@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-19 - core: disable automatic bootstrap by default
+
+Changed Qortium so automatic bootstrap recovery is off unless an operator
+explicitly turns it on and provides bootstrap hosts in `settings.json`,
+removed the built-in upstream bootstrap host defaults, made missing-host
+bootstrap requests fail immediately instead of entering a broken retry path,
+and kept the inherited manual/bootstrap path available only when someone has
+deliberately configured it.
+
 ### 2026-04-19 - core: disable automatic updates by default
 
 Changed Qortium so automatic updates are off unless an operator explicitly

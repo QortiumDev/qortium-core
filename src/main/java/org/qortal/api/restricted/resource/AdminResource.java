@@ -36,6 +36,7 @@ import org.qortal.data.account.RewardShareData;
 import org.qortal.network.Network;
 import org.qortal.network.Peer;
 import org.qortal.network.PeerAddress;
+import org.qortal.repository.Bootstrap;
 import org.qortal.repository.DataException;
 import org.qortal.repository.ReindexManager;
 import org.qortal.repository.Repository;
@@ -455,9 +456,14 @@ public class AdminResource {
 			)
 		}
 	)
+	@ApiErrors({ApiError.INVALID_CRITERIA})
 	@SecurityRequirement(name = "apiKey")
 	public String bootstrap(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 		Security.checkApiCallAllowed(request);
+
+		if (!Settings.getInstance().hasBootstrapHostsConfigured()) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
+		}
 
 		new Thread(() -> {
 			// Short sleep to allow HTTP response body to be emitted

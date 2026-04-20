@@ -904,10 +904,13 @@ public class BlockChain {
 	 */
 	public static void validate() throws DataException {
 
-		boolean isTopOnly = Settings.getInstance().isTopOnly();
-		boolean archiveEnabled = Settings.getInstance().isArchiveEnabled();
-		boolean isLite = Settings.getInstance().isLite();
-		boolean canBootstrap = Settings.getInstance().getBootstrap();
+		Settings settings = Settings.getInstance();
+		boolean isTopOnly = settings.isTopOnly();
+		boolean archiveEnabled = settings.isArchiveEnabled();
+		boolean isLite = settings.isLite();
+		boolean bootstrapEnabled = settings.getBootstrap();
+		boolean hasBootstrapHostsConfigured = settings.hasBootstrapHostsConfigured();
+		boolean canBootstrap = bootstrapEnabled && hasBootstrapHostsConfigured;
 		boolean needsArchiveRebuild = false;
 		int checkHeight = 0;
 		BlockData chainTip;
@@ -936,7 +939,11 @@ public class BlockChain {
 				} else {
 					needsArchiveRebuild = (repository.getBlockArchiveRepository().fromHeight(2) == null);
 					if (needsArchiveRebuild) {
-						LOGGER.info("Couldn't retrieve block 2 from archive. Bootstrapping is disabled. Syncing from genesis block!");
+						if (bootstrapEnabled && !hasBootstrapHostsConfigured) {
+							LOGGER.info("Couldn't retrieve block 2 from archive. {} Syncing from genesis block!", Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
+						} else {
+							LOGGER.info("Couldn't retrieve block 2 from archive. Bootstrapping is disabled. Syncing from genesis block!");
+						}
 					}
 				}
 			}
@@ -1060,12 +1067,17 @@ public class BlockChain {
 	}
 
 	private static void rebuildBlockchain() throws DataException, InterruptedException {
-		boolean shouldBootstrap = Settings.getInstance().getBootstrap();
-		if (shouldBootstrap) {
+		Settings settings = Settings.getInstance();
+		boolean shouldBootstrap = settings.getBootstrap();
+		if (shouldBootstrap && settings.hasBootstrapHostsConfigured()) {
 			// Settings indicate that we should apply a bootstrap rather than rebuilding and syncing from genesis
 			Bootstrap bootstrap = new Bootstrap();
 			bootstrap.startImport();
 			return;
+		}
+
+		if (shouldBootstrap) {
+			LOGGER.warn("{} Rebuilding repository and syncing from genesis instead.", Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
 		}
 
 		// (Re)build repository

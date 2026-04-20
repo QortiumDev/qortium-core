@@ -47,6 +47,9 @@ public class Bootstrap {
     /** The maximum number of unpruned blocks allowed to be included in a bootstrap, beyond the prune threshold */
     private static final int MAXIMUM_UNPRUNED_BLOCKS = 100;
 
+    public static final String MISSING_BOOTSTRAP_HOSTS_MESSAGE =
+            "No bootstrap hosts are configured. Add bootstrapHosts in settings.json before bootstrapping.";
+
 
     public Bootstrap() {
     }
@@ -314,7 +317,15 @@ public class Bootstrap {
         }
     }
 
-    public void startImport() throws InterruptedException {
+    public static void ensureBootstrapHostsConfigured() throws DataException {
+        if (!Settings.getInstance().hasBootstrapHostsConfigured()) {
+            throw new DataException(MISSING_BOOTSTRAP_HOSTS_MESSAGE);
+        }
+    }
+
+    public void startImport() throws InterruptedException, DataException {
+        ensureBootstrapHostsConfigured();
+
         while (!Controller.isStopping()) {
             try (final Repository repository = RepositoryManager.getRepository()) {
                 this.repository = repository;
@@ -343,7 +354,9 @@ public class Bootstrap {
             this.downloadToPath(path);
             this.importFromPath(path);
 
-        } catch (InterruptedException | DataException | IOException e) {
+        } catch (DataException e) {
+            throw e;
+        } catch (InterruptedException | IOException e) {
             throw new DataException("Unable to import bootstrap", e);
         }
         finally {
@@ -377,6 +390,8 @@ public class Bootstrap {
     }
 
     private void downloadToPath(Path path) throws DataException {
+        ensureBootstrapHostsConfigured();
+
         String bootstrapHost = this.getRandomHost();
         String bootstrapFilename = this.getFilename();
         String bootstrapUrl = String.format("%s/%s", bootstrapHost, bootstrapFilename);
@@ -431,8 +446,10 @@ public class Bootstrap {
         }
     }
 
-    public String getRandomHost() {
+    public String getRandomHost() throws DataException {
         // Select a random host from bootstrapHosts
+        ensureBootstrapHostsConfigured();
+
         String[] hosts = Settings.getInstance().getBootstrapHosts();
         int index = new SecureRandom().nextInt(hosts.length);
         String bootstrapHost = hosts[index];

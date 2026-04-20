@@ -207,7 +207,7 @@ public class Settings {
 	private int defaultArchiveVersion = 2;
 
 	/** Whether to automatically bootstrap instead of syncing from genesis */
-	private boolean bootstrap = true;
+	private boolean bootstrap = false;
 
 	/** Registered names integrity check */
 	private boolean namesIntegrityCheckEnabled = false;
@@ -301,12 +301,7 @@ public class Settings {
 	private String bootstrapFilenamePrefix = "";
 
 	// Bootstrap sources
-	private String[] bootstrapHosts = new String[] {
-		"http://bootstrap.qortal.org",
-		"http://bootstrap2.qortal.org",
-		"http://bootstrap3.qortal.org",
-		"http://bootstrap4.qortal.org"
-	};
+	private String[] bootstrapHosts = new String[0];
 
 	// Auto-update sources
 	private String[] autoUpdateRepos = new String[0];
@@ -1219,7 +1214,24 @@ public class Settings {
 	}
 
 	public String[] getBootstrapHosts() {
-		return this.bootstrapHosts;
+		if (this.bootstrapHosts == null || this.bootstrapHosts.length == 0)
+			return new String[0];
+
+		List<String> configuredHosts = new ArrayList<>(this.bootstrapHosts.length);
+		for (String bootstrapHost : this.bootstrapHosts) {
+			if (bootstrapHost == null)
+				continue;
+
+			String trimmedHost = bootstrapHost.trim();
+			if (!trimmedHost.isEmpty())
+				configuredHosts.add(trimmedHost);
+		}
+
+		return configuredHosts.toArray(new String[0]);
+	}
+
+	public boolean hasBootstrapHostsConfigured() {
+		return this.getBootstrapHosts().length > 0;
 	}
 
 	public String getListsPath() {

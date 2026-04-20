@@ -5,6 +5,7 @@ import org.apache.logging.log4j.Logger;
 import org.qortal.ApplyBootstrap;
 import org.qortal.globalization.Translator;
 import org.qortal.gui.SysTray;
+import org.qortal.repository.Bootstrap;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.settings.Settings;
 
@@ -29,6 +30,11 @@ public class BootstrapNode {
 
 	public static boolean attemptToBootstrap() {
 		LOGGER.info(String.format("Bootstrapping node..."));
+
+		if (!Settings.getInstance().hasBootstrapHostsConfigured()) {
+			LOGGER.warn(Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
+			return false;
+		}
 
 		// Give repository a chance to backup in case things go badly wrong (if enabled)
 		if (Settings.getInstance().getRepositoryBackupInterval() > 0) {

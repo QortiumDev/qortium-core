@@ -1,6 +1,7 @@
 package org.qortal.test;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -28,6 +29,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.*;
+import static org.junit.Assume.assumeTrue;
 
 public class BootstrapTests extends Common {
 
@@ -188,29 +190,63 @@ public class BootstrapTests extends Common {
     }
 
     @Test
-    public void testGetRandomHost() {
-        String[] bootstrapHosts = Settings.getInstance().getBootstrapHosts();
+    public void testGetRandomHostUsesConfiguredHosts() throws IllegalAccessException, DataException {
+        Settings settings = Settings.getInstance();
+        String[] originalBootstrapHosts = settings.getBootstrapHosts();
         List<String> uniqueHosts = new ArrayList<>();
 
-        for (int i=0; i<1000; i++) {
-            Bootstrap bootstrap = new Bootstrap();
-            String randomHost = bootstrap.getRandomHost();
-            assertNotNull(randomHost);
+        try {
+            FieldUtils.writeField(settings, "bootstrapHosts", new String[] {
+                    " https://bootstrap-one.example ",
+                    "https://bootstrap-two.example"
+            }, true);
 
-            if (!uniqueHosts.contains(randomHost)){
-                uniqueHosts.add(randomHost);
+            String[] bootstrapHosts = settings.getBootstrapHosts();
+            for (int i = 0; i < 1000; i++) {
+                Bootstrap bootstrap = new Bootstrap();
+                String randomHost = bootstrap.getRandomHost();
+                assertNotNull(randomHost);
+
+                if (!uniqueHosts.contains(randomHost)) {
+                    uniqueHosts.add(randomHost);
+                }
             }
+
+            // Ensure we have more than one bootstrap host in the settings
+            assertTrue(Arrays.asList(bootstrapHosts).size() > 1);
+
+            // Ensure that all have been given the opportunity to be used
+            assertEquals(uniqueHosts.size(), Arrays.asList(bootstrapHosts).size());
+        } finally {
+            FieldUtils.writeField(settings, "bootstrapHosts", originalBootstrapHosts, true);
         }
+    }
 
-        // Ensure we have more than one bootstrap host in the settings
-        assertTrue(Arrays.asList(bootstrapHosts).size() > 1);
+    @Test
+    public void testGetRandomHostFailsWithoutConfiguredHosts() throws IllegalAccessException {
+        Settings settings = Settings.getInstance();
+        String[] originalBootstrapHosts = settings.getBootstrapHosts();
 
-        // Ensure that all have been given the opportunity to be used
-        assertEquals(uniqueHosts.size(), Arrays.asList(bootstrapHosts).size());
+        try {
+            FieldUtils.writeField(settings, "bootstrapHosts", new String[] {"", "  ", null}, true);
+
+            Bootstrap bootstrap = new Bootstrap();
+            try {
+                bootstrap.getRandomHost();
+                fail("Expected getRandomHost() to fail without configured bootstrap hosts");
+            } catch (DataException e) {
+                assertEquals(Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE, e.getMessage());
+            }
+        } finally {
+            FieldUtils.writeField(settings, "bootstrapHosts", originalBootstrapHosts, true);
+        }
     }
 
     @Test
     public void testBootstrapHosts() throws IOException {
+        assumeTrue(Boolean.getBoolean("qortium.runLiveBootstrapChecks"));
+        assumeTrue(Settings.getInstance().hasBootstrapHostsConfigured());
+
         String[] bootstrapHosts = Settings.getInstance().getBootstrapHosts();
         String[] bootstrapTypes = { "archive" }; // , "toponly", "full"
         boolean invalidFile = false;

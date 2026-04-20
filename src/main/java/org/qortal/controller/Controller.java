@@ -721,7 +721,10 @@ public class Controller extends Thread {
 			@Override
 			public void run() {
 				LOGGER.debug("Start sync from genesis check.");
-				boolean canBootstrap = Settings.getInstance().getBootstrap();
+				Settings settings = Settings.getInstance();
+				boolean bootstrapEnabled = settings.getBootstrap();
+				boolean hasBootstrapHostsConfigured = settings.hasBootstrapHostsConfigured();
+				boolean canBootstrap = bootstrapEnabled && hasBootstrapHostsConfigured;
 				boolean needsArchiveRebuild = false;
 				int checkHeight = 0;
 
@@ -733,12 +736,15 @@ public class Controller extends Thread {
 				}
 
 				if (canBootstrap || !needsArchiveRebuild || checkHeight > 3) {
-					LOGGER.debug("Bootstrapping is enabled or we have more than 2 blocks, cancel sync from genesis check.");
+					LOGGER.debug("Bootstrap is available, archive rebuild is not needed, or we have more than 2 blocks. Cancel sync from genesis check.");
 					syncFromGenesis.cancel();
 					return;
 				}
 
 				if (needsArchiveRebuild && !canBootstrap) {
+					if (bootstrapEnabled && !hasBootstrapHostsConfigured) {
+						LOGGER.info("{} Starting sync from genesis instead.", Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
+					}
 					LOGGER.info("Start syncing from genesis!");
 					List<Peer> seeds = new ArrayList<>(Network.getInstance().getImmutableHandshakedPeers());
 
