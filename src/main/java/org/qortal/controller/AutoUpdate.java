@@ -74,6 +74,11 @@ public class AutoUpdate extends Thread {
 	public void run() {
 		Thread.currentThread().setName("Auto-update");
 
+		if (!Settings.getInstance().hasAutoUpdateReposConfigured()) {
+			LOGGER.warn("Auto-update is enabled but no autoUpdateRepos are configured. Skipping auto-update service.");
+			return;
+		}
+
 		long buildTimestamp = Controller.getInstance().getBuildTimestamp() * 1000L;
 		boolean attemptedUpdate = false;
 

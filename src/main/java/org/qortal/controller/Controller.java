@@ -611,8 +611,12 @@ public class Controller extends Thread {
 
 		// Auto-update service?
 		if (Settings.getInstance().isAutoUpdateEnabled()) {
-			LOGGER.info("Starting auto-update");
-			AutoUpdate.getInstance().start();
+			if (Settings.getInstance().hasAutoUpdateReposConfigured()) {
+				LOGGER.info("Starting auto-update");
+				AutoUpdate.getInstance().start();
+			} else {
+				LOGGER.warn("Auto-update is enabled but no autoUpdateRepos are configured. Skipping auto-update startup.");
+			}
 		}
 
 		LOGGER.info("Starting wallets");
@@ -1203,7 +1207,7 @@ public class Controller extends Thread {
 					pirateWalletController.shutdown();
 				}
 
-				if (Settings.getInstance().isAutoUpdateEnabled()) {
+				if (Settings.getInstance().isAutoUpdateEnabled() && Settings.getInstance().hasAutoUpdateReposConfigured()) {
 					LOGGER.info("Shutting down auto-update");
 					AutoUpdate.getInstance().shutdown();
 				}

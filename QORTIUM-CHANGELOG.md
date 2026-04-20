@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-19 - core: disable automatic updates by default
+
+Changed Qortium so automatic updates are off unless an operator explicitly
+turns them on and provides update mirror URLs in `settings.json`, which stops
+the fork from shipping upstream Qortal update endpoints as defaults while still
+leaving the inherited manual opt-in update flow available until a better
+Qortium-specific update process is designed.
+
 ### 2026-04-19 - docs: add Qortium changelog baseline
 
 Added the main human-readable Qortium change log, documented what Qortium is

@@ -6,6 +6,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -138,7 +139,7 @@ public class Settings {
 	private long recentChatMessagesMaxAge = 60 * 60 * 1000L; // milliseconds
 
 	/** Whether we check, fetch and install auto-updates */
-	private boolean autoUpdateEnabled = true;
+	private boolean autoUpdateEnabled = false;
 	/** Whether we check, restart node without connected peers */
 	private boolean autoRestartEnabled = false;
 	/** How long between repository backups (ms), or 0 if disabled. */
@@ -308,13 +309,7 @@ public class Settings {
 	};
 
 	// Auto-update sources
-	private String[] autoUpdateRepos = new String[] {
-		"https://github.com/Qortal/qortal/raw/%s/qortal.update",
-		"https://raw.githubusercontent.com@151.101.16.133/Qortal/qortal/%s/qortal.update",
-	    "https://qortal.link/Auto-Update/%s/qortal.update",
-	    "https://qortal.name/Auto-Update/%s/qortal.update",
-	    "https://update.qortal.org/Auto-Update/%s/qortal.update"
-	};
+	private String[] autoUpdateRepos = new String[0];
 
 	// Lists
 	private String listsPath = "lists";
@@ -1203,7 +1198,24 @@ public class Settings {
 	}
 
 	public String[] getAutoUpdateRepos() {
-		return this.autoUpdateRepos;
+		if (this.autoUpdateRepos == null)
+			return new String[0];
+
+		List<String> configuredRepos = new ArrayList<>();
+		for (String repo : this.autoUpdateRepos) {
+			if (repo == null)
+				continue;
+
+			String trimmedRepo = repo.trim();
+			if (!trimmedRepo.isEmpty())
+				configuredRepos.add(trimmedRepo);
+		}
+
+		return configuredRepos.toArray(new String[0]);
+	}
+
+	public boolean hasAutoUpdateReposConfigured() {
+		return this.getAutoUpdateRepos().length > 0;
 	}
 
 	public String[] getBootstrapHosts() {

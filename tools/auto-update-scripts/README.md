@@ -1,5 +1,11 @@
 # Qortal Auto-Update Publisher Scripts
 
+Qortium ships with automatic updates disabled by default.
+
+To use this inherited auto-update flow in the fork, an operator must
+explicitly enable `"autoUpdateEnabled": true` and configure
+`"autoUpdateRepos"` in `settings.json`.
+
 This toolkit modernizes and automates the Qortal auto-update process. It includes:
 
 - A Bash script (`build-auto-update.sh`) to build and push the update
@@ -127,4 +133,3 @@ Based on original Perl scripts by Qortal core devs, specifically @catbref.
 ---
 
 Questions or issues? Drop into the Qortal Dev group on Discord, Q-Chat,  or reach out directly via Q-Mail to 'crowetic'.
-

@@ -1,5 +1,11 @@
 # Auto Updates
 
+Qortium ships with automatic updates disabled by default.
+
+To use the inherited auto-update flow in this fork, an operator must
+explicitly set `"autoUpdateEnabled": true` and provide one or more
+`"autoUpdateRepos"` entries in `settings.json`.
+
 ## TL;DR: how-to
 
 * Prepare new release version (see way below for details)
@@ -45,6 +51,7 @@ The git SHA1 commit hash is used to replace `%s` in various download locations, 
 
 These locations are part of the org.qortal.settings.Settings class and can be overriden in settings.json like:
 ```
+  "autoUpdateEnabled": true,
   "autoUpdateRepos": [
     "http://mirror.qortal.org/auto-updates/%s",
     "https://server.host.name@1.2.3.4/Qortal/%s"

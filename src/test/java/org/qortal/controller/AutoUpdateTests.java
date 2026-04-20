@@ -1,19 +1,56 @@
 package org.qortal.controller;
 
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Test;
 import org.qortal.ApplyUpdate;
+import org.qortal.settings.Settings;
 
+import java.lang.reflect.Constructor;
 import java.util.ArrayList;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class AutoUpdateTests {
+
+	private Settings newSettingsInstance() throws ReflectiveOperationException {
+		Constructor<Settings> constructor = Settings.class.getDeclaredConstructor();
+		constructor.setAccessible(true);
+		return constructor.newInstance();
+	}
+
+	@Test
+	public void testDefaultAutoUpdateSettingsAreDisabledAndEmpty() throws ReflectiveOperationException {
+		Settings settings = newSettingsInstance();
+
+		assertFalse(settings.isAutoUpdateEnabled());
+		assertFalse(settings.hasAutoUpdateReposConfigured());
+		assertArrayEquals(new String[0], settings.getAutoUpdateRepos());
+	}
+
+	@Test
+	public void testAutoUpdateReposAreTrimmedAndFiltered() throws ReflectiveOperationException {
+		Settings settings = newSettingsInstance();
+		FieldUtils.writeField(settings, "autoUpdateRepos", new String[] {null, " ", "\t", " https://example.com/%s "}, true);
+
+		assertArrayEquals(new String[] {"https://example.com/%s"}, settings.getAutoUpdateRepos());
+		assertTrue(settings.hasAutoUpdateReposConfigured());
+	}
+
+	@Test
+	public void testAutoUpdateReposRequireAtLeastOneConfiguredValue() throws ReflectiveOperationException {
+		Settings settings = newSettingsInstance();
+		FieldUtils.writeField(settings, "autoUpdateRepos", new String[] {"", "   ", null}, true);
+
+		assertFalse(settings.hasAutoUpdateReposConfigured());
+		assertArrayEquals(new String[0], settings.getAutoUpdateRepos());
+	}
 
 	@Test
 	public void testSanitizeJvmArgumentsReplacesAgentlibAndRemovesJniArgs() {
