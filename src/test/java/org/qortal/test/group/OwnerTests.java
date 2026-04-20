@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.data.group.GroupAdminData;
 import org.qortal.data.transaction.AddGroupAdminTransactionData;
 import org.qortal.data.transaction.JoinGroupTransactionData;
 import org.qortal.data.transaction.RemoveGroupAdminTransactionData;
@@ -102,6 +103,8 @@ public class OwnerTests extends Common {
 
 			// Confirm Bob is now admin
 			assertTrue(isAdmin(repository, bob.getAddress(), groupId));
+			GroupAdminData originalBobAdminData = repository.getGroupRepository().getAdmin(groupId, bob.getAddress());
+			assertNotNull(originalBobAdminData);
 
 			// Attempt to demote admin
 			result = removeGroupAdmin(repository, alice, groupId, bob.getAddress());
@@ -119,6 +122,9 @@ public class OwnerTests extends Common {
 
 			// Confirm Bob is now admin
 			assertTrue(isAdmin(repository, bob.getAddress(), groupId));
+			GroupAdminData restoredBobAdminData = repository.getGroupRepository().getAdmin(groupId, bob.getAddress());
+			assertNotNull(restoredBobAdminData);
+			assertArrayEquals(originalBobAdminData.getReference(), restoredBobAdminData.getReference());
 
 			// Have Alice (owner) try to demote herself
 			result = removeGroupAdmin(repository, alice, groupId, alice.getAddress());

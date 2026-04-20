@@ -83,7 +83,6 @@ public class BlockChain {
 		fixBatchRewardHeight,
 		adminsReplaceFoundersHeight,
 		ignoreLevelForRewardShareHeight,
-		adminQueryFixHeight,
 		multipleNamesPerAccountHeight,
 		mintedBlocksAdjustmentRemovalHeight,
 		atValidateHeight
@@ -648,10 +647,6 @@ public class BlockChain {
 
 	public int getIgnoreLevelForRewardShareHeight() {
 		return this.featureTriggers.get(FeatureTrigger.ignoreLevelForRewardShareHeight.name()).intValue();
-	}
-
-	public int getAdminQueryFixHeight() {
-		return this.featureTriggers.get(FeatureTrigger.adminQueryFixHeight.name()).intValue();
 	}
 
 	public int getMultipleNamesPerAccountHeight() {

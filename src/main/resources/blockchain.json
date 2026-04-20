@@ -110,7 +110,6 @@
 		"fixBatchRewardHeight": 1945900,
 		"adminsReplaceFoundersHeight": 2012800,
 		"ignoreLevelForRewardShareHeight": 2012800,
-		"adminQueryFixHeight": 2012800,
 		"multipleNamesPerAccountHeight": 2206300,
 		"mintedBlocksAdjustmentRemovalHeight": 2206300,
 		"atValidateHeight": 2521500

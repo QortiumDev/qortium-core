@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.data.group.GroupAdminData;
 import org.qortal.data.transaction.*;
 import org.qortal.group.Group.ApprovalThreshold;
 import org.qortal.repository.DataException;
@@ -86,6 +87,8 @@ public class AdminTests extends Common {
 
 			// Confirm Bob is now admin
 			assertTrue(isAdmin(repository, bob.getAddress(), groupId));
+			GroupAdminData originalBobAdminData = repository.getGroupRepository().getAdmin(groupId, bob.getAddress());
+			assertNotNull(originalBobAdminData);
 
 			// Attempt to kick Bob
 			ValidationResult result = groupKick(repository, alice, groupId, bob.getAddress());
@@ -100,6 +103,9 @@ public class AdminTests extends Common {
 
 			// Confirm Bob now an admin
 			assertTrue(isAdmin(repository, bob.getAddress(), groupId));
+			GroupAdminData restoredBobAdminData = repository.getGroupRepository().getAdmin(groupId, bob.getAddress());
+			assertNotNull(restoredBobAdminData);
+			assertArrayEquals(originalBobAdminData.getReference(), restoredBobAdminData.getReference());
 
 			// Have Alice (owner) try to kick herself!
 			result = groupKick(repository, alice, groupId, alice.getAddress());
@@ -359,6 +365,8 @@ public class AdminTests extends Common {
 
 			// Confirm Bob is now admin
 			assertTrue(isAdmin(repository, bob.getAddress(), groupId));
+			GroupAdminData originalBobAdminData = repository.getGroupRepository().getAdmin(groupId, bob.getAddress());
+			assertNotNull(originalBobAdminData);
 
 			// Attempt to ban Bob
 			int timeToLive = 0;
@@ -406,6 +414,9 @@ public class AdminTests extends Common {
 
 			// Confirm Bob is now admin
 			assertTrue(isAdmin(repository, bob.getAddress(), groupId));
+			GroupAdminData restoredBobAdminData = repository.getGroupRepository().getAdmin(groupId, bob.getAddress());
+			assertNotNull(restoredBobAdminData);
+			assertArrayEquals(originalBobAdminData.getReference(), restoredBobAdminData.getReference());
 
 			// Have Alice (owner) try to ban herself!
 			result = groupBan(repository, alice, groupId, alice.getAddress(), timeToLive);

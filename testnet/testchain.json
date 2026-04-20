@@ -107,7 +107,6 @@
 		"fixBatchRewardHeight": 9999999999999,
 		"adminsReplaceFoundersHeight": 0,
 		"ignoreLevelForRewardShareHeight": 0,
-		"adminQueryFixHeight": 0,
 		"multipleNamesPerAccountHeight": 0,
 		"mintedBlocksAdjustmentRemovalHeight": 0
 	},

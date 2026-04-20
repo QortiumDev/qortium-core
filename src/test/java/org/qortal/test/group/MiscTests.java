@@ -4,6 +4,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.data.group.GroupAdminData;
+import org.qortal.data.transaction.AddGroupAdminTransactionData;
 import org.qortal.data.transaction.CreateGroupTransactionData;
 import org.qortal.data.transaction.GroupInviteTransactionData;
 import org.qortal.data.transaction.JoinGroupTransactionData;
@@ -18,8 +20,7 @@ import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.Transaction.ValidationResult;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class MiscTests extends Common {
 
@@ -184,6 +185,41 @@ public class MiscTests extends Common {
 		}
 	}
 
+	@Test
+	public void testLeaveGroupAsAdminRestoresCorrectAdminReference() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+
+			// Create group
+			int groupId = createGroup(repository, alice, "open-group", true);
+
+			// Bob joins and becomes admin
+			joinGroup(repository, bob, groupId);
+			addGroupAdmin(repository, alice, groupId, bob.getAddress());
+
+			GroupAdminData originalBobAdminData = repository.getGroupRepository().getAdmin(groupId, bob.getAddress());
+			assertNotNull(originalBobAdminData);
+
+			// Bob leaves
+			leaveGroup(repository, bob, groupId);
+
+			// Confirm Bob is no longer a member or admin
+			assertFalse(isMember(repository, bob.getAddress(), groupId));
+			assertFalse(isAdmin(repository, bob.getAddress(), groupId));
+
+			// Orphan last block
+			BlockUtils.orphanLastBlock(repository);
+
+			// Confirm Bob is again a member and admin, with the same admin reference
+			assertTrue(isMember(repository, bob.getAddress(), groupId));
+			assertTrue(isAdmin(repository, bob.getAddress(), groupId));
+			GroupAdminData restoredBobAdminData = repository.getGroupRepository().getAdmin(groupId, bob.getAddress());
+			assertNotNull(restoredBobAdminData);
+			assertArrayEquals(originalBobAdminData.getReference(), restoredBobAdminData.getReference());
+		}
+	}
+
 	private Integer createGroup(Repository repository, PrivateKeyAccount owner, String groupName, boolean isOpen) throws DataException {
 		String description = groupName + " (description)";
 
@@ -207,6 +243,11 @@ public class MiscTests extends Common {
 		TransactionUtils.signAndMint(repository, transactionData, admin);
 	}
 
+	private void addGroupAdmin(Repository repository, PrivateKeyAccount owner, int groupId, String member) throws DataException {
+		AddGroupAdminTransactionData transactionData = new AddGroupAdminTransactionData(TestTransaction.generateBase(owner), groupId, member);
+		TransactionUtils.signAndMint(repository, transactionData, owner);
+	}
+
 	private void leaveGroup(Repository repository, PrivateKeyAccount leaver, int groupId) throws DataException {
 		LeaveGroupTransactionData transactionData = new LeaveGroupTransactionData(TestTransaction.generateBase(leaver), groupId);
 		TransactionUtils.signAndMint(repository, transactionData, leaver);
@@ -214,6 +255,10 @@ public class MiscTests extends Common {
 
 	private boolean isMember(Repository repository, String address, int groupId) throws DataException {
 		return repository.getGroupRepository().memberExists(groupId, address);
+	}
+
+	private boolean isAdmin(Repository repository, String address, int groupId) throws DataException {
+		return repository.getGroupRepository().adminExists(groupId, address);
 	}
 
 }

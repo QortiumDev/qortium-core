@@ -54,8 +54,6 @@ public interface GroupRepository {
 
 	// Group Admins
 
-	public GroupAdminData getAdminFaulty(int groupId, String address) throws DataException;
-
 	public GroupAdminData getAdmin(int groupId, String address) throws DataException;
 
 	public boolean adminExists(int groupId, String address) throws DataException;

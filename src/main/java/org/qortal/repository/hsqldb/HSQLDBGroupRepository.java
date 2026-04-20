@@ -403,21 +403,6 @@ public class HSQLDBGroupRepository implements GroupRepository {
 	// Group Admins
 
 	@Override
-	public GroupAdminData getAdminFaulty(int groupId, String address) throws DataException {
-		try (ResultSet resultSet = this.repository.checkedExecute("SELECT admin, reference FROM GroupAdmins WHERE group_id = ?", groupId)) {
-			if (resultSet == null)
-				return null;
-
-			String admin = resultSet.getString(1);
-			byte[] reference = resultSet.getBytes(2);
-
-			return new GroupAdminData(groupId, admin, reference);
-		} catch (SQLException e) {
-			throw new DataException("Unable to fetch group admin from repository", e);
-		}
-	}
-
-	@Override
 	public GroupAdminData getAdmin(int groupId, String address) throws DataException {
 		try (ResultSet resultSet = this.repository.checkedExecute("SELECT admin, reference FROM GroupAdmins WHERE group_id = ? AND admin = ?", groupId, address)) {
 			if (resultSet == null)

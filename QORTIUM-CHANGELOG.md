@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-20 - core: remove adminQueryFixHeight trigger
+
+Changed Qortium so group admin lookups always use the correct address-specific repository query instead of preserving the older upstream fallback that could return the wrong admin row for a group and corrupt cached admin references during orphaning, removed the related trigger from the main chain config and mirrored test chain configs, and tightened the group orphaning tests to verify the right admin reference is restored.
+
 ### 2026-04-20 - core: remove nullGroupMembershipHeight trigger
 
 Changed Qortium so null-owned groups always use the approval-based membership rules instead of preserving the older upstream split where invites could bypass approval while kicks and bans were blocked until a later trigger height, and removed the related trigger from the main chain config and mirrored test chain configs so the null-owner governance model applies from genesis.
