@@ -22,7 +22,7 @@
 	"blockRewardBatchSize": 10,
 	"blockRewardBatchAccountsBlockCount": 3,
 	"mintingGroupIds": [
-		{ "height": 0, "ids": [ 1 ]}
+		{ "height": 0, "ids": [ 2 ]}
 	],
 	"rewardsByHeight": [
 		{ "height": 1, "reward": 100 },
@@ -66,10 +66,7 @@
 		"transactionV6Timestamp": 9999999999999,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999990,
 		"arbitraryOptionalFeeTimestamp": 0,
-		"onlyMintWithNameHeight": 9999999999990,
-		"groupMemberCheckHeight": 9999999999999,
 		"decreaseOnlineAccountsDifficultyTimestamp": 9999999999999,
-		"removeOnlyMintWithNameHeight": 9999999999999,
 		"adminsReplaceFoundersHeight": 9999999999999
 	},
 	"genesisInfo": {
@@ -86,6 +83,11 @@
 			{ "type": "GENESIS", "recipient": "Qci5m9k4rcwe4ruKrZZQKka4FzUUMut3er", "amount": "1000000" },
 
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "groupName": "dev-group", "description": "developer group", "isOpen": false, "approvalThreshold": "PCT100", "minimumBlockDelay": 0, "maximumBlockDelay": 1440 },
+
+			{ "type": "CREATE_GROUP", "creatorPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "groupName": "minter-group", "description": "minting test group", "isOpen": true, "approvalThreshold": "PCT100", "minimumBlockDelay": 0, "maximumBlockDelay": 1440 },
+			{ "type": "JOIN_GROUP", "joinerPublicKey": "C6wuddsBV3HzRrXUtezE7P5MoRXp5m3mEDokRDGZB6ry", "groupId": 2 },
+			{ "type": "JOIN_GROUP", "joinerPublicKey": "7KNBj2MnEb6zq1vvKY1q8G2Voctcc2Z1X4avFyEH2eJC", "groupId": 2 },
+			{ "type": "JOIN_GROUP", "joinerPublicKey": "CGAedAQU91SR73iqoYtss6NAsra284SShXnDWvRXqR4G", "groupId": 2 },
 
 			{ "type": "ISSUE_ASSET", "issuerPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "assetName": "TEST", "description": "test asset", "data": "", "quantity": "1000000", "isDivisible": true, "fee": 0 },
 			{ "type": "ISSUE_ASSET", "issuerPublicKey": "C6wuddsBV3HzRrXUtezE7P5MoRXp5m3mEDokRDGZB6ry", "assetName": "OTHER", "description": "other test asset", "data": "", "quantity": "1000000", "isDivisible": true, "fee": 0 },

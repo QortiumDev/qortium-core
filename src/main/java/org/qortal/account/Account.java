@@ -7,12 +7,11 @@ import org.qortal.block.BlockChain;
 import org.qortal.controller.LiteNode;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
-import org.qortal.data.account.RewardShareData;
 import org.qortal.data.naming.NameData;
+import org.qortal.data.account.RewardShareData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.GroupRepository;
-import org.qortal.repository.NameRepository;
 import org.qortal.repository.Repository;
 import org.qortal.settings.Settings;
 import org.qortal.utils.Base58;
@@ -205,49 +204,23 @@ public class Account {
 
 	/** Returns whether account can be considered a "minting account".
 	 * <p>
-	 * To be considered a "minting account", the account needs to pass some of these tests:<br>
-	 * <ul>
-	 * <li>account's level is at least <tt>minAccountLevelToMint</tt> from blockchain config</li>
-	 * <li>account's address has registered a name</li>
-	 * <li>account's address is a member of the minter group</li>
-	 * </ul>
+	 * Mint eligibility is governed by membership in one of the configured minting groups.
 	 *
-	 * @param isGroupValidated true if this account has already been validated for MINTER Group membership
+	 * @param isGroupValidated true if this account has already been validated for configured minting-group membership
 	 * @return true if account can be considered "minting account"
 	 * @throws DataException
 	 */
 	public boolean canMint(boolean isGroupValidated) throws DataException {
 		AccountData accountData = this.repository.getAccountRepository().getAccount(this.address);
-		NameRepository nameRepository = this.repository.getNameRepository();
 		GroupRepository groupRepository = this.repository.getGroupRepository();
-		String myAddress = accountData.getAddress();
+		if (accountData == null)
+			return false;
 
 		int blockchainHeight = this.repository.getBlockRepository().getBlockchainHeight();
+		List<Integer> groupIdsToMint = Groups.getGroupIdsToMint(BlockChain.getInstance(), blockchainHeight);
+		String myAddress = accountData.getAddress();
 
-		List<Integer> groupIdsToMint = Groups.getGroupIdsToMint( BlockChain.getInstance(), blockchainHeight );
-		int nameCheckHeight = BlockChain.getInstance().getOnlyMintWithNameHeight();
-		int groupCheckHeight = BlockChain.getInstance().getGroupMemberCheckHeight();
-		int removeNameCheckHeight = BlockChain.getInstance().getRemoveOnlyMintWithNameHeight();
-
-		if (blockchainHeight < nameCheckHeight) {
-			return true;
-		}
-
-		if (blockchainHeight >= nameCheckHeight && blockchainHeight < groupCheckHeight) {
-			List<NameData> myName = nameRepository.getNamesByOwner(myAddress);
-			return !myName.isEmpty();
-		}
-
-		if (blockchainHeight >= groupCheckHeight && blockchainHeight < removeNameCheckHeight) {
-			List<NameData> myName = nameRepository.getNamesByOwner(myAddress);
-			return !myName.isEmpty() && (isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress));
-		}
-
-		if (blockchainHeight >= removeNameCheckHeight) {
-			return isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress);
-		}
-
-		return false;
+		return isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress);
 	}
 
 	/** Returns account's blockMinted (0+) or null if account not found in repository. */

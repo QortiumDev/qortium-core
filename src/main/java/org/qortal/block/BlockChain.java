@@ -65,9 +65,6 @@ public class BlockChain {
 		increaseOnlineAccountsDifficultyTimestamp,
 		decreaseOnlineAccountsDifficultyTimestamp,
 		arbitraryOptionalFeeTimestamp,
-		onlyMintWithNameHeight,
-		removeOnlyMintWithNameHeight,
-		groupMemberCheckHeight,
 		adminsReplaceFoundersHeight,
 		multipleNamesPerAccountHeight
 	}
@@ -511,18 +508,6 @@ public class BlockChain {
 
 	public long getArbitraryOptionalFeeTimestamp() {
 		return this.featureTriggers.get(FeatureTrigger.arbitraryOptionalFeeTimestamp.name()).longValue();
-	}
-
-	public int getOnlyMintWithNameHeight() {
-		return this.featureTriggers.get(FeatureTrigger.onlyMintWithNameHeight.name()).intValue();
-	}
-
-	public int getRemoveOnlyMintWithNameHeight() {
-		return this.featureTriggers.get(FeatureTrigger.removeOnlyMintWithNameHeight.name()).intValue();
-	}
-
-	public int getGroupMemberCheckHeight() {
-		return this.featureTriggers.get(FeatureTrigger.groupMemberCheckHeight.name()).intValue();
 	}
 
 	public int getAdminsReplaceFoundersHeight() {

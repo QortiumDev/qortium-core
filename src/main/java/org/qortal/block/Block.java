@@ -214,10 +214,8 @@ public class Block {
 			if (accountLevel <= 0)
 				return null; // level 0 isn't included in any share bins
 
-			if (blockHeight >= blockChain.getGroupMemberCheckHeight()) {
-				if (!this.isMinterMember)
-					return null; // not member of minter group isn't included in any share bins
-			}
+			if (!this.isMinterMember)
+				return null; // not member of configured minting groups isn't included in any share bins
 
 			final AccountLevelShareBin[] shareBinsByLevel = blockChain.getShareBinsByAccountLevel();
 
@@ -417,21 +415,18 @@ public class Block {
 			List<OnlineAccountData> onlineAccounts = OnlineAccountsManager.getInstance().getOnlineAccounts(onlineAccountsTimestamp);
 			onlineAccounts.removeIf(a -> a.getNonce() == null || a.getNonce() < 0);
 
-			// Once the minting-group rule is active, remove any online accounts that
-			// are not backed by a minting-group member.
-			if (height >= BlockChain.getInstance().getGroupMemberCheckHeight()) {
-				onlineAccounts.removeIf(a -> {
-					try {
-						List<Integer> groupIdsToMint = Groups.getGroupIdsToMint(BlockChain.getInstance(), height);
-						String address = Account.getRewardShareMintingAddress(repository, a.getPublicKey());
-						boolean isMinterGroupMember = Groups.memberExistsInAnyGroup(repository.getGroupRepository(), groupIdsToMint, address);
-						return !isMinterGroupMember;
-					} catch (DataException e) {
-						// Something went wrong, so remove the account
-						return true;
-					}
-				});
-			}
+			// Remove any online accounts that are not backed by a minting-group member.
+			onlineAccounts.removeIf(a -> {
+				try {
+					List<Integer> groupIdsToMint = Groups.getGroupIdsToMint(BlockChain.getInstance(), height);
+					String address = Account.getRewardShareMintingAddress(repository, a.getPublicKey());
+					boolean isMinterGroupMember = Groups.memberExistsInAnyGroup(repository.getGroupRepository(), groupIdsToMint, address);
+					return !isMinterGroupMember;
+				} catch (DataException e) {
+					// Something went wrong, so remove the account
+					return true;
+				}
+			});
 
 			if (onlineAccounts.isEmpty()) {
 				// new v5.1.0, don't fail (25 blocks before payout) when isSingleNodeTestnet == true
@@ -1163,13 +1158,12 @@ public class Block {
 		if (onlineRewardShares == null)
 			return ValidationResult.ONLINE_ACCOUNT_UNKNOWN;
 
-		if (this.blockData.getHeight() >= BlockChain.getInstance().getGroupMemberCheckHeight()) {
-			Optional<ExpandedAccount> anyInvalidAccount
-					= this.getExpandedAccounts().stream()
-					.filter(account -> !account.isMinterMember)
-					.findAny();
-			if( anyInvalidAccount.isPresent() ) return ValidationResult.ONLINE_ACCOUNTS_INVALID;
-		}
+		Optional<ExpandedAccount> anyInvalidAccount
+				= this.getExpandedAccounts().stream()
+				.filter(account -> !account.isMinterMember)
+				.findAny();
+		if (anyInvalidAccount.isPresent())
+			return ValidationResult.ONLINE_ACCOUNTS_INVALID;
 
 		// If block is past a certain age then we simply assume the signatures were correct
 		long signatureRequirementThreshold = NTP.getTime() - BlockChain.getInstance().getOnlineAccountSignaturesMinLifetime();
@@ -1662,17 +1656,9 @@ public class Block {
 		final List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 		final int maximumLevel = cumulativeBlocksByLevel.size() - 1;
 
-		final List<ExpandedAccount> expandedAccounts;
-
-		if (this.getBlockData().getHeight() < BlockChain.getInstance().getGroupMemberCheckHeight()) {
-			expandedAccounts = this.getExpandedAccounts().stream().collect(Collectors.toList());
-		}
-		else {
-			expandedAccounts
-				= this.getExpandedAccounts().stream()
-					.filter(expandedAccount -> expandedAccount.isMinterMember)
-					.collect(Collectors.toList());
-		}
+		final List<ExpandedAccount> expandedAccounts = this.getExpandedAccounts().stream()
+				.filter(expandedAccount -> expandedAccount.isMinterMember)
+				.collect(Collectors.toList());
 
 		Set<AccountData> allUniqueExpandedAccounts = new HashSet<>();
 		for (ExpandedAccount expandedAccount : expandedAccounts) {
@@ -2073,17 +2059,9 @@ public class Block {
 		final List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 		final int maximumLevel = cumulativeBlocksByLevel.size() - 1;
 
-		final List<ExpandedAccount> expandedAccounts;
-
-		if (this.getBlockData().getHeight() < BlockChain.getInstance().getGroupMemberCheckHeight()) {
-			expandedAccounts = this.getExpandedAccounts().stream().collect(Collectors.toList());
-		}
-		else {
-			expandedAccounts
-				= this.getExpandedAccounts().stream()
-					.filter(expandedAccount -> expandedAccount.isMinterMember)
-					.collect(Collectors.toList());
-		}
+		final List<ExpandedAccount> expandedAccounts = this.getExpandedAccounts().stream()
+				.filter(expandedAccount -> expandedAccount.isMinterMember)
+				.collect(Collectors.toList());
 
 		Set<AccountData> allUniqueExpandedAccounts = new HashSet<>();
 		for (ExpandedAccount expandedAccount : expandedAccounts) {
@@ -2287,17 +2265,9 @@ public class Block {
 		List<BlockRewardCandidate> rewardCandidates = new ArrayList<>();
 
 		// All online accounts
-		final List<ExpandedAccount> expandedAccounts;
-
-		if (this.getBlockData().getHeight() < BlockChain.getInstance().getGroupMemberCheckHeight()) {
-			expandedAccounts = this.getExpandedAccounts().stream().collect(Collectors.toList());
-		}
-		else {
-			expandedAccounts
-				= this.getExpandedAccounts().stream()
-					.filter(expandedAccount -> expandedAccount.isMinterMember)
-					.collect(Collectors.toList());
-		}
+		final List<ExpandedAccount> expandedAccounts = this.getExpandedAccounts().stream()
+				.filter(expandedAccount -> expandedAccount.isMinterMember)
+				.collect(Collectors.toList());
 
 		/*
 		 * Distribution rules:

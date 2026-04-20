@@ -190,18 +190,27 @@ public class RewardShareTests extends Common {
 	}
 
 	@Test
-	public void testLevelZeroAccountCanMintAndCreateRewardShare() throws DataException {
+	public void testMintingGroupRulesApplyFromGenesis() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount aliceAccount = Common.getTestAccount(repository, "alice");
 			PrivateKeyAccount bobAccount = Common.getTestAccount(repository, "bob");
-			Account bob = new Account(repository, bobAccount.getAddress());
+			PrivateKeyAccount outsiderAccount = Common.generateRandomSeedAccount(repository);
+			Account alice = new Account(repository, aliceAccount.getAddress());
+			Account outsider = new Account(repository, outsiderAccount.getAddress());
 
-			assertTrue("Level-zero account should be able to mint", bob.canMint(false));
-			assertTrue("Level-zero account should be able to create reward shares", bob.canRewardShare());
+			assertTrue("Genesis minting group member should be able to mint", alice.canMint(false));
+			assertTrue("Genesis minting group member should not need a name to mint", repository.getNameRepository().getNamesByOwner(alice.getAddress()).isEmpty());
 
-			TransactionData transactionData = AccountUtils.createRewardShare(repository, "bob", "chloe", 0);
-			Transaction transaction = Transaction.fromData(repository, transactionData);
+			TransactionData aliceRewardShareData = AccountUtils.createRewardShare(repository, "alice", "bob", 0);
+			Transaction aliceRewardShare = Transaction.fromData(repository, aliceRewardShareData);
+			assertEquals("Minting group member reward-share should be valid", ValidationResult.OK, aliceRewardShare.isValidUnconfirmed());
 
-			assertEquals("Level-zero account reward-share should be valid", ValidationResult.OK, transaction.isValidUnconfirmed());
+			AccountUtils.pay(repository, aliceAccount, outsiderAccount.getAddress(), 1_00000000L);
+			assertFalse("Non-member should not be able to mint", outsider.canMint(false));
+
+			TransactionData outsiderRewardShareData = AccountUtils.createRewardShare(repository, outsiderAccount, bobAccount, 0, AccountUtils.fee);
+			Transaction outsiderRewardShare = Transaction.fromData(repository, outsiderRewardShareData);
+			assertEquals("Non-member reward-share should be rejected", ValidationResult.NOT_MINTING_ACCOUNT, outsiderRewardShare.isValid());
 		}
 	}
 

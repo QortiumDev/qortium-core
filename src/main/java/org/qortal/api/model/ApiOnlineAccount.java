@@ -1,9 +1,11 @@
 package org.qortal.api.model;
 
 import org.qortal.account.Account;
+import org.qortal.block.BlockChain;
 import org.qortal.repository.DataException;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.repository.Repository;
+import org.qortal.utils.Groups;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
@@ -63,7 +65,10 @@ public class ApiOnlineAccount {
 
 	public boolean getIsMember() {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			return repository.getGroupRepository().memberExists(694, getMinterAddress());
+			int blockchainHeight = repository.getBlockRepository().getBlockchainHeight();
+			return Groups.memberExistsInAnyGroup(repository.getGroupRepository(),
+					Groups.getGroupIdsToMint(BlockChain.getInstance(), blockchainHeight),
+					getMinterAddress());
 		} catch (DataException e) {
 			return false;
 		}

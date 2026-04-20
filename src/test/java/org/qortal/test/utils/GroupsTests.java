@@ -42,10 +42,11 @@ public class GroupsTests extends Common {
 
     @Test
     public void testGetGroupIdsToMintSimple() {
-        List<Integer> ids = Groups.getGroupIdsToMint(BlockChain.getInstance(), 0);
+        List<Integer> ids = Groups.getGroupIdsToMint(BlockChain.getInstance(), 1);
 
         Assert.assertNotNull(ids);
-        Assert.assertEquals(0, ids.size());
+        Assert.assertEquals(1, ids.size());
+        Assert.assertTrue(ids.contains(2));
     }
 
     @Test
@@ -59,7 +60,7 @@ public class GroupsTests extends Common {
             List<Integer> ids1 = Groups.getGroupIdsToMint(BlockChain.getInstance(), height1);
 
             Assert.assertEquals(1, ids1.size() );
-            Assert.assertTrue( ids1.contains( 694 ) );
+            Assert.assertTrue(ids1.contains(2));
 
             Block block2 = BlockUtils.mintBlocks(repository, HEIGHT_2 - HEIGHT_1);
             int height2 = block2.getBlockData().getHeight().intValue();
@@ -67,10 +68,8 @@ public class GroupsTests extends Common {
 
             List<Integer> ids2 = Groups.getGroupIdsToMint(BlockChain.getInstance(), height2);
 
-            Assert.assertEquals(2, ids2.size() );
-
-            Assert.assertTrue( ids2.contains( 694 ) );
-            Assert.assertTrue( ids2.contains( 800 ) );
+            Assert.assertEquals(1, ids2.size());
+            Assert.assertTrue(ids2.contains(2));
 
             Block block3 = BlockUtils.mintBlocks(repository, HEIGHT_3 - HEIGHT_2);
             int height3 = block3.getBlockData().getHeight().intValue();
@@ -78,9 +77,8 @@ public class GroupsTests extends Common {
 
             List<Integer> ids3 = Groups.getGroupIdsToMint(BlockChain.getInstance(), height3);
 
-            Assert.assertEquals( 1, ids3.size() );
-
-            Assert.assertTrue( ids3.contains( 800 ) );
+            Assert.assertEquals(1, ids3.size());
+            Assert.assertTrue(ids3.contains(2));
         }
     }
 

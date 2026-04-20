@@ -80,9 +80,6 @@
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"decreaseOnlineAccountsDifficultyTimestamp": 1731958200000,
 		"arbitraryOptionalFeeTimestamp": 1680278400000,
-		"onlyMintWithNameHeight": 1900300,
-		"removeOnlyMintWithNameHeight": 1935500,
-		"groupMemberCheckHeight": 1902700,
 		"adminsReplaceFoundersHeight": 2012800,
 		"multipleNamesPerAccountHeight": 2206300
 	},

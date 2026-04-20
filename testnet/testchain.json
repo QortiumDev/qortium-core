@@ -76,10 +76,7 @@
 		"aggregateSignatureTimestamp": 0,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"arbitraryOptionalFeeTimestamp": 0,
-		"onlyMintWithNameHeight": 8500,
-		"groupMemberCheckHeight": 11200,
 		"decreaseOnlineAccountsDifficultyTimestamp": 9999999999999,
-		"removeOnlyMintWithNameHeight": 9999999999999,
 		"adminsReplaceFoundersHeight": 0,
 		"multipleNamesPerAccountHeight": 0
 	},
