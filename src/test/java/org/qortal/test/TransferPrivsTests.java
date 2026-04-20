@@ -294,7 +294,7 @@ public class TransferPrivsTests extends Common {
 	/** Mint enough blocks, using <tt>mintingAccount</tt> so that minting account(s) will surpass <tt>targetAccount</tt>'s level post-combine. */
 	private void mintToSurpassLevelPostCombine(Repository repository, PrivateKeyAccount mintingAccount, Account targetAccount) throws DataException {
 		AccountData preMintAccountData = repository.getAccountRepository().getAccount(targetAccount.getAddress());
-		final int minterBlocksNeeded = cumulativeBlocksByLevel.get(preMintAccountData.getLevel() + 1) - preMintAccountData.getBlocksMinted() - preMintAccountData.getBlocksMintedAdjustment();
+		final int minterBlocksNeeded = cumulativeBlocksByLevel.get(preMintAccountData.getLevel() + 1) - preMintAccountData.getBlocksMinted();
 
 		// Mint enough blocks to bump testAccount level
 		for (int bc = 0; bc < minterBlocksNeeded; ++bc)
@@ -324,9 +324,6 @@ public class TransferPrivsTests extends Common {
 
 		// Confirm sender has zeroed minted block count
 		assertEquals("sender's minted block count should be zeroed", 0, (int) senderAccountData.getBlocksMinted());
-
-		// Confirm sender has zeroed minted block adjustment
-		assertEquals("sender's minted block adjustment should be zeroed", 0, (int) senderAccountData.getBlocksMintedAdjustment());
 	}
 
 	private void checkRecipientPostTransfer(AccountData preCombineSenderData, AccountData preCombineRecipientData, AccountData postCombineRecipientData, int expectedPostCombineLevel) {
@@ -338,9 +335,6 @@ public class TransferPrivsTests extends Common {
 
 		// Confirm recipient has increased minted block count
 		assertEquals("recipient minted block count incorrect", preCombineRecipientData.getBlocksMinted() + preCombineSenderData.getBlocksMinted() + 1, postCombineRecipientData.getBlocksMinted());
-
-		// Confirm recipient has increased minted block adjustment
-		assertEquals("recipient minted block adjustment incorrect", preCombineRecipientData.getBlocksMintedAdjustment() + preCombineSenderData.getBlocksMintedAdjustment(), postCombineRecipientData.getBlocksMintedAdjustment());
 	}
 
 	private void checkAccountDataRestored(String accountName, AccountData expectedAccountData, AccountData actualAccountData) {
@@ -349,9 +343,6 @@ public class TransferPrivsTests extends Common {
 
 		// Confirm minted blocks count
 		assertEquals(accountName + "'s minted block count wasn't restored", expectedAccountData.getBlocksMinted(), actualAccountData.getBlocksMinted());
-
-		// Confirm minted block adjustment
-		assertEquals(accountName + "'s minted block adjustment wasn't restored", expectedAccountData.getBlocksMintedAdjustment(), actualAccountData.getBlocksMintedAdjustment());
 
 		// Confirm level has been restored
 		assertEquals(accountName + "'s level wasn't restored", expectedAccountData.getLevel(), actualAccountData.getLevel());

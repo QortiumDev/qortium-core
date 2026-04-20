@@ -29,9 +29,6 @@ public class TransferPrivsTransactionData extends TransactionData {
 
 	@XmlTransient
 	@Schema(hidden = true)
-	private Integer previousSenderBlocksMintedAdjustment;
-	@XmlTransient
-	@Schema(hidden = true)
 	private Integer previousSenderBlocksMinted;
 
 	// Constructors
@@ -48,7 +45,7 @@ public class TransferPrivsTransactionData extends TransactionData {
 	/** Constructs using data from repository. */
 	public TransferPrivsTransactionData(BaseTransactionData baseTransactionData, String recipient,
 			Integer previousSenderFlags, Integer previousRecipientFlags,
-			Integer previousSenderBlocksMintedAdjustment, Integer previousSenderBlocksMinted) {
+			Integer previousSenderBlocksMinted) {
 		super(TransactionType.TRANSFER_PRIVS, baseTransactionData);
 
 		this.senderPublicKey = baseTransactionData.creatorPublicKey;
@@ -57,13 +54,12 @@ public class TransferPrivsTransactionData extends TransactionData {
 		this.previousSenderFlags = previousSenderFlags;
 		this.previousRecipientFlags = previousRecipientFlags;
 
-		this.previousSenderBlocksMintedAdjustment = previousSenderBlocksMintedAdjustment;
 		this.previousSenderBlocksMinted = previousSenderBlocksMinted;
 	}
 
 	/** Constructs using data from network/API. */
 	public TransferPrivsTransactionData(BaseTransactionData baseTransactionData, String recipient) {
-		this(baseTransactionData, recipient, null, null, null, null);
+		this(baseTransactionData, recipient, null, null, null);
 	}
 
 	// Getters/setters
@@ -90,14 +86,6 @@ public class TransferPrivsTransactionData extends TransactionData {
 
 	public void setPreviousRecipientFlags(Integer previousRecipientFlags) {
 		this.previousRecipientFlags = previousRecipientFlags;
-	}
-
-	public Integer getPreviousSenderBlocksMintedAdjustment() {
-		return this.previousSenderBlocksMintedAdjustment;
-	}
-
-	public void setPreviousSenderBlocksMintedAdjustment(Integer previousSenderBlocksMintedAdjustment) {
-		this.previousSenderBlocksMintedAdjustment = previousSenderBlocksMintedAdjustment;
 	}
 
 	public Integer getPreviousSenderBlocksMinted() {

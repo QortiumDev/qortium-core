@@ -39,8 +39,6 @@ public class AccountMessage extends Message {
 
 			bytes.write(Ints.toByteArray(accountData.getBlocksMinted()));
 
-			bytes.write(Ints.toByteArray(accountData.getBlocksMintedAdjustment()));
-
 		} catch (IOException e) {
 			throw new AssertionError("IOException shouldn't occur with ByteArrayOutputStream");
 		}
@@ -78,9 +76,7 @@ public class AccountMessage extends Message {
 
 		int blocksMinted = byteBuffer.getInt();
 
-		int blocksMintedAdjustment = byteBuffer.getInt();
-
-		AccountData accountData = new AccountData(address, reference, publicKey, defaultGroupId, flags, level, blocksMinted, blocksMintedAdjustment);
+		AccountData accountData = new AccountData(address, reference, publicKey, defaultGroupId, flags, level, blocksMinted);
 		return new AccountMessage(id, accountData);
 	}
 

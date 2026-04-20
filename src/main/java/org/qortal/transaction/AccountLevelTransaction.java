@@ -2,6 +2,7 @@ package org.qortal.transaction;
 
 import org.qortal.account.Account;
 import org.qortal.block.BlockChain;
+import org.qortal.data.account.AccountData;
 import org.qortal.data.transaction.AccountLevelTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.repository.DataException;
@@ -64,10 +65,12 @@ public class AccountLevelTransaction extends Transaction {
 		// Set account's initial level
 		target.setLevel(this.accountLevelTransactionData.getLevel());
 
-		// Set account's blocks minted adjustment
+		// Seed blocksMinted so the pre-leveled account starts with matching mint history.
 		List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
-		int blocksMintedAdjustment = cumulativeBlocksByLevel.get(this.accountLevelTransactionData.getLevel());
-		target.setBlocksMintedAdjustment(blocksMintedAdjustment);
+		int blocksMinted = cumulativeBlocksByLevel.get(this.accountLevelTransactionData.getLevel());
+		AccountData targetData = this.repository.getAccountRepository().getAccount(target.getAddress());
+		targetData.setBlocksMinted(blocksMinted);
+		this.repository.getAccountRepository().setMintedBlockCount(targetData);
 	}
 
 	@Override

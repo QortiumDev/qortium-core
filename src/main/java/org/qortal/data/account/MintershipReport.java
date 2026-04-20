@@ -14,8 +14,6 @@ public class MintershipReport {
 
 	private int blocksMinted;
 
-	private int adjustments;
-
 	private boolean transfer;
 
 	private String name;
@@ -44,11 +42,10 @@ public class MintershipReport {
 	protected MintershipReport() {
 	}
 
-	public MintershipReport(String address, int level, int blocksMinted, int adjustments, boolean transfer, String name, int sponseeCount, int balance, int arbitraryCount, int transferAssetCount, int transferPrivsCount, int sellCount, int sellAmount, int buyCount, int buyAmount) {
+	public MintershipReport(String address, int level, int blocksMinted, boolean transfer, String name, int sponseeCount, int balance, int arbitraryCount, int transferAssetCount, int transferPrivsCount, int sellCount, int sellAmount, int buyCount, int buyAmount) {
 		this.address = address;
 		this.level = level;
 		this.blocksMinted = blocksMinted;
-		this.adjustments = adjustments;
 		this.transfer = transfer;
 		this.name = name;
 		this.sponseeCount = sponseeCount;
@@ -75,10 +72,6 @@ public class MintershipReport {
 
 	public int getBlocksMinted() {
 		return blocksMinted;
-	}
-
-	public int getAdjustments() {
-		return adjustments;
 	}
 
 	public boolean isTransfer() {
@@ -131,7 +124,6 @@ public class MintershipReport {
 				"address='" + address + '\'' +
 				", level=" + level +
 				", blocksMinted=" + blocksMinted +
-				", adjustments=" + adjustments +
 				", transfer=" + transfer +
 				", name='" + name + '\'' +
 				", sponseeCount=" + sponseeCount +

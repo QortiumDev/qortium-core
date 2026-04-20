@@ -78,8 +78,7 @@ public class BlockChain {
 		groupMemberCheckHeight,
 		adminsReplaceFoundersHeight,
 		ignoreLevelForRewardShareHeight,
-		multipleNamesPerAccountHeight,
-		mintedBlocksAdjustmentRemovalHeight
+		multipleNamesPerAccountHeight
 	}
 
     // V5.5 Default List of Historic Triggers
@@ -325,7 +324,6 @@ public class BlockChain {
 
         // Load in the default feature triggers
         defaultFeatureTriggerHeight.put(FeatureTrigger.multipleNamesPerAccountHeight, 2206300L);
-        defaultFeatureTriggerHeight.put(FeatureTrigger.mintedBlocksAdjustmentRemovalHeight, 2206300L);
 
 		try  {
 			// Attempt to unmarshal JSON stream to BlockChain config
@@ -588,10 +586,6 @@ public class BlockChain {
 
 	public int getMultipleNamesPerAccountHeight() {
 		return this.featureTriggers.get(FeatureTrigger.multipleNamesPerAccountHeight.name()).intValue();
-	}
-
-	public int getMintedBlocksAdjustmentRemovalHeight() {
-		return this.featureTriggers.get(FeatureTrigger.mintedBlocksAdjustmentRemovalHeight.name()).intValue();
 	}
 
 	// More complex getters for aspects that change by height or timestamp

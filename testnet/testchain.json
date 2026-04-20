@@ -98,8 +98,7 @@
 		"removeOnlyMintWithNameHeight": 9999999999999,
 		"adminsReplaceFoundersHeight": 0,
 		"ignoreLevelForRewardShareHeight": 0,
-		"multipleNamesPerAccountHeight": 0,
-		"mintedBlocksAdjustmentRemovalHeight": 0
+		"multipleNamesPerAccountHeight": 0
 	},
 	"genesisInfo": {
 		"version": 4,

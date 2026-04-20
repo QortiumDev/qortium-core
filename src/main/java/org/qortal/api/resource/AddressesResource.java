@@ -686,7 +686,6 @@ public class AddressesResource {
 					report.getAddress(),
 					report.getLevel(),
 					report.getBlocksMinted(),
-					report.getAdjustments(),
 					report.isTransfer(),
 					name,
 					sponseeCount,

@@ -336,12 +336,6 @@ public class Account {
 		this.repository.getAccountRepository().setLevel(accountData);
 	}
 
-	public void setBlocksMintedAdjustment(int blocksMintedAdjustment) throws DataException {
-		AccountData accountData = this.buildAccountData();
-		accountData.setBlocksMintedAdjustment(blocksMintedAdjustment);
-		this.repository.getAccountRepository().setBlocksMintedAdjustment(accountData);
-	}
-
 	/**
 	 * Returns 'effective' minting level, or zero if account does not exist/cannot mint.
 	 * <p>

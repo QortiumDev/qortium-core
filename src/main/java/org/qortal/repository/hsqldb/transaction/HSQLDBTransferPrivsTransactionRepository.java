@@ -17,7 +17,7 @@ public class HSQLDBTransferPrivsTransactionRepository extends HSQLDBTransactionR
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT recipient, previous_sender_flags, previous_recipient_flags, previous_sender_blocks_minted_adjustment, previous_sender_blocks_minted FROM TransferPrivsTransactions WHERE signature = ?";
+		String sql = "SELECT recipient, previous_sender_flags, previous_recipient_flags, previous_sender_blocks_minted FROM TransferPrivsTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
@@ -33,15 +33,11 @@ public class HSQLDBTransferPrivsTransactionRepository extends HSQLDBTransactionR
 			if (previousRecipientFlags == 0 && resultSet.wasNull())
 				previousRecipientFlags = null;
 
-			Integer previousSenderBlocksMintedAdjustment = resultSet.getInt(4);
-			if (previousSenderBlocksMintedAdjustment == 0 && resultSet.wasNull())
-				previousSenderBlocksMintedAdjustment = null;
-
-			Integer previousSenderBlocksMinted = resultSet.getInt(5);
+			Integer previousSenderBlocksMinted = resultSet.getInt(4);
 			if (previousSenderBlocksMinted == 0 && resultSet.wasNull())
 				previousSenderBlocksMinted = null;
 
-			return new TransferPrivsTransactionData(baseTransactionData, recipient, previousSenderFlags, previousRecipientFlags, previousSenderBlocksMintedAdjustment, previousSenderBlocksMinted);
+			return new TransferPrivsTransactionData(baseTransactionData, recipient, previousSenderFlags, previousRecipientFlags, previousSenderBlocksMinted);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch transfer privs transaction from repository", e);
 		}
@@ -56,7 +52,6 @@ public class HSQLDBTransferPrivsTransactionRepository extends HSQLDBTransactionR
 				.bind("recipient", transferPrivsTransactionData.getRecipient())
 				.bind("previous_sender_flags", transferPrivsTransactionData.getPreviousSenderFlags())
 				.bind("previous_recipient_flags", transferPrivsTransactionData.getPreviousRecipientFlags())
-				.bind("previous_sender_blocks_minted_adjustment", transferPrivsTransactionData.getPreviousSenderBlocksMintedAdjustment())
 				.bind("previous_sender_blocks_minted", transferPrivsTransactionData.getPreviousSenderBlocksMinted());
 
 		try {

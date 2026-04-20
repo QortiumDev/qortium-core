@@ -1730,15 +1730,7 @@ public class Block {
 			accountData.setBlocksMinted(accountData.getBlocksMinted() + 1);
 			LOGGER.trace(() -> String.format("Block minter %s up to %d minted block%s", accountData.getAddress(), accountData.getBlocksMinted(), (accountData.getBlocksMinted() != 1 ? "s" : "")));
 
-			int blocksMintedAdjustment
-				=
-				(this.blockData.getHeight() > BlockChain.getInstance().getMintedBlocksAdjustmentRemovalHeight())
-				?
-				0
-				:
-				accountData.getBlocksMintedAdjustment();
-
-			final int effectiveBlocksMinted = accountData.getBlocksMinted() + blocksMintedAdjustment;
+			final int effectiveBlocksMinted = accountData.getBlocksMinted();
 
 			for (int newLevel = maximumLevel; newLevel >= 0; --newLevel)
 				if (effectiveBlocksMinted >= cumulativeBlocksByLevel.get(newLevel)) {
@@ -2145,15 +2137,7 @@ public class Block {
 			accountData.setBlocksMinted(accountData.getBlocksMinted() - 1);
 			LOGGER.trace(() -> String.format("Block minter %s down to %d minted block%s", accountData.getAddress(), accountData.getBlocksMinted(), (accountData.getBlocksMinted() != 1 ? "s" : "")));
 
-			int blocksMintedAdjustment
-				=
-				(this.blockData.getHeight() -1 > BlockChain.getInstance().getMintedBlocksAdjustmentRemovalHeight())
-				?
-				0
-				:
-				accountData.getBlocksMintedAdjustment();
-
-			final int effectiveBlocksMinted = accountData.getBlocksMinted() + blocksMintedAdjustment;
+			final int effectiveBlocksMinted = accountData.getBlocksMinted();
 
 			for (int newLevel = maximumLevel; newLevel >= 0; --newLevel)
 				if (effectiveBlocksMinted >= cumulativeBlocksByLevel.get(newLevel)) {

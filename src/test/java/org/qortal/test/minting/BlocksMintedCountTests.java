@@ -98,9 +98,9 @@ public class BlocksMintedCountTests extends Common {
 			// get the Alice's reward share account
 			PrivateKeyAccount aliceMintingAccount = Common.getTestAccount(repository, "alice-reward-share");
 
-			// give Alice an 8 blocks minted adjustment
-			int blocksMintedAdjustmentForAlice = 8;
-			adjustMintingData(repository, "alice", blocksMintedAdjustmentForAlice);
+			// seed Alice with 8 minted blocks
+			int seededBlocksMintedForAlice = 8;
+			seedMintingData(repository, "alice", seededBlocksMintedForAlice);
 
 			// Confirm reward-share exists
 			RewardShareData aliceRewardShareData = repository.getAccountRepository().getRewardShare(aliceMintingAccount.getPublicKey());
@@ -115,13 +115,13 @@ public class BlocksMintedCountTests extends Common {
 				BlockMinter.mintTestingBlockRetainingTimestamps(repository, aliceMintingAccount);
 
 				// assert Alice's minting data after another block minted
-				assertMintingData(repository, "alice", blocksMintedAdjustmentForAlice);
+				assertMintingData(repository, "alice");
 
 				// orphan the block
 				BlockUtils.orphanLastBlock(repository);
 
 				// assert the orphaning
-				assertMintingData(repository, "alice", blocksMintedAdjustmentForAlice);
+				assertMintingData(repository, "alice");
 
 				// mint another block to reverse the orpaning
 				BlockMinter.mintTestingBlockRetainingTimestamps(repository, aliceMintingAccount);
@@ -139,11 +139,9 @@ public class BlocksMintedCountTests extends Common {
 	 *
 	 * @param repository the data repository
 	 * @param name the name of the minting account
-	 * @param adjustment the blocks minted adjustment
-	 *
 	 * @throws DataException
 	 */
-	private static void assertMintingData(Repository repository, String name, int adjustment ) throws DataException {
+	private static void assertMintingData(Repository repository, String name) throws DataException {
 
 		// get the test account data
 		TestAccount testAccount = Common.getTestAccount(repository, name);
@@ -151,18 +149,8 @@ public class BlocksMintedCountTests extends Common {
 
 		List<Integer> blocksNeededByLevel = BlockChain.getInstance().getBlocksNeededByLevel();
 
-		// determine current height and adjustment ability
 		int height = repository.getBlockRepository().getBlockchainHeight();
-		int adjustmentRemovalHeight = BlockChain.getInstance().getMintedBlocksAdjustmentRemovalHeight();
-		boolean isAdjustingEnabled = height <= adjustmentRemovalHeight;
-
-		// initialize loop variables
-		int blocksLeft;
-
-		if( isAdjustingEnabled )
-			blocksLeft = testAccountData.getBlocksMinted() + adjustment;
-		else
-			blocksLeft = testAccountData.getBlocksMinted();
+		int blocksLeft = testAccountData.getBlocksMinted();
 
 		int index = 0;
 		int expectedLevel = 0;
@@ -183,7 +171,7 @@ public class BlocksMintedCountTests extends Common {
 		}
 
 		// print and assert the expected and derived numbers
-		System.out.println(String.format("height = %s,expectedLevel = %s, adjustment = %s, blocksMinted = %s", height, expectedLevel, adjustment, testAccountData.getBlocksMinted()) );
+		System.out.println(String.format("height = %s,expectedLevel = %s, blocksMinted = %s", height, expectedLevel, testAccountData.getBlocksMinted()) );
 		assertEquals( expectedLevel, testAccountData.getLevel() );
 	}
 
@@ -192,15 +180,15 @@ public class BlocksMintedCountTests extends Common {
 	 *
 	 * @param repository the data repository
 	 * @param name the name of the account to adjust
-	 * @param blocksMintedAdjustment the number of blocks to adjust
+	 * @param blocksMinted the number of blocks to seed
 	 *
 	 * @throws DataException
 	 */
-	private static void adjustMintingData(Repository repository, String name, int blocksMintedAdjustment) throws DataException {
+	private static void seedMintingData(Repository repository, String name, int blocksMinted) throws DataException {
 		TestAccount testAccount = Common.getTestAccount(repository, name);
 		AccountData testAccountData = repository.getAccountRepository().getAccount(testAccount.getAddress());
-		testAccountData.setBlocksMintedAdjustment(blocksMintedAdjustment);
-		repository.getAccountRepository().setBlocksMintedAdjustment(testAccountData);
+		testAccountData.setBlocksMinted(blocksMinted);
+		repository.getAccountRepository().setMintedBlockCount(testAccountData);
 	}
 
 	private void testRewardShare(Repository repository, PrivateKeyAccount testRewardShareAccount, int aliceDelta, int bobDelta) throws DataException {
