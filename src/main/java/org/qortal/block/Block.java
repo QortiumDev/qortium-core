@@ -219,9 +219,7 @@ public class Block {
 					return null; // not member of minter group isn't included in any share bins
 			}
 
-			// Select the correct set of share bins based on block height
-			final AccountLevelShareBin[] shareBinsByLevel = (blockHeight >= blockChain.getSharesByLevelV2Height()) ?
-					blockChain.getShareBinsByAccountLevelV2() : blockChain.getShareBinsByAccountLevelV1();
+			final AccountLevelShareBin[] shareBinsByLevel = blockChain.getShareBinsByAccountLevel();
 
 			if (accountLevel > shareBinsByLevel.length)
 				return null;
@@ -2337,7 +2335,7 @@ public class Block {
 		 * If ANY founders are online, then they receive the leftover non-distributed reward.
 		 * If NO founders are online, then account-level-based rewards are scaled up so 100% of reward is allocated.
 		 *
-		 * If ANY non-maxxed legacy QORA holders exist then they are always allocated their fixed share (e.g. 20%).
+		 * If ANY non-maxxed legacy QORA holders exist then they are always allocated their fixed share (e.g. 1%).
 		 *
 		 * There has to be either at least one 'online' account for blocks to be minted
 		 * so there is always either one account-level-based or founder reward candidate.
@@ -2345,20 +2343,20 @@ public class Block {
 		 * Examples:
 		 *
 		 * With at least one founder online:
-		 * Level 1/2 accounts: 5%
-		 * Legacy QORA holders: 20%
-		 * Founders: ~75%
+		 * Level 1/2 accounts: 6%
+		 * Legacy QORA holders: 1%
+		 * Founders: ~93%
 		 *
 		 * No online founders:
-		 * Level 1/2 accounts: 5%
-		 * Level 5/6 accounts: 15%
-		 * Legacy QORA holders: 20%
-		 * Total: 40%
+		 * Level 1/2 accounts: 6%
+		 * Level 5/6 accounts: 19%
+		 * Legacy QORA holders: 1%
+		 * Total: 26%
 		 *
 		 * After scaling account-level-based shares to fill 100%:
-		 * Level 1/2 accounts: 20%
-		 * Level 5/6 accounts: 60%
-		 * Legacy QORA holders: 20%
+		 * Level 1/2 accounts: ~23.08%
+		 * Level 5/6 accounts: ~73.08%
+		 * Legacy QORA holders: 1%
 		 * Total: 100%
 		 */
 		long totalShares = 0;
@@ -2367,9 +2365,7 @@ public class Block {
 		final List<ExpandedAccount> onlineFounderAccounts = expandedAccounts.stream().filter(expandedAccount -> expandedAccount.isMinterFounder).collect(Collectors.toList());
 		final boolean haveFounders = !onlineFounderAccounts.isEmpty();
 
-		// Select the correct set of share bins based on block height
-		List<AccountLevelShareBin> accountLevelShareBinsForBlock = (this.blockData.getHeight() >= BlockChain.getInstance().getSharesByLevelV2Height()) ?
-				BlockChain.getInstance().getAccountLevelShareBinsV2() : BlockChain.getInstance().getAccountLevelShareBinsV1();
+		List<AccountLevelShareBin> accountLevelShareBinsForBlock = BlockChain.getInstance().getAccountLevelShareBins();
 		// Determine reward candidates based on account level
 		// This needs a deep copy, so the shares can be modified when tiers aren't activated yet
 		List<AccountLevelShareBin> accountLevelShareBins = new ArrayList<>();

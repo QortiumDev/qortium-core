@@ -34,14 +34,7 @@
 		{ "height": 11, "reward": 10 },
 		{ "height": 21, "reward": 1 }
 	],
-	"sharesByLevelV1": [
-		{ "id": 1, "levels": [ 1, 2 ], "share": 0.05 },
-		{ "id": 2, "levels": [ 3, 4 ], "share": 0.10 },
-		{ "id": 3, "levels": [ 5, 6 ], "share": 0.15 },
-		{ "id": 4, "levels": [ 7, 8 ], "share": 0.20 },
-		{ "id": 5, "levels": [ 9, 10 ], "share": 0.25 }
-	],
-	"sharesByLevelV2": [
+	"sharesByLevel": [
 		{ "id": 1, "levels": [ 1, 2 ], "share": 0.06 },
 		{ "id": 2, "levels": [ 3, 4 ], "share": 0.13 },
 		{ "id": 3, "levels": [ 5, 6 ], "share": 0.19 },
@@ -49,8 +42,7 @@
 		{ "id": 5, "levels": [ 9, 10 ], "share": 0.32 }
 	],
 	"qoraHoldersShareByHeight": [
-		{ "height": 1, "share": 0.20 },
-		{ "height": 1000, "share": 0.01 }
+		{ "height": 1, "share": 0.01 }
 	],
 	"qoraPerQortReward": 250,
 	"minAccountsToActivateShareBin": 30,
@@ -75,7 +67,6 @@
 		"qortalTimestamp": 0,
 		"newAssetPricingTimestamp": 0,
 		"groupApprovalTimestamp": 0,
-		"sharesByLevelV2Height": 1000,
 		"rewardShareLimitTimestamp": 9999999999999,
 		"transactionV6Timestamp": 0,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999990,
