@@ -51,6 +51,7 @@ public class BatchRewardTests extends Common {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
+			final int aliceStartingBlocksMinted = AccountUtils.getBlocksMinted(repository, "alice");
 
 			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
 
@@ -65,7 +66,7 @@ public class BatchRewardTests extends Common {
 			AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
 			long aliceCurrentBalance = expectedBalance;
 
-			AccountUtils.assertBlocksMinted(repository, "alice", 1);
+			AccountUtils.assertBlocksMinted(repository, "alice", aliceStartingBlocksMinted + 1);
 
 			// Mint blocks 3-20
 			Block block;
@@ -80,7 +81,7 @@ public class BatchRewardTests extends Common {
 			}
 			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 20);
 
-			AccountUtils.assertBlocksMinted(repository, "alice", 19);
+			AccountUtils.assertBlocksMinted(repository, "alice", aliceStartingBlocksMinted + 19);
 
 			// Mint blocks 21-29
 			long expectedFees = 0L;
@@ -102,7 +103,7 @@ public class BatchRewardTests extends Common {
 			}
 			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 29);
 
-			AccountUtils.assertBlocksMinted(repository, "alice", 19);
+			AccountUtils.assertBlocksMinted(repository, "alice", aliceStartingBlocksMinted + 19);
 
 			// No payouts since block 20 due to batching (to be paid at block 30)
 			AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
@@ -117,7 +118,7 @@ public class BatchRewardTests extends Common {
 			expectedFees += block.getBlockData().getTotalFees();
 			assertTrue(expectedFees > 0);
 
-			AccountUtils.assertBlocksMinted(repository, "alice", 29);
+			AccountUtils.assertBlocksMinted(repository, "alice", aliceStartingBlocksMinted + 29);
 
 			// Batch distribution still active
 			assertTrue(block.isBatchRewardDistributionActive());
@@ -141,7 +142,7 @@ public class BatchRewardTests extends Common {
 			}
 			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 39);
 
-			AccountUtils.assertBlocksMinted(repository, "alice", 29);
+			AccountUtils.assertBlocksMinted(repository, "alice", aliceStartingBlocksMinted + 29);
 
 			// No payouts since block 30 due to batching (to be paid at block 40)
 			AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
