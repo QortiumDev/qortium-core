@@ -71,7 +71,6 @@
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999990,
 		"onlineAccountMinterLevelValidationHeight": 0,
 		"arbitraryOptionalFeeTimestamp": 0,
-		"unconfirmableRewardSharesHeight": 500,
 		"disableTransferPrivsTimestamp": 9999999999500,
 		"enableTransferPrivsTimestamp": 9999999999950,
 		"disableRewardshareHeight": 9999999999990,

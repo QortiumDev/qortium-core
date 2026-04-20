@@ -683,7 +683,8 @@ public class BatchRewardTests extends Common {
 
 	@Test
 	public void testUnconfirmableRewardShares() throws DataException, IllegalAccessException {
-		// test-settings-v2-reward-scaling.json has unconfirmable reward share feature trigger enabled from block 500
+		// Reward-share changes should be delayed whenever batch rewards are active and the
+		// target block is in the online-account capture/distribution window.
 		Common.useSettings("test-settings-v2-reward-scaling.json");
 
 		// Set reward batching to every 1000 blocks, starting at block 0, looking back the last 25 blocks for online accounts
@@ -756,7 +757,8 @@ public class BatchRewardTests extends Common {
 
 	@Test
 	public void testUnconfirmableRewardShareBlocks() throws DataException, IllegalAccessException {
-		// test-settings-v2-reward-scaling.json has unconfirmable reward share feature trigger enabled from block 500
+		// Reward-share changes should be unconfirmable only during the active batch
+		// capture/distribution window, not in ordinary non-batched heights.
 		Common.useSettings("test-settings-v2-reward-scaling.json");
 
 		// Set reward batching to every 1000 blocks, starting at block 0, looking back the last 25 blocks for online accounts

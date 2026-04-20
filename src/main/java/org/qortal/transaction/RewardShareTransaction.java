@@ -180,11 +180,11 @@ public class RewardShareTransaction extends Transaction {
 
 	@Override
 	public boolean isConfirmableAtHeight(int height) {
-		if (height >= BlockChain.getInstance().getUnconfirmableRewardSharesHeight()) {
-			// Not confirmable in online accounts or distribution blocks
-			if (Block.isOnlineAccountsBlock(height) || Block.isBatchRewardDistributionBlock(height)) {
-				return false;
-			}
+		// Once batch reward distribution is active, do not confirm reward-share changes
+		// inside online-account capture blocks or distribution blocks.
+		if (Block.isBatchRewardDistributionActive(height)
+				&& (Block.isOnlineAccountsBlock(height) || Block.isBatchRewardDistributionBlock(height))) {
+			return false;
 		}
 
 		return true;
