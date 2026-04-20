@@ -21,7 +21,6 @@
 	"founderEffectiveMintingLevel": 10,
 	"onlineAccountSignaturesMinLifetime": 3600000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,
-	"onlineAccountsModulusV2Timestamp": 9999999999999,
 	"mempowTransactionUpdatesTimestamp": 0,
 	"blockRewardBatchStartHeight": 999999000,
 	"blockRewardBatchSize": 10,
@@ -68,9 +67,7 @@
 		"newAssetPricingTimestamp": 0,
 		"groupApprovalTimestamp": 0,
 		"transactionV6Timestamp": 0,
-		"increaseOnlineAccountsDifficultyTimestamp": 9999999999990,
 		"arbitraryOptionalFeeTimestamp": 0,
-		"decreaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"adminsReplaceFoundersHeight": 9999999999999
 	},
 	"genesisInfo": {

@@ -44,9 +44,7 @@ public class OnlineAccountsManager {
     /**
      * How long online accounts signatures last before they expire.
      */
-    private static final long ONLINE_TIMESTAMP_MODULUS_V1 = 5 * 60 * 1000L;
-    private static final long ONLINE_TIMESTAMP_MODULUS_V2 = 30 * 60 * 1000L;
-    private static final long ONLINE_TIMESTAMP_MODULUS_V3 = 10 * 60 * 1000L;
+    private static final long ONLINE_TIMESTAMP_MODULUS = 10 * 60 * 1000L;
 
     /**
      * How many 'current' timestamp-sets of online accounts we cache.
@@ -71,9 +69,7 @@ public class OnlineAccountsManager {
 
     // MemoryPoW - mainnet
     public static final int POW_BUFFER_SIZE = 1024 * 1024; // bytes
-    public static final int POW_DIFFICULTY_V1 = 18; // leading zero bits
-    public static final int POW_DIFFICULTY_V2 = 19; // leading zero bits
-    public static final int POW_DIFFICULTY_V3 = 6; // leading zero bits
+    public static final int POW_DIFFICULTY = 6; // leading zero bits
 
     // MemoryPoW - testnet
     public static final int POW_BUFFER_SIZE_TESTNET = 1024 * 1024; // bytes
@@ -109,14 +105,7 @@ public class OnlineAccountsManager {
     private boolean hasOurOnlineAccounts = false;
 
     public static long getOnlineTimestampModulus() {
-        Long now = NTP.getTime();
-        if (now != null && now >= BlockChain.getInstance().getOnlineAccountsModulusV2Timestamp() && now < BlockChain.getInstance().getOnlineAccountsModulusV3Timestamp()) {
-            return ONLINE_TIMESTAMP_MODULUS_V2;
-        }
-        if (now != null && now >= BlockChain.getInstance().getOnlineAccountsModulusV3Timestamp()) {
-            return ONLINE_TIMESTAMP_MODULUS_V3;
-        }
-        return ONLINE_TIMESTAMP_MODULUS_V1;
+        return ONLINE_TIMESTAMP_MODULUS;
     }
 
     public static Long getCurrentOnlineAccountTimestamp() {
@@ -139,17 +128,11 @@ public class OnlineAccountsManager {
         return POW_BUFFER_SIZE;
     }
 
-    private static int getPoWDifficulty(long timestamp) {
+    private static int getPoWDifficulty() {
         if (Settings.getInstance().isTestNet())
             return POW_DIFFICULTY_TESTNET;
 
-        if (timestamp >= BlockChain.getInstance().getIncreaseOnlineAccountsDifficultyTimestamp() && timestamp < BlockChain.getInstance().getDecreaseOnlineAccountsDifficultyTimestamp())
-            return POW_DIFFICULTY_V2;
-
-        if (timestamp >= BlockChain.getInstance().getDecreaseOnlineAccountsDifficultyTimestamp())
-            return POW_DIFFICULTY_V3;
-
-        return POW_DIFFICULTY_V1;
+        return POW_DIFFICULTY;
     }
 
     private OnlineAccountsManager() {
@@ -629,7 +612,7 @@ public class OnlineAccountsManager {
                             Base58.encode(publicKey),
                             onlineAccountsTimestamp,
                             nonce,
-                            getPoWDifficulty(onlineAccountsTimestamp),
+                            getPoWDifficulty(),
                             getPoWBufferSize());
                 }
             }
@@ -681,7 +664,7 @@ public class OnlineAccountsManager {
         final long nextOnlineAccountsTimestamp = toOnlineAccountTimestamp(startTime) + getOnlineTimestampModulus();
         long timeUntilNextTimestamp = nextOnlineAccountsTimestamp - startTime;
 
-        int difficulty = getPoWDifficulty(onlineAccountsTimestamp);
+        int difficulty = getPoWDifficulty();
         Integer nonce = MemoryPoW.compute2(bytes, getPoWBufferSize(), difficulty, timeUntilNextTimestamp);
 
         double totalSeconds = (NTP.getTime() - startTime) / 1000.0f;
@@ -712,7 +695,7 @@ public class OnlineAccountsManager {
         }
 
         // Verify the nonce
-        return MemoryPoW.verify2(mempowBytes, workBuffer, getPoWBufferSize(), getPoWDifficulty(onlineAccountData.getTimestamp()), nonce);
+        return MemoryPoW.verify2(mempowBytes, workBuffer, getPoWBufferSize(), getPoWDifficulty(), nonce);
     }
 
 

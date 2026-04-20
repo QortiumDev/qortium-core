@@ -64,9 +64,7 @@
 		"newAssetPricingTimestamp": 0,
 		"groupApprovalTimestamp": 0,
 		"transactionV6Timestamp": 9999999999999,
-		"increaseOnlineAccountsDifficultyTimestamp": 9999999999990,
 		"arbitraryOptionalFeeTimestamp": 0,
-		"decreaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"adminsReplaceFoundersHeight": 9999999999999
 	},
 	"genesisInfo": {

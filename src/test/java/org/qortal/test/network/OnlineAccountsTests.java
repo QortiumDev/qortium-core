@@ -2,15 +2,14 @@ package org.qortal.test.network;
 
 import com.google.common.primitives.Ints;
 import io.druid.extendedset.intset.ConciseSet;
-import org.apache.commons.lang3.reflect.FieldUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.qortal.block.Block;
-import org.qortal.block.BlockChain;
 import org.qortal.controller.BlockMinter;
+import org.qortal.controller.OnlineAccountsManager;
 import org.qortal.data.network.OnlineAccountData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -28,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class OnlineAccountsTests extends Common {
@@ -49,11 +49,9 @@ public class OnlineAccountsTests extends Common {
 
 
     @Test
-    public void testOnlineAccountsModulusV1() throws IllegalAccessException, DataException {
+    public void testOnlineAccountsModulusBaseline() throws DataException {
         try (final Repository repository = RepositoryManager.getRepository()) {
-
-            // Set feature trigger timestamp to MAX long so that it is inactive
-            FieldUtils.writeField(BlockChain.getInstance(), "onlineAccountsModulusV2Timestamp", Long.MAX_VALUE, true);
+            assertEquals(10 * 60 * 1000L, OnlineAccountsManager.getOnlineTimestampModulus());
 
             List<String> onlineAccountSignatures = new ArrayList<>();
             long fakeNTPOffset = 0L;
@@ -78,9 +76,10 @@ public class OnlineAccountsTests extends Common {
                 }
             }
 
-            // We expect at least 6 unique signatures over 30 blocks (generally 6-8, but could be higher due to block time differences)
+            // With the 10 minute baseline modulus and 1 minute-ish blocks, 30 blocks should span
+            // multiple online-account windows and therefore produce more than one unique signature set.
             System.out.println(String.format("onlineAccountSignatures count: %d", onlineAccountSignatures.size()));
-            assertTrue(onlineAccountSignatures.size() >= 6);
+            assertTrue(onlineAccountSignatures.size() >= 2);
         }
     }
 

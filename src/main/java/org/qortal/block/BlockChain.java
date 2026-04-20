@@ -62,8 +62,6 @@ public class BlockChain {
 
 	public enum FeatureTrigger {
 		transactionV6Timestamp,
-		increaseOnlineAccountsDifficultyTimestamp,
-		decreaseOnlineAccountsDifficultyTimestamp,
 		arbitraryOptionalFeeTimestamp,
 		adminsReplaceFoundersHeight
 	}
@@ -196,14 +194,6 @@ public class BlockChain {
 
 	/** Maximum time to retain online account signatures (ms) for block validity checks, to allow for clock variance. */
 	private long onlineAccountSignaturesMaxLifetime;
-
-	/** Feature trigger timestamp for ONLINE_ACCOUNTS_MODULUS time interval increase. Can't use
-	 * featureTriggers because unit tests need to set this value via Reflection. */
-	private long onlineAccountsModulusV2Timestamp;
-
-	/** Feature trigger timestamp for ONLINE_ACCOUNTS_MODULUS time interval decrease. Can't use
-	 * featureTriggers because unit tests need to set this value via Reflection. */
-	private long onlineAccountsModulusV3Timestamp;
 
 	/** Feature-trigger timestamp to modify behaviour of various transactions that support mempow */
 	private long mempowTransactionUpdatesTimestamp;
@@ -371,15 +361,6 @@ public class BlockChain {
 		return this.maxBlockSize;
 	}
 
-	// Online accounts
-	public long getOnlineAccountsModulusV2Timestamp() {
-		return this.onlineAccountsModulusV2Timestamp;
-	}
-
-	public long getOnlineAccountsModulusV3Timestamp() {
-		return this.onlineAccountsModulusV3Timestamp;
-	}
-
 	/* Block reward batching */
 	public long getBlockRewardBatchStartHeight() {
 		return this.blockRewardBatchStartHeight;
@@ -483,14 +464,6 @@ public class BlockChain {
 
 	public long getTransactionV6Timestamp() {
 		return this.featureTriggers.get(FeatureTrigger.transactionV6Timestamp.name()).longValue();
-	}
-
-	public long getIncreaseOnlineAccountsDifficultyTimestamp() {
-		return this.featureTriggers.get(FeatureTrigger.increaseOnlineAccountsDifficultyTimestamp.name()).longValue();
-	}
-
-	public long getDecreaseOnlineAccountsDifficultyTimestamp() {
-		return this.featureTriggers.get(FeatureTrigger.decreaseOnlineAccountsDifficultyTimestamp.name()).longValue();
 	}
 
 	public long getArbitraryOptionalFeeTimestamp() {
