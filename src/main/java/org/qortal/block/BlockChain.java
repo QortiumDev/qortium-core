@@ -61,7 +61,6 @@ public class BlockChain {
 	private GenesisBlock.GenesisInfo genesisInfo;
 
 	public enum FeatureTrigger {
-		newBlockSigHeight,
 		shareBinFix,
 		sharesByLevelV2Height,
 		rewardShareLimitTimestamp,
@@ -569,10 +568,6 @@ public class BlockChain {
 	}
 
 	// Convenience methods for specific blockchain feature triggers
-
-	public int getNewBlockSigHeight() {
-		return this.featureTriggers.get(FeatureTrigger.newBlockSigHeight.name()).intValue();
-	}
 
 	public int getShareBinFixHeight() {
 		return this.featureTriggers.get(FeatureTrigger.shareBinFix.name()).intValue();

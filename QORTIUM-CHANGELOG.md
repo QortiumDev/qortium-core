@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-19 - core: remove newBlockSigHeight trigger
+
+Changed Qortium so block minter signatures always use the full previous block signature instead of preserving the older upstream split behavior that only used the first half of the parent signature, and removed the related trigger from the main chain config and all mirrored test chain configs so the fork starts with the stronger baseline rule everywhere.
+
 ### 2026-04-19 - core: remove atFindNextTransactionFix trigger
 
 Changed Qortium so ATs always use the corrected “find the next transaction after this timestamp” behavior instead of preserving the old upstream off-by-one compatibility branch, and removed the related trigger from the main chain config and all mirrored test chain configs because a new-chain fork does not need to replay that historical bug.

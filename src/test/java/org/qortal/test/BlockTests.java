@@ -16,6 +16,7 @@ import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.TransactionType;
+import org.qortal.transform.Transformer;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.block.BlockTransformation;
 import org.qortal.transform.block.BlockTransformer;
@@ -80,6 +81,35 @@ public class BlockTests extends Common {
 			assertTrue(transaction.isSignatureValid());
 			assertEquals(Transaction.ValidationResult.OK, transaction.isValid());
 		}
+	}
+
+	@Test
+	public void testMinterSignatureUsesFullParentSignature() {
+		byte[] parentSignature = new byte[BlockTransformer.BLOCK_SIGNATURE_LENGTH];
+		byte[] nextMinterPublicKey = new byte[Transformer.PUBLIC_KEY_LENGTH];
+		byte[] encodedOnlineAccounts = new byte[] { 1, 2, 3, 4 };
+
+		for (int i = 0; i < parentSignature.length; ++i)
+			parentSignature[i] = (byte) (i + 1);
+
+		for (int i = 0; i < nextMinterPublicKey.length; ++i)
+			nextMinterPublicKey[i] = (byte) (i + 11);
+
+		byte[] expected = new byte[parentSignature.length + nextMinterPublicKey.length + encodedOnlineAccounts.length];
+		System.arraycopy(parentSignature, 0, expected, 0, parentSignature.length);
+		System.arraycopy(nextMinterPublicKey, 0, expected, parentSignature.length, nextMinterPublicKey.length);
+		System.arraycopy(encodedOnlineAccounts, 0, expected, parentSignature.length + nextMinterPublicKey.length, encodedOnlineAccounts.length);
+
+		byte[] parentMinterSignature = Arrays.copyOfRange(parentSignature, 0, Transformer.SIGNATURE_LENGTH);
+		byte[] parentTransactionsSignature = Arrays.copyOfRange(parentSignature, Transformer.SIGNATURE_LENGTH, BlockTransformer.BLOCK_SIGNATURE_LENGTH);
+
+		BlockData parentBlockData = new BlockData(4, new byte[BlockTransformer.BLOCK_SIGNATURE_LENGTH], 0, 0L, parentTransactionsSignature, 123, 456L,
+				new byte[Transformer.PUBLIC_KEY_LENGTH], parentMinterSignature, 0, 0L);
+		BlockData childBlockData = new BlockData(4, parentSignature, 0, 0L, null, 124, 457L,
+				nextMinterPublicKey, null, 0, 0L, encodedOnlineAccounts, 0, null, null);
+
+		assertArrayEquals(expected, BlockTransformer.getBytesForMinterSignature(parentBlockData, nextMinterPublicKey, encodedOnlineAccounts));
+		assertArrayEquals(expected, BlockTransformer.getBytesForMinterSignature(childBlockData));
 	}
 
 	@Test

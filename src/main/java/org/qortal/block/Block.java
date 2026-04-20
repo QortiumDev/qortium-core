@@ -915,9 +915,9 @@ public class Block {
 	 * <p>
 	 * Minter signature is made by the minter signing the following data:
 	 * <p>
-	 * previous block's minter signature + minter's public key + (encoded) online-accounts data
+	 * previous block's full signature + minter's public key + (encoded) online-accounts data
 	 * <p>
-	 * (Previous block's minter signature is extracted from this block's reference).
+	 * (Previous block's full signature is extracted from this block's reference).
 	 *
 	 * @throws IllegalStateException
 	 *             if block's {@code minter} is not a {@code PrivateKeyAccount}.

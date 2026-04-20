@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class BlockTransformer extends Transformer {
@@ -394,26 +393,12 @@ public class BlockTransformer extends Transformer {
 		}
 	}
 
-	private static byte[] getReferenceBytesForMinterSignature(int blockHeight, byte[] reference) {
-		int newBlockSigTriggerHeight = BlockChain.getInstance().getNewBlockSigHeight();
-
-		return blockHeight >= newBlockSigTriggerHeight
-				// 'new' block sig uses all of previous block's signature
-				? reference
-				// 'old' block sig only uses first 64 bytes of previous block's signature
-				: Arrays.copyOf(reference, MINTER_SIGNATURE_LENGTH);
-	}
-
 	public static byte[] getBytesForMinterSignature(BlockData blockData) {
-		byte[] referenceBytes = getReferenceBytesForMinterSignature(blockData.getHeight(), blockData.getReference());
-
-		return getBytesForMinterSignature(referenceBytes, blockData.getMinterPublicKey(), blockData.getEncodedOnlineAccounts());
+		return getBytesForMinterSignature(blockData.getReference(), blockData.getMinterPublicKey(), blockData.getEncodedOnlineAccounts());
 	}
 
 	public static byte[] getBytesForMinterSignature(BlockData parentBlockData, byte[] minterPublicKey, byte[] encodedOnlineAccounts) {
-		byte[] referenceBytes = getReferenceBytesForMinterSignature(parentBlockData.getHeight() + 1, parentBlockData.getSignature());
-
-		return getBytesForMinterSignature(referenceBytes, minterPublicKey, encodedOnlineAccounts);
+		return getBytesForMinterSignature(parentBlockData.getSignature(), minterPublicKey, encodedOnlineAccounts);
 	}
 
 	private static byte[] getBytesForMinterSignature(byte[] referenceBytes, byte[] minterPublicKey, byte[] encodedOnlineAccounts) {

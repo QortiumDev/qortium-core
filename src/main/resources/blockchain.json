@@ -88,7 +88,6 @@
 		"minutesPerBlock": 1
 	},
 	"featureTriggers": {
-		"newBlockSigHeight": 320000,
 		"shareBinFix": 399000,
 		"sharesByLevelV2Height": 1010000,
 		"rewardShareLimitTimestamp": 1657382400000,

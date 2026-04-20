@@ -79,7 +79,6 @@
 		"qortalTimestamp": 0,
 		"newAssetPricingTimestamp": 0,
 		"groupApprovalTimestamp": 0,
-		"newBlockSigHeight": 999999,
 		"shareBinFix": 999999,
 		"sharesByLevelV2Height": 1000,
 		"rewardShareLimitTimestamp": 9999999999999,
