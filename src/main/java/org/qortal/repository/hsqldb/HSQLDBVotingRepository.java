@@ -117,7 +117,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		sql.append("  p.poll_name, p.description, p.creator, p.owner, p.published_when, ");
 		sql.append("  po.option_index, po.option_name, ");
 		sql.append("  COUNT(pv.voter) AS vote_count, ");
-		sql.append("  COALESCE(SUM(CASE WHEN a.blocks_minted + a.blocks_minted_penalty < 0 THEN 0 ELSE a.blocks_minted + a.blocks_minted_penalty END), 0) AS vote_weight ");
+		sql.append("  COALESCE(SUM(a.blocks_minted), 0) AS vote_weight ");
 		sql.append("FROM Polls p ");
 		sql.append("LEFT JOIN PollOptions po ON p.poll_name = po.poll_name ");
 		sql.append("LEFT JOIN PollVotes pv ON p.poll_name = pv.poll_name AND po.option_index = pv.option_index ");

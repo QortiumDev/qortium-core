@@ -243,7 +243,7 @@ public class Account {
 		// Account's level is at least minAccountLevelToMint from blockchain config
 		if (blockchainHeight < nameCheckHeight) {
 			if (Account.isFounder(accountData.getFlags())) {
-				return accountData.getBlocksMintedPenalty() == 0;
+				return true;
 			} else {
 				return level >= levelToMint;
 			}
@@ -255,7 +255,7 @@ public class Account {
 		if (blockchainHeight >= nameCheckHeight && blockchainHeight < groupCheckHeight) {
 			List<NameData> myName = nameRepository.getNamesByOwner(myAddress);
 			if (Account.isFounder(accountData.getFlags())) {
-				return accountData.getBlocksMintedPenalty() == 0 && !myName.isEmpty();
+				return !myName.isEmpty();
 			} else {
 				return level >= levelToMint && !myName.isEmpty();
 			}
@@ -268,7 +268,7 @@ public class Account {
 		if (blockchainHeight >= groupCheckHeight && blockchainHeight < removeNameCheckHeight) {
 			List<NameData> myName = nameRepository.getNamesByOwner(myAddress);
 			if (Account.isFounder(accountData.getFlags())) {
-				return accountData.getBlocksMintedPenalty() == 0 && !myName.isEmpty() && (isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress));
+				return !myName.isEmpty() && (isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress));
 			} else {
 				return level >= levelToMint && !myName.isEmpty() && (isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress));
 			}
@@ -279,7 +279,7 @@ public class Account {
 		// Account's address is a member of the minter group
 		if (blockchainHeight >= removeNameCheckHeight) {
 			if (Account.isFounder(accountData.getFlags())) {
-				return accountData.getBlocksMintedPenalty() == 0 && (isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress));
+				return isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress);
 			} else {
 				return level >= levelToMint && (isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress));
 			}
@@ -319,7 +319,7 @@ public class Account {
 		if (level != null && level >= BlockChain.getInstance().getMinAccountLevelToRewardShare())
 			return true;
 
-		if (Account.isFounder(accountData.getFlags()) && accountData.getBlocksMintedPenalty() == 0)
+		if (Account.isFounder(accountData.getFlags()))
 			return true;
 
 		if( this.repository.getBlockRepository().getBlockchainHeight() >= BlockChain.getInstance().getIgnoreLevelForRewardShareHeight() )
@@ -350,7 +350,7 @@ public class Account {
 	/**
 	 * Returns 'effective' minting level, or zero if account does not exist/cannot mint.
 	 * <p>
-	 * For founder accounts with no penalty, this returns "founderEffectiveMintingLevel" from blockchain config.
+	 * For founder accounts, this returns "founderEffectiveMintingLevel" from blockchain config.
 	 * 
 	 * @return 0+
 	 * @throws DataException
@@ -360,8 +360,8 @@ public class Account {
 		if (accountData == null)
 			return 0;
 
-		// Founders are assigned a different effective minting level, as long as they have no penalty
-		if (Account.isFounder(accountData.getFlags()) && accountData.getBlocksMintedPenalty() == 0)
+		// Founders are assigned a different effective minting level.
+		if (Account.isFounder(accountData.getFlags()))
 			return BlockChain.getInstance().getFounderEffectiveMintingLevel();
 
 		return accountData.getLevel();

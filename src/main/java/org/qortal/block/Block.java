@@ -1746,7 +1746,7 @@ public class Block {
 				:
 				accountData.getBlocksMintedAdjustment();
 
-			final int effectiveBlocksMinted = accountData.getBlocksMinted() + blocksMintedAdjustment + accountData.getBlocksMintedPenalty();
+			final int effectiveBlocksMinted = accountData.getBlocksMinted() + blocksMintedAdjustment;
 
 			for (int newLevel = maximumLevel; newLevel >= 0; --newLevel)
 				if (effectiveBlocksMinted >= cumulativeBlocksByLevel.get(newLevel)) {
@@ -2161,7 +2161,7 @@ public class Block {
 				:
 				accountData.getBlocksMintedAdjustment();
 
-			final int effectiveBlocksMinted = accountData.getBlocksMinted() + blocksMintedAdjustment + accountData.getBlocksMintedPenalty();
+			final int effectiveBlocksMinted = accountData.getBlocksMinted() + blocksMintedAdjustment;
 
 			for (int newLevel = maximumLevel; newLevel >= 0; --newLevel)
 				if (effectiveBlocksMinted >= cumulativeBlocksByLevel.get(newLevel)) {

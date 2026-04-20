@@ -3,6 +3,10 @@ package org.qortal.test.repository;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.account.PrivateKeyAccount;
+import org.qortal.controller.BlockMinter;
+import org.qortal.controller.OnlineAccountsManager;
+import org.qortal.data.account.AccountPenaltyData;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollDataWithVotes;
 import org.qortal.data.voting.PollOptionData;
@@ -15,6 +19,7 @@ import org.qortal.test.common.Common;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.Assert.*;
 
@@ -98,6 +103,37 @@ public class VotingRepositoryTests extends Common {
 			Map<String, Integer> voteCountMap = pollWithVotes.getVoteCountMap();
 			assertTrue(voteCountMap.containsKey("5"));
 			assertTrue(voteCountMap.get("5") >= 1);
+		}
+	}
+
+	@Test
+	public void testGetPollsByPrefixVoteWeightIgnoresPenalty() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "app-library-APP-rating-PenaltyWeightTest";
+			createTestPoll(repository, pollName);
+
+			PrivateKeyAccount mintingAccount = Common.getTestAccount(repository, "alice-reward-share");
+			OnlineAccountsManager.getInstance().ensureTestingAccountsOnline(mintingAccount);
+			BlockMinter.mintTestingBlockRetainingTimestamps(repository, mintingAccount);
+
+			int aliceBlocksMinted = Common.getTestAccount(repository, "alice").getBlocksMinted();
+			assertTrue("Alice should have minted blocks for vote-weight testing", aliceBlocksMinted > 0);
+
+			byte[] voterPublicKey = Common.getTestAccount(repository, "alice").getPublicKey();
+			VoteOnPollData vote = new VoteOnPollData(pollName, voterPublicKey, 4);
+			repository.getVotingRepository().save(vote);
+			applyPenalty(repository, "alice", -5_000_000);
+
+			List<PollDataWithVotes> results = repository.getVotingRepository()
+					.getPollsByPrefix("app-library-APP-rating-PenaltyWeightTest", null, null);
+
+			assertNotNull(results);
+			assertEquals(1, results.size());
+
+			PollDataWithVotes pollWithVotes = results.get(0);
+			assertEquals(1, (int) pollWithVotes.getTotalVotes());
+			assertEquals(aliceBlocksMinted, (int) pollWithVotes.getTotalWeight());
+			assertEquals(aliceBlocksMinted, (int) pollWithVotes.getVoteWeightMap().get("5"));
 		}
 	}
 
@@ -249,6 +285,7 @@ public class VotingRepositoryTests extends Common {
 		String[] testPollPrefixes = {
 				"app-library-APP-rating-TestApp",
 				"app-library-APP-rating-VoteTest",
+				"app-library-APP-rating-PenaltyWeightTest",
 				"app-library-APP-rating-LimitTest",
 				"app-library-APP-rating-OffsetTest",
 				"app-library-APP-rating-OptionsTest",
@@ -269,6 +306,12 @@ public class VotingRepositoryTests extends Common {
 				// Ignore errors during cleanup
 			}
 		}
+	}
+
+	private void applyPenalty(Repository repository, String accountName, int penalty) throws DataException {
+		String address = Common.getTestAccount(repository, accountName).getAddress();
+		repository.getAccountRepository().updateBlocksMintedPenalties(Set.of(new AccountPenaltyData(address, penalty)));
+		repository.saveChanges();
 	}
 
 }

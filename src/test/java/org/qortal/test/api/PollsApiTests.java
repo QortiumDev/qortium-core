@@ -2,11 +2,17 @@ package org.qortal.test.api;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.model.AppRatingsResponse;
+import org.qortal.api.model.PollVotes;
 import org.qortal.api.resource.PollsResource;
+import org.qortal.controller.BlockMinter;
+import org.qortal.controller.OnlineAccountsManager;
+import org.qortal.data.account.AccountPenaltyData;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollDataWithVotes;
 import org.qortal.data.voting.PollOptionData;
+import org.qortal.data.voting.VoteOnPollData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -17,6 +23,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.Assert.*;
 
@@ -138,6 +145,39 @@ public class PollsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testGetPollVotesIgnoresPenaltyWeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "app-library-APP-rating-PollVotesPenaltyTest";
+			createTestAppRatingPoll(repository, pollName);
+
+			PrivateKeyAccount mintingAccount = Common.getTestAccount(repository, "alice-reward-share");
+			OnlineAccountsManager.getInstance().ensureTestingAccountsOnline(mintingAccount);
+			BlockMinter.mintTestingBlockRetainingTimestamps(repository, mintingAccount);
+
+			int aliceBlocksMinted = Common.getTestAccount(repository, "alice").getBlocksMinted();
+			assertTrue("Alice should have minted blocks for vote-weight testing", aliceBlocksMinted > 0);
+
+			VoteOnPollData vote = new VoteOnPollData(pollName, Common.getTestAccount(repository, "alice").getPublicKey(), 4);
+			repository.getVotingRepository().save(vote);
+			applyPenalty(repository, "alice", -5_000_000);
+
+			PollVotes response = this.pollsResource.getPollVotes(pollName, true);
+			assertNotNull(response);
+			assertEquals(Integer.valueOf(1), response.totalVotes);
+			assertEquals(Integer.valueOf(aliceBlocksMinted), response.totalWeight);
+
+			PollVotes.OptionWeight selectedOption = response.voteWeights.stream()
+					.filter(optionWeight -> "5".equals(optionWeight.optionName))
+					.findFirst()
+					.orElse(null);
+			assertNotNull(selectedOption);
+			assertEquals(Integer.valueOf(aliceBlocksMinted), selectedOption.voteWeight);
+
+			deleteTestPoll(repository, pollName);
+		}
+	}
+
+	@Test
 	public void testGetAppRatingsEmptyResult() {
 		// Test with non-existent service type
 		AppRatingsResponse response = this.pollsResource.getAppRatings(null, null, null, null, null);
@@ -179,6 +219,12 @@ public class PollsApiTests extends ApiCommon {
 		} catch (DataException e) {
 			// Ignore if poll doesn't exist
 		}
+	}
+
+	private void applyPenalty(Repository repository, String accountName, int penalty) throws DataException {
+		String address = Common.getTestAccount(repository, accountName).getAddress();
+		repository.getAccountRepository().updateBlocksMintedPenalties(Set.of(new AccountPenaltyData(address, penalty)));
+		repository.saveChanges();
 	}
 
 }
