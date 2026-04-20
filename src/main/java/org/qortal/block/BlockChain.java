@@ -84,8 +84,7 @@ public class BlockChain {
 		adminsReplaceFoundersHeight,
 		ignoreLevelForRewardShareHeight,
 		multipleNamesPerAccountHeight,
-		mintedBlocksAdjustmentRemovalHeight,
-		atValidateHeight
+		mintedBlocksAdjustmentRemovalHeight
 	}
 
     // V5.5 Default List of Historic Triggers
@@ -655,10 +654,6 @@ public class BlockChain {
 
 	public int getMintedBlocksAdjustmentRemovalHeight() {
 		return this.featureTriggers.get(FeatureTrigger.mintedBlocksAdjustmentRemovalHeight.name()).intValue();
-	}
-
-	public int getAtValidateHeight() {
-		return this.featureTriggers.get(FeatureTrigger.atValidateHeight.name()).intValue();
 	}
 
 	// More complex getters for aspects that change by height or timestamp

@@ -106,8 +106,7 @@
 		"adminsReplaceFoundersHeight": 9999999999999,
 		"ignoreLevelForRewardShareHeight": 9999999999999,
 		"multipleNamesPerAccountHeight": 10,
-		"mintedBlocksAdjustmentRemovalHeight": 27,
-		"atValidateHeight": 9999999999999
+		"mintedBlocksAdjustmentRemovalHeight": 27
 	},
 	"genesisInfo": {
 		"version": 4,
