@@ -72,13 +72,6 @@ public class TransferPrivsTransaction extends Transaction {
 		if (senderAccountData == null)
 			return ValidationResult.ACCOUNT_NOT_TRANSFERABLE;
 
-		// Disable Transfer Privs (start - end) from feature trigger
-		long transactionTimestamp = this.transferPrivsTransactionData.getTimestamp();
-		final long startTimestamp = BlockChain.getInstance().getDisableTransferPrivsTimestamp();
-		final long endTimestamp = BlockChain.getInstance().getEnableTransferPrivsTimestamp();
-		if (transactionTimestamp > startTimestamp && transactionTimestamp < endTimestamp)
-			return ValidationResult.TRANSFER_PRIVS_DISABLED;
-
 		return ValidationResult.OK;
 	}
 

@@ -66,8 +66,6 @@ public class BlockChain {
 		decreaseOnlineAccountsDifficultyTimestamp,
 		onlineAccountMinterLevelValidationHeight,
 		arbitraryOptionalFeeTimestamp,
-		disableTransferPrivsTimestamp,
-		enableTransferPrivsTimestamp,
 		disableRewardshareHeight,
 		enableRewardshareHeight,
 		onlyMintWithNameHeight,
@@ -521,14 +519,6 @@ public class BlockChain {
 
 	public long getArbitraryOptionalFeeTimestamp() {
 		return this.featureTriggers.get(FeatureTrigger.arbitraryOptionalFeeTimestamp.name()).longValue();
-	}
-
-	public long getDisableTransferPrivsTimestamp() {
-		return this.featureTriggers.get(FeatureTrigger.disableTransferPrivsTimestamp.name()).longValue();
-	}
-
-	public long getEnableTransferPrivsTimestamp() {
-		return this.featureTriggers.get(FeatureTrigger.enableTransferPrivsTimestamp.name()).longValue();
 	}
 
 	public int getDisableRewardshareHeight() {
