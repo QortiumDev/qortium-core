@@ -224,65 +224,27 @@ public class Account {
 
 		int blockchainHeight = this.repository.getBlockRepository().getBlockchainHeight();
 
-		int levelToMint;
-
-		if( blockchainHeight >= BlockChain.getInstance().getIgnoreLevelForRewardShareHeight() ) {
-			levelToMint = 0;
-		}
-		else {
-			levelToMint = BlockChain.getInstance().getMinAccountLevelToMint();
-		}
-
-		int level = accountData.getLevel();
 		List<Integer> groupIdsToMint = Groups.getGroupIdsToMint( BlockChain.getInstance(), blockchainHeight );
 		int nameCheckHeight = BlockChain.getInstance().getOnlyMintWithNameHeight();
 		int groupCheckHeight = BlockChain.getInstance().getGroupMemberCheckHeight();
 		int removeNameCheckHeight = BlockChain.getInstance().getRemoveOnlyMintWithNameHeight();
 
-		// Can only mint if:
-		// Account's level is at least minAccountLevelToMint from blockchain config
 		if (blockchainHeight < nameCheckHeight) {
-			if (Account.isFounder(accountData.getFlags())) {
-				return true;
-			} else {
-				return level >= levelToMint;
-			}
+			return true;
 		}
 
-		// Can only mint on onlyMintWithNameHeight from blockchain config if:
-		// Account's level is at least minAccountLevelToMint from blockchain config
-		// Account's address has registered a name
 		if (blockchainHeight >= nameCheckHeight && blockchainHeight < groupCheckHeight) {
 			List<NameData> myName = nameRepository.getNamesByOwner(myAddress);
-			if (Account.isFounder(accountData.getFlags())) {
-				return !myName.isEmpty();
-			} else {
-				return level >= levelToMint && !myName.isEmpty();
-			}
+			return !myName.isEmpty();
 		}
 
-		// Can only mint on groupMemberCheckHeight from blockchain config if:
-		// Account's level is at least minAccountLevelToMint from blockchain config
-		// Account's address has registered a name
-		// Account's address is a member of the minter group
 		if (blockchainHeight >= groupCheckHeight && blockchainHeight < removeNameCheckHeight) {
 			List<NameData> myName = nameRepository.getNamesByOwner(myAddress);
-			if (Account.isFounder(accountData.getFlags())) {
-				return !myName.isEmpty() && (isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress));
-			} else {
-				return level >= levelToMint && !myName.isEmpty() && (isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress));
-			}
+			return !myName.isEmpty() && (isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress));
 		}
 
-		// Can only mint on removeOnlyMintWithNameHeight from blockchain config if:
-		// Account's level is at least minAccountLevelToMint from blockchain config
-		// Account's address is a member of the minter group
 		if (blockchainHeight >= removeNameCheckHeight) {
-			if (Account.isFounder(accountData.getFlags())) {
-				return isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress);
-			} else {
-				return level >= levelToMint && (isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress));
-			}
+			return isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress);
 		}
 
 		return false;
@@ -294,14 +256,8 @@ public class Account {
 	}
 
 	/** Returns whether account can build reward-shares.
-	 * <p>
-	 * To be able to create reward-shares, the account needs to pass at least one of these tests:<br>
-	 * <ul>
-	 * <li>account's level is at least <tt>minAccountLevelToRewardShare</tt> from blockchain config</li>
-	 * <li>account has 'founder' flag set</li>
-	 * </ul>
-	 * 
-	 * @return true if account can be considered "minting account"
+	 *
+	 * @return true if the account exists in the repository
 	 * @throws DataException
 	 */
 	public boolean canRewardShare() throws DataException {
@@ -310,17 +266,7 @@ public class Account {
 		if (accountData == null)
 			return false;
 
-		Integer level = accountData.getLevel();
-		if (level != null && level >= BlockChain.getInstance().getMinAccountLevelToRewardShare())
-			return true;
-
-		if (Account.isFounder(accountData.getFlags()))
-			return true;
-
-		if( this.repository.getBlockRepository().getBlockchainHeight() >= BlockChain.getInstance().getIgnoreLevelForRewardShareHeight() )
-			return true;
-
-		return false;
+		return true;
 	}
 
 	// Account level

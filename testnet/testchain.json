@@ -81,7 +81,6 @@
 		"decreaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"removeOnlyMintWithNameHeight": 9999999999999,
 		"adminsReplaceFoundersHeight": 0,
-		"ignoreLevelForRewardShareHeight": 0,
 		"multipleNamesPerAccountHeight": 0
 	},
 	"genesisInfo": {

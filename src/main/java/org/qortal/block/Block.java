@@ -417,20 +417,8 @@ public class Block {
 			List<OnlineAccountData> onlineAccounts = OnlineAccountsManager.getInstance().getOnlineAccounts(onlineAccountsTimestamp);
 			onlineAccounts.removeIf(a -> a.getNonce() == null || a.getNonce() < 0);
 
-			// Until the later ignore-level change, online accounts must still come
-			// from reward shares whose effective minting level is above zero.
-			if (height < BlockChain.getInstance().getIgnoreLevelForRewardShareHeight()) {
-				onlineAccounts.removeIf(a -> {
-					try {
-						return Account.getRewardShareEffectiveMintingLevel(repository, a.getPublicKey()) == 0;
-					} catch (DataException e) {
-						// Something went wrong, so remove the account
-						return true;
-					}
-				});
-			}
-
-			// After feature trigger, remove any online accounts that are not minter group member
+			// Once the minting-group rule is active, remove any online accounts that
+			// are not backed by a minting-group member.
 			if (height >= BlockChain.getInstance().getGroupMemberCheckHeight()) {
 				onlineAccounts.removeIf(a -> {
 					try {
@@ -1175,21 +1163,7 @@ public class Block {
 		if (onlineRewardShares == null)
 			return ValidationResult.ONLINE_ACCOUNT_UNKNOWN;
 
-		// Until the later ignore-level change, all minter-member online accounts
-		// must still come from reward shares whose effective minting level is above zero.
-		if (this.blockData.getHeight() < BlockChain.getInstance().getIgnoreLevelForRewardShareHeight()) {
-			List<ExpandedAccount> expandedAccounts
-					= this.getExpandedAccounts().stream()
-					.filter(expandedAccount -> expandedAccount.isMinterMember)
-					.collect(Collectors.toList());
-
-			for (ExpandedAccount account : expandedAccounts) {
-				if (account.getMintingAccount().getEffectiveMintingLevel() == 0)
-					return ValidationResult.ONLINE_ACCOUNTS_INVALID;
-
-			}
-		}
-		else if (this.blockData.getHeight() >= BlockChain.getInstance().getIgnoreLevelForRewardShareHeight()){
+		if (this.blockData.getHeight() >= BlockChain.getInstance().getGroupMemberCheckHeight()) {
 			Optional<ExpandedAccount> anyInvalidAccount
 					= this.getExpandedAccounts().stream()
 					.filter(account -> !account.isMinterMember)

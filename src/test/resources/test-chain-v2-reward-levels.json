@@ -74,8 +74,7 @@
 		"groupMemberCheckHeight": 9999999999999,
 		"decreaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"removeOnlyMintWithNameHeight": 9999999999999,
-		"adminsReplaceFoundersHeight": 9999999999999,
-		"ignoreLevelForRewardShareHeight": 9999999999999
+		"adminsReplaceFoundersHeight": 9999999999999
 	},
 	"genesisInfo": {
 		"version": 4,

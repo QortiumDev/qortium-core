@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-20 - core: remove ignoreLevelForRewardShareHeight trigger
+
+Changed Qortium so minting level no longer gates ordinary minting or reward-share creation, removed the later trigger that had switched the chain onto that model, and kept the remaining name and minting-group rules as the live restrictions instead so the fork now treats group-based minting eligibility as the long-term baseline instead of preserving a later level-ignoring transition height.
+
 ### 2026-04-20 - core: remove onlineAccountMinterLevelValidationHeight trigger
 
 Changed Qortium so the inherited online-account rule that rejects level-zero reward-share minters now applies from genesis until the later point where reward-share level is deliberately ignored again, and removed the separate activation height from the main chain and mirrored test chain configs so online-account block building and validation no longer preserve that extra historical branch.

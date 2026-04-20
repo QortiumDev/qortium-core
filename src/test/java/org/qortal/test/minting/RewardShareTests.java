@@ -1,5 +1,6 @@
 package org.qortal.test.minting;
 
+import org.qortal.account.Account;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -185,6 +186,22 @@ public class RewardShareTests extends Common {
 			newTransactionData.setFee(0L);
 			validationResult = newTransaction.isValidUnconfirmed();
 			assertNotSame("Subsequent zero-fee self-share cancel should be invalid", ValidationResult.OK, validationResult);
+		}
+	}
+
+	@Test
+	public void testLevelZeroAccountCanMintAndCreateRewardShare() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount bobAccount = Common.getTestAccount(repository, "bob");
+			Account bob = new Account(repository, bobAccount.getAddress());
+
+			assertTrue("Level-zero account should be able to mint", bob.canMint(false));
+			assertTrue("Level-zero account should be able to create reward shares", bob.canRewardShare());
+
+			TransactionData transactionData = AccountUtils.createRewardShare(repository, "bob", "chloe", 0);
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+
+			assertEquals("Level-zero account reward-share should be valid", ValidationResult.OK, transaction.isValidUnconfirmed());
 		}
 	}
 
