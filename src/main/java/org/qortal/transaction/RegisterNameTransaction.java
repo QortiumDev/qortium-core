@@ -4,6 +4,7 @@ import com.google.common.base.Utf8;
 import org.qortal.account.Account;
 import org.qortal.api.resource.TransactionsResource;
 import org.qortal.asset.Asset;
+import org.qortal.block.BlockChain;
 import org.qortal.controller.repository.NamesDatabaseIntegrityCheck;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.naming.NameData;

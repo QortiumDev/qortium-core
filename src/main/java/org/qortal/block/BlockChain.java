@@ -68,7 +68,6 @@ public class BlockChain {
 		increaseOnlineAccountsDifficultyTimestamp,
 		decreaseOnlineAccountsDifficultyTimestamp,
 		onlineAccountMinterLevelValidationHeight,
-		selfSponsorshipAlgoV3Height,
 		arbitraryOptionalFeeTimestamp,
 		unconfirmableRewardSharesHeight,
 		disableTransferPrivsTimestamp,
@@ -227,12 +226,6 @@ public class BlockChain {
 	/** Feature trigger timestamp for ONLINE_ACCOUNTS_MODULUS time interval decrease. Can't use
 	 * featureTriggers because unit tests need to set this value via Reflection. */
 	private long onlineAccountsModulusV3Timestamp;
-
-	/** Snapshot timestamp for self sponsorship algo V1 */
-	private long selfSponsorshipAlgoV1SnapshotTimestamp;
-
-	/** Snapshot timestamp for self sponsorship algo V3 */
-	private long selfSponsorshipAlgoV3SnapshotTimestamp;
 
 	/** Feature-trigger timestamp to modify behaviour of various transactions that support mempow */
 	private long mempowTransactionUpdatesTimestamp;
@@ -432,16 +425,6 @@ public class BlockChain {
 		return this.penaltyFixHash;
 	}
 
-	// Self sponsorship algo V1
-	public long getSelfSponsorshipAlgoV1SnapshotTimestamp() {
-		return this.selfSponsorshipAlgoV1SnapshotTimestamp;
-	}
-
-	// Self sponsorship algo V3
-	public long getSelfSponsorshipAlgoV3SnapshotTimestamp() {
-		return this.selfSponsorshipAlgoV3SnapshotTimestamp;
-	}
-
 	// Feature-trigger timestamp to modify behaviour of various transactions that support mempow
 	public long getMemPoWTransactionUpdatesTimestamp() {
 		return this.mempowTransactionUpdatesTimestamp;
@@ -565,10 +548,6 @@ public class BlockChain {
 
 	public long getDecreaseOnlineAccountsDifficultyTimestamp() {
 		return this.featureTriggers.get(FeatureTrigger.decreaseOnlineAccountsDifficultyTimestamp.name()).longValue();
-	}
-
-	public int getSelfSponsorshipAlgoV3Height() {
-		return this.featureTriggers.get(FeatureTrigger.selfSponsorshipAlgoV3Height.name()).intValue();
 	}
 
 	public long getOnlineAccountMinterLevelValidationHeight() {
