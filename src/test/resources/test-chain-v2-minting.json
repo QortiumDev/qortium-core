@@ -69,7 +69,6 @@
 		"groupApprovalTimestamp": 0,
 		"transactionV6Timestamp": 0,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999990,
-		"onlineAccountMinterLevelValidationHeight": 0,
 		"arbitraryOptionalFeeTimestamp": 9999999999999,
 		"onlyMintWithNameHeight": 9999999999990,
 		"groupMemberCheckHeight": 9999999999999,

@@ -64,7 +64,6 @@ public class BlockChain {
 		transactionV6Timestamp,
 		increaseOnlineAccountsDifficultyTimestamp,
 		decreaseOnlineAccountsDifficultyTimestamp,
-		onlineAccountMinterLevelValidationHeight,
 		arbitraryOptionalFeeTimestamp,
 		onlyMintWithNameHeight,
 		removeOnlyMintWithNameHeight,
@@ -509,10 +508,6 @@ public class BlockChain {
 
 	public long getDecreaseOnlineAccountsDifficultyTimestamp() {
 		return this.featureTriggers.get(FeatureTrigger.decreaseOnlineAccountsDifficultyTimestamp.name()).longValue();
-	}
-
-	public long getOnlineAccountMinterLevelValidationHeight() {
-		return this.featureTriggers.get(FeatureTrigger.onlineAccountMinterLevelValidationHeight.name()).intValue();
 	}
 
 	public long getArbitraryOptionalFeeTimestamp() {

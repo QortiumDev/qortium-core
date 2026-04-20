@@ -79,7 +79,6 @@
 		"transactionV6Timestamp": 9999999999999,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"decreaseOnlineAccountsDifficultyTimestamp": 1731958200000,
-		"onlineAccountMinterLevelValidationHeight": 1092000,
 		"arbitraryOptionalFeeTimestamp": 1680278400000,
 		"onlyMintWithNameHeight": 1900300,
 		"removeOnlyMintWithNameHeight": 1935500,

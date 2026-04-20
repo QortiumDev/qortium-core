@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-20 - core: remove onlineAccountMinterLevelValidationHeight trigger
+
+Changed Qortium so the inherited online-account rule that rejects level-zero reward-share minters now applies from genesis until the later point where reward-share level is deliberately ignored again, and removed the separate activation height from the main chain and mirrored test chain configs so online-account block building and validation no longer preserve that extra historical branch.
+
 ### 2026-04-20 - core: remove transfer privs disable window
 
 Changed Qortium so the temporary transfer-privileges freeze tied to the old penalty-fix intervention window is gone, removed the related start and end timestamps from the main chain and mirrored test chain configs, and left ordinary transfer-privs validation to follow the remaining stable rules instead of a historical February 2024 shutdown period.

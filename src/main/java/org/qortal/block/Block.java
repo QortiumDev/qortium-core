@@ -417,10 +417,9 @@ public class Block {
 			List<OnlineAccountData> onlineAccounts = OnlineAccountsManager.getInstance().getOnlineAccounts(onlineAccountsTimestamp);
 			onlineAccounts.removeIf(a -> a.getNonce() == null || a.getNonce() < 0);
 
-			// After feature trigger, remove any online accounts that are level 0
-			// but only if they are before the ignore level feature trigger
-			if (height < BlockChain.getInstance().getIgnoreLevelForRewardShareHeight() &&
-					height >= BlockChain.getInstance().getOnlineAccountMinterLevelValidationHeight()) {
+			// Until the later ignore-level change, online accounts must still come
+			// from reward shares whose effective minting level is above zero.
+			if (height < BlockChain.getInstance().getIgnoreLevelForRewardShareHeight()) {
 				onlineAccounts.removeIf(a -> {
 					try {
 						return Account.getRewardShareEffectiveMintingLevel(repository, a.getPublicKey()) == 0;
@@ -1176,10 +1175,9 @@ public class Block {
 		if (onlineRewardShares == null)
 			return ValidationResult.ONLINE_ACCOUNT_UNKNOWN;
 
-		// After feature trigger, require all online account minters to be greater than level 0,
-		// but only if it is before the feature trigger where we ignore level again
-		if (this.blockData.getHeight() < BlockChain.getInstance().getIgnoreLevelForRewardShareHeight() &&
-			this.getBlockData().getHeight() >= BlockChain.getInstance().getOnlineAccountMinterLevelValidationHeight()) {
+		// Until the later ignore-level change, all minter-member online accounts
+		// must still come from reward shares whose effective minting level is above zero.
+		if (this.blockData.getHeight() < BlockChain.getInstance().getIgnoreLevelForRewardShareHeight()) {
 			List<ExpandedAccount> expandedAccounts
 					= this.getExpandedAccounts().stream()
 					.filter(expandedAccount -> expandedAccount.isMinterMember)
