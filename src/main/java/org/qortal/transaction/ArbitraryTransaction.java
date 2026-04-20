@@ -124,34 +124,6 @@ public class ArbitraryTransaction extends Transaction {
 	}
 
 	@Override
-	public boolean hasValidReference() throws DataException {
-		// We shouldn't really get this far, but just in case:
-
-		// Disable reference checking after feature trigger timestamp
-		if (this.arbitraryTransactionData.getTimestamp() >= BlockChain.getInstance().getDisableReferenceTimestamp()) {
-			// Allow any value as long as it is the correct length
-			return this.arbitraryTransactionData.getReference() != null &&
-					this.arbitraryTransactionData.getReference().length == Transformer.SIGNATURE_LENGTH;
-		}
-
-		if (this.arbitraryTransactionData.getReference() == null) {
-			return false;
-		}
-
-		// If the account current doesn't have a last reference, and the fee is 0, we will allow any value.
-		// This ensures that the first transaction for an account will be valid whilst still validating
-		// the last reference from the second transaction onwards. By checking for a zero fee, we ensure
-		// standard last reference validation when fee > 0.
-		Account creator = getCreator();
-		Long fee = this.arbitraryTransactionData.getFee();
-		if (creator.getLastReference() == null && fee == 0) {
-			return true;
-		}
-
-		return super.hasValidReference();
-	}
-
-	@Override
 	public ValidationResult isValid() throws DataException {
 		// Check that some data - or a data hash - has been supplied
 		if (arbitraryTransactionData.getData() == null) {

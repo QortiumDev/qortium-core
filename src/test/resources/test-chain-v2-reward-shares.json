@@ -83,7 +83,6 @@
 		"rewardShareLimitTimestamp": 0,
 		"newConsensusTimestamp": 0,
 		"transactionV6Timestamp": 0,
-		"disableReferenceTimestamp": 9999999999999,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999990,
 		"onlineAccountMinterLevelValidationHeight": 0,
 		"selfSponsorshipAlgoV1Height": 999999999,

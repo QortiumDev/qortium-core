@@ -175,27 +175,6 @@ public class MessageTransaction extends Transaction {
 	}
 
 	@Override
-	public boolean hasValidReference() throws DataException {
-		// We shouldn't really get this far, but just in case:
-
-		// Disable reference checking after feature trigger timestamp
-		if (this.messageTransactionData.getTimestamp() >= BlockChain.getInstance().getDisableReferenceTimestamp()) {
-			// Allow any value as long as it is the correct length
-			return this.messageTransactionData.getReference() != null &&
-					this.messageTransactionData.getReference().length == Transformer.SIGNATURE_LENGTH;
-		}
-
-		if (this.messageTransactionData.getReference() == null)
-			return false;
-
-		// If zero fee, then we rely on nonce and reference isn't important
-		if (this.messageTransactionData.getFee() == 0)
-			return true;
-
-		return super.hasValidReference();
-	}
-
-	@Override
 	public boolean isConfirmable() {
 		// After feature trigger timestamp, only messages to an AT address can confirm
 		if (this.transactionData.getTimestamp() >= BlockChain.getInstance().getMemPoWTransactionUpdatesTimestamp()) {

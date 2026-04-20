@@ -65,7 +65,6 @@ public class BlockChain {
 		sharesByLevelV2Height,
 		rewardShareLimitTimestamp,
 		transactionV6Timestamp,
-		disableReferenceTimestamp,
 		increaseOnlineAccountsDifficultyTimestamp,
 		decreaseOnlineAccountsDifficultyTimestamp,
 		onlineAccountMinterLevelValidationHeight,
@@ -581,10 +580,6 @@ public class BlockChain {
 
 	public long getTransactionV6Timestamp() {
 		return this.featureTriggers.get(FeatureTrigger.transactionV6Timestamp.name()).longValue();
-	}
-
-	public long getDisableReferenceTimestamp() {
-		return this.featureTriggers.get(FeatureTrigger.disableReferenceTimestamp.name()).longValue();
 	}
 
 	public long getIncreaseOnlineAccountsDifficultyTimestamp() {

@@ -88,7 +88,6 @@
 		"rewardShareLimitTimestamp": 0,
 		"calcChainWeightTimestamp": 0,
 		"transactionV6Timestamp": 9999999999999,
-		"disableReferenceTimestamp": 0,
 		"aggregateSignatureTimestamp": 0,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"onlineAccountMinterLevelValidationHeight": 0,

@@ -83,7 +83,6 @@
 		"sharesByLevelV2Height": 5,
 		"rewardShareLimitTimestamp": 9999999999999,
 		"transactionV6Timestamp": 0,
-		"disableReferenceTimestamp": 9999999999999,
 		"aggregateSignatureTimestamp": 0,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999990,
 		"onlineAccountMinterLevelValidationHeight": 0,

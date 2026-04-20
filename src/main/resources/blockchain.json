@@ -92,7 +92,6 @@
 		"sharesByLevelV2Height": 1010000,
 		"rewardShareLimitTimestamp": 1657382400000,
 		"transactionV6Timestamp": 9999999999999,
-		"disableReferenceTimestamp": 1655222400000,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"decreaseOnlineAccountsDifficultyTimestamp": 1731958200000,
 		"onlineAccountMinterLevelValidationHeight": 1092000,

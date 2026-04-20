@@ -9,7 +9,6 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.Common;
-import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.Transaction;
 
@@ -24,9 +23,9 @@ public class TransactionReferenceTests extends Common {
         Common.useDefaultSettings();
     }
 
-    @Test
-    public void testInvalidRandomReferenceBeforeFeatureTrigger() throws DataException {
-        Random random = new Random();
+	@Test
+	public void testValidRandomReference() throws DataException {
+		Random random = new Random();
 
         try (final Repository repository = RepositoryManager.getRepository()) {
             PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -45,45 +44,15 @@ public class TransactionReferenceTests extends Common {
 
             Transaction paymentTransaction = Transaction.fromData(repository, paymentTransactionData);
 
-            // Transaction should be invalid due to random reference
-            Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
-            assertEquals(Transaction.ValidationResult.INVALID_REFERENCE, validationResult);
-        }
-    }
+			// Transaction should be valid because references only need to be present and 64 bytes long
+			Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
+			assertEquals(Transaction.ValidationResult.OK, validationResult);
+		}
+	}
 
-    @Test
-    public void testValidRandomReferenceAfterFeatureTrigger() throws DataException {
-        Common.useSettings("test-settings-v2-disable-reference.json");
-        Random random = new Random();
-
-        try (final Repository repository = RepositoryManager.getRepository()) {
-            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
-
-            byte[] randomPrivateKey = new byte[32];
-            random.nextBytes(randomPrivateKey);
-            PrivateKeyAccount recipient = new PrivateKeyAccount(repository, randomPrivateKey);
-
-            // Create payment transaction data
-            TransactionData paymentTransactionData = new PaymentTransactionData(TestTransaction.generateBase(alice), recipient.getAddress(), 100000L);
-
-            // Set random reference
-            byte[] randomReference = new byte[64];
-            random.nextBytes(randomReference);
-            paymentTransactionData.setReference(randomReference);
-
-            Transaction paymentTransaction = Transaction.fromData(repository, paymentTransactionData);
-
-            // Transaction should be valid, even with random reference, because reference checking is now disabled
-            Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
-            assertEquals(Transaction.ValidationResult.OK, validationResult);
-            TransactionUtils.signAndImportValid(repository, paymentTransactionData, alice);
-        }
-    }
-
-    @Test
-    public void testNullReferenceAfterFeatureTrigger() throws DataException {
-        Common.useSettings("test-settings-v2-disable-reference.json");
-        Random random = new Random();
+	@Test
+	public void testNullReference() throws DataException {
+		Random random = new Random();
 
         try (final Repository repository = RepositoryManager.getRepository()) {
             PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -100,16 +69,15 @@ public class TransactionReferenceTests extends Common {
 
             Transaction paymentTransaction = Transaction.fromData(repository, paymentTransactionData);
 
-            // Transaction should be invalid, as we require a non-null reference
-            Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
-            assertEquals(Transaction.ValidationResult.INVALID_REFERENCE, validationResult);
-        }
-    }
+			// Transaction should be invalid because references must still be present
+			Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
+			assertEquals(Transaction.ValidationResult.INVALID_REFERENCE, validationResult);
+		}
+	}
 
-    @Test
-    public void testShortReferenceAfterFeatureTrigger() throws DataException {
-        Common.useSettings("test-settings-v2-disable-reference.json");
-        Random random = new Random();
+	@Test
+	public void testShortReference() throws DataException {
+		Random random = new Random();
 
         try (final Repository repository = RepositoryManager.getRepository()) {
             PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -128,16 +96,15 @@ public class TransactionReferenceTests extends Common {
 
             Transaction paymentTransaction = Transaction.fromData(repository, paymentTransactionData);
 
-            // Transaction should be invalid, as reference isn't long enough
-            Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
-            assertEquals(Transaction.ValidationResult.INVALID_REFERENCE, validationResult);
-        }
-    }
+			// Transaction should be invalid because references must be 64 bytes long
+			Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
+			assertEquals(Transaction.ValidationResult.INVALID_REFERENCE, validationResult);
+		}
+	}
 
-    @Test
-    public void testLongReferenceAfterFeatureTrigger() throws DataException {
-        Common.useSettings("test-settings-v2-disable-reference.json");
-        Random random = new Random();
+	@Test
+	public void testLongReference() throws DataException {
+		Random random = new Random();
 
         try (final Repository repository = RepositoryManager.getRepository()) {
             PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -156,10 +123,10 @@ public class TransactionReferenceTests extends Common {
 
             Transaction paymentTransaction = Transaction.fromData(repository, paymentTransactionData);
 
-            // Transaction should be invalid, as reference is too long
-            Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
-            assertEquals(Transaction.ValidationResult.INVALID_REFERENCE, validationResult);
-        }
-    }
+			// Transaction should be invalid because references must be exactly 64 bytes long
+			Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
+			assertEquals(Transaction.ValidationResult.INVALID_REFERENCE, validationResult);
+		}
+	}
 
 }
