@@ -99,7 +99,6 @@
 		"onlyMintWithNameHeight": 1900300,
 		"removeOnlyMintWithNameHeight": 1935500,
 		"groupMemberCheckHeight": 1902700,
-		"fixBatchRewardHeight": 1945900,
 		"adminsReplaceFoundersHeight": 2012800,
 		"ignoreLevelForRewardShareHeight": 2012800,
 		"multipleNamesPerAccountHeight": 2206300,

@@ -214,7 +214,7 @@ public class Block {
 			if (accountLevel <= 0)
 				return null; // level 0 isn't included in any share bins
 
-			if (blockHeight >= blockChain.getFixBatchRewardHeight()) {
+			if (blockHeight >= blockChain.getGroupMemberCheckHeight()) {
 				if (!this.isMinterMember)
 					return null; // not member of minter group isn't included in any share bins
 			}
@@ -1191,10 +1191,6 @@ public class Block {
 				if (account.getMintingAccount().getEffectiveMintingLevel() == 0)
 					return ValidationResult.ONLINE_ACCOUNTS_INVALID;
 
-				if (this.getBlockData().getHeight() >= BlockChain.getInstance().getFixBatchRewardHeight()) {
-					if (!account.isMinterMember)
-						return ValidationResult.ONLINE_ACCOUNTS_INVALID;
-				}
 			}
 		}
 		else if (this.blockData.getHeight() >= BlockChain.getInstance().getIgnoreLevelForRewardShareHeight()){
@@ -1698,7 +1694,7 @@ public class Block {
 
 		final List<ExpandedAccount> expandedAccounts;
 
-		if (this.getBlockData().getHeight() < BlockChain.getInstance().getFixBatchRewardHeight()) {
+		if (this.getBlockData().getHeight() < BlockChain.getInstance().getGroupMemberCheckHeight()) {
 			expandedAccounts = this.getExpandedAccounts().stream().collect(Collectors.toList());
 		}
 		else {
@@ -2117,7 +2113,7 @@ public class Block {
 
 		final List<ExpandedAccount> expandedAccounts;
 
-		if (this.getBlockData().getHeight() < BlockChain.getInstance().getFixBatchRewardHeight()) {
+		if (this.getBlockData().getHeight() < BlockChain.getInstance().getGroupMemberCheckHeight()) {
 			expandedAccounts = this.getExpandedAccounts().stream().collect(Collectors.toList());
 		}
 		else {
@@ -2339,7 +2335,7 @@ public class Block {
 		// All online accounts
 		final List<ExpandedAccount> expandedAccounts;
 
-		if (this.getBlockData().getHeight() < BlockChain.getInstance().getFixBatchRewardHeight()) {
+		if (this.getBlockData().getHeight() < BlockChain.getInstance().getGroupMemberCheckHeight()) {
 			expandedAccounts = this.getExpandedAccounts().stream().collect(Collectors.toList());
 		}
 		else {

@@ -76,7 +76,6 @@ public class BlockChain {
 		onlyMintWithNameHeight,
 		removeOnlyMintWithNameHeight,
 		groupMemberCheckHeight,
-		fixBatchRewardHeight,
 		adminsReplaceFoundersHeight,
 		ignoreLevelForRewardShareHeight,
 		multipleNamesPerAccountHeight,
@@ -577,10 +576,6 @@ public class BlockChain {
 
 	public int getGroupMemberCheckHeight() {
 		return this.featureTriggers.get(FeatureTrigger.groupMemberCheckHeight.name()).intValue();
-	}
-
-	public int getFixBatchRewardHeight() {
-		return this.featureTriggers.get(FeatureTrigger.fixBatchRewardHeight.name()).intValue();
 	}
 
 	public int getAdminsReplaceFoundersHeight() {
