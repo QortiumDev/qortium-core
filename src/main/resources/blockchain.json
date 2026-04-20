@@ -95,7 +95,6 @@
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"decreaseOnlineAccountsDifficultyTimestamp": 1731958200000,
 		"onlineAccountMinterLevelValidationHeight": 1092000,
-		"selfSponsorshipAlgoV1Height": 1092400,
 		"selfSponsorshipAlgoV2Height": 1611200,
 		"selfSponsorshipAlgoV3Height": 1612200,
 		"arbitraryOptionalFeeTimestamp": 1680278400000,

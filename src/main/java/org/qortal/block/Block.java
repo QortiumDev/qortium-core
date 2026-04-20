@@ -1654,8 +1654,6 @@ public class Block {
 				} else if (InvalidBalanceBlocks.isAffectedBlock(this.blockData.getHeight())) {
 					// Apply fix for affected balance blocks
 					InvalidBalanceBlocks.processFix(this);
-				} else if (this.blockData.getHeight() == BlockChain.getInstance().getSelfSponsorshipAlgoV1Height()) {
-					SelfSponsorshipAlgoV1Block.processAccountPenalties(this);
 				} else if (this.blockData.getHeight() == BlockChain.getInstance().getSelfSponsorshipAlgoV2Height()) {
 					SelfSponsorshipAlgoV2Block.processAccountPenalties(this);
 				} else if (this.blockData.getHeight() == BlockChain.getInstance().getSelfSponsorshipAlgoV3Height()) {
@@ -1982,8 +1980,6 @@ public class Block {
 				} else if (InvalidBalanceBlocks.isAffectedBlock(this.blockData.getHeight())) {
 					// Revert fix for affected balance blocks
 					InvalidBalanceBlocks.orphanFix(this);
-				} else if (this.blockData.getHeight() == BlockChain.getInstance().getSelfSponsorshipAlgoV1Height()) {
-					SelfSponsorshipAlgoV1Block.orphanAccountPenalties(this);
 				} else if (this.blockData.getHeight() == BlockChain.getInstance().getSelfSponsorshipAlgoV2Height()) {
 					SelfSponsorshipAlgoV2Block.orphanAccountPenalties(this);
 				} else if (this.blockData.getHeight() == BlockChain.getInstance().getSelfSponsorshipAlgoV3Height()) {

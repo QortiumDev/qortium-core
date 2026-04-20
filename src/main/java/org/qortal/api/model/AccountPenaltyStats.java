@@ -1,11 +1,15 @@
 package org.qortal.api.model;
 
-import org.qortal.block.SelfSponsorshipAlgoV1Block;
+import org.apache.commons.lang3.StringUtils;
+import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
+import org.qortal.utils.Base58;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 @XmlAccessorType(XmlAccessType.FIELD)
@@ -42,8 +46,17 @@ public class AccountPenaltyStats {
 			if (minPenalty == null || penalty > minPenalty) minPenalty = penalty;
 		}
 
-		String penaltyHash = SelfSponsorshipAlgoV1Block.getHash(addresses);
+		String penaltyHash = getHash(addresses);
 		return new AccountPenaltyStats(totalPenalties, maxPenalty, minPenalty, penaltyHash);
+	}
+
+	public static String getHash(List<String> penaltyAddresses) {
+		if (penaltyAddresses == null || penaltyAddresses.isEmpty()) {
+			return null;
+		}
+
+		Collections.sort(penaltyAddresses);
+		return Base58.encode(Crypto.digest(StringUtils.join(penaltyAddresses).getBytes(StandardCharsets.UTF_8)));
 	}
 
 

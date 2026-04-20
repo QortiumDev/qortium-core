@@ -68,7 +68,6 @@ public class BlockChain {
 		increaseOnlineAccountsDifficultyTimestamp,
 		decreaseOnlineAccountsDifficultyTimestamp,
 		onlineAccountMinterLevelValidationHeight,
-		selfSponsorshipAlgoV1Height,
 		selfSponsorshipAlgoV2Height,
 		selfSponsorshipAlgoV3Height,
 		arbitraryOptionalFeeTimestamp,
@@ -582,10 +581,6 @@ public class BlockChain {
 
 	public long getDecreaseOnlineAccountsDifficultyTimestamp() {
 		return this.featureTriggers.get(FeatureTrigger.decreaseOnlineAccountsDifficultyTimestamp.name()).longValue();
-	}
-
-	public int getSelfSponsorshipAlgoV1Height() {
-		return this.featureTriggers.get(FeatureTrigger.selfSponsorshipAlgoV1Height.name()).intValue();
 	}
 
 	public int getSelfSponsorshipAlgoV2Height() {

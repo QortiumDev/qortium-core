@@ -89,7 +89,6 @@
 		"transactionV6Timestamp": 0,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999990,
 		"onlineAccountMinterLevelValidationHeight": 0,
-		"selfSponsorshipAlgoV1Height": 999999999,
 		"selfSponsorshipAlgoV2Height": 999999999,
 		"selfSponsorshipAlgoV3Height": 999999999,
 		"arbitraryOptionalFeeTimestamp": 0,

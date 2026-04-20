@@ -91,7 +91,6 @@
 		"aggregateSignatureTimestamp": 0,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"onlineAccountMinterLevelValidationHeight": 0,
-		"selfSponsorshipAlgoV1Height": 9999999,
 		"selfSponsorshipAlgoV2Height": 9999900,
 		"selfSponsorshipAlgoV3Height": 9999900,
 		"arbitraryOptionalFeeTimestamp": 0,
