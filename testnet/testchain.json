@@ -94,7 +94,6 @@
 		"selfSponsorshipAlgoV1Height": 9999999,
 		"selfSponsorshipAlgoV2Height": 9999900,
 		"selfSponsorshipAlgoV3Height": 9999900,
-		"feeValidationFixTimestamp": 0,
 		"chatReferenceTimestamp": 0,
 		"arbitraryOptionalFeeTimestamp": 0,
 		"unconfirmableRewardSharesHeight": 9999999,

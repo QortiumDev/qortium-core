@@ -71,7 +71,6 @@ public class BlockChain {
 		selfSponsorshipAlgoV1Height,
 		selfSponsorshipAlgoV2Height,
 		selfSponsorshipAlgoV3Height,
-		feeValidationFixTimestamp,
 		chatReferenceTimestamp,
 		arbitraryOptionalFeeTimestamp,
 		unconfirmableRewardSharesHeight,
@@ -604,10 +603,6 @@ public class BlockChain {
 
 	public long getOnlineAccountMinterLevelValidationHeight() {
 		return this.featureTriggers.get(FeatureTrigger.onlineAccountMinterLevelValidationHeight.name()).intValue();
-	}
-
-	public long getFeeValidationFixTimestamp() {
-		return this.featureTriggers.get(FeatureTrigger.feeValidationFixTimestamp.name()).longValue();
 	}
 
 	public long getChatReferenceTimestamp() {

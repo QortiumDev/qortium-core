@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.asset.Asset;
 import org.qortal.data.account.RewardShareData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.repository.DataException;
@@ -146,6 +147,16 @@ public class RewardShareTests extends Common {
 			transactionData.setFee(0L);
 			validationResult = transaction.isValidUnconfirmed();
 			assertEquals("Zero-fee self-share should be valid", ValidationResult.OK, validationResult);
+
+			// A self-share with a positive fee still has to be fundable
+			transactionData.setFee(signingAccount.getConfirmedBalance(Asset.QORT) + 1L);
+			validationResult = transaction.isValidUnconfirmed();
+			assertEquals("Underfunded self-share fee should be rejected", ValidationResult.NO_BALANCE, validationResult);
+
+			// Restore zero-fee self-share before minting it
+			transactionData.setFee(0L);
+			validationResult = transaction.isValidUnconfirmed();
+			assertEquals("Zero-fee self-share should still be valid", ValidationResult.OK, validationResult);
 
 			TransactionUtils.signAndMint(repository, transactionData, signingAccount);
 
