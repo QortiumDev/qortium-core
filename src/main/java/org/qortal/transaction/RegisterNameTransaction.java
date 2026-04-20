@@ -4,7 +4,6 @@ import com.google.common.base.Utf8;
 import org.qortal.account.Account;
 import org.qortal.api.resource.TransactionsResource;
 import org.qortal.asset.Asset;
-import org.qortal.block.BlockChain;
 import org.qortal.controller.repository.NamesDatabaseIntegrityCheck;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.naming.NameData;
@@ -66,10 +65,6 @@ public class RegisterNameTransaction extends Transaction {
 			}
 		}
 
-		int blockchainHeight = this.repository.getBlockRepository().getBlockchainHeight();
-		final int start = BlockChain.getInstance().getSelfSponsorshipAlgoV2Height() - 1180;
-		final int end = BlockChain.getInstance().getSelfSponsorshipAlgoV3Height();
-
 		// Check name size bounds
 		int nameLength = Utf8.encodedLength(name);
 		if (nameLength < Name.MIN_NAME_SIZE || nameLength > Name.MAX_NAME_SIZE)
@@ -91,10 +86,6 @@ public class RegisterNameTransaction extends Transaction {
 		// Check registrant has enough funds
 		if (registrant.getConfirmedBalance(Asset.QORT) < this.registerNameTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
-
-		// Check if we are on algo runs
-		if (blockchainHeight >= start && blockchainHeight <= end)
-			return ValidationResult.TEMPORARY_DISABLED;
 
 		return ValidationResult.OK;
 	}

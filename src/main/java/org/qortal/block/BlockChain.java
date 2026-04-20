@@ -68,7 +68,6 @@ public class BlockChain {
 		increaseOnlineAccountsDifficultyTimestamp,
 		decreaseOnlineAccountsDifficultyTimestamp,
 		onlineAccountMinterLevelValidationHeight,
-		selfSponsorshipAlgoV2Height,
 		selfSponsorshipAlgoV3Height,
 		arbitraryOptionalFeeTimestamp,
 		unconfirmableRewardSharesHeight,
@@ -232,14 +231,8 @@ public class BlockChain {
 	/** Snapshot timestamp for self sponsorship algo V1 */
 	private long selfSponsorshipAlgoV1SnapshotTimestamp;
 
-	/** Snapshot timestamp for self sponsorship algo V2 */
-	private long selfSponsorshipAlgoV2SnapshotTimestamp;
-
 	/** Snapshot timestamp for self sponsorship algo V3 */
 	private long selfSponsorshipAlgoV3SnapshotTimestamp;
-
-	/** Reference timestamp for self sponsorship algo V1 block height */
-	private long referenceTimestampBlock;
 
 	/** Feature-trigger timestamp to modify behaviour of various transactions that support mempow */
 	private long mempowTransactionUpdatesTimestamp;
@@ -444,20 +437,11 @@ public class BlockChain {
 		return this.selfSponsorshipAlgoV1SnapshotTimestamp;
 	}
 
-	// Self sponsorship algo V2
-	public long getSelfSponsorshipAlgoV2SnapshotTimestamp() {
-		return this.selfSponsorshipAlgoV2SnapshotTimestamp;
-	}
-
 	// Self sponsorship algo V3
 	public long getSelfSponsorshipAlgoV3SnapshotTimestamp() {
 		return this.selfSponsorshipAlgoV3SnapshotTimestamp;
 	}
 
-	// Self sponsorship algo V3
-	public long getReferenceTimestampBlock() {
-		return this.referenceTimestampBlock;
-	}
 	// Feature-trigger timestamp to modify behaviour of various transactions that support mempow
 	public long getMemPoWTransactionUpdatesTimestamp() {
 		return this.mempowTransactionUpdatesTimestamp;
@@ -581,10 +565,6 @@ public class BlockChain {
 
 	public long getDecreaseOnlineAccountsDifficultyTimestamp() {
 		return this.featureTriggers.get(FeatureTrigger.decreaseOnlineAccountsDifficultyTimestamp.name()).longValue();
-	}
-
-	public int getSelfSponsorshipAlgoV2Height() {
-		return this.featureTriggers.get(FeatureTrigger.selfSponsorshipAlgoV2Height.name()).intValue();
 	}
 
 	public int getSelfSponsorshipAlgoV3Height() {

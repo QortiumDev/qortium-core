@@ -1,7 +1,6 @@
 package org.qortal.transaction;
 
 import org.qortal.account.Account;
-import org.qortal.block.BlockChain;
 import org.qortal.data.PaymentData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.TransferAssetTransactionData;
@@ -52,14 +51,6 @@ public class TransferAssetTransaction extends Transaction {
 
 	@Override
 	public ValidationResult isValid() throws DataException {
-		int blockchainHeight = this.repository.getBlockRepository().getBlockchainHeight();
-		final int start = BlockChain.getInstance().getSelfSponsorshipAlgoV2Height();
-		final int end = BlockChain.getInstance().getSelfSponsorshipAlgoV3Height();
-
-		// Check if we are on algo runs
-		if (blockchainHeight >= start && blockchainHeight <= end)
-		       return ValidationResult.ASSET_NOT_SPENDABLE;
-
 		// Wrap asset transfer as a payment and delegate final payment checks to Payment class
 		return new Payment(this.repository).isValid(this.transferAssetTransactionData.getSenderPublicKey(), getPaymentData(), this.transferAssetTransactionData.getFee());
 	}
