@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-19 - core: remove atFindNextTransactionFix trigger
+
+Changed Qortium so ATs always use the corrected “find the next transaction after this timestamp” behavior instead of preserving the old upstream off-by-one compatibility branch, and removed the related trigger from the main chain config and all mirrored test chain configs because a new-chain fork does not need to replay that historical bug.
+
 ### 2026-04-19 - network: move initial peers into settings
 
 Changed Qortium so the initial peer list now comes from an optional

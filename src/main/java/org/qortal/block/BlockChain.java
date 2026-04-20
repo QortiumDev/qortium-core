@@ -61,7 +61,6 @@ public class BlockChain {
 	private GenesisBlock.GenesisInfo genesisInfo;
 
 	public enum FeatureTrigger {
-		atFindNextTransactionFix,
 		newBlockSigHeight,
 		shareBinFix,
 		sharesByLevelV2Height,
@@ -570,10 +569,6 @@ public class BlockChain {
 	}
 
 	// Convenience methods for specific blockchain feature triggers
-
-	public int getAtFindNextTransactionFixHeight() {
-		return this.featureTriggers.get(FeatureTrigger.atFindNextTransactionFix.name()).intValue();
-	}
 
 	public int getNewBlockSigHeight() {
 		return this.featureTriggers.get(FeatureTrigger.newBlockSigHeight.name()).intValue();
