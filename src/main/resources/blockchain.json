@@ -76,7 +76,6 @@
 		"minutesPerBlock": 1
 	},
 	"featureTriggers": {
-		"rewardShareLimitTimestamp": 1657382400000,
 		"transactionV6Timestamp": 9999999999999,
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"decreaseOnlineAccountsDifficultyTimestamp": 1731958200000,

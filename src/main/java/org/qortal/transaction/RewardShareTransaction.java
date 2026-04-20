@@ -149,7 +149,6 @@ public class RewardShareTransaction extends Transaction {
 
 			// Check the minting account hasn't reach maximum number of reward-shares
 			int rewardShareCount = this.repository.getAccountRepository().countRewardShares(creator.getPublicKey());
-			int selfShareCount = this.repository.getAccountRepository().countSelfShares(creator.getPublicKey());
 
 			int maxRewardShares = BlockChain.getInstance().getMaxRewardSharesAtTimestamp(this.rewardShareTransactionData.getTimestamp());
 			if (creator.isFounder())
@@ -158,11 +157,6 @@ public class RewardShareTransaction extends Transaction {
 
 			if (rewardShareCount >= maxRewardShares)
 				return ValidationResult.MAXIMUM_REWARD_SHARES;
-
-			// When filling all reward share slots, one must be a self share (after feature trigger timestamp)
-			if (this.rewardShareTransactionData.getTimestamp() >= BlockChain.getInstance().getRewardShareLimitTimestamp())
-				if (!isRecipientAlsoMinter && rewardShareCount == maxRewardShares-1 && selfShareCount == 0)
-					return ValidationResult.MAXIMUM_REWARD_SHARES;
 
 		} else {
 			// This transaction intends to modify/terminate an existing reward-share

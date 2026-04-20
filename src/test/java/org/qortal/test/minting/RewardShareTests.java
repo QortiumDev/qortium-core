@@ -221,12 +221,12 @@ public class RewardShareTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount dilbertAccount = Common.getTestAccount(repository, "dilbert");
 
-			// Create 2 reward shares
-			for (int i=0; i<2; i++) {
+			// Create 3 reward shares
+			for (int i=0; i<3; i++) {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
 			}
 
-			// 3rd reward share should fail because we've reached the limit (and we haven't got a self share)
+			// 4th reward share should fail because we've reached the simple maximum share limit
 			AssertionError assertionError = null;
 			try {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
@@ -252,21 +252,11 @@ public class RewardShareTests extends Common {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
 			}
 
-			// 3rd reward share should fail because we've reached the limit (and we haven't got a self share)
-			AssertionError assertionError = null;
-			try {
-				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
-			} catch (AssertionError e) {
-				assertionError = e;
-			}
-			assertNotNull("Transaction should be invalid", assertionError);
-			assertTrue("Transaction should be invalid due to reaching maximum reward shares", assertionError.getMessage().contains("MAXIMUM_REWARD_SHARES"));
-
-			// Now create a self share, which should succeed as we have space for it
+			// Create a self share, which should succeed as it simply counts toward the same overall share limit
 			AccountUtils.rewardShare(repository, dilbertAccount, dilbertAccount, sharePercent);
 
 			// 4th reward share should fail because we've reached the limit (including the self share)
-			assertionError = null;
+			AssertionError assertionError = null;
 			try {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
 			} catch (AssertionError e) {

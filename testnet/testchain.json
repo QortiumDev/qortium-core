@@ -71,7 +71,6 @@
 	"featureTriggers": {
 		"atFindNextTransactionFix": 0,
 		"newBlockSigHeight": 0,
-		"rewardShareLimitTimestamp": 0,
 		"calcChainWeightTimestamp": 0,
 		"transactionV6Timestamp": 9999999999999,
 		"aggregateSignatureTimestamp": 0,

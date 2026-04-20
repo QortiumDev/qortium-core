@@ -61,7 +61,6 @@ public class BlockChain {
 	private GenesisBlock.GenesisInfo genesisInfo;
 
 	public enum FeatureTrigger {
-		rewardShareLimitTimestamp,
 		transactionV6Timestamp,
 		increaseOnlineAccountsDifficultyTimestamp,
 		decreaseOnlineAccountsDifficultyTimestamp,
@@ -504,10 +503,6 @@ public class BlockChain {
 	}
 
 	// Convenience methods for specific blockchain feature triggers
-
-	public long getRewardShareLimitTimestamp() {
-		return this.featureTriggers.get(FeatureTrigger.rewardShareLimitTimestamp.name()).longValue();
-	}
 
 	public long getTransactionV6Timestamp() {
 		return this.featureTriggers.get(FeatureTrigger.transactionV6Timestamp.name()).longValue();
