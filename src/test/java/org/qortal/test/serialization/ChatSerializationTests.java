@@ -4,6 +4,7 @@ import com.google.common.hash.HashCode;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.repository.DataException;
@@ -98,5 +99,35 @@ public class ChatSerializationTests {
             assertArrayEquals(deserializedChatTransactionData.getChatReference(), transactionData.getChatReference());
         }
     }
+
+	@Test
+	public void testChatSerializationPreservesChatReferenceWithOldTimestamp() throws DataException, TransformationException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount signingAccount = Common.getTestAccount(repository, "alice");
+			ChatTransactionData originalTransactionData = (ChatTransactionData) ChatTestTransaction.randomTransaction(repository, signingAccount, true);
+
+			BaseTransactionData baseTransactionData = new BaseTransactionData(
+					1_500_000_000_000L,
+					originalTransactionData.getTxGroupId(),
+					originalTransactionData.getReference(),
+					originalTransactionData.getCreatorPublicKey(),
+					originalTransactionData.getFee(),
+					originalTransactionData.getSignature());
+			ChatTransactionData transactionData = new ChatTransactionData(baseTransactionData, originalTransactionData.getSender(),
+					originalTransactionData.getNonce(), originalTransactionData.getRecipient(), originalTransactionData.getChatReference(),
+					originalTransactionData.getData(), originalTransactionData.getIsText(), originalTransactionData.getIsEncrypted());
+
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+			transaction.sign(signingAccount);
+
+			final int claimedLength = TransactionTransformer.getDataLength(transactionData);
+			byte[] serializedTransaction = TransactionTransformer.toBytes(transactionData);
+			assertEquals("Serialized CHAT transaction length differs from declared length", claimedLength, serializedTransaction.length);
+
+			ChatTransactionData deserializedTransactionData = (ChatTransactionData) TransactionTransformer.fromBytes(serializedTransaction);
+			assertNotNull(deserializedTransactionData.getChatReference());
+			assertArrayEquals("Old timestamp should still preserve chat reference", transactionData.getChatReference(), deserializedTransactionData.getChatReference());
+		}
+	}
 
 }

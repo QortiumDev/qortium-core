@@ -47,6 +47,8 @@ public class ChatTransactionTransformer extends TransactionTransformer {
 		layout.add("is message encrypted?", TransformationType.BOOLEAN);
 		layout.add("is message text?", TransformationType.BOOLEAN);
 		layout.add("fee", TransformationType.AMOUNT);
+		layout.add("has chat reference?", TransformationType.BOOLEAN);
+		layout.add("? chat reference", TransformationType.SIGNATURE);
 		layout.add("signature", TransformationType.SIGNATURE);
 	}
 
@@ -80,14 +82,11 @@ public class ChatTransactionTransformer extends TransactionTransformer {
 		long fee = byteBuffer.getLong();
 
 		byte[] chatReference = null;
+		boolean hasChatReference = byteBuffer.get() != 0;
 
-		if (timestamp >= BlockChain.getInstance().getChatReferenceTimestamp()) {
-			boolean hasChatReference = byteBuffer.get() != 0;
-
-			if (hasChatReference) {
-				chatReference = new byte[CHAT_REFERENCE_LENGTH];
-				byteBuffer.get(chatReference);
-			}
+		if (hasChatReference) {
+			chatReference = new byte[CHAT_REFERENCE_LENGTH];
+			byteBuffer.get(chatReference);
 		}
 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
@@ -140,14 +139,12 @@ public class ChatTransactionTransformer extends TransactionTransformer {
 
 			bytes.write(Longs.toByteArray(chatTransactionData.getFee()));
 
-			if (transactionData.getTimestamp() >= BlockChain.getInstance().getChatReferenceTimestamp()) {
-				// Include chat reference if it's not null
-				if (chatTransactionData.getChatReference() != null) {
-					bytes.write((byte) 1);
-					bytes.write(chatTransactionData.getChatReference());
-				} else {
-					bytes.write((byte) 0);
-				}
+			// Include chat reference if it's not null
+			if (chatTransactionData.getChatReference() != null) {
+				bytes.write((byte) 1);
+				bytes.write(chatTransactionData.getChatReference());
+			} else {
+				bytes.write((byte) 0);
 			}
 
 			if (chatTransactionData.getSignature() != null)
