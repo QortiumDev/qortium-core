@@ -88,11 +88,6 @@ public class BuyNameTransaction extends Transaction {
 		if (buyer.getAddress().equals(nameData.getOwner()))
 			return ValidationResult.BUYER_ALREADY_OWNER;
 
-		// If accounts are only allowed one registered name then check for this
-		if (BlockChain.getInstance().oneNamePerAccount(this.repository.getBlockRepository().getBlockchainHeight())
-				&& !this.repository.getNameRepository().getNamesByOwner(buyer.getAddress()).isEmpty())
-			return ValidationResult.MULTIPLE_NAMES_FORBIDDEN;
-
 		// Check expected seller currently owns name
 		if (!this.buyNameTransactionData.getSeller().equals(nameData.getOwner()))
 			return ValidationResult.INVALID_SELLER;

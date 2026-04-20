@@ -13,7 +13,6 @@
 	"useBrokenMD160ForAddresses": false,
 	"requireGroupForApproval": false,
 	"defaultGroupId": 0,
-	"oneNamePerAccount": true,
 	"minAccountLevelToMint": 1,
 	"minAccountLevelForBlockSubmissions": 1,
 	"minAccountLevelToRewardShare": 2,
@@ -77,8 +76,7 @@
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999999,
 		"arbitraryOptionalFeeTimestamp": 0,
 		"decreaseOnlineAccountsDifficultyTimestamp": 9999999999999,
-		"adminsReplaceFoundersHeight": 0,
-		"multipleNamesPerAccountHeight": 0
+		"adminsReplaceFoundersHeight": 0
 	},
 	"genesisInfo": {
 		"version": 4,

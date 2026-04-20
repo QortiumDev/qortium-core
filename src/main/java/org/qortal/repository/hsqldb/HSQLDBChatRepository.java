@@ -46,15 +46,7 @@ public class HSQLDBChatRepository implements ChatRepository {
 
 		StringBuilder sql = new StringBuilder(1024);
 
-		String tableName;
-
-		// if the PrimaryTable is available, then use it
-		if( this.repository.getBlockRepository().getBlockchainHeight() > BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
-			tableName = "PrimaryNames";
-		}
-		else {
-			tableName = "Names";
-		}
+		String tableName = "PrimaryNames";
 
 		sql.append("SELECT created_when, tx_group_id, Transactions.reference, creator, "
 				+ "sender, SenderNames.name, recipient, RecipientNames.name, "
@@ -175,15 +167,7 @@ public class HSQLDBChatRepository implements ChatRepository {
 	@Override
 	public ChatMessage toChatMessage(ChatTransactionData chatTransactionData, Encoding encoding) throws DataException {
 
-		String tableName;
-
-		// if the PrimaryTable is available, then use it
-		if( this.repository.getBlockRepository().getBlockchainHeight() > BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
-			tableName = "PrimaryNames";
-		}
-		else {
-			tableName = "Names";
-		}
+		String tableName = "PrimaryNames";
 
 		String sql = "SELECT SenderNames.name, RecipientNames.name "
 				+ "FROM ChatTransactions "
@@ -227,15 +211,7 @@ public class HSQLDBChatRepository implements ChatRepository {
 	}
 	
 	private List<GroupChat> getActiveGroupChats(String address, Encoding encoding, Boolean hasChatReference) throws DataException {
-		String tableName;
-
-		// if the PrimaryTable is available, then use it
-		if( this.repository.getBlockRepository().getBlockchainHeight() > BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
-			tableName = "PrimaryNames";
-		}
-		else {
-			tableName = "Names";
-		}
+		String tableName = "PrimaryNames";
 
 		Long now = NTP.getTime();
 		if (now == null)
@@ -356,15 +332,7 @@ public class HSQLDBChatRepository implements ChatRepository {
 	}
 
 	private List<DirectChat> getActiveDirectChats(String address, Boolean hasChatReference) throws DataException {
-		String tableName;
-
-		// if the PrimaryTable is available, then use it
-		if( this.repository.getBlockRepository().getBlockchainHeight() > BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
-			tableName = "PrimaryNames";
-		}
-		else {
-			tableName = "Names";
-		}
+		String tableName = "PrimaryNames";
 
 		Long now = NTP.getTime();
 		if (now == null)

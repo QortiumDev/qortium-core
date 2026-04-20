@@ -402,9 +402,6 @@ public class UpdateTests extends Common {
 			assertTrue(repository.getNameRepository().nameExists(initialName));
 			assertNotNull(repository.getNameRepository().fromReducedName(initialReducedName));
 
-			// move passed primary initiation
-			BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
 			// check primary name
 			assertTrue(alice.getPrimaryName().isPresent());
 			assertEquals(initialName, alice.getPrimaryName().get());
@@ -543,9 +540,6 @@ public class UpdateTests extends Common {
 	@Test
 	public void testUpdatePrimaryName() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			// mint passed the feature trigger block
-			BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
 

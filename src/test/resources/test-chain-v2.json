@@ -72,8 +72,7 @@
 		"increaseOnlineAccountsDifficultyTimestamp": 9999999999990,
 		"arbitraryOptionalFeeTimestamp": 0,
 		"decreaseOnlineAccountsDifficultyTimestamp": 9999999999999,
-		"adminsReplaceFoundersHeight": 9999999999999,
-		"multipleNamesPerAccountHeight": 10
+		"adminsReplaceFoundersHeight": 9999999999999
 	},
 	"genesisInfo": {
 		"version": 4,

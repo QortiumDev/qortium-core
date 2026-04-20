@@ -388,8 +388,6 @@ public class IntegrityTests extends Common {
     @Test
     public void testUpdateToMissingName() throws DataException {
         try (final Repository repository = RepositoryManager.getRepository()) {
-            BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
             // Register-name
             PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
             String initialName = "test-name";

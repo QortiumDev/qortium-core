@@ -65,8 +65,7 @@ public class BlockChain {
 		increaseOnlineAccountsDifficultyTimestamp,
 		decreaseOnlineAccountsDifficultyTimestamp,
 		arbitraryOptionalFeeTimestamp,
-		adminsReplaceFoundersHeight,
-		multipleNamesPerAccountHeight
+		adminsReplaceFoundersHeight
 	}
 
     // V5.5 Default List of Historic Triggers
@@ -88,10 +87,6 @@ public class BlockChain {
 
 	/** Whether to use legacy, broken RIPEMD160 implementation when converting public keys to addresses. */
 	private boolean useBrokenMD160ForAddresses = false;
-
-	/** This should get ignored and overwritten in the oneNamePerAccount(int blockchainHeight) method,
-	 * because it is based on block height, not based on the genesis block.*/
-	private boolean oneNamePerAccount = false;
 
 	/** Checkpoints */
 	public static class Checkpoint {
@@ -308,9 +303,6 @@ public class BlockChain {
 			jsonSource = new StreamSource(in);
 		}
 
-        // Load in the default feature triggers
-        defaultFeatureTriggerHeight.put(FeatureTrigger.multipleNamesPerAccountHeight, 2206300L);
-
 		try  {
 			// Attempt to unmarshal JSON stream to BlockChain config
 			blockchain = unmarshaller.unmarshal(jsonSource, BlockChain.class).getValue();
@@ -415,11 +407,6 @@ public class BlockChain {
 		return this.useBrokenMD160ForAddresses;
 	}
 
-	public boolean oneNamePerAccount(int blockchainHeight) {
-		// this is not set on a simple blockchain setting, it is based on a feature trigger height
-		return blockchainHeight < this.getMultipleNamesPerAccountHeight();
-	}
-
 	public List<Checkpoint> getCheckpoints() {
 		return this.checkpoints;
 	}
@@ -512,10 +499,6 @@ public class BlockChain {
 
 	public int getAdminsReplaceFoundersHeight() {
 		return this.featureTriggers.get(FeatureTrigger.adminsReplaceFoundersHeight.name()).intValue();
-	}
-
-	public int getMultipleNamesPerAccountHeight() {
-		return this.featureTriggers.get(FeatureTrigger.multipleNamesPerAccountHeight.name()).intValue();
 	}
 
 	// More complex getters for aspects that change by height or timestamp

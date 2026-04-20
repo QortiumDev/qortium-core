@@ -97,11 +97,6 @@ public class RegisterNameTransaction extends Transaction {
 		if (this.repository.getNameRepository().reducedNameExists(this.registerNameTransactionData.getReducedName()))
 			return ValidationResult.NAME_ALREADY_REGISTERED;
 
-		// If accounts are only allowed one registered name then check for this
-		if (BlockChain.getInstance().oneNamePerAccount(this.repository.getBlockRepository().getBlockchainHeight())
-				&& !this.repository.getNameRepository().getNamesByOwner(getRegistrant().getAddress()).isEmpty())
-			return ValidationResult.MULTIPLE_NAMES_FORBIDDEN;
-
 		return ValidationResult.OK;
 	}
 

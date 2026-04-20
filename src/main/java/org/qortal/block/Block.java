@@ -1610,8 +1610,6 @@ public class Block {
 				} else if (InvalidBalanceBlocks.isAffectedBlock(this.blockData.getHeight())) {
 					// Apply fix for affected balance blocks
 					InvalidBalanceBlocks.processFix(this);
-				} else if (this.blockData.getHeight() == BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
-					PrimaryNamesBlock.processNames(this.repository);
 				}
 			}
 		}
@@ -1913,13 +1911,11 @@ public class Block {
 				} else if (this.blockData.getHeight() == 1333492) {
 					// Revert fix for block 1333492
 					Block1333492.orphanFix(this);
-				} else if (InvalidBalanceBlocks.isAffectedBlock(this.blockData.getHeight())) {
-					// Revert fix for affected balance blocks
-					InvalidBalanceBlocks.orphanFix(this);
-				} else if (this.blockData.getHeight() == BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
-					PrimaryNamesBlock.orphanNames( this.repository );
+					} else if (InvalidBalanceBlocks.isAffectedBlock(this.blockData.getHeight())) {
+						// Revert fix for affected balance blocks
+						InvalidBalanceBlocks.orphanFix(this);
+					}
 				}
-			}
 
 			// Account levels and block rewards are only processed/orphaned on block reward distribution blocks
 			if (this.isRewardDistributionBlock()) {

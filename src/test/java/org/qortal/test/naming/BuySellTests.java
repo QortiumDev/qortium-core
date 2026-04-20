@@ -101,23 +101,11 @@ public class BuySellTests extends Common {
 		// check name does exist
 		assertTrue(repository.getNameRepository().nameExists(name1));
 
-		// register another name, second registered name should fail before the feature trigger
+		// register another name, second registered name should also be allowed
 		final String name2 = "another name";
 		RegisterNameTransactionData transactionData2 = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name2, "{}");
-		Transaction.ValidationResult resultBeforeFeatureTrigger = TransactionUtils.signAndImport(repository, transactionData2, alice);
-
-		// check that that multiple names is forbidden
-		assertTrue(Transaction.ValidationResult.MULTIPLE_NAMES_FORBIDDEN.equals(resultBeforeFeatureTrigger));
-
-		// mint passed the feature trigger block
-		BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
-		// register again, now that we are passed the feature trigger
-		RegisterNameTransactionData transactionData3 = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name2, "{}");
-		Transaction.ValidationResult resultAfterFeatureTrigger = TransactionUtils.signAndImport(repository, transactionData3, alice);
-
-		// check that multiple names is ok
-		assertTrue(Transaction.ValidationResult.OK.equals(resultAfterFeatureTrigger));
+		Transaction.ValidationResult result = TransactionUtils.signAndImport(repository, transactionData2, alice);
+		assertEquals(Transaction.ValidationResult.OK, result);
 
 		// mint block, confirm transaction
 		BlockUtils.mintBlock(repository);
@@ -142,9 +130,6 @@ public class BuySellTests extends Common {
 
 	@Test
 	public void testSellName() throws DataException {
-		// mint passed the feature trigger block
-		BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
 		// Register-name
 		testRegisterName();
 
@@ -317,9 +302,6 @@ public class BuySellTests extends Common {
 
 	@Test
 	public void testBuyName() throws DataException {
-		// move passed primary initiation
-		BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
 		// Register-name and sell-name
 		testSellName();
 
@@ -469,9 +451,6 @@ public class BuySellTests extends Common {
 
 	@Test
 	public void testBuyInvalidationDuringPrimaryNameSale() throws DataException {
-		// mint passed the feature trigger block
-		BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
 		// Register-name
 		testRegisterName();
 

@@ -124,8 +124,6 @@ public class MiscTests extends Common {
 			transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 
-			BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
 			// Register another name that we will later attempt to rename to first name (above)
 			String otherName = "new-name";
 			String otherData = "";
@@ -340,8 +338,6 @@ public class MiscTests extends Common {
 	public void testRegisterNameFeeIncrease() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
-			BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
 			// Add original fee to nameRegistrationUnitFees
 			UnitFeesByTimestamp originalFee = new UnitFeesByTimestamp();
 			originalFee.timestamp = 0L;
@@ -531,9 +527,6 @@ public class MiscTests extends Common {
 
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 
-			// mint passed the feature trigger block
-			BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
 			Optional<String> primaryName = repository.getNameRepository().getPrimaryName(alice.getAddress());
 
 			Assert.assertNotNull(primaryName);
@@ -559,9 +552,6 @@ public class MiscTests extends Common {
 			assertTrue(repository.getNameRepository().nameExists(name1));
 
 
-			// mint passed the feature trigger block
-			BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight() + 1);
-
 			Optional<String> primaryName = repository.getNameRepository().getPrimaryName(alice.getAddress());
 
 			Assert.assertNotNull(primaryName);
@@ -571,14 +561,11 @@ public class MiscTests extends Common {
 	}
 
 	@Test
-	public void testPrimaryNameSingleAfterFeature() throws DataException {
+	public void testPrimaryNameSingleOrphan() throws DataException {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			String name = "alice 1";
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
-
-			// mint passed the feature trigger block
-			BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
 
 			// register name 1
 			RegisterNameTransactionData transactionData1 = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, "{}");
@@ -623,23 +610,11 @@ public class MiscTests extends Common {
 			// check name does exist
 			assertTrue(repository.getNameRepository().nameExists(name1));
 
-			// register another name, second registered name should fail before the feature trigger
+			// register another name, second registered name should also be allowed
 			final String name2 = "another name";
 			RegisterNameTransactionData transactionData2 = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name2, "{}");
-			Transaction.ValidationResult resultBeforeFeatureTrigger = TransactionUtils.signAndImport(repository, transactionData2, alice);
-
-			// check that that multiple names is forbidden
-			assertTrue(Transaction.ValidationResult.MULTIPLE_NAMES_FORBIDDEN.equals(resultBeforeFeatureTrigger));
-
-			// mint passed the feature trigger block
-			BlockUtils.mintBlocks(repository, BlockChain.getInstance().getMultipleNamesPerAccountHeight());
-
-			// register again, now that we are passed the feature trigger
-			RegisterNameTransactionData transactionData3 = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name2, "{}");
-			Transaction.ValidationResult resultAfterFeatureTrigger = TransactionUtils.signAndImport(repository, transactionData3, alice);
-
-			// check that multiple names is ok
-			assertTrue(Transaction.ValidationResult.OK.equals(resultAfterFeatureTrigger));
+			Transaction.ValidationResult result = TransactionUtils.signAndImport(repository, transactionData2, alice);
+			assertEquals(Transaction.ValidationResult.OK, result);
 
 			// mint block, confirm transaction
 			BlockUtils.mintBlock(repository);

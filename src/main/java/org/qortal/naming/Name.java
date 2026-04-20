@@ -62,14 +62,11 @@ public class Name {
 	public void register() throws DataException {
 		this.repository.getNameRepository().save(this.nameData);
 
-		if( this.repository.getBlockRepository().getBlockchainHeight() > BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
+		Account account = new Account(this.repository, this.nameData.getOwner());
 
-			Account account = new Account(this.repository, this.nameData.getOwner());
-
-			// if there is no primary name established, then the new registered name is the primary name
-			if (account.getPrimaryName().isEmpty()) {
-				account.setPrimaryName(this.nameData.getName());
-			}
+		// If there is no primary name established, then the new registered name is the primary name.
+		if (account.getPrimaryName().isEmpty()) {
+			account.setPrimaryName(this.nameData.getName());
 		}
 	}
 
@@ -102,23 +99,16 @@ public class Name {
 		// Save updated name data
 		this.repository.getNameRepository().save(this.nameData);
 
-		if( this.repository.getBlockRepository().getBlockchainHeight() > BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
+		Account account = new Account(this.repository, this.nameData.getOwner());
 
-			Account account = new Account(this.repository, this.nameData.getOwner());
+		// If updating the primary name, then set primary name to new name.
+		if (account.getPrimaryName().isEmpty() || account.getPrimaryName().get().equals(updateNameTransactionData.getName())) {
+			String newName = updateNameTransactionData.getNewName();
 
-			// if updating the primary name, then set primary name to new name
-			if( account.getPrimaryName().isEmpty() || account.getPrimaryName().get().equals(updateNameTransactionData.getName())) {
-
-				String newName = updateNameTransactionData.getNewName();
-
-				// if there is a new name, then set primary to the new name
-				if( newName != null && !"".equals(newName)) {
-					account.setPrimaryName(newName);
-				}
-				// if there is not a new name and there is an existing primary name, then remove the existing primary name
-				else if( account.getPrimaryName().isPresent() ){
-					account.removePrimaryName();
-				}
+			if (newName != null && !"".equals(newName)) {
+				account.setPrimaryName(newName);
+			} else if (account.getPrimaryName().isPresent()) {
+				account.removePrimaryName();
 			}
 		}
 	}
@@ -152,14 +142,11 @@ public class Name {
 		// Remove reference to previous name-changing transaction
 		updateNameTransactionData.setNameReference(null);
 
-		if( this.repository.getBlockRepository().getBlockchainHeight() > BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
+		Account account = new Account(this.repository, this.nameData.getOwner());
 
-			Account account = new Account(this.repository, this.nameData.getOwner());
-
-			// if the primary name is the new updated name, then it needs to be set back to the previous name
-			if (account.getPrimaryName().isPresent() && account.getPrimaryName().get().equals(updateNameTransactionData.getNewName())) {
-				account.setPrimaryName(updateNameTransactionData.getName());
-			}
+		// If the primary name is the new updated name, then it needs to be set back to the previous name.
+		if (account.getPrimaryName().isPresent() && account.getPrimaryName().get().equals(updateNameTransactionData.getNewName())) {
+			account.setPrimaryName(updateNameTransactionData.getName());
 		}
 	}
 
@@ -271,21 +258,17 @@ public class Name {
 		// Save updated name data
 		this.repository.getNameRepository().save(this.nameData);
 
-		// if multiple names feature is activated, then check the buyer and seller's primary name status
-		if( this.repository.getBlockRepository().getBlockchainHeight() > BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
+		Account seller = new Account(this.repository, buyNameTransactionData.getSeller());
+		Optional<String> sellerPrimaryName = seller.getPrimaryName();
 
-			Account seller = new Account(this.repository, buyNameTransactionData.getSeller());
-			Optional<String> sellerPrimaryName = seller.getPrimaryName();
+		// If the seller sold their primary name, then remove their primary name.
+		if (sellerPrimaryName.isPresent() && sellerPrimaryName.get().equals(buyNameTransactionData.getName())) {
+			seller.removePrimaryName();
+		}
 
-			// if the seller sold their primary name, then remove their primary name
-			if (sellerPrimaryName.isPresent() && sellerPrimaryName.get().equals(buyNameTransactionData.getName())) {
-				seller.removePrimaryName();
-			}
-
-			// if the buyer had no primary name, then set the primary name to the name bought
-			if( buyer.getPrimaryName().isEmpty() ) {
-				buyer.setPrimaryName(buyNameTransactionData.getName());
-			}
+		// If the buyer had no primary name, then set the primary name to the name bought.
+		if (buyer.getPrimaryName().isEmpty()) {
+			buyer.setPrimaryName(buyNameTransactionData.getName());
 		}
 	}
 
@@ -318,20 +301,16 @@ public class Name {
 		// Caller is expected to save
 		buyNameTransactionData.setNameReference(null);
 
-		// if multiple names feature is activated, then check the buyer and seller's primary name status
-		if( this.repository.getBlockRepository().getBlockchainHeight() > BlockChain.getInstance().getMultipleNamesPerAccountHeight()) {
+		// If the seller lost their primary name, then set their primary name back.
+		if (seller.getPrimaryName().isEmpty()) {
+			seller.setPrimaryName(this.nameData.getName());
+		}
 
-			// if the seller lost their primary name, then set their primary name back
-			if (seller.getPrimaryName().isEmpty()) {
-				seller.setPrimaryName(this.nameData.getName());
-			}
+		Optional<String> buyerPrimaryName = buyer.getPrimaryName();
 
-			Optional<String> buyerPrimaryName = buyer.getPrimaryName();
-
-			// if the buyer bought their primary, then remove it
-			if( buyerPrimaryName.isPresent() && this.nameData.getName().equals(buyerPrimaryName.get()) ) {
-				buyer.removePrimaryName();
-			}
+		// If the buyer bought their primary, then remove it.
+		if (buyerPrimaryName.isPresent() && this.nameData.getName().equals(buyerPrimaryName.get())) {
+			buyer.removePrimaryName();
 		}
 	}
 
