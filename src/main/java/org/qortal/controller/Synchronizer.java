@@ -655,9 +655,7 @@ public class Synchronizer extends Thread {
 					return peers;
 				}
 
-				// We will switch to a new chain weight consensus algorithm at a hard fork, so determine if this has happened yet
-				boolean usingSameLengthChainWeight = (NTP.getTime() >= BlockChain.getInstance().getCalcChainWeightTimestamp());
-				LOGGER.debug(String.format("Using %s chain weight consensus algorithm", (usingSameLengthChainWeight ? "same-length" : "variable-length")));
+				LOGGER.debug("Using same-length chain weight consensus algorithm");
 
 				// Retrieve a list of unique common blocks from this list of peers
 				List<BlockSummaryData> commonBlocks = this.uniqueCommonBlocks(peers);
@@ -800,7 +798,7 @@ public class Synchronizer extends Thread {
 					if (!ourBlockSummaries.isEmpty())
 						ourChainWeight = Block.calcChainWeight(commonBlockSummary.getHeight(), commonBlockSummary.getSignature(), ourBlockSummaries, maxHeightForChainWeightComparisons);
 
-					LOGGER.debug(String.format("Our chain weight based on %d blocks is %s", (usingSameLengthChainWeight ? minChainLength : ourBlockSummaries.size()), accurateFormatter.format(ourChainWeight)));
+					LOGGER.debug(String.format("Our chain weight based on %d blocks is %s", minChainLength, accurateFormatter.format(ourChainWeight)));
 
 					LOGGER.debug(String.format("Listing peers with common block %.8s...", Base58.encode(commonBlockSummary.getSignature())));
 					for (Peer peer : peersSharingCommonBlock) {
@@ -829,10 +827,10 @@ public class Synchronizer extends Thread {
 						populateBlockSummariesMinterLevels(repository, peerBlockSummariesAfterCommonBlock);
 
 						// Calculate cumulative chain weight of this blockchain subset, from common block to highest mutual block held by all peers in this group.
-						LOGGER.debug(String.format("About to calculate chain weight based on %d blocks for peer %s with common block %.8s (peer has %d blocks after common block)", (usingSameLengthChainWeight ? minChainLength : peerBlockSummariesAfterCommonBlock.size()), peer, Base58.encode(commonBlockSummary.getSignature()), peerAdditionalBlocksAfterCommonBlock));
+						LOGGER.debug(String.format("About to calculate chain weight based on %d blocks for peer %s with common block %.8s (peer has %d blocks after common block)", minChainLength, peer, Base58.encode(commonBlockSummary.getSignature()), peerAdditionalBlocksAfterCommonBlock));
 						BigInteger peerChainWeight = Block.calcChainWeight(commonBlockSummary.getHeight(), commonBlockSummary.getSignature(), peerBlockSummariesAfterCommonBlock, maxHeightForChainWeightComparisons);
 						peer.getCommonBlockData().setChainWeight(peerChainWeight);
-						LOGGER.debug(String.format("Chain weight of peer %s based on %d blocks (%d - %d) is %s", peer, (usingSameLengthChainWeight ? minChainLength : peerBlockSummariesAfterCommonBlock.size()), peerBlockSummariesAfterCommonBlock.get(0).getHeight(), peerBlockSummariesAfterCommonBlock.get(peerBlockSummariesAfterCommonBlock.size()-1).getHeight(), accurateFormatter.format(peerChainWeight)));
+						LOGGER.debug(String.format("Chain weight of peer %s based on %d blocks (%d - %d) is %s", peer, minChainLength, peerBlockSummariesAfterCommonBlock.get(0).getHeight(), peerBlockSummariesAfterCommonBlock.get(peerBlockSummariesAfterCommonBlock.size()-1).getHeight(), accurateFormatter.format(peerChainWeight)));
 
 						// Compare against our chain - if our blockchain has greater weight then don't synchronize with peer (or any others in this group)
 						if (ourChainWeight.compareTo(peerChainWeight) > 0) {

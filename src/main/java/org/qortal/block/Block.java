@@ -1010,8 +1010,7 @@ public class Block {
 			parentHeight = blockSummaryData.getHeight();
 			parentBlockSignature = blockSummaryData.getSignature();
 
-			// After this timestamp, we only compare the same number of blocks
-			if (NTP.getTime() >= BlockChain.getInstance().getCalcChainWeightTimestamp() && parentHeight >= maxHeight)
+			if (parentHeight >= maxHeight)
 				break;
 		}
 		LOGGER.trace(String.format("Chain weight calculation was based on %d blocks", blockCount));

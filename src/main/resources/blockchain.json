@@ -91,7 +91,6 @@
 		"shareBinFix": 399000,
 		"sharesByLevelV2Height": 1010000,
 		"rewardShareLimitTimestamp": 1657382400000,
-		"calcChainWeightTimestamp": 1620579600000,
 		"transactionV5Timestamp": 1642176000000,
 		"transactionV6Timestamp": 9999999999999,
 		"disableReferenceTimestamp": 1655222400000,

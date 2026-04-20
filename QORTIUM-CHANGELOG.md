@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-19 - core: remove calcChainWeightTimestamp trigger
+
+Changed Qortium so chain-weight comparisons always use the same shared block range instead of preserving the older upstream rule that could keep counting extra blocks on a longer chain, and removed the related trigger from the main chain config and all mirrored test chain configs so peer sync decisions now follow the cleaner baseline behavior everywhere.
+
 ### 2026-04-19 - core: remove newBlockSigHeight trigger
 
 Changed Qortium so block minter signatures always use the full previous block signature instead of preserving the older upstream split behavior that only used the first half of the parent signature, and removed the related trigger from the main chain config and all mirrored test chain configs so the fork starts with the stronger baseline rule everywhere.

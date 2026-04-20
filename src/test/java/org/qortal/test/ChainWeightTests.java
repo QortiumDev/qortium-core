@@ -1,11 +1,9 @@
 package org.qortal.test;
 
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.block.Block;
-import org.qortal.block.BlockChain;
 import org.qortal.data.block.BlockSummaryData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -14,7 +12,6 @@ import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.transform.Transformer;
 import org.qortal.transform.block.BlockTransformer;
-import org.qortal.utils.NTP;
 
 import java.math.BigInteger;
 import java.text.DecimalFormat;
@@ -29,12 +26,6 @@ public class ChainWeightTests extends Common {
 
 	private static final Random RANDOM = new Random();
 	private static final NumberFormat FORMATTER = new DecimalFormat("0.###E0");
-
-	@BeforeClass
-	public static void beforeClass() {
-		// We need this so that NTP.getTime() in Block.calcChainWeight() doesn't return null, causing NPE
-		NTP.setFixedOffset(0L);
-	}
 
 	@Before
 	public void beforeTest() throws DataException {
@@ -209,10 +200,7 @@ public class ChainWeightTests extends Common {
 			BigInteger shorterChainWeight = Block.calcChainWeight(commonBlockHeight, commonBlockGeneratorKey, shorterChain, mutualHeight);
 			BigInteger longerChainWeight = Block.calcChainWeight(commonBlockHeight, commonBlockGeneratorKey, longerChain, mutualHeight);
 
-			if (NTP.getTime() >= BlockChain.getInstance().getCalcChainWeightTimestamp())
-				assertEquals("longer chain should have same weight", 0, longerChainWeight.compareTo(shorterChainWeight));
-			else
-				assertEquals("longer chain should have greater weight", 1, longerChainWeight.compareTo(shorterChainWeight));
+			assertEquals("longer chain should have same weight", 0, longerChainWeight.compareTo(shorterChainWeight));
 		}
 	}
 
