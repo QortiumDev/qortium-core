@@ -79,7 +79,6 @@
 	"featureTriggers": {
 		"atFindNextTransactionFix": 0,
 		"newBlockSigHeight": 0,
-		"shareBinFix": 0,
 		"sharesByLevelV2Height": 0,
 		"rewardShareLimitTimestamp": 0,
 		"calcChainWeightTimestamp": 0,

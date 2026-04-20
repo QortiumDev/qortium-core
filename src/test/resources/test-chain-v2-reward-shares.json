@@ -74,7 +74,6 @@
 		"qortalTimestamp": 0,
 		"newAssetPricingTimestamp": 0,
 		"groupApprovalTimestamp": 0,
-		"shareBinFix": 999999,
 		"sharesByLevelV2Height": 999999,
 		"rewardShareLimitTimestamp": 0,
 		"newConsensusTimestamp": 0,

@@ -84,7 +84,6 @@
 		"minutesPerBlock": 1
 	},
 	"featureTriggers": {
-		"shareBinFix": 399000,
 		"sharesByLevelV2Height": 1010000,
 		"rewardShareLimitTimestamp": 1657382400000,
 		"transactionV6Timestamp": 9999999999999,

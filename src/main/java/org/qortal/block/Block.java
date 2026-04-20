@@ -226,10 +226,6 @@ public class Block {
 			if (accountLevel > shareBinsByLevel.length)
 				return null;
 
-			if (blockHeight < blockChain.getShareBinFixHeight())
-				// Off-by-one bug still in effect
-				return shareBinsByLevel[accountLevel];
-
 			// level 1 stored at index 0, level 2 stored at index 1, etc.
 			return shareBinsByLevel[accountLevel-1];
 
