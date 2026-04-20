@@ -8,7 +8,6 @@ import org.qortal.block.BlockChain;
 import org.qortal.controller.BlockMinter;
 import org.qortal.controller.OnlineAccountsManager;
 import org.qortal.data.account.AccountData;
-import org.qortal.data.account.AccountPenaltyData;
 import org.qortal.data.account.RewardShareData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -19,7 +18,6 @@ import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 
 import java.util.List;
-import java.util.Set;
 
 import static org.junit.Assert.*;
 
@@ -136,42 +134,6 @@ public class BlocksMintedCountTests extends Common {
 		assertFalse(exceptionThrown);
 	}
 
-	@Test
-	public void testLevelSettingIgnoresPenalty() {
-
-		boolean exceptionThrown = false;
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-
-			PrivateKeyAccount aliceMintingAccount = Common.getTestAccount(repository, "alice-reward-share");
-			int blocksMintedAdjustmentForAlice = 8;
-			int blocksMintedPenaltyForAlice = -5_000_000;
-
-			adjustMintingData(repository, "alice", blocksMintedAdjustmentForAlice);
-			adjustBlocksMintedPenalty(repository, "alice", blocksMintedPenaltyForAlice);
-
-			RewardShareData aliceRewardShareData = repository.getAccountRepository().getRewardShare(aliceMintingAccount.getPublicKey());
-			assertNotNull(aliceRewardShareData);
-
-			for (int i = 0; i < 40; i++) {
-				OnlineAccountsManager.getInstance().ensureTestingAccountsOnline(aliceMintingAccount);
-
-				BlockMinter.mintTestingBlockRetainingTimestamps(repository, aliceMintingAccount);
-				assertMintingData(repository, "alice", blocksMintedAdjustmentForAlice);
-
-				BlockUtils.orphanLastBlock(repository);
-				assertMintingData(repository, "alice", blocksMintedAdjustmentForAlice);
-
-				BlockMinter.mintTestingBlockRetainingTimestamps(repository, aliceMintingAccount);
-			}
-		}
-		catch (DataException e) {
-			exceptionThrown = true;
-		}
-
-		assertFalse(exceptionThrown);
-	}
-
 	/**
 	 * Assert Minting Data
 	 *
@@ -239,12 +201,6 @@ public class BlocksMintedCountTests extends Common {
 		AccountData testAccountData = repository.getAccountRepository().getAccount(testAccount.getAddress());
 		testAccountData.setBlocksMintedAdjustment(blocksMintedAdjustment);
 		repository.getAccountRepository().setBlocksMintedAdjustment(testAccountData);
-	}
-
-	private static void adjustBlocksMintedPenalty(Repository repository, String name, int blocksMintedPenalty) throws DataException {
-		TestAccount testAccount = Common.getTestAccount(repository, name);
-		repository.getAccountRepository().updateBlocksMintedPenalties(Set.of(new AccountPenaltyData(testAccount.getAddress(), blocksMintedPenalty)));
-		repository.saveChanges();
 	}
 
 	private void testRewardShare(Repository repository, PrivateKeyAccount testRewardShareAccount, int aliceDelta, int bobDelta) throws DataException {

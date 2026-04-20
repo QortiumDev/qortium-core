@@ -1069,6 +1069,13 @@ public class HSQLDBDatabaseUpdates {
 
 					break;
 
+				case 52:
+					// Remove obsolete blocks minted penalty state after removing all runtime behavior that used it.
+					// During the unreleased Qortium baseline phase, this tail migration is intentionally acting as
+					// the current cleanup point and may be revised again before the first real release baseline.
+					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
+					break;
+
 				default:
 					// nothing to do
 					return false;

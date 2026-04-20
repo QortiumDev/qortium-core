@@ -13,7 +13,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.*;
-import org.qortal.api.model.AccountPenaltyStats;
 import org.qortal.api.model.ApiOnlineAccount;
 import org.qortal.api.model.RewardShareKeyRequest;
 import org.qortal.asset.Asset;
@@ -51,7 +50,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Path("/addresses")
 @Tag(name = "Addresses")
@@ -462,54 +460,6 @@ public class AddressesResource {
 		}
 	}
 
-	@GET
-	@Path("/penalties")
-	@Operation(
-			summary = "Get addresses with penalties",
-			description = "Returns a list of accounts with a blocksMintedPenalty",
-			responses = {
-					@ApiResponse(
-							description = "accounts with penalties",
-							content = @Content(mediaType = MediaType.APPLICATION_JSON, array = @ArraySchema(schema = @Schema(implementation = AccountPenaltyData.class)))
-					)
-			}
-	)
-	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.REPOSITORY_ISSUE})
-	public List<AccountPenaltyData> getAccountsWithPenalties() {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-
-			List<AccountData> accounts = repository.getAccountRepository().getPenaltyAccounts();
-			List<AccountPenaltyData> penalties = accounts.stream().map(a -> new AccountPenaltyData(a.getAddress(), a.getBlocksMintedPenalty())).collect(Collectors.toList());
-
-			return penalties;
-		} catch (DataException e) {
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
-		}
-	}
-
-	@GET
-	@Path("/penalties/stats")
-	@Operation(
-			summary = "Get stats about current penalties",
-			responses = {
-					@ApiResponse(
-							description = "aggregated stats about accounts with penalties",
-							content = @Content(mediaType = MediaType.APPLICATION_JSON, array = @ArraySchema(schema = @Schema(implementation = AccountPenaltyStats.class)))
-					)
-			}
-	)
-	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.REPOSITORY_ISSUE})
-	public AccountPenaltyStats getPenaltyStats() {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-
-			List<AccountData> accounts = repository.getAccountRepository().getPenaltyAccounts();
-			return AccountPenaltyStats.fromAccounts(accounts);
-
-		} catch (DataException e) {
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
-		}
-	}
-
 	@POST
 	@Path("/publicize")
 	@Operation(
@@ -737,7 +687,6 @@ public class AddressesResource {
 					report.getLevel(),
 					report.getBlocksMinted(),
 					report.getAdjustments(),
-					report.getPenalties(),
 					report.isTransfer(),
 					name,
 					sponseeCount,

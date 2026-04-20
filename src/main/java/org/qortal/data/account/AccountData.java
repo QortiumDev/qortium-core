@@ -18,7 +18,6 @@ public class AccountData {
 	protected int level;
 	protected int blocksMinted;
 	protected int blocksMintedAdjustment;
-	protected int blocksMintedPenalty;
 
 	// Constructors
 
@@ -26,7 +25,7 @@ public class AccountData {
 	protected AccountData() {
 	}
 
-	public AccountData(String address, byte[] reference, byte[] publicKey, int defaultGroupId, int flags, int level, int blocksMinted, int blocksMintedAdjustment, int blocksMintedPenalty) {
+	public AccountData(String address, byte[] reference, byte[] publicKey, int defaultGroupId, int flags, int level, int blocksMinted, int blocksMintedAdjustment) {
 		this.address = address;
 		this.reference = reference;
 		this.publicKey = publicKey;
@@ -35,11 +34,10 @@ public class AccountData {
 		this.level = level;
 		this.blocksMinted = blocksMinted;
 		this.blocksMintedAdjustment = blocksMintedAdjustment;
-		this.blocksMintedPenalty = blocksMintedPenalty;
 	}
 
 	public AccountData(String address) {
-		this(address, null, null, Group.NO_GROUP, 0, 0, 0, 0, 0);
+		this(address, null, null, Group.NO_GROUP, 0, 0, 0, 0);
 	}
 
 	// Getters/Setters
@@ -102,14 +100,6 @@ public class AccountData {
 
 	public void setBlocksMintedAdjustment(int blocksMintedAdjustment) {
 		this.blocksMintedAdjustment = blocksMintedAdjustment;
-	}
-
-	public int getBlocksMintedPenalty() {
-		return this.blocksMintedPenalty;
-	}
-
-	public void setBlocksMintedPenalty(int blocksMintedPenalty) {
-		this.blocksMintedPenalty = blocksMintedPenalty;
 	}
 
 	// Comparison

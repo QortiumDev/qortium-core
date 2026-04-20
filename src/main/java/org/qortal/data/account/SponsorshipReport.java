@@ -16,8 +16,6 @@ public class SponsorshipReport {
 
 	private int adjustments;
 
-	private int penalties;
-
 	private boolean transfer;
 
 	private String[] names;
@@ -48,12 +46,11 @@ public class SponsorshipReport {
 	protected SponsorshipReport() {
 	}
 
-	public SponsorshipReport(String address, int level, int blocksMinted, int adjustments, int penalties, boolean transfer, String[] names, int sponseeCount, int nonRegisteredCount, int avgBalance, int arbitraryCount, int transferAssetCount, int transferPrivsCount, int sellCount, int sellAmount, int buyCount, int buyAmount) {
+	public SponsorshipReport(String address, int level, int blocksMinted, int adjustments, boolean transfer, String[] names, int sponseeCount, int nonRegisteredCount, int avgBalance, int arbitraryCount, int transferAssetCount, int transferPrivsCount, int sellCount, int sellAmount, int buyCount, int buyAmount) {
 		this.address = address;
 		this.level = level;
 		this.blocksMinted = blocksMinted;
 		this.adjustments = adjustments;
-		this.penalties = penalties;
 		this.transfer = transfer;
 		this.names = names;
 		this.sponseeCount = sponseeCount;
@@ -85,10 +82,6 @@ public class SponsorshipReport {
 
 	public int getAdjustments() {
 		return adjustments;
-	}
-
-	public int getPenalties() {
-		return penalties;
 	}
 
 	public boolean isTransfer() {
@@ -146,7 +139,6 @@ public class SponsorshipReport {
 				", level=" + level +
 				", blocksMinted=" + blocksMinted +
 				", adjustments=" + adjustments +
-				", penalties=" + penalties +
 				", transfer=" + transfer +
 				", names=" + Arrays.toString(names) +
 				", sponseeCount=" + sponseeCount +

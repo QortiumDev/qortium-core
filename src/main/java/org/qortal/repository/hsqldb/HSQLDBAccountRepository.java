@@ -15,7 +15,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -36,7 +35,7 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 	@Override
 	public AccountData getAccount(String address) throws DataException {
-		String sql = "SELECT reference, public_key, default_group_id, flags, level, blocks_minted, blocks_minted_adjustment, blocks_minted_penalty FROM Accounts WHERE account = ?";
+		String sql = "SELECT reference, public_key, default_group_id, flags, level, blocks_minted, blocks_minted_adjustment FROM Accounts WHERE account = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, address)) {
 			if (resultSet == null)
@@ -49,9 +48,8 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			int level = resultSet.getInt(5);
 			int blocksMinted = resultSet.getInt(6);
 			int blocksMintedAdjustment = resultSet.getInt(7);
-			int blocksMintedPenalty = resultSet.getInt(8);
 
-			return new AccountData(address, reference, publicKey, defaultGroupId, flags, level, blocksMinted, blocksMintedAdjustment, blocksMintedPenalty);
+			return new AccountData(address, reference, publicKey, defaultGroupId, flags, level, blocksMinted, blocksMintedAdjustment);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch account info from repository", e);
 		}
@@ -59,7 +57,7 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 	@Override
 	public List<AccountData> getFlaggedAccounts(int mask) throws DataException {
-		String sql = "SELECT reference, public_key, default_group_id, flags, level, blocks_minted, blocks_minted_adjustment, blocks_minted_penalty, account FROM Accounts WHERE BITAND(flags, ?) != 0";
+		String sql = "SELECT reference, public_key, default_group_id, flags, level, blocks_minted, blocks_minted_adjustment, account FROM Accounts WHERE BITAND(flags, ?) != 0";
 
 		List<AccountData> accounts = new ArrayList<>();
 
@@ -75,45 +73,14 @@ public class HSQLDBAccountRepository implements AccountRepository {
 				int level = resultSet.getInt(5);
 				int blocksMinted = resultSet.getInt(6);
 				int blocksMintedAdjustment = resultSet.getInt(7);
-				int blocksMintedPenalty = resultSet.getInt(8);
-				String address = resultSet.getString(9);
+				String address = resultSet.getString(8);
 
-				accounts.add(new AccountData(address, reference, publicKey, defaultGroupId, flags, level, blocksMinted, blocksMintedAdjustment, blocksMintedPenalty));
+				accounts.add(new AccountData(address, reference, publicKey, defaultGroupId, flags, level, blocksMinted, blocksMintedAdjustment));
 			} while (resultSet.next());
 
 			return accounts;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch flagged accounts from repository", e);
-		}
-	}
-
-	@Override
-	public List<AccountData> getPenaltyAccounts() throws DataException {
-		String sql = "SELECT reference, public_key, default_group_id, flags, level, blocks_minted, blocks_minted_adjustment, blocks_minted_penalty, account FROM Accounts WHERE blocks_minted_penalty != 0";
-
-		List<AccountData> accounts = new ArrayList<>();
-
-		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
-			if (resultSet == null)
-				return accounts;
-
-			do {
-				byte[] reference = resultSet.getBytes(1);
-				byte[] publicKey = resultSet.getBytes(2);
-				int defaultGroupId = resultSet.getInt(3);
-				int flags = resultSet.getInt(4);
-				int level = resultSet.getInt(5);
-				int blocksMinted = resultSet.getInt(6);
-				int blocksMintedAdjustment = resultSet.getInt(7);
-				int blocksMintedPenalty = resultSet.getInt(8);
-				String address = resultSet.getString(9);
-
-				accounts.add(new AccountData(address, reference, publicKey, defaultGroupId, flags, level, blocksMinted, blocksMintedAdjustment, blocksMintedPenalty));
-			} while (resultSet.next());
-
-			return accounts;
-		} catch (SQLException e) {
-			throw new DataException("Unable to fetch penalty accounts from repository", e);
 		}
 	}
 
@@ -333,39 +300,6 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			this.repository.executeCheckedBatchUpdate(sql, bindParamRows);
 		} catch (SQLException e) {
 			throw new DataException("Unable to modify many account minted block counts in repository", e);
-		}
-	}
-
-	@Override
-	public Integer getBlocksMintedPenaltyCount(String address) throws DataException {
-		String sql = "SELECT blocks_minted_penalty FROM Accounts WHERE account = ?";
-
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, address)) {
-			if (resultSet == null)
-				return null;
-
-			return resultSet.getInt(1);
-		} catch (SQLException e) {
-			throw new DataException("Unable to fetch account's block minted penalty count from repository", e);
-		}
-	}
-	public void updateBlocksMintedPenalties(Set<AccountPenaltyData> accountPenalties) throws DataException {
-		// Nothing to do?
-		if (accountPenalties == null || accountPenalties.isEmpty())
-			return;
-
-		// Map balance changes into SQL bind params, filtering out no-op changes
-		List<Object[]> updateBlocksMintedPenaltyParams = accountPenalties.stream()
-				.map(accountPenalty -> new Object[] { accountPenalty.getAddress(), accountPenalty.getBlocksMintedPenalty(), accountPenalty.getBlocksMintedPenalty() })
-				.collect(Collectors.toList());
-
-		// Perform actual balance changes
-		String sql = "INSERT INTO Accounts (account, blocks_minted_penalty) VALUES (?, ?) " +
-				"ON DUPLICATE KEY UPDATE blocks_minted_penalty = blocks_minted_penalty + ?";
-		try {
-			this.repository.executeCheckedBatchUpdate(sql, updateBlocksMintedPenaltyParams);
-		} catch (SQLException e) {
-			throw new DataException("Unable to set blocks minted penalties in repository", e);
 		}
 	}
 
@@ -1209,16 +1143,15 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			int level = accountResultSet.getInt(2);
 			int blocksMinted = accountResultSet.getInt(3);
 			int adjustments = accountResultSet.getInt(4);
-			int penalties = accountResultSet.getInt(5);
-			boolean transferPrivs = accountResultSet.getBoolean(6);
+			boolean transferPrivs = accountResultSet.getBoolean(5);
 
 			List<String> sponseeAddresses = addressFetcher.apply(account);
 
 			if( sponseeAddresses.isEmpty() ){
-				return new SponsorshipReport(account, level, blocksMinted, adjustments, penalties, transferPrivs, new String[0], 0,  0,0, 0, 0, 0, 0, 0, 0, 0);
+				return new SponsorshipReport(account, level, blocksMinted, adjustments, transferPrivs, new String[0], 0,  0,0, 0, 0, 0, 0, 0, 0, 0);
 			}
 			else {
-				return produceSponsorShipReport(account, level, blocksMinted, adjustments, penalties, sponseeAddresses, transferPrivs);
+				return produceSponsorShipReport(account, level, blocksMinted, adjustments, sponseeAddresses, transferPrivs);
 			}
 		}
 		 catch (Exception e) {
@@ -1287,7 +1220,7 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 		StringBuffer sponsorSql = new StringBuffer();
 
-		sponsorSql.append( "SELECT DISTINCT account, level, blocks_minted, blocks_minted_adjustment, blocks_minted_penalty ");
+		sponsorSql.append( "SELECT DISTINCT account ");
 		sponsorSql.append( "FROM REWARDSHARETRANSACTIONS t ");
 		sponsorSql.append( "INNER JOIN ACCOUNTS a on a.public_key = t.minter_public_key ");
 		sponsorSql.append( "WHERE recipient = ? and recipient != account ");
@@ -1346,7 +1279,6 @@ public class HSQLDBAccountRepository implements AccountRepository {
 	 * @param level                  the sponsor's level
 	 * @param blocksMinted           the blocks minted by the sponsor
 	 * @param blocksMintedAdjustment
-	 * @param blocksMintedPenalty
 	 * @param sponseeAddresses
 	 * @param transferPrivs true if this account was involved in a TRANSFER_PRIVS transaction
 	 * @return the report
@@ -1357,7 +1289,6 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			int level,
 			int blocksMinted,
 			int blocksMintedAdjustment,
-			int blocksMintedPenalty,
 			List<String> sponseeAddresses,
 			boolean transferPrivs) throws SQLException, DataException {
 
@@ -1446,7 +1377,6 @@ public class HSQLDBAccountRepository implements AccountRepository {
 				level,
 				blocksMinted,
 				blocksMintedAdjustment,
-				blocksMintedPenalty,
 				transferPrivs,
 				sponseeNames.toArray(new String[sponseeNames.size()]),
 				sponseeCount,
@@ -1498,7 +1428,7 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 		StringBuffer accountSql = new StringBuffer();
 
-		accountSql.append( "SELECT DISTINCT a.account, a.level, a.blocks_minted, a.blocks_minted_adjustment, a.blocks_minted_penalty, tx.sender IS NOT NULL as transfer ");
+		accountSql.append( "SELECT DISTINCT a.account, a.level, a.blocks_minted, a.blocks_minted_adjustment, tx.sender IS NOT NULL as transfer ");
 		accountSql.append( "FROM ACCOUNTS a ");
 		accountSql.append( "LEFT JOIN TRANSFERPRIVSTRANSACTIONS tx on a.public_key = tx.sender or a.account = tx.recipient ");
 		accountSql.append( "WHERE account = ? ");

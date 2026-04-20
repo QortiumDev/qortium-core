@@ -243,8 +243,6 @@ public class BlockChain {
 	 * data and to base online accounts decisions on. */
 	private int blockRewardBatchAccountsBlockCount;
 
-	private String penaltyFixHash;
-
 	/** Max reward shares by block height */
 	public static class MaxRewardSharesByTimestamp {
 		public long timestamp;
@@ -419,10 +417,6 @@ public class BlockChain {
 
 	public int getBlockRewardBatchAccountsBlockCount() {
 		return this.blockRewardBatchAccountsBlockCount;
-	}
-
-	public String getPenaltyFixHash() {
-		return this.penaltyFixHash;
 	}
 
 	// Feature-trigger timestamp to modify behaviour of various transactions that support mempow

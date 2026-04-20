@@ -293,11 +293,6 @@ public class Account {
 		return this.repository.getAccountRepository().getMintedBlockCount(this.address);
 	}
 
-	/** Returns account's blockMintedPenalty or null if account not found in repository. */
-	public Integer getBlocksMintedPenalty() throws DataException {
-		return this.repository.getAccountRepository().getBlocksMintedPenaltyCount(this.address);
-	}
-
 	/** Returns whether account can build reward-shares.
 	 * <p>
 	 * To be able to create reward-shares, the account needs to pass at least one of these tests:<br>
@@ -542,7 +537,7 @@ public class Account {
 	/**
 	 * Returns 'effective' minting level, with a fix for the zero level.
 	 * <p>
-	 * For founder accounts with no penalty, this returns "founderEffectiveMintingLevel" from blockchain config.
+	 * For founder accounts, this returns "founderEffectiveMintingLevel" from blockchain config.
 	 *
 	 * @param repository
 	 * @param rewardSharePublicKey
