@@ -81,8 +81,6 @@
 		"decreaseOnlineAccountsDifficultyTimestamp": 1731958200000,
 		"onlineAccountMinterLevelValidationHeight": 1092000,
 		"arbitraryOptionalFeeTimestamp": 1680278400000,
-		"disableRewardshareHeight": 1899100,
-		"enableRewardshareHeight": 1905100,
 		"onlyMintWithNameHeight": 1900300,
 		"removeOnlyMintWithNameHeight": 1935500,
 		"groupMemberCheckHeight": 1902700,
