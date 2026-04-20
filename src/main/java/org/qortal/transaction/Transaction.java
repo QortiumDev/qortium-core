@@ -388,8 +388,8 @@ public abstract class Transaction {
 	/**
 	 * Return the transaction version number that should be used, based on passed timestamp.
 	 * <p>
-	 * We're starting with version 4 as a nod to being newer than successor Qora,
-	 * whose latest transaction version was 3.
+	 * Qortium uses transaction version 5 as its baseline and switches to
+	 * version 6 once the configured trigger timestamp is reached.
 	 * 
 	 * @param timestamp
 	 * @return transaction version number
@@ -398,10 +398,8 @@ public abstract class Transaction {
 		if (timestamp >= BlockChain.getInstance().getTransactionV6Timestamp()) {
 			return 6;
 		}
-		else if (timestamp >= BlockChain.getInstance().getTransactionV5Timestamp()) {
-			return 5;
-		}
-		return 4;
+
+		return 5;
 	}
 
 	/**

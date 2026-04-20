@@ -301,7 +301,7 @@ public class SleepUntilMessageOrHeightTests extends Common {
 		}
 
 		Long fee = null;
-		int version = 4;
+		int version = org.qortal.transaction.Transaction.getVersionByTimestamp(txTimestamp);
 		int nonce = 0;
 		long amount = 0;
 		Long assetId = null; // because amount is zero

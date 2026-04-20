@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-19 - core: remove transactionV5Timestamp trigger
+
+Changed Qortium so transaction version 5 is treated as the baseline instead of preserving the older upstream switch from version 4 to version 5, removed the related trigger from the main chain config and all mirrored test chain configs, and cleaned up the arbitrary transaction and message-building paths so they now follow the baseline version rules directly.
+
 ### 2026-04-19 - core: remove calcChainWeightTimestamp trigger
 
 Changed Qortium so chain-weight comparisons always use the same shared block range instead of preserving the older upstream rule that could keep counting extra blocks on a longer chain, and removed the related trigger from the main chain config and all mirrored test chain configs so peer sync decisions now follow the cleaner baseline behavior everywhere.

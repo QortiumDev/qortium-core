@@ -34,7 +34,6 @@ import static org.junit.Assert.*;
 
 public class MessageTests extends Common {
 
-	private static final int version = 4;
 	private static final String recipient = Common.getTestAccount(null, "bob").getAddress();
 
 
@@ -325,8 +324,8 @@ public class MessageTests extends Common {
 			boolean isText = false;
 			boolean isEncrypted = false;
 
-			MessageTransactionData transactionData = new MessageTransactionData(TestTransaction.generateBase(alice, txGroupId),
-					version, nonce, recipient, amount, assetId, data, isText, isEncrypted);
+			BaseTransactionData baseTransactionData = TestTransaction.generateBase(alice, txGroupId);
+			MessageTransactionData transactionData = buildMessageTransactionData(baseTransactionData, nonce, recipient, amount, assetId, data, isText, isEncrypted);
 
 			Transaction transaction = new MessageTransaction(repository, transactionData);
 
@@ -337,11 +336,10 @@ public class MessageTests extends Common {
 	private boolean hasValidReference(Repository repository, PrivateKeyAccount sender, byte[] reference, long fee) throws DataException {
 		long timestamp = NTP.getTime();
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, sender.getPublicKey(), fee, null);
-		int version = 4;
 		byte[] data = "test".getBytes();
 		boolean isText = true;
 		boolean isEncrypted = false;
-		MessageTransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, version, 0, recipient, 0, null, data, isText, isEncrypted);
+		MessageTransactionData messageTransactionData = buildMessageTransactionData(baseTransactionData, 0, recipient, 0, null, data, isText, isEncrypted);
 		MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);
 		return messageTransaction.hasValidReference();
 	}
@@ -364,8 +362,8 @@ public class MessageTests extends Common {
 		boolean isText = false;
 		boolean isEncrypted = false;
 
-		MessageTransactionData transactionData = new MessageTransactionData(TestTransaction.generateBase(alice, txGroupId),
-				version, nonce, recipient, amount, assetId, data, isText, isEncrypted);
+		BaseTransactionData baseTransactionData = TestTransaction.generateBase(alice, txGroupId);
+		MessageTransactionData transactionData = buildMessageTransactionData(baseTransactionData, nonce, recipient, amount, assetId, data, isText, isEncrypted);
 
 		MessageTransaction transaction = new MessageTransaction(repository, transactionData);
 
@@ -396,8 +394,8 @@ public class MessageTests extends Common {
 			boolean isText = false;
 			boolean isEncrypted = false;
 
-			MessageTransactionData transactionData = new MessageTransactionData(TestTransaction.generateBase(alice, txGroupId),
-					version, nonce, recipient, amount, assetId, data, isText, isEncrypted);
+			BaseTransactionData baseTransactionData = TestTransaction.generateBase(alice, txGroupId);
+			MessageTransactionData transactionData = buildMessageTransactionData(baseTransactionData, nonce, recipient, amount, assetId, data, isText, isEncrypted);
 
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 
@@ -416,8 +414,8 @@ public class MessageTests extends Common {
 			boolean isText = false;
 			boolean isEncrypted = false;
 
-			MessageTransactionData expectedTransactionData = new MessageTransactionData(TestTransaction.generateBase(alice),
-					version, nonce, recipient, amount, assetId, data, isText, isEncrypted);
+			BaseTransactionData baseTransactionData = TestTransaction.generateBase(alice);
+			MessageTransactionData expectedTransactionData = buildMessageTransactionData(baseTransactionData, nonce, recipient, amount, assetId, data, isText, isEncrypted);
 
 			Transaction transaction = new MessageTransaction(repository, expectedTransactionData);
 			transaction.sign(alice);
@@ -434,6 +432,11 @@ public class MessageTests extends Common {
 			assertEquals(expectedTransactionData.getAmount(), actualTransactionData.getAmount());
 			assertEquals(expectedTransactionData.getAssetId(), actualTransactionData.getAssetId());
 		}
+	}
+
+	private static MessageTransactionData buildMessageTransactionData(BaseTransactionData baseTransactionData, int nonce, String recipient, long amount, Long assetId, byte[] data, boolean isText, boolean isEncrypted) {
+		int version = Transaction.getVersionByTimestamp(baseTransactionData.getTimestamp());
+		return new MessageTransactionData(baseTransactionData, version, nonce, recipient, amount, assetId, data, isText, isEncrypted);
 	}
 
 }

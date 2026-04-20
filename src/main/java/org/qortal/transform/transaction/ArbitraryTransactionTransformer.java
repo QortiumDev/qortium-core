@@ -94,31 +94,23 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 
 		byte[] senderPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
-		int nonce = 0;
-		String name = null;
-		String identifier = null;
-		ArbitraryTransactionData.Method method = null;
+		int nonce = byteBuffer.getInt();
+
+		String name = Serialization.deserializeSizedStringV2(byteBuffer, Name.MAX_NAME_SIZE);
+
+		String identifier = Serialization.deserializeSizedStringV2(byteBuffer, ArbitraryTransaction.MAX_IDENTIFIER_LENGTH);
+
+		ArbitraryTransactionData.Method method =  ArbitraryTransactionData.Method.valueOf(byteBuffer.getInt());
+
+		int secretLength = byteBuffer.getInt();
 		byte[] secret = null;
-		ArbitraryTransactionData.Compression compression = null;
 
-		if (version >= 5) {
-			nonce = byteBuffer.getInt();
-
-			name = Serialization.deserializeSizedStringV2(byteBuffer, Name.MAX_NAME_SIZE);
-
-			identifier = Serialization.deserializeSizedStringV2(byteBuffer, ArbitraryTransaction.MAX_IDENTIFIER_LENGTH);
-
-			method =  ArbitraryTransactionData.Method.valueOf(byteBuffer.getInt());
-
-			int secretLength = byteBuffer.getInt();
-
-			if (secretLength > 0) {
-				secret = new byte[secretLength];
-				byteBuffer.get(secret);
-			}
-
-			compression = ArbitraryTransactionData.Compression.valueOf(byteBuffer.getInt());
+		if (secretLength > 0) {
+			secret = new byte[secretLength];
+			byteBuffer.get(secret);
 		}
+
+		ArbitraryTransactionData.Compression compression = ArbitraryTransactionData.Compression.valueOf(byteBuffer.getInt());
 
 		// Always return a list of payments, even if empty
 		List<PaymentData> payments = new ArrayList<>();
@@ -144,18 +136,14 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		byte[] data = new byte[dataSize];
 		byteBuffer.get(data);
 
-		int size = 0;
+		int size = byteBuffer.getInt();
+
+		int metadataHashLength = byteBuffer.getInt();
 		byte[] metadataHash = null;
 
-		if (version >= 5) {
-			size = byteBuffer.getInt();
-
-			int metadataHashLength = byteBuffer.getInt();
-
-			if (metadataHashLength > 0) {
-				metadataHash = new byte[metadataHashLength];
-				byteBuffer.get(metadataHash);
-			}
+		if (metadataHashLength > 0) {
+			metadataHash = new byte[metadataHashLength];
+			byteBuffer.get(metadataHash);
 		}
 
 		long fee = byteBuffer.getLong();
@@ -178,11 +166,7 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		int dataLength = (arbitraryTransactionData.getData() != null) ? arbitraryTransactionData.getData().length : 0;
 		int metadataHashLength = (arbitraryTransactionData.getMetadataHash() != null) ? arbitraryTransactionData.getMetadataHash().length : 0;
 
-		int length = getBaseLength(transactionData) + EXTRAS_LENGTH + nameLength + identifierLength + secretLength + dataLength + metadataHashLength;
-
-		if (arbitraryTransactionData.getVersion() >= 5) {
-			length += EXTRAS_V5_LENGTH;
-		}
+		int length = getBaseLength(transactionData) + EXTRAS_LENGTH + EXTRAS_V5_LENGTH + nameLength + identifierLength + secretLength + dataLength + metadataHashLength;
 
 		// Optional payments
 		length += NUMBER_PAYMENTS_LENGTH + arbitraryTransactionData.getPayments().size() * PaymentTransformer.getDataLength();
@@ -198,25 +182,23 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 
 			transformCommonBytes(transactionData, bytes);
 
-			if (arbitraryTransactionData.getVersion() >= 5) {
-				bytes.write(Ints.toByteArray(arbitraryTransactionData.getNonce()));
+			bytes.write(Ints.toByteArray(arbitraryTransactionData.getNonce()));
 
-				Serialization.serializeSizedStringV2(bytes, arbitraryTransactionData.getName());
+			Serialization.serializeSizedStringV2(bytes, arbitraryTransactionData.getName());
 
-				Serialization.serializeSizedStringV2(bytes, arbitraryTransactionData.getIdentifier());
+			Serialization.serializeSizedStringV2(bytes, arbitraryTransactionData.getIdentifier());
 
-				bytes.write(Ints.toByteArray(arbitraryTransactionData.getMethod().value));
+			bytes.write(Ints.toByteArray(arbitraryTransactionData.getMethod().value));
 
-				byte[] secret = arbitraryTransactionData.getSecret();
-				int secretLength = (secret != null) ? secret.length : 0;
-				bytes.write(Ints.toByteArray(secretLength));
+			byte[] secret = arbitraryTransactionData.getSecret();
+			int secretLength = (secret != null) ? secret.length : 0;
+			bytes.write(Ints.toByteArray(secretLength));
 
-				if (secretLength > 0) {
-					bytes.write(secret);
-				}
-
-				bytes.write(Ints.toByteArray(arbitraryTransactionData.getCompression().value));
+			if (secretLength > 0) {
+				bytes.write(secret);
 			}
+
+			bytes.write(Ints.toByteArray(arbitraryTransactionData.getCompression().value));
 
 			List<PaymentData> payments = arbitraryTransactionData.getPayments();
 			bytes.write(Ints.toByteArray(payments.size()));
@@ -231,16 +213,14 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 			bytes.write(Ints.toByteArray(arbitraryTransactionData.getData().length));
 			bytes.write(arbitraryTransactionData.getData());
 
-			if (arbitraryTransactionData.getVersion() >= 5) {
-				bytes.write(Ints.toByteArray(arbitraryTransactionData.getSize()));
+			bytes.write(Ints.toByteArray(arbitraryTransactionData.getSize()));
 
-				byte[] metadataHash = arbitraryTransactionData.getMetadataHash();
-				int metadataHashLength = (metadataHash != null) ? metadataHash.length : 0;
-				bytes.write(Ints.toByteArray(metadataHashLength));
+			byte[] metadataHash = arbitraryTransactionData.getMetadataHash();
+			int metadataHashLength = (metadataHash != null) ? metadataHash.length : 0;
+			bytes.write(Ints.toByteArray(metadataHashLength));
 
-				if (metadataHashLength > 0) {
-					bytes.write(metadataHash);
-				}
+			if (metadataHashLength > 0) {
+				bytes.write(metadataHash);
 			}
 
 			bytes.write(Longs.toByteArray(arbitraryTransactionData.getFee()));
@@ -269,25 +249,23 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 
 			transformCommonBytes(arbitraryTransactionData, bytes);
 
-			if (arbitraryTransactionData.getVersion() >= 5) {
-				bytes.write(Ints.toByteArray(arbitraryTransactionData.getNonce()));
+			bytes.write(Ints.toByteArray(arbitraryTransactionData.getNonce()));
 
-				Serialization.serializeSizedStringV2(bytes, arbitraryTransactionData.getName());
+			Serialization.serializeSizedStringV2(bytes, arbitraryTransactionData.getName());
 
-				Serialization.serializeSizedStringV2(bytes, arbitraryTransactionData.getIdentifier());
+			Serialization.serializeSizedStringV2(bytes, arbitraryTransactionData.getIdentifier());
 
-				bytes.write(Ints.toByteArray(arbitraryTransactionData.getMethod().value));
+			bytes.write(Ints.toByteArray(arbitraryTransactionData.getMethod().value));
 
-				byte[] secret = arbitraryTransactionData.getSecret();
-				int secretLength = (secret != null) ? secret.length : 0;
-				bytes.write(Ints.toByteArray(secretLength));
+			byte[] secret = arbitraryTransactionData.getSecret();
+			int secretLength = (secret != null) ? secret.length : 0;
+			bytes.write(Ints.toByteArray(secretLength));
 
-				if (secretLength > 0) {
-					bytes.write(secret);
-				}
-
-				bytes.write(Ints.toByteArray(arbitraryTransactionData.getCompression().value));
+			if (secretLength > 0) {
+				bytes.write(secret);
 			}
+
+			bytes.write(Ints.toByteArray(arbitraryTransactionData.getCompression().value));
 
 			if (arbitraryTransactionData.getVersion() != 1) {
 				List<PaymentData> payments = arbitraryTransactionData.getPayments();
@@ -312,16 +290,14 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 					break;
 			}
 
-			if (arbitraryTransactionData.getVersion() >= 5) {
-				bytes.write(Ints.toByteArray(arbitraryTransactionData.getSize()));
+			bytes.write(Ints.toByteArray(arbitraryTransactionData.getSize()));
 
-				byte[] metadataHash = arbitraryTransactionData.getMetadataHash();
-				int metadataHashLength = (metadataHash != null) ? metadataHash.length : 0;
-				bytes.write(Ints.toByteArray(metadataHashLength));
+			byte[] metadataHash = arbitraryTransactionData.getMetadataHash();
+			int metadataHashLength = (metadataHash != null) ? metadataHash.length : 0;
+			bytes.write(Ints.toByteArray(metadataHashLength));
 
-				if (metadataHashLength > 0) {
-					bytes.write(metadataHash);
-				}
+			if (metadataHashLength > 0) {
+				bytes.write(metadataHash);
 			}
 
 			bytes.write(Longs.toByteArray(arbitraryTransactionData.getFee()));

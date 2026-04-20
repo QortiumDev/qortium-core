@@ -334,7 +334,7 @@ public class CrossChainBitcoinACCTv1Resource {
 			random.nextBytes(lastReference);
 		}
 
-		int version = 4;
+		int version = Transaction.getVersionByTimestamp(txTimestamp);
 		int nonce = 0;
 		long amount = 0L;
 		Long assetId = null; // no assetId as amount is zero

@@ -170,26 +170,20 @@ public class ArbitraryTransaction extends Transaction {
 				return ValidationResult.INVALID_DATA_LENGTH;
 			}
 
-			// Version 5+
-			if (arbitraryTransactionData.getVersion() >= 5) {
-				byte[] metadata = arbitraryTransactionData.getMetadataHash();
+			byte[] metadata = arbitraryTransactionData.getMetadataHash();
 
-				// Check maximum length of metadata hash
-				if (metadata != null && metadata.length > MAX_METADATA_LENGTH) {
-					return ValidationResult.INVALID_DATA_LENGTH;
-				}
+			// Check maximum length of metadata hash
+			if (metadata != null && metadata.length > MAX_METADATA_LENGTH) {
+				return ValidationResult.INVALID_DATA_LENGTH;
 			}
 		}
 
 		// Check raw data
 		if (arbitraryTransactionData.getDataType() == ArbitraryTransactionData.DataType.RAW_DATA) {
-			// Version 5+
-			if (arbitraryTransactionData.getVersion() >= 5) {
-				// Check reported length of the raw data
-				// We should not download the raw data, so validation of that will be performed later
-				if (arbitraryTransactionData.getSize() > ArbitraryDataFile.MAX_FILE_SIZE) {
-					return ValidationResult.INVALID_DATA_LENGTH;
-				}
+			// Check reported length of the raw data.
+			// We should not download the raw data, so validation of that will be performed later.
+			if (arbitraryTransactionData.getSize() > ArbitraryDataFile.MAX_FILE_SIZE) {
+				return ValidationResult.INVALID_DATA_LENGTH;
 			}
 		}
 
@@ -232,28 +226,24 @@ public class ArbitraryTransaction extends Transaction {
 			return false;
 		}
 
-		// Nonce wasn't added until version 5+
-		if (arbitraryTransactionData.getVersion() >= 5) {
+		int nonce = arbitraryTransactionData.getNonce();
 
-			int nonce = arbitraryTransactionData.getNonce();
+		// Clear nonce from transactionBytes
+		ArbitraryTransactionTransformer.clearNonce(transactionBytes);
 
-			// Clear nonce from transactionBytes
-			ArbitraryTransactionTransformer.clearNonce(transactionBytes);
+		// As of the mempow transaction updates timestamp, a nonce is no longer supported, so a fee must be included
+		if (this.transactionData.getTimestamp() >= BlockChain.getInstance().getMemPoWTransactionUpdatesTimestamp()) {
+			// Require that the fee is a positive number. Fee checking itself is performed in isFeeValid()
+			return (this.arbitraryTransactionData.getFee() > 0L);
+		}
 
-			// As of the mempow transaction updates timestamp, a nonce is no longer supported, so a fee must be included
-			if (this.transactionData.getTimestamp() >= BlockChain.getInstance().getMemPoWTransactionUpdatesTimestamp()) {
-				// Require that the fee is a positive number. Fee checking itself is performed in isFeeValid()
-				return (this.arbitraryTransactionData.getFee() > 0L);
-			}
-
-			// As of the earlier "optional fee" feature-trigger timestamp, we only required a nonce when the fee was zero
-			boolean beforeFeatureTrigger = this.arbitraryTransactionData.getTimestamp() < BlockChain.getInstance().getArbitraryOptionalFeeTimestamp();
-			if (beforeFeatureTrigger || this.arbitraryTransactionData.getFee() == 0L) {
-				// We only need to check nonce for recent transactions due to PoW verification overhead
-				if (NTP.getTime() - this.arbitraryTransactionData.getTimestamp() < HISTORIC_THRESHOLD) {
-					int difficulty = ArbitraryDataManager.getInstance().getPowDifficulty();
-					return MemoryPoW.verify2(transactionBytes, POW_BUFFER_SIZE, difficulty, nonce);
-				}
+		// As of the earlier "optional fee" feature-trigger timestamp, we only required a nonce when the fee was zero
+		boolean beforeFeatureTrigger = this.arbitraryTransactionData.getTimestamp() < BlockChain.getInstance().getArbitraryOptionalFeeTimestamp();
+		if (beforeFeatureTrigger || this.arbitraryTransactionData.getFee() == 0L) {
+			// We only need to check nonce for recent transactions due to PoW verification overhead
+			if (NTP.getTime() - this.arbitraryTransactionData.getTimestamp() < HISTORIC_THRESHOLD) {
+				int difficulty = ArbitraryDataManager.getInstance().getPowDifficulty();
+				return MemoryPoW.verify2(transactionBytes, POW_BUFFER_SIZE, difficulty, nonce);
 			}
 		}
 

@@ -42,6 +42,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.transaction.MessageTransaction;
+import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.Transformer;
@@ -876,7 +877,7 @@ public class CrossChainResource {
 			random.nextBytes(lastReference);
 		}
 
-		int version = 4;
+		int version = Transaction.getVersionByTimestamp(txTimestamp);
 		int nonce = 0;
 		long amount = 0L;
 		Long assetId = null; // no assetId as amount is zero

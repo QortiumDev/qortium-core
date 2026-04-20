@@ -409,7 +409,7 @@ public class ArbitraryTransactionTests extends Common {
         final ArbitraryTransactionData.Method method = ArbitraryTransactionData.Method.PUT;
         final ArbitraryTransactionData.Compression compression = ArbitraryTransactionData.Compression.ZIP;
         final int size = 999;
-        final int version = 5;
+        final int version = Transaction.getVersionByTimestamp(baseTransactionData.getTimestamp());
         final int nonce = 0;
         final byte[] secret = randomHash;
         final ArbitraryTransactionData.DataType dataType = ArbitraryTransactionData.DataType.DATA_HASH;

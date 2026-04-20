@@ -64,7 +64,6 @@ public class BlockChain {
 		shareBinFix,
 		sharesByLevelV2Height,
 		rewardShareLimitTimestamp,
-		transactionV5Timestamp,
 		transactionV6Timestamp,
 		disableReferenceTimestamp,
 		increaseOnlineAccountsDifficultyTimestamp,
@@ -578,10 +577,6 @@ public class BlockChain {
 
 	public long getRewardShareLimitTimestamp() {
 		return this.featureTriggers.get(FeatureTrigger.rewardShareLimitTimestamp.name()).longValue();
-	}
-
-	public long getTransactionV5Timestamp() {
-		return this.featureTriggers.get(FeatureTrigger.transactionV5Timestamp.name()).longValue();
 	}
 
 	public long getTransactionV6Timestamp() {

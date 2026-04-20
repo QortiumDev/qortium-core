@@ -40,9 +40,6 @@ public class ArbitraryDataTransactionBuilder {
 
     private static final Logger LOGGER = LogManager.getLogger(ArbitraryDataTransactionBuilder.class);
 
-    // Min transaction version required
-    private static final int MIN_TRANSACTION_VERSION = 5;
-
     // Maximum number of PATCH layers allowed
     private static final int MAX_LAYERS = 10;
     // Maximum size difference (out of 1) allowed for PATCH transactions
@@ -134,11 +131,7 @@ public class ArbitraryDataTransactionBuilder {
                 throw new DataException("NTP time not synced yet");
             }
 
-            // Ensure that this chain supports transactions necessary for complex arbitrary data
             int transactionVersion = Transaction.getVersionByTimestamp(now);
-            if (transactionVersion < MIN_TRANSACTION_VERSION) {
-                throw new DataException("Transaction version unsupported on this blockchain.");
-            }
 
             if (publicKey58 == null || path == null) {
                 throw new DataException("Missing public key or path");
@@ -198,7 +191,6 @@ public class ArbitraryDataTransactionBuilder {
             final BaseTransactionData baseTransactionData = new BaseTransactionData(now, Group.NO_GROUP,
                     lastReference, creatorPublicKey, fee, null);
             final int size = (int) arbitraryDataFile.size();
-            final int version = 5;
             final int nonce = 0;
             byte[] secret = arbitraryDataFile.getSecret();
 
@@ -206,7 +198,7 @@ public class ArbitraryDataTransactionBuilder {
             final List<PaymentData> payments = new ArrayList<>();
 
             ArbitraryTransactionData transactionData = new ArbitraryTransactionData(baseTransactionData,
-                    version, service.value, nonce, size, name, identifier, method,
+                    transactionVersion, service.value, nonce, size, name, identifier, method,
                     secret, compression, data, dataType, metadataHash, payments);
 
             this.arbitraryTransactionData = transactionData;

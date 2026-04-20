@@ -87,7 +87,6 @@
 		"sharesByLevelV2Height": 0,
 		"rewardShareLimitTimestamp": 0,
 		"calcChainWeightTimestamp": 0,
-		"transactionV5Timestamp": 0,
 		"transactionV6Timestamp": 9999999999999,
 		"disableReferenceTimestamp": 0,
 		"aggregateSignatureTimestamp": 0,

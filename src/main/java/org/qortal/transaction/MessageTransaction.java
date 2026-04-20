@@ -64,7 +64,7 @@ public class MessageTransaction extends Transaction {
 
 		long fee = 0L;
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, sender.getPublicKey(), fee, null);
-		int version = 4;
+		int version = Transaction.getVersionByTimestamp(timestamp);
 		MessageTransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, version, 0, recipient, 0, null, data, isText, isEncrypted);
 		return new MessageTransaction(repository, messageTransactionData);
 	}
