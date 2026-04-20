@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-19 - network: move initial peers into settings
+
+Changed Qortium so the initial peer list now comes from an optional
+`initialPeers` array in `settings.json` instead of shipping built-in Qortal
+seed nodes, which keeps first-run and bootstrap-created peer lists under the
+operator’s control while still preserving the existing behavior of only seeding
+peers when the local peer database is empty.
+
 ### 2026-04-19 - core: disable automatic bootstrap by default
 
 Changed Qortium so automatic bootstrap recovery is off unless an operator

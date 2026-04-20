@@ -9,6 +9,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -292,6 +293,7 @@ public class Settings {
 	private String repositoryPath = "db";
 	/** Repository connection pool size. Needs to be a bit bigger than maxNetworkThreadPoolSize */
 	private int repositoryConnectionPoolSize = 1920;
+	private String[] initialPeers = new String[0];
 	private List<String> fixedNetwork;
 
 	// Export/import
@@ -1272,6 +1274,27 @@ public class Settings {
 
 	public boolean getShowCheckpointNotification() {
 		return this.showCheckpointNotification;
+	}
+
+	public String[] getInitialPeers() {
+		if (this.initialPeers == null || this.initialPeers.length == 0)
+			return new String[0];
+
+		Set<String> configuredPeers = new LinkedHashSet<>(this.initialPeers.length);
+		for (String initialPeer : this.initialPeers) {
+			if (initialPeer == null)
+				continue;
+
+			String trimmedPeer = initialPeer.trim();
+			if (!trimmedPeer.isEmpty())
+				configuredPeers.add(trimmedPeer);
+		}
+
+		return configuredPeers.toArray(new String[0]);
+	}
+
+	public boolean hasInitialPeersConfigured() {
+		return this.getInitialPeers().length > 0;
 	}
 
 	public List<String> getFixedNetwork() {

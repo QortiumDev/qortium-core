@@ -82,18 +82,6 @@ public class Network {
     // private static final byte[] MAINNET_MESSAGE_MAGIC = new byte[]{0x64, 0x65, 0x76, 0x4E}; // devN
     private static final byte[] TESTNET_MESSAGE_MAGIC = new byte[]{0x71, 0x6f, 0x72, 0x54}; // qorT
 
-    private static final String[] INITIAL_PEERS = new String[]{
-            "node1.qortal.org", "node2.qortal.org", "node3.qortal.org", "node4.qortal.org", "node5.qortal.org",
-            "node6.qortal.org", "node7.qortal.org", "node8.qortal.org", "node9.qortal.org", "node10.qortal.org",
-            "node11.qortal.org", "node12.qortal.org", "node13.qortal.org", "node14.qortal.org", "node15.qortal.org",
-            "node.qortal.ru", "node2.qortal.ru", "node3.qortal.ru", "node.qortal.uk", "qnode1.crowetic.com", "bootstrap-ssh.qortal.org",
-            "proxynodes.qortal.link", "api.qortal.org", "bootstrap2-ssh.qortal.org", "bootstrap3-ssh.qortal.org",
-            "node2.qortalnodes.live", "node3.qortalnodes.live", "node4.qortalnodes.live", "node5.qortalnodes.live",
-            "node6.qortalnodes.live", "node7.qortalnodes.live", "node8.qortalnodes.live", "ubuntu-monster.qortal.org"
-    };
-
-
-
     private static final long NETWORK_EPC_KEEPALIVE = 5L; // seconds
 
     public static final int MAX_SIGNATURES_PER_REPLY = 500;
@@ -948,11 +936,16 @@ public class Network {
     // Initial setup
 
     public static void installInitialPeers(Repository repository) throws DataException {
-        for (String address : INITIAL_PEERS) {
-            PeerAddress peerAddress = PeerAddress.fromString(address);
+        long addedWhen = System.currentTimeMillis();
 
-            PeerData peerData = new PeerData(peerAddress, System.currentTimeMillis(), "INIT");
-            repository.getNetworkRepository().save(peerData);
+        for (String address : Settings.getInstance().getInitialPeers()) {
+            try {
+                PeerAddress peerAddress = PeerAddress.fromString(address);
+                PeerData peerData = new PeerData(peerAddress, addedWhen, "INIT");
+                repository.getNetworkRepository().save(peerData);
+            } catch (IllegalArgumentException e) {
+                LOGGER.warn("Skipping invalid initial peer '{}' from settings.json: {}", address, e.getMessage());
+            }
         }
 
         repository.saveChanges();
