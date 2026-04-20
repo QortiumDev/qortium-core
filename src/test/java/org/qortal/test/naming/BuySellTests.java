@@ -246,6 +246,30 @@ public class BuySellTests extends Common {
 	}
 
 	@Test
+	public void testDuplicateCancelSellNameInvalid() throws DataException {
+		// Register-name and sell-name
+		testSellName();
+
+		// First cancel succeeds
+		CancelSellNameTransactionData transactionData = new CancelSellNameTransactionData(TestTransaction.generateBase(alice), name);
+		TransactionUtils.signAndMint(repository, transactionData, alice);
+
+		NameData nameData = repository.getNameRepository().fromName(name);
+		assertFalse(nameData.isForSale());
+		assertNull(nameData.getSalePrice());
+
+		// Second cancel without relisting should fail
+		CancelSellNameTransactionData duplicateCancelTransactionData = new CancelSellNameTransactionData(TestTransaction.generateBase(alice), name);
+		Transaction.ValidationResult validationResult = TransactionUtils.signAndImport(repository, duplicateCancelTransactionData, alice);
+		assertEquals("Duplicate cancel-sell should be rejected", Transaction.ValidationResult.NAME_NOT_FOR_SALE, validationResult);
+
+		// Name should remain not for sale after the rejected duplicate cancel
+		nameData = repository.getNameRepository().fromName(name);
+		assertFalse(nameData.isForSale());
+		assertNull(nameData.getSalePrice());
+	}
+
+	@Test
 	public void testCancelSellNameAndRelist() throws DataException {
 		// Register-name and sell-name
 		testSellName();

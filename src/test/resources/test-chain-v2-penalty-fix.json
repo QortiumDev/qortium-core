@@ -90,7 +90,6 @@
 		"unconfirmableRewardSharesHeight": 99999999,
 		"disableTransferPrivsTimestamp": 9999999999500,
 		"enableTransferPrivsTimestamp": 9999999999950,
-		"cancelSellNameValidationTimestamp": 9999999999999,
 		"disableRewardshareHeight": 9999999999990,
 		"enableRewardshareHeight": 9999999999999,
 		"onlyMintWithNameHeight": 9999999999990,
