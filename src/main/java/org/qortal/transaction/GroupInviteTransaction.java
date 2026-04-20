@@ -2,7 +2,6 @@ package org.qortal.transaction;
 
 import org.qortal.account.Account;
 import org.qortal.asset.Asset;
-import org.qortal.block.BlockChain;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.transaction.GroupInviteTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -87,15 +86,12 @@ public class GroupInviteTransaction extends Transaction {
 		if (admin.getConfirmedBalance(Asset.QORT) < this.groupInviteTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
-		// if null ownership group, then check for admin approval
-		if( this.repository.getBlockRepository().getBlockchainHeight() >= BlockChain.getInstance().getNullGroupMembershipHeight() ) {
-			String groupOwner = this.repository.getGroupRepository().getOwner(groupId);
-			boolean groupOwnedByNullAccount = Objects.equals(groupOwner, Group.NULL_OWNER_ADDRESS);
+		String groupOwner = this.repository.getGroupRepository().getOwner(groupId);
+		boolean groupOwnedByNullAccount = Objects.equals(groupOwner, Group.NULL_OWNER_ADDRESS);
 
-			// Require approval if transaction relates to a group owned by the null account
-			if (groupOwnedByNullAccount && !this.needsGroupApproval())
-				return ValidationResult.GROUP_APPROVAL_REQUIRED;
-		}
+		// Require approval if transaction relates to a group owned by the null account
+		if (groupOwnedByNullAccount && !this.needsGroupApproval())
+			return ValidationResult.GROUP_APPROVAL_REQUIRED;
 
 		return ValidationResult.OK;
 	}

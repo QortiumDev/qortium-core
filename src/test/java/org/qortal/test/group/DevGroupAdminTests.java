@@ -5,8 +5,6 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
-import org.qortal.block.Block;
-import org.qortal.block.BlockChain;
 import org.qortal.data.group.GroupAdminData;
 import org.qortal.data.transaction.*;
 import org.qortal.group.Group;
@@ -39,15 +37,19 @@ import static org.junit.Assert.*;
  * Since these apply to all null-owned groups, this allows anyone to update their group to
  * the null owner if they want to take advantage of this decentralized approval system.
  *
- * Currently, the affected transaction types are:
+ * The affected transaction types are:
  * - AddGroupAdminTransaction
  * - RemoveGroupAdminTransaction
+ * - GroupInviteTransaction
+ * - CancelGroupInviteTransaction
+ * - GroupKickTransaction
+ * - GroupBanTransaction
+ * - CancelGroupBanTransaction
  *
  * This same approach could ultimately be applied to other group transactions too.
  */
 public class DevGroupAdminTests extends Common {
 
-	public static final int NULL_GROUP_MEMBERSHIP_HEIGHT = BlockChain.getInstance().getNullGroupMembershipHeight();
 	private static final int DEV_GROUP_ID = 1;
 
 	public static final String ALICE = "alice";
@@ -82,8 +84,9 @@ public class DevGroupAdminTests extends Common {
 			// Should NOT be OK
 			assertNotSame(ValidationResult.OK, result);
 
-			// Alice to invite Bob, as it's a closed group
-			groupInvite(repository, alice, groupId, bob.getAddress(), 3600);
+			// Alice invites Bob and the dev-group admins approve it
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, groupId, bob.getAddress(), 3600, List.of(alice)));
 
 			// Bob to join
 			joinGroup(repository, bob, groupId);
@@ -93,7 +96,7 @@ public class DevGroupAdminTests extends Common {
 
 			// Attempt to kick Bob
 			result = groupKick(repository, alice, groupId, bob.getAddress());
-			// Should not be OK, cannot kick member out of null owned group
+			// Should not be OK without the required null-owner group approval
 			assertNotSame(ValidationResult.OK, result);
 
 			// Confirm Bob remains a member
@@ -113,8 +116,9 @@ public class DevGroupAdminTests extends Common {
 			// Confirm Bob is not a member
 			assertFalse(isMember(repository, bob.getAddress(), groupId));
 
-			// Alice to invite Bob, as it's a closed group
-			groupInvite(repository, alice, groupId, bob.getAddress(), 3600);
+			// Alice invites Bob and the dev-group admins approve it
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, groupId, bob.getAddress(), 3600, List.of(alice)));
 
 			// Bob to join
 			joinGroup(repository, bob, groupId);
@@ -190,7 +194,7 @@ public class DevGroupAdminTests extends Common {
 
 			// Attempt to ban Bob
 			result = groupBan(repository, alice, groupId, bob.getAddress());
-			// Should not be OK, cannot ban someone from a null owned group
+			// Should not be OK without the required null-owner group approval
 			assertNotSame(ValidationResult.OK, result);
 
 			// Bob attempts to join
@@ -201,8 +205,9 @@ public class DevGroupAdminTests extends Common {
 			// Confirm Bob is not a member
 			assertFalse(isMember(repository, bob.getAddress(), groupId));
 
-			// Alice to invite Bob, as it's a closed group
-			groupInvite(repository, alice, groupId, bob.getAddress(), 3600);
+			// Alice invites Bob and the dev-group admins approve it
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, groupId, bob.getAddress(), 3600, List.of(alice)));
 
 			// Bob to join
 			result = joinGroup(repository, bob, groupId);
@@ -215,7 +220,7 @@ public class DevGroupAdminTests extends Common {
 
 			// Attempt to ban Bob
 			result = groupBan(repository, alice, groupId, bob.getAddress());
-			// Should not be OK, because you can ban a member of a null owned group
+			// Should not be OK without the required null-owner group approval
 			assertNotSame(ValidationResult.OK, result);
 
 			// Confirm Bob is still a member
@@ -245,8 +250,9 @@ public class DevGroupAdminTests extends Common {
 			// Confirm Bob is not a member
 			assertFalse(isMember(repository, bob.getAddress(), groupId));
 
-			// Alice to invite Bob, as it's a closed group
-			groupInvite(repository, alice, groupId, bob.getAddress(), 3600);
+			// Alice invites Bob and the dev-group admins approve it
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, groupId, bob.getAddress(), 3600, List.of(alice)));
 
 			// Bob to join
 			ValidationResult result = joinGroup(repository, bob, groupId);
@@ -275,8 +281,8 @@ public class DevGroupAdminTests extends Common {
 
 			// Attempt to ban Bob
 			result = groupBan(repository, alice, groupId, bob.getAddress());
-			// .. but we can't, because Bob is an admin and the group has no owner
-			assertEquals(ValidationResult.INVALID_GROUP_OWNER, result);
+			// Direct bans in null-owned groups now require approval from genesis
+			assertEquals(ValidationResult.GROUP_APPROVAL_REQUIRED, result);
 
 			// Confirm Bob still a member
 			assertTrue(isMember(repository, bob.getAddress(), groupId));
@@ -317,9 +323,9 @@ public class DevGroupAdminTests extends Common {
 			// confirm Bob is not a member
 			assertFalse(isMember(repository, bob.getAddress(), DEV_GROUP_ID));
 
-			// alice invites bob
-			ValidationResult result = groupInvite(repository, alice, DEV_GROUP_ID, bob.getAddress(), 3600);
-			assertSame(ValidationResult.OK, result);
+			// Alice invites Bob and the dev-group admins approve it
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, DEV_GROUP_ID, bob.getAddress(), 3600, List.of(alice)));
 
 			// bob joins
 			joinGroup(repository, bob, DEV_GROUP_ID);
@@ -338,9 +344,9 @@ public class DevGroupAdminTests extends Common {
 			assertEquals(3, repository.getGroupRepository().countGroupAdmins(DEV_GROUP_ID).intValue() );
 			assertTrue(isAdmin(repository, bob.getAddress(), DEV_GROUP_ID));
 
-			// bob invites chloe
-			result = groupInvite(repository, bob, DEV_GROUP_ID, chloe.getAddress(), 3600);
-			assertSame(ValidationResult.OK, result);
+			// Bob invites Chloe and the dev-group admins approve it
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, bob, DEV_GROUP_ID, chloe.getAddress(), 3600, List.of(alice, bob)));
 
 			// chloe joins
 			joinGroup(repository, chloe, DEV_GROUP_ID);
@@ -374,9 +380,6 @@ public class DevGroupAdminTests extends Common {
 	public void testOrphanSecondInviteApproval() throws DataException {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-
-			Block block = BlockUtils.mintBlocks(repository, NULL_GROUP_MEMBERSHIP_HEIGHT);
-			assertEquals(NULL_GROUP_MEMBERSHIP_HEIGHT + 1, block.getBlockData().getHeight().intValue());
 
 			// establish accounts
 			PrivateKeyAccount alice = Common.getTestAccount(repository, ALICE);
@@ -472,9 +475,6 @@ public class DevGroupAdminTests extends Common {
 	@Test
 	public void testNullOwnershipMembership()  throws DataException{
 		try (final Repository repository = RepositoryManager.getRepository()) {
-
-			Block block = BlockUtils.mintBlocks(repository, NULL_GROUP_MEMBERSHIP_HEIGHT);
-			assertEquals(NULL_GROUP_MEMBERSHIP_HEIGHT + 1, block.getBlockData().getHeight().intValue());
 
 			// establish accounts
 			PrivateKeyAccount alice = Common.getTestAccount(repository, ALICE);
@@ -722,14 +722,10 @@ public class DevGroupAdminTests extends Common {
 		return result;
 	}
 
-	private ValidationResult groupInvite(Repository repository, PrivateKeyAccount admin, int groupId, String invitee, int timeToLive) throws DataException {
-		GroupInviteTransactionData transactionData = new GroupInviteTransactionData(TestTransaction.generateBase(admin), groupId, invitee, timeToLive);
-		ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, admin);
-
-		if (result == ValidationResult.OK)
-			BlockUtils.mintBlock(repository);
-
-		return result;
+	private Transaction.ApprovalStatus approveGroupInvite(Repository repository, PrivateKeyAccount admin, int groupId,
+			String invitee, int timeToLive, List<PrivateKeyAccount> signers) throws DataException {
+		TransactionData transactionData = createGroupInviteForGroupApproval(repository, admin, groupId, invitee, timeToLive);
+		return signForGroupApproval(repository, transactionData, signers);
 	}
 
 	private TransactionData createGroupInviteForGroupApproval(Repository repository, PrivateKeyAccount admin, int groupId, String invitee, int timeToLive) throws DataException {
