@@ -16,7 +16,7 @@
 	You will need to calculate `rewardSharePublicKey` (and private key),
 	or make a new account on mainnet and use self-share key values
 - Add `ACCOUNT_LEVEL` transactions to set initial level of accounts as needed
-- Add `GENESIS` transactions to add QORT/LEGACY_QORA funds to accounts as needed
+- Add `GENESIS` transactions to add QORT funds to accounts as needed
 
 ## Testnet `settings.json`
 

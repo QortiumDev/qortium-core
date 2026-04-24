@@ -23,10 +23,10 @@ public class AssetUtils {
 	public static final int txGroupId = Group.NO_GROUP;
 	public static final long fee = 1L * Amounts.MULTIPLIER;
 
-	// QORT: 0, LEGACY_QORA: 1, QORT_FROM_QORA: 2
-	public static final long testAssetId = 3L; // Owned by Alice
-	public static final long otherAssetId = 4L; // Owned by Bob
-	public static final long goldAssetId = 5L; // Owned by Alice
+	// QORT: 0
+	public static final long testAssetId = 1L; // Owned by Alice
+	public static final long otherAssetId = 2L; // Owned by Bob
+	public static final long goldAssetId = 3L; // Owned by Alice
 
 	public static long issueAsset(Repository repository, String issuerAccountName, String assetName, long quantity, boolean isDivisible) throws DataException {
 		PrivateKeyAccount account = Common.getTestAccount(repository, issuerAccountName);

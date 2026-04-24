@@ -2,7 +2,6 @@ package org.qortal.repository.hsqldb;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.qortal.asset.Asset;
 import org.qortal.data.account.*;
 import org.qortal.repository.AccountRepository;
 import org.qortal.repository.DataException;
@@ -947,100 +946,6 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			return this.repository.delete("MintingAccounts", "minter_private_key = ? OR minter_public_key = ?", minterKey, minterKey);
 		} catch (SQLException e) {
 			throw new DataException("Unable to delete minting account from repository", e);
-		}
-	}
-
-	// Managing QORT from legacy QORA
-
-	@Override
-	public List<EligibleQoraHolderData> getEligibleLegacyQoraHolders(Integer blockHeight) throws DataException {
-		StringBuilder sql = new StringBuilder(1024);
-		List<Object> bindParams = new ArrayList<>();
-
-		sql.append("SELECT account, Qora.balance, QortFromQora.balance, final_qort_from_qora, final_block_height ");
-		sql.append("FROM AccountBalances AS Qora ");
-		sql.append("LEFT OUTER JOIN AccountQortFromQoraInfo USING (account) ");
-		sql.append("LEFT OUTER JOIN AccountBalances AS QortFromQora ON QortFromQora.account = Qora.account AND QortFromQora.asset_id = ");
-		sql.append(Asset.QORT_FROM_QORA); // int is safe to use literally
-		sql.append(" WHERE Qora.asset_id = ");
-		sql.append(Asset.LEGACY_QORA); // int is safe to use literally
-		sql.append(" AND (final_block_height IS NULL");
-
-		if (blockHeight != null) {
-			sql.append(" OR final_block_height >= ?");
-			bindParams.add(blockHeight);
-		}
-
-		sql.append(")");
-
-		List<EligibleQoraHolderData> eligibleLegacyQoraHolders = new ArrayList<>();
-
-		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {
-			if (resultSet == null)
-				return eligibleLegacyQoraHolders;
-
-			do {
-				String address = resultSet.getString(1);
-				long qoraBalance = resultSet.getLong(2);
-				long qortFromQoraBalance = resultSet.getLong(3);
-
-				Long finalQortFromQora = resultSet.getLong(4);
-				if (finalQortFromQora == 0 && resultSet.wasNull())
-					finalQortFromQora = null;
-
-				Integer finalBlockHeight = resultSet.getInt(5);
-				if (finalBlockHeight == 0 && resultSet.wasNull())
-					finalBlockHeight = null;
-
-				eligibleLegacyQoraHolders.add(new EligibleQoraHolderData(address, qoraBalance, qortFromQoraBalance, finalQortFromQora, finalBlockHeight));
-			} while (resultSet.next());
-
-			return eligibleLegacyQoraHolders;
-		} catch (SQLException e) {
-			throw new DataException("Unable to fetch eligible legacy QORA holders from repository", e);
-		}
-	}
-
-	@Override
-	public QortFromQoraData getQortFromQoraInfo(String address) throws DataException {
-		String sql = "SELECT final_qort_from_qora, final_block_height FROM AccountQortFromQoraInfo WHERE account = ?";
-
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, address)) {
-			if (resultSet == null)
-				return null;
-
-			long finalQortFromQora = resultSet.getLong(1);
-			Integer finalBlockHeight = resultSet.getInt(2);
-			if (finalBlockHeight == 0 && resultSet.wasNull())
-				finalBlockHeight = null;
-
-			return new QortFromQoraData(address, finalQortFromQora, finalBlockHeight);
-		} catch (SQLException e) {
-			throw new DataException("Unable to fetch account qort-from-qora info from repository", e);
-		}
-	}
-
-	@Override
-	public void save(QortFromQoraData qortFromQoraData) throws DataException {
-		HSQLDBSaver saveHelper = new HSQLDBSaver("AccountQortFromQoraInfo");
-
-		saveHelper.bind("account", qortFromQoraData.getAddress())
-		.bind("final_qort_from_qora", qortFromQoraData.getFinalQortFromQora())
-		.bind("final_block_height", qortFromQoraData.getFinalBlockHeight());
-
-		try {
-			saveHelper.execute(this.repository);
-		} catch (SQLException e) {
-			throw new DataException("Unable to save account qort-from-qora info into repository", e);
-		}
-	}
-
-	@Override
-	public int deleteQortFromQoraInfo(String address) throws DataException {
-		try {
-			return this.repository.delete("AccountQortFromQoraInfo", "account = ?", address);
-		} catch (SQLException e) {
-			throw new DataException("Unable to delete qort-from-qora info from repository", e);
 		}
 	}
 

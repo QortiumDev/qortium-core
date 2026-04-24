@@ -11,7 +11,6 @@ import org.qortal.asset.Asset;
 import org.qortal.block.BlockChain;
 import org.qortal.block.BlockChain.RewardByHeight;
 import org.qortal.controller.BlockMinter;
-import org.qortal.data.account.AccountBalanceData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -22,7 +21,6 @@ import org.qortal.test.common.TestAccount;
 import org.qortal.utils.Amounts;
 import org.qortal.utils.Base58;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -108,94 +106,6 @@ public class RewardTests extends Common {
 	}
 
 
-	@Test
-	public void testLegacyQoraReward() throws DataException {
-		Common.useSettings("test-settings-v2-qora-holder-extremes.json");
-
-		long qoraHoldersShare = BlockChain.getInstance().getQoraHoldersShareAtHeight(1);
-		BigInteger qoraHoldersShareBI = BigInteger.valueOf(qoraHoldersShare);
-
-		long qoraPerQort = BlockChain.getInstance().getQoraPerQortReward();
-		BigInteger qoraPerQortBI = BigInteger.valueOf(qoraPerQort);
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
-
-			Long blockReward = BlockUtils.getNextBlockReward(repository);
-			BigInteger blockRewardBI = BigInteger.valueOf(blockReward);
-
-			// Fetch all legacy QORA holder balances
-			List<AccountBalanceData> qoraHolders = repository.getAccountRepository().getAssetBalances(Asset.LEGACY_QORA, true);
-			long totalQoraHeld = 0L;
-			for (AccountBalanceData accountBalanceData : qoraHolders)
-				totalQoraHeld += accountBalanceData.getBalance();
-			BigInteger totalQoraHeldBI = BigInteger.valueOf(totalQoraHeld);
-
-			BlockUtils.mintBlock(repository);
-
-			/*
-			 * Example:
-			 *
-			 * Block reward is 100 QORT, QORA-holders' share is 0.01 (1%) = 1 QORT
-			 *
-			 * We hold 100 QORA
-			 * Someone else holds 28 QORA
-			 * Total QORA held: 128 QORA
-			 *
-			 * Our portion of that is 100 QORA / 128 QORA * 1 QORT = 0.78125 QORT
-			 *
-			 * QORA holders earn at most 1 QORT per 250 QORA held.
-			 *
-			 * So we can earn at most 100 QORA / 250 QORAperQORT = 0.4 QORT
-			 *
-			 * Thus our block earning should be capped to 0.4 QORT.
-			 */
-
-			// Expected reward
-			long qoraHoldersReward = blockRewardBI.multiply(qoraHoldersShareBI).divide(Amounts.MULTIPLIER_BI).longValue();
-			assertTrue("QORA-holders share of block reward should be less than total block reward", qoraHoldersReward < blockReward);
-			assertFalse("QORA-holders share of block reward should not be negative!", qoraHoldersReward < 0);
-			BigInteger qoraHoldersRewardBI = BigInteger.valueOf(qoraHoldersReward);
-
-			long ourQoraHeld = initialBalances.get("chloe").get(Asset.LEGACY_QORA);
-			BigInteger ourQoraHeldBI = BigInteger.valueOf(ourQoraHeld);
-			long ourQoraReward = qoraHoldersRewardBI.multiply(ourQoraHeldBI).divide(totalQoraHeldBI).longValue();
-			assertTrue("Our QORA-related reward should be less than total QORA-holders share of block reward", ourQoraReward < qoraHoldersReward);
-			assertFalse("Our QORA-related reward should not be negative!", ourQoraReward < 0);
-
-			long ourQortFromQoraCap = Amounts.scaledDivide(ourQoraHeldBI, qoraPerQortBI);
-			assertTrue("Our QORT-from-QORA cap should be greater than zero", ourQortFromQoraCap > 0);
-
-			long expectedReward = Math.min(ourQoraReward, ourQortFromQoraCap);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, initialBalances.get("chloe").get(Asset.QORT) + expectedReward);
-
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT_FROM_QORA, initialBalances.get("chloe").get(Asset.QORT_FROM_QORA) + expectedReward);
-		}
-	}
-
-	@Test
-	public void testLegacyQoraRewardCapNotExceeded() throws DataException {
-		Common.useSettings("test-settings-v2-qora-holder.json");
-
-		long qoraPerQort = BlockChain.getInstance().getQoraPerQortReward();
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
-
-			// Mint lots of blocks
-			for (int i = 0; i < 100; ++i)
-				BlockUtils.mintBlock(repository);
-
-			long qortReward = AccountUtils.getBalance(repository, "dilbert", Asset.QORT) - initialBalances.get("dilbert").get(Asset.QORT);
-			long qortFromQoraReward = AccountUtils.getBalance(repository, "dilbert", Asset.QORT_FROM_QORA) - initialBalances.get("dilbert").get(Asset.QORT_FROM_QORA);
-			long maxReward = Amounts.scaledDivide(initialBalances.get("dilbert").get(Asset.LEGACY_QORA), qoraPerQort);
-
-			assertEquals(qortReward, qortFromQoraReward);
-			assertTrue(qortReward > 0);
-			assertTrue(qortReward <= maxReward);
-		}
-	}
-
 	/** Use Alice-Chloe reward-share to bump Chloe from level 0 to level 1, then check orphaning works as expected. */
 	@Test
 	public void testLevel1() throws DataException {
@@ -270,7 +180,7 @@ public class RewardTests extends Common {
 			byte[] dilbertSelfSharePrivateKey = AccountUtils.rewardShare(repository, "dilbert", "dilbert", 0); // Block minted by Alice
 			PrivateKeyAccount dilbertSelfShareAccount = new PrivateKeyAccount(repository, dilbertSelfSharePrivateKey);
 
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 
 			long blockReward = BlockUtils.getNextBlockReward(repository);
 
@@ -279,55 +189,25 @@ public class RewardTests extends Common {
 			/*
 			 * Dilbert is only account 'online'.
 			 * Alice is a dev admin but is not online.
-			 * Some legacy QORA holders.
-			 *
 			 * So Dilbert should receive the combined level 5 to 8 share from the inactive
 			 * level 7/8 bin, and Alice should receive the remaining admin replacement share.
 			 */
 
-			final long qoraHoldersShare = BlockChain.getInstance().getQoraHoldersShareAtHeight(1);
 			final int level5To8SharePercent = 45_00;
 			final long level5To8Share = Amounts.roundDownScaledMultiply(blockReward, level5To8SharePercent * 10000L);
-			final long qoraShare = Amounts.roundDownScaledMultiply(blockReward, qoraHoldersShare);
 
 			long dilbertExpectedBalance = initialBalances.get("dilbert").get(Asset.QORT);
 			dilbertExpectedBalance += level5To8Share;
 
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertExpectedBalance);
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, initialBalances.get("alice").get(Asset.QORT) + blockReward - level5To8Share - qoraShare);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, initialBalances.get("alice").get(Asset.QORT) + blockReward - level5To8Share);
 
-			// After several blocks, the legacy QORA holder is still eligible at the fixed 1% baseline
-			for (int i = 0; i < 10; ++i)
-				BlockUtils.mintBlock(repository);
-
-			// Dilbert should continue receiving the non-QORA share of the block reward
+			// Dilbert should continue receiving the configured share of the block reward
 			blockReward = BlockUtils.getNextBlockReward(repository);
 
 			BlockMinter.mintTestingBlock(repository, dilbertSelfShareAccount);
 
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertExpectedBalance + Amounts.roundDownScaledMultiply(blockReward, level5To8SharePercent * 10000L));
-		}
-	}
-
-	/** Check leftover legacy QORA reward goes to admins. */
-	@Test
-	public void testLeftoverReward() throws DataException {
-		Common.useSettings("test-settings-v2-leftover-reward.json");
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
-
-			long blockReward = BlockUtils.getNextBlockReward(repository);
-
-			BlockUtils.mintBlock(repository); // Block minted by Alice self-share
-
-			// Chloe maxxes out her legacy QORA reward so the leftover flows to the admin replacement bucket.
-
-			TestAccount chloe = Common.getTestAccount(repository, "chloe");
-			final long chloeQortFromQora = chloe.getConfirmedBalance(Asset.QORT_FROM_QORA);
-
-			long expectedBalance = initialBalances.get("alice").get(Asset.QORT) + blockReward - chloeQortFromQora;
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
 		}
 	}
 
@@ -368,7 +248,7 @@ public class RewardTests extends Common {
 			assertEquals(2, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 1 or 2, we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
 			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
 			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
@@ -385,8 +265,6 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'. Bob is offline.
 			 * Alice and Chloe are level 1, Dilbert is level 2.
-			 * No legacy QORA holders.
-			 *
 			 * Alice, Chloe, and Dilbert should receive equal shares of the 6% block reward for Level 1 and 2.
 			 * Alice should also receive the remaining admin replacement reward.
 			 */
@@ -448,7 +326,7 @@ public class RewardTests extends Common {
 			assertEquals(4, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 3 or 4, we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
 			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
 			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
@@ -464,8 +342,6 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Alice, Bob, and Chloe are level 3; Dilbert is level 4.
-			 * No legacy QORA holders.
-			 *
 			 * Alice, Chloe, Bob and Dilbert should receive equal shares of the 13% block reward for level 3 and 4.
 			 * Alice should also receive the remaining admin replacement reward.
 			 */
@@ -528,7 +404,7 @@ public class RewardTests extends Common {
 			assertEquals(6, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 5 or 6 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
 			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
 			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
@@ -544,8 +420,6 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Bob is level 1; Alice and Chloe are level 5; Dilbert is level 6.
-			 * No legacy QORA holders.
-			 *
 			 * Alice, Chloe, and Dilbert should receive equal shares of the 19% block reward for level 5 and 6.
 			 * Bob should receive all of the level 1 and 2 reward (6%)
 			 * Alice should also receive the remaining admin replacement reward.
@@ -607,7 +481,7 @@ public class RewardTests extends Common {
 			assertEquals(8, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 7 or 8 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
 			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
 			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
@@ -623,8 +497,6 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
 			 * Alice and Chloe are level 7; Dilbert is level 8.
-			 * No legacy QORA holders.
-			 *
 			 * Alice, Chloe, and Dilbert should receive equal shares of the 26% block reward for level 7 and 8.
 			 * Alice should also receive the remaining admin replacement reward.
 			 */
@@ -696,7 +568,7 @@ public class RewardTests extends Common {
 			assertEquals(10, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 7 or 8 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
 			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
 			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
@@ -712,8 +584,6 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Bob is level 1; Alice and Chloe are level 9; Dilbert is level 10.
-			 * No legacy QORA holders.
-			 *
 			 * Alice, Chloe, and Dilbert should receive equal shares of the 32% block reward for level 9 and 10.
 			 * Bob should receive all of the level 1 and 2 reward (6%)
 			 * Alice should also receive the remaining admin replacement reward.
@@ -787,7 +657,7 @@ public class RewardTests extends Common {
 			assertEquals(8, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 7 or 8 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
 			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
 			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
@@ -803,8 +673,6 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
 			 * Alice and Chloe are level 7; Dilbert is level 8.
-			 * No legacy QORA holders.
-			 *
 			 * Level 7 and 8 is not yet activated, so its rewards are added to the level 5 and 6 share bin.
 			 * There are no level 5 and 6 online.
 			 * Alice, Chloe, and Dilbert should receive equal shares of the 45% block reward for levels 5 to 8.
@@ -881,7 +749,7 @@ public class RewardTests extends Common {
 			assertEquals(10, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 7 or 8 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
 			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
 			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
@@ -897,8 +765,6 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Bob is level 1; Alice and Chloe are level 9; Dilbert is level 10.
-			 * No legacy QORA holders.
-			 *
 			 * Levels 7+8, and 9+10 are not yet activated, so their rewards are added to the level 5 and 6 share bin.
 			 * There are no levels 5-8 online.
 			 * Bob should receive all of the level 1 and 2 reward (6%).
@@ -973,7 +839,7 @@ public class RewardTests extends Common {
 			assertEquals(7, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that dilbert has reached level 7, we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
 			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
 			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
@@ -989,8 +855,6 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
 			 * Chloe is level 6; Alice and Dilbert are level 7.
-			 * No legacy QORA holders.
-			 *
 			 * Level 7 and 8 is not yet activated, so its rewards are added to the level 5 and 6 share bin.
 			 * Alice, Chloe, and Dilbert should receive equal shares of the 45% block reward for levels 5 to 8.
 			 * Alice should also receive the remaining admin replacement reward.
@@ -1014,7 +878,7 @@ public class RewardTests extends Common {
 			assertEquals(7, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Capture pre-activation balances
-			Map<String, Map<Long, Long>> preActivationBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> preActivationBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			final long alicePreActivationBalance = preActivationBalances.get("alice").get(Asset.QORT);
 			final long bobPreActivationBalance = preActivationBalances.get("bob").get(Asset.QORT);
 			final long chloePreActivationBalance = preActivationBalances.get("chloe").get(Asset.QORT);
@@ -1033,8 +897,6 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
 			 * Alice, Chloe, and Dilbert are level 7.
-			 * No legacy QORA holders.
-			 *
 			 * Level 7 and 8 is now activated, so its rewards are paid out in the normal way.
 			 * Alice, Chloe, and Dilbert should receive equal shares of the 26% block reward for levels 7 to 8.
 			 * Alice should also receive the remaining admin replacement reward.
@@ -1119,7 +981,7 @@ public class RewardTests extends Common {
 			assertEquals(2, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 1 or 2, we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
 			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
 			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
@@ -1155,88 +1017,4 @@ public class RewardTests extends Common {
 		}
 	}
 
-	/** Test rewards for level 1 and 2 accounts with legacy QORA holders using the fixed baseline share layout. */
-	@Test
-	public void testLevel1And2RewardsShareBinsV2WithQoraHolders() throws DataException {
-		Common.useSettings("test-settings-v2-qora-holder-extremes.json");
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-
-			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
-
-			// Some legacy QORA holders exist (Bob and Chloe)
-
-			// Alice self share online
-			PrivateKeyAccount aliceSelfShare = Common.getTestAccount(repository, "alice-reward-share");
-			mintingAndOnlineAccounts.add(aliceSelfShare);
-			byte[] chloeRewardSharePrivateKey;
-			// Bob self-share NOT online
-
-			// Mint some blocks so Chloe and Dilbert can start minting while we test the higher-height baseline rewards
-			for (int i=0; i<990; i++)
-				BlockMinter.mintTestingBlock(repository, mintingAndOnlineAccounts.toArray(new PrivateKeyAccount[0]));
-
-			// Chloe self share comes online
-			try {
-				chloeRewardSharePrivateKey = AccountUtils.rewardShare(repository, "chloe", "chloe", 0);
-			} catch (IllegalArgumentException ex) {
-				LOGGER.error("FAILED {}", ex.getLocalizedMessage(), ex);
-				throw ex;
-			}
-			PrivateKeyAccount chloeRewardShareAccount = new PrivateKeyAccount(repository, chloeRewardSharePrivateKey);
-			mintingAndOnlineAccounts.add(chloeRewardShareAccount);
-
-			// Dilbert self share comes online
-			byte[] dilbertRewardSharePrivateKey = AccountUtils.rewardShare(repository, "dilbert", "dilbert", 0);
-			PrivateKeyAccount dilbertRewardShareAccount = new PrivateKeyAccount(repository, dilbertRewardSharePrivateKey);
-			mintingAndOnlineAccounts.add(dilbertRewardShareAccount);
-
-			// Mint 6 more blocks so the level 1 and 2 accounts are ready for the higher-height reward check
-			for (int i=0; i<6; i++)
-				BlockMinter.mintTestingBlock(repository, mintingAndOnlineAccounts.toArray(new PrivateKeyAccount[0]));
-
-			// Ensure that the levels are as we expect
-			assertEquals(10, (int) Common.getTestAccount(repository, "alice").getLevel());
-			assertEquals(1, (int) Common.getTestAccount(repository, "bob").getLevel());
-			assertEquals(1, (int) Common.getTestAccount(repository, "chloe").getLevel());
-			assertEquals(2, (int) Common.getTestAccount(repository, "dilbert").getLevel());
-
-			// Now that everyone is at level 1 or 2, we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
-			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
-			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
-			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
-			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.QORT);
-
-			// Mint a block
-			final long blockReward = BlockUtils.getNextBlockReward(repository);
-			BlockMinter.mintTestingBlock(repository, mintingAndOnlineAccounts.toArray(new PrivateKeyAccount[0]));
-
-			// Ensure we are at the correct height and block reward value
-			assertEquals(1000, (int) repository.getBlockRepository().getLastBlock().getHeight());
-			assertEquals(100000000L, blockReward);
-
-			final int level1And2SharePercent = 6_00; // 6%
-			final int qoraSharePercent = 1_00; // 1%
-			final long qoraShareAmount = (blockReward * qoraSharePercent) / 100L / 100L;
-			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
-			final long expectedLevel1And2Reward = level1And2ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedAliceReward = blockReward - level1And2ShareAmount - qoraShareAmount; // Alice receives her high-level bin plus the admin remainder
-
-			// Validate the balances
-			assertEquals(6000000, level1And2ShareAmount);
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAliceReward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
-			// Chloe is a QORA holder and will receive additional QORT, so it's not easy to pre-calculate her balance
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel1And2Reward);
-
-			BlockUtils.orphanBlocks(repository, 1);
-			assertEquals(999, (int) repository.getBlockRepository().getLastBlock().getHeight());
-
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance);
-		}
-	}
 }

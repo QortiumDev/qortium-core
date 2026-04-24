@@ -2169,10 +2169,8 @@ public class Block {
 		final long totalAmountForLogging = totalAmount;
 		LOGGER.trace(() -> String.format("Distributing: %s", Amounts.prettyAmount(totalAmountForLogging)));
 
-		final boolean isProcessingNotOrphaning = totalAmount >= 0;
-
 		// How to distribute reward among groups, with ratio, IN ORDER
-		List<BlockRewardCandidate> rewardCandidates = determineBlockRewardCandidates(isProcessingNotOrphaning);
+		List<BlockRewardCandidate> rewardCandidates = determineBlockRewardCandidates();
 
 		// Now distribute to candidates
 
@@ -2189,7 +2187,7 @@ public class Block {
 			long sharedAmount = rewardCandidate.distribute(distributionAmount, balanceChanges);
 			remainingAmount -= sharedAmount;
 
-			// Reallocate any amount we didn't distribute, e.g. from maxxed legacy QORA holders
+			// Reallocate any amount that could not be distributed by this candidate.
 			if (sharedAmount != distributionAmount)
 				totalAmount += Amounts.scaledDivide(distributionAmount - sharedAmount, 1_00000000 - rewardCandidate.share);
 
@@ -2209,7 +2207,7 @@ public class Block {
 		this.repository.getAccountRepository().modifyAssetBalances(accountBalanceDeltas);
 	}
 
-	protected List<BlockRewardCandidate> determineBlockRewardCandidates(boolean isProcessingNotOrphaning) throws DataException {
+	protected List<BlockRewardCandidate> determineBlockRewardCandidates() throws DataException {
 		// How to distribute reward among groups, with ratio, IN ORDER
 		List<BlockRewardCandidate> rewardCandidates = new ArrayList<>();
 
@@ -2225,8 +2223,6 @@ public class Block {
 		 *
 		 * Admins receive the leftover non-distributed reward.
 		 *
-		 * If ANY non-maxxed legacy QORA holders exist then they are always allocated their fixed share (e.g. 1%).
-		 *
 		 * There has to be either at least one 'online' account for blocks to be minted
 		 * so there is always either one account-level-based or admin reward candidate.
 		 *
@@ -2234,8 +2230,7 @@ public class Block {
 		 *
 		 * With account-level rewards:
 		 * Level 1/2 accounts: 6%
-		 * Legacy QORA holders: 1%
-		 * Admins: ~93%
+		 * Admins: 94%
 		 */
 		long totalShares = 0;
 
@@ -2311,24 +2306,6 @@ public class Block {
 			BlockRewardDistributor accountLevelBinDistributor = (distributionAmount, balanceChanges) -> distributeBlockRewardShare(distributionAmount, binnedAccounts, balanceChanges);
 
 			BlockRewardCandidate rewardCandidate = new BlockRewardCandidate(description, accountLevelShareBin.share, accountLevelBinDistributor);
-			rewardCandidates.add(rewardCandidate);
-
-			totalShares += rewardCandidate.share;
-		}
-
-		// Fetch list of legacy QORA holders who haven't reached their cap of QORT reward.
-		List<EligibleQoraHolderData> qoraHolders = this.repository.getAccountRepository().getEligibleLegacyQoraHolders(isProcessingNotOrphaning ? null : this.blockData.getHeight());
-		final boolean haveQoraHolders = !qoraHolders.isEmpty();
-		final long qoraHoldersShare = BlockChain.getInstance().getQoraHoldersShareAtHeight(this.blockData.getHeight());
-
-		// Add legacy QORA holders as reward candidate with fixed share (if appropriate)
-		if (haveQoraHolders) {
-			// Yes: add to reward candidates list
-			BlockRewardDistributor legacyQoraHoldersDistributor = (distributionAmount, balanceChanges) -> distributeBlockRewardToQoraHolders(distributionAmount, qoraHolders, balanceChanges, this);
-
-			BlockRewardCandidate rewardCandidate = new BlockRewardCandidate("Legacy QORA holders", qoraHoldersShare, legacyQoraHoldersDistributor);
-
-			// Distribute legacy QORA just before the admin remainder bucket so undistributed QORA rewards flow to admins.
 			rewardCandidates.add(rewardCandidate);
 
 			totalShares += rewardCandidate.share;
@@ -2445,101 +2422,6 @@ public class Block {
 			for (ExpandedAccount expandedAccount : recipientAccounts)
 				sharedAmount += expandedAccount.distribute(perRecipientAccountAmount, balanceChanges);
 		}
-
-		return sharedAmount;
-	}
-
-	private static long distributeBlockRewardToQoraHolders(long qoraHoldersAmount, List<EligibleQoraHolderData> qoraHolders, Map<String, Long> balanceChanges, Block block) throws DataException {
-		final boolean isProcessingNotOrphaning = qoraHoldersAmount >= 0;
-
-		long qoraPerQortReward = BlockChain.getInstance().getQoraPerQortReward();
-		BigInteger qoraPerQortRewardBI = BigInteger.valueOf(qoraPerQortReward);
-
-		long totalQoraHeld = 0;
-		for (int i = 0; i < qoraHolders.size(); ++i)
-			totalQoraHeld += qoraHolders.get(i).getQoraBalance();
-
-		long finalTotalQoraHeld = totalQoraHeld;
-		LOGGER.trace(() -> String.format("Total legacy QORA held: %s", Amounts.prettyAmount(finalTotalQoraHeld)));
-
-		if (totalQoraHeld <= 0)
-			return 0;
-
-		// Could do with a faster 128bit integer library, but until then...
-		BigInteger qoraHoldersAmountBI = BigInteger.valueOf(qoraHoldersAmount);
-		BigInteger totalQoraHeldBI = BigInteger.valueOf(totalQoraHeld);
-
-		long sharedAmount = 0;
-		// For batched update of QORT_FROM_QORA balances
-		List<AccountBalanceData> newQortFromQoraBalances = new ArrayList<>();
-
-		for (int h = 0; h < qoraHolders.size(); ++h) {
-			EligibleQoraHolderData qoraHolder = qoraHolders.get(h);
-			BigInteger qoraHolderBalanceBI = BigInteger.valueOf(qoraHolder.getQoraBalance());
-			String qoraHolderAddress = qoraHolder.getAddress();
-
-			// This is where a 128bit integer library could help:
-			// long holderReward = (qoraHoldersAmount * qoraHolder.getBalance()) / totalQoraHeld;
-			long holderReward = qoraHoldersAmountBI.multiply(qoraHolderBalanceBI).divide(totalQoraHeldBI).longValue();
-
-			final long holderRewardForLogging = holderReward;
-			LOGGER.trace(() -> String.format("QORA holder %s has %s / %s QORA so share: %s",
-					qoraHolderAddress, Amounts.prettyAmount(qoraHolder.getQoraBalance()), finalTotalQoraHeld, Amounts.prettyAmount(holderRewardForLogging)));
-
-			// Too small to register this time?
-			if (holderReward == 0)
-				continue;
-
-			long newQortFromQoraBalance = qoraHolder.getQortFromQoraBalance() + holderReward;
-
-			// If processing, make sure we don't overpay
-			if (isProcessingNotOrphaning) {
-				long maxQortFromQora = Amounts.scaledDivide(qoraHolderBalanceBI, qoraPerQortRewardBI);
-
-				if (newQortFromQoraBalance >= maxQortFromQora) {
-					// Reduce final QORT-from-QORA payment to match max
-					long adjustment = newQortFromQoraBalance - maxQortFromQora;
-
-					holderReward -= adjustment;
-					newQortFromQoraBalance -= adjustment;
-
-					// This is also the QORA holder's final QORT-from-QORA block
-					QortFromQoraData qortFromQoraData = new QortFromQoraData(qoraHolderAddress, holderReward, block.blockData.getHeight());
-					block.repository.getAccountRepository().save(qortFromQoraData);
-
-					long finalAdjustedHolderReward = holderReward;
-					LOGGER.trace(() -> String.format("QORA holder %s final share %s at height %d",
-							qoraHolderAddress, Amounts.prettyAmount(finalAdjustedHolderReward), block.blockData.getHeight()));
-				}
-			} else {
-				// Orphaning
-				if (qoraHolder.getFinalBlockHeight() != null) {
-					// Final QORT-from-QORA amount from repository was stored during processing, and hence positive.
-					// So we use + here as qortFromQora is negative during orphaning.
-					// More efficient than "holderReward - (0 - final-qort-from-qora)"
-					long adjustment = holderReward + qoraHolder.getFinalQortFromQora();
-
-					holderReward -= adjustment;
-					newQortFromQoraBalance -= adjustment;
-
-					block.repository.getAccountRepository().deleteQortFromQoraInfo(qoraHolderAddress);
-
-					long finalAdjustedHolderReward = holderReward;
-					LOGGER.trace(() -> String.format("QORA holder %s final share %s was at height %d",
-							qoraHolderAddress, Amounts.prettyAmount(finalAdjustedHolderReward), block.blockData.getHeight()));
-				}
-			}
-
-			balanceChanges.merge(qoraHolderAddress, holderReward, Long::sum);
-
-			// Add to batched QORT_FROM_QORA balance update list
-			newQortFromQoraBalances.add(new AccountBalanceData(qoraHolderAddress, Asset.QORT_FROM_QORA, newQortFromQoraBalance));
-
-			sharedAmount += holderReward;
-		}
-
-		// Perform batched update of QORT_FROM_QORA balances
-		block.repository.getAccountRepository().setAssetBalances(newQortFromQoraBalances);
 
 		return sharedAmount;
 	}

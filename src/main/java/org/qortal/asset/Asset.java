@@ -16,11 +16,6 @@ public class Asset {
 	 */
 	public static final long QORT = 0L;
 
-	/** Hard-coded asset representing legacy QORA held in old QORA1 blockchain. */
-	public static final long LEGACY_QORA = 1L;
-	/** Hard-coded asset representing QORT gained from holding legacy QORA. */
-	public static final long QORT_FROM_QORA = 2L;
-
 	// Other useful constants
 
 	public static final int MIN_NAME_SIZE = 3;

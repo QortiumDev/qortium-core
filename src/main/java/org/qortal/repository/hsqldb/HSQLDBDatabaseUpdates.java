@@ -231,16 +231,12 @@ public class HSQLDBDatabaseUpdates {
 					// Account balances
 					stmt.execute("CREATE TABLE AccountBalances (account QortalAddress, asset_id AssetID, balance QortalAmount NOT NULL, "
 							+ "PRIMARY KEY (account, asset_id), FOREIGN KEY (account) REFERENCES Accounts (account) ON DELETE CASCADE)");
-					// Index for speeding up fetch legacy QORA holders for Block processing
+					// Index for account balance lookups by asset and balance
 					stmt.execute("CREATE INDEX AccountBalancesAssetBalanceIndex ON AccountBalances (asset_id, balance)");
 					// Add CHECK constraint to account balances
 					stmt.execute("ALTER TABLE AccountBalances ADD CONSTRAINT CheckBalanceNotNegative CHECK (balance >= 0)");
 					// Use a separate table space as this table will be very large.
 					stmt.execute("SET TABLE AccountBalances NEW SPACE");
-
-					// Keeping track of QORT gained from holding legacy QORA
-					stmt.execute("CREATE TABLE AccountQortFromQoraInfo (account QortalAddress, final_qort_from_qora QortalAmount, final_block_height INT, "
-									+ "PRIMARY KEY (account), FOREIGN KEY (account) REFERENCES Accounts (account) ON DELETE CASCADE)");
 					break;
 
 				case 4:
@@ -1073,6 +1069,7 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");
 					stmt.execute("ALTER TABLE TransferPrivsTransactions DROP COLUMN previous_sender_blocks_minted_adjustment");
+					stmt.execute("DROP TABLE IF EXISTS AccountQortFromQoraInfo");
 					break;
 
 				default:

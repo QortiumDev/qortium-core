@@ -48,10 +48,6 @@
 		{ "id": 4, "levels": [ 7, 8 ], "share": 0.26 },
 		{ "id": 5, "levels": [ 9, 10 ], "share": 0.32 }
 	],
-	"qoraHoldersShareByHeight": [
-		{ "height": 1, "share": 0.01 }
-	],
-	"qoraPerQortReward": 250,
 	"minAccountsToActivateShareBin": 30,
 	"shareBinActivationMinLevel": 7,
 	"blocksNeededByLevel": [ 50, 64800, 129600, 172800, 244000, 345600, 518400, 691200, 864000, 1036800 ],
@@ -76,9 +72,6 @@
 		"timestamp": "1726152900000",
 		"transactions": [
 			{ "type": "ISSUE_ASSET", "assetName": "QORT", "description": "QORTAL coin", "quantity": 0, "isDivisible": true, "data": "{}" },
-			{ "type": "ISSUE_ASSET", "assetName": "Legacy-QORA", "description": "Representative legacy QORA", "quantity": 0, "isDivisible": true, "data": "{}", "isUnspendable": true },
-			{ "type": "ISSUE_ASSET", "assetName": "QORT-from-QORA", "description": "QORT gained from holding legacy QORA", "quantity": 0, "isDivisible": true, "data": "{}", "isUnspendable": true },
-
 			{ "type": "REWARD_SHARE", "minterPublicKey": "HFDmuc4HAAoVs9Siea3MugjBHasbotgVz2gsRDuLAAcB", "recipient": "QY82MasqEH6ChwXaETH4piMtE8Pk4NBWD3", "rewardSharePublicKey": "F35TbQXmgzz32cALj29jxzpdYSUKQvssqThLsZSabSXx", "sharePercent": 0 },
 			{ "type": "REWARD_SHARE", "minterPublicKey": "HmViWJ2SMRVTYNuMvNYFBX7DitXcEB2gBZasAN3uheJL", "recipient": "Qi3N6fNRrs15EHmkxYyWHyh4z3Dp2rVU2i", "rewardSharePublicKey": "8dsLkxj2C19iK2wob9YNDdQ2mdzyV9X6aQzfHdG1sWrp", "sharePercent": 0 },
 			{ "type": "REWARD_SHARE", "minterPublicKey": "79THiqG9Cftu7RFEA3SvW9G4YUim7qojhbyepb68trH4", "recipient": "QS7K9EsSDeCdb7T8kzZaFNGLomNmmET2Dr", "rewardSharePublicKey": "BuKWPsnu1sxxsFT2wNGCgcicm48ch4hhvQq9585P2pth", "sharePercent": 0 },

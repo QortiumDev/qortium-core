@@ -220,27 +220,4 @@ public interface AccountRepository {
 	/** Delete minting account info, used by BlockMinter, from repository using passed public or private key. */
 	public int delete(byte[] mintingAccountKey) throws DataException;
 
-	// Managing QORT from legacy QORA
-
-	/**
-	 * Returns full info for accounts with legacy QORA asset that are eligible
-	 * for more block reward (block processing) or for block reward removal (block orphaning).
-	 * <p>
-	 * For block processing, accounts that have already received their final QORT reward for owning
-	 * legacy QORA are omitted from the results. <tt>blockHeight</tt> should be <tt>null</tt>.
-	 * <p>
-	 * For block orphaning, accounts that did not receive a QORT reward at <tt>blockHeight</tt>
-	 * are omitted from the results.
-	 * 
-	 * @param blockHeight QORT reward must have be present at this height (for orphaning only)
-	 * @throws DataException
-	 */
-	public List<EligibleQoraHolderData> getEligibleLegacyQoraHolders(Integer blockHeight) throws DataException;
-
-	public QortFromQoraData getQortFromQoraInfo(String address) throws DataException;
-
-	public void save(QortFromQoraData qortFromQoraData) throws DataException;
-
-	public int deleteQortFromQoraInfo(String address) throws DataException;
-
 }

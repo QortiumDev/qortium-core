@@ -122,18 +122,6 @@ public class BlockChain {
 	/** Generated lookup of share-bin by account level */
 	private AccountLevelShareBin[] shareBinsByLevel;
 
-	/** Share of block reward/fees to legacy QORA coin holders, by block height */
-	public static class ShareByHeight {
-		public int height;
-		@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-		public long share;
-	}
-	private List<ShareByHeight> qoraHoldersShareByHeight;
-
-	/** How many legacy QORA per 1 QORT of block reward. */
-	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	private Long qoraPerQortReward;
-
 	/** Minimum number of accounts before a share bin is considered activated */
 	private int minAccountsToActivateShareBin;
 
@@ -408,10 +396,6 @@ public class BlockChain {
 		return this.cumulativeBlocksByLevel;
 	}
 
-	public long getQoraPerQortReward() {
-		return this.qoraPerQortReward;
-	}
-
 	public int getMinAccountsToActivateShareBin() {
 		return this.minAccountsToActivateShareBin;
 	}
@@ -499,15 +483,6 @@ public class BlockChain {
 		return 0;
 	}
 
-	public long getQoraHoldersShareAtHeight(int ourHeight) {
-		// Scan through for QORA share at our height
-		for (int i = qoraHoldersShareByHeight.size() - 1; i >= 0; --i)
-			if (qoraHoldersShareByHeight.get(i).height <= ourHeight)
-				return qoraHoldersShareByHeight.get(i).share;
-
-		return 0;
-	}
-
 	/** Validate blockchain config read from JSON */
 	private void validateConfig() {
 		if (this.genesisInfo == null)
@@ -518,15 +493,6 @@ public class BlockChain {
 
 		if (this.sharesByLevel == null)
 			Settings.throwValidationError("No \"sharesByLevel\" entry found in blockchain config");
-
-		if (this.qoraHoldersShareByHeight == null)
-			Settings.throwValidationError("No \"qoraHoldersShareByHeight\" entry found in blockchain config");
-
-		if (this.qoraHoldersShareByHeight.isEmpty())
-			Settings.throwValidationError("\"qoraHoldersShareByHeight\" must contain at least one entry");
-
-		if (this.qoraPerQortReward == null)
-			Settings.throwValidationError("No \"qoraPerQortReward\" entry found in blockchain config");
 
 		if (this.blocksNeededByLevel == null)
 			Settings.throwValidationError("No \"blocksNeededByLevel\" entry found in blockchain config");
@@ -561,7 +527,7 @@ public class BlockChain {
                     featureTriggers.put(featureTrigger.name(), defaultFeatureTriggerHeight.get(featureTrigger));
 
 		// Check block reward share bounds
-		long totalShare = this.qoraHoldersShareByHeight.get(0).share;
+		long totalShare = 0;
 		// Add share percents for account-level-based rewards
 		for (AccountLevelShareBin accountLevelShareBin : this.sharesByLevel)
 			totalShare += accountLevelShareBin.share;
@@ -614,7 +580,6 @@ public class BlockChain {
 		this.blocksNeededByLevel = Collections.unmodifiableList(this.blocksNeededByLevel);
 		this.cumulativeBlocksByLevel = Collections.unmodifiableList(this.cumulativeBlocksByLevel);
 		this.blockTimingsByHeight = Collections.unmodifiableList(this.blockTimingsByHeight);
-		this.qoraHoldersShareByHeight = Collections.unmodifiableList(this.qoraHoldersShareByHeight);
 	}
 
 	/**

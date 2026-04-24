@@ -39,10 +39,6 @@
 		{ "id": 4, "levels": [ 7, 8 ], "share": 0.26 },
 		{ "id": 5, "levels": [ 9, 10 ], "share": 0.32 }
 	],
-	"qoraHoldersShareByHeight": [
-		{ "height": 1, "share": 0.01 }
-	],
-	"qoraPerQortReward": 250,
 	"minAccountsToActivateShareBin": 30,
 	"shareBinActivationMinLevel": 7,
 	"blocksNeededByLevel": [ 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 ],
@@ -72,9 +68,6 @@
 		"timestamp": 0,
 		"transactions": [
 			{ "type": "ISSUE_ASSET", "assetName": "QORT", "description": "QORT native coin", "data": "", "quantity": 0, "isDivisible": true, "fee": 0 },
-			{ "type": "ISSUE_ASSET", "assetName": "Legacy-QORA", "description": "Representative legacy QORA", "quantity": 0, "isDivisible": true, "data": "{}", "isUnspendable": true },
-			{ "type": "ISSUE_ASSET", "assetName": "QORT-from-QORA", "description": "QORT gained from holding legacy QORA", "quantity": 0, "isDivisible": true, "data": "{}", "isUnspendable": true },
-
 			{ "type": "GENESIS", "recipient": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "amount": "1000000000" },
 			{ "type": "GENESIS", "recipient": "QixPbJUwsaHsVEofJdozU9zgVqkK6aYhrK", "amount": "1000000" },
 			{ "type": "GENESIS", "recipient": "QaUpHNhT3Ygx6avRiKobuLdusppR5biXjL", "amount": "1000000" },
