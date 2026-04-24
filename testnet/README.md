@@ -12,7 +12,6 @@
 - Set `timestamp` to a nearby future value, e.g. 15 mins from 'now'
 	This is to give yourself enough time to set up other testnet nodes
 - Retain the initial `ISSUE_ASSET` transactions!
-- Add `ACCOUNT_FLAGS` transactions with `"andMask": -1, "orMask": 1, "xorMask": 0` to create founders
 - Add at least one `REWARD_SHARE` transaction otherwise no-one can mint initial blocks!
 	You will need to calculate `rewardSharePublicKey` (and private key),
 	or make a new account on mainnet and use self-share key values

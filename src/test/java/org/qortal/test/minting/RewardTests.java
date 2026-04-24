@@ -224,10 +224,10 @@ public class RewardTests extends Common {
 		}
 	}
 
-	/** Test that founders no longer receive a special reward bucket. */
+	/** Test that admin replacement rewards flow to online minter admins. */
 	@Test
-	public void testFounderRewardReplacement() throws DataException {
-		Common.useSettings("test-settings-v2-founder-rewards.json");
+	public void testAdminReplacementReward() throws DataException {
+		Common.useSettings("test-settings-v2-admin-replacement-rewards.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
@@ -253,7 +253,7 @@ public class RewardTests extends Common {
 			// Alice is the only group admin, so she receives the full admin replacement share.
 			AccountUtils.assertBalance(repository, "alice", Asset.QORT, initialBalances.get("alice").get(Asset.QORT) + blockReward);
 
-			// Other founders are online, but founder status no longer creates a reward bucket.
+			// Other accounts are online, but only minter admins receive the admin replacement reward.
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, initialBalances.get("bob").get(Asset.QORT));
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, initialBalances.get("chloe").get(Asset.QORT));
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, initialBalances.get("dilbert").get(Asset.QORT));

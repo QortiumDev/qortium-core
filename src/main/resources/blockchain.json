@@ -85,28 +85,7 @@
 			{ "type": "ISSUE_ASSET", "assetName": "Legacy-QORA", "description": "Representative legacy QORA", "quantity": 0, "isDivisible": true, "data": "{}", "isUnspendable": true },
 			{ "type": "ISSUE_ASSET", "assetName": "QORT-from-QORA", "description": "QORT gained from holding legacy QORA", "quantity": 0, "isDivisible": true, "data": "{}", "isUnspendable": true },
 
-			{ "type": "ACCOUNT_FLAGS", "target": "QY82MasqEH6ChwXaETH4piMtE8Pk4NBWD3", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QcPro2T97Q8cAfcVM4Pn4fv71Za4T6oeFD", "andMask": -1, "orMask": 1, "xorMask": 0 },
-
 			{ "type": "REWARD_SHARE", "minterPublicKey": "HFDmuc4HAAoVs9Siea3MugjBHasbotgVz2gsRDuLAAcB", "recipient": "QY82MasqEH6ChwXaETH4piMtE8Pk4NBWD3", "rewardSharePublicKey": "F35TbQXmgzz32cALj29jxzpdYSUKQvssqThLsZSabSXx", "sharePercent": 0 },
-
-			{ "type": "ACCOUNT_FLAGS", "target": "QbJqEntoBFps7XECQkTDFzXNCdz9R2qmkB", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "Qc5sZS1Vb1ujj8qvL5uXV5y5yQPq6pw2GC", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QceNmCiZxxLdvL85huifVcnk64udcJ47Jr", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "Qd453ewoyESrEgUab6dTFe2pufWkD94Tsm", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QfjoMGib4trpZHzxUSMdmtiRnsrLNf74zp", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "Qgfh143pRJyxpS92JoazjXNMH1uZueQBZ2", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "Qi3N6fNRrs15EHmkxYyWHyh4z3Dp2rVU2i", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QicRwDhfk8M2CGNvpMEmYzQEjESvF7WrFY", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QLwMaXmDDUvh7aN5MdpY28rqTKE8U1Cepc", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QP3J3GHgjqP69neTAprpYe4co33eKQiQpS", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QPsjHoKhugEADrtSQP5xjFgsaQPn9WmE3Y", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QRt11DVBnLaSDxr2KHvx92LdPrjhbhJtkj", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QRTygRGv8XxTeP34cgQqwfCeYBGu3bMCz1", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QSbHwxaBh5P7wXDurk2KCb8d1sCVN4JpMf", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QTE6b4xF8ecQTdphXn2BrptPVgRWCkzMQC", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QTKKxJXRWWqNNTgaMmvw22Jb3F5ttriSah", "andMask": -1, "orMask": 1, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QUxh6PNsKhwJ12qGaM3AC1xZjwxy4hk1RG", "andMask": -1, "orMask": 1, "xorMask": 0 },
 
 			{ "type": "ACCOUNT_LEVEL", "target": "QagyUZdmnKJA9LyEqcxJFFf2ehmcqVZsKb", "level": 5 },
 			{ "type": "ACCOUNT_LEVEL", "target": "QcCYuXos5xBXXHbRg1RTfSdxiZEkGa3N2P", "level": 5 },

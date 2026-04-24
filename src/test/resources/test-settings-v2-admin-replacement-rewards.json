@@ -1,7 +1,7 @@
 {
   "repositoryPath": "testdb",
   "restrictedApi": false,
-  "blockchainConfig": "src/test/resources/test-chain-v2-founder-rewards.json",
+  "blockchainConfig": "src/test/resources/test-chain-v2-admin-replacement-rewards.json",
   "exportPath": "qortal-backup-test",
   "bootstrap": false,
   "wipeUnconfirmedOnStart": false,

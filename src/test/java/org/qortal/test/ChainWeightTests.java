@@ -211,13 +211,13 @@ public class ChainWeightTests extends Common {
 	}
 
 	@Test
-	public void testAccountFlagsDoNotBoostMinterLevel() throws DataException {
+	public void testExplicitAccountLevelControlsMinterLevel() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount aliceAccount = Common.getTestAccount(repository, "alice-reward-share");
 
 			int minterLevel = Account.getRewardShareEffectiveMintingLevel(repository, aliceAccount.getPublicKey());
 
-			assertEquals("account flags should not boost effective minting level", 1, minterLevel);
+			assertEquals("explicit account level should control effective minting level", 1, minterLevel);
 		}
 	}
 

@@ -91,8 +91,6 @@
 			{ "type": "ISSUE_ASSET", "issuerPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "assetName": "TEST", "description": "test asset", "data": "", "quantity": "1000000", "isDivisible": true, "fee": 0 },
 			{ "type": "ISSUE_ASSET", "issuerPublicKey": "C6wuddsBV3HzRrXUtezE7P5MoRXp5m3mEDokRDGZB6ry", "assetName": "OTHER", "description": "other test asset", "data": "", "quantity": "1000000", "isDivisible": true, "fee": 0 },
 			{ "type": "ISSUE_ASSET", "issuerPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "assetName": "GOLD", "description": "gold test asset", "data": "", "quantity": "1000000", "isDivisible": true, "fee": 0 },
-
-			{ "type": "ACCOUNT_FLAGS", "target": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "andMask": -1, "orMask": 1, "xorMask": 0 },
 			{ "type": "ACCOUNT_LEVEL", "target": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "level": 1 },
 			{ "type": "REWARD_SHARE", "minterPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "recipient": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "rewardSharePublicKey": "7PpfnvLSG7y4HPh8hE7KoqAjLCkv7Ui6xw4mKAkbZtox", "sharePercent": "100" },
 
