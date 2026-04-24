@@ -62,8 +62,7 @@
 		"qortalTimestamp": 0,
 		"newAssetPricingTimestamp": 0,
 		"groupApprovalTimestamp": 0,
-		"transactionV6Timestamp": 9999999999999,
-		"arbitraryOptionalFeeTimestamp": 0
+		"transactionV6Timestamp": 9999999999999
 	},
 	"genesisInfo": {
 		"version": 4,

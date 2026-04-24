@@ -65,8 +65,7 @@
 		"newAssetPricingTimestamp": 0,
 		"groupApprovalTimestamp": 0,
 		"newConsensusTimestamp": 0,
-		"transactionV6Timestamp": 0,
-		"arbitraryOptionalFeeTimestamp": 0
+		"transactionV6Timestamp": 0
 	},
 	"genesisInfo": {
 		"version": 4,

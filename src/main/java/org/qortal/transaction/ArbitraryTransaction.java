@@ -7,7 +7,6 @@ import org.qortal.arbitrary.ArbitraryDataFile;
 import org.qortal.arbitrary.ArbitraryDataResource;
 import org.qortal.arbitrary.metadata.ArbitraryDataTransactionMetadata;
 import org.qortal.arbitrary.misc.Service;
-import org.qortal.block.BlockChain;
 import org.qortal.controller.arbitrary.ArbitraryDataManager;
 import org.qortal.controller.arbitrary.ArbitraryTransactionDataHashWrapper;
 import org.qortal.controller.repository.NamesDatabaseIntegrityCheck;
@@ -108,17 +107,9 @@ public class ArbitraryTransaction extends Transaction {
 		if (this.transactionData.getFee() < 0)
 			return ValidationResult.NEGATIVE_FEE;
 
-		// As of the mempow transaction updates timestamp, a nonce is no longer supported, so a valid fee must be included
-		if (this.transactionData.getTimestamp() >= BlockChain.getInstance().getMemPoWTransactionUpdatesTimestamp()) {
-			// Validate the fee
+		// ARBITRARY transactions can either pay the normal fee or use MemoryPoW when fee is zero.
+		if (this.arbitraryTransactionData.getFee() != 0L)
 			return super.isFeeValid();
-		}
-
-		// After the earlier "optional fee" feature trigger, we required the fee to be sufficient if it wasn't 0.
-		// If the fee was zero, then the nonce was validated in isSignatureValid() as an alternative to a fee
-		if (this.arbitraryTransactionData.getTimestamp() >= BlockChain.getInstance().getArbitraryOptionalFeeTimestamp() && this.arbitraryTransactionData.getFee() != 0L) {
-			return super.isFeeValid();
-		}
 
 		return ValidationResult.OK;
 	}
@@ -203,20 +194,13 @@ public class ArbitraryTransaction extends Transaction {
 		// Clear nonce from transactionBytes
 		ArbitraryTransactionTransformer.clearNonce(transactionBytes);
 
-		// As of the mempow transaction updates timestamp, a nonce is no longer supported, so a fee must be included
-		if (this.transactionData.getTimestamp() >= BlockChain.getInstance().getMemPoWTransactionUpdatesTimestamp()) {
-			// Require that the fee is a positive number. Fee checking itself is performed in isFeeValid()
-			return (this.arbitraryTransactionData.getFee() > 0L);
-		}
+		if (this.arbitraryTransactionData.getFee() != 0L)
+			return true;
 
-		// As of the earlier "optional fee" feature-trigger timestamp, we only required a nonce when the fee was zero
-		boolean beforeFeatureTrigger = this.arbitraryTransactionData.getTimestamp() < BlockChain.getInstance().getArbitraryOptionalFeeTimestamp();
-		if (beforeFeatureTrigger || this.arbitraryTransactionData.getFee() == 0L) {
-			// We only need to check nonce for recent transactions due to PoW verification overhead
-			if (NTP.getTime() - this.arbitraryTransactionData.getTimestamp() < HISTORIC_THRESHOLD) {
-				int difficulty = ArbitraryDataManager.getInstance().getPowDifficulty();
-				return MemoryPoW.verify2(transactionBytes, POW_BUFFER_SIZE, difficulty, nonce);
-			}
+		// We only need to check nonce for recent transactions due to PoW verification overhead.
+		if (NTP.getTime() - this.arbitraryTransactionData.getTimestamp() < HISTORIC_THRESHOLD) {
+			int difficulty = ArbitraryDataManager.getInstance().getPowDifficulty();
+			return MemoryPoW.verify2(transactionBytes, POW_BUFFER_SIZE, difficulty, nonce);
 		}
 
 		return true;

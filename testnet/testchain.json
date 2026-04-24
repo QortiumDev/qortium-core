@@ -69,8 +69,7 @@
 		"newBlockSigHeight": 0,
 		"calcChainWeightTimestamp": 0,
 		"transactionV6Timestamp": 9999999999999,
-		"aggregateSignatureTimestamp": 0,
-		"arbitraryOptionalFeeTimestamp": 0
+		"aggregateSignatureTimestamp": 0
 	},
 	"genesisInfo": {
 		"version": 4,

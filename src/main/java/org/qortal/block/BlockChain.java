@@ -61,8 +61,7 @@ public class BlockChain {
 	private GenesisBlock.GenesisInfo genesisInfo;
 
 	public enum FeatureTrigger {
-		transactionV6Timestamp,
-		arbitraryOptionalFeeTimestamp
+		transactionV6Timestamp
 	}
 
     // V5.5 Default List of Historic Triggers
@@ -453,10 +452,6 @@ public class BlockChain {
 
 	public long getTransactionV6Timestamp() {
 		return this.featureTriggers.get(FeatureTrigger.transactionV6Timestamp.name()).longValue();
-	}
-
-	public long getArbitraryOptionalFeeTimestamp() {
-		return this.featureTriggers.get(FeatureTrigger.arbitraryOptionalFeeTimestamp.name()).longValue();
 	}
 
 	// More complex getters for aspects that change by height or timestamp
