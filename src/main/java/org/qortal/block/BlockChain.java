@@ -385,7 +385,7 @@ public class BlockChain {
 	}
 
 	public List<Checkpoint> getCheckpoints() {
-		return this.checkpoints;
+		return this.checkpoints == null ? Collections.emptyList() : this.checkpoints;
 	}
 
 	public List<RewardByHeight> getBlockRewardsByHeight() {

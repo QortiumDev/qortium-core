@@ -1316,22 +1316,6 @@ public class Block {
 			// (they are not in the repository yet during validation)
 			BlockValidationContext.set(this.getTransactions().stream().map(Transaction::getTransactionData).collect(Collectors.toList()));
 
-			if (!isTestnet) {
-				if (this.blockData.getHeight() == 212937) {
-					// Apply fix for block 212937 but fix will be rolled back before we exit method
-					Block212937.processFix(this);
-				} else if (this.blockData.getHeight() == 1333492) {
-					// Apply fix for block 1333492 but fix will be rolled back before we exit method
-					Block1333492.processFix(this);
-				} else if (InvalidNameRegistrationBlocks.isAffectedBlock(this.blockData.getHeight())) {
-					// Apply fix for affected name registration blocks, but fix will be rolled back before we exit method
-					InvalidNameRegistrationBlocks.processFix(this);
-				} else if (InvalidBalanceBlocks.isAffectedBlock(this.blockData.getHeight())) {
-					// Apply fix for affected balance blocks, but fix will be rolled back before we exit method
-					InvalidBalanceBlocks.processFix(this);
-				}
-			}
-
 			for (Transaction transaction : this.getTransactions()) {
 				TransactionData transactionData = transaction.getTransactionData();
 
@@ -1593,19 +1577,6 @@ public class Block {
 
 				// Distribute block rewards, including transaction fees, before transactions processed
 				processBlockRewards();
-			}
-
-			if (!isTestnet) {
-				if (this.blockData.getHeight() == 212937) {
-					// Apply fix for block 212937
-					Block212937.processFix(this);
-				} else if (this.blockData.getHeight() == 1333492) {
-					// Apply fix for block 1333492
-					Block1333492.processFix(this);
-				} else if (InvalidBalanceBlocks.isAffectedBlock(this.blockData.getHeight())) {
-					// Apply fix for affected balance blocks
-					InvalidBalanceBlocks.processFix(this);
-				}
 			}
 		}
 
@@ -1898,19 +1869,6 @@ public class Block {
 		if (this.blockData.getHeight() > 1) {
 			// Invalidate expandedAccounts as they may have changed due to orphaning TRANSFER_PRIVS transactions, etc.
 			this.cachedExpandedAccounts = null;
-
-			if (!isTestnet) {
-				if (this.blockData.getHeight() == 212937) {
-					// Revert fix for block 212937
-					Block212937.orphanFix(this);
-				} else if (this.blockData.getHeight() == 1333492) {
-					// Revert fix for block 1333492
-					Block1333492.orphanFix(this);
-					} else if (InvalidBalanceBlocks.isAffectedBlock(this.blockData.getHeight())) {
-						// Revert fix for affected balance blocks
-						InvalidBalanceBlocks.orphanFix(this);
-					}
-				}
 
 			// Account levels and block rewards are only processed/orphaned on block reward distribution blocks
 			if (this.isRewardDistributionBlock()) {
