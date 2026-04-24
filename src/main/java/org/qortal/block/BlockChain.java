@@ -178,8 +178,6 @@ public class BlockChain {
 	private int minAccountLevelToMint;
 	private int minAccountLevelForBlockSubmissions;
 	private int minAccountLevelToRewardShare;
-	private int maxRewardSharesPerFounderMintingAccount;
-	private int founderEffectiveMintingLevel;
 
 	public static class IdsForHeight {
 		public int height;
@@ -435,14 +433,6 @@ public class BlockChain {
 		return this.minAccountLevelToRewardShare;
 	}
 
-	public int getMaxRewardSharesPerFounderMintingAccount() {
-		return this.maxRewardSharesPerFounderMintingAccount;
-	}
-
-	public int getFounderEffectiveMintingLevel() {
-		return this.founderEffectiveMintingLevel;
-	}
-
 	public long getOnlineAccountSignaturesMinLifetime() {
 		return this.onlineAccountSignaturesMinLifetime;
 	}
@@ -560,9 +550,6 @@ public class BlockChain {
 
 		if (this.minAccountLevelToRewardShare <= 0)
 			Settings.throwValidationError("Invalid/missing \"minAccountLevelToRewardShare\" in blockchain config");
-
-		if (this.founderEffectiveMintingLevel <= 0)
-			Settings.throwValidationError("Invalid/missing \"founderEffectiveMintingLevel\" in blockchain config");
 
 		if (this.ciyamAtSettings == null)
 			Settings.throwValidationError("No \"ciyamAtSettings\" entry found in blockchain config");

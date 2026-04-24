@@ -2403,7 +2403,7 @@ public class Block {
 
 				long adminShare = 1_00000000 - totalShares;
 				LOGGER.info("initial total Shares: {}", totalShares);
-				LOGGER.info("logging adminShare after founder replacement, this is the primary reward that will be split {}", adminShare);
+				LOGGER.info("logging adminShare before admin split, this is the primary reward that will be split {}", adminShare);
 
 				minterAdminShare = adminShare / 2;
 				BlockRewardCandidate minterAdminRewardCandidate

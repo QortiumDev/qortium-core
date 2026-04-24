@@ -143,10 +143,6 @@ public class RewardShareTransaction extends Transaction {
 			int rewardShareCount = this.repository.getAccountRepository().countRewardShares(creator.getPublicKey());
 
 			int maxRewardShares = BlockChain.getInstance().getMaxRewardSharesAtTimestamp(this.rewardShareTransactionData.getTimestamp());
-			if (creator.isFounder())
-				// Founders have a different limit
-				maxRewardShares = BlockChain.getInstance().getMaxRewardSharesPerFounderMintingAccount();
-
 			if (rewardShareCount >= maxRewardShares)
 				return ValidationResult.MAXIMUM_REWARD_SHARES;
 

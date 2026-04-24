@@ -95,10 +95,11 @@ public class RewardTests extends Common {
 
 			BlockMinter.mintTestingBlock(repository, rewardShareAccount);
 
-			// Alice is the online minter admin, so Bob receives 12.8% of Alice's minter-admin half.
+			// Alice is the online level 1 minter admin, so Bob receives 12.8% of Alice's combined reward.
 
-			long minterAdminShare = blockReward / 2;
-			long bobShare = (minterAdminShare * share) / 100L / 100L;
+			long level1And2Share = (blockReward * 6L) / 100L;
+			long minterAdminShare = (blockReward - level1And2Share) / 2;
+			long bobShare = ((level1And2Share + minterAdminShare) * share) / 100L / 100L;
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, initialBalances.get("bob").get(Asset.QORT) + bobShare);
 
 			long aliceShare = blockReward - bobShare;

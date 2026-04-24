@@ -210,6 +210,17 @@ public class ChainWeightTests extends Common {
 		testMinterLevels("chloe-reward-share", "bob-reward-share");
 	}
 
+	@Test
+	public void testAccountFlagsDoNotBoostMinterLevel() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount aliceAccount = Common.getTestAccount(repository, "alice-reward-share");
+
+			int minterLevel = Account.getRewardShareEffectiveMintingLevel(repository, aliceAccount.getPublicKey());
+
+			assertEquals("account flags should not boost effective minting level", 1, minterLevel);
+		}
+	}
+
 	private void testMinterLevels(String betterMinterName, String worseMinterName) throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount betterAccount = Common.getTestAccount(repository, betterMinterName);
@@ -253,12 +264,6 @@ public class ChainWeightTests extends Common {
 
 			assertTrue("Account with better minting level didn't win more blocks", betterAccountWins > worseAccountWins);
 		}
-	}
-
-	// Check that a higher level account wins more blocks
-	@Test
-	public void testFounderMinterLevel() throws DataException {
-		testMinterLevels("alice-reward-share", "dilbert-reward-share");
 	}
 
 	private void populateBlockSummariesMinterLevels(Repository repository, List<BlockSummaryData> blockSummaries) throws DataException {

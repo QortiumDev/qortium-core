@@ -13,12 +13,10 @@
 	],
 	"requireGroupForApproval": false,
 	"minAccountLevelToRewardShare": 5,
-	"maxRewardSharesPerFounderMintingAccount": 6,
 	"maxRewardSharesByTimestamp": [
 		{ "timestamp": 0, "maxShares": 6 },
 		{ "timestamp": 9999999999999, "maxShares": 3 }
 	],
-	"founderEffectiveMintingLevel": 10,
 	"onlineAccountSignaturesMinLifetime": 3600000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,
 	"mempowTransactionUpdatesTimestamp": 0,
@@ -86,6 +84,7 @@
 			{ "type": "JOIN_GROUP", "joinerPublicKey": "CGAedAQU91SR73iqoYtss6NAsra284SShXnDWvRXqR4G", "groupId": 1 },
 
 			{ "type": "ACCOUNT_FLAGS", "target": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "andMask": -1, "orMask": 1, "xorMask": 0 },
+			{ "type": "ACCOUNT_LEVEL", "target": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "level": 1 },
 			{ "type": "REWARD_SHARE", "minterPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "recipient": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "rewardSharePublicKey": "7PpfnvLSG7y4HPh8hE7KoqAjLCkv7Ui6xw4mKAkbZtox", "sharePercent": 100 },
 
 			{ "type": "ACCOUNT_FLAGS", "target": "QixPbJUwsaHsVEofJdozU9zgVqkK6aYhrK", "andMask": -1, "orMask": 1, "xorMask": 0 },

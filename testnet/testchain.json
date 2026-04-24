@@ -16,11 +16,9 @@
 	"minAccountLevelToMint": 1,
 	"minAccountLevelForBlockSubmissions": 1,
 	"minAccountLevelToRewardShare": 2,
-	"maxRewardSharesPerFounderMintingAccount": 10,
 	"maxRewardSharesByTimestamp": [
 		{ "timestamp": 0, "maxShares": 10 }
 	],
-	"founderEffectiveMintingLevel": 10,
 	"onlineAccountSignaturesMinLifetime": 43200000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,
 	"mempowTransactionUpdatesTimestamp": 1692554400000,

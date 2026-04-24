@@ -140,7 +140,7 @@ public class BlockMinter extends Thread {
 						if (mintingAccountsData.isEmpty())
 							continue;
 
-						// Disregard minting accounts that are no longer valid, e.g. by transfer/loss of founder flag or account level
+						// Disregard minting accounts that are no longer valid, e.g. by account level or group membership
 						// Note that minting accounts are actually reward-shares in Qortal
 						Iterator<MintingAccountData> madi = mintingAccountsData.iterator();
 						while (madi.hasNext()) {

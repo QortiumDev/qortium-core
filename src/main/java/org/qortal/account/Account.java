@@ -34,7 +34,6 @@ public class Account {
 	private static final Logger LOGGER = LogManager.getLogger(Account.class);
 
 	public static final int ADDRESS_LENGTH = 25;
-	public static final int FOUNDER_FLAG = 0x1;
 
 	protected Repository repository;
 	protected String address;
@@ -191,15 +190,6 @@ public class Account {
 		this.repository.getAccountRepository().setFlags(accountData);
 	}
 
-	public static boolean isFounder(Integer flags) {
-		return flags != null && (flags & FOUNDER_FLAG) != 0;
-	}
-
-	public boolean isFounder() throws DataException  {
-		Integer flags = this.getFlags();
-		return Account.isFounder(flags);
-	}
-
 	// Minting blocks
 
 	/** Returns whether account can be considered a "minting account".
@@ -257,8 +247,6 @@ public class Account {
 
 	/**
 	 * Returns 'effective' minting level, or zero if account does not exist/cannot mint.
-	 * <p>
-	 * For founder accounts, this returns "founderEffectiveMintingLevel" from blockchain config.
 	 * 
 	 * @return 0+
 	 * @throws DataException
@@ -267,10 +255,6 @@ public class Account {
 		AccountData accountData = this.repository.getAccountRepository().getAccount(this.address);
 		if (accountData == null)
 			return 0;
-
-		// Founders are assigned a different effective minting level.
-		if (Account.isFounder(accountData.getFlags()))
-			return BlockChain.getInstance().getFounderEffectiveMintingLevel();
 
 		return accountData.getLevel();
 	}
@@ -449,8 +433,6 @@ public class Account {
 
 	/**
 	 * Returns 'effective' minting level, with a fix for the zero level.
-	 * <p>
-	 * For founder accounts, this returns "founderEffectiveMintingLevel" from blockchain config.
 	 *
 	 * @param repository
 	 * @param rewardSharePublicKey
