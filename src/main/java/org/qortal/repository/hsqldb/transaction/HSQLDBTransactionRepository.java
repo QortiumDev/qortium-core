@@ -44,7 +44,7 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 
 	private static final RepositorySubclassInfo[] subclassInfos;
 	static {
-		subclassInfos = new RepositorySubclassInfo[TransactionType.values().length + 1];
+		subclassInfos = new RepositorySubclassInfo[TransactionType.getMaxValue() + 1];
 
 		for (TransactionType txType : TransactionType.values()) {
 			RepositorySubclassInfo subclassInfo = new RepositorySubclassInfo();
@@ -98,7 +98,7 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 	public HSQLDBTransactionRepository(HSQLDBRepository repository) {
 		this.repository = repository;
 
-		this.repositoryByTxType = new HSQLDBTransactionRepository[TransactionType.values().length + 1];
+		this.repositoryByTxType = new HSQLDBTransactionRepository[TransactionType.getMaxValue() + 1];
 
 		for (TransactionType txType : TransactionType.values()) {
 			RepositorySubclassInfo subclassInfo = subclassInfos[txType.value];

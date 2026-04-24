@@ -33,8 +33,6 @@ public class AccountMessage extends Message {
 
 			bytes.write(Ints.toByteArray(accountData.getDefaultGroupId()));
 
-			bytes.write(Ints.toByteArray(accountData.getFlags()));
-
 			bytes.write(Ints.toByteArray(accountData.getLevel()));
 
 			bytes.write(Ints.toByteArray(accountData.getBlocksMinted()));
@@ -70,13 +68,11 @@ public class AccountMessage extends Message {
 
 		int defaultGroupId = byteBuffer.getInt();
 
-		int flags = byteBuffer.getInt();
-
 		int level = byteBuffer.getInt();
 
 		int blocksMinted = byteBuffer.getInt();
 
-		AccountData accountData = new AccountData(address, reference, publicKey, defaultGroupId, flags, level, blocksMinted);
+		AccountData accountData = new AccountData(address, reference, publicKey, defaultGroupId, level, blocksMinted);
 		return new AccountMessage(id, accountData);
 	}
 

@@ -96,22 +96,6 @@ public class TransferPrivsTransaction extends Transaction {
 		Account sender = this.getSender();
 		Account recipient = this.getRecipient();
 
-		int senderFlags = sender.getFlags(); // Sender must exist so we always expect a result
-		Integer recipientFlags = recipient.getFlags(); // Recipient might not exist yet, so null possible
-
-		// Save prior values
-		this.transferPrivsTransactionData.setPreviousSenderFlags(senderFlags);
-		this.transferPrivsTransactionData.setPreviousRecipientFlags(recipientFlags);
-
-		// Combine sender & recipient flags for recipient
-		if (recipientFlags != null)
-			senderFlags |= recipientFlags;
-
-		recipient.setFlags(senderFlags);
-
-		// Clear sender's flags
-		sender.setFlags(0);
-
 		// Combine blocks minted counts
 		final AccountRepository accountRepository = this.repository.getAccountRepository();
 
@@ -119,9 +103,16 @@ public class TransferPrivsTransaction extends Transaction {
 		int sendersBlocksMinted = senderData.getBlocksMinted();
 
 		AccountData recipientData = accountRepository.getAccount(recipient.getAddress());
-		int recipientBlocksMinted = recipientData != null ? recipientData.getBlocksMinted() : 0;
+		boolean previousRecipientExisted = recipientData != null;
+		int recipientBlocksMinted = previousRecipientExisted ? recipientData.getBlocksMinted() : 0;
+
+		if (!previousRecipientExisted) {
+			recipient.ensureAccount();
+			recipientData = accountRepository.getAccount(recipient.getAddress());
+		}
 
 		// Save prior values
+		this.transferPrivsTransactionData.setPreviousRecipientExisted(previousRecipientExisted);
 		this.transferPrivsTransactionData.setPreviousSenderBlocksMinted(sendersBlocksMinted);
 
 		// Combine blocks minted
@@ -139,7 +130,8 @@ public class TransferPrivsTransaction extends Transaction {
 					// Account has increased in level!
 					recipientData.setLevel(newLevel);
 					accountRepository.setLevel(recipientData);
-					LOGGER.trace(() -> String.format("TRANSFER_PRIVS recipient %s bumped to level %d", recipientData.getAddress(), recipientData.getLevel()));
+					AccountData updatedRecipientData = recipientData;
+					LOGGER.trace(() -> String.format("TRANSFER_PRIVS recipient %s bumped to level %d", updatedRecipientData.getAddress(), updatedRecipientData.getLevel()));
 				}
 
 				break;
@@ -175,21 +167,7 @@ public class TransferPrivsTransaction extends Transaction {
 
 		AccountData senderData = accountRepository.getAccount(sender.getAddress());
 		AccountData recipientData = accountRepository.getAccount(recipient.getAddress());
-
-		// Restore sender's flags
-		senderData.setFlags(this.transferPrivsTransactionData.getPreviousSenderFlags());
-		accountRepository.setFlags(senderData);
-
-		// Restore recipient's flags
-		Integer previousRecipientFlags = this.transferPrivsTransactionData.getPreviousRecipientFlags();
-		if (previousRecipientFlags != null) {
-			recipientData.setFlags(previousRecipientFlags);
-			accountRepository.setFlags(recipientData);
-		}
-
-		// Clean values in transaction data
-		this.transferPrivsTransactionData.setPreviousSenderFlags(null);
-		this.transferPrivsTransactionData.setPreviousRecipientFlags(null);
+		Boolean previousRecipientExisted = this.transferPrivsTransactionData.getPreviousRecipientExisted();
 
 		final List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 		final int maximumLevel = cumulativeBlocksByLevel.size() - 1;
@@ -210,7 +188,7 @@ public class TransferPrivsTransaction extends Transaction {
 				break;
 			}
 
-		if (previousRecipientFlags != null) {
+		if (Boolean.TRUE.equals(previousRecipientExisted)) {
 			// Restore recipient block minted count
 			recipientData.setBlocksMinted(recipientData.getBlocksMinted() - this.transferPrivsTransactionData.getPreviousSenderBlocksMinted());
 			accountRepository.setMintedBlockCount(recipientData);
@@ -232,6 +210,7 @@ public class TransferPrivsTransaction extends Transaction {
 		}
 
 		// Clear values in transaction data
+		this.transferPrivsTransactionData.setPreviousRecipientExisted(null);
 		this.transferPrivsTransactionData.setPreviousSenderBlocksMinted(null);
 
 		// Save this transaction

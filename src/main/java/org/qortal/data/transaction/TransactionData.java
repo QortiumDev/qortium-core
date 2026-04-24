@@ -36,7 +36,7 @@ import java.util.Arrays;
 	JoinGroupTransactionData.class, LeaveGroupTransactionData.class,
 	GroupApprovalTransactionData.class, SetGroupTransactionData.class,
 	UpdateAssetTransactionData.class,
-	AccountFlagsTransactionData.class, RewardShareTransactionData.class,
+	RewardShareTransactionData.class,
 	AccountLevelTransactionData.class, ChatTransactionData.class, PresenceTransactionData.class
 })
 //All properties to be converted to JSON via JAXB

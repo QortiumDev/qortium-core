@@ -170,12 +170,6 @@
 			{ "type": "ACCOUNT_LEVEL", "target": "QS1GoQZwVESSvia7SHaj5kKf5tkKAa4bh1", "level": 3 },
 			{ "type": "ACCOUNT_LEVEL", "target": "QUdx56eS3yRsCC5f6XJTKNJkbdYZP2xrNZ", "level": 3 },
 
-			{ "type": "ACCOUNT_FLAGS", "target": "QbmBdAbvmXqCya8bia8WaD5izumKkC9BrY", "andMask": -1, "orMask": 0, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QhPXuFFRa9s91Q2qYKpSN5LVCUTqYkgRLz", "andMask": -1, "orMask": 0, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QPFM4xX2826MuBEhMtdReW1QR3vRYrQff3", "andMask": -1, "orMask": 0, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QSJ5cDLWivGcn9ym21azufBfiqeuGH1maq", "andMask": -1, "orMask": 0, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QTx98gU8ErigXkViWkvRH5JfaMpk8b3bHe", "andMask": -1, "orMask": 0, "xorMask": 0 },
-
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "CVancqfgb2vWLXHjqZF8LtoQyB7Y5HtZUrFKvtwrTkNW", "owner": "QbmBdAbvmXqCya8bia8WaD5izumKkC9BrY", "groupName": "dev-group", "description": "developer group", "isOpen": true, "approvalThreshold": "ONE", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
 
 			{ "type": "JOIN_GROUP", "joinerPublicKey": "25jxnXz3xF3tK2WJHpUHwGx7DXR6yfjAHF1hFX5ice6H", "groupId": 1 },

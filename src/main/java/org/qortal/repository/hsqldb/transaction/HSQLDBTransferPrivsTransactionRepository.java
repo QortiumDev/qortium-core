@@ -17,7 +17,7 @@ public class HSQLDBTransferPrivsTransactionRepository extends HSQLDBTransactionR
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT recipient, previous_sender_flags, previous_recipient_flags, previous_sender_blocks_minted FROM TransferPrivsTransactions WHERE signature = ?";
+		String sql = "SELECT recipient, previous_recipient_existed, previous_sender_blocks_minted FROM TransferPrivsTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
@@ -25,19 +25,15 @@ public class HSQLDBTransferPrivsTransactionRepository extends HSQLDBTransactionR
 
 			String recipient = resultSet.getString(1);
 
-			Integer previousSenderFlags = resultSet.getInt(2);
-			if (previousSenderFlags == 0 && resultSet.wasNull())
-				previousSenderFlags = null;
+			Boolean previousRecipientExisted = resultSet.getBoolean(2);
+			if (!previousRecipientExisted && resultSet.wasNull())
+				previousRecipientExisted = null;
 
-			Integer previousRecipientFlags = resultSet.getInt(3);
-			if (previousRecipientFlags == 0 && resultSet.wasNull())
-				previousRecipientFlags = null;
-
-			Integer previousSenderBlocksMinted = resultSet.getInt(4);
+			Integer previousSenderBlocksMinted = resultSet.getInt(3);
 			if (previousSenderBlocksMinted == 0 && resultSet.wasNull())
 				previousSenderBlocksMinted = null;
 
-			return new TransferPrivsTransactionData(baseTransactionData, recipient, previousSenderFlags, previousRecipientFlags, previousSenderBlocksMinted);
+			return new TransferPrivsTransactionData(baseTransactionData, recipient, previousRecipientExisted, previousSenderBlocksMinted);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch transfer privs transaction from repository", e);
 		}
@@ -50,8 +46,7 @@ public class HSQLDBTransferPrivsTransactionRepository extends HSQLDBTransactionR
 		HSQLDBSaver saveHelper = new HSQLDBSaver("TransferPrivsTransactions");
 		saveHelper.bind("signature", transferPrivsTransactionData.getSignature()).bind("sender", transferPrivsTransactionData.getSenderPublicKey())
 				.bind("recipient", transferPrivsTransactionData.getRecipient())
-				.bind("previous_sender_flags", transferPrivsTransactionData.getPreviousSenderFlags())
-				.bind("previous_recipient_flags", transferPrivsTransactionData.getPreviousRecipientFlags())
+				.bind("previous_recipient_existed", transferPrivsTransactionData.getPreviousRecipientExisted())
 				.bind("previous_sender_blocks_minted", transferPrivsTransactionData.getPreviousSenderBlocksMinted());
 
 		try {

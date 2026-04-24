@@ -22,10 +22,7 @@ public class TransferPrivsTransactionData extends TransactionData {
 	// No need to ever expose this via API
 	@XmlTransient
 	@Schema(hidden = true)
-	private Integer previousSenderFlags;
-	@XmlTransient
-	@Schema(hidden = true)
-	private Integer previousRecipientFlags;
+	private Boolean previousRecipientExisted;
 
 	@XmlTransient
 	@Schema(hidden = true)
@@ -44,22 +41,20 @@ public class TransferPrivsTransactionData extends TransactionData {
 
 	/** Constructs using data from repository. */
 	public TransferPrivsTransactionData(BaseTransactionData baseTransactionData, String recipient,
-			Integer previousSenderFlags, Integer previousRecipientFlags,
+			Boolean previousRecipientExisted,
 			Integer previousSenderBlocksMinted) {
 		super(TransactionType.TRANSFER_PRIVS, baseTransactionData);
 
 		this.senderPublicKey = baseTransactionData.creatorPublicKey;
 		this.recipient = recipient;
 
-		this.previousSenderFlags = previousSenderFlags;
-		this.previousRecipientFlags = previousRecipientFlags;
-
+		this.previousRecipientExisted = previousRecipientExisted;
 		this.previousSenderBlocksMinted = previousSenderBlocksMinted;
 	}
 
 	/** Constructs using data from network/API. */
 	public TransferPrivsTransactionData(BaseTransactionData baseTransactionData, String recipient) {
-		this(baseTransactionData, recipient, null, null, null);
+		this(baseTransactionData, recipient, null, null);
 	}
 
 	// Getters/setters
@@ -72,20 +67,12 @@ public class TransferPrivsTransactionData extends TransactionData {
 		return this.recipient;
 	}
 
-	public Integer getPreviousSenderFlags() {
-		return this.previousSenderFlags;
+	public Boolean getPreviousRecipientExisted() {
+		return this.previousRecipientExisted;
 	}
 
-	public void setPreviousSenderFlags(Integer previousSenderFlags) {
-		this.previousSenderFlags = previousSenderFlags;
-	}
-
-	public Integer getPreviousRecipientFlags() {
-		return this.previousRecipientFlags;
-	}
-
-	public void setPreviousRecipientFlags(Integer previousRecipientFlags) {
-		this.previousRecipientFlags = previousRecipientFlags;
+	public void setPreviousRecipientExisted(Boolean previousRecipientExisted) {
+		this.previousRecipientExisted = previousRecipientExisted;
 	}
 
 	public Integer getPreviousSenderBlocksMinted() {

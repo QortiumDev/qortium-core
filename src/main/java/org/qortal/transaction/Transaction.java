@@ -39,7 +39,6 @@ public abstract class Transaction {
 
 	// Transaction types
 	public enum TransactionType {
-		// NOTE: must be contiguous or reflection fails
 		GENESIS(1, false),
 		PAYMENT(2, false),
 		REGISTER_NAME(3, true),
@@ -75,7 +74,6 @@ public abstract class Transaction {
 		GROUP_APPROVAL(33, false),
 		SET_GROUP(34, false),
 		UPDATE_ASSET(35, true),
-		ACCOUNT_FLAGS(36, false),
 		ENABLE_FORGING(37, false),
 		REWARD_SHARE(38, false),
 		ACCOUNT_LEVEL(39, false),
@@ -90,6 +88,7 @@ public abstract class Transaction {
 		public final Constructor<?> constructor;
 
 		private static final Map<Integer, TransactionType> map = stream(TransactionType.values()).collect(toMap(type -> type.value, type -> type));
+		private static final int maxValue = stream(TransactionType.values()).mapToInt(type -> type.value).max().orElse(0);
 
 		TransactionType(int value, boolean needsApproval) {
 			this.value = value;
@@ -124,6 +123,10 @@ public abstract class Transaction {
 
 		public static TransactionType valueOf(int value) {
 			return map.get(value);
+		}
+
+		public static int getMaxValue() {
+			return maxValue;
 		}
 	}
 

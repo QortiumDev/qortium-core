@@ -114,7 +114,7 @@ public abstract class TransactionTransformer extends Transformer {
 	/** Cache of transformer subclass info, keyed by transaction type */
 	private static final TransformerSubclassInfo[] subclassInfos;
 	static {
-		subclassInfos = new TransformerSubclassInfo[TransactionType.values().length + 1];
+		subclassInfos = new TransformerSubclassInfo[TransactionType.getMaxValue() + 1];
 
 		for (TransactionType txType : TransactionType.values()) {
 			TransformerSubclassInfo subclassInfo = new TransformerSubclassInfo();

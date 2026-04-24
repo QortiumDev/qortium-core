@@ -13,17 +13,11 @@ public interface AccountRepository {
 	/** Returns all general information about account, e.g. public key, last reference, default group ID. */
 	public AccountData getAccount(String address) throws DataException;
 
-	/** Returns accounts with <b>any</b> bit set in given mask. */
-	public List<AccountData> getFlaggedAccounts(int mask) throws DataException;
-
 	/** Returns account's last reference or null if not set or account not found. */
 	public byte[] getLastReference(String address) throws DataException;
 
 	/** Returns account's default groupID or null if account not found. */
 	public Integer getDefaultGroupId(String address) throws DataException;
-
-	/** Returns account's flags or null if account not found. */
-	public Integer getFlags(String address) throws DataException;
 
 	/** Returns account's level or null if account not found. */
 	public Integer getLevel(String address) throws DataException;
@@ -51,13 +45,6 @@ public interface AccountRepository {
 	 * Note: ignores other fields like last reference.
 	 */
 	public void setDefaultGroupId(AccountData accountData) throws DataException;
-
-	/**
-	 * Saves account's flags, and public key if present, in repository.
-	 * <p>
-	 * Note: ignores other fields like last reference, default groupID.
-	 */
-	public void setFlags(AccountData accountData) throws DataException;
 
 	/**
 	 * Saves account's level, and public key if present, in repository.

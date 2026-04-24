@@ -1340,7 +1340,7 @@ public class Block {
 					continue;
 
 				// GenesisTransactions are not allowed (GenesisBlock overrides isValid() to allow them)
-				if (transactionData.getType() == TransactionType.GENESIS || transactionData.getType() == TransactionType.ACCOUNT_FLAGS)
+				if (transactionData.getType() == TransactionType.GENESIS)
 					return ValidationResult.GENESIS_TRANSACTIONS_INVALID;
 
 				// Check timestamp and deadline

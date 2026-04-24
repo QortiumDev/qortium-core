@@ -90,12 +90,6 @@
 			{ "type": "REWARD_SHARE", "minterPublicKey": "BqWV8eMDUxAJ7FEcjQZzCsNKi6TggwYd7yQHWtmYJLWd", "recipient": "QScfgds57u1zEPWyjL3GyKsZQ6PRbuVv2G", "rewardSharePublicKey": "AZBGQ6pVcH8KHBRuqNyBZSkFRedida8GdjoPJvDbgXtn", "sharePercent": 0 },
 			{ "type": "REWARD_SHARE", "minterPublicKey": "ELt8dgskQ9zfwF9dwVYwjq2zXFExstRJoPD4gCC4991d", "recipient": "QZm6GbBJuLJnTbftJAaJtw2ZJqXiDTu2pD", "rewardSharePublicKey": "C6aVBbUHy8nAS3wYQo6jdWFTBagmqrh3JhRo8VH5k1Bx", "sharePercent": 0 },
 			{ "type": "REWARD_SHARE", "minterPublicKey": "Btqz7ug1XEMMun8hXZHVZWctRZxMKYeExsax7ohgzGNE", "recipient": "Qb5rprTsoSoKaMcdwLFL7jP3eyhK3LGqNm", "rewardSharePublicKey": "CdVq4RwirHMjaRkM38PAtMvLNkokqYCiu2srQ3qf7znq", "sharePercent": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QbmBdAbvmXqCya8bia8WaD5izumKkC9BrY", "andMask": -1, "orMask": 0, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QhPXuFFRa9s91Q2qYKpSN5LVCUTqYkgRLz", "andMask": -1, "orMask": 0, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QPFM4xX2826MuBEhMtdReW1QR3vRYrQff3", "andMask": -1, "orMask": 0, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QSJ5cDLWivGcn9ym21azufBfiqeuGH1maq", "andMask": -1, "orMask": 0, "xorMask": 0 },
-			{ "type": "ACCOUNT_FLAGS", "target": "QTx98gU8ErigXkViWkvRH5JfaMpk8b3bHe", "andMask": -1, "orMask": 0, "xorMask": 0 },
-
 			{ "type": "ACCOUNT_LEVEL", "target": "QXsrAcNz93naQsBcyGTECMiB3heKmbZZNT", "level": 1 },
 			{ "type": "ACCOUNT_LEVEL", "target": "QN4NnUvf4UwCKz9U66NUEs6cQJtZiHzpsB", "level": 1 },
 			{ "type": "ACCOUNT_LEVEL", "target": "QRXzd5xi7nPdqZg5ugkoNnttAMEMAS7Zgp", "level": 1 },

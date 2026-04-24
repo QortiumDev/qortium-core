@@ -118,11 +118,11 @@ public class BlockTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount signingAccount = Common.getTestAccount(repository, "alice");
 
-			// TODO: Fill block with random, valid transactions of every type (except GENESIS, ACCOUNT_FLAGS or AT)
+			// TODO: Fill block with random, valid transactions of every type (except GENESIS or AT)
 			// This isn't as trivial as it seems as some transactions rely on others.
 			// e.g. CANCEL_ASSET_ORDER needs a prior CREATE_ASSET_ORDER
 			for (Transaction.TransactionType txType : Transaction.TransactionType.values()) {
-				if (txType == TransactionType.GENESIS || txType == TransactionType.ACCOUNT_FLAGS || txType == TransactionType.AT)
+				if (txType == TransactionType.GENESIS || txType == TransactionType.AT)
 					continue;
 
 				TransactionData transactionData = TransactionUtils.randomTransaction(repository, signingAccount, txType, true);

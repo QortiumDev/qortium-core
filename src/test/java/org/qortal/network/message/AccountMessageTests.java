@@ -22,7 +22,7 @@ public class AccountMessageTests {
 			publicKey[i] = (byte) (i + 1);
 		}
 
-		AccountData accountData = new AccountData(Common.getTestAccount(null, "alice").getAddress(), reference, publicKey, 1, 2, 3, 4);
+		AccountData accountData = new AccountData(Common.getTestAccount(null, "alice").getAddress(), reference, publicKey, 1, 3, 4);
 		AccountMessage message = new AccountMessage(accountData);
 
 		AccountMessage decodedMessage = (AccountMessage) AccountMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
@@ -32,7 +32,6 @@ public class AccountMessageTests {
 		assertArrayEquals(accountData.getReference(), decodedData.getReference());
 		assertArrayEquals(accountData.getPublicKey(), decodedData.getPublicKey());
 		assertEquals(accountData.getDefaultGroupId(), decodedData.getDefaultGroupId());
-		assertEquals(accountData.getFlags(), decodedData.getFlags());
 		assertEquals(accountData.getLevel(), decodedData.getLevel());
 		assertEquals(accountData.getBlocksMinted(), decodedData.getBlocksMinted());
 	}

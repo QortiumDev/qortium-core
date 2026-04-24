@@ -35,7 +35,7 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 	@Override
 	public AccountData getAccount(String address) throws DataException {
-		String sql = "SELECT reference, public_key, default_group_id, flags, level, blocks_minted FROM Accounts WHERE account = ?";
+		String sql = "SELECT reference, public_key, default_group_id, level, blocks_minted FROM Accounts WHERE account = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, address)) {
 			if (resultSet == null)
@@ -44,41 +44,12 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			byte[] reference = resultSet.getBytes(1);
 			byte[] publicKey = resultSet.getBytes(2);
 			int defaultGroupId = resultSet.getInt(3);
-			int flags = resultSet.getInt(4);
-			int level = resultSet.getInt(5);
-			int blocksMinted = resultSet.getInt(6);
+			int level = resultSet.getInt(4);
+			int blocksMinted = resultSet.getInt(5);
 
-			return new AccountData(address, reference, publicKey, defaultGroupId, flags, level, blocksMinted);
+			return new AccountData(address, reference, publicKey, defaultGroupId, level, blocksMinted);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch account info from repository", e);
-		}
-	}
-
-	@Override
-	public List<AccountData> getFlaggedAccounts(int mask) throws DataException {
-		String sql = "SELECT reference, public_key, default_group_id, flags, level, blocks_minted, account FROM Accounts WHERE BITAND(flags, ?) != 0";
-
-		List<AccountData> accounts = new ArrayList<>();
-
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, mask)) {
-			if (resultSet == null)
-				return accounts;
-
-			do {
-				byte[] reference = resultSet.getBytes(1);
-				byte[] publicKey = resultSet.getBytes(2);
-				int defaultGroupId = resultSet.getInt(3);
-				int flags = resultSet.getInt(4);
-				int level = resultSet.getInt(5);
-				int blocksMinted = resultSet.getInt(6);
-				String address = resultSet.getString(7);
-
-				accounts.add(new AccountData(address, reference, publicKey, defaultGroupId, flags, level, blocksMinted));
-			} while (resultSet.next());
-
-			return accounts;
-		} catch (SQLException e) {
-			throw new DataException("Unable to fetch flagged accounts from repository", e);
 		}
 	}
 
@@ -108,20 +79,6 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			return resultSet.getInt(1);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch account's default groupID from repository", e);
-		}
-	}
-
-	@Override
-	public Integer getFlags(String address) throws DataException {
-		String sql = "SELECT flags FROM Accounts WHERE account = ?";
-
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, address)) {
-			if (resultSet == null)
-				return null;
-
-			return resultSet.getInt(1);
-		} catch (SQLException e) {
-			throw new DataException("Unable to fetch account's flags from repository", e);
 		}
 	}
 
@@ -189,23 +146,6 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			saveHelper.execute(this.repository);
 		} catch (SQLException e) {
 			throw new DataException("Unable to save account's default group ID into repository", e);
-		}
-	}
-
-	@Override
-	public void setFlags(AccountData accountData) throws DataException {
-		HSQLDBSaver saveHelper = new HSQLDBSaver("Accounts");
-
-		saveHelper.bind("account", accountData.getAddress()).bind("flags", accountData.getFlags());
-
-		byte[] publicKey = accountData.getPublicKey();
-		if (publicKey != null)
-			saveHelper.bind("public_key", publicKey);
-
-		try {
-			saveHelper.execute(this.repository);
-		} catch (SQLException e) {
-			throw new DataException("Unable to save account's flags into repository", e);
 		}
 	}
 

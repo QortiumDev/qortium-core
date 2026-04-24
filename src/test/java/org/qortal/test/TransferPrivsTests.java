@@ -301,7 +301,7 @@ public class TransferPrivsTests extends Common {
 			BlockMinter.mintTestingBlock(repository, mintingAccount);
 	}
 
-	/** Combine sender's level, flags and block counts into recipient using TRANSFER_PRIVS transaction. */
+	/** Combine sender's level and block counts into recipient using TRANSFER_PRIVS transaction. */
 	private void combineAccounts(Repository repository, PrivateKeyAccount senderAccount, Account recipientAccount, PrivateKeyAccount mintingAccount) throws DataException {
 		byte[] reference = senderAccount.getLastReference();
 		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
@@ -316,9 +316,6 @@ public class TransferPrivsTests extends Common {
 	}
 
 	private void checkSenderPostTransfer(AccountData senderAccountData) {
-		// Confirm sender has zeroed flags
-		assertEquals("sender's flags should be zeroed", 0, (int) senderAccountData.getFlags());
-
 		// Confirm sender has zeroed level
 		assertEquals("sender's level should be zeroed", 0, (int) senderAccountData.getLevel());
 
@@ -330,17 +327,11 @@ public class TransferPrivsTests extends Common {
 		// Confirm recipient has bumped level
 		assertEquals("recipient's level incorrect", expectedPostCombineLevel, postCombineRecipientData.getLevel());
 
-		// Confirm recipient has gained sender's flags
-		assertEquals("recipient's flags should be changed", preCombineSenderData.getFlags() | preCombineRecipientData.getFlags(), (int) postCombineRecipientData.getFlags());
-
 		// Confirm recipient has increased minted block count
 		assertEquals("recipient minted block count incorrect", preCombineRecipientData.getBlocksMinted() + preCombineSenderData.getBlocksMinted() + 1, postCombineRecipientData.getBlocksMinted());
 	}
 
 	private void checkAccountDataRestored(String accountName, AccountData expectedAccountData, AccountData actualAccountData) {
-		// Confirm flags have been restored
-		assertEquals(accountName + "'s flags weren't restored", expectedAccountData.getFlags(), actualAccountData.getFlags());
-
 		// Confirm minted blocks count
 		assertEquals(accountName + "'s minted block count wasn't restored", expectedAccountData.getBlocksMinted(), actualAccountData.getBlocksMinted());
 

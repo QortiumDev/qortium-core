@@ -220,7 +220,7 @@ public class HSQLDBDatabaseUpdates {
 				case 3:
 					// Accounts
 					stmt.execute("CREATE TABLE Accounts (account QortalAddress, reference Signature, public_key QortalPublicKey, "
-							+ "default_group_id GroupID NOT NULL DEFAULT 0, flags INTEGER NOT NULL DEFAULT 0, level INT NOT NULL DEFAULT 0, "
+							+ "default_group_id GroupID NOT NULL DEFAULT 0, level INT NOT NULL DEFAULT 0, "
 							+ "blocks_minted INTEGER NOT NULL DEFAULT 0, blocks_minted_adjustment INTEGER NOT NULL DEFAULT 0, "
 							+ "PRIMARY KEY (account))");
 					// For looking up an account by public key
@@ -247,10 +247,6 @@ public class HSQLDBDatabaseUpdates {
 					// Genesis Transactions
 					stmt.execute("CREATE TABLE GenesisTransactions (signature Signature, recipient QortalAddress NOT NULL, "
 							+ "amount QortalAmount NOT NULL, asset_id AssetID NOT NULL, " + TRANSACTION_KEYS + ")");
-
-					// Genesis-block-only transaction to set/clear flags
-					stmt.execute("CREATE TABLE AccountFlagsTransactions (signature Signature, creator QortalPublicKey NOT NULL, target QortalAddress NOT NULL, "
-							+ "and_mask INT NOT NULL, or_mask INT NOT NULL, xor_mask INT NOT NULL, previous_flags INT, " + TRANSACTION_KEYS + ")");
 
 					// Genesis-block-only transaction to set level
 					stmt.execute("CREATE TABLE AccountLevelTransactions (signature Signature, creator QortalPublicKey NOT NULL, target QortalAddress NOT NULL, "
@@ -606,7 +602,7 @@ public class HSQLDBDatabaseUpdates {
 				case 17:
 					// TRANSFER_PRIVS transaction
 					stmt.execute("CREATE TABLE TransferPrivsTransactions (signature Signature, sender QortalPublicKey NOT NULL, recipient QortalAddress NOT NULL, "
-							+ "previous_sender_flags INT, previous_recipient_flags INT, "
+							+ "previous_recipient_existed BOOLEAN, "
 							+ "previous_sender_blocks_minted_adjustment INT, previous_sender_blocks_minted INT, "
 							+ TRANSACTION_KEYS + ")");
 					break;

@@ -38,11 +38,10 @@ public class SerializationTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount signingAccount = Common.getTestAccount(repository, "alice");
 
-			// Check serialization/deserialization of transactions of every type (except GENESIS, ACCOUNT_FLAGS or AT)
+			// Check serialization/deserialization of transactions of every type (except GENESIS or unsupported types)
 			for (Transaction.TransactionType txType : Transaction.TransactionType.values()) {
 				switch (txType) {
 					case GENESIS:
-					case ACCOUNT_FLAGS:
 					case PUBLICIZE:
 					case AIRDROP:
 					case ENABLE_FORGING:
