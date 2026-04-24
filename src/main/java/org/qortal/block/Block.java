@@ -639,10 +639,9 @@ public class Block {
 	/**
 	 * Return the next block's version.
 	 * <p>
-	 * We're starting with version 4 as a nod to being newer than successor Qora,
-	 * whose latest block version was 3.
+	 * Qortium starts from the inherited version 4 block format.
 	 *
-	 * @return 1, 2, 3 or 4
+	 * @return 4
 	 */
 	public int getNextBlockVersion() {
 		if (this.blockData.getHeight() == null)

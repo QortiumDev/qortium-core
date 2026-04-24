@@ -1069,7 +1069,6 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");
 					stmt.execute("ALTER TABLE TransferPrivsTransactions DROP COLUMN previous_sender_blocks_minted_adjustment");
-					stmt.execute("DROP TABLE IF EXISTS AccountQortFromQoraInfo");
 					break;
 
 				default:

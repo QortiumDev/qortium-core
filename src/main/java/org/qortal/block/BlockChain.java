@@ -81,9 +81,6 @@ public class BlockChain {
 	@XmlJavaTypeAdapter(StringLongMapXmlAdapter.class)
 	private Map<String, Long> featureTriggers;
 
-	/** Whether to use legacy, broken RIPEMD160 implementation when converting public keys to addresses. */
-	private boolean useBrokenMD160ForAddresses = false;
-
 	/** Checkpoints */
 	public static class Checkpoint {
 		public int height;
@@ -366,10 +363,6 @@ public class BlockChain {
 	/** Returns true if approval-needing transaction types require a txGroupId other than NO_GROUP. */
 	public boolean getRequireGroupForApproval() {
 		return this.requireGroupForApproval;
-	}
-
-	public boolean getUseBrokenMD160ForAddresses() {
-		return this.useBrokenMD160ForAddresses;
 	}
 
 	public List<Checkpoint> getCheckpoints() {

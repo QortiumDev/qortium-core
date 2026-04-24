@@ -8,7 +8,6 @@ import org.bouncycastle.crypto.params.X25519PrivateKeyParameters;
 import org.bouncycastle.crypto.params.X25519PublicKeyParameters;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
-import org.qortal.block.BlockChain;
 import org.qortal.crypto.AES;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.Qortal25519Extras;
@@ -89,7 +88,7 @@ public class CryptoTests extends Common {
 	@Test
 	public void testPublicKeyToAddress() {
 		byte[] publicKey = HashCode.fromString("775ada64a48a30b3bfc4f1db16bca512d4088704975a62bde78781ce0cba90d6").asBytes();
-		String expected = BlockChain.getInstance().getUseBrokenMD160ForAddresses() ? "QUD9y7NZqTtNwvSAUfewd7zKUGoVivVnTW" : "QPc6TvGJ5RjW6LpwUtafx7XRCdRvyN6rsA";
+		String expected = "QPc6TvGJ5RjW6LpwUtafx7XRCdRvyN6rsA";
 
 		assertEquals(expected, Crypto.toAddress(publicKey));
 	}

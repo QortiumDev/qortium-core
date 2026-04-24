@@ -10,7 +10,6 @@
 	"nameRegistrationUnitFees": [
 		{ "timestamp": 0, "fee": "1.25" }
 	],
-	"useBrokenMD160ForAddresses": false,
 	"requireGroupForApproval": false,
 	"defaultGroupId": 0,
 	"minAccountLevelToMint": 1,
