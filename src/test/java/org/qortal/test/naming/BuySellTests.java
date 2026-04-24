@@ -104,6 +104,7 @@ public class BuySellTests extends Common {
 		// register another name, second registered name should also be allowed
 		final String name2 = "another name";
 		RegisterNameTransactionData transactionData2 = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name2, "{}");
+		transactionData2.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData2.getTimestamp()));
 		Transaction.ValidationResult result = TransactionUtils.signAndImport(repository, transactionData2, alice);
 		assertEquals(Transaction.ValidationResult.OK, result);
 
@@ -157,6 +158,7 @@ public class BuySellTests extends Common {
 		// assert alice cannot register another name while primary name is for sale
 		final String name2 = "another name";
 		RegisterNameTransactionData registerSecondNameData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name2, "{}");
+		registerSecondNameData.setFee(new RegisterNameTransaction(null, null).getUnitFee(registerSecondNameData.getTimestamp()));
 		Transaction.ValidationResult registrationResult = TransactionUtils.signAndImport(repository, registerSecondNameData, alice);
 
 		// check that registering is not supported while primary name is for sale
@@ -478,6 +480,7 @@ public class BuySellTests extends Common {
 		// assert alice cannot register another name while primary name is for sale
 		final String name2 = "another name";
 		RegisterNameTransactionData registerSecondNameData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name2, "{}");
+		registerSecondNameData.setFee(new RegisterNameTransaction(null, null).getUnitFee(registerSecondNameData.getTimestamp()));
 		Transaction.ValidationResult registrationResult = TransactionUtils.signAndImport(repository, registerSecondNameData, alice);
 
 		// check that registering is not supported while primary name is for sale
@@ -485,7 +488,7 @@ public class BuySellTests extends Common {
 
 		String bobName = "bob";
 		RegisterNameTransactionData bobRegisterData = new RegisterNameTransactionData(TestTransaction.generateBase(bob), bobName, "{}");
-		transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(bobRegisterData.getTimestamp()));
+		bobRegisterData.setFee(new RegisterNameTransaction(null, null).getUnitFee(bobRegisterData.getTimestamp()));
 		TransactionUtils.signAndMint(repository, bobRegisterData, bob);
 
 		Optional<String> bobPrimaryName = bob.getPrimaryName();

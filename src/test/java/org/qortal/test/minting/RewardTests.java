@@ -106,9 +106,9 @@ public class RewardTests extends Common {
 	}
 
 
-	/** Use Alice-Chloe reward-share to bump Chloe from level 0 to level 1, then check orphaning works as expected. */
+	/** Use Alice-Chloe reward-share to confirm recipients do not gain account levels from shared rewards. */
 	@Test
-	public void testLevel1() throws DataException {
+	public void testRewardShareRecipientDoesNotGainLevel() throws DataException {
 		List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
@@ -121,11 +121,11 @@ public class RewardTests extends Common {
 			PrivateKeyAccount aliceChloeRewardShareAccount = new PrivateKeyAccount(repository, aliceChloeRewardSharePrivateKey);
 
 			final int minterBlocksNeeded = cumulativeBlocksByLevel.get(1);
-			// Mint enough blocks to bump testAccount level
+			// Mint enough blocks that Chloe would have reached level 1 under the old recipient-credit behavior.
 			for (int bc = 0; bc < minterBlocksNeeded; ++bc)
 				BlockMinter.mintTestingBlock(repository, aliceChloeRewardShareAccount);
 
-			assertEquals(1, (int) chloe.getLevel());
+			assertEquals(0, (int) chloe.getLevel());
 
 			// Orphan back to genesis block
 			BlockUtils.orphanToBlock(repository, 1);

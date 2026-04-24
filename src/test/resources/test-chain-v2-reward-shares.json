@@ -5,17 +5,15 @@
 	"maxBlockSize": 2097152,
 	"maxBytesPerUnitFee": 1024,
 	"unitFees": [
-		{ "timestamp": 0, "fee": "0.1" }
+		{ "timestamp": 0, "fee": "0.01" }
 	],
 	"nameRegistrationUnitFees": [
-		{ "timestamp": 0, "fee": "0.1" },
-		{ "timestamp": 1645372800000, "fee": "5" }
+		{ "timestamp": 0, "fee": "1.25" }
 	],
 	"requireGroupForApproval": false,
 	"minAccountLevelToRewardShare": 5,
 	"maxRewardSharesByTimestamp": [
-		{ "timestamp": 0, "maxShares": 6 },
-		{ "timestamp": 1655460000000, "maxShares": 3 }
+		{ "timestamp": 0, "maxShares": 6 }
 	],
 	"onlineAccountSignaturesMinLifetime": 3600000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,

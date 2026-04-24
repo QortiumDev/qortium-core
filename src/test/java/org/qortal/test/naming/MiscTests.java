@@ -383,7 +383,7 @@ public class MiscTests extends Common {
 			// First try with the default unit fee
 			String name2 = "test-name-2";
 			transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name2, data);
-			assertEquals(10000000L, transactionData.getFee().longValue());
+			assertEquals(1000000L, transactionData.getFee().longValue());
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 			transaction.sign(alice);
 			ValidationResult result = transaction.importAsUnconfirmed();
@@ -400,19 +400,15 @@ public class MiscTests extends Common {
 		}
 	}
 
-	// test reading the name registration fee schedule from blockchain.json / test-chain-v2.json
+	// test reading the baseline name registration fee from blockchain.json / test-chain-v2.json
 	@Test
-	public void testRegisterNameFeeScheduleInTestchainData() throws Exception {
+	public void testRegisterNameFeeBaselineInTestchainData() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
-			final long expectedFutureFeeIncreaseTimestamp = 9999999999999L; // 20 Nov 2286, as per test-chain-v2.json
-			final long expectedFutureFeeIncreaseValue = new AmountTypeAdapter().unmarshal("5");
+			final long expectedNameRegistrationFee = new AmountTypeAdapter().unmarshal("1.25");
 
-			assertEquals(expectedFutureFeeIncreaseValue, BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(expectedFutureFeeIncreaseTimestamp));
-
-			// Validate unit fees pre and post timestamp
-			assertEquals(10000000, BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(expectedFutureFeeIncreaseTimestamp - 1)); // 0.1 QORT
-			assertEquals(500000000, BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(expectedFutureFeeIncreaseTimestamp)); // 5 QORT
+			assertEquals(expectedNameRegistrationFee, BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(0));
+			assertEquals(expectedNameRegistrationFee, BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(9999999999999L));
 
 			// Register-name
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -421,7 +417,7 @@ public class MiscTests extends Common {
 
 			RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, data);
 			transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
-			assertEquals(10000000L, transactionData.getFee().longValue());
+			assertEquals(125000000L, transactionData.getFee().longValue());
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 		}
 	}
@@ -495,19 +491,15 @@ public class MiscTests extends Common {
 		}
 	}
 
-	// test reading the fee schedule from blockchain.json / test-chain-v2.json
+	// test reading the baseline unit fee from blockchain.json / test-chain-v2.json
 	@Test
-	public void testFeeScheduleInTestchainData() throws Exception {
+	public void testFeeBaselineInTestchainData() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
-			final long expectedFutureFeeIncreaseTimestamp = 9999999999999L; // 20 Nov 2286, as per test-chain-v2.json
-			final long expectedFutureFeeIncreaseValue = new AmountTypeAdapter().unmarshal("1");
+			final long expectedUnitFee = new AmountTypeAdapter().unmarshal("0.01");
 
-			assertEquals(expectedFutureFeeIncreaseValue, BlockChain.getInstance().getUnitFeeAtTimestamp(expectedFutureFeeIncreaseTimestamp));
-
-			// Validate unit fees pre and post timestamp
-			assertEquals(10000000, BlockChain.getInstance().getUnitFeeAtTimestamp(expectedFutureFeeIncreaseTimestamp - 1)); // 0.1 QORT
-			assertEquals(100000000, BlockChain.getInstance().getUnitFeeAtTimestamp(expectedFutureFeeIncreaseTimestamp)); // 1 QORT
+			assertEquals(expectedUnitFee, BlockChain.getInstance().getUnitFeeAtTimestamp(0));
+			assertEquals(expectedUnitFee, BlockChain.getInstance().getUnitFeeAtTimestamp(9999999999999L));
 
 			// Payment
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -515,7 +507,7 @@ public class MiscTests extends Common {
 
 			PaymentTransactionData transactionData = new PaymentTransactionData(TestTransaction.generateBase(alice), bob.getAddress(), 100000);
 			transactionData.setFee(new PaymentTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
-			assertEquals(10000000L, transactionData.getFee().longValue());
+			assertEquals(1000000L, transactionData.getFee().longValue());
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 		}
 	}
@@ -613,6 +605,7 @@ public class MiscTests extends Common {
 			// register another name, second registered name should also be allowed
 			final String name2 = "another name";
 			RegisterNameTransactionData transactionData2 = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name2, "{}");
+			transactionData2.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData2.getTimestamp()));
 			Transaction.ValidationResult result = TransactionUtils.signAndImport(repository, transactionData2, alice);
 			assertEquals(Transaction.ValidationResult.OK, result);
 

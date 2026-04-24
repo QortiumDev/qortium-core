@@ -215,7 +215,7 @@ public class RewardShareTests extends Common {
 	}
 
 	@Test
-	public void testCreateRewardSharesBeforeReduction() throws DataException {
+	public void testCreateRewardSharesAtBaselineLimit() throws DataException {
 		final int sharePercent = 0;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
@@ -226,7 +226,7 @@ public class RewardShareTests extends Common {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
 			}
 
-			// 7th reward share should fail because we've reached the limit (and we're not yet requiring a self share)
+			// 7th reward share should fail because we've reached the current baseline limit.
 			AssertionError assertionError = null;
 			try {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
@@ -239,7 +239,7 @@ public class RewardShareTests extends Common {
 	}
 
 	@Test
-	public void testCreateRewardSharesAfterReduction() throws DataException {
+	public void testCreateRewardSharesInRewardShareFixture() throws DataException {
 		Common.useSettings("test-settings-v2-reward-shares.json");
 
 		final int sharePercent = 0;
@@ -247,12 +247,12 @@ public class RewardShareTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount dilbertAccount = Common.getTestAccount(repository, "dilbert");
 
-			// Create 3 reward shares
-			for (int i=0; i<3; i++) {
+			// Create 6 reward shares
+			for (int i=0; i<6; i++) {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
 			}
 
-			// 4th reward share should fail because we've reached the simple maximum share limit
+			// 7th reward share should fail because we've reached the simple maximum share limit.
 			AssertionError assertionError = null;
 			try {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
@@ -265,7 +265,7 @@ public class RewardShareTests extends Common {
 	}
 
 	@Test
-	public void testCreateSelfAndRewardSharesAfterReduction() throws DataException {
+	public void testCreateSelfAndRewardSharesAtBaselineLimit() throws DataException {
 		Common.useSettings("test-settings-v2-reward-shares.json");
 
 		final int sharePercent = 0;
@@ -273,15 +273,15 @@ public class RewardShareTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount dilbertAccount = Common.getTestAccount(repository, "dilbert");
 
-			// Create 2 reward shares
-			for (int i=0; i<2; i++) {
+			// Create 5 reward shares
+			for (int i=0; i<5; i++) {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
 			}
 
 			// Create a self share, which should succeed as it simply counts toward the same overall share limit
 			AccountUtils.rewardShare(repository, dilbertAccount, dilbertAccount, sharePercent);
 
-			// 4th reward share should fail because we've reached the limit (including the self share)
+			// 7th reward share should fail because we've reached the limit (including the self share).
 			AssertionError assertionError = null;
 			try {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);

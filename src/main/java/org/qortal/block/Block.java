@@ -1623,12 +1623,9 @@ public class Block {
 				.filter(expandedAccount -> expandedAccount.isMinterMember)
 				.collect(Collectors.toList());
 
-		Set<AccountData> allUniqueExpandedAccounts = new HashSet<>();
+		Map<String, AccountData> uniqueMintingAccountsByAddress = new HashMap<>();
 		for (ExpandedAccount expandedAccount : expandedAccounts) {
-			allUniqueExpandedAccounts.add(expandedAccount.mintingAccountData);
-
-			if (!expandedAccount.isRecipientAlsoMinter)
-				allUniqueExpandedAccounts.add(expandedAccount.recipientAccountData);
+			uniqueMintingAccountsByAddress.putIfAbsent(expandedAccount.mintingAccountData.getAddress(), expandedAccount.mintingAccountData);
 		}
 
 		// Increase blocks minted count for all accounts
@@ -1638,15 +1635,15 @@ public class Block {
 		}
 
 		// Batch update in repository
-		repository.getAccountRepository().modifyMintedBlockCounts(allUniqueExpandedAccounts.stream().map(AccountData::getAddress).collect(Collectors.toList()), +delta);
+		repository.getAccountRepository().modifyMintedBlockCounts(new ArrayList<>(uniqueMintingAccountsByAddress.keySet()), +delta);
 
 		// Keep track of level bumps in case we need to apply to other entries
 		Map<String, Integer> bumpedAccounts = new HashMap<>();
 
 		// Local changes and also checks for level bump
-		for (AccountData accountData : allUniqueExpandedAccounts) {
+		for (AccountData accountData : uniqueMintingAccountsByAddress.values()) {
 			// Adjust count locally (in Java)
-			accountData.setBlocksMinted(accountData.getBlocksMinted() + 1);
+			accountData.setBlocksMinted(accountData.getBlocksMinted() + delta);
 			LOGGER.trace(() -> String.format("Block minter %s up to %d minted block%s", accountData.getAddress(), accountData.getBlocksMinted(), (accountData.getBlocksMinted() != 1 ? "s" : "")));
 
 			final int effectiveBlocksMinted = accountData.getBlocksMinted();
@@ -2011,12 +2008,9 @@ public class Block {
 				.filter(expandedAccount -> expandedAccount.isMinterMember)
 				.collect(Collectors.toList());
 
-		Set<AccountData> allUniqueExpandedAccounts = new HashSet<>();
+		Map<String, AccountData> uniqueMintingAccountsByAddress = new HashMap<>();
 		for (ExpandedAccount expandedAccount : expandedAccounts) {
-			allUniqueExpandedAccounts.add(expandedAccount.mintingAccountData);
-
-			if (!expandedAccount.isRecipientAlsoMinter)
-				allUniqueExpandedAccounts.add(expandedAccount.recipientAccountData);
+			uniqueMintingAccountsByAddress.putIfAbsent(expandedAccount.mintingAccountData.getAddress(), expandedAccount.mintingAccountData);
 		}
 
 		// Decrease blocks minted count for all accounts
@@ -2026,11 +2020,11 @@ public class Block {
 		}
 
 		// Batch update in repository
-		repository.getAccountRepository().modifyMintedBlockCounts(allUniqueExpandedAccounts.stream().map(AccountData::getAddress).collect(Collectors.toList()), -delta);
+		repository.getAccountRepository().modifyMintedBlockCounts(new ArrayList<>(uniqueMintingAccountsByAddress.keySet()), -delta);
 
-		for (AccountData accountData : allUniqueExpandedAccounts) {
+		for (AccountData accountData : uniqueMintingAccountsByAddress.values()) {
 			// Adjust count locally (in Java)
-			accountData.setBlocksMinted(accountData.getBlocksMinted() - 1);
+			accountData.setBlocksMinted(accountData.getBlocksMinted() - delta);
 			LOGGER.trace(() -> String.format("Block minter %s down to %d minted block%s", accountData.getAddress(), accountData.getBlocksMinted(), (accountData.getBlocksMinted() != 1 ? "s" : "")));
 
 			final int effectiveBlocksMinted = accountData.getBlocksMinted();

@@ -46,7 +46,7 @@ public class BlocksMintedCountTests extends Common {
 			RewardShareData testRewardShareData = repository.getAccountRepository().getRewardShare(testRewardShareAccount.getPublicKey());
 			assertNotNull(testRewardShareData);
 
-			testRewardShare(repository, testRewardShareAccount, +1, +1);
+			testRewardShare(repository, testRewardShareAccount, +1, 0);
 		}
 	}
 
@@ -80,11 +80,11 @@ public class BlocksMintedCountTests extends Common {
 			assertNotNull(testRewardShareData);
 
 			// Create signed timestamps
-            OnlineAccountsManager.getInstance().ensureTestingAccountsOnline(mintingAccount, testRewardShareAccount);
+			OnlineAccountsManager.getInstance().ensureTestingAccountsOnline(mintingAccount, testRewardShareAccount);
 
 			// Even though Alice features in two online reward-shares, she should only gain +1 blocksMinted
-			// Bob only features in one online reward-share, so should also only gain +1 blocksMinted
-			testRewardShareRetainingTimestamps(repository, testRewardShareAccount, +1, +1);
+			// Bob only receives the reward-share payout, so his blocksMinted count should not increase
+			testRewardShareRetainingTimestamps(repository, testRewardShareAccount, +1, 0);
 		}
 	}
 
@@ -98,8 +98,8 @@ public class BlocksMintedCountTests extends Common {
 			// get the Alice's reward share account
 			PrivateKeyAccount aliceMintingAccount = Common.getTestAccount(repository, "alice-reward-share");
 
-			// seed Alice with 8 minted blocks
-			int seededBlocksMintedForAlice = 8;
+			// Seed Alice at level 1 so orphan/remint checks do not drop below the current block-minting guard.
+			int seededBlocksMintedForAlice = BlockChain.getInstance().getCumulativeBlocksByLevel().get(1);
 			seedMintingData(repository, "alice", seededBlocksMintedForAlice);
 
 			// Confirm reward-share exists
@@ -123,7 +123,7 @@ public class BlocksMintedCountTests extends Common {
 				// assert the orphaning
 				assertMintingData(repository, "alice");
 
-				// mint another block to reverse the orpaning
+				// mint another block to reverse the orphaning
 				BlockMinter.mintTestingBlockRetainingTimestamps(repository, aliceMintingAccount);
 			}
 		}
