@@ -67,8 +67,7 @@
 		"newAssetPricingTimestamp": 0,
 		"groupApprovalTimestamp": 0,
 		"transactionV6Timestamp": 0,
-		"arbitraryOptionalFeeTimestamp": 0,
-		"adminsReplaceFoundersHeight": 9999999999999
+		"arbitraryOptionalFeeTimestamp": 0
 	},
 	"genesisInfo": {
 		"version": 4,

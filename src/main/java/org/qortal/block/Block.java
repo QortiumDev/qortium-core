@@ -143,7 +143,6 @@ public class Block {
 
 		private final Account mintingAccount;
 		private final AccountData mintingAccountData;
-		private final boolean isMinterFounder;
 		private final boolean isMinterMember;
 
 		private final Account recipientAccount;
@@ -157,7 +156,6 @@ public class Block {
 
 			this.mintingAccount = new Account(repository, this.rewardShareData.getMinter());
 			this.mintingAccountData = repository.getAccountRepository().getAccount(this.mintingAccount.getAddress());
-			this.isMinterFounder = Account.isFounder(mintingAccountData.getFlags());
 
 			this.isRecipientAlsoMinter = this.rewardShareData.getRecipient().equals(this.mintingAccount.getAddress());
 			this.isMinterMember
@@ -204,12 +202,9 @@ public class Block {
 		 * This is a method, not a final variable, because account's level can change between construction and call,
 		 * e.g. during Block.process() where account levels are bumped right before Block.distributeBlockReward().
 		 *
-		 *  @return account-level share "bin" from blockchain config, or null if founder / none found
+		 *  @return account-level share "bin" from blockchain config, or null if none found
 		 */
 		public AccountLevelShareBin getShareBin(int blockHeight) {
-			if (this.isMinterFounder && blockHeight < BlockChain.getInstance().getAdminsReplaceFoundersHeight())
-				return null;
-
 			final int accountLevel = this.mintingAccountData.getLevel();
 			if (accountLevel <= 0)
 				return null; // level 0 isn't included in any share bins
@@ -2270,38 +2265,21 @@ public class Block {
 		 *
 		 * Distribution is based on the minting account of 'online' reward-shares.
 		 *
-		 * If ANY founders are online, then they receive the leftover non-distributed reward.
-		 * If NO founders are online, then account-level-based rewards are scaled up so 100% of reward is allocated.
+		 * Admins receive the leftover non-distributed reward.
 		 *
 		 * If ANY non-maxxed legacy QORA holders exist then they are always allocated their fixed share (e.g. 1%).
 		 *
 		 * There has to be either at least one 'online' account for blocks to be minted
-		 * so there is always either one account-level-based or founder reward candidate.
+		 * so there is always either one account-level-based or admin reward candidate.
 		 *
 		 * Examples:
 		 *
-		 * With at least one founder online:
+		 * With account-level rewards:
 		 * Level 1/2 accounts: 6%
 		 * Legacy QORA holders: 1%
-		 * Founders: ~93%
-		 *
-		 * No online founders:
-		 * Level 1/2 accounts: 6%
-		 * Level 5/6 accounts: 19%
-		 * Legacy QORA holders: 1%
-		 * Total: 26%
-		 *
-		 * After scaling account-level-based shares to fill 100%:
-		 * Level 1/2 accounts: ~23.08%
-		 * Level 5/6 accounts: ~73.08%
-		 * Legacy QORA holders: 1%
-		 * Total: 100%
+		 * Admins: ~93%
 		 */
 		long totalShares = 0;
-
-		// Determine whether we have any online founders
-		final List<ExpandedAccount> onlineFounderAccounts = expandedAccounts.stream().filter(expandedAccount -> expandedAccount.isMinterFounder).collect(Collectors.toList());
-		final boolean haveFounders = !onlineFounderAccounts.isEmpty();
 
 		List<AccountLevelShareBin> accountLevelShareBinsForBlock = BlockChain.getInstance().getAccountLevelShareBins();
 		// Determine reward candidates based on account level
@@ -2317,7 +2295,7 @@ public class Block {
 		for (int binIndex = accountLevelShareBins.size()-1; binIndex >= 0; --binIndex) {
 			AccountLevelShareBin accountLevelShareBin = accountLevelShareBins.get(binIndex);
 
-			// Find all accounts in share bin. getShareBin() returns null for minter accounts that are also founders, so they are effectively filtered out.
+			// Find all accounts in share bin.
 			List<ExpandedAccount> binnedAccounts = expandedAccounts.stream().filter(accountInfo -> accountInfo.hasShareBin(accountLevelShareBin, this.blockData.getHeight())).collect(Collectors.toList());
 			// Add any accounts that have been moved down from a higher tier
 			List<ExpandedAccount> existingBinnedAccounts = accountsForShareBin.get(binIndex);
@@ -2385,25 +2363,6 @@ public class Block {
 		final boolean haveQoraHolders = !qoraHolders.isEmpty();
 		final long qoraHoldersShare = BlockChain.getInstance().getQoraHoldersShareAtHeight(this.blockData.getHeight());
 
-		// Perform account-level-based reward scaling if appropriate
-		if (!haveFounders && this.blockData.getHeight() < BlockChain.getInstance().getAdminsReplaceFoundersHeight() ) {
-			// Recalculate distribution ratios based on candidates
-
-			// Nothing shared? This shouldn't happen
-			if (totalShares == 0)
-				throw new DataException("Unexpected lack of block reward candidates?");
-
-			// Re-scale individual reward candidate's share as if total shared was 100% - legacy QORA holders' share
-			long scalingFactor;
-			if (haveQoraHolders)
-				scalingFactor = Amounts.scaledDivide(totalShares, 1_00000000 - qoraHoldersShare);
-			else
-				scalingFactor = totalShares;
-
-			for (BlockRewardCandidate rewardCandidate : rewardCandidates)
-				rewardCandidate.share = Amounts.scaledDivide(rewardCandidate.share, scalingFactor);
-		}
-
 		// Add legacy QORA holders as reward candidate with fixed share (if appropriate)
 		if (haveQoraHolders) {
 			// Yes: add to reward candidates list
@@ -2411,85 +2370,69 @@ public class Block {
 
 			BlockRewardCandidate rewardCandidate = new BlockRewardCandidate("Legacy QORA holders", qoraHoldersShare, legacyQoraHoldersDistributor);
 
-			if (haveFounders)
-				// We have founders, so distribute legacy QORA holders just before founders so founders get any non-distributed
-				rewardCandidates.add(rewardCandidate);
-			else
-				// No founder, so distribute legacy QORA holders first, so all account-level-based rewards get share of any non-distributed
-				rewardCandidates.add(0, rewardCandidate);
+			// Distribute legacy QORA just before the admin remainder bucket so undistributed QORA rewards flow to admins.
+			rewardCandidates.add(rewardCandidate);
 
 			totalShares += rewardCandidate.share;
 		}
 
-		// Add founders as reward candidate if appropriate
-		if (haveFounders && this.blockData.getHeight() < BlockChain.getInstance().getAdminsReplaceFoundersHeight()) {
-			// Yes: add to reward candidates list
-			BlockRewardDistributor founderDistributor = (distributionAmount, balanceChanges) -> distributeBlockRewardShare(distributionAmount, onlineFounderAccounts, balanceChanges);
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			GroupRepository groupRepository = repository.getGroupRepository();
 
-			final long foundersShare = 1_00000000 - totalShares;
-			BlockRewardCandidate rewardCandidate = new BlockRewardCandidate("Founders", foundersShare, founderDistributor);
-			rewardCandidates.add(rewardCandidate);
-			LOGGER.info("logging foundersShare prior to reward modifications {}",foundersShare);
-		}
-		else if (this.blockData.getHeight() >= BlockChain.getInstance().getAdminsReplaceFoundersHeight()) {
-			try (final Repository repository = RepositoryManager.getRepository()) {
-				GroupRepository groupRepository = repository.getGroupRepository();
+			List<Integer> mintingGroupIds = Groups.getGroupIdsToMint(BlockChain.getInstance(), this.blockData.getHeight());
 
-				List<Integer> mintingGroupIds = Groups.getGroupIdsToMint(BlockChain.getInstance(), this.blockData.getHeight());
+			// all minter admins
+			List<String> minterAdmins = Groups.getAllAdmins(groupRepository, mintingGroupIds);
 
-				// all minter admins
-				List<String> minterAdmins = Groups.getAllAdmins(groupRepository, mintingGroupIds);
+			// all minter admins that are online
+			List<ExpandedAccount> onlineMinterAdminAccounts
+				= expandedAccounts.stream()
+					.filter(expandedAccount ->  minterAdmins.contains(expandedAccount.getMintingAccount().getAddress()))
+					.collect(Collectors.toList());
 
-				// all minter admins that are online
-				List<ExpandedAccount> onlineMinterAdminAccounts
-					= expandedAccounts.stream()
-						.filter(expandedAccount ->  minterAdmins.contains(expandedAccount.getMintingAccount().getAddress()))
-						.collect(Collectors.toList());
+			long minterAdminShare;
 
-				long minterAdminShare;
-
-				if( onlineMinterAdminAccounts.isEmpty() ) {
-					minterAdminShare = 0;
-				}
-				else {
-					BlockRewardDistributor minterAdminDistributor
-							= (distributionAmount, balanceChanges)
-							->
-							distributeBlockRewardShare(distributionAmount, onlineMinterAdminAccounts, balanceChanges);
-
-					long adminShare = 1_00000000 - totalShares;
-					LOGGER.info("initial total Shares: {}", totalShares);
-					LOGGER.info("logging adminShare after hardfork, this is the primary reward that will be split {}", adminShare);
-
-					minterAdminShare = adminShare / 2;
-					BlockRewardCandidate minterAdminRewardCandidate
-							= new BlockRewardCandidate("Minter Admins", minterAdminShare, minterAdminDistributor);
-					rewardCandidates.add(minterAdminRewardCandidate);
-
-					totalShares += minterAdminShare;
-				}
-
-				LOGGER.info("MINTER ADMIN SHARE: {}",minterAdminShare);
-
-				// all dev admins
-				List<String> devAdminAddresses
-						= groupRepository.getGroupAdmins(1).stream()
-						.map(GroupAdminData::getAdmin)
-						.collect(Collectors.toList());
-
-				LOGGER.debug("Removing NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
-				devAdminAddresses.removeIf( address -> Group.NULL_OWNER_ADDRESS.equals(address) );
-				LOGGER.debug("Removed NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
-
-				BlockRewardDistributor devAdminDistributor
-					= (distributionAmount, balanceChanges) -> distributeToAccounts(distributionAmount, devAdminAddresses, balanceChanges);
-
-				long devAdminShare = 1_00000000 - totalShares;
-				LOGGER.info("DEV ADMIN SHARE: {}",devAdminShare);
-				BlockRewardCandidate devAdminRewardCandidate
-					= new BlockRewardCandidate("Dev Admins", devAdminShare,devAdminDistributor);
-				rewardCandidates.add(devAdminRewardCandidate);
+			if( onlineMinterAdminAccounts.isEmpty() ) {
+				minterAdminShare = 0;
 			}
+			else {
+				BlockRewardDistributor minterAdminDistributor
+						= (distributionAmount, balanceChanges)
+						->
+						distributeBlockRewardShare(distributionAmount, onlineMinterAdminAccounts, balanceChanges);
+
+				long adminShare = 1_00000000 - totalShares;
+				LOGGER.info("initial total Shares: {}", totalShares);
+				LOGGER.info("logging adminShare after founder replacement, this is the primary reward that will be split {}", adminShare);
+
+				minterAdminShare = adminShare / 2;
+				BlockRewardCandidate minterAdminRewardCandidate
+						= new BlockRewardCandidate("Minter Admins", minterAdminShare, minterAdminDistributor);
+				rewardCandidates.add(minterAdminRewardCandidate);
+
+				totalShares += minterAdminShare;
+			}
+
+			LOGGER.info("MINTER ADMIN SHARE: {}",minterAdminShare);
+
+			// all dev admins
+			List<String> devAdminAddresses
+					= groupRepository.getGroupAdmins(1).stream()
+					.map(GroupAdminData::getAdmin)
+					.collect(Collectors.toList());
+
+			LOGGER.debug("Removing NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
+			devAdminAddresses.removeIf( address -> Group.NULL_OWNER_ADDRESS.equals(address) );
+			LOGGER.debug("Removed NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
+
+			BlockRewardDistributor devAdminDistributor
+				= (distributionAmount, balanceChanges) -> distributeToAccounts(distributionAmount, devAdminAddresses, balanceChanges);
+
+			long devAdminShare = 1_00000000 - totalShares;
+			LOGGER.info("DEV ADMIN SHARE: {}",devAdminShare);
+			BlockRewardCandidate devAdminRewardCandidate
+				= new BlockRewardCandidate("Dev Admins", devAdminShare,devAdminDistributor);
+			rewardCandidates.add(devAdminRewardCandidate);
 		}
 
 		return rewardCandidates;

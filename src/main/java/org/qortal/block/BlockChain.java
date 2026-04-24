@@ -62,8 +62,7 @@ public class BlockChain {
 
 	public enum FeatureTrigger {
 		transactionV6Timestamp,
-		arbitraryOptionalFeeTimestamp,
-		adminsReplaceFoundersHeight
+		arbitraryOptionalFeeTimestamp
 	}
 
     // V5.5 Default List of Historic Triggers
@@ -470,10 +469,6 @@ public class BlockChain {
 		return this.featureTriggers.get(FeatureTrigger.arbitraryOptionalFeeTimestamp.name()).longValue();
 	}
 
-	public int getAdminsReplaceFoundersHeight() {
-		return this.featureTriggers.get(FeatureTrigger.adminsReplaceFoundersHeight.name()).intValue();
-	}
-
 	// More complex getters for aspects that change by height or timestamp
 
 	public long getRewardAtHeight(int ourHeight) {
@@ -590,7 +585,7 @@ public class BlockChain {
 			totalShare += accountLevelShareBin.share;
 
 		if (totalShare < 0 || totalShare > 1_00000000L)
-			Settings.throwValidationError("Total non-founder share out of bounds (0<x<1e8)");
+			Settings.throwValidationError("Total configured reward share out of bounds (0<x<1e8)");
 
 		// Check that blockRewardBatchSize isn't zero
 		if (this.blockRewardBatchSize <= 0)

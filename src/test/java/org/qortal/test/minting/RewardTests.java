@@ -95,9 +95,10 @@ public class RewardTests extends Common {
 
 			BlockMinter.mintTestingBlock(repository, rewardShareAccount);
 
-			// We're expecting reward * 12.8% to Bob, the rest to Alice
+			// Alice is the online minter admin, so Bob receives 12.8% of Alice's minter-admin half.
 
-			long bobShare = (blockReward * share) / 100L / 100L;
+			long minterAdminShare = blockReward / 2;
+			long bobShare = (minterAdminShare * share) / 100L / 100L;
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, initialBalances.get("bob").get(Asset.QORT) + bobShare);
 
 			long aliceShare = blockReward - bobShare;
@@ -222,12 +223,13 @@ public class RewardTests extends Common {
 		}
 	}
 
-	/** Test rewards to founders, one in reward-share, the other is self-share. */
+	/** Test that founders no longer receive a special reward bucket. */
 	@Test
-	public void testFounderRewards() throws DataException {
+	public void testFounderRewardReplacement() throws DataException {
 		Common.useSettings("test-settings-v2-founder-rewards.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
 			Long blockReward = BlockUtils.getNextBlockReward(repository);
 
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
@@ -247,37 +249,19 @@ public class RewardTests extends Common {
 
 			BlockMinter.mintTestingBlock(repository, mintingAndOnlineAccounts.toArray(new PrivateKeyAccount[0]));
 
-			// 2 founders online so blockReward divided by 2
-			int founderCount = 2;
-			long perFounderReward = blockReward / founderCount;
+			// Alice is the only group admin, so she receives the full admin replacement share.
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, initialBalances.get("alice").get(Asset.QORT) + blockReward);
 
-			// Alice simple self-share so her reward is perFounderReward
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, perFounderReward);
-
-			// Bob not online so his reward is zero
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, 0L);
-
-			// Chloe has two reward-shares, so her reward is divided by 2
-			int chloeSharesCount = 2;
-			long chloePerShareReward = perFounderReward / chloeSharesCount;
-
-			// Her self-share gets chloePerShareReward
-			long chloeExpectedBalance = chloePerShareReward;
-
-			// Her reward-share with Dilbert: 25% goes to Dilbert
-			int dilbertSharePercent = 25;
-			long dilbertExpectedBalance = (chloePerShareReward * dilbertSharePercent) / 100L;
-
-			// The remaining 75% goes to Chloe
-			long rewardShareRemaining = chloePerShareReward - dilbertExpectedBalance;
-			chloeExpectedBalance += rewardShareRemaining;
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeExpectedBalance);
+			// Other founders are online, but founder status no longer creates a reward bucket.
+			AccountUtils.assertBalance(repository, "bob", Asset.QORT, initialBalances.get("bob").get(Asset.QORT));
+			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, initialBalances.get("chloe").get(Asset.QORT));
+			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, initialBalances.get("dilbert").get(Asset.QORT));
 		}
 	}
 
-	/** Check account-level-based reward scaling when no founders are online. */
+	/** Check admin replacement rewards when no minter admin is online. */
 	@Test
-	public void testNoFounderRewardScaling() throws DataException {
+	public void testAdminReplacementWithoutOnlineMinterAdmin() throws DataException {
 		Common.useSettings("test-settings-v2-reward-scaling.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
@@ -293,19 +277,23 @@ public class RewardTests extends Common {
 
 			/*
 			 * Dilbert is only account 'online'.
-			 * No founders online.
+			 * Alice is a dev admin but is not online.
 			 * Some legacy QORA holders.
 			 *
-			 * So Dilbert should receive 100% - legacy QORA holder's share.
+			 * So Dilbert should receive the combined level 5 to 8 share from the inactive
+			 * level 7/8 bin, and Alice should receive the remaining admin replacement share.
 			 */
 
 			final long qoraHoldersShare = BlockChain.getInstance().getQoraHoldersShareAtHeight(1);
-			final long remainingShare = 1_00000000 - qoraHoldersShare;
+			final int level5To8SharePercent = 45_00;
+			final long level5To8Share = Amounts.roundDownScaledMultiply(blockReward, level5To8SharePercent * 10000L);
+			final long qoraShare = Amounts.roundDownScaledMultiply(blockReward, qoraHoldersShare);
 
 			long dilbertExpectedBalance = initialBalances.get("dilbert").get(Asset.QORT);
-			dilbertExpectedBalance += Amounts.roundDownScaledMultiply(blockReward, remainingShare);
+			dilbertExpectedBalance += level5To8Share;
 
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertExpectedBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, initialBalances.get("alice").get(Asset.QORT) + blockReward - level5To8Share - qoraShare);
 
 			// After several blocks, the legacy QORA holder is still eligible at the fixed 1% baseline
 			for (int i = 0; i < 10; ++i)
@@ -316,11 +304,11 @@ public class RewardTests extends Common {
 
 			BlockMinter.mintTestingBlock(repository, dilbertSelfShareAccount);
 
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertExpectedBalance + Amounts.roundDownScaledMultiply(blockReward, remainingShare));
+			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertExpectedBalance + Amounts.roundDownScaledMultiply(blockReward, level5To8SharePercent * 10000L));
 		}
 	}
 
-	/** Check leftover legacy QORA reward goes to online founders. */
+	/** Check leftover legacy QORA reward goes to admins. */
 	@Test
 	public void testLeftoverReward() throws DataException {
 		Common.useSettings("test-settings-v2-leftover-reward.json");
@@ -332,7 +320,7 @@ public class RewardTests extends Common {
 
 			BlockUtils.mintBlock(repository); // Block minted by Alice self-share
 
-			// Chloe maxxes out her legacy QORA reward so some is leftover to reward to Alice.
+			// Chloe maxxes out her legacy QORA reward so the leftover flows to the admin replacement bucket.
 
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
 			final long chloeQortFromQora = chloe.getConfirmedBalance(Asset.QORT_FROM_QORA);
@@ -378,12 +366,6 @@ public class RewardTests extends Common {
 			assertEquals(1, (int) Common.getTestAccount(repository, "chloe").getLevel());
 			assertEquals(2, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
-			// Ensure that only Alice is a founder
-			assertEquals(1, getFlags(repository, "alice"));
-			assertEquals(0, getFlags(repository, "bob"));
-			assertEquals(0, getFlags(repository, "chloe"));
-			assertEquals(0, getFlags(repository, "dilbert"));
-
 			// Now that everyone is at level 1 or 2, we can capture initial balances
 			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
@@ -401,23 +383,22 @@ public class RewardTests extends Common {
 
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'. Bob is offline.
-			 * Chloe is level 1, Dilbert is level 2.
-			 * One founder online (Alice, who is also level 1).
+			 * Alice and Chloe are level 1, Dilbert is level 2.
 			 * No legacy QORA holders.
 			 *
-			 * Chloe and Dilbert should receive equal shares of the 6% block reward for Level 1 and 2
-			 * Alice should receive the remainder (94%)
+			 * Alice, Chloe, and Dilbert should receive equal shares of the 6% block reward for Level 1 and 2.
+			 * Alice should also receive the remaining admin replacement reward.
 			 */
 
 			// Level 1 and 2 always share the same reward in Qortium.
 			final int level1And2SharePercent = 6_00; // 6%
 			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
-			final long expectedReward = level1And2ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedFounderReward = blockReward - level1And2ShareAmount; // Alice should receive the remainder
+			final long expectedReward = level1And2ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
+			final long expectedAdminReward = blockReward - level1And2ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
 			assertEquals(600000000, level1And2ShareAmount);
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedReward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedReward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedReward);
@@ -481,22 +462,21 @@ public class RewardTests extends Common {
 
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
-			 * Bob and Chloe are level 3; Dilbert is level 4.
-			 * One founder online (Alice, who is also level 3).
+			 * Alice, Bob, and Chloe are level 3; Dilbert is level 4.
 			 * No legacy QORA holders.
 			 *
-			 * Chloe, Bob and Dilbert should receive equal shares of the 13% block reward for level 3 and 4
-			 * Alice should receive the remainder (87%)
+			 * Alice, Chloe, Bob and Dilbert should receive equal shares of the 13% block reward for level 3 and 4.
+			 * Alice should also receive the remaining admin replacement reward.
 			 */
 
 			// Level 3 and 4 always share the same reward in Qortium.
 			final int level3And4SharePercent = 13_00; // 13%
 			final long level3And4ShareAmount = (blockReward * level3And4SharePercent) / 100L / 100L;
-			final long expectedReward = level3And4ShareAmount / 3; // The reward is split between Bob, Chloe, and Dilbert
-			final long expectedFounderReward = blockReward - level3And4ShareAmount; // Alice should receive the remainder
+			final long expectedReward = level3And4ShareAmount / 4; // The reward is split between Alice, Bob, Chloe, and Dilbert
+			final long expectedAdminReward = blockReward - level3And4ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedReward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance+expectedReward);
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedReward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedReward);
@@ -562,13 +542,12 @@ public class RewardTests extends Common {
 
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
-			 * Bob is level 1; Chloe is level 5; Dilbert is level 6.
-			 * One founder online (Alice, who is also level 5).
+			 * Bob is level 1; Alice and Chloe are level 5; Dilbert is level 6.
 			 * No legacy QORA holders.
 			 *
-			 * Chloe and Dilbert should receive equal shares of the 19% block reward for level 5 and 6
+			 * Alice, Chloe, and Dilbert should receive equal shares of the 19% block reward for level 5 and 6.
 			 * Bob should receive all of the level 1 and 2 reward (6%)
-			 * Alice should receive the remainder (75%)
+			 * Alice should also receive the remaining admin replacement reward.
 			 */
 
 			// Level 5 and 6 always share the same reward in Qortium.
@@ -577,11 +556,11 @@ public class RewardTests extends Common {
 			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
 			final long level5And6ShareAmount = (blockReward * level5And6SharePercent) / 100L / 100L;
 			final long expectedLevel1And2Reward = level1And2ShareAmount; // The reward is given entirely to Bob
-			final long expectedLevel5And6Reward = level5And6ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedFounderReward = blockReward - level1And2ShareAmount - level5And6ShareAmount; // Alice should receive the remainder
+			final long expectedLevel5And6Reward = level5And6ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
+			final long expectedAdminReward = blockReward - level1And2ShareAmount - level5And6ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel5And6Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance+expectedLevel1And2Reward);
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel5And6Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel5And6Reward);
@@ -642,22 +621,21 @@ public class RewardTests extends Common {
 
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
-			 * Chloe is level 7; Dilbert is level 8.
-			 * One founder online (Alice, who is also level 7).
+			 * Alice and Chloe are level 7; Dilbert is level 8.
 			 * No legacy QORA holders.
 			 *
-			 * Chloe and Dilbert should receive equal shares of the 26% block reward for level 7 and 8
-			 * Alice should receive the remainder (74%)
+			 * Alice, Chloe, and Dilbert should receive equal shares of the 26% block reward for level 7 and 8.
+			 * Alice should also receive the remaining admin replacement reward.
 			 */
 
 			// Level 7 and 8 always share the same reward in Qortium.
 			final int level7And8SharePercent = 26_00; // 26%
 			final long level7And8ShareAmount = (blockReward * level7And8SharePercent) / 100L / 100L;
-			final long expectedLevel7And8Reward = level7And8ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedFounderReward = blockReward - level7And8ShareAmount; // Alice should receive the remainder
+			final long expectedLevel7And8Reward = level7And8ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
+			final long expectedAdminReward = blockReward - level7And8ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel7And8Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel7And8Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel7And8Reward);
@@ -732,13 +710,12 @@ public class RewardTests extends Common {
 
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
-			 * Bob is level 1; Chloe is level 9; Dilbert is level 10.
-			 * One founder online (Alice, who is also level 9).
+			 * Bob is level 1; Alice and Chloe are level 9; Dilbert is level 10.
 			 * No legacy QORA holders.
 			 *
-			 * Chloe and Dilbert should receive equal shares of the 32% block reward for level 9 and 10
+			 * Alice, Chloe, and Dilbert should receive equal shares of the 32% block reward for level 9 and 10.
 			 * Bob should receive all of the level 1 and 2 reward (6%)
-			 * Alice should receive the remainder (62%)
+			 * Alice should also receive the remaining admin replacement reward.
 			 */
 
 			// Level 9 and 10 always share the same reward in Qortium.
@@ -747,11 +724,11 @@ public class RewardTests extends Common {
 			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
 			final long level9And10ShareAmount = (blockReward * level9And10SharePercent) / 100L / 100L;
 			final long expectedLevel1And2Reward = level1And2ShareAmount; // The reward is given entirely to Bob
-			final long expectedLevel9And10Reward = level9And10ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedFounderReward = blockReward - level1And2ShareAmount - level9And10ShareAmount; // Alice should receive the remainder
+			final long expectedLevel9And10Reward = level9And10ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
+			final long expectedAdminReward = blockReward - level1And2ShareAmount - level9And10ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel9And10Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance+expectedLevel1And2Reward);
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel9And10Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel9And10Reward);
@@ -773,8 +750,8 @@ public class RewardTests extends Common {
 	public void testLevel7And8RewardsPreActivation() throws DataException, IllegalAccessException {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
-		// Set minAccountsToActivateShareBin to 3 so that share bins 7-8 and 9-10 are considered inactive
-		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 3, true);
+		// Set minAccountsToActivateShareBin to 4 so that share bins 7-8 and 9-10 are considered inactive
+		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 4, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
@@ -824,23 +801,22 @@ public class RewardTests extends Common {
 
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
-			 * Chloe is level 7; Dilbert is level 8.
-			 * One founder online (Alice, who is also level 7).
+			 * Alice and Chloe are level 7; Dilbert is level 8.
 			 * No legacy QORA holders.
 			 *
 			 * Level 7 and 8 is not yet activated, so its rewards are added to the level 5 and 6 share bin.
 			 * There are no level 5 and 6 online.
-			 * Chloe and Dilbert should receive equal shares of the 45% block reward for levels 5 to 8.
-			 * Alice should receive the remainder (55%).
+			 * Alice, Chloe, and Dilbert should receive equal shares of the 45% block reward for levels 5 to 8.
+			 * Alice should also receive the remaining admin replacement reward.
 			 */
 
 			final int level5To8SharePercent = 45_00; // 45% (combined 19% and 26%)
 			final long level5To8ShareAmount = (blockReward * level5To8SharePercent) / 100L / 100L;
-			final long expectedLevel5To8Reward = level5To8ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedFounderReward = blockReward - level5To8ShareAmount; // Alice should receive the remainder
+			final long expectedLevel5To8Reward = level5To8ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
+			final long expectedAdminReward = blockReward - level5To8ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel5To8Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel5To8Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel5To8Reward);
@@ -863,8 +839,8 @@ public class RewardTests extends Common {
 	public void testLevel9And10RewardsPreActivation() throws DataException, IllegalAccessException {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
-		// Set minAccountsToActivateShareBin to 3 so that share bins 7-8 and 9-10 are considered inactive
-		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 3, true);
+		// Set minAccountsToActivateShareBin to 4 so that share bins 7-8 and 9-10 are considered inactive
+		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 4, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
@@ -919,15 +895,14 @@ public class RewardTests extends Common {
 
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
-			 * Bob is level 1; Chloe is level 9; Dilbert is level 10.
-			 * One founder online (Alice, who is also level 9).
+			 * Bob is level 1; Alice and Chloe are level 9; Dilbert is level 10.
 			 * No legacy QORA holders.
 			 *
 			 * Levels 7+8, and 9+10 are not yet activated, so their rewards are added to the level 5 and 6 share bin.
 			 * There are no levels 5-8 online.
 			 * Bob should receive all of the level 1 and 2 reward (6%).
-			 * Chloe and Dilbert should receive equal shares of the 77% block reward for levels 5 to 10.
-			 * Alice should receive the remainder (17%).
+			 * Alice, Chloe, and Dilbert should receive equal shares of the 77% block reward for levels 5 to 10.
+			 * Alice should also receive the remaining admin replacement reward.
 			 */
 
 			final int level1And2SharePercent = 6_00; // 6%
@@ -935,11 +910,11 @@ public class RewardTests extends Common {
 			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
 			final long level5To10ShareAmount = (blockReward * level5To10SharePercent) / 100L / 100L;
 			final long expectedLevel1And2Reward = level1And2ShareAmount; // The reward is given entirely to Bob
-			final long expectedLevel5To10Reward = level5To10ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedFounderReward = blockReward - level1And2ShareAmount - level5To10ShareAmount; // Alice should receive the remainder
+			final long expectedLevel5To10Reward = level5To10ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
+			final long expectedAdminReward = blockReward - level1And2ShareAmount - level5To10ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel5To10Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance+expectedLevel1And2Reward);
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel5To10Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel5To10Reward);
@@ -961,8 +936,8 @@ public class RewardTests extends Common {
 	public void testLevel7And8RewardsPreAndPostActivation() throws DataException, IllegalAccessException {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
-		// Set minAccountsToActivateShareBin to 2 so that share bins 7-8 and 9-10 are considered inactive at first
-		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 2, true);
+		// Set minAccountsToActivateShareBin to 3 so that share bins 7-8 and 9-10 are considered inactive at first
+		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 3, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
@@ -1012,23 +987,21 @@ public class RewardTests extends Common {
 
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
-			 * Chloe is level 6; Dilbert is level 7.
-			 * One founder online (Alice, who is also level 7).
+			 * Chloe is level 6; Alice and Dilbert are level 7.
 			 * No legacy QORA holders.
 			 *
 			 * Level 7 and 8 is not yet activated, so its rewards are added to the level 5 and 6 share bin.
-			 * There are no level 5 and 6 online.
-			 * Chloe and Dilbert should receive equal shares of the 45% block reward for levels 5 to 8.
-			 * Alice should receive the remainder (55%).
+			 * Alice, Chloe, and Dilbert should receive equal shares of the 45% block reward for levels 5 to 8.
+			 * Alice should also receive the remaining admin replacement reward.
 			 */
 
 			final int level5To8SharePercent = 45_00; // 45% (combined 19% and 26%)
 			final long level5To8ShareAmount = (blockReward * level5To8SharePercent) / 100L / 100L;
-			final long expectedLevel5To8Reward = level5To8ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedFounderReward = blockReward - level5To8ShareAmount; // Alice should receive the remainder
+			final long expectedLevel5To8Reward = level5To8ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
+			final long expectedAdminReward = blockReward - level5To8ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel5To8Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel5To8Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel5To8Reward);
@@ -1058,23 +1031,21 @@ public class RewardTests extends Common {
 
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
-			 * Chloe and Dilbert are level 7.
-			 * One founder online (Alice, who is also level 7).
+			 * Alice, Chloe, and Dilbert are level 7.
 			 * No legacy QORA holders.
 			 *
 			 * Level 7 and 8 is now activated, so its rewards are paid out in the normal way.
-			 * There are no level 5 and 6 online.
-			 * Chloe and Dilbert should receive equal shares of the 26% block reward for levels 7 to 8.
-			 * Alice should receive the remainder (74%).
+			 * Alice, Chloe, and Dilbert should receive equal shares of the 26% block reward for levels 7 to 8.
+			 * Alice should also receive the remaining admin replacement reward.
 			 */
 
 			final int level7To8SharePercent = 26_00; // 26%
 			final long level7To8ShareAmount = (blockReward * level7To8SharePercent) / 100L / 100L;
-			final long expectedLevel7To8Reward = level7To8ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long newExpectedFounderReward = blockReward - level7To8ShareAmount; // Alice should receive the remainder
+			final long expectedLevel7To8Reward = level7To8ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
+			final long expectedSecondAdminReward = blockReward - level7To8ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, alicePreActivationBalance+newExpectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, alicePreActivationBalance+expectedSecondAdminReward+expectedLevel7To8Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobPreActivationBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloePreActivationBalance+expectedLevel7To8Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertPreActivationBalance+expectedLevel7To8Reward);
@@ -1146,12 +1117,6 @@ public class RewardTests extends Common {
 			assertEquals(1, (int) Common.getTestAccount(repository, "chloe").getLevel());
 			assertEquals(2, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
-			// Ensure that only Alice is a founder
-			assertEquals(1, getFlags(repository, "alice"));
-			assertEquals(0, getFlags(repository, "bob"));
-			assertEquals(0, getFlags(repository, "chloe"));
-			assertEquals(0, getFlags(repository, "dilbert"));
-
 			// Now that everyone is at level 1 or 2, we can capture initial balances
 			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
@@ -1170,11 +1135,11 @@ public class RewardTests extends Common {
 			final int level1And2SharePercent = 6_00; // 6%
 			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
 			final long expectedLevel1And2Reward = level1And2ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedFounderReward = blockReward - level1And2ShareAmount; // Alice should receive the remainder
+			final long expectedAliceReward = blockReward - level1And2ShareAmount; // Alice receives her high-level bin plus the admin remainder
 
 			// Validate the balances
 			assertEquals(6000000, level1And2ShareAmount);
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAliceReward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel1And2Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel1And2Reward);
@@ -1235,12 +1200,6 @@ public class RewardTests extends Common {
 			assertEquals(1, (int) Common.getTestAccount(repository, "chloe").getLevel());
 			assertEquals(2, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
-			// Ensure that only Alice is a founder
-			assertEquals(1, getFlags(repository, "alice"));
-			assertEquals(0, getFlags(repository, "bob"));
-			assertEquals(0, getFlags(repository, "chloe"));
-			assertEquals(0, getFlags(repository, "dilbert"));
-
 			// Now that everyone is at level 1 or 2, we can capture initial balances
 			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT, Asset.LEGACY_QORA, Asset.QORT_FROM_QORA);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
@@ -1261,11 +1220,11 @@ public class RewardTests extends Common {
 			final long qoraShareAmount = (blockReward * qoraSharePercent) / 100L / 100L;
 			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
 			final long expectedLevel1And2Reward = level1And2ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedFounderReward = blockReward - level1And2ShareAmount - qoraShareAmount; // Alice should receive the remainder
+			final long expectedAliceReward = blockReward - level1And2ShareAmount - qoraShareAmount; // Alice receives her high-level bin plus the admin remainder
 
 			// Validate the balances
 			assertEquals(6000000, level1And2ShareAmount);
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedFounderReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAliceReward);
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
 			// Chloe is a QORA holder and will receive additional QORT, so it's not easy to pre-calculate her balance
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel1And2Reward);
@@ -1279,11 +1238,4 @@ public class RewardTests extends Common {
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance);
 		}
 	}
-
-
-	private int getFlags(Repository repository, String name) throws DataException {
-		TestAccount testAccount = Common.getTestAccount(repository, name);
-		return repository.getAccountRepository().getAccount(testAccount.getAddress()).getFlags();
-	}
-
 }
