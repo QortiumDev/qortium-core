@@ -93,11 +93,10 @@ public class RewardTests extends Common {
 
 			BlockMinter.mintTestingBlock(repository, rewardShareAccount);
 
-			// Alice is the online level 1 minter admin, so Bob receives 12.8% of Alice's combined reward.
+			// Alice is the online level-zero minter admin, so Bob receives 12.8% of Alice's admin replacement reward.
 
-			long level1And2Share = (blockReward * 6L) / 100L;
-			long minterAdminShare = (blockReward - level1And2Share) / 2;
-			long bobShare = ((level1And2Share + minterAdminShare) * share) / 100L / 100L;
+			long minterAdminShare = blockReward / 2;
+			long bobShare = (minterAdminShare * share) / 100L / 100L;
 			AccountUtils.assertBalance(repository, "bob", Asset.QORT, initialBalances.get("bob").get(Asset.QORT) + bobShare);
 
 			long aliceShare = blockReward - bobShare;
@@ -176,6 +175,8 @@ public class RewardTests extends Common {
 		Common.useSettings("test-settings-v2-reward-scaling.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardScalingTestAccounts(repository);
+
 			// Dilbert needs to create a self-share
 			byte[] dilbertSelfSharePrivateKey = AccountUtils.rewardShare(repository, "dilbert", "dilbert", 0); // Block minted by Alice
 			PrivateKeyAccount dilbertSelfShareAccount = new PrivateKeyAccount(repository, dilbertSelfSharePrivateKey);
@@ -217,6 +218,7 @@ public class RewardTests extends Common {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardLevelTestAccounts(repository);
 
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
 
@@ -291,6 +293,7 @@ public class RewardTests extends Common {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardLevelTestAccounts(repository);
 
 			List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
@@ -367,6 +370,7 @@ public class RewardTests extends Common {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardLevelTestAccounts(repository);
 
 			List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
@@ -449,6 +453,7 @@ public class RewardTests extends Common {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardLevelTestAccounts(repository);
 
 			List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
@@ -531,6 +536,7 @@ public class RewardTests extends Common {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardLevelTestAccounts(repository);
 
 			List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
@@ -625,6 +631,7 @@ public class RewardTests extends Common {
 		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 4, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardLevelTestAccounts(repository);
 
 			List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
@@ -712,6 +719,7 @@ public class RewardTests extends Common {
 		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 4, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardLevelTestAccounts(repository);
 
 			List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
@@ -807,6 +815,7 @@ public class RewardTests extends Common {
 		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 3, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardLevelTestAccounts(repository);
 
 			List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
@@ -942,6 +951,7 @@ public class RewardTests extends Common {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardLevelTestAccounts(repository);
 
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
 
@@ -1015,6 +1025,20 @@ public class RewardTests extends Common {
 			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance);
 		}
+	}
+
+	private static void seedRewardLevelTestAccounts(Repository repository) throws DataException {
+		AccountUtils.setMintingData(repository, "alice", 1);
+		AccountUtils.setMintingData(repository, "bob", 1);
+		AccountUtils.setMintingData(repository, "chloe", 1);
+		AccountUtils.setMintingData(repository, "dilbert", 2);
+	}
+
+	private static void seedRewardScalingTestAccounts(Repository repository) throws DataException {
+		AccountUtils.setMintingData(repository, "alice", 1);
+		AccountUtils.setMintingData(repository, "bob", 1);
+		AccountUtils.setMintingData(repository, "chloe", 1);
+		AccountUtils.setMintingData(repository, "dilbert", 8);
 	}
 
 }

@@ -76,7 +76,6 @@ public abstract class Transaction {
 		UPDATE_ASSET(35, true),
 		ENABLE_FORGING(37, false),
 		REWARD_SHARE(38, false),
-		ACCOUNT_LEVEL(39, false),
 		TRANSFER_PRIVS(40, false),
 		PRESENCE(41, false);
 

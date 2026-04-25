@@ -99,8 +99,7 @@ public class BlocksMintedCountTests extends Common {
 			PrivateKeyAccount aliceMintingAccount = Common.getTestAccount(repository, "alice-reward-share");
 
 			// Seed Alice at level 1 so orphan/remint checks do not drop below the current block-minting guard.
-			int seededBlocksMintedForAlice = BlockChain.getInstance().getCumulativeBlocksByLevel().get(1);
-			seedMintingData(repository, "alice", seededBlocksMintedForAlice);
+			AccountUtils.setMintingData(repository, "alice", 1);
 
 			// Confirm reward-share exists
 			RewardShareData aliceRewardShareData = repository.getAccountRepository().getRewardShare(aliceMintingAccount.getPublicKey());
@@ -173,22 +172,6 @@ public class BlocksMintedCountTests extends Common {
 		// print and assert the expected and derived numbers
 		System.out.println(String.format("height = %s,expectedLevel = %s, blocksMinted = %s", height, expectedLevel, testAccountData.getBlocksMinted()) );
 		assertEquals( expectedLevel, testAccountData.getLevel() );
-	}
-
-	/**
-	 * Adjust Minting Data
-	 *
-	 * @param repository the data repository
-	 * @param name the name of the account to adjust
-	 * @param blocksMinted the number of blocks to seed
-	 *
-	 * @throws DataException
-	 */
-	private static void seedMintingData(Repository repository, String name, int blocksMinted) throws DataException {
-		TestAccount testAccount = Common.getTestAccount(repository, name);
-		AccountData testAccountData = repository.getAccountRepository().getAccount(testAccount.getAddress());
-		testAccountData.setBlocksMinted(blocksMinted);
-		repository.getAccountRepository().setMintedBlockCount(testAccountData);
 	}
 
 	private void testRewardShare(Repository repository, PrivateKeyAccount testRewardShareAccount, int aliceDelta, int bobDelta) throws DataException {

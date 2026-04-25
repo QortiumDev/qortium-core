@@ -15,7 +15,7 @@
 - Add at least one `REWARD_SHARE` transaction otherwise no-one can mint initial blocks!
 	You will need to calculate `rewardSharePublicKey` (and private key),
 	or make a new account on mainnet and use self-share key values
-- Add `ACCOUNT_LEVEL` transactions to set initial level of accounts as needed
+- Accounts start at level zero and gain levels naturally from minted blocks
 - Add `GENESIS` transactions to add QORT funds to accounts as needed
 
 ## Testnet `settings.json`

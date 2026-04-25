@@ -4,8 +4,10 @@ import com.google.common.primitives.Longs;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.account.PublicKeyAccount;
+import org.qortal.block.BlockChain;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.Qortal25519Extras;
+import org.qortal.data.account.AccountData;
 import org.qortal.data.network.OnlineAccountData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
@@ -191,6 +193,25 @@ public class AccountUtils {
 
 	public static int getBlocksMinted(Repository repository, String accountName) throws DataException {
 		return Common.getTestAccount(repository, accountName).getBlocksMinted();
+	}
+
+	public static void setMintingData(Repository repository, String accountName, int level) throws DataException {
+		int blocksMinted = BlockChain.getInstance().getCumulativeBlocksByLevel().get(level);
+
+		setMintingData(repository, accountName, blocksMinted, level);
+	}
+
+	public static void setMintingData(Repository repository, String accountName, int blocksMinted, int level) throws DataException {
+		TestAccount testAccount = Common.getTestAccount(repository, accountName);
+		AccountData accountData = repository.getAccountRepository().getAccount(testAccount.getAddress());
+
+		accountData.setBlocksMinted(blocksMinted);
+		repository.getAccountRepository().setMintedBlockCount(accountData);
+
+		accountData.setLevel(level);
+		repository.getAccountRepository().setLevel(accountData);
+
+		repository.saveChanges();
 	}
 
 	public static void assertBlocksMinted(Repository repository, String accountName, int expectedBlocksMinted) throws DataException {

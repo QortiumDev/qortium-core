@@ -243,10 +243,6 @@ public class HSQLDBDatabaseUpdates {
 					// Genesis Transactions
 					stmt.execute("CREATE TABLE GenesisTransactions (signature Signature, recipient QortalAddress NOT NULL, "
 							+ "amount QortalAmount NOT NULL, asset_id AssetID NOT NULL, " + TRANSACTION_KEYS + ")");
-
-					// Genesis-block-only transaction to set level
-					stmt.execute("CREATE TABLE AccountLevelTransactions (signature Signature, creator QortalPublicKey NOT NULL, target QortalAddress NOT NULL, "
-							+ "level INT NOT NULL, " + TRANSACTION_KEYS + ")");
 					break;
 
 				case 5:

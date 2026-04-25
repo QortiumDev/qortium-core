@@ -74,12 +74,8 @@
 			{ "type": "JOIN_GROUP", "joinerPublicKey": "C6wuddsBV3HzRrXUtezE7P5MoRXp5m3mEDokRDGZB6ry", "groupId": 1 },
 			{ "type": "JOIN_GROUP", "joinerPublicKey": "7KNBj2MnEb6zq1vvKY1q8G2Voctcc2Z1X4avFyEH2eJC", "groupId": 1 },
 			{ "type": "JOIN_GROUP", "joinerPublicKey": "CGAedAQU91SR73iqoYtss6NAsra284SShXnDWvRXqR4G", "groupId": 1 },
-			{ "type": "REWARD_SHARE", "minterPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "recipient": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "rewardSharePublicKey": "7PpfnvLSG7y4HPh8hE7KoqAjLCkv7Ui6xw4mKAkbZtox", "sharePercent": 100 },
+			{ "type": "REWARD_SHARE", "minterPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP", "recipient": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "rewardSharePublicKey": "7PpfnvLSG7y4HPh8hE7KoqAjLCkv7Ui6xw4mKAkbZtox", "sharePercent": 100 }
 
-			{ "type": "ACCOUNT_LEVEL", "target": "Qci5m9k4rcwe4ruKrZZQKka4FzUUMut3er", "level": 8 },
-			{ "type": "ACCOUNT_LEVEL", "target": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "level": 1 },
-			{ "type": "ACCOUNT_LEVEL", "target": "QixPbJUwsaHsVEofJdozU9zgVqkK6aYhrK", "level": 1 },
-			{ "type": "ACCOUNT_LEVEL", "target": "QaUpHNhT3Ygx6avRiKobuLdusppR5biXjL", "level": 1 }
 		]
 	}
 }

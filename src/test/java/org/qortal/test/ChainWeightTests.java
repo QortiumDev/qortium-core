@@ -8,6 +8,7 @@ import org.qortal.data.block.BlockSummaryData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.transform.Transformer;
@@ -30,6 +31,13 @@ public class ChainWeightTests extends Common {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useSettings("test-settings-v2-minting.json");
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			AccountUtils.setMintingData(repository, "alice", 1);
+			AccountUtils.setMintingData(repository, "bob", 1);
+			AccountUtils.setMintingData(repository, "chloe", 8);
+			AccountUtils.setMintingData(repository, "dilbert", 5);
+		}
 	}
 
 	private static BlockSummaryData genBlockSummary(Repository repository, int height) {
@@ -211,13 +219,13 @@ public class ChainWeightTests extends Common {
 	}
 
 	@Test
-	public void testExplicitAccountLevelControlsMinterLevel() throws DataException {
+	public void testAccountLevelControlsMinterLevel() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount aliceAccount = Common.getTestAccount(repository, "alice-reward-share");
 
 			int minterLevel = Account.getRewardShareEffectiveMintingLevel(repository, aliceAccount.getPublicKey());
 
-			assertEquals("explicit account level should control effective minting level", 1, minterLevel);
+			assertEquals("account level should control effective minting level", 1, minterLevel);
 		}
 	}
 
