@@ -58,7 +58,6 @@ public abstract class Transaction {
 		MESSAGE(17, true),
 		CHAT(18, false),
 		PUBLICIZE(19, false),
-		AIRDROP(20, false),
 		AT(21, false),
 		CREATE_GROUP(22, true),
 		UPDATE_GROUP(23, true),
@@ -74,7 +73,6 @@ public abstract class Transaction {
 		GROUP_APPROVAL(33, false),
 		SET_GROUP(34, false),
 		UPDATE_ASSET(35, true),
-		ENABLE_FORGING(37, false),
 		REWARD_SHARE(38, false),
 		TRANSFER_PRIVS(40, false),
 		PRESENCE(41, false);

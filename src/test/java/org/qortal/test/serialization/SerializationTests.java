@@ -43,8 +43,6 @@ public class SerializationTests extends Common {
 				switch (txType) {
 					case GENESIS:
 					case PUBLICIZE:
-					case AIRDROP:
-					case ENABLE_FORGING:
 						continue;
 
 					default:
