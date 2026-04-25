@@ -10,10 +10,10 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PublicKeyAccount;
-import org.qortal.controller.tradebot.LitecoinACCTv1TradeBot;
+import org.qortal.controller.tradebot.TradeStates;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.Litecoin;
-import org.qortal.crosschain.LitecoinACCTv1;
+import org.qortal.crosschain.LitecoinACCTv3;
 import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.MintingAccountData;
@@ -407,8 +407,8 @@ public class ImportExportTests extends Common {
         long foreignAmount = 1234;
         long qortAmount= 5678;
 
-        TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, LitecoinACCTv1.NAME,
-                LitecoinACCTv1TradeBot.State.BOB_WAITING_FOR_AT_CONFIRM.name(), LitecoinACCTv1TradeBot.State.BOB_WAITING_FOR_AT_CONFIRM.value,
+        TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, LitecoinACCTv3.NAME,
+                TradeStates.State.BOB_WAITING_FOR_AT_CONFIRM.name(), TradeStates.State.BOB_WAITING_FOR_AT_CONFIRM.value,
                 creator.getAddress(), atAddress, timestamp, qortAmount,
                 tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
                 null, null,

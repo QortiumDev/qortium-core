@@ -3,7 +3,7 @@ package org.qortal.repository.hsqldb;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.controller.Controller;
-import org.qortal.controller.tradebot.BitcoinACCTv1TradeBot;
+import org.qortal.controller.tradebot.TradeStates;
 import org.qortal.gui.SplashFrame;
 
 import java.sql.Connection;
@@ -782,21 +782,21 @@ public class HSQLDBDatabaseUpdates {
 				case 32:
 					// Multiple blockchains, ACCTs and trade-bots
 					stmt.execute("ALTER TABLE TradeBotStates ADD COLUMN acct_name VARCHAR(40) BEFORE trade_state");
-					stmt.execute("UPDATE TradeBotStates SET acct_name = 'BitcoinACCTv1' WHERE acct_name IS NULL");
+					stmt.execute("UPDATE TradeBotStates SET acct_name = 'BitcoinACCTv3' WHERE acct_name IS NULL");
 					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN acct_name SET NOT NULL");
 
 					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN trade_state RENAME TO trade_state_value");
 
 					stmt.execute("ALTER TABLE TradeBotStates ADD COLUMN trade_state VARCHAR(40) BEFORE trade_state_value");
-					// Any existing values will be BitcoinACCTv1
+					// Qortium's fresh baseline has no inherited trade-bot rows here.
 					StringBuilder updateTradeBotStatesSql = new StringBuilder(1024);
 					updateTradeBotStatesSql.append("UPDATE TradeBotStates SET (trade_state) = (")
 							.append("SELECT state_name FROM (VALUES ")
 							.append(
-									Arrays.stream(BitcoinACCTv1TradeBot.State.values())
+									Arrays.stream(TradeStates.State.values())
 									.map(state -> String.format("(%d, '%s')", state.value, state.name()))
 									.collect(Collectors.joining(", ")))
-							.append(") AS BitcoinACCTv1States (state_value, state_name) ")
+							.append(") AS TradeBotStates (state_value, state_name) ")
 							.append("WHERE state_value = trade_state_value)");
 					stmt.execute(updateTradeBotStatesSql.toString());
 					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN trade_state SET NOT NULL");

@@ -2,7 +2,7 @@ package org.qortal.test.crosschain.litecoinv3;
 
 import com.google.common.hash.HashCode;
 import org.qortal.crosschain.ACCT;
-import org.qortal.crosschain.LitecoinACCTv1;
+import org.qortal.crosschain.LitecoinACCTv3;
 import org.qortal.test.crosschain.ACCTTests;
 
 public class LitecoinACCTv3Tests extends ACCTTests {
@@ -18,32 +18,32 @@ public class LitecoinACCTv3Tests extends ACCTTests {
 
 	@Override
 	protected byte[] buildQortalAT(String address, byte[] publicKey, long redeemAmount, long foreignAmount, int tradeTimeout) {
-		return LitecoinACCTv1.buildQortalAT(address, publicKey, redeemAmount, foreignAmount, tradeTimeout);
+		return LitecoinACCTv3.buildQortalAT(address, publicKey, redeemAmount, foreignAmount, tradeTimeout);
 	}
 
 	@Override
 	protected ACCT getInstance() {
-		return LitecoinACCTv1.getInstance();
+		return LitecoinACCTv3.getInstance();
 	}
 
 	@Override
 	protected int calcRefundTimeout(long partnersOfferMessageTransactionTimestamp, int lockTimeA) {
-		return LitecoinACCTv1.calcRefundTimeout(partnersOfferMessageTransactionTimestamp, lockTimeA);
+		return LitecoinACCTv3.calcRefundTimeout(partnersOfferMessageTransactionTimestamp, lockTimeA);
 	}
 
 	@Override
 	protected byte[] buildTradeMessage(String address, byte[] publicKey, byte[] hashOfSecretA, int lockTimeA, int refundTimeout) {
-		return LitecoinACCTv1.buildTradeMessage(address, publicKey, hashOfSecretA, lockTimeA, refundTimeout);
+		return LitecoinACCTv3.buildTradeMessage(address, publicKey, hashOfSecretA, lockTimeA, refundTimeout);
 	}
 
 	@Override
 	protected byte[] buildRedeemMessage(byte[] secretA, String address) {
-		return LitecoinACCTv1.buildRedeemMessage(secretA, address);
+		return LitecoinACCTv3.buildRedeemMessage(secretA, address);
 	}
 
 	@Override
 	protected byte[] getCodeBytesHash() {
-		return LitecoinACCTv1.CODE_BYTES_HASH;
+		return LitecoinACCTv3.CODE_BYTES_HASH;
 	}
 
 	@Override

@@ -7,7 +7,7 @@ import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.asset.Asset;
-import org.qortal.crosschain.BitcoinACCTv1;
+import org.qortal.crosschain.BitcoinACCTv3;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
@@ -396,7 +396,7 @@ public class RepositoryTests extends Common {
 	@Test
 	public void testAtLateral() {
 		try (final HSQLDBRepository hsqldb = (HSQLDBRepository) RepositoryManager.getRepository()) {
-			byte[] codeHash = BitcoinACCTv1.CODE_BYTES_HASH;
+			byte[] codeHash = BitcoinACCTv3.CODE_BYTES_HASH;
 			Boolean isFinished = null;
 			Integer dataByteOffset = null;
 			Long expectedValue = null;

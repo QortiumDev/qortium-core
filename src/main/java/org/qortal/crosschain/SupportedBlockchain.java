@@ -13,7 +13,6 @@ import java.util.stream.Collectors;
 public enum SupportedBlockchain {
 
 	BITCOIN(Arrays.asList(
-				Triple.valueOf(BitcoinACCTv1.NAME, BitcoinACCTv1.CODE_BYTES_HASH, BitcoinACCTv1::getInstance),
 				Triple.valueOf(BitcoinACCTv3.NAME, BitcoinACCTv3.CODE_BYTES_HASH, BitcoinACCTv3::getInstance)
 			)) {
 		@Override
@@ -28,7 +27,6 @@ public enum SupportedBlockchain {
 	},
 
 	LITECOIN(Arrays.asList(
-			Triple.valueOf(LitecoinACCTv1.NAME, LitecoinACCTv1.CODE_BYTES_HASH, LitecoinACCTv1::getInstance),
 			Triple.valueOf(LitecoinACCTv3.NAME, LitecoinACCTv3.CODE_BYTES_HASH, LitecoinACCTv3::getInstance)
 		)) {
 		@Override
@@ -43,7 +41,6 @@ public enum SupportedBlockchain {
 	},
 
 	DOGECOIN(Arrays.asList(
-			Triple.valueOf(DogecoinACCTv1.NAME, DogecoinACCTv1.CODE_BYTES_HASH, DogecoinACCTv1::getInstance),
 			Triple.valueOf(DogecoinACCTv3.NAME, DogecoinACCTv3.CODE_BYTES_HASH, DogecoinACCTv3::getInstance)
 		)) {
 		@Override
