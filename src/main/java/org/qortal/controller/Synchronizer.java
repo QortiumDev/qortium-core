@@ -1862,9 +1862,9 @@ public class Synchronizer extends Thread {
 
 			BlockSummaryData blockSummary = blockSummaries.get(i);
 
-			// Qortal: minter is always a reward-share, so find actual minter and get their effective minting level
-			int minterLevel = Account.getRewardShareEffectiveMintingLevel(repository, blockSummary.getMinterPublicKey());
-			if (minterLevel == 0) {
+			// Minter is always a reward-share, so find actual minter and get their effective minting level.
+			Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfPresent(repository, blockSummary.getMinterPublicKey());
+			if (minterLevel == null) {
 				// It looks like this block's minter's reward-share has been cancelled.
 				// So search for REWARD_SHARE transactions since common block to find missing minter info
 				List<byte[]> transactionSignatures = repository.getTransactionRepository().getSignaturesMatchingCriteria(Transaction.TransactionType.REWARD_SHARE, null, firstBlockHeight, null);
@@ -1879,10 +1879,10 @@ public class Synchronizer extends Thread {
 					}
 				}
 
-				if (minterLevel == 0) {
-					// We don't want to throw, or use zero, as this will kill Controller thread and make client unstable.
+				if (minterLevel == null) {
+					// We don't want to throw, or use an unknown level, as this will kill Controller thread and make client unstable.
 					// So we log this but use 1 instead
-					LOGGER.debug(() -> String.format("Unexpected zero effective minter level for reward-share %s - using 1 instead!", Base58.encode(blockSummary.getMinterPublicKey())));
+					LOGGER.debug(() -> String.format("Unable to resolve effective minter level for reward-share %s - using 1 instead!", Base58.encode(blockSummary.getMinterPublicKey())));
 					minterLevel = 1;
 				}
 			}

@@ -502,7 +502,7 @@ public class BlockChain {
 		if (this.maxBlockSize <= 0)
 			Settings.throwValidationError("Invalid \"maxBlockSize\" in blockchain config");
 
-		if (this.minAccountLevelToRewardShare <= 0)
+		if (this.minAccountLevelToRewardShare < 0)
 			Settings.throwValidationError("Invalid/missing \"minAccountLevelToRewardShare\" in blockchain config");
 
 		if (this.ciyamAtSettings == null)

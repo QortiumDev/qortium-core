@@ -410,33 +410,69 @@ public class Account {
 	 * @throws DataException
 	 */
 	public static int getRewardShareEffectiveMintingLevel(Repository repository, byte[] rewardSharePublicKey) throws DataException {
-		// Find actual minter and get their effective minting level
+		Integer mintingLevel = getRewardShareEffectiveMintingLevelIfPresent(repository, rewardSharePublicKey);
+		return mintingLevel == null ? 0 : mintingLevel;
+	}
+
+	/**
+	 * Returns a reward-share minter's actual level, or null if the reward-share does not exist.
+	 *
+	 * @param repository
+	 * @param rewardSharePublicKey
+	 * @return actual account level, including zero, or null
+	 * @throws DataException
+	 */
+	public static Integer getRewardShareEffectiveMintingLevelIfPresent(Repository repository, byte[] rewardSharePublicKey) throws DataException {
 		RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(rewardSharePublicKey);
 		if (rewardShareData == null)
-			return 0;
+			return null;
 
 		Account rewardShareMinter = new Account(repository, rewardShareData.getMinter());
 		return rewardShareMinter.getEffectiveMintingLevel();
 	}
 
 	/**
-	 * Returns 'effective' minting level, with a fix for the zero level.
+	 * Returns a reward-share minter's actual level, or null if the reward-share is not currently allowed to mint.
 	 *
 	 * @param repository
 	 * @param rewardSharePublicKey
-	 * @return 0+
+	 * @return actual account level, including zero, or null
 	 * @throws DataException
 	 */
-	public static int getRewardShareEffectiveMintingLevelIncludingLevelZero(Repository repository, byte[] rewardSharePublicKey) throws DataException {
-		// Find actual minter and get their effective minting level
+	public static Integer getRewardShareEffectiveMintingLevelIfMinting(Repository repository, byte[] rewardSharePublicKey) throws DataException {
 		RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(rewardSharePublicKey);
 		if (rewardShareData == null)
-			return 0;
-
-		else if (!rewardShareData.getMinter().equals(rewardShareData.getRecipient())) // Sponsorship reward share
-			return 0;
+			return null;
 
 		Account rewardShareMinter = new Account(repository, rewardShareData.getMinter());
+		if (!rewardShareMinter.canMint(false))
+			return null;
+
 		return rewardShareMinter.getEffectiveMintingLevel();
 	}
+
+	/**
+	 * Returns whether the supplied reward-share public key belongs to an account currently allowed to mint.
+	 *
+	 * @param repository
+	 * @param rewardSharePublicKey
+	 * @return true if the reward-share exists and its minter can mint
+	 * @throws DataException
+	 */
+	public static boolean canRewardShareMint(Repository repository, byte[] rewardSharePublicKey) throws DataException {
+		return getRewardShareEffectiveMintingLevelIfMinting(repository, rewardSharePublicKey) != null;
+	}
+
+	/**
+	 * Returns the account level to use in minting-weight calculations.
+	 * <p>
+	 * Level-zero minters are eligible, but the weight divisor must be at least one.
+	 *
+	 * @param accountLevel
+	 * @return account level clamped to the minimum minting weight
+	 */
+	public static int getMintingWeightLevel(int accountLevel) {
+		return Math.max(1, accountLevel);
+	}
+
 }

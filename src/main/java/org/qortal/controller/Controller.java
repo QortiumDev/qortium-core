@@ -1024,7 +1024,7 @@ public class Controller extends Thread {
 			return true;
 
 		try (Repository repository = RepositoryManager.getRepository()) {
-			return Account.getRewardShareEffectiveMintingLevel(repository, peerChainTipData.getMinterPublicKey()) == 0;
+			return !Account.canRewardShareMint(repository, peerChainTipData.getMinterPublicKey());
 		} catch (DataException e) {
 			return true;
 		}

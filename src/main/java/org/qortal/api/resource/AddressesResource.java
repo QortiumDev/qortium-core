@@ -204,7 +204,9 @@ public class AddressesResource {
 
 			for (OnlineAccountData onlineAccountData : onlineAccounts) {
 				try {
-					final int minterLevel = Account.getRewardShareEffectiveMintingLevelIncludingLevelZero(repository, onlineAccountData.getPublicKey());
+					final Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfMinting(repository, onlineAccountData.getPublicKey());
+					if (minterLevel == null)
+						continue;
 
 					OnlineAccountLevel onlineAccountLevel = onlineAccountLevels.stream()
 							.filter(a -> a.getLevel() == minterLevel)

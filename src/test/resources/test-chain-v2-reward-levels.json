@@ -11,7 +11,7 @@
 		{ "timestamp": 0, "fee": "1.25" }
 	],
 	"requireGroupForApproval": false,
-	"minAccountLevelToRewardShare": 5,
+	"minAccountLevelToRewardShare": 0,
 	"maxRewardSharesByTimestamp": [
 		{ "timestamp": 0, "maxShares": 6 }
 	],

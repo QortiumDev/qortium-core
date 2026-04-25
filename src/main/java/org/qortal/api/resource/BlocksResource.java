@@ -547,8 +547,8 @@ public class BlocksResource {
 			}
 
 			String minterAddress = Account.getRewardShareMintingAddress(repository, blockData.getMinterPublicKey());
-			int minterLevel = Account.getRewardShareEffectiveMintingLevel(repository, blockData.getMinterPublicKey());
-			if (minterLevel == 0)
+			Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfPresent(repository, blockData.getMinterPublicKey());
+			if (minterLevel == null)
 				// This may be unavailable when requesting a trimmed block
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
 

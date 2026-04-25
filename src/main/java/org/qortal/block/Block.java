@@ -376,15 +376,15 @@ public class Block {
 		int version = parentBlock.getNextBlockVersion();
 		byte[] reference = parentBlockData.getSignature();
 
-		// Qortal: minter is always a reward-share, so find actual minter and get their effective minting level
-		int minterLevel = Account.getRewardShareEffectiveMintingLevel(repository, minter.getPublicKey());
-		if (minterLevel == 0) {
-			LOGGER.error("Minter effective level returned zero?");
+		// Minter is always a reward-share, so find actual minter and get their minting weight.
+		Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfMinting(repository, minter.getPublicKey());
+		if (minterLevel == null) {
+			LOGGER.error("Minter reward-share is not currently allowed to mint");
 			return null;
 		}
 
 		int height = parentBlockData.getHeight() + 1;
-		long timestamp = calcTimestamp(parentBlockData, minter.getPublicKey(), minterLevel);
+		long timestamp = calcTimestamp(parentBlockData, minter.getPublicKey(), Account.getMintingWeightLevel(minterLevel));
 
 		Long onlineAccountsTimestamp = OnlineAccountsManager.getCurrentOnlineAccountTimestamp();
 		byte[] encodedOnlineAccounts = new byte[0];
@@ -563,14 +563,14 @@ public class Block {
 		byte[] minterSignature = minter.sign(BlockTransformer.getBytesForMinterSignature(parentBlockData,
 				minter.getPublicKey(), this.blockData.getEncodedOnlineAccounts()));
 
-		// Qortal: minter is always a reward-share, so find actual minter and get their effective minting level
-		int minterLevel = Account.getRewardShareEffectiveMintingLevel(repository, minter.getPublicKey());
-		if (minterLevel == 0){
-			LOGGER.error("Minter effective level returned zero?");
+		// Minter is always a reward-share, so find actual minter and get their minting weight.
+		Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfMinting(repository, minter.getPublicKey());
+		if (minterLevel == null) {
+			LOGGER.error("Minter reward-share is not currently allowed to mint");
 			return null;
 		}
 
-		long timestamp = calcTimestamp(parentBlockData, minter.getPublicKey(), minterLevel);
+		long timestamp = calcTimestamp(parentBlockData, minter.getPublicKey(), Account.getMintingWeightLevel(minterLevel));
 
 		newBlock.transactions = this.transactions;
 		int transactionCount = this.blockData.getTransactionCount();
@@ -934,7 +934,8 @@ public class Block {
 		byte[] idealKey = calcIdealMinterPublicKey(parentHeight, parentBlockSignature);
 		byte[] perturbedKey = calcHeightPerturbedPublicKey(parentHeight + 1, publicKey);
 
-		return MAX_DISTANCE.subtract(new BigInteger(idealKey).subtract(new BigInteger(perturbedKey)).abs()).divide(BigInteger.valueOf(accountLevel));
+		int mintingWeightLevel = Account.getMintingWeightLevel(accountLevel);
+		return MAX_DISTANCE.subtract(new BigInteger(idealKey).subtract(new BigInteger(perturbedKey)).abs()).divide(BigInteger.valueOf(mintingWeightLevel));
 	}
 
 	public static BigInteger calcBlockWeight(int parentHeight, byte[] parentBlockSignature, BlockSummaryData blockSummaryData) {
@@ -1085,12 +1086,12 @@ public class Block {
 		if (this.blockData.getTimestamp() < Block.calcMinimumTimestamp(parentBlockData))
 			return ValidationResult.TIMESTAMP_TOO_SOON;
 
-		// Qortal: minter is always a reward-share, so find actual minter and get their effective minting level
-		int minterLevel = Account.getRewardShareEffectiveMintingLevel(repository, this.blockData.getMinterPublicKey());
-		if (minterLevel == 0)
+		// Minter is always a reward-share, so find actual minter and get their minting weight.
+		Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfMinting(repository, this.blockData.getMinterPublicKey());
+		if (minterLevel == null)
 			return ValidationResult.MINTER_NOT_ACCEPTED;
 
-		long expectedTimestamp = calcTimestamp(parentBlockData, this.blockData.getMinterPublicKey(), minterLevel);
+		long expectedTimestamp = calcTimestamp(parentBlockData, this.blockData.getMinterPublicKey(), Account.getMintingWeightLevel(minterLevel));
 		if (this.blockData.getTimestamp() != expectedTimestamp) {
 			LOGGER.debug(String.format("timestamp mismatch! block had %s but we expected %s", this.blockData.getTimestamp(), expectedTimestamp));
 			return ValidationResult.TIMESTAMP_INCORRECT;
@@ -2453,18 +2454,18 @@ public class Block {
 			if (this.repository == null || this.getMinter() == null || this.getBlockData() == null)
 				return;
 
-			int minterLevel = Account.getRewardShareEffectiveMintingLevel(this.repository, this.getMinter().getPublicKey());
+			Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfMinting(this.repository, this.getMinter().getPublicKey());
 			String minterAddress = Account.getRewardShareMintingAddress(this.repository, this.getMinter().getPublicKey());
 
 			LOGGER.debug(String.format("======= BLOCK %d (%.8s) =======", this.getBlockData().getHeight(), Base58.encode(this.getSignature())));
 			LOGGER.debug(String.format("Timestamp: %d", this.getBlockData().getTimestamp()));
 			LOGGER.debug(String.format("Minter address: %s", minterAddress));
-			LOGGER.debug(String.format("Minter level: %d", minterLevel));
+			LOGGER.debug(String.format("Minter level: %s", minterLevel == null ? "unknown" : minterLevel.toString()));
 			LOGGER.debug(String.format("Online accounts: %d", this.getBlockData().getOnlineAccountsCount()));
 			LOGGER.debug(String.format("AT count: %d", this.getBlockData().getATCount()));
 
 			BlockSummaryData blockSummaryData = new BlockSummaryData(this.getBlockData());
-			if (this.getParent() == null || this.getParent().getSignature() == null || blockSummaryData == null || minterLevel == 0)
+			if (this.getParent() == null || this.getParent().getSignature() == null || blockSummaryData == null || minterLevel == null)
 				return;
 
 			blockSummaryData.setMinterLevel(minterLevel);

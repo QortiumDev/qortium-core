@@ -11,9 +11,9 @@
 	],
 	"requireGroupForApproval": false,
 	"defaultGroupId": 0,
-	"minAccountLevelToMint": 1,
-	"minAccountLevelForBlockSubmissions": 5,
-	"minAccountLevelToRewardShare": 5,
+	"minAccountLevelToMint": 0,
+	"minAccountLevelForBlockSubmissions": 0,
+	"minAccountLevelToRewardShare": 0,
 	"maxRewardSharesByTimestamp": [
 		{ "timestamp": 0, "maxShares": 6 }
 	],
