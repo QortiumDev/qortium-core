@@ -6,6 +6,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.data.group.GroupAdminData;
+import org.qortal.data.group.GroupApprovalData;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.*;
 import org.qortal.group.Group;
@@ -47,8 +48,7 @@ import static org.junit.Assert.*;
  * - GroupKickTransaction
  * - GroupBanTransaction
  * - CancelGroupBanTransaction
- *
- * This same approach could ultimately be applied to other group transactions too.
+ * - UpdateGroupTransaction
  */
 public class DevGroupAdminTests extends Common {
 
@@ -72,6 +72,57 @@ public class DevGroupAdminTests extends Common {
 	@After
 	public void afterTest() throws DataException {
 		Common.orphanCheck();
+	}
+
+	@Test
+	public void testUpdateGroupRequiresApproval() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, ALICE);
+
+			GroupData originalGroupData = repository.getGroupRepository().fromGroupId(DEV_GROUP_ID);
+			String updatedDescription = "Updated Qortium Development";
+
+			ValidationResult result = updateGroup(repository, alice, Group.NO_GROUP, DEV_GROUP_ID, updatedDescription);
+			assertEquals(ValidationResult.GROUP_APPROVAL_REQUIRED, result);
+			assertEquals(originalGroupData.getDescription(), repository.getGroupRepository().fromGroupId(DEV_GROUP_ID).getDescription());
+
+			TransactionData updateGroupTransactionData = createUpdateGroupForGroupApproval(repository, alice, DEV_GROUP_ID, updatedDescription);
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, updateGroupTransactionData.getSignature()));
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, updateGroupTransactionData, List.of(alice)));
+
+			assertEquals(updatedDescription, repository.getGroupRepository().fromGroupId(DEV_GROUP_ID).getDescription());
+		}
+	}
+
+	@Test
+	public void testStaleApprovalAuthorityIsIgnored() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, ALICE);
+			PrivateKeyAccount bob = Common.getTestAccount(repository, BOB);
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, DEV_GROUP_ID, bob.getAddress(), 3600, List.of(alice)));
+			assertEquals(ValidationResult.OK, joinGroup(repository, bob, DEV_GROUP_ID));
+
+			TransactionData addBobAsAdmin = addGroupAdmin(repository, alice, DEV_GROUP_ID, bob.getAddress());
+			assertEquals(Transaction.ApprovalStatus.APPROVED, signForGroupApproval(repository, addBobAsAdmin, List.of(alice)));
+			assertTrue(isAdmin(repository, bob.getAddress(), DEV_GROUP_ID));
+
+			TransactionData updateGroupTransactionData = createUpdateGroupForGroupApproval(repository, alice, DEV_GROUP_ID, "Ignored stale approval");
+			GroupUtils.approveTransaction(repository, ALICE, updateGroupTransactionData.getSignature(), true);
+
+			GroupApprovalData approvalData = repository.getTransactionRepository().getApprovalData(updateGroupTransactionData.getSignature());
+			assertEquals(1, approvalData.approvingAdmins.size());
+
+			TransactionData removeAliceAsAdmin = removeGroupAdmin(repository, bob, DEV_GROUP_ID, alice.getAddress());
+			assertEquals(Transaction.ApprovalStatus.APPROVED, signForGroupApproval(repository, removeAliceAsAdmin, List.of(bob)));
+			assertFalse(isAdmin(repository, alice.getAddress(), DEV_GROUP_ID));
+
+			approvalData = repository.getTransactionRepository().getApprovalData(updateGroupTransactionData.getSignature());
+			assertEquals(0, approvalData.approvingAdmins.size());
+		}
 	}
 
 	@Test
@@ -821,6 +872,30 @@ public class DevGroupAdminTests extends Common {
 		RemoveGroupAdminTransactionData transactionData = new RemoveGroupAdminTransactionData(TestTransaction.generateBase(owner, groupId), groupId, admin);
 		TransactionUtils.signAndMint(repository, transactionData, owner);
 		return transactionData;
+	}
+
+	private ValidationResult updateGroup(Repository repository, PrivateKeyAccount updater, int txGroupId, int groupId, String newDescription) throws DataException {
+		UpdateGroupTransactionData transactionData = createUpdateGroupTransactionData(repository, updater, txGroupId, groupId, newDescription);
+		ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, updater);
+
+		if (result == ValidationResult.OK)
+			BlockUtils.mintBlock(repository);
+
+		return result;
+	}
+
+	private TransactionData createUpdateGroupForGroupApproval(Repository repository, PrivateKeyAccount updater, int groupId, String newDescription) throws DataException {
+		UpdateGroupTransactionData transactionData = createUpdateGroupTransactionData(repository, updater, groupId, groupId, newDescription);
+		TransactionUtils.signAndMint(repository, transactionData, updater);
+		return transactionData;
+	}
+
+	private UpdateGroupTransactionData createUpdateGroupTransactionData(Repository repository, PrivateKeyAccount updater, int txGroupId, int groupId, String newDescription) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+
+		return new UpdateGroupTransactionData(TestTransaction.generateBase(updater, txGroupId), groupId, groupData.getOwner(),
+				newDescription, groupData.isOpen(), groupData.getApprovalThreshold(), groupData.getMinimumBlockDelay(),
+				groupData.getMaximumBlockDelay());
 	}
 
 	private boolean isMember(Repository repository, String address, int groupId) throws DataException {

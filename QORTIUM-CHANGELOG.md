@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-30 - core: tighten null-owned group approval
+
+Allowed null-owned groups to update their own group settings through the same approval path now used for admin, invite, kick, and ban management, instead of requiring the impossible null-account owner signature. Approval decision counting now ignores votes from accounts that are no longer current approval authorities, so old admin votes cannot keep counting after group authority changes.
+
 ### 2026-04-30 - test: align default test chain with Qortium genesis
 
 Updated the default test-chain genesis to use the same neutral public development and minting groups as the main Qortium chain, removing inherited Alice-owned group setup, group updates, seeded minting joins, and the seeded reward-share from that fixture. Tests now use explicit bootstrap helpers when they need deterministic minting or development-admin state, keeping the fixture closer to a clean chain while preserving practical test setup.

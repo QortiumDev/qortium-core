@@ -77,14 +77,24 @@ public class UpdateGroupTransaction extends Transaction {
 		if (groupData == null)
 			return ValidationResult.GROUP_DOES_NOT_EXIST;
 
-		// As this transaction type could require approval, check txGroupId matches groupID at creation
-		if (groupData.getCreationGroupId() != this.updateGroupTransactionData.getTxGroupId())
+		boolean groupOwnedByNullAccount = Group.isNullOwner(groupData.getOwner());
+
+		// Require approval if transaction relates to a group owned by the null account
+		if (groupOwnedByNullAccount && !this.needsGroupApproval())
+			return ValidationResult.GROUP_APPROVAL_REQUIRED;
+
+		// Null-owned group management is approved by the group being updated.
+		if (groupOwnedByNullAccount && this.updateGroupTransactionData.getTxGroupId() != this.updateGroupTransactionData.getGroupId())
+			return ValidationResult.TX_GROUP_ID_MISMATCH;
+
+		// Non-null-owned groups retain the inherited approval group chosen at creation.
+		if (!groupOwnedByNullAccount && groupData.getCreationGroupId() != this.updateGroupTransactionData.getTxGroupId())
 			return ValidationResult.TX_GROUP_ID_MISMATCH;
 
 		Account owner = getOwner();
 
-		// Check creator is group's current owner
-		if (!owner.getAddress().equals(groupData.getOwner()))
+		// Check creator is group's current owner (except for groups owned by the null account)
+		if (!groupOwnedByNullAccount && !owner.getAddress().equals(groupData.getOwner()))
 			return ValidationResult.INVALID_GROUP_OWNER;
 
 		// Check creator has enough funds
@@ -98,9 +108,10 @@ public class UpdateGroupTransaction extends Transaction {
 	public ValidationResult isProcessable() throws DataException {
 		GroupData groupData = this.repository.getGroupRepository().fromGroupId(this.updateGroupTransactionData.getGroupId());
 		Account owner = getOwner();
+		boolean groupOwnedByNullAccount = Group.isNullOwner(groupData.getOwner());
 
-		// Check transaction's public key matches group's current owner
-		if (!owner.getAddress().equals(groupData.getOwner()))
+		// Check transaction's public key matches group's current owner (except for groups owned by the null account)
+		if (!groupOwnedByNullAccount && !owner.getAddress().equals(groupData.getOwner()))
 			return ValidationResult.INVALID_GROUP_OWNER;
 
 		Account newOwner = getNewOwner();

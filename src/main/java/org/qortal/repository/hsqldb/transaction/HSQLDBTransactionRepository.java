@@ -4,6 +4,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.arbitrary.misc.Service;
+import org.qortal.crypto.Crypto;
 import org.qortal.data.PaymentData;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.group.GroupApprovalData;
@@ -12,6 +13,7 @@ import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.GroupApprovalTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.TransferAssetTransactionData;
+import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.TransactionRepository;
 import org.qortal.repository.hsqldb.HSQLDBRepository;
@@ -1352,21 +1354,19 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 	public GroupApprovalData getApprovalData(byte[] pendingSignature) throws DataException {
 		// Fetch latest approval data for pending transaction's signature
 		// NOT simply number of GROUP_APPROVAL transactions as some may be rejecting transaction, or changed opinions
-		// Also make sure that GROUP_APPROVAL transaction's admin is still an admin of group
+		// Also make sure that GROUP_APPROVAL transaction's signer still has approval authority for the group
 
 		// Sub-query SQL to find latest GroupApprovalTransaction relating to passed pending signature
 		String latestApprovalSql = "SELECT pending_signature, admin, approval, created_when, signature FROM GroupApprovalTransactions "
 				+ "NATURAL JOIN Transactions WHERE pending_signature = ? AND block_height IS NOT NULL";
 
 		StringBuilder sql = new StringBuilder(1024);
-		sql.append("SELECT GAT.admin, GAT.approval FROM (");
+		sql.append("SELECT GAT.admin, GAT.approval, PendingTransactions.tx_group_id FROM (");
 		sql.append(latestApprovalSql);
 		sql.append(") AS GAT LEFT OUTER JOIN (");
 		sql.append(latestApprovalSql);
 		sql.append(") AS NewerGAT ON NewerGAT.admin = GAT.admin AND (NewerGAT.created_when > GAT.created_when OR (NewerGAT.created_when = GAT.created_when AND NewerGat.signature > GAT.signature)) "
 				+ "JOIN Transactions AS PendingTransactions ON PendingTransactions.signature = GAT.pending_signature "
-				+ "LEFT OUTER JOIN Accounts ON Accounts.public_key = GAT.admin "
-				+ "LEFT OUTER JOIN GroupAdmins ON GroupAdmins.admin = Accounts.account AND GroupAdmins.group_id = PendingTransactions.tx_group_id "
 				+ "WHERE NewerGAT.admin IS NULL");
 
 		GroupApprovalData groupApprovalData = new GroupApprovalData();
@@ -1378,6 +1378,11 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 			do {
 				byte[] adminPublicKey = resultSet.getBytes(1);
 				boolean approval = resultSet.getBoolean(2);
+				int txGroupId = resultSet.getInt(3);
+
+				String adminAddress = Crypto.toAddress(adminPublicKey);
+				if (!Group.canApprove(this.repository, txGroupId, adminAddress))
+					continue;
 
 				if (approval)
 					groupApprovalData.approvingAdmins.add(adminPublicKey);
