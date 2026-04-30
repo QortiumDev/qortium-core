@@ -24,6 +24,9 @@
 	"mintingGroupIds": [
 		{ "height": 0, "ids": [ 1 ]}
 	],
+	"devGroupIds": [
+		{ "height": 0, "ids": [ 1 ]}
+	],
 	"rewardsByHeight": [
 		{ "height": 1, "reward": 100 },
 		{ "height": 11, "reward": 10 },

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-30 - test: declare dev groups in reward fixtures
+
+Updated the specialized reward and minting test-chain fixtures to declare which group supplies development-admin reward recipients. This preserves their existing reward expectations now that block rewards use configured development groups instead of an implicit group 1 rule.
+
 ### 2026-04-30 - core: honor configured dev groups for block rewards
 
 Changed block reward distribution to read development-admin reward recipients from the configured development group list instead of directly assuming group 1, and to skip the development-admin reward bucket when no real non-null admins exist. This lets a neutral chain start without seeded development admins while avoiding empty-recipient reward distribution failures.
