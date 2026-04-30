@@ -5,6 +5,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.ApplyUpdate;
 import org.qortal.api.ApiRequest;
+import org.qortal.block.BlockChain;
 import org.qortal.data.transaction.ArbitraryTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.globalization.Translator;
@@ -16,6 +17,7 @@ import org.qortal.settings.Settings;
 import org.qortal.transaction.ArbitraryTransaction;
 import org.qortal.transaction.Transaction.TransactionType;
 import org.qortal.transform.Transformer;
+import org.qortal.utils.Groups;
 
 import java.awt.TrayIcon.MessageType;
 import java.io.IOException;
@@ -47,7 +49,6 @@ public class AutoUpdate extends Thread {
 	private static final Logger LOGGER = LogManager.getLogger(AutoUpdate.class);
 	private static final long CHECK_INTERVAL = 20 * 60 * 1000L; // ms
 
-	private static final int DEV_GROUP_ID = 1;
 	private static final int UPDATE_SERVICE = 1;
 
 	private static final int GIT_COMMIT_HASH_LENGTH = 20; // SHA-1
@@ -98,9 +99,16 @@ public class AutoUpdate extends Thread {
 					// Whatever
 				}
 
-			// Look for "update" tx which is arbitrary tx in dev-group with service 1 and timestamp later than buildTimestamp
+			// Look for "update" tx which is arbitrary tx in a configured dev group with service 1 and timestamp later than buildTimestamp
 			try (final Repository repository = RepositoryManager.getRepository()) {
-				byte[] signature = repository.getTransactionRepository().getLatestAutoUpdateTransaction(TransactionType.ARBITRARY, DEV_GROUP_ID, UPDATE_SERVICE);
+				int blockchainHeight = repository.getBlockRepository().getBlockchainHeight();
+				List<Integer> devGroupIds = Groups.getGroupIdsAtHeight(BlockChain.getInstance().getDevGroupIds(), blockchainHeight);
+				if (devGroupIds.isEmpty()) {
+					LOGGER.warn(String.format("Auto-update is enabled but no devGroupIds are configured at height %d. Skipping update lookup.", blockchainHeight));
+					continue;
+				}
+
+				byte[] signature = repository.getTransactionRepository().getLatestAutoUpdateTransaction(TransactionType.ARBITRARY, devGroupIds, UPDATE_SERVICE);
 				if (signature == null)
 					continue;
 

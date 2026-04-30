@@ -798,8 +798,12 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 	}
 
 	@Override
-	public byte[] getLatestAutoUpdateTransaction(TransactionType txType, int txGroupId, Integer service) throws DataException {
+	public byte[] getLatestAutoUpdateTransaction(TransactionType txType, List<Integer> txGroupIds, Integer service) throws DataException {
+		if (txGroupIds == null || txGroupIds.isEmpty())
+			return null;
+
 		StringBuilder sql = new StringBuilder(1024);
+		List<Object> bindParams = new ArrayList<>();
 		sql.append("SELECT Transactions.signature FROM Transactions");
 
 		if (service != null) {
@@ -811,15 +815,15 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 		// Enum int value safe to use literally
 		sql.append(txType.value);
 
-		sql.append(" AND tx_group_id = ");
-		// int value safe to use literally
-		sql.append(txGroupId);
+		sql.append(" AND tx_group_id IN (");
+		sql.append(String.join(", ", Collections.nCopies(txGroupIds.size(), "?")));
+		sql.append(")");
+		bindParams.addAll(txGroupIds);
 
 		if (service != null) {
 			// This is for ARBITRARY transactions
-			sql.append(" AND service = ");
-			// int value safe to use literally
-			sql.append(service);
+			sql.append(" AND service = ?");
+			bindParams.add(service);
 		}
 
 		// "approvalHeight > blockHeight" filters out 'auto-approved' transactions, i.e. those by group admins/owner
@@ -832,7 +836,7 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 
 		sql.append(" ORDER BY created_when DESC LIMIT 1");
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString())) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {
 			if (resultSet == null)
 				return null;
 

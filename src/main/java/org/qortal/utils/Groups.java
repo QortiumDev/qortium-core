@@ -99,6 +99,21 @@ public class Groups {
      * @return the group Ids for the minting groups at the height given
      */
     public static List<Integer> getGroupIdsToMint(BlockChain blockchain, int blockchainHeight) {
+        return getGroupIdsAtHeight(blockchain.getMintingGroupIds(), blockchainHeight);
+    }
+
+    /**
+     * Get configured group IDs active at a given chain height.
+     *
+     * @param idsByHeight the configured group IDs keyed by activation height
+     * @param blockchainHeight the block height to query
+     *
+     * @return the group IDs active at the height given
+     */
+    public static List<Integer> getGroupIdsAtHeight(List<BlockChain.IdsForHeight> idsByHeight, int blockchainHeight) {
+        if (idsByHeight == null) {
+            return new ArrayList<>(0);
+        }
 
         // sort heights lowest to highest
         Comparator<BlockChain.IdsForHeight> compareByHeight = Comparator.comparingInt(entry -> entry.height);
@@ -107,7 +122,7 @@ public class Groups {
         Comparator<BlockChain.IdsForHeight> compareByHeightReversed = compareByHeight.reversed();
 
         // get highest height that is less than the blockchain height
-        Optional<BlockChain.IdsForHeight> ids = blockchain.getMintingGroupIds().stream()
+        Optional<BlockChain.IdsForHeight> ids = idsByHeight.stream()
                 .filter(entry -> entry.height < blockchainHeight)
                 .sorted(compareByHeightReversed)
                 .findFirst();

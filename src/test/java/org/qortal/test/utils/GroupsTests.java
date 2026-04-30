@@ -83,6 +83,23 @@ public class GroupsTests extends Common {
     }
 
     @Test
+    public void testGetGroupIdsAtHeight() {
+        BlockChain.IdsForHeight firstIds = new BlockChain.IdsForHeight();
+        firstIds.height = 0;
+        firstIds.ids = List.of(1);
+
+        BlockChain.IdsForHeight secondIds = new BlockChain.IdsForHeight();
+        secondIds.height = 10;
+        secondIds.ids = List.of(2, 3);
+
+        assertTrue(Groups.getGroupIdsAtHeight(null, 1).isEmpty());
+        assertTrue(Groups.getGroupIdsAtHeight(List.of(firstIds), 0).isEmpty());
+        assertEquals(List.of(1), Groups.getGroupIdsAtHeight(List.of(firstIds, secondIds), 1));
+        assertEquals(List.of(1), Groups.getGroupIdsAtHeight(List.of(firstIds, secondIds), 10));
+        assertEquals(List.of(2, 3), Groups.getGroupIdsAtHeight(List.of(firstIds, secondIds), 11));
+    }
+
+    @Test
     public void testMemberExistsInAnyGroupSimple() throws DataException {
 
         try (final Repository repository = RepositoryManager.getRepository()) {

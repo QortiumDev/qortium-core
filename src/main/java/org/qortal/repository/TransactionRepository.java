@@ -155,12 +155,12 @@ public interface TransactionRepository {
 	 * being greater than <tt>blockHeight</tt>.
 	 * 
 	 * @param txType
-	 * @param txGroupId
+	 * @param txGroupIds
 	 * @param service
 	 * @return
 	 * @throws DataException
 	 */
-	public byte[] getLatestAutoUpdateTransaction(TransactionType txType, int txGroupId, Integer service) throws DataException;
+	public byte[] getLatestAutoUpdateTransaction(TransactionType txType, List<Integer> txGroupIds, Integer service) throws DataException;
 
 	/**
 	 * Returns signatures for all name-registration related transactions relating to supplied name.

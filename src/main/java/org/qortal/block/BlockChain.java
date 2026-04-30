@@ -169,6 +169,7 @@ public class BlockChain {
 	}
 
 	private List<IdsForHeight> mintingGroupIds;
+	private List<IdsForHeight> devGroupIds;
 
 	/** Minimum time to retain online account signatures (ms) for block validity checks. */
 	private long onlineAccountSignaturesMinLifetime;
@@ -421,6 +422,10 @@ public class BlockChain {
 		return mintingGroupIds;
 	}
 
+	public List<IdsForHeight> getDevGroupIds() {
+		return devGroupIds;
+	}
+
 	public CiyamAtSettings getCiyamAtSettings() {
 		return this.ciyamAtSettings;
 	}
@@ -573,6 +578,7 @@ public class BlockChain {
 		this.blocksNeededByLevel = Collections.unmodifiableList(this.blocksNeededByLevel);
 		this.cumulativeBlocksByLevel = Collections.unmodifiableList(this.cumulativeBlocksByLevel);
 		this.blockTimingsByHeight = Collections.unmodifiableList(this.blockTimingsByHeight);
+		this.devGroupIds = this.devGroupIds == null ? Collections.emptyList() : Collections.unmodifiableList(this.devGroupIds);
 	}
 
 	/**
