@@ -2305,64 +2305,62 @@ public class Block {
 			totalShares += rewardCandidate.share;
 		}
 
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			GroupRepository groupRepository = repository.getGroupRepository();
+		GroupRepository groupRepository = this.repository.getGroupRepository();
 
-			List<Integer> mintingGroupIds = Groups.getGroupIdsToMint(BlockChain.getInstance(), this.blockData.getHeight());
+		List<Integer> mintingGroupIds = Groups.getGroupIdsToMint(BlockChain.getInstance(), this.blockData.getHeight());
 
-			// all minter admins
-			List<String> minterAdmins = Groups.getAllAdmins(groupRepository, mintingGroupIds);
+		// all minter admins
+		List<String> minterAdmins = Groups.getAllAdmins(groupRepository, mintingGroupIds);
 
-			// all minter admins that are online
-			List<ExpandedAccount> onlineMinterAdminAccounts
-				= expandedAccounts.stream()
-					.filter(expandedAccount ->  minterAdmins.contains(expandedAccount.getMintingAccount().getAddress()))
-					.collect(Collectors.toList());
+		// all minter admins that are online
+		List<ExpandedAccount> onlineMinterAdminAccounts
+			= expandedAccounts.stream()
+				.filter(expandedAccount ->  minterAdmins.contains(expandedAccount.getMintingAccount().getAddress()))
+				.collect(Collectors.toList());
 
-			long minterAdminShare;
+		long minterAdminShare;
 
-			if( onlineMinterAdminAccounts.isEmpty() ) {
-				minterAdminShare = 0;
-			}
-			else {
-				BlockRewardDistributor minterAdminDistributor
-						= (distributionAmount, balanceChanges)
-						->
-						distributeBlockRewardShare(distributionAmount, onlineMinterAdminAccounts, balanceChanges);
-
-				long adminShare = 1_00000000 - totalShares;
-				LOGGER.info("initial total Shares: {}", totalShares);
-				LOGGER.info("logging adminShare before admin split, this is the primary reward that will be split {}", adminShare);
-
-				minterAdminShare = adminShare / 2;
-				BlockRewardCandidate minterAdminRewardCandidate
-						= new BlockRewardCandidate("Minter Admins", minterAdminShare, minterAdminDistributor);
-				rewardCandidates.add(minterAdminRewardCandidate);
-
-				totalShares += minterAdminShare;
-			}
-
-			LOGGER.info("MINTER ADMIN SHARE: {}",minterAdminShare);
-
-			// all dev admins
-			List<String> devAdminAddresses
-					= groupRepository.getGroupAdmins(1).stream()
-					.map(GroupAdminData::getAdmin)
-					.collect(Collectors.toList());
-
-			LOGGER.debug("Removing NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
-			devAdminAddresses.removeIf( address -> Group.NULL_OWNER_ADDRESS.equals(address) );
-			LOGGER.debug("Removed NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
-
-			BlockRewardDistributor devAdminDistributor
-				= (distributionAmount, balanceChanges) -> distributeToAccounts(distributionAmount, devAdminAddresses, balanceChanges);
-
-			long devAdminShare = 1_00000000 - totalShares;
-			LOGGER.info("DEV ADMIN SHARE: {}",devAdminShare);
-			BlockRewardCandidate devAdminRewardCandidate
-				= new BlockRewardCandidate("Dev Admins", devAdminShare,devAdminDistributor);
-			rewardCandidates.add(devAdminRewardCandidate);
+		if( onlineMinterAdminAccounts.isEmpty() ) {
+			minterAdminShare = 0;
 		}
+		else {
+			BlockRewardDistributor minterAdminDistributor
+					= (distributionAmount, balanceChanges)
+					->
+					distributeBlockRewardShare(distributionAmount, onlineMinterAdminAccounts, balanceChanges);
+
+			long adminShare = 1_00000000 - totalShares;
+			LOGGER.info("initial total Shares: {}", totalShares);
+			LOGGER.info("logging adminShare before admin split, this is the primary reward that will be split {}", adminShare);
+
+			minterAdminShare = adminShare / 2;
+			BlockRewardCandidate minterAdminRewardCandidate
+					= new BlockRewardCandidate("Minter Admins", minterAdminShare, minterAdminDistributor);
+			rewardCandidates.add(minterAdminRewardCandidate);
+
+			totalShares += minterAdminShare;
+		}
+
+		LOGGER.info("MINTER ADMIN SHARE: {}",minterAdminShare);
+
+		// all dev admins
+		List<String> devAdminAddresses
+				= groupRepository.getGroupAdmins(1).stream()
+				.map(GroupAdminData::getAdmin)
+				.collect(Collectors.toList());
+
+		LOGGER.debug("Removing NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
+		devAdminAddresses.removeIf( address -> Group.NULL_OWNER_ADDRESS.equals(address) );
+		LOGGER.debug("Removed NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
+
+		BlockRewardDistributor devAdminDistributor
+			= (distributionAmount, balanceChanges) -> distributeToAccounts(distributionAmount, devAdminAddresses, balanceChanges);
+
+		long devAdminShare = 1_00000000 - totalShares;
+		LOGGER.info("DEV ADMIN SHARE: {}",devAdminShare);
+		BlockRewardCandidate devAdminRewardCandidate
+			= new BlockRewardCandidate("Dev Admins", devAdminShare,devAdminDistributor);
+		rewardCandidates.add(devAdminRewardCandidate);
 
 		return rewardCandidates;
 	}

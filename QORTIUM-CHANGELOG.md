@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-30 - core: keep reward orphaning on the active repository
+
+Changed block reward recipient lookup to use the same repository connection that is currently processing or orphaning the block. This prevents reward orphaning from reading stale group-admin state while approved group-admin changes are being unwound, so tests that add or remove development admins can return cleanly to the genesis balance snapshot.
+
 ### 2026-04-30 - core: seed neutral development and minting groups
 
 Updated Qortium's main genesis configuration to replace inherited Qortal reward-share, join, admin, and group-update seed entries with two neutral null-account-owned groups: `development` for dev approval and `minting` for minting eligibility. The native asset issue remains unchanged for now, while the active minting group configuration now points to the new minting group.
