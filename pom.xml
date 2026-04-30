@@ -339,7 +339,9 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- Copy modified hsqldb.jar to install / modified MANIFEST.MF-->
+			<!-- Install modified hsqldb.jar before dependency resolution for compile/test.
+			     This jar has a modified MANIFEST.MF with Sealed: false, which is needed
+			     because Qortal adds classes in org.hsqldb.jdbc. -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-install-plugin</artifactId>
@@ -352,7 +354,7 @@
 				</configuration>
 				<executions>
 					<execution>
-						<phase>install</phase>
+						<phase>validate</phase>
 						<goals>
 							<goal>install-file</goal>
 						</goals>
