@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-30 - core: honor configured dev groups for block rewards
+
+Changed block reward distribution to read development-admin reward recipients from the configured development group list instead of directly assuming group 1, and to skip the development-admin reward bucket when no real non-null admins exist. This lets a neutral chain start without seeded development admins while avoiding empty-recipient reward distribution failures.
+
 ### 2026-04-30 - core: let null-owned groups bootstrap from members
 
 Made Qortium's seeded development and minting groups public so new accounts can join without preloaded privileged accounts, and changed null-owned group approval so members can approve group actions only while there are no usable non-null admins. Once a real admin exists, approval authority returns to the admin set, keeping the bootstrap path open without making public membership permanently equivalent to admin control.

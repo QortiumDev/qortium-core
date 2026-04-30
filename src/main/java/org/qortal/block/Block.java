@@ -23,7 +23,6 @@ import org.qortal.data.at.ATStateData;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.block.BlockSummaryData;
 import org.qortal.data.block.BlockTransactionData;
-import org.qortal.data.group.GroupAdminData;
 import org.qortal.data.network.OnlineAccountData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.group.Group;
@@ -2344,23 +2343,26 @@ public class Block {
 		LOGGER.info("MINTER ADMIN SHARE: {}",minterAdminShare);
 
 		// all dev admins
+		List<Integer> devGroupIds = Groups.getGroupIdsAtHeight(BlockChain.getInstance().getDevGroupIds(), this.blockData.getHeight());
 		List<String> devAdminAddresses
-				= groupRepository.getGroupAdmins(1).stream()
-				.map(GroupAdminData::getAdmin)
-				.collect(Collectors.toList());
+				= Groups.getAllAdmins(groupRepository, devGroupIds);
 
 		LOGGER.debug("Removing NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
 		devAdminAddresses.removeIf( address -> Group.NULL_OWNER_ADDRESS.equals(address) );
 		LOGGER.debug("Removed NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
 
-		BlockRewardDistributor devAdminDistributor
-			= (distributionAmount, balanceChanges) -> distributeToAccounts(distributionAmount, devAdminAddresses, balanceChanges);
-
 		long devAdminShare = 1_00000000 - totalShares;
-		LOGGER.info("DEV ADMIN SHARE: {}",devAdminShare);
-		BlockRewardCandidate devAdminRewardCandidate
-			= new BlockRewardCandidate("Dev Admins", devAdminShare,devAdminDistributor);
-		rewardCandidates.add(devAdminRewardCandidate);
+		if (devAdminAddresses.isEmpty()) {
+			LOGGER.info("DEV ADMIN SHARE: 0");
+		} else {
+			BlockRewardDistributor devAdminDistributor
+					= (distributionAmount, balanceChanges) -> distributeToAccounts(distributionAmount, devAdminAddresses, balanceChanges);
+
+			LOGGER.info("DEV ADMIN SHARE: {}",devAdminShare);
+			BlockRewardCandidate devAdminRewardCandidate
+					= new BlockRewardCandidate("Dev Admins", devAdminShare,devAdminDistributor);
+			rewardCandidates.add(devAdminRewardCandidate);
+		}
 
 		return rewardCandidates;
 	}
