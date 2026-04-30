@@ -14,6 +14,7 @@ import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TestAccount;
 
 import static org.junit.Assert.*;
@@ -23,6 +24,11 @@ public class LevelZeroMintingTests extends Common {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestChainBootstrapUtils.ensureMintingGroupMember(repository, "bob");
+			repository.saveChanges();
+		}
 	}
 
 	@After

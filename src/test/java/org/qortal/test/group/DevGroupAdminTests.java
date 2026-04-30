@@ -6,6 +6,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.data.group.GroupAdminData;
+import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.*;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
@@ -14,6 +15,7 @@ import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.GroupUtils;
+import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.Transaction;
@@ -60,6 +62,11 @@ public class DevGroupAdminTests extends Common {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestChainBootstrapUtils.ensureDevelopmentAdmin(repository, ALICE);
+			repository.saveChanges();
+		}
 	}
 
 	@After
@@ -134,13 +141,7 @@ public class DevGroupAdminTests extends Common {
 			assertEquals("incorrect transaction approval status", Transaction.ApprovalStatus.PENDING, approvalStatus);
 
 			// Have Alice approve Bob's approval-needed transaction
-			GroupUtils.approveTransaction(repository, ALICE, addGroupAdminTransactionData.getSignature(), true);
-
-			// Mint a block so that the transaction becomes approved
-			BlockUtils.mintBlock(repository);
-
-			// Confirm transaction is approved
-			approvalStatus = GroupUtils.getApprovalStatus(repository, addGroupAdminTransactionData.getSignature());
+			approvalStatus = signForGroupApproval(repository, addGroupAdminTransactionData, List.of(alice));
 			assertEquals("incorrect transaction approval status", Transaction.ApprovalStatus.APPROVED, approvalStatus);
 
 			// Confirm Bob is now admin
@@ -199,23 +200,10 @@ public class DevGroupAdminTests extends Common {
 
 			// Bob attempts to join
 			result = joinGroup(repository, bob, groupId);
-			// Should be OK, but won't actually get him in the group
+			// Should be OK because the default development group is public
 			assertEquals(ValidationResult.OK, result);
 
-			// Confirm Bob is not a member
-			assertFalse(isMember(repository, bob.getAddress(), groupId));
-
-			// Alice invites Bob and the dev-group admins approve it
-			assertEquals(Transaction.ApprovalStatus.APPROVED,
-					approveGroupInvite(repository, alice, groupId, bob.getAddress(), 3600, List.of(alice)));
-
-			// Bob to join
-			result = joinGroup(repository, bob, groupId);
-			// Should not be OK, bob should already be a member, he joined before the invite and
-			// the invite served as an approval
-			assertEquals(ValidationResult.ALREADY_GROUP_MEMBER, result);
-
-			// Confirm Bob now a member, now that he got an invite
+			// Confirm Bob is now a member
 			assertTrue(isMember(repository, bob.getAddress(), groupId));
 
 			// Attempt to ban Bob
@@ -267,13 +255,7 @@ public class DevGroupAdminTests extends Common {
 			assertEquals("incorrect transaction approval status", Transaction.ApprovalStatus.PENDING, approvalStatus);
 
 			// Have Alice approve Bob's approval-needed transaction
-			GroupUtils.approveTransaction(repository, ALICE, addGroupAdminTransactionData.getSignature(), true);
-
-			// Mint a block so that the transaction becomes approved
-			BlockUtils.mintBlock(repository);
-
-			// Confirm transaction is approved
-			approvalStatus = GroupUtils.getApprovalStatus(repository, addGroupAdminTransactionData.getSignature());
+			approvalStatus = signForGroupApproval(repository, addGroupAdminTransactionData, List.of(alice));
 			assertEquals("incorrect transaction approval status", Transaction.ApprovalStatus.APPROVED, approvalStatus);
 
 			// Confirm Bob is now admin
@@ -645,11 +627,11 @@ public class DevGroupAdminTests extends Common {
 			// assert approved
 			assertEquals(Transaction.ApprovalStatus.APPROVED, cancelDilbertInviteStatus1);
 
-			// dilbert joins before the group approves cancellation
+			// Dilbert joins after the invite is cancelled. Public groups still allow direct joins.
 			joinGroup(repository, dilbert, DEV_GROUP_ID);
 
-			// assert dilbert is not in the group because the invite was already cancelled
-			assertFalse(isMember(repository, dilbert.getAddress(), DEV_GROUP_ID));
+			// assert dilbert is in the group because membership no longer depends on an invite
+			assertTrue(isMember(repository, dilbert.getAddress(), DEV_GROUP_ID));
 
 			// alice kicks out dilbert, alice and bob sign which is 66% approval while 40% is needed
 			TransactionData kickDilbert = createGroupKickForGroupApproval(repository, alice, DEV_GROUP_ID, dilbert.getAddress(), "he is sneaky");
@@ -675,11 +657,11 @@ public class DevGroupAdminTests extends Common {
 			// assert approved
 			assertEquals(Transaction.ApprovalStatus.APPROVED, cancelDilbertInviteStatus2);
 
-			// dilbert tries to join after the group approves cancellation
+			// Dilbert joins after the group approves cancellation. Public groups still allow direct joins.
 			joinGroup(repository, dilbert, DEV_GROUP_ID);
 
-			// assert dilbert is not in the group
-			assertFalse(isMember(repository, dilbert.getAddress(), DEV_GROUP_ID));
+			// assert dilbert is in the group because membership no longer depends on an invite
+			assertTrue(isMember(repository, dilbert.getAddress(), DEV_GROUP_ID));
 		}
 	}
 
@@ -709,10 +691,22 @@ public class DevGroupAdminTests extends Common {
 			signTransactionDataForGroupApproval(repository, signer, data);
 		}
 
-		BlockUtils.mintBlocks(repository, 2);
+		BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository, data));
 
 		// return approval status
 		return GroupUtils.getApprovalStatus(repository, data.getSignature());
+	}
+
+	private int getApprovalSettlementBlockCount(Repository repository, TransactionData data) throws DataException {
+		int groupId = data.getTxGroupId();
+		if (groupId == Group.NO_GROUP)
+			return 2;
+
+		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+		if (groupData == null)
+			return 2;
+
+		return Math.max(2, groupData.getMinimumBlockDelay() + 1);
 	}
 
 	private static void signTransactionDataForGroupApproval(Repository repository, PrivateKeyAccount signer, TransactionData transactionData) throws DataException {

@@ -144,6 +144,11 @@ public class Common {
 		BlockChain.validate();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			if (usesDefaultTestChain())
+				TestChainBootstrapUtils.ensureDefaultTestChainBootstrap(repository);
+
+			repository.saveChanges();
+
 			// Build snapshot of initial state in case we want to compare with post-test orphaning
 			initialAssets = repository.getAssetRepository().getAllAssets();
 			initialGroups = repository.getGroupRepository().getAllGroups();
@@ -154,6 +159,11 @@ public class Common {
 				if (!testAccount.isRewardShare)
 					assertNotNull(String.format("Test account %s / %s should have last reference", testAccount.accountName, testAccount.getAddress()), testAccount.getLastReference());
 		}
+	}
+
+	private static boolean usesDefaultTestChain() {
+		String blockchainConfig = Settings.getInstance().getBlockchainConfig();
+		return blockchainConfig != null && blockchainConfig.endsWith("test-chain-v2.json");
 	}
 
 	/** Orphan back to genesis block and compare initial snapshot. */

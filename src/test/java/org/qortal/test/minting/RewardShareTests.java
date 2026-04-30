@@ -14,6 +14,7 @@ import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
@@ -28,6 +29,11 @@ public class RewardShareTests extends Common {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestChainBootstrapUtils.ensureMintingGroupMember(repository, "dilbert");
+			repository.saveChanges();
+		}
 	}
 
 	@After
@@ -198,8 +204,8 @@ public class RewardShareTests extends Common {
 			Account alice = new Account(repository, aliceAccount.getAddress());
 			Account outsider = new Account(repository, outsiderAccount.getAddress());
 
-			assertTrue("Genesis minting group member should be able to mint", alice.canMint(false));
-			assertTrue("Genesis minting group member should not need a name to mint", repository.getNameRepository().getNamesByOwner(alice.getAddress()).isEmpty());
+			assertTrue("Default test minting member should be able to mint", alice.canMint(false));
+			assertTrue("Default test minting member should not need a name to mint", repository.getNameRepository().getNamesByOwner(alice.getAddress()).isEmpty());
 
 			TransactionData aliceRewardShareData = AccountUtils.createRewardShare(repository, "alice", "bob", 0);
 			Transaction aliceRewardShare = Transaction.fromData(repository, aliceRewardShareData);
