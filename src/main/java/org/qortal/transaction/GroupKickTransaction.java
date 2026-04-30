@@ -14,7 +14,6 @@ import org.qortal.repository.Repository;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 public class GroupKickTransaction extends Transaction {
 
@@ -65,8 +64,8 @@ public class GroupKickTransaction extends Transaction {
 
 		Account admin = getAdmin();
 
-		// Can't kick if not an admin
-		if (!groupRepository.adminExists(groupId, admin.getAddress()))
+		// Can't kick if not part of the group's current management authority
+		if (!Group.canApprove(this.repository, groupId, admin.getAddress()))
 			return ValidationResult.NOT_GROUP_ADMIN;
 
 		Account member = getMember();
@@ -84,7 +83,7 @@ public class GroupKickTransaction extends Transaction {
 			return ValidationResult.INVALID_GROUP_OWNER;
 
 		String groupOwner = this.repository.getGroupRepository().getOwner(groupId);
-		boolean groupOwnedByNullAccount = Objects.equals(groupOwner, Group.NULL_OWNER_ADDRESS);
+		boolean groupOwnedByNullAccount = Group.isNullOwner(groupOwner);
 
 		if (groupOwnedByNullAccount) {
 			// Require approval if transaction relates to a group owned by the null account

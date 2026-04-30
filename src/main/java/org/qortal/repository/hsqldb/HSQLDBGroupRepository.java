@@ -1,6 +1,7 @@
 package org.qortal.repository.hsqldb;
 
 import org.qortal.data.group.*;
+import org.qortal.group.Group;
 import org.qortal.group.Group.ApprovalThreshold;
 import org.qortal.repository.DataException;
 import org.qortal.repository.GroupRepository;
@@ -472,6 +473,27 @@ public class HSQLDBGroupRepository implements GroupRepository {
 	}
 
 	@Override
+	public boolean usableAdminExists(int groupId, String address) throws DataException {
+		if (Group.NULL_OWNER_ADDRESS.equals(address))
+			return false;
+
+		try {
+			return this.repository.exists("GroupAdmins", "group_id = ? AND admin = ?", groupId, address);
+		} catch (SQLException e) {
+			throw new DataException("Unable to check for usable group admin in repository", e);
+		}
+	}
+
+	@Override
+	public int countUsableGroupAdmins(int groupId) throws DataException {
+		try (ResultSet resultSet = this.repository.checkedExecute("SELECT COUNT(*) FROM GroupAdmins WHERE group_id = ? AND admin != ?", groupId, Group.NULL_OWNER_ADDRESS)) {
+			return resultSet.getInt(1);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch usable group admin count from repository", e);
+		}
+	}
+
+	@Override
 	public void save(GroupAdminData groupAdminData) throws DataException {
 		HSQLDBSaver saveHelper = new HSQLDBSaver("GroupAdmins");
 
@@ -565,6 +587,15 @@ public class HSQLDBGroupRepository implements GroupRepository {
 			return count;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch group member count from repository", e);
+		}
+	}
+
+	@Override
+	public int countNonNullGroupMembers(int groupId) throws DataException {
+		try (ResultSet resultSet = this.repository.checkedExecute("SELECT COUNT(*) FROM GroupMembers WHERE group_id = ? AND address != ?", groupId, Group.NULL_OWNER_ADDRESS)) {
+			return resultSet.getInt(1);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch non-null group member count from repository", e);
 		}
 	}
 

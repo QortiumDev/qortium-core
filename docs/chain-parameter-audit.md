@@ -26,7 +26,7 @@ runtime behavior.
 
 - native asset issue transaction with `assetName` set to `QORT`
 - neutral development and minting group creation entries, currently owned by the
-  null account
+  null account and open for public membership
 - group seed choices that are still consensus-defining rather than generated
   from an explicit fork template
 
@@ -41,7 +41,8 @@ Initial recommendation:
 - continue reducing inherited main genesis seed data into a neutral baseline or
   generated fork template
 - make the governance group seed model explicit enough that a new chain can
-  choose no seed governance, one seed admin group, or its own configured groups
+  choose no seed governance, public bootstrap groups, one seed admin group, or
+  its own configured groups
 
 ### Native Asset Identity
 

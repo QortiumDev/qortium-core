@@ -71,8 +71,8 @@
 		"timestamp": "1593450000000",
 		"transactions": [
 			{ "type": "ISSUE_ASSET", "assetName": "QORT", "description": "QORTAL coin", "quantity": 0, "isDivisible": true, "data": "{}" },
-			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "development", "description": "Qortium Development", "isOpen": false, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
-			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "minting", "description": "Qortium Minting", "isOpen": false, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 }
+			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "development", "description": "Qortium Development", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
+			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "minting", "description": "Qortium Minting", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 }
 
 		]
 	}

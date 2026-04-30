@@ -794,19 +794,36 @@ public abstract class Transaction {
 		GroupData groupData = repository.getGroupRepository().fromGroupId(txGroupId);
 		ApprovalThreshold approvalThreshold = groupData.getApprovalThreshold();
 
-		// Fetch total number of admins in group
-		int totalAdmins = repository.getGroupRepository().countGroupAdmins(txGroupId);
+		// Fetch total number of accounts currently allowed to approve this group's transactions
+		int totalAuthorities = Group.countApprovalAuthorities(repository, txGroupId);
+		if (totalAuthorities <= 0)
+			return null;
+
+		int approvingAuthorities = countCurrentApprovalAuthorities(groupApprovalData.approvingAdmins, txGroupId);
+		int rejectingAuthorities = countCurrentApprovalAuthorities(groupApprovalData.rejectingAdmins, txGroupId);
 
 		// Are there enough approvals?
-		if (approvalThreshold.meetsTheshold(groupApprovalData.approvingAdmins.size(), totalAdmins))
+		if (approvalThreshold.meetsTheshold(approvingAuthorities, totalAuthorities))
 			return true;
 
 		// Are there enough rejections?
-		if (approvalThreshold.meetsTheshold(groupApprovalData.rejectingAdmins.size(), totalAdmins))
+		if (approvalThreshold.meetsTheshold(rejectingAuthorities, totalAuthorities))
 			return false;
 
 		// No definitive decision yet
 		return null;
+	}
+
+	private int countCurrentApprovalAuthorities(List<byte[]> publicKeys, int groupId) throws DataException {
+		int count = 0;
+
+		for (byte[] publicKey : publicKeys) {
+			String address = Crypto.toAddress(publicKey);
+			if (Group.canApprove(this.repository, groupId, address))
+				++count;
+		}
+
+		return count;
 	}
 
 	/**

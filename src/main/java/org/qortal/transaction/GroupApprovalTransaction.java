@@ -5,6 +5,7 @@ import org.qortal.asset.Asset;
 import org.qortal.block.BlockValidationContext;
 import org.qortal.data.transaction.GroupApprovalTransactionData;
 import org.qortal.data.transaction.TransactionData;
+import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 
@@ -61,8 +62,8 @@ public class GroupApprovalTransaction extends Transaction {
 
 		Account admin = getAdmin();
 
-		// Can't cast approval decision if not an admin
-		if (!this.repository.getGroupRepository().adminExists(pendingTransactionData.getTxGroupId(), admin.getAddress()))
+		// Can't cast approval decision if not part of the group's current approval authority
+		if (!Group.canApprove(this.repository, pendingTransactionData.getTxGroupId(), admin.getAddress()))
 			return ValidationResult.NOT_GROUP_ADMIN;
 
 		// Check creator has enough funds

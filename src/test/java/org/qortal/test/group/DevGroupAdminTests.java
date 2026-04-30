@@ -303,7 +303,7 @@ public class DevGroupAdminTests extends Common {
 	}
 
 	@Test
-	public void testAddAdmin2of3() throws DataException {
+	public void testAddAdminExcludesNullAdminFromThreshold() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
 			// establish accounts
@@ -365,14 +365,8 @@ public class DevGroupAdminTests extends Common {
 			// signer 1
 			Transaction.ApprovalStatus addChloeAsGroupAdminStatus2 = signForGroupApproval(repository, addChloeAsGroupAdmin, List.of(alice));
 
-			// 1 out of 3 has signed, so it should be pending, because it is less than 40%
-			assertEquals( Transaction.ApprovalStatus.PENDING, addChloeAsGroupAdminStatus2);
-
-			// signer 2
-			Transaction.ApprovalStatus addChloeAsGroupAdminStatus3 = signForGroupApproval(repository, addChloeAsGroupAdmin, List.of(bob));
-
-			// 2 out of 3 has signed, so it should be approved, because it is more than 40%
-			assertEquals( Transaction.ApprovalStatus.APPROVED, addChloeAsGroupAdminStatus3);
+			// 1 out of 2 usable admins has signed, so it should be approved because the null admin is ignored
+			assertEquals( Transaction.ApprovalStatus.APPROVED, addChloeAsGroupAdminStatus2);
 		}
 	}
 
@@ -422,38 +416,36 @@ public class DevGroupAdminTests extends Common {
 			assertEquals(3, repository.getGroupRepository().countGroupAdmins(DEV_GROUP_ID).intValue());
 			assertTrue(isAdmin(repository, bob.getAddress(), DEV_GROUP_ID));
 
-			// bob invites chloe, bob signs which is 33% approval while 40% is needed
-			TransactionData chloeInvite1 = createGroupInviteForGroupApproval(repository, bob, DEV_GROUP_ID, chloe.getAddress(), 3600);
-			Transaction.ApprovalStatus chloeInvite1Status = signForGroupApproval(repository, chloeInvite1, List.of(bob));
-
-			// assert invite 1 pending
-			assertEquals(Transaction.ApprovalStatus.PENDING, chloeInvite1Status);
-
-			// bob invites chloe again, bob signs which is 33% approval while 40% is needed
-			// since chloe is not a member yet, this invite is valie
-			TransactionData chloeInvite2 = createGroupInviteForGroupApproval(repository, bob, DEV_GROUP_ID, chloe.getAddress(), 3600);
-			Transaction.ApprovalStatus chloeInvite2Status = signForGroupApproval(repository, chloeInvite2, List.of(bob));
-
-			// assert invite 2 is pending
-			assertEquals(Transaction.ApprovalStatus.PENDING, chloeInvite2Status);
-
-			// alice signs which is 66% approval while 40% is needed
-			chloeInvite1Status = signForGroupApproval(repository, chloeInvite1, List.of(alice));
-
-			// assert invite 1 approval
-			assertEquals(Transaction.ApprovalStatus.APPROVED, chloeInvite1Status);
-
-			// chloe joins
+			// Add Chloe as a third usable admin so a single approval remains pending
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, bob, DEV_GROUP_ID, chloe.getAddress(), 3600, List.of(bob)));
 			joinGroup(repository, chloe, DEV_GROUP_ID);
+			TransactionData addChloeAsGroupAdmin = addGroupAdmin(repository, chloe, DEV_GROUP_ID, chloe.getAddress());
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, addChloeAsGroupAdmin, List.of(alice)));
+			assertTrue(isAdmin(repository, chloe.getAddress(), DEV_GROUP_ID));
 
-			// assert chloe is in the group
-			assertTrue(isMember(repository, bob.getAddress(), DEV_GROUP_ID));
+			// bob invites dilbert, bob signs which is 1 of 3 usable admins and remains pending
+			TransactionData dilbertInvite1 = createGroupInviteForGroupApproval(repository, bob, DEV_GROUP_ID, dilbert.getAddress(), 3600);
+			Transaction.ApprovalStatus dilbertInvite1Status = signForGroupApproval(repository, dilbertInvite1, List.of(bob));
+			assertEquals(Transaction.ApprovalStatus.PENDING, dilbertInvite1Status);
 
-			// alice signs invite 2 which is 66% approval while 40% is needed
-			chloeInvite2Status = signForGroupApproval(repository, chloeInvite2, List.of(alice));
+			// bob invites dilbert again while the first invite is still pending
+			TransactionData dilbertInvite2 = createGroupInviteForGroupApproval(repository, bob, DEV_GROUP_ID, dilbert.getAddress(), 3600);
+			Transaction.ApprovalStatus dilbertInvite2Status = signForGroupApproval(repository, dilbertInvite2, List.of(bob));
+			assertEquals(Transaction.ApprovalStatus.PENDING, dilbertInvite2Status);
 
-			// assert invite 2 approval
-			assertEquals(Transaction.ApprovalStatus.APPROVED, chloeInvite2Status);
+			// alice signs which is 2 of 3 usable admins
+			dilbertInvite1Status = signForGroupApproval(repository, dilbertInvite1, List.of(alice));
+			assertEquals(Transaction.ApprovalStatus.APPROVED, dilbertInvite1Status);
+
+			// dilbert joins
+			joinGroup(repository, dilbert, DEV_GROUP_ID);
+			assertTrue(isMember(repository, dilbert.getAddress(), DEV_GROUP_ID));
+
+			// alice signs invite 2 after Dilbert joined
+			dilbertInvite2Status = signForGroupApproval(repository, dilbertInvite2, List.of(alice));
+			assertEquals(Transaction.ApprovalStatus.APPROVED, dilbertInvite2Status);
 
 			boolean exceptionThrown = false;
 
@@ -467,8 +459,58 @@ public class DevGroupAdminTests extends Common {
 
 			Assert.assertFalse(exceptionThrown);
 
-			// assert chloe is still a member
-			assertTrue(isMember(repository, bob.getAddress(), DEV_GROUP_ID));
+			// assert dilbert is still a member
+			assertTrue(isMember(repository, dilbert.getAddress(), DEV_GROUP_ID));
+		}
+	}
+
+	@Test
+	public void testNullOwnedGroupFallsBackToMemberApprovalWithoutUsableAdmins() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, ALICE);
+			PrivateKeyAccount bob = Common.getTestAccount(repository, BOB);
+			PrivateKeyAccount chloe = Common.getTestAccount(repository, CHLOE);
+
+			assertEquals(2, repository.getGroupRepository().countGroupAdmins(DEV_GROUP_ID).intValue());
+			assertEquals(1, repository.getGroupRepository().countUsableGroupAdmins(DEV_GROUP_ID));
+			assertTrue(isAdmin(repository, Group.NULL_OWNER_ADDRESS, DEV_GROUP_ID));
+			assertTrue(isAdmin(repository, alice.getAddress(), DEV_GROUP_ID));
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, DEV_GROUP_ID, bob.getAddress(), 3600, List.of(alice)));
+			assertEquals(ValidationResult.OK, joinGroup(repository, bob, DEV_GROUP_ID));
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					approveGroupInvite(repository, alice, DEV_GROUP_ID, chloe.getAddress(), 3600, List.of(alice)));
+			assertEquals(ValidationResult.OK, joinGroup(repository, chloe, DEV_GROUP_ID));
+
+			TransactionData removeAliceAsAdmin = removeGroupAdmin(repository, alice, DEV_GROUP_ID, alice.getAddress());
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, removeAliceAsAdmin, List.of(alice)));
+
+			assertEquals(1, repository.getGroupRepository().countGroupAdmins(DEV_GROUP_ID).intValue());
+			assertEquals(0, repository.getGroupRepository().countUsableGroupAdmins(DEV_GROUP_ID));
+			assertTrue(isAdmin(repository, Group.NULL_OWNER_ADDRESS, DEV_GROUP_ID));
+			assertFalse(isAdmin(repository, alice.getAddress(), DEV_GROUP_ID));
+
+			TransactionData addBobAsAdmin = addGroupAdmin(repository, bob, DEV_GROUP_ID, bob.getAddress());
+			assertEquals(Transaction.ApprovalStatus.PENDING,
+					signForGroupApproval(repository, addBobAsAdmin, List.of(bob)));
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, addBobAsAdmin, List.of(chloe)));
+
+			assertTrue(isAdmin(repository, bob.getAddress(), DEV_GROUP_ID));
+			assertEquals(1, repository.getGroupRepository().countUsableGroupAdmins(DEV_GROUP_ID));
+
+			TransactionData addChloeAsAdmin = addGroupAdmin(repository, chloe, DEV_GROUP_ID, chloe.getAddress());
+			assertEquals(ValidationResult.NOT_GROUP_ADMIN,
+					groupApproval(repository, alice, addChloeAsAdmin, true));
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					signForGroupApproval(repository, addChloeAsAdmin, List.of(bob)));
+
+			assertTrue(isAdmin(repository, chloe.getAddress(), DEV_GROUP_ID));
 		}
 	}
 
@@ -517,15 +559,9 @@ public class DevGroupAdminTests extends Common {
 			assertEquals(3, repository.getGroupRepository().countGroupAdmins(DEV_GROUP_ID).intValue());
 			assertTrue(isAdmin(repository, bob.getAddress(), DEV_GROUP_ID));
 
-			// bob invites chloe, bob signs which is 33% approval while 40% is needed
+			// bob invites chloe, bob signs which is 1 of 2 usable admins
 			TransactionData chloeInvite = createGroupInviteForGroupApproval(repository, bob, DEV_GROUP_ID, chloe.getAddress(), 3600);
 			Transaction.ApprovalStatus chloeInviteStatus = signForGroupApproval(repository, chloeInvite, List.of(bob));
-
-			// assert pending
-			assertEquals(Transaction.ApprovalStatus.PENDING, chloeInviteStatus);
-
-			// alice signs which is 66% approval while 40% is needed
-			chloeInviteStatus = signForGroupApproval(repository, chloeInvite, List.of(alice));
 
 			// assert approval
 			assertEquals(Transaction.ApprovalStatus.APPROVED, chloeInviteStatus);
@@ -534,20 +570,11 @@ public class DevGroupAdminTests extends Common {
 			joinGroup(repository, chloe, DEV_GROUP_ID);
 
 			// assert chloe is in the group
-			assertTrue(isMember(repository, bob.getAddress(), DEV_GROUP_ID));
+			assertTrue(isMember(repository, chloe.getAddress(), DEV_GROUP_ID));
 
-			// alice kicks chloe, alice signs which is 33% approval while 40% is needed
+			// alice kicks chloe, alice signs which is 1 of 2 usable admins
 			TransactionData chloeKick = createGroupKickForGroupApproval(repository, alice, DEV_GROUP_ID, chloe.getAddress(),"testing chloe kick");
 			Transaction.ApprovalStatus chloeKickStatus = signForGroupApproval(repository, chloeKick, List.of(alice));
-
-			// assert pending
-			assertEquals(Transaction.ApprovalStatus.PENDING, chloeKickStatus);
-
-			// assert chloe is still in the group
-			assertTrue(isMember(repository, bob.getAddress(), DEV_GROUP_ID));
-
-			// bob signs which is 66% approval while 40% is needed
-			chloeKickStatus = signForGroupApproval(repository, chloeKick, List.of(bob));
 
 			// assert approval
 			assertEquals(Transaction.ApprovalStatus.APPROVED, chloeKickStatus);
@@ -566,20 +593,14 @@ public class DevGroupAdminTests extends Common {
 			joinGroup(repository, chloe, DEV_GROUP_ID);
 
 			// assert chloe is in the group
-			assertTrue(isMember(repository, bob.getAddress(), DEV_GROUP_ID));
+			assertTrue(isMember(repository, chloe.getAddress(), DEV_GROUP_ID));
 
-			// alice bans chloe, alice signs which is 33% approval while 40% is needed
+			// alice bans chloe, alice signs which is 1 of 2 usable admins
 			TransactionData chloeBan = createGroupBanForGroupApproval(repository, alice, DEV_GROUP_ID, chloe.getAddress(), "testing group ban", 3600);
 			Transaction.ApprovalStatus chloeBanStatus1 = signForGroupApproval(repository, chloeBan, List.of(alice));
 
-			// assert pending
-			assertEquals(Transaction.ApprovalStatus.PENDING, chloeBanStatus1);
-
-			// bob signs which 66% approval while 40% is needed
-			Transaction.ApprovalStatus chloeBanStatus2 = signForGroupApproval(repository, chloeBan, List.of(bob));
-
 			// assert approved
-			assertEquals(Transaction.ApprovalStatus.APPROVED, chloeBanStatus2);
+			assertEquals(Transaction.ApprovalStatus.APPROVED, chloeBanStatus1);
 
 			// assert chloe is not in the group
 			assertFalse(isMember(repository, chloe.getAddress(), DEV_GROUP_ID));
@@ -590,18 +611,12 @@ public class DevGroupAdminTests extends Common {
 			// assert banned status on invite attempt
 			assertEquals(ValidationResult.BANNED_FROM_GROUP, chloeInviteValidation);
 
-			// bob cancel ban on chloe, bob signs which is 33% approval while 40% is needed
+			// bob cancels ban on chloe, bob signs which is 1 of 2 usable admins
 			TransactionData chloeCancelBan = createCancelGroupBanForGroupApproval( repository, bob, DEV_GROUP_ID, chloe.getAddress());
 			Transaction.ApprovalStatus chloeCancelBanStatus1 = signForGroupApproval(repository, chloeCancelBan, List.of(bob));
 
-			// assert pending
-			assertEquals(Transaction.ApprovalStatus.PENDING, chloeCancelBanStatus1);
-
-			// alice signs which is 66% approval while 40% is needed
-			Transaction.ApprovalStatus chloeCancelBanStatus2 = signForGroupApproval(repository, chloeCancelBan, List.of(alice));
-
 			// assert approved
-			assertEquals(Transaction.ApprovalStatus.APPROVED, chloeCancelBanStatus2);
+			assertEquals(Transaction.ApprovalStatus.APPROVED, chloeCancelBanStatus1);
 
 			// bob invites chloe, alice and bob signs which is 66% approval while 40% is needed
 			TransactionData chloeInvite4 = createGroupInviteForGroupApproval(repository, bob, DEV_GROUP_ID, chloe.getAddress(), 3600);
@@ -623,18 +638,18 @@ public class DevGroupAdminTests extends Common {
 			// assert approved
 			assertEquals(Transaction.ApprovalStatus.APPROVED, dibertInviteStatus1);
 
-			// alice cancels dilbert's invite, alice signs which is 33% approval while 40% is needed
+			// alice cancels dilbert's invite, alice signs which is 1 of 2 usable admins
 			TransactionData cancelDilbertInvite = createCancelInviteForGroupApproval(repository, alice, DEV_GROUP_ID, dilbert.getAddress());
 			Transaction.ApprovalStatus cancelDilbertInviteStatus1 = signForGroupApproval(repository, cancelDilbertInvite, List.of(alice));
 
-			// assert pending
-			assertEquals(Transaction.ApprovalStatus.PENDING, cancelDilbertInviteStatus1);
+			// assert approved
+			assertEquals(Transaction.ApprovalStatus.APPROVED, cancelDilbertInviteStatus1);
 
 			// dilbert joins before the group approves cancellation
 			joinGroup(repository, dilbert, DEV_GROUP_ID);
 
-			// assert dilbert is in the group
-			assertTrue(isMember(repository, dilbert.getAddress(), DEV_GROUP_ID));
+			// assert dilbert is not in the group because the invite was already cancelled
+			assertFalse(isMember(repository, dilbert.getAddress(), DEV_GROUP_ID));
 
 			// alice kicks out dilbert, alice and bob sign which is 66% approval while 40% is needed
 			TransactionData kickDilbert = createGroupKickForGroupApproval(repository, alice, DEV_GROUP_ID, dilbert.getAddress(), "he is sneaky");
@@ -701,15 +716,19 @@ public class DevGroupAdminTests extends Common {
 	}
 
 	private static void signTransactionDataForGroupApproval(Repository repository, PrivateKeyAccount signer, TransactionData transactionData) throws DataException {
+		assertEquals(ValidationResult.OK, groupApproval(repository, signer, transactionData, true));
+	}
+
+	private static ValidationResult groupApproval(Repository repository, PrivateKeyAccount signer, TransactionData transactionData, boolean decision) throws DataException {
 		byte[] reference = signer.getLastReference();
 		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
 
 		BaseTransactionData baseTransactionData
 				= new BaseTransactionData(timestamp, Group.NO_GROUP, reference, signer.getPublicKey(), GroupUtils.fee, null);
 		TransactionData groupApprovalTransactionData
-				= new GroupApprovalTransactionData(baseTransactionData, transactionData.getSignature(), true);
+				= new GroupApprovalTransactionData(baseTransactionData, transactionData.getSignature(), decision);
 
-		TransactionUtils.signAndImportValid(repository, groupApprovalTransactionData, signer);
+		return TransactionUtils.signAndImport(repository, groupApprovalTransactionData, signer);
 	}
 
 	private ValidationResult joinGroup(Repository repository, PrivateKeyAccount joiner, int groupId) throws DataException {
@@ -800,6 +819,12 @@ public class DevGroupAdminTests extends Common {
 	private TransactionData addGroupAdmin(Repository repository, PrivateKeyAccount owner, int groupId, String member) throws DataException {
 		AddGroupAdminTransactionData transactionData = new AddGroupAdminTransactionData(TestTransaction.generateBase(owner), groupId, member);
 		transactionData.setTxGroupId(groupId);
+		TransactionUtils.signAndMint(repository, transactionData, owner);
+		return transactionData;
+	}
+
+	private TransactionData removeGroupAdmin(Repository repository, PrivateKeyAccount owner, int groupId, String admin) throws DataException {
+		RemoveGroupAdminTransactionData transactionData = new RemoveGroupAdminTransactionData(TestTransaction.generateBase(owner, groupId), groupId, admin);
 		TransactionUtils.signAndMint(repository, transactionData, owner);
 		return transactionData;
 	}

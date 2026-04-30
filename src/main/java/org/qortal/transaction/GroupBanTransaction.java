@@ -12,7 +12,6 @@ import org.qortal.repository.Repository;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 public class GroupBanTransaction extends Transaction {
 
@@ -67,12 +66,12 @@ public class GroupBanTransaction extends Transaction {
 
 		Account admin = getAdmin();
 
-		// Can't ban if not an admin
-		if (!this.repository.getGroupRepository().adminExists(groupId, admin.getAddress()))
+		// Can't ban if not part of the group's current management authority
+		if (!Group.canApprove(this.repository, groupId, admin.getAddress()))
 			return ValidationResult.NOT_GROUP_ADMIN;
 
 		String groupOwner = this.repository.getGroupRepository().getOwner(groupId);
-		boolean groupOwnedByNullAccount = Objects.equals(groupOwner, Group.NULL_OWNER_ADDRESS);
+		boolean groupOwnedByNullAccount = Group.isNullOwner(groupOwner);
 
 		if (groupOwnedByNullAccount) {
 			// Require approval if transaction relates to a group owned by the null account

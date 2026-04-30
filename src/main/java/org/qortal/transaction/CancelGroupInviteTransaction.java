@@ -12,7 +12,6 @@ import org.qortal.repository.Repository;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 public class CancelGroupInviteTransaction extends Transaction {
 
@@ -67,8 +66,8 @@ public class CancelGroupInviteTransaction extends Transaction {
 
 		Account admin = getAdmin();
 
-		// Check admin is actually an admin
-		if (!this.repository.getGroupRepository().adminExists(groupId, admin.getAddress()))
+		// Check admin is part of the group's current management authority
+		if (!Group.canApprove(this.repository, groupId, admin.getAddress()))
 			return ValidationResult.NOT_GROUP_ADMIN;
 
 		Account invitee = getInvitee();
@@ -82,7 +81,7 @@ public class CancelGroupInviteTransaction extends Transaction {
 			return ValidationResult.NO_BALANCE;
 
 		String groupOwner = this.repository.getGroupRepository().getOwner(groupId);
-		boolean groupOwnedByNullAccount = Objects.equals(groupOwner, Group.NULL_OWNER_ADDRESS);
+		boolean groupOwnedByNullAccount = Group.isNullOwner(groupOwner);
 
 		// Require approval if transaction relates to a group owned by the null account
 		if (groupOwnedByNullAccount && !this.needsGroupApproval())

@@ -13,6 +13,7 @@ import org.qortal.repository.Repository;
 
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Objects;
 
 import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toMap;
@@ -73,6 +74,50 @@ public class Group {
 	public static final int MAX_DESCRIPTION_SIZE = 128;
 	/** Max size of kick/ban reason */
 	public static final int MAX_REASON_SIZE = 128;
+
+	public static boolean isNullOwner(String address) {
+		return Objects.equals(address, NULL_OWNER_ADDRESS);
+	}
+
+	public static boolean hasUsableAdmins(Repository repository, int groupId) throws DataException {
+		return repository.getGroupRepository().countUsableGroupAdmins(groupId) > 0;
+	}
+
+	public static boolean canApprove(Repository repository, int groupId, String address) throws DataException {
+		if (isNullOwner(address))
+			return false;
+
+		GroupRepository groupRepository = repository.getGroupRepository();
+		GroupData groupData = groupRepository.fromGroupId(groupId);
+		if (groupData == null)
+			return false;
+
+		if (!isNullOwner(groupData.getOwner()))
+			return groupRepository.adminExists(groupId, address);
+
+		if (hasUsableAdmins(repository, groupId))
+			return groupRepository.usableAdminExists(groupId, address);
+
+		return groupRepository.memberExists(groupId, address);
+	}
+
+	public static int countApprovalAuthorities(Repository repository, int groupId) throws DataException {
+		GroupRepository groupRepository = repository.getGroupRepository();
+		GroupData groupData = groupRepository.fromGroupId(groupId);
+		if (groupData == null)
+			return 0;
+
+		if (!isNullOwner(groupData.getOwner())) {
+			Integer adminCount = groupRepository.countGroupAdmins(groupId);
+			return adminCount == null ? 0 : adminCount;
+		}
+
+		int usableAdminCount = groupRepository.countUsableGroupAdmins(groupId);
+		if (usableAdminCount > 0)
+			return usableAdminCount;
+
+		return groupRepository.countNonNullGroupMembers(groupId);
+	}
 
 	// Constructors
 

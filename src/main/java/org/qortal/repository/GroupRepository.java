@@ -67,6 +67,10 @@ public interface GroupRepository {
 	/** Returns number of group admins, or null if group doesn't exist */
 	public Integer countGroupAdmins(int groupId) throws DataException;
 
+	public boolean usableAdminExists(int groupId, String address) throws DataException;
+
+	public int countUsableGroupAdmins(int groupId) throws DataException;
+
 	public void save(GroupAdminData groupAdminData) throws DataException;
 
 	public void deleteAdmin(int groupId, String address) throws DataException;
@@ -85,6 +89,8 @@ public interface GroupRepository {
 
 	/** Returns number of group members, or null if group doesn't exist */
 	public Integer countGroupMembers(int groupId) throws DataException;
+
+	public int countNonNullGroupMembers(int groupId) throws DataException;
 
 	public void save(GroupMemberData groupMemberData) throws DataException;
 

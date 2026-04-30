@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-04-30 - core: let null-owned groups bootstrap from members
+
+Made Qortium's seeded development and minting groups public so new accounts can join without preloaded privileged accounts, and changed null-owned group approval so members can approve group actions only while there are no usable non-null admins. Once a real admin exists, approval authority returns to the admin set, keeping the bootstrap path open without making public membership permanently equivalent to admin control.
+
 ### 2026-04-30 - core: keep reward orphaning on the active repository
 
 Changed block reward recipient lookup to use the same repository connection that is currently processing or orphaning the block. This prevents reward orphaning from reading stale group-admin state while approved group-admin changes are being unwound, so tests that add or remove development admins can return cleanly to the genesis balance snapshot.
