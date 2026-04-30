@@ -25,10 +25,10 @@ runtime behavior.
 `src/main/resources/blockchain.json` still contains Qortal-era seed data:
 
 - native asset issue transaction with `assetName` set to `QORT`
-- reward-share seed entries tied to fixed public keys and addresses
-- `dev-group` creation, membership, admin, and ownership update transactions
-- Qortal address-format recipients and owners embedded directly in the main
-  chain config
+- neutral development and minting group creation entries, currently owned by the
+  null account
+- group seed choices that are still consensus-defining rather than generated
+  from an explicit fork template
 
 These are consensus-defining defaults. A reusable baseline should either ship a
 neutral example genesis or make these values clearly supplied by a fork's chain
@@ -38,7 +38,7 @@ Initial recommendation:
 
 - keep asset ID `0` as the native-asset protocol primitive
 - stop treating `QORT` as the hardcoded name of that primitive
-- replace the inherited main genesis seed data with a neutral baseline or a
+- continue reducing inherited main genesis seed data into a neutral baseline or
   generated fork template
 - make the governance group seed model explicit enough that a new chain can
   choose no seed governance, one seed admin group, or its own configured groups

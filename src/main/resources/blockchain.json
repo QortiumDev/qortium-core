@@ -24,7 +24,7 @@
 	"blockRewardBatchSize": 1000,
 	"blockRewardBatchAccountsBlockCount": 25,
 	"mintingGroupIds": [
-		{ "height": 0, "ids": [ 694 ]}
+		{ "height": 0, "ids": [ 2 ]}
 	],
 	"devGroupIds": [
 		{ "height": 0, "ids": [ 1 ]}
@@ -71,23 +71,8 @@
 		"timestamp": "1593450000000",
 		"transactions": [
 			{ "type": "ISSUE_ASSET", "assetName": "QORT", "description": "QORTAL coin", "quantity": 0, "isDivisible": true, "data": "{}" },
-			{ "type": "REWARD_SHARE", "minterPublicKey": "HFDmuc4HAAoVs9Siea3MugjBHasbotgVz2gsRDuLAAcB", "recipient": "QY82MasqEH6ChwXaETH4piMtE8Pk4NBWD3", "rewardSharePublicKey": "F35TbQXmgzz32cALj29jxzpdYSUKQvssqThLsZSabSXx", "sharePercent": 0 },
-
-			{ "type": "CREATE_GROUP", "creatorPublicKey": "CVancqfgb2vWLXHjqZF8LtoQyB7Y5HtZUrFKvtwrTkNW", "owner": "QbmBdAbvmXqCya8bia8WaD5izumKkC9BrY", "groupName": "dev-group", "description": "developer group", "isOpen": true, "approvalThreshold": "ONE", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
-
-			{ "type": "JOIN_GROUP", "joinerPublicKey": "25jxnXz3xF3tK2WJHpUHwGx7DXR6yfjAHF1hFX5ice6H", "groupId": 1 },
-			{ "type": "ADD_GROUP_ADMIN", "ownerPublicKey": "CVancqfgb2vWLXHjqZF8LtoQyB7Y5HtZUrFKvtwrTkNW", "groupId": 1, "member": "QhPXuFFRa9s91Q2qYKpSN5LVCUTqYkgRLz" },
-
-			{ "type": "JOIN_GROUP", "joinerPublicKey": "4gzaBTL8is3efMqVVPpfVr6SuAw22zS7t7qh6tBBqnRW", "groupId": 1 },
-			{ "type": "ADD_GROUP_ADMIN", "ownerPublicKey": "CVancqfgb2vWLXHjqZF8LtoQyB7Y5HtZUrFKvtwrTkNW", "groupId": 1, "member": "QPFM4xX2826MuBEhMtdReW1QR3vRYrQff3" },
-
-			{ "type": "JOIN_GROUP", "joinerPublicKey": "2ZnSnZcpvMePw23f3AefANbRQHs7KjDyAyEzXc9dBMdn", "groupId": 1 },
-			{ "type": "ADD_GROUP_ADMIN", "ownerPublicKey": "CVancqfgb2vWLXHjqZF8LtoQyB7Y5HtZUrFKvtwrTkNW", "groupId": 1, "member": "QSJ5cDLWivGcn9ym21azufBfiqeuGH1maq" },
-
-			{ "type": "JOIN_GROUP", "joinerPublicKey": "Gqcfa6YGXnKTr4F3QMpDQkjxxLGBmsq83wXcYeZvES7i", "groupId": 1 },
-			{ "type": "ADD_GROUP_ADMIN", "ownerPublicKey": "CVancqfgb2vWLXHjqZF8LtoQyB7Y5HtZUrFKvtwrTkNW", "groupId": 1, "member": "QTx98gU8ErigXkViWkvRH5JfaMpk8b3bHe" },
-
-			{ "type": "UPDATE_GROUP", "ownerPublicKey": "CVancqfgb2vWLXHjqZF8LtoQyB7Y5HtZUrFKvtwrTkNW", "groupId": 1, "newOwner": "QdSnUy6sUiEnaN87dWmE92g1uQjrvPgrWG", "newDescription": "developer group", "newIsOpen": false, "newApprovalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 }
+			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "development", "description": "Qortium Development", "isOpen": false, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
+			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "minting", "description": "Qortium Minting", "isOpen": false, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 }
 
 		]
 	}
