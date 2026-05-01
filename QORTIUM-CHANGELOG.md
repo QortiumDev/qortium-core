@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - core: define mempow fee policy for normal transactions
+
+Defined the central Qortium policy for when ordinary user-submitted transactions will be allowed to use a MemoryPoW nonce instead of a paid fee. This commit only adds the shared policy hooks and keeps existing transaction behavior unchanged until later commits add nonce data and verification for eligible transaction types.
+
 ### 2026-05-01 - core: remove transaction reference from wire and schema
 
 Removed the inherited general transaction reference from Qortium transaction data, raw transaction bytes, API lookup, chat responses, and database storage. Transaction signatures now cover a smaller baseline payload without the unused reference slot, while independent block, chat, group, name, and asset references remain in place for their own domain-specific state.

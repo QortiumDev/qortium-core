@@ -358,6 +358,55 @@ public abstract class Transaction {
 		return this.feePerByte() >= maxBytePerUnitFee / unitFee;
 	}
 
+	/** Returns whether this transaction can use a MemoryPoW nonce as an alternative to the normal paid fee. */
+	protected boolean canUseMempowFeeAlternative() {
+		return canUseMempowFeeAlternative(this.transactionData.getType());
+	}
+
+	protected static boolean canUseMempowFeeAlternative(TransactionType transactionType) {
+		switch (transactionType) {
+			case GENESIS:
+			case ARBITRARY:
+			case MESSAGE:
+			case CHAT:
+			case PUBLICIZE:
+			case AT:
+			case REWARD_SHARE:
+			case PRESENCE:
+				return false;
+
+			default:
+				return true;
+		}
+	}
+
+	/** Returns whether this transaction carries a positive fee. */
+	protected boolean hasPaidFee() {
+		Long fee = this.transactionData.getFee();
+		return fee != null && fee > 0;
+	}
+
+	/**
+	 * Returns whether this transaction satisfies the fee policy.
+	 * <p>
+	 * Future normal transaction nonce support should override {@link #hasValidMempowFeeNonce()}.
+	 */
+	protected boolean hasValidFeeOrMempow() throws DataException {
+		if (this.hasMinimumFee() && this.hasMinimumFeePerByte())
+			return true;
+
+		return this.canUseMempowFeeAlternative() && this.hasValidMempowFeeNonce();
+	}
+
+	/** Returns whether this transaction has a valid MemoryPoW fee-alternative nonce. */
+	protected boolean hasValidMempowFeeNonce() throws DataException {
+		return false;
+	}
+
+	protected ValidationResult validateMempowFeePolicy() throws DataException {
+		return this.hasValidFeeOrMempow() ? ValidationResult.OK : ValidationResult.INSUFFICIENT_FEE;
+	}
+
 	public long calcRecommendedFee() {
 		int dataLength;
 		try {
@@ -554,10 +603,7 @@ public abstract class Transaction {
 
 	/** Returns whether transaction's fee is valid. Might be overriden in transaction subclasses. */
 	protected ValidationResult isFeeValid() throws DataException {
-		if (!hasMinimumFee() || !hasMinimumFeePerByte())
-			return ValidationResult.INSUFFICIENT_FEE;
-
-		return ValidationResult.OK;
+		return this.validateMempowFeePolicy();
 	}
 
 	protected boolean isValidTxGroupId() throws DataException {
