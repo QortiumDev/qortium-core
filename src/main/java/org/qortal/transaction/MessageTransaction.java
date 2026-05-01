@@ -57,7 +57,7 @@ public class MessageTransaction extends Transaction {
 		long timestamp = NTP.getTime();
 
 		long fee = 0L;
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, null, sender.getPublicKey(), fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, sender.getPublicKey(), fee, null);
 		int version = Transaction.getVersionByTimestamp(timestamp);
 		MessageTransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, version, 0, recipient, 0, null, data, isText, isEncrypted);
 		return new MessageTransaction(repository, messageTransactionData);
@@ -305,8 +305,7 @@ public class MessageTransaction extends Transaction {
 
 		// Wrap and delegate fee restoration to Payment class.
 		new Payment(this.repository).orphanReferencesAndFees(this.messageTransactionData.getSenderPublicKey(),
-				getPaymentData(), this.messageTransactionData.getFee(), this.messageTransactionData.getSignature(),
-				this.messageTransactionData.getReference(), false);
+				getPaymentData(), this.messageTransactionData.getFee(), this.messageTransactionData.getSignature(), false);
 	}
 
 }

@@ -26,7 +26,6 @@ public class CancelAssetOrderTransactionTransformer extends TransactionTransform
 		layout.add("txType: " + TransactionType.CANCEL_ASSET_ORDER.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("order creator's public key", TransformationType.PUBLIC_KEY);
 		layout.add("order ID to cancel", TransformationType.SIGNATURE);
 		layout.add("fee", TransformationType.AMOUNT);
@@ -37,10 +36,6 @@ public class CancelAssetOrderTransactionTransformer extends TransactionTransform
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		byte[] orderId = new byte[ORDER_ID_LENGTH];
@@ -51,7 +46,7 @@ public class CancelAssetOrderTransactionTransformer extends TransactionTransform
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
 
 		return new CancelAssetOrderTransactionData(baseTransactionData, orderId);
 	}

@@ -872,7 +872,7 @@ public class CrossChainResource {
 		Long assetId = null; // no assetId as amount is zero
 		Long fee = 0L;
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, null, senderPublicKey, fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, senderPublicKey, fee, null);
 		TransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, version, nonce, atAddress, amount, assetId, messageData, false, false);
 
 		MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);

@@ -34,7 +34,6 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.DEPLOY_AT.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("AT creator's public key", TransformationType.PUBLIC_KEY);
 		layout.add("AT name length", TransformationType.INT);
 		layout.add("AT name", TransformationType.STRING);
@@ -54,10 +53,6 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		String name = Serialization.deserializeSizedString(byteBuffer, DeployAtTransaction.MAX_NAME_SIZE);
@@ -84,7 +79,7 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
 
 		return new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, amount, assetId);
 	}

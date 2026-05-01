@@ -31,7 +31,7 @@ public class GroupUtils {
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 		String groupDescription = groupName + " (test group)";
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, null, account.getPublicKey(), GroupUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, account.getPublicKey(), GroupUtils.fee, null);
 		TransactionData transactionData = new CreateGroupTransactionData(baseTransactionData, groupName, groupDescription, isOpen, approvalThreshold, minimumBlockDelay, maximumBlockDelay);
 
 		TransactionUtils.signAndMint(repository, transactionData, account);
@@ -71,7 +71,7 @@ public class GroupUtils {
 	public static void joinGroup(Repository repository, PrivateKeyAccount joinerAccount, int groupId) throws DataException {
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, null, joinerAccount.getPublicKey(), GroupUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, joinerAccount.getPublicKey(), GroupUtils.fee, null);
 		TransactionData transactionData = new JoinGroupTransactionData(baseTransactionData, groupId);
 
 		TransactionUtils.signAndMint(repository, transactionData, joinerAccount);
@@ -88,7 +88,7 @@ public class GroupUtils {
 
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, null, account.getPublicKey(), GroupUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, account.getPublicKey(), GroupUtils.fee, null);
 		TransactionData transactionData = new GroupApprovalTransactionData(baseTransactionData, pendingSignature, decision);
 
 		TransactionUtils.signAndMint(repository, transactionData, account);

@@ -137,46 +137,6 @@ public class TransactionsResource {
 	}
 
 	@GET
-	@Path("/reference/{reference}")
-	@Operation(
-		summary = "Fetch transaction using transaction reference",
-		description = "Returns transaction",
-		responses = {
-			@ApiResponse(
-				description = "a transaction",
-				content = @Content(
-					schema = @Schema(
-						implementation = TransactionData.class
-					)
-				)
-			)
-		}
-	)
-	@ApiErrors({
-		ApiError.INVALID_REFERENCE, ApiError.TRANSACTION_UNKNOWN, ApiError.REPOSITORY_ISSUE
-	})
-	public TransactionData getTransactionByReference(@PathParam("reference") String reference58) {
-		byte[] reference;
-		try {
-			reference = Base58.decode(reference58);
-		} catch (NumberFormatException e) {
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_REFERENCE, e);
-		}
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			TransactionData transactionData = repository.getTransactionRepository().fromReference(reference);
-			if (transactionData == null)
-				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSACTION_UNKNOWN);
-
-			return transactionData;
-		} catch (ApiException e) {
-			throw e;
-		} catch (DataException e) {
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
-		}
-	}
-
-	@GET
 	@Path("/block/{signature}")
 	@Operation(
 		summary = "Fetch transactions using block signature",

@@ -109,7 +109,6 @@ public class ChatSerializationTests {
 			BaseTransactionData baseTransactionData = new BaseTransactionData(
 					1_500_000_000_000L,
 					originalTransactionData.getTxGroupId(),
-					originalTransactionData.getReference(),
 					originalTransactionData.getCreatorPublicKey(),
 					originalTransactionData.getFee(),
 					originalTransactionData.getSignature());

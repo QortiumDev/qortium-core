@@ -28,8 +28,6 @@ import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.NTP;
 
 import java.util.List;
-import java.util.Random;
-
 import static org.junit.Assert.*;
 
 public class MessageTests extends Common {
@@ -71,44 +69,6 @@ public class MessageTests extends Common {
 
 		// Alice is not part of new group
 		assertFalse(isValid(newGroupId, null, 0L, null));
-	}
-
-	@Test
-	public void referenceTests() throws DataException {
-		Random random = new Random();
-
-		byte[] randomPrivateKey = new byte[32];
-		random.nextBytes(randomPrivateKey);
-
-		byte[] randomReference = new byte[64];
-		random.nextBytes(randomReference);
-
-		long minimumFee = BlockChain.getInstance().getUnitFeeAtTimestamp(System.currentTimeMillis());
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
-			PrivateKeyAccount newbie = new PrivateKeyAccount(repository, randomPrivateKey);
-
-			byte[] aliceReference = null;
-
-			// real account, correct reference, real fee: OK
-			assertTrue(hasValidReference(repository, alice, aliceReference, minimumFee));
-			// real account, random reference, real fee: OK
-			assertTrue(hasValidReference(repository, alice, randomReference, minimumFee));
-			// real account, correct reference, zero fee: OK
-			assertTrue(hasValidReference(repository, alice, aliceReference, 0));
-			// real account, random reference, zero fee: OK
-			assertTrue(hasValidReference(repository, alice, randomReference, 0));
-
-			// new account, null reference, real fee: OK
-			assertTrue(hasValidReference(repository, newbie, null, minimumFee));
-			// new account, random reference, real fee: OK
-			assertTrue(hasValidReference(repository, newbie, randomReference, minimumFee));
-			// new account, null reference, zero fee: OK
-			assertTrue(hasValidReference(repository, newbie, null, 0));
-			// new account, random reference, zero fee: OK
-			assertTrue(hasValidReference(repository, newbie, randomReference, 0));
-		}
 	}
 
 	@Test
@@ -332,18 +292,6 @@ public class MessageTests extends Common {
 			return transaction.isValidUnconfirmed() == ValidationResult.OK;
 		}
 	}
-
-	private boolean hasValidReference(Repository repository, PrivateKeyAccount sender, byte[] reference, long fee) throws DataException {
-		long timestamp = NTP.getTime();
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, sender.getPublicKey(), fee, null);
-		byte[] data = "test".getBytes();
-		boolean isText = true;
-		boolean isEncrypted = false;
-		MessageTransactionData messageTransactionData = buildMessageTransactionData(baseTransactionData, 0, recipient, 0, null, data, isText, isEncrypted);
-		MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);
-		return messageTransaction.hasValidReference();
-	}
-
 
 	private MessageTransaction testFeeNonce(boolean withFee, boolean withNonce, boolean isValid) throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {

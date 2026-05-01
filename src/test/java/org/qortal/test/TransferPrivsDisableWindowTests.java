@@ -42,8 +42,7 @@ public class TransferPrivsDisableWindowTests extends Common {
 
 			long fee = 1L * Amounts.MULTIPLIER;
 
-			BaseTransactionData baseTransactionData = new BaseTransactionData(DISABLED_WINDOW_TIMESTAMP, Group.NO_GROUP, null,
-					sender.getPublicKey(), fee, null);
+			BaseTransactionData baseTransactionData = new BaseTransactionData(DISABLED_WINDOW_TIMESTAMP, Group.NO_GROUP, sender.getPublicKey(), fee, null);
 			TransactionData transactionData = new TransferPrivsTransactionData(baseTransactionData, recipient.getAddress());
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 

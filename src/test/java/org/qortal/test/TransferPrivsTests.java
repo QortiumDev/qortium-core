@@ -307,7 +307,7 @@ public class TransferPrivsTests extends Common {
 		int txGroupId = 0;
 		long fee = 1L * Amounts.MULTIPLIER;
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, null, senderAccount.getPublicKey(), fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderAccount.getPublicKey(), fee, null);
 		TransactionData transactionData = new TransferPrivsTransactionData(baseTransactionData, recipientAccount.getAddress());
 
 		TransactionUtils.signAndImportValid(repository, transactionData, senderAccount);

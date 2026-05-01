@@ -176,7 +176,7 @@ public class ArbitraryDataTransactionBuilder {
             }
 
             final BaseTransactionData baseTransactionData = new BaseTransactionData(now, Group.NO_GROUP,
-                    null, creatorPublicKey, fee, null);
+                    creatorPublicKey, fee, null);
             final int size = (int) arbitraryDataFile.size();
             final int nonce = 0;
             byte[] secret = arbitraryDataFile.getSecret();

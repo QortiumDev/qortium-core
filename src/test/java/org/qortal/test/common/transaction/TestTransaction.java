@@ -14,7 +14,7 @@ public abstract class TestTransaction {
 
 	public static BaseTransactionData generateBase(PrivateKeyAccount account, int txGroupId) throws DataException {
 		long timestamp = System.currentTimeMillis();
-		return new BaseTransactionData(timestamp, txGroupId, null, account.getPublicKey(), BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp), null);
+		return new BaseTransactionData(timestamp, txGroupId, account.getPublicKey(), BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp), null);
 	}
 
 	public static BaseTransactionData generateBase(PrivateKeyAccount account) throws DataException {

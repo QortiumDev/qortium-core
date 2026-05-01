@@ -29,7 +29,6 @@ public class BuyNameTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.BUY_NAME.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("buyer's public key", TransformationType.PUBLIC_KEY);
 		layout.add("name length", TransformationType.INT);
 		layout.add("name", TransformationType.STRING);
@@ -43,10 +42,6 @@ public class BuyNameTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] buyerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		String name = Serialization.deserializeSizedString(byteBuffer, Name.MAX_NAME_SIZE);
@@ -60,7 +55,7 @@ public class BuyNameTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, buyerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, buyerPublicKey, fee, signature);
 
 		return new BuyNameTransactionData(baseTransactionData, name, amount, seller);
 	}

@@ -128,10 +128,10 @@ public class RavencoinACCTv3TradeBot implements AcctTradeBot {
 
 		// Deploy AT
 		long timestamp = NTP.getTime();
-		byte[] reference = null;
+
 		long fee = 0L;
 		byte[] signature = null;
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, creator.getPublicKey(), fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, creator.getPublicKey(), fee, signature);
 
 		String name = "QORT/RVN ACCT";
 		String description = "QORT/RVN cross-chain trade";

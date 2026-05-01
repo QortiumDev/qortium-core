@@ -79,11 +79,6 @@ public class PublicizeTransaction extends Transaction {
 	}
 
 	@Override
-	public boolean hasValidReference() throws DataException {
-		return true;
-	}
-
-	@Override
 	public void preProcess() throws DataException {
 		// Nothing to do
 	}

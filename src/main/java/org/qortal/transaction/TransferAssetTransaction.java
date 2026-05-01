@@ -89,7 +89,7 @@ public class TransferAssetTransaction extends Transaction {
 	public void orphanReferencesAndFees() throws DataException {
 		// Wrap asset transfer as a payment and delegate fee restoration to Payment class.
 		new Payment(this.repository).orphanReferencesAndFees(this.transferAssetTransactionData.getSenderPublicKey(), getPaymentData(), this.transferAssetTransactionData.getFee(),
-				this.transferAssetTransactionData.getSignature(), this.transferAssetTransactionData.getReference(), false);
+				this.transferAssetTransactionData.getSignature(), false);
 	}
 
 }

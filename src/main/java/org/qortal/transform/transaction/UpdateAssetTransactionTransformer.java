@@ -31,7 +31,6 @@ public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.UPDATE_ASSET.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("asset owner's public key", TransformationType.PUBLIC_KEY);
 		layout.add("asset ID", TransformationType.LONG);
 		layout.add("asset new owner", TransformationType.ADDRESS);
@@ -47,10 +46,6 @@ public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] ownerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		long assetId = byteBuffer.getLong();
@@ -66,7 +61,7 @@ public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, ownerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, signature);
 
 		return new UpdateAssetTransactionData(baseTransactionData, assetId, newOwner, newDescription, newData);
 	}

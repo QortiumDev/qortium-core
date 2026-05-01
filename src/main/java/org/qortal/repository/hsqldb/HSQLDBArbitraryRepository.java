@@ -161,7 +161,7 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 
 	@Override
 	public List<ArbitraryTransactionData> getArbitraryTransactions(String name, Service service, String identifier, long since) throws DataException {
-		String sql = "SELECT type, reference, signature, creator, created_when, fee, " +
+		String sql = "SELECT type, signature, creator, created_when, fee, " +
 				"tx_group_id, block_height, approval_status, approval_height, " +
 				"version, nonce, service, size, is_data_raw, data, metadata_hash, " +
 				"name, identifier, update_method, secret, compression FROM ArbitraryTransactions " +
@@ -178,41 +178,40 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 			do {
 				//TransactionType type = TransactionType.valueOf(resultSet.getInt(1));
 
-				byte[] reference = resultSet.getBytes(2);
-				byte[] signature = resultSet.getBytes(3);
-				byte[] creatorPublicKey = resultSet.getBytes(4);
-				long timestamp = resultSet.getLong(5);
+				byte[] signature = resultSet.getBytes(2);
+				byte[] creatorPublicKey = resultSet.getBytes(3);
+				long timestamp = resultSet.getLong(4);
 
-				Long fee = resultSet.getLong(6);
+				Long fee = resultSet.getLong(5);
 				if (fee == 0 && resultSet.wasNull())
 					fee = null;
 
-				int txGroupId = resultSet.getInt(7);
+				int txGroupId = resultSet.getInt(6);
 
-				Integer blockHeight = resultSet.getInt(8);
+				Integer blockHeight = resultSet.getInt(7);
 				if (blockHeight == 0 && resultSet.wasNull())
 					blockHeight = null;
 
-				ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(9));
-				Integer approvalHeight = resultSet.getInt(10);
+				ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(8));
+				Integer approvalHeight = resultSet.getInt(9);
 				if (approvalHeight == 0 && resultSet.wasNull())
 					approvalHeight = null;
 
-				BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
+				BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
 
-				int version = resultSet.getInt(11);
-				int nonce = resultSet.getInt(12);
-				int serviceInt = resultSet.getInt(13);
-				int size = resultSet.getInt(14);
-				boolean isDataRaw = resultSet.getBoolean(15); // NOT NULL, so no null to false
+				int version = resultSet.getInt(10);
+				int nonce = resultSet.getInt(11);
+				int serviceInt = resultSet.getInt(12);
+				int size = resultSet.getInt(13);
+				boolean isDataRaw = resultSet.getBoolean(14); // NOT NULL, so no null to false
 				DataType dataType = isDataRaw ? DataType.RAW_DATA : DataType.DATA_HASH;
-				byte[] data = resultSet.getBytes(16);
-				byte[] metadataHash = resultSet.getBytes(17);
-				String nameResult = resultSet.getString(18);
-				String identifierResult = resultSet.getString(19);
-				Method method = Method.valueOf(resultSet.getInt(20));
-				byte[] secret = resultSet.getBytes(21);
-				Compression compression = Compression.valueOf(resultSet.getInt(22));
+				byte[] data = resultSet.getBytes(15);
+				byte[] metadataHash = resultSet.getBytes(16);
+				String nameResult = resultSet.getString(17);
+				String identifierResult = resultSet.getString(18);
+				Method method = Method.valueOf(resultSet.getInt(19));
+				byte[] secret = resultSet.getBytes(20);
+				Compression compression = Compression.valueOf(resultSet.getInt(21));
 				// FUTURE: get payments from signature if needed. Avoiding for now to reduce database calls.
 
 				ArbitraryTransactionData transactionData = new ArbitraryTransactionData(baseTransactionData,
@@ -235,7 +234,7 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 
 	@Override
 	public List<ArbitraryTransactionData> getLatestArbitraryTransactions(Integer limit) throws DataException {
-		String sql = "SELECT type, reference, signature, creator, created_when, fee, " +
+		String sql = "SELECT type, signature, creator, created_when, fee, " +
 				"tx_group_id, block_height, approval_status, approval_height, " +
 				"version, nonce, service, size, is_data_raw, data, metadata_hash, " +
 				"name, identifier, update_method, secret, compression FROM ArbitraryTransactions " +
@@ -250,41 +249,40 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 				return new ArrayList<>(0);
 
 			do {
-				byte[] reference = resultSet.getBytes(2);
-				byte[] signature = resultSet.getBytes(3);
-				byte[] creatorPublicKey = resultSet.getBytes(4);
-				long timestamp = resultSet.getLong(5);
+				byte[] signature = resultSet.getBytes(2);
+				byte[] creatorPublicKey = resultSet.getBytes(3);
+				long timestamp = resultSet.getLong(4);
 
-				Long fee = resultSet.getLong(6);
+				Long fee = resultSet.getLong(5);
 				if (fee == 0 && resultSet.wasNull())
 					fee = null;
 
-				int txGroupId = resultSet.getInt(7);
+				int txGroupId = resultSet.getInt(6);
 
-				Integer blockHeight = resultSet.getInt(8);
+				Integer blockHeight = resultSet.getInt(7);
 				if (blockHeight == 0 && resultSet.wasNull())
 					blockHeight = null;
 
-				ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(9));
-				Integer approvalHeight = resultSet.getInt(10);
+				ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(8));
+				Integer approvalHeight = resultSet.getInt(9);
 				if (approvalHeight == 0 && resultSet.wasNull())
 					approvalHeight = null;
 
-				BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
+				BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
 
-				int version = resultSet.getInt(11);
-				int nonce = resultSet.getInt(12);
-				int serviceInt = resultSet.getInt(13);
-				int size = resultSet.getInt(14);
-				boolean isDataRaw = resultSet.getBoolean(15); // NOT NULL, so no null to false
+				int version = resultSet.getInt(10);
+				int nonce = resultSet.getInt(11);
+				int serviceInt = resultSet.getInt(12);
+				int size = resultSet.getInt(13);
+				boolean isDataRaw = resultSet.getBoolean(14); // NOT NULL, so no null to false
 				DataType dataType = isDataRaw ? DataType.RAW_DATA : DataType.DATA_HASH;
-				byte[] data = resultSet.getBytes(16);
-				byte[] metadataHash = resultSet.getBytes(17);
-				String nameResult = resultSet.getString(18);
-				String identifierResult = resultSet.getString(19);
-				Method method = Method.valueOf(resultSet.getInt(20));
-				byte[] secret = resultSet.getBytes(21);
-				Compression compression = Compression.valueOf(resultSet.getInt(22));
+				byte[] data = resultSet.getBytes(15);
+				byte[] metadataHash = resultSet.getBytes(16);
+				String nameResult = resultSet.getString(17);
+				String identifierResult = resultSet.getString(18);
+				Method method = Method.valueOf(resultSet.getInt(19));
+				byte[] secret = resultSet.getBytes(20);
+				Compression compression = Compression.valueOf(resultSet.getInt(21));
 				// FUTURE: get payments from signature if needed. Avoiding for now to reduce database calls.
 
 				ArbitraryTransactionData transactionData = new ArbitraryTransactionData(baseTransactionData,
@@ -333,7 +331,7 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 
 	@Override
 	public List<ArbitraryTransactionData> getLatestArbitraryTransactionsByName( String name ) throws DataException {
-		String sql = "SELECT type, reference, signature, creator, created_when, fee, " +
+		String sql = "SELECT type, signature, creator, created_when, fee, " +
 				"tx_group_id, block_height, approval_status, approval_height, " +
 				"version, nonce, service, size, is_data_raw, data, metadata_hash, " +
 				"name, identifier, update_method, secret, compression FROM ArbitraryTransactions " +
@@ -347,41 +345,40 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 				return new ArrayList<>(0);
 
 			do {
-				byte[] reference = resultSet.getBytes(2);
-				byte[] signature = resultSet.getBytes(3);
-				byte[] creatorPublicKey = resultSet.getBytes(4);
-				long timestamp = resultSet.getLong(5);
+				byte[] signature = resultSet.getBytes(2);
+				byte[] creatorPublicKey = resultSet.getBytes(3);
+				long timestamp = resultSet.getLong(4);
 
-				Long fee = resultSet.getLong(6);
+				Long fee = resultSet.getLong(5);
 				if (fee == 0 && resultSet.wasNull())
 					fee = null;
 
-				int txGroupId = resultSet.getInt(7);
+				int txGroupId = resultSet.getInt(6);
 
-				Integer blockHeight = resultSet.getInt(8);
+				Integer blockHeight = resultSet.getInt(7);
 				if (blockHeight == 0 && resultSet.wasNull())
 					blockHeight = null;
 
-				ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(9));
-				Integer approvalHeight = resultSet.getInt(10);
+				ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(8));
+				Integer approvalHeight = resultSet.getInt(9);
 				if (approvalHeight == 0 && resultSet.wasNull())
 					approvalHeight = null;
 
-				BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
+				BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
 
-				int version = resultSet.getInt(11);
-				int nonce = resultSet.getInt(12);
-				int serviceInt = resultSet.getInt(13);
-				int size = resultSet.getInt(14);
-				boolean isDataRaw = resultSet.getBoolean(15); // NOT NULL, so no null to false
+				int version = resultSet.getInt(10);
+				int nonce = resultSet.getInt(11);
+				int serviceInt = resultSet.getInt(12);
+				int size = resultSet.getInt(13);
+				boolean isDataRaw = resultSet.getBoolean(14); // NOT NULL, so no null to false
 				DataType dataType = isDataRaw ? DataType.RAW_DATA : DataType.DATA_HASH;
-				byte[] data = resultSet.getBytes(16);
-				byte[] metadataHash = resultSet.getBytes(17);
-				String nameResult = resultSet.getString(18);
-				String identifierResult = resultSet.getString(19);
-				Method method = Method.valueOf(resultSet.getInt(20));
-				byte[] secret = resultSet.getBytes(21);
-				Compression compression = Compression.valueOf(resultSet.getInt(22));
+				byte[] data = resultSet.getBytes(15);
+				byte[] metadataHash = resultSet.getBytes(16);
+				String nameResult = resultSet.getString(17);
+				String identifierResult = resultSet.getString(18);
+				Method method = Method.valueOf(resultSet.getInt(19));
+				byte[] secret = resultSet.getBytes(20);
+				Compression compression = Compression.valueOf(resultSet.getInt(21));
 				// FUTURE: get payments from signature if needed. Avoiding for now to reduce database calls.
 
 				ArbitraryTransactionData transactionData = new ArbitraryTransactionData(baseTransactionData,
@@ -408,7 +405,7 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 
 		StringBuilder sql = new StringBuilder(1024);
 
-		sql.append("SELECT type, reference, signature, creator, created_when, fee, " +
+		sql.append("SELECT type, signature, creator, created_when, fee, " +
 				"tx_group_id, block_height, approval_status, approval_height, " +
 				"version, nonce, service, size, is_data_raw, data, metadata_hash, " +
 				"name, identifier, update_method, secret, compression FROM ArbitraryTransactions " +
@@ -438,41 +435,40 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 
 			//TransactionType type = TransactionType.valueOf(resultSet.getInt(1));
 
-			byte[] reference = resultSet.getBytes(2);
-			byte[] signature = resultSet.getBytes(3);
-			byte[] creatorPublicKey = resultSet.getBytes(4);
-			long timestamp = resultSet.getLong(5);
+			byte[] signature = resultSet.getBytes(2);
+			byte[] creatorPublicKey = resultSet.getBytes(3);
+			long timestamp = resultSet.getLong(4);
 
-			Long fee = resultSet.getLong(6);
+			Long fee = resultSet.getLong(5);
 			if (fee == 0 && resultSet.wasNull())
 				fee = null;
 
-			int txGroupId = resultSet.getInt(7);
+			int txGroupId = resultSet.getInt(6);
 
-			Integer blockHeight = resultSet.getInt(8);
+			Integer blockHeight = resultSet.getInt(7);
 			if (blockHeight == 0 && resultSet.wasNull())
 				blockHeight = null;
 
-			ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(9));
-			Integer approvalHeight = resultSet.getInt(10);
+			ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(8));
+			Integer approvalHeight = resultSet.getInt(9);
 			if (approvalHeight == 0 && resultSet.wasNull())
 				approvalHeight = null;
 
-			BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
+			BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
 
-			int version = resultSet.getInt(11);
-			int nonce = resultSet.getInt(12);
-			int serviceInt = resultSet.getInt(13);
-			int size = resultSet.getInt(14);
-			boolean isDataRaw = resultSet.getBoolean(15); // NOT NULL, so no null to false
+			int version = resultSet.getInt(10);
+			int nonce = resultSet.getInt(11);
+			int serviceInt = resultSet.getInt(12);
+			int size = resultSet.getInt(13);
+			boolean isDataRaw = resultSet.getBoolean(14); // NOT NULL, so no null to false
 			DataType dataType = isDataRaw ? DataType.RAW_DATA : DataType.DATA_HASH;
-			byte[] data = resultSet.getBytes(16);
-			byte[] metadataHash = resultSet.getBytes(17);
-			String nameResult = resultSet.getString(18);
-			String identifierResult = resultSet.getString(19);
-			Method methodResult = Method.valueOf(resultSet.getInt(20));
-			byte[] secret = resultSet.getBytes(21);
-			Compression compression = Compression.valueOf(resultSet.getInt(22));
+			byte[] data = resultSet.getBytes(15);
+			byte[] metadataHash = resultSet.getBytes(16);
+			String nameResult = resultSet.getString(17);
+			String identifierResult = resultSet.getString(18);
+			Method methodResult = Method.valueOf(resultSet.getInt(19));
+			byte[] secret = resultSet.getBytes(20);
+			Compression compression = Compression.valueOf(resultSet.getInt(21));
 			// FUTURE: get payments from signature if needed. Avoiding for now to reduce database calls.
 
 			ArbitraryTransactionData transactionData = new ArbitraryTransactionData(baseTransactionData,
@@ -489,7 +485,7 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 	public ArbitraryTransactionData getSingleTransactionBySignature(byte[] signature) throws DataException {
 		StringBuilder sql = new StringBuilder(1024);
 
-		sql.append("SELECT type, reference, signature, creator, created_when, fee, " +
+		sql.append("SELECT type, signature, creator, created_when, fee, " +
 				"tx_group_id, block_height, approval_status, approval_height, " +
 				"version, nonce, service, size, is_data_raw, data, metadata_hash, " +
 				"name, identifier, update_method, secret, compression FROM ArbitraryTransactions atx " +
@@ -500,40 +496,39 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 			if (resultSet == null)
 				return null;
 
-			byte[] reference = resultSet.getBytes(2);
-			byte[] creatorPublicKey = resultSet.getBytes(4);
-			long timestamp = resultSet.getLong(5);
+			byte[] creatorPublicKey = resultSet.getBytes(3);
+			long timestamp = resultSet.getLong(4);
 
-			Long fee = resultSet.getLong(6);
+			Long fee = resultSet.getLong(5);
 			if (fee == 0 && resultSet.wasNull())
 				fee = null;
 
-			int txGroupId = resultSet.getInt(7);
+			int txGroupId = resultSet.getInt(6);
 
-			Integer blockHeight = resultSet.getInt(8);
+			Integer blockHeight = resultSet.getInt(7);
 			if (blockHeight == 0 && resultSet.wasNull())
 				blockHeight = null;
 
-			ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(9));
-			Integer approvalHeight = resultSet.getInt(10);
+			ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(8));
+			Integer approvalHeight = resultSet.getInt(9);
 			if (approvalHeight == 0 && resultSet.wasNull())
 				approvalHeight = null;
 
-			BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
+			BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
 
-			int version = resultSet.getInt(11);
-			int nonce = resultSet.getInt(12);
-			int serviceInt = resultSet.getInt(13);
-			int size = resultSet.getInt(14);
-			boolean isDataRaw = resultSet.getBoolean(15); // NOT NULL, so no null to false
+			int version = resultSet.getInt(10);
+			int nonce = resultSet.getInt(11);
+			int serviceInt = resultSet.getInt(12);
+			int size = resultSet.getInt(13);
+			boolean isDataRaw = resultSet.getBoolean(14); // NOT NULL, so no null to false
 			DataType dataType = isDataRaw ? DataType.RAW_DATA : DataType.DATA_HASH;
-			byte[] data = resultSet.getBytes(16);
-			byte[] metadataHash = resultSet.getBytes(17);
-			String nameResult = resultSet.getString(18);
-			String identifierResult = resultSet.getString(19);
-			Method methodResult = Method.valueOf(resultSet.getInt(20));
-			byte[] secret = resultSet.getBytes(21);
-			Compression compression = Compression.valueOf(resultSet.getInt(22));
+			byte[] data = resultSet.getBytes(15);
+			byte[] metadataHash = resultSet.getBytes(16);
+			String nameResult = resultSet.getString(17);
+			String identifierResult = resultSet.getString(18);
+			Method methodResult = Method.valueOf(resultSet.getInt(19));
+			byte[] secret = resultSet.getBytes(20);
+			Compression compression = Compression.valueOf(resultSet.getInt(21));
 			// TODO: get payments from signature if needed. Avoiding for now to reduce database calls.
 
 			ArbitraryTransactionData transactionData = new ArbitraryTransactionData(baseTransactionData,
@@ -558,7 +553,7 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 
 	public List<ArbitraryTransactionData> getArbitraryTransactions(boolean requireName, Integer limit, Integer offset, Boolean reverse) throws DataException {
 		StringBuilder sql = new StringBuilder(512);
-		sql.append("SELECT type, reference, signature, creator, created_when, fee, " +
+		sql.append("SELECT type, signature, creator, created_when, fee, " +
 			"tx_group_id, block_height, approval_status, approval_height, " +
 			"version, nonce, service, size, is_data_raw, data, metadata_hash, " +
 			"name, identifier, update_method, secret, compression FROM ArbitraryTransactions " +
@@ -585,41 +580,40 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 			do {
 				//TransactionType type = TransactionType.valueOf(resultSet.getInt(1));
 
-				byte[] reference = resultSet.getBytes(2);
-				byte[] signature = resultSet.getBytes(3);
-				byte[] creatorPublicKey = resultSet.getBytes(4);
-				long timestamp = resultSet.getLong(5);
+				byte[] signature = resultSet.getBytes(2);
+				byte[] creatorPublicKey = resultSet.getBytes(3);
+				long timestamp = resultSet.getLong(4);
 
-				Long fee = resultSet.getLong(6);
+				Long fee = resultSet.getLong(5);
 				if (fee == 0 && resultSet.wasNull())
 					fee = null;
 
-				int txGroupId = resultSet.getInt(7);
+				int txGroupId = resultSet.getInt(6);
 
-				Integer blockHeight = resultSet.getInt(8);
+				Integer blockHeight = resultSet.getInt(7);
 				if (blockHeight == 0 && resultSet.wasNull())
 					blockHeight = null;
 
-				ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(9));
-				Integer approvalHeight = resultSet.getInt(10);
+				ApprovalStatus approvalStatus = ApprovalStatus.valueOf(resultSet.getInt(8));
+				Integer approvalHeight = resultSet.getInt(9);
 				if (approvalHeight == 0 && resultSet.wasNull())
 					approvalHeight = null;
 
-				BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
+				BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, approvalStatus, blockHeight, approvalHeight, signature);
 
-				int version = resultSet.getInt(11);
-				int nonce = resultSet.getInt(12);
-				int serviceInt = resultSet.getInt(13);
-				int size = resultSet.getInt(14);
-				boolean isDataRaw = resultSet.getBoolean(15); // NOT NULL, so no null to false
+				int version = resultSet.getInt(10);
+				int nonce = resultSet.getInt(11);
+				int serviceInt = resultSet.getInt(12);
+				int size = resultSet.getInt(13);
+				boolean isDataRaw = resultSet.getBoolean(14); // NOT NULL, so no null to false
 				DataType dataType = isDataRaw ? DataType.RAW_DATA : DataType.DATA_HASH;
-				byte[] data = resultSet.getBytes(16);
-				byte[] metadataHash = resultSet.getBytes(17);
-				String nameResult = resultSet.getString(18);
-				String identifierResult = resultSet.getString(19);
-				Method method = Method.valueOf(resultSet.getInt(20));
-				byte[] secret = resultSet.getBytes(21);
-				Compression compression = Compression.valueOf(resultSet.getInt(22));
+				byte[] data = resultSet.getBytes(15);
+				byte[] metadataHash = resultSet.getBytes(16);
+				String nameResult = resultSet.getString(17);
+				String identifierResult = resultSet.getString(18);
+				Method method = Method.valueOf(resultSet.getInt(19));
+				byte[] secret = resultSet.getBytes(20);
+				Compression compression = Compression.valueOf(resultSet.getInt(21));
 				// FUTURE: get payments from signature if needed. Avoiding for now to reduce database calls.
 
 				ArbitraryTransactionData transactionData = new ArbitraryTransactionData(baseTransactionData,

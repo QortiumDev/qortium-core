@@ -35,7 +35,6 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.CREATE_POLL.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("poll creator's public key", TransformationType.PUBLIC_KEY);
 		layout.add("poll owner's address", TransformationType.ADDRESS);
 		layout.add("poll name length", TransformationType.INT);
@@ -53,10 +52,6 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		String owner = Serialization.deserializeAddress(byteBuffer);
@@ -81,7 +76,7 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
 
 		return new CreatePollTransactionData(baseTransactionData, owner, pollName, description, pollOptions);
 	}

@@ -67,7 +67,6 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 						null,
 						null,
 						null,
-						null,
 						encoding,
 						limit, offset, reverse);
 
@@ -92,7 +91,6 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			List<ChatMessage> chatMessages = repository.getChatRepository().getMessagesMatchingCriteria(
-					null,
 					null,
 					null,
 					null,

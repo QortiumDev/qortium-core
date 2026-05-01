@@ -297,7 +297,7 @@ public class ArbitraryTransaction extends Transaction {
 	public void orphanReferencesAndFees() throws DataException {
 		// Wrap and delegate fee restoration to Payment class.
 		new Payment(this.repository).orphanReferencesAndFees(arbitraryTransactionData.getSenderPublicKey(), arbitraryTransactionData.getPayments(),
-				arbitraryTransactionData.getFee(), arbitraryTransactionData.getSignature(), arbitraryTransactionData.getReference(), true);
+				arbitraryTransactionData.getFee(), arbitraryTransactionData.getSignature(), true);
 	}
 
 	// Data access

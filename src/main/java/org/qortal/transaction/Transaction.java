@@ -467,34 +467,6 @@ public abstract class Transaction {
 		return this.creator;
 	}
 
-	/**
-	 * Load parent's transaction data from repository via this transaction's reference.
-	 * 
-	 * @return Parent's TransactionData, or null if no parent found (which should not happen)
-	 * @throws DataException
-	 */
-	protected TransactionData getParent() throws DataException {
-		byte[] reference = this.transactionData.getReference();
-		if (reference == null)
-			return null;
-
-		return this.repository.getTransactionRepository().fromSignature(reference);
-	}
-
-	/**
-	 * Load child's transaction data from repository, if any.
-	 * 
-	 * @return Child's TransactionData, or null if no child found
-	 * @throws DataException
-	 */
-	protected TransactionData getChild() throws DataException {
-		byte[] signature = this.transactionData.getSignature();
-		if (signature == null)
-			return null;
-
-		return this.repository.getTransactionRepository().fromReference(signature);
-	}
-
 	// Processing
 
 	public void sign(PrivateKeyAccount signer) {
@@ -568,10 +540,6 @@ public abstract class Transaction {
 		// Check transaction's txGroupId
 		if (!this.isValidTxGroupId())
 			return ValidationResult.INVALID_TX_GROUP_ID;
-
-		// Check transaction references
-		if (!this.hasValidReference())
-			return ValidationResult.INVALID_REFERENCE;
 
 		// Check transaction is valid
 		ValidationResult result = this.isValid();
@@ -722,10 +690,6 @@ public abstract class Transaction {
 
 		// Check transaction's txGroupId
 		// Skipped because this is checked upon submission and the result would be the same now
-
-		// Check transaction references
-		if (!this.hasValidReference())
-			return ValidationResult.INVALID_REFERENCE;
 
 		// Check transaction is valid
 		ValidationResult result = this.isValid();
@@ -942,14 +906,6 @@ public abstract class Transaction {
 	 * @throws DataException
 	 */
 	public abstract ValidationResult isValid() throws DataException;
-
-	/**
-	 * General transaction references are retained only for legacy wire/storage
-	 * compatibility and no longer sequence account transactions.
-	 */
-	public boolean hasValidReference() throws DataException {
-		return true;
-	}
 
 	/**
 	 * Returns whether transaction can be processed.

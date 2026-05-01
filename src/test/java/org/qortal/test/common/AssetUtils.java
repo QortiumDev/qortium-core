@@ -33,7 +33,7 @@ public class AssetUtils {
 
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, null, account.getPublicKey(), AssetUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, account.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new IssueAssetTransactionData(baseTransactionData, assetName, "desc", quantity, isDivisible, "{}", false);
 
 		TransactionUtils.signAndMint(repository, transactionData, account);
@@ -47,7 +47,7 @@ public class AssetUtils {
 
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, null, fromAccount.getPublicKey(), AssetUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, fromAccount.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new TransferAssetTransactionData(baseTransactionData, toAccount.getAddress(), amount, assetId);
 
 		TransactionUtils.signAndMint(repository, transactionData, fromAccount);
@@ -58,7 +58,7 @@ public class AssetUtils {
 
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, null, account.getPublicKey(), AssetUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, account.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new CreateAssetOrderTransactionData(baseTransactionData, haveAssetId, wantAssetId, amount, price);
 
 		TransactionUtils.signAndMint(repository, transactionData, account);
@@ -71,7 +71,7 @@ public class AssetUtils {
 
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, null, account.getPublicKey(), AssetUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, account.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new CancelAssetOrderTransactionData(baseTransactionData, orderId);
 
 		return Transaction.fromData(repository, transactionData);

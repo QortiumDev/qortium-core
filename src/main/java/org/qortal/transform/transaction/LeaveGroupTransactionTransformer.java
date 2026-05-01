@@ -27,7 +27,6 @@ public class LeaveGroupTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.LEAVE_GROUP.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("leaver's public key", TransformationType.PUBLIC_KEY);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("fee", TransformationType.AMOUNT);
@@ -38,10 +37,6 @@ public class LeaveGroupTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] leaverPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		int groupId = byteBuffer.getInt();
@@ -51,7 +46,7 @@ public class LeaveGroupTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, leaverPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, leaverPublicKey, fee, signature);
 
 		return new LeaveGroupTransactionData(baseTransactionData, groupId);
 	}

@@ -31,7 +31,6 @@ public class GroupKickTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.GROUP_KICK.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("group admin's public key", TransformationType.PUBLIC_KEY);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("group member to kick", TransformationType.ADDRESS);
@@ -45,10 +44,6 @@ public class GroupKickTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] adminPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		int groupId = byteBuffer.getInt();
@@ -62,7 +57,7 @@ public class GroupKickTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, adminPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, adminPublicKey, fee, signature);
 
 		return new GroupKickTransactionData(baseTransactionData, groupId, member, reason);
 	}

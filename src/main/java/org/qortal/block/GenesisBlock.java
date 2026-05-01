@@ -257,17 +257,12 @@ public class GenesisBlock extends Block {
 		LOGGER.info(String.format("Using genesis block timestamp of %d", this.blockData.getTimestamp()));
 
 		/*
-		 * Some transactions will be missing references and signatures,
-		 * so we generate them by using <tt>GENESIS_TRANSACTION_REFERENCE</tt>
-		 * and a duplicated SHA256 digest for signature
+		 * Some transactions will be missing signatures, so we generate them using a
+		 * duplicated SHA256 digest.
 		 */
 		try {
 			for (Transaction transaction : this.getTransactions()) {
 				TransactionData transactionData = transaction.getTransactionData();
-
-				// Missing reference?
-				if (transactionData.getReference() == null)
-					transactionData.setReference(GENESIS_TRANSACTION_REFERENCE);
 
 				// Missing signature?
 				if (transactionData.getSignature() == null) {

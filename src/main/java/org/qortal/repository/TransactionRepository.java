@@ -21,8 +21,6 @@ public interface TransactionRepository {
 
 	public List<TransactionData> fromSignatures(List<byte[]> signatures) throws DataException;
 
-	public TransactionData fromReference(byte[] reference) throws DataException;
-
 	public TransactionData fromHeightAndSequence(int height, int sequence) throws DataException;
 
 	/** Returns block height containing transaction or 0 if not in a block or transaction doesn't exist */

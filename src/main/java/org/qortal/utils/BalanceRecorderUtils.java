@@ -241,7 +241,6 @@ public class BalanceRecorderUtils {
                 new BaseTransactionData(
                         multiPaymentData.getTimestamp(),
                         multiPaymentData.getTxGroupId(),
-                        multiPaymentData.getReference(),
                         multiPaymentData.getCreatorPublicKey(),
                         0L,
                         multiPaymentData.getSignature()

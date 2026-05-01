@@ -28,7 +28,6 @@ public class AddGroupAdminTransactionTransformer extends TransactionTransformer 
 		layout.add("txType: " + TransactionType.ADD_GROUP_ADMIN.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("group owner's public key", TransformationType.PUBLIC_KEY);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("member to promote to admin", TransformationType.ADDRESS);
@@ -40,10 +39,6 @@ public class AddGroupAdminTransactionTransformer extends TransactionTransformer 
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] ownerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		int groupId = byteBuffer.getInt();
@@ -55,7 +50,7 @@ public class AddGroupAdminTransactionTransformer extends TransactionTransformer 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, ownerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, signature);
 
 		return new AddGroupAdminTransactionData(baseTransactionData, groupId, member);
 	}

@@ -194,7 +194,7 @@ public class BalanceRecorderUtilsTests {
 
             PaymentTransactionData paymentData
                 = new PaymentTransactionData(
-                    new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+                    new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                     RECIPIENT_ADDRESS,
                     amount
             );
@@ -439,7 +439,7 @@ public class BalanceRecorderUtilsTests {
 
             PaymentTransactionData paymentData
                 = new PaymentTransactionData(
-                    new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+                    new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                     RECIPIENT_ADDRESS,
                     amount
             );
@@ -470,7 +470,7 @@ public class BalanceRecorderUtilsTests {
 
             TransferAssetTransactionData transferAssetData
              = new TransferAssetTransactionData(
-                     new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+                     new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                     RECIPIENT_ADDRESS,
                     amount,
                     0
@@ -500,7 +500,7 @@ public class BalanceRecorderUtilsTests {
             byte[] creatorPublicKey = TestUtils.generatePublicKey();
             Map<String, Long> amountsByAddress = new HashMap<>();
 
-            ATTransactionData atTransactionData = new ATTransactionData(new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+            ATTransactionData atTransactionData = new ATTransactionData(new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                     AT_ADDRESS,
                     RECIPIENT_ADDRESS,
                     new byte[0]);
@@ -530,7 +530,7 @@ public class BalanceRecorderUtilsTests {
 
             ATTransactionData atTransactionData
                 = new ATTransactionData(
-                    new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+                    new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                     AT_ADDRESS,
                     RECIPIENT_ADDRESS,
                     amount,
@@ -563,7 +563,7 @@ public class BalanceRecorderUtilsTests {
 
             BuyNameTransactionData buyNameData
                 = new BuyNameTransactionData(
-                    new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+                    new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                     "null",
                     amount,
                     RECIPIENT_ADDRESS
@@ -596,7 +596,7 @@ public class BalanceRecorderUtilsTests {
             payments.add(new PaymentData(RECIPIENT_ADDRESS, 0, amount));
 
             MultiPaymentTransactionData multiPayment
-                    = new MultiPaymentTransactionData(new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+                    = new MultiPaymentTransactionData(new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                     payments);
             BalanceRecorderUtils.mapBalanceModificationsForMultiPaymentTransaction(amountsByAddress,multiPayment);
             assertAmountsByAddress(amountsByAddress, amount, creatorPublicKey, RECIPIENT_ADDRESS);
@@ -625,7 +625,7 @@ public class BalanceRecorderUtilsTests {
             payments.add(new PaymentData(RECIPIENT_ADDRESS, 0, amount));
 
             MultiPaymentTransactionData multiPayment
-                    = new MultiPaymentTransactionData(new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+                    = new MultiPaymentTransactionData(new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                     payments);
             BalanceRecorderUtils.mapBalanceModificationsForMultiPaymentTransaction(amountsByAddress,multiPayment);
             assertAmountsByAddress(amountsByAddress, 2*amount, creatorPublicKey, RECIPIENT_ADDRESS);
@@ -654,7 +654,7 @@ public class BalanceRecorderUtilsTests {
             payments.add(new PaymentData(OTHER, 0, amount));
 
             MultiPaymentTransactionData multiPayment
-                    = new MultiPaymentTransactionData(new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+                    = new MultiPaymentTransactionData(new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                     payments);
             BalanceRecorderUtils.mapBalanceModificationsForMultiPaymentTransaction(amountsByAddress,multiPayment);
             assertAmountByAddress(amountsByAddress, amount, RECIPIENT_ADDRESS);
@@ -684,7 +684,7 @@ public class BalanceRecorderUtilsTests {
 
             DeployAtTransactionData deployAt
                 = new DeployAtTransactionData(
-                    new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+                    new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                     AT_ADDRESS, "name", "description", "type", "tags", new byte[0], amount, Asset.QORT
                 );
 
@@ -712,7 +712,7 @@ public class BalanceRecorderUtilsTests {
             BalanceRecorderUtils.mapBalanceModificationsForTransaction(
                     amountsByAddress,
                     new RegisterNameTransactionData(
-                            new BaseTransactionData(0L, 0, null, creatorPublicKey, fee, null),
+                            new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
                             "aaa", "data", "aaa")
             );
 

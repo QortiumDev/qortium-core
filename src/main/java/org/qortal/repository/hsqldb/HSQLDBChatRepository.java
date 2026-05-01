@@ -36,7 +36,7 @@ public class HSQLDBChatRepository implements ChatRepository {
 	}
 	
 	@Override
-	public List<ChatMessage> getMessagesMatchingCriteria(Long before, Long after, Integer txGroupId, byte[] referenceBytes,
+	public List<ChatMessage> getMessagesMatchingCriteria(Long before, Long after, Integer txGroupId,
 														 byte[] chatReferenceBytes, Boolean hasChatReference, List<String> involving, String senderAddress,
 														 Encoding encoding, Integer limit, Integer offset, Boolean reverse) throws DataException {
 		// Check args meet expectations
@@ -48,7 +48,7 @@ public class HSQLDBChatRepository implements ChatRepository {
 
 		String tableName = "PrimaryNames";
 
-		sql.append("SELECT created_when, tx_group_id, Transactions.reference, creator, "
+		sql.append("SELECT created_when, tx_group_id, creator, "
 				+ "sender, SenderNames.name, recipient, RecipientNames.name, "
 				+ "chat_reference, data, is_text, is_encrypted, signature "
 				+ "FROM ChatTransactions "
@@ -70,11 +70,6 @@ public class HSQLDBChatRepository implements ChatRepository {
 		if (after != null) {
 			whereClauses.add("created_when > ?");
 			bindParams.add(after);
-		}
-
-		if (referenceBytes != null) {
-			whereClauses.add("reference = ?");
-			bindParams.add(referenceBytes);
 		}
 
 		if (chatReferenceBytes != null) {
@@ -129,19 +124,18 @@ public class HSQLDBChatRepository implements ChatRepository {
 			do {
 				long timestamp = resultSet.getLong(1);
 				int groupId = resultSet.getInt(2);
-				byte[] reference = resultSet.getBytes(3);
-				byte[] senderPublicKey = resultSet.getBytes(4);
-				String sender = resultSet.getString(5);
-				String senderName = resultSet.getString(6);
-				String recipient = resultSet.getString(7);
-				String recipientName = resultSet.getString(8);
-				byte[] chatReference = resultSet.getBytes(9);
-				byte[] data = resultSet.getBytes(10);
-				boolean isText = resultSet.getBoolean(11);
-				boolean isEncrypted = resultSet.getBoolean(12);
-				byte[] signature = resultSet.getBytes(13);
+				byte[] senderPublicKey = resultSet.getBytes(3);
+				String sender = resultSet.getString(4);
+				String senderName = resultSet.getString(5);
+				String recipient = resultSet.getString(6);
+				String recipientName = resultSet.getString(7);
+				byte[] chatReference = resultSet.getBytes(8);
+				byte[] data = resultSet.getBytes(9);
+				boolean isText = resultSet.getBoolean(10);
+				boolean isEncrypted = resultSet.getBoolean(11);
+				byte[] signature = resultSet.getBytes(12);
 
-				ChatMessage chatMessage = new ChatMessage(timestamp, groupId, reference, senderPublicKey, sender,
+				ChatMessage chatMessage = new ChatMessage(timestamp, groupId, senderPublicKey, sender,
 						senderName, recipient, recipientName, chatReference, encoding, data, isText, isEncrypted, signature);
 
 				chatMessages.add(chatMessage);
@@ -184,7 +178,6 @@ public class HSQLDBChatRepository implements ChatRepository {
 
 			long timestamp = chatTransactionData.getTimestamp();
 			int groupId = chatTransactionData.getTxGroupId();
-			byte[] reference = chatTransactionData.getReference();
 			byte[] senderPublicKey = chatTransactionData.getSenderPublicKey();
 			String sender = chatTransactionData.getSender();
 			String recipient = chatTransactionData.getRecipient();
@@ -194,7 +187,7 @@ public class HSQLDBChatRepository implements ChatRepository {
 			boolean isEncrypted = chatTransactionData.getIsEncrypted();
 			byte[] signature = chatTransactionData.getSignature();
 
-			return new ChatMessage(timestamp, groupId, reference, senderPublicKey, sender,
+			return new ChatMessage(timestamp, groupId, senderPublicKey, sender,
 					senderName, recipient, recipientName, chatReference, encoding, data,
 					isText, isEncrypted, signature);
 		} catch (SQLException e) {

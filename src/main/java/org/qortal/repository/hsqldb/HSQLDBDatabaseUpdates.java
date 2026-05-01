@@ -169,8 +169,8 @@ public class HSQLDBDatabaseUpdates {
 					break;
 
 				case 2:
-					// Generic transactions (null reference, creator and milestone_block for genesis transactions)
-					stmt.execute("CREATE TABLE Transactions (signature Signature, reference Signature, type TINYINT NOT NULL, "
+					// Generic transactions (creator and milestone_block for genesis transactions)
+					stmt.execute("CREATE TABLE Transactions (signature Signature, type TINYINT NOT NULL, "
 							+ "creator QortalPublicKey NOT NULL, created_when EpochMillis NOT NULL, fee QortalAmount NOT NULL, "
 							+ "tx_group_id GroupID NOT NULL, block_height INTEGER, "
 							+ "approval_status TINYINT NOT NULL, approval_height INTEGER, "
@@ -181,8 +181,6 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE INDEX TransactionTimestampIndex ON Transactions (created_when)");
 					// For when a user wants to lookup ALL transactions they have created, with optional type.
 					stmt.execute("CREATE INDEX TransactionCreatorIndex ON Transactions (creator, type)");
-					// For finding transactions by reference, e.g. child transactions.
-					stmt.execute("CREATE INDEX TransactionReferenceIndex ON Transactions (reference)");
 					// For finding transactions by groupID
 					stmt.execute("CREATE INDEX TransactionGroupIndex ON Transactions (tx_group_id)");
 					// For finding transactions by block height
@@ -1058,11 +1056,13 @@ public class HSQLDBDatabaseUpdates {
 					break;
 
 				case 52:
-					// Remove obsolete account sequencing, blocks minted penalty, and blocks-minted-adjustment
-					// state after removing all runtime behavior that used them.
+					// Remove obsolete account/transaction sequencing, blocks minted penalty, and
+					// blocks-minted-adjustment state after removing all runtime behavior that used them.
 					// During the unreleased Qortium baseline phase, this tail migration is intentionally acting as
 					// the current cleanup point and may be revised again before the first real release baseline.
-					stmt.execute("ALTER TABLE Accounts DROP COLUMN reference");
+					dropColumnIfExists(connection, "Accounts", "reference");
+					stmt.execute("DROP INDEX TransactionReferenceIndex IF EXISTS");
+					dropColumnIfExists(connection, "Transactions", "reference");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");
 					stmt.execute("ALTER TABLE TransferPrivsTransactions DROP COLUMN previous_sender_blocks_minted_adjustment");
@@ -1077,5 +1077,16 @@ public class HSQLDBDatabaseUpdates {
 		// database was updated
 		LOGGER.info(() -> String.format("HSQLDB repository updated to version %d", databaseVersion + 1));
 		return true;
+	}
+
+	private static void dropColumnIfExists(Connection connection, String tableName, String columnName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getColumns(null, null, tableName.toUpperCase(), columnName.toUpperCase())) {
+			if (!resultSet.next())
+				return;
+		}
+
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute(String.format("ALTER TABLE %s DROP COLUMN %s", tableName, columnName));
+		}
 	}
 }

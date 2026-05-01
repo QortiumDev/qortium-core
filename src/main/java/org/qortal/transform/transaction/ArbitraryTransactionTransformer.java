@@ -51,7 +51,6 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.ARBITRARY.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("sender's public key", TransformationType.PUBLIC_KEY);
 		layout.add("nonce", TransformationType.INT); // Version 5+
 
@@ -88,10 +87,6 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		int version = Transaction.getVersionByTimestamp(timestamp);
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] senderPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		int nonce = byteBuffer.getInt();
@@ -151,7 +146,7 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, senderPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, signature);
 
 		return new ArbitraryTransactionData(baseTransactionData, version, service, nonce, size, name, identifier,
 				method, secret, compression, data, dataType, metadataHash, payments);
@@ -311,7 +306,7 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 	}
 
 	public static void clearNonce(byte[] transactionBytes) {
-		int nonceIndex = TYPE_LENGTH + TIMESTAMP_LENGTH + GROUPID_LENGTH + REFERENCE_LENGTH + PUBLIC_KEY_LENGTH;
+		int nonceIndex = TYPE_LENGTH + TIMESTAMP_LENGTH + GROUPID_LENGTH + PUBLIC_KEY_LENGTH;
 
 		transactionBytes[nonceIndex++] = (byte) 0;
 		transactionBytes[nonceIndex++] = (byte) 0;

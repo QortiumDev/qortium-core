@@ -25,7 +25,6 @@ public class CreateAssetOrderTransactionTransformer extends TransactionTransform
 		layout.add("txType: " + TransactionType.CREATE_ASSET_ORDER.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("order creator's public key", TransformationType.PUBLIC_KEY);
 		layout.add("ID of asset of offer", TransformationType.LONG);
 		layout.add("ID of asset wanted", TransformationType.LONG);
@@ -39,10 +38,6 @@ public class CreateAssetOrderTransactionTransformer extends TransactionTransform
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		long haveAssetId = byteBuffer.getLong();
@@ -58,7 +53,7 @@ public class CreateAssetOrderTransactionTransformer extends TransactionTransform
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
 
 		return new CreateAssetOrderTransactionData(baseTransactionData, haveAssetId, wantAssetId, amount, price);
 	}

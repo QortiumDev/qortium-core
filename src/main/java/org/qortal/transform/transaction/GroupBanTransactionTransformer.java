@@ -32,7 +32,6 @@ public class GroupBanTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.GROUP_BAN.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("group admin's public key", TransformationType.PUBLIC_KEY);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("account to ban", TransformationType.ADDRESS);
@@ -47,10 +46,6 @@ public class GroupBanTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] adminPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		int groupId = byteBuffer.getInt();
@@ -66,7 +61,7 @@ public class GroupBanTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, adminPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, adminPublicKey, fee, signature);
 
 		return new GroupBanTransactionData(baseTransactionData, groupId, offender, reason, timeToLive);
 	}

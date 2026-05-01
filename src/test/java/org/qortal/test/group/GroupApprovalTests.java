@@ -390,7 +390,7 @@ public class GroupApprovalTests extends Common {
 
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, null, sendingAccount.getPublicKey(), fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, sendingAccount.getPublicKey(), fee, null);
 		PaymentTransactionData transactionData = new PaymentTransactionData(baseTransactionData, recipientAccount.getAddress(), amount);
 
 		return Transaction.fromData(repository, transactionData);
@@ -401,7 +401,7 @@ public class GroupApprovalTests extends Common {
 
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, null, account.getPublicKey(), fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, account.getPublicKey(), fee, null);
 		TransactionData transactionData = new IssueAssetTransactionData(baseTransactionData, "test asset", "test asset desc", 1000L, true, "{}", false);
 
 		return Transaction.fromData(repository, transactionData);

@@ -29,10 +29,6 @@ public class AtTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int version = Transaction.getVersionByTimestamp(timestamp);
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		String atAddress = Serialization.deserializeAddress(byteBuffer);
 
 		String recipient = Serialization.deserializeAddress(byteBuffer);
@@ -71,7 +67,7 @@ public class AtTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, NullAccount.PUBLIC_KEY, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, NullAccount.PUBLIC_KEY, fee, signature);
 
 		if (isMessageType) {
 			// MESSAGE-type
@@ -88,7 +84,7 @@ public class AtTransactionTransformer extends TransactionTransformer {
 		ATTransactionData atTransactionData = (ATTransactionData) transactionData;
 		int version = Transaction.getVersionByTimestamp(transactionData.getTimestamp());
 
-		final int baseLength = TYPE_LENGTH + TIMESTAMP_LENGTH + REFERENCE_LENGTH + ADDRESS_LENGTH + ADDRESS_LENGTH +
+		final int baseLength = TYPE_LENGTH + TIMESTAMP_LENGTH + ADDRESS_LENGTH + ADDRESS_LENGTH +
 				FEE_LENGTH + SIGNATURE_LENGTH;
 
 		int typeSpecificLength = 0;
@@ -124,8 +120,6 @@ public class AtTransactionTransformer extends TransactionTransformer {
 
 			bytes.write(Ints.toByteArray(atTransactionData.getType().value));
 			bytes.write(Longs.toByteArray(atTransactionData.getTimestamp()));
-			byte[] reference = atTransactionData.getReference();
-			bytes.write(reference != null && reference.length == REFERENCE_LENGTH ? reference : new byte[REFERENCE_LENGTH]);
 
 			Serialization.serializeAddress(bytes, atTransactionData.getATAddress());
 

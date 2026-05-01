@@ -30,7 +30,6 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.VOTE_ON_POLL.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("voter's public key", TransformationType.PUBLIC_KEY);
 		layout.add("poll name length", TransformationType.INT);
 		layout.add("poll name", TransformationType.STRING);
@@ -43,10 +42,6 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] voterPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		String pollName = Serialization.deserializeSizedString(byteBuffer, Poll.MAX_NAME_SIZE);
@@ -60,7 +55,7 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, voterPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, voterPublicKey, fee, signature);
 
 		return new VoteOnPollTransactionData(baseTransactionData, pollName, optionIndex);
 	}

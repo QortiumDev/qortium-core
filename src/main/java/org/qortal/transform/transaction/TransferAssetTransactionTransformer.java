@@ -26,7 +26,6 @@ public class TransferAssetTransactionTransformer extends TransactionTransformer 
 		layout.add("txType: " + TransactionType.TRANSFER_ASSET.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("asset owner's public key", TransformationType.PUBLIC_KEY);
 		layout.add("recipient", TransformationType.ADDRESS);
 		layout.add("asset ID", TransformationType.LONG);
@@ -39,10 +38,6 @@ public class TransferAssetTransactionTransformer extends TransactionTransformer 
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] senderPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		String recipient = Serialization.deserializeAddress(byteBuffer);
@@ -56,7 +51,7 @@ public class TransferAssetTransactionTransformer extends TransactionTransformer 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, senderPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, signature);
 
 		return new TransferAssetTransactionData(baseTransactionData, recipient, amount, assetId);
 	}

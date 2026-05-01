@@ -11,7 +11,6 @@ import org.qortal.transaction.Transaction.TransactionType;
 
 import javax.xml.bind.annotation.*;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
-import java.math.BigInteger;
 import java.util.Arrays;
 
 /*
@@ -55,9 +54,6 @@ public abstract class TransactionData {
 
 	@Schema(description = "timestamp when transaction created, in milliseconds since unix epoch", example = "__unix_epoch_time_milliseconds__")
 	protected long timestamp;
-
-	@Schema(description = "deprecated legacy transaction reference slot; ignored by Qortium validation", example = "deprecated_reference_in_base58")
-	protected byte[] reference;
 
 	@Schema(description = "fee for processing transaction", example = "0.0001")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
@@ -105,7 +101,6 @@ public abstract class TransactionData {
 		this.recipient = baseTransactionData.recipient;
 		this.timestamp = baseTransactionData.timestamp;
 		this.txGroupId = baseTransactionData.txGroupId;
-		this.reference = baseTransactionData.reference;
 		this.creatorPublicKey = baseTransactionData.creatorPublicKey;
 		this.fee = baseTransactionData.fee;
 		this.signature = baseTransactionData.signature;
@@ -139,14 +134,6 @@ public abstract class TransactionData {
 
 	public void setTxGroupId(int txGroupId) {
 		this.txGroupId = txGroupId;
-	}
-
-	public byte[] getReference() {
-		return this.reference;
-	}
-
-	public void setReference(byte[] reference) {
-		this.reference = reference;
 	}
 
 	public byte[] getCreatorPublicKey() {
@@ -223,11 +210,11 @@ public abstract class TransactionData {
 	public int hashCode() {
 		byte[] bytes = this.signature;
 
-		// No signature? Use reference instead
+		// Unsigned transaction data is only equal to itself.
 		if (bytes == null)
-			bytes = this.reference;
+			return System.identityHashCode(this);
 
-		return new BigInteger(bytes).intValue();
+		return Arrays.hashCode(bytes);
 	}
 
 	@Override

@@ -127,10 +127,10 @@ public class LitecoinACCTv3TradeBot implements AcctTradeBot {
 
 		// Deploy AT
 		long timestamp = NTP.getTime();
-		byte[] reference = null;
+
 		long fee = 0L;
 		byte[] signature = null;
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, creator.getPublicKey(), fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, creator.getPublicKey(), fee, signature);
 
 		String name = "QORT/LTC ACCT";
 		String description = "QORT/LTC cross-chain trade";

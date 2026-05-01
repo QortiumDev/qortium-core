@@ -32,7 +32,6 @@ public abstract class TransactionTransformer extends Transformer {
 
 	protected static final int TYPE_LENGTH = INT_LENGTH;
 	protected static final int GROUPID_LENGTH = INT_LENGTH;
-	protected static final int REFERENCE_LENGTH = SIGNATURE_LENGTH;
 	protected static final int FEE_LENGTH = AMOUNT_LENGTH;
 
 	/** Description of one component of raw transaction layout */
@@ -218,8 +217,8 @@ public abstract class TransactionTransformer extends Transformer {
 	}
 
 	protected static int getBaseLength(TransactionData transactionData) {
-		// All transactions have at least txType, timestamp, txGroupId, legacy reference slot, tx creator's public key and also fee and signature (on the end)
-		return TYPE_LENGTH + TIMESTAMP_LENGTH + GROUPID_LENGTH + REFERENCE_LENGTH + PUBLIC_KEY_LENGTH + FEE_LENGTH + SIGNATURE_LENGTH;
+		// All transactions have at least txType, timestamp, txGroupId, creator public key, fee and signature.
+		return TYPE_LENGTH + TIMESTAMP_LENGTH + GROUPID_LENGTH + PUBLIC_KEY_LENGTH + FEE_LENGTH + SIGNATURE_LENGTH;
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
@@ -308,10 +307,6 @@ public abstract class TransactionTransformer extends Transformer {
 
 		// Transaction's groupID
 		bytes.write(Ints.toByteArray(transactionData.getTxGroupId()));
-
-		// Legacy reference slot
-		byte[] reference = transactionData.getReference();
-		bytes.write(reference != null && reference.length == REFERENCE_LENGTH ? reference : new byte[REFERENCE_LENGTH]);
 
 		// Creator public key
 		bytes.write(transactionData.getCreatorPublicKey());

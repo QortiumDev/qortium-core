@@ -120,7 +120,7 @@ public class PaymentTransaction extends Transaction {
 	public void orphanReferencesAndFees() throws DataException {
 		// Wrap and delegate fee restoration to Payment class.
 		new Payment(this.repository).orphanReferencesAndFees(this.paymentTransactionData.getSenderPublicKey(), getPaymentData(), this.paymentTransactionData.getFee(),
-				this.paymentTransactionData.getSignature(), this.paymentTransactionData.getReference(), false);
+				this.paymentTransactionData.getSignature(), false);
 	}
 
 }

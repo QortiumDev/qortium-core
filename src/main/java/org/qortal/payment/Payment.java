@@ -216,7 +216,7 @@ public class Payment {
 
 	// orphanReferencesAndFees
 
-	public void orphanReferencesAndFees(byte[] senderPublicKey, List<PaymentData> payments, long fee, byte[] signature, byte[] reference,
+	public void orphanReferencesAndFees(byte[] senderPublicKey, List<PaymentData> payments, long fee, byte[] signature,
 			boolean alwaysUninitializeRecipientReference) throws DataException {
 		Account sender = new PublicKeyAccount(this.repository, senderPublicKey);
 
@@ -225,9 +225,9 @@ public class Payment {
 			sender.modifyAssetBalance(Asset.QORT, fee);
 	}
 
-	public void orphanReferencesAndFees(byte[] senderPublicKey, PaymentData paymentData, long fee, byte[] signature, byte[] reference,
+	public void orphanReferencesAndFees(byte[] senderPublicKey, PaymentData paymentData, long fee, byte[] signature,
 			boolean alwaysUninitializeRecipientReference) throws DataException {
-		orphanReferencesAndFees(senderPublicKey, Collections.singletonList(paymentData), fee, signature, reference, alwaysUninitializeRecipientReference);
+		orphanReferencesAndFees(senderPublicKey, Collections.singletonList(paymentData), fee, signature, alwaysUninitializeRecipientReference);
 	}
 
 }

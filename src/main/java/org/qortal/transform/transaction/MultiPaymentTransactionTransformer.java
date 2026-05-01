@@ -31,7 +31,6 @@ public class MultiPaymentTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.MULTI_PAYMENT.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("sender's public key", TransformationType.PUBLIC_KEY);
 		layout.add("number of payments", TransformationType.INT);
 		layout.add("* recipient", TransformationType.ADDRESS);
@@ -45,10 +44,6 @@ public class MultiPaymentTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] senderPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		int paymentsCount = byteBuffer.getInt();
@@ -62,7 +57,7 @@ public class MultiPaymentTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, senderPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, signature);
 
 		return new MultiPaymentTransactionData(baseTransactionData, payments);
 	}

@@ -27,7 +27,6 @@ public class SetGroupTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.SET_GROUP.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("account's public key", TransformationType.PUBLIC_KEY);
 		layout.add("account's new default groupID", TransformationType.INT);
 		layout.add("fee", TransformationType.AMOUNT);
@@ -38,10 +37,6 @@ public class SetGroupTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		int defaultGroupId = byteBuffer.getInt();
@@ -51,7 +46,7 @@ public class SetGroupTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
 
 		return new SetGroupTransactionData(baseTransactionData, defaultGroupId);
 	}

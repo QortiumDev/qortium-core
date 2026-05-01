@@ -350,9 +350,8 @@ public class QortalATAPI extends API {
 		Account recipient = getAccountFromB(state);
 
 		long timestamp = this.getNextTransactionTimestamp();
-		byte[] reference = this.getGeneratedTransactionReference();
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, NullAccount.PUBLIC_KEY, 0L, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, NullAccount.PUBLIC_KEY, 0L, null);
 		ATTransactionData atTransactionData = new ATTransactionData(baseTransactionData, this.atData.getATAddress(),
 				recipient.getAddress(), amount, this.atData.getAssetId());
 		AtTransaction atTransaction = new AtTransaction(this.repository, atTransactionData);
@@ -367,9 +366,8 @@ public class QortalATAPI extends API {
 		Account recipient = getAccountFromB(state);
 
 		long timestamp = this.getNextTransactionTimestamp();
-		byte[] reference = this.getGeneratedTransactionReference();
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, NullAccount.PUBLIC_KEY, 0L, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, NullAccount.PUBLIC_KEY, 0L, null);
 		ATTransactionData atTransactionData = new ATTransactionData(baseTransactionData, this.atData.getATAddress(),
 				recipient.getAddress(), message);
 		AtTransaction atTransaction = new AtTransaction(this.repository, atTransactionData);
@@ -396,9 +394,8 @@ public class QortalATAPI extends API {
 		// Refund remaining balance (if any) to AT's creator
 		Account creator = this.getCreator();
 		long timestamp = this.getNextTransactionTimestamp();
-		byte[] reference = this.getGeneratedTransactionReference();
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, NullAccount.PUBLIC_KEY, 0L, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, NullAccount.PUBLIC_KEY, 0L, null);
 		ATTransactionData atTransactionData = new ATTransactionData(baseTransactionData, this.atData.getATAddress(),
 				creator.getAddress(), finalBalance, this.atData.getAssetId());
 		AtTransaction atTransaction = new AtTransaction(this.repository, atTransactionData);
@@ -464,7 +461,7 @@ public class QortalATAPI extends API {
 			if (transactionData == null)
 				throw new RuntimeException("AT API unable to fetch transaction?");
 
-			// Check transaction referenced still matches the one from the repository
+			// Check transaction still matches the one from the repository
 			verifyTransaction(transactionData, state);
 
 			return transactionData;
@@ -509,20 +506,11 @@ public class QortalATAPI extends API {
 	/** Returns the timestamp to use for next AT Transaction */
 	private long getNextTransactionTimestamp() {
 		/*
-		 * Use block's timestamp.
-		 * 
-		 * This is OK because AT transactions are always generated locally and order is preserved in Transaction.getDataComparator().
+		 * AT transactions are generated locally and use hash-derived pseudo-signatures.
+		 * Include their same-block generation index in the timestamp so otherwise
+		 * identical generated payments still receive unique deterministic signatures.
 		 */
-		return this.blockTimestamp;
-	}
-
-	/** Returns previous generated AT transaction signature for legacy transaction reference uniqueness. */
-	private byte[] getGeneratedTransactionReference() {
-		// If we have transactions already, then use signature from last transaction
-		if (!this.transactions.isEmpty())
-			return this.transactions.get(this.transactions.size() - 1).getTransactionData().getSignature();
-
-		return null;
+		return this.blockTimestamp + this.transactions.size();
 	}
 
 	/**

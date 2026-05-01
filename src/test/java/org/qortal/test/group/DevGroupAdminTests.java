@@ -768,7 +768,7 @@ public class DevGroupAdminTests extends Common {
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData
-				= new BaseTransactionData(timestamp, Group.NO_GROUP, null, signer.getPublicKey(), GroupUtils.fee, null);
+				= new BaseTransactionData(timestamp, Group.NO_GROUP, signer.getPublicKey(), GroupUtils.fee, null);
 		TransactionData groupApprovalTransactionData
 				= new GroupApprovalTransactionData(baseTransactionData, transactionData.getSignature(), decision);
 

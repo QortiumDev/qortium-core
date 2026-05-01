@@ -95,7 +95,7 @@ public class MultiPaymentTransaction extends Transaction {
 	public void orphanReferencesAndFees() throws DataException {
 		// Wrap and delegate fee restoration to Payment class.
 		new Payment(this.repository).orphanReferencesAndFees(this.multiPaymentTransactionData.getSenderPublicKey(), this.multiPaymentTransactionData.getPayments(),
-				this.multiPaymentTransactionData.getFee(), this.multiPaymentTransactionData.getSignature(), this.multiPaymentTransactionData.getReference(), true);
+				this.multiPaymentTransactionData.getFee(), this.multiPaymentTransactionData.getSignature(), true);
 	}
 
 }

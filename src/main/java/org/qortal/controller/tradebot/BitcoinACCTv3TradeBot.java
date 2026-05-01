@@ -127,10 +127,10 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 
 		// Deploy AT
 		long timestamp = NTP.getTime();
-		byte[] reference = null;
+
 		long fee = 0L;
 		byte[] signature = null;
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, creator.getPublicKey(), fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, creator.getPublicKey(), fee, signature);
 
 		String name = "QORT/BTC ACCT";
 		String description = "QORT/BTC cross-chain trade";

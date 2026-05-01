@@ -27,7 +27,6 @@ public class RewardShareTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.REWARD_SHARE.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("minter's public key", TransformationType.PUBLIC_KEY);
 		layout.add("recipient account's address", TransformationType.ADDRESS);
 		layout.add("reward-share public key", TransformationType.PUBLIC_KEY);
@@ -41,10 +40,6 @@ public class RewardShareTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] minterPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		String recipient = Serialization.deserializeAddress(byteBuffer);
@@ -58,7 +53,7 @@ public class RewardShareTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, minterPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, minterPublicKey, fee, signature);
 
 		return new RewardShareTransactionData(baseTransactionData, recipient, rewardSharePublicKey, sharePercent);
 	}

@@ -37,7 +37,6 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 		layout.add("txType: " + TransactionType.UPDATE_GROUP.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("group owner's public key", TransformationType.PUBLIC_KEY);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("group's new owner", TransformationType.ADDRESS);
@@ -55,10 +54,6 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] ownerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		int groupId = byteBuffer.getInt();
@@ -80,7 +75,7 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, ownerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, signature);
 
 		return new UpdateGroupTransactionData(baseTransactionData, groupId, newOwner, newDescription, newIsOpen,
 				newApprovalThreshold, newMinBlockDelay, newMaxBlockDelay);

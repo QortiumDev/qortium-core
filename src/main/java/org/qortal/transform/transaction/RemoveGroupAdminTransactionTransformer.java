@@ -28,7 +28,6 @@ public class RemoveGroupAdminTransactionTransformer extends TransactionTransform
 		layout.add("txType: " + TransactionType.REMOVE_GROUP_ADMIN.valueString, TransformationType.INT);
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
-		layout.add("reference", TransformationType.SIGNATURE);
 		layout.add("group owner's public key", TransformationType.PUBLIC_KEY);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("admin to demote", TransformationType.ADDRESS);
@@ -40,10 +39,6 @@ public class RemoveGroupAdminTransactionTransformer extends TransactionTransform
 		long timestamp = byteBuffer.getLong();
 
 		int txGroupId = byteBuffer.getInt();
-
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] ownerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
 		int groupId = byteBuffer.getInt();
@@ -55,7 +50,7 @@ public class RemoveGroupAdminTransactionTransformer extends TransactionTransform
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, ownerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, signature);
 
 		return new RemoveGroupAdminTransactionData(baseTransactionData, groupId, admin);
 	}
