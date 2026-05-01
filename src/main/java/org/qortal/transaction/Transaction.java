@@ -10,6 +10,7 @@ import org.qortal.block.BlockChain;
 import org.qortal.controller.Controller;
 import org.qortal.controller.TransactionImporter;
 import org.qortal.crypto.Crypto;
+import org.qortal.crypto.MemoryPoW;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.group.GroupApprovalData;
 import org.qortal.data.group.GroupData;
@@ -35,6 +36,9 @@ import static java.util.Arrays.stream;
 import static java.util.stream.Collectors.toMap;
 
 public abstract class Transaction {
+
+	private static final int MEMPOW_FEE_ALTERNATIVE_BUFFER_SIZE = 8 * 1024 * 1024; // bytes
+	private static final int MEMPOW_FEE_ALTERNATIVE_DIFFICULTY = 16; // leading zero bits
 
 	// Transaction types
 	public enum TransactionType {
@@ -390,11 +394,7 @@ public abstract class Transaction {
 		return fee != null && fee > 0;
 	}
 
-	/**
-	 * Returns whether this transaction satisfies the fee policy.
-	 * <p>
-	 * Future normal transaction nonce support should override {@link #hasValidMempowFeeNonce()}.
-	 */
+	/** Returns whether this transaction satisfies the fee policy. */
 	protected boolean hasValidFeeOrMempow() throws DataException {
 		if (this.hasMinimumFee() && this.hasMinimumFeePerByte())
 			return true;
@@ -404,10 +404,40 @@ public abstract class Transaction {
 
 	/** Returns whether this transaction has a valid MemoryPoW fee-alternative nonce. */
 	protected boolean hasValidMempowFeeNonce() throws DataException {
-		return false;
+		Integer nonce = this.transactionData.getNonceOrNull();
+		if (nonce == null || nonce < 0)
+			return false;
+
+		byte[] transactionBytes;
+
+		try {
+			transactionBytes = TransactionTransformer.toBytesForSigning(this.transactionData);
+		} catch (TransformationException e) {
+			throw new DataException("Unable to transform transaction to byte array for MemoryPoW verification", e);
+		}
+
+		TransactionTransformer.clearMempowFeeNonce(transactionBytes);
+
+		return MemoryPoW.verify2(transactionBytes, this.getMempowFeeAlternativeBufferSize(),
+				this.getMempowFeeAlternativeDifficulty(), nonce);
+	}
+
+	protected int getMempowFeeAlternativeBufferSize() {
+		return MEMPOW_FEE_ALTERNATIVE_BUFFER_SIZE;
+	}
+
+	protected int getMempowFeeAlternativeDifficulty() {
+		return MEMPOW_FEE_ALTERNATIVE_DIFFICULTY;
 	}
 
 	protected ValidationResult validateMempowFeePolicy() throws DataException {
+		Long fee = this.transactionData.getFee();
+		if (fee == null)
+			return ValidationResult.INSUFFICIENT_FEE;
+
+		if (fee < 0)
+			return ValidationResult.NEGATIVE_FEE;
+
 		return this.hasValidFeeOrMempow() ? ValidationResult.OK : ValidationResult.INSUFFICIENT_FEE;
 	}
 
@@ -606,7 +636,7 @@ public abstract class Transaction {
 	}
 
 	/** Returns whether transaction's fee is valid. Might be overriden in transaction subclasses. */
-	protected ValidationResult isFeeValid() throws DataException {
+	public ValidationResult isFeeValid() throws DataException {
 		return this.validateMempowFeePolicy();
 	}
 

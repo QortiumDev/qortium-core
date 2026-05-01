@@ -34,6 +34,7 @@ public abstract class TransactionTransformer extends Transformer {
 	protected static final int GROUPID_LENGTH = INT_LENGTH;
 	protected static final int NONCE_LENGTH = INT_LENGTH;
 	protected static final int FEE_LENGTH = AMOUNT_LENGTH;
+	private static final int MEMPOW_FEE_NONCE_INDEX = TYPE_LENGTH + TIMESTAMP_LENGTH + GROUPID_LENGTH + PUBLIC_KEY_LENGTH;
 
 	/** Description of one component of raw transaction layout */
 	public enum TransformationType {
@@ -314,6 +315,10 @@ public abstract class TransactionTransformer extends Transformer {
 			return null;
 
 		return byteBuffer.getInt();
+	}
+
+	public static void clearMempowFeeNonce(byte[] transactionBytes) {
+		Arrays.fill(transactionBytes, MEMPOW_FEE_NONCE_INDEX, MEMPOW_FEE_NONCE_INDEX + NONCE_LENGTH, (byte) 0);
 	}
 
 	protected static void transformCommonBytes(TransactionData transactionData, ByteArrayOutputStream bytes) throws IOException {

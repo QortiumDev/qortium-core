@@ -1342,9 +1342,16 @@ public class Block {
 				if (this.repository.getTransactionRepository().isConfirmed(transactionData.getSignature()))
 					return ValidationResult.TRANSACTION_ALREADY_PROCESSED;
 
+				// Check transaction fee policy, including MemoryPoW fee alternatives
+				Transaction.ValidationResult validationResult = transaction.isFeeValid();
+				if (validationResult != Transaction.ValidationResult.OK) {
+					LOGGER.debug(String.format("Error during transaction fee validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
+					return ValidationResult.TRANSACTION_INVALID;
+				}
+
 				// Check transaction is even valid
 				// NOTE: in Gen1 there was an extra block height passed to DeployATTransaction.isValid
-				Transaction.ValidationResult validationResult = transaction.isValid();
+				validationResult = transaction.isValid();
 				if (validationResult != Transaction.ValidationResult.OK) {
 					LOGGER.debug(String.format("Error during transaction validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
 					return ValidationResult.TRANSACTION_INVALID;
