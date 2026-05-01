@@ -2153,6 +2153,11 @@ public class Block {
 		final long totalAmountForLogging = totalAmount;
 		LOGGER.trace(() -> String.format("Distributing: %s", Amounts.prettyAmount(totalAmountForLogging)));
 
+		if (!this.repository.getAssetRepository().assetExists(Asset.QORT)) {
+			LOGGER.debug("Skipping native block reward distribution because asset {} does not exist", Asset.QORT);
+			return;
+		}
+
 		// How to distribute reward among groups, with ratio, IN ORDER
 		List<BlockRewardCandidate> rewardCandidates = determineBlockRewardCandidates();
 
