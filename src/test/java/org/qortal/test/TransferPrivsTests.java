@@ -303,12 +303,11 @@ public class TransferPrivsTests extends Common {
 
 	/** Combine sender's level and block counts into recipient using TRANSFER_PRIVS transaction. */
 	private void combineAccounts(Repository repository, PrivateKeyAccount senderAccount, Account recipientAccount, PrivateKeyAccount mintingAccount) throws DataException {
-		byte[] reference = senderAccount.getLastReference();
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 		int txGroupId = 0;
 		long fee = 1L * Amounts.MULTIPLIER;
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, senderAccount.getPublicKey(), fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, null, senderAccount.getPublicKey(), fee, null);
 		TransactionData transactionData = new TransferPrivsTransactionData(baseTransactionData, recipientAccount.getAddress());
 
 		TransactionUtils.signAndImportValid(repository, transactionData, senderAccount);

@@ -34,35 +34,20 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 	@Override
 	public AccountData getAccount(String address) throws DataException {
-		String sql = "SELECT reference, public_key, default_group_id, level, blocks_minted FROM Accounts WHERE account = ?";
+		String sql = "SELECT public_key, default_group_id, level, blocks_minted FROM Accounts WHERE account = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, address)) {
 			if (resultSet == null)
 				return null;
 
-			byte[] reference = resultSet.getBytes(1);
-			byte[] publicKey = resultSet.getBytes(2);
-			int defaultGroupId = resultSet.getInt(3);
-			int level = resultSet.getInt(4);
-			int blocksMinted = resultSet.getInt(5);
+			byte[] publicKey = resultSet.getBytes(1);
+			int defaultGroupId = resultSet.getInt(2);
+			int level = resultSet.getInt(3);
+			int blocksMinted = resultSet.getInt(4);
 
-			return new AccountData(address, reference, publicKey, defaultGroupId, level, blocksMinted);
+			return new AccountData(address, publicKey, defaultGroupId, level, blocksMinted);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch account info from repository", e);
-		}
-	}
-
-	@Override
-	public byte[] getLastReference(String address) throws DataException {
-		String sql = "SELECT reference FROM Accounts WHERE account = ?";
-
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, address)) {
-			if (resultSet == null)
-				return null;
-
-			return resultSet.getBytes(1);
-		} catch (SQLException e) {
-			throw new DataException("Unable to fetch account's last reference from repository", e);
 		}
 	}
 
@@ -111,23 +96,6 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			this.repository.executeCheckedUpdate(sql, accountData.getAddress(), accountData.getPublicKey());
 		} catch (SQLException e) {
 			throw new DataException("Unable to ensure minimal account in repository", e);
-		}
-	}
-
-	@Override
-	public void setLastReference(AccountData accountData) throws DataException {
-		HSQLDBSaver saveHelper = new HSQLDBSaver("Accounts");
-
-		saveHelper.bind("account", accountData.getAddress()).bind("reference", accountData.getReference());
-
-		byte[] publicKey = accountData.getPublicKey();
-		if (publicKey != null)
-			saveHelper.bind("public_key", publicKey);
-
-		try {
-			saveHelper.execute(this.repository);
-		} catch (SQLException e) {
-			throw new DataException("Unable to save account's last reference into repository", e);
 		}
 	}
 

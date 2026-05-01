@@ -89,7 +89,7 @@ public class MessageTests extends Common {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			PrivateKeyAccount newbie = new PrivateKeyAccount(repository, randomPrivateKey);
 
-			byte[] aliceReference = alice.getLastReference();
+			byte[] aliceReference = null;
 
 			// real account, correct reference, real fee: OK
 			assertTrue(hasValidReference(repository, alice, aliceReference, minimumFee));

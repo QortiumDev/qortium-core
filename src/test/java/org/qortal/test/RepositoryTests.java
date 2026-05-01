@@ -87,7 +87,7 @@ public class RepositoryTests extends Common {
 
 			// Do a database 'read'
 			Account account1 = Common.getTestAccount(repository1, "alice");
-			account1.getLastReference();
+			account1.getDefaultGroupId();
 
 			// Open connection 2
 			try (final Repository repository2 = RepositoryManager.getRepository()) {

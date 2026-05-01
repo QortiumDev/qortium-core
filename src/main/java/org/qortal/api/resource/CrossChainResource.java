@@ -866,34 +866,17 @@ public class CrossChainResource {
 	private byte[] buildAtMessage(Repository repository, byte[] senderPublicKey, String atAddress, byte[] messageData) throws DataException {
 		long txTimestamp = NTP.getTime();
 
-		// senderPublicKey could be ephemeral trade public key where there is no corresponding account and hence no reference
-		String senderAddress = Crypto.toAddress(senderPublicKey);
-		byte[] lastReference = repository.getAccountRepository().getLastReference(senderAddress);
-		final boolean requiresPoW = lastReference == null;
-
-		if (requiresPoW) {
-			Random random = new Random();
-			lastReference = new byte[Transformer.SIGNATURE_LENGTH];
-			random.nextBytes(lastReference);
-		}
-
 		int version = Transaction.getVersionByTimestamp(txTimestamp);
 		int nonce = 0;
 		long amount = 0L;
 		Long assetId = null; // no assetId as amount is zero
 		Long fee = 0L;
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, lastReference, senderPublicKey, fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, null, senderPublicKey, fee, null);
 		TransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, version, nonce, atAddress, amount, assetId, messageData, false, false);
 
 		MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);
-
-		if (requiresPoW) {
-			messageTransaction.computeNonce();
-		} else {
-			fee = messageTransaction.calcRecommendedFee();
-			messageTransactionData.setFee(fee);
-		}
+		messageTransaction.computeNonce();
 
 		ValidationResult result = messageTransaction.isValidUnconfirmed();
 		if (result != ValidationResult.OK)

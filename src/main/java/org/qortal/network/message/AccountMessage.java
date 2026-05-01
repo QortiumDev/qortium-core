@@ -12,7 +12,6 @@ import java.nio.ByteBuffer;
 public class AccountMessage extends Message {
 
 	private static final int ADDRESS_LENGTH = Transformer.ADDRESS_LENGTH;
-	private static final int REFERENCE_LENGTH = Transformer.SIGNATURE_LENGTH;
 	private static final int PUBLIC_KEY_LENGTH = Transformer.PUBLIC_KEY_LENGTH;
 
 	private AccountData accountData;
@@ -26,8 +25,6 @@ public class AccountMessage extends Message {
 			// Send raw address instead of base58 encoded
 			byte[] address = Base58.decode(accountData.getAddress());
 			bytes.write(address);
-
-			bytes.write(accountData.getReference());
 
 			bytes.write(accountData.getPublicKey());
 
@@ -60,9 +57,6 @@ public class AccountMessage extends Message {
 		byteBuffer.get(addressBytes);
 		String address = Base58.encode(addressBytes);
 
-		byte[] reference = new byte[REFERENCE_LENGTH];
-		byteBuffer.get(reference);
-
 		byte[] publicKey = new byte[PUBLIC_KEY_LENGTH];
 		byteBuffer.get(publicKey);
 
@@ -72,7 +66,7 @@ public class AccountMessage extends Message {
 
 		int blocksMinted = byteBuffer.getInt();
 
-		AccountData accountData = new AccountData(address, reference, publicKey, defaultGroupId, level, blocksMinted);
+		AccountData accountData = new AccountData(address, publicKey, defaultGroupId, level, blocksMinted);
 		return new AccountMessage(id, accountData);
 	}
 

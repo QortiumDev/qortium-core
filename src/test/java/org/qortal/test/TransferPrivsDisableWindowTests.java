@@ -40,10 +40,9 @@ public class TransferPrivsDisableWindowTests extends Common {
 			PrivateKeyAccount sender = Common.getTestAccount(repository, "alice");
 			Account recipient = AccountUtils.createRandomAccount(repository);
 
-			byte[] reference = sender.getLastReference();
 			long fee = 1L * Amounts.MULTIPLIER;
 
-			BaseTransactionData baseTransactionData = new BaseTransactionData(DISABLED_WINDOW_TIMESTAMP, Group.NO_GROUP, reference,
+			BaseTransactionData baseTransactionData = new BaseTransactionData(DISABLED_WINDOW_TIMESTAMP, Group.NO_GROUP, null,
 					sender.getPublicKey(), fee, null);
 			TransactionData transactionData = new TransferPrivsTransactionData(baseTransactionData, recipient.getAddress());
 			Transaction transaction = Transaction.fromData(repository, transactionData);

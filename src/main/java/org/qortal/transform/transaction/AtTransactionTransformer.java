@@ -124,7 +124,8 @@ public class AtTransactionTransformer extends TransactionTransformer {
 
 			bytes.write(Ints.toByteArray(atTransactionData.getType().value));
 			bytes.write(Longs.toByteArray(atTransactionData.getTimestamp()));
-			bytes.write(atTransactionData.getReference());
+			byte[] reference = atTransactionData.getReference();
+			bytes.write(reference != null && reference.length == REFERENCE_LENGTH ? reference : new byte[REFERENCE_LENGTH]);
 
 			Serialization.serializeAddress(bytes, atTransactionData.getATAddress());
 

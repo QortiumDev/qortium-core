@@ -14,7 +14,6 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.GroupRepository;
 import org.qortal.repository.Repository;
 import org.qortal.settings.Settings;
-import org.qortal.utils.Base58;
 import org.qortal.utils.Groups;
 
 import javax.xml.bind.annotation.XmlAccessType;
@@ -124,35 +123,6 @@ public class Account {
 
 	public void deleteBalance(long assetId) throws DataException {
 		this.repository.getAccountRepository().delete(this.address, assetId);
-	}
-
-	// Reference manipulations
-
-	/**
-	 * Fetch last reference for account.
-	 * 
-	 * @return byte[] reference, or null if no reference or account not found.
-	 * @throws DataException
-	 */
-	public byte[] getLastReference() throws DataException {
-		byte[] reference = AccountRefCache.getLastReference(this.repository, this.address);
-		LOGGER.trace(() -> String.format("Last reference for %s is %s", this.address, reference == null ? "null" : Base58.encode(reference)));
-		return reference;
-	}
-
-	/**
-	 * Set last reference for account.
-	 * 
-	 * @param reference
-	 *            -- null allowed
-	 * @throws DataException
-	 */
-	public void setLastReference(byte[] reference) throws DataException {
-		LOGGER.trace(() -> String.format("Setting last reference for %s to %s", this.address, (reference == null ? "null" : Base58.encode(reference))));
-
-		AccountData accountData = this.buildAccountData();
-		accountData.setReference(reference);
-		AccountRefCache.setLastReference(this.repository, accountData);
 	}
 
 	// Default groupID manipulations

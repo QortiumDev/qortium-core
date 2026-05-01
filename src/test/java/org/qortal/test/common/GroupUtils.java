@@ -28,11 +28,10 @@ public class GroupUtils {
 			account = null;
 		}
 
-		byte[] reference = account.getLastReference();
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 		String groupDescription = groupName + " (test group)";
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, account.getPublicKey(), GroupUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, null, account.getPublicKey(), GroupUtils.fee, null);
 		TransactionData transactionData = new CreateGroupTransactionData(baseTransactionData, groupName, groupDescription, isOpen, approvalThreshold, minimumBlockDelay, maximumBlockDelay);
 
 		TransactionUtils.signAndMint(repository, transactionData, account);
@@ -70,10 +69,9 @@ public class GroupUtils {
 	 * @since v4.7.1
 	 */
 	public static void joinGroup(Repository repository, PrivateKeyAccount joinerAccount, int groupId) throws DataException {
-		byte[] reference = joinerAccount.getLastReference();
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, joinerAccount.getPublicKey(), GroupUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, null, joinerAccount.getPublicKey(), GroupUtils.fee, null);
 		TransactionData transactionData = new JoinGroupTransactionData(baseTransactionData, groupId);
 
 		TransactionUtils.signAndMint(repository, transactionData, joinerAccount);
@@ -88,10 +86,9 @@ public class GroupUtils {
 	public static void approveTransaction(Repository repository, String accountName, byte[] pendingSignature, boolean decision) throws DataException {
 		PrivateKeyAccount account = Common.getTestAccount(repository, accountName);
 
-		byte[] reference = account.getLastReference();
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, account.getPublicKey(), GroupUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, null, account.getPublicKey(), GroupUtils.fee, null);
 		TransactionData transactionData = new GroupApprovalTransactionData(baseTransactionData, pendingSignature, decision);
 
 		TransactionUtils.signAndMint(repository, transactionData, account);

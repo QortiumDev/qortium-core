@@ -53,12 +53,6 @@ public class AtUtils {
 
     public static DeployAtTransaction doDeployAT(Repository repository, PrivateKeyAccount deployer, byte[] creationBytes, long fundingAmount) throws DataException {
         long txTimestamp = System.currentTimeMillis();
-        byte[] lastReference = deployer.getLastReference();
-
-        if (lastReference == null) {
-            System.err.println(String.format("Qortal account %s has no last reference", deployer.getAddress()));
-            System.exit(2);
-        }
 
         Long fee = null;
         String name = "Test AT";
@@ -66,7 +60,7 @@ public class AtUtils {
         String atType = "Test";
         String tags = "TEST";
 
-        BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, lastReference, deployer.getPublicKey(), fee, null);
+        BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, null, deployer.getPublicKey(), fee, null);
         TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.QORT);
 
         DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);

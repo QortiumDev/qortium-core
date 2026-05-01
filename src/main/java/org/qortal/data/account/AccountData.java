@@ -11,7 +11,6 @@ public class AccountData {
 
 	// Properties
 	protected String address;
-	protected byte[] reference;
 	protected byte[] publicKey;
 	protected int defaultGroupId;
 	protected int level;
@@ -23,9 +22,8 @@ public class AccountData {
 	protected AccountData() {
 	}
 
-	public AccountData(String address, byte[] reference, byte[] publicKey, int defaultGroupId, int level, int blocksMinted) {
+	public AccountData(String address, byte[] publicKey, int defaultGroupId, int level, int blocksMinted) {
 		this.address = address;
-		this.reference = reference;
 		this.publicKey = publicKey;
 		this.defaultGroupId = defaultGroupId;
 		this.level = level;
@@ -33,21 +31,13 @@ public class AccountData {
 	}
 
 	public AccountData(String address) {
-		this(address, null, null, Group.NO_GROUP, 0, 0);
+		this(address, null, Group.NO_GROUP, 0, 0);
 	}
 
 	// Getters/Setters
 
 	public String getAddress() {
 		return this.address;
-	}
-
-	public byte[] getReference() {
-		return this.reference;
-	}
-
-	public void setReference(byte[] reference) {
-		this.reference = reference;
 	}
 
 	public byte[] getPublicKey() {

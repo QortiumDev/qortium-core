@@ -350,7 +350,7 @@ public class QortalATAPI extends API {
 		Account recipient = getAccountFromB(state);
 
 		long timestamp = this.getNextTransactionTimestamp();
-		byte[] reference = this.getLastReference();
+		byte[] reference = this.getGeneratedTransactionReference();
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, NullAccount.PUBLIC_KEY, 0L, null);
 		ATTransactionData atTransactionData = new ATTransactionData(baseTransactionData, this.atData.getATAddress(),
@@ -367,7 +367,7 @@ public class QortalATAPI extends API {
 		Account recipient = getAccountFromB(state);
 
 		long timestamp = this.getNextTransactionTimestamp();
-		byte[] reference = this.getLastReference();
+		byte[] reference = this.getGeneratedTransactionReference();
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, NullAccount.PUBLIC_KEY, 0L, null);
 		ATTransactionData atTransactionData = new ATTransactionData(baseTransactionData, this.atData.getATAddress(),
@@ -396,7 +396,7 @@ public class QortalATAPI extends API {
 		// Refund remaining balance (if any) to AT's creator
 		Account creator = this.getCreator();
 		long timestamp = this.getNextTransactionTimestamp();
-		byte[] reference = this.getLastReference();
+		byte[] reference = this.getGeneratedTransactionReference();
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, NullAccount.PUBLIC_KEY, 0L, null);
 		ATTransactionData atTransactionData = new ATTransactionData(baseTransactionData, this.atData.getATAddress(),
@@ -516,20 +516,13 @@ public class QortalATAPI extends API {
 		return this.blockTimestamp;
 	}
 
-	/** Returns AT account's lastReference */
-	private byte[] getLastReference() {
+	/** Returns previous generated AT transaction signature for legacy transaction reference uniqueness. */
+	private byte[] getGeneratedTransactionReference() {
 		// If we have transactions already, then use signature from last transaction
 		if (!this.transactions.isEmpty())
 			return this.transactions.get(this.transactions.size() - 1).getTransactionData().getSignature();
 
-		try {
-			// Look up AT's account's last reference from repository
-			Account atAccount = this.getATAccount();
-
-			return atAccount.getLastReference();
-		} catch (DataException e) {
-			throw new RuntimeException("AT API unable to fetch AT's last reference from repository?", e);
-		}
+		return null;
 	}
 
 	/**

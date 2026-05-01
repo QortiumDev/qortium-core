@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - core: remove account last-reference state
+
+Removed the inherited account last-reference record from Qortium accounts, APIs, lite-node account messages, and database schema. Transaction builders now use the deprecated transaction reference slot only as a neutral legacy field, so accounts no longer need a stored sequencing reference before creating or receiving transactions.
+
 ### 2026-05-01 - core: disable transaction reference semantics
 
 Stopped using the inherited transaction reference as an account sequencing rule. Transactions no longer need a sender last-reference, processing no longer advances or reverts account last-reference values, and serialization keeps a neutral placeholder when the old field is missing or malformed. This keeps the legacy database and API field in place for now while preparing Qortium for participation models that do not require accounts to already own coins.

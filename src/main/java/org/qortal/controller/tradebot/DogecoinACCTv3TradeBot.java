@@ -128,7 +128,7 @@ public class DogecoinACCTv3TradeBot implements AcctTradeBot {
 
 		// Deploy AT
 		long timestamp = NTP.getTime();
-		byte[] reference = creator.getLastReference();
+		byte[] reference = null;
 		long fee = 0L;
 		byte[] signature = null;
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, creator.getPublicKey(), fee, signature);

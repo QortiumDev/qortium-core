@@ -25,7 +25,6 @@ import org.qortal.utils.NTP;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Random;
 
 public class MessageTransaction extends Transaction {
 
@@ -56,14 +55,9 @@ public class MessageTransaction extends Transaction {
 	/** Constructs non-payment MessageTransaction. Caller will need to compute nonce/set fee and then sign. */
 	public static MessageTransaction build(Repository repository, PrivateKeyAccount sender, int txGroupId, String recipient, byte[] data, boolean isText, boolean isEncrypted) throws DataException {
 		long timestamp = NTP.getTime();
-		byte[] reference = sender.getLastReference();
-		if (reference == null) {
-			reference = new byte[64];
-			new Random().nextBytes(reference);
-		}
 
 		long fee = 0L;
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, sender.getPublicKey(), fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, null, sender.getPublicKey(), fee, null);
 		int version = Transaction.getVersionByTimestamp(timestamp);
 		MessageTransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, version, 0, recipient, 0, null, data, isText, isEncrypted);
 		return new MessageTransaction(repository, messageTransactionData);

@@ -11,7 +11,6 @@ import org.qortal.arbitrary.metadata.ArbitraryDataTransactionMetadata;
 import org.qortal.arbitrary.misc.Category;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.crypto.AES;
-import org.qortal.crypto.Crypto;
 import org.qortal.data.PaymentData;
 import org.qortal.data.transaction.ArbitraryTransactionData;
 import org.qortal.data.transaction.ArbitraryTransactionData.Compression;
@@ -23,7 +22,6 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.transaction.ArbitraryTransaction;
 import org.qortal.transaction.Transaction;
-import org.qortal.transform.Transformer;
 import org.qortal.utils.Base58;
 import org.qortal.utils.FilesystemUtils;
 import org.qortal.utils.NTP;
@@ -34,7 +32,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Random;
 
 public class ArbitraryDataTransactionBuilder {
 
@@ -137,16 +134,6 @@ public class ArbitraryDataTransactionBuilder {
                 throw new DataException("Missing public key or path");
             }
             byte[] creatorPublicKey = Base58.decode(publicKey58);
-            final String creatorAddress = Crypto.toAddress(creatorPublicKey);
-            byte[] lastReference = repository.getAccountRepository().getLastReference(creatorAddress);
-            if (lastReference == null) {
-                // Use a random last reference on the very first transaction for an account
-                // Code copied from CrossChainResource.buildAtMessage()
-                // We already require PoW on all arbitrary transactions, so no additional logic is needed
-                Random random = new Random();
-                lastReference = new byte[Transformer.SIGNATURE_LENGTH];
-                random.nextBytes(lastReference);
-            }
 
             // Single file resources are handled differently, especially for very small data payloads, as these go on chain
             final boolean isSingleFileResource = FilesystemUtils.isSingleFileResource(path, false);
@@ -189,7 +176,7 @@ public class ArbitraryDataTransactionBuilder {
             }
 
             final BaseTransactionData baseTransactionData = new BaseTransactionData(now, Group.NO_GROUP,
-                    lastReference, creatorPublicKey, fee, null);
+                    null, creatorPublicKey, fee, null);
             final int size = (int) arbitraryDataFile.size();
             final int nonce = 0;
             byte[] secret = arbitraryDataFile.getSecret();

@@ -10,11 +10,8 @@ public interface AccountRepository {
 
 	// General account
 
-	/** Returns all general information about account, e.g. public key, last reference, default group ID. */
+	/** Returns all general information about account, e.g. public key, default group ID. */
 	public AccountData getAccount(String address) throws DataException;
-
-	/** Returns account's last reference or null if not set or account not found. */
-	public byte[] getLastReference(String address) throws DataException;
 
 	/** Returns account's default groupID or null if account not found. */
 	public Integer getDefaultGroupId(String address) throws DataException;
@@ -33,23 +30,16 @@ public interface AccountRepository {
 	public void ensureAccount(AccountData accountData) throws DataException;
 
 	/**
-	 * Saves account's last reference, and public key if present, in repository.
-	 * <p>
-	 * Note: ignores other fields like default group ID.
-	 */
-	public void setLastReference(AccountData accountData) throws DataException;
-
-	/**
 	 * Saves account's default groupID, and public key if present, in repository.
 	 * <p>
-	 * Note: ignores other fields like last reference.
+	 * Note: ignores other fields like level.
 	 */
 	public void setDefaultGroupId(AccountData accountData) throws DataException;
 
 	/**
 	 * Saves account's level, and public key if present, in repository.
 	 * <p>
-	 * Note: ignores other fields like last reference, default groupID.
+	 * Note: ignores other fields like default groupID.
 	 */
 	public void setLevel(AccountData accountData) throws DataException;
 
@@ -59,7 +49,7 @@ public interface AccountRepository {
 	/**
 	 * Saves account's minted block count and public key if present, in repository.
 	 * <p>
-	 * Note: ignores other fields like last reference, default groupID.
+	 * Note: ignores other fields like default groupID.
 	 */
 	public void setMintedBlockCount(AccountData accountData) throws DataException;
 

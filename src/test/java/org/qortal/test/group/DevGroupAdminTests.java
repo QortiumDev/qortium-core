@@ -765,11 +765,10 @@ public class DevGroupAdminTests extends Common {
 	}
 
 	private static ValidationResult groupApproval(Repository repository, PrivateKeyAccount signer, TransactionData transactionData, boolean decision) throws DataException {
-		byte[] reference = signer.getLastReference();
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData
-				= new BaseTransactionData(timestamp, Group.NO_GROUP, reference, signer.getPublicKey(), GroupUtils.fee, null);
+				= new BaseTransactionData(timestamp, Group.NO_GROUP, null, signer.getPublicKey(), GroupUtils.fee, null);
 		TransactionData groupApprovalTransactionData
 				= new GroupApprovalTransactionData(baseTransactionData, transactionData.getSignature(), decision);
 

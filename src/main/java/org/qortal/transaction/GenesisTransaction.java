@@ -114,12 +114,10 @@ public class GenesisTransaction extends Transaction {
 
 	@Override
 	public void processReferencesAndFees() throws DataException {
-		// Do not attempt to update non-existent genesis account's reference!
+		// Do not attempt to process a non-existent genesis sender.
 
 		Account recipient = new Account(repository, this.genesisTransactionData.getRecipient());
-
-		// Set recipient's starting reference (also creates account)
-		recipient.setLastReference(this.genesisTransactionData.getSignature());
+		recipient.ensureAccount();
 	}
 
 	@Override
@@ -130,7 +128,7 @@ public class GenesisTransaction extends Transaction {
 
 	@Override
 	public void orphanReferencesAndFees() throws DataException {
-		// Recipient's last reference removed thanks to delete() called by orphan() above.
+		// Recipient account removed by orphan() above.
 	}
 
 }

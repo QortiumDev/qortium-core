@@ -87,50 +87,6 @@ public class AddressesResource {
 	}
 
 	@GET
-	@Path("/lastreference/{address}")
-	@Operation(
-		summary = "Fetch reference for next transaction to be created by address",
-		description = "Returns the base58-encoded signature of the last confirmed transaction created by address, failing that: the first incoming transaction. Returns \"false\" if there is no last-reference.",
-		responses = {
-			@ApiResponse(
-				description = "the base58-encoded last-reference",
-				content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
-			)
-		}
-	)
-	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.ADDRESS_UNKNOWN, ApiError.REPOSITORY_ISSUE})
-	public String getLastReference(@PathParam("address") String address) {
-		if (!Crypto.isValidAddress(address))
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
-
-		AccountData accountData;
-
-		if (Settings.getInstance().isLite()) {
-			// Lite nodes request data from peers instead of the local db
-			accountData = LiteNode.getInstance().fetchAccountData(address);
-		}
-		else {
-			// All other node types request data from local db
-			try (final Repository repository = RepositoryManager.getRepository()) {
-				accountData = repository.getAccountRepository().getAccount(address);
-			} catch (DataException e) {
-				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
-			}
-		}
-
-		// Not found?
-		if (accountData == null)
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
-
-		byte[] lastReference = accountData.getReference();
-
-		if (lastReference == null || lastReference.length == 0)
-			return "false";
-
-		return Base58.encode(lastReference);
-	}
-
-	@GET
 	@Path("/validate/{address}")
 	@Operation(
 		summary = "Validates the given address",

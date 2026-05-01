@@ -293,13 +293,13 @@ public class ArbitraryTransactionTests extends Common {
         byte[] randomHash = new byte[32];
         new Random().nextBytes(randomHash);
 
-        byte[] lastReference = new byte[64];
-        new Random().nextBytes(lastReference);
+        byte[] transactionReference = new byte[64];
+        new Random().nextBytes(transactionReference);
 
         Long now = NTP.getTime();
 
         final BaseTransactionData baseTransactionData = new BaseTransactionData(now, Group.NO_GROUP,
-                lastReference, randomHash, 0L, null);
+                transactionReference, randomHash, 0L, null);
         final String name = "test";
         final String identifier = "test";
         final ArbitraryTransactionData.Method method = ArbitraryTransactionData.Method.PUT;

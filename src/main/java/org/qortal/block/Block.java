@@ -7,7 +7,6 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.account.Account;
-import org.qortal.account.AccountRefCache;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.asset.Asset;
@@ -1305,9 +1304,7 @@ public class Block {
 
 	/** Returns whether block's transactions are valid. */
 	private ValidationResult areTransactionsValid() throws DataException {
-		// We're about to (test-)process a batch of transactions,
-		// so create an account reference cache so get/set correct last-references.
-		try (AccountRefCache accountRefCache = new AccountRefCache(repository)) {
+		try {
 			// Create repository savepoint here so we can rollback to it after testing transactions
 			repository.setSavepoint();
 
@@ -1373,7 +1370,7 @@ public class Block {
 					if (transactionData.getApprovalStatus() == ApprovalStatus.NOT_REQUIRED)
 						transaction.process();
 
-					// Regardless of group-approval, update relevant info for creator (e.g. lastReference)
+					// Regardless of group-approval, update relevant creator info and fees
 					transaction.processReferencesAndFees();
 				} catch (Exception e) {
 					LOGGER.error(String.format("Exception during transaction validation, tx %s", Base58.encode(transactionData.getSignature())), e);
@@ -1579,21 +1576,14 @@ public class Block {
 			}
 		}
 
-		// We're about to (test-)process a batch of transactions,
-		// so create an account reference cache so get/set correct last-references.
-		try (AccountRefCache accountRefCache = new AccountRefCache(this.repository)) {
-			// Process transactions (we'll link them to this block after saving the block itself)
-			processTransactions();
+		// Process transactions (we'll link them to this block after saving the block itself)
+		processTransactions();
 
-			// Group-approval transactions
-			processGroupApprovalTransactions();
+		// Group-approval transactions
+		processGroupApprovalTransactions();
 
-			// Process AT fees and save AT states into repository
-			processAtFeesAndStates();
-
-			// Commit new accounts' last-reference changes
-			accountRefCache.commit();
-		}
+		// Process AT fees and save AT states into repository
+		processAtFeesAndStates();
 
 		// Link block into blockchain by fetching signature of highest block and setting that as our reference
 		BlockData latestBlockData = this.repository.getBlockRepository().fromHeight(blockchainHeight);
@@ -1736,7 +1726,7 @@ public class Block {
 			if (transactionData.getApprovalStatus() == ApprovalStatus.NOT_REQUIRED)
 				transaction.process();
 
-			// Regardless of group-approval, update relevant info for creator (e.g. lastReference)
+			// Regardless of group-approval, update relevant creator info and fees.
 			transaction.processReferencesAndFees();
 		}
 	}
@@ -1899,7 +1889,7 @@ public class Block {
 			if (transactionData.getApprovalStatus() == ApprovalStatus.NOT_REQUIRED)
 				transaction.orphan();
 
-			// Regardless of group-approval, update relevant info for creator (e.g. lastReference)
+			// Regardless of group-approval, update relevant creator info and fees.
 			transaction.orphanReferencesAndFees();
 
 			// Unlink transaction from this block

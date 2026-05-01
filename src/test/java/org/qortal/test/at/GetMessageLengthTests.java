@@ -163,20 +163,13 @@ public class GetMessageLengthTests extends Common {
 
 	private DeployAtTransaction doDeploy(Repository repository, PrivateKeyAccount deployer, byte[] creationBytes, long fundingAmount) throws DataException {
 		long txTimestamp = System.currentTimeMillis();
-		byte[] lastReference = deployer.getLastReference();
-
-		if (lastReference == null) {
-			System.err.println(String.format("Qortal account %s has no last reference", deployer.getAddress()));
-			System.exit(2);
-		}
-
 		Long fee = null;
 		String name = "Test AT";
 		String description = "Test AT";
 		String atType = "Test";
 		String tags = "TEST";
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, lastReference, deployer.getPublicKey(), fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, null, deployer.getPublicKey(), fee, null);
 		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.QORT);
 
 		DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
@@ -191,20 +184,13 @@ public class GetMessageLengthTests extends Common {
 
 	private MessageTransaction sendMessage(Repository repository, PrivateKeyAccount sender, byte[] data, String recipient) throws DataException {
 		long txTimestamp = System.currentTimeMillis();
-		byte[] lastReference = sender.getLastReference();
-
-		if (lastReference == null) {
-			System.err.println(String.format("Qortal account %s has no last reference", sender.getAddress()));
-			System.exit(2);
-		}
-
 		Long fee = null;
 		int version = org.qortal.transaction.Transaction.getVersionByTimestamp(txTimestamp);
 		int nonce = 0;
 		long amount = 0;
 		Long assetId = null; // because amount is zero
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, lastReference, sender.getPublicKey(), fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, null, sender.getPublicKey(), fee, null);
 		TransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, version, nonce, recipient, amount, assetId, data, false, false);
 
 		MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);

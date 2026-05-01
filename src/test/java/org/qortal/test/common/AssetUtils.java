@@ -31,10 +31,9 @@ public class AssetUtils {
 	public static long issueAsset(Repository repository, String issuerAccountName, String assetName, long quantity, boolean isDivisible) throws DataException {
 		PrivateKeyAccount account = Common.getTestAccount(repository, issuerAccountName);
 
-		byte[] reference = account.getLastReference();
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, reference, account.getPublicKey(), AssetUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, null, account.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new IssueAssetTransactionData(baseTransactionData, assetName, "desc", quantity, isDivisible, "{}", false);
 
 		TransactionUtils.signAndMint(repository, transactionData, account);
@@ -46,10 +45,9 @@ public class AssetUtils {
 		PrivateKeyAccount fromAccount = Common.getTestAccount(repository, fromAccountName);
 		PrivateKeyAccount toAccount = Common.getTestAccount(repository, toAccountName);
 
-		byte[] reference = fromAccount.getLastReference();
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, reference, fromAccount.getPublicKey(), AssetUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, null, fromAccount.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new TransferAssetTransactionData(baseTransactionData, toAccount.getAddress(), amount, assetId);
 
 		TransactionUtils.signAndMint(repository, transactionData, fromAccount);
@@ -58,10 +56,9 @@ public class AssetUtils {
 	public static byte[] createOrder(Repository repository, String accountName, long haveAssetId, long wantAssetId, long amount, long price) throws DataException {
 		PrivateKeyAccount account = Common.getTestAccount(repository, accountName);
 
-		byte[] reference = account.getLastReference();
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, reference, account.getPublicKey(), AssetUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, null, account.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new CreateAssetOrderTransactionData(baseTransactionData, haveAssetId, wantAssetId, amount, price);
 
 		TransactionUtils.signAndMint(repository, transactionData, account);
@@ -72,10 +69,9 @@ public class AssetUtils {
 	public static Transaction buildCancelOrder(Repository repository, String accountName, byte[] orderId) throws DataException {
 		PrivateKeyAccount account = Common.getTestAccount(repository, accountName);
 
-		byte[] reference = account.getLastReference();
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, reference, account.getPublicKey(), AssetUtils.fee, null);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, null, account.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new CancelAssetOrderTransactionData(baseTransactionData, orderId);
 
 		return Transaction.fromData(repository, transactionData);

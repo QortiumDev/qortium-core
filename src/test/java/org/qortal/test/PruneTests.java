@@ -6,7 +6,6 @@ import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
-import org.qortal.block.Block;
 import org.qortal.controller.BlockMinter;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.LitecoinACCTv3;
@@ -132,11 +131,11 @@ public class PruneTests extends Common {
             String atAddress = at.getAddress();
 
             // Mint enough blocks to take the original DEPLOY_AT past the prune threshold (in this case 20)
-            Block block = BlockUtils.mintBlocks(repository, 25);
+            BlockUtils.mintBlocks(repository, 25);
 
             // Send creator's address to AT, instead of typical partner's address
             byte[] messageData = LitecoinACCTv3.getInstance().buildCancelMessage(deployer.getAddress());
-            long txTimestamp = block.getBlockData().getTimestamp();
+            long txTimestamp = System.currentTimeMillis();
             MessageTransaction messageTransaction = sendMessage(repository, deployer, messageData, atAddress, txTimestamp);
 
             // AT should process 'cancel' message in next block
@@ -167,20 +166,13 @@ public class PruneTests extends Common {
         byte[] creationBytes = LitecoinACCTv3.buildQortalAT(tradeAddress, litecoinPublicKeyHash, redeemAmount, litecoinAmount, tradeTimeout);
 
         long txTimestamp = System.currentTimeMillis();
-        byte[] lastReference = deployer.getLastReference();
-
-        if (lastReference == null) {
-            System.err.println(String.format("Qortal account %s has no last reference", deployer.getAddress()));
-            System.exit(2);
-        }
-
         Long fee = null;
         String name = "QORT-LTC cross-chain trade";
         String description = String.format("Qortal-Litecoin cross-chain trade");
         String atType = "ACCT";
         String tags = "QORT-LTC ACCT";
 
-        BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, lastReference, deployer.getPublicKey(), fee, null);
+        BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, null, deployer.getPublicKey(), fee, null);
         TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.QORT);
 
         DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
@@ -194,20 +186,13 @@ public class PruneTests extends Common {
     }
 
     private MessageTransaction sendMessage(Repository repository, PrivateKeyAccount sender, byte[] data, String recipient, long txTimestamp) throws DataException {
-        byte[] lastReference = sender.getLastReference();
-
-        if (lastReference == null) {
-            System.err.println(String.format("Qortal account %s has no last reference", sender.getAddress()));
-            System.exit(2);
-        }
-
         Long fee = null;
         int version = org.qortal.transaction.Transaction.getVersionByTimestamp(txTimestamp);
         int nonce = 0;
         long amount = 0;
         Long assetId = null; // because amount is zero
 
-        BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, lastReference, sender.getPublicKey(), fee, null);
+        BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, null, sender.getPublicKey(), fee, null);
         TransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, version, nonce, recipient, amount, assetId, data, false, false);
 
         MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);
