@@ -5,9 +5,14 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
 import org.qortal.crypto.MemoryPoW;
+import org.qortal.data.PaymentData;
 import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.JoinGroupTransactionData;
+import org.qortal.data.transaction.MultiPaymentTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
+import org.qortal.data.transaction.RegisterNameTransactionData;
 import org.qortal.data.transaction.TransactionData;
+import org.qortal.data.transaction.TransferAssetTransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -21,7 +26,10 @@ import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.TransactionTransformer;
 
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -119,6 +127,18 @@ public class MempowFeePolicyTests extends Common {
 	}
 
 	@Test
+	public void testNormalTransactionFeePolicyRepresentativeTypes() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+
+			for (RepresentativeTransactionCase transactionCase : buildRepresentativeTransactionCases()) {
+				assertRepresentativeTypeFeePolicy(repository, alice, bob, transactionCase);
+			}
+		}
+	}
+
+	@Test
 	public void testZeroFeeMempowTransactionDoesNotMoveFeeBalance() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -164,10 +184,58 @@ public class MempowFeePolicyTests extends Common {
 	}
 
 	private PaymentTransaction buildPaymentTransaction(Repository repository, PrivateKeyAccount sender, String recipient, long fee) {
-		long timestamp = System.currentTimeMillis();
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, sender.getPublicKey(), fee, null);
+		BaseTransactionData baseTransactionData = buildBaseTransactionData(sender, fee);
 		PaymentTransactionData paymentTransactionData = new PaymentTransactionData(baseTransactionData, recipient, 1L);
 		return new FastMempowPaymentTransaction(repository, paymentTransactionData);
+	}
+
+	private static BaseTransactionData buildBaseTransactionData(PrivateKeyAccount sender, long fee) {
+		long timestamp = System.currentTimeMillis();
+		return new BaseTransactionData(timestamp, Group.NO_GROUP, sender.getPublicKey(), fee, null);
+	}
+
+	private List<RepresentativeTransactionCase> buildRepresentativeTransactionCases() {
+		return Arrays.asList(
+				new RepresentativeTransactionCase("PAYMENT", (sender, recipient, fee) ->
+						new PaymentTransactionData(buildBaseTransactionData(sender, fee), recipient.getAddress(), 1L)),
+				new RepresentativeTransactionCase("MULTI_PAYMENT", (sender, recipient, fee) ->
+						new MultiPaymentTransactionData(buildBaseTransactionData(sender, fee),
+								Collections.singletonList(new PaymentData(recipient.getAddress(), Asset.QORT, 1L)))),
+				new RepresentativeTransactionCase("TRANSFER_ASSET", (sender, recipient, fee) ->
+						new TransferAssetTransactionData(buildBaseTransactionData(sender, fee), recipient.getAddress(), 1L, Asset.QORT)),
+				new RepresentativeTransactionCase("REGISTER_NAME", (sender, recipient, fee) ->
+						new RegisterNameTransactionData(buildBaseTransactionData(sender, fee), "mempow-test-name", "mempow test data")),
+				new RepresentativeTransactionCase("JOIN_GROUP", (sender, recipient, fee) ->
+						new JoinGroupTransactionData(buildBaseTransactionData(sender, fee), 2)));
+	}
+
+	private void assertRepresentativeTypeFeePolicy(Repository repository, PrivateKeyAccount sender, PrivateKeyAccount recipient,
+			RepresentativeTransactionCase transactionCase) throws Exception {
+		Transaction paidFeeTransaction = transactionCase.build(repository, sender, recipient, 0L);
+		paidFeeTransaction.getTransactionData().setFee(paidFeeTransaction.calcRecommendedFee());
+		assertTrue(transactionCase.name, invokeHasPaidFee(paidFeeTransaction));
+		assertEquals(transactionCase.name, ValidationResult.OK, invokeIsFeeValid(paidFeeTransaction));
+
+		Transaction missingNonceTransaction = transactionCase.build(repository, sender, recipient, 0L);
+		assertTrue(transactionCase.name, invokeCanUseMempowFeeAlternative(missingNonceTransaction));
+		assertFalse(transactionCase.name, invokeHasPaidFee(missingNonceTransaction));
+		assertEquals(transactionCase.name, ValidationResult.INSUFFICIENT_FEE, invokeIsFeeValid(missingNonceTransaction));
+
+		Transaction invalidNonceTransaction = transactionCase.build(repository, sender, recipient, 0L);
+		setInvalidMempowNonce(invalidNonceTransaction);
+		assertEquals(transactionCase.name, ValidationResult.INSUFFICIENT_FEE, invokeIsFeeValid(invalidNonceTransaction));
+
+		Transaction zeroFeeMempowTransaction = transactionCase.build(repository, sender, recipient, 0L);
+		computeValidMempowNonce(zeroFeeMempowTransaction);
+		assertEquals(transactionCase.name, ValidationResult.OK, invokeIsFeeValid(zeroFeeMempowTransaction));
+
+		Transaction lowFeeMempowTransaction = transactionCase.build(repository, sender, recipient, 1L);
+		computeValidMempowNonce(lowFeeMempowTransaction);
+		assertEquals(transactionCase.name, ValidationResult.OK, invokeIsFeeValid(lowFeeMempowTransaction));
+
+		Transaction negativeFeeTransaction = transactionCase.build(repository, sender, recipient, -1L);
+		computeValidMempowNonce(negativeFeeTransaction);
+		assertEquals(transactionCase.name, ValidationResult.NEGATIVE_FEE, invokeIsFeeValid(negativeFeeTransaction));
 	}
 
 	private static void computeValidMempowNonce(Transaction transaction) throws TransformationException {
@@ -232,5 +300,64 @@ public class MempowFeePolicyTests extends Common {
 		protected int getMempowFeeAlternativeDifficulty() {
 			return TEST_MEMPOW_DIFFICULTY;
 		}
+	}
+
+	private static class FastMempowTestTransaction extends Transaction {
+		private FastMempowTestTransaction(Repository repository, TransactionData transactionData) {
+			super(repository, transactionData);
+		}
+
+		@Override
+		public List<String> getRecipientAddresses() {
+			return Collections.emptyList();
+		}
+
+		@Override
+		public ValidationResult isValid() {
+			return ValidationResult.OK;
+		}
+
+		@Override
+		public void preProcess() {
+			// Nothing to do
+		}
+
+		@Override
+		public void process() {
+			// Nothing to do
+		}
+
+		@Override
+		public void orphan() {
+			// Nothing to do
+		}
+
+		@Override
+		protected int getMempowFeeAlternativeBufferSize() {
+			return TEST_MEMPOW_BUFFER_SIZE;
+		}
+
+		@Override
+		protected int getMempowFeeAlternativeDifficulty() {
+			return TEST_MEMPOW_DIFFICULTY;
+		}
+	}
+
+	private static class RepresentativeTransactionCase {
+		private final String name;
+		private final RepresentativeTransactionDataBuilder transactionDataBuilder;
+
+		private RepresentativeTransactionCase(String name, RepresentativeTransactionDataBuilder transactionDataBuilder) {
+			this.name = name;
+			this.transactionDataBuilder = transactionDataBuilder;
+		}
+
+		private Transaction build(Repository repository, PrivateKeyAccount sender, PrivateKeyAccount recipient, long fee) {
+			return new FastMempowTestTransaction(repository, this.transactionDataBuilder.build(sender, recipient, fee));
+		}
+	}
+
+	private interface RepresentativeTransactionDataBuilder {
+		TransactionData build(PrivateKeyAccount sender, PrivateKeyAccount recipient, long fee);
 	}
 }

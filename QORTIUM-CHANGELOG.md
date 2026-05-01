@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - test: cover mempow fee alternatives for normal transactions
+
+Added broader tests for the shared normal-transaction MemoryPoW fee policy across representative transaction shapes. The tests now check that normal transactions can use either a sufficient paid fee or a valid MemoryPoW nonce, while missing nonces, invalid nonces, and negative fees are still rejected, without changing production behavior.
+
 ### 2026-05-01 - core: allow zero-fee processing for mempow transactions
 
 Made the transaction processing paths treat only positive declared fees as balance-moving fees, so a valid zero-fee MemoryPoW transaction does not debit or later refund any QORT. Positive low fees accepted through MemoryPoW are still charged exactly as signed, multipayment validation now relies on the shared payment balance check instead of a broken redundant fee check, and balance recording no longer creates artificial zero-value fee movements for zero-fee transactions.
