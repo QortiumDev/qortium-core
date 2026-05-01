@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - test/docs: neutralize native asset fixtures
+
+Renamed the standard test-chain native asset fixture from QORT to NATIVE and moved shared test helper defaults to the neutral native asset constant. This keeps tests aligned with Qortium's asset `0` direction without changing production chain behavior, while the audit notes now distinguish the neutralized native fixture labels from broader inherited test identities that still need cleanup.
+
 ### 2026-05-01 - core: define native asset bootstrap rules
 
 Defined runtime native asset bootstrap as a development-group-governed asset issuance instead of letting any first asset issue claim asset `0`. When no native asset exists, an ordinary `ISSUE_ASSET` transaction must now target one of the active configured development groups, pass group approval, and can still create asset `0` with either zero or positive initial quantity. The approval path remains coinless because `GROUP_APPROVAL` is covered by the shared MemoryPoW fee-alternative policy, and tests now cover rejection outside the development group plus approved bootstrap into native rewards.

@@ -23,7 +23,7 @@ public class AssetUtils {
 	public static final int txGroupId = Group.NO_GROUP;
 	public static final long fee = 1L * Amounts.MULTIPLIER;
 
-	// QORT: 0
+	// Native asset: 0
 	public static final long testAssetId = 1L; // Owned by Alice
 	public static final long otherAssetId = 2L; // Owned by Bob
 	public static final long goldAssetId = 3L; // Owned by Alice

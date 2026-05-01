@@ -15,7 +15,7 @@ public class MessageTestTransaction extends TestTransaction {
 	public static TransactionData randomTransaction(Repository repository, PrivateKeyAccount account, boolean wantValid) throws DataException {
 		final int nonce = 0;
 		String recipient = account.getAddress();
-		final long assetId = Asset.QORT;
+		final long assetId = Asset.NATIVE;
 		long amount = 123L * Amounts.MULTIPLIER;
 		byte[] data = "message contents".getBytes();
 		final boolean isText = true;

@@ -40,7 +40,7 @@ public class ArbitraryTestTransaction extends TestTransaction {
 		DataType dataType = DataType.RAW_DATA;
 
 		String recipient = account.getAddress();
-		final long assetId = Asset.QORT;
+		final long assetId = Asset.NATIVE;
 		long amount = 123L * Amounts.MULTIPLIER;
 
 		List<PaymentData> payments = new ArrayList<>();

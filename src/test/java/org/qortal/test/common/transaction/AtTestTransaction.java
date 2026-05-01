@@ -23,7 +23,7 @@ public class AtTestTransaction extends TestTransaction {
 
 		// Use PAYMENT-type
 		long amount = 123L * Amounts.MULTIPLIER;
-		final long assetId = Asset.QORT;
+		final long assetId = Asset.NATIVE;
 
 		return new ATTransactionData(generateBase(account), atAddress, recipient, amount, assetId);
 	}

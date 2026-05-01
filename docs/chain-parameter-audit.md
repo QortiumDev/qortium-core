@@ -49,8 +49,8 @@ Initial recommendation:
 ### Native Asset Identity
 
 `src/main/java/org/qortal/asset/Asset.java` now exposes `Asset.NATIVE = 0L`,
-with `Asset.QORT` kept as a temporary compatibility alias. Many comments, docs,
-test fixtures, and ACCT classes still describe the native asset as QORT.
+with `Asset.QORT` kept as a temporary compatibility alias. Some comments, docs,
+tests, and ACCT classes still describe the native asset as QORT.
 
 The protocol still needs a stable native asset ID, but the display name should
 not be fixed to QORT in fork-facing code.
@@ -107,9 +107,13 @@ Initial recommendation:
 
 ### Test Chain Fixtures
 
-The `src/test/resources/test-chain-v2*.json` fixtures still seed `QORT`,
-`dev-group`, `minter-group`, Qortal-style addresses, and fixed reward-share
-keys. The shared Java test helpers also carry inherited fixture identities.
+The standard `src/test/resources/test-chain-v2*.json` fixtures now seed native
+asset ID `0` as `NATIVE`, while the no-native-asset fixture intentionally omits
+asset `0`. These fixtures still carry `dev-group`, `minter-group`,
+Qortal-style addresses, and fixed reward-share keys.
+
+The shared Java test helpers now use `Asset.NATIVE` for default native-asset
+payments, but broader inherited test names and chain-specific identities remain.
 
 Some fixed keys are useful for deterministic tests, so the goal should be
 neutral fixture naming rather than removing all fixture data.
@@ -118,7 +122,8 @@ Initial recommendation:
 
 - keep deterministic keys where they are test mechanics
 - rename fixture groups and comments to neutral terms
-- make native asset labels follow the same path as production chain config
+- keep native asset fixture labels neutral unless a test is explicitly about a
+  Qortal compatibility surface
 - avoid mixing test fixture cleanup with production genesis changes
 
 ### Cross-Chain ACCT Coupling

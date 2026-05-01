@@ -11,7 +11,7 @@ import org.qortal.utils.Amounts;
 public class CreateAssetOrderTestTransaction extends TestTransaction {
 
 	public static TransactionData randomTransaction(Repository repository, PrivateKeyAccount account, boolean wantValid) throws DataException {
-		final long haveAssetId = Asset.QORT;
+		final long haveAssetId = Asset.NATIVE;
 		final long wantAssetId = 1;
 		long amount = 123L * Amounts.MULTIPLIER;
 		long price = 123L * Amounts.MULTIPLIER;

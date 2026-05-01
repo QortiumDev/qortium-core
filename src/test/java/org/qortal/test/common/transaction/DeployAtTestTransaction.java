@@ -22,7 +22,7 @@ public class DeployAtTestTransaction extends TestTransaction {
 		byte[] creationBytes = new byte[1024];
 		random.nextBytes(creationBytes);
 		long amount = 123L * Amounts.MULTIPLIER;
-		long assetId = Asset.QORT;
+		long assetId = Asset.NATIVE;
 
 		return new DeployAtTransactionData(generateBase(account), name, description, atType, tags, creationBytes, amount, assetId);
 	}
