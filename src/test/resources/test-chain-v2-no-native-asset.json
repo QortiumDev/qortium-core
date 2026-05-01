@@ -1,0 +1,76 @@
+{
+	"isTestChain": true,
+	"blockTimestampMargin": 500,
+	"transactionExpiryPeriod": 86400000,
+	"maxBlockSize": 2097152,
+	"maxBytesPerUnitFee": 1024,
+	"unitFees": [
+		{ "timestamp": 0, "fee": "0" }
+	],
+	"nameRegistrationUnitFees": [
+		{ "timestamp": 0, "fee": "0" }
+	],
+	"requireGroupForApproval": false,
+	"minAccountLevelToMint": 0,
+	"minAccountLevelForBlockSubmissions": 0,
+	"minAccountLevelToRewardShare": 0,
+	"maxRewardSharesByTimestamp": [
+		{ "timestamp": 0, "maxShares": 6 }
+	],
+	"onlineAccountSignaturesMinLifetime": 3600000,
+	"onlineAccountSignaturesMaxLifetime": 86400000,
+	"mempowTransactionUpdatesTimestamp": 0,
+	"blockRewardBatchStartHeight": 999999000,
+	"blockRewardBatchSize": 10,
+	"blockRewardBatchAccountsBlockCount": 3,
+	"mintingGroupIds": [
+		{ "height": 0, "ids": [2]}
+	],
+	"devGroupIds": [
+		{ "height": 0, "ids": [1]}
+	],
+	"rewardsByHeight": [
+		{ "height": 1, "reward": 100 },
+		{ "height": 11, "reward": 10 },
+		{ "height": 21, "reward": 1 }
+	],
+	"sharesByLevel": [
+		{ "id": 1, "levels": [ 1, 2 ], "share": 0.06 },
+		{ "id": 2, "levels": [ 3, 4 ], "share": 0.13 },
+		{ "id": 3, "levels": [ 5, 6 ], "share": 0.19 },
+		{ "id": 4, "levels": [ 7, 8 ], "share": 0.26 },
+		{ "id": 5, "levels": [ 9, 10 ], "share": 0.32 }
+	],
+	"minAccountsToActivateShareBin": 30,
+	"shareBinActivationMinLevel": 7,
+	"blocksNeededByLevel": [ 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 ],
+	"blockTimingsByHeight": [
+		{ "height": 1, "target": 60000, "deviation": 30000, "power": 0.2 }
+	],
+	"ciyamAtSettings": {
+		"feePerStep": "0.0001",
+		"maxStepsPerRound": 500,
+		"stepsPerFunctionCall": 10,
+		"minutesPerBlock": 1
+	},
+	"featureTriggers": {
+		"messageHeight": 0,
+		"atHeight": 0,
+		"assetsTimestamp": 0,
+		"votingTimestamp": 0,
+		"arbitraryTimestamp": 0,
+		"powfixTimestamp": 0,
+		"qortalTimestamp": 0,
+		"newAssetPricingTimestamp": 0,
+		"groupApprovalTimestamp": 0,
+		"transactionV6Timestamp": 0
+	},
+	"genesisInfo": {
+		"version": 4,
+		"timestamp": 0,
+		"transactions": [
+			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "development", "description": "Qortium Development", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
+			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "minting", "description": "Qortium Minting", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 }
+		]
+	}
+}

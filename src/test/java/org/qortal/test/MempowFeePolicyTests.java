@@ -7,6 +7,7 @@ import org.qortal.asset.Asset;
 import org.qortal.crypto.MemoryPoW;
 import org.qortal.data.PaymentData;
 import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.IssueAssetTransactionData;
 import org.qortal.data.transaction.JoinGroupTransactionData;
 import org.qortal.data.transaction.MultiPaymentTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
@@ -205,6 +206,8 @@ public class MempowFeePolicyTests extends Common {
 						new TransferAssetTransactionData(buildBaseTransactionData(sender, fee), recipient.getAddress(), 1L, Asset.QORT)),
 				new RepresentativeTransactionCase("REGISTER_NAME", (sender, recipient, fee) ->
 						new RegisterNameTransactionData(buildBaseTransactionData(sender, fee), "mempow-test-name", "mempow test data")),
+				new RepresentativeTransactionCase("ISSUE_ASSET", (sender, recipient, fee) ->
+						new IssueAssetTransactionData(buildBaseTransactionData(sender, fee), "MEMPOW_TEST", "mempow test asset", 1L, true, "{}", false)),
 				new RepresentativeTransactionCase("JOIN_GROUP", (sender, recipient, fee) ->
 						new JoinGroupTransactionData(buildBaseTransactionData(sender, fee), 2)));
 	}

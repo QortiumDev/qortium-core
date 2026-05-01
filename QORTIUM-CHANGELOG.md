@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - test: cover no-native-asset bootstrap
+
+Added a dedicated test-chain fixture with no genesis native asset or native balances, plus tests that mint safely before asset `0` exists, issue the first asset as asset `0`, and confirm rewards begin once that native asset exists. The MemoryPoW fee-policy tests now also include asset issuance as a representative normal transaction, keeping the coinless bootstrap path covered without making the test suite perform production-cost proof-of-work.
+
 ### 2026-05-01 - core: skip native rewards until native asset exists
 
 Changed block reward distribution so Qortium does not create native asset balances before the native asset exists. This keeps minting safe for a future no-genesis-native-asset bootstrap: blocks can still be minted, account progress can still advance, and native rewards simply wait until asset `0` has been issued.
