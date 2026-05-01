@@ -155,7 +155,7 @@ public class RewardShareTransaction extends Transaction {
 		}
 
 		// Check creator has enough funds to cover any declared fee, including initial self-shares.
-		if (creator.getConfirmedBalance(Asset.QORT) < this.rewardShareTransactionData.getFee())
+		if (creator.getConfirmedBalance(Asset.NATIVE) < this.rewardShareTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

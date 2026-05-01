@@ -339,7 +339,7 @@ public class QortalATAPI extends API {
 		try {
 			Account atAccount = this.getATAccount();
 
-			return atAccount.getConfirmedBalance(Asset.QORT);
+			return atAccount.getConfirmedBalance(Asset.NATIVE);
 		} catch (DataException e) {
 			throw new RuntimeException("AT API unable to fetch AT's current balance?", e);
 		}

@@ -85,11 +85,11 @@ public class CreateAssetOrderTransaction extends Transaction {
 		 * "amount" might be either have-asset or want-asset, whichever has the highest assetID.
 		 * 
 		 * e.g. with assetID 11 "GOLD":
-		 * haveAssetId: 0 (QORT), wantAssetId: 11 (GOLD), amount: 123 (GOLD), price: 400 (QORT/GOLD)
-		 * stake 49200 QORT, return 123 GOLD
+		 * haveAssetId: 0 (native), wantAssetId: 11 (GOLD), amount: 123 (GOLD), price: 400 (native/GOLD)
+		 * stake 49200 native, return 123 GOLD
 		 * 
-		 * haveAssetId: 11 (GOLD), wantAssetId: 0 (QORT), amount: 123 (GOLD), price: 400 (QORT/GOLD)
-		 * stake 123 GOLD, return 49200 QORT
+		 * haveAssetId: 11 (GOLD), wantAssetId: 0 (native), amount: 123 (GOLD), price: 400 (native/GOLD)
+		 * stake 123 GOLD, return 49200 native
 		 */
 		boolean isAmountWantAsset = haveAssetId < wantAssetId;
 		BigInteger amount = BigInteger.valueOf(this.createOrderTransactionData.getAmount());
@@ -99,11 +99,11 @@ public class CreateAssetOrderTransaction extends Transaction {
 		BigInteger maxOtherAmount;
 
 		if (isAmountWantAsset) {
-			// have/commit 49200 QORT, want/return 123 GOLD
+			// have/commit 49200 native, want/return 123 GOLD
 			committedCost = amount.multiply(price).divide(Amounts.MULTIPLIER_BI);
 			maxOtherAmount = amount;
 		} else {
-			// have/commit 123 GOLD, want/return 49200 QORT
+			// have/commit 123 GOLD, want/return 49200 native
 			committedCost = amount;
 			maxOtherAmount = amount.multiply(price).divide(Amounts.MULTIPLIER_BI);
 		}
@@ -116,19 +116,19 @@ public class CreateAssetOrderTransaction extends Transaction {
 		if (!wantAssetData.isDivisible() && maxOtherAmount.mod(Amounts.MULTIPLIER_BI).signum() != 0)
 			return ValidationResult.INVALID_RETURN;
 
-		// Check order creator has enough asset balance AFTER removing fee, in case asset is QORT
-		// If asset is QORT then we need to check amount + fee in one go
-		if (haveAssetId == Asset.QORT) {
-			// Check creator has enough funds for amount + fee in QORT
-			if (creator.getConfirmedBalance(Asset.QORT) < committedCost.longValue() + this.createOrderTransactionData.getFee())
+		// Check order creator has enough asset balance AFTER removing fee, in case asset is native
+		// If asset is native then we need to check amount + fee in one go
+		if (haveAssetId == Asset.NATIVE) {
+			// Check creator has enough funds for amount + fee in native asset
+			if (creator.getConfirmedBalance(Asset.NATIVE) < committedCost.longValue() + this.createOrderTransactionData.getFee())
 				return ValidationResult.NO_BALANCE;
 		} else {
 			// Check creator has enough funds for amount in whatever asset
 			if (creator.getConfirmedBalance(haveAssetId) < committedCost.longValue())
 				return ValidationResult.NO_BALANCE;
 
-			// Check creator has enough funds for fee in QORT
-			if (creator.getConfirmedBalance(Asset.QORT) < this.createOrderTransactionData.getFee())
+			// Check creator has enough funds for fee in native asset
+			if (creator.getConfirmedBalance(Asset.NATIVE) < this.createOrderTransactionData.getFee())
 				return ValidationResult.NO_BALANCE;
 		}
 

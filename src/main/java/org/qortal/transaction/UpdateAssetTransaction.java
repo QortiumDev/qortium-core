@@ -71,7 +71,7 @@ public class UpdateAssetTransaction extends Transaction {
 		Account currentOwner = getOwner();
 
 		// Check current owner has enough funds
-		if (currentOwner.getConfirmedBalance(Asset.QORT) < this.updateAssetTransactionData.getFee())
+		if (currentOwner.getConfirmedBalance(Asset.NATIVE) < this.updateAssetTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

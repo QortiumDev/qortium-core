@@ -65,18 +65,24 @@ public class IssueAssetTransaction extends Transaction {
 		if (data == null || dataLength < 1 || dataLength > Asset.MAX_DATA_SIZE)
 			return ValidationResult.INVALID_DATA_LENGTH;
 
-		// Check quantity
-		if (this.issueAssetTransactionData.getQuantity() < 1 || this.issueAssetTransactionData.getQuantity() > Asset.MAX_QUANTITY)
+		long quantity = this.issueAssetTransactionData.getQuantity();
+		boolean nativeAssetExists = this.repository.getAssetRepository().assetExists(Asset.NATIVE);
+
+		// Check quantity. The native asset may bootstrap with zero initial supply.
+		if (quantity < 0 || quantity > Asset.MAX_QUANTITY)
+			return ValidationResult.INVALID_QUANTITY;
+
+		if (quantity == 0 && nativeAssetExists)
 			return ValidationResult.INVALID_QUANTITY;
 
 		// Check quantity versus indivisibility
-		if (!this.issueAssetTransactionData.isDivisible() && this.issueAssetTransactionData.getQuantity() % Amounts.MULTIPLIER != 0)
+		if (!this.issueAssetTransactionData.isDivisible() && quantity % Amounts.MULTIPLIER != 0)
 			return ValidationResult.INVALID_QUANTITY;
 
 		Account issuer = getIssuer();
 
 		// Check issuer has enough funds
-		if (issuer.getConfirmedBalance(Asset.QORT) < this.issueAssetTransactionData.getFee())
+		if (issuer.getConfirmedBalance(Asset.NATIVE) < this.issueAssetTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

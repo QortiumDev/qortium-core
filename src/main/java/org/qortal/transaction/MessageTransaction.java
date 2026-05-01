@@ -194,7 +194,7 @@ public class MessageTransaction extends Transaction {
 
 		// If message has no payment then we only need to do a simple balance check for fee
 		if (this.messageTransactionData.getAmount() == 0) {
-			if (getSender().getConfirmedBalance(Asset.QORT) < this.messageTransactionData.getFee())
+			if (getSender().getConfirmedBalance(Asset.NATIVE) < this.messageTransactionData.getFee())
 				return ValidationResult.NO_BALANCE;
 
 			return ValidationResult.OK;

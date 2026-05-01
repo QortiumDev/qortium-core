@@ -97,7 +97,7 @@ public class BuyNameTransaction extends Transaction {
 			return ValidationResult.INVALID_AMOUNT;
 
 		// Check buyer has enough funds
-		if (buyer.getConfirmedBalance(Asset.QORT) < this.buyNameTransactionData.getFee() + this.buyNameTransactionData.getAmount())
+		if (buyer.getConfirmedBalance(Asset.NATIVE) < this.buyNameTransactionData.getFee() + this.buyNameTransactionData.getAmount())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

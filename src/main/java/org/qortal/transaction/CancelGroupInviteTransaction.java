@@ -77,7 +77,7 @@ public class CancelGroupInviteTransaction extends Transaction {
 			return ValidationResult.INVITE_UNKNOWN;
 
 		// Check creator has enough funds
-		if (admin.getConfirmedBalance(Asset.QORT) < this.cancelGroupInviteTransactionData.getFee())
+		if (admin.getConfirmedBalance(Asset.NATIVE) < this.cancelGroupInviteTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		String groupOwner = this.repository.getGroupRepository().getOwner(groupId);

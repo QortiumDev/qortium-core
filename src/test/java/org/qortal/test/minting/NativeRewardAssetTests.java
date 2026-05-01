@@ -23,7 +23,7 @@ public class NativeRewardAssetTests extends Common {
 	@Test
 	public void testNativeRewardsSkippedUntilNativeAssetExists() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			repository.getAssetRepository().delete(Asset.QORT);
+			repository.getAssetRepository().delete(Asset.NATIVE);
 			repository.saveChanges();
 
 			assertNativeAssetAbsent(repository);
@@ -42,8 +42,8 @@ public class NativeRewardAssetTests extends Common {
 	}
 
 	private static void assertNativeAssetAbsent(Repository repository) throws DataException {
-		assertFalse(repository.getAssetRepository().assetExists(Asset.QORT));
-		assertTrue(repository.getAccountRepository().getAssetBalances(Asset.QORT, false).isEmpty());
+		assertFalse(repository.getAssetRepository().assetExists(Asset.NATIVE));
+		assertTrue(repository.getAccountRepository().getAssetBalances(Asset.NATIVE, false).isEmpty());
 	}
 
 }

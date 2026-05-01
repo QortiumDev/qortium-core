@@ -82,7 +82,7 @@ public class GroupInviteTransaction extends Transaction {
 			return ValidationResult.BANNED_FROM_GROUP;
 
 		// Check creator has enough funds
-		if (admin.getConfirmedBalance(Asset.QORT) < this.groupInviteTransactionData.getFee())
+		if (admin.getConfirmedBalance(Asset.NATIVE) < this.groupInviteTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		String groupOwner = this.repository.getGroupRepository().getOwner(groupId);

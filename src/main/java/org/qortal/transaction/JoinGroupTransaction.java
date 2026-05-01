@@ -61,7 +61,7 @@ public class JoinGroupTransaction extends Transaction {
 			return ValidationResult.JOIN_REQUEST_EXISTS;
 
 		// Check joiner has enough funds
-		if (joiner.getConfirmedBalance(Asset.QORT) < this.joinGroupTransactionData.getFee())
+		if (joiner.getConfirmedBalance(Asset.NATIVE) < this.joinGroupTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

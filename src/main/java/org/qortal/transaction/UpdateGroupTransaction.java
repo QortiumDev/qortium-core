@@ -98,7 +98,7 @@ public class UpdateGroupTransaction extends Transaction {
 			return ValidationResult.INVALID_GROUP_OWNER;
 
 		// Check creator has enough funds
-		if (owner.getConfirmedBalance(Asset.QORT) < this.updateGroupTransactionData.getFee())
+		if (owner.getConfirmedBalance(Asset.NATIVE) < this.updateGroupTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

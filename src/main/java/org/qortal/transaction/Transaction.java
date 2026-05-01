@@ -1038,7 +1038,7 @@ public abstract class Transaction {
 
 		// Update transaction creator's balance
 		if (fee > 0)
-			creator.modifyAssetBalance(Asset.QORT, - fee);
+			creator.modifyAssetBalance(Asset.NATIVE, - fee);
 	}
 
 	/**
@@ -1062,7 +1062,7 @@ public abstract class Transaction {
 
 		// Update transaction creator's balance
 		if (fee > 0)
-			creator.modifyAssetBalance(Asset.QORT, fee);
+			creator.modifyAssetBalance(Asset.NATIVE, fee);
 	}
 
 

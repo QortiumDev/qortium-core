@@ -50,7 +50,7 @@ public class SetGroupTransaction extends Transaction {
 			return ValidationResult.NOT_GROUP_MEMBER;
 
 		// Check creator has enough funds
-		if (creator.getConfirmedBalance(Asset.QORT) < this.setGroupTransactionData.getFee())
+		if (creator.getConfirmedBalance(Asset.NATIVE) < this.setGroupTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

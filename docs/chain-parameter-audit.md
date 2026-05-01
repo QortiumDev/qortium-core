@@ -48,17 +48,16 @@ Initial recommendation:
 
 ### Native Asset Identity
 
-`src/main/java/org/qortal/asset/Asset.java` exposes `Asset.QORT = 0L`, and many
-code paths, comments, docs, test fixtures, and ACCT classes still describe the
-native asset as QORT.
+`src/main/java/org/qortal/asset/Asset.java` now exposes `Asset.NATIVE = 0L`,
+with `Asset.QORT` kept as a temporary compatibility alias. Many comments, docs,
+test fixtures, and ACCT classes still describe the native asset as QORT.
 
 The protocol still needs a stable native asset ID, but the display name should
 not be fixed to QORT in fork-facing code.
 
 Initial recommendation:
 
-- introduce neutral naming in code for the native asset ID, such as
-  `Asset.NATIVE = 0L`
+- keep using neutral naming in core code for the native asset ID
 - preserve compatibility aliases only where needed during migration
 - source display labels like `QORT` from chain config or application identity
   metadata
@@ -172,13 +171,11 @@ Initial recommendation:
 
 ## Suggested Implementation Order
 
-1. Add neutral native asset naming while preserving `Asset.QORT` as a temporary
-   compatibility alias.
-2. Make native asset display metadata come from chain configuration.
-3. Continue replacing or templating the remaining main `blockchain.json` genesis
+1. Make native asset display metadata come from chain configuration.
+2. Continue replacing or templating the remaining main `blockchain.json` genesis
    seed data.
-4. Clean test fixtures separately from production genesis.
-5. Add application identity defaults for backup paths, data paths, jar naming,
+3. Clean test fixtures separately from production genesis.
+4. Add application identity defaults for backup paths, data paths, jar naming,
    Docker names, and API documentation title.
 6. Split ACCT registration from the supported external blockchain list.
 7. Run broad branding and package cleanup after the core assumptions are no

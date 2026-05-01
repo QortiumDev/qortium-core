@@ -109,7 +109,7 @@ public class PublicizeTransaction extends Transaction {
 		// Validate fee if one has been included
 		PublicKeyAccount creator = this.getCreator();
 		if (this.transactionData.getFee() > 0)
-			if (creator.getConfirmedBalance(Asset.QORT) < this.transactionData.getFee())
+			if (creator.getConfirmedBalance(Asset.NATIVE) < this.transactionData.getFee())
 				return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

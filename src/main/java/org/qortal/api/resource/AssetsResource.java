@@ -424,14 +424,14 @@ public class AssetsResource {
 	) @QueryParam("reverse") Boolean reverse) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			if (assetIds.isEmpty())
-				assetIds = Collections.singletonList(Asset.QORT);
+				assetIds = Collections.singletonList(Asset.NATIVE);
 			else
 				for (long assetId : assetIds)
 					if (!repository.getAssetRepository().assetExists(assetId))
 						throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ASSET_ID);
 
 			if (otherAssetIds.isEmpty())
-				otherAssetIds = Collections.singletonList(Asset.QORT);
+				otherAssetIds = Collections.singletonList(Asset.NATIVE);
 			else
 				for (long assetId : otherAssetIds)
 					if (!repository.getAssetRepository().assetExists(assetId))

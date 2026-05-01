@@ -124,14 +124,14 @@ public class DeployAtTransaction extends Transaction {
 		Account creator = this.getCreator();
 
 		// Check creator has enough funds
-		if (assetId == Asset.QORT) {
-			// Simple case: amount and fee both in QORT
+		if (assetId == Asset.NATIVE) {
+			// Simple case: amount and fee both in native asset
 			long minimumBalance = this.deployAtTransactionData.getFee() + this.deployAtTransactionData.getAmount();
 
-			if (creator.getConfirmedBalance(Asset.QORT) < minimumBalance)
+			if (creator.getConfirmedBalance(Asset.NATIVE) < minimumBalance)
 				return ValidationResult.NO_BALANCE;
 		} else {
-			if (creator.getConfirmedBalance(Asset.QORT) < this.deployAtTransactionData.getFee())
+			if (creator.getConfirmedBalance(Asset.NATIVE) < this.deployAtTransactionData.getFee())
 				return ValidationResult.NO_BALANCE;
 
 			if (creator.getConfirmedBalance(assetId) < this.deployAtTransactionData.getAmount())
@@ -181,14 +181,14 @@ public class DeployAtTransaction extends Transaction {
 		long assetId = this.deployAtTransactionData.getAssetId();
 
 		// Check creator has enough funds
-		if (assetId == Asset.QORT) {
-			// Simple case: amount and fee both in QORT
+		if (assetId == Asset.NATIVE) {
+			// Simple case: amount and fee both in native asset
 			long minimumBalance = this.deployAtTransactionData.getFee() + this.deployAtTransactionData.getAmount();
 
-			if (creator.getConfirmedBalance(Asset.QORT) < minimumBalance)
+			if (creator.getConfirmedBalance(Asset.NATIVE) < minimumBalance)
 				return ValidationResult.NO_BALANCE;
 		} else {
-			if (creator.getConfirmedBalance(Asset.QORT) < this.deployAtTransactionData.getFee())
+			if (creator.getConfirmedBalance(Asset.NATIVE) < this.deployAtTransactionData.getFee())
 				return ValidationResult.NO_BALANCE;
 
 			if (creator.getConfirmedBalance(assetId) < this.deployAtTransactionData.getAmount())

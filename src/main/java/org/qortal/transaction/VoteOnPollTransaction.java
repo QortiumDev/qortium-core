@@ -85,7 +85,7 @@ public class VoteOnPollTransaction extends Transaction {
 		Account voter = getVoter();
 
 		// Check voter has enough funds
-		if (voter.getConfirmedBalance(Asset.QORT) < this.voteOnPollTransactionData.getFee())
+		if (voter.getConfirmedBalance(Asset.NATIVE) < this.voteOnPollTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

@@ -67,7 +67,7 @@ public class GroupApprovalTransaction extends Transaction {
 			return ValidationResult.NOT_GROUP_ADMIN;
 
 		// Check creator has enough funds
-		if (admin.getConfirmedBalance(Asset.QORT) < this.groupApprovalTransactionData.getFee())
+		if (admin.getConfirmedBalance(Asset.NATIVE) < this.groupApprovalTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

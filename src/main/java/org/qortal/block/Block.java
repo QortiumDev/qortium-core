@@ -1795,7 +1795,7 @@ public class Block {
 			Account atAccount = new Account(this.repository, atStateData.getATAddress());
 
 			// Subtract AT-generated fees from AT accounts
-			atAccount.modifyAssetBalance(Asset.QORT, - atStateData.getFees());
+			atAccount.modifyAssetBalance(Asset.NATIVE, - atStateData.getFees());
 
 			// Update AT info with latest state
 			ATData atData = atRepository.fromATAddress(atStateData.getATAddress());
@@ -1980,7 +1980,7 @@ public class Block {
 			Account atAccount = new Account(this.repository, atStateData.getATAddress());
 
 			// Return AT-generated fees to AT accounts
-			atAccount.modifyAssetBalance(Asset.QORT, atStateData.getFees());
+			atAccount.modifyAssetBalance(Asset.NATIVE, atStateData.getFees());
 
 			// Revert AT info to prior values
 			ATData atData = atRepository.fromATAddress(atStateData.getATAddress());
@@ -2153,8 +2153,8 @@ public class Block {
 		final long totalAmountForLogging = totalAmount;
 		LOGGER.trace(() -> String.format("Distributing: %s", Amounts.prettyAmount(totalAmountForLogging)));
 
-		if (!this.repository.getAssetRepository().assetExists(Asset.QORT)) {
-			LOGGER.debug("Skipping native block reward distribution because asset {} does not exist", Asset.QORT);
+		if (!this.repository.getAssetRepository().assetExists(Asset.NATIVE)) {
+			LOGGER.debug("Skipping native block reward distribution because asset {} does not exist", Asset.NATIVE);
 			return;
 		}
 
@@ -2190,7 +2190,7 @@ public class Block {
 
 		// Apply balance changes
 		List<AccountBalanceData> accountBalanceDeltas = balanceChanges.entrySet().stream()
-				.map(entry -> new AccountBalanceData(entry.getKey(), Asset.QORT, entry.getValue()))
+				.map(entry -> new AccountBalanceData(entry.getKey(), Asset.NATIVE, entry.getValue()))
 				.collect(Collectors.toList());
 		LOGGER.trace("Account Balance Deltas: {}", accountBalanceDeltas);
 		this.repository.getAccountRepository().modifyAssetBalances(accountBalanceDeltas);

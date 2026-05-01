@@ -12,9 +12,16 @@ import org.qortal.utils.Amounts;
 public class Asset {
 
 	/**
-	 * QORT coins are just another asset but with fixed assetId of zero.
+	 * Native chain asset, with fixed asset ID zero.
 	 */
-	public static final long QORT = 0L;
+	public static final long NATIVE = 0L;
+
+	/**
+	 * @deprecated use {@link #NATIVE}. Kept temporarily while inherited QORT-specific
+	 * names are removed from non-consensus surfaces.
+	 */
+	@Deprecated
+	public static final long QORT = NATIVE;
 
 	// Other useful constants
 

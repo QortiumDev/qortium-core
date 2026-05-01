@@ -55,8 +55,8 @@ public class CancelAssetOrderTransaction extends Transaction {
 
 		Account creator = getCreator();
 
-		// Check creator has enough QORT for fee
-		if (creator.getConfirmedBalance(Asset.QORT) < this.cancelOrderTransactionData.getFee())
+		// Check creator has enough native asset for fee
+		if (creator.getConfirmedBalance(Asset.NATIVE) < this.cancelOrderTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

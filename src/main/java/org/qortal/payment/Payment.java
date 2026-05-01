@@ -44,7 +44,7 @@ public class Payment {
 		// Total up payment amounts by assetId
 		Map<Long, Long> amountsByAssetId = new HashMap<>();
 		// Add transaction fee to start with
-		amountsByAssetId.put(Asset.QORT, fee);
+		amountsByAssetId.put(Asset.NATIVE, fee);
 
 		// Grab sender info
 		Account sender = new PublicKeyAccount(this.repository, senderPublicKey);
@@ -182,7 +182,7 @@ public class Payment {
 
 		// Update sender's balance due to fee
 		if (fee > 0)
-			sender.modifyAssetBalance(Asset.QORT, - fee);
+			sender.modifyAssetBalance(Asset.NATIVE, - fee);
 	}
 
 	/** Single payment fee processing. Legacy references are no longer mutated. */
@@ -222,7 +222,7 @@ public class Payment {
 
 		// Update sender's balance due to fee
 		if (fee > 0)
-			sender.modifyAssetBalance(Asset.QORT, fee);
+			sender.modifyAssetBalance(Asset.NATIVE, fee);
 	}
 
 	public void orphanReferencesAndFees(byte[] senderPublicKey, PaymentData paymentData, long fee, byte[] signature,

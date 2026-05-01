@@ -88,7 +88,7 @@ public class AddGroupAdminTransaction extends Transaction {
 			return ValidationResult.ALREADY_GROUP_ADMIN;
 
 		// Check group owner has enough funds
-		if (owner.getConfirmedBalance(Asset.QORT) < this.addGroupAdminTransactionData.getFee())
+		if (owner.getConfirmedBalance(Asset.NATIVE) < this.addGroupAdminTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

@@ -68,7 +68,7 @@ public class CancelSellNameTransaction extends Transaction {
 			return ValidationResult.INVALID_NAME_OWNER;
 
 		// Check if issuer has enough balance for the transaction fee
-		if (owner.getConfirmedBalance(Asset.QORT) < cancelSellNameTransactionData.getFee())
+		if (owner.getConfirmedBalance(Asset.NATIVE) < cancelSellNameTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK; // All validations passed

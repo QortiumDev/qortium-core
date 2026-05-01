@@ -100,7 +100,7 @@ public class UpdateNameTransaction extends Transaction {
 		Account owner = getOwner();
 
 		// Check owner has enough funds
-		if (owner.getConfirmedBalance(Asset.QORT) < this.updateNameTransactionData.getFee())
+		if (owner.getConfirmedBalance(Asset.NATIVE) < this.updateNameTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

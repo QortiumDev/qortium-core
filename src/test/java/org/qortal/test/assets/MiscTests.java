@@ -58,6 +58,19 @@ public class MiscTests extends Common {
 	}
 
 	@Test
+	public void testNonNativeAssetCannotHaveZeroQuantity() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+
+			TransactionData transactionData = new IssueAssetTransactionData(TestTransaction.generateBase(alice),
+					"zero-quantity-asset", "description", 0L, true, "{}", false);
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.INVALID_QUANTITY, result);
+		}
+	}
+
+	@Test
 	public void testCalcCommitmentWithRoundUp() throws DataException {
 		long amount = 1234_87654321L;
 		long price = 1_35615263L;

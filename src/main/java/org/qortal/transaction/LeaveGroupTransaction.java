@@ -61,7 +61,7 @@ public class LeaveGroupTransaction extends Transaction {
 			return ValidationResult.NOT_GROUP_MEMBER;
 
 		// Check leaver has enough funds
-		if (leaver.getConfirmedBalance(Asset.QORT) < this.leaveGroupTransactionData.getFee())
+		if (leaver.getConfirmedBalance(Asset.NATIVE) < this.leaveGroupTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;

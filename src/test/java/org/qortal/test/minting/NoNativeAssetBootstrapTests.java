@@ -69,22 +69,50 @@ public class NoNativeAssetBootstrapTests extends Common {
 			issueInitialNativeAsset(repository);
 
 			AssetData nativeAssetData = repository.getAssetRepository().fromAssetName("BOOTSTRAP");
-			assertEquals(Asset.QORT, (long) nativeAssetData.getAssetId());
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, INITIAL_NATIVE_QUANTITY);
+			assertEquals(Asset.NATIVE, (long) nativeAssetData.getAssetId());
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, INITIAL_NATIVE_QUANTITY);
 
 			long nextBlockReward = BlockUtils.getNextBlockReward(repository);
 			BlockUtils.mintBlock(repository);
 
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, INITIAL_NATIVE_QUANTITY + nextBlockReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, INITIAL_NATIVE_QUANTITY + nextBlockReward);
+		}
+	}
+
+	@Test
+	public void testNativeAssetCanBootstrapWithZeroQuantity() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			bootstrapAliceMinter(repository);
+			TestChainBootstrapUtils.ensureDevelopmentAdmin(repository, "alice");
+			repository.saveChanges();
+
+			BlockUtils.mintBlock(repository);
+			assertNativeAssetAbsent(repository);
+
+			issueInitialNativeAsset(repository, "ZERO_NATIVE", 0L);
+
+			AssetData nativeAssetData = repository.getAssetRepository().fromAssetName("ZERO_NATIVE");
+			assertEquals(Asset.NATIVE, (long) nativeAssetData.getAssetId());
+			assertEquals(0L, nativeAssetData.getQuantity());
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, 0L);
+
+			long nextBlockReward = BlockUtils.getNextBlockReward(repository);
+			BlockUtils.mintBlock(repository);
+
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, nextBlockReward);
 		}
 	}
 
 	private static void issueInitialNativeAsset(Repository repository) throws DataException {
+		issueInitialNativeAsset(repository, "BOOTSTRAP", INITIAL_NATIVE_QUANTITY);
+	}
+
+	private static void issueInitialNativeAsset(Repository repository, String assetName, long quantity) throws DataException {
 		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, alice.getPublicKey(), 0L, null);
 		IssueAssetTransactionData transactionData = new IssueAssetTransactionData(baseTransactionData,
-				"BOOTSTRAP", "Bootstrap native asset", INITIAL_NATIVE_QUANTITY, true, "{}", false);
+				assetName, "Bootstrap native asset", quantity, true, "{}", false);
 
 		TransactionUtils.signAndMint(repository, transactionData, alice);
 	}
@@ -104,8 +132,8 @@ public class NoNativeAssetBootstrapTests extends Common {
 	}
 
 	private static void assertNativeAssetAbsent(Repository repository) throws DataException {
-		assertFalse(repository.getAssetRepository().assetExists(Asset.QORT));
-		assertTrue(repository.getAccountRepository().getAssetBalances(Asset.QORT, false).isEmpty());
+		assertFalse(repository.getAssetRepository().assetExists(Asset.NATIVE));
+		assertTrue(repository.getAccountRepository().getAssetBalances(Asset.NATIVE, false).isEmpty());
 	}
 
 }

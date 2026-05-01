@@ -51,7 +51,7 @@ public class PaymentTransaction extends Transaction {
 
 	private PaymentData getPaymentData() {
 		if (this.paymentData == null)
-			this.paymentData = new PaymentData(this.paymentTransactionData.getRecipient(), Asset.QORT, this.paymentTransactionData.getAmount());
+			this.paymentData = new PaymentData(this.paymentTransactionData.getRecipient(), Asset.NATIVE, this.paymentTransactionData.getAmount());
 
 		return this.paymentData;
 	}

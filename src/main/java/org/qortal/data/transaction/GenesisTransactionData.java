@@ -41,9 +41,9 @@ public class GenesisTransactionData extends TransactionData {
 		this.assetId = assetId;
 	}
 
-	/** From repository (where asset locked to QORT) */
+	/** From repository, defaulting to the native asset. */
 	public GenesisTransactionData(BaseTransactionData baseTransactionData, String recipient, long amount) {
-		this(baseTransactionData, recipient, amount, Asset.QORT);
+		this(baseTransactionData, recipient, amount, Asset.NATIVE);
 	}
 
 	// Getters/Setters

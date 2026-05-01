@@ -84,7 +84,7 @@ public class SellNameTransaction extends Transaction {
 			return ValidationResult.INVALID_AMOUNT;
 
 		// Check if owner has enough balance for the transaction fee
-		if (owner.getConfirmedBalance(Asset.QORT) < this.sellNameTransactionData.getFee())
+		if (owner.getConfirmedBalance(Asset.NATIVE) < this.sellNameTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK; // All validation checks passed
