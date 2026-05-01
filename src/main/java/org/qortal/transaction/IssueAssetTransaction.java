@@ -3,11 +3,14 @@ package org.qortal.transaction;
 import com.google.common.base.Utf8;
 import org.qortal.account.Account;
 import org.qortal.asset.Asset;
+import org.qortal.block.BlockChain;
 import org.qortal.data.transaction.IssueAssetTransactionData;
 import org.qortal.data.transaction.TransactionData;
+import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.utils.Amounts;
+import org.qortal.utils.Groups;
 import org.qortal.utils.Unicode;
 
 import java.util.Collections;
@@ -68,6 +71,10 @@ public class IssueAssetTransaction extends Transaction {
 		long quantity = this.issueAssetTransactionData.getQuantity();
 		boolean nativeAssetExists = this.repository.getAssetRepository().assetExists(Asset.NATIVE);
 
+		ValidationResult nativeBootstrapResult = this.validateNativeAssetBootstrapRules(nativeAssetExists);
+		if (nativeBootstrapResult != ValidationResult.OK)
+			return nativeBootstrapResult;
+
 		// Check quantity. The native asset may bootstrap with zero initial supply.
 		if (quantity < 0 || quantity > Asset.MAX_QUANTITY)
 			return ValidationResult.INVALID_QUANTITY;
@@ -90,6 +97,10 @@ public class IssueAssetTransaction extends Transaction {
 
 	@Override
 	public ValidationResult isProcessable() throws DataException {
+		// Re-check zero-quantity assets at approval time, in case asset 0 was issued while this transaction was pending.
+		if (this.issueAssetTransactionData.getQuantity() == 0 && this.repository.getAssetRepository().assetExists(Asset.NATIVE))
+			return ValidationResult.INVALID_QUANTITY;
+
 		// Check the name isn't already taken
 		if (this.repository.getAssetRepository().reducedAssetNameExists(this.issueAssetTransactionData.getReducedAssetName()))
 			return ValidationResult.ASSET_ALREADY_EXISTS;
@@ -134,6 +145,24 @@ public class IssueAssetTransaction extends Transaction {
 
 		// Save this transaction, with removed assetId
 		this.repository.getTransactionRepository().save(this.issueAssetTransactionData);
+	}
+
+	private ValidationResult validateNativeAssetBootstrapRules(boolean nativeAssetExists) throws DataException {
+		if (nativeAssetExists)
+			return ValidationResult.OK;
+
+		// Genesis configs can seed assets explicitly; runtime no-native bootstrap is development-group gated.
+		int blockchainHeight = this.repository.getBlockRepository().getBlockchainHeight();
+		if (blockchainHeight == 0)
+			return ValidationResult.OK;
+
+		int txGroupId = this.issueAssetTransactionData.getTxGroupId();
+		if (txGroupId == Group.NO_GROUP)
+			return ValidationResult.INVALID_TX_GROUP_ID;
+
+		int targetBlockHeight = blockchainHeight + 1;
+		List<Integer> devGroupIds = Groups.getGroupIdsAtHeight(BlockChain.getInstance().getDevGroupIds(), targetBlockHeight);
+		return devGroupIds.contains(txGroupId) ? ValidationResult.OK : ValidationResult.INVALID_TX_GROUP_ID;
 	}
 
 }

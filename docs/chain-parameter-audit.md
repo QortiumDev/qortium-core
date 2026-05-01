@@ -37,8 +37,8 @@ configuration process.
 Initial recommendation:
 
 - keep asset ID `0` as the native-asset protocol primitive
-- let the first issued asset create asset ID `0` instead of seeding QORT in
-  genesis
+- let a development-group-approved runtime asset issue create asset ID `0`
+  instead of seeding QORT in genesis
 - stop treating `QORT` as the hardcoded name of the native-asset primitive
 - continue reducing inherited main genesis seed data into a neutral baseline or
   generated fork template

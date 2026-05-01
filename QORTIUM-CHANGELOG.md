@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - core: define native asset bootstrap rules
+
+Defined runtime native asset bootstrap as a development-group-governed asset issuance instead of letting any first asset issue claim asset `0`. When no native asset exists, an ordinary `ISSUE_ASSET` transaction must now target one of the active configured development groups, pass group approval, and can still create asset `0` with either zero or positive initial quantity. The approval path remains coinless because `GROUP_APPROVAL` is covered by the shared MemoryPoW fee-alternative policy, and tests now cover rejection outside the development group plus approved bootstrap into native rewards.
+
 ### 2026-05-01 - core: introduce neutral native asset id
 
 Introduced `Asset.NATIVE` as the neutral name for protocol asset ID `0` and moved core fee, reward, payment, and AT fee handling to that name while keeping `Asset.QORT` as a temporary compatibility alias for inherited surfaces that still need cleanup. Native asset bootstrap can now issue asset `0` with zero initial quantity, allowing a chain to define its native reward asset without preallocating any coins while keeping zero-quantity non-native assets invalid.

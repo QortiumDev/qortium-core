@@ -6,7 +6,9 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
 import org.qortal.data.account.RewardShareData;
 import org.qortal.data.asset.AssetData;
+import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.GroupApprovalTransactionData;
 import org.qortal.data.transaction.IssueAssetTransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
@@ -17,6 +19,8 @@ import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TransactionUtils;
+import org.qortal.transaction.Transaction.ApprovalStatus;
+import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.utils.Amounts;
 
 import static org.junit.Assert.assertEquals;
@@ -52,6 +56,29 @@ public class NoNativeAssetBootstrapTests extends Common {
 
 			assertEquals(startingHeight, repository.getBlockRepository().getBlockchainHeight());
 			assertEquals(startingBlocksMinted, AccountUtils.getBlocksMinted(repository, "alice"));
+			assertNativeAssetAbsent(repository);
+		}
+	}
+
+	@Test
+	public void testNativeAssetBootstrapRequiresDevelopmentGroup() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			bootstrapAliceMinter(repository);
+			assertNativeAssetAbsent(repository);
+
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			IssueAssetTransactionData transactionData = buildIssueAssetTransactionData(repository,
+					"NO_GROUP_NATIVE", INITIAL_NATIVE_QUANTITY, Group.NO_GROUP);
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.INVALID_TX_GROUP_ID, result);
+			assertNativeAssetAbsent(repository);
+
+			transactionData = buildIssueAssetTransactionData(repository,
+					"MINTING_GROUP_NATIVE", INITIAL_NATIVE_QUANTITY, TestChainBootstrapUtils.MINTING_GROUP_ID);
+
+			result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.INVALID_TX_GROUP_ID, result);
 			assertNativeAssetAbsent(repository);
 		}
 	}
@@ -108,13 +135,49 @@ public class NoNativeAssetBootstrapTests extends Common {
 	}
 
 	private static void issueInitialNativeAsset(Repository repository, String assetName, long quantity) throws DataException {
+		IssueAssetTransactionData transactionData = submitNativeAssetBootstrapForApproval(repository, assetName, quantity);
+		approveNativeAssetBootstrap(repository, transactionData);
+	}
+
+	private static IssueAssetTransactionData submitNativeAssetBootstrapForApproval(Repository repository,
+			String assetName, long quantity) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+		IssueAssetTransactionData transactionData = buildIssueAssetTransactionData(repository,
+				assetName, quantity, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
+
+		TransactionUtils.signAndMint(repository, transactionData, alice);
+		assertEquals(ApprovalStatus.PENDING, getApprovalStatus(repository, transactionData));
+		assertNativeAssetAbsent(repository);
+
+		return transactionData;
+	}
+
+	private static IssueAssetTransactionData buildIssueAssetTransactionData(Repository repository, String assetName,
+			long quantity, int txGroupId) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+		long timestamp = TransactionUtils.nextTimestamp(repository);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, alice.getPublicKey(), 0L, null);
+		return new IssueAssetTransactionData(baseTransactionData,
+				assetName, "Bootstrap native asset", quantity, true, "{}", false);
+	}
+
+	private static void approveNativeAssetBootstrap(Repository repository, IssueAssetTransactionData pendingTransactionData) throws DataException {
 		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, alice.getPublicKey(), 0L, null);
-		IssueAssetTransactionData transactionData = new IssueAssetTransactionData(baseTransactionData,
-				assetName, "Bootstrap native asset", quantity, true, "{}", false);
+		GroupApprovalTransactionData approvalTransactionData = new GroupApprovalTransactionData(baseTransactionData,
+				pendingTransactionData.getSignature(), true);
 
-		TransactionUtils.signAndMint(repository, transactionData, alice);
+		TransactionUtils.signAndMint(repository, approvalTransactionData, alice);
+
+		GroupData groupData = repository.getGroupRepository().fromGroupId(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
+		BlockUtils.mintBlocks(repository, groupData.getMinimumBlockDelay());
+
+		assertEquals(ApprovalStatus.APPROVED, getApprovalStatus(repository, pendingTransactionData));
+	}
+
+	private static ApprovalStatus getApprovalStatus(Repository repository, IssueAssetTransactionData transactionData) throws DataException {
+		return repository.getTransactionRepository().fromSignature(transactionData.getSignature()).getApprovalStatus();
 	}
 
 	private static void bootstrapAliceMinter(Repository repository) throws DataException {
