@@ -181,7 +181,7 @@ public class Payment {
 		sender.ensureAccount();
 
 		// Update sender's balance due to fee
-		if (fee != 0)
+		if (fee > 0)
 			sender.modifyAssetBalance(Asset.QORT, - fee);
 	}
 
@@ -221,7 +221,7 @@ public class Payment {
 		Account sender = new PublicKeyAccount(this.repository, senderPublicKey);
 
 		// Update sender's balance due to fee
-		if (fee != 0)
+		if (fee > 0)
 			sender.modifyAssetBalance(Asset.QORT, fee);
 	}
 

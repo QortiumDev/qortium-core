@@ -147,8 +147,10 @@ public class BalanceRecorderUtils {
             creatorAddress = Crypto.toAddress(transactionData.getCreatorPublicKey());
         }
 
-        // all transactions modify the balance for fees
-        mapBalanceModifications(amountsByAddress, transactionData.getFee(), creatorAddress, Optional.empty());
+        // Positive transaction fees modify the creator's balance.
+        Long fee = transactionData.getFee();
+        if(fee != null && fee > 0)
+            mapBalanceModifications(amountsByAddress, fee, creatorAddress, Optional.empty());
     }
 
     public static String mapBalanceModificationsForTransferAssetTransaction(Map<String, Long> amountsByAddress, TransferAssetTransactionData transferAssetData) {
@@ -251,6 +253,9 @@ public class BalanceRecorderUtils {
     }
 
     public static void mapBalanceModifications(Map<String, Long> amountsByAddress, Long amount, String sender, Optional<String> recipient) {
+        if(amount == null || amount == 0)
+            return;
+
         amountsByAddress.put(
                 sender,
             amountsByAddress.getOrDefault(sender, 0L) - amount

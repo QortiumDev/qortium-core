@@ -727,6 +727,32 @@ public class BalanceRecorderUtilsTests {
     }
 
     @Test
+    public void testMapBalanceModificationsForZeroFeeTransactionDoesNotAddFeeEntry() {
+
+        boolean exceptionThrown = false;
+
+        try {
+            final long fee = 0;
+
+            byte[] creatorPublicKey = TestUtils.generatePublicKey();
+            Map<String, Long> amountsByAddress = new HashMap<>();
+
+            BalanceRecorderUtils.mapBalanceModificationsForTransaction(
+                    amountsByAddress,
+                    new RegisterNameTransactionData(
+                            new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
+                            "aaa", "data", "aaa")
+            );
+
+            Assert.assertTrue(amountsByAddress.isEmpty());
+        } catch(Exception e) {
+            exceptionThrown = true;
+        }
+
+        Assert.assertFalse(exceptionThrown);
+    }
+
+    @Test
     public void testBlockHeightRangeEqualityTrue() {
 
         BlockHeightRange range1 = new BlockHeightRange(2, 4, false);

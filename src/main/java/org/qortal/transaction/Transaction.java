@@ -1034,9 +1034,11 @@ public abstract class Transaction {
 		// Keep creator public-key metadata even though references are no longer updated.
 		creator.ensureAccount();
 
+		long fee = transactionData.getFee();
+
 		// Update transaction creator's balance
-		if (transactionData.getFee() != 0)
-			creator.modifyAssetBalance(Asset.QORT, - transactionData.getFee());
+		if (fee > 0)
+			creator.modifyAssetBalance(Asset.QORT, - fee);
 	}
 
 	/**
@@ -1056,9 +1058,11 @@ public abstract class Transaction {
 	public void orphanReferencesAndFees() throws DataException {
 		Account creator = getCreator();
 
+		long fee = transactionData.getFee();
+
 		// Update transaction creator's balance
-		if (transactionData.getFee() != 0)
-			creator.modifyAssetBalance(Asset.QORT, transactionData.getFee());
+		if (fee > 0)
+			creator.modifyAssetBalance(Asset.QORT, fee);
 	}
 
 

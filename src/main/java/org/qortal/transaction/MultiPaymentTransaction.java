@@ -1,7 +1,5 @@
 package org.qortal.transaction;
 
-import org.qortal.account.Account;
-import org.qortal.asset.Asset;
 import org.qortal.data.PaymentData;
 import org.qortal.data.transaction.MultiPaymentTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -35,14 +33,6 @@ public class MultiPaymentTransaction extends Transaction {
 		return this.multiPaymentTransactionData.getPayments().stream().map(PaymentData::getRecipient).collect(Collectors.toList());
 	}
 
-	// Navigation
-
-	public Account getSender() {
-		return this.getCreator();
-	}
-
-	// Processing
-
 	@Override
 	public ValidationResult isValid() throws DataException {
 		List<PaymentData> payments = this.multiPaymentTransactionData.getPayments();
@@ -50,12 +40,6 @@ public class MultiPaymentTransaction extends Transaction {
 		// Check number of payments
 		if (payments.isEmpty() || payments.size() > MAX_PAYMENTS_COUNT)
 			return ValidationResult.INVALID_PAYMENTS_COUNT;
-
-		Account sender = getSender();
-
-		// Check sender has enough funds for fee
-		if (sender.getConfirmedBalance(Asset.QORT) > this.multiPaymentTransactionData.getFee())
-			return ValidationResult.NO_BALANCE;
 
 		return new Payment(this.repository).isValid(this.multiPaymentTransactionData.getSenderPublicKey(), payments, this.multiPaymentTransactionData.getFee());
 	}

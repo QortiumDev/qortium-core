@@ -3,6 +3,7 @@ package org.qortal.test;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.asset.Asset;
 import org.qortal.crypto.MemoryPoW;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
@@ -114,6 +115,51 @@ public class MempowFeePolicyTests extends Common {
 			computeValidMempowNonce(negativeFeeTransaction);
 
 			assertEquals(ValidationResult.NEGATIVE_FEE, invokeIsFeeValid(negativeFeeTransaction));
+		}
+	}
+
+	@Test
+	public void testZeroFeeMempowTransactionDoesNotMoveFeeBalance() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+
+			PaymentTransaction mempowTransaction = buildPaymentTransaction(repository, alice, bob.getAddress(), 0L);
+			computeValidMempowNonce(mempowTransaction);
+			assertEquals(ValidationResult.OK, invokeIsFeeValid(mempowTransaction));
+
+			long startingBalance = alice.getConfirmedBalance(Asset.QORT);
+
+			mempowTransaction.processReferencesAndFees();
+			assertEquals(startingBalance, alice.getConfirmedBalance(Asset.QORT));
+
+			mempowTransaction.orphanReferencesAndFees();
+			assertEquals(startingBalance, alice.getConfirmedBalance(Asset.QORT));
+
+			repository.discardChanges();
+		}
+	}
+
+	@Test
+	public void testLowFeeMempowTransactionMovesDeclaredFeeBalance() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			long declaredFee = 1L;
+
+			PaymentTransaction mempowTransaction = buildPaymentTransaction(repository, alice, bob.getAddress(), declaredFee);
+			computeValidMempowNonce(mempowTransaction);
+			assertEquals(ValidationResult.OK, invokeIsFeeValid(mempowTransaction));
+
+			long startingBalance = alice.getConfirmedBalance(Asset.QORT);
+
+			mempowTransaction.processReferencesAndFees();
+			assertEquals(startingBalance - declaredFee, alice.getConfirmedBalance(Asset.QORT));
+
+			mempowTransaction.orphanReferencesAndFees();
+			assertEquals(startingBalance, alice.getConfirmedBalance(Asset.QORT));
+
+			repository.discardChanges();
 		}
 	}
 
