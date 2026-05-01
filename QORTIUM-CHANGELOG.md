@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - core: remove QORT genesis asset from main chain
+
+Removed the inherited QORT asset issue from Qortium's main genesis configuration. A fresh main-chain baseline now starts without a pre-created native asset, so asset `0` can be created later by the first asset issuance while block rewards remain paused until that native asset exists.
+
 ### 2026-05-01 - test: cover no-native-asset bootstrap
 
 Added a dedicated test-chain fixture with no genesis native asset or native balances, plus tests that mint safely before asset `0` exists, issue the first asset as asset `0`, and confirm rewards begin once that native asset exists. The MemoryPoW fee-policy tests now also include asset issuance as a representative normal transaction, keeping the coinless bootstrap path covered without making the test suite perform production-cost proof-of-work.

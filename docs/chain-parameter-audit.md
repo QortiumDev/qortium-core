@@ -22,9 +22,9 @@ runtime behavior.
 
 ### Main Chain Genesis And Governance
 
-`src/main/resources/blockchain.json` still contains Qortal-era seed data:
+`src/main/resources/blockchain.json` no longer seeds a QORT native asset, but
+it still contains consensus-defining genesis group data:
 
-- native asset issue transaction with `assetName` set to `QORT`
 - neutral development and minting group creation entries, currently owned by the
   null account and open for public membership
 - group seed choices that are still consensus-defining rather than generated
@@ -37,7 +37,9 @@ configuration process.
 Initial recommendation:
 
 - keep asset ID `0` as the native-asset protocol primitive
-- stop treating `QORT` as the hardcoded name of that primitive
+- let the first issued asset create asset ID `0` instead of seeding QORT in
+  genesis
+- stop treating `QORT` as the hardcoded name of the native-asset primitive
 - continue reducing inherited main genesis seed data into a neutral baseline or
   generated fork template
 - make the governance group seed model explicit enough that a new chain can
@@ -173,7 +175,8 @@ Initial recommendation:
 1. Add neutral native asset naming while preserving `Asset.QORT` as a temporary
    compatibility alias.
 2. Make native asset display metadata come from chain configuration.
-3. Replace or template the main `blockchain.json` genesis seed data.
+3. Continue replacing or templating the remaining main `blockchain.json` genesis
+   seed data.
 4. Clean test fixtures separately from production genesis.
 5. Add application identity defaults for backup paths, data paths, jar naming,
    Docker names, and API documentation title.
