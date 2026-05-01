@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - core: add nonce support to normal transaction data
+
+Added a shared MemoryPoW nonce field to normal transaction data so future fee-free transaction support can bind a nonce directly into each transaction's signed bytes and stored repository record. This only adds nonce carriage for eligible normal transaction types; it does not yet compute, validate, or accept MemoryPoW as a replacement for normal transaction fees.
+
 ### 2026-05-01 - core: define mempow fee policy for normal transactions
 
 Defined the central Qortium policy for when ordinary user-submitted transactions will be allowed to use a MemoryPoW nonce instead of a paid fee. This commit only adds the shared policy hooks and keeps existing transaction behavior unchanged until later commits add nonce data and verification for eligible transaction types.

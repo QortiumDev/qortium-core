@@ -26,6 +26,7 @@ public class CreateAssetOrderTransactionTransformer extends TransactionTransform
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("order creator's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.CREATE_ASSET_ORDER);
 		layout.add("ID of asset of offer", TransformationType.LONG);
 		layout.add("ID of asset wanted", TransformationType.LONG);
 		layout.add("amount of asset on offer", TransformationType.AMOUNT);
@@ -40,6 +41,8 @@ public class CreateAssetOrderTransactionTransformer extends TransactionTransform
 		int txGroupId = byteBuffer.getInt();
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.CREATE_ASSET_ORDER);
+
 		long haveAssetId = byteBuffer.getLong();
 
 		long wantAssetId = byteBuffer.getLong();
@@ -53,7 +56,7 @@ public class CreateAssetOrderTransactionTransformer extends TransactionTransform
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, nonce, signature);
 
 		return new CreateAssetOrderTransactionData(baseTransactionData, haveAssetId, wantAssetId, amount, price);
 	}

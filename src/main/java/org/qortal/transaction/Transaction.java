@@ -124,6 +124,23 @@ public abstract class Transaction {
 		public static int getMaxValue() {
 			return maxValue;
 		}
+
+		public boolean supportsMempowFeeAlternative() {
+			switch (this) {
+				case GENESIS:
+				case ARBITRARY:
+				case MESSAGE:
+				case CHAT:
+				case PUBLICIZE:
+				case AT:
+				case REWARD_SHARE:
+				case PRESENCE:
+					return false;
+
+				default:
+					return true;
+			}
+		}
 	}
 
 	// Group-approval status
@@ -364,20 +381,7 @@ public abstract class Transaction {
 	}
 
 	protected static boolean canUseMempowFeeAlternative(TransactionType transactionType) {
-		switch (transactionType) {
-			case GENESIS:
-			case ARBITRARY:
-			case MESSAGE:
-			case CHAT:
-			case PUBLICIZE:
-			case AT:
-			case REWARD_SHARE:
-			case PRESENCE:
-				return false;
-
-			default:
-				return true;
-		}
+		return transactionType.supportsMempowFeeAlternative();
 	}
 
 	/** Returns whether this transaction carries a positive fee. */

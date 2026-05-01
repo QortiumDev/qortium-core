@@ -172,7 +172,7 @@ public class HSQLDBDatabaseUpdates {
 					// Generic transactions (creator and milestone_block for genesis transactions)
 					stmt.execute("CREATE TABLE Transactions (signature Signature, type TINYINT NOT NULL, "
 							+ "creator QortalPublicKey NOT NULL, created_when EpochMillis NOT NULL, fee QortalAmount NOT NULL, "
-							+ "tx_group_id GroupID NOT NULL, block_height INTEGER, "
+							+ "tx_group_id GroupID NOT NULL, nonce INT, block_height INTEGER, "
 							+ "approval_status TINYINT NOT NULL, approval_height INTEGER, "
 							+ "PRIMARY KEY (signature))");
 					// For finding transactions by transaction type.
@@ -1063,6 +1063,7 @@ public class HSQLDBDatabaseUpdates {
 					dropColumnIfExists(connection, "Accounts", "reference");
 					stmt.execute("DROP INDEX TransactionReferenceIndex IF EXISTS");
 					dropColumnIfExists(connection, "Transactions", "reference");
+					addColumnIfMissing(connection, "Transactions", "nonce", "INT");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");
 					stmt.execute("ALTER TABLE TransferPrivsTransactions DROP COLUMN previous_sender_blocks_minted_adjustment");
@@ -1087,6 +1088,17 @@ public class HSQLDBDatabaseUpdates {
 
 		try (Statement stmt = connection.createStatement()) {
 			stmt.execute(String.format("ALTER TABLE %s DROP COLUMN %s", tableName, columnName));
+		}
+	}
+
+	private static void addColumnIfMissing(Connection connection, String tableName, String columnName, String columnDefinition) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getColumns(null, null, tableName.toUpperCase(), columnName.toUpperCase())) {
+			if (resultSet.next())
+				return;
+		}
+
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute(String.format("ALTER TABLE %s ADD COLUMN %s %s", tableName, columnName, columnDefinition));
 		}
 	}
 }

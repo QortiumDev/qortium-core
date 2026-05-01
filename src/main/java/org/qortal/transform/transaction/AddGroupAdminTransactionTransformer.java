@@ -29,6 +29,7 @@ public class AddGroupAdminTransactionTransformer extends TransactionTransformer 
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("group owner's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.ADD_GROUP_ADMIN);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("member to promote to admin", TransformationType.ADDRESS);
 		layout.add("fee", TransformationType.AMOUNT);
@@ -41,6 +42,8 @@ public class AddGroupAdminTransactionTransformer extends TransactionTransformer 
 		int txGroupId = byteBuffer.getInt();
 		byte[] ownerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.ADD_GROUP_ADMIN);
+
 		int groupId = byteBuffer.getInt();
 
 		String member = Serialization.deserializeAddress(byteBuffer);
@@ -50,7 +53,7 @@ public class AddGroupAdminTransactionTransformer extends TransactionTransformer 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, nonce, signature);
 
 		return new AddGroupAdminTransactionData(baseTransactionData, groupId, member);
 	}

@@ -72,7 +72,6 @@ public class ArbitraryTransactionData extends TransactionData {
 	private byte[] senderPublicKey;
 
 	private int service;
-	private int nonce;
 	private int size;
 
 	private String name;
@@ -109,7 +108,7 @@ public class ArbitraryTransactionData extends TransactionData {
 		this.senderPublicKey = baseTransactionData.creatorPublicKey;
 		this.version = version;
 		this.service = service;
-		this.nonce = nonce;
+		this.nonce = Integer.valueOf(nonce);
 		this.size = size;
 		this.name = name;
 		this.identifier = identifier;
@@ -138,14 +137,6 @@ public class ArbitraryTransactionData extends TransactionData {
 
 	public int getServiceInt() {
 		return this.service;
-	}
-
-	public int getNonce() {
-		return this.nonce;
-	}
-
-	public void setNonce(int nonce) {
-		this.nonce = nonce;
 	}
 
 	public int getSize() {

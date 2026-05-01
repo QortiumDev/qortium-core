@@ -27,6 +27,7 @@ public class PaymentTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("sender's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.PAYMENT);
 		layout.add("recipient", TransformationType.ADDRESS);
 		layout.add("payment amount", TransformationType.AMOUNT);
 		layout.add("fee", TransformationType.AMOUNT);
@@ -39,6 +40,8 @@ public class PaymentTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] senderPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.PAYMENT);
+
 		String recipient = Serialization.deserializeAddress(byteBuffer);
 
 		long amount = byteBuffer.getLong();
@@ -48,7 +51,7 @@ public class PaymentTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, nonce, signature);
 
 		return new PaymentTransactionData(baseTransactionData, recipient, amount);
 	}

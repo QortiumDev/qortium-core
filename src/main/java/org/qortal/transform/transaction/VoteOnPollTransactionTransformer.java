@@ -31,6 +31,7 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("voter's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.VOTE_ON_POLL);
 		layout.add("poll name length", TransformationType.INT);
 		layout.add("poll name", TransformationType.STRING);
 		layout.add("poll option index (0+)", TransformationType.INT);
@@ -44,6 +45,8 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] voterPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.VOTE_ON_POLL);
+
 		String pollName = Serialization.deserializeSizedString(byteBuffer, Poll.MAX_NAME_SIZE);
 
 		int optionIndex = byteBuffer.getInt();
@@ -55,7 +58,7 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, voterPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, voterPublicKey, fee, nonce, signature);
 
 		return new VoteOnPollTransactionData(baseTransactionData, pollName, optionIndex);
 	}

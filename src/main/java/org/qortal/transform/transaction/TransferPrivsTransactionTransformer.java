@@ -27,6 +27,7 @@ public class TransferPrivsTransactionTransformer extends TransactionTransformer 
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("sender's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.TRANSFER_PRIVS);
 		layout.add("recipient", TransformationType.ADDRESS);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
@@ -38,6 +39,8 @@ public class TransferPrivsTransactionTransformer extends TransactionTransformer 
 		int txGroupId = byteBuffer.getInt();
 		byte[] senderPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.TRANSFER_PRIVS);
+
 		String recipient = Serialization.deserializeAddress(byteBuffer);
 
 		long fee = byteBuffer.getLong();
@@ -45,7 +48,7 @@ public class TransferPrivsTransactionTransformer extends TransactionTransformer 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, nonce, signature);
 
 		return new TransferPrivsTransactionData(baseTransactionData, recipient);
 	}

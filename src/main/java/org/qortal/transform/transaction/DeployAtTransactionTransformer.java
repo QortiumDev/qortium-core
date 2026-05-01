@@ -35,6 +35,7 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("AT creator's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.DEPLOY_AT);
 		layout.add("AT name length", TransformationType.INT);
 		layout.add("AT name", TransformationType.STRING);
 		layout.add("AT description length", TransformationType.INT);
@@ -54,6 +55,8 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 
 		int txGroupId = byteBuffer.getInt();
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
+
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.DEPLOY_AT);
 
 		String name = Serialization.deserializeSizedString(byteBuffer, DeployAtTransaction.MAX_NAME_SIZE);
 
@@ -79,7 +82,7 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, nonce, signature);
 
 		return new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, amount, assetId);
 	}

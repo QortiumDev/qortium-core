@@ -20,9 +20,6 @@ public class ChatTransactionData extends TransactionData {
 	@Schema(accessMode = AccessMode.READ_ONLY)
 	private String sender;
 
-	@Schema(accessMode = AccessMode.READ_ONLY)
-	private int nonce;
-
 	private String recipient; // can be null
 
 	private byte[] chatReference; // can be null
@@ -50,7 +47,7 @@ public class ChatTransactionData extends TransactionData {
 
 		this.senderPublicKey = baseTransactionData.creatorPublicKey;
 		this.sender = sender;
-		this.nonce = nonce;
+		this.nonce = Integer.valueOf(nonce);
 		this.recipient = recipient;
 		this.chatReference = chatReference;
 		this.data = data;
@@ -66,14 +63,6 @@ public class ChatTransactionData extends TransactionData {
 
 	public String getSender() {
 		return this.sender;
-	}
-
-	public int getNonce() {
-		return this.nonce;
-	}
-
-	public void setNonce(int nonce) {
-		this.nonce = nonce;
 	}
 
 	public String getRecipient() {

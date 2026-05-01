@@ -1,7 +1,6 @@
 package org.qortal.data.transaction;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.media.Schema.AccessMode;
 import org.qortal.transaction.Transaction.TransactionType;
 
 import javax.xml.bind.Unmarshaller;
@@ -19,9 +18,6 @@ public class MessageTransactionData extends TransactionData {
 	private byte[] senderPublicKey;
 
 	private int version;
-
-	@Schema(accessMode = AccessMode.READ_ONLY)
-	private int nonce;
 
 	// Not always present
 	private String recipient;
@@ -55,7 +51,7 @@ public class MessageTransactionData extends TransactionData {
 
 		this.senderPublicKey = baseTransactionData.creatorPublicKey;
 		this.version = version;
-		this.nonce = nonce;
+		this.nonce = Integer.valueOf(nonce);
 		this.recipient = recipient;
 		this.amount = amount;
 		this.assetId = assetId;
@@ -72,14 +68,6 @@ public class MessageTransactionData extends TransactionData {
 
 	public int getVersion() {
 		return this.version;
-	}
-
-	public int getNonce() {
-		return this.nonce;
-	}
-
-	public void setNonce(int nonce) {
-		this.nonce = nonce;
 	}
 
 	public String getRecipient() {

@@ -28,6 +28,7 @@ public class JoinGroupTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("joiner's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.JOIN_GROUP);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
@@ -39,6 +40,8 @@ public class JoinGroupTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] joinerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.JOIN_GROUP);
+
 		int groupId = byteBuffer.getInt();
 
 		long fee = byteBuffer.getLong();
@@ -46,7 +49,7 @@ public class JoinGroupTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, joinerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, joinerPublicKey, fee, nonce, signature);
 
 		return new JoinGroupTransactionData(baseTransactionData, groupId);
 	}

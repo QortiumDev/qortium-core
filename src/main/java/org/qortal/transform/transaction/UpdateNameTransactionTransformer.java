@@ -31,6 +31,7 @@ public class UpdateNameTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("name owner's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.UPDATE_NAME);
 		layout.add("name length", TransformationType.INT);
 		layout.add("name", TransformationType.STRING);
 		layout.add("new name's length (0 for no change)", TransformationType.INT);
@@ -47,6 +48,8 @@ public class UpdateNameTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] ownerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.UPDATE_NAME);
+
 		String name = Serialization.deserializeSizedString(byteBuffer, Name.MAX_NAME_SIZE);
 
 		String newName = Serialization.deserializeSizedString(byteBuffer, Name.MAX_NAME_SIZE);
@@ -58,7 +61,7 @@ public class UpdateNameTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, nonce, signature);
 
 		return new UpdateNameTransactionData(baseTransactionData, name, newName, newData);
 	}

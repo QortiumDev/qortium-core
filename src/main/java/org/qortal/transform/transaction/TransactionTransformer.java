@@ -32,6 +32,7 @@ public abstract class TransactionTransformer extends Transformer {
 
 	protected static final int TYPE_LENGTH = INT_LENGTH;
 	protected static final int GROUPID_LENGTH = INT_LENGTH;
+	protected static final int NONCE_LENGTH = INT_LENGTH;
 	protected static final int FEE_LENGTH = AMOUNT_LENGTH;
 
 	/** Description of one component of raw transaction layout */
@@ -218,7 +219,12 @@ public abstract class TransactionTransformer extends Transformer {
 
 	protected static int getBaseLength(TransactionData transactionData) {
 		// All transactions have at least txType, timestamp, txGroupId, creator public key, fee and signature.
-		return TYPE_LENGTH + TIMESTAMP_LENGTH + GROUPID_LENGTH + PUBLIC_KEY_LENGTH + FEE_LENGTH + SIGNATURE_LENGTH;
+		int baseLength = TYPE_LENGTH + TIMESTAMP_LENGTH + GROUPID_LENGTH + PUBLIC_KEY_LENGTH + FEE_LENGTH + SIGNATURE_LENGTH;
+
+		if (transactionData.getType().supportsMempowFeeAlternative())
+			baseLength += NONCE_LENGTH;
+
+		return baseLength;
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
@@ -298,6 +304,18 @@ public abstract class TransactionTransformer extends Transformer {
 		}
 	}
 
+	protected static void addMempowFeeNonceToLayout(TransactionLayout layout, TransactionType transactionType) {
+		if (transactionType.supportsMempowFeeAlternative())
+			layout.add("MemoryPoW fee nonce", TransformationType.INT);
+	}
+
+	protected static Integer deserializeMempowFeeNonce(ByteBuffer byteBuffer, TransactionType transactionType) {
+		if (!transactionType.supportsMempowFeeAlternative())
+			return null;
+
+		return byteBuffer.getInt();
+	}
+
 	protected static void transformCommonBytes(TransactionData transactionData, ByteArrayOutputStream bytes) throws IOException {
 		// Transaction type
 		bytes.write(Ints.toByteArray(transactionData.getType().value));
@@ -310,6 +328,9 @@ public abstract class TransactionTransformer extends Transformer {
 
 		// Creator public key
 		bytes.write(transactionData.getCreatorPublicKey());
+
+		if (transactionData.getType().supportsMempowFeeAlternative())
+			bytes.write(Ints.toByteArray(transactionData.getNonce()));
 	}
 
 }

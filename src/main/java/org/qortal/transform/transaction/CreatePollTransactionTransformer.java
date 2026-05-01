@@ -36,6 +36,7 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("poll creator's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.CREATE_POLL);
 		layout.add("poll owner's address", TransformationType.ADDRESS);
 		layout.add("poll name length", TransformationType.INT);
 		layout.add("poll name", TransformationType.STRING);
@@ -53,6 +54,8 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 
 		int txGroupId = byteBuffer.getInt();
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
+
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.CREATE_POLL);
 
 		String owner = Serialization.deserializeAddress(byteBuffer);
 
@@ -76,7 +79,7 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, nonce, signature);
 
 		return new CreatePollTransactionData(baseTransactionData, owner, pollName, description, pollOptions);
 	}

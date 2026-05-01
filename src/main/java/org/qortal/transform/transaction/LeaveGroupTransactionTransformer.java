@@ -28,6 +28,7 @@ public class LeaveGroupTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("leaver's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.LEAVE_GROUP);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
@@ -39,6 +40,8 @@ public class LeaveGroupTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] leaverPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.LEAVE_GROUP);
+
 		int groupId = byteBuffer.getInt();
 
 		long fee = byteBuffer.getLong();
@@ -46,7 +49,7 @@ public class LeaveGroupTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, leaverPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, leaverPublicKey, fee, nonce, signature);
 
 		return new LeaveGroupTransactionData(baseTransactionData, groupId);
 	}

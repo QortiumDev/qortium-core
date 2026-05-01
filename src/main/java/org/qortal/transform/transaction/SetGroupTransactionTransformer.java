@@ -28,6 +28,7 @@ public class SetGroupTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("account's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.SET_GROUP);
 		layout.add("account's new default groupID", TransformationType.INT);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
@@ -39,6 +40,8 @@ public class SetGroupTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.SET_GROUP);
+
 		int defaultGroupId = byteBuffer.getInt();
 
 		long fee = byteBuffer.getLong();
@@ -46,7 +49,7 @@ public class SetGroupTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, nonce, signature);
 
 		return new SetGroupTransactionData(baseTransactionData, defaultGroupId);
 	}

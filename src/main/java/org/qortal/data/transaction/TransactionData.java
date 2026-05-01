@@ -68,6 +68,9 @@ public abstract class TransactionData {
 	@Schema(description = "recipient for this transaction")
 	protected String recipient;
 
+	@Schema(accessMode = AccessMode.READ_ONLY, description = "MemoryPoW nonce used as an alternative to a paid fee")
+	protected Integer nonce;
+
 	// Not always present
 	@Schema(accessMode = AccessMode.READ_ONLY, hidden = true, description = "height of block containing transaction")
 	protected Integer blockHeight;
@@ -103,6 +106,7 @@ public abstract class TransactionData {
 		this.txGroupId = baseTransactionData.txGroupId;
 		this.creatorPublicKey = baseTransactionData.creatorPublicKey;
 		this.fee = baseTransactionData.fee;
+		this.nonce = baseTransactionData.nonce;
 		this.signature = baseTransactionData.signature;
 		this.blockHeight = baseTransactionData.blockHeight;
 		this.blockSequence = baseTransactionData.blockSequence;
@@ -151,6 +155,25 @@ public abstract class TransactionData {
 
 	public void setFee(Long fee) {
 		this.fee = fee;
+	}
+
+	public int getNonce() {
+		return this.nonce != null ? this.nonce : 0;
+	}
+
+	@XmlTransient
+	@Schema(hidden = true)
+	public Integer getNonceOrNull() {
+		return this.nonce;
+	}
+
+	public void setNonce(int nonce) {
+		this.nonce = nonce;
+	}
+
+	@XmlTransient
+	public void setNonce(Integer nonce) {
+		this.nonce = nonce;
 	}
 
 	public byte[] getSignature() {

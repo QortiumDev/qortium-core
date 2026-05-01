@@ -28,6 +28,7 @@ public class GroupApprovalTransactionTransformer extends TransactionTransformer 
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("group admin's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.GROUP_APPROVAL);
 		layout.add("pending transaction's signature", TransformationType.SIGNATURE);
 		layout.add("approval decision", TransformationType.BOOLEAN);
 		layout.add("fee", TransformationType.AMOUNT);
@@ -40,6 +41,8 @@ public class GroupApprovalTransactionTransformer extends TransactionTransformer 
 		int txGroupId = byteBuffer.getInt();
 		byte[] adminPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.GROUP_APPROVAL);
+
 		byte[] pendingSignature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(pendingSignature);
 
@@ -50,7 +53,7 @@ public class GroupApprovalTransactionTransformer extends TransactionTransformer 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, adminPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, adminPublicKey, fee, nonce, signature);
 
 		return new GroupApprovalTransactionData(baseTransactionData, pendingSignature, approval);
 	}

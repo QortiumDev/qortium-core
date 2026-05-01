@@ -27,6 +27,7 @@ public class TransferAssetTransactionTransformer extends TransactionTransformer 
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("asset owner's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.TRANSFER_ASSET);
 		layout.add("recipient", TransformationType.ADDRESS);
 		layout.add("asset ID", TransformationType.LONG);
 		layout.add("asset quantity", TransformationType.AMOUNT);
@@ -40,6 +41,8 @@ public class TransferAssetTransactionTransformer extends TransactionTransformer 
 		int txGroupId = byteBuffer.getInt();
 		byte[] senderPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.TRANSFER_ASSET);
+
 		String recipient = Serialization.deserializeAddress(byteBuffer);
 
 		long assetId = byteBuffer.getLong();
@@ -51,7 +54,7 @@ public class TransferAssetTransactionTransformer extends TransactionTransformer 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, nonce, signature);
 
 		return new TransferAssetTransactionData(baseTransactionData, recipient, amount, assetId);
 	}

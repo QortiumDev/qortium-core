@@ -1,7 +1,6 @@
 package org.qortal.data.transaction;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.media.Schema.AccessMode;
 import org.qortal.transaction.PresenceTransaction.PresenceType;
 import org.qortal.transaction.Transaction.TransactionType;
 
@@ -17,9 +16,6 @@ public class PresenceTransactionData extends TransactionData {
 	// Properties
 	@Schema(description = "sender's public key", example = "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP")
 	private byte[] senderPublicKey;
-
-	@Schema(accessMode = AccessMode.READ_ONLY)
-	private int nonce;
 
 	private PresenceType presenceType;
 
@@ -42,7 +38,7 @@ public class PresenceTransactionData extends TransactionData {
 		super(TransactionType.PRESENCE, baseTransactionData);
 
 		this.senderPublicKey = baseTransactionData.creatorPublicKey;
-		this.nonce = nonce;
+		this.nonce = Integer.valueOf(nonce);
 		this.presenceType = presenceType;
 		this.timestampSignature = timestampSignature;
 	}
@@ -51,14 +47,6 @@ public class PresenceTransactionData extends TransactionData {
 
 	public byte[] getSenderPublicKey() {
 		return this.senderPublicKey;
-	}
-
-	public int getNonce() {
-		return this.nonce;
-	}
-
-	public void setNonce(int nonce) {
-		this.nonce = nonce;
 	}
 
 	public PresenceType getPresenceType() {

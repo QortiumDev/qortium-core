@@ -35,6 +35,7 @@ public class IssueAssetTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("asset issuer's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.ISSUE_ASSET);
 		layout.add("asset name length", TransformationType.INT);
 		layout.add("asset name", TransformationType.STRING);
 		layout.add("asset description length", TransformationType.INT);
@@ -54,6 +55,8 @@ public class IssueAssetTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] issuerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.ISSUE_ASSET);
+
 		String assetName = Serialization.deserializeSizedString(byteBuffer, Asset.MAX_NAME_SIZE);
 
 		String description = Serialization.deserializeSizedString(byteBuffer, Asset.MAX_DESCRIPTION_SIZE);
@@ -71,7 +74,7 @@ public class IssueAssetTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, issuerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, issuerPublicKey, fee, nonce, signature);
 
 		return new IssueAssetTransactionData(baseTransactionData, assetName, description, quantity, isDivisible, data, isUnspendable);
 	}

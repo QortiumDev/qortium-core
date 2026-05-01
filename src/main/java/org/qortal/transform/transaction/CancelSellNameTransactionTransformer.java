@@ -29,6 +29,7 @@ public class CancelSellNameTransactionTransformer extends TransactionTransformer
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("name owner's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.CANCEL_SELL_NAME);
 		layout.add("name length", TransformationType.INT);
 		layout.add("name", TransformationType.STRING);
 		layout.add("fee", TransformationType.AMOUNT);
@@ -41,6 +42,8 @@ public class CancelSellNameTransactionTransformer extends TransactionTransformer
 		int txGroupId = byteBuffer.getInt();
 		byte[] ownerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.CANCEL_SELL_NAME);
+
 		String name = Serialization.deserializeSizedString(byteBuffer, Name.MAX_NAME_SIZE);
 
 		long fee = byteBuffer.getLong();
@@ -48,7 +51,7 @@ public class CancelSellNameTransactionTransformer extends TransactionTransformer
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, nonce, signature);
 
 		return new CancelSellNameTransactionData(baseTransactionData, name);
 	}

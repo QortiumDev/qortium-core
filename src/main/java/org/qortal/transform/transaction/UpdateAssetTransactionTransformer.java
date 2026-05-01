@@ -32,6 +32,7 @@ public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("asset owner's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.UPDATE_ASSET);
 		layout.add("asset ID", TransformationType.LONG);
 		layout.add("asset new owner", TransformationType.ADDRESS);
 		layout.add("asset new description length", TransformationType.INT);
@@ -48,6 +49,8 @@ public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] ownerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.UPDATE_ASSET);
+
 		long assetId = byteBuffer.getLong();
 
 		String newOwner = Serialization.deserializeAddress(byteBuffer);
@@ -61,7 +64,7 @@ public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, nonce, signature);
 
 		return new UpdateAssetTransactionData(baseTransactionData, assetId, newOwner, newDescription, newData);
 	}

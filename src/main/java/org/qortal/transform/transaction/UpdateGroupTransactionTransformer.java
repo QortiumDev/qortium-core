@@ -38,6 +38,7 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("group owner's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.UPDATE_GROUP);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("group's new owner", TransformationType.ADDRESS);
 		layout.add("group's new description length", TransformationType.INT);
@@ -55,6 +56,8 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 
 		int txGroupId = byteBuffer.getInt();
 		byte[] ownerPublicKey = Serialization.deserializePublicKey(byteBuffer);
+
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.UPDATE_GROUP);
 
 		int groupId = byteBuffer.getInt();
 
@@ -75,7 +78,7 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, nonce, signature);
 
 		return new UpdateGroupTransactionData(baseTransactionData, groupId, newOwner, newDescription, newIsOpen,
 				newApprovalThreshold, newMinBlockDelay, newMaxBlockDelay);

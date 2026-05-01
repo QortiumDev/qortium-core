@@ -32,6 +32,7 @@ public class GroupKickTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("group admin's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.GROUP_KICK);
 		layout.add("group ID", TransformationType.INT);
 		layout.add("group member to kick", TransformationType.ADDRESS);
 		layout.add("kick reason length", TransformationType.INT);
@@ -46,6 +47,8 @@ public class GroupKickTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] adminPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.GROUP_KICK);
+
 		int groupId = byteBuffer.getInt();
 
 		String member = Serialization.deserializeAddress(byteBuffer);
@@ -57,7 +60,7 @@ public class GroupKickTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, adminPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, adminPublicKey, fee, nonce, signature);
 
 		return new GroupKickTransactionData(baseTransactionData, groupId, member, reason);
 	}

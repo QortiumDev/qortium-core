@@ -1,7 +1,6 @@
 package org.qortal.data.transaction;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.media.Schema.AccessMode;
 import org.qortal.transaction.Transaction.TransactionType;
 
 import javax.xml.bind.Unmarshaller;
@@ -16,9 +15,6 @@ public class PublicizeTransactionData extends TransactionData {
 	// Properties
 	@Schema(description = "sender's public key", example = "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP")
 	private byte[] senderPublicKey;
-
-	@Schema(accessMode = AccessMode.READ_ONLY)
-	private int nonce;
 
 	// Constructors
 
@@ -35,21 +31,13 @@ public class PublicizeTransactionData extends TransactionData {
 		super(TransactionType.PUBLICIZE, baseTransactionData);
 
 		this.senderPublicKey = baseTransactionData.creatorPublicKey;
-		this.nonce = nonce;
+		this.nonce = Integer.valueOf(nonce);
 	}
 
 	// Getters/Setters
 
 	public byte[] getSenderPublicKey() {
 		return this.senderPublicKey;
-	}
-
-	public int getNonce() {
-		return this.nonce;
-	}
-
-	public void setNonce(int nonce) {
-		this.nonce = nonce;
 	}
 
 }

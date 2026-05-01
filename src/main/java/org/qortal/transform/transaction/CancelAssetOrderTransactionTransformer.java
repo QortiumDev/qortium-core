@@ -27,6 +27,7 @@ public class CancelAssetOrderTransactionTransformer extends TransactionTransform
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("order creator's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.CANCEL_ASSET_ORDER);
 		layout.add("order ID to cancel", TransformationType.SIGNATURE);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
@@ -38,6 +39,8 @@ public class CancelAssetOrderTransactionTransformer extends TransactionTransform
 		int txGroupId = byteBuffer.getInt();
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.CANCEL_ASSET_ORDER);
+
 		byte[] orderId = new byte[ORDER_ID_LENGTH];
 		byteBuffer.get(orderId);
 
@@ -46,7 +49,7 @@ public class CancelAssetOrderTransactionTransformer extends TransactionTransform
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, nonce, signature);
 
 		return new CancelAssetOrderTransactionData(baseTransactionData, orderId);
 	}

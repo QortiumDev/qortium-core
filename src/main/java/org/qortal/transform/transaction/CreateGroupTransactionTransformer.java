@@ -36,6 +36,7 @@ public class CreateGroupTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("group creator's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.CREATE_GROUP);
 		layout.add("group's name length", TransformationType.INT);
 		layout.add("group's name", TransformationType.STRING);
 		layout.add("group's description length", TransformationType.INT);
@@ -54,6 +55,8 @@ public class CreateGroupTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] creatorPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.CREATE_GROUP);
+
 		String groupName = Serialization.deserializeSizedString(byteBuffer, Group.MAX_NAME_SIZE);
 
 		String description = Serialization.deserializeSizedString(byteBuffer, Group.MAX_DESCRIPTION_SIZE);
@@ -71,7 +74,7 @@ public class CreateGroupTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, nonce, signature);
 
 		return new CreateGroupTransactionData(baseTransactionData, groupName, description, isOpen, approvalThreshold, minBlockDelay, maxBlockDelay);
 	}

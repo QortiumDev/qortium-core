@@ -32,6 +32,7 @@ public class MultiPaymentTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("sender's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.MULTI_PAYMENT);
 		layout.add("number of payments", TransformationType.INT);
 		layout.add("* recipient", TransformationType.ADDRESS);
 		layout.add("* asset ID of payment", TransformationType.LONG);
@@ -46,6 +47,8 @@ public class MultiPaymentTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] senderPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.MULTI_PAYMENT);
+
 		int paymentsCount = byteBuffer.getInt();
 
 		List<PaymentData> payments = new ArrayList<>();
@@ -57,7 +60,7 @@ public class MultiPaymentTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, nonce, signature);
 
 		return new MultiPaymentTransactionData(baseTransactionData, payments);
 	}

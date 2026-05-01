@@ -30,6 +30,7 @@ public class RegisterNameTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("name registrant's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.REGISTER_NAME);
 		layout.add("name length", TransformationType.INT);
 		layout.add("name", TransformationType.STRING);
 		layout.add("data length", TransformationType.INT);
@@ -44,6 +45,8 @@ public class RegisterNameTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] registrantPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.REGISTER_NAME);
+
 		String name = Serialization.deserializeSizedString(byteBuffer, Name.MAX_NAME_SIZE);
 
 		String data = Serialization.deserializeSizedString(byteBuffer, Name.MAX_DATA_SIZE);
@@ -53,7 +56,7 @@ public class RegisterNameTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, registrantPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, registrantPublicKey, fee, nonce, signature);
 
 		return new RegisterNameTransactionData(baseTransactionData, name, data);
 	}

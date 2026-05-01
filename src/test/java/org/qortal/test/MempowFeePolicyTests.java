@@ -43,6 +43,7 @@ public class MempowFeePolicyTests extends Common {
 
 		for (TransactionType transactionType : TransactionType.values()) {
 			boolean canUseMempow = invokeStaticCanUseMempowFeeAlternative(transactionType);
+			assertEquals(transactionType.name(), transactionType.supportsMempowFeeAlternative(), canUseMempow);
 
 			if (excludedTypes.contains(transactionType)) {
 				assertFalse(transactionType.name(), canUseMempow);

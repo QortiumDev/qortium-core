@@ -29,6 +29,7 @@ public class SellNameTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("name owner's public key", TransformationType.PUBLIC_KEY);
+		addMempowFeeNonceToLayout(layout, TransactionType.SELL_NAME);
 		layout.add("name length", TransformationType.INT);
 		layout.add("name", TransformationType.STRING);
 		layout.add("sale price", TransformationType.AMOUNT);
@@ -42,6 +43,8 @@ public class SellNameTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] ownerPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.SELL_NAME);
+
 		String name = Serialization.deserializeSizedString(byteBuffer, Name.MAX_NAME_SIZE);
 
 		long amount = byteBuffer.getLong();
@@ -51,7 +54,7 @@ public class SellNameTransactionTransformer extends TransactionTransformer {
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, nonce, signature);
 
 		return new SellNameTransactionData(baseTransactionData, name, amount);
 	}
