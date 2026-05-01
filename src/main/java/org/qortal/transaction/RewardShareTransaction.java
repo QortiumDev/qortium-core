@@ -209,11 +209,6 @@ public class RewardShareTransaction extends Transaction {
 	@Override
 	public void processReferencesAndFees() throws DataException {
 		super.processReferencesAndFees();
-
-		// If reward-share recipient has no last-reference then use this transaction's signature as last-reference so they can spend their block rewards
-		Account recipient = new Account(this.repository, this.rewardShareTransactionData.getRecipient());
-		if (recipient.getLastReference() == null)
-			recipient.setLastReference(this.rewardShareTransactionData.getSignature());
 	}
 
 	@Override
@@ -241,11 +236,6 @@ public class RewardShareTransaction extends Transaction {
 	@Override
 	public void orphanReferencesAndFees() throws DataException {
 		super.orphanReferencesAndFees();
-
-		// If recipient didn't have a last-reference prior to this transaction then remove it
-		Account recipient = new Account(this.repository, this.rewardShareTransactionData.getRecipient());
-		if (Arrays.equals(recipient.getLastReference(), this.rewardShareTransactionData.getSignature()))
-			recipient.setLastReference(null);
 	}
 
 }

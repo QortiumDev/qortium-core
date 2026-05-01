@@ -77,8 +77,8 @@ public class GroupApprovalTests extends Common {
 	}
 
 	@Test
-	/** Check that a transaction, that requires approval, updates references and fees properly. */
-	public void testReferencesAndFees() throws DataException {
+	/** Check that a transaction, that requires approval, updates fees without changing legacy references. */
+	public void testApprovalPendingFees() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount aliceAccount = Common.getTestAccount(repository, "alice");
 
@@ -100,9 +100,9 @@ public class GroupApprovalTests extends Common {
 			ApprovalStatus approvalStatus = GroupUtils.getApprovalStatus(repository, bobAssetTransaction.getTransactionData().getSignature());
 			assertEquals("incorrect transaction approval status", ApprovalStatus.PENDING, approvalStatus);
 
-			// Bob's last-reference should have changed, even though the transaction itself hasn't been approved yet
+			// Bob's last-reference should not change because general references are no longer used for sequencing
 			byte[] bobPostAssetReference = bobAccount.getLastReference();
-			assertFalse("reference should have changed", Arrays.equals(bobOriginalReference, bobPostAssetReference));
+			assertTrue("reference should be unchanged", Arrays.equals(bobOriginalReference, bobPostAssetReference));
 
 			// Bob's balance should have the fee removed, even though the transaction itself hasn't been approved yet
 			long bobPostAssetBalance = bobAccount.getConfirmedBalance(Asset.QORT);
@@ -112,12 +112,12 @@ public class GroupApprovalTests extends Common {
 			long alicePostAssetBalance = aliceAccount.getConfirmedBalance(Asset.QORT);
 			assertEquals("block minter's balance incorrect", aliceOriginalBalance + blockReward + fee, alicePostAssetBalance);
 
-			// Have Bob do a non-approval transaction to change his last-reference
+			// Have Bob do a non-approval transaction to confirm fee/orphan handling does not rely on references
 			Transaction bobPaymentTransaction = buildPaymentTransaction(repository, "bob", "chloe", amount, Group.NO_GROUP);
 			TransactionUtils.signAndMint(repository, bobPaymentTransaction.getTransactionData(), bobAccount);
 
 			byte[] bobPostPaymentReference = bobAccount.getLastReference();
-			assertFalse("reference should have changed", Arrays.equals(bobPostAssetReference, bobPostPaymentReference));
+			assertTrue("reference should be unchanged", Arrays.equals(bobOriginalReference, bobPostPaymentReference));
 
 			// Have Alice approve Bob's approval-needed transaction
 			GroupUtils.approveTransaction(repository, "alice", bobAssetTransaction.getTransactionData().getSignature(), true);
@@ -132,7 +132,7 @@ public class GroupApprovalTests extends Common {
 
 			// Check Bob's last reference hasn't been changed by transaction approval
 			byte[] bobPostApprovalReference = bobAccount.getLastReference();
-			assertTrue("reference should be unchanged", Arrays.equals(bobPostPaymentReference, bobPostApprovalReference));
+			assertTrue("reference should be unchanged", Arrays.equals(bobOriginalReference, bobPostApprovalReference));
 
 			// Ok, now unwind/orphan all the above to double-check
 
@@ -142,28 +142,28 @@ public class GroupApprovalTests extends Common {
 
 			// Check Bob's last reference is still correct
 			byte[] bobReference = bobAccount.getLastReference();
-			assertTrue("reference should be unchanged", Arrays.equals(bobPostPaymentReference, bobReference));
+			assertTrue("reference should be unchanged", Arrays.equals(bobOriginalReference, bobReference));
 
 			// Orphan block containing Alice's group-approval transaction
 			BlockUtils.orphanLastBlock(repository);
 
 			// Check Bob's last reference is still correct
 			bobReference = bobAccount.getLastReference();
-			assertTrue("reference should be unchanged", Arrays.equals(bobPostPaymentReference, bobReference));
+			assertTrue("reference should be unchanged", Arrays.equals(bobOriginalReference, bobReference));
 
 			// Orphan block containing Bob's non-approval payment transaction
 			BlockUtils.orphanLastBlock(repository);
 
-			// Check Bob's last reference has reverted to pre-payment value
+			// Check Bob's last reference is still unchanged
 			bobReference = bobAccount.getLastReference();
-			assertTrue("reference should be pre-payment", Arrays.equals(bobPostAssetReference, bobReference));
+			assertTrue("reference should be unchanged", Arrays.equals(bobOriginalReference, bobReference));
 
 			// Orphan block containing Bob's issue-asset approval-needed transaction
 			BlockUtils.orphanLastBlock(repository);
 
-			// Check Bob's last reference has reverted to original value
+			// Check Bob's last reference is still unchanged
 			bobReference = bobAccount.getLastReference();
-			assertTrue("reference should be pre-payment", Arrays.equals(bobOriginalReference, bobReference));
+			assertTrue("reference should be unchanged", Arrays.equals(bobOriginalReference, bobReference));
 
 			// Also check Bob's balance is back to original value
 			long bobBalance = bobAccount.getConfirmedBalance(Asset.QORT);
@@ -419,7 +419,7 @@ public class GroupApprovalTests extends Common {
 		PrivateKeyAccount recipientAccount = Common.getTestAccount(repository, recipient);
 
 		byte[] reference = sendingAccount.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, sendingAccount.getPublicKey(), fee, null);
 		PaymentTransactionData transactionData = new PaymentTransactionData(baseTransactionData, recipientAccount.getAddress(), amount);
@@ -431,7 +431,7 @@ public class GroupApprovalTests extends Common {
 		PrivateKeyAccount account = Common.getTestAccount(repository, testAccountName);
 
 		byte[] reference = account.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, account.getPublicKey(), fee, null);
 		TransactionData transactionData = new IssueAssetTransactionData(baseTransactionData, "test asset", "test asset desc", 1000L, true, "{}", false);

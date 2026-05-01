@@ -172,30 +172,20 @@ public class Payment {
 
 	// processReferenceAndFees
 
-	/** Multiple payment reference processing */
+	/** Multiple payment fee processing. Legacy references are no longer mutated. */
 	public void processReferencesAndFees(byte[] senderPublicKey, List<PaymentData> payments, long fee, byte[] signature, boolean alwaysInitializeRecipientReference)
 			throws DataException {
 		Account sender = new PublicKeyAccount(this.repository, senderPublicKey);
 
+		// Keep sender public-key metadata even when fee is zero.
+		sender.ensureAccount();
+
 		// Update sender's balance due to fee
-		sender.modifyAssetBalance(Asset.QORT, - fee);
-
-		// Update sender's reference
-		sender.setLastReference(signature);
-
-		// Process all recipients
-		for (PaymentData paymentData : payments) {
-			Account recipient = new Account(this.repository, paymentData.getRecipient());
-
-			long assetId = paymentData.getAssetId();
-
-			// For QORT amounts only: if recipient has no reference yet, then this is their starting reference
-			if ((alwaysInitializeRecipientReference || assetId == Asset.QORT) && recipient.getLastReference() == null)
-				recipient.setLastReference(signature);
-		}
+		if (fee != 0)
+			sender.modifyAssetBalance(Asset.QORT, - fee);
 	}
 
-	/** Multiple payment reference processing */
+	/** Single payment fee processing. Legacy references are no longer mutated. */
 	public void processReferencesAndFees(byte[] senderPublicKey, PaymentData payment, long fee, byte[] signature, boolean alwaysInitializeRecipientReference)
 			throws DataException {
 		processReferencesAndFees(senderPublicKey, Collections.singletonList(payment), fee, signature, alwaysInitializeRecipientReference);
@@ -231,23 +221,8 @@ public class Payment {
 		Account sender = new PublicKeyAccount(this.repository, senderPublicKey);
 
 		// Update sender's balance due to fee
-		sender.modifyAssetBalance(Asset.QORT, fee);
-
-		// Update sender's reference
-		sender.setLastReference(reference);
-
-		// Orphan all recipients
-		for (PaymentData paymentData : payments) {
-			Account recipient = new Account(this.repository, paymentData.getRecipient());
-			long assetId = paymentData.getAssetId();
-
-			/*
-			 * For QORT amounts only: If recipient's last reference is this transaction's signature, then they can't have made any transactions of their own
-			 * (which would have changed their last reference) thus this is their first reference so remove it.
-			 */
-			if ((alwaysUninitializeRecipientReference || assetId == Asset.QORT) && Arrays.equals(recipient.getLastReference(), signature))
-				recipient.setLastReference(null);
-		}
+		if (fee != 0)
+			sender.modifyAssetBalance(Asset.QORT, fee);
 	}
 
 	public void orphanReferencesAndFees(byte[] senderPublicKey, PaymentData paymentData, long fee, byte[] signature, byte[] reference,

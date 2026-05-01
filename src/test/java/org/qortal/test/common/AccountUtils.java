@@ -43,7 +43,7 @@ public class AccountUtils {
 
 	public static void pay(Repository repository, PrivateKeyAccount sendingAccount, String recipientAddress, long amount) throws DataException {
 		byte[] reference = sendingAccount.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, reference, sendingAccount.getPublicKey(), fee, null);
 		TransactionData transactionData = new PaymentTransactionData(baseTransactionData, recipientAddress, amount);
@@ -59,7 +59,7 @@ public class AccountUtils {
 
 	public static TransactionData createRewardShare(Repository repository, PrivateKeyAccount mintingAccount, PrivateKeyAccount recipientAccount, int sharePercent, long fee) throws DataException {
 		byte[] reference = mintingAccount.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		byte[] rewardSharePrivateKey = mintingAccount.getRewardSharePrivateKey(recipientAccount.getPublicKey());
 		byte[] rewardSharePublicKey = Crypto.toPublicKey(rewardSharePrivateKey);

@@ -80,20 +80,20 @@ public class MultiPaymentTransaction extends Transaction {
 
 	@Override
 	public void processReferencesAndFees() throws DataException {
-		// Wrap and delegate reference processing to Payment class. Always update recipients' last references regardless of asset.
+		// Wrap and delegate fee processing to Payment class.
 		new Payment(this.repository).processReferencesAndFees(this.multiPaymentTransactionData.getSenderPublicKey(), this.multiPaymentTransactionData.getPayments(),
 				this.multiPaymentTransactionData.getFee(), this.multiPaymentTransactionData.getSignature(), true);
 	}
 
 	@Override
 	public void orphan() throws DataException {
-		// Wrap and delegate payment processing to Payment class. Always revert recipients' last references regardless of asset.
+		// Wrap and delegate payment processing to Payment class.
 		new Payment(this.repository).orphan(this.multiPaymentTransactionData.getSenderPublicKey(), this.multiPaymentTransactionData.getPayments());
 	}
 
 	@Override
 	public void orphanReferencesAndFees() throws DataException {
-		// Wrap and delegate reference processing to Payment class. Always revert recipients' last references regardless of asset.
+		// Wrap and delegate fee restoration to Payment class.
 		new Payment(this.repository).orphanReferencesAndFees(this.multiPaymentTransactionData.getSenderPublicKey(), this.multiPaymentTransactionData.getPayments(),
 				this.multiPaymentTransactionData.getFee(), this.multiPaymentTransactionData.getSignature(), this.multiPaymentTransactionData.getReference(), true);
 	}

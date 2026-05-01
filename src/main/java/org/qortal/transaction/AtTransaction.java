@@ -142,17 +142,7 @@ public class AtTransaction extends Transaction {
 
 	@Override
 	public void processReferencesAndFees() throws DataException {
-		getATAccount().setLastReference(this.atTransactionData.getSignature());
-
-		if (this.atTransactionData.getAmount() != null) {
-			Account recipient = getRecipient();
-			long assetId = this.atTransactionData.getAssetId();
-
-			// For QORT amounts only: if recipient has no reference yet, then this is their starting reference
-			if (assetId == Asset.QORT && recipient.getLastReference() == null)
-				// Use the AT transaction signature as the recipient's starting reference.
-				recipient.setLastReference(this.atTransactionData.getSignature());
-		}
+		getATAccount().ensureAccount();
 	}
 
 	@Override
@@ -177,20 +167,7 @@ public class AtTransaction extends Transaction {
 
 	@Override
 	public void orphanReferencesAndFees() throws DataException {
-		getATAccount().setLastReference(this.atTransactionData.getReference());
-
-		if (this.atTransactionData.getAmount() != null) {
-			Account recipient = getRecipient();
-
-			long assetId = this.atTransactionData.getAssetId();
-
-			/*
-			 * For QORT amounts only: If recipient's last reference is this transaction's signature, then they can't have made any transactions of their own
-			 * (which would have changed their last reference) thus this is their first reference so remove it.
-			 */
-			if (assetId == Asset.QORT && Arrays.equals(recipient.getLastReference(), this.atTransactionData.getSignature()))
-				recipient.setLastReference(null);
-		}
+		// Legacy references are no longer mutated.
 	}
 
 }

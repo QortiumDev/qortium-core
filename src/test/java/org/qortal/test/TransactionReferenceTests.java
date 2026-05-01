@@ -44,7 +44,7 @@ public class TransactionReferenceTests extends Common {
 
             Transaction paymentTransaction = Transaction.fromData(repository, paymentTransactionData);
 
-			// Transaction should be valid because references only need to be present and 64 bytes long
+			// Transaction should be valid because general references are ignored
 			Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
 			assertEquals(Transaction.ValidationResult.OK, validationResult);
 		}
@@ -69,9 +69,9 @@ public class TransactionReferenceTests extends Common {
 
             Transaction paymentTransaction = Transaction.fromData(repository, paymentTransactionData);
 
-			// Transaction should be invalid because references must still be present
+			// Transaction should be valid because general references are ignored
 			Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
-			assertEquals(Transaction.ValidationResult.INVALID_REFERENCE, validationResult);
+			assertEquals(Transaction.ValidationResult.OK, validationResult);
 		}
 	}
 
@@ -89,16 +89,16 @@ public class TransactionReferenceTests extends Common {
             // Create payment transaction data
             TransactionData paymentTransactionData = new PaymentTransactionData(TestTransaction.generateBase(alice), recipient.getAddress(), 100000L);
 
-            // Set a 1-byte reference
+            // Set a short reference
             byte[] randomByte = new byte[63];
             random.nextBytes(randomByte);
             paymentTransactionData.setReference(randomByte);
 
             Transaction paymentTransaction = Transaction.fromData(repository, paymentTransactionData);
 
-			// Transaction should be invalid because references must be 64 bytes long
+			// Transaction should be valid because general references are ignored
 			Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
-			assertEquals(Transaction.ValidationResult.INVALID_REFERENCE, validationResult);
+			assertEquals(Transaction.ValidationResult.OK, validationResult);
 		}
 	}
 
@@ -116,16 +116,16 @@ public class TransactionReferenceTests extends Common {
             // Create payment transaction data
             TransactionData paymentTransactionData = new PaymentTransactionData(TestTransaction.generateBase(alice), recipient.getAddress(), 100000L);
 
-            // Set a 1-byte reference
+            // Set a long reference
             byte[] randomByte = new byte[65];
             random.nextBytes(randomByte);
             paymentTransactionData.setReference(randomByte);
 
             Transaction paymentTransaction = Transaction.fromData(repository, paymentTransactionData);
 
-			// Transaction should be invalid because references must be exactly 64 bytes long
+			// Transaction should be valid because general references are ignored
 			Transaction.ValidationResult validationResult = paymentTransaction.isValidUnconfirmed();
-			assertEquals(Transaction.ValidationResult.INVALID_REFERENCE, validationResult);
+			assertEquals(Transaction.ValidationResult.OK, validationResult);
 		}
 	}
 

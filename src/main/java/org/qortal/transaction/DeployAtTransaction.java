@@ -221,9 +221,9 @@ public class DeployAtTransaction extends Transaction {
 		Account creator = getCreator();
 		creator.modifyAssetBalance(assetId, - this.deployAtTransactionData.getAmount());
 
-		// Update AT's reference, which also creates AT account
+		// Create AT account without mutating the deprecated reference field
 		Account atAccount = this.getATAccount();
-		atAccount.setLastReference(this.deployAtTransactionData.getSignature());
+		atAccount.ensureAccount();
 
 		// Update AT's balance
 		atAccount.setConfirmedBalance(assetId, this.deployAtTransactionData.getAmount());

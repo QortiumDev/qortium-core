@@ -32,7 +32,7 @@ public class AssetUtils {
 		PrivateKeyAccount account = Common.getTestAccount(repository, issuerAccountName);
 
 		byte[] reference = account.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, reference, account.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new IssueAssetTransactionData(baseTransactionData, assetName, "desc", quantity, isDivisible, "{}", false);
@@ -47,7 +47,7 @@ public class AssetUtils {
 		PrivateKeyAccount toAccount = Common.getTestAccount(repository, toAccountName);
 
 		byte[] reference = fromAccount.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, reference, fromAccount.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new TransferAssetTransactionData(baseTransactionData, toAccount.getAddress(), amount, assetId);
@@ -59,7 +59,7 @@ public class AssetUtils {
 		PrivateKeyAccount account = Common.getTestAccount(repository, accountName);
 
 		byte[] reference = account.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, reference, account.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new CreateAssetOrderTransactionData(baseTransactionData, haveAssetId, wantAssetId, amount, price);
@@ -73,7 +73,7 @@ public class AssetUtils {
 		PrivateKeyAccount account = Common.getTestAccount(repository, accountName);
 
 		byte[] reference = account.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, AssetUtils.txGroupId, reference, account.getPublicKey(), AssetUtils.fee, null);
 		TransactionData transactionData = new CancelAssetOrderTransactionData(baseTransactionData, orderId);

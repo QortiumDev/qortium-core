@@ -282,7 +282,7 @@ public class ArbitraryTransaction extends Transaction {
 
 	@Override
 	public void processReferencesAndFees() throws DataException {
-		// Wrap and delegate reference and fee processing to Payment class. Always update recipients' last references regardless of asset.
+		// Wrap and delegate fee processing to Payment class.
 		new Payment(this.repository).processReferencesAndFees(arbitraryTransactionData.getSenderPublicKey(), arbitraryTransactionData.getPayments(),
 				arbitraryTransactionData.getFee(), arbitraryTransactionData.getSignature(), true);
 	}
@@ -295,7 +295,7 @@ public class ArbitraryTransaction extends Transaction {
 
 	@Override
 	public void orphanReferencesAndFees() throws DataException {
-		// Wrap and delegate reference and fee processing to Payment class. Always revert recipients' last references regardless of asset.
+		// Wrap and delegate fee restoration to Payment class.
 		new Payment(this.repository).orphanReferencesAndFees(arbitraryTransactionData.getSenderPublicKey(), arbitraryTransactionData.getPayments(),
 				arbitraryTransactionData.getFee(), arbitraryTransactionData.getSignature(), arbitraryTransactionData.getReference(), true);
 	}

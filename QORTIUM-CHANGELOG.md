@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - core: disable transaction reference semantics
+
+Stopped using the inherited transaction reference as an account sequencing rule. Transactions no longer need a sender last-reference, processing no longer advances or reverts account last-reference values, and serialization keeps a neutral placeholder when the old field is missing or malformed. This keeps the legacy database and API field in place for now while preparing Qortium for participation models that do not require accounts to already own coins.
+
 ### 2026-04-30 - core: tighten null-owned group approval
 
 Allowed null-owned groups to update their own group settings through the same approval path now used for admin, invite, kick, and ban management, instead of requiring the impossible null-account owner signature. Approval decision counting now ignores votes from accounts that are no longer current approval authorities, so old admin votes cannot keep counting after group authority changes.

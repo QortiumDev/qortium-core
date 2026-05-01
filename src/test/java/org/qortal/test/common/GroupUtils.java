@@ -29,7 +29,7 @@ public class GroupUtils {
 		}
 
 		byte[] reference = account.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 		String groupDescription = groupName + " (test group)";
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, account.getPublicKey(), GroupUtils.fee, null);
@@ -71,7 +71,7 @@ public class GroupUtils {
 	 */
 	public static void joinGroup(Repository repository, PrivateKeyAccount joinerAccount, int groupId) throws DataException {
 		byte[] reference = joinerAccount.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, joinerAccount.getPublicKey(), GroupUtils.fee, null);
 		TransactionData transactionData = new JoinGroupTransactionData(baseTransactionData, groupId);
@@ -89,7 +89,7 @@ public class GroupUtils {
 		PrivateKeyAccount account = Common.getTestAccount(repository, accountName);
 
 		byte[] reference = account.getLastReference();
-		long timestamp = repository.getTransactionRepository().fromSignature(reference).getTimestamp() + 1;
+		long timestamp = TransactionUtils.nextTimestamp(repository);
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, reference, account.getPublicKey(), GroupUtils.fee, null);
 		TransactionData transactionData = new GroupApprovalTransactionData(baseTransactionData, pendingSignature, decision);

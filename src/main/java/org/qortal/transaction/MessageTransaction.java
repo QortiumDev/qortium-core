@@ -274,13 +274,13 @@ public class MessageTransaction extends Transaction {
 
 	@Override
 	public void processReferencesAndFees() throws DataException {
-		// If we have no amount then we only need to process sender's reference and fees
+		// If we have no amount then we only need to process sender metadata and fees
 		if (this.messageTransactionData.getAmount() == 0L) {
 			super.processReferencesAndFees();
 			return;
 		}
 
-		// Wrap and delegate references processing to Payment class. Only update recipient's last reference if transferring QORT.
+		// Wrap and delegate fee processing to Payment class.
 		new Payment(this.repository).processReferencesAndFees(this.messageTransactionData.getSenderPublicKey(),
 				getPaymentData(), this.messageTransactionData.getFee(), this.messageTransactionData.getSignature(),
 				false);
@@ -303,13 +303,13 @@ public class MessageTransaction extends Transaction {
 
 	@Override
 	public void orphanReferencesAndFees() throws DataException {
-		// If we have no amount then we only need to orphan sender's reference and fees
+		// If we have no amount then we only need to restore sender fees
 		if (this.messageTransactionData.getAmount() == 0L) {
 			super.orphanReferencesAndFees();
 			return;
 		}
 
-		// Wrap and delegate references processing to Payment class. Only revert recipient's last reference if transferring QORT.
+		// Wrap and delegate fee restoration to Payment class.
 		new Payment(this.repository).orphanReferencesAndFees(this.messageTransactionData.getSenderPublicKey(),
 				getPaymentData(), this.messageTransactionData.getFee(), this.messageTransactionData.getSignature(),
 				this.messageTransactionData.getReference(), false);

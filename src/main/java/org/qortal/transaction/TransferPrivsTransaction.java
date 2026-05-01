@@ -14,7 +14,6 @@ import org.qortal.repository.AccountRepository;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -151,11 +150,6 @@ public class TransferPrivsTransaction extends Transaction {
 	@Override
 	public void processReferencesAndFees() throws DataException {
 		super.processReferencesAndFees();
-
-		// If recipient has no last-reference then use this transaction's signature as last-reference so they can spend their block rewards
-		Account recipient = new Account(this.repository, this.transferPrivsTransactionData.getRecipient());
-		if (recipient.getLastReference() == null)
-			recipient.setLastReference(this.transferPrivsTransactionData.getSignature());
 	}
 
 	@Override
@@ -220,11 +214,6 @@ public class TransferPrivsTransaction extends Transaction {
 	@Override
 	public void orphanReferencesAndFees() throws DataException {
 		super.orphanReferencesAndFees();
-
-		// If recipient didn't have a last-reference prior to this transaction then remove it
-		Account recipient = new Account(this.repository, this.transferPrivsTransactionData.getRecipient());
-		if (Arrays.equals(recipient.getLastReference(), this.transferPrivsTransactionData.getSignature()))
-			recipient.setLastReference(null);
 	}
 
 }

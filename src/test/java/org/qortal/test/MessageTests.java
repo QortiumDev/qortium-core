@@ -100,12 +100,12 @@ public class MessageTests extends Common {
 			// real account, random reference, zero fee: OK
 			assertTrue(hasValidReference(repository, alice, randomReference, 0));
 
-			// new account, null reference, real fee: INVALID: new accounts don't have a reference!
-			assertFalse(hasValidReference(repository, newbie, null, minimumFee));
+			// new account, null reference, real fee: OK
+			assertTrue(hasValidReference(repository, newbie, null, minimumFee));
 			// new account, random reference, real fee: OK
 			assertTrue(hasValidReference(repository, newbie, randomReference, minimumFee));
-			// new account, null reference, zero fee: INVALID
-			assertFalse(hasValidReference(repository, newbie, null, 0));
+			// new account, null reference, zero fee: OK
+			assertTrue(hasValidReference(repository, newbie, null, 0));
 			// new account, random reference, zero fee: OK
 			assertTrue(hasValidReference(repository, newbie, randomReference, 0));
 		}

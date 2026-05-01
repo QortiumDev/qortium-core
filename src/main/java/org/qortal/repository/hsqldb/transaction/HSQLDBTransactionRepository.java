@@ -20,6 +20,7 @@ import org.qortal.repository.hsqldb.HSQLDBRepository;
 import org.qortal.repository.hsqldb.HSQLDBSaver;
 import org.qortal.transaction.Transaction.ApprovalStatus;
 import org.qortal.transaction.Transaction.TransactionType;
+import org.qortal.transform.Transformer;
 import org.qortal.utils.Base58;
 import org.qortal.utils.Unicode;
 
@@ -118,6 +119,11 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 
 	// Never called
 	protected HSQLDBTransactionRepository() {
+	}
+
+	private byte[] getLegacyReferenceForStorage(TransactionData transactionData) {
+		byte[] reference = transactionData.getReference();
+		return reference == null || reference.length == Transformer.SIGNATURE_LENGTH ? reference : new byte[Transformer.SIGNATURE_LENGTH];
 	}
 
 	// Fetching transactions / transaction height
@@ -1974,7 +1980,7 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 
 		// Do not include "block_height" or "approval_height" as they are modified a different way
 
-		saver.bind("signature", transactionData.getSignature()).bind("reference", transactionData.getReference())
+		saver.bind("signature", transactionData.getSignature()).bind("reference", getLegacyReferenceForStorage(transactionData))
 			.bind("type", transactionData.getType().value)
 			.bind("creator", transactionData.getCreatorPublicKey()).bind("created_when", transactionData.getTimestamp())
 			.bind("fee", transactionData.getFee()).bind("tx_group_id", transactionData.getTxGroupId())

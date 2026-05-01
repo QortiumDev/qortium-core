@@ -74,7 +74,7 @@ public class TransferAssetTransaction extends Transaction {
 
 	@Override
 	public void processReferencesAndFees() throws DataException {
-		// Wrap asset transfer as a payment and delegate processing to Payment class. Only update recipient's last reference if transferring QORT.
+		// Wrap asset transfer as a payment and delegate fee processing to Payment class.
 		new Payment(this.repository).processReferencesAndFees(this.transferAssetTransactionData.getSenderPublicKey(), getPaymentData(), this.transferAssetTransactionData.getFee(),
 				this.transferAssetTransactionData.getSignature(), false);
 	}
@@ -87,7 +87,7 @@ public class TransferAssetTransaction extends Transaction {
 
 	@Override
 	public void orphanReferencesAndFees() throws DataException {
-		// Wrap asset transfer as a payment and delegate processing to Payment class. Only revert recipient's last reference if transferring QORT.
+		// Wrap asset transfer as a payment and delegate fee restoration to Payment class.
 		new Payment(this.repository).orphanReferencesAndFees(this.transferAssetTransactionData.getSenderPublicKey(), getPaymentData(), this.transferAssetTransactionData.getFee(),
 				this.transferAssetTransactionData.getSignature(), this.transferAssetTransactionData.getReference(), false);
 	}

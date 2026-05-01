@@ -111,7 +111,7 @@ public class ArbitraryTransactionTests extends Common {
 
             // Create PUT transaction, with a fee that is too low
             Path path1 = ArbitraryUtils.generateRandomDataPath(dataLength);
-            long fee = 9999999; // insufficient
+            long fee = 1; // insufficient
             boolean computeNonce = true;
             boolean insufficientFeeDetected = false;
             try {
@@ -188,7 +188,7 @@ public class ArbitraryTransactionTests extends Common {
 
             // Create PUT transaction with an insufficient fee and no nonce.
             Path path1 = ArbitraryUtils.generateRandomDataPath(dataLength);
-            long fee = 9999999; // insufficient
+            long fee = 1; // insufficient
 
             ArbitraryDataTransactionBuilder txnBuilder = new ArbitraryDataTransactionBuilder(
                     repository, publicKey58, fee, path1, name, ArbitraryTransactionData.Method.PUT, service, identifier, null, null, null, null);

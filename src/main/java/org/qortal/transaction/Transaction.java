@@ -21,7 +21,6 @@ import org.qortal.repository.GroupRepository;
 import org.qortal.repository.Repository;
 import org.qortal.settings.Settings;
 import org.qortal.transform.TransformationException;
-import org.qortal.transform.Transformer;
 import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.NTP;
 
@@ -945,13 +944,11 @@ public abstract class Transaction {
 	public abstract ValidationResult isValid() throws DataException;
 
 	/**
-	 * Returns whether transaction's reference is valid.
-	 * 
-	 * @throws DataException
+	 * General transaction references are retained only for legacy wire/storage
+	 * compatibility and no longer sequence account transactions.
 	 */
 	public boolean hasValidReference() throws DataException {
-		byte[] reference = this.transactionData.getReference();
-		return reference != null && reference.length == Transformer.SIGNATURE_LENGTH;
+		return true;
 	}
 
 	/**
@@ -991,18 +988,19 @@ public abstract class Transaction {
 	public abstract void process() throws DataException;
 
 	/**
-	 * Update last references, subtract transaction fees, etc.
+	 * Ensure transaction creator exists and subtract transaction fees.
 	 * 
 	 * @throws DataException
 	 */
 	public void processReferencesAndFees() throws DataException {
 		Account creator = getCreator();
 
-		// Update transaction creator's balance
-		creator.modifyAssetBalance(Asset.QORT, - transactionData.getFee());
+		// Keep creator public-key metadata even though references are no longer updated.
+		creator.ensureAccount();
 
-		// Update transaction creator's reference (and possibly public key)
-		creator.setLastReference(transactionData.getSignature());
+		// Update transaction creator's balance
+		if (transactionData.getFee() != 0)
+			creator.modifyAssetBalance(Asset.QORT, - transactionData.getFee());
 	}
 
 	/**
@@ -1015,7 +1013,7 @@ public abstract class Transaction {
 	public abstract void orphan() throws DataException;
 
 	/**
-	 * Update last references, subtract transaction fees, etc.
+	 * Restore transaction fees without changing legacy account references.
 	 * 
 	 * @throws DataException
 	 */
@@ -1023,10 +1021,8 @@ public abstract class Transaction {
 		Account creator = getCreator();
 
 		// Update transaction creator's balance
-		creator.modifyAssetBalance(Asset.QORT, transactionData.getFee());
-
-		// Update transaction creator's reference (and possibly public key)
-		creator.setLastReference(transactionData.getReference());
+		if (transactionData.getFee() != 0)
+			creator.modifyAssetBalance(Asset.QORT, transactionData.getFee());
 	}
 
 

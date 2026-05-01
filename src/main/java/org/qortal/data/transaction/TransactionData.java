@@ -56,7 +56,7 @@ public abstract class TransactionData {
 	@Schema(description = "timestamp when transaction created, in milliseconds since unix epoch", example = "__unix_epoch_time_milliseconds__")
 	protected long timestamp;
 
-	@Schema(description = "sender's last transaction ID", example = "real_transaction_reference_in_base58")
+	@Schema(description = "deprecated legacy transaction reference slot; ignored by Qortium validation", example = "deprecated_reference_in_base58")
 	protected byte[] reference;
 
 	@Schema(description = "fee for processing transaction", example = "0.0001")

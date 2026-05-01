@@ -8,6 +8,7 @@ import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.TransactionType;
 import org.qortal.transaction.Transaction.ValidationResult;
+import org.qortal.utils.NTP;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -17,6 +18,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class TransactionUtils {
+
+	public static long nextTimestamp(Repository repository) throws DataException {
+		Long now = NTP.getTime();
+		long nextBlockTimestamp = repository.getBlockRepository().getLastBlock().getTimestamp() + 1;
+
+		return now == null ? nextBlockTimestamp : Math.min(now, nextBlockTimestamp);
+	}
 
 	/** Signs transaction using given account and attempts to import into unconfirmed pile, returning validation result. */
 	public static ValidationResult signAndImport(Repository repository, TransactionData transactionData, PrivateKeyAccount signingAccount) throws DataException {
