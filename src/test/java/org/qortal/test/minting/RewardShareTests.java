@@ -156,7 +156,7 @@ public class RewardShareTests extends Common {
 			assertEquals("Zero-fee self-share should be valid", ValidationResult.OK, validationResult);
 
 			// A self-share with a positive fee still has to be fundable
-			transactionData.setFee(signingAccount.getConfirmedBalance(Asset.QORT) + 1L);
+			transactionData.setFee(signingAccount.getConfirmedBalance(Asset.NATIVE) + 1L);
 			validationResult = transaction.isValidUnconfirmed();
 			assertEquals("Underfunded self-share fee should be rejected", ValidationResult.NO_BALANCE, validationResult);
 

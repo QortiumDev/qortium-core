@@ -173,7 +173,7 @@ public class PruneTests extends Common {
         String tags = "QORT-LTC ACCT";
 
         BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), fee, null);
-        TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.QORT);
+        TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.NATIVE);
 
         DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
 

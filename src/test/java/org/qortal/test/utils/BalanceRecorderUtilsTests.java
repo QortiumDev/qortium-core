@@ -685,7 +685,7 @@ public class BalanceRecorderUtilsTests {
             DeployAtTransactionData deployAt
                 = new DeployAtTransactionData(
                     new BaseTransactionData(0L, 0, creatorPublicKey, fee, null),
-                    AT_ADDRESS, "name", "description", "type", "tags", new byte[0], amount, Asset.QORT
+                    AT_ADDRESS, "name", "description", "type", "tags", new byte[0], amount, Asset.NATIVE
                 );
 
             BalanceRecorderUtils.mapBalanceModificationsForDeployAtTransaction(amountsByAddress,deployAt);

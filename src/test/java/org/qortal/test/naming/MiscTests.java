@@ -351,8 +351,8 @@ public class MiscTests extends Common {
 			assertEquals(futureFeeIncrease.fee, BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(futureFeeIncrease.timestamp));
 
 			// Validate unit fees pre and post timestamp
-			assertEquals(10000000, BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(futureFeeIncrease.timestamp - 1)); // 0.1 QORT
-			assertEquals(500000000, BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(futureFeeIncrease.timestamp)); // 5 QORT
+			assertEquals(10000000, BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(futureFeeIncrease.timestamp - 1)); // 0.1 native asset
+			assertEquals(500000000, BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(futureFeeIncrease.timestamp)); // 5 native asset
 
 			// Register-name
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -442,8 +442,8 @@ public class MiscTests extends Common {
 			assertEquals(futureFeeIncrease.fee, BlockChain.getInstance().getUnitFeeAtTimestamp(futureFeeIncrease.timestamp));
 
 			// Validate unit fees pre and post timestamp
-			assertEquals(10000000, BlockChain.getInstance().getUnitFeeAtTimestamp(futureFeeIncrease.timestamp - 1)); // 0.1 QORT
-			assertEquals(100000000, BlockChain.getInstance().getUnitFeeAtTimestamp(futureFeeIncrease.timestamp)); // 1 QORT
+			assertEquals(10000000, BlockChain.getInstance().getUnitFeeAtTimestamp(futureFeeIncrease.timestamp - 1)); // 0.1 native asset
+			assertEquals(100000000, BlockChain.getInstance().getUnitFeeAtTimestamp(futureFeeIncrease.timestamp)); // 1 native asset
 
 			// Payment
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");

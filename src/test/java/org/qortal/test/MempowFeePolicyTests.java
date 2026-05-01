@@ -150,13 +150,13 @@ public class MempowFeePolicyTests extends Common {
 			computeValidMempowNonce(mempowTransaction);
 			assertEquals(ValidationResult.OK, invokeIsFeeValid(mempowTransaction));
 
-			long startingBalance = alice.getConfirmedBalance(Asset.QORT);
+			long startingBalance = alice.getConfirmedBalance(Asset.NATIVE);
 
 			mempowTransaction.processReferencesAndFees();
-			assertEquals(startingBalance, alice.getConfirmedBalance(Asset.QORT));
+			assertEquals(startingBalance, alice.getConfirmedBalance(Asset.NATIVE));
 
 			mempowTransaction.orphanReferencesAndFees();
-			assertEquals(startingBalance, alice.getConfirmedBalance(Asset.QORT));
+			assertEquals(startingBalance, alice.getConfirmedBalance(Asset.NATIVE));
 
 			repository.discardChanges();
 		}
@@ -173,13 +173,13 @@ public class MempowFeePolicyTests extends Common {
 			computeValidMempowNonce(mempowTransaction);
 			assertEquals(ValidationResult.OK, invokeIsFeeValid(mempowTransaction));
 
-			long startingBalance = alice.getConfirmedBalance(Asset.QORT);
+			long startingBalance = alice.getConfirmedBalance(Asset.NATIVE);
 
 			mempowTransaction.processReferencesAndFees();
-			assertEquals(startingBalance - declaredFee, alice.getConfirmedBalance(Asset.QORT));
+			assertEquals(startingBalance - declaredFee, alice.getConfirmedBalance(Asset.NATIVE));
 
 			mempowTransaction.orphanReferencesAndFees();
-			assertEquals(startingBalance, alice.getConfirmedBalance(Asset.QORT));
+			assertEquals(startingBalance, alice.getConfirmedBalance(Asset.NATIVE));
 
 			repository.discardChanges();
 		}
@@ -202,9 +202,9 @@ public class MempowFeePolicyTests extends Common {
 						new PaymentTransactionData(buildBaseTransactionData(sender, fee), recipient.getAddress(), 1L)),
 				new RepresentativeTransactionCase("MULTI_PAYMENT", (sender, recipient, fee) ->
 						new MultiPaymentTransactionData(buildBaseTransactionData(sender, fee),
-								Collections.singletonList(new PaymentData(recipient.getAddress(), Asset.QORT, 1L)))),
+								Collections.singletonList(new PaymentData(recipient.getAddress(), Asset.NATIVE, 1L)))),
 				new RepresentativeTransactionCase("TRANSFER_ASSET", (sender, recipient, fee) ->
-						new TransferAssetTransactionData(buildBaseTransactionData(sender, fee), recipient.getAddress(), 1L, Asset.QORT)),
+						new TransferAssetTransactionData(buildBaseTransactionData(sender, fee), recipient.getAddress(), 1L, Asset.NATIVE)),
 				new RepresentativeTransactionCase("REGISTER_NAME", (sender, recipient, fee) ->
 						new RegisterNameTransactionData(buildBaseTransactionData(sender, fee), "mempow-test-name", "mempow test data")),
 				new RepresentativeTransactionCase("ISSUE_ASSET", (sender, recipient, fee) ->

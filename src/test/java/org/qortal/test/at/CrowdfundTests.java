@@ -92,7 +92,7 @@ public class CrowdfundTests extends Common {
 		BlockUtils.mintBlock(repository); // height now 3
 
 		// Fetch AT's balance for this height
-		long preMintBalance = atAccount.getConfirmedBalance(Asset.QORT);
+		long preMintBalance = atAccount.getConfirmedBalance(Asset.NATIVE);
 
 		// Fetch AT's initial lastTxnTimestamp
 		byte[] creationTimestamp = new byte[8];
@@ -111,7 +111,7 @@ public class CrowdfundTests extends Common {
 		// AT should have woken and run at this height so balance should have changed
 
 		// Fetch new AT balance
-		long postMintBalance = atAccount.getConfirmedBalance(Asset.QORT);
+		long postMintBalance = atAccount.getConfirmedBalance(Asset.NATIVE);
 
 		assertNotSame(preMintBalance, postMintBalance);
 
@@ -191,7 +191,7 @@ public class CrowdfundTests extends Common {
 		BlockUtils.mintBlock(repository); // height now 3
 
 		// Fetch AT's balance for this height
-		long preMintBalance = atAccount.getConfirmedBalance(Asset.QORT);
+		long preMintBalance = atAccount.getConfirmedBalance(Asset.NATIVE);
 
 		// Fetch AT's initial lastTxnTimestamp
 		byte[] creationTimestamp = new byte[8];
@@ -219,7 +219,7 @@ public class CrowdfundTests extends Common {
 				.distinct()
 				.collect(Collectors.toMap(name -> name, name -> generateTestAccount(repository, name)));
 
-		// Give donors some QORT so they can donate
+		// Give donors some native asset so they can donate
 		donors.values()
 				.stream()
 				.forEach(donorAccount -> {
@@ -235,7 +235,7 @@ public class CrowdfundTests extends Common {
 				.stream()
 				.collect(Collectors.toMap(account -> account.getAddress(), account -> {
 					try {
-						return account.getConfirmedBalance(Asset.QORT);
+						return account.getConfirmedBalance(Asset.NATIVE);
 					} catch (DataException e) {
 						fail(e.getMessage());
 						return null;
@@ -248,7 +248,7 @@ public class CrowdfundTests extends Common {
 					TestAccount donorAccount = donors.get(donation.getA());
 					try {
 						AccountUtils.pay(repository, donorAccount, atAddress, donation.getB() * 1_00000000L);
-						System.out.printf("AT balance at height %d is %s\n", repository.getBlockRepository().getBlockchainHeight(), Amounts.prettyAmount(atAccount.getConfirmedBalance(Asset.QORT)));
+						System.out.printf("AT balance at height %d is %s\n", repository.getBlockRepository().getBlockchainHeight(), Amounts.prettyAmount(atAccount.getConfirmedBalance(Asset.NATIVE)));
 					} catch (DataException e) {
 						fail(e.getMessage());
 					}
@@ -258,7 +258,7 @@ public class CrowdfundTests extends Common {
 		i = repository.getBlockRepository().getBlockchainHeight();
 		for (; i < WAKE_HEIGHT; ++i) {
 			BlockUtils.mintBlock(repository);
-			System.out.printf("AT balance at height %d is %s\n", repository.getBlockRepository().getBlockchainHeight(), Amounts.prettyAmount(atAccount.getConfirmedBalance(Asset.QORT)));
+			System.out.printf("AT balance at height %d is %s\n", repository.getBlockRepository().getBlockchainHeight(), Amounts.prettyAmount(atAccount.getConfirmedBalance(Asset.NATIVE)));
 		}
 
 		// We should now be at WAKE_HEIGHT
@@ -266,10 +266,10 @@ public class CrowdfundTests extends Common {
 		assertEquals(WAKE_HEIGHT, height);
 
 		// AT should have woken and run at this height so balance should have changed
-		System.out.printf("AT balance at height %d is %s\n", repository.getBlockRepository().getBlockchainHeight(), Amounts.prettyAmount(atAccount.getConfirmedBalance(Asset.QORT)));
+		System.out.printf("AT balance at height %d is %s\n", repository.getBlockRepository().getBlockchainHeight(), Amounts.prettyAmount(atAccount.getConfirmedBalance(Asset.NATIVE)));
 
 		// Fetch new AT balance
-		long postMintBalance = atAccount.getConfirmedBalance(Asset.QORT);
+		long postMintBalance = atAccount.getConfirmedBalance(Asset.NATIVE);
 
 		assertNotSame(preMintBalance, postMintBalance);
 
@@ -316,7 +316,7 @@ public class CrowdfundTests extends Common {
 
 			// Mint new block in case we need to loop round again
 			BlockUtils.mintBlock(repository);
-			System.out.printf("AT balance at height %d is %s\n", repository.getBlockRepository().getBlockchainHeight(), Amounts.prettyAmount(atAccount.getConfirmedBalance(Asset.QORT)));
+			System.out.printf("AT balance at height %d is %s\n", repository.getBlockRepository().getBlockchainHeight(), Amounts.prettyAmount(atAccount.getConfirmedBalance(Asset.NATIVE)));
 		} while (!atData.getIsFinished());
 
 		// Compare expected balances
@@ -328,7 +328,7 @@ public class CrowdfundTests extends Common {
 					Long expectedBalance = expectedBalances.get(donorAccount.getAddress());
 					Long actualBalance = null;
 					try {
-						actualBalance = donorAccount.getConfirmedBalance(Asset.QORT);
+						actualBalance = donorAccount.getConfirmedBalance(Asset.NATIVE);
 					} catch (DataException e) {
 						fail(e.getMessage());
 					}
@@ -347,7 +347,7 @@ public class CrowdfundTests extends Common {
 		String tags = "TEST";
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), fee, null);
-		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.QORT);
+		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.NATIVE);
 
 		DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
 

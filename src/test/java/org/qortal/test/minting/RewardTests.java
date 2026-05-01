@@ -42,14 +42,14 @@ public class RewardTests extends Common {
 	@Test
 	public void testSimpleReward() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 
 			Long blockReward = BlockUtils.getNextBlockReward(repository);
 
 			BlockUtils.mintBlock(repository);
 
-			long expectedBalance = initialBalances.get("alice").get(Asset.QORT) + blockReward;
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
+			long expectedBalance = initialBalances.get("alice").get(Asset.NATIVE) + blockReward;
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, expectedBalance);
 		}
 	}
 
@@ -58,12 +58,12 @@ public class RewardTests extends Common {
 		List<RewardByHeight> rewardsByHeight = BlockChain.getInstance().getBlockRewardsByHeight();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 
 			int rewardIndex = rewardsByHeight.size() - 1;
 
 			RewardByHeight rewardInfo = rewardsByHeight.get(rewardIndex);
-			Long expectedBalance = initialBalances.get("alice").get(Asset.QORT);
+			Long expectedBalance = initialBalances.get("alice").get(Asset.NATIVE);
 
 			for (int height = rewardInfo.height; height > 1; --height) {
 				if (height < rewardInfo.height) {
@@ -76,7 +76,7 @@ public class RewardTests extends Common {
 				expectedBalance += rewardInfo.reward;
 			}
 
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, expectedBalance);
 		}
 	}
 
@@ -88,7 +88,7 @@ public class RewardTests extends Common {
 			byte[] rewardSharePrivateKey = AccountUtils.rewardShare(repository, "alice", "bob", share);
 			PrivateKeyAccount rewardShareAccount = new PrivateKeyAccount(repository, rewardSharePrivateKey);
 
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 			Long blockReward = BlockUtils.getNextBlockReward(repository);
 
 			BlockMinter.mintTestingBlock(repository, rewardShareAccount);
@@ -97,10 +97,10 @@ public class RewardTests extends Common {
 
 			long minterAdminShare = blockReward / 2;
 			long bobShare = (minterAdminShare * share) / 100L / 100L;
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, initialBalances.get("bob").get(Asset.QORT) + bobShare);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, initialBalances.get("bob").get(Asset.NATIVE) + bobShare);
 
 			long aliceShare = blockReward - bobShare;
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, initialBalances.get("alice").get(Asset.QORT) + aliceShare);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, initialBalances.get("alice").get(Asset.NATIVE) + aliceShare);
 		}
 	}
 
@@ -139,7 +139,7 @@ public class RewardTests extends Common {
 		Common.useSettings("test-settings-v2-admin-replacement-rewards.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 			Long blockReward = BlockUtils.getNextBlockReward(repository);
 
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
@@ -160,12 +160,12 @@ public class RewardTests extends Common {
 			BlockMinter.mintTestingBlock(repository, mintingAndOnlineAccounts.toArray(new PrivateKeyAccount[0]));
 
 			// Alice is the only group admin, so she receives the full admin replacement share.
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, initialBalances.get("alice").get(Asset.QORT) + blockReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, initialBalances.get("alice").get(Asset.NATIVE) + blockReward);
 
 			// Other accounts are online, but only minter admins receive the admin replacement reward.
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, initialBalances.get("bob").get(Asset.QORT));
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, initialBalances.get("chloe").get(Asset.QORT));
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, initialBalances.get("dilbert").get(Asset.QORT));
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, initialBalances.get("bob").get(Asset.NATIVE));
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, initialBalances.get("chloe").get(Asset.NATIVE));
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, initialBalances.get("dilbert").get(Asset.NATIVE));
 		}
 	}
 
@@ -181,7 +181,7 @@ public class RewardTests extends Common {
 			byte[] dilbertSelfSharePrivateKey = AccountUtils.rewardShare(repository, "dilbert", "dilbert", 0); // Block minted by Alice
 			PrivateKeyAccount dilbertSelfShareAccount = new PrivateKeyAccount(repository, dilbertSelfSharePrivateKey);
 
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 
 			long blockReward = BlockUtils.getNextBlockReward(repository);
 
@@ -197,18 +197,18 @@ public class RewardTests extends Common {
 			final int level5To8SharePercent = 45_00;
 			final long level5To8Share = Amounts.roundDownScaledMultiply(blockReward, level5To8SharePercent * 10000L);
 
-			long dilbertExpectedBalance = initialBalances.get("dilbert").get(Asset.QORT);
+			long dilbertExpectedBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
 			dilbertExpectedBalance += level5To8Share;
 
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertExpectedBalance);
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, initialBalances.get("alice").get(Asset.QORT) + blockReward - level5To8Share);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertExpectedBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, initialBalances.get("alice").get(Asset.NATIVE) + blockReward - level5To8Share);
 
 			// Dilbert should continue receiving the configured share of the block reward
 			blockReward = BlockUtils.getNextBlockReward(repository);
 
 			BlockMinter.mintTestingBlock(repository, dilbertSelfShareAccount);
 
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertExpectedBalance + Amounts.roundDownScaledMultiply(blockReward, level5To8SharePercent * 10000L));
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertExpectedBalance + Amounts.roundDownScaledMultiply(blockReward, level5To8SharePercent * 10000L));
 		}
 	}
 
@@ -250,11 +250,11 @@ public class RewardTests extends Common {
 			assertEquals(2, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 1 or 2, we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
-			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
-			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
-			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
-			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
+			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
 
 			// Mint a block
 			final long blockReward = BlockUtils.getNextBlockReward(repository);
@@ -279,10 +279,10 @@ public class RewardTests extends Common {
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
 			assertEquals(600000000, level1And2ShareAmount);
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedReward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedReward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedReward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedReward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedReward);
 
 		}
 	}
@@ -329,11 +329,11 @@ public class RewardTests extends Common {
 			assertEquals(4, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 3 or 4, we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
-			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
-			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
-			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
-			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
+			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
 
 			// Mint a block
 			final long blockReward = BlockUtils.getNextBlockReward(repository);
@@ -356,10 +356,10 @@ public class RewardTests extends Common {
 			final long expectedAdminReward = blockReward - level3And4ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedReward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance+expectedReward);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedReward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedReward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedReward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedReward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedReward);
 
 		}
 	}
@@ -408,11 +408,11 @@ public class RewardTests extends Common {
 			assertEquals(6, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 5 or 6 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
-			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
-			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
-			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
-			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
+			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
 
 			// Mint a block
 			final long blockReward = BlockUtils.getNextBlockReward(repository);
@@ -439,10 +439,10 @@ public class RewardTests extends Common {
 			final long expectedAdminReward = blockReward - level1And2ShareAmount - level5And6ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel5And6Reward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance+expectedLevel1And2Reward);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel5And6Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel5And6Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel5And6Reward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1And2Reward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5And6Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5And6Reward);
 
 		}
 	}
@@ -486,11 +486,11 @@ public class RewardTests extends Common {
 			assertEquals(8, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 7 or 8 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
-			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
-			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
-			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
-			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
+			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
 
 			// Mint a block
 			final long blockReward = BlockUtils.getNextBlockReward(repository);
@@ -513,19 +513,19 @@ public class RewardTests extends Common {
 			final long expectedAdminReward = blockReward - level7And8ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel7And8Reward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel7And8Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel7And8Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel7And8Reward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel7And8Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel7And8Reward);
 
 			// Orphan and ensure balances return to their previous values
 			BlockUtils.orphanBlocks(repository, 1);
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance);
 
 		}
 	}
@@ -574,11 +574,11 @@ public class RewardTests extends Common {
 			assertEquals(10, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 7 or 8 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
-			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
-			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
-			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
-			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
+			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
 
 			// Mint a block
 			final long blockReward = BlockUtils.getNextBlockReward(repository);
@@ -605,19 +605,19 @@ public class RewardTests extends Common {
 			final long expectedAdminReward = blockReward - level1And2ShareAmount - level9And10ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel9And10Reward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance+expectedLevel1And2Reward);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel9And10Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel9And10Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel9And10Reward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1And2Reward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel9And10Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel9And10Reward);
 
 			// Orphan and ensure balances return to their previous values
 			BlockUtils.orphanBlocks(repository, 1);
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance);
 
 		}
 	}
@@ -664,11 +664,11 @@ public class RewardTests extends Common {
 			assertEquals(8, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 7 or 8 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
-			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
-			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
-			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
-			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
+			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
 
 			// Mint a block
 			final long blockReward = BlockUtils.getNextBlockReward(repository);
@@ -692,19 +692,19 @@ public class RewardTests extends Common {
 			final long expectedAdminReward = blockReward - level5To8ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel5To8Reward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel5To8Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel5To8Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel5To8Reward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5To8Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5To8Reward);
 
 			// Orphan and ensure balances return to their previous values
 			BlockUtils.orphanBlocks(repository, 1);
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance);
 
 		}
 	}
@@ -757,11 +757,11 @@ public class RewardTests extends Common {
 			assertEquals(10, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 7 or 8 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
-			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
-			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
-			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
-			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
+			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
 
 			// Mint a block
 			final long blockReward = BlockUtils.getNextBlockReward(repository);
@@ -789,19 +789,19 @@ public class RewardTests extends Common {
 			final long expectedAdminReward = blockReward - level1And2ShareAmount - level5To10ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel5To10Reward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance+expectedLevel1And2Reward);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel5To10Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel5To10Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel5To10Reward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1And2Reward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5To10Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5To10Reward);
 
 			// Orphan and ensure balances return to their previous values
 			BlockUtils.orphanBlocks(repository, 1);
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance);
 
 		}
 	}
@@ -848,11 +848,11 @@ public class RewardTests extends Common {
 			assertEquals(7, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that dilbert has reached level 7, we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
-			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
-			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
-			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
-			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
+			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
 
 			// Mint a block
 			long blockReward = BlockUtils.getNextBlockReward(repository);
@@ -875,10 +875,10 @@ public class RewardTests extends Common {
 			final long expectedAdminReward = blockReward - level5To8ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAdminReward+expectedLevel5To8Reward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel5To8Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel5To8Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel5To8Reward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5To8Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5To8Reward);
 
 			// Ensure that the levels are as we expect
 			assertEquals(7, (int) Common.getTestAccount(repository, "alice").getLevel());
@@ -887,11 +887,11 @@ public class RewardTests extends Common {
 			assertEquals(7, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Capture pre-activation balances
-			Map<String, Map<Long, Long>> preActivationBalances = AccountUtils.getBalances(repository, Asset.QORT);
-			final long alicePreActivationBalance = preActivationBalances.get("alice").get(Asset.QORT);
-			final long bobPreActivationBalance = preActivationBalances.get("bob").get(Asset.QORT);
-			final long chloePreActivationBalance = preActivationBalances.get("chloe").get(Asset.QORT);
-			final long dilbertPreActivationBalance = preActivationBalances.get("dilbert").get(Asset.QORT);
+			Map<String, Map<Long, Long>> preActivationBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long alicePreActivationBalance = preActivationBalances.get("alice").get(Asset.NATIVE);
+			final long bobPreActivationBalance = preActivationBalances.get("bob").get(Asset.NATIVE);
+			final long chloePreActivationBalance = preActivationBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertPreActivationBalance = preActivationBalances.get("dilbert").get(Asset.NATIVE);
 
 			// Mint another block
 			blockReward = BlockUtils.getNextBlockReward(repository);
@@ -917,30 +917,30 @@ public class RewardTests extends Common {
 			final long expectedSecondAdminReward = blockReward - level7To8ShareAmount; // Alice should receive the remaining admin reward
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, alicePreActivationBalance+expectedSecondAdminReward+expectedLevel7To8Reward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobPreActivationBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloePreActivationBalance+expectedLevel7To8Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertPreActivationBalance+expectedLevel7To8Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, alicePreActivationBalance+expectedSecondAdminReward+expectedLevel7To8Reward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobPreActivationBalance); // Bob not online so his balance remains the same
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloePreActivationBalance+expectedLevel7To8Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertPreActivationBalance+expectedLevel7To8Reward);
 
 
 			// Orphan and ensure balances return to their pre-activation values
 			BlockUtils.orphanBlocks(repository, 1);
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, alicePreActivationBalance);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobPreActivationBalance);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloePreActivationBalance);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertPreActivationBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, alicePreActivationBalance);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobPreActivationBalance);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloePreActivationBalance);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertPreActivationBalance);
 
 
 			// Orphan again and ensure balances return to their initial values
 			BlockUtils.orphanBlocks(repository, 1);
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance);
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance);
 
 		}
 	}
@@ -991,11 +991,11 @@ public class RewardTests extends Common {
 			assertEquals(2, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
 			// Now that everyone is at level 1 or 2, we can capture initial balances
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
-			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.QORT);
-			final long bobInitialBalance = initialBalances.get("bob").get(Asset.QORT);
-			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.QORT);
-			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
+			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
 
 			// Mint a block
 			final long blockReward = BlockUtils.getNextBlockReward(repository);
@@ -1012,18 +1012,18 @@ public class RewardTests extends Common {
 
 			// Validate the balances
 			assertEquals(6000000, level1And2ShareAmount);
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance+expectedAliceReward);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance+expectedLevel1And2Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance+expectedLevel1And2Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAliceReward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel1And2Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel1And2Reward);
 
 			BlockUtils.orphanBlocks(repository, 1);
 			assertEquals(999, (int) repository.getBlockRepository().getLastBlock().getHeight());
 
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, aliceInitialBalance);
-			AccountUtils.assertBalance(repository, "bob", Asset.QORT, bobInitialBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.QORT, chloeInitialBalance);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, dilbertInitialBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance);
 		}
 	}
 

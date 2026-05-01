@@ -41,7 +41,7 @@ public class MultiPaymentTransactionTests extends Common {
 	private MultiPaymentTransaction buildMultiPaymentTransaction(Repository repository, PrivateKeyAccount sender, PrivateKeyAccount recipient, long fee) {
 		long timestamp = System.currentTimeMillis();
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, sender.getPublicKey(), fee, null);
-		PaymentData paymentData = new PaymentData(recipient.getAddress(), Asset.QORT, 1L);
+		PaymentData paymentData = new PaymentData(recipient.getAddress(), Asset.NATIVE, 1L);
 		MultiPaymentTransactionData transactionData = new MultiPaymentTransactionData(baseTransactionData, Collections.singletonList(paymentData));
 
 		return new MultiPaymentTransaction(repository, transactionData);

@@ -86,8 +86,8 @@ public class GroupApprovalTests extends Common {
 
 			PrivateKeyAccount bobAccount = Common.getTestAccount(repository, "bob");
 
-			long aliceOriginalBalance = aliceAccount.getConfirmedBalance(Asset.QORT);
-			long bobOriginalBalance = bobAccount.getConfirmedBalance(Asset.QORT);
+			long aliceOriginalBalance = aliceAccount.getConfirmedBalance(Asset.NATIVE);
+			long bobOriginalBalance = bobAccount.getConfirmedBalance(Asset.NATIVE);
 
 			Long blockReward = BlockUtils.getNextBlockReward(repository);
 			Transaction bobAssetTransaction = buildIssueAssetTransaction(repository, "bob", groupId);
@@ -98,11 +98,11 @@ public class GroupApprovalTests extends Common {
 			assertEquals("incorrect transaction approval status", ApprovalStatus.PENDING, approvalStatus);
 
 			// Bob's balance should have the fee removed, even though the transaction itself hasn't been approved yet
-			long bobPostAssetBalance = bobAccount.getConfirmedBalance(Asset.QORT);
+			long bobPostAssetBalance = bobAccount.getConfirmedBalance(Asset.NATIVE);
 			assertEquals("approval-pending transaction creator's balance incorrect", bobOriginalBalance - fee, bobPostAssetBalance);
 
 			// Transaction fee should have ended up in forging account
-			long alicePostAssetBalance = aliceAccount.getConfirmedBalance(Asset.QORT);
+			long alicePostAssetBalance = aliceAccount.getConfirmedBalance(Asset.NATIVE);
 			assertEquals("block minter's balance incorrect", aliceOriginalBalance + blockReward + fee, alicePostAssetBalance);
 
 			// Have Bob do a non-approval transaction to confirm fee/orphan handling does not rely on references
@@ -136,7 +136,7 @@ public class GroupApprovalTests extends Common {
 			BlockUtils.orphanLastBlock(repository);
 
 			// Also check Bob's balance is back to original value
-			long bobBalance = bobAccount.getConfirmedBalance(Asset.QORT);
+			long bobBalance = bobAccount.getConfirmedBalance(Asset.NATIVE);
 			assertEquals("reverted balance doesn't match original", bobOriginalBalance, bobBalance);
 		}
 	}

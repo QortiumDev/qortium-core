@@ -50,7 +50,7 @@ public class BatchRewardTests extends Common {
 		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 3, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 			final int aliceStartingBlocksMinted = AccountUtils.getBlocksMinted(repository, "alice");
 
 			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
@@ -62,8 +62,8 @@ public class BatchRewardTests extends Common {
 			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, Common.getTestAccount(repository, "bob"), AtUtils.buildSimpleAT(), 1_00000000L);
 			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 2);
 
-			long expectedBalance = initialBalances.get("alice").get(Asset.QORT) + blockReward + deployAtTransaction.getTransactionData().getFee();
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
+			long expectedBalance = initialBalances.get("alice").get(Asset.NATIVE) + blockReward + deployAtTransaction.getTransactionData().getFee();
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, expectedBalance);
 			long aliceCurrentBalance = expectedBalance;
 
 			AccountUtils.assertBlocksMinted(repository, "alice", aliceStartingBlocksMinted + 1);
@@ -76,7 +76,7 @@ public class BatchRewardTests extends Common {
 				expectedBalance += block.getBlockData().getTotalFees();
 				assertFalse(block.isBatchRewardDistributionActive());
 				assertTrue(block.isRewardDistributionBlock());
-				AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
+				AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, expectedBalance);
 				aliceCurrentBalance = expectedBalance;
 			}
 			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 20);
@@ -106,7 +106,7 @@ public class BatchRewardTests extends Common {
 			AccountUtils.assertBlocksMinted(repository, "alice", aliceStartingBlocksMinted + 19);
 
 			// No payouts since block 20 due to batching (to be paid at block 30)
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, expectedBalance);
 
 			// Block reward to be used for next batch payout
 			blockReward = BlockUtils.getNextBlockReward(repository);
@@ -128,7 +128,7 @@ public class BatchRewardTests extends Common {
 
 			// Balance should increase by the block reward multiplied by the batch size
 			expectedBalance = aliceCurrentBalance + (blockReward * BlockChain.getInstance().getBlockRewardBatchSize()) + expectedFees;
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, expectedBalance);
 
 			// Mint blocks 31-39
 			for (int i=31; i<=39; i++) {
@@ -145,7 +145,7 @@ public class BatchRewardTests extends Common {
 			AccountUtils.assertBlocksMinted(repository, "alice", aliceStartingBlocksMinted + 29);
 
 			// No payouts since block 30 due to batching (to be paid at block 40)
-			AccountUtils.assertBalance(repository, "alice", Asset.QORT, expectedBalance);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, expectedBalance);
 
 			// Batch distribution still active
 			assertTrue(block.isBatchRewardDistributionActive());
@@ -315,7 +315,7 @@ public class BatchRewardTests extends Common {
 			}
 
 			// Capture initial balances now that the online accounts test is ready to begin
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 
 			// Mint block 7
 			List<PrivateKeyAccount> onlineAccounts = Arrays.asList(aliceSelfShare, bobSelfShare);
@@ -339,12 +339,12 @@ public class BatchRewardTests extends Common {
 			assertEquals(3, block10.getBlockData().getOnlineAccountsCount());
 
 			// Dilbert's balance should remain the same as he wasn't included in block 8
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, initialBalances.get("dilbert").get(Asset.QORT));
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, initialBalances.get("dilbert").get(Asset.NATIVE));
 
 			// Alice, Bob, and Chloe's balances should have increased, as they were all included in block 8 (and therefore block 10)
-			AccountUtils.assertBalanceGreaterThan(repository, "alice", Asset.QORT, initialBalances.get("alice").get(Asset.QORT));
-			AccountUtils.assertBalanceGreaterThan(repository, "bob", Asset.QORT, initialBalances.get("bob").get(Asset.QORT));
-			AccountUtils.assertBalanceGreaterThan(repository, "chloe", Asset.QORT, initialBalances.get("chloe").get(Asset.QORT));
+			AccountUtils.assertBalanceGreaterThan(repository, "alice", Asset.NATIVE, initialBalances.get("alice").get(Asset.NATIVE));
+			AccountUtils.assertBalanceGreaterThan(repository, "bob", Asset.NATIVE, initialBalances.get("bob").get(Asset.NATIVE));
+			AccountUtils.assertBalanceGreaterThan(repository, "chloe", Asset.NATIVE, initialBalances.get("chloe").get(Asset.NATIVE));
 
 			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 10);
 
@@ -643,7 +643,7 @@ public class BatchRewardTests extends Common {
 			BlockUtils.assertEqual(block6Data, block6DataDeserialized);
 
 			// Capture initial balances now that the online accounts test is ready to begin
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.QORT);
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 
 			// Mint block 7
 			List<PrivateKeyAccount> onlineAccounts = Arrays.asList(aliceSelfShare, bobSelfShare);
@@ -667,12 +667,12 @@ public class BatchRewardTests extends Common {
 			assertEquals(3, block10.getBlockData().getOnlineAccountsCount());
 
 			// Dilbert's balance should remain the same as he wasn't included in block 8
-			AccountUtils.assertBalance(repository, "dilbert", Asset.QORT, initialBalances.get("dilbert").get(Asset.QORT));
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, initialBalances.get("dilbert").get(Asset.NATIVE));
 
 			// Alice, Bob, and Chloe's balances should have increased, as they were all included in block 8 (and therefore block 10)
-			AccountUtils.assertBalanceGreaterThan(repository, "alice", Asset.QORT, initialBalances.get("alice").get(Asset.QORT));
-			AccountUtils.assertBalanceGreaterThan(repository, "bob", Asset.QORT, initialBalances.get("bob").get(Asset.QORT));
-			AccountUtils.assertBalanceGreaterThan(repository, "chloe", Asset.QORT, initialBalances.get("chloe").get(Asset.QORT));
+			AccountUtils.assertBalanceGreaterThan(repository, "alice", Asset.NATIVE, initialBalances.get("alice").get(Asset.NATIVE));
+			AccountUtils.assertBalanceGreaterThan(repository, "bob", Asset.NATIVE, initialBalances.get("bob").get(Asset.NATIVE));
+			AccountUtils.assertBalanceGreaterThan(repository, "chloe", Asset.NATIVE, initialBalances.get("chloe").get(Asset.NATIVE));
 
 			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 10);
 

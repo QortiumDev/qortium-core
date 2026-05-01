@@ -50,13 +50,13 @@ public class AccountBalanceTests extends Common {
 
 	private long testNewerBalance(Repository repository, TestAccount testAccount) throws DataException {
 		// Grab initial balance
-		long initialBalance = testAccount.getConfirmedBalance(Asset.QORT);
+		long initialBalance = testAccount.getConfirmedBalance(Asset.NATIVE);
 
 		// Mint block to cause newer balance
 		BlockUtils.mintBlock(repository);
 
 		// Grab newer balance
-		long newerBalance = testAccount.getConfirmedBalance(Asset.QORT);
+		long newerBalance = testAccount.getConfirmedBalance(Asset.NATIVE);
 
 		// Confirm newer balance is greater than initial balance
 		assertTrue("Newer balance should be greater than initial balance", newerBalance > initialBalance);
@@ -75,7 +75,7 @@ public class AccountBalanceTests extends Common {
 			BlockUtils.orphanLastBlock(repository);
 
 			// Grab post-orphan balance
-			long orphanedBalance = alice.getConfirmedBalance(Asset.QORT);
+			long orphanedBalance = alice.getConfirmedBalance(Asset.NATIVE);
 
 			// Confirm post-orphan balance is same as initial
 			assertEquals("Post-orphan balance should match initial", initialBalance, orphanedBalance);

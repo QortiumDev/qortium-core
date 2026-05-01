@@ -48,7 +48,7 @@ public class MessageTests extends Common {
 	@Test
 	public void validityTests() throws DataException {
 		// with recipient, with amount
-		assertTrue(isValid(Group.NO_GROUP, recipient, 123L, Asset.QORT));
+		assertTrue(isValid(Group.NO_GROUP, recipient, 123L, Asset.NATIVE));
 
 		// with recipient, no amount
 		assertTrue(isValid(Group.NO_GROUP, recipient, 0L, null));
@@ -57,7 +57,7 @@ public class MessageTests extends Common {
 		assertTrue(isValid(Group.NO_GROUP, null, 0L, null));
 
 		// can't have amount if no recipient!
-		assertFalse(isValid(Group.NO_GROUP, null, 123L, Asset.QORT));
+		assertFalse(isValid(Group.NO_GROUP, null, 123L, Asset.NATIVE));
 
 		// Alice is part of group 1
 		assertTrue(isValid(1, null, 0L, null));
@@ -98,7 +98,7 @@ public class MessageTests extends Common {
 
 	@Test
 	public void withRecipientWithAmount() throws DataException {
-		testMessage(Group.NO_GROUP, recipient, 123L, Asset.QORT);
+		testMessage(Group.NO_GROUP, recipient, 123L, Asset.NATIVE);
 	}
 
 	@Test
@@ -248,7 +248,7 @@ public class MessageTests extends Common {
 	@Test
 	public void serializationTests() throws DataException, TransformationException {
 		// with recipient, with amount
-		testSerialization(recipient, 123L, Asset.QORT);
+		testSerialization(recipient, 123L, Asset.NATIVE);
 
 		// with recipient, no amount
 		testSerialization(recipient, 0L, null);
@@ -305,7 +305,7 @@ public class MessageTests extends Common {
 		int txGroupId = 0;
 		int nonce = 0;
 		long amount = 0;
-		long assetId = Asset.QORT;
+		long assetId = Asset.NATIVE;
 		byte[] data = new byte[1];
 		boolean isText = false;
 		boolean isEncrypted = false;

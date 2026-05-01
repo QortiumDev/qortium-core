@@ -94,23 +94,23 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 
 			long expectedBalance = deployersInitialBalance - fundingAmount - deployAtTransaction.getTransactionData().getFee();
-			long actualBalance = deployer.getConfirmedBalance(Asset.QORT);
+			long actualBalance = deployer.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Deployer's post-deployment balance incorrect", expectedBalance, actualBalance);
 
 			expectedBalance = fundingAmount;
-			actualBalance = deployAtTransaction.getATAccount().getConfirmedBalance(Asset.QORT);
+			actualBalance = deployAtTransaction.getATAccount().getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("AT's post-deployment balance incorrect", expectedBalance, actualBalance);
 
 			expectedBalance = partnersInitialBalance;
-			actualBalance = partner.getConfirmedBalance(Asset.QORT);
+			actualBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Partner's post-deployment balance incorrect", expectedBalance, actualBalance);
 
@@ -118,17 +118,17 @@ public abstract class ACCTTests extends Common {
 			BlockUtils.orphanLastBlock(repository);
 
 			expectedBalance = deployersInitialBalance;
-			actualBalance = deployer.getConfirmedBalance(Asset.QORT);
+			actualBalance = deployer.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Deployer's post-orphan/pre-deployment balance incorrect", expectedBalance, actualBalance);
 
 			expectedBalance = 0;
-			actualBalance = deployAtTransaction.getATAccount().getConfirmedBalance(Asset.QORT);
+			actualBalance = deployAtTransaction.getATAccount().getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("AT's post-orphan/pre-deployment balance incorrect", expectedBalance, actualBalance);
 
 			expectedBalance = partnersInitialBalance;
-			actualBalance = partner.getConfirmedBalance(Asset.QORT);
+			actualBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Partner's post-orphan/pre-deployment balance incorrect", expectedBalance, actualBalance);
 		}
@@ -143,8 +143,8 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 			Account at = deployAtTransaction.getATAccount();
@@ -175,7 +175,7 @@ public abstract class ACCTTests extends Common {
 			long expectedMinimumBalance = deployersPostDeploymentBalance;
 			long expectedMaximumBalance = deployersInitialBalance - deployAtFee - messageFee;
 
-			long actualBalance = deployer.getConfirmedBalance(Asset.QORT);
+			long actualBalance = deployer.getConfirmedBalance(Asset.NATIVE);
 
 			assertTrue(String.format("Deployer's balance %s should be above minimum %s", actualBalance, expectedMinimumBalance), actualBalance > expectedMinimumBalance);
 			assertTrue(String.format("Deployer's balance %s should be below maximum %s", actualBalance, expectedMaximumBalance), actualBalance < expectedMaximumBalance);
@@ -185,7 +185,7 @@ public abstract class ACCTTests extends Common {
 
 			// Check balances
 			long expectedBalance = deployersPostDeploymentBalance - messageFee;
-			actualBalance = deployer.getConfirmedBalance(Asset.QORT);
+			actualBalance = deployer.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Deployer's post-orphan/pre-refund balance incorrect", expectedBalance, actualBalance);
 		}
@@ -200,8 +200,8 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 			Account at = deployAtTransaction.getATAccount();
@@ -241,8 +241,8 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 			Account at = deployAtTransaction.getATAccount();
@@ -284,7 +284,7 @@ public abstract class ACCTTests extends Common {
 
 			// Check balances
 			long expectedBalance = deployersPostDeploymentBalance;
-			long actualBalance = deployer.getConfirmedBalance(Asset.QORT);
+			long actualBalance = deployer.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Deployer's post-orphan/pre-refund balance incorrect", expectedBalance, actualBalance);
 		}
@@ -302,8 +302,8 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount bystander = Common.getTestAccount(repository, "bob");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 			Account at = deployAtTransaction.getATAccount();
@@ -320,7 +320,7 @@ public abstract class ACCTTests extends Common {
 			BlockUtils.mintBlock(repository);
 
 			long expectedBalance = partnersInitialBalance;
-			long actualBalance = partner.getConfirmedBalance(Asset.QORT);
+			long actualBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Partner's post-initial-payout balance incorrect", expectedBalance, actualBalance);
 
@@ -343,8 +343,8 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 			Account at = deployAtTransaction.getATAccount();
@@ -382,7 +382,7 @@ public abstract class ACCTTests extends Common {
 
 			// Check balances
 			long expectedBalance = deployersPostDeploymentBalance;
-			long actualBalance = deployer.getConfirmedBalance(Asset.QORT);
+			long actualBalance = deployer.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Deployer's post-orphan/pre-refund balance incorrect", expectedBalance, actualBalance);
 		}
@@ -397,8 +397,8 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 			Account at = deployAtTransaction.getATAccount();
@@ -435,7 +435,7 @@ public abstract class ACCTTests extends Common {
 
 			// Check balances
 			long expectedBalance = partnersInitialBalance - messageTransaction.getTransactionData().getFee() + redeemAmount;
-			long actualBalance = partner.getConfirmedBalance(Asset.QORT);
+			long actualBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Partner's post-redeem balance incorrect", expectedBalance, actualBalance);
 
@@ -444,7 +444,7 @@ public abstract class ACCTTests extends Common {
 
 			// Check balances
 			expectedBalance = partnersInitialBalance - messageTransaction.getTransactionData().getFee();
-			actualBalance = partner.getConfirmedBalance(Asset.QORT);
+			actualBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Partner's post-orphan/pre-redeem balance incorrect", expectedBalance, actualBalance);
 
@@ -466,8 +466,8 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount bystander = Common.getTestAccount(repository, "bob");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 			long deployAtFee = deployAtTransaction.getTransactionData().getFee();
@@ -506,7 +506,7 @@ public abstract class ACCTTests extends Common {
 
 			// Check balances
 			long expectedBalance = partnersInitialBalance;
-			long actualBalance = partner.getConfirmedBalance(Asset.QORT);
+			long actualBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Partner's balance incorrect", expectedBalance, actualBalance);
 
@@ -524,8 +524,8 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 			long deployAtFee = deployAtTransaction.getTransactionData().getFee();
@@ -565,7 +565,7 @@ public abstract class ACCTTests extends Common {
 			assertEquals(AcctMode.TRADING, tradeData.mode);
 
 			long expectedBalance = partnersInitialBalance - messageTransaction.getTransactionData().getFee();
-			long actualBalance = partner.getConfirmedBalance(Asset.QORT);
+			long actualBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			assertEquals("Partner's balance incorrect", expectedBalance, actualBalance);
 
@@ -583,8 +583,8 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 			Account at = deployAtTransaction.getATAccount();
@@ -630,8 +630,8 @@ public abstract class ACCTTests extends Common {
 
 			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
 
-			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.QORT);
-			long partnersInitialBalance = partner.getConfirmedBalance(Asset.QORT);
+			long deployersInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			long partnersInitialBalance = partner.getConfirmedBalance(Asset.NATIVE);
 
 			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress());
 
@@ -672,7 +672,7 @@ public abstract class ACCTTests extends Common {
 		String tags = "QORT-" + getSymbol() + " ACCT";
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), fee, null);
-		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.QORT);
+		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.NATIVE);
 
 		DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
 
@@ -717,7 +717,7 @@ public abstract class ACCTTests extends Common {
 		long expectedMinimumBalance = deployersPostDeploymentBalance;
 		long expectedMaximumBalance = deployersInitialBalance - deployAtFee;
 
-		long actualBalance = deployer.getConfirmedBalance(Asset.QORT);
+		long actualBalance = deployer.getConfirmedBalance(Asset.NATIVE);
 
 		assertTrue(String.format("Deployer's balance %s should be above minimum %s", actualBalance, expectedMinimumBalance), actualBalance > expectedMinimumBalance);
 		assertTrue(String.format("Deployer's balance %s should be below maximum %s", actualBalance, expectedMaximumBalance), actualBalance < expectedMaximumBalance);

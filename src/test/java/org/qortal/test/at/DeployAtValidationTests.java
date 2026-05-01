@@ -38,7 +38,7 @@ public class DeployAtValidationTests extends Common {
 					"TEST",
 					creationBytes,
 					fundingAmount,
-					org.qortal.asset.Asset.QORT
+					org.qortal.asset.Asset.NATIVE
 			);
 
 			DeployAtTransaction transaction = new DeployAtTransaction(repository, transactionData);
@@ -64,7 +64,7 @@ public class DeployAtValidationTests extends Common {
 					"TEST",
 					creationBytes,
 					fundingAmount,
-					org.qortal.asset.Asset.QORT
+					org.qortal.asset.Asset.NATIVE
 			);
 
 			DeployAtTransaction transaction = new DeployAtTransaction(repository, transactionData);

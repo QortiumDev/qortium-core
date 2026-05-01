@@ -49,8 +49,9 @@ Initial recommendation:
 ### Native Asset Identity
 
 `src/main/java/org/qortal/asset/Asset.java` now exposes `Asset.NATIVE = 0L`,
-with `Asset.QORT` kept as a temporary compatibility alias. Some comments, docs,
-tests, and ACCT classes still describe the native asset as QORT.
+with `Asset.QORT` kept as a temporary compatibility alias. Direct Java test use
+of `Asset.QORT` has been neutralized, but some comments, docs, cross-chain
+test labels, and ACCT classes still describe the native side as QORT.
 
 The protocol still needs a stable native asset ID, but the display name should
 not be fixed to QORT in fork-facing code.
@@ -112,8 +113,9 @@ asset ID `0` as `NATIVE`, while the no-native-asset fixture intentionally omits
 asset `0`. These fixtures still carry `dev-group`, `minter-group`,
 Qortal-style addresses, and fixed reward-share keys.
 
-The shared Java test helpers now use `Asset.NATIVE` for default native-asset
-payments, but broader inherited test names and chain-specific identities remain.
+The shared Java test helpers and direct native-asset test assertions now use
+`Asset.NATIVE`, but broader inherited test names, cross-chain labels, and
+chain-specific identities remain.
 
 Some fixed keys are useful for deterministic tests, so the goal should be
 neutral fixture naming rather than removing all fixture data.

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - test/docs: replace test native asset aliases
+
+Replaced the remaining direct test use of the deprecated `Asset.QORT` alias with `Asset.NATIVE` and cleaned up nearby test comments that were only describing native-asset balances or fees. This removes another layer of inherited QORT naming from the test suite while deliberately leaving cross-chain QORT trade labels for the later native-side cross-chain cleanup.
+
 ### 2026-05-01 - test/docs: neutralize native asset fixtures
 
 Renamed the standard test-chain native asset fixture from QORT to NATIVE and moved shared test helper defaults to the neutral native asset constant. This keeps tests aligned with Qortium's asset `0` direction without changing production chain behavior, while the audit notes now distinguish the neutralized native fixture labels from broader inherited test identities that still need cleanup.
