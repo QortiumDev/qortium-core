@@ -2,14 +2,11 @@
 
 # v4.0.2
 
-use JSON;
 use warnings;
 use strict;
 
 use Getopt::Std;
 use File::Basename;
-use Digest::SHA qw( sha256 sha256_hex );
-use Crypt::RIPEMD160;
 
 our %opt;
 getopts('dpst', \%opt);
@@ -24,7 +21,7 @@ if (@ARGV < 1) {
 	print STDERR "-d: debug, -p: process (broadcast) transaction, -s: sign, -t: testnet\n";
 	print STDERR "example: $proc PAYMENT P22kW91AJfDNBj32nVii292hhfo5AgvUYPz5W12ExsjE QxxQZiK7LZBjmpGjRz1FAZSx9MJDCoaHqz 0.1\n";
 	print STDERR "example: $proc JOIN_GROUP X92h3hf9k20kBj32nVnoh3XT14o5AgvUYPz5W12ExsjE 3\n";
-	print STDERR "example: BASE_URL=node10.qortal.org $proc JOIN_GROUP CB2DW91AJfd47432nVnoh3XT14o5AgvUYPz5W12ExsjE 3\n";
+	print STDERR "example: BASE_URL=node.example.org $proc JOIN_GROUP CB2DW91AJfd47432nVnoh3XT14o5AgvUYPz5W12ExsjE 3\n";
 	print STDERR "example: $proc -p sign C4ifh827ffDNBj32nVnoh3XT14o5AgvUYPz5W12ExsjE 111jivxUwerRw...Fjtu\n";
 	print STDERR "for help: $proc all\n";
 	print STDERR "for help: $proc REGISTER_NAME\n";
@@ -171,7 +168,7 @@ our %TRANSACTION_TYPES = (
 	# Cross-chain trading
 	create_trade => {
 		url => 'crosschain/tradebot/create',
-		required => [qw(qortAmount fundingQortAmount foreignAmount receivingAddress)],
+		required => [qw(nativeAmount fundingNativeAmount foreignAmount receivingAddress)],
 		optional => [qw(tradeTimeout foreignBlockchain)],
 		key_name => 'creatorPublicKey',
 		defaults => { tradeTimeout => 1440, foreignBlockchain => 'LITECOIN' },
@@ -180,13 +177,13 @@ our %TRANSACTION_TYPES = (
 		url => 'crosschain/tradeoffer/recipient',
 		required => [qw(atAddress recipient)],
 		key_name => 'creatorPublicKey',
-		remove => [qw(timestamp reference fee)],
+		remove => [qw(timestamp fee)],
 	},
 	trade_secret => {
 		url => 'crosschain/tradeoffer/secret',
 		required => [qw(atAddress secret)],
 		key_name => 'recipientPublicKey',
-		remove => [qw(timestamp reference fee)],
+		remove => [qw(timestamp fee)],
 	},
 	# These are fake transaction types to provide utility functions:
 	sign => {
@@ -230,11 +227,6 @@ if ($tx_type ne 'sign') {
 		$extras{$required_arg} = shift @ARGV;
 	}
 
-	# For CHAT we use a random reference
-	if ($tx_type eq 'chat') {
-		$extras{reference} = api('utils/random?length=64');
-	}
-
 	%extras = (%extras, %{$tx_info->{defaults}}) if exists $tx_info->{defaults};
 
 	%extras = (%extras, @ARGV);
@@ -276,7 +268,7 @@ sub account {
 
 	my $account = { private => $privkey };
 	$account->{public} = $extras{publickey} || priv_to_pub($privkey);
-	$account->{address} = $extras{address} || pubkey_to_address($account->{public}); # api('addresses/convert/{publickey}', '', '{publickey}', $account->{public});
+	$account->{address} = $extras{address} || api('addresses/convert/{publickey}', '', '{publickey}', $account->{public});
 
 	return $account;
 }
@@ -297,11 +289,8 @@ sub build_raw {
 	my $tx_info = $TRANSACTION_TYPES{$type};
 	die("unknown tx type: $type\n") unless defined $tx_info;
 
-	my $ref = exists $extras{reference} ? $extras{reference} : lastref($account->{address});
-
 	my %json = (
 		timestamp => time * 1000,
-		reference => $ref,
 		fee => $DEFAULT_FEE,
 	);
 
@@ -314,6 +303,8 @@ sub build_raw {
 	while (my ($key, $value) = each %extras) {
 		$json{$key} = $value;
 	}
+
+	delete $json{reference};
 
 	if (exists $tx_info->{remove}) {
 		foreach my $key (@{$tx_info->{remove}}) {
@@ -371,12 +362,6 @@ sub process {
 	my ($signed) = @_;
 	
 	return api('transactions/process', $signed);
-}
-
-sub lastref {
-	my ($address) = @_;
-
-	return api('addresses/lastreference/{address}', '', '{address}', $address)
 }
 
 sub api {
@@ -480,21 +465,4 @@ __ASN1__
 	$pubkey .= $1 while $output =~ m/([0-9a-f]{2})(?::|$)/g;
 
 	return encode_base58($pubkey);
-}
-
-sub pubkey_to_address {
-	my ($pubkey) = @_;
-
-	my $pubkey_hex = decode_base58($pubkey);
-	my $pubkey_raw = pack('H*', $pubkey_hex);
-
-	my $pkh_hex = Crypt::RIPEMD160->hexhash(sha256($pubkey_raw));
-	$pkh_hex =~ tr/ //ds;
-
-	my $version = '3a'; # hex
-
-	my $raw = pack('H*', $version . $pkh_hex);
-	my $chksum = substr(sha256_hex(sha256($raw)), 0, 8);
-
-	return encode_base58($version . $pkh_hex . $chksum);
 }

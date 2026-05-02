@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 
 # default output post-processor
-postproc=cat
+postproc=(cat)
 
-# Qortal defaults
+# API defaults
 port=12391
-example_host=node10.qortal.org
+example_host=node.example.org
 
 # called-as name
 name="${0##*/}"
@@ -16,17 +16,17 @@ while [ -n "$*" ]; do
 	case $1 in
 		-p)
 			shift
-			postproc="json_pp -f json -t json -json_opt utf8,pretty"
+			postproc=(json_pp -f json -t json -json_opt "utf8,pretty")
 			;;
 
 		[Dd][Ee][Ll][Ee][Tt][Ee])
 			shift
-			method="-X DELETE"
+			method=(-X DELETE)
 			;;
 
 		-l)
 			shift
-			src="--interface localhost"
+			src=(--interface localhost)
 			;;
 
 		-t)
@@ -45,11 +45,8 @@ while [ -n "$*" ]; do
 	esac
 done
 	
-if [ "${name}" = "qort" ]; then
-	port=${testnet:+62391}
-	port=${port:-12391}
-	example_host=node10.qortal.org
-fi
+port=${testnet:+62391}
+port=${port:-12391}
 
 if [ -z "$*" ]; then
 	echo "usage: $name [-l] [-p] [-t] [DELETE] <url> [<post-data>]"
@@ -71,8 +68,8 @@ if [ -f "apikey.txt" ]; then
   apikey=$(cat "apikey.txt")
 elif [ -f "${script_dir}/../apikey.txt" ]; then
   apikey=$(cat "${script_dir}/../apikey.txt")
-elif [ -f "${HOME}/qortal/apikey.txt" ]; then
-  apikey=$(cat "${HOME}/qortal/apikey.txt")
+elif [ -f "${HOME}/qortium/apikey.txt" ]; then
+  apikey=$(cat "${HOME}/qortium/apikey.txt")
 fi
 
 if [ "${url:0:4}" != "http" ]; then
@@ -90,8 +87,13 @@ if [ "${url:0:4}" != "http" ]; then
 fi
 
 if [ "$#" != 0 ]; then
-	data="--data"
+	data=(--data)
 fi
 
-curl --silent --insecure --connect-timeout 5 -H "X-API-KEY: ${apikey}" ${content_type:+--header} "${content_type}" ${method} ${src} --url ${url} ${data} "$@" | ${postproc}
+curl_args=(--silent --insecure --connect-timeout 5 -H "X-API-KEY: ${apikey}")
+if [ -n "${content_type}" ]; then
+	curl_args+=(--header "${content_type}")
+fi
+
+curl "${curl_args[@]}" "${method[@]}" "${src[@]}" --url "${url}" "${data[@]}" "$@" | "${postproc[@]}"
 echo

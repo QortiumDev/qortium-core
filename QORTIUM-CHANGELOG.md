@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - tools: neutralize helper script naming and defaults
+
+Updated helper scripts that still exposed inherited Qortal naming in active defaults. API helpers now use neutral example hosts and Qortium API-key paths, QDN publishing uses `QDN_PRIVKEY`, the transaction helper uses current native cross-chain field names, and the transaction helper no longer depends on removed account last-reference state.
+
 ### 2026-05-02 - runtime: neutralize log and testnet identity defaults
 
 Updated runtime and testnet defaults that still used inherited Qortal naming. Log files now default to Qortium names, the testnet stop script now looks for and reports Qortium processes, and the testnet bootstrap native asset is labelled generically as `NATIVE` instead of using the old QORT identity.
