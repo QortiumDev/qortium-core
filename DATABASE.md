@@ -4,7 +4,7 @@ You can examine your node's database using [HSQLDB's "sqltool"](http://www.hsqld
 It's a good idea to install "rlwrap" (ReadLine wrapper) too as sqltool doesn't support command history/editing.
 
 Typical command line for sqltool would be:
-`rlwrap java -cp ${HSQLDB_JAR}:${SQLTOOL_JAR} org.hsqldb.cmdline.SqlTool --rcFile=${SQLTOOL_RC} qortal`
+`rlwrap java -cp ${HSQLDB_JAR}:${SQLTOOL_JAR} org.hsqldb.cmdline.SqlTool --rcFile=${SQLTOOL_RC} qortium`
 
 `${HSQLDB_JAR}` should be set with pathname where Maven downloaded hsqldb, 
 typically `${HOME}/.m2/repository/org/hsqldb/hsqldb/2.5.1/hsqldb-2.5.1.jar`

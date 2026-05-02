@@ -16,7 +16,7 @@
 	You will need to calculate `rewardSharePublicKey` (and private key),
 	or make a new account on mainnet and use self-share key values
 - Accounts start at level zero and gain levels naturally from minted blocks
-- Add `GENESIS` transactions to add QORT funds to accounts as needed
+- Add `GENESIS` transactions to add native asset funds to accounts as needed
 
 ## Testnet `settings.json`
 

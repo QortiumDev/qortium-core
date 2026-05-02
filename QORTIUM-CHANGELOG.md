@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - docs: neutralize small helper examples
+
+Updated narrow helper documentation that still used inherited Qortal or QORT examples. The database sqltool example now uses the Qortium URL ID, and the testnet genesis guidance now refers to native asset funds instead of QORT funds.
+
 ### 2026-05-02 - core: replace Qortal QDN category metadata
 
 Replaced the inherited `QORTAL` arbitrary metadata category with a neutral `NETWORK` category. QDN helper validation and arbitrary metadata tests now use `NETWORK`, so new baseline chains no longer expose a Qortal-branded category in the active metadata vocabulary.
