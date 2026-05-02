@@ -18,12 +18,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Qortal-specific CIYAM-AT Functions.
+ * Chain-specific CIYAM-AT functions.
  * <p>
  * Function codes need to be between 0x0500 and 0x06ff.
  *
  */
-public enum QortalFunctionCode {
+public enum ChainFunctionCode {
 	/**
 	 * Returns length of message data from transaction in A.<br>
 	 * <tt>0x0501</tt><br>
@@ -32,7 +32,7 @@ public enum QortalFunctionCode {
 	GET_MESSAGE_LENGTH_FROM_TX_IN_A(0x0501, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			QortalATAPI api = (QortalATAPI) state.getAPI();
+			ChainATAPI api = (ChainATAPI) state.getAPI();
 
 			TransactionData transactionData = api.getTransactionFromA(state);
 
@@ -54,7 +54,7 @@ public enum QortalFunctionCode {
 	PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B(0x0502, 1, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			QortalATAPI api = (QortalATAPI) state.getAPI();
+			ChainATAPI api = (ChainATAPI) state.getAPI();
 
 			// In case something goes wrong, or we don't have enough message data.
 			api.zeroB(state);
@@ -98,7 +98,7 @@ public enum QortalFunctionCode {
 
 			long txTimestamp = functionData.value1;
 
-			QortalATAPI api = (QortalATAPI) state.getAPI();
+			ChainATAPI api = (ChainATAPI) state.getAPI();
 			api.sleepUntilMessageOrHeight(state, txTimestamp, null);
 		}
 	},
@@ -119,7 +119,7 @@ public enum QortalFunctionCode {
 
 			long sleepUntilHeight = functionData.value2;
 
-			QortalATAPI api = (QortalATAPI) state.getAPI();
+			ChainATAPI api = (ChainATAPI) state.getAPI();
 			api.sleepUntilMessageOrHeight(state, txTimestamp, sleepUntilHeight);
 		}
 	},
@@ -153,11 +153,11 @@ public enum QortalFunctionCode {
 		}
 	},
 	/**
-	 * Convert 20-byte value in LSB of B1, and all of B2 & B3 to Qortal address.<br>
+	 * Convert 20-byte value in LSB of B1, and all of B2 & B3 to chain address.<br>
 	 * <tt>0x0512</tt><br>
-	 * Qortal address stored in lower 25 bytes of B.
+	 * Chain address stored in lower 25 bytes of B.
 	 */
-	CONVERT_B_TO_QORTAL(0x0512, 0, false) {
+	CONVERT_B_TO_CHAIN_ADDRESS(0x0512, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
 			convertAddressInB(Crypto.ADDRESS_VERSION, state);
@@ -166,17 +166,17 @@ public enum QortalFunctionCode {
 	/**
 	 * Returns account level of account in B.<br>
 	 * <tt>0x0520</tt><br>
-	 * B should contain either Qortal address or public key,<br>
+	 * B should contain either chain address or public key,<br>
 	 * e.g. as a result of calling function {@link org.ciyam.at.FunctionCode#PUT_ADDRESS_FROM_TX_IN_A_INTO_B}</code>.
 	 * <p></p>
 	 * Returns account level, or -1 if account unknown.
 	 * <p></p>
-	 * @see QortalATAPI#getAccountFromB(MachineState)
+	 * @see ChainATAPI#getAccountFromB(MachineState)
 	 */
 	GET_ACCOUNT_LEVEL_FROM_ACCOUNT_IN_B(0x0520, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			QortalATAPI api = (QortalATAPI) state.getAPI();
+			ChainATAPI api = (ChainATAPI) state.getAPI();
 			Account account = api.getAccountFromB(state);
 
 			Integer accountLevel = null;
@@ -197,17 +197,17 @@ public enum QortalFunctionCode {
 	/**
 	 * Returns account's minted block count of account in B.<br>
 	 * <tt>0x0521</tt><br>
-	 * B should contain either Qortal address or public key,<br>
+	 * B should contain either chain address or public key,<br>
 	 * e.g. as a result of calling function {@link org.ciyam.at.FunctionCode#PUT_ADDRESS_FROM_TX_IN_A_INTO_B}</code>.
 	 * <p></p>
 	 * Returns account level, or -1 if account unknown.
 	 * <p></p>
-	 * @see QortalATAPI#getAccountFromB(MachineState)
+	 * @see ChainATAPI#getAccountFromB(MachineState)
 	 */
 	GET_BLOCKS_MINTED_FROM_ACCOUNT_IN_B(0x0521, 0, true) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			QortalATAPI api = (QortalATAPI) state.getAPI();
+			ChainATAPI api = (ChainATAPI) state.getAPI();
 			Account account = api.getAccountFromB(state);
 
 			Integer blocksMinted = null;
@@ -230,18 +230,18 @@ public enum QortalFunctionCode {
 	public final int paramCount;
 	public final boolean returnsValue;
 
-	private static final Logger LOGGER = LogManager.getLogger(QortalFunctionCode.class);
+	private static final Logger LOGGER = LogManager.getLogger(ChainFunctionCode.class);
 
-	private static final Map<Short, QortalFunctionCode> map = Arrays.stream(QortalFunctionCode.values())
+	private static final Map<Short, ChainFunctionCode> map = Arrays.stream(ChainFunctionCode.values())
 			.collect(Collectors.toMap(functionCode -> functionCode.value, functionCode -> functionCode));
 
-	private QortalFunctionCode(int value, int paramCount, boolean returnsValue) {
+	private ChainFunctionCode(int value, int paramCount, boolean returnsValue) {
 		this.value = (short) value;
 		this.paramCount = paramCount;
 		this.returnsValue = returnsValue;
 	}
 
-	public static QortalFunctionCode valueOf(int value) {
+	public static ChainFunctionCode valueOf(int value) {
 		return map.get((short) value);
 	}
 
@@ -300,12 +300,12 @@ public enum QortalFunctionCode {
 	}
 
 	private static byte[] getB(MachineState state) {
-		QortalATAPI api = (QortalATAPI) state.getAPI();
+		ChainATAPI api = (ChainATAPI) state.getAPI();
 		return api.getB(state);
 	}
 
 	private static void setB(MachineState state, byte[] bBytes) {
-		QortalATAPI api = (QortalATAPI) state.getAPI();
+		ChainATAPI api = (ChainATAPI) state.getAPI();
 		api.setB(state, bBytes);
 	}
 

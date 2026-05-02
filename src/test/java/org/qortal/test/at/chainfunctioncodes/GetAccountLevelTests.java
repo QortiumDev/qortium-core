@@ -1,4 +1,4 @@
-package org.qortal.test.at.qortalfunctioncodes;
+package org.qortal.test.at.chainfunctioncodes;
 
 import com.google.common.primitives.Bytes;
 import org.ciyam.at.CompilationException;
@@ -10,7 +10,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
-import org.qortal.at.QortalFunctionCode;
+import org.qortal.at.ChainFunctionCode;
 import org.qortal.data.at.ATStateData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -146,7 +146,7 @@ public class GetAccountLevelTests extends Common {
                 codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.SET_B_IND, addrAccountBytesPointer));
 
                 // Get account level and save into addrAccountLevel
-                codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(QortalFunctionCode.GET_ACCOUNT_LEVEL_FROM_ACCOUNT_IN_B.value, addrAccountLevel));
+                codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(ChainFunctionCode.GET_ACCOUNT_LEVEL_FROM_ACCOUNT_IN_B.value, addrAccountLevel));
 
                 // We're done
                 codeByteBuffer.put(OpCode.FIN_IMD.compile());

@@ -7,7 +7,7 @@ import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
-import org.qortal.at.QortalFunctionCode;
+import org.qortal.at.ChainFunctionCode;
 import org.qortal.block.Block;
 import org.qortal.data.at.ATStateData;
 import org.qortal.data.block.BlockData;
@@ -218,7 +218,7 @@ public class SleepUntilMessageOrHeightTests extends Common {
 				/* Loop, waiting for message to AT */
 
 				/* Sleep until message arrives */
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT_2.compile(QortalFunctionCode.SLEEP_UNTIL_MESSAGE_OR_HEIGHT.value, addrLastTxTimestamp, addrWakeHeight));
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT_2.compile(ChainFunctionCode.SLEEP_UNTIL_MESSAGE_OR_HEIGHT.value, addrLastTxTimestamp, addrWakeHeight));
 
 				// Find next transaction to this AT since the last one (if any)
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PUT_TX_AFTER_TIMESTAMP_INTO_A, addrLastTxTimestamp));

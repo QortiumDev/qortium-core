@@ -8,7 +8,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
-import org.qortal.at.QortalFunctionCode;
+import org.qortal.at.ChainFunctionCode;
 import org.qortal.data.at.ATStateData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.DeployAtTransactionData;
@@ -139,7 +139,7 @@ public class GetMessageLengthTests extends Common {
 				// Update our 'last found transaction's timestamp' using 'timestamp' from transaction
 				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_TIMESTAMP_FROM_TX_IN_A, addrLastTxTimestamp));
 				// Save message length
-				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(QortalFunctionCode.GET_MESSAGE_LENGTH_FROM_TX_IN_A.value, addrResult));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(ChainFunctionCode.GET_MESSAGE_LENGTH_FROM_TX_IN_A.value, addrResult));
 
 				// Stop and wait for next block (and hence more transactions)
 				codeByteBuffer.put(OpCode.STP_IMD.compile());

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - core: neutralize AT API naming
+
+Renamed the inherited Qortal-branded AT integration classes and chain-specific function-code enum to neutral `Chain*` names while preserving the underlying CIYAM AT function-code values and behavior. The chain address conversion function now uses the Java name `CONVERT_B_TO_CHAIN_ADDRESS` but still maps to function code `0x0512`, so generated AT bytecode semantics remain unchanged.
+
 ### 2026-05-02 - core: neutralize cross-chain native-side naming
 
 Renamed active cross-chain native-side API fields, helper methods, ledger labels, and docs from inherited Qortal wording to neutral role-based wording. Cross-chain trade data now uses names such as `atAddress`, `creatorAddress`, `creatorTradeAddress`, `partnerAddress`, and `partnerReceivingAddress`, and ACCT helpers now refer to trade ATs without Qortal-specific method names.

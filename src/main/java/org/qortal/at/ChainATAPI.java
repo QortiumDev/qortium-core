@@ -29,10 +29,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public class QortalATAPI extends API {
+public class ChainATAPI extends API {
 
 	private static final byte[] ADDRESS_PADDING = new byte[32 - Account.ADDRESS_LENGTH];
-	private static final Logger LOGGER = LogManager.getLogger(QortalATAPI.class);
+	private static final Logger LOGGER = LogManager.getLogger(ChainATAPI.class);
 
 	// Properties
 	private Repository repository;
@@ -45,7 +45,7 @@ public class QortalATAPI extends API {
 
 	// Constructors
 
-	public QortalATAPI(Repository repository, ATData atData, long blockTimestamp) {
+	public ChainATAPI(Repository repository, ATData atData, long blockTimestamp) {
 		this.repository = repository;
 		this.atData = atData;
 		this.transactions = new ArrayList<>();
@@ -54,7 +54,7 @@ public class QortalATAPI extends API {
 		this.ciyamAtSettings = BlockChain.getInstance().getCiyamAtSettings();
 	}
 
-	// Methods specific to Qortal AT processing, not inherited
+	// Methods specific to chain AT processing, not inherited
 
 	public Repository getRepository() {
 		return this.repository;
@@ -412,22 +412,22 @@ public class QortalATAPI extends API {
 	@Override
 	public void platformSpecificPreExecuteCheck(int paramCount, boolean returnValueExpected, MachineState state, short rawFunctionCode)
 			throws IllegalFunctionCodeException {
-		QortalFunctionCode qortalFunctionCode = QortalFunctionCode.valueOf(rawFunctionCode);
+		ChainFunctionCode chainFunctionCode = ChainFunctionCode.valueOf(rawFunctionCode);
 
-		if (qortalFunctionCode == null)
-			throw new IllegalFunctionCodeException("Unknown Qortal function code 0x" + String.format("%04x", rawFunctionCode) + " encountered");
+		if (chainFunctionCode == null)
+			throw new IllegalFunctionCodeException("Unknown chain function code 0x" + String.format("%04x", rawFunctionCode) + " encountered");
 
-		qortalFunctionCode.preExecuteCheck(paramCount, returnValueExpected, rawFunctionCode);
+		chainFunctionCode.preExecuteCheck(paramCount, returnValueExpected, rawFunctionCode);
 	}
 
 	@Override
 	public void platformSpecificPostCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-		QortalFunctionCode qortalFunctionCode = QortalFunctionCode.valueOf(rawFunctionCode);
+		ChainFunctionCode chainFunctionCode = ChainFunctionCode.valueOf(rawFunctionCode);
 
-		if (qortalFunctionCode == null)
-			throw new IllegalFunctionCodeException("Unknown Qortal function code 0x" + String.format("%04x", rawFunctionCode) + " encountered");
+		if (chainFunctionCode == null)
+			throw new IllegalFunctionCodeException("Unknown chain function code 0x" + String.format("%04x", rawFunctionCode) + " encountered");
 
-		qortalFunctionCode.execute(functionData, state, rawFunctionCode);
+		chainFunctionCode.execute(functionData, state, rawFunctionCode);
 	}
 
 	// Utility methods
@@ -537,7 +537,7 @@ public class QortalATAPI extends API {
 		return new PublicKeyAccount(this.repository, bBytes);
 	}
 
-	/* Convenience methods to allow QortalFunctionCode package-visibility access to A/B-get/set methods. */
+	/* Convenience methods to allow ChainFunctionCode package-visibility access to A/B-get/set methods. */
 
 	protected byte[] getB(MachineState state) {
 		return super.getB(state);

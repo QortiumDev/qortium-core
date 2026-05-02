@@ -8,7 +8,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
-import org.qortal.at.QortalFunctionCode;
+import org.qortal.at.ChainFunctionCode;
 import org.qortal.data.at.ATStateData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.DeployAtTransactionData;
@@ -134,7 +134,7 @@ public class GetPartialMessageTests extends Common {
 					codeByteBuffer.put(OpCode.SET_VAL.compile(addrOffset, offsets[i]));
 
 					// Extract partial message
-					codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(QortalFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrOffset));
+					codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(ChainFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrOffset));
 
 					// Copy B to data segment
 					codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrCopyOfBIndex));

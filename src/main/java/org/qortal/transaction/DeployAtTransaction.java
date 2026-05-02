@@ -6,8 +6,8 @@ import org.ciyam.at.Timestamp;
 import org.qortal.account.Account;
 import org.qortal.asset.Asset;
 import org.qortal.at.AT;
-import org.qortal.at.QortalATAPI;
-import org.qortal.at.QortalAtLoggerFactory;
+import org.qortal.at.ChainATAPI;
+import org.qortal.at.ChainAtLoggerFactory;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.asset.AssetData;
 import org.qortal.data.at.ATData;
@@ -154,8 +154,8 @@ public class DeployAtTransaction extends Transaction {
 		int height = this.repository.getBlockRepository().getBlockchainHeight() + 1;
 		long blockTimestamp = Timestamp.toLong(height, 0);
 
-		QortalATAPI api = new QortalATAPI(repository, skeletonAtData, blockTimestamp);
-		QortalAtLoggerFactory loggerFactory = QortalAtLoggerFactory.getInstance();
+		ChainATAPI api = new ChainATAPI(repository, skeletonAtData, blockTimestamp);
+		ChainAtLoggerFactory loggerFactory = ChainAtLoggerFactory.getInstance();
 
 		try {
 			MachineState state = new MachineState(api, loggerFactory, this.deployAtTransactionData.getCreationBytes());

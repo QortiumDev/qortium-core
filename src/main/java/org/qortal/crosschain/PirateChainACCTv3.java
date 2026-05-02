@@ -6,7 +6,7 @@ import org.ciyam.at.*;
 import org.qortal.account.Account;
 import org.qortal.api.resource.CrossChainUtils;
 import org.qortal.asset.Asset;
-import org.qortal.at.QortalFunctionCode;
+import org.qortal.at.ChainFunctionCode;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.at.ATData;
 import org.qortal.data.at.ATStateData;
@@ -365,7 +365,7 @@ public class PirateChainACCTv3 implements ACCT {
 				labelTradeTxnLoop = codeByteBuffer.position();
 
 				/* Sleep until message arrives */
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(QortalFunctionCode.SLEEP_UNTIL_MESSAGE.value, addrLastTxnTimestamp));
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(ChainFunctionCode.SLEEP_UNTIL_MESSAGE.value, addrLastTxnTimestamp));
 
 				// Find next transaction (if any) to this AT since the last one (referenced by addrLastTxnTimestamp)
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PUT_TX_AFTER_TIMESTAMP_INTO_A, addrLastTxnTimestamp));
@@ -423,7 +423,7 @@ public class PirateChainACCTv3 implements ACCT {
 				labelCheckNonRefundTradeTxn = codeByteBuffer.position();
 
 				// Check 'trade' message we received has expected number of message bytes
-				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(QortalFunctionCode.GET_MESSAGE_LENGTH_FROM_TX_IN_A.value, addrMessageLength));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(ChainFunctionCode.GET_MESSAGE_LENGTH_FROM_TX_IN_A.value, addrMessageLength));
 				// If message length matches, branch to info extraction code
 				codeByteBuffer.put(OpCode.BEQ_DAT.compile(addrMessageLength, addrExpectedTradeMessageLength, calcOffset(codeByteBuffer, labelTradeTxnExtract)));
 				// Message length didn't match - go back to finding another 'trade' MESSAGE transaction
@@ -438,19 +438,19 @@ public class PirateChainACCTv3 implements ACCT {
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerAddressPointer));
 
 				// Extract first 32 bytes of trade partner's Pirate Chain public key from message into B
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(QortalFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrTradeMessagePartnerPirateChainPublicKeyFirst32BytesOffset));
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(ChainFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrTradeMessagePartnerPirateChainPublicKeyFirst32BytesOffset));
 				// Store first 32 bytes of partner's Pirate Chain public key
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerPirateChainPublicKeyFirst32BytesPointer));
 
 				// Extract last byte of public key, plus trade timeout, from message into B
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(QortalFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrTradeMessagePartnerPirateChainPublicKeyLastByteOffset));
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(ChainFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrTradeMessagePartnerPirateChainPublicKeyLastByteOffset));
 				// Store last byte of partner's Pirate Chain public key
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerPirateChainPublicKeyLastBytePointer));
 				// Extract AT trade timeout (minutes) (from B2)
 				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_B2, addrRefundTimeout));
 
 				// Grab next 32 bytes
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(QortalFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrTradeMessageHashOfSecretAOffset));
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(ChainFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrTradeMessageHashOfSecretAOffset));
 
 				// Extract hash-of-secret-A (we only really use values from B1-B3)
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrHashOfSecretAPointer));
@@ -498,7 +498,7 @@ public class PirateChainACCTv3 implements ACCT {
 				codeByteBuffer.put(OpCode.BNE_DAT.compile(addrTxnType, addrMessageTxnType, calcOffset(codeByteBuffer, labelRedeemTxnLoop)));
 
 				/* Check message payload length */
-				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(QortalFunctionCode.GET_MESSAGE_LENGTH_FROM_TX_IN_A.value, addrMessageLength));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(ChainFunctionCode.GET_MESSAGE_LENGTH_FROM_TX_IN_A.value, addrMessageLength));
 				// If message length matches, branch to sender checking code
 				codeByteBuffer.put(OpCode.BEQ_DAT.compile(addrMessageLength, addrExpectedRedeemMessageLength, calcOffset(codeByteBuffer, labelCheckRedeemTxnSender)));
 				// Message length didn't match - go back to finding another 'redeem' MESSAGE transaction
@@ -536,7 +536,7 @@ public class PirateChainACCTv3 implements ACCT {
 				labelPayout = codeByteBuffer.position();
 
 				// Extract local-chain receiving address from next 32 bytes of message from transaction into B register
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(QortalFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrRedeemMessageReceivingAddressOffset));
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(ChainFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrRedeemMessageReceivingAddressOffset));
 				// Save B register into data segment starting at addrPartnerReceivingAddress (as pointed to by addrPartnerReceivingAddressPointer)
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerReceivingAddressPointer));
 				// Pay AT's balance to receiving address

@@ -16,16 +16,16 @@ import org.apache.logging.log4j.util.Supplier;
  * the ERROR, DEBUG and ECHO custom log levels.
  * <p>Compatible with Log4j 2.6 or higher.</p>
  */
-public final class QortalAtLogger extends ExtendedLoggerWrapper implements org.ciyam.at.AtLogger {
+public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ciyam.at.AtLogger {
     private static final long serialVersionUID = 4740841485167L;
     private final ExtendedLoggerWrapper logger;
 
-    private static final String FQCN = QortalAtLogger.class.getName();
+    private static final String FQCN = ChainAtLogger.class.getName();
     private static final Level ERROR = Level.forName("ERROR", 200);
     private static final Level DEBUG = Level.forName("DEBUG", 500);
     private static final Level ECHO = Level.forName("ECHO", 400);
 
-    private QortalAtLogger(final Logger logger) {
+    private ChainAtLogger(final Logger logger) {
         super((AbstractLogger) logger, logger.getName(), logger.getMessageFactory());
         this.logger = this;
     }
@@ -35,9 +35,9 @@ public final class QortalAtLogger extends ExtendedLoggerWrapper implements org.c
      * 
      * @return The custom Logger for the calling class.
      */
-    public static QortalAtLogger create() {
+    public static ChainAtLogger create() {
         final Logger wrapped = LogManager.getLogger();
-        return new QortalAtLogger(wrapped);
+        return new ChainAtLogger(wrapped);
     }
 
     /**
@@ -48,9 +48,9 @@ public final class QortalAtLogger extends ExtendedLoggerWrapper implements org.c
      *            If null it will default to the calling class.
      * @return The custom Logger.
      */
-    public static QortalAtLogger create(final Class<?> loggerName) {
+    public static ChainAtLogger create(final Class<?> loggerName) {
         final Logger wrapped = LogManager.getLogger(loggerName);
-        return new QortalAtLogger(wrapped);
+        return new ChainAtLogger(wrapped);
     }
 
     /**
@@ -64,9 +64,9 @@ public final class QortalAtLogger extends ExtendedLoggerWrapper implements org.c
      *            a warning if mismatched.
      * @return The custom Logger.
      */
-    public static QortalAtLogger create(final Class<?> loggerName, final MessageFactory messageFactory) {
+    public static ChainAtLogger create(final Class<?> loggerName, final MessageFactory messageFactory) {
         final Logger wrapped = LogManager.getLogger(loggerName, messageFactory);
-        return new QortalAtLogger(wrapped);
+        return new ChainAtLogger(wrapped);
     }
 
     /**
@@ -78,9 +78,9 @@ public final class QortalAtLogger extends ExtendedLoggerWrapper implements org.c
      *            the logger name.
      * @return The custom Logger.
      */
-    public static QortalAtLogger create(final Object value) {
+    public static ChainAtLogger create(final Object value) {
         final Logger wrapped = LogManager.getLogger(value);
-        return new QortalAtLogger(wrapped);
+        return new ChainAtLogger(wrapped);
     }
 
     /**
@@ -95,9 +95,9 @@ public final class QortalAtLogger extends ExtendedLoggerWrapper implements org.c
      *            a warning if mismatched.
      * @return The custom Logger.
      */
-    public static QortalAtLogger create(final Object value, final MessageFactory messageFactory) {
+    public static ChainAtLogger create(final Object value, final MessageFactory messageFactory) {
         final Logger wrapped = LogManager.getLogger(value, messageFactory);
-        return new QortalAtLogger(wrapped);
+        return new ChainAtLogger(wrapped);
     }
 
     /**
@@ -107,9 +107,9 @@ public final class QortalAtLogger extends ExtendedLoggerWrapper implements org.c
      *            be used.
      * @return The custom Logger.
      */
-    public static QortalAtLogger create(final String name) {
+    public static ChainAtLogger create(final String name) {
         final Logger wrapped = LogManager.getLogger(name);
-        return new QortalAtLogger(wrapped);
+        return new ChainAtLogger(wrapped);
     }
 
     /**
@@ -122,9 +122,9 @@ public final class QortalAtLogger extends ExtendedLoggerWrapper implements org.c
      *            a warning if mismatched.
      * @return The custom Logger.
      */
-    public static QortalAtLogger create(final String name, final MessageFactory messageFactory) {
+    public static ChainAtLogger create(final String name, final MessageFactory messageFactory) {
         final Logger wrapped = LogManager.getLogger(name, messageFactory);
-        return new QortalAtLogger(wrapped);
+        return new ChainAtLogger(wrapped);
     }
 
     /**
