@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - core: neutralize network identity defaults
+
+Moved the peer network message magic out of inherited hardcoded QORT constants and into the chain configuration. Qortium's main and test chain configs now use `QRTM` and `qrtm` as their default network identifiers, and both normal peer networking and data networking read those values from the active chain config so future forks can choose their own network identity without editing Java constants.
+
 ### 2026-05-02 - core: remove native asset compatibility alias
 
 Removed the temporary `Asset.QORT` Java compatibility alias now that production and test code use `Asset.NATIVE` for protocol asset ID `0`. This makes the native asset identity explicit in code and leaves any remaining historical QORT wording for separate documentation or branding cleanup.

@@ -67,6 +67,18 @@ Initial recommendation:
   metadata
 - update comments and docs after the runtime constant is neutralized
 
+### Network Identity
+
+`src/main/resources/blockchain.json` now defines the four-byte peer network
+message magic values for mainnet and testnet mode. Qortium uses `QRTM` and
+`qrtm` by default, and both the normal peer network and the data network read
+the active value from chain configuration instead of hardcoded inherited QORT
+constants.
+
+The network magic is consensus-adjacent peer identity: nodes with different
+values will reject each other's messages. Forks should choose unique values in
+their chain configuration before launching a network.
+
 ### Runtime Defaults And Data Locations
 
 `src/main/java/org/qortal/settings/Settings.java` still hardcodes Qortal

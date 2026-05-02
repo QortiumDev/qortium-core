@@ -77,11 +77,6 @@ public class Network {
      */
     private static final long HANDSHAKE_TIMEOUT = 60 * 1000L; // ms
 
-  private static final byte[] MAINNET_MESSAGE_MAGIC = new byte[]{0x51, 0x4f, 0x52, 0x54}; // QORT
-    // Magic for devnet. Only use for testing and development.
-    // private static final byte[] MAINNET_MESSAGE_MAGIC = new byte[]{0x64, 0x65, 0x76, 0x4E}; // devN
-    private static final byte[] TESTNET_MESSAGE_MAGIC = new byte[]{0x71, 0x6f, 0x72, 0x54}; // qorT
-
     private static final long NETWORK_EPC_KEEPALIVE = 5L; // seconds
 
     public static final int MAX_SIGNATURES_PER_REPLY = 500;
@@ -405,7 +400,7 @@ public class Network {
     }
 
     public byte[] getMessageMagic() {
-        return Settings.getInstance().isTestNet() ? TESTNET_MESSAGE_MAGIC : MAINNET_MESSAGE_MAGIC;
+        return BlockChain.getInstance().getMessageMagic(Settings.getInstance().isTestNet());
     }
 
     public String getOurNodeId() {

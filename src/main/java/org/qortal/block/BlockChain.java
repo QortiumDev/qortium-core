@@ -24,6 +24,7 @@ import javax.xml.transform.stream.StreamSource;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
@@ -57,6 +58,12 @@ public class BlockChain {
 
 	/** Whether transactions with txGroupId of NO_GROUP are allowed */
 	private boolean requireGroupForApproval;
+
+	/** Four-byte network message magic values used to identify this chain's peer network. */
+	private String mainnetMessageMagic;
+	private String testnetMessageMagic;
+	private byte[] mainnetMessageMagicBytes;
+	private byte[] testnetMessageMagicBytes;
 
 	private GenesisBlock.GenesisInfo genesisInfo;
 
@@ -327,6 +334,11 @@ public class BlockChain {
 		return this.isTestChain;
 	}
 
+	public byte[] getMessageMagic(boolean isTestNet) {
+		byte[] messageMagic = isTestNet ? this.testnetMessageMagicBytes : this.mainnetMessageMagicBytes;
+		return Arrays.copyOf(messageMagic, messageMagic.length);
+	}
+
 	public int getMaxBytesPerUnitFee() {
 		return this.maxBytesPerUnitFee;
 	}
@@ -507,6 +519,11 @@ public class BlockChain {
 		if (this.maxBlockSize <= 0)
 			Settings.throwValidationError("Invalid \"maxBlockSize\" in blockchain config");
 
+		byte[] mainnetMagic = decodeMessageMagic("mainnetMessageMagic", this.mainnetMessageMagic);
+		byte[] testnetMagic = decodeMessageMagic("testnetMessageMagic", this.testnetMessageMagic);
+		if (Arrays.equals(mainnetMagic, testnetMagic))
+			Settings.throwValidationError("\"mainnetMessageMagic\" and \"testnetMessageMagic\" must be different");
+
 		if (this.minAccountLevelToRewardShare < 0)
 			Settings.throwValidationError("Invalid/missing \"minAccountLevelToRewardShare\" in blockchain config");
 
@@ -550,8 +567,25 @@ public class BlockChain {
 			Settings.throwValidationError("\"blockRewardBatchAccountsBlockCount\" must be less than or equal to \"blockRewardBatchSize\"");
 	}
 
+	private static byte[] decodeMessageMagic(String fieldName, String messageMagic) {
+		if (messageMagic == null)
+			Settings.throwValidationError(String.format("No \"%s\" entry found in blockchain config", fieldName));
+
+		if (messageMagic.length() != 4)
+			Settings.throwValidationError(String.format("\"%s\" must be exactly 4 ASCII characters", fieldName));
+
+		for (int i = 0; i < messageMagic.length(); ++i)
+			if (messageMagic.charAt(i) > 0x7f)
+				Settings.throwValidationError(String.format("\"%s\" must contain only ASCII characters", fieldName));
+
+		return messageMagic.getBytes(StandardCharsets.US_ASCII);
+	}
+
 	/** Minor normalization, cached value generation, etc. */
 	private void fixUp() {
+		this.mainnetMessageMagicBytes = decodeMessageMagic("mainnetMessageMagic", this.mainnetMessageMagic);
+		this.testnetMessageMagicBytes = decodeMessageMagic("testnetMessageMagic", this.testnetMessageMagic);
+
 		// Calculate cumulative blocks required for each level
 		int cumulativeBlocks = 0;
 		this.cumulativeBlocksByLevel = new ArrayList<>(this.blocksNeededByLevel.size() + 1);
