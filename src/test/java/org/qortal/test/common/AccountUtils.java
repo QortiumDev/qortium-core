@@ -6,7 +6,7 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.block.BlockChain;
 import org.qortal.crypto.Crypto;
-import org.qortal.crypto.Qortal25519Extras;
+import org.qortal.crypto.Ed25519Extras;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.network.OnlineAccountData;
 import org.qortal.data.transaction.BaseTransactionData;
@@ -25,7 +25,7 @@ import java.util.*;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.qortal.crypto.Qortal25519Extras.signForAggregation;
+import static org.qortal.crypto.Ed25519Extras.signForAggregation;
 
 public class AccountUtils {
 
@@ -230,7 +230,7 @@ public class AccountUtils {
 			SECURE_RANDOM.nextBytes(privateKey);
 
 			byte[] publicKey = new byte[Transformer.PUBLIC_KEY_LENGTH];
-			Qortal25519Extras.generatePublicKey(privateKey, 0, publicKey, 0);
+			Ed25519Extras.generatePublicKey(privateKey, 0, publicKey, 0);
 
 			byte[] signature = signForAggregation(privateKey, timestampBytes);
 

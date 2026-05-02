@@ -14,7 +14,7 @@ import java.security.SecureRandom;
 /**
  * Duplicate of {@link org.bouncycastle.math.ec.rfc8032.Ed25519},
  * but with {@code private} modifiers replaced with {@code protected},
- * to allow for extension by {@link org.qortal.crypto.Qortal25519Extras}.
+ * to allow for extension by {@link org.qortal.crypto.Ed25519Extras}.
  */
 public abstract class BouncyCastleEd25519
 {

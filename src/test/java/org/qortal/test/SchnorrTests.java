@@ -6,7 +6,7 @@ import com.google.common.primitives.Longs;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.junit.Test;
-import org.qortal.crypto.Qortal25519Extras;
+import org.qortal.crypto.Ed25519Extras;
 import org.qortal.data.network.OnlineAccountData;
 import org.qortal.test.common.AccountUtils;
 import org.qortal.transform.Transformer;
@@ -18,7 +18,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.Assert.*;
 
-public class SchnorrTests extends Qortal25519Extras {
+public class SchnorrTests extends Ed25519Extras {
 
     static {
         // This must go before any calls to LogManager/Logger
@@ -38,7 +38,7 @@ public class SchnorrTests extends Qortal25519Extras {
 
         BigInteger expectedY = new BigInteger("46316835694926478169428394003475163141307993866256225615783033603165251855960");
 
-        PointAccum pointAccum = Qortal25519Extras.newPointAccum();
+        PointAccum pointAccum = Ed25519Extras.newPointAccum();
         scalarMultBase(scalarA, pointAccum);
 
         byte[] encoded = new byte[POINT_BYTES];
@@ -76,10 +76,10 @@ public class SchnorrTests extends Qortal25519Extras {
         byte[] g2 = HashCode.fromString("c9a3f86aae465f0e56513864510f3997561fa2c9e85ea21dc2292309f3cd6022".toLowerCase()).asBytes();
         byte[] g3 = HashCode.fromString("d4b4f5784868c3020403246717ec169ff79e26608ea126a1ab69ee77d1b16712".toLowerCase()).asBytes();
 
-        PointAccum p1 = Qortal25519Extras.newPointAccum();
+        PointAccum p1 = Ed25519Extras.newPointAccum();
         scalarMultBase(s1, p1);
 
-        PointAccum p2 = Qortal25519Extras.newPointAccum();
+        PointAccum p2 = Ed25519Extras.newPointAccum();
         scalarMultBase(s2, p2);
 
         pointAdd(pointCopy(p1), p2);
@@ -108,7 +108,7 @@ public class SchnorrTests extends Qortal25519Extras {
         byte[] signature = HashCode.fromString("13e58e88f3df9e06637d2d5bbb814c028e3ba135494530b9d3b120bdb31168d62c70a37ae9cfba816fe6038ee1ce2fb521b95c4a91c7ff0bb1dd2e67733f2b0d".toLowerCase()).asBytes();
 
         byte[] publicKey = new byte[Transformer.PUBLIC_KEY_LENGTH];
-        Qortal25519Extras.generatePublicKey(privateKey, 0, publicKey, 0);
+        Ed25519Extras.generatePublicKey(privateKey, 0, publicKey, 0);
 
         assertTrue(verifyAggregated(publicKey, signature, message));
     }
@@ -121,7 +121,7 @@ public class SchnorrTests extends Qortal25519Extras {
         byte[] signature = signForAggregation(privateKey, message);
 
         byte[] publicKey = new byte[Transformer.PUBLIC_KEY_LENGTH];
-        Qortal25519Extras.generatePublicKey(privateKey, 0, publicKey, 0);
+        Ed25519Extras.generatePublicKey(privateKey, 0, publicKey, 0);
 
         assertTrue(verifyAggregated(publicKey, signature, message));
     }

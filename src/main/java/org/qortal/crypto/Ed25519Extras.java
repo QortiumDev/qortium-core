@@ -20,7 +20,7 @@ import java.util.Collection;
  *     <li>Aggregate signatures</li>
  * </ul>
  */
-public abstract class Qortal25519Extras extends BouncyCastleEd25519 {
+public abstract class Ed25519Extras extends BouncyCastleEd25519 {
 
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 

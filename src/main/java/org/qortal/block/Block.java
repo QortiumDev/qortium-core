@@ -15,7 +15,7 @@ import org.qortal.block.BlockChain.AccountLevelShareBin;
 import org.qortal.block.BlockChain.BlockTimingByHeight;
 import org.qortal.controller.OnlineAccountsManager;
 import org.qortal.crypto.Crypto;
-import org.qortal.crypto.Qortal25519Extras;
+import org.qortal.crypto.Ed25519Extras;
 import org.qortal.data.account.*;
 import org.qortal.data.at.ATData;
 import org.qortal.data.at.ATStateData;
@@ -426,7 +426,7 @@ public class Block {
 				if (Settings.getInstance().isSingleNodeTestnet()) {
 					Integer nonce = new Random().nextInt(500000);
 					byte[] timestampBytes = Longs.toByteArray(onlineAccountsTimestamp);
-					byte[] signature = Qortal25519Extras.signForAggregation(minter.getPrivateKey(), timestampBytes);
+					byte[] signature = Ed25519Extras.signForAggregation(minter.getPrivateKey(), timestampBytes);
 					byte[] publicKey = minter.getPublicKey();
 					OnlineAccountData me = new OnlineAccountData(
 							NTP.getTime(),
@@ -471,7 +471,7 @@ public class Block {
 					.collect(Collectors.toList());
 
 			// Aggregated, single signature
-			onlineAccountsSignatures = Qortal25519Extras.aggregateSignatures(signaturesToAggregate);
+			onlineAccountsSignatures = Ed25519Extras.aggregateSignatures(signaturesToAggregate);
 
 			// Add nonces to the end of the online accounts signatures
 			try {
@@ -1216,12 +1216,12 @@ public class Block {
 				.map(RewardShareData::getRewardSharePublicKey)
 				.collect(Collectors.toList());
 
-		byte[] aggregatePublicKey = Qortal25519Extras.aggregatePublicKeys(publicKeys);
+		byte[] aggregatePublicKey = Ed25519Extras.aggregatePublicKeys(publicKeys);
 
 		byte[] aggregateSignature = onlineAccountsSignatures.get(0);
 
 		// One-step verification of aggregate signature using aggregate public key
-		if (!Qortal25519Extras.verifyAggregated(aggregatePublicKey, aggregateSignature, onlineTimestampBytes))
+		if (!Ed25519Extras.verifyAggregated(aggregatePublicKey, aggregateSignature, onlineTimestampBytes))
 			return ValidationResult.ONLINE_ACCOUNT_SIGNATURE_INCORRECT;
 
 		// All online accounts valid, so save our list of online accounts for potential later use

@@ -10,7 +10,7 @@ import org.qortal.block.Block;
 import org.qortal.block.BlockChain;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
-import org.qortal.crypto.Qortal25519Extras;
+import org.qortal.crypto.Ed25519Extras;
 import org.qortal.data.account.MintingAccountData;
 import org.qortal.data.account.RewardShareData;
 import org.qortal.data.group.GroupMemberData;
@@ -184,7 +184,7 @@ public class OnlineAccountsManager {
         for (PrivateKeyAccount onlineAccount : onlineAccounts) {
             // Check mintingAccount is actually reward-share?
 
-            byte[] signature = Qortal25519Extras.signForAggregation(onlineAccount.getPrivateKey(), timestampBytes);
+            byte[] signature = Ed25519Extras.signForAggregation(onlineAccount.getPrivateKey(), timestampBytes);
             byte[] publicKey = onlineAccount.getPublicKey();
 
             Integer nonce = new Random().nextInt(500000);
@@ -331,7 +331,7 @@ public class OnlineAccountsManager {
 
         // Verify signature
         byte[] data = Longs.toByteArray(onlineAccountData.getTimestamp());
-        boolean isSignatureValid = Qortal25519Extras.verifyAggregated(rewardSharePublicKey, onlineAccountData.getSignature(), data);
+        boolean isSignatureValid = Ed25519Extras.verifyAggregated(rewardSharePublicKey, onlineAccountData.getSignature(), data);
         if (!isSignatureValid) {
             LOGGER.trace(() -> String.format("Rejecting invalid online account %s", Base58.encode(rewardSharePublicKey)));
             return false;
@@ -599,7 +599,7 @@ public class OnlineAccountsManager {
                     return false;
                 }
 
-                byte[] signature = Qortal25519Extras.signForAggregation(privateKey, timestampBytes);
+                byte[] signature = Ed25519Extras.signForAggregation(privateKey, timestampBytes);
 
                 // Our account is online
                 OnlineAccountData ourOnlineAccountData = new OnlineAccountData(onlineAccountsTimestamp, signature, publicKey, nonce);

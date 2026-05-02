@@ -10,7 +10,7 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.crypto.AES;
 import org.qortal.crypto.Crypto;
-import org.qortal.crypto.Qortal25519Extras;
+import org.qortal.crypto.Ed25519Extras;
 import org.qortal.test.common.Common;
 import org.qortal.utils.Base58;
 
@@ -119,14 +119,14 @@ public class CryptoTests extends Common {
 			random.nextBytes(ed25519PrivateKey);
 			PrivateKeyAccount account = new PrivateKeyAccount(null, ed25519PrivateKey);
 
-			byte[] x25519PrivateKey = Qortal25519Extras.toX25519PrivateKey(account.getPrivateKey());
+			byte[] x25519PrivateKey = Ed25519Extras.toX25519PrivateKey(account.getPrivateKey());
 			X25519PrivateKeyParameters x25519PrivateKeyParams = new X25519PrivateKeyParameters(x25519PrivateKey, 0);
 
 			// Derive X25519 public key from X25519 private key
 			byte[] x25519PublicKeyFromPrivate = x25519PrivateKeyParams.generatePublicKey().getEncoded();
 
 			// Derive X25519 public key from Ed25519 public key
-			byte[] x25519PublicKeyFromEd25519 = Qortal25519Extras.toX25519PublicKey(account.getPublicKey());
+			byte[] x25519PublicKeyFromEd25519 = Ed25519Extras.toX25519PublicKey(account.getPublicKey());
 
 			assertEquals(String.format("Public keys do not match, from private key %s", Base58.encode(ed25519PrivateKey)), Base58.encode(x25519PublicKeyFromPrivate), Base58.encode(x25519PublicKeyFromEd25519));
 		}
@@ -158,10 +158,10 @@ public class CryptoTests extends Common {
 	}
 
 	private static byte[] calcBCSharedSecret(byte[] ed25519PrivateKey, byte[] ed25519PublicKey) {
-		byte[] x25519PrivateKey = Qortal25519Extras.toX25519PrivateKey(ed25519PrivateKey);
+		byte[] x25519PrivateKey = Ed25519Extras.toX25519PrivateKey(ed25519PrivateKey);
 		X25519PrivateKeyParameters privateKeyParams = new X25519PrivateKeyParameters(x25519PrivateKey, 0);
 
-		byte[] x25519PublicKey = Qortal25519Extras.toX25519PublicKey(ed25519PublicKey);
+		byte[] x25519PublicKey = Ed25519Extras.toX25519PublicKey(ed25519PublicKey);
 		X25519PublicKeyParameters publicKeyParams = new X25519PublicKeyParameters(x25519PublicKey, 0);
 
 		byte[] sharedSecret = new byte[32];
@@ -182,10 +182,10 @@ public class CryptoTests extends Common {
 		final String expectedTheirX25519PublicKey = "ANjnZLRSzW9B1aVamiYGKP3XtBooU9tGGDjUiibUfzp2";
 		final String expectedSharedSecret = "DTMZYG96x8XZuGzDvHFByVLsXedimqtjiXHhXPVe58Ap";
 
-		byte[] ourX25519PrivateKey = Qortal25519Extras.toX25519PrivateKey(ourPrivateKey);
+		byte[] ourX25519PrivateKey = Ed25519Extras.toX25519PrivateKey(ourPrivateKey);
 		assertEquals("X25519 private key incorrect", expectedOurX25519PrivateKey, Base58.encode(ourX25519PrivateKey));
 
-		byte[] theirX25519PublicKey = Qortal25519Extras.toX25519PublicKey(theirPublicKey);
+		byte[] theirX25519PublicKey = Ed25519Extras.toX25519PublicKey(theirPublicKey);
 		assertEquals("X25519 public key incorrect", expectedTheirX25519PublicKey, Base58.encode(theirX25519PublicKey));
 
 		byte[] sharedSecret = calcBCSharedSecret(ourPrivateKey, theirPublicKey);
