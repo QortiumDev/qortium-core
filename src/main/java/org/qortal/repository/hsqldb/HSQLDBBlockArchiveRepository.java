@@ -120,7 +120,7 @@ public class HSQLDBBlockArchiveRepository implements BlockArchiveRepository {
         sql.append("SELECT signature, height, BlockArchive.minter FROM ");
 
         // List of minter account's public key and reward-share public keys with minter's public key
-        sql.append("(SELECT * FROM (VALUES (CAST(? AS QortalPublicKey))) UNION (SELECT reward_share_public_key FROM RewardShares WHERE minter_public_key = ?)) AS PublicKeys (public_key) ");
+        sql.append("(SELECT * FROM (VALUES (CAST(? AS AccountPublicKey))) UNION (SELECT reward_share_public_key FROM RewardShares WHERE minter_public_key = ?)) AS PublicKeys (public_key) ");
 
         // Match BlockArchive blocks signed with public key from above list
         sql.append("JOIN BlockArchive ON BlockArchive.minter = public_key ");

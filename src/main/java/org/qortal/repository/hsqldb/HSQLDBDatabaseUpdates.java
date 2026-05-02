@@ -34,7 +34,7 @@ public class HSQLDBDatabaseUpdates {
 		while (databaseUpdating(connection, wasPristine))
 			incrementDatabaseVersion(connection);
 
-		String text = String.format("Starting Qortal Core v%s...", Controller.getInstance().getVersionStringWithoutPrefix());
+		String text = String.format("Starting Qortium Core v%s...", Controller.getInstance().getVersionStringWithoutPrefix());
 		SplashFrame.getInstance().updateStatus(text);
 
 		return wasPristine;
@@ -139,10 +139,10 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE TYPE PollName AS VARCHAR(128) COLLATE SQL_TEXT_NO_PAD");
 					stmt.execute("CREATE TYPE PollOption AS VARCHAR(80) COLLATE SQL_TEXT_UCC_NO_PAD");
 					stmt.execute("CREATE TYPE PollOptionIndex AS TINYINT");
-					stmt.execute("CREATE TYPE QortalAddress AS VARCHAR(36)");
-					stmt.execute("CREATE TYPE QortalKeySeed AS VARBINARY(32)");
-					stmt.execute("CREATE TYPE QortalPublicKey AS VARBINARY(32)");
-					stmt.execute("CREATE TYPE QortalAmount AS BIGINT");
+					stmt.execute("CREATE TYPE AccountAddress AS VARCHAR(36)");
+					stmt.execute("CREATE TYPE PrivateKeySeed AS VARBINARY(32)");
+					stmt.execute("CREATE TYPE AccountPublicKey AS VARBINARY(32)");
+					stmt.execute("CREATE TYPE AssetAmount AS BIGINT");
 					stmt.execute("CREATE TYPE RegisteredName AS VARCHAR(128) COLLATE SQL_TEXT_NO_PAD");
 					stmt.execute("CREATE TYPE RewardSharePercent AS INT");
 					stmt.execute("CREATE TYPE Signature AS VARBINARY(64)");
@@ -151,9 +151,9 @@ public class HSQLDBDatabaseUpdates {
 				case 1:
 					// Blocks
 					stmt.execute("CREATE TABLE Blocks (signature BlockSignature, version TINYINT NOT NULL, reference BlockSignature, "
-							+ "transaction_count INTEGER NOT NULL, total_fees QortalAmount NOT NULL, transactions_signature Signature NOT NULL, "
+							+ "transaction_count INTEGER NOT NULL, total_fees AssetAmount NOT NULL, transactions_signature Signature NOT NULL, "
 							+ "height INTEGER NOT NULL, minted_when EpochMillis NOT NULL, "
-							+ "minter QortalPublicKey NOT NULL, minter_signature Signature NOT NULL, AT_count INTEGER NOT NULL, AT_fees QortalAmount NOT NULL, "
+							+ "minter AccountPublicKey NOT NULL, minter_signature Signature NOT NULL, AT_count INTEGER NOT NULL, AT_fees AssetAmount NOT NULL, "
 							+ "online_accounts VARBINARY(1024), online_accounts_count INTEGER NOT NULL, online_accounts_timestamp EpochMillis, online_accounts_signatures VARBINARY(1M), "
 							+ "PRIMARY KEY (signature))");
 					// For finding blocks by height.
@@ -171,7 +171,7 @@ public class HSQLDBDatabaseUpdates {
 				case 2:
 					// Generic transactions (creator and milestone_block for genesis transactions)
 					stmt.execute("CREATE TABLE Transactions (signature Signature, type TINYINT NOT NULL, "
-							+ "creator QortalPublicKey NOT NULL, created_when EpochMillis NOT NULL, fee QortalAmount NOT NULL, "
+							+ "creator AccountPublicKey NOT NULL, created_when EpochMillis NOT NULL, fee AssetAmount NOT NULL, "
 							+ "tx_group_id GroupID NOT NULL, nonce INT, block_height INTEGER, "
 							+ "approval_status TINYINT NOT NULL, approval_height INTEGER, "
 							+ "PRIMARY KEY (signature))");
@@ -207,7 +207,7 @@ public class HSQLDBDatabaseUpdates {
 
 					// Transaction participants
 					// To allow lookup of all activity by an address
-					stmt.execute("CREATE TABLE TransactionParticipants (signature Signature NOT NULL, participant QortalAddress NOT NULL, "
+					stmt.execute("CREATE TABLE TransactionParticipants (signature Signature NOT NULL, participant AccountAddress NOT NULL, "
 							+ "FOREIGN KEY (signature) REFERENCES Transactions (signature) ON DELETE CASCADE)");
 					// Add index to TransactionParticipants to speed up queries
 					stmt.execute("CREATE INDEX TransactionParticipantsAddressIndex on TransactionParticipants (participant)");
@@ -217,7 +217,7 @@ public class HSQLDBDatabaseUpdates {
 
 				case 3:
 					// Accounts
-					stmt.execute("CREATE TABLE Accounts (account QortalAddress, reference Signature, public_key QortalPublicKey, "
+					stmt.execute("CREATE TABLE Accounts (account AccountAddress, reference Signature, public_key AccountPublicKey, "
 							+ "default_group_id GroupID NOT NULL DEFAULT 0, level INT NOT NULL DEFAULT 0, "
 							+ "blocks_minted INTEGER NOT NULL DEFAULT 0, blocks_minted_adjustment INTEGER NOT NULL DEFAULT 0, "
 							+ "PRIMARY KEY (account))");
@@ -227,7 +227,7 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("SET TABLE Accounts NEW SPACE");
 
 					// Account balances
-					stmt.execute("CREATE TABLE AccountBalances (account QortalAddress, asset_id AssetID, balance QortalAmount NOT NULL, "
+					stmt.execute("CREATE TABLE AccountBalances (account AccountAddress, asset_id AssetID, balance AssetAmount NOT NULL, "
 							+ "PRIMARY KEY (account, asset_id), FOREIGN KEY (account) REFERENCES Accounts (account) ON DELETE CASCADE)");
 					// Index for account balance lookups by asset and balance
 					stmt.execute("CREATE INDEX AccountBalancesAssetBalanceIndex ON AccountBalances (asset_id, balance)");
@@ -239,36 +239,36 @@ public class HSQLDBDatabaseUpdates {
 
 				case 4:
 					// Genesis Transactions
-					stmt.execute("CREATE TABLE GenesisTransactions (signature Signature, recipient QortalAddress NOT NULL, "
-							+ "amount QortalAmount NOT NULL, asset_id AssetID NOT NULL, " + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE GenesisTransactions (signature Signature, recipient AccountAddress NOT NULL, "
+							+ "amount AssetAmount NOT NULL, asset_id AssetID NOT NULL, " + TRANSACTION_KEYS + ")");
 					break;
 
 				case 5:
 					// Payments
 					// Arbitrary/Multi-payment/Message/Payment Transaction Payments
-					stmt.execute("CREATE TABLE SharedTransactionPayments (signature Signature, recipient QortalAddress NOT NULL, "
-							+ "amount QortalAmount NOT NULL, asset_id AssetID NOT NULL, " + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE SharedTransactionPayments (signature Signature, recipient AccountAddress NOT NULL, "
+							+ "amount AssetAmount NOT NULL, asset_id AssetID NOT NULL, " + TRANSACTION_KEYS + ")");
 
 					// Payment Transactions
-					stmt.execute("CREATE TABLE PaymentTransactions (signature Signature, sender QortalPublicKey NOT NULL, recipient QortalAddress NOT NULL, "
-							+ "amount QortalAmount NOT NULL, " + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE PaymentTransactions (signature Signature, sender AccountPublicKey NOT NULL, recipient AccountAddress NOT NULL, "
+							+ "amount AssetAmount NOT NULL, " + TRANSACTION_KEYS + ")");
 
 					// Multi-payment Transactions
-					stmt.execute("CREATE TABLE MultiPaymentTransactions (signature Signature, sender QortalPublicKey NOT NULL, "
+					stmt.execute("CREATE TABLE MultiPaymentTransactions (signature Signature, sender AccountPublicKey NOT NULL, "
 							+ TRANSACTION_KEYS + ")");
 					break;
 
 				case 6:
 					// Message Transactions
 					stmt.execute("CREATE TABLE MessageTransactions (signature Signature, version TINYINT NOT NULL, nonce INT NOT NULL, "
-							+ "sender QortalPublicKey NOT NULL, recipient QortalAddress, amount QortalAmount NOT NULL, asset_id AssetID, "
+							+ "sender AccountPublicKey NOT NULL, recipient AccountAddress, amount AssetAmount NOT NULL, asset_id AssetID, "
 							+ "is_text BOOLEAN NOT NULL, is_encrypted BOOLEAN NOT NULL, data MessageData NOT NULL, "
 							+ TRANSACTION_KEYS + ")");
 					break;
 
 				case 7:
 					// Arbitrary Transactions
-					stmt.execute("CREATE TABLE ArbitraryTransactions (signature Signature, sender QortalPublicKey NOT NULL, version TINYINT NOT NULL, "
+					stmt.execute("CREATE TABLE ArbitraryTransactions (signature Signature, sender AccountPublicKey NOT NULL, version TINYINT NOT NULL, "
 							+ "service SMALLINT NOT NULL, is_data_raw BOOLEAN NOT NULL, data ArbitraryData NOT NULL, "
 							+ TRANSACTION_KEYS + ")");
 					// NB: Actual data payload stored elsewhere
@@ -276,9 +276,9 @@ public class HSQLDBDatabaseUpdates {
 
 				case 8:
 					// Name-related
-					stmt.execute("CREATE TABLE Names (name RegisteredName, reduced_name RegisteredName, owner QortalAddress NOT NULL, "
+					stmt.execute("CREATE TABLE Names (name RegisteredName, reduced_name RegisteredName, owner AccountAddress NOT NULL, "
 							+ "registered_when EpochMillis NOT NULL, updated_when EpochMillis, "
-							+ "is_for_sale BOOLEAN NOT NULL DEFAULT FALSE, sale_price QortalAmount, data NameData NOT NULL, "
+							+ "is_for_sale BOOLEAN NOT NULL DEFAULT FALSE, sale_price AssetAmount, data NameData NOT NULL, "
 							+ "reference Signature, creation_group_id GroupID NOT NULL DEFAULT 0, "
 							+ "PRIMARY KEY (name))");
 					// For finding names by owner
@@ -287,31 +287,31 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE INDEX NamesReducedNameIndex ON Names (reduced_name)");
 
 					// Register Name Transactions
-					stmt.execute("CREATE TABLE RegisterNameTransactions (signature Signature, registrant QortalPublicKey NOT NULL, name RegisteredName NOT NULL, "
+					stmt.execute("CREATE TABLE RegisterNameTransactions (signature Signature, registrant AccountPublicKey NOT NULL, name RegisteredName NOT NULL, "
 							+ "data NameData NOT NULL, reduced_name RegisteredName NOT NULL, " + TRANSACTION_KEYS + ")");
 
 					// Update Name Transactions
-					stmt.execute("CREATE TABLE UpdateNameTransactions (signature Signature, owner QortalPublicKey NOT NULL, name RegisteredName NOT NULL, "
+					stmt.execute("CREATE TABLE UpdateNameTransactions (signature Signature, owner AccountPublicKey NOT NULL, name RegisteredName NOT NULL, "
 							+ "new_name RegisteredName NOT NULL, new_data NameData NOT NULL, reduced_new_name RegisteredName NOT NULL, "
 							+ "name_reference Signature, " + TRANSACTION_KEYS + ")");
 
 					// Sell Name Transactions
-					stmt.execute("CREATE TABLE SellNameTransactions (signature Signature, owner QortalPublicKey NOT NULL, name RegisteredName NOT NULL, "
-							+ "amount QortalAmount NOT NULL, " + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE SellNameTransactions (signature Signature, owner AccountPublicKey NOT NULL, name RegisteredName NOT NULL, "
+							+ "amount AssetAmount NOT NULL, " + TRANSACTION_KEYS + ")");
 
 					// Cancel Sell Name Transactions
-					stmt.execute("CREATE TABLE CancelSellNameTransactions (signature Signature, owner QortalPublicKey NOT NULL, name RegisteredName NOT NULL, "
+					stmt.execute("CREATE TABLE CancelSellNameTransactions (signature Signature, owner AccountPublicKey NOT NULL, name RegisteredName NOT NULL, "
 							+ TRANSACTION_KEYS + ")");
 
 					// Buy Name Transactions
-					stmt.execute("CREATE TABLE BuyNameTransactions (signature Signature, buyer QortalPublicKey NOT NULL, name RegisteredName NOT NULL, "
-							+ "seller QortalAddress NOT NULL, amount QortalAmount NOT NULL, name_reference Signature, " + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE BuyNameTransactions (signature Signature, buyer AccountPublicKey NOT NULL, name RegisteredName NOT NULL, "
+							+ "seller AccountAddress NOT NULL, amount AssetAmount NOT NULL, name_reference Signature, " + TRANSACTION_KEYS + ")");
 					break;
 
 				case 9:
 					// Polls/voting
-					stmt.execute("CREATE TABLE Polls (poll_name PollName, creator QortalPublicKey NOT NULL, "
-							+ "owner QortalAddress NOT NULL, published_when EpochMillis NOT NULL, "
+					stmt.execute("CREATE TABLE Polls (poll_name PollName, creator AccountPublicKey NOT NULL, "
+							+ "owner AccountAddress NOT NULL, published_when EpochMillis NOT NULL, "
 							+ "description GenericDescription NOT NULL, "
 							+ "PRIMARY KEY (poll_name))");
 					// For when a user wants to lookup poll they own
@@ -322,11 +322,11 @@ public class HSQLDBDatabaseUpdates {
 							+ "PRIMARY KEY (poll_name, option_index), FOREIGN KEY (poll_name) REFERENCES Polls (poll_name) ON DELETE CASCADE)");
 
 					// Actual votes cast on a poll by voting users. NOTE: only one vote per user supported at this time.
-					stmt.execute("CREATE TABLE PollVotes (poll_name PollName, voter QortalPublicKey, option_index PollOptionIndex NOT NULL, "
+					stmt.execute("CREATE TABLE PollVotes (poll_name PollName, voter AccountPublicKey, option_index PollOptionIndex NOT NULL, "
 							+ "PRIMARY KEY (poll_name, voter), FOREIGN KEY (poll_name) REFERENCES Polls (poll_name) ON DELETE CASCADE)");
 
 					// Create Poll Transactions
-					stmt.execute("CREATE TABLE CreatePollTransactions (signature Signature, creator QortalPublicKey NOT NULL, owner QortalAddress NOT NULL, "
+					stmt.execute("CREATE TABLE CreatePollTransactions (signature Signature, creator AccountPublicKey NOT NULL, owner AccountAddress NOT NULL, "
 							+ "poll_name PollName NOT NULL, description GenericDescription NOT NULL, " + TRANSACTION_KEYS + ")");
 
 					// Poll options. NB: option is implicitly NON NULL and UNIQUE due to being part of compound primary key
@@ -335,13 +335,13 @@ public class HSQLDBDatabaseUpdates {
 					// For the future: add flag to polls to allow one or multiple votes per voter
 
 					// Vote On Poll Transactions
-					stmt.execute("CREATE TABLE VoteOnPollTransactions (signature Signature, voter QortalPublicKey NOT NULL, poll_name PollName NOT NULL, "
+					stmt.execute("CREATE TABLE VoteOnPollTransactions (signature Signature, voter AccountPublicKey NOT NULL, poll_name PollName NOT NULL, "
 							+ "option_index PollOptionIndex NOT NULL, previous_option_index PollOptionIndex, " + TRANSACTION_KEYS + ")");
 					break;
 
 				case 10:
 					// Assets (including the native asset itself)
-					stmt.execute("CREATE TABLE Assets (asset_id AssetID, owner QortalAddress NOT NULL, "
+					stmt.execute("CREATE TABLE Assets (asset_id AssetID, owner AccountAddress NOT NULL, "
 							+ "asset_name AssetName NOT NULL, description GenericDescription NOT NULL, "
 							+ "quantity BIGINT NOT NULL, is_divisible BOOLEAN NOT NULL, "
 							+ "is_unspendable BOOLEAN NOT NULL DEFAULT FALSE, creation_group_id GroupID NOT NULL DEFAULT 0, "
@@ -358,9 +358,9 @@ public class HSQLDBDatabaseUpdates {
 							+ "SET new_row.asset_id = (SELECT IFNULL(MAX(asset_id) + 1, 0) FROM Assets)");
 
 					// Asset Orders
-					stmt.execute("CREATE TABLE AssetOrders (asset_order_id AssetOrderID, creator QortalPublicKey NOT NULL, "
+					stmt.execute("CREATE TABLE AssetOrders (asset_order_id AssetOrderID, creator AccountPublicKey NOT NULL, "
 							+ "have_asset_id AssetID NOT NULL, want_asset_id AssetID NOT NULL, "
-							+ "amount QortalAmount NOT NULL, fulfilled QortalAmount NOT NULL, price QortalAmount NOT NULL, "
+							+ "amount AssetAmount NOT NULL, fulfilled AssetAmount NOT NULL, price AssetAmount NOT NULL, "
 							+ "ordered_when EpochMillis NOT NULL, is_closed BOOLEAN NOT NULL, is_fulfilled BOOLEAN NOT NULL, "
 							+ "PRIMARY KEY (asset_order_id))");
 					// For quick matching of orders. is_closed are is_fulfilled included so inactive orders can be filtered out.
@@ -370,43 +370,43 @@ public class HSQLDBDatabaseUpdates {
 
 					// Asset Trades
 					stmt.execute("CREATE TABLE AssetTrades (initiating_order_id AssetOrderId NOT NULL, target_order_id AssetOrderId NOT NULL, "
-							+ "target_amount QortalAmount NOT NULL, initiator_amount QortalAmount NOT NULL, traded_when EpochMillis NOT NULL, "
-							+ "initiator_saving QortalAmount NOT NULL DEFAULT 0)");
+							+ "target_amount AssetAmount NOT NULL, initiator_amount AssetAmount NOT NULL, traded_when EpochMillis NOT NULL, "
+							+ "initiator_saving AssetAmount NOT NULL DEFAULT 0)");
 					// For looking up historic trades based on orders
 					stmt.execute("CREATE INDEX AssetTradeBuyOrderIndex on AssetTrades (initiating_order_id, traded_when)");
 					stmt.execute("CREATE INDEX AssetTradeSellOrderIndex on AssetTrades (target_order_id, traded_when)");
 
 					// Issue Asset Transactions
-					stmt.execute("CREATE TABLE IssueAssetTransactions (signature Signature, issuer QortalPublicKey NOT NULL, asset_name AssetName NOT NULL, "
+					stmt.execute("CREATE TABLE IssueAssetTransactions (signature Signature, issuer AccountPublicKey NOT NULL, asset_name AssetName NOT NULL, "
 							+ "description GenericDescription NOT NULL, quantity BIGINT NOT NULL, is_divisible BOOLEAN NOT NULL, asset_id AssetID, "
 							+ "is_unspendable BOOLEAN NOT NULL, data AssetData NOT NULL DEFAULT '', reduced_asset_name AssetName NOT NULL, "
 							+ TRANSACTION_KEYS + ")");
 
 					// Transfer Asset Transactions
-					stmt.execute("CREATE TABLE TransferAssetTransactions (signature Signature, sender QortalPublicKey NOT NULL, recipient QortalAddress NOT NULL, "
-							+ "asset_id AssetID NOT NULL, amount QortalAmount NOT NULL," + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE TransferAssetTransactions (signature Signature, sender AccountPublicKey NOT NULL, recipient AccountAddress NOT NULL, "
+							+ "asset_id AssetID NOT NULL, amount AssetAmount NOT NULL," + TRANSACTION_KEYS + ")");
 
 					// Add support for UPDATE_ASSET transactions
-					stmt.execute("CREATE TABLE UpdateAssetTransactions (signature Signature, owner QortalPublicKey NOT NULL, asset_id AssetID NOT NULL, "
-									+ "new_owner QortalAddress NOT NULL, new_description GenericDescription NOT NULL, new_data AssetData NOT NULL, "
+					stmt.execute("CREATE TABLE UpdateAssetTransactions (signature Signature, owner AccountPublicKey NOT NULL, asset_id AssetID NOT NULL, "
+									+ "new_owner AccountAddress NOT NULL, new_description GenericDescription NOT NULL, new_data AssetData NOT NULL, "
 									+ "orphan_reference Signature, " + TRANSACTION_KEYS + ")");
 
 					// Create Asset Order Transactions
-					stmt.execute("CREATE TABLE CreateAssetOrderTransactions (signature Signature, creator QortalPublicKey NOT NULL, "
-							+ "have_asset_id AssetID NOT NULL, amount QortalAmount NOT NULL, want_asset_id AssetID NOT NULL, price QortalAmount NOT NULL, "
+					stmt.execute("CREATE TABLE CreateAssetOrderTransactions (signature Signature, creator AccountPublicKey NOT NULL, "
+							+ "have_asset_id AssetID NOT NULL, amount AssetAmount NOT NULL, want_asset_id AssetID NOT NULL, price AssetAmount NOT NULL, "
 							+ TRANSACTION_KEYS + ")");
 
 					// Cancel Asset Order Transactions
-					stmt.execute("CREATE TABLE CancelAssetOrderTransactions (signature Signature, creator QortalPublicKey NOT NULL, "
+					stmt.execute("CREATE TABLE CancelAssetOrderTransactions (signature Signature, creator AccountPublicKey NOT NULL, "
 							+ "asset_order_id AssetOrderID NOT NULL, " + TRANSACTION_KEYS + ")");
 					break;
 
 				case 11:
 					// CIYAM Automated Transactions
-					stmt.execute("CREATE TABLE ATs (AT_address QortalAddress, creator QortalPublicKey NOT NULL, created_when EpochMillis NOT NULL, "
+					stmt.execute("CREATE TABLE ATs (AT_address AccountAddress, creator AccountPublicKey NOT NULL, created_when EpochMillis NOT NULL, "
 							+ "version INTEGER NOT NULL, asset_id AssetID NOT NULL, code_bytes ATCode NOT NULL, code_hash VARBINARY(32) NOT NULL, "
 							+ "creation_group_id GroupID NOT NULL DEFAULT 0, is_sleeping BOOLEAN NOT NULL, sleep_until_height INTEGER, "
-							+ "is_finished BOOLEAN NOT NULL, had_fatal_error BOOLEAN NOT NULL, is_frozen BOOLEAN NOT NULL, frozen_balance QortalAmount, "
+							+ "is_finished BOOLEAN NOT NULL, had_fatal_error BOOLEAN NOT NULL, is_frozen BOOLEAN NOT NULL, frozen_balance AssetAmount, "
 							+ "PRIMARY key (AT_address))");
 					// For finding executable ATs, ordered by creation timestamp
 					stmt.execute("CREATE INDEX ATIndex on ATs (is_finished, created_when)");
@@ -414,8 +414,8 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE INDEX ATCreatorIndex on ATs (creator)");
 
 					// AT state on a per-block basis
-					stmt.execute("CREATE TABLE ATStates (AT_address QortalAddress, height INTEGER NOT NULL, created_when EpochMillis NOT NULL, "
-							+ "state_data ATState, state_hash ATStateHash NOT NULL, fees QortalAmount NOT NULL, is_initial BOOLEAN NOT NULL, "
+					stmt.execute("CREATE TABLE ATStates (AT_address AccountAddress, height INTEGER NOT NULL, created_when EpochMillis NOT NULL, "
+							+ "state_data ATState, state_hash ATStateHash NOT NULL, fees AssetAmount NOT NULL, is_initial BOOLEAN NOT NULL, "
 							+ "PRIMARY KEY (AT_address, height), FOREIGN KEY (AT_address) REFERENCES ATs (AT_address) ON DELETE CASCADE)");
 					// For finding per-block AT states, ordered by creation timestamp
 					stmt.execute("CREATE INDEX BlockATStateIndex on ATStates (height, created_when)");
@@ -423,16 +423,16 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("SET TABLE ATStates NEW SPACE");
 
 					// Deploy CIYAM AT Transactions
-					stmt.execute("CREATE TABLE DeployATTransactions (signature Signature, creator QortalPublicKey NOT NULL, AT_name ATName NOT NULL, "
+					stmt.execute("CREATE TABLE DeployATTransactions (signature Signature, creator AccountPublicKey NOT NULL, AT_name ATName NOT NULL, "
 							+ "description GenericDescription NOT NULL, AT_type ATType NOT NULL, AT_tags ATTags NOT NULL, "
-							+ "creation_bytes ATCreationBytes NOT NULL, amount QortalAmount NOT NULL, asset_id AssetID NOT NULL, AT_address QortalAddress, "
+							+ "creation_bytes ATCreationBytes NOT NULL, amount AssetAmount NOT NULL, asset_id AssetID NOT NULL, AT_address AccountAddress, "
 							+ TRANSACTION_KEYS + ")");
 					// For looking up the Deploy AT Transaction based on deployed AT address
 					stmt.execute("CREATE INDEX DeployATAddressIndex on DeployATTransactions (AT_address)");
 
 					// Generated AT Transactions
-					stmt.execute("CREATE TABLE ATTransactions (signature Signature, AT_address QortalAddress NOT NULL, recipient QortalAddress, "
-							+ "amount QortalAmount, asset_id AssetID, message ATMessage, "
+					stmt.execute("CREATE TABLE ATTransactions (signature Signature, AT_address AccountAddress NOT NULL, recipient AccountAddress, "
+							+ "amount AssetAmount, asset_id AssetID, message ATMessage, "
 							+ TRANSACTION_KEYS + ")");
 					// For finding AT Transactions generated by a specific AT
 					stmt.execute("CREATE INDEX ATTransactionsIndex on ATTransactions (AT_address)");
@@ -441,7 +441,7 @@ public class HSQLDBDatabaseUpdates {
 				case 12:
 					// Groups
 					// NOTE: We need to set Groups to `GROUPS` here to avoid SQL Standard Keywords in HSQLDB v2.7.4
-					stmt.execute("CREATE TABLE `GROUPS` (group_id GroupID, owner QortalAddress NOT NULL, group_name GroupName NOT NULL, "
+					stmt.execute("CREATE TABLE `GROUPS` (group_id GroupID, owner AccountAddress NOT NULL, group_name GroupName NOT NULL, "
 							+ "created_when EpochMillis NOT NULL, updated_when EpochMillis, is_open BOOLEAN NOT NULL, "
 							+ "approval_threshold TINYINT NOT NULL, min_block_delay INTEGER NOT NULL, max_block_delay INTEGER NOT NULL, "
 							+ "reference Signature, creation_group_id GroupID, reduced_group_name GroupName NOT NULL, "
@@ -459,20 +459,20 @@ public class HSQLDBDatabaseUpdates {
 							+ "SET new_row.group_id = (SELECT IFNULL(MAX(group_id) + 1, 1) FROM `GROUPS`)");
 
 					// Admins
-					stmt.execute("CREATE TABLE GroupAdmins (group_id GroupID, admin QortalAddress, reference Signature NOT NULL, "
+					stmt.execute("CREATE TABLE GroupAdmins (group_id GroupID, admin AccountAddress, reference Signature NOT NULL, "
 							+ "PRIMARY KEY (group_id, admin), FOREIGN KEY (group_id) REFERENCES `GROUPS` (group_id) ON DELETE CASCADE)");
 					// For finding groups by admin address
 					stmt.execute("CREATE INDEX GroupAdminIndex ON GroupAdmins (admin)");
 
 					// Members
-					stmt.execute("CREATE TABLE GroupMembers (group_id GroupID, address QortalAddress, "
+					stmt.execute("CREATE TABLE GroupMembers (group_id GroupID, address AccountAddress, "
 							+ "joined_when EpochMillis NOT NULL, reference Signature NOT NULL, "
 							+ "PRIMARY KEY (group_id, address), FOREIGN KEY (group_id) REFERENCES `GROUPS` (group_id) ON DELETE CASCADE)");
 					// For finding groups by member address
 					stmt.execute("CREATE INDEX GroupMemberIndex ON GroupMembers (address)");
 
 					// Invites
-					stmt.execute("CREATE TABLE GroupInvites (group_id GroupID, inviter QortalAddress, invitee QortalAddress, "
+					stmt.execute("CREATE TABLE GroupInvites (group_id GroupID, inviter AccountAddress, invitee AccountAddress, "
 							+ "expires_when EpochMillis, reference Signature, "
 							+ "PRIMARY KEY (group_id, invitee), FOREIGN KEY (group_id) REFERENCES `GROUPS` (group_id) ON DELETE CASCADE)");
 					// For finding invites sent by inviter
@@ -483,12 +483,12 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE INDEX GroupInviteExpiryIndex ON GroupInvites (expires_when)");
 
 					// Pending "join requests"
-					stmt.execute("CREATE TABLE GroupJoinRequests (group_id GroupID, joiner QortalAddress, reference Signature NOT NULL, "
+					stmt.execute("CREATE TABLE GroupJoinRequests (group_id GroupID, joiner AccountAddress, reference Signature NOT NULL, "
 							+ "PRIMARY KEY (group_id, joiner))");
 
 					// Bans
 					// NULL expires_when means does not expire!
-					stmt.execute("CREATE TABLE GroupBans (group_id GroupID, offender QortalAddress, admin QortalAddress NOT NULL, "
+					stmt.execute("CREATE TABLE GroupBans (group_id GroupID, offender AccountAddress, admin AccountAddress NOT NULL, "
 							+ "banned_when EpochMillis NOT NULL, reason GenericDescription NOT NULL, expires_when EpochMillis, reference Signature NOT NULL, "
 							+ "PRIMARY KEY (group_id, offender), FOREIGN KEY (group_id) REFERENCES `GROUPS` (group_id) ON DELETE CASCADE)");
 					// For expiry maintenance
@@ -498,62 +498,62 @@ public class HSQLDBDatabaseUpdates {
 				case 13:
 					// Group transactions
 					// Create group
-					stmt.execute("CREATE TABLE CreateGroupTransactions (signature Signature, creator QortalPublicKey NOT NULL, group_name GroupName NOT NULL, "
+					stmt.execute("CREATE TABLE CreateGroupTransactions (signature Signature, creator AccountPublicKey NOT NULL, group_name GroupName NOT NULL, "
 							+ "is_open BOOLEAN NOT NULL, approval_threshold TINYINT NOT NULL, reduced_group_name GroupName NOT NULL, "
 							+ "min_block_delay INTEGER NOT NULL, max_block_delay INTEGER NOT NULL, group_id GroupID, description GenericDescription NOT NULL, "
 							+ TRANSACTION_KEYS + ")");
 
 					// Update group
-					stmt.execute("CREATE TABLE UpdateGroupTransactions (signature Signature, owner QortalPublicKey NOT NULL, group_id GroupID NOT NULL, "
-							+ "new_owner QortalAddress NOT NULL, new_is_open BOOLEAN NOT NULL, new_approval_threshold TINYINT NOT NULL, "
+					stmt.execute("CREATE TABLE UpdateGroupTransactions (signature Signature, owner AccountPublicKey NOT NULL, group_id GroupID NOT NULL, "
+							+ "new_owner AccountAddress NOT NULL, new_is_open BOOLEAN NOT NULL, new_approval_threshold TINYINT NOT NULL, "
 							+ "new_min_block_delay INTEGER NOT NULL, new_max_block_delay INTEGER NOT NULL, "
 							+ "group_reference Signature, new_description GenericDescription NOT NULL, " + TRANSACTION_KEYS + ")");
 
 					// Promote to admin
-					stmt.execute("CREATE TABLE AddGroupAdminTransactions (signature Signature, owner QortalPublicKey NOT NULL, "
-							+ "group_id GroupID NOT NULL, address QortalAddress NOT NULL, " + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE AddGroupAdminTransactions (signature Signature, owner AccountPublicKey NOT NULL, "
+							+ "group_id GroupID NOT NULL, address AccountAddress NOT NULL, " + TRANSACTION_KEYS + ")");
 
 					// Demote from admin
-					stmt.execute("CREATE TABLE RemoveGroupAdminTransactions (signature Signature, owner QortalPublicKey NOT NULL, "
-							+ "group_id GroupID NOT NULL, admin QortalAddress NOT NULL, admin_reference Signature, "
+					stmt.execute("CREATE TABLE RemoveGroupAdminTransactions (signature Signature, owner AccountPublicKey NOT NULL, "
+							+ "group_id GroupID NOT NULL, admin AccountAddress NOT NULL, admin_reference Signature, "
 							+ TRANSACTION_KEYS + ")");
 
 					// Join group
-					stmt.execute("CREATE TABLE JoinGroupTransactions (signature Signature, joiner QortalPublicKey NOT NULL, group_id GroupID NOT NULL, "
+					stmt.execute("CREATE TABLE JoinGroupTransactions (signature Signature, joiner AccountPublicKey NOT NULL, group_id GroupID NOT NULL, "
 							+ "invite_reference Signature, previous_group_id GroupID, " + TRANSACTION_KEYS + ")");
 
 					// Leave group
-					stmt.execute("CREATE TABLE LeaveGroupTransactions (signature Signature, leaver QortalPublicKey NOT NULL, group_id GroupID NOT NULL, "
+					stmt.execute("CREATE TABLE LeaveGroupTransactions (signature Signature, leaver AccountPublicKey NOT NULL, group_id GroupID NOT NULL, "
 							+ "member_reference Signature, admin_reference Signature, previous_group_id GroupID, " + TRANSACTION_KEYS + ")");
 
 					// Kick from group
-					stmt.execute("CREATE TABLE GroupKickTransactions (signature Signature, admin QortalPublicKey NOT NULL, "
-							+ "group_id GroupID NOT NULL, address QortalAddress NOT NULL, reason GroupReason, previous_group_id GroupID, "
+					stmt.execute("CREATE TABLE GroupKickTransactions (signature Signature, admin AccountPublicKey NOT NULL, "
+							+ "group_id GroupID NOT NULL, address AccountAddress NOT NULL, reason GroupReason, previous_group_id GroupID, "
 							+ "member_reference Signature, admin_reference Signature, join_reference Signature, " + TRANSACTION_KEYS + ")");
 
 					// Invite to group
-					stmt.execute("CREATE TABLE GroupInviteTransactions (signature Signature, admin QortalPublicKey NOT NULL, group_id GroupID NOT NULL, "
-							+ "invitee QortalAddress NOT NULL, time_to_live INTEGER NOT NULL, join_reference Signature, previous_group_id GroupID, "
+					stmt.execute("CREATE TABLE GroupInviteTransactions (signature Signature, admin AccountPublicKey NOT NULL, group_id GroupID NOT NULL, "
+							+ "invitee AccountAddress NOT NULL, time_to_live INTEGER NOT NULL, join_reference Signature, previous_group_id GroupID, "
 							+ TRANSACTION_KEYS + ")");
 
 					// Cancel group invite
-					stmt.execute("CREATE TABLE CancelGroupInviteTransactions (signature Signature, admin QortalPublicKey NOT NULL, group_id GroupID NOT NULL, "
-							+ "invitee QortalAddress NOT NULL, invite_reference Signature, " + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE CancelGroupInviteTransactions (signature Signature, admin AccountPublicKey NOT NULL, group_id GroupID NOT NULL, "
+							+ "invitee AccountAddress NOT NULL, invite_reference Signature, " + TRANSACTION_KEYS + ")");
 
 					// Ban from group
-					stmt.execute("CREATE TABLE GroupBanTransactions (signature Signature, admin QortalPublicKey NOT NULL, group_id GroupID NOT NULL, "
-							+ "address QortalAddress NOT NULL, reason GroupReason, time_to_live INTEGER NOT NULL, previous_group_id GroupID, "
+					stmt.execute("CREATE TABLE GroupBanTransactions (signature Signature, admin AccountPublicKey NOT NULL, group_id GroupID NOT NULL, "
+							+ "address AccountAddress NOT NULL, reason GroupReason, time_to_live INTEGER NOT NULL, previous_group_id GroupID, "
 							+ "member_reference Signature, admin_reference Signature, join_invite_reference Signature, "
 							+ TRANSACTION_KEYS + ")");
 
 					// Unban from group
-					stmt.execute("CREATE TABLE CancelGroupBanTransactions (signature Signature, admin QortalPublicKey NOT NULL, group_id GroupID NOT NULL, "
-							+ "address QortalAddress NOT NULL, ban_reference Signature, " + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE CancelGroupBanTransactions (signature Signature, admin AccountPublicKey NOT NULL, group_id GroupID NOT NULL, "
+							+ "address AccountAddress NOT NULL, ban_reference Signature, " + TRANSACTION_KEYS + ")");
 
 					// Approval transactions
 					// "pending_signature" contains signature of pending transaction requiring approval
 					// "prior_reference" contains signature of previous approval transaction for orphaning purposes
-					stmt.execute("CREATE TABLE GroupApprovalTransactions (signature Signature, admin QortalPublicKey NOT NULL, pending_signature Signature NOT NULL, approval BOOLEAN NOT NULL, "
+					stmt.execute("CREATE TABLE GroupApprovalTransactions (signature Signature, admin AccountPublicKey NOT NULL, pending_signature Signature NOT NULL, approval BOOLEAN NOT NULL, "
 							+ "prior_reference Signature, " + TRANSACTION_KEYS + ")");
 					// For finding transactions pending approval, and maybe decision by specific admin
 					stmt.execute("CREATE INDEX GroupApprovalLatestIndex on GroupApprovalTransactions (pending_signature, admin)");
@@ -572,13 +572,13 @@ public class HSQLDBDatabaseUpdates {
 				case 15:
 					// Reward-shares
 					// Transaction emitted by minter announcing they are sharing with recipient
-					stmt.execute("CREATE TABLE RewardShareTransactions (signature Signature, minter_public_key QortalPublicKey NOT NULL, recipient QortalAddress NOT NULL, "
-							+ "reward_share_public_key QortalPublicKey NOT NULL, share_percent RewardSharePercent NOT NULL, previous_share_percent RewardSharePercent, "
+					stmt.execute("CREATE TABLE RewardShareTransactions (signature Signature, minter_public_key AccountPublicKey NOT NULL, recipient AccountAddress NOT NULL, "
+							+ "reward_share_public_key AccountPublicKey NOT NULL, share_percent RewardSharePercent NOT NULL, previous_share_percent RewardSharePercent, "
 							+ TRANSACTION_KEYS + ")");
 
 					// Active reward-shares
-					stmt.execute("CREATE TABLE RewardShares (minter_public_key QortalPublicKey NOT NULL, minter QortalAddress NOT NULL, recipient QortalAddress NOT NULL, "
-							+ "reward_share_public_key QortalPublicKey NOT NULL, share_percent RewardSharePercent NOT NULL, "
+					stmt.execute("CREATE TABLE RewardShares (minter_public_key AccountPublicKey NOT NULL, minter AccountAddress NOT NULL, recipient AccountAddress NOT NULL, "
+							+ "reward_share_public_key AccountPublicKey NOT NULL, share_percent RewardSharePercent NOT NULL, "
 							+ "PRIMARY KEY (minter_public_key, recipient))");
 					// For looking up reward-shares based on reward-share public key
 					stmt.execute("CREATE INDEX RewardSharePublicKeyIndex ON RewardShares (reward_share_public_key)");
@@ -586,12 +586,12 @@ public class HSQLDBDatabaseUpdates {
 
 				case 16:
 					// Stash of private keys used for generating blocks. These should be proxy keys!
-					stmt.execute("CREATE TABLE MintingAccounts (minter_private_key QortalKeySeed NOT NULL, minter_public_key QortalPublicKey NOT NULL, PRIMARY KEY (minter_private_key))");
+					stmt.execute("CREATE TABLE MintingAccounts (minter_private_key PrivateKeySeed NOT NULL, minter_public_key AccountPublicKey NOT NULL, PRIMARY KEY (minter_private_key))");
 					break;
 
 				case 17:
 					// TRANSFER_PRIVS transaction
-					stmt.execute("CREATE TABLE TransferPrivsTransactions (signature Signature, sender QortalPublicKey NOT NULL, recipient QortalAddress NOT NULL, "
+					stmt.execute("CREATE TABLE TransferPrivsTransactions (signature Signature, sender AccountPublicKey NOT NULL, recipient AccountAddress NOT NULL, "
 							+ "previous_recipient_existed BOOLEAN, "
 							+ "previous_sender_blocks_minted_adjustment INT, previous_sender_blocks_minted INT, "
 							+ TRANSACTION_KEYS + ")");
@@ -599,7 +599,7 @@ public class HSQLDBDatabaseUpdates {
 
 				case 18:
 					// Chat transactions
-					stmt.execute("CREATE TABLE ChatTransactions (signature Signature, sender QortalAddress NOT NULL, nonce INT NOT NULL, recipient QortalAddress, "
+					stmt.execute("CREATE TABLE ChatTransactions (signature Signature, sender AccountAddress NOT NULL, nonce INT NOT NULL, recipient AccountAddress, "
 							+ "is_text BOOLEAN NOT NULL, is_encrypted BOOLEAN NOT NULL, data MessageData NOT NULL, " + TRANSACTION_KEYS + ")");
 					// For finding chat messages by sender
 					stmt.execute("CREATE INDEX ChatTransactionsSenderIndex ON ChatTransactions (sender)");
@@ -615,10 +615,10 @@ public class HSQLDBDatabaseUpdates {
 				case 20:
 					// Trade bot
 					// See case 25 below for changes
-					stmt.execute("CREATE TABLE TradeBotStates (trade_private_key QortalKeySeed NOT NULL, trade_state TINYINT NOT NULL, "
-							+ "creator_address QortalAddress NOT NULL, at_address QortalAddress, updated_when BIGINT NOT NULL, native_amount QortalAmount NOT NULL, "
-							+ "trade_native_public_key QortalPublicKey NOT NULL, trade_native_public_key_hash VARBINARY(32) NOT NULL, "
-							+ "trade_native_address QortalAddress NOT NULL, secret VARBINARY(32) NOT NULL, hash_of_secret VARBINARY(32) NOT NULL, "
+					stmt.execute("CREATE TABLE TradeBotStates (trade_private_key PrivateKeySeed NOT NULL, trade_state TINYINT NOT NULL, "
+							+ "creator_address AccountAddress NOT NULL, at_address AccountAddress, updated_when BIGINT NOT NULL, native_amount AssetAmount NOT NULL, "
+							+ "trade_native_public_key AccountPublicKey NOT NULL, trade_native_public_key_hash VARBINARY(32) NOT NULL, "
+							+ "trade_native_address AccountAddress NOT NULL, secret VARBINARY(32) NOT NULL, hash_of_secret VARBINARY(32) NOT NULL, "
 							+ "trade_foreign_public_key VARBINARY(33) NOT NULL, trade_foreign_public_key_hash VARBINARY(32) NOT NULL, "
 							+ "bitcoin_amount BIGINT NOT NULL, xprv58 VARCHAR(200), last_transaction_signature Signature, locktime_a BIGINT, "
 							+ "receiving_account_info VARBINARY(32) NOT NULL, PRIMARY KEY (trade_private_key))");
@@ -681,7 +681,7 @@ public class HSQLDBDatabaseUpdates {
 				case 28:
 					// Latest AT state cache
 					stmt.execute("CREATE TEMPORARY TABLE IF NOT EXISTS LatestATStates ("
-								+ "AT_address QortalAddress NOT NULL, "
+								+ "AT_address AccountAddress NOT NULL, "
 								+ "height INT NOT NULL"
 							+ ")");
 					break;
@@ -718,8 +718,8 @@ public class HSQLDBDatabaseUpdates {
 
 					// Create new AT-states table without full state data
 					stmt.execute("CREATE TABLE ATStatesNew ("
-							+ "AT_address QortalAddress, height INTEGER NOT NULL, state_hash ATStateHash NOT NULL, "
-							+ "fees QortalAmount NOT NULL, is_initial BOOLEAN NOT NULL, "
+							+ "AT_address AccountAddress, height INTEGER NOT NULL, state_hash ATStateHash NOT NULL, "
+							+ "fees AssetAmount NOT NULL, is_initial BOOLEAN NOT NULL, "
 							+ "PRIMARY KEY (AT_address, height), "
 							+ "FOREIGN KEY (AT_address) REFERENCES ATs (AT_address) ON DELETE CASCADE)");
 					stmt.execute("SET TABLE ATStatesNew NEW SPACE");
@@ -745,7 +745,7 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CHECKPOINT");
 
 					stmt.execute("CREATE TABLE ATStatesData ("
-							+ "AT_address QortalAddress, height INTEGER NOT NULL, state_data ATState NOT NULL, "
+							+ "AT_address AccountAddress, height INTEGER NOT NULL, state_data ATState NOT NULL, "
 							+ "PRIMARY KEY (height, AT_address), "
 							+ "FOREIGN KEY (AT_address) REFERENCES ATs (AT_address) ON DELETE CASCADE)");
 					stmt.execute("SET TABLE ATStatesData NEW SPACE");
@@ -773,7 +773,7 @@ public class HSQLDBDatabaseUpdates {
 					// Fix latest AT state cache which was previous created as TEMPORARY
 					stmt.execute("DROP TABLE IF EXISTS LatestATStates");
 					stmt.execute("CREATE TABLE IF NOT EXISTS LatestATStates ("
-								+ "AT_address QortalAddress NOT NULL, "
+								+ "AT_address AccountAddress NOT NULL, "
 								+ "height INT NOT NULL, PRIMARY KEY (height, AT_address))");
 					break;
 
@@ -823,8 +823,8 @@ public class HSQLDBDatabaseUpdates {
 
 					// Create new AT-states table with new column
 					stmt.execute("CREATE TABLE ATStatesNew ("
-							+ "AT_address QortalAddress, height INTEGER NOT NULL, state_hash ATStateHash NOT NULL, "
-							+ "fees QortalAmount NOT NULL, is_initial BOOLEAN NOT NULL, sleep_until_message_timestamp BIGINT, "
+							+ "AT_address AccountAddress, height INTEGER NOT NULL, state_hash ATStateHash NOT NULL, "
+							+ "fees AssetAmount NOT NULL, is_initial BOOLEAN NOT NULL, sleep_until_message_timestamp BIGINT, "
 							+ "PRIMARY KEY (AT_address, height), "
 							+ "FOREIGN KEY (AT_address) REFERENCES ATs (AT_address) ON DELETE CASCADE)");
 					stmt.execute("SET TABLE ATStatesNew NEW SPACE");
@@ -873,7 +873,7 @@ public class HSQLDBDatabaseUpdates {
 					// Block archive (lookup table to map signature to height)
 					// Actual data is stored in archive files outside of the database
 					stmt.execute("CREATE TABLE BlockArchive (signature BlockSignature, height INTEGER NOT NULL, "
-							+ "minted_when EpochMillis NOT NULL, minter QortalPublicKey NOT NULL, "
+							+ "minted_when EpochMillis NOT NULL, minter AccountPublicKey NOT NULL, "
 							+ "PRIMARY KEY (signature))");
 					// For finding blocks by height.
 					stmt.execute("CREATE INDEX BlockArchiveHeightIndex ON BlockArchive (height)");
@@ -977,7 +977,7 @@ public class HSQLDBDatabaseUpdates {
 
 				case 46:
 					// We need to track the sale price when canceling a name sale, so it can be put back when orphaned
-					stmt.execute("ALTER TABLE CancelSellNameTransactions ADD sale_price QortalAmount");
+					stmt.execute("ALTER TABLE CancelSellNameTransactions ADD sale_price AssetAmount");
 					break;
 
 				case 47:
@@ -1040,8 +1040,8 @@ public class HSQLDBDatabaseUpdates {
 					break;
 
 				case 50:
-					// Primary name for a Qortal Address, 0-1 for any address
-					stmt.execute("CREATE TABLE PrimaryNames (owner QortalAddress, name RegisteredName, "
+					// Primary name for an account address, 0-1 for any address
+					stmt.execute("CREATE TABLE PrimaryNames (owner AccountAddress, name RegisteredName, "
 							+ "PRIMARY KEY (owner), FOREIGN KEY (name) REFERENCES Names (name) ON DELETE CASCADE)");
 					break;
 

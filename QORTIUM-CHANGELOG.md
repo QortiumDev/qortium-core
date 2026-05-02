@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - core: neutralize database schema domain names
+
+Renamed the inherited Qortal-branded HSQLDB domain types to reusable neutral names. Database schema definitions now use `AccountAddress`, `AccountPublicKey`, `PrivateKeySeed`, and `AssetAmount`, and the remaining runtime SQL casts were updated to match the neutral schema while leaving table names, column names, APIs, and Java package names unchanged.
+
 ### 2026-05-02 - core: neutralize QDN app compatibility names
 
 Moved QDN app and content compatibility names from inherited Qortal terms to Qortium-neutral terms without legacy fallbacks. QDN links now use `qdn://`, injected app helpers use `qdnRequest`, resource metadata lives under `.qdn`, encrypted and raw QDN payload prefixes use `qdn*` names, and the default avatar identifier is now `qdn_avatar`.

@@ -329,7 +329,7 @@ public class HSQLDBBlockRepository implements BlockRepository {
 		sql.append("SELECT signature, height, Blocks.minter, online_accounts_count, minted_when, transaction_count, Blocks.reference FROM ");
 
 		// List of minter account's public key and reward-share public keys with minter's public key
-		sql.append("(SELECT * FROM (VALUES (CAST(? AS QortalPublicKey))) UNION (SELECT reward_share_public_key FROM RewardShares WHERE minter_public_key = ?)) AS PublicKeys (public_key) ");
+		sql.append("(SELECT * FROM (VALUES (CAST(? AS AccountPublicKey))) UNION (SELECT reward_share_public_key FROM RewardShares WHERE minter_public_key = ?)) AS PublicKeys (public_key) ");
 
 		// Match Blocks signed with public key from above list
 		sql.append("JOIN Blocks ON Blocks.minter = public_key ");
