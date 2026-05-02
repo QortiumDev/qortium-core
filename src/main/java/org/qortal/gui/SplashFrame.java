@@ -44,7 +44,7 @@ public class SplashFrame {
 			add(Box.createRigidArea(new Dimension(0, 16)));
 
 			// Add status label
-			String text = String.format("Starting Qortal Core v%s...", Controller.getInstance().getVersionStringWithoutPrefix());
+			String text = String.format("Starting Qortium Core v%s...", Controller.getInstance().getVersionStringWithoutPrefix());
 			statusLabel = new JLabel(text, JLabel.CENTER);
 			statusLabel.setMaximumSize(new Dimension(500, 50));
 			statusLabel.setFont(new Font("Verdana", Font.PLAIN, 20));
@@ -76,10 +76,10 @@ public class SplashFrame {
 
 		List<Image> icons = new ArrayList<>();
 		icons.add(Gui.loadImage("icons/icon16.png"));
-		icons.add(Gui.loadImage("icons/qortal_ui_tray_synced.png"));
-		icons.add(Gui.loadImage("icons/qortal_ui_tray_syncing_time-alt.png"));
-		icons.add(Gui.loadImage("icons/qortal_ui_tray_minting.png"));
-		icons.add(Gui.loadImage("icons/qortal_ui_tray_syncing.png"));
+		icons.add(Gui.loadImage("icons/qortium_ui_tray_synced.png"));
+		icons.add(Gui.loadImage("icons/qortium_ui_tray_syncing_time-alt.png"));
+		icons.add(Gui.loadImage("icons/qortium_ui_tray_minting.png"));
+		icons.add(Gui.loadImage("icons/qortium_ui_tray_syncing.png"));
 		icons.add(Gui.loadImage("icons/icon64.png"));
 		icons.add(Gui.loadImage("icons/Qlogo_128.png"));
 		this.splashDialog.setIconImages(icons);

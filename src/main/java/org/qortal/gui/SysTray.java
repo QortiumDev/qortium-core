@@ -49,7 +49,7 @@ public class SysTray {
 		this.popupMenu = createJPopupMenu();
 
 		// Build TrayIcon without AWT PopupMenu (which doesn't support Unicode)...
-		this.trayIcon = new TrayIcon(Gui.loadImage("icons/qortal_ui_tray_synced.png"), "qortal", null);
+		this.trayIcon = new TrayIcon(Gui.loadImage("icons/qortium_ui_tray_synced.png"), "Qortium", null);
 		// ...and attach mouse listener instead so we can use JPopupMenu (which does support Unicode)
 		this.trayIcon.addMouseListener(new MouseAdapter() {
 			@Override
@@ -162,7 +162,7 @@ public class SysTray {
 		about.addActionListener(actionEvent -> {
 			destroyHiddenDialog();
 
-			JOptionPane.showMessageDialog(null,"Qortal Core\n" + Translator.INSTANCE.translate("SysTray", "BUILD_VERSION") + ":\n" + Controller.getInstance().getVersionStringWithoutPrefix(),"Qortal Core",1);
+			JOptionPane.showMessageDialog(null,"Qortium Core\n" + Translator.INSTANCE.translate("SysTray", "BUILD_VERSION") + ":\n" + Controller.getInstance().getVersionStringWithoutPrefix(),"Qortium Core",1);
 		});
 		menu.add(about);
 
@@ -240,16 +240,16 @@ public class SysTray {
 			if (trayIcon != null) {
 				switch (iconid) {
 					case 1:
-						this.trayIcon.setImage(Gui.loadImage("icons/qortal_ui_tray_syncing_time-alt.png"));
+						this.trayIcon.setImage(Gui.loadImage("icons/qortium_ui_tray_syncing_time-alt.png"));
 						break;
 					case 2:
-						this.trayIcon.setImage(Gui.loadImage("icons/qortal_ui_tray_minting.png"));
+						this.trayIcon.setImage(Gui.loadImage("icons/qortium_ui_tray_minting.png"));
 						break;
 					case 3:
-						this.trayIcon.setImage(Gui.loadImage("icons/qortal_ui_tray_syncing.png"));
+						this.trayIcon.setImage(Gui.loadImage("icons/qortium_ui_tray_syncing.png"));
 						break;
 					case 4:
-						this.trayIcon.setImage(Gui.loadImage("icons/qortal_ui_tray_synced.png"));
+						this.trayIcon.setImage(Gui.loadImage("icons/qortium_ui_tray_synced.png"));
 						break;
 				}
 			}

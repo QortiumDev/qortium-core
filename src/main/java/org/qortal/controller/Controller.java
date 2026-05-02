@@ -95,7 +95,7 @@ public class Controller extends Thread {
 
 	/** Controller start-up time (ms) taken using <tt>System.currentTimeMillis()</tt>. */
 	public static final long startTime = System.currentTimeMillis();
-	public static final String VERSION_PREFIX = "qortal-";
+	public static final String VERSION_PREFIX = "qortium-";
 
 	private static final Logger LOGGER = LogManager.getLogger(Controller.class);
 	public static final long MISBEHAVIOUR_COOLOFF = 10 * 60 * 1000L; // ms
@@ -796,7 +796,7 @@ public class Controller extends Thread {
 
 	@Override
 	public void run() {
-		Thread.currentThread().setName("Qortal");
+		Thread.currentThread().setName("Qortium");
 
 		final long repositoryBackupInterval = Settings.getInstance().getRepositoryBackupInterval();
 		final long repositoryCheckpointInterval = Settings.getInstance().getRepositoryCheckpointInterval();

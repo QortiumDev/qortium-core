@@ -185,7 +185,7 @@ public class ArbitraryDataCacheManager extends Thread {
         } catch (SQLException e) {
             throw new DataException(e.getMessage());
         } finally {
-            SplashFrame.getInstance().updateStatus("Proceeding to Start Qortal ...");
+            SplashFrame.getInstance().updateStatus("Proceeding to Start Qortium ...");
         }
     }
 

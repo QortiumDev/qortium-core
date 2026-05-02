@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - core: neutralize runtime UI identity strings
+
+Updated active runtime and GUI-facing identity strings from inherited Qortal wording to Qortium wording. Node version strings now use the `qortium-` prefix, the main controller thread is named Qortium, splash and system tray text now refer to Qortium Core, and the tray icon resource filenames have been moved to Qortium names while leaving the existing artwork unchanged.
+
 ### 2026-05-02 - test: fix repository interrupt test setup
 
 Fixed the repository interrupt test so HSQLDB is explicitly allowed to call its test-only Java sleep routine under the test JVM. The test now also reports the underlying exception when setup or execution fails, shuts down its scheduler, and clears the deliberate interrupt before later repository or JUnit cleanup can inherit it.
