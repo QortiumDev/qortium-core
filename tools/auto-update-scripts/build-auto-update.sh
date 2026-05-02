@@ -4,7 +4,7 @@ set -euo pipefail
 
 # === Configurable Defaults ===
 BASE_BRANCH="master"
-DEFAULT_LOG_DIR="${HOME}/qortal-auto-update-logs"
+DEFAULT_LOG_DIR="${HOME}/qortium-auto-update-logs"
 LOG_FILE=""
 DRY_RUN=false
 RUN_PUBLISH=false
@@ -46,7 +46,7 @@ else
 fi
 
 mkdir -p "${LOG_DIR}" || abort "Unable to create log directory: ${LOG_DIR}"
-LOG_FILE="${LOG_DIR}/qortal-auto-update-log-$(date +%Y%m%d-%H%M%S).log"
+LOG_FILE="${LOG_DIR}/qortium-auto-update-log-$(date +%Y%m%d-%H%M%S).log"
 echo "Logging to: ${LOG_FILE}"
 
 # Log everything to file as well as terminal
@@ -87,8 +87,8 @@ git config user.email || echo "(not set)"
 
 read -rp "Would you like to set/override the Git username and email for this repo? (y/N): " git_id_choice
 if [[ "${git_id_choice}" =~ ^[Yy]$ ]]; then
-  read -rp "Enter Git username (e.g. Qortal-Auto-Update): " git_user
-  read -rp "Enter Git email (e.g. qortal-auto-update@example.com): " git_email
+  read -rp "Enter Git username (e.g. Qortium-Auto-Update): " git_user
+  read -rp "Enter Git email (e.g. qortium-auto-update@example.com): " git_email
 
   run_git config user.name "${git_user}"
   run_git config user.email "${git_email}"
@@ -185,7 +185,8 @@ if ! $DRY_RUN; then
   }
 fi
 
-jar_file=$(ls target/${project}*.jar | head -n1)
+jar_files=(target/"${project}"*.jar)
+jar_file="${jar_files[0]:-}"
 [[ ! -f "${jar_file}" ]] && abort "Built JAR file not found."
 
 # === XOR Obfuscation ===
@@ -196,7 +197,7 @@ $DRY_RUN || java -cp "${jar_file}" org.qortal.XorUpdate "${jar_file}" "${project
 update_branch="auto-update-${short_hash}"
 
 echo "Creating update branch: ${update_branch}"
-if git show-ref --verify --quiet refs/heads/${update_branch}; then
+if git show-ref --verify --quiet "refs/heads/${update_branch}"; then
   run_git branch -D "${update_branch}"
 fi
 
@@ -260,5 +261,3 @@ if $RUN_PUBLISH; then
     echo "WARNING: Python script not found at ${PUBLISH_SCRIPT}. Skipping."
   fi
 fi
-
-

@@ -41,7 +41,7 @@ public class AdvancedStringMatcher {
         private boolean enableStopWords = true;
         private double stopWordWeight = 0.2;
         private int minWordsForPartialMatch = 2;
-        private String synonymFilePath = "qortal-backup/Synonyms.json";
+        private String synonymFilePath = "qortium-backup/Synonyms.json";
         private boolean autoReloadSynonyms = false;
         private long synonymReloadInterval = 300000; // 5 minutes in milliseconds
         

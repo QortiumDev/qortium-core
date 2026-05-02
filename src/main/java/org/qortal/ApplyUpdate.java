@@ -36,7 +36,7 @@ public class ApplyUpdate {
 	private static final Logger LOGGER = LogManager.getLogger(ApplyUpdate.class);
 	private static final String JAR_FILENAME = AutoUpdate.JAR_FILENAME;
 	private static final String NEW_JAR_FILENAME = AutoUpdate.NEW_JAR_FILENAME;
-	private static final String WINDOWS_EXE_LAUNCHER = "qortal.exe";
+	private static final String WINDOWS_EXE_LAUNCHER = "qortium.exe";
 	private static final String JAVA_TOOL_OPTIONS_NAME = "JAVA_TOOL_OPTIONS";
 	private static final String JAVA_TOOL_OPTIONS_VALUE = "";
 

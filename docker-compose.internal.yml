@@ -1,20 +1,20 @@
 services:
-  qortal:
+  qortium:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${QORTAL_CONTAINER_NAME:-qortal-core}
+    container_name: ${QORTIUM_CONTAINER_NAME:-qortium-core}
     restart: unless-stopped
     expose:
-      - "${QORTAL_API_PORT:-12391}"
-      - "${QORTAL_P2P_PORT:-12392}"
-      - "${QORTAL_QDN_PORT:-12394}"
+      - "${QORTIUM_API_PORT:-12391}"
+      - "${QORTIUM_P2P_PORT:-12392}"
+      - "${QORTIUM_QDN_PORT:-12394}"
     volumes:
-      - ./data/qortal:/qortal
+      - ./data/qortium:/qortium
     networks:
-      - qortal_net
+      - qortium_net
 
 networks:
-  qortal_net:
-    name: ${QORTAL_NETWORK_NAME:-qortal-net}
+  qortium_net:
+    name: ${QORTIUM_NETWORK_NAME:-qortium-net}
     driver: bridge

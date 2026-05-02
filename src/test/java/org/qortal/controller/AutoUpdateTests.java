@@ -67,7 +67,7 @@ public class AutoUpdateTests {
 
 		assertTrue(sanitized.contains("-Xmx1g"));
 		assertTrue(sanitized.contains("-Dfoo=bar"));
-		assertTrue(sanitized.contains("-DQORTAL_agentlib=:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"));
+		assertTrue(sanitized.contains("-DQORTIUM_agentlib=:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"));
 		assertFalse(sanitized.contains("abort"));
 		assertFalse(sanitized.contains("exit"));
 		assertFalse(sanitized.contains("vfprintf"));
@@ -84,15 +84,15 @@ public class AutoUpdateTests {
 				true,
 				runtimeInputArgs,
 				savedArgs,
-				Paths.get("/tmp/new-qortal.jar")
+				Paths.get("/tmp/new-qortium.jar")
 		);
 
 		assertEquals(javaExecutable, command.get(0));
 		assertTrue(command.contains("-Xmx2g"));
-		assertTrue(command.contains("-DQORTAL_agentlib=:test=foo"));
+		assertTrue(command.contains("-DQORTIUM_agentlib=:test=foo"));
 		assertFalse(command.contains("abort"));
 		assertTrue(command.contains("-cp"));
-		assertTrue(command.contains("/tmp/new-qortal.jar"));
+		assertTrue(command.contains("/tmp/new-qortium.jar"));
 		assertTrue(command.contains(ApplyUpdate.class.getCanonicalName()));
 		assertTrue(command.contains("--alpha"));
 		assertTrue(command.contains("beta"));
@@ -107,14 +107,14 @@ public class AutoUpdateTests {
 				false,
 				runtimeInputArgs,
 				null,
-				Paths.get("/tmp/new-qortal.jar")
+				Paths.get("/tmp/new-qortium.jar")
 		);
 
 		assertEquals("java", command.get(0));
 		assertFalse(command.contains("-Xmx2g"));
-		assertFalse(command.contains("-DQORTAL_agentlib=:test=foo"));
+		assertFalse(command.contains("-DQORTIUM_agentlib=:test=foo"));
 		assertTrue(command.contains("-cp"));
-		assertTrue(command.contains("/tmp/new-qortal.jar"));
+		assertTrue(command.contains("/tmp/new-qortium.jar"));
 		assertTrue(command.contains(ApplyUpdate.class.getCanonicalName()));
 	}
 
@@ -138,7 +138,7 @@ public class AutoUpdateTests {
 		List<String> sanitized = AutoUpdate.sanitizeJvmArguments(inputArgs);
 
 		assertEquals(Arrays.asList("-Xmx1g", "-agentlib:test=foo", "abort"), inputArgs);
-		assertTrue(sanitized.contains("-DQORTAL_agentlib=:test=foo"));
+		assertTrue(sanitized.contains("-DQORTIUM_agentlib=:test=foo"));
 		assertFalse(sanitized.contains("abort"));
 	}
 
@@ -151,12 +151,23 @@ public class AutoUpdateTests {
 				true,
 				runtimeInputArgs,
 				null,
-				Paths.get("/tmp/new-qortal.jar")
+				Paths.get("/tmp/new-qortium.jar")
 		);
 
 		assertTrue(command.contains("-Xmx2g"));
 		assertTrue(command.contains("-cp"));
-		assertTrue(command.contains("/tmp/new-qortal.jar"));
+		assertTrue(command.contains("/tmp/new-qortium.jar"));
 		assertTrue(command.contains(ApplyUpdate.class.getCanonicalName()));
+	}
+
+	@Test
+	public void testDefaultRuntimeIdentitySettingsUseQortiumNames() throws ReflectiveOperationException {
+		Settings settings = newSettingsInstance();
+
+		assertEquals("QortiumKeyStore.jks", settings.getSslKeystorePathname());
+		assertEquals("qortium-backup", settings.getExportPath());
+		assertEquals("qortium.jar", AutoUpdate.JAR_FILENAME);
+		assertEquals("new-qortium.jar", AutoUpdate.NEW_JAR_FILENAME);
+		assertEquals("-DQORTIUM_agentlib=", AutoUpdate.AGENTLIB_JVM_HOLDER_ARG);
 	}
 }

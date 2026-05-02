@@ -46,26 +46,26 @@ The same method is used to obfuscate and de-obfuscate:
 
 ## Typical download locations
 The git SHA1 commit hash is used to replace `%s` in various download locations, e.g.:
-* https://github.com/Qortal/qortal/raw/%s/qortal.update
-* https://raw.githubusercontent.com@151.101.16.133/Qortal/qortal/%s/qortal.update
+* https://github.com/QuickMythril/qortium/raw/%s/qortium.update
+* https://raw.githubusercontent.com@151.101.16.133/QuickMythril/qortium/%s/qortium.update
 
 These locations are part of the org.qortal.settings.Settings class and can be overriden in settings.json like:
 ```
   "autoUpdateEnabled": true,
   "autoUpdateRepos": [
     "http://mirror.qortal.org/auto-updates/%s",
-    "https://server.host.name@1.2.3.4/Qortal/%s"
+    "https://server.host.name@1.2.3.4/Qortium/%s"
   ]
 ```
 The latter entry is an example where the IP address is provided, bypassing name resolution, for situations where DNS is unreliable or unavailable.
 
 ## XOR tool
-To help with manual verification of auto-updates, there is a XOR tool included in the Qortal JAR.
+To help with manual verification of auto-updates, there is a XOR tool included in the Qortium JAR.
 It can be used thus:
 ```
-$ java -cp qortal.jar org.qortal.XorUpdate
+$ java -cp qortium.jar org.qortal.XorUpdate
 usage: XorUpdate <input-file> <output-file>
-$ java -cp qortal.jar org.qortal.XorUpdate qortal.jar qortal.update
+$ java -cp qortium.jar org.qortal.XorUpdate qortium.jar qortium.update
 $
 ```
 

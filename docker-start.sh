@@ -2,15 +2,15 @@
 set -eu
 
 DEFAULT_JVM_MEMORY_ARGS='-XX:MaxRAMPercentage=25 -XX:+UseG1GC -Xss1024k'
-START_ARGS_FILE="${QORTAL_START_ARGUMENTS_FILE:-/qortal/start-arguments.txt}"
-SETTINGS_FILE="${QORTAL_SETTINGS_FILE:-/qortal/settings.json}"
+START_ARGS_FILE="${QORTIUM_START_ARGUMENTS_FILE:-/qortium/start-arguments.txt}"
+SETTINGS_FILE="${QORTIUM_SETTINGS_FILE:-/qortium/settings.json}"
 
 if [ ! -f "${SETTINGS_FILE}" ]; then
     printf '{}\n' > "${SETTINGS_FILE}"
 fi
 
 if [ ! -f "${START_ARGS_FILE}" ]; then
-    printf '%s\n' "${QORTAL_JVM_MEMORY_ARGS:-${DEFAULT_JVM_MEMORY_ARGS}}" > "${START_ARGS_FILE}"
+    printf '%s\n' "${QORTIUM_JVM_MEMORY_ARGS:-${DEFAULT_JVM_MEMORY_ARGS}}" > "${START_ARGS_FILE}"
 fi
 
 # Convert start-arguments file to a single shell-split argument string.
@@ -25,7 +25,7 @@ file_args="$(awk '
 }
 ' "${START_ARGS_FILE}" 2>/dev/null || true)"
 
-jvm_memory_args="${file_args:-${QORTAL_JVM_MEMORY_ARGS:-${DEFAULT_JVM_MEMORY_ARGS}}}"
+jvm_memory_args="${file_args:-${QORTIUM_JVM_MEMORY_ARGS:-${DEFAULT_JVM_MEMORY_ARGS}}}"
 echo "Using JVM memory args from ${START_ARGS_FILE}: ${jvm_memory_args}"
 echo "Using settings file: ${SETTINGS_FILE}"
 if [ -f "${SETTINGS_FILE}" ]; then
@@ -37,7 +37,7 @@ if [ -f "${SETTINGS_FILE}" ]; then
 fi
 
 if [ "$#" -eq 0 ]; then
-    set -- -jar /usr/local/qortal/qortal.jar "${SETTINGS_FILE}"
+    set -- -jar /usr/local/qortium/qortium.jar "${SETTINGS_FILE}"
 fi
 
 # shellcheck disable=SC2086

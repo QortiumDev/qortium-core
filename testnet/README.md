@@ -123,7 +123,7 @@ Here are some steps to quickly get a single node testnet up and running with a g
 3. Make sure feature triggers and other timestamp/height activations are correctly set. Generally these would be `0` so that they are enabled from the start.
 4. Set a recent genesis `timestamp` in testchain.json, and add this reward share entry:
 `{ "type": "REWARD_SHARE", "minterPublicKey": "DwcUnhxjamqppgfXCLgbYRx8H9XFPUc2qYRy3CEvQWEw", "recipient": "QbTDMss7NtRxxQaSqBZtSLSNdSYgvGaqFf", "rewardSharePublicKey": "CRvQXxFfUMfr4q3o1PcUZPA4aPCiubBsXkk47GzRo754", "sharePercent": 0 },`
-5. Start the node, passing in settings-test.json, e.g: `java -jar qortal.jar settings-test.json`
+5. Start the node, passing in settings-test.json, e.g: `java -jar qortium.jar settings-test.json`
 6. Once started, add the corresponding minting key to the node:
 `curl -X POST "http://localhost:62391/admin/mintingaccounts" -d "F48mYJycFgRdqtc58kiovwbcJgVukjzRE4qRRtRsK9ix"`
 7. Alternatively you can use your own minting account instead of the generic one above.

@@ -23,34 +23,40 @@ else
   exit 1
 fi
 
-# No qortal.jar but we have a Maven built one?
+# No qortium.jar but we have a Maven built one?
 # Be helpful and copy across to correct location
-if [ ! -e qortal.jar -a -f target/qortal*.jar ]; then
-	echo "Copying Maven-built Qortal JAR to correct pathname"
-	cp target/qortal*.jar qortal.jar
+if [ ! -e qortium.jar ]; then
+	for qortium_jar in target/qortium*.jar; do
+		if [ -f "${qortium_jar}" ]; then
+			echo "Copying Maven-built Qortium JAR to correct pathname"
+			cp "${qortium_jar}" qortium.jar
+			break
+		fi
+	done
 fi
 
 # Limits Java JVM stack size and maximum heap usage.
 # Comment out for bigger systems, e.g. non-routers
 # or when API documentation is enabled
 # JAVA MEMORY SETTINGS BELOW - These settings are essentially optimized default settings.
-# Combined with the latest changes on the Qortal Core in version 4.6.6 and beyond,
+# Combined with the latest changes on Qortium Core,
 # should give a dramatic increase In performance due to optimized Garbage Collection.
 # These memory arguments should work on machines with as little as 6GB of RAM.
 # If you want to run on a machine with less than 6GB of RAM, it is suggested to increase the '50' below to '75'
-# The Qortal Core will utilize only as much RAM as it needs, but up-to the amount set in percentage below.
+# Qortium Core will utilize only as much RAM as it needs, but up-to the amount set in percentage below.
 JVM_MEMORY_ARGS="-XX:MaxRAMPercentage=50 -XX:+UseG1GC -Xss1024k"
 
 # Although java.net.preferIPv4Stack is supposed to be false
 # by default in Java 11, on some platforms (e.g. FreeBSD 12),
 # it is overridden to be true by default. Hence we explicitly
 # set it to false to obtain desired behaviour.
+# shellcheck disable=SC2086 # JVM_MEMORY_ARGS intentionally expands to multiple arguments.
 nohup nice -n 20 java \
 	-Djava.net.preferIPv4Stack=false \
 	${JVM_MEMORY_ARGS} \
-	-jar qortal.jar \
+	-jar qortium.jar \
 	1>run.log 2>&1 &
 
 # Save backgrounded process's PID
 echo $! > run.pid
-echo qortal running as pid $!
+echo qortium running as pid $!

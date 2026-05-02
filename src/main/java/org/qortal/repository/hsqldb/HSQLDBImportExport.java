@@ -260,7 +260,7 @@ public class HSQLDBImportExport {
         Path backupPath = Paths.get(Settings.getInstance().getExportPath());
 
         if (createIfNotExists) {
-            // Create the qortal-backup folder if it doesn't exist
+            // Create the export folder if it doesn't exist
             try {
                 Files.createDirectories(backupPath);
             } catch (IOException e) {

@@ -17,11 +17,16 @@ else
   exit 1
 fi
 
-# No qortal.jar but we have a Maven built one?
+# No qortium.jar but we have a Maven built one?
 # Be helpful and copy across to correct location
-if [ ! -e qortal.jar -a -f target/qortal*.jar ]; then
-	echo "Copying Maven-built Qortal JAR to correct pathname"
-	cp target/qortal*.jar qortal.jar
+if [ ! -e qortium.jar ]; then
+	for qortium_jar in target/qortium*.jar; do
+		if [ -f "${qortium_jar}" ]; then
+			echo "Copying Maven-built Qortium JAR to correct pathname"
+			cp "${qortium_jar}" qortium.jar
+			break
+		fi
+	done
 fi
 
 # Limits Java JVM stack size and maximum heap usage.
@@ -33,13 +38,14 @@ JVM_MEMORY_ARGS="-Xss256m -XX:+UseSerialGC"
 # by default in Java 11, on some platforms (e.g. FreeBSD 12),
 # it is overridden to be true by default. Hence we explicitly
 # set it to false to obtain desired behaviour.
+# shellcheck disable=SC2086 # JVM_MEMORY_ARGS intentionally expands to multiple arguments.
 nohup nice -n 20 java \
 	-Djava.net.preferIPv4Stack=false \
 	${JVM_MEMORY_ARGS} \
-	-jar qortal.jar \
+	-jar qortium.jar \
 	settings-test.json \
 	1>run.log 2>&1 &
 
 # Save backgrounded process's PID
 echo $! > run.pid
-echo qortal running as pid $!
+echo qortium running as pid $!

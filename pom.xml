@@ -1,8 +1,8 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>org.qortal</groupId>
-	<artifactId>qortal</artifactId>
+	<groupId>org.qortium</groupId>
+	<artifactId>qortium</artifactId>
 	<version>6.1.4</version> <!-- Version must be <X.Y.Z> -->
 	<packaging>jar</packaging>
 	<properties>
@@ -172,7 +172,7 @@
 							<replacements>
 								<replacement>
 									<token>Swagger UI</token>
-									<value>Qortal API Documentation</value>
+									<value>Qortium API Documentation</value>
 								</replacement>
 							</replacements>
 						</configuration>

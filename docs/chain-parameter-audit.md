@@ -81,23 +81,21 @@ their chain configuration before launching a network.
 
 ### Runtime Defaults And Data Locations
 
-`src/main/java/org/qortal/settings/Settings.java` still hardcodes Qortal
-defaults:
+`src/main/java/org/qortal/settings/Settings.java` now uses Qortium runtime
+defaults for local file names:
 
 - P2P ports `12392` and `62392`
 - API ports `12391` and `62391`
 - developer proxy ports `12393` and `62393`
-- `QortalKeyStore.jks`
-- `qortal-backup`
+- `QortiumKeyStore.jks`
+- `qortium-backup`
 
-Docker, startup scripts, and compose files also still use `/qortal`,
-`qortal.jar`, `qortal-core`, `qortal-net`, and `QORTAL_*` environment names.
+Docker, startup scripts, and compose files now use Qortium jar, data path,
+container, network, and environment-variable defaults.
 
 Initial recommendation:
 
-- separate consensus chain parameters from application packaging identity
-- add a single application identity source for product name, data directory,
-  jar name, backup path, and default Docker names
+- keep consensus chain parameters separate from application packaging identity
 - avoid changing network ports until the intended fork baseline values are
   decided
 
@@ -105,9 +103,9 @@ Initial recommendation:
 
 ### Build, API, And Package Identity
 
-`pom.xml` still builds `org.qortal:qortal`, uses the `org.qortal` Java package
-namespace, sets Swagger output to `Qortal API Documentation`, and points the
-main class at `org.qortal.controller.Controller`.
+`pom.xml` now builds `org.qortium:qortium` and sets Swagger output to
+`Qortium API Documentation`, while the Java package namespace and main class
+still use `org.qortal`.
 
 This is broad and touches imports throughout the tree. It is not the first
 consensus-risk item, but it is part of making Qortium feel like a real baseline

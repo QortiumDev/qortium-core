@@ -108,7 +108,7 @@ public class Settings {
 	private boolean apiLoggingEnabled = false;
 	private boolean apiDocumentationEnabled = false;
 	// Both of these need to be set for API to use SSL
-	private String sslKeystorePathname = "QortalKeyStore.jks";
+	private String sslKeystorePathname = "QortiumKeyStore.jks";
 	private String sslKeystorePassword = "default";
 
 	// Domain mapping
@@ -297,7 +297,7 @@ public class Settings {
 	private List<String> fixedNetwork;
 
 	// Export/import
-	private String exportPath = "qortal-backup";
+	private String exportPath = "qortium-backup";
 
 	// Bootstrap
 	private String bootstrapFilenamePrefix = "";

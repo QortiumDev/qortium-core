@@ -1,24 +1,24 @@
 services:
-  qortal:
+  qortium:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ${QORTAL_CONTAINER_NAME:-qortal-core}
+    container_name: ${QORTIUM_CONTAINER_NAME:-qortium-core}
     restart: unless-stopped
     ports:
-      - "${QORTAL_API_BIND_HOST:-127.0.0.1}:${QORTAL_API_PORT:-12391}:${QORTAL_API_PORT:-12391}"
-      - "${QORTAL_P2P_BIND_HOST:-0.0.0.0}:${QORTAL_P2P_PORT:-12392}:${QORTAL_P2P_PORT:-12392}"
-      - "${QORTAL_QDN_BIND_HOST:-0.0.0.0}:${QORTAL_QDN_PORT:-12394}:${QORTAL_QDN_PORT:-12394}"
+      - "${QORTIUM_API_BIND_HOST:-127.0.0.1}:${QORTIUM_API_PORT:-12391}:${QORTIUM_API_PORT:-12391}"
+      - "${QORTIUM_P2P_BIND_HOST:-0.0.0.0}:${QORTIUM_P2P_PORT:-12392}:${QORTIUM_P2P_PORT:-12392}"
+      - "${QORTIUM_QDN_BIND_HOST:-0.0.0.0}:${QORTIUM_QDN_PORT:-12394}:${QORTIUM_QDN_PORT:-12394}"
     expose:
-      - "${QORTAL_API_PORT:-12391}"
-      - "${QORTAL_P2P_PORT:-12392}"
-      - "${QORTAL_QDN_PORT:-12394}"
+      - "${QORTIUM_API_PORT:-12391}"
+      - "${QORTIUM_P2P_PORT:-12392}"
+      - "${QORTIUM_QDN_PORT:-12394}"
     volumes:
-      - ./data/qortal:/qortal
+      - ./data/qortium:/qortium
     networks:
-      - qortal_net
+      - qortium_net
 
 networks:
-  qortal_net:
-    name: ${QORTAL_NETWORK_NAME:-qortal-net}
+  qortium_net:
+    name: ${QORTIUM_NETWORK_NAME:-qortium-net}
     driver: bridge

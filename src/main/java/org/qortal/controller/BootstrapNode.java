@@ -23,8 +23,8 @@ import java.util.stream.Collectors;
 
 public class BootstrapNode {
 
-	public static final String JAR_FILENAME = "qortal.jar";
-	public static final String AGENTLIB_JVM_HOLDER_ARG = "-DQORTAL_agentlib=";
+	public static final String JAR_FILENAME = "qortium.jar";
+	public static final String AGENTLIB_JVM_HOLDER_ARG = "-DQORTIUM_agentlib=";
 
 	private static final Logger LOGGER = LogManager.getLogger(BootstrapNode.class);
 

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - core: neutralize runtime/build identity defaults
+
+Moved the active runtime and build defaults from inherited Qortal names to Qortium names. New nodes now default to `QortiumKeyStore.jks`, `qortium-backup`, `qortium.jar`, `qortium.exe`, `qortium.update`, Qortium Docker paths and environment names, and `org.qortium:qortium` build coordinates, while the Java package namespace remains unchanged for a later dedicated refactor.
+
 ### 2026-05-02 - core: neutralize network identity defaults
 
 Moved the peer network message magic out of inherited hardcoded QORT constants and into the chain configuration. Qortium's main and test chain configs now use `QRTM` and `qrtm` as their default network identifiers, and both normal peer networking and data networking read those values from the active chain config so future forks can choose their own network identity without editing Java constants.

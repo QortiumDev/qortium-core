@@ -16,7 +16,7 @@ typically  `${HOME}/.m2/repository/org/hsqldb/sqltool/2.5.0/sqltool-2.5.0.jar`
 e.g. `${HOME}/.sqltool.rc`, with contents like:
 
 ```
-urlid qortal
+urlid qortium
 url jdbc:hsqldb:file:db/blockchain
 username SA
 password
@@ -29,12 +29,12 @@ export HSQLDB_JAR=${HOME}/.m2/repository/org/hsqldb/hsqldb/2.5.1/hsqldb-2.5.1.ja
 export SQLTOOL_JAR=${HOME}/.m2/repository/org/hsqldb/sqltool/2.5.0/sqltool-2.5.0.jar
 alias sqltool='rlwrap java -cp ${HSQLDB_JAR}:${SQLTOOL_JAR} org.hsqldb.cmdline.SqlTool --rcFile=${SQLTOOL_RC}'
 ```
-So you can simply type: `sqltool qortal`
+So you can simply type: `sqltool qortium`
 
 Don't forget to use `SHUTDOWN;` before exiting sqltool so that database files are closed cleanly.
 
 ## Quick and dirty version
 
-With `sqltool-2.5.0.jar` and `qortal.jar` in current directory, and database in `db/`
+With `sqltool-2.5.0.jar` and `qortium.jar` in current directory, and database in `db/`
 
-`java -cp qortal.jar:sqltool-2.5.0.jar org.hsqldb.cmdline.SqlTool --inlineRc=url=jdbc:hsqldb:file:db/blockchain`
+`java -cp qortium.jar:sqltool-2.5.0.jar org.hsqldb.cmdline.SqlTool --inlineRc=url=jdbc:hsqldb:file:db/blockchain`

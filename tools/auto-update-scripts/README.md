@@ -1,4 +1,4 @@
-# Qortal Auto-Update Publisher Scripts
+# Qortium Auto-Update Publisher Scripts
 
 Qortium ships with automatic updates disabled by default.
 
@@ -6,7 +6,7 @@ To use this inherited auto-update flow in the fork, an operator must
 explicitly enable `"autoUpdateEnabled": true` and configure
 `"autoUpdateRepos"` in `settings.json`.
 
-This toolkit modernizes and automates the Qortal auto-update process. It includes:
+This toolkit modernizes and automates the Qortium auto-update process. It includes:
 
 - A Bash script (`build-auto-update.sh`) to build and push the update
 - A Python script (`publish-auto-update.py`) to publish the auto-update transaction
@@ -16,9 +16,9 @@ This toolkit modernizes and automates the Qortal auto-update process. It include
 
 ## 🧰 Prerequisites
 
-- You must be a **non-admin member** of the Qortal `dev` group
-- A Qortal core node must be running locally (default API port: `12391`)
-- You need the latest version of the `qortal` repo cloned locally
+- You must be a **non-admin member** of the Qortium development group
+- A Qortium core node must be running locally (default API port: `12391`)
+- You need the latest version of the `qortium` repo cloned locally
 
 ---
 
@@ -79,17 +79,17 @@ This script will:
 
 ## 🛠 Advanced Options
 
-- Log files are created in `~/qortal-auto-update-logs` by default
+- Log files are created in `~/qortium-auto-update-logs` by default
 - You can override the log directory interactively
 - Branch naming is standardized: `auto-update-<short-commit-hash>`
-- The `.update` file is XOR-obfuscated using Qortal’s built-in logic
+- The `.update` file is XOR-obfuscated using Qortium's built-in logic
 - Your commit must already exist on the main repo (e.g. via push or PR merge)
 
 ---
 
 ## 📌 Notes
 
-- **Do not use Git LFS** — Qortal nodes download `.update` files using raw HTTP from GitHub
+- **Do not use Git LFS** - Qortium nodes download `.update` files using raw HTTP from GitHub
 We may build LFS support in the future, but for now it is NOT utilized, and will NOT work. 
 (Other locations for the publish of the .update file will be utilized in the future, 
 preferably utilizing QDN via gateway nodes, until auto-update setup can be re-written to
@@ -105,7 +105,7 @@ will be modifying the need for this in the future anyway.)
 ## ✅ Example End-to-End (Manual)
 
 ```bash
-cd ~/git-repos/qortal
+cd ~/git-repos/qortium
 ./tools/auto-update-scripts/build-auto-update.sh
 # follow prompts...
 
@@ -132,4 +132,4 @@ Based on original Perl scripts by Qortal core devs, specifically @catbref.
 
 ---
 
-Questions or issues? Drop into the Qortal Dev group on Discord, Q-Chat,  or reach out directly via Q-Mail to 'crowetic'.
+Questions or issues? Use the configured Qortium development group channels for this fork.

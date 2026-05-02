@@ -21,9 +21,9 @@ Building the future one block at a time. Welcome to Qortal.
 - Install Maven
 - Use Maven to fetch dependencies and build: `mvn clean package`
 - Update Maven dependencies: `mvn install` 
-- Built JAR should be something like `target/qortal-1.0.jar`
+- Built JAR should be something like `target/qortium-1.0.jar`
 - Create basic *settings.json* file: `echo '{}' > settings.json`
-- Run JAR in same working directory as *settings.json*: `java -jar target/qortal-1.0.jar`
+- Run JAR in same working directory as *settings.json*: `java -jar target/qortium-1.0.jar`
 - Wrap in shell script, add JVM flags, redirection, backgrounding, etc. as necessary.
 - Or use supplied example shell script: *start.sh*
 
@@ -33,20 +33,20 @@ Building the future one block at a time. Welcome to Qortal.
 - Build and start with host port publishing (default): `docker compose up -d --build`
 - Internal Docker network only (no host port publishing): `docker compose -f docker-compose.internal.yml up -d --build`
 - Stop container: `docker compose down`
-- Node data and *settings.json* are stored in: `./data/qortal`
-- JVM start arguments file is stored in: `./data/qortal/start-arguments.txt`
+- Node data and *settings.json* are stored in: `./data/qortium`
+- JVM start arguments file is stored in: `./data/qortium/start-arguments.txt`
   - Default content: `-XX:MaxRAMPercentage=25 -XX:+UseG1GC -Xss1024k`
   - Edit this file and restart the container to apply memory/runtime argument changes
-- Follow logs: `docker compose logs -f qortal`
-- Network name can be set using `QORTAL_NETWORK_NAME` in `.env`
-- Port source of truth is `./data/qortal/settings.json`; keep `.env` `QORTAL_API_PORT` / `QORTAL_P2P_PORT` / `QORTAL_QDN_PORT` in sync
+- Follow logs: `docker compose logs -f qortium`
+- Network name can be set using `QORTIUM_NETWORK_NAME` in `.env`
+- Port source of truth is `./data/qortium/settings.json`; keep `.env` `QORTIUM_API_PORT` / `QORTIUM_P2P_PORT` / `QORTIUM_QDN_PORT` in sync
 - If other containers need API access, update API whitelist in `settings.json` (by default only loopback is allowed)
 
 ## IntelliJ IDEA Configuration
 
 - Run -> Edit Configurations
 - Add New Application
-- Name: qortal
+- Name: qortium
 - SDK: java 11
 - Main Class: org.qortal.controller.Controller
 - Program arguments: settings.json -Dlog4j.configurationFile=log4j2.properties -ea

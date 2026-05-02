@@ -3,7 +3,7 @@
 # Check for color support
 if [ -t 1 ]; then
 	ncolors=$( tput colors )
-	if [ -n "${ncolors}" -a "${ncolors}" -ge 8 ]; then
+	if [ -n "${ncolors}" ] && [ "${ncolors}" -ge 8 ]; then
 		if normal="$( tput sgr0 )"; then
 			# use terminfo names
 			red="$( tput setaf 1 )"
@@ -18,18 +18,23 @@ if [ -t 1 ]; then
 fi
 
 # Track the pid if we can find it
-read pid 2>/dev/null <run.pid
+read -r pid 2>/dev/null <run.pid
 is_pid_valid=$?
 
 # Swap out the API port if the --testnet (or -t) argument is specified
 api_port=12391
-if [[ "$@" = *"--testnet"* ]] || [[  "$@" = *"-t"* ]]; then
-  api_port=62391
-fi
+for arg in "$@"; do
+  case "${arg}" in
+    --testnet|-t)
+      api_port=62391
+      break
+      ;;
+  esac
+done
 
 # Attempt to locate the process ID if we don't have one
 if [ -z "${pid}" ]; then
-  pid=$(ps aux | grep '[q]ortal.jar' | head -n 1 | awk '{print $2}')
+  pid=$(pgrep -f 'qortium\.jar' | head -n 1)
   is_pid_valid=$?
 fi
 
@@ -39,7 +44,7 @@ success=0
 
 # Try and stop via the API
 if [ -n "$apikey" ]; then
-  echo "Stopping Qortal via API..."
+  echo "Stopping Qortium via API..."
   if curl --url "http://localhost:${api_port}/admin/stop?apiKey=$apikey" 1>/dev/null 2>&1; then
     success=1
   fi
@@ -47,7 +52,7 @@ fi
 
 # Try to kill process with SIGTERM
 if [ "$success" -ne 1 ] && [ -n "$pid" ]; then
-  echo "Stopping Qortal process $pid..."
+  echo "Stopping Qortium process $pid..."
   if kill -15 "${pid}"; then
     success=1
   fi
@@ -64,15 +69,15 @@ if [ "$success" -ne 1 ]; then
 fi
 
 if [ "$success" -eq 1 ]; then
-  echo "Qortal node should be shutting down"
+  echo "Qortium node should be shutting down"
   if [ "${is_pid_valid}" -eq 0 ]; then
-    echo -n "Monitoring for Qortal node to end"
-    while s=`ps -p $pid -o stat=` && [[ "$s" && "$s" != 'Z' ]]; do
+    echo -n "Monitoring for Qortium node to end"
+    while s=$(ps -p "$pid" -o stat=) && [[ "$s" && "$s" != 'Z' ]]; do
       echo -n .
       sleep 1
     done
     echo
-    echo "${green}Qortal ended gracefully${normal}"
+    echo "${green}Qortium ended gracefully${normal}"
     rm -f run.pid
   fi
 fi

@@ -116,7 +116,7 @@ def decode_transaction(signed_tx, port):
 
 def main():
     import getpass
-    parser = argparse.ArgumentParser(description="Modern auto-update publisher for Qortal")
+    parser = argparse.ArgumentParser(description="Modern auto-update publisher for Qortium")
     parser.add_argument("arg1", nargs="?", help="Private key OR commit hash")
     parser.add_argument("arg2", nargs="?", help="Commit hash if arg1 was private key")
     parser.add_argument("--port", type=int, default=12391, help="API port")
@@ -231,4 +231,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

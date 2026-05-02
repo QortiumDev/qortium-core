@@ -133,7 +133,7 @@ my $signed_tx = `curl --silent -H "accept: text/plain" -H "Content-Type: applica
 die("Can't sign raw transaction:\n$signed_tx\n") unless $signed_tx =~ m/^\w{390,410}$/; # +90ish longer than $raw_tx
 printf "\nSigned transaction:\n%s\n", $signed_tx;
 
-# Get the origin URL - So that we will be able to TEST the obtaining of the qortal.update... 
+# Get the origin URL - So that we will be able to TEST the obtaining of the qortium.update...
 my $origin = `git remote get-url origin`;
 chomp $origin; # Remove any trailing newlines
 die("Unable to get github url for 'origin'?\n") unless $origin;
@@ -141,36 +141,36 @@ die("Unable to get github url for 'origin'?\n") unless $origin;
 # Debug: Print the origin URL
 print "Full Origin URL: $origin\n";
 
-# Extract the repository path (e.g., Qortal/qortal) NOTE - github is case-sensitive with repo names
+# Extract the repository path (e.g., QuickMythril/qortium) NOTE - github is case-sensitive with repo names
 my $repo;
 if ($origin =~ m/[:\/]([\w\-]+\/[\w\-]+)\.git$/) {
     $repo = $1;
     print "Extracted direct repository path: $repo\n";
-    if ($repo =~ m/^qortal\//i) {
-        $repo =~ s/^qortal\//Qortal\//;
+    if ($repo =~ m/^quickmythril\//i) {
+        $repo =~ s/^quickmythril\//QuickMythril\//;
         print "Corrected repository path capitalization: $repo\n";
     }
     print "Please verify the direct repository path. Current: '$repo'\n";
-    print "If incorrect, input the correct direct repository path (e.g., 'Qortal/qortal' or 'bob/qortal').NOTE - github is CASE SENSITIVE for repository urls... Press Enter to keep the extracted version: ";
+    print "If incorrect, input the correct direct repository path (e.g., 'QuickMythril/qortium' or 'bob/qortium').NOTE - github is CASE SENSITIVE for repository urls... Press Enter to keep the extracted version: ";
     my $input = <STDIN>;
-    if ($input =~ m/^qortal\//i) {
-        $input =~ s/^qortal\//Qortal\//;
+    if ($input =~ m/^quickmythril\//i) {
+        $input =~ s/^quickmythril\//QuickMythril\//;
         print "Corrected repository path capitalization: $repo\n";
     }
     chomp $input;
     $repo = $input if $input; # Update repo if user provides input
 
 } else {
-    # Default to qortal/qortal if extraction fails
-    $repo = "Qortal/qortal";
+    # Default to qortium if extraction fails
+    $repo = "QuickMythril/qortium";
     print "Failed to extract repository path from origin URL. Using default: $repo\n";
 
     # Prompt the user for confirmation or input
     print "Please verify the repository path. Current: '$repo'\n";
-    print "If incorrect, input the correct repository path (e.g., 'Qortal/qortal' or 'BobsCodeburgers/qortal'). NOTE - GitHub is CASE SENSITIVE for repository urls... Press Enter to keep the default: ";
+    print "If incorrect, input the correct repository path (e.g., 'QuickMythril/qortium' or 'BobsCodeburgers/qortium'). NOTE - GitHub is CASE SENSITIVE for repository urls... Press Enter to keep the default: ";
     my $input = <STDIN>;
-    if ($input =~ m/^qortal\//i) {
-        $input =~ s/^qortal\//Qortal\//;
+    if ($input =~ m/^quickmythril\//i) {
+        $input =~ s/^quickmythril\//QuickMythril\//;
         print "Corrected repository path capitalization: $repo\n";
     }
     chomp $input;

@@ -11,8 +11,8 @@ import java.util.List;
 
 public class LaunchExeWIthJvmOptions {
 
-	private static final String JAR_FILENAME = "qortal.jar";
-	private static final String WINDOWS_EXE_LAUNCHER = "qortal.exe";
+	private static final String JAR_FILENAME = "qortium.jar";
+	private static final String WINDOWS_EXE_LAUNCHER = "qortium.exe";
 	private static final String JAVA_TOOL_OPTIONS_NAME = "JAVA_TOOL_OPTIONS";
 	private static final String JAVA_TOOL_OPTIONS_VALUE = "-XX:MaxRAMFraction=4";
 
