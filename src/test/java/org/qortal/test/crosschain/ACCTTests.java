@@ -54,7 +54,7 @@ public abstract class ACCTTests extends Common {
 
 	protected abstract byte[] getPublicKey();
 
-	protected abstract byte[] buildQortalAT(String address, byte[] publicKey, long redeemAmount, long foreignAmount, int tradeTimeout);
+	protected abstract byte[] buildTradeAT(String address, byte[] publicKey, long redeemAmount, long foreignAmount, int tradeTimeout);
 
 	protected abstract ACCT getInstance();
 
@@ -79,7 +79,7 @@ public abstract class ACCTTests extends Common {
 	public void testCompile() {
 		PrivateKeyAccount tradeAccount = createTradeAccount(null);
 
-		byte[] creationBytes = buildQortalAT(tradeAccount.getAddress(), getPublicKey(), redeemAmount, foreignAmount, tradeTimeout);
+		byte[] creationBytes = buildTradeAT(tradeAccount.getAddress(), getPublicKey(), redeemAmount, foreignAmount, tradeTimeout);
 		assertNotNull(creationBytes);
 
 		System.out.println("AT creation bytes: " + HashCode.fromBytes(creationBytes).toString());
@@ -273,8 +273,8 @@ public abstract class ACCTTests extends Common {
 			// Check hashOfSecretA was extracted correctly
 			assertTrue(Arrays.equals(hashOfSecretA, tradeData.hashOfSecretA));
 
-			// Check trade partner Qortal address was extracted correctly
-			assertEquals(partner.getAddress(), tradeData.qortalPartnerAddress);
+			// Check trade partner local-chain address was extracted correctly
+			assertEquals(partner.getAddress(), tradeData.partnerAddress);
 
 			// Check trade partner's Foreign Coin PKH was extracted correctly
 			assertTrue(Arrays.equals(getPublicKey(), tradeData.partnerForeignPKH));
@@ -662,12 +662,12 @@ public abstract class ACCTTests extends Common {
 	}
 
 	protected DeployAtTransaction doDeploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress) throws DataException {
-		byte[] creationBytes = buildQortalAT(tradeAddress, getPublicKey(), redeemAmount, foreignAmount, tradeTimeout);
+		byte[] creationBytes = buildTradeAT(tradeAddress, getPublicKey(), redeemAmount, foreignAmount, tradeTimeout);
 
 		long txTimestamp = System.currentTimeMillis();
 		Long fee = null;
 		String name = "NATIVE-" + getSymbol() + " cross-chain trade";
-		String description = String.format("Qortal-" + getName() + " cross-chain trade");
+		String description = String.format("Local-chain-" + getName() + " cross-chain trade");
 		String atType = "ACCT";
 		String tags = "NATIVE-" + getSymbol() + " ACCT";
 
@@ -739,9 +739,9 @@ public abstract class ACCTTests extends Common {
 				+ "\tredeem payout: %s NATIVE,\n"
 				+ "\texpected " + getName() + ": %s " + getSymbol() + ",\n"
 				+ "\tcurrent block height: %d,\n",
-				tradeData.qortalAtAddress,
+				tradeData.atAddress,
 				tradeData.mode,
-				tradeData.qortalCreator,
+				tradeData.creatorAddress,
 				epochMilliFormatter.apply(tradeData.creationTimestamp),
 				Amounts.prettyAmount(tradeData.nativeBalance),
 				atData.getIsFinished(),
@@ -764,8 +764,8 @@ public abstract class ACCTTests extends Common {
 					tradeData.tradeRefundHeight,
 					HashCode.fromBytes(tradeData.hashOfSecretA).toString().substring(0, 40),
 					tradeData.lockTimeA, epochMilliFormatter.apply(tradeData.lockTimeA * 1000L),
-					tradeData.qortalPartnerAddress,
-					tradeData.qortalPartnerReceivingAddress));
+					tradeData.partnerAddress,
+					tradeData.partnerReceivingAddress));
 		}
 	}
 

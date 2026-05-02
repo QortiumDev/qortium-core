@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
  * <p>
  * We deal with three different independent state-spaces here:
  * <ul>
- * 	<li>Qortal blockchain</li>
+ * 	<li>local chain</li>
  * 	<li>Foreign blockchain</li>
  * 	<li>Trade-bot entries</li>
  * </ul>
@@ -174,20 +174,20 @@ public class TradeBot implements Listener {
 	 * </ul>
 	 * Derives:
 	 * <ul>
-	 * 	<li>'native' (as in Qortal) public key, public key hash, address (starting with Q)</li>
+	 * 	<li>'native' (local-chain) public key, public key hash, address (starting with Q)</li>
 	 * 	<li>'foreign' public key, public key hash</li>
 	 *	<li>hash(es) of secret(s)</li>
 	 * </ul>
-	 * A Qortal AT is then constructed including the following as constants in the 'data segment':
+	 * A local-chain AT is then constructed including the following as constants in the 'data segment':
 	 * <ul>
-	 * 	<li>'native' (Qortal) 'trade' address - used to MESSAGE AT</li>
+	 * 	<li>'native' local-chain 'trade' address - used to MESSAGE AT</li>
 	 * 	<li>'foreign' public key hash - used by Alice's to allow redeem of currency on foreign blockchain</li>
 	 * 	<li>hash(es) of secret(s) - used by AT (optional) and foreign blockchain as needed</li>
 	 * 	<li>native asset amount on offer by Bob</li>
 	 * 	<li>foreign currency amount expected in return by Bob (from Alice)</li>
 	 * 	<li>trading timeout, in case things go wrong and everyone needs to refund</li>
 	 * </ul>
-	 * Returns a DEPLOY_AT transaction that needs to be signed and broadcast to the Qortal network.
+	 * Returns a DEPLOY_AT transaction that needs to be signed and broadcast to the local-chain network.
 	 * <p>
 	 * Trade-bot will wait for Bob's AT to be deployed before taking next step.
 	 * <p>
@@ -243,7 +243,7 @@ public class TradeBot implements Listener {
 	 * <p>
 	 * @param repository
 	 * @param crossChainTradeDataList chosen trade OFFERs that Alice wants to match
-	 * @param receiveAddress Alice's Qortal address to receive her NATIVE
+	 * @param receiveAddress Alice's local-chain address to receive her NATIVE
 	 * @param foreignKey foreign blockchain wallet key
 	 * @param bitcoiny
 	 * @throws DataException
@@ -263,7 +263,7 @@ public class TradeBot implements Listener {
 
 		for( CrossChainTradeData tradeData : crossChainTradeDataList) {
 			// Check Alice doesn't already have an existing, on-going trade-bot entry for this AT.
-			if (repository.getCrossChainRepository().existsTradeWithAtExcludingStates(tradeData.qortalAtAddress, acctTradeBot.getEndStates()))
+			if (repository.getCrossChainRepository().existsTradeWithAtExcludingStates(tradeData.atAddress, acctTradeBot.getEndStates()))
 				return ResponseResult.TRADE_ALREADY_EXISTS;
 		}
 		return TradeBotUtils.startResponseMultiple(repository, acct, crossChainTradeDataList, receiveAddress, foreignKey, bitcoiny);
@@ -454,7 +454,7 @@ public class TradeBot implements Listener {
 		* There's no point in Alice trying to broadcast presence for an AT that isn't locked to her,
 		* as other peers won't be able to verify as signing public key isn't yet in the AT's data segment.
 		*/
-		if (!signerAddress.equals(tradeData.qortalCreatorTradeAddress) && !signerAddress.equals(tradeData.qortalPartnerAddress)) {
+		if (!signerAddress.equals(tradeData.creatorTradeAddress) && !signerAddress.equals(tradeData.partnerAddress)) {
 			// Signer is neither Bob, nor trade locked to Alice
 			LOGGER.trace("Can't provide trade presence for our AT {} as it's not yet locked to Alice", atAddress);
 			return;
@@ -754,17 +754,17 @@ public class TradeBot implements Listener {
 			// for each populated trade data, validate and fire event
 			for( CrossChainTradeData tradeData : crossChainTradeDataList ) {
 
-				List<Peer> peers = peersByAtAddress.get(tradeData.qortalAtAddress);
+				List<Peer> peers = peersByAtAddress.get(tradeData.atAddress);
 
 				for( Peer peer : peers ) {
 
-					TradePresenceData peersTradePresence = tradePresenceByAtAddress.get(tradeData.qortalAtAddress);
+					TradePresenceData peersTradePresence = tradePresenceByAtAddress.get(tradeData.atAddress);
 
 					// Convert signer's public key to address form
 					String signerAddress = peersTradePresence.getTradeAddress();
 
 					// Signer's public key (in address form) must match Bob's / Alice's trade public key (in address form)
-					if (!signerAddress.equals(tradeData.qortalCreatorTradeAddress) && !signerAddress.equals(tradeData.qortalPartnerAddress)) {
+					if (!signerAddress.equals(tradeData.creatorTradeAddress) && !signerAddress.equals(tradeData.partnerAddress)) {
 						LOGGER.trace("Ignoring trade presence {} from peer {} as signer isn't Alice or Bob?",
 								peersTradePresence.getAtAddress(), peer
 						);
@@ -818,14 +818,14 @@ public class TradeBot implements Listener {
 	public void decorateTradeDataWithPresence(CrossChainTradeData crossChainTradeData) {
 		// Match by AT address, then check for Bob vs Alice
 		this.safeAllTradePresencesByPubkey.values().stream()
-				.filter(tradePresenceData -> tradePresenceData.getAtAddress().equals(crossChainTradeData.qortalAtAddress))
+				.filter(tradePresenceData -> tradePresenceData.getAtAddress().equals(crossChainTradeData.atAddress))
 				.forEach(tradePresenceData -> {
 					String signerAddress = tradePresenceData.getTradeAddress();
 
 					// Signer's public key (in address form) must match Bob's / Alice's trade public key (in address form)
-					if (signerAddress.equals(crossChainTradeData.qortalCreatorTradeAddress))
+					if (signerAddress.equals(crossChainTradeData.creatorTradeAddress))
 						crossChainTradeData.creatorPresenceExpiry = tradePresenceData.getTimestamp();
-					else if (signerAddress.equals(crossChainTradeData.qortalPartnerAddress))
+					else if (signerAddress.equals(crossChainTradeData.partnerAddress))
 						crossChainTradeData.partnerPresenceExpiry = tradePresenceData.getTimestamp();
 				});
 	}
@@ -843,21 +843,21 @@ public class TradeBot implements Listener {
 		for (CrossChainTradeData crossChainTradeData : crossChainTrades) {
 			// We only care about trades in the OFFERING state
 			if (crossChainTradeData.mode != AcctMode.OFFERING) {
-				failedTrades.remove(crossChainTradeData.qortalAtAddress);
-				validTrades.remove(crossChainTradeData.qortalAtAddress);
+				failedTrades.remove(crossChainTradeData.atAddress);
+				validTrades.remove(crossChainTradeData.atAddress);
 				continue;
 			}
 
 			// Return recently cached values if they exist
-			Long failedTimestamp = failedTrades.get(crossChainTradeData.qortalAtAddress);
+			Long failedTimestamp = failedTrades.get(crossChainTradeData.atAddress);
 			if (failedTimestamp != null && now - failedTimestamp < 60 * 60 * 1000L) {
 				updatedCrossChainTrades.remove(crossChainTradeData);
-				//LOGGER.info("Removing cached failed trade AT {}", crossChainTradeData.qortalAtAddress);
+				//LOGGER.info("Removing cached failed trade AT {}", crossChainTradeData.atAddress);
 				continue;
 			}
-			Long validTimestamp = validTrades.get(crossChainTradeData.qortalAtAddress);
+			Long validTimestamp = validTrades.get(crossChainTradeData.atAddress);
 			if (validTimestamp != null && now - validTimestamp < 60 * 60 * 1000L) {
-				//LOGGER.info("NOT removing cached valid trade AT {}", crossChainTradeData.qortalAtAddress);
+				//LOGGER.info("NOT removing cached valid trade AT {}", crossChainTradeData.atAddress);
 				continue;
 			}
 
@@ -866,16 +866,16 @@ public class TradeBot implements Listener {
 
 				for (TransactionData transactionData : transactions) {
 					// Treat as failed if buy attempt was more than 60 mins ago (as it's still in the OFFERING state)
-					if (transactionData.getRecipient().equals(crossChainTradeData.qortalCreatorTradeAddress) && now - transactionData.getTimestamp() > 60*60*1000L) {
-						failedTrades.put(crossChainTradeData.qortalAtAddress, now);
+					if (transactionData.getRecipient().equals(crossChainTradeData.creatorTradeAddress) && now - transactionData.getTimestamp() > 60*60*1000L) {
+						failedTrades.put(crossChainTradeData.atAddress, now);
 						updatedCrossChainTrades.remove(crossChainTradeData);
 					} else {
-						validTrades.put(crossChainTradeData.qortalAtAddress, now);
+						validTrades.put(crossChainTradeData.atAddress, now);
 					}
 				}
 
 			} catch (DataException e) {
-				LOGGER.info("Unable to determine failed state of AT {}", crossChainTradeData.qortalAtAddress);
+				LOGGER.info("Unable to determine failed state of AT {}", crossChainTradeData.atAddress);
             }
 		}
 

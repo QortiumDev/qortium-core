@@ -14,14 +14,14 @@ public class CrossChainOfferSummary {
 
 	// Properties
 
-	@Schema(description = "AT's Qortal address")
-	private String qortalAtAddress;
+	@Schema(description = "AT's local-chain address")
+	private String atAddress;
 
-	@Schema(description = "AT creator's Qortal address")
-	private String qortalCreator;
+	@Schema(description = "AT creator's local-chain address")
+	private String creatorAddress;
 
-	@Schema(description = "AT creator's ephemeral trading key-pair represented as Qortal address")
-	private String qortalCreatorTradeAddress;
+	@Schema(description = "AT creator's ephemeral trading key-pair represented as local-chain address")
+	private String creatorTradeAddress;
 
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long nativeAmount;
@@ -43,8 +43,8 @@ public class CrossChainOfferSummary {
 
 	private long timestamp;
 
-	@Schema(description = "Trade partner's Qortal receiving address")
-	private String partnerQortalReceivingAddress;
+	@Schema(description = "Trade partner's local-chain receiving address")
+	private String partnerReceivingAddress;
 
 	private String foreignBlockchain;
 
@@ -55,30 +55,30 @@ public class CrossChainOfferSummary {
 	}
 
 	public CrossChainOfferSummary(CrossChainTradeData crossChainTradeData, long timestamp) {
-		this.qortalAtAddress = crossChainTradeData.qortalAtAddress;
-		this.qortalCreator = crossChainTradeData.qortalCreator;
-		this.qortalCreatorTradeAddress = crossChainTradeData.qortalCreatorTradeAddress;
+		this.atAddress = crossChainTradeData.atAddress;
+		this.creatorAddress = crossChainTradeData.creatorAddress;
+		this.creatorTradeAddress = crossChainTradeData.creatorTradeAddress;
 		this.nativeAmount = crossChainTradeData.nativeAmount;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
 		this.btcAmount = this.foreignAmount; // Duplicate for deprecated field
 		this.tradeTimeout = crossChainTradeData.tradeTimeout;
 		this.mode = crossChainTradeData.mode;
 		this.timestamp = timestamp;
-		this.partnerQortalReceivingAddress = crossChainTradeData.qortalPartnerReceivingAddress;
+		this.partnerReceivingAddress = crossChainTradeData.partnerReceivingAddress;
 		this.foreignBlockchain = crossChainTradeData.foreignBlockchain;
 		this.acctName = crossChainTradeData.acctName;
 	}
 
-	public String getQortalAtAddress() {
-		return this.qortalAtAddress;
+	public String getAtAddress() {
+		return this.atAddress;
 	}
 
-	public String getQortalCreator() {
-		return this.qortalCreator;
+	public String getCreatorAddress() {
+		return this.creatorAddress;
 	}
 
-	public String getQortalCreatorTradeAddress() {
-		return this.qortalCreatorTradeAddress;
+	public String getCreatorTradeAddress() {
+		return this.creatorTradeAddress;
 	}
 
 	public long getNativeAmount() {
@@ -105,8 +105,8 @@ public class CrossChainOfferSummary {
 		return this.timestamp;
 	}
 
-	public String getPartnerQortalReceivingAddress() {
-		return this.partnerQortalReceivingAddress;
+	public String getPartnerReceivingAddress() {
+		return this.partnerReceivingAddress;
 	}
 
 	public String getForeignBlockchain() {
@@ -120,7 +120,7 @@ public class CrossChainOfferSummary {
 	// For debugging mostly
 
 	public String toString() {
-		return String.format("%s: %s", this.qortalAtAddress, this.mode);
+		return String.format("%s: %s", this.atAddress, this.mode);
 	}
 
 }

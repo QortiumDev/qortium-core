@@ -11,7 +11,7 @@ public class CrossChainCancelRequest {
 	@Schema(description = "AT creator's public key", example = "K6wuddsBV3HzRrXFFezE7P5MoRXp5m3mEDokRDGZB6ry")
 	public byte[] creatorPublicKey;
 
-	@Schema(description = "Qortal trade AT address")
+	@Schema(description = "local-chain trade AT address")
 	public String atAddress;
 
 	public CrossChainCancelRequest() {

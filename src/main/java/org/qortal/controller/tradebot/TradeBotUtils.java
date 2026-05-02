@@ -55,7 +55,7 @@ public class TradeBotUtils {
      * which should result in a base58 string starting with either 'xprv' (for Blockchain main-net)
      * or 'tprv' for (Blockchain test-net).
      * <p>
-     * It is envisaged that the value in <tt>foreignKey</tt> will actually come from a Qortal-UI-managed wallet.
+     * It is envisaged that the value in <tt>foreignKey</tt> will actually come from a local-chain UI-managed wallet.
      * <p>
      * If sufficient funds are available, <b>this method will actually fund the P2SH-A</b>
      * with the Blockchain amount expected by 'Bob'.
@@ -68,7 +68,7 @@ public class TradeBotUtils {
      *
      * @param repository for backing up the trade bot data
      * @param crossChainTradeDataList chosen trade OFFERs that Alice wants to match
-     * @param receiveAddress Alice's Qortal address
+     * @param receiveAddress Alice's local-chain address
      * @param foreignKey              funded wallet xprv in base58
      * @param bitcoiny the bitcoiny chain to match the sell offer with
      * @return true if P2SH-A funding transaction successfully broadcast to Blockchain network, false otherwise
@@ -126,7 +126,7 @@ public class TradeBotUtils {
             TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, acct.getClass().getSimpleName(),
                     State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
                     receiveAddress,
-                    crossChainTradeData.qortalAtAddress,
+                    crossChainTradeData.atAddress,
                     now,
                     crossChainTradeData.nativeAmount,
                     tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
@@ -169,12 +169,12 @@ public class TradeBotUtils {
         }
 
         for(DataCombiner datumToProcess : dataToProcess ) {
-            // Attempt to send MESSAGE to Bob's Qortal trade address
+            // Attempt to send MESSAGE to Bob's local-chain trade address
             TradeBotData tradeBotData = datumToProcess.tradeBotData;
 
             byte[] messageData = CrossChainUtils.buildOfferMessage(tradeBotData.getTradeForeignPublicKeyHash(), tradeBotData.getHashOfSecret(), tradeBotData.getLockTimeA());
             CrossChainTradeData crossChainTradeData = datumToProcess.crossChainTradeData;
-            String messageRecipient = crossChainTradeData.qortalCreatorTradeAddress;
+            String messageRecipient = crossChainTradeData.creatorTradeAddress;
 
             boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, messageData);
             if (!isMessageAlreadySent) {

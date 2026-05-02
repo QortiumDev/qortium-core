@@ -17,8 +17,8 @@ public class DogecoinACCTv3Tests extends ACCTTests {
 	}
 
 	@Override
-	protected byte[] buildQortalAT(String address, byte[] publicKey, long redeemAmount, long foreignAmount, int tradeTimeout) {
-		return DogecoinACCTv3.buildQortalAT(address, publicKey, redeemAmount, foreignAmount, tradeTimeout);
+	protected byte[] buildTradeAT(String address, byte[] publicKey, long redeemAmount, long foreignAmount, int tradeTimeout) {
+		return DogecoinACCTv3.buildTradeAT(address, publicKey, redeemAmount, foreignAmount, tradeTimeout);
 	}
 
 	@Override

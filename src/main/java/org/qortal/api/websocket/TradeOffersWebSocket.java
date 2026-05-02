@@ -108,7 +108,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 					}
 
 					// Remove any entries unchanged from last time
-					crossChainOfferSummaries.removeIf(offerSummary -> cachedInfo.previousAtModes.get(offerSummary.getQortalAtAddress()) == offerSummary.getMode());
+					crossChainOfferSummaries.removeIf(offerSummary -> cachedInfo.previousAtModes.get(offerSummary.getAtAddress()) == offerSummary.getMode());
 
 					// Skip to next blockchain if nothing has changed (for this blockchain)
 					if (crossChainOfferSummaries.isEmpty())
@@ -116,7 +116,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 
 					// Update
 					for (CrossChainOfferSummary offerSummary : crossChainOfferSummaries) {
-						String offerAtAddress = offerSummary.getQortalAtAddress();
+						String offerAtAddress = offerSummary.getAtAddress();
 						cachedInfo.previousAtModes.put(offerAtAddress, offerSummary.getMode());
 						LOGGER.trace("Block height: {}, AT: {}, mode: {}", blockData.getHeight(), offerAtAddress, offerSummary.getMode().name());
 
@@ -265,7 +265,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 
 				// Convert to offer summaries
 				cachedInfo.currentSummaries.putAll(produceSummaries(repository, acct, initialAtStates, null).stream()
-						.collect(Collectors.toMap(CrossChainOfferSummary::getQortalAtAddress, offerSummary -> offerSummary)));
+						.collect(Collectors.toMap(CrossChainOfferSummary::getAtAddress, offerSummary -> offerSummary)));
 			}
 		}
 	}
@@ -301,10 +301,10 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 						continue;
 
 					// Add summary to initial burst
-					cachedInfo.historicSummaries.put(historicOfferSummary.getQortalAtAddress(), historicOfferSummary);
+					cachedInfo.historicSummaries.put(historicOfferSummary.getAtAddress(), historicOfferSummary);
 
 					// Save initial AT mode
-					cachedInfo.previousAtModes.put(historicOfferSummary.getQortalAtAddress(), historicOfferSummary.getMode());
+					cachedInfo.previousAtModes.put(historicOfferSummary.getAtAddress(), historicOfferSummary.getMode());
 				}
 			}
 		}
@@ -341,12 +341,12 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 
 		// Batch failed-trade filtering to avoid re-running unconfirmed MESSAGE queries per trade.
 		Set<String> nonFailedTradeAddresses = TradeBot.getInstance().removeFailedTrades(repository, crossChainTrades).stream()
-				.map(crossChainTradeData -> crossChainTradeData.qortalAtAddress)
+				.map(crossChainTradeData -> crossChainTradeData.atAddress)
 				.collect(Collectors.toSet());
 
 		for (int i = 0; i < crossChainTrades.size(); ++i) {
 			CrossChainTradeData crossChainTradeData = crossChainTrades.get(i);
-			if (!nonFailedTradeAddresses.contains(crossChainTradeData.qortalAtAddress))
+			if (!nonFailedTradeAddresses.contains(crossChainTradeData.atAddress))
 				continue;
 
 			offerSummaries.add(produceSummary(repository, acct, atStatesByTrade.get(i), crossChainTradeData, timestamp));

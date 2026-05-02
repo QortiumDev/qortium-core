@@ -11,7 +11,7 @@ public class CrossChainTradeRequest {
 	@Schema(description = "AT creator's 'trade' public key", example = "C6wuddsBV3HzRrXUtezE7P5MoRXp5m3mEDokRDGZB6ry")
 	public byte[] tradePublicKey;
 
-	@Schema(description = "Qortal AT address")
+	@Schema(description = "local-chain AT address")
 	public String atAddress;
 
 	@Schema(description = "Signature of trading partner's 'offer' MESSAGE transaction")

@@ -163,12 +163,12 @@ public class PruneTests extends Common {
 
     // Helper methods for AT testing
     private DeployAtTransaction doDeploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress) throws DataException {
-        byte[] creationBytes = LitecoinACCTv3.buildQortalAT(tradeAddress, litecoinPublicKeyHash, redeemAmount, litecoinAmount, tradeTimeout);
+        byte[] creationBytes = LitecoinACCTv3.buildTradeAT(tradeAddress, litecoinPublicKeyHash, redeemAmount, litecoinAmount, tradeTimeout);
 
         long txTimestamp = System.currentTimeMillis();
         Long fee = null;
         String name = "NATIVE-LTC cross-chain trade";
-        String description = String.format("Qortal-Litecoin cross-chain trade");
+        String description = String.format("Local-chain-Litecoin cross-chain trade");
         String atType = "ACCT";
         String tags = "NATIVE-LTC ACCT";
 

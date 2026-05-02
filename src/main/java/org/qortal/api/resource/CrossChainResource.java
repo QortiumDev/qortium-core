@@ -206,9 +206,9 @@ public class CrossChainResource {
 
 			// Keep only failed trades by batching the failed-trade check once.
 			Set<String> nonFailedTradeAddresses = TradeBot.getInstance().removeFailedTrades(repository, crossChainTrades).stream()
-					.map(crossChainTradeData -> crossChainTradeData.qortalAtAddress)
+					.map(crossChainTradeData -> crossChainTradeData.atAddress)
 					.collect(Collectors.toSet());
-			crossChainTrades.removeIf(crossChainTradeData -> nonFailedTradeAddresses.contains(crossChainTradeData.qortalAtAddress));
+			crossChainTrades.removeIf(crossChainTradeData -> nonFailedTradeAddresses.contains(crossChainTradeData.atAddress));
 
 			crossChainTrades.stream().forEach(CrossChainResource::decorateTradeDataWithPresence);
 
@@ -282,10 +282,10 @@ public class CrossChainResource {
 				example = "1597310000000"
 			) @QueryParam("minimumTimestamp") Long minimumTimestamp,
 			@Parameter(
-				description = "Optionally filter by buyer Qortal public key"
+				description = "Optionally filter by buyer local-chain public key"
 			) @QueryParam("buyerPublicKey") String buyerPublicKey58,
 			@Parameter(
-				description = "Optionally filter by seller Qortal public key"
+				description = "Optionally filter by seller local-chain public key"
 			) @QueryParam("sellerPublicKey") String sellerPublicKey58,
 			@Parameter( ref = "limit") @QueryParam("limit") Integer limit,
 			@Parameter( ref = "offset" ) @QueryParam("offset") Integer offset,

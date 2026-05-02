@@ -11,13 +11,13 @@ public class CrossChainSecretRequest {
 	@Schema(description = "Private key to match AT's trade 'partner'", example = "C6wuddsBV3HzRrXUtezE7P5MoRXp5m3mEDokRDGZB6ry")
 	public byte[] partnerPrivateKey;
 
-	@Schema(description = "Qortal AT address")
+	@Schema(description = "local-chain AT address")
 	public String atAddress;
 
 	@Schema(description = "Secret (32 bytes)", example = "FHMzten4he9jZ4HGb4297Utj6F5g2w7serjq2EnAg2s1")
 	public byte[] secret;
 
-	@Schema(description = "Qortal address for receiving NATIVE from AT")
+	@Schema(description = "local-chain address for receiving NATIVE from AT")
 	public String receivingAddress;
 
 	public CrossChainSecretRequest() {

@@ -8,7 +8,7 @@ import javax.xml.bind.annotation.XmlAccessorType;
 @XmlAccessorType(XmlAccessType.FIELD)
 public class TradeBotRespondRequest {
 
-	@Schema(description = "Qortal AT address", example = "Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	@Schema(description = "local-chain AT address", example = "Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	public String atAddress;
 
 	@Deprecated
@@ -20,7 +20,7 @@ public class TradeBotRespondRequest {
 			example = "xprv___________________________________________________________________________________________________________")
 	public String foreignKey;
 
-	@Schema(description = "Qortal address for receiving NATIVE from AT", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
+	@Schema(description = "local-chain address for receiving NATIVE from AT", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
 	public String receivingAddress;
 
 	public TradeBotRespondRequest() {

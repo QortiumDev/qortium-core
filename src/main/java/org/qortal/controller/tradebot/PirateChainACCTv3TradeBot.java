@@ -42,7 +42,7 @@ import org.qortal.controller.tradebot.TradeStates.State;
  * <p>
  * We deal with three different independent state-spaces here:
  * <ul>
- * 	<li>Qortal blockchain</li>
+ * 	<li>local chain</li>
  * 	<li>Foreign blockchain</li>
  * 	<li>Trade-bot entries</li>
  * </ul>
@@ -84,18 +84,18 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 	 * </ul>
 	 * Derives:
 	 * <ul>
-	 * 	<li>'native' (as in Qortal) public key, public key hash, address (starting with Q)</li>
+	 * 	<li>'native' (local-chain) public key, public key hash, address (starting with Q)</li>
 	 * 	<li>'foreign' (as in PirateChain) public key, public key hash</li>
 	 * </ul>
-	 * A Qortal AT is then constructed including the following as constants in the 'data segment':
+	 * A local-chain AT is then constructed including the following as constants in the 'data segment':
 	 * <ul>
-	 * 	<li>'native'/Qortal 'trade' address - used as a MESSAGE contact</li>
+	 * 	<li>'native'/local-chain 'trade' address - used as a MESSAGE contact</li>
 	 * 	<li>'foreign'/PirateChain public key hash - used by Alice's P2SH scripts to allow redeem</li>
 	 * 	<li>native asset amount on offer by Bob</li>
 	 * 	<li>ARRR amount expected in return by Bob (from Alice)</li>
 	 * 	<li>trading timeout, in case things go wrong and everyone needs to refund</li>
 	 * </ul>
-	 * Returns a DEPLOY_AT transaction that needs to be signed and broadcast to the Qortal network.
+	 * Returns a DEPLOY_AT transaction that needs to be signed and broadcast to the local-chain network.
 	 * <p>
 	 * Trade-bot will wait for Bob's AT to be deployed before taking next step.
 	 * <p>
@@ -140,7 +140,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		String description = "NATIVE/ARRR cross-chain trade";
 		String aTType = "ACCT";
 		String tags = "ACCT NATIVE ARRR";
-		byte[] creationBytes = PirateChainACCTv3.buildQortalAT(tradeNativeAddress, tradeForeignPublicKey, tradeBotCreateRequest.nativeAmount,
+		byte[] creationBytes = PirateChainACCTv3.buildTradeAT(tradeNativeAddress, tradeForeignPublicKey, tradeBotCreateRequest.nativeAmount,
 				tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
 		long amount = tradeBotCreateRequest.fundingNativeAmount;
 
@@ -167,7 +167,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		// Attempt to backup the trade bot data
 		TradeBot.backupTradeBotData(repository, null);
 
-		// Return to user for signing and broadcast as we don't have their Qortal private key
+		// Return to user for signing and broadcast as we don't have their local-chain private key
 		try {
 			return DeployAtTransactionTransformer.toBytes(deployAtTransactionData);
 		} catch (TransformationException e) {
@@ -197,7 +197,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 	 * which should result in a base58 string starting with either 'xprv' (for PirateChain main-net)
 	 * or 'tprv' for (PirateChain test-net).
 	 * <p>
-	 * It is envisaged that the value in <tt>xprv58</tt> will actually come from a Qortal-UI-managed wallet.
+	 * It is envisaged that the value in <tt>xprv58</tt> will actually come from a local-chain UI-managed wallet.
 	 * <p>
 	 * If sufficient funds are available, <b>this method will actually fund the P2SH-A</b>
 	 * with the PirateChain amount expected by 'Bob'.
@@ -236,7 +236,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 
 		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, PirateChainACCTv3.NAME,
 				State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
-				receivingAddress, crossChainTradeData.qortalAtAddress, now, crossChainTradeData.nativeAmount,
+				receivingAddress, crossChainTradeData.atAddress, now, crossChainTradeData.nativeAmount,
 				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
 				secretA, hashOfSecretA,
 				SupportedBlockchain.PIRATECHAIN.name(),
@@ -276,9 +276,9 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 			return ResponseResult.BALANCE_ISSUE;
 		}
 
-		// Attempt to send MESSAGE to Bob's Qortal trade address
+		// Attempt to send MESSAGE to Bob's local-chain trade address
 		byte[] messageData = CrossChainUtils.buildOfferMessage(tradeBotData.getTradeForeignPublicKey(), tradeBotData.getHashOfSecret(), tradeBotData.getLockTimeA());
-		String messageRecipient = crossChainTradeData.qortalCreatorTradeAddress;
+		String messageRecipient = crossChainTradeData.creatorTradeAddress;
 
 		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, messageData);
 		if (!isMessageAlreadySent) {
@@ -640,9 +640,9 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 
 		// Find our MESSAGE to AT from previous state
 		List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(tradeBotData.getTradeNativePublicKey(),
-				crossChainTradeData.qortalCreatorTradeAddress, null, null, null);
+				crossChainTradeData.creatorTradeAddress, null, null, null);
 		if (messageTransactionsData == null || messageTransactionsData.isEmpty()) {
-			LOGGER.warn(() -> String.format("Unable to find our message to trade creator %s?", crossChainTradeData.qortalCreatorTradeAddress));
+			LOGGER.warn(() -> String.format("Unable to find our message to trade creator %s?", crossChainTradeData.creatorTradeAddress));
 			return;
 		}
 
@@ -660,8 +660,8 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 
 		// Send 'redeem' MESSAGE to AT using both secret
 		byte[] secretA = tradeBotData.getSecret();
-		String qortalReceivingAddress = Base58.encode(tradeBotData.getReceivingAccountInfo()); // Actually contains whole address, not just PKH
-		byte[] messageData = PirateChainACCTv3.buildRedeemMessage(secretA, qortalReceivingAddress);
+		String receivingAddress = Base58.encode(tradeBotData.getReceivingAccountInfo()); // Actually contains whole address, not just PKH
+		byte[] messageData = PirateChainACCTv3.buildRedeemMessage(secretA, receivingAddress);
 		String messageRecipient = tradeBotData.getAtAddress();
 
 		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, messageData);
@@ -694,7 +694,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 
 		TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_DONE,
 				() -> String.format("Redeeming AT %s. Funds should arrive at %s",
-						tradeBotData.getAtAddress(), qortalReceivingAddress));
+						tradeBotData.getAtAddress(), receivingAddress));
 	}
 
 	/**
@@ -878,7 +878,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		if (!atData.getIsFinished() && crossChainTradeData.mode == AcctMode.OFFERING)
 			return false;
 
-		boolean isAtLockedToUs = tradeBotData.getTradeNativeAddress().equals(crossChainTradeData.qortalPartnerAddress);
+		boolean isAtLockedToUs = tradeBotData.getTradeNativeAddress().equals(crossChainTradeData.partnerAddress);
 
 		if (!atData.getIsFinished() && crossChainTradeData.mode == AcctMode.TRADING)
 			if (isAtLockedToUs) {
@@ -886,7 +886,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 				return false;
 			} else {
 				TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_REFUNDING_A,
-						() -> String.format("AT %s trading with someone else: %s. Refunding & aborting trade", tradeBotData.getAtAddress(), crossChainTradeData.qortalPartnerAddress));
+						() -> String.format("AT %s trading with someone else: %s. Refunding & aborting trade", tradeBotData.getAtAddress(), crossChainTradeData.partnerAddress));
 
 				return true;
 			}

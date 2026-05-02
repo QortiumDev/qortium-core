@@ -39,9 +39,9 @@ public class CrossChainTradeSummary {
 		this.nativeAmount = crossChainTradeData.nativeAmount;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
 		this.btcAmount = this.foreignAmount;
-		this.sellerAddress = crossChainTradeData.qortalCreator;
-		this.buyerReceivingAddress = crossChainTradeData.qortalPartnerReceivingAddress;
-		this.atAddress = crossChainTradeData.qortalAtAddress;
+		this.sellerAddress = crossChainTradeData.creatorAddress;
+		this.buyerReceivingAddress = crossChainTradeData.partnerReceivingAddress;
+		this.atAddress = crossChainTradeData.atAddress;
 	}
 
 	public long getTradeTimestamp() {

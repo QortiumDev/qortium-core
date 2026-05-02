@@ -17,8 +17,8 @@ public class PirateChainACCTv3Tests extends ACCTTests {
 	}
 
 	@Override
-	protected byte[] buildQortalAT(String address, byte[] publicKey, long redeemAmount, long foreignAmount, int tradeTimeout) {
-		return PirateChainACCTv3.buildQortalAT(address, publicKey, redeemAmount, foreignAmount, tradeTimeout);
+	protected byte[] buildTradeAT(String address, byte[] publicKey, long redeemAmount, long foreignAmount, int tradeTimeout) {
+		return PirateChainACCTv3.buildTradeAT(address, publicKey, redeemAmount, foreignAmount, tradeTimeout);
 	}
 
 	@Override

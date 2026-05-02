@@ -13,14 +13,14 @@ public class CrossChainTradeData {
 
 	// Properties
 
-	@Schema(description = "AT's Qortal address")
-	public String qortalAtAddress;
+	@Schema(description = "AT's local-chain address")
+	public String atAddress;
 
-	@Schema(description = "AT creator's Qortal address")
-	public String qortalCreator;
+	@Schema(description = "AT creator's local-chain address")
+	public String creatorAddress;
 
-	@Schema(description = "AT creator's ephemeral trading key-pair represented as Qortal address")
-	public String qortalCreatorTradeAddress;
+	@Schema(description = "AT creator's ephemeral trading key-pair represented as local-chain address")
+	public String creatorTradeAddress;
 
 	@Deprecated
 	@Schema(description = "DEPRECATED: use creatorForeignPKH instead")
@@ -45,12 +45,12 @@ public class CrossChainTradeData {
 	@Schema(description = "HASH160 of 32-byte secret-B")
 	public byte[] hashOfSecretB;
 
-	@Schema(description = "Final native asset payment that will be sent to Qortal trade partner")
+	@Schema(description = "Final native asset payment that will be sent to local-chain trade partner")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public long nativeAmount;
 
-	@Schema(description = "Trade partner's Qortal address (trade begins when this is set)")
-	public String qortalPartnerAddress;
+	@Schema(description = "Trade partner's local-chain address (trade begins when this is set)")
+	public String partnerAddress;
 
 	@Schema(description = "Timestamp when AT switched to trade mode")
 	public Long tradeModeTimestamp;
@@ -58,7 +58,7 @@ public class CrossChainTradeData {
 	@Schema(description = "How long from AT creation until AT triggers automatic refund to AT creator (minutes)")
 	public Integer refundTimeout;
 
-	@Schema(description = "Actual Qortal block height when AT will automatically refund to AT creator (after trade begins)")
+	@Schema(description = "Actual local-chain block height when AT will automatically refund to AT creator (after trade begins)")
 	public Integer tradeRefundHeight;
 
 	@Deprecated
@@ -86,8 +86,8 @@ public class CrossChainTradeData {
 	@Schema(description = "Trade partner's foreign blockchain public-key-hash (PKH)")
 	public byte[] partnerForeignPKH;
 
-	@Schema(description = "Trade partner's Qortal receiving address")
-	public String qortalPartnerReceivingAddress;
+	@Schema(description = "Trade partner's local-chain receiving address")
+	public String partnerReceivingAddress;
 
 	public String foreignBlockchain;
 

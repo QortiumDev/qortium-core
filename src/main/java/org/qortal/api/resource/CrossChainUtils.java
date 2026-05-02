@@ -40,7 +40,7 @@ public class CrossChainUtils {
     public static final String NATIVE_CURRENCY_CODE = "NATIVE";
     private static final Logger LOGGER = LogManager.getLogger(CrossChainUtils.class);
     public static final String CORE_API_CALL = "Core API Call";
-    public static final String QORTAL_EXCHANGE_LABEL = "Qortal";
+    public static final String LOCAL_CHAIN_EXCHANGE_LABEL = "Local Chain";
 
     public static ServerConfigurationInfo buildServerConfigurationInfo(Bitcoiny blockchain) {
 
@@ -700,7 +700,7 @@ public class CrossChainUtils {
             joiner.add(entry.getFeeCurrency());
             joiner.add(String.valueOf(Amounts.prettyAmount(entry.getTotalPrice())));
             joiner.add(dateFormatter.format(new Date(entry.getTradeTimestamp())));
-            joiner.add(QORTAL_EXCHANGE_LABEL);
+            joiner.add(LOCAL_CHAIN_EXCHANGE_LABEL);
 
             bufferedWriter.newLine();
             bufferedWriter.append(joiner.toString());

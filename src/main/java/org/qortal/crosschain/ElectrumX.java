@@ -528,7 +528,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 					addresses.add((String) addressObj);
 				}
 
-				// For the purposes of Qortal we require all outputs to contain addresses
+					// For the purposes of the local chain we require all outputs to contain addresses
 				// Some servers omit this info, causing problems down the line with balance calculations
 				// Update: it turns out that they were just using a different key - "address" instead of "addresses"
 				// The code below can remain in place, just in case a peer returns a missing address in the future

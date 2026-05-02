@@ -188,7 +188,7 @@ public class ForeignFeesManager implements Listener {
         // the trade offers for this address on this node
         List<String> atAddressesForOffers
             = this.offersByAddress.getOrDefault(address, new ArrayList<>(0)).stream()
-                .map( data -> data.qortalAtAddress )
+                .map( data -> data.atAddress )
                 .collect(Collectors.toList());
 
         // the unsigned fee data for the address's trade offers
@@ -280,7 +280,7 @@ public class ForeignFeesManager implements Listener {
 
                         if( offerOptional.isPresent() ) {
                             CrossChainTradeData offer = offerOptional.get();
-                            this.offersByAddress.computeIfAbsent( offer.qortalCreator, x -> new ArrayList<>()).add(offer);
+                            this.offersByAddress.computeIfAbsent( offer.creatorAddress, x -> new ArrayList<>()).add(offer);
 
                             if( processTradeOfferInWaiting(now, data) ) {
                                 EventBus.INSTANCE.notify(new FeeWaitingEvent(true, data.getCreatorAddress()));
@@ -442,8 +442,8 @@ public class ForeignFeesManager implements Listener {
                         boolean allSignedForCreatorAddress
                             = this.offersByAddress
                                 .getOrDefault(tradeOfferCreatorAddress, new ArrayList<>(0)).stream()
-                                .map(data -> data.qortalAtAddress)
-                                .filter(qortalAtAddress -> this.unsignedByAT.contains(qortalAtAddress))
+                                .map(data -> data.atAddress)
+	                                .filter(offerAtAddress -> this.unsignedByAT.contains(offerAtAddress))
                                 .findAny()
                                 .isEmpty();
 
@@ -513,7 +513,7 @@ public class ForeignFeesManager implements Listener {
             Set<String> atAddresses
                 = TradeBot.getInstance()
                     .removeFailedTrades(repository, crossChainTradeOffers).stream()
-                    .map( data -> data.qortalAtAddress )
+                    .map( data -> data.atAddress )
                     .collect(Collectors.toSet());
 
             LOGGER.debug("foreign fees before AT removal: count = " + this.signedByAT.size() );
@@ -551,7 +551,7 @@ public class ForeignFeesManager implements Listener {
 
             // group all trade offers by trade offer creator, then reset map
             Map<String, List<CrossChainTradeData>> groupedOffersByAddress
-                    = crossChainTradeOffers.stream().collect(Collectors.groupingBy(data -> data.qortalCreator));
+                    = crossChainTradeOffers.stream().collect(Collectors.groupingBy(data -> data.creatorAddress));
 
             this.offersByAddress.clear();
             this.offersByAddress.putAll(groupedOffersByAddress);

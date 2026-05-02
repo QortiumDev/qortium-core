@@ -29,22 +29,22 @@ import static org.ciyam.at.OpCode.calcOffset;
  * 
  * <p>
  * <ul>
- * <li>Bob generates PirateChain & Qortal 'trade' keys
+ * <li>Bob generates PirateChain & local-chain 'trade' keys
  * 		<ul>
  * 			<li>private key required to sign P2SH redeem tx</li>
  * 			<li>private key could be used to create 'secret' (e.g. double-SHA256)</li>
- * 			<li>encrypted private key could be stored in Qortal AT for access by Bob from any node</li>
+ * 			<li>encrypted private key could be stored in local-chain AT for access by Bob from any node</li>
  * 		</ul>
  * </li>
- * <li>Bob deploys Qortal AT
+ * <li>Bob deploys local-chain AT
  * 		<ul>
  * 		</ul>
  * </li>
- * <li>Alice finds Qortal AT and wants to trade
+ * <li>Alice finds local-chain AT and wants to trade
  * 		<ul>
- * 			<li>Alice generates PirateChain & Qortal 'trade' keys</li>
+ * 			<li>Alice generates PirateChain & local-chain 'trade' keys</li>
  * 			<li>Alice funds PirateChain P2SH-A</li>
- * 			<li>Alice sends 'offer' MESSAGE to Bob from her Qortal trade address, containing:
+ * 			<li>Alice sends 'offer' MESSAGE to Bob from her local-chain trade address, containing:
  * 				<ul>
  * 					<li>hash-of-secret-A</li>
  * 					<li>her 'trade' Pirate Chain public key</li>
@@ -55,24 +55,24 @@ import static org.ciyam.at.OpCode.calcOffset;
  * <li>Bob receives "offer" MESSAGE
  * 		<ul>
  * 			<li>Checks Alice's P2SH-A</li>
- * 			<li>Sends 'trade' MESSAGE to Qortal AT from his trade address, containing:
+ * 			<li>Sends 'trade' MESSAGE to local-chain AT from his trade address, containing:
  * 				<ul>
- * 					<li>Alice's trade Qortal address</li>
+ * 					<li>Alice's trade local-chain address</li>
  * 					<li>Alice's trade Pirate Chain public key</li>
  * 					<li>hash-of-secret-A</li>
  * 				</ul>
  * 			</li>
  * 		</ul>
  * </li>
- * <li>Alice checks Qortal AT to confirm it's locked to her
+ * <li>Alice checks local-chain AT to confirm it's locked to her
  * 		<ul>
- * 			<li>Alice sends 'redeem' MESSAGE to Qortal AT from her trade address, containing:
+ * 			<li>Alice sends 'redeem' MESSAGE to local-chain AT from her trade address, containing:
  * 				<ul>
  * 					<li>secret-A</li>
- * 					<li>Qortal receiving address of her chosing</li>
+ * 					<li>local-chain receiving address of her chosing</li>
  * 				</ul>
  * 			</li>
- * 			<li>AT's native asset funds are sent to Qortal receiving address</li>
+ * 			<li>AT's native asset funds are sent to local-chain receiving address</li>
  * 		</ul>
  * </li>
  * <li>Bob checks AT, extracts secret-A
@@ -101,13 +101,13 @@ public class PirateChainACCTv3 implements ACCT {
 		public long lockTimeA;
 	}
 	public static final int OFFER_MESSAGE_LENGTH = 33 /*partnerPirateChainPublicKey*/ + 20 /*hashOfSecretA*/ + 8 /*lockTimeA*/;
-	public static final int TRADE_MESSAGE_LENGTH = 32 /*partner's Qortal trade address (padded from 25 to 32)*/
+	public static final int TRADE_MESSAGE_LENGTH = 32 /*partner's local-chain trade address (padded from 25 to 32)*/
 			+ 40 /*partner's Pirate Chain public key (padded from 33 to 40)*/
 			+ 8 /*AT trade timeout (minutes)*/
 			+ 24 /*hash of secret-A (padded from 20 to 24)*/
 			+ 8 /*lockTimeA*/;
-	public static final int REDEEM_MESSAGE_LENGTH = 32 /*secret-A*/ + 32 /*partner's Qortal receiving address padded from 25 to 32*/;
-	public static final int CANCEL_MESSAGE_LENGTH = 32 /*AT creator's Qortal address*/;
+	public static final int REDEEM_MESSAGE_LENGTH = 32 /*secret-A*/ + 32 /*partner's local-chain receiving address padded from 25 to 32*/;
+	public static final int CANCEL_MESSAGE_LENGTH = 32 /*AT creator's local-chain address*/;
 
 	private static PirateChainACCTv3 instance;
 
@@ -137,18 +137,18 @@ public class PirateChainACCTv3 implements ACCT {
 	}
 
 	/**
-	 * Returns Qortal AT creation bytes for cross-chain trading AT.
+	 * Returns local-chain AT creation bytes for cross-chain trading AT.
 	 * <p>
 	 * <tt>tradeTimeout</tt> (minutes) is the time window for the trade partner to send the
 	 * 32-byte secret to the AT, before the AT automatically refunds the AT's creator.
 	 * 
-	 * @param creatorTradeAddress AT creator's trade Qortal address
+	 * @param creatorTradeAddress AT creator's trade local-chain address
 	 * @param pirateChainPublicKeyHash 33-byte creator's trade PirateChain public key
 	 * @param nativeAmount how much native asset to pay trade partner if they send correct 32-byte secrets to AT
 	 * @param arrrAmount how much ARRR the AT creator is expecting to trade
 	 * @param tradeTimeout suggested timeout for entire trade
 	 */
-	public static byte[] buildQortalAT(String creatorTradeAddress, byte[] pirateChainPublicKeyHash, long nativeAmount, long arrrAmount, int tradeTimeout) {
+	public static byte[] buildTradeAT(String creatorTradeAddress, byte[] pirateChainPublicKeyHash, long nativeAmount, long arrrAmount, int tradeTimeout) {
 		if (pirateChainPublicKeyHash.length != 33)
 			throw new IllegalArgumentException("PirateChain public key hash should be 33 bytes");
 
@@ -174,7 +174,7 @@ public class PirateChainACCTv3 implements ACCT {
 		final int addrExpectedRedeemMessageLength = addrCounter++;
 
 		final int addrCreatorAddressPointer = addrCounter++;
-		final int addrQortalPartnerAddressPointer = addrCounter++;
+		final int addrPartnerAddressPointer = addrCounter++;
 		final int addrMessageSenderPointer = addrCounter++;
 
 		final int addrTradeMessagePartnerPirateChainPublicKeyFirst32BytesOffset = addrCounter++;
@@ -200,10 +200,10 @@ public class PirateChainACCTv3 implements ACCT {
 		final int addrCreatorAddress3 = addrCounter++;
 		final int addrCreatorAddress4 = addrCounter++;
 
-		final int addrQortalPartnerAddress1 = addrCounter++;
-		final int addrQortalPartnerAddress2 = addrCounter++;
-		final int addrQortalPartnerAddress3 = addrCounter++;
-		final int addrQortalPartnerAddress4 = addrCounter++;
+		final int addrPartnerAddress1 = addrCounter++;
+		final int addrPartnerAddress2 = addrCounter++;
+		final int addrPartnerAddress3 = addrCounter++;
+		final int addrPartnerAddress4 = addrCounter++;
 
 		final int addrLockTimeA = addrCounter++;
 		final int addrRefundTimeout = addrCounter++;
@@ -241,7 +241,7 @@ public class PirateChainACCTv3 implements ACCT {
 		// Data segment
 		ByteBuffer dataByteBuffer = ByteBuffer.allocate(addrCounter * MachineState.VALUE_SIZE);
 
-		// AT creator's trade Qortal address, decoded from Base58
+		// AT creator's trade local-chain address, decoded from Base58
 		assert dataByteBuffer.position() == addrCreatorTradeAddress1 * MachineState.VALUE_SIZE : "addrCreatorTradeAddress1 incorrect";
 		byte[] creatorTradeAddressBytes = Base58.decode(creatorTradeAddress);
 		dataByteBuffer.put(Bytes.ensureCapacity(creatorTradeAddressBytes, 32, 0));
@@ -278,9 +278,9 @@ public class PirateChainACCTv3 implements ACCT {
 		assert dataByteBuffer.position() == addrCreatorAddressPointer * MachineState.VALUE_SIZE : "addrCreatorAddressPointer incorrect";
 		dataByteBuffer.putLong(addrCreatorAddress1);
 
-		// Index into data segment of partner's Qortal address, used by SET_B_IND
-		assert dataByteBuffer.position() == addrQortalPartnerAddressPointer * MachineState.VALUE_SIZE : "addrQortalPartnerAddressPointer incorrect";
-		dataByteBuffer.putLong(addrQortalPartnerAddress1);
+		// Index into data segment of partner's local-chain address, used by SET_B_IND
+		assert dataByteBuffer.position() == addrPartnerAddressPointer * MachineState.VALUE_SIZE : "addrPartnerAddressPointer incorrect";
+		dataByteBuffer.putLong(addrPartnerAddress1);
 
 		// Index into data segment of (temporary) transaction's sender's address, used by GET_B_IND
 		assert dataByteBuffer.position() == addrMessageSenderPointer * MachineState.VALUE_SIZE : "addrMessageSenderPointer incorrect";
@@ -310,7 +310,7 @@ public class PirateChainACCTv3 implements ACCT {
 		assert dataByteBuffer.position() == addrHashOfSecretAPointer * MachineState.VALUE_SIZE : "addrHashOfSecretAPointer incorrect";
 		dataByteBuffer.putLong(addrHashOfSecretA);
 
-		// Offset into 'redeem' MESSAGE data payload for extracting Qortal receiving address
+		// Offset into 'redeem' MESSAGE data payload for extracting local-chain receiving address
 		assert dataByteBuffer.position() == addrRedeemMessageReceivingAddressOffset * MachineState.VALUE_SIZE : "addrRedeemMessageReceivingAddressOffset incorrect";
 		dataByteBuffer.putLong(32L);
 
@@ -320,7 +320,7 @@ public class PirateChainACCTv3 implements ACCT {
 		assert dataByteBuffer.position() == addrMessageDataLength * MachineState.VALUE_SIZE : "addrMessageDataLength incorrect";
 		dataByteBuffer.putLong(32L);
 
-		// Pointer into data segment of where to save partner's receiving Qortal address, used by GET_B_IND
+		// Pointer into data segment of where to save partner's receiving local-chain address, used by GET_B_IND
 		assert dataByteBuffer.position() == addrPartnerReceivingAddressPointer * MachineState.VALUE_SIZE : "addrPartnerReceivingAddressPointer incorrect";
 		dataByteBuffer.putLong(addrPartnerReceivingAddress);
 
@@ -434,8 +434,8 @@ public class PirateChainACCTv3 implements ACCT {
 
 				// Extract message from transaction into B register
 				codeByteBuffer.put(OpCode.EXT_FUN.compile(FunctionCode.PUT_MESSAGE_FROM_TX_IN_A_INTO_B));
-				// Save B register into data segment starting at addrQortalPartnerAddress1 (as pointed to by addrQortalPartnerAddressPointer)
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrQortalPartnerAddressPointer));
+				// Save B register into data segment starting at addrPartnerAddress1 (as pointed to by addrPartnerAddressPointer)
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerAddressPointer));
 
 				// Extract first 32 bytes of trade partner's Pirate Chain public key from message into B
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(QortalFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrTradeMessagePartnerPirateChainPublicKeyFirst32BytesOffset));
@@ -466,7 +466,7 @@ public class PirateChainACCTv3 implements ACCT {
 				// Set restart position to after this opcode
 				codeByteBuffer.put(OpCode.SET_PCS.compile());
 
-				/* Loop, waiting for trade timeout or 'redeem' MESSAGE from Qortal trade partner */
+				/* Loop, waiting for trade timeout or 'redeem' MESSAGE from local-chain trade partner */
 
 				// Fetch current block 'timestamp'
 				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_BLOCK_TIMESTAMP, addrBlockTimestamp));
@@ -512,10 +512,10 @@ public class PirateChainACCTv3 implements ACCT {
 				// Save B register into data segment starting at addrMessageSender1 (as pointed to by addrMessageSenderPointer)
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrMessageSenderPointer));
 				// Compare each part of transaction's sender's address with expected address. If they don't match, look for another transaction.
-				codeByteBuffer.put(OpCode.BNE_DAT.compile(addrMessageSender1, addrQortalPartnerAddress1, calcOffset(codeByteBuffer, labelRedeemTxnLoop)));
-				codeByteBuffer.put(OpCode.BNE_DAT.compile(addrMessageSender2, addrQortalPartnerAddress2, calcOffset(codeByteBuffer, labelRedeemTxnLoop)));
-				codeByteBuffer.put(OpCode.BNE_DAT.compile(addrMessageSender3, addrQortalPartnerAddress3, calcOffset(codeByteBuffer, labelRedeemTxnLoop)));
-				codeByteBuffer.put(OpCode.BNE_DAT.compile(addrMessageSender4, addrQortalPartnerAddress4, calcOffset(codeByteBuffer, labelRedeemTxnLoop)));
+				codeByteBuffer.put(OpCode.BNE_DAT.compile(addrMessageSender1, addrPartnerAddress1, calcOffset(codeByteBuffer, labelRedeemTxnLoop)));
+				codeByteBuffer.put(OpCode.BNE_DAT.compile(addrMessageSender2, addrPartnerAddress2, calcOffset(codeByteBuffer, labelRedeemTxnLoop)));
+				codeByteBuffer.put(OpCode.BNE_DAT.compile(addrMessageSender3, addrPartnerAddress3, calcOffset(codeByteBuffer, labelRedeemTxnLoop)));
+				codeByteBuffer.put(OpCode.BNE_DAT.compile(addrMessageSender4, addrPartnerAddress4, calcOffset(codeByteBuffer, labelRedeemTxnLoop)));
 
 				/* Check 'secret-A' in transaction's message */
 
@@ -535,7 +535,7 @@ public class PirateChainACCTv3 implements ACCT {
 				/* Success! Pay arranged amount to receiving address */
 				labelPayout = codeByteBuffer.position();
 
-				// Extract Qortal receiving address from next 32 bytes of message from transaction into B register
+				// Extract local-chain receiving address from next 32 bytes of message from transaction into B register
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(QortalFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrRedeemMessageReceivingAddressOffset));
 				// Save B register into data segment starting at addrPartnerReceivingAddress (as pointed to by addrPartnerReceivingAddressPointer)
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerReceivingAddressPointer));
@@ -614,8 +614,8 @@ public class PirateChainACCTv3 implements ACCT {
 		tradeData.foreignBlockchain = SupportedBlockchain.PIRATECHAIN.name();
 		tradeData.acctName = NAME;
 
-		tradeData.qortalAtAddress = atAddress;
-		tradeData.qortalCreator = Crypto.toAddress(creatorPublicKey);
+		tradeData.atAddress = atAddress;
+		tradeData.creatorAddress = Crypto.toAddress(creatorPublicKey);
 		tradeData.creationTimestamp = creationTimestamp;
 
 		if(optionalBalance.isPresent()) {
@@ -634,7 +634,7 @@ public class PirateChainACCTv3 implements ACCT {
 
 		// Skip creator's trade address
 		dataByteBuffer.get(addressBytes);
-		tradeData.qortalCreatorTradeAddress = Base58.encode(addressBytes);
+		tradeData.creatorTradeAddress = Base58.encode(addressBytes);
 		dataByteBuffer.position(dataByteBuffer.position() + 32 - addressBytes.length);
 
 		// Creator's PirateChain/foreign public key (full 33 bytes, not hashed, so ignore references to "PKH")
@@ -666,7 +666,7 @@ public class PirateChainACCTv3 implements ACCT {
 		// Skip pointer to creator's address
 		dataByteBuffer.position(dataByteBuffer.position() + 8);
 
-		// Skip pointer to partner's Qortal trade address
+		// Skip pointer to partner's local-chain trade address
 		dataByteBuffer.position(dataByteBuffer.position() + 8);
 
 		// Skip pointer to message sender
@@ -690,7 +690,7 @@ public class PirateChainACCTv3 implements ACCT {
 		// Skip pointer to hash-of-secret-A
 		dataByteBuffer.position(dataByteBuffer.position() + 8);
 
-		// Skip 'redeem' message data offset for partner's Qortal receiving address
+		// Skip 'redeem' message data offset for partner's local-chain receiving address
 		dataByteBuffer.position(dataByteBuffer.position() + 8);
 
 		// Skip pointer to message data
@@ -709,7 +709,7 @@ public class PirateChainACCTv3 implements ACCT {
 
 		// Partner's trade address (if present)
 		dataByteBuffer.get(addressBytes);
-		String qortalRecipient = Base58.encode(addressBytes);
+		String partnerAddress = Base58.encode(addressBytes);
 		dataByteBuffer.position(dataByteBuffer.position() + 32 - addressBytes.length);
 
 		// Potential lockTimeA (if in trade mode)
@@ -718,7 +718,7 @@ public class PirateChainACCTv3 implements ACCT {
 		// AT refund timeout (probably only useful for debugging)
 		int refundTimeout = (int) dataByteBuffer.getLong();
 
-		// Trade-mode refund timestamp (AT 'timestamp' converted to Qortal block height)
+		// Trade-mode refund timestamp (AT 'timestamp' converted to local-chain block height)
 		long tradeRefundTimestamp = dataByteBuffer.getLong();
 
 		// Skip last transaction timestamp
@@ -767,13 +767,13 @@ public class PirateChainACCTv3 implements ACCT {
 			tradeData.mode = mode;
 			tradeData.refundTimeout = refundTimeout;
 			tradeData.tradeRefundHeight = new Timestamp(tradeRefundTimestamp).blockHeight;
-			tradeData.qortalPartnerAddress = qortalRecipient;
+			tradeData.partnerAddress = partnerAddress;
 			tradeData.hashOfSecretA = hashOfSecretA;
 			tradeData.partnerForeignPKH = partnerPirateChainPublicKey; // Not hashed
 			tradeData.lockTimeA = lockTimeA;
 
 			if (mode == AcctMode.REDEEMED)
-				tradeData.qortalPartnerReceivingAddress = Base58.encode(partnerReceivingAddress);
+				tradeData.partnerReceivingAddress = Base58.encode(partnerReceivingAddress);
 		} else {
 			tradeData.mode = AcctMode.OFFERING;
 		}
@@ -797,13 +797,13 @@ public class PirateChainACCTv3 implements ACCT {
 	}
 
 	/** Returns 'trade' MESSAGE payload for AT creator to send to AT. */
-	public static byte[] buildTradeMessage(String partnerQortalTradeAddress, byte[] partnerBitcoinPublicKey, byte[] hashOfSecretA, int lockTimeA, int refundTimeout) {
+	public static byte[] buildTradeMessage(String partnerTradeAddress, byte[] partnerBitcoinPublicKey, byte[] hashOfSecretA, int lockTimeA, int refundTimeout) {
 		byte[] data = new byte[TRADE_MESSAGE_LENGTH];
-		byte[] partnerQortalAddressBytes = Base58.decode(partnerQortalTradeAddress);
+		byte[] partnerAddressBytes = Base58.decode(partnerTradeAddress);
 		byte[] lockTimeABytes = BitTwiddling.toBEByteArray((long) lockTimeA);
 		byte[] refundTimeoutBytes = BitTwiddling.toBEByteArray((long) refundTimeout);
 
-		System.arraycopy(partnerQortalAddressBytes, 0, data, 0, partnerQortalAddressBytes.length);
+		System.arraycopy(partnerAddressBytes, 0, data, 0, partnerAddressBytes.length);
 		System.arraycopy(partnerBitcoinPublicKey, 0, data, 32, partnerBitcoinPublicKey.length);
 		System.arraycopy(refundTimeoutBytes, 0, data, 72, refundTimeoutBytes.length);
 		System.arraycopy(hashOfSecretA, 0, data, 80, hashOfSecretA.length);
@@ -814,22 +814,22 @@ public class PirateChainACCTv3 implements ACCT {
 
 	/** Returns 'cancel' MESSAGE payload for AT creator to cancel trade AT. */
 	@Override
-	public byte[] buildCancelMessage(String creatorQortalAddress) {
+	public byte[] buildCancelMessage(String creatorAddress) {
 		byte[] data = new byte[CANCEL_MESSAGE_LENGTH];
-		byte[] creatorQortalAddressBytes = Base58.decode(creatorQortalAddress);
+		byte[] creatorAddressBytes = Base58.decode(creatorAddress);
 
-		System.arraycopy(creatorQortalAddressBytes, 0, data, 0, creatorQortalAddressBytes.length);
+		System.arraycopy(creatorAddressBytes, 0, data, 0, creatorAddressBytes.length);
 
 		return data;
 	}
 
 	/** Returns 'redeem' MESSAGE payload for trade partner to send to AT. */
-	public static byte[] buildRedeemMessage(byte[] secretA, String qortalReceivingAddress) {
+	public static byte[] buildRedeemMessage(byte[] secretA, String receivingAddress) {
 		byte[] data = new byte[REDEEM_MESSAGE_LENGTH];
-		byte[] qortalReceivingAddressBytes = Base58.decode(qortalReceivingAddress);
+		byte[] receivingAddressBytes = Base58.decode(receivingAddress);
 
 		System.arraycopy(secretA, 0, data, 0, secretA.length);
-		System.arraycopy(qortalReceivingAddressBytes, 0, data, 32, qortalReceivingAddressBytes.length);
+		System.arraycopy(receivingAddressBytes, 0, data, 32, receivingAddressBytes.length);
 
 		return data;
 	}
@@ -842,8 +842,8 @@ public class PirateChainACCTv3 implements ACCT {
 
 	@Override
 	public byte[] findSecretA(Repository repository, CrossChainTradeData crossChainTradeData) throws DataException {
-		String atAddress = crossChainTradeData.qortalAtAddress;
-		String redeemerAddress = crossChainTradeData.qortalPartnerAddress;
+		String atAddress = crossChainTradeData.atAddress;
+		String redeemerAddress = crossChainTradeData.partnerAddress;
 
 		// We don't have partner's public key so we check every message to AT
 		List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(null, atAddress, null, null, null);

@@ -25,7 +25,7 @@ public interface ACCT {
 
 	CrossChainTradeData populateTradeData(Repository repository, byte[] creatorPublicKey, long creationTimestamp, ATStateData atStateData, OptionalLong optionalBalance) throws DataException;
 
-	public byte[] buildCancelMessage(String creatorQortalAddress);
+	public byte[] buildCancelMessage(String creatorAddress);
 
 	public byte[] findSecretA(Repository repository, CrossChainTradeData crossChainTradeData) throws DataException;
 

@@ -15,7 +15,7 @@ public class CrossChainBitcoinRedeemRequest {
 	@Schema(description = "Bitcoin PRIVATE KEY for redeem", example = "cUvGNSnu14q6Hr1X7TESjYVTqBpFjj8GGLGjGdpJwD9NhSQKeYUk")
 	public byte[] redeemPrivateKey;
 
-	@Schema(description = "Qortal AT address")
+	@Schema(description = "local-chain AT address")
 	public String atAddress;
 
 	@Schema(description = "Bitcoin miner fee", example = "0.00001000")

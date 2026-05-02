@@ -59,7 +59,7 @@ public class TradeBotData {
 	private byte[] lastTransactionSignature;
 	private Integer lockTimeA;
 
-	// Could be Bitcoin or Qortal...
+		// Could be a foreign-chain or local-chain account identifier.
 	private byte[] receivingAccountInfo;
 
 	protected TradeBotData() {

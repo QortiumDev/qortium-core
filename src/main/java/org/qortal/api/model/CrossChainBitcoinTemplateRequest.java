@@ -14,7 +14,7 @@ public class CrossChainBitcoinTemplateRequest {
 	@Schema(description = "Bitcoin HASH160(public key) for redeem", example = "2daMveGc5pdjRyFacbxBzMksCbyC")
 	public byte[] redeemPublicKeyHash;
 
-	@Schema(description = "Qortal AT address")
+	@Schema(description = "local-chain AT address")
 	public String atAddress;
 
 	public CrossChainBitcoinTemplateRequest() {
