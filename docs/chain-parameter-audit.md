@@ -48,13 +48,13 @@ Initial recommendation:
 
 ### Native Asset Identity
 
-`src/main/java/org/qortal/asset/Asset.java` now exposes `Asset.NATIVE = 0L`,
-with `Asset.QORT` kept as a temporary compatibility alias. Direct Java test use
-of `Asset.QORT` has been neutralized, and simple native-asset wording in
-comments, API descriptions, translations, and demo text now avoids hardcoded
-QORT labels. Cross-chain native-side trade fields, repository storage, and
-display labels now describe the chain-side asset as native/NATIVE instead of
-QORT.
+`src/main/java/org/qortal/asset/Asset.java` now exposes only
+`Asset.NATIVE = 0L` for the protocol native asset ID. The temporary
+`Asset.QORT` Java compatibility alias has been removed after production and
+test code were moved to `Asset.NATIVE`. Simple native-asset wording in comments,
+API descriptions, translations, and demo text now avoids hardcoded QORT labels.
+Cross-chain native-side trade fields, repository storage, and display labels
+now describe the chain-side asset as native/NATIVE instead of QORT.
 
 The protocol still needs a stable native asset ID, but the display name should
 not be fixed to QORT in fork-facing code.

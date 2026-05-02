@@ -16,13 +16,6 @@ public class Asset {
 	 */
 	public static final long NATIVE = 0L;
 
-	/**
-	 * @deprecated use {@link #NATIVE}. Kept temporarily while inherited QORT-specific
-	 * names are removed from non-consensus surfaces.
-	 */
-	@Deprecated
-	public static final long QORT = NATIVE;
-
 	// Other useful constants
 
 	public static final int MIN_NAME_SIZE = 3;
