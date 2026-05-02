@@ -438,6 +438,9 @@
 				<version>${maven-surefire-plugin.version}</version>
 				<configuration>
 					<skipTests>${skipJUnitTests}</skipTests>
+					<systemPropertyVariables>
+						<hsqldb.method_class_names>org.qortal.test.RepositoryTests.*</hsqldb.method_class_names>
+					</systemPropertyVariables>
 				</configuration>
 			</plugin>
 		</plugins>

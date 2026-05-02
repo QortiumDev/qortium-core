@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - test: fix repository interrupt test setup
+
+Fixed the repository interrupt test so HSQLDB is explicitly allowed to call its test-only Java sleep routine under the test JVM. The test now also reports the underlying exception when setup or execution fails, shuts down its scheduler, and clears the deliberate interrupt before later repository or JUnit cleanup can inherit it.
+
 ### 2026-05-02 - core: neutralize database schema domain names
 
 Renamed the inherited Qortal-branded HSQLDB domain types to reusable neutral names. Database schema definitions now use `AccountAddress`, `AccountPublicKey`, `PrivateKeySeed`, and `AssetAmount`, and the remaining runtime SQL casts were updated to match the neutral schema while leaving table names, column names, APIs, and Java package names unchanged.

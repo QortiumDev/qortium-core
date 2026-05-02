@@ -298,12 +298,13 @@ public class RepositoryTests extends Common {
 	/** Test proper action of interrupt inside an HSQLDB statement. */
 	@Test
 	public void testInterrupt() {
+		ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			final Thread testThread = Thread.currentThread();
 			System.out.println(String.format("Thread ID: %s", testThread.getId()));
 
 			// Queue interrupt
-			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 			executor.schedule(() -> testThread.interrupt(), 1000L, TimeUnit.MILLISECONDS);
 
 			// Set rollback on interrupt
@@ -320,8 +321,14 @@ public class RepositoryTests extends Common {
 			if (!testThread.isInterrupted())
 				// We should not reach here
 				fail("Interrupt was swallowed");
+
+			// Do not leak the deliberately queued interrupt into later test/repository cleanup.
+			Thread.interrupted();
 		} catch (DataException | SQLException e) {
-			fail("DataException during blocked statement");
+			throw new AssertionError("Exception during interrupted HSQLDB statement", e);
+		} finally {
+			executor.shutdownNow();
+			Thread.interrupted();
 		}
 	}
 
