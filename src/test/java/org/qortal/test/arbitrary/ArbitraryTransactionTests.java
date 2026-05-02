@@ -373,7 +373,7 @@ public class ArbitraryTransactionTests extends Common {
             arbitraryDataReader.loadSynchronously(true);
 
             // Filename will be "data" because it's been held as raw bytes in the transaction,
-            // so there is nowhere to store the original filename
+            // so there is no metadata to store the original filename.
             File outputFile = Paths.get(arbitraryDataReader.getFilePath().toString(), "data").toFile();
 
             assertArrayEquals(Crypto.digest(outputFile), Crypto.digest(path1.toFile()));
@@ -436,9 +436,8 @@ public class ArbitraryTransactionTests extends Common {
             ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(name, ArbitraryDataFile.ResourceIdType.NAME, service, identifier);
             arbitraryDataReader.loadSynchronously(true);
 
-            // Filename will be "data" because it's been held as raw bytes in the transaction,
-            // so there is nowhere to store the original filename
-            File outputFile = Paths.get(arbitraryDataReader.getFilePath().toString(), "data").toFile();
+            // Metadata stores the original filename, so raw on-chain data should be rebuilt with that filename.
+            File outputFile = Paths.get(arbitraryDataReader.getFilePath().toString(), path1.getFileName().toString()).toFile();
 
             assertArrayEquals(Crypto.digest(outputFile), Crypto.digest(path1.toFile()));
         }

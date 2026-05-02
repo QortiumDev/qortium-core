@@ -17,6 +17,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.crypto.BadPaddingException;
@@ -31,6 +32,7 @@ import org.apache.logging.log4j.Logger;
 import org.qortal.arbitrary.ArbitraryDataFile.ResourceIdType;
 import org.qortal.arbitrary.exception.DataNotPublishedException;
 import org.qortal.arbitrary.exception.MissingDataException;
+import org.qortal.arbitrary.metadata.ArbitraryDataTransactionMetadata;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.controller.arbitrary.ArbitraryDataBuildManager;
 import org.qortal.controller.arbitrary.ArbitraryDataManager;
@@ -60,6 +62,7 @@ public class ArbitraryDataReader {
     private final Service service;
     private final String identifier;
     private ArbitraryTransactionData transactionData;
+    private ArbitraryDataTransactionMetadata transactionMetadata;
     private String secret58;
     private Path filePath;
     private boolean canRequestMissingFiles;
@@ -528,6 +531,7 @@ public class ArbitraryDataReader {
 
         // Set filePath to the location of the ArbitraryDataFile
         this.filePath = arbitraryDataFile.getFilePath();
+        this.transactionMetadata = arbitraryDataFile.getMetadata();
     }
 
     private void decrypt() throws DataException {
@@ -669,7 +673,8 @@ public class ArbitraryDataReader {
             }
             else if (compression == Compression.NONE) {
                 Files.createDirectories(this.uncompressedPath);
-                Path finalPath = Paths.get(this.uncompressedPath.toString(), "data");
+                Path finalPath = this.getUncompressedFilePath();
+                Files.createDirectories(finalPath.getParent());
                 this.filePath.toFile().renameTo(finalPath.toFile());
             }
             else {
@@ -686,6 +691,49 @@ public class ArbitraryDataReader {
         // Update filePath to point to uncompressed directory
         // Don't delete the original ArbitraryDataFile chunk - it needs to be preserved for peer sharing
         this.filePath = this.uncompressedPath;
+    }
+
+    private Path getUncompressedFilePath() {
+        String fileName = this.getSingleMetadataFileName();
+        if (fileName == null) {
+            fileName = "data";
+        }
+
+        Path relativePath;
+        try {
+            relativePath = Paths.get(fileName).normalize();
+        } catch (InvalidPathException e) {
+            relativePath = Paths.get("data");
+        }
+
+        if (relativePath.isAbsolute() || relativePath.toString().isEmpty() || relativePath.startsWith("..")) {
+            relativePath = Paths.get("data");
+        }
+
+        Path finalPath = this.uncompressedPath.resolve(relativePath).normalize();
+        if (!finalPath.startsWith(this.uncompressedPath.normalize())) {
+            return this.uncompressedPath.resolve("data").normalize();
+        }
+
+        return finalPath;
+    }
+
+    private String getSingleMetadataFileName() {
+        if (this.transactionMetadata == null) {
+            return null;
+        }
+
+        List<String> files = this.transactionMetadata.getFiles();
+        if (files == null || files.size() != 1) {
+            return null;
+        }
+
+        String fileName = files.get(0);
+        if (fileName == null || fileName.isBlank()) {
+            return null;
+        }
+
+        return fileName;
     }
 
     private void validate() throws IOException, DataException {
