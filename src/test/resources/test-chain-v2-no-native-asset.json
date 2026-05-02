@@ -56,15 +56,6 @@
 		"minutesPerBlock": 1
 	},
 	"featureTriggers": {
-		"messageHeight": 0,
-		"atHeight": 0,
-		"assetsTimestamp": 0,
-		"votingTimestamp": 0,
-		"arbitraryTimestamp": 0,
-		"powfixTimestamp": 0,
-		"qortalTimestamp": 0,
-		"newAssetPricingTimestamp": 0,
-		"groupApprovalTimestamp": 0,
 		"transactionV6Timestamp": 0
 	},
 	"genesisInfo": {

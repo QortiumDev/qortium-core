@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - test: remove stale feature trigger config
+
+Removed obsolete feature trigger keys from the testnet chain config and mirrored test chain fixtures. Chain configs now only list the active `transactionV6Timestamp` feature trigger, matching the current baseline code and avoiding inherited no-op transition settings.
+
 ### 2026-05-02 - core: rename Ed25519 crypto extras
 
 Renamed the inherited `Qortal25519Extras` Java helper to `Ed25519Extras` so the active crypto utility naming describes the Ed25519/X25519 and aggregate-signature behavior without carrying Qortal branding. This keeps the existing `org.qortal` package namespace unchanged.

@@ -60,11 +60,7 @@
 		"minutesPerBlock": 1
 	},
 	"featureTriggers": {
-		"atFindNextTransactionFix": 0,
-		"newBlockSigHeight": 0,
-		"calcChainWeightTimestamp": 0,
-		"transactionV6Timestamp": 9999999999999,
-		"aggregateSignatureTimestamp": 0
+		"transactionV6Timestamp": 9999999999999
 	},
 	"genesisInfo": {
 		"version": 4,
