@@ -277,7 +277,7 @@ public class ArbitraryDataFileManager extends Thread {
     
     /**
      * Cleans up the relay cache according to age and space constraints.
-     * Dynamically adjusts based on Qortal's storage usage to avoid interfering with cleanup thresholds.
+     * Dynamically adjusts based on QDN storage usage to avoid interfering with cleanup thresholds.
      */
     private void cleanupRelayCache() {
         if (relayCacheDir == null || !Files.exists(relayCacheDir)) {
@@ -315,36 +315,36 @@ public class ArbitraryDataFileManager extends Thread {
             // Sort by creation time (oldest first)
             fileInfos.sort(Comparator.comparingLong(fi -> fi.creationTime));
             
-            // Calculate max allowed size based on Qortal's storage headroom
+            // Calculate max allowed size based on QDN storage headroom
             long maxAllowedSize;
             ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
-            Long qortalStorageCapacity = storageManager.getStorageCapacity();
-            long qortalUsedSpace = storageManager.getTotalDirectorySize();
+            Long qdnStorageCapacity = storageManager.getStorageCapacity();
+            long qdnUsedSpace = storageManager.getTotalDirectorySize();
             
-            if (qortalStorageCapacity != null && qortalUsedSpace > 0) {
-                // Calculate space before Qortal hits its cleanup threshold (90%)
-                long qortalCleanupThreshold = (long)(qortalStorageCapacity * ArbitraryDataStorageManager.DELETION_THRESHOLD);
-                long qortalHeadroom = qortalCleanupThreshold - qortalUsedSpace;
+            if (qdnStorageCapacity != null && qdnUsedSpace > 0) {
+                // Calculate space before QDN hits its cleanup threshold (90%)
+                long qdnCleanupThreshold = (long)(qdnStorageCapacity * ArbitraryDataStorageManager.DELETION_THRESHOLD);
+                long qdnHeadroom = qdnCleanupThreshold - qdnUsedSpace;
                 
-                if (qortalHeadroom < 0) {
-                    // Qortal is already over threshold, use minimal relay cache
+                if (qdnHeadroom < 0) {
+                    // QDN is already over threshold, use minimal relay cache
                     maxAllowedSize = 500L * 1024 * 1024; // 500MB minimum
-                    LOGGER.debug("Qortal over storage threshold, relay cache limited to 500MB");
+                    LOGGER.debug("QDN over storage threshold, relay cache limited to 500MB");
                 } else {
                     // Use up to 10% of the headroom, with min/max bounds
-                    long calculatedSize = (long)(qortalHeadroom * 0.10);
+                    long calculatedSize = (long)(qdnHeadroom * 0.10);
                     maxAllowedSize = Math.max(500L * 1024 * 1024, // Min 500MB
-                                              calculatedSize);    // 10% of free Qortal QDN Space
+                                              calculatedSize);    // 10% of free QDN space
                     RELAY_CACHE_CLEANUP_TRIGGER = (int)(maxAllowedSize / (512L * 1024)); // 500KB avg per file
                     LOGGER.debug("Relay cache limit: {} MB (based on {}% of {} MB headroom)", 
                             maxAllowedSize / (1024 * 1024), 
                             (int)(0.10 * 100),
-                            qortalHeadroom / (1024 * 1024));
+                            qdnHeadroom / (1024 * 1024));
                 }
             } else {
-                // Fallback: conservative fixed size if Qortal's storage not calculated yet
+                // Fallback: conservative fixed size if QDN storage not calculated yet
                 maxAllowedSize = 2L * 1024 * 1024 * 1024; // 2GB
-                LOGGER.debug("Relay cache limit: 2GB (fallback - Qortal storage not calculated)");
+                LOGGER.debug("Relay cache limit: 2GB (fallback - QDN storage not calculated)");
             }
             
             int deletedCount = 0;

@@ -174,8 +174,8 @@ Initial recommendation:
 
 - update top-level README and user-visible Qortium messaging early
 - replace tray labels and icons in a UI/packaging commit
-- treat `qortal://` and `qortalRequest` as compatibility-sensitive Q-Apps API
-  names until a migration strategy exists
+- QDN app names have moved to neutral `qdn://`, `qdnRequest`, and `.qdn`
+  surfaces without legacy Qortal aliases
 
 ### API Examples
 

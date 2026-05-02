@@ -37,7 +37,7 @@ public enum Service {
             if (files != null && files[0] != null) {
                 final String extension = FilenameUtils.getExtension(files[0].getName()).toLowerCase();
                 // We must allow blank file extensions because these are used by data published from a plaintext or base64-encoded string
-                final List<String> allowedExtensions = Arrays.asList("qortal", "zip", "pdf", "txt", "odt", "ods", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "");
+                final List<String> allowedExtensions = Arrays.asList("qdn", "zip", "pdf", "txt", "odt", "ods", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "");
                 if (extension == null || !allowedExtensions.contains(extension)) {
                     return ValidationResult.INVALID_FILE_EXTENSION;
                 }
@@ -143,7 +143,7 @@ public enum Service {
             }
             if (files != null) {
                 for (File file : files) {
-                    if (file.getName().equals(".qortal")) {
+                    if (file.getName().equals(".qdn")) {
                         continue;
                     }
                     if (file.isDirectory()) {
@@ -194,8 +194,8 @@ public enum Service {
     // For JSON validation
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    private static final String encryptedDataPrefix = "qortalEncryptedData";
-    private static final String encryptedGroupDataPrefix = "qortalGroupEncryptedData";
+    private static final String encryptedDataPrefix = "qdnEncryptedData";
+    private static final String encryptedGroupDataPrefix = "qdnGroupEncryptedData";
 
     Service(int value, boolean requiresValidation, Long maxSize, boolean single, boolean isPrivate, List<String> requiredKeys) {
         this.value = value;
@@ -214,7 +214,7 @@ public enum Service {
         // Load the first 25KB of data. This only needs to be long enough to check the prefix
         // and also to allow for possible additional future validation of smaller files.
         byte[] data = FilesystemUtils.getSingleFileContents(path, 25*1024);
-        // Exclude .qortal metadata from size calculation - it's system metadata,
+        // Exclude .qdn metadata from size calculation - it's system metadata,
         // not user content, and shouldn't count against service size limits
         long size = FilesystemUtils.getDirectorySize(path, true);
 

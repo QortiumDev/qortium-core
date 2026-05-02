@@ -267,20 +267,20 @@ public class ArbitraryDataWriter {
             throw new DataException("Null path after creating patch");
         }
 
-        File qortalMetadataDirectoryFile = Paths.get(this.filePath.toString(), ".qortal").toFile();
-        if (!qortalMetadataDirectoryFile.exists()) {
-            throw new DataException("Qortal metadata folder doesn't exist in patch");
+        File qdnMetadataDirectoryFile = Paths.get(this.filePath.toString(), ".qdn").toFile();
+        if (!qdnMetadataDirectoryFile.exists()) {
+            throw new DataException("QDN metadata folder doesn't exist in patch");
         }
-        if (!qortalMetadataDirectoryFile.isDirectory()) {
-            throw new DataException("Qortal metadata folder isn't a directory");
+        if (!qdnMetadataDirectoryFile.isDirectory()) {
+            throw new DataException("QDN metadata folder isn't a directory");
         }
 
-        File qortalPatchMetadataFile = Paths.get(this.filePath.toString(), ".qortal", "patch").toFile();
-        if (!qortalPatchMetadataFile.exists()) {
-            throw new DataException("Qortal patch metadata file doesn't exist in patch");
+        File qdnPatchMetadataFile = Paths.get(this.filePath.toString(), ".qdn", "patch").toFile();
+        if (!qdnPatchMetadataFile.exists()) {
+            throw new DataException("QDN patch metadata file doesn't exist in patch");
         }
-        if (!qortalPatchMetadataFile.isFile()) {
-            throw new DataException("Qortal patch metadata file isn't a file");
+        if (!qdnPatchMetadataFile.isFile()) {
+            throw new DataException("QDN patch metadata file isn't a file");
         }
     }
 

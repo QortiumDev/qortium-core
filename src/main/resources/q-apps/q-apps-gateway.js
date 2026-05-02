@@ -16,7 +16,7 @@ function sendRequestToExtension(
 
     // Store the timeout ID so it can be cleared later
     const timeoutId = setTimeout(() => {
-      document.removeEventListener("qortalExtensionResponses", handleResponse);
+      document.removeEventListener("qdnExtensionResponses", handleResponse);
       reject(new Error("Request timed out"));
     }, timeout); // Adjust timeout as necessary
 
@@ -24,15 +24,15 @@ function sendRequestToExtension(
       const { requestId: responseId, data } = event.detail;
       if (requestId === responseId) {
         // Match the response with the request
-        document.removeEventListener("qortalExtensionResponses", handleResponse);
+        document.removeEventListener("qdnExtensionResponses", handleResponse);
         clearTimeout(timeoutId); // Clear the timeout upon successful response
         resolve(data);
       }
     }
 
-    document.addEventListener("qortalExtensionResponses", handleResponse);
+    document.addEventListener("qdnExtensionResponses", handleResponse);
     document.dispatchEvent(
-      new CustomEvent("qortalExtensionRequests", { detail })
+      new CustomEvent("qdnExtensionRequests", { detail })
     );
   });
 }
@@ -72,14 +72,14 @@ function qdnGatewayShowModal(message) {
     });
     modalElement.appendChild(closeButton);
 
-    var qortalButton = document.createElement('button');
-    qortalButton.style.cssText = 'background-color:#4CAF50; border:none; color:white; cursor:pointer; float: right; margin: 10px; padding:15px; border-radius:5px; text-align:center; text-decoration:none; display:inline-block; font-family:arial; font-weight:normal; font-size:16px;';
-    qortalButton.innerText = "Learn more";
-    qortalButton.addEventListener ("click", function() {
+    var qdnButton = document.createElement('button');
+    qdnButton.style.cssText = 'background-color:#4CAF50; border:none; color:white; cursor:pointer; float: right; margin: 10px; padding:15px; border-radius:5px; text-align:center; text-decoration:none; display:inline-block; font-family:arial; font-weight:normal; font-size:16px;';
+    qdnButton.innerText = "Learn more";
+    qdnButton.addEventListener ("click", function() {
         document.body.removeChild(document.getElementById(modalElementId));
-        window.open("https://qortal.org");
+        window.open("https://github.com/QuickMythril/qortium");
     });
-    modalElement.appendChild(qortalButton);
+    modalElement.appendChild(qdnButton);
 
     document.body.appendChild(modalElement);
 }
@@ -113,10 +113,10 @@ window.addEventListener("message", async (event) => {
         case "DELETE_LIST_ITEM":
             const isExtInstalledRes = await isExtensionInstalledFunc()
             if(isExtInstalledRes?.version) return;
-            const errorString = "Interactive features were requested, but these are not yet supported when viewing via a gateway. To use interactive features, please access using the Qortal Hub on a desktop. More info at: https://qortal.dev/onboarding";
+            const errorString = "Interactive features were requested, but these are not yet supported when viewing via a gateway. To use interactive features, please access through the QDN desktop app. More info at: https://github.com/QuickMythril/qortium";
             response = "{\"error\": \"" + errorString + "\"}"
 
-            const modalText = "This app is powered by the Qortal blockchain. You are viewing in read-only mode. To use interactive features, please access using the Qortal Hub on a desktop. More info at: https://qortal.dev/onboarding";
+            const modalText = "This app is powered by the QDN. You are viewing in read-only mode. To use interactive features, please access through the QDN desktop app. More info at: https://github.com/QuickMythril/qortium";
             qdnGatewayShowModal(modalText);
             break;
 

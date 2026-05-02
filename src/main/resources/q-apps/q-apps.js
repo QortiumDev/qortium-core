@@ -127,7 +127,7 @@ const MAX_CONCURRENT_REQUESTS = 30;
 let activeRequestCount = 0;
 const requestQueue = [];
 
-// Set to true to deduplicate identical in-flight qortalRequest calls
+// Set to true to deduplicate identical in-flight qdnRequest calls
 const ENABLE_REQUEST_DEDUPLICATION = false;
 
 // Debug logging (set to true to enable)
@@ -301,11 +301,11 @@ function buildResourceUrl(service, name, identifier, path, isLink) {
 }
 
 function extractComponents(url) {
-  if (!url.startsWith("qortal://")) {
+  if (!url.startsWith("qdn://")) {
     return null;
   }
 
-  url = url.replace(/^(qortal\:\/\/)/, "");
+  url = url.replace(/^(qdn\:\/\/)/, "");
   if (url.includes("/")) {
     let parts = url.split("/");
     const service = parts[0].toUpperCase();
@@ -343,7 +343,7 @@ function extractComponents(url) {
 }
 
 function convertToResourceUrl(url, isLink) {
-  if (!url.startsWith("qortal://")) {
+  if (!url.startsWith("qdn://")) {
     return null;
   }
   const c = extractComponents(url);
@@ -723,10 +723,10 @@ function interceptClickEvent(e) {
     return;
   }
   let href = target.getAttribute("href");
-  if (href.startsWith("qortal://")) {
+  if (href.startsWith("qdn://")) {
     const c = extractComponents(href);
     if (c != null) {
-      qortalRequest({
+      qdnRequest({
         action: "LINK_TO_QDN_RESOURCE",
         service: c.service,
         name: c.name,
@@ -860,12 +860,12 @@ function processRequestQueue() {
  * @param {object} request - The request payload
  * @param {number} [effectiveTimeoutMs] - Timeout used for this request (for cleanup); if omitted, cleanup uses getDefaultTimeout(request.action)
  */
-function executeQortalRequestImmediate(request, effectiveTimeoutMs) {
+function executeQdnRequestImmediate(request, effectiveTimeoutMs) {
   return new Promise((res, rej) => {
     const channel = new MessageChannel();
     const requestId = Math.random().toString(36).substring(2, 15) + Date.now();
 
-    // Track this channel for cleanup (effectiveTimeoutMs used so cleanup respects qortalRequest / qortalRequestWithTimeout timeouts)
+    // Track this channel for cleanup (effectiveTimeoutMs used so cleanup respects qdnRequest / qdnRequestWithTimeout timeouts)
     pendingMessageChannels.set(requestId, {
       channel: channel,
       request: request,
@@ -900,15 +900,15 @@ function executeQortalRequestImmediate(request, effectiveTimeoutMs) {
 }
 
 /**
- * Make a Qortal (Q-Apps) request with no timeout
+ * Make a QDN app request with no timeout
  * @param {object} request - The request payload
  * @param {number} [effectiveTimeoutMs] - Timeout used for this request (for orphan cleanup only); if omitted, cleanup uses getDefaultTimeout(request.action)
  */
-const qortalRequestWithNoTimeout = (request, effectiveTimeoutMs) => {
+const qdnRequestWithNoTimeout = (request, effectiveTimeoutMs) => {
   return new Promise((res, rej) => {
     const executeRequest = () => {
       activeRequestCount++;
-      executeQortalRequestImmediate(request, effectiveTimeoutMs)
+      executeQdnRequestImmediate(request, effectiveTimeoutMs)
         .then(res)
         .catch(rej);
     };
@@ -923,8 +923,8 @@ const qortalRequestWithNoTimeout = (request, effectiveTimeoutMs) => {
   });
 };
 
-// Pending qortal request deduplication
-const pendingQortalRequests = new Map();
+// Pending QDN request deduplication
+const pendingQdnRequests = new Map();
 
 /**
  * Create a unique key for request deduplication
@@ -948,16 +948,16 @@ function getRequestKey(request) {
 }
 
 /**
- * Make a Qortal (Q-Apps) request with the default timeout (10 seconds)
+ * Make a QDN app request with the default timeout (10 seconds)
  */
-const qortalRequest = (request) => {
+const qdnRequest = (request) => {
   // Check if identical request is already pending
   if (ENABLE_REQUEST_DEDUPLICATION) {
     const requestKey = getRequestKey(request);
-    if (pendingQortalRequests.has(requestKey)) {
+    if (pendingQdnRequests.has(requestKey)) {
       debugLog("Request deduplication hit for:", request.action);
       // Return the existing promise instead of creating a new request
-      return pendingQortalRequests.get(requestKey);
+      return pendingQdnRequests.get(requestKey);
     }
   }
 
@@ -974,7 +974,7 @@ const qortalRequest = (request) => {
   // Create new request promise
   const defaultTimeout = getDefaultTimeout(request.action);
   const requestPromise = Promise.race([
-    qortalRequestWithNoTimeout(request, defaultTimeout),
+    qdnRequestWithNoTimeout(request, defaultTimeout),
     awaitTimeout(defaultTimeout, "The request timed out"),
   ])
     .then((result) => {
@@ -988,45 +988,45 @@ const qortalRequest = (request) => {
     .finally(() => {
       // Remove from pending cache when done (success or failure)
       if (ENABLE_REQUEST_DEDUPLICATION) {
-        pendingQortalRequests.delete(getRequestKey(request));
+        pendingQdnRequests.delete(getRequestKey(request));
       }
     });
 
   // Store in pending cache
   if (ENABLE_REQUEST_DEDUPLICATION) {
-    pendingQortalRequests.set(getRequestKey(request), requestPromise);
+    pendingQdnRequests.set(getRequestKey(request), requestPromise);
   }
 
   return requestPromise;
 };
 
 /**
- * Make a Qortal (Q-Apps) request with a custom timeout, specified in milliseconds
+ * Make a QDN app request with a custom timeout, specified in milliseconds
  */
-const qortalRequestWithTimeout = (request, timeout) => {
+const qdnRequestWithTimeout = (request, timeout) => {
   // Check if identical request is already pending
   if (ENABLE_REQUEST_DEDUPLICATION) {
     const requestKey = getRequestKey(request);
-    if (pendingQortalRequests.has(requestKey)) {
+    if (pendingQdnRequests.has(requestKey)) {
       // Return the existing promise instead of creating a new request
-      return pendingQortalRequests.get(requestKey);
+      return pendingQdnRequests.get(requestKey);
     }
   }
 
   // Create new request promise
   const requestPromise = Promise.race([
-    qortalRequestWithNoTimeout(request, timeout),
+    qdnRequestWithNoTimeout(request, timeout),
     awaitTimeout(timeout, "The request timed out"),
   ]).finally(() => {
     // Remove from pending cache when done (success or failure)
     if (ENABLE_REQUEST_DEDUPLICATION) {
-      pendingQortalRequests.delete(getRequestKey(request));
+      pendingQdnRequests.delete(getRequestKey(request));
     }
   });
 
   // Store in pending cache
   if (ENABLE_REQUEST_DEDUPLICATION) {
-    pendingQortalRequests.set(getRequestKey(request), requestPromise);
+    pendingQdnRequests.set(getRequestKey(request), requestPromise);
   }
 
   return requestPromise;
@@ -1037,7 +1037,7 @@ const CLEANUP_BUFFER_MS = 5000;
 
 /**
  * Cleanup orphaned MessageChannels that have been waiting too long.
- * Uses each request's effective timeout (from qortalRequest or qortalRequestWithTimeout) so long-running requests are not closed early.
+ * Uses each request's effective timeout (from qdnRequest or qdnRequestWithTimeout) so long-running requests are not closed early.
  */
 function cleanupOrphanedChannels() {
   const now = Date.now();
@@ -1101,7 +1101,7 @@ setInterval(cleanupOrphanedChannels, 30000);
  */
 document.addEventListener("DOMContentLoaded", (event) => {
   resetVariables();
-  qortalRequest({
+  qdnRequest({
     action: "QDN_RESOURCE_DISPLAYED",
     service: _qdnService,
     name: _qdnName,
@@ -1124,7 +1124,7 @@ navigation.addEventListener("navigate", (event) => {
   const processedPath = fullpath.startsWith(_qdnBase)
     ? fullpath.slice(_qdnBase.length)
     : fullpath;
-  qortalRequest({
+  qdnRequest({
     action: "QDN_RESOURCE_DISPLAYED",
     service: _qdnService,
     name: _qdnName,
@@ -1155,7 +1155,7 @@ window.addEventListener("beforeunload", () => {
   // Clear all caches
   requestCache.clear();
   pendingAsyncRequests.clear();
-  pendingQortalRequests.clear();
+  pendingQdnRequests.clear();
 
   // Clear request queue
   requestQueue.length = 0;

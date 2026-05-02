@@ -1279,8 +1279,8 @@ public String finalizeUploadNoIdentifier(
             throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No chunks found for upload");
         }
 
-        String safeFilename = (filename == null || filename.isBlank()) ? "qortal-" + NTP.getTime() : filename;
-        tempDir = Files.createTempDirectory("qortal-");
+        String safeFilename = (filename == null || filename.isBlank()) ? "qdn-" + NTP.getTime() : filename;
+        tempDir = Files.createTempDirectory("qdn-");
         String sanitizedFilename = Paths.get(safeFilename).getFileName().toString();
 		tempFile = tempDir.resolve(sanitizedFilename);
 
@@ -1330,7 +1330,7 @@ public String finalizeUploadNoIdentifier(
                 String baseName = (lastDot > 0) ? filename.substring(0, lastDot) : filename;
                 uploadFilename = baseName + (detectedExtension != null ? detectedExtension : "");
             } else {
-                uploadFilename = "qortal-" + NTP.getTime() + (detectedExtension != null ? detectedExtension : "");
+                uploadFilename = "qdn-" + NTP.getTime() + (detectedExtension != null ? detectedExtension : "");
             }
         }
 
@@ -1479,7 +1479,7 @@ public String finalizeUpload(
 		String safeService = Paths.get(serviceString).getFileName().toString();
 	String safeName = Paths.get(name).getFileName().toString();
 	String safeIdentifier = Paths.get(identifier).getFileName().toString();
-	java.nio.file.Path baseUploadsDir = Paths.get("uploads-temp"); // relative to Qortal working dir
+	java.nio.file.Path baseUploadsDir = Paths.get("uploads-temp"); // relative to the node working dir
 	chunkDir = baseUploadsDir.resolve(safeService).resolve(safeName).resolve(safeIdentifier);
 		
         if (!Files.exists(chunkDir) || !Files.isDirectory(chunkDir)) {
@@ -1489,10 +1489,10 @@ public String finalizeUpload(
         // Step 1: Determine a safe filename for disk temp file (regardless of extension correctness)
         String safeFilename = filename;
         if (filename == null || filename.isBlank()) {
-			safeFilename = "qortal-" + NTP.getTime();
+			safeFilename = "qdn-" + NTP.getTime();
 		} 
 
-        tempDir = Files.createTempDirectory("qortal-");
+        tempDir = Files.createTempDirectory("qdn-");
         String sanitizedFilename = Paths.get(safeFilename).getFileName().toString();
 		tempFile = tempDir.resolve(sanitizedFilename);
 
@@ -1547,7 +1547,7 @@ public String finalizeUpload(
                 String baseName = (lastDot > 0) ? filename.substring(0, lastDot) : filename;
                 uploadFilename = baseName + (detectedExtension != null ? detectedExtension : "");
             } else {
-                uploadFilename = "qortal-" + NTP.getTime() + (detectedExtension != null ? detectedExtension : "");
+                uploadFilename = "qdn-" + NTP.getTime() + (detectedExtension != null ? detectedExtension : "");
             }
         }
 
@@ -2059,9 +2059,9 @@ public String finalizeUpload(
 				if (string != null) {
 					if (filename == null || filename.isBlank()) {
 						// Use current time as filename
-						filename = String.format("qortal-%d", NTP.getTime());
+						filename = String.format("qdn-%d", NTP.getTime());
 					}
-					java.nio.file.Path tempDirectory = Files.createTempDirectory("qortal-");
+					java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
 					File tempFile = Paths.get(tempDirectory.toString(), filename).toFile();
 					tempFile.deleteOnExit();
 					BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile.toPath().toString()));
@@ -2074,9 +2074,9 @@ public String finalizeUpload(
 				else if (base64 != null) {
 					if (filename == null || filename.isBlank()) {
 						// Use current time as filename
-						filename = String.format("qortal-%d", NTP.getTime());
+						filename = String.format("qdn-%d", NTP.getTime());
 					}
-					java.nio.file.Path tempDirectory = Files.createTempDirectory("qortal-");
+					java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
 					File tempFile = Paths.get(tempDirectory.toString(), filename).toFile();
 					tempFile.deleteOnExit();
 					Files.write(tempFile.toPath(), Base64.decode(base64));
@@ -2089,7 +2089,7 @@ public String finalizeUpload(
 
 			if (zipped) {
 				// Unzip the file
-				java.nio.file.Path tempDirectory = Files.createTempDirectory("qortal-");
+				java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
 				tempDirectory.toFile().deleteOnExit();
 				LOGGER.info("Unzipping...");
 				ZipUtils.unzip(path, tempDirectory.toString());
@@ -2222,7 +2222,7 @@ public String finalizeUpload(
 	
 			if (filepath == null || filepath.isEmpty()) {
 				// No file path supplied - so check if this is a single file resource
-				String[] files = ArrayUtils.removeElement(outputPath.toFile().list(), ".qortal");
+				String[] files = ArrayUtils.removeElement(outputPath.toFile().list(), ".qdn");
 				if (files != null && files.length == 1) {
 					// This is a single file resource
 					filepath = files[0];
@@ -2416,7 +2416,7 @@ public String finalizeUpload(
 			FileProperties fileProperties = new FileProperties();
 			fileProperties.size = FileUtils.sizeOfDirectory(outputPath.toFile());
 
-			String[] files = ArrayUtils.removeElement(outputPath.toFile().list(), ".qortal");
+			String[] files = ArrayUtils.removeElement(outputPath.toFile().list(), ".qdn");
 			if (files.length == 1) {
 				String filename = files[0];
 				java.nio.file.Path filePath = Paths.get(outputPath.toString(), files[0]);

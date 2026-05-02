@@ -129,7 +129,7 @@ public class ArbitraryDataFile {
         Path outputFilePath;
         if (this.useTemporaryFile) {
             try {
-                outputFilePath = Files.createTempFile("qortalRawData", null);
+                outputFilePath = Files.createTempFile("qdnRawData", null);
                 outputFilePath.toFile().deleteOnExit();
             }
             catch (IOException e) {

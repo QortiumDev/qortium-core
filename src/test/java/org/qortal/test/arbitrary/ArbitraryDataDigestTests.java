@@ -49,10 +49,10 @@ public class ArbitraryDataDigestTests extends Common {
         System.out.printf("Hash: %s \n", Arrays.toString(digest.getHash()));
         assertEquals(expectedHash58, digest.getHash58());
 
-        // Write a random file to .qortal/cache to ensure it isn't being included in the digest function
-        // We exclude all .qortal files from the digest since they can be different with each build, and
+        // Write a random file to .qdn/cache to ensure it isn't being included in the digest function
+        // We exclude all .qdn files from the digest since they can be different with each build, and
         // we only care about the actual user files
-        Path cachePath = Paths.get(dataPath.toString(), ".qortal", "cache");
+        Path cachePath = Paths.get(dataPath.toString(), ".qdn", "cache");
         Files.createDirectories(cachePath.getParent());
         FileWriter fileWriter = new FileWriter(cachePath.toString());
         fileWriter.append(UUID.randomUUID().toString());

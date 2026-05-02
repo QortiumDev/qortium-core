@@ -51,9 +51,9 @@ public class ArbitraryDataDigest {
             // is generated on different systems
             Path relativePath = basePathAbsolute.relativize(path.toAbsolutePath());
     
-            // Exclude Qortal folder since it can be different each time
+            // Exclude QDN metadata folder since it can be different each time
             // We only care about hashing the actual user data
-            if (relativePath.startsWith(".qortal/")) {
+            if (relativePath.startsWith(".qdn/")) {
                 continue;
             }
     

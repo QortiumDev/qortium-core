@@ -121,8 +121,8 @@ public class ArbitraryDataMerge {
     }
 
     private void copyMetadata() throws IOException {
-        Path filePath = Paths.get(this.pathAfter.toString(), ".qortal");
-        ArbitraryDataMerge.copyPathToBaseDir(filePath, this.mergePath, Paths.get(".qortal"));
+        Path filePath = Paths.get(this.pathAfter.toString(), ".qdn");
+        ArbitraryDataMerge.copyPathToBaseDir(filePath, this.mergePath, Paths.get(".qdn"));
     }
 
 

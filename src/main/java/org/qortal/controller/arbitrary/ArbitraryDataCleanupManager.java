@@ -35,8 +35,8 @@ public class ArbitraryDataCleanupManager extends Thread {
 
 	private static final Logger LOGGER = LogManager.getLogger(ArbitraryDataCleanupManager.class);
 	private static final List<TransactionType> ARBITRARY_TX_TYPE = Arrays.asList(TransactionType.ARBITRARY);
-	private static final String QORTAL_RAW_DATA_PREFIX = "qortalRawData";
-	private static final String QORTAL_TEMP_DIRECTORY_PREFIX = "qortal-";
+	private static final String QDN_RAW_DATA_PREFIX = "qdnRawData";
+	private static final String QDN_TEMP_DIRECTORY_PREFIX = "qdn-";
 
 	private static ArbitraryDataCleanupManager instance;
 
@@ -550,19 +550,19 @@ public class ArbitraryDataCleanupManager extends Thread {
 	/**
 	 * Cleanup System Temp Directory
 	 *
-	 * Delete all files and directories that the Qortal Core may of stored in the system temp directory.
+	 * Delete all files and directories that the QDN subsystem may have stored in the system temp directory.
 	 *
 	 * @param now the timestamp for now
 	 * @param minAge the amount of time to wait for deletion
 	 */
 	public void cleanupSystemTempDirectory(long now, long minAge) {
 
-		// delete temp system files from Qortal, too
+		// delete temp system files from QDN, too
 		Path systemTmpDirectory = Paths.get(System.getProperty("java.io.tmpdir"));
 
 		try {
-			ArbitraryTransactionUtils.deleteFilesByPrefix(systemTmpDirectory, QORTAL_RAW_DATA_PREFIX, now, minAge);
-			ArbitraryTransactionUtils.deleteFoldersByPrefix(systemTmpDirectory, QORTAL_TEMP_DIRECTORY_PREFIX, now, minAge);
+			ArbitraryTransactionUtils.deleteFilesByPrefix(systemTmpDirectory, QDN_RAW_DATA_PREFIX, now, minAge);
+			ArbitraryTransactionUtils.deleteFoldersByPrefix(systemTmpDirectory, QDN_TEMP_DIRECTORY_PREFIX, now, minAge);
 		} catch (IOException e) {
 			LOGGER.warn("Unable to delete temp files: {}", systemTmpDirectory);
 		}

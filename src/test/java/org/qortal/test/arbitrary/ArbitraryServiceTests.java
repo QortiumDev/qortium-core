@@ -479,7 +479,7 @@ public class ArbitraryServiceTests extends Common {
 
     @Test
     public void testValidPrivateData() throws IOException {
-        String dataString = "qortalEncryptedDatabMx4fELNTV+ifJxmv4+GcuOIJOTo+3qAvbWKNY2L1rfla5UBoEcoxbtjgZ9G7FLPb8V/Qfr0bfKWfvMmN06U/pgUdLuv2mGL2V0D3qYd1011MUzGdNG1qERjaCDz8GAi63+KnHHjfMtPgYt6bcqjs4CNV+ZZ4dIt3xxHYyVEBNc=";
+        String dataString = "qdnEncryptedDatabMx4fELNTV+ifJxmv4+GcuOIJOTo+3qAvbWKNY2L1rfla5UBoEcoxbtjgZ9G7FLPb8V/Qfr0bfKWfvMmN06U/pgUdLuv2mGL2V0D3qYd1011MUzGdNG1qERjaCDz8GAi63+KnHHjfMtPgYt6bcqjs4CNV+ZZ4dIt3xxHYyVEBNc=";
 
         // Write the data a single file in a temp path
         Path path = Files.createTempDirectory("testValidPrivateData");
@@ -498,7 +498,7 @@ public class ArbitraryServiceTests extends Common {
 
     @Test
     public void testValidPrivateGroupData() throws IOException {
-        String dataString = "qortalGroupEncryptedDatabMx4fELNTV+ifJxmv4+GcuOIJOTo+3qAvbWKNY2L1rfla5UBoEcoxbtjgZ9G7FLPb8V/Qfr0bfKWfvMmN06U/pgUdLuv2mGL2V0D3qYd1011MUzGdNG1qERjaCDz8GAi63+KnHHjfMtPgYt6bcqjs4CNV+ZZ4dIt3xxHYyVEBNc=";
+        String dataString = "qdnGroupEncryptedDatabMx4fELNTV+ifJxmv4+GcuOIJOTo+3qAvbWKNY2L1rfla5UBoEcoxbtjgZ9G7FLPb8V/Qfr0bfKWfvMmN06U/pgUdLuv2mGL2V0D3qYd1011MUzGdNG1qERjaCDz8GAi63+KnHHjfMtPgYt6bcqjs4CNV+ZZ4dIt3xxHYyVEBNc=";
 
         // Write the data a single file in a temp path
         Path path = Files.createTempDirectory("testValidPrivateData");
@@ -517,7 +517,7 @@ public class ArbitraryServiceTests extends Common {
 
     @Test
     public void testEncryptedData() throws IOException {
-        String dataString = "qortalEncryptedDatabMx4fELNTV+ifJxmv4+GcuOIJOTo+3qAvbWKNY2L1rfla5UBoEcoxbtjgZ9G7FLPb8V/Qfr0bfKWfvMmN06U/pgUdLuv2mGL2V0D3qYd1011MUzGdNG1qERjaCDz8GAi63+KnHHjfMtPgYt6bcqjs4CNV+ZZ4dIt3xxHYyVEBNc=";
+        String dataString = "qdnEncryptedDatabMx4fELNTV+ifJxmv4+GcuOIJOTo+3qAvbWKNY2L1rfla5UBoEcoxbtjgZ9G7FLPb8V/Qfr0bfKWfvMmN06U/pgUdLuv2mGL2V0D3qYd1011MUzGdNG1qERjaCDz8GAi63+KnHHjfMtPgYt6bcqjs4CNV+ZZ4dIt3xxHYyVEBNc=";
 
         // Write the data a single file in a temp path
         Path path = Files.createTempDirectory("testValidPrivateData");
@@ -580,8 +580,8 @@ public class ArbitraryServiceTests extends Common {
     }
 
     @Test
-    public void testValidateChainCommentIgnoresQortalMetadata() throws IOException {
-        Path path = Files.createTempDirectory("testValidateChainCommentIgnoresQortalMetadata");
+    public void testValidateChainCommentIgnoresQdnMetadata() throws IOException {
+        Path path = Files.createTempDirectory("testValidateChainCommentIgnoresQdnMetadata");
         path.toFile().deleteOnExit();
 
         // Create a 200-byte comment file (well under the 239-byte limit)
@@ -589,13 +589,13 @@ public class ArbitraryServiceTests extends Common {
         Arrays.fill(commentData, (byte) 'a');
         Files.write(Paths.get(path.toString(), "comment"), commentData, StandardOpenOption.CREATE);
 
-        // Add .qortal metadata directory with cache file (512 bytes)
+        // Add .qdn metadata directory with cache file (512 bytes)
         // This simulates the metadata that gets created during the build process
-        Path qortalPath = Paths.get(path.toString(), ".qortal");
-        Files.createDirectories(qortalPath);
+        Path qdnPath = Paths.get(path.toString(), ".qdn");
+        Files.createDirectories(qdnPath);
         byte[] metadata = new byte[512];
         Arrays.fill(metadata, (byte) 'b');
-        Files.write(Paths.get(qortalPath.toString(), "cache"), metadata, StandardOpenOption.CREATE);
+        Files.write(Paths.get(qdnPath.toString(), "cache"), metadata, StandardOpenOption.CREATE);
 
         // Total on disk: 200 + 512 = 712 bytes
         // But validation should only count the 200 bytes of user data

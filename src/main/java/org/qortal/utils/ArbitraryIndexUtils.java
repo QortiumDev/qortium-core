@@ -272,7 +272,7 @@ public class ArbitraryIndexUtils {
             }
 
             // No file path supplied - so check if this is a single file resource
-            String[] files = ArrayUtils.removeElement(outputPath.toFile().list(), ".qortal");
+            String[] files = ArrayUtils.removeElement(outputPath.toFile().list(), ".qdn");
             String filepath = files[0];
 
             java.nio.file.Path path = Paths.get(outputPath.toString(), filepath);

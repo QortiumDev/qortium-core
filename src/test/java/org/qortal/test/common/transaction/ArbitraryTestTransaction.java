@@ -23,7 +23,7 @@ public class ArbitraryTestTransaction extends TestTransaction {
 		final int nonce = 0;
 		final int size = 4 * 1024 * 1024;
 		final String name = "TEST";
-		final String identifier = "qortal_avatar";
+		final String identifier = "qdn_avatar";
 		final ArbitraryTransactionData.Method method = ArbitraryTransactionData.Method.PUT;
 
 		final byte[] secret = new byte[32];

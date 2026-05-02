@@ -1,4 +1,4 @@
-# Qortal Project - Q-Apps Documentation
+# QDN App Documentation
 
 ## Introduction
 
@@ -8,7 +8,7 @@ Q-Apps are static web apps written in javascript, HTML, CSS, and other static as
 # Section 0: Basic QDN concepts
 
 ## Introduction to QDN resources
-Each published item on QDN (Qortal Data Network) is referred to as a "resource". A resource could contain anything from a few characters of text, to a multi-layered directory structure containing thousands of files.
+Each published item on QDN is referred to as a "resource". A resource could contain anything from a few characters of text, to a multi-layered directory structure containing thousands of files.
 
 Resources are stored on-chain, however the data payload is generally stored off-chain, and verified using an on-chain SHA-256 hash.
 
@@ -22,14 +22,14 @@ Owning the name grants update privileges to the data. If that name is later sold
 Each QDN resource has 3 important fields:
 - `name` - the registered name of the account that is publishing the data (which will hold update/edit privileges going forwards).<br /><br />
 - `service` - the type of content (e.g. IMAGE or JSON). Different services have different validation rules. See [list of available services](#services).<br /><br />
-- `identifier` - an optional string to allow more than one resource to exist for a given name/service combination. For example, the name `QortalDemo` may wish to publish multiple images. This can be achieved by using a different identifier string for each. The identifier is only unique to the name in question, and so it doesn't matter if another name is using the same service and identifier string.
+- `identifier` - an optional string to allow more than one resource to exist for a given name/service combination. For example, the name `QdnDemo` may wish to publish multiple images. This can be achieved by using a different identifier string for each. The identifier is only unique to the name in question, and so it doesn't matter if another name is using the same service and identifier string.
 
 
 ## Shared identifiers
 
 Since an identifier can be used by multiple names, this can be used to the advantage of Q-App developers as it allows for data to be stored in a deterministic location.
 
-An example of this is the user's avatar. This will always be published with service `THUMBNAIL` and identifier `qortal_avatar`, along with the user's name. So, an app can display the avatar of a user just by specifying their name when requesting the data. The same applies when publishing data.
+An example of this is the user's avatar. This will always be published with service `THUMBNAIL` and identifier `qdn_avatar`, along with the user's name. So, an app can display the avatar of a user just by specifying their name when requesting the data. The same applies when publishing data.
 
 
 ## "Default" resources
@@ -139,32 +139,32 @@ It's recommended that all apps return a 404 page if a request isn't able to be r
 
 ## Section 1a: Linking to other QDN websites / resources
 
-The `qortal://` protocol can be used to access QDN data from within Qortal websites and apps. The basic format is as follows:
+The `qdn://` protocol can be used to access QDN data from within QDN websites and apps. The basic format is as follows:
 ```
-<a href="qortal://{service}/{name}/{identifier}/{path}">link text</a>
+<a href="qdn://{service}/{name}/{identifier}/{path}">link text</a>
 ```
 
 However, the system will support the omission of the `identifier` and/or `path` components to allow for simpler URL formats.
 
 A simple link to another website can be achieved with this HTML code:
 ```
-<a href="qortal://WEBSITE/QortalDemo">link text</a>
+<a href="qdn://WEBSITE/QdnDemo">link text</a>
 ```
 
 To link to a specific page of another website:
 ```
-<a href="qortal://WEBSITE/QortalDemo/minting-leveling/index.html">link text</a>
+<a href="qdn://WEBSITE/QdnDemo/minting-leveling/index.html">link text</a>
 ```
 
 To link to a standalone resource, such as an avatar
 ```
-<a href="qortal://THUMBNAIL/QortalDemo/qortal_avatar">avatar</a>
+<a href="qdn://THUMBNAIL/QdnDemo/qdn_avatar">avatar</a>
 ```
 
 For cases where you would prefer to explicitly include an identifier (to remove ambiguity) you can use the keyword `default` to access a resource that doesn't have an identifier. For instance:
 ```
-<a href="qortal://WEBSITE/QortalDemo/default">link to root of website</a>
-<a href="qortal://WEBSITE/QortalDemo/default/minting-leveling/index.html">link to subpage of website</a>
+<a href="qdn://WEBSITE/QdnDemo/default">link to root of website</a>
+<a href="qdn://WEBSITE/QdnDemo/default/minting-leveling/index.html">link to subpage of website</a>
 ```
 
 
@@ -172,57 +172,57 @@ For cases where you would prefer to explicitly include an identifier (to remove 
 
 The same applies for images, such as displaying an avatar:
 ```
-<img src="qortal://THUMBNAIL/QortalDemo/qortal_avatar" />
+<img src="qdn://THUMBNAIL/QdnDemo/qdn_avatar" />
 ```
 
 ...or even an image from an entirely different website:
 ```
-<img src="qortal://WEBSITE/AlphaX/assets/img/logo.png" />
+<img src="qdn://WEBSITE/AlphaX/assets/img/logo.png" />
 ```
 
 
 # Section 2: Integrating a Javascript app
 
-Javascript apps allow for much more complex integrations with Qortal's blockchain data.
+Javascript apps allow for much more complex integrations with QDN data.
 
 ## Section 2a: Direct API calls
 
-The standard [Qortal Core API](http://localhost:12391/api-documentation) is available to websites and apps, and can be called directly using a standard AJAX request, such as:
+The standard [Qortium Core API](http://localhost:12391/api-documentation) is available to websites and apps, and can be called directly using a standard AJAX request, such as:
 ```
 async function getNameInfo(name) {
     const response = await fetch("/names/" + name);
     const nameData = await response.json();
     console.log("nameData: " + JSON.stringify(nameData));
 }
-getNameInfo("QortalDemo");
+getNameInfo("QdnDemo");
 ```
 
 However, this only works for read-only data, such as looking up transactions, names, balances, etc. Also, since the address of the logged in account can't be retrieved from the core, apps can't show personalized data with this approach.
 
 
-## Section 2b: User interaction via qortalRequest()
+## Section 2b: User interaction via qdnRequest()
 
-To take things a step further, the qortalRequest() function can be used to interact with the user, in order to:
+To take things a step further, the qdnRequest() function can be used to interact with the user, in order to:
 
 - Request address and public key of the logged in account
 - Publish data to QDN
 - Send chat messages
 - Join groups
 - Deploy ATs (smart contracts)
-- Send QORT or any supported foreign coin
+- Send the native asset or any supported foreign coin
 - Add/remove items from lists
 
-In addition to the above, qortalRequest() also supports many read-only functions that are also available via direct core API calls. Using qortalRequest() helps with futureproofing, as the core APIs can be modified without breaking functionality of existing Q-Apps.
+In addition to the above, qdnRequest() also supports many read-only functions that are also available via direct core API calls. Using qdnRequest() helps with futureproofing, as the core APIs can be modified without breaking functionality of existing Q-Apps.
 
 
 ### Making a request
 
-Qortal core will automatically inject the `qortalRequest()` javascript function to all websites/apps, which returns a Promise. This can be used to fetch data or publish data to the Qortal blockchain. This functionality supports async/await, as well as try/catch error handling.
+Qortium core will automatically inject the `qdnRequest()` javascript function to all websites/apps, which returns a Promise. This can be used to fetch data or publish data to the QDN. This functionality supports async/await, as well as try/catch error handling.
 
 ```
 async function myfunction() {
     try {
-        let res = await qortalRequest({
+        let res = await qdnRequest({
             action: "GET_ACCOUNT_DATA",
             address: "QZLJV7wbaFyxaoZQsjm6rb9MWMiDzWsqM2"
         });
@@ -237,14 +237,14 @@ myfunction();
 
 ### Timeouts
 
-Request timeouts are handled automatically when using qortalRequest(). The timeout value will differ based on the action being used - see `getDefaultTimeout()` in [q-apps.js](src/main/resources/q-apps/q-apps.js) for the current values.
+Request timeouts are handled automatically when using qdnRequest(). The timeout value will differ based on the action being used - see `getDefaultTimeout()` in [q-apps.js](src/main/resources/q-apps/q-apps.js) for the current values.
 
 If a request times out it will throw an error - `The request timed out` - which can be handled by the Q-App.
 
-It is also possible to specify a custom timeout using `qortalRequestWithTimeout(request, timeout)`, however this is discouraged. It's more reliable and futureproof to let the core handle the timeout values.
+It is also possible to specify a custom timeout using `qdnRequestWithTimeout(request, timeout)`, however this is discouraged. It's more reliable and futureproof to let the core handle the timeout values.
 
 
-# Section 3: qortalRequest Documentation
+# Section 3: qdnRequest Documentation
 
 ## Supported actions
 
@@ -294,7 +294,7 @@ Here are some example requests for each of the above:
 ### Get address of logged in account
 _Will likely require user approval_
 ```
-let account = await qortalRequest({
+let account = await qdnRequest({
      action: "GET_USER_ACCOUNT"
 });
 let address = account.address;
@@ -303,7 +303,7 @@ let address = account.address;
 ### Get public key of logged in account
 _Will likely require user approval_
 ```
-let pubkey = await qortalRequest({
+let pubkey = await qdnRequest({
      action: "GET_USER_ACCOUNT"
 });
 let publicKey = account.publicKey;
@@ -311,7 +311,7 @@ let publicKey = account.publicKey;
 
 ### Get account data
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_ACCOUNT_DATA",
     address: "QZLJV7wbaFyxaoZQsjm6rb9MWMiDzWsqM2"
 });
@@ -319,7 +319,7 @@ let res = await qortalRequest({
 
 ### Get names owned by account
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_ACCOUNT_NAMES",
     address: "QZLJV7wbaFyxaoZQsjm6rb9MWMiDzWsqM2"
 });
@@ -327,7 +327,7 @@ let res = await qortalRequest({
 
 ### Search names
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "SEARCH_NAMES",
     query: "search query goes here",
     prefix: false, // Optional - if true, only the beginning of the name is matched
@@ -339,20 +339,20 @@ let res = await qortalRequest({
 
 ### Get name data
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_NAME_DATA",
-    name: "QortalDemo"
+    name: "QdnDemo"
 });
 ```
 
 
 ### List QDN resources
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "LIST_QDN_RESOURCES",
     service: "THUMBNAIL",
-    name: "QortalDemo", // Optional (exact match)
-    identifier: "qortal_avatar", // Optional (exact match)
+    name: "QdnDemo", // Optional (exact match)
+    identifier: "qdn_avatar", // Optional (exact match)
     default: true, // Optional
     includeStatus: false, // Optional - will take time to respond, so only request if necessary
     includeMetadata: false, // Optional - will take time to respond, so only request if necessary
@@ -366,7 +366,7 @@ let res = await qortalRequest({
 
 ### Search QDN resources
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "SEARCH_QDN_RESOURCES",
     service: "THUMBNAIL",
     query: "search query goes here", // Optional - searches both "identifier" and "name" fields
@@ -392,12 +392,12 @@ let res = await qortalRequest({
 
 ### Search QDN resources (multiple names)
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "SEARCH_QDN_RESOURCES",
     service: "THUMBNAIL",
     query: "search query goes here", // Optional - searches both "identifier" and "name" fields
     identifier: "search query goes here", // Optional - searches only the "identifier" field
-    names: ["QortalDemo", "crowetic", "AlphaX"], // Optional - searches only the "name" field for any of the supplied names
+    names: ["QdnDemo", "crowetic", "AlphaX"], // Optional - searches only the "name" field for any of the supplied names
     prefix: false, // Optional - if true, only the beginning of fields are matched in all of the above filters
     exactMatchNames: true, // Optional - if true, partial name matches are excluded
     default: false, // Optional - if true, only resources without identifiers are returned
@@ -417,11 +417,11 @@ let res = await qortalRequest({
 
 ### Fetch QDN single file resource
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "FETCH_QDN_RESOURCE",
-    name: "QortalDemo",
+    name: "QdnDemo",
     service: "THUMBNAIL",
-    identifier: "qortal_avatar", // Optional. If omitted, the default resource is returned, or you can alternatively use the keyword "default"
+    identifier: "qdn_avatar", // Optional. If omitted, the default resource is returned, or you can alternatively use the keyword "default"
     encoding: "base64", // Optional. If omitted, data is returned in raw form
     rebuild: false
 });
@@ -430,9 +430,9 @@ let res = await qortalRequest({
 ### Fetch file from multi file QDN resource
 Data is returned in the base64 format
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "FETCH_QDN_RESOURCE",
-    name: "QortalDemo",
+    name: "QdnDemo",
     service: "WEBSITE",
     identifier: "default", // Optional. If omitted, the default resource is returned, or you can alternatively request that using the keyword "default", as shown here
     filepath: "index.html", // Required only for resources containing more than one file
@@ -442,33 +442,33 @@ let res = await qortalRequest({
 
 ### Get QDN resource status
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_QDN_RESOURCE_STATUS",
-    name: "QortalDemo",
+    name: "QdnDemo",
     service: "THUMBNAIL",
-    identifier: "qortal_avatar", // Optional
+    identifier: "qdn_avatar", // Optional
     build: true // Optional - request that the resource is fetched & built in the background
 });
 ```
 
 ### Get QDN resource properties
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_QDN_RESOURCE_PROPERTIES",
-    name: "QortalDemo",
+    name: "QdnDemo",
     service: "THUMBNAIL",
-    identifier: "qortal_avatar" // Optional
+    identifier: "qdn_avatar" // Optional
 });
 // Returns: filename, size, mimeType (where available)
 ```
 
 ### Get QDN resource metadata
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_QDN_RESOURCE_METADATA",
-    name: "QortalDemo",
+    name: "QdnDemo",
     service: "THUMBNAIL",
-    identifier: "qortal_avatar" // Optional
+    identifier: "qdn_avatar" // Optional
 });
 ```
 
@@ -476,7 +476,7 @@ let res = await qortalRequest({
 _Requires user approval_.<br />
 Note: this publishes a single, base64-encoded file. Multi-file resource publishing (such as a WEBSITE or GIF_REPOSITORY) is not yet supported via a Q-App. It will be added in a future update.
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "PUBLISH_QDN_RESOURCE",
     name: "Demo", // Publisher must own the registered name - use GET_ACCOUNT_NAMES for a list
     service: "IMAGE",
@@ -500,7 +500,7 @@ let res = await qortalRequest({
 _Requires user approval_.<br />
 Note: each resource being published consists of a single, base64-encoded file, each in its own transaction. Useful for publishing two or more related things, such as a video and a video thumbnail.
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "PUBLISH_MULTIPLE_QDN_RESOURCES",
     resources: [
         name: "Demo", // Publisher must own the registered name - use GET_ACCOUNT_NAMES for a list
@@ -527,9 +527,9 @@ let res = await qortalRequest({
 
 ### Decrypt encrypted/private data
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "DECRYPT_DATA",
-    encryptedData: 'qortalEncryptedDatabMx4fELNTV+ifJxmv4+GcuOIJOTo+3qAvbWKNY2L1r',
+    encryptedData: 'qdnEncryptedDatabMx4fELNTV+ifJxmv4+GcuOIJOTo+3qAvbWKNY2L1r',
     publicKey: 'publickeygoeshere'
 });
 // Returns base64 encoded string of plaintext data
@@ -538,7 +538,7 @@ let res = await qortalRequest({
 ### Prompt user to save a file to disk
 Note: mimeType not required but recommended. If not specified, saving will fail if the mimeType is unable to be derived from the Blob.
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "SAVE_FILE",
     blob: dataBlob,
     filename: "myfile.pdf",
@@ -547,58 +547,58 @@ let res = await qortalRequest({
 ```
 
 
-### Get wallet balance (QORT)
+### Get native wallet balance
 _Requires user approval_
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_WALLET_BALANCE",
-    coin: "QORT"
+    coin: "NATIVE"
 });
 ```
 
 
 ### Get address or asset balance
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_BALANCE",
     address: "QZLJV7wbaFyxaoZQsjm6rb9MWMiDzWsqM2"
 });
 ```
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_BALANCE",
     assetId: 1,
     address: "QZLJV7wbaFyxaoZQsjm6rb9MWMiDzWsqM2"
 });
 ```
 
-### Send QORT to address
+### Send native asset to address
 _Requires user approval_
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "SEND_COIN",
-    coin: "QORT",
+    coin: "NATIVE",
     destinationAddress: "QZLJV7wbaFyxaoZQsjm6rb9MWMiDzWsqM2",
-    amount: 1.00000000 // 1 QORT
+    amount: 1.00000000 // 1 native unit
 });
 ```
 
 ### Send foreign coin to address
 _Requires user approval_<br />
-Note: default fees can be found [here](https://github.com/Qortal/qortal-ui/blob/master/plugins/plugins/core/qdn/browser/browser.src.js#L205-L209).
+Note: default fees are defined by the active chain configuration.
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "SEND_COIN",
     coin: "LTC",
     destinationAddress: "LSdTvMHRm8sScqwCi6x9wzYQae8JeZhx6y",
     amount: 1.00000000, // 1 LTC
-    fee: 0.00000020 // Optional fee per byte (default fee used if omitted, recommended) - not used for QORT or ARRR
+    fee: 0.00000020 // Optional fee per byte (default fee used if omitted, recommended)
 });
 ```
 
 ### Search or list chat messages
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "SEARCH_CHAT_MESSAGES",
     before: 999999999999999,
     after: 0,
@@ -617,7 +617,7 @@ let res = await qortalRequest({
 ### Send a group chat message
 _Requires user approval_
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "SEND_CHAT_MESSAGE",
     groupId: 0,
     message: "Test"
@@ -627,7 +627,7 @@ let res = await qortalRequest({
 ### Send a private chat message
 _Requires user approval_
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "SEND_CHAT_MESSAGE",
     destinationAddress: "QZLJV7wbaFyxaoZQsjm6rb9MWMiDzWsqM2",
     message: "Test"
@@ -636,7 +636,7 @@ let res = await qortalRequest({
 
 ### List groups
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "LIST_GROUPS",
     limit: 100,
     offset: 0,
@@ -647,7 +647,7 @@ let res = await qortalRequest({
 ### Join a group
 _Requires user approval_
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "JOIN_GROUP",
     groupId: 100
 });
@@ -657,14 +657,14 @@ let res = await qortalRequest({
 ### Deploy an AT
 _Requires user approval_
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "DEPLOY_AT",
     creationBytes: "12345", // Must be Base58 encoded
     name: "test name",
     description: "test description",
     type: "test type",
     tags: "test tags",
-    amount: 1.00000000, // 1 QORT
+    amount: 1.00000000, // 1 native unit
     assetId: 0,
     // fee: 0.002 // optional - will use default fee if excluded
 });
@@ -672,7 +672,7 @@ let res = await qortalRequest({
 
 ### Get AT info
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_AT",
     atAddress: "ASRUsCjk6fa5bujv3oWYmWaVqNtvxydpPH"
 });
@@ -680,7 +680,7 @@ let res = await qortalRequest({
 
 ### Get AT data bytes (base58 encoded)
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_AT_DATA",
     atAddress: "ASRUsCjk6fa5bujv3oWYmWaVqNtvxydpPH"
 });
@@ -688,7 +688,7 @@ let res = await qortalRequest({
 
 ### List ATs by functionality
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "LIST_ATS",
     codeHash58: "4KdJETRAdymE7dodDmJbf5d9L1bp4g5Nxky8m47TBkvA",
     isExecutable: true,
@@ -700,7 +700,7 @@ let res = await qortalRequest({
 
 ### Fetch block by signature
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "FETCH_BLOCK",
     signature: "875yGFUy1zHV2hmxNWzrhtn9S1zkeD7SQppwdXFysvTXrankCHCz4iyAUgCBM3GjvibbnyRQpriuy1cyu953U1u5uQdzuH3QjQivi9UVwz86z1Akn17MGd5Z5STjpDT7248K6vzMamuqDei57Znonr8GGgn8yyyABn35CbZUCeAuXju"
 });
@@ -708,7 +708,7 @@ let res = await qortalRequest({
 
 ### Fetch block by height
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "FETCH_BLOCK",
     height: "1139850"
 });
@@ -716,7 +716,7 @@ let res = await qortalRequest({
 
 ### Fetch a range of blocks
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "FETCH_BLOCK_RANGE",
     height: "1139800",
     count: 20,
@@ -726,7 +726,7 @@ let res = await qortalRequest({
 
 ### Search transactions
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "SEARCH_TRANSACTIONS",
     // startBlock: 1139000,
     // blockLimit: 1000,
@@ -742,9 +742,9 @@ let res = await qortalRequest({
 });
 ```
 
-### Get an estimate of the QORT price
+### Get an estimate of the native asset price
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_PRICE",
     blockchain: "LITECOIN",
     // maxtrades: 10,
@@ -755,11 +755,11 @@ let res = await qortalRequest({
 ### Get URL to load a QDN resource
 Note: this returns a "Resource does not exist" error if a non-existent resource is requested.
 ```
-let url = await qortalRequest({
+let url = await qdnRequest({
     action: "GET_QDN_RESOURCE_URL",
     service: "THUMBNAIL",
-    name: "QortalDemo",
-    identifier: "qortal_avatar"
+    name: "QdnDemo",
+    identifier: "qdn_avatar"
     // path: "filename.jpg" // optional - not needed if resource contains only one file
 });
 ```
@@ -767,17 +767,17 @@ let url = await qortalRequest({
 ### Get URL to load a QDN website
 Note: this returns a "Resource does not exist" error if a non-existent resource is requested.
 ```
-let url = await qortalRequest({
+let url = await qdnRequest({
     action: "GET_QDN_RESOURCE_URL",
     service: "WEBSITE",
-    name: "QortalDemo",
+    name: "QdnDemo",
 });
 ```
 
 ### Get URL to load a specific file from a QDN website
 Note: this returns a "Resource does not exist" error if a non-existent resource is requested.
 ```
-let url = await qortalRequest({
+let url = await qdnRequest({
     action: "GET_QDN_RESOURCE_URL",
     service: "WEBSITE",
     name: "AlphaX",
@@ -786,22 +786,22 @@ let url = await qortalRequest({
 ```
 
 ### Link/redirect to another QDN website
-Note: an alternate method is to include `<a href="qortal://WEBSITE/QortalDemo">link text</a>` within your HTML code.
+Note: an alternate method is to include `<a href="qdn://WEBSITE/QdnDemo">link text</a>` within your HTML code.
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "LINK_TO_QDN_RESOURCE",
     service: "WEBSITE",
-    name: "QortalDemo",
+    name: "QdnDemo",
 });
 ```
 
 ### Link/redirect to a specific path of another QDN website
-Note: an alternate method is to include `<a href="qortal://WEBSITE/QortalDemo/minting-leveling/index.html">link text</a>` within your HTML code.
+Note: an alternate method is to include `<a href="qdn://WEBSITE/QdnDemo/minting-leveling/index.html">link text</a>` within your HTML code.
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "LINK_TO_QDN_RESOURCE",
     service: "WEBSITE",
-    name: "QortalDemo",
+    name: "QdnDemo",
     path: "/minting-leveling/index.html"
 });
 ```
@@ -809,7 +809,7 @@ let res = await qortalRequest({
 ### Get the contents of a list
 _Requires user approval_
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "GET_LIST_ITEMS",
     list_name: "followedNames"
 });
@@ -818,10 +818,10 @@ let res = await qortalRequest({
 ### Add one or more items to a list
 _Requires user approval_
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "ADD_LIST_ITEMS",
     list_name: "blockedNames",
-    items: ["QortalDemo"]
+    items: ["QdnDemo"]
 });
 ```
 
@@ -829,17 +829,17 @@ let res = await qortalRequest({
 _Requires user approval_.
 Items must be deleted one at a time.
 ```
-let res = await qortalRequest({
+let res = await qdnRequest({
     action: "DELETE_LIST_ITEM",
     list_name: "blockedNames",
-    item: "QortalDemo"
+    item: "QdnDemo"
 });
 ```
 
 
 # Section 4: Examples
 
-Some example projects can be found [here](https://github.com/Qortal/Q-Apps). These can be cloned and modified, or used as a reference when creating a new app.
+QDN app examples can be cloned and modified, or used as a reference when creating a new app.
 
 
 ## Sample App
@@ -851,15 +851,15 @@ Here is a sample application to display the logged-in user's avatar:
     <script>
         async function showAvatar() {
             try {
-                // Get QORT address of logged in account
-                let account = await qortalRequest({
+                // Get chain address of logged in account
+                let account = await qdnRequest({
                     action: "GET_USER_ACCOUNT"
                 });
                 let address = account.address;
                 console.log("address: " + address);
             
                 // Get names owned by this account
-                let names = await qortalRequest({
+                let names = await qdnRequest({
                     action: "GET_ACCOUNT_NAMES",
                     address: address
                 });
@@ -871,11 +871,11 @@ Here is a sample application to display the logged-in user's avatar:
                 }
             
                 // Download base64-encoded avatar of the first registered name
-                let avatar = await qortalRequest({
+                let avatar = await qdnRequest({
                     action: "FETCH_QDN_RESOURCE",
                     name: names[0].name,
                     service: "THUMBNAIL",
-                    identifier: "qortal_avatar",
+                    identifier: "qdn_avatar",
                     encoding: "base64"
                 });
                 console.log("Avatar size: " + avatar.length + " bytes");

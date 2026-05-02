@@ -123,7 +123,7 @@ public class ArbitraryDataRenderer {
         String unzippedPath = path.toString();
 
         // Set path automatically for single file resources (except for apps, which handle routing differently)
-        String[] files = ArrayUtils.removeElement(new File(unzippedPath).list(), ".qortal");
+        String[] files = ArrayUtils.removeElement(new File(unzippedPath).list(), ".qdn");
         if (files.length == 1 && this.service != Service.APP) {
             // This is a single file resource
             inPath = files[0];

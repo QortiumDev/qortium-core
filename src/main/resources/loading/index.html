@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Loading - Qortal Network</title>
+  <title>Loading - QDN</title>
   <style>
     * {
       margin: 0;
@@ -172,7 +172,7 @@
       width: 0%;
     }
 
-    .qortal-logo {
+    .qdn-logo {
       margin-bottom: 20px;
       opacity: 0.9;
     }
@@ -282,7 +282,7 @@
       if (!name) return;
       
       const host = location.protocol + '//' + location.host;
-      const avatarUrl = host + '/arbitrary/THUMBNAIL/' + encodeURIComponent(name) + '/qortal_avatar';
+      const avatarUrl = host + '/arbitrary/THUMBNAIL/' + encodeURIComponent(name) + '/qdn_avatar';
       
       // Create image element
       const img = new Image();
@@ -758,7 +758,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       <h1 id="username"></h1>
     </div>
     <p id="description">
-      Retrieving content from the Qortal Data Network.
+      Retrieving content from the QDN.
       This page will refresh automatically when ready.
     </p>
     <div class="spinner-container">

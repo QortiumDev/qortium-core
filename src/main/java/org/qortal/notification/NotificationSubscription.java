@@ -23,13 +23,13 @@ import java.util.Map;
  *   "event": "RESOURCE_PUBLISHED",
  *   "resourceFilter": {
  *     "service": "MAIL_PRIVATE",
- *     "identifier": "qortal_qmail_alice_mail_",
+ *     "identifier": "qdn_qmail_alice_mail_",
  *     "prefix": true,
  *     "excludeBlocked": true
  *   },
  *   "message": { "en": "New QMail", "fr": "Nouveau QMail" },
  *   "image": "data:image/png;base64,...",
- *   "link": "qortal://APP/qmail"
+ *   "link": "qdn://APP/qmail"
  * }
  * </pre>
  */

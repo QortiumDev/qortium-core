@@ -211,20 +211,20 @@ public class FilesystemUtils {
         return getDirectorySize(path, false);
     }
 
-    public static long getDirectorySize(Path path, boolean excludeQortalDirectory) throws IOException {
+    public static long getDirectorySize(Path path, boolean excludeQdnDirectory) throws IOException {
         if (path == null || !Files.exists(path)) {
             return 0L;
         }
         return Files.walk(path)
                 .filter(p -> p.toFile().isFile())
-                .filter(p -> !excludeQortalDirectory || !isQortalMetadataPath(p))
+                .filter(p -> !excludeQdnDirectory || !isQdnMetadataPath(p))
                 .mapToLong(p -> p.toFile().length())
                 .sum();
     }
 
-    private static boolean isQortalMetadataPath(Path path) {
+    private static boolean isQdnMetadataPath(Path path) {
         for (Path part : path) {
-            if (".qortal".equals(part.toString())) {
+            if (".qdn".equals(part.toString())) {
                 return true;
             }
         }
@@ -252,13 +252,13 @@ public class FilesystemUtils {
         if (Files.isRegularFile(path)) {
             filePath = path;
         } else if (Files.isDirectory(path)) {
-            String[] files = ArrayUtils.removeElement(path.toFile().list(), ".qortal");
+            String[] files = ArrayUtils.removeElement(path.toFile().list(), ".qdn");
             if (files.length == 1) {
                 filePath = path.resolve(files[0]);
             }
         }
     
-        if (filePath == null || !Files.exists(filePath)) {
+        if (filePath == null || !Files.isRegularFile(filePath)) {
             return null;
         }
     
@@ -285,11 +285,11 @@ public class FilesystemUtils {
      * directory containing a single file only.
      *
      * @param path to file or directory
-     * @param excludeQortalDirectory - if true, a directory containing a single file and a .qortal directory is considered a single file resource
+     * @param excludeQdnDirectory - if true, a directory containing a single file and a .qdn directory is considered a single file resource
      * @return
      * @throws IOException
      */
-    public static boolean isSingleFileResource(Path path, boolean excludeQortalDirectory) {
+    public static boolean isSingleFileResource(Path path, boolean excludeQdnDirectory) {
         // If the path is a file, read the contents directly
         if (path.toFile().isFile()) {
             return true;
@@ -298,8 +298,8 @@ public class FilesystemUtils {
         // Or if it's a directory, only load file contents if there is a single file inside it
         else if (path.toFile().isDirectory()) {
             String[] files = path.toFile().list();
-            if (excludeQortalDirectory) {
-                files = ArrayUtils.removeElement(files, ".qortal");
+            if (excludeQdnDirectory) {
+                files = ArrayUtils.removeElement(files, ".qdn");
             }
             if (files.length == 1) {
                 Path filePath = Paths.get(path.toString(), files[0]);

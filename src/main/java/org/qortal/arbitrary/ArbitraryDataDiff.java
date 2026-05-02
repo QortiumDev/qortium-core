@@ -159,8 +159,8 @@ public class ArbitraryDataDiff {
                     Path afterPathRelative = pathAfterAbsolute.relativize(afterPathAbsolute.toAbsolutePath());
                     Path beforePathAbsolute = pathBeforeAbsolute.resolve(afterPathRelative);
 
-                    if (afterPathRelative.startsWith(".qortal")) {
-                        // Ignore the .qortal metadata folder
+                    if (afterPathRelative.startsWith(".qdn")) {
+                        // Ignore the .qdn metadata folder
                         return FileVisitResult.CONTINUE;
                     }
 
@@ -234,8 +234,8 @@ public class ArbitraryDataDiff {
                     Path directoryPathBefore = pathBeforeAbsolute.relativize(before.toAbsolutePath());
                     Path directoryPathAfter = pathAfterAbsolute.resolve(directoryPathBefore);
 
-                    if (directoryPathBefore.startsWith(".qortal")) {
-                        // Ignore the .qortal metadata folder
+                    if (directoryPathBefore.startsWith(".qdn")) {
+                        // Ignore the .qdn metadata folder
                         return FileVisitResult.CONTINUE;
                     }
 
@@ -253,8 +253,8 @@ public class ArbitraryDataDiff {
                     Path filePathBefore = pathBeforeAbsolute.relativize(before.toAbsolutePath());
                     Path filePathAfter = pathAfterAbsolute.resolve(filePathBefore);
 
-                    if (filePathBefore.startsWith(".qortal")) {
-                        // Ignore the .qortal metadata folder
+                    if (filePathBefore.startsWith(".qdn")) {
+                        // Ignore the .qdn metadata folder
                         return FileVisitResult.CONTINUE;
                     }
 
