@@ -53,7 +53,7 @@ These locations are part of the org.qortal.settings.Settings class and can be ov
 ```
   "autoUpdateEnabled": true,
   "autoUpdateRepos": [
-    "http://mirror.qortal.org/auto-updates/%s",
+    "https://updates.example.org/auto-updates/%s",
     "https://server.host.name@1.2.3.4/Qortium/%s"
   ]
 ```

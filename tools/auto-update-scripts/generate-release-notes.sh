@@ -2,20 +2,20 @@
 set -euo pipefail
 
 # -----------------------------------------------------------------------------
-# Qortal Release Helper
+# Qortium Release Helper
 # - Builds a changelog from GitHub compare between previous tag and current tag
 # - Escapes @ in commit messages to avoid accidental mentions (e.g. @Override)
 # - Intentionally @mentions real contributor logins in a dedicated section
-# - Packages qortal/ directory into qortal.zip and computes hashes
+# - Packages qortium/ directory into qortium.zip and computes hashes
 #
 # Usage:
 #   ./release.sh 6.1.0
 #
 # Optional env:
 #   GH_TOKEN=...     # strongly recommended to avoid GitHub API rate limits
-#   REPO=Qortal/qortal
+#   REPO=QuickMythril/qortium
 #   BRANCH=master
-#   WORKING_QORTAL_DIR=./qortal
+#   WORKING_QORTIUM_DIR=./qortium
 # -----------------------------------------------------------------------------
 
 VERSION="${1:-}"
@@ -24,9 +24,9 @@ if [[ -z "${VERSION}" ]]; then
   exit 1
 fi
 
-REPO="${REPO:-Qortal/qortal}"
+REPO="${REPO:-QuickMythril/qortium}"
 BRANCH="${BRANCH:-master}"
-WORKING_QORTAL_DIR="${WORKING_QORTAL_DIR:-./qortal}"
+WORKING_QORTIUM_DIR="${WORKING_QORTIUM_DIR:-./qortium}"
 
 TAG="v${VERSION}"
 
@@ -152,52 +152,52 @@ if [[ -z "$LATEST_COMMIT_TS" || "$LATEST_COMMIT_TS" == "null" ]]; then
 fi
 
 # ---- ensure working dir / artifacts ----------------------------------------
-if [[ ! -d "$WORKING_QORTAL_DIR" ]]; then
-  echo "Error: working directory '${WORKING_QORTAL_DIR}' not found."
+if [[ ! -d "$WORKING_QORTIUM_DIR" ]]; then
+  echo "Error: working directory '${WORKING_QORTIUM_DIR}' not found."
   read -r -p "Would you like to: (1) Create it here, or (2) Specify a full path? [1/2]: " choice
   if [[ "$choice" == "1" ]]; then
-    mkdir -p "$WORKING_QORTAL_DIR"
-    echo "Created: ${WORKING_QORTAL_DIR}"
+    mkdir -p "$WORKING_QORTIUM_DIR"
+    echo "Created: ${WORKING_QORTIUM_DIR}"
   elif [[ "$choice" == "2" ]]; then
     read -r -p "Enter full path to working directory: " new_path
     if [[ -z "$new_path" ]]; then
       echo "Error: empty path provided. Exiting."
       exit 1
     fi
-    WORKING_QORTAL_DIR="$new_path"
-    mkdir -p "$WORKING_QORTAL_DIR"
-    echo "Using: ${WORKING_QORTAL_DIR}"
+    WORKING_QORTIUM_DIR="$new_path"
+    mkdir -p "$WORKING_QORTIUM_DIR"
+    echo "Using: ${WORKING_QORTIUM_DIR}"
   else
     echo "Invalid choice. Exiting."
     exit 1
   fi
 fi
 
-mkdir -p "$WORKING_QORTAL_DIR"
+mkdir -p "$WORKING_QORTIUM_DIR"
 
-JAR_FILE="${WORKING_QORTAL_DIR}/qortal.jar"
+JAR_FILE="${WORKING_QORTIUM_DIR}/qortium.jar"
 if [[ ! -f "$JAR_FILE" ]]; then
   echo "Error: ${JAR_FILE} not found."
   read -r -p "Would you like to: (1) Compile from source, (2) Copy from running core, or (3) Specify a local path? [1/2/3]: " choice
 
   if [[ "$choice" == "1" ]]; then
     need_cmd mvn
-    BUILD_DIR="${TMPDIR}/qortal-build"
+    BUILD_DIR="${TMPDIR}/qortium-build"
     echo "Cloning ${REPO} (${BRANCH}) and compiling..."
     git clone --depth 1 --branch "$BRANCH" "https://github.com/${REPO}.git" "$BUILD_DIR"
     (
       cd "$BUILD_DIR"
       mvn clean package
     )
-    BUILT_JAR="$(find "${BUILD_DIR}/target" -maxdepth 1 -type f -name 'qortal-*.jar' | sort | tail -n1 || true)"
+    BUILT_JAR="$(find "${BUILD_DIR}/target" -maxdepth 1 -type f -name 'qortium-*.jar' | sort | tail -n1 || true)"
     if [[ -z "$BUILT_JAR" || ! -f "$BUILT_JAR" ]]; then
-      echo "Error: compile completed but no target/qortal-*.jar was found."
+      echo "Error: compile completed but no target/qortium-*.jar was found."
       exit 1
     fi
     cp "$BUILT_JAR" "$JAR_FILE"
     echo "Copied compiled jar to ${JAR_FILE}"
   elif [[ "$choice" == "2" ]]; then
-    RUNNING_JAR="${HOME}/qortal/qortal.jar"
+    RUNNING_JAR="${HOME}/qortium/qortium.jar"
     if [[ -f "$RUNNING_JAR" ]]; then
       cp "$RUNNING_JAR" "$JAR_FILE"
       echo "Copied from ${RUNNING_JAR}"
@@ -206,7 +206,7 @@ if [[ ! -f "$JAR_FILE" ]]; then
       exit 1
     fi
   elif [[ "$choice" == "3" ]]; then
-    read -r -p "Enter full path to qortal.jar: " jar_path
+    read -r -p "Enter full path to qortium.jar: " jar_path
     if [[ -z "$jar_path" || ! -f "$jar_path" ]]; then
       echo "Error: invalid path '${jar_path}'. Exiting."
       exit 1
@@ -221,7 +221,7 @@ fi
 
 download_required_file() {
   local file="$1"
-  local target_path="${WORKING_QORTAL_DIR}/${file}"
+  local target_path="${WORKING_QORTIUM_DIR}/${file}"
   local remote_path="$file"
 
   if [[ "$file" == "settings.json" ]]; then
@@ -248,14 +248,14 @@ EOF
 
 REQUIRED_FILES=("settings.json" "log4j2.properties" "start.sh" "stop.sh" "qort")
 for file in "${REQUIRED_FILES[@]}"; do
-  if [[ ! -f "${WORKING_QORTAL_DIR}/${file}" ]]; then
-    echo "Error: missing ${WORKING_QORTAL_DIR}/${file}"
+  if [[ ! -f "${WORKING_QORTIUM_DIR}/${file}" ]]; then
+    echo "Error: missing ${WORKING_QORTIUM_DIR}/${file}"
     read -r -p "Would you like to: (1) Get this file from GitHub, or (2) Exit and copy manually? [1/2]: " choice
     if [[ "$choice" == "1" ]]; then
       download_required_file "$file"
       echo "Added ${file}"
     elif [[ "$choice" == "2" ]]; then
-      echo "Copy files manually into ${WORKING_QORTAL_DIR}, then re-run."
+      echo "Copy files manually into ${WORKING_QORTIUM_DIR}, then re-run."
       exit 1
     else
       echo "Invalid choice. Exiting."
@@ -277,7 +277,7 @@ calculate_hashes() {
 calculate_hashes "$JAR_FILE"
 JAR_MD5="$MD5"; JAR_SHA1="$SHA1"; JAR_SHA256="$SHA256"
 
-EXE_FILE="./qortal.exe"
+EXE_FILE="./qortium.exe"
 if [[ -f "$EXE_FILE" ]]; then
   calculate_hashes "$EXE_FILE"
   EXE_MD5="$MD5"; EXE_SHA1="$SHA1"; EXE_SHA256="$SHA256"
@@ -286,21 +286,21 @@ else
 fi
 
 # ---- apply commit timestamp to files in working dir -------------------------
-echo "Applying commit timestamp (${LATEST_COMMIT_TS}) to files in ${WORKING_QORTAL_DIR}..."
-# keep qortal.exe out of the directory while timestamping if present
+echo "Applying commit timestamp (${LATEST_COMMIT_TS}) to files in ${WORKING_QORTIUM_DIR}..."
+# keep qortium.exe out of the directory while timestamping if present
 if [[ -f "$EXE_FILE" ]]; then
-  mv -f "$EXE_FILE" "${WORKING_QORTAL_DIR}/" || true
+  mv -f "$EXE_FILE" "${WORKING_QORTIUM_DIR}/" || true
 fi
-find "$WORKING_QORTAL_DIR" -type f -exec touch -d "$LATEST_COMMIT_TS" {} \;
-if [[ -f "${WORKING_QORTAL_DIR}/qortal.exe" ]]; then
-  mv -f "${WORKING_QORTAL_DIR}/qortal.exe" "$EXE_FILE" || true
+find "$WORKING_QORTIUM_DIR" -type f -exec touch -d "$LATEST_COMMIT_TS" {} \;
+if [[ -f "${WORKING_QORTIUM_DIR}/qortium.exe" ]]; then
+  mv -f "${WORKING_QORTIUM_DIR}/qortium.exe" "$EXE_FILE" || true
 fi
 
 # ---- create zip -------------------------------------------------------------
-ZIP_FILE="./qortal.zip"
+ZIP_FILE="./qortium.zip"
 echo "Packing ${ZIP_FILE}..."
 rm -f "$ZIP_FILE"
-7z a -r -tzip "$ZIP_FILE" "${WORKING_QORTAL_DIR}/" -stl
+7z a -r -tzip "$ZIP_FILE" "${WORKING_QORTIUM_DIR}/" -stl
 
 calculate_hashes "$ZIP_FILE"
 ZIP_MD5="$MD5"; ZIP_SHA1="$SHA1"; ZIP_SHA256="$SHA256"
@@ -311,7 +311,7 @@ ZIP_MD5="$MD5"; ZIP_SHA1="$SHA1"; ZIP_SHA256="$SHA256"
 RELEASE_NOTES="release-notes.txt"
 
 cat > "$RELEASE_NOTES" <<EOF
-### **_Qortal Core ${TAG}_**
+### **_Qortium Core ${TAG}_**
 
 **Compare:** [${PREV_TAG} → ${TAG}](https://github.com/${REPO}/compare/${PREV_TAG}...${TAG})
 
@@ -331,24 +331,24 @@ ${CONTRIB_MENTIONS}
 
 ## 📦 Downloads
 
-### [qortal.jar](https://github.com/${REPO}/releases/download/${TAG}/qortal.jar)
+### [qortium.jar](https://github.com/${REPO}/releases/download/${TAG}/qortium.jar)
 
 \`MD5: ${JAR_MD5}\`  
 \`SHA1: ${JAR_SHA1}\`  
 \`SHA256: ${JAR_SHA256}\`
 
-### [qortal.exe](https://github.com/${REPO}/releases/download/${TAG}/qortal.exe)
+### [qortium.exe](https://github.com/${REPO}/releases/download/${TAG}/qortium.exe)
 
 \`MD5: ${EXE_MD5}\`  
 \`SHA1: ${EXE_SHA1}\`  
 \`SHA256: ${EXE_SHA256}\`
 
-[VirusTotal report for qortal.exe](https://www.virustotal.com/gui/file/${EXE_SHA256}/detection)
+[VirusTotal report for qortium.exe](https://www.virustotal.com/gui/file/${EXE_SHA256}/detection)
 
-### [qortal.zip](https://github.com/${REPO}/releases/download/${TAG}/qortal.zip)
+### [qortium.zip](https://github.com/${REPO}/releases/download/${TAG}/qortium.zip)
 
 Bare minimum runtime bundle:
-- built \`qortal.jar\`
+- built \`qortium.jar\`
 - \`log4j2.properties\`
 - \`start.sh\`
 - \`stop.sh\`
@@ -356,7 +356,7 @@ Bare minimum runtime bundle:
 - \`settings.json\`
 
 All timestamps set to: \`${LATEST_COMMIT_TS}\`  
-Packed via: \`7z a -r -tzip qortal.zip ${WORKING_QORTAL_DIR}/\`
+Packed via: \`7z a -r -tzip qortium.zip ${WORKING_QORTIUM_DIR}/\`
 
 \`MD5: ${ZIP_MD5}\`  
 \`SHA1: ${ZIP_SHA1}\`  

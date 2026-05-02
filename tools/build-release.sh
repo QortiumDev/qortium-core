@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # Change this to where AdvancedInstaller outputs built EXE installers
-SCRIPT_DIR=$(dirname $(realpath "$0"))
-WINDOWS_INSTALLER_DIR="${SCRIPT_DIR}/../WindowsInstaller/Qortal-SetupFiles"
+SCRIPT_DIR=$(dirname "$(realpath "$0")")
+WINDOWS_INSTALLER_DIR="${SCRIPT_DIR}/../WindowsInstaller/Qortium-SetupFiles"
 
 set -e
 shopt -s expand_aliases
@@ -19,9 +19,12 @@ alias SHA256='(sha256 -q || sha256sum | cut -d" " -f1) 2>/dev/null'
 
 function 3hash {
   local zip_src=$1
-  local md5hash=$(md5 ${zip_src} | awk '{ print $NF }')
-  local sha1hash=$(shasum ${zip_src} | awk '{ print $1 }')
-  local sha256hash=$(sha256sum ${zip_src} | awk '{ print $1 }')
+  local md5hash
+  local sha1hash
+  local sha256hash
+  md5hash=$(md5 "${zip_src}" | awk '{ print $NF }')
+  sha1hash=$(shasum "${zip_src}" | awk '{ print $1 }')
+  sha256hash=$(sha256sum "${zip_src}" | awk '{ print $1 }')
   echo "\`MD5: ${md5hash}\`"
   echo "\`SHA1: ${sha1hash}\`"
   echo "\`SHA256: ${sha256hash}\`"
@@ -35,7 +38,7 @@ if [ -z "${git_dir}" ]; then
 fi
 
 # Change to git top-level
-cd ${git_dir}
+cd "${git_dir}"
 
 # Check we are in 'master' branch
 # branch_name=$( git symbolic-ref -q HEAD ) || echo "Cannot determine branch name" && exit 1
@@ -96,7 +99,8 @@ cat <<__JAR__
 ### [${project}.jar](${git_url}/releases/download/${git_tag}/${project}.jar)
 
 __JAR__
-3hash target/${project}*.jar
+jar_src=$(find target -maxdepth 1 -type f -name "${project}*.jar" | sort | tail -n1)
+3hash "${jar_src}"
 
 # EXE
 cat <<__EXE__
@@ -129,4 +133,4 @@ All timestamps set to same date-time as commit, obtained via \`git show --no-pat
 Packed with \`7z a -r -tzip ${zip_filename} ${project}/\`
 
 __ZIP__
-3hash ${zip_src}
+3hash "${zip_src}"
