@@ -68,7 +68,7 @@
   </ENTRY>
   <ENTRY id="Control.Text.NTPDialog#Text_1">
     <STRING lang="en" value="An accurate Windows clock is required to connect to the [ProductName] network and make transactions."/>
-	<STRING lang="ru" value="Для подключения к сети Qortal и совершения транзакций требуется точная настройка времени Windows"/>
+	<STRING lang="ru" value="Для подключения к сети [ProductName] и совершения транзакций требуется точная настройка времени Windows"/>
     <STRING lang="zh" value="需要准确的Windows时钟才能连接到[ProductName]网络并进行交易。"/>
   </ENTRY>
   <ENTRY id="Control.Text.NTPDialog#Text_2">

@@ -10,31 +10,31 @@
     <ROW Property="AI_FINDEXE_TITLE" Value="Select the installation package for [|ProductName]" ValueLocId="AI.Property.FindExeTitle"/>
     <ROW Property="AI_PACKAGING_TOOL" Value="Advanced Installer 19.4 build 4648ec91" ValueLocId="-"/>
     <ROW Property="AI_PREDEF_LCONDS_PROPS" Value="AI_DETECTED_ADMIN_USER"/>
-    <ROW Property="AI_PRODUCTNAME_ARP" Value="Qortal"/>
+    <ROW Property="AI_PRODUCTNAME_ARP" Value="Qortium"/>
     <ROW Property="AI_RUN_AS_ADMIN" Value="0"/>
     <ROW Property="AI_UNINSTALLER" Value="msiexec.exe"/>
     <ROW Property="ALLUSERS" Value="1"/>
     <ROW Property="ARPCOMMENTS" Value="This installer database contains the logic and data required to install [|ProductName]." ValueLocId="*"/>
     <ROW Property="ARPNOREPAIR" MultiBuildValue="DefaultBuild:1"/>
-    <ROW Property="ARPPRODUCTICON" Value="qortal.exe" Type="8"/>
+    <ROW Property="ARPPRODUCTICON" Value="qortium.exe" Type="8"/>
     <ROW Property="ARPSYSTEMCOMPONENT" Value="1"/>
-    <ROW Property="ARPURLINFOABOUT" Value="https://qortal.dev"/>
+    <ROW Property="ARPURLINFOABOUT" Value="https://github.com/QuickMythril/qortium"/>
     <ROW Property="AiWinUI" MultiBuildValue="DefaultBuild:1"/>
-    <ROW Property="BannerBitmap" Value="banner.jpg" MultiBuildValue="DefaultBuild:NiceQortalLogocrop.png" Type="1" MsiKey="BannerBitmap"/>
+    <ROW Property="BannerBitmap" Value="banner.jpg" MultiBuildValue="DefaultBuild:NiceQortiumLogocrop.png" Type="1" MsiKey="BannerBitmap"/>
     <ROW Property="DATA_PATH" Value="will-be-overwritten"/>
     <ROW Property="DefaultUIFont" Value="TextStyle" Type="2" Options="65536" MsiKey="DefaultUIFont"/>
     <ROW Property="Magistral" Value="TextStyle" Type="2"/>
-    <ROW Property="Manufacturer" Value="Qortal"/>
+    <ROW Property="Manufacturer" Value="Qortium"/>
     <ROW Property="MsiLogging" MultiBuildValue="DefaultBuild:vp"/>
     <ROW Property="NTP_GOOD" Value="false"/>
     <ROW Property="ProductCode" Value="1028:{8103A65F-45DB-43F2-94FD-A108B2967460} 1031:{F34CE1B5-5CEF-4817-A7C6-20E06D766C6F} 1033:{F9C19AD5-80B7-4259-B7B0-405A5BF10796} 1035:{9C67D499-75C4-4CDC-996F-0F7C2035DF00} 1036:{69D3A6FD-0061-4F0F-BACE-6B05E25CBDEA} 1038:{195A9845-073D-4D69-AC6F-4A85EC66FC39} 1040:{C5747600-D8B3-4B73-863D-A189F10F663D} 1041:{5F3855BB-BC8D-41C8-B855-CB0FB9B55D07} 1042:{5CE41E16-CF45-4070-8949-37420B856E7F} 1043:{8AF6CA46-99C0-4A15-9695-350B9FD96A02} 1045:{4F86D007-3DE8-4C6A-972F-78BE0B03F7AA} 1049:{1259EB9B-FC92-41AA-A4AC-E1AC14129453} 1053:{F18D94B6-CE95-41BB-B03D-0F29E3ECD975} 2052:{B3A035DA-BF2A-41DC-AF79-17B6E3DBDAC1} 2057:{920476FE-26A3-4142-B18F-8B6319862AD1} 3082:{59E5BD08-547B-4A71-942C-340077983BA5} " Type="16"/>
     <ROW Property="ProductLanguage" Value="2057"/>
-    <ROW Property="ProductName" Value="Qortal"/>
-    <ROW Property="ProductVersion" Value="4.6.6"/>
+    <ROW Property="ProductName" Value="Qortium"/>
+    <ROW Property="ProductVersion" Value="6.1.4"/>
     <ROW Property="RECONFIG_NTP" Value="true"/>
     <ROW Property="SecureCustomProperties" Value="OLDPRODUCTS;AI_NEWERPRODUCTFOUND;AI_SETUPEXEPATH;SETUPEXEDIR"/>
-    <ROW Property="TabBackground" Value="NiceQortalLogo.png" Type="1" MsiKey="TabBackground"/>
-    <ROW Property="UpgradeCode" Value="{52E6AE54-2A02-4D45-A81F-906EFCF4DC36}"/>
+    <ROW Property="TabBackground" Value="NiceQortiumLogo.png" Type="1" MsiKey="TabBackground"/>
+    <ROW Property="UpgradeCode" Value="{6733900D-8500-41E3-8C06-EC9236C17FC8}"/>
     <ROW Property="WindowsType9X" MultiBuildValue="DefaultBuild:Windows 9x/ME" ValueLocId="-"/>
     <ROW Property="WindowsType9XDisplay" MultiBuildValue="DefaultBuild:Windows 9x/ME" ValueLocId="-"/>
     <ROW Property="WindowsTypeNT" MultiBuildValue="DefaultBuild:Windows 9x/ME/NT/2000/XP/Vista/Windows 7/Windows 8 x86/Windows 8.1 x86/Windows 10 x86" ValueLocId="-"/>
@@ -45,20 +45,20 @@
     <ROW Property="WindowsTypeNT5X" MultiBuildValue="DefaultBuild:Windows XP/2003" ValueLocId="-"/>
     <ROW Property="WindowsTypeNT5XDisplay" MultiBuildValue="DefaultBuild:Windows XP/2003" ValueLocId="-"/>
     <ROW Property="WindowsTypeNTDisplay" MultiBuildValue="DefaultBuild:32-bit Windows versions" ValueLocId="-"/>
-    <ROW Property="test" Value="NiceQortalLogo.png" Type="1"/>
+    <ROW Property="test" Value="NiceQortiumLogo.png" Type="1"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiDirsComponent">
     <ROW Directory="APPDIR" Directory_Parent="TARGETDIR" DefaultDir="APPDIR:." IsPseudoRoot="1" DirectoryOptions="15"/>
     <ROW Directory="DATA_PATH" Directory_Parent="TARGETDIR" DefaultDir="DATA_P~1|DATA_PATH" IsPseudoRoot="1"/>
     <ROW Directory="DesktopFolder" Directory_Parent="TARGETDIR" DefaultDir="DESKTO~1|DesktopFolder" IsPseudoRoot="1"/>
-    <ROW Directory="Qortal_Dir" Directory_Parent="DATA_PATH" DefaultDir="Qortal"/>
+    <ROW Directory="Qortium_Dir" Directory_Parent="DATA_PATH" DefaultDir="Qortium"/>
     <ROW Directory="SHORTCUTDIR" Directory_Parent="TARGETDIR" DefaultDir="SHORTC~1|SHORTCUTDIR" IsPseudoRoot="1"/>
     <ROW Directory="TARGETDIR" DefaultDir="SourceDir"/>
-    <ROW Directory="arbitrary_Dir" Directory_Parent="Qortal_Dir" DefaultDir="ARBITR~1|arbitrary"/>
+    <ROW Directory="arbitrary_Dir" Directory_Parent="Qortium_Dir" DefaultDir="ARBITR~1|arbitrary"/>
     <ROW Directory="bin_Dir" Directory_Parent="jre64_Dir" DefaultDir="bin" DirectoryOptions="15"/>
     <ROW Directory="bridge_Dir" Directory_Parent="win32_Dir" DefaultDir="bridge" DirectoryOptions="15"/>
     <ROW Directory="conf_Dir" Directory_Parent="jre64_Dir" DefaultDir="conf" DirectoryOptions="15"/>
-    <ROW Directory="db_Dir" Directory_Parent="Qortal_Dir" DefaultDir="db"/>
+    <ROW Directory="db_Dir" Directory_Parent="Qortium_Dir" DefaultDir="db"/>
     <ROW Directory="include_Dir" Directory_Parent="jre64_Dir" DefaultDir="include" DirectoryOptions="15"/>
     <ROW Directory="java.base_Dir" Directory_Parent="legal_Dir" DefaultDir="JAVA~1.BAS|java.base" DirectoryOptions="15"/>
     <ROW Directory="java.compiler_Dir" Directory_Parent="legal_Dir" DefaultDir="JAVA~1.COM|java.compiler" DirectoryOptions="15"/>
@@ -226,8 +226,8 @@
     <ROW Component="DATA_PATH_1" ComponentId="{9CA3EA54-8164-4AA0-8C39-BF04A3979C52}" Directory_="APPDIR" Attributes="260" KeyPath="DATA_PATH" Options="1"/>
     <ROW Component="NOTICE" ComponentId="{462899BC-1310-4590-A02F-B4878EB883D5}" Directory_="jre64_Dir" Attributes="0" KeyPath="NOTICE" Type="0"/>
     <ROW Component="ProductInformation" ComponentId="{784437F2-CBA1-4491-B02C-0DB981030053}" Directory_="APPDIR" Attributes="260" KeyPath="Version" Options="1"/>
-    <ROW Component="Qortal" ComponentId="{05322893-9AFA-458A-9D8D-E003285DA56F}" Directory_="Qortal_Dir" Attributes="0"/>
-    <ROW Component="Qortal.exe" ComponentId="{FF83D033-3271-4CF8-83A1-392E93DB9E1F}" Directory_="APPDIR" Attributes="0" KeyPath="Qortal.exe"/>
+    <ROW Component="Qortium" ComponentId="{05322893-9AFA-458A-9D8D-E003285DA56F}" Directory_="Qortium_Dir" Attributes="0"/>
+    <ROW Component="Qortium.exe" ComponentId="{FF83D033-3271-4CF8-83A1-392E93DB9E1F}" Directory_="APPDIR" Attributes="0" KeyPath="Qortium.exe"/>
     <ROW Component="README.txt" ComponentId="{A967AB1F-304B-4FC8-9500-8244F257984E}" Directory_="policy_Dir" Attributes="0" KeyPath="README.txt" Type="0"/>
     <ROW Component="SHORTCUTDIR" ComponentId="{7C4D1107-8B96-47ED-A690-BB70D94EBDB3}" Directory_="SHORTCUTDIR" Attributes="0"/>
     <ROW Component="WinFallbackLookup.dll" ComponentId="{C05D8498-E79C-4DF8-A137-BA465BF4F6DA}" Directory_="bin_Dir" Attributes="256" KeyPath="WinFallbackLookup.dll"/>
@@ -361,7 +361,7 @@
     <ROW Component="rmiregistry.exe" ComponentId="{48B0835A-48BB-4AA7-BD72-610788DDC841}" Directory_="bin_Dir" Attributes="256" KeyPath="rmiregistry.exe"/>
     <ROW Component="saproc.dll" ComponentId="{8E6F30CF-C55B-4ABF-A1C7-8C584164A47C}" Directory_="bin_Dir" Attributes="256" KeyPath="saproc.dll"/>
     <ROW Component="serialver.exe" ComponentId="{2FC18A20-7EEA-4480-98B0-85DB07221AA8}" Directory_="bin_Dir" Attributes="256" KeyPath="serialver.exe"/>
-    <ROW Component="settings.json" ComponentId="{D281C10B-9C10-420E-A8CC-63E34A9B34B2}" Directory_="Qortal_Dir" Attributes="0" KeyPath="settings.json_2" Type="0"/>
+    <ROW Component="settings.json" ComponentId="{D281C10B-9C10-420E-A8CC-63E34A9B34B2}" Directory_="Qortium_Dir" Attributes="0" KeyPath="settings.json_2" Type="0"/>
     <ROW Component="splashscreen.dll" ComponentId="{DE5F51F7-FD4A-4B5C-85C9-6214190CFD5B}" Directory_="bin_Dir" Attributes="256" KeyPath="splashscreen.dll"/>
     <ROW Component="sspi_bridge.dll" ComponentId="{D1333844-5FDD-4BBC-B7A6-28D7770F997C}" Directory_="bin_Dir" Attributes="256" KeyPath="sspi_bridge.dll"/>
     <ROW Component="sunmscapi.dll" ComponentId="{71F76CA1-0447-4555-925E-9036F7173539}" Directory_="bin_Dir" Attributes="256" KeyPath="sunmscapi.dll"/>
@@ -380,11 +380,11 @@
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiFilesComponent">
     <ROW File="log4j2.properties" Component_="log4j2.properties" FileName="LOG4J2~1.PRO|log4j2.properties" Version="65535.65535.65535.65535" Attributes="0" SourcePath="Install Files\log4j2.properties" SelfReg="false"/>
-    <ROW File="Qortal.exe" Component_="Qortal.exe" FileName="Qortal.exe" Version="65535.65535.65535.65535" Attributes="0" SourcePath="&lt;AI_STUBS_64&gt;aijclw.exe" SelfReg="false" DigSign="true"/>
+    <ROW File="Qortium.exe" Component_="Qortium.exe" FileName="Qortium.exe" Version="65535.65535.65535.65535" Attributes="0" SourcePath="&lt;AI_STUBS_64&gt;aijclw.exe" SelfReg="false" DigSign="true"/>
     <ROW File="java.exe" Component_="java.exe" FileName="java.exe" Version="65535.65535.65535.65535" Attributes="0" SourcePath="..\..\..\..\..\..\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot\bin\java.exe" SelfReg="false" DigSign="true"/>
     <ROW File="javaw.exe" Component_="javaw.exe" FileName="javaw.exe" Version="65535.65535.65535.65535" Attributes="0" SourcePath="..\..\..\..\..\..\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot\bin\javaw.exe" SelfReg="false" DigSign="true"/>
     <ROW File="ntpcfg.bat" Component_="log4j2.properties" FileName="ntpcfg.bat" Version="65535.65535.65535.65535" Attributes="0" SourcePath="Install Files\ntpcfg.bat" SelfReg="false"/>
-    <ROW File="qortal.jar" Component_="log4j2.properties" FileName="qortal.jar" Version="65535.65535.65535.65535" Attributes="0" SourcePath="Install Files\qortal.jar" SelfReg="false"/>
+    <ROW File="qortium.jar" Component_="log4j2.properties" FileName="qortium.jar" Version="65535.65535.65535.65535" Attributes="0" SourcePath="Install Files\qortium.jar" SelfReg="false"/>
     <ROW File="settings.json_2" Component_="settings.json" FileName="SETTIN~1.JSO|settings.json" Attributes="0" SourcePath="Install Files\AppData\settings.json" SelfReg="false"/>
     <ROW File="apimswincoreconsolel110.dll" Component_="apimswincoreconsolel110.dll" FileName="API-MS~1.DLL|api-ms-win-core-console-l1-1-0.dll" Version="65535.65535.65535.65535" Attributes="0" SourcePath="..\..\..\..\..\..\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot\bin\api-ms-win-core-console-l1-1-0.dll" SelfReg="false"/>
     <ROW File="apimswincoreconsolel120.dll" Component_="apimswincoreconsolel120.dll" FileName="API-MS~2.DLL|api-ms-win-core-console-l1-2-0.dll" Version="65535.65535.65535.65535" Attributes="0" SourcePath="..\..\..\..\..\..\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot\bin\api-ms-win-core-console-l1-2-0.dll" SelfReg="false"/>
@@ -894,7 +894,7 @@
     <ROW Action="AI_DetectSoftware" Sequence="151"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.BuildComponent">
-    <ROW BuildKey="DefaultBuild" BuildName="DefaultBuild" BuildOrder="1" BuildType="0" Languages="en_GB;zh;en;ru;it;ja;de;fi;es;zh_TW;fr;hu;ko;pl;nl;sv" LangOpt="1" InstallationType="2" CabsLocation="1" UseLzma="true" LzmaMethod="2" LzmaCompressionLevel="4" PackageType="1" FilesInsideExe="true" ExeIconPath="qortal.ico" ExtractionFolder="[AppDataFolder][|Manufacturer]-extract\[|ProductName] [|ProductVersion]\install" ExtUI="true" LangsDialog="true" UseLargeSchema="true" Unicode="true" ExeName="qortal" MsiPackageType="x64" JRE64Dir="jre64_Dir"/>
+    <ROW BuildKey="DefaultBuild" BuildName="DefaultBuild" BuildOrder="1" BuildType="0" Languages="en_GB;zh;en;ru;it;ja;de;fi;es;zh_TW;fr;hu;ko;pl;nl;sv" LangOpt="1" InstallationType="2" CabsLocation="1" UseLzma="true" LzmaMethod="2" LzmaCompressionLevel="4" PackageType="1" FilesInsideExe="true" ExeIconPath="qortium.ico" ExtractionFolder="[AppDataFolder][|Manufacturer]-extract\[|ProductName] [|ProductVersion]\install" ExtUI="true" LangsDialog="true" UseLargeSchema="true" Unicode="true" ExeName="qortium" MsiPackageType="x64" JRE64Dir="jre64_Dir"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.DictionaryComponent">
     <ROW Path="&lt;AI_DICTS&gt;ui.ail"/>
@@ -917,7 +917,7 @@
     <ROW Path="&lt;AI_DICTS&gt;ui_sv.ail"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.FirewallExceptionComponent">
-    <ROW FirewallException="EXE" Direction="1" DisplayName="[ProductName]" Enabled="1" Scope="*" Condition="((?Qortal.exe=2) AND ($Qortal.exe=3))" Profiles="0" AppPath="[#Qortal.exe]" Port="*" Protocol="ANY"/>
+    <ROW FirewallException="EXE" Direction="1" DisplayName="[ProductName]" Enabled="1" Scope="*" Condition="((?Qortium.exe=2) AND ($Qortium.exe=3))" Profiles="0" AppPath="[#Qortium.exe]" Port="*" Protocol="ANY"/>
     <ROW FirewallException="Java" Direction="1" DisplayName="[ProductName] Java" Enabled="1" Scope="*" Condition="((?java.exe=2) AND ($java.exe=3))" Profiles="0" AppPath="[#java.exe]" Port="*" Protocol="ANY"/>
     <ROW FirewallException="Javaw" Direction="1" DisplayName="[ProductName] Javaw" Enabled="1" Scope="*" Condition="((?javaw.exe=2) AND ($javaw.exe=3))" Profiles="0" AppPath="[#javaw.exe]" Port="*" Protocol="ANY"/>
   </COMPONENT>
@@ -973,8 +973,8 @@
   <COMPONENT cid="caphyon.advinst.msicomp.MsiBinaryComponent">
     <ROW Name="ExternalUICleaner.dll" SourcePath="&lt;AI_CUSTACTS&gt;ExternalUICleaner.dll"/>
     <ROW Name="NetFirewall.dll" SourcePath="&lt;AI_CUSTACTS&gt;NetFirewall.dll"/>
-    <ROW Name="NiceQortalLogo.png" SourcePath="..\..\..\..\Downloads\Nice-Qortal-Logo.png"/>
-    <ROW Name="NiceQortalLogocrop.png" SourcePath="Nice-Qortal-Logo-crop.png"/>
+    <ROW Name="NiceQortiumLogo.png" SourcePath="Nice-Qortium-Logo-crop.png"/>
+    <ROW Name="NiceQortiumLogocrop.png" SourcePath="Nice-Qortium-Logo-crop.png"/>
     <ROW Name="Prereq.dll" SourcePath="&lt;AI_CUSTACTS&gt;Prereq.dll"/>
     <ROW Name="ResourceCleaner.dll" SourcePath="&lt;AI_CUSTACTS&gt;ResourceCleaner.dll"/>
     <ROW Name="SoftwareDetector.dll" SourcePath="&lt;AI_CUSTACTS&gt;SoftwareDetector.dll"/>
@@ -1040,7 +1040,7 @@
     <ROW Directory_="APPDIR" Component_="APPDIR" ManualDelete="true"/>
     <ROW Directory_="SHORTCUTDIR" Component_="SHORTCUTDIR" ManualDelete="false"/>
     <ROW Directory_="DATA_PATH" Component_="DATA_PATH" ManualDelete="true"/>
-    <ROW Directory_="Qortal_Dir" Component_="Qortal" ManualDelete="true"/>
+    <ROW Directory_="Qortium_Dir" Component_="Qortium" ManualDelete="true"/>
     <ROW Directory_="db_Dir" Component_="db" ManualDelete="true"/>
     <ROW Directory_="arbitrary_Dir" Component_="arbitrary" ManualDelete="true"/>
   </COMPONENT>
@@ -1112,7 +1112,7 @@
   <COMPONENT cid="caphyon.advinst.msicomp.MsiFeatCompsComponent">
     <ROW Feature_="MainFeature" Component_="AI_ExePath"/>
     <ROW Feature_="MainFeature" Component_="APPDIR"/>
-    <ROW Feature_="MainFeature" Component_="Qortal.exe"/>
+    <ROW Feature_="MainFeature" Component_="Qortium.exe"/>
     <ROW Feature_="MainFeature" Component_="ProductInformation"/>
     <ROW Feature_="MainFeature" Component_="SHORTCUTDIR"/>
     <ROW Feature_="MainFeature" Component_="log4j2.properties"/>
@@ -1212,7 +1212,7 @@
     <ROW Feature_="bitJREBundle" Component_="jstack.exe"/>
     <ROW Feature_="bitJREBundle" Component_="jstat.exe"/>
     <ROW Feature_="MainFeature" Component_="DATA_PATH"/>
-    <ROW Feature_="MainFeature" Component_="Qortal"/>
+    <ROW Feature_="MainFeature" Component_="Qortium"/>
     <ROW Feature_="MainFeature" Component_="settings.json"/>
     <ROW Feature_="MainFeature" Component_="DATA_PATH_1"/>
     <ROW Feature_="MainFeature" Component_="db"/>
@@ -1340,20 +1340,20 @@
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiIconsComponent">
     <ROW Name="SystemFoldermsiexec.exe" SourcePath="&lt;AI_RES&gt;uninstall.ico" Index="0"/>
-    <ROW Name="qortal.exe" SourcePath="qortal.ico" Index="0"/>
+    <ROW Name="qortium.exe" SourcePath="qortium.ico" Index="0"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiIniFileComponent">
-    <ROW IniFile="ApplicationType" FileName="Qortal.ini" DirProperty="APPDIR" Section="Application" Key="Application Type" Value="gui" Action="0" Component_="Qortal.exe"/>
-    <ROW IniFile="ClassPath" FileName="Qortal.ini" DirProperty="APPDIR" Section="Class Path" Key="Class Path" Value="[#qortal.jar];" Action="0" Component_="Qortal.exe"/>
-    <ROW IniFile="FailureCheck" FileName="Qortal.ini" DirProperty="APPDIR" Section="Application" Key="Failure Check" Value="yes" Action="0" Component_="Qortal.exe"/>
-    <ROW IniFile="JVMSource" FileName="Qortal.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="JVM Source" Value="favor_JDK" Action="0" Component_="Qortal.exe"/>
-    <ROW IniFile="JVMType" FileName="Qortal.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="JVM Type" Value="favor_server" Action="0" Component_="Qortal.exe"/>
-    <ROW IniFile="MainClass" FileName="Qortal.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="Main Class" Value="org.qortal.controller.Controller" Action="0" Component_="Qortal.exe"/>
-    <ROW IniFile="MaximumVersion" FileName="Qortal.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="Maximum Version" Value="any" Action="0" Component_="Qortal.exe"/>
-    <ROW IniFile="MinimumVersion" FileName="Qortal.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="Minimum Version" Value="11" Action="0" Component_="Qortal.exe"/>
-    <ROW IniFile="OverrideWorkingDir" FileName="Qortal.ini" DirProperty="APPDIR" Section="Application" Key="Override WorkingDir" Value="yes" Action="0" Component_="Qortal.exe"/>
-    <ROW IniFile="SingleInstance" FileName="Qortal.ini" DirProperty="APPDIR" Section="Application" Key="Single Instance" Value="yes" Action="0" Component_="Qortal.exe"/>
-    <ROW IniFile="VMProvider" FileName="Qortal.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="VM Provider" Value="any" Action="0" Component_="Qortal.exe"/>
+    <ROW IniFile="ApplicationType" FileName="Qortium.ini" DirProperty="APPDIR" Section="Application" Key="Application Type" Value="gui" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="ClassPath" FileName="Qortium.ini" DirProperty="APPDIR" Section="Class Path" Key="Class Path" Value="[#qortium.jar];" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="FailureCheck" FileName="Qortium.ini" DirProperty="APPDIR" Section="Application" Key="Failure Check" Value="yes" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="JVMSource" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="JVM Source" Value="favor_JDK" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="JVMType" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="JVM Type" Value="favor_server" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="MainClass" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="Main Class" Value="org.qortal.controller.Controller" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="MaximumVersion" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="Maximum Version" Value="any" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="MinimumVersion" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="Minimum Version" Value="11" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="OverrideWorkingDir" FileName="Qortium.ini" DirProperty="APPDIR" Section="Application" Key="Override WorkingDir" Value="yes" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="SingleInstance" FileName="Qortium.ini" DirProperty="APPDIR" Section="Application" Key="Single Instance" Value="yes" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="VMProvider" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="VM Provider" Value="any" Action="0" Component_="Qortium.exe"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiInstExSeqComponent">
     <ROW Action="AI_DOWNGRADE" Condition="AI_NEWERPRODUCTFOUND AND (UILevel &lt;&gt; 5)" Sequence="210"/>
@@ -1413,7 +1413,7 @@
     <ROW Action="AI_DetectSoftware" Sequence="101"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiJavaComponent">
-    <ROW Name="Qortal.exe" Launcher="Qortal.exe" MainClass="MainClass" ClassPath="ClassPath" JREMin="MinimumVersion" JREMax="MaximumVersion" IconPath="qortal.ico" AppType="ApplicationType" JVMType="JVMType" SingleInstance="SingleInstance" PlusList="APPDIR;" MinusList="#Qortal.exe;" MacDescription="[|CurrentJavaProductName] [|ProductVersion] © [|Manufacturer], Inc, 2019" MacBundleId="com.[|Manufacturer].[|ProductName].[|CurrentJavaProductName]" JVMSourcePreference="JVMSource" FailureCheck="FailureCheck" OverrideWkDir="OverrideWorkingDir" UACExecutionLevel="0" VMProviderOptions="VMProvider" Platform64="true"/>
+    <ROW Name="Qortium.exe" Launcher="Qortium.exe" MainClass="MainClass" ClassPath="ClassPath" JREMin="MinimumVersion" JREMax="MaximumVersion" IconPath="qortium.ico" AppType="ApplicationType" JVMType="JVMType" SingleInstance="SingleInstance" PlusList="APPDIR;" MinusList="#Qortium.exe;" MacDescription="[|CurrentJavaProductName] [|ProductVersion] © [|Manufacturer], Inc, 2019" MacBundleId="com.[|Manufacturer].[|ProductName].[|CurrentJavaProductName]" JVMSourcePreference="JVMSource" FailureCheck="FailureCheck" OverrideWkDir="OverrideWorkingDir" UACExecutionLevel="0" VMProviderOptions="VMProvider" Platform64="true"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiLaunchConditionsComponent">
     <ROW Condition="( Version9X OR VersionNT64 )" Description="[ProductName] can not be installed on [WindowsTypeNTDisplay]." DescriptionLocId="AI.LaunchCondition.NoNT" IsPredefined="true" Builds="DefaultBuild"/>
@@ -1483,14 +1483,14 @@
     <ROW FileKey="__1" Component_="AI_ExePath" DirProperty="APPDIR" InstallMode="2"/>
     <ROW FileKey="__2" Component_="java.exe" DirProperty="arbitrary_Dir" InstallMode="3"/>
     <ROW FileKey="__3" Component_="java.exe" DirProperty="DATA_PATH" InstallMode="2"/>
-    <ROW FileKey="__4" Component_="java.exe" DirProperty="Qortal_Dir" InstallMode="2"/>
-    <ROW FileKey="log.txt." Component_="java.exe" FileName="log.txt.*" DirProperty="Qortal_Dir" InstallMode="2"/>
-    <ROW FileKey="settings.json.orig" Component_="java.exe" FileName="settings-orig.json" DirProperty="Qortal_Dir" InstallMode="2"/>
+    <ROW FileKey="__4" Component_="java.exe" DirProperty="Qortium_Dir" InstallMode="2"/>
+    <ROW FileKey="log.txt." Component_="java.exe" FileName="log.txt.*" DirProperty="Qortium_Dir" InstallMode="2"/>
+    <ROW FileKey="settings.json.orig" Component_="java.exe" FileName="settings-orig.json" DirProperty="Qortium_Dir" InstallMode="2"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiShortsComponent">
-    <ROW Shortcut="Qortal" Directory_="DesktopFolder" Name="Qortal" Component_="Qortal.exe" Target="[#Qortal.exe]" Description="Qortal.exe" Hotkey="0" Icon_="qortal.exe" IconIndex="0" ShowCmd="1" WkDir="APPDIR"/>
-    <ROW Shortcut="Qortal_1" Directory_="SHORTCUTDIR" Name="Qortal" Component_="Qortal.exe" Target="[#Qortal.exe]" Description="Qortal" Hotkey="0" Icon_="qortal.exe" IconIndex="0" ShowCmd="1" WkDir="APPDIR"/>
-    <ROW Shortcut="Uninstall" Directory_="SHORTCUTDIR" Name="UNINST~2|Uninstall Qortal" Component_="AI_ExePath" Target="[AI_UNINSTALLER]" Arguments="/i [ProductCode]" Description="Uninstall Qortal" Hotkey="0" Icon_="SystemFoldermsiexec.exe" IconIndex="0" ShowCmd="1"/>
+    <ROW Shortcut="Qortium" Directory_="DesktopFolder" Name="Qortium" Component_="Qortium.exe" Target="[#Qortium.exe]" Description="Qortium.exe" Hotkey="0" Icon_="qortium.exe" IconIndex="0" ShowCmd="1" WkDir="APPDIR"/>
+    <ROW Shortcut="Qortium_1" Directory_="SHORTCUTDIR" Name="Qortium" Component_="Qortium.exe" Target="[#Qortium.exe]" Description="Qortium" Hotkey="0" Icon_="qortium.exe" IconIndex="0" ShowCmd="1" WkDir="APPDIR"/>
+    <ROW Shortcut="Uninstall" Directory_="SHORTCUTDIR" Name="UNINST~2|Uninstall Qortium" Component_="AI_ExePath" Target="[AI_UNINSTALLER]" Arguments="/i [ProductCode]" Description="Uninstall Qortium" Hotkey="0" Icon_="SystemFoldermsiexec.exe" IconIndex="0" ShowCmd="1"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiTextStyleComponent">
     <ROW TextStyle="TextStyle" FaceName="MagistralBlackC" Size="8" Color="6566400" StyleBits="0"/>
@@ -1504,6 +1504,6 @@
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.SynchronizedFolderComponent">
     <ROW Directory_="APPDIR" SourcePath="Install Files" Feature="MainFeature" ExcludePattern="*~|#*#|%*%|._|CVS|.cvsignore|SCCS|vssver.scc|mssccprj.scc|vssver2.scc|.svn|.DS_Store|/*.json|\AppData" ExcludeFlags="6" FileAddOptions="4"/>
-    <ROW Directory_="Qortal_Dir" SourcePath="Install Files\AppData" Feature="MainFeature" ExcludePattern="*~|#*#|%*%|._|CVS|.cvsignore|SCCS|vssver.scc|mssccprj.scc|vssver2.scc|.svn|.DS_Store" ExcludeFlags="6" FileAddOptions="4"/>
+    <ROW Directory_="Qortium_Dir" SourcePath="Install Files\AppData" Feature="MainFeature" ExcludePattern="*~|#*#|%*%|._|CVS|.cvsignore|SCCS|vssver.scc|mssccprj.scc|vssver2.scc|.svn|.DS_Store" ExcludeFlags="6" FileAddOptions="4"/>
   </COMPONENT>
 </DOCUMENT>

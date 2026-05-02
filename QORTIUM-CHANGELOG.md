@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - installer: neutralize Windows installer identity
+
+Updated the Windows installer project from inherited Qortal naming to Qortium naming. The Advanced Installer project, installer output, application executable, bundled JAR, shortcuts, log defaults, install directory, icon filename, visible installer artwork, and upgrade family now use Qortium identity while keeping the current Java main class namespace unchanged.
+
 ### 2026-05-02 - core: preserve QDN raw-data filenames
 
 Changed QDN resource rebuilding so raw on-chain data can restore the original filename when transaction metadata records a single source file. Resources without metadata still use the existing `data` fallback, and rebuilt metadata paths are validated so they cannot escape the reader output directory.
