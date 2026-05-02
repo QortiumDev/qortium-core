@@ -584,7 +584,7 @@ public class CrossChainResource {
 	@Path("/price/{blockchain}")
 	@Operation(
 		summary = "Request current estimated trading price",
-		description = "Returns price based on most recent completed trades. Price is expressed in terms of QORT per unit foreign currency.",
+		description = "Returns price based on most recent completed trades. Price is expressed in terms of NATIVE per unit foreign currency.",
 		responses = {
 			@ApiResponse(
 				content = @Content(
@@ -608,7 +608,7 @@ public class CrossChainResource {
 					schema = @Schema(type = "integer", defaultValue = "10")
 			) @QueryParam("maxtrades") Integer maxtrades,
 			@Parameter(
-					description = "Display price in terms of foreign currency per unit QORT",
+					description = "Display price in terms of foreign currency per unit NATIVE",
 					example = "false",
 					schema = @Schema(type = "boolean", defaultValue = "false")
 			) @QueryParam("inverse") Boolean inverse) {
@@ -627,7 +627,7 @@ public class CrossChainResource {
 			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getFilteredAcctMap(foreignBlockchain);
 
 			long totalForeign = 0;
-			long totalQort = 0;
+			long totalNative = 0;
 
 			Map<Long, CrossChainTradeData> reverseSortedTradeData = new TreeMap<>(Collections.reverseOrder());
 
@@ -667,11 +667,11 @@ public class CrossChainResource {
 				}
 
 				totalForeign += crossChainTradeData.expectedForeignAmount;
-				totalQort += crossChainTradeData.qortAmount;
+				totalNative += crossChainTradeData.nativeAmount;
 				index++;
 			}
 
-			return useInversePrice ? Amounts.scaledDivide(totalForeign, totalQort) : Amounts.scaledDivide(totalQort, totalForeign);
+			return useInversePrice ? Amounts.scaledDivide(totalForeign, totalNative) : Amounts.scaledDivide(totalNative, totalForeign);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
@@ -750,7 +750,7 @@ public class CrossChainResource {
 	@Path("/p2sh")
 	@Operation(
 			summary = "Returns P2SH Address",
-			description = "Get the P2SH address to lock foreign coin in a cross chain trade for QORT",
+			description = "Get the P2SH address to lock foreign coin in a cross chain trade for NATIVE",
 			requestBody = @RequestBody(
 					required = true,
 					content = @Content(

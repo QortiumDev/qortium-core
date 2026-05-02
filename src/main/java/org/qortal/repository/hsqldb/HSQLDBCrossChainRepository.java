@@ -22,7 +22,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 	public TradeBotData getTradeBotData(byte[] tradePrivateKey) throws DataException {
 		String sql = "SELECT acct_name, trade_state, trade_state_value, "
 				+ "creator_address, at_address, "
-				+ "updated_when, qort_amount, "
+				+ "updated_when, native_amount, "
 				+ "trade_native_public_key, trade_native_public_key_hash, "
 				+ "trade_native_address, secret, hash_of_secret, "
 				+ "foreign_blockchain, trade_foreign_public_key, trade_foreign_public_key_hash, "
@@ -40,7 +40,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 			String creatorAddress = resultSet.getString(4);
 			String atAddress = resultSet.getString(5);
 			long timestamp = resultSet.getLong(6);
-			long qortAmount = resultSet.getLong(7);
+			long nativeAmount = resultSet.getLong(7);
 			byte[] tradeNativePublicKey = resultSet.getBytes(8);
 			byte[] tradeNativePublicKeyHash = resultSet.getBytes(9);
 			String tradeNativeAddress = resultSet.getString(10);
@@ -59,7 +59,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 
 			return new TradeBotData(tradePrivateKey, acctName,
 					tradeState, tradeStateValue,
-					creatorAddress, atAddress, timestamp, qortAmount,
+					creatorAddress, atAddress, timestamp, nativeAmount,
 					tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
 					secret, hashOfSecret,
 					foreignBlockchain, tradeForeignPublicKey, tradeForeignPublicKeyHash,
@@ -103,7 +103,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 	public List<TradeBotData> getAllTradeBotData() throws DataException {
 		String sql = "SELECT trade_private_key, acct_name, trade_state, trade_state_value, "
 				+ "creator_address, at_address, "
-				+ "updated_when, qort_amount, "
+				+ "updated_when, native_amount, "
 				+ "trade_native_public_key, trade_native_public_key_hash, "
 				+ "trade_native_address, secret, hash_of_secret, "
 				+ "foreign_blockchain, trade_foreign_public_key, trade_foreign_public_key_hash, "
@@ -124,7 +124,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 				String creatorAddress = resultSet.getString(5);
 				String atAddress = resultSet.getString(6);
 				long timestamp = resultSet.getLong(7);
-				long qortAmount = resultSet.getLong(8);
+				long nativeAmount = resultSet.getLong(8);
 				byte[] tradeNativePublicKey = resultSet.getBytes(9);
 				byte[] tradeNativePublicKeyHash = resultSet.getBytes(10);
 				String tradeNativeAddress = resultSet.getString(11);
@@ -143,7 +143,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 
 				TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, acctName,
 						tradeState, tradeStateValue,
-						creatorAddress, atAddress, timestamp, qortAmount,
+						creatorAddress, atAddress, timestamp, nativeAmount,
 						tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
 						secret, hashOfSecret,
 						foreignBlockchain, tradeForeignPublicKey, tradeForeignPublicKeyHash,
@@ -168,7 +168,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 				.bind("creator_address", tradeBotData.getCreatorAddress())
 				.bind("at_address", tradeBotData.getAtAddress())
 				.bind("updated_when", tradeBotData.getTimestamp())
-				.bind("qort_amount", tradeBotData.getQortAmount())
+				.bind("native_amount", tradeBotData.getNativeAmount())
 				.bind("trade_native_public_key", tradeBotData.getTradeNativePublicKey())
 				.bind("trade_native_public_key_hash", tradeBotData.getTradeNativePublicKeyHash())
 				.bind("trade_native_address", tradeBotData.getTradeNativeAddress())

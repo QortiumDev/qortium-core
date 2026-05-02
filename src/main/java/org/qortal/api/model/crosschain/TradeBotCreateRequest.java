@@ -13,13 +13,13 @@ public class TradeBotCreateRequest {
 	@Schema(description = "Trade creator's public key", example = "2zR1WFsbM7akHghqSCYKBPk6LDP8aKiQSRS1FrwoLvoB")
 	public byte[] creatorPublicKey;
 
-	@Schema(description = "QORT amount paid out on successful trade", example = "80.40000000", type = "number")
+	@Schema(description = "Native asset amount paid out on successful trade", example = "80.40000000", type = "number")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long qortAmount;
+	public long nativeAmount;
 
-	@Schema(description = "QORT amount funding AT, including covering AT execution fees", example = "80.50000000", type = "number")
+	@Schema(description = "Native asset amount funding AT, including covering AT execution fees", example = "80.50000000", type = "number")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long fundingQortAmount;
+	public long fundingNativeAmount;
 
 	@Deprecated
 	@Schema(description = "Bitcoin amount wanted in return. DEPRECATED: use foreignAmount instead", example = "0.00864200", type = "number", hidden = true)

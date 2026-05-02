@@ -35,9 +35,9 @@ public class CrossChainTradeData {
 	@Schema(description = "Suggested trade timeout (minutes)", example = "10080")
 	public int tradeTimeout;
 
-	@Schema(description = "AT's current QORT balance")
+	@Schema(description = "AT's current native asset balance")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long qortBalance;
+	public long nativeBalance;
 
 	@Schema(description = "HASH160 of 32-byte secret-A")
 	public byte[] hashOfSecretA;
@@ -45,9 +45,9 @@ public class CrossChainTradeData {
 	@Schema(description = "HASH160 of 32-byte secret-B")
 	public byte[] hashOfSecretB;
 
-	@Schema(description = "Final QORT payment that will be sent to Qortal trade partner")
+	@Schema(description = "Final native asset payment that will be sent to Qortal trade partner")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long qortAmount;
+	public long nativeAmount;
 
 	@Schema(description = "Trade partner's Qortal address (trade begins when this is set)")
 	public String qortalPartnerAddress;

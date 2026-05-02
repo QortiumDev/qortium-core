@@ -74,7 +74,7 @@ import static org.ciyam.at.OpCode.calcOffset;
  * 					<li>Qortal receiving address of her chosing</li>
  * 				</ul>
  * 			</li>
- * 			<li>AT's QORT funds are sent to Qortal receiving address</li>
+ * 			<li>AT's native asset funds are sent to Qortal receiving address</li>
  * 		</ul>
  * </li>
  * <li>Bob checks AT, extracts secret-A
@@ -148,11 +148,11 @@ public class DogecoinACCTv3 implements ACCT {
 	 * 
 	 * @param creatorTradeAddress AT creator's trade Qortal address
 	 * @param dogecoinPublicKeyHash 20-byte HASH160 of creator's trade Dogecoin public key
-	 * @param qortAmount how much QORT to pay trade partner if they send correct 32-byte secrets to AT
+	 * @param nativeAmount how much native asset to pay trade partner if they send correct 32-byte secrets to AT
 	 * @param dogecoinAmount how much DOGE the AT creator is expecting to trade
 	 * @param tradeTimeout suggested timeout for entire trade
 	 */
-	public static byte[] buildQortalAT(String creatorTradeAddress, byte[] dogecoinPublicKeyHash, long qortAmount, long dogecoinAmount, int tradeTimeout) {
+	public static byte[] buildQortalAT(String creatorTradeAddress, byte[] dogecoinPublicKeyHash, long nativeAmount, long dogecoinAmount, int tradeTimeout) {
 		if (dogecoinPublicKeyHash.length != 20)
 			throw new IllegalArgumentException("Dogecoin public key hash should be 20 bytes");
 
@@ -169,7 +169,7 @@ public class DogecoinACCTv3 implements ACCT {
 		final int addrDogecoinPublicKeyHash = addrCounter;
 		addrCounter += 4;
 
-		final int addrQortAmount = addrCounter++;
+		final int addrNativeAmount = addrCounter++;
 		final int addrDogecoinAmount = addrCounter++;
 		final int addrTradeTimeout = addrCounter++;
 
@@ -249,9 +249,9 @@ public class DogecoinACCTv3 implements ACCT {
 		assert dataByteBuffer.position() == addrDogecoinPublicKeyHash * MachineState.VALUE_SIZE : "addrDogecoinPublicKeyHash incorrect";
 		dataByteBuffer.put(Bytes.ensureCapacity(dogecoinPublicKeyHash, 32, 0));
 
-		// Redeem Qort amount
-		assert dataByteBuffer.position() == addrQortAmount * MachineState.VALUE_SIZE : "addrQortAmount incorrect";
-		dataByteBuffer.putLong(qortAmount);
+		// Redeem native amount
+		assert dataByteBuffer.position() == addrNativeAmount * MachineState.VALUE_SIZE : "addrNativeAmount incorrect";
+		dataByteBuffer.putLong(nativeAmount);
 
 		// Expected Dogecoin amount
 		assert dataByteBuffer.position() == addrDogecoinAmount * MachineState.VALUE_SIZE : "addrDogecoinAmount incorrect";
@@ -529,7 +529,7 @@ public class DogecoinACCTv3 implements ACCT {
 				// Save B register into data segment starting at addrPartnerReceivingAddress (as pointed to by addrPartnerReceivingAddressPointer)
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerReceivingAddressPointer));
 				// Pay AT's balance to receiving address
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PAY_TO_ADDRESS_IN_B, addrQortAmount));
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PAY_TO_ADDRESS_IN_B, addrNativeAmount));
 				// Set redeemed mode
 				codeByteBuffer.put(OpCode.SET_VAL.compile(addrMode, AcctMode.REDEEMED.value));
 				// We're finished forever (finishing auto-refunds remaining balance to AT creator)
@@ -545,7 +545,7 @@ public class DogecoinACCTv3 implements ACCT {
 				// We're finished forever (finishing auto-refunds remaining balance to AT creator)
 				codeByteBuffer.put(OpCode.FIN_IMD.compile());
 			} catch (CompilationException e) {
-				throw new IllegalStateException("Unable to compile DOGE-QORT ACCT?", e);
+				throw new IllegalStateException("Unable to compile DOGE-NATIVE ACCT?", e);
 			}
 		}
 
@@ -608,11 +608,11 @@ public class DogecoinACCTv3 implements ACCT {
 		tradeData.creationTimestamp = creationTimestamp;
 
 		if(optionalBalance.isPresent()) {
-			tradeData.qortBalance = optionalBalance.getAsLong();
+			tradeData.nativeBalance = optionalBalance.getAsLong();
 		}
 		else {
 			Account atAccount = new Account(repository, atAddress);
-			tradeData.qortBalance = atAccount.getConfirmedBalance(Asset.QORT);
+			tradeData.nativeBalance = atAccount.getConfirmedBalance(Asset.NATIVE);
 		}
 
 		byte[] stateData = atStateData.getStateData();
@@ -635,7 +635,7 @@ public class DogecoinACCTv3 implements ACCT {
 		tradeData.hashOfSecretB = null;
 
 		// Redeem payout
-		tradeData.qortAmount = dataByteBuffer.getLong();
+		tradeData.nativeAmount = dataByteBuffer.getLong();
 
 		// Expected DOGE amount
 		tradeData.expectedForeignAmount = dataByteBuffer.getLong();

@@ -21,7 +21,7 @@ public class Bitcoin extends Bitcoiny {
 
 	public static final String CURRENCY_CODE = "BTC";
 
-	// Locking fee to lock in a QORT for BTC. This is the default value that the user should reset to
+	// Locking fee to lock in native asset for BTC. This is the default value that the user should reset to
 	// a value inline with the BTC fee market. This is 5 sats per kB.
 	private static final Coin DEFAULT_FEE_PER_KB = Coin.valueOf(5_000); // 0.00005 BTC per 1000 bytes
 

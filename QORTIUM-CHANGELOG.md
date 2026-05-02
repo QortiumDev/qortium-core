@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - core: refactor cross-chain native-side naming from QORT to native
+
+Refactored the cross-chain trade and trade-bot surfaces so the chain-side asset is described as the native asset instead of QORT. Cross-chain request and response fields now use `nativeAmount`, `fundingNativeAmount`, and `nativeBalance`, trade-bot backups and repository storage use `nativeAmount` and `native_amount`, cross-chain labels now use `NATIVE` as the neutral display code, and the remaining cross-chain native balance checks now use `Asset.NATIVE`.
+
 ### 2026-05-01 - docs: neutralize native asset wording
 
 Neutralized simple QORT wording in native-asset comments, API descriptions, translation strings, and demo UI text so those surfaces describe the chain's native asset without hardcoding the inherited QORT name. Cross-chain trade labels and `qortAmount`-style API fields remain unchanged for the dedicated cross-chain native-side refactor.

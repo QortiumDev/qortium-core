@@ -17,7 +17,7 @@ public class CrossChainSecretRequest {
 	@Schema(description = "Secret (32 bytes)", example = "FHMzten4he9jZ4HGb4297Utj6F5g2w7serjq2EnAg2s1")
 	public byte[] secret;
 
-	@Schema(description = "Qortal address for receiving QORT from AT")
+	@Schema(description = "Qortal address for receiving NATIVE from AT")
 	public String receivingAddress;
 
 	public CrossChainSecretRequest() {

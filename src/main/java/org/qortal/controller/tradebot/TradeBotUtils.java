@@ -128,7 +128,7 @@ public class TradeBotUtils {
                     receiveAddress,
                     crossChainTradeData.qortalAtAddress,
                     now,
-                    crossChainTradeData.qortAmount,
+                    crossChainTradeData.nativeAmount,
                     tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
                     secretA, hashOfSecretA,
                     crossChainTradeData.foreignBlockchain,

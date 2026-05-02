@@ -74,7 +74,7 @@ public class DigibyteACCTv3TradeBot implements AcctTradeBot {
 	}
 
 	/**
-	 * Creates a new trade-bot entry from the "Bob" viewpoint, i.e. OFFERing QORT in exchange for DGB.
+	 * Creates a new trade-bot entry from the "Bob" viewpoint, i.e. OFFERing NATIVE in exchange for DGB.
 	 * <p>
 	 * Generates:
 	 * <ul>
@@ -89,7 +89,7 @@ public class DigibyteACCTv3TradeBot implements AcctTradeBot {
 	 * <ul>
 	 * 	<li>'native'/Qortal 'trade' address - used as a MESSAGE contact</li>
 	 * 	<li>'foreign'/Digibyte public key hash - used by Alice's P2SH scripts to allow redeem</li>
-	 * 	<li>QORT amount on offer by Bob</li>
+	 * 	<li>native asset amount on offer by Bob</li>
 	 * 	<li>DGB amount expected in return by Bob (from Alice)</li>
 	 * 	<li>trading timeout, in case things go wrong and everyone needs to refund</li>
 	 * </ul>
@@ -133,15 +133,15 @@ public class DigibyteACCTv3TradeBot implements AcctTradeBot {
 		byte[] signature = null;
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, creator.getPublicKey(), fee, signature);
 
-		String name = "QORT/DGB ACCT";
-		String description = "QORT/DGB cross-chain trade";
+		String name = "NATIVE/DGB ACCT";
+		String description = "NATIVE/DGB cross-chain trade";
 		String aTType = "ACCT";
-		String tags = "ACCT QORT DGB";
-		byte[] creationBytes = DigibyteACCTv3.buildQortalAT(tradeNativeAddress, tradeForeignPublicKeyHash, tradeBotCreateRequest.qortAmount,
+		String tags = "ACCT NATIVE DGB";
+		byte[] creationBytes = DigibyteACCTv3.buildQortalAT(tradeNativeAddress, tradeForeignPublicKeyHash, tradeBotCreateRequest.nativeAmount,
 				tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
-		long amount = tradeBotCreateRequest.fundingQortAmount;
+		long amount = tradeBotCreateRequest.fundingNativeAmount;
 
-		DeployAtTransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, aTType, tags, creationBytes, amount, Asset.QORT);
+		DeployAtTransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, aTType, tags, creationBytes, amount, Asset.NATIVE);
 
 		DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
 		fee = deployAtTransaction.calcRecommendedFee();
@@ -152,7 +152,7 @@ public class DigibyteACCTv3TradeBot implements AcctTradeBot {
 
 		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, DigibyteACCTv3.NAME,
 				State.BOB_WAITING_FOR_AT_CONFIRM.name(), State.BOB_WAITING_FOR_AT_CONFIRM.value,
-				creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.qortAmount,
+				creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.nativeAmount,
 				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
 				null, null,
 				SupportedBlockchain.DIGIBYTE.name(),
@@ -229,7 +229,7 @@ public class DigibyteACCTv3TradeBot implements AcctTradeBot {
 
 		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, DigibyteACCTv3.NAME,
 				State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
-				receivingAddress, crossChainTradeData.qortalAtAddress, now, crossChainTradeData.qortAmount,
+				receivingAddress, crossChainTradeData.qortalAtAddress, now, crossChainTradeData.nativeAmount,
 				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
 				secretA, hashOfSecretA,
 				SupportedBlockchain.DIGIBYTE.name(),
@@ -433,7 +433,7 @@ public class DigibyteACCTv3TradeBot implements AcctTradeBot {
 	/**
 	 * Trade-bot is waiting for MESSAGE from Alice's trade-bot, containing Alice's trade info.
 	 * <p>
-	 * It's possible Bob has cancelling his trade offer, receiving an automatic QORT refund,
+	 * It's possible Bob has cancelling his trade offer, receiving an automatic native asset refund,
 	 * in which case trade-bot is done with this specific trade and finalizes on refunded state.
 	 * <p>
 	 * Assuming trade is still on offer, trade-bot checks the contents of MESSAGE from Alice's trade-bot.
@@ -564,7 +564,7 @@ public class DigibyteACCTv3TradeBot implements AcctTradeBot {
 	 * <p>
 	 * Assuming Bob's AT is locked to Alice, trade-bot checks AT's state data to make sure it is correct.
 	 * <p>
-	 * If all is well, trade-bot then redeems AT using Alice's secret-A, releasing Bob's QORT to Alice.
+	 * If all is well, trade-bot then redeems AT using Alice's secret-A, releasing Bob's NATIVE to Alice.
 	 * <p>
 	 * In revealing a valid secret-A, Bob can then redeem the DGB funds from P2SH-A.
 	 * <p>
@@ -686,7 +686,7 @@ public class DigibyteACCTv3TradeBot implements AcctTradeBot {
 	/**
 	 * Trade-bot is waiting for Alice to redeem Bob's AT, thus revealing secret-A which is required to spend the DGB funds from P2SH-A.
 	 * <p>
-	 * It's possible that Bob's AT has reached its trading timeout and automatically refunded QORT back to Bob. In which case,
+	 * It's possible that Bob's AT has reached its trading timeout and automatically refunded NATIVE back to Bob. In which case,
 	 * trade-bot is done with this specific trade and finalizes in refunded state.
 	 * <p>
 	 * Assuming trade-bot can extract a valid secret-A from Alice's MESSAGE then trade-bot uses that to redeem the DGB funds from P2SH-A
@@ -699,14 +699,14 @@ public class DigibyteACCTv3TradeBot implements AcctTradeBot {
 	 */
 	private void handleBobWaitingForAtRedeem(Repository repository, TradeBotData tradeBotData,
 			ATData atData, CrossChainTradeData crossChainTradeData) throws DataException, ForeignBlockchainException {
-		// AT should be 'finished' once Alice has redeemed QORT funds
+		// AT should be 'finished' once Alice has redeemed native asset funds
 		if (!atData.getIsFinished())
 			// Not finished yet
 			return;
 
 		// If AT is REFUNDED or CANCELLED then something has gone wrong
 		if (crossChainTradeData.mode == AcctMode.REFUNDED || crossChainTradeData.mode == AcctMode.CANCELLED) {
-			// Alice hasn't redeemed the QORT, so there is no point in trying to redeem the DGB
+			// Alice hasn't redeemed the native asset, so there is no point in trying to redeem the DGB
 			TradeBot.updateTradeBotState(repository, tradeBotData, State.BOB_REFUNDED,
 					() -> String.format("AT %s has auto-refunded - trade aborted", tradeBotData.getAtAddress()));
 

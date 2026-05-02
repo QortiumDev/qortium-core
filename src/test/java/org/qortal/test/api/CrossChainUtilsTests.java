@@ -154,7 +154,7 @@ public class CrossChainUtilsTests extends ApiCommon {
             new PrintWriter(System.out),
             List.of(
                 new CrossChainTradeLedgerEntry(
-                    "QORT",
+                    "NATIVE",
                     "LTC",
                     1000,
                     0,
@@ -171,7 +171,7 @@ public class CrossChainUtilsTests extends ApiCommon {
             new PrintWriter(System.out),
                 List.of(
                     new CrossChainTradeLedgerEntry(
-                        "QORT",
+                        "NATIVE",
                         "LTC",
                         1000,
                         0,
@@ -181,7 +181,7 @@ public class CrossChainUtilsTests extends ApiCommon {
                     ),
                     new CrossChainTradeLedgerEntry(
                         "LTC",
-                        "QORT",
+                        "NATIVE",
                         1,
                         0,
                         "LTC",

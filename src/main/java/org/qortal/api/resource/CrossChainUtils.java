@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
 
 
 public class CrossChainUtils {
-    public static final String QORT_CURRENCY_CODE = "QORT";
+    public static final String NATIVE_CURRENCY_CODE = "NATIVE";
     private static final Logger LOGGER = LogManager.getLogger(CrossChainUtils.class);
     public static final String CORE_API_CALL = "Core API Call";
     public static final String QORTAL_EXCHANGE_LABEL = "Qortal";
@@ -775,12 +775,12 @@ public class CrossChainUtils {
 
             CrossChainTradeLedgerEntry ledgerEntry
                 = new CrossChainTradeLedgerEntry(
-                    isBuy ? QORT_CURRENCY_CODE : foreignBlockchainCurrencyCode,
-                    isBuy ? foreignBlockchainCurrencyCode : QORT_CURRENCY_CODE,
-                    isBuy ? crossChainTradeData.qortAmount : crossChainTradeData.expectedForeignAmount,
+                    isBuy ? NATIVE_CURRENCY_CODE : foreignBlockchainCurrencyCode,
+                    isBuy ? foreignBlockchainCurrencyCode : NATIVE_CURRENCY_CODE,
+                    isBuy ? crossChainTradeData.nativeAmount : crossChainTradeData.expectedForeignAmount,
                     0,
                     foreignBlockchainCurrencyCode,
-                    isBuy ? crossChainTradeData.expectedForeignAmount : crossChainTradeData.qortAmount,
+                    isBuy ? crossChainTradeData.expectedForeignAmount : crossChainTradeData.nativeAmount,
                     localTimestamp);
 
             entries.add(ledgerEntry);
@@ -808,7 +808,7 @@ public class CrossChainUtils {
         Map<String, Long> balanceByAtAddress
             = repository
                 .getAccountRepository()
-                .getBalances(new ArrayList<>(atDataByAtAddress.keySet()), Asset.QORT)
+                .getBalances(new ArrayList<>(atDataByAtAddress.keySet()), Asset.NATIVE)
                 .stream().collect(Collectors.toMap(AccountBalanceData::getAddress, AccountBalanceData::getBalance));
 
         List<CrossChainTradeData> crossChainTradeDataList = new ArrayList<>(latestATStates.size());

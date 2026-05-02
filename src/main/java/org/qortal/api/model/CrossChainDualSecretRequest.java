@@ -20,7 +20,7 @@ public class CrossChainDualSecretRequest {
 	@Schema(description = "secret-B (32 bytes)", example = "EN2Bgx3BcEMtxFCewmCVSMkfZjVKYhx3KEXC5A21KBGx")
 	public byte[] secretB;
 
-	@Schema(description = "Qortal address for receiving QORT from AT")
+	@Schema(description = "Qortal address for receiving NATIVE from AT")
 	public String receivingAddress;
 
 	public CrossChainDualSecretRequest() {

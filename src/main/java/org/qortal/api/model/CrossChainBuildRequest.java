@@ -12,13 +12,13 @@ public class CrossChainBuildRequest {
 	@Schema(description = "AT creator's public key", example = "C6wuddsBV3HzRrXUtezE7P5MoRXp5m3mEDokRDGZB6ry")
 	public byte[] creatorPublicKey;
 
-	@Schema(description = "Final QORT amount paid out on successful trade", example = "80.40200000")
+	@Schema(description = "Final native asset amount paid out on successful trade", example = "80.40200000")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long qortAmount;
+	public long nativeAmount;
 
-	@Schema(description = "QORT amount funding AT, including covering AT execution fees", example = "123.45670000")
+	@Schema(description = "Native asset amount funding AT, including covering AT execution fees", example = "123.45670000")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long fundingQortAmount;
+	public long fundingNativeAmount;
 
 	@Schema(description = "HASH160 of creator's Bitcoin public key", example = "2daMveGc5pdjRyFacbxBzMksCbyC")
 	public byte[] bitcoinPublicKeyHash;

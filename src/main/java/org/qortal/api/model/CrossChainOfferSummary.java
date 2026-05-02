@@ -24,7 +24,7 @@ public class CrossChainOfferSummary {
 	private String qortalCreatorTradeAddress;
 
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	private long qortAmount;
+	private long nativeAmount;
 
 	@Schema(description = "Bitcoin amount - DEPRECATED: use foreignAmount")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
@@ -58,7 +58,7 @@ public class CrossChainOfferSummary {
 		this.qortalAtAddress = crossChainTradeData.qortalAtAddress;
 		this.qortalCreator = crossChainTradeData.qortalCreator;
 		this.qortalCreatorTradeAddress = crossChainTradeData.qortalCreatorTradeAddress;
-		this.qortAmount = crossChainTradeData.qortAmount;
+		this.nativeAmount = crossChainTradeData.nativeAmount;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
 		this.btcAmount = this.foreignAmount; // Duplicate for deprecated field
 		this.tradeTimeout = crossChainTradeData.tradeTimeout;
@@ -81,8 +81,8 @@ public class CrossChainOfferSummary {
 		return this.qortalCreatorTradeAddress;
 	}
 
-	public long getQortAmount() {
-		return this.qortAmount;
+	public long getNativeAmount() {
+		return this.nativeAmount;
 	}
 
 	public long getBtcAmount() {

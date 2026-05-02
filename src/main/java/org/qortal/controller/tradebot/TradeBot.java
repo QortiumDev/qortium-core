@@ -165,7 +165,7 @@ public class TradeBot implements Listener {
 
 	/**
 	 * Creates a new trade-bot entry from the "Bob" viewpoint,
-	 * i.e. OFFERing QORT in exchange for foreign blockchain currency.
+	 * i.e. OFFERing NATIVE in exchange for foreign blockchain currency.
 	 * <p>
 	 * Generates:
 	 * <ul>
@@ -183,7 +183,7 @@ public class TradeBot implements Listener {
 	 * 	<li>'native' (Qortal) 'trade' address - used to MESSAGE AT</li>
 	 * 	<li>'foreign' public key hash - used by Alice's to allow redeem of currency on foreign blockchain</li>
 	 * 	<li>hash(es) of secret(s) - used by AT (optional) and foreign blockchain as needed</li>
-	 * 	<li>QORT amount on offer by Bob</li>
+	 * 	<li>native asset amount on offer by Bob</li>
 	 * 	<li>foreign currency amount expected in return by Bob (from Alice)</li>
 	 * 	<li>trading timeout, in case things go wrong and everyone needs to refund</li>
 	 * </ul>
@@ -209,7 +209,7 @@ public class TradeBot implements Listener {
 
 	/**
 	 * Creates a trade-bot entry from the 'Alice' viewpoint,
-	 * i.e. matching foreign blockchain currency to an existing QORT offer.
+	 * i.e. matching foreign blockchain currency to an existing NATIVE offer.
 	 * <p>
 	 * Requires a chosen trade offer from Bob, passed by <tt>crossChainTradeData</tt>
 	 * and access to a foreign blockchain wallet via <tt>foreignKey</tt>.
@@ -236,14 +236,14 @@ public class TradeBot implements Listener {
 
 	/**
 	 * Creates a trade-bot entries from the 'Alice' viewpoint,
-	 * i.e. matching foreign blockchain currency to existing QORT offers.
+	 * i.e. matching foreign blockchain currency to existing NATIVE offers.
 	 * <p>
 	 * Requires chosen trade offers from Bob, passed by <tt>crossChainTradeData</tt>
 	 * and access to a foreign blockchain wallet via <tt>foreignKey</tt>.
 	 * <p>
 	 * @param repository
 	 * @param crossChainTradeDataList chosen trade OFFERs that Alice wants to match
-	 * @param receiveAddress Alice's Qortal address to receive her QORT
+	 * @param receiveAddress Alice's Qortal address to receive her NATIVE
 	 * @param foreignKey foreign blockchain wallet key
 	 * @param bitcoiny
 	 * @throws DataException

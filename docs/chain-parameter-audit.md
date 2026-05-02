@@ -52,8 +52,9 @@ Initial recommendation:
 with `Asset.QORT` kept as a temporary compatibility alias. Direct Java test use
 of `Asset.QORT` has been neutralized, and simple native-asset wording in
 comments, API descriptions, translations, and demo text now avoids hardcoded
-QORT labels. Cross-chain test labels and ACCT classes still describe the native
-side as QORT.
+QORT labels. Cross-chain native-side trade fields, repository storage, and
+display labels now describe the chain-side asset as native/NATIVE instead of
+QORT.
 
 The protocol still needs a stable native asset ID, but the display name should
 not be fixed to QORT in fork-facing code.
@@ -133,7 +134,7 @@ Initial recommendation:
 ### Cross-Chain ACCT Coupling
 
 The v3 ACCT classes still describe trades in terms of Qortal-side addresses,
-QORT amounts, `Asset.QORT`, `qortalAtAddress`, and `SupportedBlockchain`.
+`qortalAtAddress`, and `SupportedBlockchain`.
 
 This area mixes two concerns:
 

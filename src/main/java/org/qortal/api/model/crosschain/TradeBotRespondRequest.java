@@ -20,7 +20,7 @@ public class TradeBotRespondRequest {
 			example = "xprv___________________________________________________________________________________________________________")
 	public String foreignKey;
 
-	@Schema(description = "Qortal address for receiving QORT from AT", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
+	@Schema(description = "Qortal address for receiving NATIVE from AT", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
 	public String receivingAddress;
 
 	public TradeBotRespondRequest() {

@@ -666,10 +666,10 @@ public abstract class ACCTTests extends Common {
 
 		long txTimestamp = System.currentTimeMillis();
 		Long fee = null;
-		String name = "QORT-" + getSymbol() + " cross-chain trade";
+		String name = "NATIVE-" + getSymbol() + " cross-chain trade";
 		String description = String.format("Qortal-" + getName() + " cross-chain trade");
 		String atType = "ACCT";
-		String tags = "QORT-" + getSymbol() + " ACCT";
+		String tags = "NATIVE-" + getSymbol() + " ACCT";
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), fee, null);
 		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.NATIVE);
@@ -713,7 +713,7 @@ public abstract class ACCTTests extends Common {
 		for (int blockCount = 0; blockCount <= refundTimeout; ++blockCount)
 			BlockUtils.mintBlock(repository);
 
-		// We don't bother to exactly calculate QORT spent running AT for several blocks, but we do know the expected range
+		// We don't bother to exactly calculate native asset spent running AT for several blocks, but we do know the expected range
 		long expectedMinimumBalance = deployersPostDeploymentBalance;
 		long expectedMaximumBalance = deployersInitialBalance - deployAtFee;
 
@@ -734,18 +734,18 @@ public abstract class ACCTTests extends Common {
 				+ "\tmode: %s\n"
 				+ "\tcreator: %s,\n"
 				+ "\tcreation timestamp: %s,\n"
-				+ "\tcurrent balance: %s QORT,\n"
+				+ "\tcurrent balance: %s NATIVE,\n"
 				+ "\tis finished: %b,\n"
-				+ "\tredeem payout: %s QORT,\n"
+				+ "\tredeem payout: %s NATIVE,\n"
 				+ "\texpected " + getName() + ": %s " + getSymbol() + ",\n"
 				+ "\tcurrent block height: %d,\n",
 				tradeData.qortalAtAddress,
 				tradeData.mode,
 				tradeData.qortalCreator,
 				epochMilliFormatter.apply(tradeData.creationTimestamp),
-				Amounts.prettyAmount(tradeData.qortBalance),
+				Amounts.prettyAmount(tradeData.nativeBalance),
 				atData.getIsFinished(),
-				Amounts.prettyAmount(tradeData.qortAmount),
+				Amounts.prettyAmount(tradeData.nativeAmount),
 				Amounts.prettyAmount(tradeData.expectedForeignAmount),
 				currentBlockHeight));
 

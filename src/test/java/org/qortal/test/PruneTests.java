@@ -167,10 +167,10 @@ public class PruneTests extends Common {
 
         long txTimestamp = System.currentTimeMillis();
         Long fee = null;
-        String name = "QORT-LTC cross-chain trade";
+        String name = "NATIVE-LTC cross-chain trade";
         String description = String.format("Qortal-Litecoin cross-chain trade");
         String atType = "ACCT";
-        String tags = "QORT-LTC ACCT";
+        String tags = "NATIVE-LTC ACCT";
 
         BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), fee, null);
         TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.NATIVE);

@@ -29,7 +29,7 @@ public class TradeBotData {
 	private long timestamp;
 
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	private long qortAmount;
+	private long nativeAmount;
 
 	private byte[] tradeNativePublicKey;
 	private byte[] tradeNativePublicKeyHash;
@@ -68,7 +68,7 @@ public class TradeBotData {
 
 	public TradeBotData(byte[] tradePrivateKey, String acctName, String tradeState, int tradeStateValue,
 			String creatorAddress, String atAddress,
-			long timestamp, long qortAmount,
+			long timestamp, long nativeAmount,
 			byte[] tradeNativePublicKey, byte[] tradeNativePublicKeyHash, String tradeNativeAddress,
 			byte[] secret, byte[] hashOfSecret,
 			String foreignBlockchain, byte[] tradeForeignPublicKey, byte[] tradeForeignPublicKeyHash,
@@ -81,7 +81,7 @@ public class TradeBotData {
 		this.creatorAddress = creatorAddress;
 		this.atAddress = atAddress;
 		this.timestamp = timestamp;
-		this.qortAmount = qortAmount;
+		this.nativeAmount = nativeAmount;
 		this.tradeNativePublicKey = tradeNativePublicKey;
 		this.tradeNativePublicKeyHash = tradeNativePublicKeyHash;
 		this.tradeNativeAddress = tradeNativeAddress;
@@ -143,8 +143,8 @@ public class TradeBotData {
 		this.timestamp = timestamp;
 	}
 
-	public long getQortAmount() {
-		return this.qortAmount;
+	public long getNativeAmount() {
+		return this.nativeAmount;
 	}
 
 	public byte[] getTradeNativePublicKey() {
@@ -216,7 +216,7 @@ public class TradeBotData {
 		jsonObject.put("creatorAddress", this.getCreatorAddress());
 		jsonObject.put("atAddress", this.getAtAddress());
 		jsonObject.put("timestamp", this.getTimestamp());
-		jsonObject.put("qortAmount", this.getQortAmount());
+		jsonObject.put("nativeAmount", this.getNativeAmount());
 		if (this.getTradeNativePublicKey() != null) jsonObject.put("tradeNativePublicKey", Base58.encode(this.getTradeNativePublicKey()));
 		if (this.getTradeNativePublicKeyHash() != null) jsonObject.put("tradeNativePublicKeyHash", Base58.encode(this.getTradeNativePublicKeyHash()));
 		jsonObject.put("tradeNativeAddress", this.getTradeNativeAddress());
@@ -242,7 +242,7 @@ public class TradeBotData {
 				json.isNull("creatorAddress") ? null : json.getString("creatorAddress"),
 				json.isNull("atAddress") ? null : json.getString("atAddress"),
 				json.isNull("timestamp") ? null : json.getLong("timestamp"),
-				json.isNull("qortAmount") ? null : json.getLong("qortAmount"),
+				json.getLong("nativeAmount"),
 				json.isNull("tradeNativePublicKey") ? null : Base58.decode(json.getString("tradeNativePublicKey")),
 				json.isNull("tradeNativePublicKeyHash") ? null : Base58.decode(json.getString("tradeNativePublicKeyHash")),
 				json.isNull("tradeNativeAddress") ? null : json.getString("tradeNativeAddress"),

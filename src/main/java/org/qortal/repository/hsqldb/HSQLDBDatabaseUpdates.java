@@ -340,7 +340,7 @@ public class HSQLDBDatabaseUpdates {
 					break;
 
 				case 10:
-					// Assets (including QORT coin itself)
+					// Assets (including the native asset itself)
 					stmt.execute("CREATE TABLE Assets (asset_id AssetID, owner QortalAddress NOT NULL, "
 							+ "asset_name AssetName NOT NULL, description GenericDescription NOT NULL, "
 							+ "quantity BIGINT NOT NULL, is_divisible BOOLEAN NOT NULL, "
@@ -616,7 +616,7 @@ public class HSQLDBDatabaseUpdates {
 					// Trade bot
 					// See case 25 below for changes
 					stmt.execute("CREATE TABLE TradeBotStates (trade_private_key QortalKeySeed NOT NULL, trade_state TINYINT NOT NULL, "
-							+ "creator_address QortalAddress NOT NULL, at_address QortalAddress, updated_when BIGINT NOT NULL, qort_amount QortalAmount NOT NULL, "
+							+ "creator_address QortalAddress NOT NULL, at_address QortalAddress, updated_when BIGINT NOT NULL, native_amount QortalAmount NOT NULL, "
 							+ "trade_native_public_key QortalPublicKey NOT NULL, trade_native_public_key_hash VARBINARY(32) NOT NULL, "
 							+ "trade_native_address QortalAddress NOT NULL, secret VARBINARY(32) NOT NULL, hash_of_secret VARBINARY(32) NOT NULL, "
 							+ "trade_foreign_public_key VARBINARY(33) NOT NULL, trade_foreign_public_key_hash VARBINARY(32) NOT NULL, "
@@ -1064,6 +1064,7 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("DROP INDEX TransactionReferenceIndex IF EXISTS");
 					dropColumnIfExists(connection, "Transactions", "reference");
 					addColumnIfMissing(connection, "Transactions", "nonce", "INT");
+					renameColumnIfExists(connection, "TradeBotStates", "qort_amount", "native_amount");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");
 					stmt.execute("ALTER TABLE TransferPrivsTransactions DROP COLUMN previous_sender_blocks_minted_adjustment");
@@ -1099,6 +1100,22 @@ public class HSQLDBDatabaseUpdates {
 
 		try (Statement stmt = connection.createStatement()) {
 			stmt.execute(String.format("ALTER TABLE %s ADD COLUMN %s %s", tableName, columnName, columnDefinition));
+		}
+	}
+
+	private static void renameColumnIfExists(Connection connection, String tableName, String oldColumnName, String newColumnName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getColumns(null, null, tableName.toUpperCase(), oldColumnName.toUpperCase())) {
+			if (!resultSet.next())
+				return;
+		}
+
+		try (ResultSet resultSet = connection.getMetaData().getColumns(null, null, tableName.toUpperCase(), newColumnName.toUpperCase())) {
+			if (resultSet.next())
+				return;
+		}
+
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute(String.format("ALTER TABLE %s ALTER COLUMN %s RENAME TO %s", tableName, oldColumnName, newColumnName));
 		}
 	}
 }

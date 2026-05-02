@@ -14,7 +14,7 @@ public class CrossChainTradeSummary {
 	private long tradeTimestamp;
 
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	private long qortAmount;
+	private long nativeAmount;
 
 	@Deprecated
 	@Schema(description = "DEPRECATED: use foreignAmount instead")
@@ -36,7 +36,7 @@ public class CrossChainTradeSummary {
 
 	public CrossChainTradeSummary(CrossChainTradeData crossChainTradeData, long timestamp) {
 		this.tradeTimestamp = timestamp;
-		this.qortAmount = crossChainTradeData.qortAmount;
+		this.nativeAmount = crossChainTradeData.nativeAmount;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
 		this.btcAmount = this.foreignAmount;
 		this.sellerAddress = crossChainTradeData.qortalCreator;
@@ -48,8 +48,8 @@ public class CrossChainTradeSummary {
 		return this.tradeTimestamp;
 	}
 
-	public long getQortAmount() {
-		return this.qortAmount;
+	public long getNativeAmount() {
+		return this.nativeAmount;
 	}
 
 	public long getBtcAmount() {

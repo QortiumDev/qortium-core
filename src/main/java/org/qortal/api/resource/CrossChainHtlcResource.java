@@ -179,9 +179,9 @@ public class CrossChainHtlcResource {
 	@Path("/redeem/{ataddress}")
 	@Operation(
 			summary = "Redeems HTLC associated with supplied AT",
-			description = "To be used by a QORT seller (Bob) who needs to redeem LTC/DOGE/etc proceeds that are stuck in a P2SH.<br>" +
+			description = "To be used by a native-asset seller (Bob) who needs to redeem LTC/DOGE/etc proceeds that are stuck in a P2SH.<br>" +
 					"This requires Bob's trade bot data to be present in the database for this AT.<br>" +
-					"It will fail if the buyer has yet to redeem the QORT held in the AT.",
+					"It will fail if the buyer has yet to redeem the native asset held in the AT.",
 			responses = {
 					@ApiResponse(
 							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "boolean"))
@@ -238,7 +238,7 @@ public class CrossChainHtlcResource {
 	@Path("/redeemAll")
 	@Operation(
 			summary = "Redeems HTLC for all applicable ATs in tradebot data",
-			description = "To be used by a QORT seller (Bob) who needs to redeem LTC/DOGE/etc proceeds that are stuck in P2SH transactions.<br>" +
+			description = "To be used by a native-asset seller (Bob) who needs to redeem LTC/DOGE/etc proceeds that are stuck in P2SH transactions.<br>" +
 					"This requires Bob's trade bot data to be present in the database for any ATs that need redeeming.<br>" +
 					"Returns true if at least one trade is redeemed. More detail is available in the log.txt.* file.",
 			responses = {
@@ -360,10 +360,10 @@ public class CrossChainHtlcResource {
 			if (foreignBlockchainReceivingAccountInfo == null || foreignBlockchainReceivingAccountInfo.length != 20)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-			// Make sure the receiving address isn't a QORT address, given that we can share the same field for both QORT and foreign blockchains
+			// Make sure the receiving address isn't a native-chain address, given that we can share the same field for both native-chain and foreign blockchains
 			if (Crypto.isValidAddress(foreignBlockchainReceivingAccountInfo))
 				if (Base58.encode(foreignBlockchainReceivingAccountInfo).startsWith("Q"))
-					// This is likely a QORT address, not a foreign blockchain
+					// This is likely a native-chain address, not a foreign blockchain
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 
@@ -425,7 +425,7 @@ public class CrossChainHtlcResource {
 	@Path("/refund/{ataddress}")
 	@Operation(
 			summary = "Refunds HTLC associated with supplied AT",
-			description = "To be used by a QORT buyer (Alice) who needs to refund their LTC/DOGE/etc that is stuck in a P2SH.<br>" +
+			description = "To be used by a native-asset buyer (Alice) who needs to refund their LTC/DOGE/etc that is stuck in a P2SH.<br>" +
 					"This requires Alice's trade bot data to be present in the database for this AT.<br>" +
 					"It will fail if it's already redeemed by the seller, or if the lockTime (60 minutes) hasn't passed yet.",
 			responses = {
@@ -474,7 +474,7 @@ public class CrossChainHtlcResource {
 	@Path("/refundAll")
 	@Operation(
 			summary = "Refunds HTLC for all applicable ATs in tradebot data",
-			description = "To be used by a QORT buyer (Alice) who needs to refund their LTC/DOGE/etc proceeds that are stuck in P2SH transactions.<br>" +
+			description = "To be used by a native-asset buyer (Alice) who needs to refund their LTC/DOGE/etc proceeds that are stuck in P2SH transactions.<br>" +
 					"This requires Alice's trade bot data to be present in the database for this AT.<br>" +
 					"It will fail if it's already redeemed by the seller, or if the lockTime (60 minutes) hasn't passed yet.",
 			responses = {
@@ -575,9 +575,9 @@ public class CrossChainHtlcResource {
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			// If the AT is "finished" then it will have a zero balance
-			// In these cases we should avoid HTLC refunds if tbe QORT haven't been returned to the seller
+			// In these cases we should avoid HTLC refunds if the native asset has not been returned to the seller
 			if (atData.getIsFinished() && crossChainTradeData.mode != AcctMode.REFUNDED && crossChainTradeData.mode != AcctMode.CANCELLED) {
-				LOGGER.info(String.format("Skipping AT %s because the QORT has already been redeemed by the buyer", atAddress));
+				LOGGER.info(String.format("Skipping AT %s because the native asset has already been redeemed by the buyer", atAddress));
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 			}
 
