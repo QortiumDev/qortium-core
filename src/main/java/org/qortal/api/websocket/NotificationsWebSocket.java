@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * WebSocket endpoint for the Qortal notification system.
+ * WebSocket endpoint for the node notification system.
  *
  * <p>Clients connect to {@code /websockets/notifications} and send a JSON message
  * to register their subscription rules:

@@ -10,7 +10,7 @@ public class ATStateData {
 	private Long fees;
 	private boolean isInitial;
 
-	// Qortal-AT-specific
+	// Chain AT-specific
 	private Long sleepUntilMessageTimestamp;
 
 	// Constructors

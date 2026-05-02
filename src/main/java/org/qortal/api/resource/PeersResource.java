@@ -454,7 +454,7 @@ public class PeersResource {
 			content = @Content(
 				mediaType = MediaType.TEXT_PLAIN,
 				schema = @Schema(
-					type = "string", example = "node2.qortal.org"
+					type = "string", example = "node.example.org"
 				)
 			)
 		),

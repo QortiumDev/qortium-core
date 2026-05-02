@@ -25,7 +25,7 @@ public class UpdateNameTransactionData extends TransactionData {
 	@Schema(description = "new name", example = "my-new-name")
 	private String newName;
 
-	@Schema(description = "replacement simple name-related info in JSON or text format", example = "Registered Name on the Qortal Chain")
+	@Schema(description = "replacement simple name-related info in JSON or text format", example = "Name metadata for this chain")
 	private String newData;
 
 	// For internal use

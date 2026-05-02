@@ -12,7 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortal.api.Security;
 
 @OpenAPIDefinition(
-		info = @Info( title = "Qortal API", description = "NOTE: byte-arrays are encoded in Base58" ),
+		info = @Info( title = "Qortium API", description = "NOTE: byte-arrays are encoded in Base58" ),
 		tags = {
 			@Tag(name = "Addresses"),
 			@Tag(name = "Admin"),

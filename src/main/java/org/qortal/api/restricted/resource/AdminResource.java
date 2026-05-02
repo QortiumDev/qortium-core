@@ -642,12 +642,12 @@ public class AdminResource {
 			// Check seed is valid
 			PrivateKeyAccount mintingAccount = new PrivateKeyAccount(repository, seed);
 
-			// Qortal: account must derive to known reward-share public key
+			// Account must derive to known reward-share public key
 			RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(mintingAccount.getPublicKey());
 			if (rewardShareData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
-			// Qortal: check reward-share's minting account is still allowed to mint
+			// Check reward-share's minting account is still allowed to mint
 			Account rewardShareMintingAccount = new Account(repository, rewardShareData.getMinter());
 			if (!rewardShareMintingAccount.canMint(false))
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.CANNOT_MINT);
@@ -845,7 +845,7 @@ public class AdminResource {
 			content = @Content(
 				mediaType = MediaType.TEXT_PLAIN,
 				schema = @Schema(
-					type = "string", example = "node2.qortal.org"
+					type = "string", example = "node.example.org"
 				)
 			)
 		),

@@ -25,7 +25,7 @@ public class RegisterNameTransactionData extends TransactionData {
 	@Schema(description = "requested name", example = "my-name")
 	private String name;
 
-	@Schema(description = "simple name-related info in JSON or text format", example = "Registered Name on the Qortal Chain")
+	@Schema(description = "simple name-related info in JSON or text format", example = "Name metadata for this chain")
 	private String data;
 
 	// For internal use
