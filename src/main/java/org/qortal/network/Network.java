@@ -2377,7 +2377,7 @@ public class Network {
                 InetAddress address = InetAddress.getByName(peerData.getAddress().getHost());
 
                 // Don't send 'local' addresses if peer is not 'local'.
-                // e.g. don't send localhost:9084 to node4.qortal.org
+                // e.g. don't send localhost:9084 to example-peer.invalid
                 if (!peer.isLocal() && Peer.isAddressLocal(address)) {
                     continue;
                 }

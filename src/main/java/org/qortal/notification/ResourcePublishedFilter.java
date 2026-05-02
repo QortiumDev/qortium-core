@@ -16,7 +16,7 @@ import java.util.List;
  *   "event": "RESOURCE_PUBLISHED",
  *   "resourceFilter": {
  *     "service": "BLOG",
- *     "query": "qortal",
+ *     "query": "network",
  *     "names": ["alice", "bob"],
  *     "identifier": "post",
  *     "title": "hello",

@@ -27,7 +27,7 @@ import java.util.regex.Matcher;
  *
  * This enum models both inbound and outbound handshakes and coordinates message
  * exchange, validation, Proof-of-Work (PoW), and duplicate-connection resolution
- * for P2P Network and Qortal Data Network (QDN) peers.
+ * for P2P Network and QDN peers.
  *
  * ---------------------------------------------------------------------------
  * HIGH-LEVEL WORKFLOW
@@ -75,7 +75,7 @@ import java.util.regex.Matcher;
  *
  * 6. COMPLETED
  *    - Handshake successfully finalized.
- *    - Ownership is handed off to P2P Network or Qortal Data Networ via 
+ *    - Ownership is handed off to P2P Network or QDN via
  * 		onHandshakeCompleted().
  *
  * ---------------------------------------------------------------------------

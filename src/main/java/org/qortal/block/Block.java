@@ -1528,7 +1528,7 @@ public class Block {
 
 	/** Returns whether block's minter is actually allowed to mint this block. */
 	protected boolean isMinterValid(Block parentBlock) throws DataException {
-		// Qortal: block's minter public key must be known reward-share public key
+		// Block's minter public key must be known reward-share public key
 		RewardShareData rewardShareData = this.repository.getAccountRepository().getRewardShare(this.blockData.getMinterPublicKey());
 		if (rewardShareData == null)
 			return false;

@@ -43,6 +43,8 @@ public class SslUtils {
     private static final String CA_KEY_PATH = "ca.key";
     private static final String SERVER_CERT_PATH = "server.crt";
     private static final String SERVER_KEY_PATH = "server.key";
+    private static final String LOCAL_CA_SUBJECT = "CN=qortium-local-ca";
+    private static final String LOCAL_SERVER_SUBJECT = "CN=qortium-local-server";
 
     static {
         Security.addProvider(new BouncyCastleProvider());
@@ -69,7 +71,7 @@ public class SslUtils {
             KeyPair keyPair = kpGen.generateKeyPair();
 
             // Create self-signed certificate
-            X500Name subject = new X500Name("CN=qortal.org");
+            X500Name subject = new X500Name(LOCAL_CA_SUBJECT);
             BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
             Date notBefore = new Date();
             Date notAfter = new Date(System.currentTimeMillis() + (10L * 365 * 24 * 60 * 60 * 1000));
@@ -103,13 +105,13 @@ public class SslUtils {
         KeyPair serverKeyPair = kpGen.generateKeyPair();
 
         // Create server certificate
-        X500Name subject = new X500Name("CN=qortal-server"); // Standardize the CN
+        X500Name subject = new X500Name(LOCAL_SERVER_SUBJECT);
         BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
         Date notBefore = new Date();
         Date notAfter = new Date(System.currentTimeMillis() + (365 * 24 * 60 * 60 * 1000));
 
         JcaX509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
-                new X500Name("CN=qortal.org"),
+                new X500Name(LOCAL_CA_SUBJECT),
                 serial,
                 notBefore,
                 notAfter,

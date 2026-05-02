@@ -41,8 +41,8 @@ public class LiteNode {
 
 
     /**
-     * Fetch account data from peers for given QORT address
-     * @param address - the QORT address to query
+     * Fetch account data from peers for given account address
+     * @param address - the account address to query
      * @return accountData - the account data for this address, or null if not retrieved
      */
     public AccountData fetchAccountData(String address) {
@@ -55,8 +55,8 @@ public class LiteNode {
     }
 
     /**
-     * Fetch account balance data from peers for given QORT address and asset ID
-     * @param address - the QORT address to query
+     * Fetch account balance data from peers for given account address and asset ID
+     * @param address - the account address to query
      * @return balance - the balance for this address and assetId, or null if not retrieved
      */
     public AccountBalanceData fetchAccountBalance(String address, long assetId) {
@@ -69,8 +69,8 @@ public class LiteNode {
     }
 
     /**
-     * Fetch list of transactions for given QORT address
-     * @param address - the QORT address to query
+     * Fetch list of transactions for given account address
+     * @param address - the account address to query
      * @param limit - the maximum number of results to return
      * @param offset - the starting index
      * @return a list of TransactionData objects, or null if not retrieved
@@ -100,8 +100,8 @@ public class LiteNode {
     }
 
     /**
-     * Fetch list of names for given QORT address
-     * @param address - the QORT address to query
+     * Fetch list of names for given account address
+     * @param address - the account address to query
      * @return a list of NameData objects, or null if not retrieved
      */
     public List<NameData> fetchAccountNames(String address) {

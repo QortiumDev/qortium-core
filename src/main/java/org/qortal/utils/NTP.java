@@ -35,7 +35,7 @@ public class NTP implements Runnable {
 
 	/**
 	 * Bootstrap behavior:
-	 * Qortal message flow often needs "some" offset quickly (even if imperfect),
+	 * Peer message flow often needs "some" offset quickly (even if imperfect),
 	 * and can refine later. So:
 	 *  - if offset not set yet, set it as soon as we have a small number of replies
 	 *  - once set, switch to stricter quorum + filtering + weighting

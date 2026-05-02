@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - core: neutralize TLS and small runtime examples
+
+Neutralized remaining low-risk runtime examples and comments that still used inherited Qortal identity. Generated SSL certificate subjects now use Qortium-local names, account and resource comments use generic chain terminology, and internal HSQLDB notes describe the project-specific extension without Qortal branding.
+
 ### 2026-05-02 - tools: neutralize helper script naming and defaults
 
 Updated helper scripts that still exposed inherited Qortal naming in active defaults. API helpers now use neutral example hosts and Qortium API-key paths, QDN publishing uses `QDN_PRIVKEY`, the transaction helper uses current native cross-chain field names, and the transaction helper no longer depends on removed account last-reference state.

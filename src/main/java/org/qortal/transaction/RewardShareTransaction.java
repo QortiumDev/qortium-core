@@ -118,7 +118,7 @@ public class RewardShareTransaction extends Transaction {
 		if (!isCancellingSharePercent && !creator.canMint(false))
 			return ValidationResult.NOT_MINTING_ACCOUNT;
 
-		// Qortal: special rules in play depending whether recipient is also minter
+		// Special rules apply depending on whether recipient is also minter
 		final boolean isRecipientAlsoMinter = creator.getAddress().equals(recipient.getAddress());
 		if (!isCancellingSharePercent && !isRecipientAlsoMinter && !creator.canRewardShare())
 			return ValidationResult.ACCOUNT_CANNOT_REWARD_SHARE;

@@ -26,7 +26,7 @@ public class ResourceList {
 
     /**
      * ResourceList
-     * Creates or updates a list for the purpose of tracking resources on the Qortal network
+     * Creates or updates a list for the purpose of tracking resources on the network
      * This can be used for local blocking, or even for curating and sharing content lists
      * Lists are backed off to JSON files (in the lists folder) to ease sharing between nodes and users
      *

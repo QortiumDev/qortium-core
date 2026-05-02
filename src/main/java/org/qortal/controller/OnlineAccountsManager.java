@@ -337,7 +337,7 @@ public class OnlineAccountsManager {
             return false;
         }
 
-        // Qortal: check online account is actually reward-share
+        // Check online account is actually a reward-share
         RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(rewardSharePublicKey);
         if (rewardShareData == null) {
             // Reward-share doesn't even exist - probably not a good sign

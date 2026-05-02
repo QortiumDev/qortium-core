@@ -556,7 +556,7 @@ public class ArbitraryDataFile {
 
     public boolean delete() {
         // Delete the complete file
-        // ... but only if it's inside the Qortal data or temp directory
+        // ... but only if it's inside the data or temp directory
         if (FilesystemUtils.pathInsideDataOrTempPath(this.filePath)) {
             if (Files.exists(this.filePath)) {
                 try {
