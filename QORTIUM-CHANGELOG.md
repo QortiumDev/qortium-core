@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - core: replace Qortal QDN category metadata
+
+Replaced the inherited `QORTAL` arbitrary metadata category with a neutral `NETWORK` category. QDN helper validation and arbitrary metadata tests now use `NETWORK`, so new baseline chains no longer expose a Qortal-branded category in the active metadata vocabulary.
+
 ### 2026-05-02 - tools: neutralize auto-update release helpers
 
 Updated auto-update and release helper defaults from inherited Qortal release names to Qortium names. Release-note generation now defaults to the Qortium repository, working directory, JAR, EXE, ZIP, and release title, and the auto-update documentation no longer points at the old Qortal mirror example.

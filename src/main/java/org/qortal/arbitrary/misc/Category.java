@@ -37,7 +37,7 @@ public enum Category {
     PRODUCE("Products and Services"),
     PRODUCTIVITY("Productivity"),
     PSYCHOLOGY("Psychology"),
-    QORTAL("Qortal"),
+    NETWORK("Network"),
     SCIENCE("Science"),
     SELF_CARE("Self Care"),
     SELF_SUFFICIENCY("Self-Sufficiency and Homesteading"),

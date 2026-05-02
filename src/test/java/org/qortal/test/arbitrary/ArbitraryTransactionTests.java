@@ -397,7 +397,7 @@ public class ArbitraryTransactionTests extends Common {
             String title = "Test title";
             String description = "Test description";
             List<String> tags = Arrays.asList("Test", "tag", "another tag");
-            Category category = Category.QORTAL;
+            Category category = Category.NETWORK;
 
             // Register the name to Alice
             RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, "");

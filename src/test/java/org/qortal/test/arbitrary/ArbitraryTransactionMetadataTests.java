@@ -100,7 +100,7 @@ public class ArbitraryTransactionMetadataTests extends Common {
             String title = "Test title";
             String description = "Test description";
             List<String> tags = Arrays.asList("Test", "tag", "another tag");
-            Category category = Category.QORTAL;
+            Category category = Category.NETWORK;
 
             // Register the name to Alice
             RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, "");
@@ -152,7 +152,7 @@ public class ArbitraryTransactionMetadataTests extends Common {
             String title = "Test title";
             String description = "Test description";
             List<String> tags = Arrays.asList("Test", "tag", "another tag");
-            Category category = Category.QORTAL;
+            Category category = Category.NETWORK;
 
             // Register the name to Alice
             RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, "");
@@ -216,7 +216,7 @@ public class ArbitraryTransactionMetadataTests extends Common {
             String title = "Test title";
             String description = "Test description";
             List<String> tags = Arrays.asList("Test", "tag", "another tag");
-            Category category = Category.QORTAL;
+            Category category = Category.NETWORK;
 
             // Register the name to Alice
             RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, "");
@@ -432,7 +432,7 @@ public class ArbitraryTransactionMetadataTests extends Common {
     @Test
     public void testExistingCategories() {
         // Matching categories should be correctly located
-        assertEquals(Category.QORTAL, Category.uncategorizedValueOf("QORTAL"));
+        assertEquals(Category.NETWORK, Category.uncategorizedValueOf("NETWORK"));
         assertEquals(Category.TECHNOLOGY, Category.uncategorizedValueOf("TECHNOLOGY"));
     }
 
@@ -440,7 +440,7 @@ public class ArbitraryTransactionMetadataTests extends Common {
     public void testMissingCategory() {
         // Missing or invalid categories should fall back to UNCATEGORIZED
         assertEquals(Category.UNCATEGORIZED, Category.uncategorizedValueOf("INVALID_CATEGORY"));
-        assertEquals(Category.UNCATEGORIZED, Category.uncategorizedValueOf("Qortal")); // Case-sensitive match required
+        assertEquals(Category.UNCATEGORIZED, Category.uncategorizedValueOf("Network")); // Case-sensitive match required
     }
 
 }
