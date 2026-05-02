@@ -443,7 +443,7 @@ public class TransactionsResource {
 	public List<TransactionData> getPaymentsBetweenAddresses(
 			@Parameter(description = "Recipient's address") @QueryParam("recipientAddress") String recipientAddress,
 			@Parameter(description = "Sender's address") @QueryParam("senderAddress") String senderAddress,
-			@Parameter(description = "Payment amount (e.g., 1 or 1.5 for QORT)") @QueryParam("amount") String amountString,
+			@Parameter(description = "Payment amount (e.g., 1 or 1.5 native asset)") @QueryParam("amount") String amountString,
 			@Parameter(description = "Start block height") @QueryParam("startBlock") Integer startBlock,
 			@Parameter(description = "Block limit (number of blocks to search from startBlock)") @QueryParam("blockLimit") Integer blockLimit,
 			@Parameter(

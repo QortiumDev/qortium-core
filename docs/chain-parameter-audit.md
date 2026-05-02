@@ -50,8 +50,10 @@ Initial recommendation:
 
 `src/main/java/org/qortal/asset/Asset.java` now exposes `Asset.NATIVE = 0L`,
 with `Asset.QORT` kept as a temporary compatibility alias. Direct Java test use
-of `Asset.QORT` has been neutralized, but some comments, docs, cross-chain
-test labels, and ACCT classes still describe the native side as QORT.
+of `Asset.QORT` has been neutralized, and simple native-asset wording in
+comments, API descriptions, translations, and demo text now avoids hardcoded
+QORT labels. Cross-chain test labels and ACCT classes still describe the native
+side as QORT.
 
 The protocol still needs a stable native asset ID, but the display name should
 not be fixed to QORT in fork-facing code.

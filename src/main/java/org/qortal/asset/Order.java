@@ -34,7 +34,7 @@ public class Order {
 	private final BigInteger orderAmount;
 	private final BigInteger orderPrice;
 
-	/** Cache of price-pair units e.g. QORT/GOLD, but use getPricePair() instead! */
+	/** Cache of price-pair units e.g. NATIVE/GOLD, but use getPricePair() instead! */
 	private String cachedPricePair;
 
 	/** Cache of have-asset data - but use getHaveAsset() instead! */
@@ -120,7 +120,7 @@ public class Order {
 	/**
 	 * Returns price-pair in string form.
 	 * <p>
-	 * e.g. <tt>"QORT/GOLD"</tt>
+	 * e.g. <tt>"NATIVE/GOLD"</tt>
 	 */
 	public String getPricePair() throws DataException {
 		if (cachedPricePair == null)
@@ -129,11 +129,11 @@ public class Order {
 		return cachedPricePair;
 	}
 
-	/** Calculate price pair. (e.g. QORT/GOLD)
+	/** Calculate price pair. (e.g. NATIVE/GOLD)
 	 * <p>
 	 * Lowest-assetID asset is first,
-	 * so if QORT has assetID 0 and GOLD has assetID 10, then
-	 * the pricing pair is QORT/GOLD.
+	 * so if NATIVE has assetID 0 and GOLD has assetID 10, then
+	 * the pricing pair is NATIVE/GOLD.
 	 * <p>
 	 * This means the "amount" fields are expressed in terms
 	 * of the higher-assetID asset. (e.g. GOLD)
@@ -289,19 +289,19 @@ public class Order {
 		 * Potential matching order example:
 		 * 
 		 * Our order:
-		 * haveAssetId=[GOLD], wantAssetId=0 (QORT), amount=40 (GOLD), price=486 (QORT/GOLD)
-		 * This translates to "we have 40 GOLD and want QORT at a price of 486 QORT per GOLD"
-		 * If our order matched, we'd end up with 19,440 QORT at a cost of 19,440 / 486 = 40 GOLD.
+		 * haveAssetId=[GOLD], wantAssetId=0 (NATIVE), amount=40 (GOLD), price=486 (NATIVE/GOLD)
+		 * This translates to "we have 40 GOLD and want NATIVE at a price of 486 NATIVE per GOLD"
+		 * If our order matched, we'd end up with 19,440 NATIVE at a cost of 19,440 / 486 = 40 GOLD.
 		 * 
 		 * Their order:
-		 * haveAssetId=0 (QORT), wantAssetId=[GOLD], amount=40 (GOLD), price=486.00074844 (QORT/GOLD)
-		 * This translates to "they have QORT and want GOLD at a price of 486.00074844 QORT per GOLD"
+		 * haveAssetId=0 (NATIVE), wantAssetId=[GOLD], amount=40 (GOLD), price=486.00074844 (NATIVE/GOLD)
+		 * This translates to "they have NATIVE and want GOLD at a price of 486.00074844 NATIVE per GOLD"
 		 * 
-		 * Their price is better than our requested 486 QORT/GOLD so this order matches.
+		 * Their price is better than our requested 486 NATIVE/GOLD so this order matches.
 		 * 
-		 * Using their price, we end up with 40 * 486.00074844 = 19440.02993760 QORT. They end up with 40 GOLD.
+		 * Using their price, we end up with 40 * 486.00074844 = 19440.02993760 NATIVE. They end up with 40 GOLD.
 		 * 
-		 * If their order only had 36 GOLD left, only 36 * 486.00074844 = 17496.02694384 QORT would be traded.
+		 * If their order only had 36 GOLD left, only 36 * 486.00074844 = 17496.02694384 NATIVE would be traded.
 		 */
 
 		long ourPrice = this.orderData.getPrice();

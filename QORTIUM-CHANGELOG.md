@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-01 - docs: neutralize native asset wording
+
+Neutralized simple QORT wording in native-asset comments, API descriptions, translation strings, and demo UI text so those surfaces describe the chain's native asset without hardcoding the inherited QORT name. Cross-chain trade labels and `qortAmount`-style API fields remain unchanged for the dedicated cross-chain native-side refactor.
+
 ### 2026-05-01 - test/docs: replace test native asset aliases
 
 Replaced the remaining direct test use of the deprecated `Asset.QORT` alias with `Asset.NATIVE` and cleaned up nearby test comments that were only describing native-asset balances or fees. This removes another layer of inherited QORT naming from the test suite while deliberately leaving cross-chain QORT trade labels for the later native-side cross-chain cleanup.

@@ -496,7 +496,7 @@ public class Settings {
 	/**
 	 * Minimum Balance Recording
 	 *
-	 * The minimum recored balance change in Qortoshis (1/100000000 QORT)
+	 * The minimum recorded balance change in atomic native asset units (1/100000000 native asset)
 	 */
     private long minimumBalanceRecording = 100000000;
 

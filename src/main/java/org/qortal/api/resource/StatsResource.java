@@ -36,10 +36,10 @@ public class StatsResource {
 	@GET
 	@Path("/supply/circulating")
 	@Operation(
-		summary = "Fetch circulating QORT supply",
+		summary = "Fetch circulating native asset supply",
 		responses = {
 			@ApiResponse(
-					description = "circulating supply of QORT",
+					description = "circulating supply of native asset",
 					content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string", format = "number"))
 			)
 		}
