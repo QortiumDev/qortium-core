@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - runtime: neutralize log and testnet identity defaults
+
+Updated runtime and testnet defaults that still used inherited Qortal naming. Log files now default to Qortium names, the testnet stop script now looks for and reports Qortium processes, and the testnet bootstrap native asset is labelled generically as `NATIVE` instead of using the old QORT identity.
+
 ### 2026-05-02 - api: neutralize public API labels and examples
 
 Updated public API documentation labels and examples that still used inherited Qortal wording. The OpenAPI title now says Qortium API, name-transaction metadata examples use neutral chain wording, peer host examples use generic hostnames, and API-facing source comments no longer use Qortal as the public chain label.

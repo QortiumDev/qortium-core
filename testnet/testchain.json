@@ -70,7 +70,7 @@
 		"version": 4,
 		"timestamp": "1726152900000",
 		"transactions": [
-			{ "type": "ISSUE_ASSET", "assetName": "QORT", "description": "QORTAL coin", "quantity": 0, "isDivisible": true, "data": "{}" },
+			{ "type": "ISSUE_ASSET", "assetName": "NATIVE", "description": "Native asset", "quantity": 0, "isDivisible": true, "data": "{}" },
 			{ "type": "REWARD_SHARE", "minterPublicKey": "HFDmuc4HAAoVs9Siea3MugjBHasbotgVz2gsRDuLAAcB", "recipient": "QY82MasqEH6ChwXaETH4piMtE8Pk4NBWD3", "rewardSharePublicKey": "F35TbQXmgzz32cALj29jxzpdYSUKQvssqThLsZSabSXx", "sharePercent": 0 },
 			{ "type": "REWARD_SHARE", "minterPublicKey": "HmViWJ2SMRVTYNuMvNYFBX7DitXcEB2gBZasAN3uheJL", "recipient": "Qi3N6fNRrs15EHmkxYyWHyh4z3Dp2rVU2i", "rewardSharePublicKey": "8dsLkxj2C19iK2wob9YNDdQ2mdzyV9X6aQzfHdG1sWrp", "sharePercent": 0 },
 			{ "type": "REWARD_SHARE", "minterPublicKey": "79THiqG9Cftu7RFEA3SvW9G4YUim7qojhbyepb68trH4", "recipient": "QS7K9EsSDeCdb7T8kzZaFNGLomNmmET2Dr", "rewardSharePublicKey": "BuKWPsnu1sxxsFT2wNGCgcicm48ch4hhvQq9585P2pth", "sharePercent": 0 },
