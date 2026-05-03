@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - chat: restore general chat support
+
+Restored public groupless CHAT transactions by removing the inherited API, peer-import, and websocket blocks against messages with no group and no direct recipient. General Chat continues to use the existing CHAT validation rules, including MemoryPoW, timestamp bounds, data-size limits, block lists, and recent-message rate limiting, and tests now cover import, retrieval, direct-chat separation, and active-chat listing for group 0.
+
 ### 2026-05-03 - core: enforce group invite expiries
 
 Fixed group invite and ban expiry calculations so long time-to-live values do not overflow before being converted to milliseconds. Added timestamp-aware active-invite lookup for validation and group processing so expired invites can no longer be used to join closed groups or canceled as if they were still pending.

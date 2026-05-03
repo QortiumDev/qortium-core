@@ -52,12 +52,6 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 		if (txGroupIds != null && txGroupIds.size() == 1) {
 			int txGroupId = Integer.parseInt(txGroupIds.get(0));
 
-			// reject general chat
-			if (txGroupId == 0) {
-				session.close(4001, "invalid criteria");
-				return;
-			}
-
 			try (final Repository repository = RepositoryManager.getRepository()) {
 				List<ChatMessage> chatMessages = repository.getChatRepository().getMessagesMatchingCriteria(
 						null,
@@ -138,7 +132,7 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 			// There has been a group-membership change, but we're not interested
 			return;
 
-		// We only want group-based messages with our txGroupId
+		// We only want public messages with our txGroupId, including groupless general chat.
 		if (chatTransactionData.getRecipient() != null || chatTransactionData.getTxGroupId() != txGroupId)
 			return;
 

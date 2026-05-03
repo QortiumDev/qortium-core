@@ -792,11 +792,6 @@ public class TransactionsResource {
 		if (transactionData == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
 
-		// general chat transactions are invalid
-		if( transactionData.getType() == TransactionType.CHAT && transactionData.getTxGroupId() == 0 && transactionData.getRecipient() == null) {
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
-		}
-
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
