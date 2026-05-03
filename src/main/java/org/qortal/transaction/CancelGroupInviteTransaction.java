@@ -73,7 +73,7 @@ public class CancelGroupInviteTransaction extends Transaction {
 		Account invitee = getInvitee();
 
 		// Check invite exists
-		if (!this.repository.getGroupRepository().inviteExists(groupId, invitee.getAddress()))
+		if (!this.repository.getGroupRepository().inviteExists(groupId, invitee.getAddress(), this.cancelGroupInviteTransactionData.getTimestamp()))
 			return ValidationResult.INVITE_UNKNOWN;
 
 		// Check creator has enough funds

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: enforce group invite expiries
+
+Fixed group invite and ban expiry calculations so long time-to-live values do not overflow before being converted to milliseconds. Added timestamp-aware active-invite lookup for validation and group processing so expired invites can no longer be used to join closed groups or canceled as if they were still pending.
+
 ### 2026-05-03 - test: discard name integrity repair changes
 
 Updated name integrity repair tests to explicitly discard temporary repository changes after their assertions. This keeps the tests focused on repair behavior while preventing repository-close warnings about uncommitted test work.

@@ -102,7 +102,21 @@ public interface GroupRepository {
 
 	public GroupInviteData getInvite(int groupId, String invitee) throws DataException;
 
+	/**
+	 * IMPORTANT: when using getInvite() as part of validation, the timestamp must be that of the transaction that
+	 * is calling getInvite() as part of its validation. It must NOT be the current time, unless this is being
+	 * called outside of validation, as part of an on demand check for an invite existing.
+	 */
+	public GroupInviteData getInvite(int groupId, String invitee, long timestamp) throws DataException;
+
 	public boolean inviteExists(int groupId, String invitee) throws DataException;
+
+	/**
+	 * IMPORTANT: when using inviteExists() as part of validation, the timestamp must be that of the transaction that
+	 * is calling inviteExists() as part of its validation. It must NOT be the current time, unless this is being
+	 * called outside of validation, as part of an on demand check for an invite existing.
+	 */
+	public boolean inviteExists(int groupId, String invitee, long timestamp) throws DataException;
 
 	public List<GroupInviteData> getInvitesByGroupId(int groupId, Integer limit, Integer offset, Boolean reverse) throws DataException;
 

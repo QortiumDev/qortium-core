@@ -685,11 +685,43 @@ public class HSQLDBGroupRepository implements GroupRepository {
 	}
 
 	@Override
+	public GroupInviteData getInvite(int groupId, String invitee, long timestamp) throws DataException {
+		String sql = "SELECT inviter, expires_when, reference FROM GroupInvites WHERE group_id = ? AND invitee = ? "
+				+ "AND (expires_when IS NULL OR expires_when > ?)";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, groupId, invitee, timestamp)) {
+			if (resultSet == null)
+				return null;
+
+			String inviter = resultSet.getString(1);
+
+			Long expiry = resultSet.getLong(2);
+			if (expiry == 0 && resultSet.wasNull())
+				expiry = null;
+
+			byte[] reference = resultSet.getBytes(3);
+
+			return new GroupInviteData(groupId, inviter, invitee, expiry, reference);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch active group invite from repository", e);
+		}
+	}
+
+	@Override
 	public boolean inviteExists(int groupId, String invitee) throws DataException {
 		try {
 			return this.repository.exists("GroupInvites", "group_id = ? AND invitee = ?", groupId, invitee);
 		} catch (SQLException e) {
 			throw new DataException("Unable to check for group invite in repository", e);
+		}
+	}
+
+	@Override
+	public boolean inviteExists(int groupId, String invitee, long timestamp) throws DataException {
+		try {
+			return this.repository.exists("GroupInvites", "group_id = ? AND invitee = ? AND (expires_when IS NULL OR expires_when > ?)", groupId, invitee, timestamp);
+		} catch (SQLException e) {
+			throw new DataException("Unable to check for active group invite in repository", e);
 		}
 	}
 

@@ -242,8 +242,8 @@ public class Group {
 
 	// Invites
 
-	private GroupInviteData getInvite(String invitee) throws DataException {
-		return groupRepository.getInvite(this.groupData.getGroupId(), invitee);
+	private GroupInviteData getActiveInvite(String invitee, long timestamp) throws DataException {
+		return groupRepository.getInvite(this.groupData.getGroupId(), invitee, timestamp);
 	}
 
 	private void addInvite(GroupInviteTransactionData groupInviteTransactionData) throws DataException {
@@ -252,7 +252,7 @@ public class Group {
 		Long expiry = null;
 		int timeToLive = groupInviteTransactionData.getTimeToLive();
 		if (timeToLive != 0)
-			expiry = groupInviteTransactionData.getTimestamp() + timeToLive * 1000;
+			expiry = groupInviteTransactionData.getTimestamp() + timeToLive * 1000L;
 
 		GroupInviteData groupInviteData = new GroupInviteData(this.groupData.getGroupId(), inviter.getAddress(), invitee, expiry,
 				groupInviteTransactionData.getSignature());
@@ -279,7 +279,7 @@ public class Group {
 		Long expiry = null;
 		int timeToLive = groupBanTransactionData.getTimeToLive();
 		if (timeToLive != 0)
-			expiry = groupBanTransactionData.getTimestamp() + timeToLive * 1000;
+			expiry = groupBanTransactionData.getTimestamp() + timeToLive * 1000L;
 
 		// Save reference to this banning transaction so cancel-ban can rebuild ban during orphaning.
 		byte[] reference = groupBanTransactionData.getSignature();
@@ -611,7 +611,7 @@ public class Group {
 				groupBanTransactionData.setAdminReference(null);
 			} else {
 				// No join request, but there could be a pending invite
-				GroupInviteData groupInviteData = this.getInvite(offender);
+				GroupInviteData groupInviteData = this.getActiveInvite(offender, groupBanTransactionData.getTimestamp());
 				if (groupInviteData != null) {
 					// Save reference to invite so we can rebuild invite if orphaning,
 					// and differentiate between needing to rebuild join request and rebuild invite.
@@ -767,7 +767,7 @@ public class Group {
 		String invitee = cancelGroupInviteTransactionData.getInvitee();
 
 		// Save reference to invite transaction so invite can be rebuilt during orphaning.
-		GroupInviteData groupInviteData = this.getInvite(invitee);
+		GroupInviteData groupInviteData = this.getActiveInvite(invitee, cancelGroupInviteTransactionData.getTimestamp());
 		if( groupInviteData != null) {
 			cancelGroupInviteTransactionData.setInviteReference(groupInviteData.getReference());
 		}
@@ -791,7 +791,7 @@ public class Group {
 		Account joiner = new PublicKeyAccount(this.repository, joinGroupTransactionData.getJoinerPublicKey());
 
 		// Any pending invite?
-		GroupInviteData groupInviteData = this.getInvite(joiner.getAddress());
+		GroupInviteData groupInviteData = this.getActiveInvite(joiner.getAddress(), joinGroupTransactionData.getTimestamp());
 
 		// If there is no invites and this group is "closed" (i.e. invite-only) then
 		// this is now a pending "join request"

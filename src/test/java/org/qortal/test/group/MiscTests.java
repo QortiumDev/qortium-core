@@ -4,12 +4,17 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.block.BlockChain;
+import org.qortal.data.group.GroupInviteData;
 import org.qortal.data.group.GroupAdminData;
 import org.qortal.data.transaction.AddGroupAdminTransactionData;
+import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.CancelGroupInviteTransactionData;
 import org.qortal.data.transaction.CreateGroupTransactionData;
 import org.qortal.data.transaction.GroupInviteTransactionData;
 import org.qortal.data.transaction.JoinGroupTransactionData;
 import org.qortal.data.transaction.LeaveGroupTransactionData;
+import org.qortal.group.Group;
 import org.qortal.group.Group.ApprovalThreshold;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -148,6 +153,75 @@ public class MiscTests extends Common {
 	}
 
 	@Test
+	public void testJoinClosedGroupWithExpiredInviteCreatesJoinRequest() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+
+			int groupId = createGroup(repository, alice, "expired-invite-group", false);
+
+			int timeToLive = 1;
+			GroupInviteTransactionData inviteTransactionData = groupInviteAtTimestamp(repository, alice, groupId, bob.getAddress(),
+					timeToLive, TransactionUtils.nextTimestamp(repository) - 2000L);
+			long expiry = inviteTransactionData.getTimestamp() + timeToLive * 1000L;
+
+			assertNotNull(repository.getGroupRepository().getInvite(groupId, bob.getAddress()));
+			assertTrue(repository.getGroupRepository().inviteExists(groupId, bob.getAddress(), expiry - 1));
+			assertFalse(repository.getGroupRepository().inviteExists(groupId, bob.getAddress(), expiry));
+
+			joinGroup(repository, bob, groupId);
+
+			assertFalse(isMember(repository, bob.getAddress(), groupId));
+			assertTrue(repository.getGroupRepository().joinRequestExists(groupId, bob.getAddress()));
+		}
+	}
+
+	@Test
+	public void testCancelExpiredGroupInvite() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+
+			int groupId = createGroup(repository, alice, "expired-cancel-invite-group", false);
+
+			int timeToLive = 1;
+			GroupInviteTransactionData inviteTransactionData = groupInviteAtTimestamp(repository, alice, groupId, bob.getAddress(),
+					timeToLive, TransactionUtils.nextTimestamp(repository) - 2000L);
+			long expiry = inviteTransactionData.getTimestamp() + timeToLive * 1000L;
+
+			assertNotNull(repository.getGroupRepository().getInvite(groupId, bob.getAddress()));
+			assertFalse(repository.getGroupRepository().inviteExists(groupId, bob.getAddress(), expiry));
+
+			ValidationResult result = cancelGroupInvite(repository, alice, groupId, bob.getAddress());
+			assertEquals(ValidationResult.INVITE_UNKNOWN, result);
+			assertNotNull(repository.getGroupRepository().getInvite(groupId, bob.getAddress()));
+		}
+	}
+
+	@Test
+	public void testLongGroupInviteExpiryDoesNotOverflow() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+
+			int groupId = createGroup(repository, alice, "long-invite-group", false);
+
+			int timeToLive = 30 * 24 * 60 * 60;
+			GroupInviteTransactionData inviteTransactionData = groupInviteAtTimestamp(repository, alice, groupId, bob.getAddress(),
+					timeToLive, TransactionUtils.nextTimestamp(repository));
+
+			GroupInviteData inviteData = repository.getGroupRepository().getInvite(groupId, bob.getAddress());
+			long expectedExpiry = inviteTransactionData.getTimestamp() + timeToLive * 1000L;
+
+			assertEquals(Long.valueOf(expectedExpiry), inviteData.getExpiry());
+			assertTrue(repository.getGroupRepository().inviteExists(groupId, bob.getAddress(),
+					inviteTransactionData.getTimestamp() + 29L * 24 * 60 * 60 * 1000));
+			assertFalse(repository.getGroupRepository().inviteExists(groupId, bob.getAddress(),
+					inviteTransactionData.getTimestamp() + 31L * 24 * 60 * 60 * 1000));
+		}
+	}
+
+	@Test
 	public void testLeaveGroup() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -241,6 +315,26 @@ public class MiscTests extends Common {
 	private void groupInvite(Repository repository, PrivateKeyAccount admin, int groupId, String invitee, int timeToLive) throws DataException {
 		GroupInviteTransactionData transactionData = new GroupInviteTransactionData(TestTransaction.generateBase(admin), groupId, invitee, timeToLive);
 		TransactionUtils.signAndMint(repository, transactionData, admin);
+	}
+
+	private GroupInviteTransactionData groupInviteAtTimestamp(Repository repository, PrivateKeyAccount admin, int groupId, String invitee,
+			int timeToLive, long timestamp) throws DataException {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, admin.getPublicKey(),
+				BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp), null);
+		GroupInviteTransactionData transactionData = new GroupInviteTransactionData(baseTransactionData, groupId, invitee, timeToLive);
+		TransactionUtils.signAndMint(repository, transactionData, admin);
+
+		return transactionData;
+	}
+
+	private ValidationResult cancelGroupInvite(Repository repository, PrivateKeyAccount admin, int groupId, String invitee) throws DataException {
+		CancelGroupInviteTransactionData transactionData = new CancelGroupInviteTransactionData(TestTransaction.generateBase(admin), groupId, invitee);
+		ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, admin);
+
+		if (result == ValidationResult.OK)
+			BlockUtils.mintBlock(repository);
+
+		return result;
 	}
 
 	private void addGroupAdmin(Repository repository, PrivateKeyAccount owner, int groupId, String member) throws DataException {

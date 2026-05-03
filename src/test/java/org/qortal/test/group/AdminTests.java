@@ -5,6 +5,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.data.group.GroupAdminData;
+import org.qortal.data.group.GroupBanData;
 import org.qortal.data.transaction.*;
 import org.qortal.group.Group.ApprovalThreshold;
 import org.qortal.repository.DataException;
@@ -343,6 +344,32 @@ public class AdminTests extends Common {
 
 			// Confirm Bob now a member
 			assertTrue(isMember(repository, bob.getAddress(), groupId));
+		}
+	}
+
+	@Test
+	public void testLongGroupBanExpiryDoesNotOverflow() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+
+			int groupId = createGroup(repository, alice, "long-ban-group", true);
+
+			int timeToLive = 30 * 24 * 60 * 60;
+			GroupBanTransactionData transactionData = new GroupBanTransactionData(TestTransaction.generateBase(alice), groupId,
+					bob.getAddress(), "testing", timeToLive);
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.OK, result);
+			BlockUtils.mintBlock(repository);
+
+			GroupBanData banData = repository.getGroupRepository().getBan(groupId, bob.getAddress());
+			long expectedExpiry = transactionData.getTimestamp() + timeToLive * 1000L;
+
+			assertEquals(Long.valueOf(expectedExpiry), banData.getExpiry());
+			assertTrue(repository.getGroupRepository().banExists(groupId, bob.getAddress(),
+					transactionData.getTimestamp() + 29L * 24 * 60 * 60 * 1000));
+			assertFalse(repository.getGroupRepository().banExists(groupId, bob.getAddress(),
+					transactionData.getTimestamp() + 31L * 24 * 60 * 60 * 1000));
 		}
 	}
 
