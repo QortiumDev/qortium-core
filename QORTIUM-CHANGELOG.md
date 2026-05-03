@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: stop name-sale validation repairs
+
+Removed SELL_NAME, CANCEL_SELL_NAME, and BUY_NAME pre-processing that rebuilt name table state before validation. Updated name integrity tests so sale, cancel-sale, and buy-name validation reject missing current name state until an explicit name integrity rebuild restores the sale state.
+
 ### 2026-05-03 - core: stop update-name validation repairs
 
 Removed UPDATE_NAME pre-processing that rebuilt name table state before validation. Updated integrity tests so missing current-name and destination-name state is only repaired by explicit name integrity rebuilds, keeping update-name validation focused on current repository state.

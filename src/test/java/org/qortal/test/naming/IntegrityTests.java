@@ -501,9 +501,21 @@ public class IntegrityTests extends Common {
             Transaction transaction = Transaction.fromData(repository, sellTransactionData);
             transaction.sign(alice);
 
-            // Transaction should be valid, because the database inconsistency was fixed by SellNameTransaction.preProcess()
-            Transaction.ValidationResult result = transaction.importAsUnconfirmed();
-            assertTrue("Transaction should be valid", Transaction.ValidationResult.OK == result);
+            // Sell-name validation should not repair the Names table as a side effect
+            transaction.preProcess();
+            Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+            assertEquals("Missing name should remain invalid until explicit repair", Transaction.ValidationResult.NAME_DOES_NOT_EXIST, result);
+            assertNull(repository.getNameRepository().fromName(name));
+
+            // Explicit integrity repair should restore the missing name and make the sale valid
+            NamesDatabaseIntegrityCheck integrityCheck = new NamesDatabaseIntegrityCheck();
+            assertEquals(1, integrityCheck.rebuildName(name, repository));
+            assertEquals(data, repository.getNameRepository().fromName(name).getData());
+
+            result = transaction.isValidUnconfirmed();
+            assertEquals("Transaction should be valid after explicit repair", Transaction.ValidationResult.OK, result);
+
+            repository.discardChanges();
         }
     }
 
@@ -522,21 +534,15 @@ public class IntegrityTests extends Common {
             // Ensure the name exists and the data is correct
             assertEquals(data, repository.getNameRepository().fromName(name).getData());
 
-            // Now delete the name, to simulate a database inconsistency
-            repository.getNameRepository().delete(name);
-
-            // Ensure the name doesn't exist
-            assertNull(repository.getNameRepository().fromName(name));
-
-            // Attempt to sell the name
+            // Sell the name
             long amount = 123456;
             TransactionData sellTransactionData = new SellNameTransactionData(TestTransaction.generateBase(alice), name, amount);
             TransactionUtils.signAndMint(repository, sellTransactionData, alice);
 
-            // Ensure the name now exists
-            assertNotNull(repository.getNameRepository().fromName(name));
+            // Ensure the name now exists and is for sale
+            assertTrue(repository.getNameRepository().fromName(name).isForSale());
 
-            // Now delete the name again, to simulate another database inconsistency
+            // Now delete the name, to simulate a database inconsistency
             repository.getNameRepository().delete(name);
 
             // Ensure the name doesn't exist
@@ -549,9 +555,64 @@ public class IntegrityTests extends Common {
             Transaction transaction = Transaction.fromData(repository, buyTransactionData);
             transaction.sign(bob);
 
-            // Transaction should be valid, because the database inconsistency was fixed by SellNameTransaction.preProcess()
-            Transaction.ValidationResult result = transaction.importAsUnconfirmed();
-            assertTrue("Transaction should be valid", Transaction.ValidationResult.OK == result);
+            // Buy-name validation should not repair the Names table as a side effect
+            transaction.preProcess();
+            Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+            assertEquals("Missing name should remain invalid until explicit repair", Transaction.ValidationResult.NAME_DOES_NOT_EXIST, result);
+            assertNull(repository.getNameRepository().fromName(name));
+
+            // Explicit integrity repair should restore the missing name sale and make the buy valid
+            NamesDatabaseIntegrityCheck integrityCheck = new NamesDatabaseIntegrityCheck();
+            assertEquals(2, integrityCheck.rebuildName(name, repository));
+            assertTrue(repository.getNameRepository().fromName(name).isForSale());
+
+            result = transaction.isValidUnconfirmed();
+            assertEquals("Transaction should be valid after explicit repair", Transaction.ValidationResult.OK, result);
+
+            repository.discardChanges();
+        }
+    }
+
+    @Test
+    public void testCancelSellMissingName() throws DataException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String name = "test-name";
+            String data = "{\"age\":30}";
+
+            RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, data);
+            transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
+            TransactionUtils.signAndMint(repository, transactionData, alice);
+
+            long amount = 123456;
+            TransactionData sellTransactionData = new SellNameTransactionData(TestTransaction.generateBase(alice), name, amount);
+            TransactionUtils.signAndMint(repository, sellTransactionData, alice);
+
+            assertTrue(repository.getNameRepository().fromName(name).isForSale());
+
+            // Now delete the name, to simulate a database inconsistency
+            repository.getNameRepository().delete(name);
+            assertNull(repository.getNameRepository().fromName(name));
+
+            TransactionData cancelSellTransactionData = new CancelSellNameTransactionData(TestTransaction.generateBase(alice), name);
+            Transaction transaction = Transaction.fromData(repository, cancelSellTransactionData);
+            transaction.sign(alice);
+
+            // Cancel-sell validation should not repair the Names table as a side effect
+            transaction.preProcess();
+            Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+            assertEquals("Missing name should remain invalid until explicit repair", Transaction.ValidationResult.NAME_DOES_NOT_EXIST, result);
+            assertNull(repository.getNameRepository().fromName(name));
+
+            // Explicit integrity repair should restore the missing name sale and make cancel-sell valid
+            NamesDatabaseIntegrityCheck integrityCheck = new NamesDatabaseIntegrityCheck();
+            assertEquals(2, integrityCheck.rebuildName(name, repository));
+            assertTrue(repository.getNameRepository().fromName(name).isForSale());
+
+            result = transaction.isValidUnconfirmed();
+            assertEquals("Transaction should be valid after explicit repair", Transaction.ValidationResult.OK, result);
+
+            repository.discardChanges();
         }
     }
 

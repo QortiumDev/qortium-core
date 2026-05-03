@@ -3,7 +3,6 @@ package org.qortal.transaction;
 import com.google.common.base.Utf8;
 import org.qortal.account.Account;
 import org.qortal.asset.Asset;
-import org.qortal.controller.repository.NamesDatabaseIntegrityCheck;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.transaction.SellNameTransactionData;
@@ -91,13 +90,6 @@ public class SellNameTransaction extends Transaction {
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK; // All validation checks passed
-	}
-
-	@Override
-	public void preProcess() throws DataException {
-		// Directly access class field rather than local variable for clarity
-		NamesDatabaseIntegrityCheck namesDatabaseIntegrityCheck = new NamesDatabaseIntegrityCheck();
-		namesDatabaseIntegrityCheck.rebuildName(this.sellNameTransactionData.getName(), this.repository);
 	}
 
 	@Override
