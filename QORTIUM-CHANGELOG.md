@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: own CIYAM AT dependency fork
+
+Moved the CIYAM AT Maven dependency from the inherited IceBurst GitHub coordinate to the Qortium-controlled `QuickMythril/AT` fork while keeping the same pinned `v1.4.3` commit, making the change behavior-neutral. Added dependency provenance notes for the AT fork chain, the remaining inherited `altcoinj` fork, and the locally patched HSQLDB jar so future dependency ownership work has a tracked starting point.
+
 ### 2026-05-03 - core: allow ATs to use arbitrary spendable assets
 
 Updated AT payment validation so AT accounts can receive any existing spendable asset while still rejecting unspendable assets. ATs can now pay arbitrary spendable assets through the asset-specific payout function, including native asset surplus after reserving the current round's maximum execution fees. Tests cover non-configured asset deposits, payouts, native surplus payouts, and unspendable asset rejection.
