@@ -389,7 +389,8 @@ public class HSQLDBDatabaseUpdates {
 
 					// Add support for UPDATE_ASSET transactions
 					stmt.execute("CREATE TABLE UpdateAssetTransactions (signature Signature, owner AccountPublicKey NOT NULL, asset_id AssetID NOT NULL, "
-									+ "new_owner AccountAddress NOT NULL, new_description GenericDescription NOT NULL, new_data AssetData NOT NULL, "
+									+ "new_owner AccountAddress NOT NULL, new_name AssetName NOT NULL, "
+									+ "new_description GenericDescription NOT NULL, new_data AssetData NOT NULL, reduced_new_name AssetName NOT NULL, "
 									+ "orphan_reference Signature, " + TRANSACTION_KEYS + ")");
 
 					// Create Asset Order Transactions
@@ -1074,6 +1075,8 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "UpdateGroupTransactions", "reduced_new_name", "GroupName DEFAULT '' NOT NULL");
 					addColumnIfMissing(connection, "UpdateNameTransactions", "is_primary", "BOOLEAN");
 					addColumnIfMissing(connection, "UpdateNameTransactions", "previous_primary_name", "RegisteredName");
+					addColumnIfMissing(connection, "UpdateAssetTransactions", "new_name", "AssetName DEFAULT '' NOT NULL");
+					addColumnIfMissing(connection, "UpdateAssetTransactions", "reduced_new_name", "AssetName DEFAULT '' NOT NULL");
 					renameColumnIfExists(connection, "TradeBotStates", "qort_amount", "native_amount");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");

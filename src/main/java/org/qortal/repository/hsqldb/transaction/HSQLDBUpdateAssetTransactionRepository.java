@@ -17,7 +17,8 @@ public class HSQLDBUpdateAssetTransactionRepository extends HSQLDBTransactionRep
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT asset_id, new_owner, new_description, new_data, orphan_reference FROM UpdateAssetTransactions WHERE signature = ?";
+		String sql = "SELECT asset_id, new_owner, new_name, new_description, new_data, reduced_new_name, orphan_reference "
+				+ "FROM UpdateAssetTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
@@ -25,11 +26,13 @@ public class HSQLDBUpdateAssetTransactionRepository extends HSQLDBTransactionRep
 
 			long assetId = resultSet.getLong(1);
 			String newOwner = resultSet.getString(2);
-			String newDescription = resultSet.getString(3);
-			String newData = resultSet.getString(4);
-			byte[] orphanReference = resultSet.getBytes(5);
+			String newName = resultSet.getString(3);
+			String newDescription = resultSet.getString(4);
+			String newData = resultSet.getString(5);
+			String reducedNewName = resultSet.getString(6);
+			byte[] orphanReference = resultSet.getBytes(7);
 
-			return new UpdateAssetTransactionData(baseTransactionData, assetId, newOwner, newDescription, newData, orphanReference);
+			return new UpdateAssetTransactionData(baseTransactionData, assetId, newOwner, newName, newDescription, newData, reducedNewName, orphanReference);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch update asset transaction from repository", e);
 		}
@@ -45,8 +48,10 @@ public class HSQLDBUpdateAssetTransactionRepository extends HSQLDBTransactionRep
 				.bind("owner", updateAssetTransactionData.getOwnerPublicKey())
 				.bind("asset_id", updateAssetTransactionData.getAssetId())
 				.bind("new_owner", updateAssetTransactionData.getNewOwner())
+				.bind("new_name", updateAssetTransactionData.getNewName())
 				.bind("new_description", updateAssetTransactionData.getNewDescription())
 				.bind("new_data", updateAssetTransactionData.getNewData())
+				.bind("reduced_new_name", updateAssetTransactionData.getReducedNewName())
 				.bind("orphan_reference", updateAssetTransactionData.getOrphanReference());
 
 		try {

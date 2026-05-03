@@ -10,6 +10,7 @@ import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.UpdateAssetTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
+import org.qortal.utils.Unicode;
 
 import java.util.Collections;
 import java.util.List;
@@ -53,6 +54,18 @@ public class UpdateAssetTransaction extends Transaction {
 		if (!Crypto.isValidAddress(this.updateAssetTransactionData.getNewOwner()))
 			return ValidationResult.INVALID_ADDRESS;
 
+		// Check new name (0 length means DO NOT CHANGE name)
+		String newName = this.updateAssetTransactionData.getNewName();
+		int newNameLength = Utf8.encodedLength(newName);
+		if (newNameLength != 0) {
+			if (newNameLength < Asset.MIN_NAME_SIZE || newNameLength > Asset.MAX_NAME_SIZE)
+				return ValidationResult.INVALID_NAME_LENGTH;
+
+			// Check name is in normalized form (no leading/trailing whitespace, etc.)
+			if (!newName.equals(Unicode.normalize(newName)))
+				return ValidationResult.NAME_NOT_NORMALIZED;
+		}
+
 		// Check new description size bounds. Note: zero length means DO NOT CHANGE description
 		int newDescriptionLength = Utf8.encodedLength(this.updateAssetTransactionData.getNewDescription());
 		if (newDescriptionLength > Asset.MAX_DESCRIPTION_SIZE)
@@ -85,6 +98,12 @@ public class UpdateAssetTransaction extends Transaction {
 
 		if (!assetData.getOwner().equals(currentOwner.getAddress()))
 			return ValidationResult.INVALID_ASSET_OWNER;
+
+		if (!this.updateAssetTransactionData.getNewName().isEmpty()) {
+			AssetData existingAssetData = this.repository.getAssetRepository().fromReducedAssetName(this.updateAssetTransactionData.getReducedNewName());
+			if (existingAssetData != null && existingAssetData.getAssetId() != this.updateAssetTransactionData.getAssetId())
+				return ValidationResult.ASSET_ALREADY_EXISTS;
+		}
 
 		return ValidationResult.OK;
 	}

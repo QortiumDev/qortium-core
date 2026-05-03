@@ -77,8 +77,13 @@ public class Asset {
 		// New reference is this transaction's signature
 		this.assetData.setReference(updateAssetTransactionData.getSignature());
 
-		// Update asset's owner, description and data
+		// Update asset's owner, name, description and data
 		this.assetData.setOwner(updateAssetTransactionData.getNewOwner());
+
+		if (!updateAssetTransactionData.getNewName().isEmpty()) {
+			this.assetData.setName(updateAssetTransactionData.getNewName());
+			this.assetData.setReducedAssetName(updateAssetTransactionData.getReducedNewName());
+		}
 
 		if (!updateAssetTransactionData.getNewDescription().isEmpty())
 			this.assetData.setDescription(updateAssetTransactionData.getNewDescription());
@@ -96,14 +101,15 @@ public class Asset {
 
 		/*
 		 * It's possible the previous transaction might be an UPDATE_ASSET that didn't change
-		 * description/data fields and so we have to keep going back until we find an actual value,
+		 * name/description/data fields and so we have to keep going back until we find an actual value,
 		 * even to the original ISSUE_ASSET transaction if necessary.
-		 * 
+		 *
 		 * So we need to keep track of whether we still need
-		 * a previous description and/or data so we can stop looking.
+		 * a previous name, description and/or data so we can stop looking.
 		 */
-		boolean needDescription = updateAssetTransactionData.getNewDescription() != null;
-		boolean needData = updateAssetTransactionData.getNewData() != null;
+		boolean needName = !updateAssetTransactionData.getNewName().isEmpty();
+		boolean needDescription = !updateAssetTransactionData.getNewDescription().isEmpty();
+		boolean needData = !updateAssetTransactionData.getNewData().isEmpty();
 
 		byte[] previousTransactionSignature = this.assetData.getReference();
 
@@ -123,6 +129,12 @@ public class Asset {
 					String ownerAddress = Crypto.toAddress(previousIssueAssetTransactionData.getCreatorPublicKey());
 					this.assetData.setOwner(ownerAddress);
 
+					if (needName) {
+						this.assetData.setName(previousIssueAssetTransactionData.getAssetName());
+						this.assetData.setReducedAssetName(previousIssueAssetTransactionData.getReducedAssetName());
+						needName = false;
+					}
+
 					if (needDescription) {
 						this.assetData.setDescription(previousIssueAssetTransactionData.getDescription());
 						needDescription = false;
@@ -140,6 +152,12 @@ public class Asset {
 
 					this.assetData.setOwner(previousUpdateAssetTransactionData.getNewOwner());
 
+					if (needName && !previousUpdateAssetTransactionData.getNewName().isEmpty()) {
+						this.assetData.setName(previousUpdateAssetTransactionData.getNewName());
+						this.assetData.setReducedAssetName(previousUpdateAssetTransactionData.getReducedNewName());
+						needName = false;
+					}
+
 					if (needDescription && !previousUpdateAssetTransactionData.getNewDescription().isEmpty()) {
 						this.assetData.setDescription(previousUpdateAssetTransactionData.getNewDescription());
 						needDescription = false;
@@ -151,7 +169,7 @@ public class Asset {
 					}
 
 					// Get signature for previous transaction in chain, just in case we need it
-					if (needDescription || needData)
+					if (needName || needDescription || needData)
 						previousTransactionSignature = previousUpdateAssetTransactionData.getOrphanReference();
 
 					break;
@@ -161,7 +179,7 @@ public class Asset {
 					throw new IllegalStateException("Invalid referenced transaction when orphaning UPDATE_ASSET");
 			}
 
-		} while (needDescription || needData);
+		} while (needName || needDescription || needData);
 
 		// Save reverted asset
 		this.repository.getAssetRepository().save(this.assetData);

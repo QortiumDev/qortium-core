@@ -15,6 +15,8 @@ public interface AssetRepository {
 
 	public AssetData fromAssetName(String assetName) throws DataException;
 
+	public AssetData fromReducedAssetName(String reducedAssetName) throws DataException;
+
 	public boolean assetExists(long assetId) throws DataException;
 
 	public boolean assetExists(String assetName) throws DataException;

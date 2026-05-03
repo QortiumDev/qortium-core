@@ -2,6 +2,7 @@ package org.qortal.data.transaction;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.qortal.transaction.Transaction.TransactionType;
+import org.qortal.utils.Unicode;
 
 import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.XmlAccessType;
@@ -19,10 +20,16 @@ public class UpdateAssetTransactionData extends TransactionData {
 	private byte[] ownerPublicKey;
 	@Schema(description = "asset new owner's address", example = "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v")
 	private String newOwner;
+	@Schema(description = "asset new name; empty means no change", example = "GOLD")
+	private String newName;
 	@Schema(description = "asset new description", example = "Gold asset - 1 unit represents one 1kg of gold")
 	private String newDescription;
 	@Schema(description = "new asset-related data, typically JSON", example = "{\"logo\": \"data:image/jpeg;base64,/9j/4AAQSkZJRgA==\"}")
 	private String newData;
+	// No need to expose this via API
+	@XmlTransient
+	@Schema(hidden = true)
+	private String reducedNewName;
 	// No need to expose this via API
 	@XmlTransient
 	@Schema(hidden = true)
@@ -37,24 +44,43 @@ public class UpdateAssetTransactionData extends TransactionData {
 
 	public void afterUnmarshal(Unmarshaller u, Object parent) {
 		this.creatorPublicKey = this.ownerPublicKey;
+		if (this.newName == null)
+			this.newName = "";
+
+		this.reducedNewName = Unicode.sanitize(this.newName);
 	}
 
 	/** From repository */
 	public UpdateAssetTransactionData(BaseTransactionData baseTransactionData,
-			long assetId, String newOwner, String newDescription, String newData, byte[] orphanReference) {
+			long assetId, String newOwner, String newName, String newDescription, String newData,
+			String reducedNewName, byte[] orphanReference) {
 		super(TransactionType.UPDATE_ASSET, baseTransactionData);
 
 		this.assetId = assetId;
 		this.ownerPublicKey = baseTransactionData.creatorPublicKey;
 		this.newOwner = newOwner;
+		this.newName = newName;
 		this.newDescription = newDescription;
 		this.newData = newData;
+		this.reducedNewName = reducedNewName;
 		this.orphanReference = orphanReference;
+	}
+
+	/** From repository */
+	public UpdateAssetTransactionData(BaseTransactionData baseTransactionData,
+			long assetId, String newOwner, String newDescription, String newData, byte[] orphanReference) {
+		this(baseTransactionData, assetId, newOwner, "", newDescription, newData, "", orphanReference);
+	}
+
+	/** From network/API */
+	public UpdateAssetTransactionData(BaseTransactionData baseTransactionData, long assetId, String newOwner, String newName, String newDescription, String newData) {
+		this(baseTransactionData, assetId, newOwner, newName != null ? newName : "", newDescription, newData,
+				Unicode.sanitize(newName != null ? newName : ""), null);
 	}
 
 	/** From network/API */
 	public UpdateAssetTransactionData(BaseTransactionData baseTransactionData, long assetId, String newOwner, String newDescription, String newData) {
-		this(baseTransactionData, assetId, newOwner, newDescription, newData, null);
+		this(baseTransactionData, assetId, newOwner, "", newDescription, newData);
 	}
 
 	// Getters/Setters
@@ -71,12 +97,20 @@ public class UpdateAssetTransactionData extends TransactionData {
 		return this.newOwner;
 	}
 
+	public String getNewName() {
+		return this.newName;
+	}
+
 	public String getNewDescription() {
 		return this.newDescription;
 	}
 
 	public String getNewData() {
 		return this.newData;
+	}
+
+	public String getReducedNewName() {
+		return this.reducedNewName;
 	}
 
 	public byte[] getOrphanReference() {

@@ -80,6 +80,34 @@ public class HSQLDBAssetRepository implements AssetRepository {
 	}
 
 	@Override
+	public AssetData fromReducedAssetName(String reducedAssetName) throws DataException {
+		String sql = "SELECT owner, asset_id, asset_name, description, quantity, is_divisible, data, "
+				+ "is_unspendable, creation_group_id, reference "
+				+ "FROM Assets WHERE reduced_asset_name = ?";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, reducedAssetName)) {
+			if (resultSet == null)
+				return null;
+
+			String owner = resultSet.getString(1);
+			long assetId = resultSet.getLong(2);
+			String assetName = resultSet.getString(3);
+			String description = resultSet.getString(4);
+			long quantity = resultSet.getLong(5);
+			boolean isDivisible = resultSet.getBoolean(6);
+			String data = resultSet.getString(7);
+			boolean isUnspendable = resultSet.getBoolean(8);
+			int creationGroupId = resultSet.getInt(9);
+			byte[] reference = resultSet.getBytes(10);
+
+			return new AssetData(assetId, owner, assetName, description, quantity, isDivisible, data, isUnspendable,
+					creationGroupId, reference, reducedAssetName);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch asset from repository", e);
+		}
+	}
+
+	@Override
 	public boolean assetExists(long assetId) throws DataException {
 		try {
 			return this.repository.exists("Assets", "asset_id = ?", assetId);

@@ -17,11 +17,12 @@ import java.nio.ByteBuffer;
 public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 
 	// Property lengths
+	private static final int NEW_NAME_SIZE_LENGTH = INT_LENGTH;
 	private static final int NEW_OWNER_LENGTH = ADDRESS_LENGTH;
 	private static final int NEW_DESCRIPTION_SIZE_LENGTH = INT_LENGTH;
 	private static final int NEW_DATA_SIZE_LENGTH = INT_LENGTH;
 
-	private static final int EXTRAS_LENGTH = ASSET_ID_LENGTH + NEW_OWNER_LENGTH + NEW_DESCRIPTION_SIZE_LENGTH
+	private static final int EXTRAS_LENGTH = ASSET_ID_LENGTH + NEW_NAME_SIZE_LENGTH + NEW_OWNER_LENGTH + NEW_DESCRIPTION_SIZE_LENGTH
 			+ NEW_DATA_SIZE_LENGTH;
 
 	protected static final TransactionLayout layout;
@@ -34,6 +35,8 @@ public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 		layout.add("asset owner's public key", TransformationType.PUBLIC_KEY);
 		addMempowFeeNonceToLayout(layout, TransactionType.UPDATE_ASSET);
 		layout.add("asset ID", TransformationType.LONG);
+		layout.add("asset new name length", TransformationType.INT);
+		layout.add("asset new name", TransformationType.STRING);
 		layout.add("asset new owner", TransformationType.ADDRESS);
 		layout.add("asset new description length", TransformationType.INT);
 		layout.add("asset new description", TransformationType.STRING);
@@ -53,6 +56,8 @@ public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 
 		long assetId = byteBuffer.getLong();
 
+		String newName = Serialization.deserializeSizedString(byteBuffer, Asset.MAX_NAME_SIZE);
+
 		String newOwner = Serialization.deserializeAddress(byteBuffer);
 
 		String newDescription = Serialization.deserializeSizedString(byteBuffer, Asset.MAX_DESCRIPTION_SIZE);
@@ -66,13 +71,14 @@ public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, nonce, signature);
 
-		return new UpdateAssetTransactionData(baseTransactionData, assetId, newOwner, newDescription, newData);
+		return new UpdateAssetTransactionData(baseTransactionData, assetId, newOwner, newName, newDescription, newData);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
 		UpdateAssetTransactionData updateAssetTransactionData = (UpdateAssetTransactionData) transactionData;
 
 		return getBaseLength(transactionData) + EXTRAS_LENGTH
+				+ Utf8.encodedLength(updateAssetTransactionData.getNewName())
 				+ Utf8.encodedLength(updateAssetTransactionData.getNewDescription())
 				+ Utf8.encodedLength(updateAssetTransactionData.getNewData());
 	}
@@ -86,6 +92,8 @@ public class UpdateAssetTransactionTransformer extends TransactionTransformer {
 			transformCommonBytes(transactionData, bytes);
 
 			bytes.write(Longs.toByteArray(updateAssetTransactionData.getAssetId()));
+
+			Serialization.serializeSizedString(bytes, updateAssetTransactionData.getNewName());
 
 			Serialization.serializeAddress(bytes, updateAssetTransactionData.getNewOwner());
 

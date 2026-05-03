@@ -3,11 +3,15 @@ package org.qortal.test.assets;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.data.asset.AssetData;
 import org.qortal.data.transaction.IssueAssetTransactionData;
 import org.qortal.data.transaction.TransactionData;
+import org.qortal.data.transaction.UpdateAssetTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.AssetUtils;
+import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
@@ -67,6 +71,110 @@ public class MiscTests extends Common {
 
 			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
 			assertEquals(ValidationResult.INVALID_QUANTITY, result);
+		}
+	}
+
+	@Test
+	public void testUpdateAssetName() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+
+			String assetName = "rename-asset";
+			long assetId = AssetUtils.issueAsset(repository, "alice", assetName, 1000L, true);
+
+			String newName = "renamed-asset";
+			TransactionData transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
+					assetId, alice.getAddress(), newName, "", "");
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(newName, assetData.getName());
+			assertEquals(newName, assetData.getReducedAssetName());
+			assertEquals(assetId, repository.getAssetRepository().fromAssetName(newName).getAssetId().longValue());
+			assertEquals(assetId, repository.getAssetRepository().fromReducedAssetName(newName).getAssetId().longValue());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(assetName, assetData.getName());
+			assertEquals(assetName, assetData.getReducedAssetName());
+			assertEquals(assetId, repository.getAssetRepository().fromAssetName(assetName).getAssetId().longValue());
+		}
+	}
+
+	@Test
+	public void testUpdateAssetNameDuplicateReducedName() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+
+			AssetUtils.issueAsset(repository, "alice", "test-asset", 1000L, true);
+			long assetId = AssetUtils.issueAsset(repository, "alice", "other-asset", 1000L, true);
+
+			TransactionData transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
+					assetId, alice.getAddress(), "TEST-Ásset", "", "");
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+
+			assertEquals(ValidationResult.ASSET_ALREADY_EXISTS, result);
+		}
+	}
+
+	@Test
+	public void testUpdateAssetNameCaseOnly() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+
+			long assetId = AssetUtils.issueAsset(repository, "alice", "Case-Asset", 1000L, true);
+
+			String newName = "case-asset";
+			TransactionData transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
+					assetId, alice.getAddress(), newName, "", "");
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(newName, assetData.getName());
+			assertEquals("case-asset", assetData.getReducedAssetName());
+		}
+	}
+
+	@Test
+	public void testUpdateAssetNameRevertsThroughNonRenameUpdate() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+
+			String originalName = "chain-asset";
+			long assetId = AssetUtils.issueAsset(repository, "alice", originalName, 1000L, true);
+
+			String middleName = "middle-asset";
+			TransactionData transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
+					assetId, alice.getAddress(), middleName, "", "");
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
+					assetId, alice.getAddress(), "", "updated description", "");
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			String newestName = "newest-asset";
+			transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
+					assetId, alice.getAddress(), newestName, "", "");
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(newestName, assetData.getName());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(middleName, assetData.getName());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(middleName, assetData.getName());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(originalName, assetData.getName());
 		}
 	}
 

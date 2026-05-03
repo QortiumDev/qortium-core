@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: allow asset renames
+
+Added optional asset renaming to UPDATE_ASSET, including reduced-name collision checks, updated transaction persistence and wire format, and orphan restoration for asset name history.
+
 ### 2026-05-03 - core: allow explicit primary name updates
 
 Added an optional primary-name setting to UPDATE_NAME so owners can set or clear their primary name explicitly, with orphan restoration. Removed the restrictions that prevented updating or selling a primary name when the owner had multiple names.
