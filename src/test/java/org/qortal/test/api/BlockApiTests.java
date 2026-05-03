@@ -7,6 +7,9 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
 import org.qortal.api.resource.BlocksResource;
 import org.qortal.block.GenesisBlock;
+import org.qortal.data.account.AccountData;
+import org.qortal.data.block.BlockSummaryData;
+import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -19,6 +22,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 
 public class BlockApiTests extends ApiCommon {
@@ -118,10 +123,29 @@ public class BlockApiTests extends ApiCommon {
 	@Test
 	public void testGetBlockSummariesBySigner() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			repository.getAccountRepository().setDefaultGroupId(new AccountData(alice.getAddress(), alice.getPublicKey(), Group.NO_GROUP, 0, 0));
+			repository.saveChanges();
 			BlockUtils.mintBlock(repository);
 
-			assertNotNull(this.blocksResource.getBlockSummariesBySigner(aliceAddress, null, null, null));
+			List<BlockSummaryData> summaries = this.blocksResource.getBlockSummariesBySigner(aliceAddress, null, null, null);
+			assertNotNull(summaries);
+			assertFalse(summaries.isEmpty());
+			assertEquals(aliceAddress, summaries.get(0).getMinterAddress());
+
 			assertNotNull(this.blocksResource.getBlockSummariesBySigner(aliceAddress, 1, 1, true));
+		}
+	}
+
+	@Test
+	public void testBlockSummariesIncludeMinterAddress() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int height = BlockUtils.mintBlock(repository).getBlockData().getHeight();
+
+			List<BlockSummaryData> summaries = this.blocksResource.getBlockSummaries(height, height + 1, null);
+
+			assertEquals(1, summaries.size());
+			assertEquals(aliceAddress, summaries.get(0).getMinterAddress());
 		}
 	}
 

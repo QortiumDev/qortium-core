@@ -723,15 +723,14 @@ public class BlocksResource {
 
 			List<BlockSummaryData> summaries = repository.getBlockRepository()
 					.getBlockSummariesBySigner(accountData.getPublicKey(), limit, offset, reverse);
+			if (summaries == null)
+				summaries = new ArrayList<>();
 
 			// Add any from the archive
 			List<BlockSummaryData> archivedSummaries = repository.getBlockArchiveRepository()
 					.getBlockSummariesBySigner(accountData.getPublicKey(), limit, offset, reverse);
 			if (archivedSummaries != null && !archivedSummaries.isEmpty()) {
 				summaries.addAll(archivedSummaries);
-			}
-			else {
-				summaries = archivedSummaries;
 			}
 
 			// Sort the results (because they may have been obtained from two places)
@@ -741,6 +740,8 @@ public class BlocksResource {
 			else {
 				summaries.sort(Comparator.comparing(s -> Integer.valueOf(s.getHeight())));
 			}
+
+			populateBlockSummaryMinterAddresses(repository, summaries);
 
 			return summaries;
 		} catch (DataException e) {
@@ -888,9 +889,20 @@ public class BlocksResource {
 				}
 			}
 
+			populateBlockSummaryMinterAddresses(repository, blockSummaries);
+
 			return blockSummaries;
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	private static void populateBlockSummaryMinterAddresses(Repository repository, List<BlockSummaryData> blockSummaries) throws DataException {
+		for (BlockSummaryData blockSummary : blockSummaries) {
+			if (blockSummary.getMinterPublicKey() == null)
+				continue;
+
+			blockSummary.setMinterAddress(Account.getRewardShareMintingAddress(repository, blockSummary.getMinterPublicKey()));
 		}
 	}
 

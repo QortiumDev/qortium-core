@@ -19,6 +19,7 @@ public class BlockSummaryData {
 	private byte[] reference;
 
 	// Optional, set after construction
+	private String minterAddress;
 	private Integer minterLevel;
 
 	// Constructors
@@ -77,6 +78,14 @@ public class BlockSummaryData {
 
 	public byte[] getMinterPublicKey() {
 		return this.minterPublicKey;
+	}
+
+	public String getMinterAddress() {
+		return this.minterAddress;
+	}
+
+	public void setMinterAddress(String minterAddress) {
+		this.minterAddress = minterAddress;
 	}
 
 	public Integer getOnlineAccountsCount() {
