@@ -401,9 +401,21 @@ public class IntegrityTests extends Common {
             Transaction transaction = Transaction.fromData(repository, updateTransactionData);
             transaction.sign(alice);
 
-            // Transaction should be valid, because the database inconsistency was fixed by UpdateNameTransaction.preProcess()
-            Transaction.ValidationResult result = transaction.importAsUnconfirmed();
-            assertTrue("Transaction should be valid", Transaction.ValidationResult.OK == result);
+            // Update-name validation should not repair the Names table as a side effect
+            transaction.preProcess();
+            Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+            assertEquals("Missing current name should remain invalid until explicit repair", Transaction.ValidationResult.NAME_DOES_NOT_EXIST, result);
+            assertNull(repository.getNameRepository().fromName(initialName));
+
+            // Explicit integrity repair should restore the missing name and make the update valid
+            NamesDatabaseIntegrityCheck integrityCheck = new NamesDatabaseIntegrityCheck();
+            assertEquals(1, integrityCheck.rebuildName(initialName, repository));
+            assertEquals(data, repository.getNameRepository().fromName(initialName).getData());
+
+            result = transaction.isValidUnconfirmed();
+            assertEquals("Transaction should be valid after explicit repair", Transaction.ValidationResult.OK, result);
+
+            repository.discardChanges();
         }
     }
 
@@ -443,14 +455,23 @@ public class IntegrityTests extends Common {
             Transaction transaction = Transaction.fromData(repository, updateTransactionData);
             transaction.sign(alice);
 
-            // Transaction should be invalid, because the database inconsistency was fixed by UpdateNameTransaction.preProcess()
-            // Therefore the name that we are trying to rename TO already exists
-            Transaction.ValidationResult result = transaction.importAsUnconfirmed();
-            assertTrue("Transaction should be invalid", Transaction.ValidationResult.OK != result);
+            // Update-name validation should not repair destination name state as a side effect
+            transaction.preProcess();
+            Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+            assertEquals("Transaction should validate against current repository state", Transaction.ValidationResult.OK, result);
+            assertNull(repository.getNameRepository().fromName(secondName));
 
-            assertTrue("Destination name should already exist", Transaction.ValidationResult.NAME_ALREADY_REGISTERED == result);
+            // Explicit integrity repair should restore the destination name and collision
+            NamesDatabaseIntegrityCheck integrityCheck = new NamesDatabaseIntegrityCheck();
+            assertEquals(1, integrityCheck.rebuildName(secondName, repository));
+            assertEquals(secondNameData, repository.getNameRepository().fromName(secondName).getData());
+
+            result = transaction.isValidUnconfirmed();
+            assertEquals("Destination name should already exist after explicit repair", Transaction.ValidationResult.NAME_ALREADY_REGISTERED, result);
 
             assertEquals(alice.getPrimaryName(), alice.determinePrimaryName(TransactionsResource.ConfirmationStatus.CONFIRMED));
+
+            repository.discardChanges();
         }
     }
 

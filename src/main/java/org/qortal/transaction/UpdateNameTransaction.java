@@ -4,7 +4,6 @@ import com.google.common.base.Utf8;
 import org.qortal.account.Account;
 import org.qortal.asset.Asset;
 import org.qortal.block.BlockChain;
-import org.qortal.controller.repository.NamesDatabaseIntegrityCheck;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.transaction.TransactionData;
@@ -16,7 +15,6 @@ import org.qortal.utils.Unicode;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 public class UpdateNameTransaction extends Transaction {
 
@@ -127,23 +125,6 @@ public class UpdateNameTransaction extends Transaction {
 		}
 
 		return ValidationResult.OK;
-	}
-
-	@Override
-	public void preProcess() throws DataException {
-		UpdateNameTransactionData updateNameTransactionData = (UpdateNameTransactionData) transactionData;
-
-		// Rebuild this name in the Names table from the transaction history
-		// This is necessary because in some rare cases names can be missing from the Names table after registration
-		// but we have been unable to reproduce the issue and track down the root cause
-		NamesDatabaseIntegrityCheck namesDatabaseIntegrityCheck = new NamesDatabaseIntegrityCheck();
-		namesDatabaseIntegrityCheck.rebuildName(updateNameTransactionData.getName(), this.repository);
-
-		if (!updateNameTransactionData.getNewName().isEmpty()
-				&& !Objects.equals(updateNameTransactionData.getName(), updateNameTransactionData.getNewName())) {
-			// Renaming - so make sure the new name is rebuilt too
-			namesDatabaseIntegrityCheck.rebuildName(updateNameTransactionData.getNewName(), this.repository);
-		}
 	}
 
 	@Override

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: stop update-name validation repairs
+
+Removed UPDATE_NAME pre-processing that rebuilt name table state before validation. Updated integrity tests so missing current-name and destination-name state is only repaired by explicit name integrity rebuilds, keeping update-name validation focused on current repository state.
+
 ### 2026-05-03 - core: default transaction preProcess to no-op
 
 Changed transaction pre-processing to default to a no-op in the base transaction class and removed redundant no-op overrides from individual transaction classes. This keeps preProcess overrides limited to transaction types that actually need preparatory behavior.
