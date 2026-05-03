@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: expose MESSAGE payments to ATs
+
+Updated AT transaction decoding so MESSAGE transactions with attached payments continue to report as messages while also exposing their payment amount and asset id through the existing amount and asset-id AT functions. Tests now cover configured-asset message payments, native message fee top-ups, and no-payment messages.
+
 ### 2026-05-03 - core: broaden AT asset support
 
 Added a native fee reserve to DEPLOY_AT so an AT can be funded with both its configured working asset and asset `0` for execution fees in the same transaction. ATs now use their configured asset for default balance, payout, and final refund semantics while block processing continues to charge execution fees in the native asset, and new chain function codes let ATs inspect configured asset IDs, query asset balances, read incoming payment asset IDs, and pay non-native asset balances. External asset transfers to existing ATs now allow only the AT's configured asset plus native fee top-ups, and tests cover deploy funding, native fee separation, configured-asset payouts, rejected wrong-asset transfers, and transfer-asset visibility.

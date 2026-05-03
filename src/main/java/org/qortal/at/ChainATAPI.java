@@ -244,6 +244,14 @@ public class ChainATAPI extends API {
 			case TRANSFER_ASSET:
 				return ((TransferAssetTransactionData) transactionData).getAmount();
 
+			case MESSAGE:
+				long messageAmount = ((MessageTransactionData) transactionData).getAmount();
+
+				if (messageAmount != 0L)
+					return messageAmount;
+
+				return 0xffffffffffffffffL;
+
 			case AT:
 				Long amount = ((ATTransactionData) transactionData).getAmount();
 
@@ -460,6 +468,14 @@ public class ChainATAPI extends API {
 
 			case TRANSFER_ASSET:
 				return ((TransferAssetTransactionData) transactionData).getAssetId();
+
+			case MESSAGE:
+				Long messageAssetId = ((MessageTransactionData) transactionData).getAssetId();
+
+				if (((MessageTransactionData) transactionData).getAmount() != 0L && messageAssetId != null)
+					return messageAssetId;
+
+				return -1L;
 
 			case AT:
 				if (((ATTransactionData) transactionData).getAmount() != null)
