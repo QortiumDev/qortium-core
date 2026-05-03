@@ -86,8 +86,8 @@ public class Payment {
 			if (assetData.isUnspendable() && !assetData.getOwner().equals(sender.getAddress()))
 				return ValidationResult.ASSET_NOT_SPENDABLE;
 
-			// If we're sending to an AT then assetId must match AT's assetId
-			if (atData != null && atData.getAssetId() != paymentData.getAssetId())
+			// ATs can receive their configured working asset, plus native asset for execution fees
+			if (atData != null && paymentData.getAssetId() != Asset.NATIVE && paymentData.getAssetId() != atData.getAssetId())
 				return ValidationResult.ASSET_DOES_NOT_MATCH_AT;
 
 			// Check asset amount is integer if asset is not divisible

@@ -17,7 +17,7 @@ public class HSQLDBDeployAtTransactionRepository extends HSQLDBTransactionReposi
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT AT_name, description, AT_type, AT_tags, creation_bytes, amount, asset_id, AT_address FROM DeployATTransactions WHERE signature = ?";
+		String sql = "SELECT AT_name, description, AT_type, AT_tags, creation_bytes, amount, asset_id, native_fee_reserve, AT_address FROM DeployATTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
@@ -30,11 +30,12 @@ public class HSQLDBDeployAtTransactionRepository extends HSQLDBTransactionReposi
 			byte[] creationBytes = resultSet.getBytes(5);
 			long amount = resultSet.getLong(6);
 			long assetId = resultSet.getLong(7);
+			long nativeFeeReserve = resultSet.getLong(8);
 
 			// Special null-checking for AT address
-			String atAddress = resultSet.getString(8);
+			String atAddress = resultSet.getString(9);
 
-			return new DeployAtTransactionData(baseTransactionData, atAddress, name, description, atType, tags, creationBytes, amount, assetId);
+			return new DeployAtTransactionData(baseTransactionData, atAddress, name, description, atType, tags, creationBytes, amount, assetId, nativeFeeReserve);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch deploy AT transaction from repository", e);
 		}
@@ -47,10 +48,11 @@ public class HSQLDBDeployAtTransactionRepository extends HSQLDBTransactionReposi
 		HSQLDBSaver saveHelper = new HSQLDBSaver("DeployATTransactions");
 
 		saveHelper.bind("signature", deployATTransactionData.getSignature()).bind("creator", deployATTransactionData.getCreatorPublicKey())
-				.bind("AT_name", deployATTransactionData.getName()).bind("description", deployATTransactionData.getDescription())
-				.bind("AT_type", deployATTransactionData.getAtType()).bind("AT_tags", deployATTransactionData.getTags())
-				.bind("creation_bytes", deployATTransactionData.getCreationBytes()).bind("amount", deployATTransactionData.getAmount())
-				.bind("asset_id", deployATTransactionData.getAssetId()).bind("AT_address", deployATTransactionData.getAtAddress());
+			.bind("AT_name", deployATTransactionData.getName()).bind("description", deployATTransactionData.getDescription())
+			.bind("AT_type", deployATTransactionData.getAtType()).bind("AT_tags", deployATTransactionData.getTags())
+			.bind("creation_bytes", deployATTransactionData.getCreationBytes()).bind("amount", deployATTransactionData.getAmount())
+			.bind("asset_id", deployATTransactionData.getAssetId()).bind("native_fee_reserve", deployATTransactionData.getNativeFeeReserve())
+			.bind("AT_address", deployATTransactionData.getAtAddress());
 
 		try {
 			saveHelper.execute(this.repository);

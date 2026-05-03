@@ -1006,11 +1006,13 @@ public class HSQLDBATRepository implements ATRepository {
 	// Finding transactions for ATs to process
 
 	public NextTransactionInfo findNextTransaction(String recipient, int height, int sequence) throws DataException {
-		// We only need to search for a subset of transaction types: MESSAGE, PAYMENT or AT
+		// We only need to search for a subset of transaction types: MESSAGE, PAYMENT, TRANSFER_ASSET or AT
 
 		String sql = "SELECT block_height, block_sequence, Transactions.signature "
 				+ "FROM ("
 					+ "SELECT signature FROM PaymentTransactions WHERE recipient = ? "
+					+ "UNION "
+					+ "SELECT signature FROM TransferAssetTransactions WHERE recipient = ? "
 					+ "UNION "
 					+ "SELECT signature FROM MessageTransactions WHERE recipient = ? "
 					+ "UNION "
@@ -1021,7 +1023,7 @@ public class HSQLDBATRepository implements ATRepository {
 				+ "ORDER BY block_height ASC, block_sequence ASC "
 				+ "LIMIT 1";
 
-		Object[] bindParams = new Object[] { recipient, recipient, recipient, height, height, sequence };
+		Object[] bindParams = new Object[] { recipient, recipient, recipient, recipient, height, height, sequence };
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, bindParams)) {
 			if (resultSet == null)

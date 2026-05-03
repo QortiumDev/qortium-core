@@ -224,6 +224,53 @@ public enum ChainFunctionCode {
 					? blocksMinted.longValue()
 					: -1;
 		}
+	},
+	/**
+	 * Returns the AT's configured working asset id.<br>
+	 * <tt>0x0530</tt>
+	 */
+	GET_CONFIGURED_ASSET_ID(0x0530, 0, true) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			functionData.returnValue = api.getConfiguredAssetId();
+		}
+	},
+	/**
+	 * Returns AT account's current spendable balance for asset id.<br>
+	 * <tt>0x0531 asset-id</tt><br>
+	 * Returns -1 if asset id is unknown.
+	 */
+	GET_ASSET_BALANCE(0x0531, 1, true) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			functionData.returnValue = api.getAssetBalance(functionData.value1, state);
+		}
+	},
+	/**
+	 * Returns asset id from payment-like transaction in A.<br>
+	 * <tt>0x0532</tt><br>
+	 * Returns -1 if transaction in A has no asset amount.
+	 */
+	GET_ASSET_ID_FROM_TX_IN_A(0x0532, 0, true) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			functionData.returnValue = api.getAssetIdFromTransactionInA(state);
+		}
+	},
+	/**
+	 * Pays amount of asset id to address in B.<br>
+	 * <tt>0x0533 asset-id amount</tt><br>
+	 * Returns amount actually paid, 0 if no balance is available, or -1 if the request is invalid.
+	 */
+	PAY_ASSET_AMOUNT_TO_B(0x0533, 2, true) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			functionData.returnValue = api.payAssetAmountToB(functionData.value1, functionData.value2, state);
+		}
 	};
 
 	public final short value;

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: broaden AT asset support
+
+Added a native fee reserve to DEPLOY_AT so an AT can be funded with both its configured working asset and asset `0` for execution fees in the same transaction. ATs now use their configured asset for default balance, payout, and final refund semantics while block processing continues to charge execution fees in the native asset, and new chain function codes let ATs inspect configured asset IDs, query asset balances, read incoming payment asset IDs, and pay non-native asset balances. External asset transfers to existing ATs now allow only the AT's configured asset plus native fee top-ups, and tests cover deploy funding, native fee separation, configured-asset payouts, rejected wrong-asset transfers, and transfer-asset visibility.
+
 ### 2026-05-03 - core: tighten reduced-name anti-spoofing
 
 Changed reduced-name sanitizing so lowercase `i` joins the same reduced homoglyph class as uppercase `I`, lowercase `l`, `1`, and `|`, treats visually blank filler characters as whitespace before trimming and reduced-name generation, and strips control/format/private-use codepoints during normal name validation. This closes inherited spoofing gaps that allowed visually confusing names such as `sample-label` and `sample-Iabel`, names with trailing blank filler characters, or names with hidden bidirectional display controls to remain distinct, and adds coverage for names, groups, assets, and direct Unicode sanitizer behavior while leaving multi-character visual substitutions as a separate policy decision.

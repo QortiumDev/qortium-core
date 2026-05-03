@@ -22,6 +22,8 @@ public class DeployAtTransactionData extends TransactionData {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long amount;
 	private long assetId;
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long nativeFeeReserve;
 	private String aTAddress;
 
 	// Constructors
@@ -33,7 +35,7 @@ public class DeployAtTransactionData extends TransactionData {
 
 	/** From repository */
 	public DeployAtTransactionData(BaseTransactionData baseTransactionData,
-			String aTAddress, String name, String description, String aTType, String tags, byte[] creationBytes, long amount, long assetId) {
+			String aTAddress, String name, String description, String aTType, String tags, byte[] creationBytes, long amount, long assetId, long nativeFeeReserve) {
 		super(TransactionType.DEPLOY_AT, baseTransactionData);
 
 		this.aTAddress = aTAddress;
@@ -44,12 +46,25 @@ public class DeployAtTransactionData extends TransactionData {
 		this.creationBytes = creationBytes;
 		this.amount = amount;
 		this.assetId = assetId;
+		this.nativeFeeReserve = nativeFeeReserve;
+	}
+
+	/** From repository */
+	public DeployAtTransactionData(BaseTransactionData baseTransactionData,
+			String aTAddress, String name, String description, String aTType, String tags, byte[] creationBytes, long amount, long assetId) {
+		this(baseTransactionData, aTAddress, name, description, aTType, tags, creationBytes, amount, assetId, 0L);
+	}
+
+	/** From network/API */
+	public DeployAtTransactionData(BaseTransactionData baseTransactionData,
+			String name, String description, String aTType, String tags, byte[] creationBytes, long amount, long assetId, long nativeFeeReserve) {
+		this(baseTransactionData, null, name, description, aTType, tags, creationBytes, amount, assetId, nativeFeeReserve);
 	}
 
 	/** From network/API */
 	public DeployAtTransactionData(BaseTransactionData baseTransactionData,
 			String name, String description, String aTType, String tags, byte[] creationBytes, long amount, long assetId) {
-		this(baseTransactionData, null, name, description, aTType, tags, creationBytes, amount, assetId);
+		this(baseTransactionData, null, name, description, aTType, tags, creationBytes, amount, assetId, 0L);
 	}
 
 	// Getters/Setters
@@ -80,6 +95,10 @@ public class DeployAtTransactionData extends TransactionData {
 
 	public long getAssetId() {
 		return this.assetId;
+	}
+
+	public long getNativeFeeReserve() {
+		return this.nativeFeeReserve;
 	}
 
 	public String getAtAddress() {

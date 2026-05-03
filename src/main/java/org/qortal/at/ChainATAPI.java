@@ -11,6 +11,7 @@ import org.qortal.asset.Asset;
 import org.qortal.block.BlockChain;
 import org.qortal.block.BlockChain.CiyamAtSettings;
 import org.qortal.crypto.Crypto;
+import org.qortal.data.asset.AssetData;
 import org.qortal.data.at.ATData;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.block.BlockSummaryData;
@@ -22,12 +23,15 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.transaction.AtTransaction;
 import org.qortal.transaction.Transaction.TransactionType;
+import org.qortal.utils.Amounts;
 import org.qortal.utils.Base58;
 import org.qortal.utils.BitTwiddling;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ChainATAPI extends API {
 
@@ -43,12 +47,16 @@ public class ChainATAPI extends API {
 	/** List of generated AT transactions */
 	List<AtTransaction> transactions;
 
+	/** Generated platform-function payouts not tracked by CIYAM's single current-balance field. */
+	private final Map<Long, Long> pendingAssetPayouts;
+
 	// Constructors
 
 	public ChainATAPI(Repository repository, ATData atData, long blockTimestamp) {
 		this.repository = repository;
 		this.atData = atData;
 		this.transactions = new ArrayList<>();
+		this.pendingAssetPayouts = new HashMap<>();
 		this.blockTimestamp = blockTimestamp;
 
 		this.ciyamAtSettings = BlockChain.getInstance().getCiyamAtSettings();
@@ -90,7 +98,7 @@ public class ChainATAPI extends API {
 				return false;
 		}
 
-		return true;
+		return this.hasNativeFeeBalance();
 	}
 
 	public void preExecute(MachineState state) {
@@ -109,7 +117,11 @@ public class ChainATAPI extends API {
 
 	@Override
 	public int getMaxStepsPerRound() {
-		return this.ciyamAtSettings.maxStepsPerRound;
+		if (this.usesNativeWorkingAsset() || this.ciyamAtSettings.feePerStep <= 0)
+			return this.ciyamAtSettings.maxStepsPerRound;
+
+		long nativeStepBudget = this.getNativeFeeBalance() / this.ciyamAtSettings.feePerStep;
+		return (int) Math.min(this.ciyamAtSettings.maxStepsPerRound, Math.max(0L, nativeStepBudget));
 	}
 
 	@Override
@@ -122,7 +134,7 @@ public class ChainATAPI extends API {
 
 	@Override
 	public long getFeePerStep() {
-		return this.ciyamAtSettings.feePerStep;
+		return this.usesNativeWorkingAsset() ? this.ciyamAtSettings.feePerStep : 0L;
 	}
 
 	@Override
@@ -204,6 +216,7 @@ public class ChainATAPI extends API {
 
 		switch (transactionData.getType()) {
 			case PAYMENT:
+			case TRANSFER_ASSET:
 				return ATTransactionType.PAYMENT.value;
 
 			case MESSAGE:
@@ -227,6 +240,9 @@ public class ChainATAPI extends API {
 		switch (transactionData.getType()) {
 			case PAYMENT:
 				return ((PaymentTransactionData) transactionData).getAmount();
+
+			case TRANSFER_ASSET:
+				return ((TransferAssetTransactionData) transactionData).getAmount();
 
 			case AT:
 				Long amount = ((ATTransactionData) transactionData).getAmount();
@@ -339,7 +355,7 @@ public class ChainATAPI extends API {
 		try {
 			Account atAccount = this.getATAccount();
 
-			return atAccount.getConfirmedBalance(Asset.NATIVE);
+			return atAccount.getConfirmedBalance(this.atData.getAssetId());
 		} catch (DataException e) {
 			throw new RuntimeException("AT API unable to fetch AT's current balance?", e);
 		}
@@ -347,17 +363,7 @@ public class ChainATAPI extends API {
 
 	@Override
 	public void payAmountToB(long amount, MachineState state) {
-		Account recipient = getAccountFromB(state);
-
-		long timestamp = this.getNextTransactionTimestamp();
-
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, NullAccount.PUBLIC_KEY, 0L, null);
-		ATTransactionData atTransactionData = new ATTransactionData(baseTransactionData, this.atData.getATAddress(),
-				recipient.getAddress(), amount, this.atData.getAssetId());
-		AtTransaction atTransaction = new AtTransaction(this.repository, atTransactionData);
-
-		// Add to our transactions
-		this.transactions.add(atTransaction);
+		this.addPaymentToB(amount, this.atData.getAssetId(), state);
 	}
 
 	@Override
@@ -388,20 +394,18 @@ public class ChainATAPI extends API {
 
 	@Override
 	public void onFinished(long finalBalance, MachineState state) {
-		if (finalBalance <= 0)
-			return;
+		long configuredAssetId = this.atData.getAssetId();
+		long configuredRefund = Math.max(0L, finalBalance - this.getPendingPayout(configuredAssetId));
 
-		// Refund remaining balance (if any) to AT's creator
-		Account creator = this.getCreator();
-		long timestamp = this.getNextTransactionTimestamp();
+		if (configuredRefund > 0)
+			this.addPaymentToCreator(configuredRefund, configuredAssetId);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, NullAccount.PUBLIC_KEY, 0L, null);
-		ATTransactionData atTransactionData = new ATTransactionData(baseTransactionData, this.atData.getATAddress(),
-				creator.getAddress(), finalBalance, this.atData.getAssetId());
-		AtTransaction atTransaction = new AtTransaction(this.repository, atTransactionData);
+		if (!this.usesNativeWorkingAsset()) {
+			long nativeRefund = Math.max(0L, this.getNativeFeeBalance() - this.calcFinalFees(state) - this.getPendingPayout(Asset.NATIVE));
 
-		// Add to our transactions
-		this.transactions.add(atTransaction);
+			if (nativeRefund > 0)
+				this.addPaymentToCreator(nativeRefund, Asset.NATIVE);
+		}
 	}
 
 	@Override
@@ -428,6 +432,76 @@ public class ChainATAPI extends API {
 			throw new IllegalFunctionCodeException("Unknown chain function code 0x" + String.format("%04x", rawFunctionCode) + " encountered");
 
 		chainFunctionCode.execute(functionData, state, rawFunctionCode);
+	}
+
+	// Chain-specific asset helpers
+
+	public long getConfiguredAssetId() {
+		return this.atData.getAssetId();
+	}
+
+	public long getAssetBalance(long assetId, MachineState state) {
+		try {
+			if (!this.repository.getAssetRepository().assetExists(assetId))
+				return -1L;
+
+			return this.getSpendableAssetBalance(assetId, state);
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to fetch asset details?", e);
+		}
+	}
+
+	public long getAssetIdFromTransactionInA(MachineState state) {
+		TransactionData transactionData = this.getTransactionFromA(state);
+
+		switch (transactionData.getType()) {
+			case PAYMENT:
+				return Asset.NATIVE;
+
+			case TRANSFER_ASSET:
+				return ((TransferAssetTransactionData) transactionData).getAssetId();
+
+			case AT:
+				if (((ATTransactionData) transactionData).getAmount() != null)
+					return ((ATTransactionData) transactionData).getAssetId();
+
+				return -1L;
+
+			default:
+				return -1L;
+		}
+	}
+
+	public long payAssetAmountToB(long assetId, long requestedAmount, MachineState state) {
+		if (requestedAmount < 0)
+			return -1L;
+
+		if (requestedAmount == 0)
+			return 0L;
+
+		// For non-native ATs, native balance is reserved for execution fees.
+		if (!this.usesNativeWorkingAsset() && assetId == Asset.NATIVE)
+			return -1L;
+
+		try {
+			AssetData assetData = this.repository.getAssetRepository().fromAssetId(assetId);
+			if (assetData == null || assetData.isUnspendable())
+				return -1L;
+
+			if (!assetData.isDivisible() && requestedAmount % Amounts.MULTIPLIER != 0)
+				return -1L;
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to fetch asset details?", e);
+		}
+
+		long amount = Math.min(requestedAmount, this.getSpendableAssetBalance(assetId, state));
+		if (amount <= 0)
+			return 0L;
+
+		this.addPaymentToB(amount, assetId, state);
+		this.addPendingPayout(assetId, amount);
+
+		return amount;
 	}
 
 	// Utility methods
@@ -513,6 +587,78 @@ public class ChainATAPI extends API {
 		return this.blockTimestamp + this.transactions.size();
 	}
 
+	private boolean usesNativeWorkingAsset() {
+		return this.atData.getAssetId() == Asset.NATIVE;
+	}
+
+	public boolean hasNativeFeeBalance() {
+		return this.usesNativeWorkingAsset()
+				|| this.ciyamAtSettings.feePerStep <= 0
+				|| this.getNativeFeeBalance() >= this.ciyamAtSettings.feePerStep;
+	}
+
+	private long getNativeFeeBalance() {
+		try {
+			Account atAccount = this.getATAccount();
+			return atAccount.getConfirmedBalance(Asset.NATIVE);
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to fetch AT's native fee balance?", e);
+		}
+	}
+
+	private long getPendingPayout(long assetId) {
+		return this.pendingAssetPayouts.getOrDefault(assetId, 0L);
+	}
+
+	private void addPendingPayout(long assetId, long amount) {
+		this.pendingAssetPayouts.merge(assetId, amount, Long::sum);
+	}
+
+	private long getSpendableAssetBalance(long assetId, MachineState state) {
+		long balance;
+
+		if (assetId == this.atData.getAssetId()) {
+			balance = state.getCurrentBalance();
+		} else {
+			try {
+				Account atAccount = this.getATAccount();
+				balance = atAccount.getConfirmedBalance(assetId);
+			} catch (DataException e) {
+				throw new RuntimeException("AT API unable to fetch AT asset balance?", e);
+			}
+
+			if (!this.usesNativeWorkingAsset() && assetId == Asset.NATIVE)
+				balance -= this.calcFinalFees(state);
+		}
+
+		balance -= this.getPendingPayout(assetId);
+
+		return Math.max(0L, balance);
+	}
+
+	private void addPaymentToB(long amount, long assetId, MachineState state) {
+		Account recipient = getAccountFromB(state);
+
+		this.addPayment(recipient.getAddress(), amount, assetId);
+	}
+
+	private void addPaymentToCreator(long amount, long assetId) {
+		Account creator = this.getCreator();
+		this.addPayment(creator.getAddress(), amount, assetId);
+	}
+
+	private void addPayment(String recipient, long amount, long assetId) {
+		long timestamp = this.getNextTransactionTimestamp();
+
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, NullAccount.PUBLIC_KEY, 0L, null);
+		ATTransactionData atTransactionData = new ATTransactionData(baseTransactionData, this.atData.getATAddress(),
+				recipient, amount, assetId);
+		AtTransaction atTransaction = new AtTransaction(this.repository, atTransactionData);
+
+		// Add to our transactions
+		this.transactions.add(atTransaction);
+	}
+
 	/**
 	 * Returns Account (possibly PublicKeyAccount) based on value in B.
 	 * <p>
@@ -547,6 +693,7 @@ public class ChainATAPI extends API {
 		super.setB(state, bBytes);
 	}
 
+	@Override
 	protected void zeroB(MachineState state) {
 		super.zeroB(state);
 	}

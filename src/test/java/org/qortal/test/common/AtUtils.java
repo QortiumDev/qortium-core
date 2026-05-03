@@ -52,6 +52,10 @@ public class AtUtils {
     }
 
     public static DeployAtTransaction doDeployAT(Repository repository, PrivateKeyAccount deployer, byte[] creationBytes, long fundingAmount) throws DataException {
+        return doDeployAT(repository, deployer, creationBytes, fundingAmount, Asset.NATIVE, 0L);
+    }
+
+    public static DeployAtTransaction doDeployAT(Repository repository, PrivateKeyAccount deployer, byte[] creationBytes, long fundingAmount, long assetId, long nativeFeeReserve) throws DataException {
         long txTimestamp = System.currentTimeMillis();
 
         Long fee = null;
@@ -61,7 +65,7 @@ public class AtUtils {
         String tags = "TEST";
 
         BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), fee, null);
-        TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.NATIVE);
+        TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, assetId, nativeFeeReserve);
 
         DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
 

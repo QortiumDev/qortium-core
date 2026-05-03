@@ -441,7 +441,8 @@ public class HSQLDBDatabaseUpdates {
 					// Deploy CIYAM AT Transactions
 					stmt.execute("CREATE TABLE DeployATTransactions (signature Signature, creator AccountPublicKey NOT NULL, AT_name ATName NOT NULL, "
 							+ "description GenericDescription NOT NULL, AT_type ATType NOT NULL, AT_tags ATTags NOT NULL, "
-							+ "creation_bytes ATCreationBytes NOT NULL, amount AssetAmount NOT NULL, asset_id AssetID NOT NULL, AT_address AccountAddress, "
+							+ "creation_bytes ATCreationBytes NOT NULL, amount AssetAmount NOT NULL, asset_id AssetID NOT NULL, "
+							+ "native_fee_reserve AssetAmount NOT NULL DEFAULT 0, AT_address AccountAddress, "
 							+ TRANSACTION_KEYS + ")");
 					// For looking up the Deploy AT Transaction based on deployed AT address
 					stmt.execute("CREATE INDEX DeployATAddressIndex on DeployATTransactions (AT_address)");
@@ -1085,6 +1086,7 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "SellNameTransactions", "recipient", "AccountAddress");
 					addColumnIfMissing(connection, "CancelSellNameTransactions", "sale_recipient", "AccountAddress");
 					addColumnIfMissing(connection, "BuyNameTransactions", "sale_recipient", "AccountAddress");
+					addColumnIfMissing(connection, "DeployATTransactions", "native_fee_reserve", "AssetAmount NOT NULL DEFAULT 0");
 					addColumnIfMissing(connection, "Assets", "is_owner_for_sale", "BOOLEAN NOT NULL DEFAULT FALSE");
 					addColumnIfMissing(connection, "Assets", "owner_sale_price", "AssetAmount");
 					addColumnIfMissing(connection, "Assets", "owner_sale_recipient", "AccountAddress");

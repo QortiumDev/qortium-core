@@ -25,7 +25,7 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 	private static final int CREATION_BYTES_SIZE_LENGTH = INT_LENGTH;
 
 	private static final int EXTRAS_LENGTH = NAME_SIZE_LENGTH + DESCRIPTION_SIZE_LENGTH + AT_TYPE_SIZE_LENGTH + TAGS_SIZE_LENGTH + CREATION_BYTES_SIZE_LENGTH
-			+ AMOUNT_LENGTH + ASSET_ID_LENGTH;
+			+ AMOUNT_LENGTH + ASSET_ID_LENGTH + AMOUNT_LENGTH;
 
 	protected static final TransactionLayout layout;
 
@@ -46,6 +46,7 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 		layout.add("creation bytes", TransformationType.DATA);
 		layout.add("AT initial balance", TransformationType.AMOUNT);
 		layout.add("asset ID used by AT", TransformationType.LONG);
+		layout.add("native asset reserve for AT execution fees", TransformationType.AMOUNT);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
 	}
@@ -77,6 +78,8 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 
 		long assetId = byteBuffer.getLong();
 
+		long nativeFeeReserve = byteBuffer.getLong();
+
 		long fee = byteBuffer.getLong();
 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
@@ -84,7 +87,7 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, nonce, signature);
 
-		return new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, amount, assetId);
+		return new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, amount, assetId, nativeFeeReserve);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
@@ -122,6 +125,8 @@ public class DeployAtTransactionTransformer extends TransactionTransformer {
 			bytes.write(Longs.toByteArray(deployATTransactionData.getAmount()));
 
 			bytes.write(Longs.toByteArray(deployATTransactionData.getAssetId()));
+
+			bytes.write(Longs.toByteArray(deployATTransactionData.getNativeFeeReserve()));
 
 			bytes.write(Longs.toByteArray(deployATTransactionData.getFee()));
 

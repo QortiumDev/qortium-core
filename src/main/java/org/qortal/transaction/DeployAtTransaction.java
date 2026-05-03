@@ -103,9 +103,16 @@ public class DeployAtTransaction extends Transaction {
 		if (tagsLength < 1 || tagsLength > MAX_TAGS_SIZE)
 			return ValidationResult.INVALID_TAGS_LENGTH;
 
-		// Check amount is positive
-		if (this.deployAtTransactionData.getAmount() <= 0)
+		long amount = this.deployAtTransactionData.getAmount();
+		long nativeFeeReserve = this.deployAtTransactionData.getNativeFeeReserve();
+
+		// Check deployment funding is not negative
+		if (amount < 0 || nativeFeeReserve < 0)
 			return ValidationResult.NEGATIVE_AMOUNT;
+
+		// ATs need at least a working balance or a native fee reserve
+		if (amount == 0 && nativeFeeReserve == 0)
+			return ValidationResult.INVALID_AMOUNT;
 
 		long assetId = this.deployAtTransactionData.getAssetId();
 		AssetData assetData = this.repository.getAssetRepository().fromAssetId(assetId);
@@ -113,28 +120,32 @@ public class DeployAtTransaction extends Transaction {
 		if (assetData == null)
 			return ValidationResult.ASSET_DOES_NOT_EXIST;
 
+		// AT execution fees are always paid in the native asset
+		if (assetId != Asset.NATIVE && this.repository.getAssetRepository().fromAssetId(Asset.NATIVE) == null)
+			return ValidationResult.ASSET_DOES_NOT_EXIST;
+
 		// Unspendable assets are not valid
 		if (assetData.isUnspendable())
 			return ValidationResult.ASSET_NOT_SPENDABLE;
 
 		// Check asset amount is integer if asset is not divisible
-		if (!assetData.isDivisible() && this.deployAtTransactionData.getAmount() % Amounts.MULTIPLIER != 0)
+		if (!assetData.isDivisible() && amount % Amounts.MULTIPLIER != 0)
 			return ValidationResult.INVALID_AMOUNT;
 
 		Account creator = this.getCreator();
 
 		// Check creator has enough funds
 		if (assetId == Asset.NATIVE) {
-			// Simple case: amount and fee both in native asset
-			long minimumBalance = this.deployAtTransactionData.getFee() + this.deployAtTransactionData.getAmount();
+			// Simple case: amount, native fee reserve and fee are all in native asset
+			long minimumBalance = this.deployAtTransactionData.getFee() + amount + nativeFeeReserve;
 
 			if (creator.getConfirmedBalance(Asset.NATIVE) < minimumBalance)
 				return ValidationResult.NO_BALANCE;
 		} else {
-			if (creator.getConfirmedBalance(Asset.NATIVE) < this.deployAtTransactionData.getFee())
+			if (creator.getConfirmedBalance(Asset.NATIVE) < this.deployAtTransactionData.getFee() + nativeFeeReserve)
 				return ValidationResult.NO_BALANCE;
 
-			if (creator.getConfirmedBalance(assetId) < this.deployAtTransactionData.getAmount())
+			if (creator.getConfirmedBalance(assetId) < amount)
 				return ValidationResult.NO_BALANCE;
 		}
 
@@ -179,19 +190,21 @@ public class DeployAtTransaction extends Transaction {
 	public ValidationResult isProcessable() throws DataException {
 		Account creator = getCreator();
 		long assetId = this.deployAtTransactionData.getAssetId();
+		long amount = this.deployAtTransactionData.getAmount();
+		long nativeFeeReserve = this.deployAtTransactionData.getNativeFeeReserve();
 
 		// Check creator has enough funds
 		if (assetId == Asset.NATIVE) {
-			// Simple case: amount and fee both in native asset
-			long minimumBalance = this.deployAtTransactionData.getFee() + this.deployAtTransactionData.getAmount();
+			// Simple case: amount, native fee reserve and fee are all in native asset
+			long minimumBalance = this.deployAtTransactionData.getFee() + amount + nativeFeeReserve;
 
 			if (creator.getConfirmedBalance(Asset.NATIVE) < minimumBalance)
 				return ValidationResult.NO_BALANCE;
 		} else {
-			if (creator.getConfirmedBalance(Asset.NATIVE) < this.deployAtTransactionData.getFee())
+			if (creator.getConfirmedBalance(Asset.NATIVE) < this.deployAtTransactionData.getFee() + nativeFeeReserve)
 				return ValidationResult.NO_BALANCE;
 
-			if (creator.getConfirmedBalance(assetId) < this.deployAtTransactionData.getAmount())
+			if (creator.getConfirmedBalance(assetId) < amount)
 				return ValidationResult.NO_BALANCE;
 		}
 
@@ -212,17 +225,27 @@ public class DeployAtTransaction extends Transaction {
 		at.deploy();
 
 		long assetId = this.deployAtTransactionData.getAssetId();
+		long amount = this.deployAtTransactionData.getAmount();
+		long nativeFeeReserve = this.deployAtTransactionData.getNativeFeeReserve();
 
 		// Update creator's balance regarding initial payment to AT
 		Account creator = getCreator();
-		creator.modifyAssetBalance(assetId, - this.deployAtTransactionData.getAmount());
+		if (amount != 0)
+			creator.modifyAssetBalance(assetId, - amount);
+
+		if (nativeFeeReserve != 0)
+			creator.modifyAssetBalance(Asset.NATIVE, - nativeFeeReserve);
 
 		// Create AT account without mutating the deprecated reference field
 		Account atAccount = this.getATAccount();
 		atAccount.ensureAccount();
 
 		// Update AT's balance
-		atAccount.setConfirmedBalance(assetId, this.deployAtTransactionData.getAmount());
+		if (amount != 0)
+			atAccount.modifyAssetBalance(assetId, amount);
+
+		if (nativeFeeReserve != 0)
+			atAccount.modifyAssetBalance(Asset.NATIVE, nativeFeeReserve);
 	}
 
 	@Override
@@ -232,10 +255,16 @@ public class DeployAtTransaction extends Transaction {
 		at.undeploy();
 
 		long assetId = this.deployAtTransactionData.getAssetId();
+		long amount = this.deployAtTransactionData.getAmount();
+		long nativeFeeReserve = this.deployAtTransactionData.getNativeFeeReserve();
 
 		// Update creator's balance regarding initial payment to AT
 		Account creator = getCreator();
-		creator.modifyAssetBalance(assetId, this.deployAtTransactionData.getAmount());
+		if (amount != 0)
+			creator.modifyAssetBalance(assetId, amount);
+
+		if (nativeFeeReserve != 0)
+			creator.modifyAssetBalance(Asset.NATIVE, nativeFeeReserve);
 
 		// Delete AT's account (and hence its balance)
 		this.repository.getAccountRepository().delete(this.deployAtTransactionData.getAtAddress());
