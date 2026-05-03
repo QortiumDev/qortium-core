@@ -48,7 +48,7 @@ public enum Translator {
 			return resourceBundle;
 
 		try {
-			resourceBundle = ResourceBundle.getBundle("i18n." + className, Locale.forLanguageTag(lang));
+			resourceBundle = ResourceBundle.getBundle("i18n." + className, localeForLang(lang));
 		} catch (MissingResourceException e) {
 			LOGGER.warn(String.format("Can't locate '%s' translation resource bundle for %s", lang, className));
 			// Set to null then fall-through to storing in map so we don't emit warning more than once
@@ -58,6 +58,10 @@ public enum Translator {
 		resourceBundles.put(bundleKey, resourceBundle);
 
 		return resourceBundle;
+	}
+
+	private static Locale localeForLang(String lang) {
+		return Locale.forLanguageTag(lang.replace('_', '-'));
 	}
 
 }

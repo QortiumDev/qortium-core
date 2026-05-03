@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - i18n: synchronize translation bundles
+
+Updated the translation checker so it discovers available language bundles instead of relying on a short hardcoded list. Fixed underscore locale loading for bundles such as zh_CN and zh_TW, removed stale translation keys, added missing current keys across the existing bundles, and cleaned malformed UTF-8 bundle headers so the checker now reports all discovered translation bundles as synchronized.
+
 ### 2026-05-03 - core: add explicit asset ownership transfers
 
 Removed direct owner-change fields from UPDATE_GROUP and UPDATE_ASSET so those transactions only update mutable metadata and settings. Added explicit SELL_ASSET_OWNERSHIP, CANCEL_SELL_ASSET_OWNERSHIP, and BUY_ASSET_OWNERSHIP transactions, including public sales, direct recipient sales, zero-price direct gifts, orphan restoration, API builders, and native asset ownership-transfer rejection.
