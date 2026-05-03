@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: own altcoinj dependency fork
+
+Moved the inherited altcoinj Maven dependency from the IceBurst GitHub coordinate to the Qortium-controlled `QuickMythril/altcoinj` fork while keeping the same pinned bitcoinj `0.16` compatibility commit. Expanded dependency provenance notes with the bitcoinj -> libdohj -> altcoinj fork chain and the foreign-chain parameter support carried by that dependency.
+
 ### 2026-05-03 - build: own CIYAM AT dependency fork
 
 Moved the CIYAM AT Maven dependency from the inherited IceBurst GitHub coordinate to the Qortium-controlled `QuickMythril/AT` fork while keeping the same pinned `v1.4.3` commit, making the change behavior-neutral. Added dependency provenance notes for the AT fork chain, the remaining inherited `altcoinj` fork, and the locally patched HSQLDB jar so future dependency ownership work has a tracked starting point.

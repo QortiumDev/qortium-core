@@ -25,10 +25,25 @@ behavior used by Qortium should remain unchanged at this fork point.
 
 ## altcoinj
 
-Qortium still inherits the GitHub/JitPack dependency
-`com.github.iceburst:altcoinj`. This supports inherited foreign-chain code. If
-Qortium keeps that cross-chain implementation, this dependency should be forked
-or vendored under Qortium control in a later dedicated change.
+Qortium depends on altcoinj through a Qortium-controlled fork:
+
+- Maven coordinate: `com.github.QuickMythril:altcoinj`
+- Version pin: `d7cf6ac`
+- Local checkout: `~/git/altcoinj`
+- Upstream lineage: `bitcoinj/bitcoinj` -> `dogecoin/libdohj` ->
+  `jjos2372/altcoinj` -> `Qortal/altcoinj` -> `IceBurst/altcoinj` ->
+  `QuickMythril/altcoinj`
+
+The pinned commit is the same IceBurst commit that inherited Qortal Core already
+used for bitcoinj `0.16` compatibility. Moving the dependency to
+`QuickMythril/altcoinj` is intended to be behavior-neutral while giving Qortium
+ownership of the inherited foreign-chain support dependency.
+
+The Qortal-era altcoinj lineage carries the non-Bitcoin network parameter support
+used by Qortium's inherited cross-chain code, including Litecoin, Dogecoin,
+DigiByte, Ravencoin, and incomplete Pirate Chain parameters. Any larger update
+to current `dogecoin/libdohj` or `bitcoinj` should be treated as a dedicated
+cross-chain compatibility project, not as provenance cleanup.
 
 ## HSQLDB
 
