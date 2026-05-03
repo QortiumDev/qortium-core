@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.CreateGroupTransactionData;
 import org.qortal.data.transaction.UpdateGroupTransactionData;
 import org.qortal.group.Group.ApprovalThreshold;
@@ -13,7 +14,9 @@ import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.GroupUtils;
 import org.qortal.test.common.TestAccount;
+import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
+import org.qortal.test.common.BlockUtils;
 import org.qortal.transaction.CreateGroupTransaction;
 import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
@@ -106,6 +109,44 @@ public class GroupBlockDelayTests extends Common {
 
 		UpdateGroupTransactionData transactionData = new UpdateGroupTransactionData(TestTransaction.generateBase(account), groupId, newOwner, newDescription, newIsOpen, newApprovalThreshold, newMinimumBlockDelay, newMaximumBlockDelay);
 		return new UpdateGroupTransaction(repository, transactionData);
+	}
+
+	@Test
+	public void testUpdateGroupBlockDelaysApplyAndOrphan() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+
+			int groupId = GroupUtils.createGroup(repository, "alice", "test", true, ApprovalThreshold.ONE, 10, 40);
+
+			UpdateGroupTransactionData transactionData = new UpdateGroupTransactionData(TestTransaction.generateBase(alice), groupId, alice.getAddress(),
+					"updated test group", false, ApprovalThreshold.PCT40, 20, 60);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+			assertEquals(20, groupData.getMinimumBlockDelay());
+			assertEquals(60, groupData.getMaximumBlockDelay());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			groupData = repository.getGroupRepository().fromGroupId(groupId);
+			assertEquals(10, groupData.getMinimumBlockDelay());
+			assertEquals(40, groupData.getMaximumBlockDelay());
+		}
+	}
+
+	@Test
+	public void testUpdateGroupOwnerChangeDisabled() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			int groupId = GroupUtils.createGroup(repository, "alice", "test", true, ApprovalThreshold.ONE, 10, 40);
+
+			UpdateGroupTransactionData transactionData = new UpdateGroupTransactionData(TestTransaction.generateBase(alice), groupId, bob.getAddress(),
+					"updated test group", false, ApprovalThreshold.PCT40, 20, 60);
+			Transaction transaction = new UpdateGroupTransaction(repository, transactionData);
+			assertEquals(ValidationResult.INVALID_GROUP_OWNER, transaction.isValid());
+		}
 	}
 
 }

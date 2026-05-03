@@ -101,6 +101,10 @@ public class GroupData {
 		return this.groupName;
 	}
 
+	public void setGroupName(String groupName) {
+		this.groupName = groupName;
+	}
+
 	public String getDescription() {
 		return this.description;
 	}
@@ -149,8 +153,16 @@ public class GroupData {
 		return this.minimumBlockDelay;
 	}
 
+	public void setMinimumBlockDelay(int minimumBlockDelay) {
+		this.minimumBlockDelay = minimumBlockDelay;
+	}
+
 	public int getMaximumBlockDelay() {
 		return this.maximumBlockDelay;
+	}
+
+	public void setMaximumBlockDelay(int maximumBlockDelay) {
+		this.maximumBlockDelay = maximumBlockDelay;
 	}
 
 	public int getCreationGroupId() {

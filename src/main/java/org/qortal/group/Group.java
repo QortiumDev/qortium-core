@@ -336,27 +336,16 @@ public class Group {
 		// Update GroupData's reference to this transaction's signature
 		this.groupData.setReference(updateGroupTransactionData.getSignature());
 
-		// Update Group's owner and description
-		this.groupData.setOwner(updateGroupTransactionData.getNewOwner());
+		// Update Group's mutable settings. Ownership changes are handled by future group-sale transactions.
 		this.groupData.setDescription(updateGroupTransactionData.getNewDescription());
 		this.groupData.setIsOpen(updateGroupTransactionData.getNewIsOpen());
 		this.groupData.setApprovalThreshold(updateGroupTransactionData.getNewApprovalThreshold());
+		this.groupData.setMinimumBlockDelay(updateGroupTransactionData.getNewMinimumBlockDelay());
+		this.groupData.setMaximumBlockDelay(updateGroupTransactionData.getNewMaximumBlockDelay());
 		this.groupData.setUpdated(updateGroupTransactionData.getTimestamp());
 
 		// Save updated group data
 		groupRepository.save(this.groupData);
-
-		String newOwner = updateGroupTransactionData.getNewOwner();
-
-		// New owner should be a member if not already
-		if (!this.memberExists(newOwner))
-			this.addMember(newOwner, updateGroupTransactionData);
-
-		// New owner should be an admin if not already
-		if (!this.adminExists(newOwner))
-			this.addAdmin(newOwner, updateGroupTransactionData);
-
-		// Previous owner retained as admin and member
 	}
 
 	public void unupdateGroup(UpdateGroupTransactionData updateGroupTransactionData) throws DataException {
@@ -406,6 +395,8 @@ public class Group {
 				this.groupData.setDescription(previousCreateGroupTransactionData.getDescription());
 				this.groupData.setIsOpen(previousCreateGroupTransactionData.isOpen());
 				this.groupData.setApprovalThreshold(previousCreateGroupTransactionData.getApprovalThreshold());
+				this.groupData.setMinimumBlockDelay(previousCreateGroupTransactionData.getMinimumBlockDelay());
+				this.groupData.setMaximumBlockDelay(previousCreateGroupTransactionData.getMaximumBlockDelay());
 				this.groupData.setUpdated(null);
 				break;
 			}
@@ -416,6 +407,8 @@ public class Group {
 				this.groupData.setDescription(previousUpdateGroupTransactionData.getNewDescription());
 				this.groupData.setIsOpen(previousUpdateGroupTransactionData.getNewIsOpen());
 				this.groupData.setApprovalThreshold(previousUpdateGroupTransactionData.getNewApprovalThreshold());
+				this.groupData.setMinimumBlockDelay(previousUpdateGroupTransactionData.getNewMinimumBlockDelay());
+				this.groupData.setMaximumBlockDelay(previousUpdateGroupTransactionData.getNewMaximumBlockDelay());
 				this.groupData.setUpdated(previousUpdateGroupTransactionData.getTimestamp());
 				break;
 			}

@@ -31,7 +31,7 @@ public class UpdateGroupTransaction extends Transaction {
 
 	@Override
 	public List<String> getRecipientAddresses() throws DataException {
-		return Collections.singletonList(this.updateGroupTransactionData.getNewOwner());
+		return Collections.emptyList();
 	}
 
 	// Navigation
@@ -76,6 +76,10 @@ public class UpdateGroupTransaction extends Transaction {
 		// Check group exists
 		if (groupData == null)
 			return ValidationResult.GROUP_DOES_NOT_EXIST;
+
+		// Group ownership transfers are disabled until explicit group sale transactions exist.
+		if (!this.updateGroupTransactionData.getNewOwner().equals(groupData.getOwner()))
+			return ValidationResult.INVALID_GROUP_OWNER;
 
 		boolean groupOwnedByNullAccount = Group.isNullOwner(groupData.getOwner());
 
