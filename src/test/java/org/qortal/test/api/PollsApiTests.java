@@ -3,10 +3,11 @@ package org.qortal.test.api;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.api.model.AppRatingsResponse;
+import org.qortal.api.model.PollVotes;
 import org.qortal.api.resource.PollsResource;
 import org.qortal.data.voting.PollData;
-import org.qortal.data.voting.PollDataWithVotes;
 import org.qortal.data.voting.PollOptionData;
+import org.qortal.data.voting.VoteOnPollData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -14,9 +15,7 @@ import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.Assert.*;
 
@@ -144,6 +143,33 @@ public class PollsApiTests extends ApiCommon {
 		assertNotNull(response);
 		assertNotNull(response.ratings);
 		// Should return successfully even if empty
+	}
+
+	@Test
+	public void testGetPollVotesIncludesVoterAddress() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "app-library-APP-rating-VoterAddressTest";
+			createTestAppRatingPoll(repository, pollName);
+
+			VoteOnPollData vote = new VoteOnPollData(pollName, Common.getTestAccount(repository, "alice").getPublicKey(), 4);
+			repository.getVotingRepository().save(vote);
+			repository.saveChanges();
+
+			PollVotes response = this.pollsResource.getPollVotes(pollName, false);
+
+			assertNotNull(response);
+			assertNotNull(response.votes);
+			assertEquals(1, response.votes.size());
+			assertEquals(aliceAddress, response.votes.get(0).getVoterAddress());
+			assertNotNull(response.votes.get(0).getVoterPublicKey());
+
+			PollVotes countsOnlyResponse = this.pollsResource.getPollVotes(pollName, true);
+			assertNotNull(countsOnlyResponse);
+			assertNull(countsOnlyResponse.votes);
+			assertEquals(Integer.valueOf(1), countsOnlyResponse.totalVotes);
+
+			deleteTestPoll(repository, pollName);
+		}
 	}
 
 	// Helper methods

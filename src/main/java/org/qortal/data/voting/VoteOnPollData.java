@@ -1,5 +1,8 @@
 package org.qortal.data.voting;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+import org.qortal.crypto.Crypto;
+
 public class VoteOnPollData {
 
 	// Properties
@@ -32,6 +35,11 @@ public class VoteOnPollData {
 
 	public byte[] getVoterPublicKey() {
 		return this.voterPublicKey;
+	}
+
+	@Schema(description = "Voter's address")
+	public String getVoterAddress() {
+		return this.voterPublicKey == null ? null : Crypto.toAddress(this.voterPublicKey);
 	}
 
 	public void setVoterPublicKey(byte[] voterPublicKey) {
