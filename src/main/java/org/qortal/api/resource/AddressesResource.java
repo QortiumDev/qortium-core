@@ -25,6 +25,7 @@ import org.qortal.data.network.OnlineAccountLevel;
 import org.qortal.data.transaction.PublicizeTransactionData;
 import org.qortal.data.transaction.RewardShareTransactionData;
 import org.qortal.data.transaction.TransactionData;
+import org.qortal.data.transaction.TransferPrivsTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -38,6 +39,7 @@ import org.qortal.transform.Transformer;
 import org.qortal.transform.transaction.PublicizeTransactionTransformer;
 import org.qortal.transform.transaction.RewardShareTransactionTransformer;
 import org.qortal.transform.transaction.TransactionTransformer;
+import org.qortal.transform.transaction.TransferPrivsTransactionTransformer;
 import org.qortal.utils.Amounts;
 import org.qortal.utils.Base58;
 
@@ -410,6 +412,52 @@ public class AddressesResource {
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
 			byte[] bytes = RewardShareTransactionTransformer.toBytes(transactionData);
+			return Base58.encode(bytes);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/transferprivs")
+	@Operation(
+		summary = "Build raw, unsigned, TRANSFER_PRIVS transaction",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = TransferPrivsTransactionData.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "raw, unsigned, TRANSFER_PRIVS transaction encoded in Base58",
+				content = @Content(
+					mediaType = MediaType.TEXT_PLAIN,
+					schema = @Schema(
+						type = "string"
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String transferPrivs(TransferPrivsTransactionData transactionData) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+
+			ValidationResult result = transaction.isValidUnconfirmed();
+			if (result != ValidationResult.OK)
+				throw TransactionsResource.createTransactionInvalidException(request, result);
+
+			byte[] bytes = TransferPrivsTransactionTransformer.toBytes(transactionData);
 			return Base58.encode(bytes);
 		} catch (TransformationException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);

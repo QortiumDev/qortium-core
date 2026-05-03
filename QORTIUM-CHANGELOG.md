@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - api: complete transfer privs API surface
+
+Added the missing TRANSFER_PRIVS transaction API surface. Generic transaction responses can now expose typed transfer-privs data, and `/addresses/transferprivs` can build a validated raw unsigned TRANSFER_PRIVS transaction for clients to sign.
+
 ### 2026-05-02 - api: fix cross-chain current server reporting
 
 Fixed cross-chain server configuration reporting so a disconnected foreign-chain provider no longer marks every configured server as current. The current-server flag now only appears when the provider actually has a matching current server.
