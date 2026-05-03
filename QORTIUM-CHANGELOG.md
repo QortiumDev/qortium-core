@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - test: discard name integrity repair changes
+
+Updated name integrity repair tests to explicitly discard temporary repository changes after their assertions. This keeps the tests focused on repair behavior while preventing repository-close warnings about uncommitted test work.
+
 ### 2026-05-03 - core: stop arbitrary name validation repairs
 
 Removed ARBITRARY transaction pre-processing that rebuilt name table state before validation. Added coverage for named arbitrary publishes so validation rejects missing name state until an explicit name integrity rebuild restores the name.

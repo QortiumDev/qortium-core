@@ -58,6 +58,8 @@ public class IntegrityTests extends Common {
 
             // Ensure the name still exists and the data is still correct
             assertEquals(data, repository.getNameRepository().fromName(name).getData());
+
+            repository.discardChanges();
         }
     }
 
@@ -138,6 +140,8 @@ public class IntegrityTests extends Common {
             // Ensure the new name still exists and the data is still correct
             assertTrue(repository.getNameRepository().nameExists(initialName));
             assertEquals(initialData, repository.getNameRepository().fromName(initialName).getData());
+
+            repository.discardChanges();
         }
     }
 
@@ -169,6 +173,8 @@ public class IntegrityTests extends Common {
             // Ensure the name still exists and the data is still correct
             assertEquals(name, repository.getNameRepository().fromName(name).getName());
             assertEquals(newData, repository.getNameRepository().fromName(name).getData());
+
+            repository.discardChanges();
         }
     }
 
@@ -230,6 +236,8 @@ public class IntegrityTests extends Common {
 
             // Ensure the name exists again and the data is correct
             assertEquals(data, repository.getNameRepository().fromName(name).getData());
+
+            repository.discardChanges();
         }
     }
 
@@ -269,6 +277,8 @@ public class IntegrityTests extends Common {
 
             // Ensure the name exists and the data is correct
             assertEquals(newData, repository.getNameRepository().fromName(name).getData());
+
+            repository.discardChanges();
         }
     }
 
