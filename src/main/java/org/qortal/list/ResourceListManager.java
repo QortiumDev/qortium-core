@@ -200,6 +200,21 @@ public class ResourceListManager {
         return items;
     }
 
+    public List<String> getListNames() {
+        List<String> listNames = new ArrayList<>();
+
+        synchronized (this.lists) {
+            for (ResourceList list : this.lists) {
+                if (list != null && list.getName() != null) {
+                    listNames.add(list.getName());
+                }
+            }
+        }
+
+        Collections.sort(listNames);
+        return listNames;
+    }
+
     public int getItemCountForList(String listName) {
         ResourceList list = this.getList(listName);
         if (list == null) {

@@ -3,10 +3,13 @@ package org.qortal.test;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.apache.commons.lang3.reflect.FieldUtils;
+import org.qortal.api.resource.ListsResource;
 import org.qortal.list.ResourceList;
 import org.qortal.list.ResourceListManager;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
+import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
 import org.qortal.utils.ListUtils;
 
@@ -42,6 +45,35 @@ public class ListTests {
 
         // Clear resource list manager instance
         ResourceListManager.reset();
+    }
+
+    @Test
+    public void testListNameDiscovery() {
+        ResourceListManager resourceListManager = ResourceListManager.getInstance();
+
+        assertTrue(resourceListManager.getListNames().isEmpty());
+
+        resourceListManager.addToList("followedNames_test", "testName1", true);
+        resourceListManager.addToList("blockedNames_test", "testName2", true);
+
+        List<String> listNames = resourceListManager.getListNames();
+
+        assertEquals(2, listNames.size());
+        assertEquals("blockedNames_test", listNames.get(0));
+        assertEquals("followedNames_test", listNames.get(1));
+    }
+
+    @Test
+    public void testListNameApi() throws IllegalAccessException {
+        FieldUtils.writeField(Settings.getInstance(), "localAuthBypassEnabled", true, true);
+
+        ResourceListManager.getInstance().addToList("followedNames_test", "testName1", true);
+
+        ListsResource listsResource = (ListsResource) ApiCommon.buildResource(ListsResource.class);
+        List<String> listNames = listsResource.getLists(null);
+
+        assertEquals(1, listNames.size());
+        assertEquals("followedNames_test", listNames.get(0));
     }
 
     @Test

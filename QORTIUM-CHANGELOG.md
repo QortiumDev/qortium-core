@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - api: add local list discovery
+
+Added an authenticated `GET /lists` API path that returns the known local list names in stable sorted order. This completes the basic list-management surface so clients can discover available node-local lists before fetching or updating a specific list.
+
 ### 2026-05-02 - test: remove stale feature trigger config
 
 Removed obsolete feature trigger keys from the testnet chain config and mirrored test chain fixtures. Chain configs now only list the active `transactionV6Timestamp` feature trigger, matching the current baseline code and avoiding inherited no-op transition settings.
