@@ -68,10 +68,6 @@ public class PaymentTransaction extends Transaction {
 		return new Payment(this.repository).isProcessable(this.paymentTransactionData.getSenderPublicKey(), getPaymentData(), this.paymentTransactionData.getFee());
 	}
 
-	@Override
-	public void preProcess() throws DataException {
-		// Nothing to do
-	}
 
 	@Override
 	public void process() throws DataException {

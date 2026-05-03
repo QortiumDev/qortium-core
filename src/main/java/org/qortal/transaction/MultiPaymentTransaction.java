@@ -51,10 +51,6 @@ public class MultiPaymentTransaction extends Transaction {
 		return new Payment(this.repository).isProcessable(this.multiPaymentTransactionData.getSenderPublicKey(), payments, this.multiPaymentTransactionData.getFee());
 	}
 
-	@Override
-	public void preProcess() throws DataException {
-		// Nothing to do
-	}
 
 	@Override
 	public void process() throws DataException {

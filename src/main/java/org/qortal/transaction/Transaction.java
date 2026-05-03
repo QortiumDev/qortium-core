@@ -1012,12 +1012,13 @@ public abstract class Transaction {
 	}
 
 	/**
-	 * * Pre-process a transaction before validating or processing the block
-	 * This allows for any database integrity checks prior to validation.
+	 * Pre-process a transaction before validating or processing the block.
 	 *
 	 * @throws DataException
 	 */
-	public abstract void preProcess() throws DataException;
+	public void preProcess() throws DataException {
+		// Nothing to do
+	}
 
 	/**
 	 * Actually process a transaction, updating the blockchain.

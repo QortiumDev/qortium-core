@@ -246,10 +246,6 @@ public class MessageTransaction extends Transaction {
 				getPaymentData(), this.messageTransactionData.getFee(), true);
 	}
 
-	@Override
-	public void preProcess() throws DataException {
-		// Nothing to do
-	}
 
 	@Override
 	public void process() throws DataException {

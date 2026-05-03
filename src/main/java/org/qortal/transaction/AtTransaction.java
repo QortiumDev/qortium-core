@@ -72,10 +72,6 @@ public class AtTransaction extends Transaction {
 
 	// Processing
 
-	@Override
-	public void preProcess() throws DataException {
-		// Nothing to do
-	}
 
 	@Override
 	public ValidationResult isValid() throws DataException {

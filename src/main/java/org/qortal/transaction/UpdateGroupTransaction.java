@@ -128,10 +128,6 @@ public class UpdateGroupTransaction extends Transaction {
 		return ValidationResult.OK;
 	}
 
-	@Override
-	public void preProcess() throws DataException {
-		// Nothing to do
-	}
 
 	@Override
 	public void process() throws DataException {

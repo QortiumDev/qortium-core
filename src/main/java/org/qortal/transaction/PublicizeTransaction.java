@@ -62,10 +62,6 @@ public class PublicizeTransaction extends Transaction {
 				this.getMempowFeeAlternativeDifficulty()));
 	}
 
-	@Override
-	public void preProcess() throws DataException {
-		// Nothing to do
-	}
 
 	@Override
 	public ValidationResult isValid() throws DataException {

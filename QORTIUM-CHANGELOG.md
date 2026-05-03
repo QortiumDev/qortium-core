@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: default transaction preProcess to no-op
+
+Changed transaction pre-processing to default to a no-op in the base transaction class and removed redundant no-op overrides from individual transaction classes. This keeps preProcess overrides limited to transaction types that actually need preparatory behavior.
+
 ### 2026-05-03 - core: stop register-name validation repairs
 
 Removed the REGISTER_NAME validation-time rebuild of name table state so register-name validation no longer mutates repository name data as a side effect. Updated name integrity tests to verify validation uses the current repository state, while explicit name integrity repair still restores missing name data and then causes duplicate registration attempts to be rejected.

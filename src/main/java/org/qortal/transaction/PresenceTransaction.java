@@ -144,10 +144,6 @@ public class PresenceTransaction extends Transaction {
 		return ValidationResult.OK;
 	}
 
-	@Override
-	public void preProcess() throws DataException {
-		// Nothing to do
-	}
 
 	@Override
 	public boolean isConfirmable() {
