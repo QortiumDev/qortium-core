@@ -36,7 +36,7 @@ public class UpdateTests extends Common {
 			// Register-name
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			String initialName = "initial-name";
-			String initialReducedName = "initia1-name";
+			String initialReducedName = "1n1t1a1-name";
 			String initialData = "{\"age\":30}";
 
 			TransactionData initialTransactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), initialName, initialData);
@@ -46,7 +46,7 @@ public class UpdateTests extends Common {
 			// Check name, reduced name, and data exist
 			assertTrue(repository.getNameRepository().nameExists(initialName));
 			NameData nameData = repository.getNameRepository().fromName(initialName);
-			assertEquals("initia1-name", nameData.getReducedName());
+			assertEquals("1n1t1a1-name", nameData.getReducedName());
 			assertEquals(initialData, nameData.getData());
 			assertNotNull(repository.getNameRepository().fromReducedName(initialReducedName));
 
@@ -104,7 +104,7 @@ public class UpdateTests extends Common {
 			String initialName = "initial-name";
 			String initialData = "{\"age\":30}";
 
-			String constantReducedName = "initia1-name";
+			String constantReducedName = "1n1t1a1-name";
 
 			TransactionData initialTransactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), initialName, initialData);
 			initialTransactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(initialTransactionData.getTimestamp()));
@@ -151,7 +151,7 @@ public class UpdateTests extends Common {
 			// Register-name
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			String initialName = "initial-name";
-			String initialReducedName = "initia1-name";
+			String initialReducedName = "1n1t1a1-name";
 			String initialData = "{\"age\":30}";
 
 			TransactionData initialTransactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), initialName, initialData);
@@ -163,7 +163,7 @@ public class UpdateTests extends Common {
 			assertNotNull(repository.getNameRepository().fromReducedName(initialReducedName));
 
 			String middleName = "middle-name";
-			String middleReducedName = "midd1e-name";
+			String middleReducedName = "m1dd1e-name";
 			String middleData = "";
 			TransactionData middleTransactionData = new UpdateNameTransactionData(TestTransaction.generateBase(alice), initialName, middleName, middleData);
 			TransactionUtils.signAndMint(repository, middleTransactionData, alice);
@@ -289,7 +289,7 @@ public class UpdateTests extends Common {
 			// Register-name
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			String initialName = "initial-name";
-			String initialReducedName = "initia1-name";
+			String initialReducedName = "1n1t1a1-name";
 			String initialData = "{\"age\":30}";
 
 			TransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), initialName, initialData);
@@ -347,7 +347,7 @@ public class UpdateTests extends Common {
 			// Register-name
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			String initialName = "initial-name";
-			String initialReducedName = "initia1-name";
+			String initialReducedName = "1n1t1a1-name";
 			String initialData = "{\"age\":30}";
 
 			TransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), initialName, initialData);
@@ -389,7 +389,7 @@ public class UpdateTests extends Common {
 			// Register-name
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			String initialName = "initial-name";
-			String initialReducedName = "initia1-name";
+			String initialReducedName = "1n1t1a1-name";
 			String initialData = "{\"age\":30}";
 
 			TransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), initialName, initialData);
@@ -406,7 +406,7 @@ public class UpdateTests extends Common {
 
 			// Update data
 			String middleName = "middle-name";
-			String middleReducedName = "midd1e-name";
+			String middleReducedName = "m1dd1e-name";
 			String middleData = "middle-data";
 			transactionData = new UpdateNameTransactionData(TestTransaction.generateBase(alice), initialName, middleName, middleData);
 			TransactionUtils.signAndMint(repository, transactionData, alice);
@@ -466,7 +466,7 @@ public class UpdateTests extends Common {
 			// Register-name
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			String initialName = "initial-name";
-			String initialReducedName = "initia1-name";
+			String initialReducedName = "1n1t1a1-name";
 			String initialData = "{\"age\":30}";
 
 			TransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), initialName, initialData);
@@ -480,7 +480,7 @@ public class UpdateTests extends Common {
 			// Don't update data, but update name.
 			// This tests whether reverting a future update/sale can find the correct previous data
 			String middleName = "middle-name";
-			String middleReducedName = "midd1e-name";
+			String middleReducedName = "m1dd1e-name";
 			String middleData = "";
 			transactionData = new UpdateNameTransactionData(TestTransaction.generateBase(alice), initialName, middleName, middleData);
 			TransactionUtils.signAndMint(repository, transactionData, alice);

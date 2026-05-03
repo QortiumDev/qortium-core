@@ -21,7 +21,16 @@ public abstract class Unicode {
 	public static final String WORD_JOINER = "\u2060";
 	public static final String ZERO_WIDTH_NO_BREAK_SPACE = "\ufeff";
 
+	public static final String BRAILLE_PATTERN_BLANK = "\u2800";
+	public static final String HANGUL_CHOSEONG_FILLER = "\u115f";
+	public static final String HANGUL_JUNGSEONG_FILLER = "\u1160";
+	public static final String HANGUL_FILLER = "\u3164";
+	public static final String HALFWIDTH_HANGUL_FILLER = "\uffa0";
+
 	public static final CharMatcher ZERO_WIDTH_CHAR_MATCHER = CharMatcher.anyOf(ZERO_WIDTH_SPACE + ZERO_WIDTH_NON_JOINER + ZERO_WIDTH_JOINER + WORD_JOINER + ZERO_WIDTH_NO_BREAK_SPACE);
+	private static final CharMatcher VISUAL_BLANK_CHAR_MATCHER = CharMatcher.anyOf(BRAILLE_PATTERN_BLANK + HANGUL_CHOSEONG_FILLER
+			+ HANGUL_JUNGSEONG_FILLER + HANGUL_FILLER + HALFWIDTH_HANGUL_FILLER);
+	private static final UnicodeSet removableOtherUniset = new UnicodeSet("[[:Other:]]").freeze();
 	private static final UnicodeSet removableUniset = new UnicodeSet("[[:Mark:][:Other:]]").freeze();
 
 
@@ -36,6 +45,8 @@ public abstract class Unicode {
 
 	/** Returns string in Unicode canonical normalized form (NFKC),<br>
 	 * with zero-width spaces/joiners removed,<br>
+	 * visually blank filler characters treated as whitespace,<br>
+	 * controls, format controls, private-use characters, surrogates, and unassigned codepoints removed,<br>
 	 * leading/trailing whitespace trimmed<br>
 	 * and all other whitespace blocks collapsed into a single space character.
 	 * <p>
@@ -58,6 +69,12 @@ public abstract class Unicode {
 		// Remove zero-width code-points, used for rendering
 		output = removeZeroWidth(output);
 
+		// Treat visible blank/filler code-points as whitespace
+		output = replaceVisualBlanksWithWhitespace(output);
+
+		// Remove invisible controls and other unsafe non-rendering codepoints
+		output = removableOtherUniset.stripFrom(output, true);
+
 		// Normalize whitespace
 		output = CharMatcher.whitespace().trimAndCollapseFrom(output, ' ');
 
@@ -65,6 +82,7 @@ public abstract class Unicode {
 	}
 
 	/** Returns string after normalization,<br>
+	 * visually blank filler characters treated as whitespace,<br>
 	 * conversion to lowercase (locale insensitive)<br>
 	 * and homoglyphs replaced with simpler, reduced codepoints.
 	 * <p>
@@ -90,6 +108,9 @@ public abstract class Unicode {
 		// Remove zero-width code-points, used for rendering
 		output = removeZeroWidth(output);
 
+		// Treat visible blank/filler code-points as whitespace
+		output = replaceVisualBlanksWithWhitespace(output);
+
 		// Normalize whitespace
 		output = CharMatcher.whitespace().trimAndCollapseFrom(output, ' ');
 
@@ -102,11 +123,21 @@ public abstract class Unicode {
 		// Reduce homoglyphs
 		output = reduceHomoglyphs(output);
 
+		// The bundled homoglyph table maps uppercase I, lowercase L, one, and pipe
+		// together, but case-folding has already converted uppercase I to lowercase i.
+		// Fold lowercase i into the same reduced class so I/i/l/1/| cannot be used
+		// as distinct reduced-name variants.
+		output = output.replace('i', '1');
+
 		return output;
 	}
 
 	public static String removeZeroWidth(String input) {
 		return ZERO_WIDTH_CHAR_MATCHER.removeFrom(input);
+	}
+
+	private static String replaceVisualBlanksWithWhitespace(String input) {
+		return VISUAL_BLANK_CHAR_MATCHER.replaceFrom(input, ' ');
 	}
 
 	public static String reduceHomoglyphs(String input) {

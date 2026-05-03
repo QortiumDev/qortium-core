@@ -4,6 +4,11 @@ import org.junit.Test;
 import org.qortal.utils.Unicode;
 
 import static org.junit.Assert.*;
+import static org.qortal.utils.Unicode.BRAILLE_PATTERN_BLANK;
+import static org.qortal.utils.Unicode.HALFWIDTH_HANGUL_FILLER;
+import static org.qortal.utils.Unicode.HANGUL_CHOSEONG_FILLER;
+import static org.qortal.utils.Unicode.HANGUL_FILLER;
+import static org.qortal.utils.Unicode.HANGUL_JUNGSEONG_FILLER;
 import static org.qortal.utils.Unicode.NO_BREAK_SPACE;
 import static org.qortal.utils.Unicode.ZERO_WIDTH_SPACE;
 
@@ -16,6 +21,41 @@ public class UnicodeTests {
 		String output = Unicode.normalize(input);
 
 		assertEquals("trim & collapse failed", "test", output);
+	}
+
+	@Test
+	public void testVisualBlankCharacters() {
+		String[] visualBlanks = new String[] {
+				BRAILLE_PATTERN_BLANK,
+				HANGUL_CHOSEONG_FILLER,
+				HANGUL_JUNGSEONG_FILLER,
+				HANGUL_FILLER,
+				HALFWIDTH_HANGUL_FILLER
+		};
+
+		for (String visualBlank : visualBlanks) {
+			assertEquals("visual blank trim failed", "sample", Unicode.normalize(visualBlank + "sample" + visualBlank));
+			assertEquals("visual blank collapse failed", "sample name", Unicode.normalize("sample" + visualBlank + visualBlank + "name"));
+			assertEquals("strings should match", Unicode.sanitize("sample"), Unicode.sanitize(visualBlank + "sample" + visualBlank));
+			assertEquals("strings should match", Unicode.sanitize("sample name"), Unicode.sanitize("sample" + visualBlank + "name"));
+		}
+	}
+
+	@Test
+	public void testOtherCodepointsAreRemovedFromNormalizedNames() {
+		String[] unsafeCodepoints = new String[] {
+				"\u0007", // bell control
+				"\u202d", // left-to-right override
+				"\u202e", // right-to-left override
+				"\u2066", // left-to-right isolate
+				"\u2069", // pop directional isolate
+				"\ue000" // private use
+		};
+
+		for (String unsafeCodepoint : unsafeCodepoints) {
+			assertEquals("unsafe codepoint strip failed", "sample", Unicode.normalize("sam" + unsafeCodepoint + "ple"));
+			assertEquals("strings should match", Unicode.sanitize("sample"), Unicode.sanitize("sam" + unsafeCodepoint + "ple"));
+		}
 	}
 
 	@Test
@@ -34,6 +74,21 @@ public class UnicodeTests {
 		String input2 = "  " + NO_BREAK_SPACE + "t" + omicron + "ast  " + ZERO_WIDTH_SPACE;
 
 		assertEquals("strings should match", Unicode.sanitize(input1), Unicode.sanitize(input2));
+	}
+
+	@Test
+	public void testCaseFoldedIHomoglyphs() {
+		assertEquals("1abe1", Unicode.sanitize("label"));
+		assertEquals("strings should match", Unicode.sanitize("label"), Unicode.sanitize("1abel"));
+		assertEquals("strings should match", Unicode.sanitize("label"), Unicode.sanitize("Iabel"));
+
+		assertEquals("11near", Unicode.sanitize("linear"));
+		assertEquals("strings should match", Unicode.sanitize("linear"), Unicode.sanitize("1inear"));
+		assertEquals("strings should match", Unicode.sanitize("linear"), Unicode.sanitize("Iinear"));
+
+		assertEquals("strings should match", Unicode.sanitize("Ian"), Unicode.sanitize("ian"));
+		assertEquals("strings should match", Unicode.sanitize("Ian"), Unicode.sanitize("lan"));
+		assertEquals("strings should match", Unicode.sanitize("Ian"), Unicode.sanitize("1an"));
 	}
 
 	@Test

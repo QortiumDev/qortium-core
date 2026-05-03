@@ -23,6 +23,7 @@ import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.utils.Amounts;
+import org.qortal.utils.Unicode;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -62,6 +63,68 @@ public class MiscTests extends Common {
 
 			ValidationResult result = transaction.importAsUnconfirmed();
 			assertTrue("Transaction should be invalid", ValidationResult.OK != result);
+		}
+	}
+
+	@Test
+	public void testCreateAssetRejectsIConfusableReducedName() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			String description = "description";
+			long quantity = 12345678L;
+			boolean isDivisible = true;
+			String data = "{}";
+			boolean isUnspendable = false;
+
+			AssetUtils.issueAsset(repository, "alice", "sample-label", quantity, isDivisible);
+
+			TransactionData transactionData = new IssueAssetTransactionData(TestTransaction.generateBase(alice),
+					"sample-Iabel", description, quantity, isDivisible, data, isUnspendable);
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.ASSET_ALREADY_EXISTS, result);
+		}
+	}
+
+	@Test
+	public void testCreateAssetRejectsTrailingVisualBlankName() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			String assetName = "sample-space";
+			String spoofedAssetName = assetName + Unicode.BRAILLE_PATTERN_BLANK;
+			String description = "description";
+			long quantity = 12345678L;
+			boolean isDivisible = true;
+			String data = "{}";
+			boolean isUnspendable = false;
+
+			TransactionData transactionData = new IssueAssetTransactionData(TestTransaction.generateBase(alice),
+					spoofedAssetName, description, quantity, isDivisible, data, isUnspendable);
+			assertEquals(Unicode.sanitize(assetName), ((IssueAssetTransactionData) transactionData).getReducedAssetName());
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.NAME_NOT_NORMALIZED, result);
+		}
+	}
+
+	@Test
+	public void testCreateAssetRejectsBidiControlName() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			String assetName = "sample-name";
+			String spoofedAssetName = "sam\u202eple-name";
+			String description = "description";
+			long quantity = 12345678L;
+			boolean isDivisible = true;
+			String data = "{}";
+			boolean isUnspendable = false;
+
+			TransactionData transactionData = new IssueAssetTransactionData(TestTransaction.generateBase(alice),
+					spoofedAssetName, description, quantity, isDivisible, data, isUnspendable);
+			assertEquals(Unicode.sanitize(assetName), ((IssueAssetTransactionData) transactionData).getReducedAssetName());
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.NAME_NOT_NORMALIZED, result);
 		}
 	}
 

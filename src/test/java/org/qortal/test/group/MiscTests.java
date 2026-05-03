@@ -24,6 +24,7 @@ import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.Transaction.ValidationResult;
+import org.qortal.utils.Unicode;
 
 import static org.junit.Assert.*;
 
@@ -59,6 +60,70 @@ public class MiscTests extends Common {
 			CreateGroupTransactionData transactionData = new CreateGroupTransactionData(TestTransaction.generateBase(alice), duplicateGroupName, description, isOpen, approvalThreshold, minimumBlockDelay, maximumBlockDelay);
 			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
 			assertTrue("Transaction should be invalid", ValidationResult.OK != result);
+		}
+	}
+
+	@Test
+	public void testCreateGroupRejectsIConfusableReducedName() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			createGroup(repository, alice, "sample-label", false);
+
+			String duplicateGroupName = "sample-Iabel";
+			String description = duplicateGroupName + " (description)";
+			boolean isOpen = false;
+			ApprovalThreshold approvalThreshold = ApprovalThreshold.ONE;
+			int minimumBlockDelay = 10;
+			int maximumBlockDelay = 1440;
+
+			CreateGroupTransactionData transactionData = new CreateGroupTransactionData(TestTransaction.generateBase(alice),
+					duplicateGroupName, description, isOpen, approvalThreshold, minimumBlockDelay, maximumBlockDelay);
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.GROUP_ALREADY_EXISTS, result);
+		}
+	}
+
+	@Test
+	public void testCreateGroupRejectsTrailingVisualBlankName() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			String groupName = "sample-space";
+			String spoofedGroupName = groupName + Unicode.BRAILLE_PATTERN_BLANK;
+			String description = "description";
+			boolean isOpen = false;
+			ApprovalThreshold approvalThreshold = ApprovalThreshold.ONE;
+			int minimumBlockDelay = 10;
+			int maximumBlockDelay = 1440;
+
+			CreateGroupTransactionData transactionData = new CreateGroupTransactionData(TestTransaction.generateBase(alice),
+					spoofedGroupName, description, isOpen, approvalThreshold, minimumBlockDelay, maximumBlockDelay);
+			assertEquals(Unicode.sanitize(groupName), transactionData.getReducedGroupName());
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.NAME_NOT_NORMALIZED, result);
+		}
+	}
+
+	@Test
+	public void testCreateGroupRejectsBidiControlName() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			String groupName = "sample-name";
+			String spoofedGroupName = "sam\u202eple-name";
+			String description = "description";
+			boolean isOpen = false;
+			ApprovalThreshold approvalThreshold = ApprovalThreshold.ONE;
+			int minimumBlockDelay = 10;
+			int maximumBlockDelay = 1440;
+
+			CreateGroupTransactionData transactionData = new CreateGroupTransactionData(TestTransaction.generateBase(alice),
+					spoofedGroupName, description, isOpen, approvalThreshold, minimumBlockDelay, maximumBlockDelay);
+			assertEquals(Unicode.sanitize(groupName), transactionData.getReducedGroupName());
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.NAME_NOT_NORMALIZED, result);
 		}
 	}
 

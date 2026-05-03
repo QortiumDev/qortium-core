@@ -72,7 +72,7 @@ public class IntegrityTests extends Common {
             PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
             String initialName = "initial-name";
             String initialData = "{\"age\":30}";
-            String initialReducedName = "initia1-name";
+            String initialReducedName = "1n1t1a1-name";
 
             TransactionData initialTransactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), initialName, initialData);
             initialTransactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(initialTransactionData.getTimestamp()));

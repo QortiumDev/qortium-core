@@ -27,6 +27,7 @@ import org.qortal.transaction.RegisterNameTransaction;
 import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.utils.NTP;
+import org.qortal.utils.Unicode;
 
 import java.util.Arrays;
 import java.util.List;
@@ -108,6 +109,60 @@ public class MiscTests extends Common {
 
 			ValidationResult result = transaction.importAsUnconfirmed();
 			assertTrue("Transaction should be invalid", ValidationResult.OK != result);
+		}
+	}
+
+	@Test
+	public void testRegisterNameRejectsIConfusableReducedName() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			String name = "sample-label";
+			String data = "{}";
+
+			RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, data);
+			transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			RegisterNameTransactionData duplicateData = new RegisterNameTransactionData(TestTransaction.generateBase(bob), "sample-Iabel", data);
+			duplicateData.setFee(new RegisterNameTransaction(null, null).getUnitFee(duplicateData.getTimestamp()));
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, duplicateData, bob);
+			assertEquals(ValidationResult.NAME_ALREADY_REGISTERED, result);
+		}
+	}
+
+	@Test
+	public void testRegisterNameRejectsTrailingVisualBlankName() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			String name = "sample-space";
+			String spoofedName = name + Unicode.BRAILLE_PATTERN_BLANK;
+			String data = "{}";
+
+			RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), spoofedName, data);
+			transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
+			assertEquals(Unicode.sanitize(name), transactionData.getReducedName());
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.NAME_NOT_NORMALIZED, result);
+		}
+	}
+
+	@Test
+	public void testRegisterNameRejectsBidiControlName() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			String name = "sample-name";
+			String spoofedName = "sam\u202eple-name";
+			String data = "{}";
+
+			RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), spoofedName, data);
+			transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
+			assertEquals(Unicode.sanitize(name), transactionData.getReducedName());
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
+			assertEquals(ValidationResult.NAME_NOT_NORMALIZED, result);
 		}
 	}
 
