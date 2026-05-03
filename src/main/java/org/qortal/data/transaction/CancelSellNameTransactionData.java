@@ -24,6 +24,11 @@ public class CancelSellNameTransactionData extends TransactionData {
 	@Schema(hidden = true)
 	private Long salePrice;
 
+	// For internal use when orphaning
+	@XmlTransient
+	@Schema(hidden = true)
+	private String saleRecipient;
+
 	// Constructors
 
 	// For JAXB
@@ -35,17 +40,22 @@ public class CancelSellNameTransactionData extends TransactionData {
 		this.creatorPublicKey = this.ownerPublicKey;
 	}
 
-	public CancelSellNameTransactionData(BaseTransactionData baseTransactionData, String name, Long salePrice) {
+	public CancelSellNameTransactionData(BaseTransactionData baseTransactionData, String name, Long salePrice, String saleRecipient) {
 		super(TransactionType.CANCEL_SELL_NAME, baseTransactionData);
 
 		this.ownerPublicKey = baseTransactionData.creatorPublicKey;
 		this.name = name;
 		this.salePrice = salePrice;
+		this.saleRecipient = saleRecipient;
+	}
+
+	public CancelSellNameTransactionData(BaseTransactionData baseTransactionData, String name, Long salePrice) {
+		this(baseTransactionData, name, salePrice, null);
 	}
 
 	/** From network/API */
 	public CancelSellNameTransactionData(BaseTransactionData baseTransactionData, String name) {
-		this(baseTransactionData, name, null);
+		this(baseTransactionData, name, null, null);
 	}
 
 	// Getters / setters
@@ -64,6 +74,14 @@ public class CancelSellNameTransactionData extends TransactionData {
 
 	public void setSalePrice(Long salePrice) {
 		this.salePrice = salePrice;
+	}
+
+	public String getSaleRecipient() {
+		return this.saleRecipient;
+	}
+
+	public void setSaleRecipient(String saleRecipient) {
+		this.saleRecipient = saleRecipient;
 	}
 
 }

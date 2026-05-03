@@ -34,6 +34,11 @@ public class BuyNameTransactionData extends TransactionData {
 	@Schema(hidden = true)
 	private byte[] nameReference;
 
+	// For internal use when orphaning
+	@XmlTransient
+	@Schema(hidden = true)
+	private String saleRecipient;
+
 	// Constructors
 
 	// For JAXB
@@ -47,7 +52,7 @@ public class BuyNameTransactionData extends TransactionData {
 
 	/** From repository */
 	public BuyNameTransactionData(BaseTransactionData baseTransactionData,
-			String name, long amount, String seller, byte[] nameReference) {
+			String name, long amount, String seller, byte[] nameReference, String saleRecipient) {
 		super(TransactionType.BUY_NAME, baseTransactionData);
 
 		this.buyerPublicKey = baseTransactionData.creatorPublicKey;
@@ -55,11 +60,18 @@ public class BuyNameTransactionData extends TransactionData {
 		this.amount = amount;
 		this.seller = seller;
 		this.nameReference = nameReference;
+		this.saleRecipient = saleRecipient;
+	}
+
+	/** From repository */
+	public BuyNameTransactionData(BaseTransactionData baseTransactionData,
+			String name, long amount, String seller, byte[] nameReference) {
+		this(baseTransactionData, name, amount, seller, nameReference, null);
 	}
 
 	/** From network/API */
 	public BuyNameTransactionData(BaseTransactionData baseTransactionData, String name, long amount, String seller) {
-		this(baseTransactionData, name, amount, seller, null);
+		this(baseTransactionData, name, amount, seller, null, null);
 	}
 
 	// Getters / setters
@@ -86,6 +98,14 @@ public class BuyNameTransactionData extends TransactionData {
 
 	public void setNameReference(byte[] nameReference) {
 		this.nameReference = nameReference;
+	}
+
+	public String getSaleRecipient() {
+		return this.saleRecipient;
+	}
+
+	public void setSaleRecipient(String saleRecipient) {
+		this.saleRecipient = saleRecipient;
 	}
 
 }

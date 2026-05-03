@@ -17,7 +17,7 @@ public class HSQLDBBuyNameTransactionRepository extends HSQLDBTransactionReposit
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT name, amount, seller, name_reference FROM BuyNameTransactions WHERE signature = ?";
+		String sql = "SELECT name, amount, seller, name_reference, sale_recipient FROM BuyNameTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
@@ -27,8 +27,9 @@ public class HSQLDBBuyNameTransactionRepository extends HSQLDBTransactionReposit
 			long amount = resultSet.getLong(2);
 			String seller = resultSet.getString(3);
 			byte[] nameReference = resultSet.getBytes(4);
+			String saleRecipient = resultSet.getString(5);
 
-			return new BuyNameTransactionData(baseTransactionData, name, amount, seller, nameReference);
+			return new BuyNameTransactionData(baseTransactionData, name, amount, seller, nameReference, saleRecipient);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch buy name transaction from repository", e);
 		}
@@ -42,7 +43,8 @@ public class HSQLDBBuyNameTransactionRepository extends HSQLDBTransactionReposit
 
 		saveHelper.bind("signature", buyNameTransactionData.getSignature()).bind("buyer", buyNameTransactionData.getBuyerPublicKey())
 				.bind("name", buyNameTransactionData.getName()).bind("amount", buyNameTransactionData.getAmount())
-				.bind("seller", buyNameTransactionData.getSeller()).bind("name_reference", buyNameTransactionData.getNameReference());
+				.bind("seller", buyNameTransactionData.getSeller()).bind("name_reference", buyNameTransactionData.getNameReference())
+				.bind("sale_recipient", buyNameTransactionData.getSaleRecipient());
 
 		try {
 			saveHelper.execute(this.repository);

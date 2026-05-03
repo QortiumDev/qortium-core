@@ -4,6 +4,7 @@ import com.google.common.base.Utf8;
 import org.qortal.account.Account;
 import org.qortal.asset.Asset;
 import org.qortal.controller.repository.NamesDatabaseIntegrityCheck;
+import org.qortal.crypto.Crypto;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.transaction.SellNameTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -32,7 +33,9 @@ public class SellNameTransaction extends Transaction {
 	// More information
 	@Override
 	public List<String> getRecipientAddresses() throws DataException {
-		return Collections.emptyList(); // No direct recipient address for this transaction
+		return this.sellNameTransactionData.getRecipient() != null
+				? Collections.singletonList(this.sellNameTransactionData.getRecipient())
+				: Collections.emptyList();
 	}
 
 	// Navigation
@@ -76,10 +79,16 @@ public class SellNameTransaction extends Transaction {
 		if (!owner.getAddress().equals(nameData.getOwner()))
 			return ValidationResult.INVALID_NAME_OWNER;
 
-		// Check amount is positive and within valid range
+		String recipient = this.sellNameTransactionData.getRecipient();
+		if (recipient != null && !Crypto.isValidAddress(recipient))
+			return ValidationResult.INVALID_ADDRESS;
+
+		// Check amount is non-negative for direct sales, positive for public sales, and within valid range
 		long amount = this.sellNameTransactionData.getAmount();
-		if (amount <= 0)
+		if (amount < 0)
 			return ValidationResult.NEGATIVE_AMOUNT;
+		if (amount == 0 && recipient == null)
+			return ValidationResult.INVALID_AMOUNT;
 		if (amount >= MAX_AMOUNT)
 			return ValidationResult.INVALID_AMOUNT;
 

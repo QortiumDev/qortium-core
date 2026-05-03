@@ -278,7 +278,7 @@ public class HSQLDBDatabaseUpdates {
 					// Name-related
 					stmt.execute("CREATE TABLE Names (name RegisteredName, reduced_name RegisteredName, owner AccountAddress NOT NULL, "
 							+ "registered_when EpochMillis NOT NULL, updated_when EpochMillis, "
-							+ "is_for_sale BOOLEAN NOT NULL DEFAULT FALSE, sale_price AssetAmount, data NameData NOT NULL, "
+							+ "is_for_sale BOOLEAN NOT NULL DEFAULT FALSE, sale_price AssetAmount, sale_recipient AccountAddress, data NameData NOT NULL, "
 							+ "reference Signature, creation_group_id GroupID NOT NULL DEFAULT 0, "
 							+ "PRIMARY KEY (name))");
 					// For finding names by owner
@@ -297,7 +297,7 @@ public class HSQLDBDatabaseUpdates {
 
 					// Sell Name Transactions
 					stmt.execute("CREATE TABLE SellNameTransactions (signature Signature, owner AccountPublicKey NOT NULL, name RegisteredName NOT NULL, "
-							+ "amount AssetAmount NOT NULL, " + TRANSACTION_KEYS + ")");
+							+ "amount AssetAmount NOT NULL, recipient AccountAddress, " + TRANSACTION_KEYS + ")");
 
 					// Cancel Sell Name Transactions
 					stmt.execute("CREATE TABLE CancelSellNameTransactions (signature Signature, owner AccountPublicKey NOT NULL, name RegisteredName NOT NULL, "
@@ -305,7 +305,7 @@ public class HSQLDBDatabaseUpdates {
 
 					// Buy Name Transactions
 					stmt.execute("CREATE TABLE BuyNameTransactions (signature Signature, buyer AccountPublicKey NOT NULL, name RegisteredName NOT NULL, "
-							+ "seller AccountAddress NOT NULL, amount AssetAmount NOT NULL, name_reference Signature, " + TRANSACTION_KEYS + ")");
+							+ "seller AccountAddress NOT NULL, amount AssetAmount NOT NULL, name_reference Signature, sale_recipient AccountAddress, " + TRANSACTION_KEYS + ")");
 					break;
 
 				case 9:
@@ -1064,6 +1064,10 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("DROP INDEX TransactionReferenceIndex IF EXISTS");
 					dropColumnIfExists(connection, "Transactions", "reference");
 					addColumnIfMissing(connection, "Transactions", "nonce", "INT");
+					addColumnIfMissing(connection, "Names", "sale_recipient", "AccountAddress");
+					addColumnIfMissing(connection, "SellNameTransactions", "recipient", "AccountAddress");
+					addColumnIfMissing(connection, "CancelSellNameTransactions", "sale_recipient", "AccountAddress");
+					addColumnIfMissing(connection, "BuyNameTransactions", "sale_recipient", "AccountAddress");
 					renameColumnIfExists(connection, "TradeBotStates", "qort_amount", "native_amount");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");

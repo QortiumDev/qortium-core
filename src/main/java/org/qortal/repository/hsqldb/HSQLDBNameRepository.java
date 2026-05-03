@@ -24,7 +24,7 @@ public class HSQLDBNameRepository implements NameRepository {
 	@Override
 	public NameData fromName(String name) throws DataException {
 		String sql = "SELECT reduced_name, owner, data, registered_when, updated_when, "
-				+ "is_for_sale, sale_price, reference, creation_group_id FROM Names WHERE name = ?";
+				+ "is_for_sale, sale_price, sale_recipient, reference, creation_group_id FROM Names WHERE name = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, name)) {
 			if (resultSet == null)
@@ -46,10 +46,12 @@ public class HSQLDBNameRepository implements NameRepository {
 			if (salePrice == 0 && resultSet.wasNull())
 				salePrice = null;
 
-			byte[] reference = resultSet.getBytes(8);
-			int creationGroupId = resultSet.getInt(9);
+			String saleRecipient = resultSet.getString(8);
 
-			return new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, reference, creationGroupId);
+			byte[] reference = resultSet.getBytes(9);
+			int creationGroupId = resultSet.getInt(10);
+
+			return new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, saleRecipient, reference, creationGroupId);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch name info from repository", e);
 		}
@@ -67,7 +69,7 @@ public class HSQLDBNameRepository implements NameRepository {
 	@Override
 	public NameData fromReducedName(String reducedName) throws DataException {
 		String sql = "SELECT name, owner, data, registered_when, updated_when, "
-				+ "is_for_sale, sale_price, reference, creation_group_id FROM Names WHERE reduced_name = ?";
+				+ "is_for_sale, sale_price, sale_recipient, reference, creation_group_id FROM Names WHERE reduced_name = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, reducedName)) {
 			if (resultSet == null)
@@ -89,10 +91,12 @@ public class HSQLDBNameRepository implements NameRepository {
 			if (salePrice == 0 && resultSet.wasNull())
 				salePrice = null;
 
-			byte[] reference = resultSet.getBytes(8);
-			int creationGroupId = resultSet.getInt(9);
+			String saleRecipient = resultSet.getString(8);
 
-			return new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, reference, creationGroupId);
+			byte[] reference = resultSet.getBytes(9);
+			int creationGroupId = resultSet.getInt(10);
+
+			return new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, saleRecipient, reference, creationGroupId);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch name info from repository", e);
 		}
@@ -112,7 +116,7 @@ public class HSQLDBNameRepository implements NameRepository {
 		List<Object> bindParams = new ArrayList<>();
 
 		sql.append("SELECT name, reduced_name, owner, data, registered_when, updated_when, "
-				+ "is_for_sale, sale_price, reference, creation_group_id FROM Names "
+				+ "is_for_sale, sale_price, sale_recipient, reference, creation_group_id FROM Names "
 				+ "WHERE LCASE(name) LIKE ? ORDER BY name");
 
 		// Search anywhere in the name, unless "prefixOnly" has been requested
@@ -149,10 +153,12 @@ public class HSQLDBNameRepository implements NameRepository {
 				if (salePrice == 0 && resultSet.wasNull())
 					salePrice = null;
 
-				byte[] reference = resultSet.getBytes(9);
-				int creationGroupId = resultSet.getInt(10);
+				String saleRecipient = resultSet.getString(9);
 
-				names.add(new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, reference, creationGroupId));
+				byte[] reference = resultSet.getBytes(10);
+				int creationGroupId = resultSet.getInt(11);
+
+				names.add(new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, saleRecipient, reference, creationGroupId));
 			} while (resultSet.next());
 
 			return names;
@@ -167,7 +173,7 @@ public class HSQLDBNameRepository implements NameRepository {
 		List<Object> bindParams = new ArrayList<>();
 
 		sql.append("SELECT name, reduced_name, owner, data, registered_when, updated_when, "
-				+ "is_for_sale, sale_price, reference, creation_group_id FROM Names");
+				+ "is_for_sale, sale_price, sale_recipient, reference, creation_group_id FROM Names");
 
 		if (after != null) {
 			sql.append(" WHERE registered_when > ? OR updated_when > ?");
@@ -206,10 +212,12 @@ public class HSQLDBNameRepository implements NameRepository {
 				if (salePrice == 0 && resultSet.wasNull())
 					salePrice = null;
 
-				byte[] reference = resultSet.getBytes(9);
-				int creationGroupId = resultSet.getInt(10);
+				String saleRecipient = resultSet.getString(9);
 
-				names.add(new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, reference, creationGroupId));
+				byte[] reference = resultSet.getBytes(10);
+				int creationGroupId = resultSet.getInt(11);
+
+				names.add(new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, saleRecipient, reference, creationGroupId));
 			} while (resultSet.next());
 
 			return names;
@@ -223,7 +231,7 @@ public class HSQLDBNameRepository implements NameRepository {
 		StringBuilder sql = new StringBuilder(512);
 
 		sql.append("SELECT name, reduced_name, owner, data, registered_when, updated_when, "
-				+ "sale_price, reference, creation_group_id  FROM Names WHERE is_for_sale = TRUE ORDER BY name");
+				+ "sale_price, sale_recipient, reference, creation_group_id  FROM Names WHERE is_for_sale = TRUE ORDER BY name");
 
 		if (reverse != null && reverse)
 			sql.append(" DESC");
@@ -254,10 +262,12 @@ public class HSQLDBNameRepository implements NameRepository {
 				if (salePrice == 0 && resultSet.wasNull())
 					salePrice = null;
 
-				byte[] reference = resultSet.getBytes(8);
-				int creationGroupId = resultSet.getInt(9);
+				String saleRecipient = resultSet.getString(8);
 
-				names.add(new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, reference, creationGroupId));
+				byte[] reference = resultSet.getBytes(9);
+				int creationGroupId = resultSet.getInt(10);
+
+				names.add(new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, saleRecipient, reference, creationGroupId));
 			} while (resultSet.next());
 
 			return names;
@@ -271,7 +281,7 @@ public class HSQLDBNameRepository implements NameRepository {
 		StringBuilder sql = new StringBuilder(512);
 
 		sql.append("SELECT name, reduced_name, data, registered_when, updated_when, "
-				+ "is_for_sale, sale_price, reference, creation_group_id FROM Names WHERE owner = ? ORDER BY registered_when");
+				+ "is_for_sale, sale_price, sale_recipient, reference, creation_group_id FROM Names WHERE owner = ? ORDER BY registered_when");
 
 		if (reverse != null && reverse)
 			sql.append(" DESC");
@@ -301,10 +311,12 @@ public class HSQLDBNameRepository implements NameRepository {
 				if (salePrice == 0 && resultSet.wasNull())
 					salePrice = null;
 
-				byte[] reference = resultSet.getBytes(8);
-				int creationGroupId = resultSet.getInt(9);
+				String saleRecipient = resultSet.getString(8);
 
-				names.add(new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, reference, creationGroupId));
+				byte[] reference = resultSet.getBytes(9);
+				int creationGroupId = resultSet.getInt(10);
+
+				names.add(new NameData(name, reducedName, owner, data, registered, updated, isForSale, salePrice, saleRecipient, reference, creationGroupId));
 			} while (resultSet.next());
 
 			return names;
@@ -430,7 +442,8 @@ public class HSQLDBNameRepository implements NameRepository {
 				.bind("owner", nameData.getOwner()).bind("data", nameData.getData())
 				.bind("registered_when", nameData.getRegistered()).bind("updated_when", nameData.getUpdated())
 				.bind("is_for_sale", nameData.isForSale()).bind("sale_price", nameData.getSalePrice())
-				.bind("reference", nameData.getReference()).bind("creation_group_id", nameData.getCreationGroupId());
+				.bind("sale_recipient", nameData.getSaleRecipient()).bind("reference", nameData.getReference())
+				.bind("creation_group_id", nameData.getCreationGroupId());
 
 		try {
 			saveHelper.execute(this.repository);

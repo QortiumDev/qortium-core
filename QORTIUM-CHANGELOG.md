@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - core: support direct name sales
+
+Added optional direct-sale recipients to name sale state so sellers can list a name for a specific buyer. Direct sales can use a zero price, but the recipient still has to submit a BUY_NAME transaction to accept the transfer; public name sales still require a positive price. Orphan handling now restores direct-sale recipient details for canceled and completed name sales.
+
 ### 2026-05-02 - core: enable publicize account bootstrap
 
 Re-enabled PUBLICIZE as a fee-or-MemoryPoW transaction so new accounts can publish their public key without needing native coins first. Valid unseen addresses now return placeholder account data instead of an unknown-address error, while public-key lookups still return false until the account key has actually appeared on chain.

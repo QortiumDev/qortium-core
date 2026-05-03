@@ -188,39 +188,44 @@ public class Name {
 	}
 
 	public void sell(SellNameTransactionData sellNameTransactionData) throws DataException {
-		// Mark as for-sale and set price
+		// Mark as for-sale and set price/optional direct-sale recipient
 		this.nameData.setIsForSale(true);
 		this.nameData.setSalePrice(sellNameTransactionData.getAmount());
+		this.nameData.setSaleRecipient(sellNameTransactionData.getRecipient());
 
 		// Save sale info into repository
 		this.repository.getNameRepository().save(this.nameData);
 	}
 
 	public void unsell(SellNameTransactionData sellNameTransactionData) throws DataException {
-		// Mark not for-sale and unset price
+		// Mark not for-sale and unset price/optional direct-sale recipient
 		this.nameData.setIsForSale(false);
 		this.nameData.setSalePrice(null);
+		this.nameData.setSaleRecipient(null);
 
 		// Save no-sale info into repository
 		this.repository.getNameRepository().save(this.nameData);
 	}
 
 	public void cancelSell(CancelSellNameTransactionData cancelSellNameTransactionData) throws DataException {
-		// Update previous sale price in transaction data
+		// Update previous sale details in transaction data
 		cancelSellNameTransactionData.setSalePrice(this.nameData.getSalePrice());
+		cancelSellNameTransactionData.setSaleRecipient(this.nameData.getSaleRecipient());
 
 		// Mark not for-sale
 		this.nameData.setIsForSale(false);
 		this.nameData.setSalePrice(null);
+		this.nameData.setSaleRecipient(null);
 
 		// Save sale info into repository
 		this.repository.getNameRepository().save(this.nameData);
 	}
 
 	public void uncancelSell(CancelSellNameTransactionData cancelSellNameTransactionData) throws DataException {
-		// Mark as for-sale using existing price
+		// Mark as for-sale using existing direct-sale details
 		this.nameData.setIsForSale(true);
 		this.nameData.setSalePrice(cancelSellNameTransactionData.getSalePrice());
+		this.nameData.setSaleRecipient(cancelSellNameTransactionData.getSaleRecipient());
 
 		// Save no-sale info into repository
 		this.repository.getNameRepository().save(this.nameData);
@@ -230,9 +235,11 @@ public class Name {
 		// Save previous name-changing reference in this transaction's data
 		// Caller is expected to save
 		buyNameTransactionData.setNameReference(this.nameData.getReference());
+		buyNameTransactionData.setSaleRecipient(this.nameData.getSaleRecipient());
 
 		// Mark not for-sale but leave price in case we want to orphan
 		this.nameData.setIsForSale(false);
+		this.nameData.setSaleRecipient(null);
 
 		if (modifyBalances) {
 			// Update seller's balance
@@ -273,9 +280,10 @@ public class Name {
 	}
 
 	public void unbuy(BuyNameTransactionData buyNameTransactionData) throws DataException {
-		// Mark as for-sale using existing price
+		// Mark as for-sale using existing direct-sale details
 		this.nameData.setIsForSale(true);
 		this.nameData.setSalePrice(buyNameTransactionData.getAmount());
+		this.nameData.setSaleRecipient(buyNameTransactionData.getSaleRecipient());
 
 		// Previous name-changing reference is taken from this transaction's cached copy
 		this.nameData.setReference(buyNameTransactionData.getNameReference());
@@ -300,6 +308,7 @@ public class Name {
 		// Clean previous name-changing reference from this transaction's data
 		// Caller is expected to save
 		buyNameTransactionData.setNameReference(null);
+		buyNameTransactionData.setSaleRecipient(null);
 
 		// If the seller lost their primary name, then set their primary name back.
 		if (seller.getPrimaryName().isEmpty()) {

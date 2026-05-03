@@ -35,6 +35,7 @@ public class BuySellTests extends Common {
 	private Repository repository;
 	private PrivateKeyAccount alice;
 	private PrivateKeyAccount bob;
+	private PrivateKeyAccount chloe;
 
 	private String name;
 	private Long price;
@@ -46,6 +47,7 @@ public class BuySellTests extends Common {
 		repository = RepositoryManager.getRepository();
 		alice = Common.getTestAccount(repository, "alice");
 		bob = Common.getTestAccount(repository, "bob");
+		chloe = Common.getTestAccount(repository, "chloe");
 
 		name = "test name" + " " + random.nextInt(1_000_000);
 		price = (random.nextInt(1000) + 1) * Amounts.MULTIPLIER;
@@ -58,6 +60,7 @@ public class BuySellTests extends Common {
 
 		alice = null;
 		bob = null;
+		chloe = null;
 
 		repository = null;
 
@@ -230,6 +233,102 @@ public class BuySellTests extends Common {
 		nameData = repository.getNameRepository().fromName(name);
 		assertTrue(nameData.isForSale());
 		assertEquals("price incorrect", price, nameData.getSalePrice());
+	}
+
+	@Test
+	public void testDirectSellNameOnlyRecipientCanBuy() throws DataException {
+		testRegisterName();
+
+		String seller = alice.getAddress();
+		SellNameTransactionData sellNameTransactionData = new SellNameTransactionData(TestTransaction.generateBase(alice), name, price, bob.getAddress());
+		TransactionUtils.signAndMint(repository, sellNameTransactionData, alice);
+
+		NameData nameData = repository.getNameRepository().fromName(name);
+		assertTrue(nameData.isForSale());
+		assertEquals("price incorrect", price, nameData.getSalePrice());
+		assertEquals("sale recipient incorrect", bob.getAddress(), nameData.getSaleRecipient());
+
+		BuyNameTransactionData chloeBuyData = new BuyNameTransactionData(TestTransaction.generateBase(chloe), name, price, seller);
+		Transaction.ValidationResult chloeBuyResult = TransactionUtils.signAndImport(repository, chloeBuyData, chloe);
+		assertEquals(Transaction.ValidationResult.INVALID_BUYER, chloeBuyResult);
+
+		nameData = repository.getNameRepository().fromName(name);
+		assertTrue(nameData.isForSale());
+		assertEquals(alice.getAddress(), nameData.getOwner());
+		assertEquals(bob.getAddress(), nameData.getSaleRecipient());
+
+		BuyNameTransactionData bobBuyData = new BuyNameTransactionData(TestTransaction.generateBase(bob), name, price, seller);
+		TransactionUtils.signAndMint(repository, bobBuyData, bob);
+
+		nameData = repository.getNameRepository().fromName(name);
+		assertFalse(nameData.isForSale());
+		assertEquals(bob.getAddress(), nameData.getOwner());
+		assertNull(nameData.getSaleRecipient());
+
+		BlockUtils.orphanLastBlock(repository);
+
+		nameData = repository.getNameRepository().fromName(name);
+		assertTrue(nameData.isForSale());
+		assertEquals(alice.getAddress(), nameData.getOwner());
+		assertEquals("price incorrect", price, nameData.getSalePrice());
+		assertEquals("sale recipient incorrect", bob.getAddress(), nameData.getSaleRecipient());
+	}
+
+	@Test
+	public void testDirectSellNameAllowsZeroPriceGift() throws DataException {
+		testRegisterName();
+
+		String seller = alice.getAddress();
+		SellNameTransactionData publicZeroPriceSale = new SellNameTransactionData(TestTransaction.generateBase(alice), name, 0L);
+		Transaction.ValidationResult publicSaleResult = TransactionUtils.signAndImport(repository, publicZeroPriceSale, alice);
+		assertEquals(Transaction.ValidationResult.INVALID_AMOUNT, publicSaleResult);
+
+		SellNameTransactionData giftSale = new SellNameTransactionData(TestTransaction.generateBase(alice), name, 0L, bob.getAddress());
+		TransactionUtils.signAndMint(repository, giftSale, alice);
+
+		NameData nameData = repository.getNameRepository().fromName(name);
+		assertTrue(nameData.isForSale());
+		assertEquals("price incorrect", Long.valueOf(0L), nameData.getSalePrice());
+		assertEquals("sale recipient incorrect", bob.getAddress(), nameData.getSaleRecipient());
+
+		BuyNameTransactionData bobBuyData = new BuyNameTransactionData(TestTransaction.generateBase(bob), name, 0L, seller);
+		TransactionUtils.signAndMint(repository, bobBuyData, bob);
+
+		nameData = repository.getNameRepository().fromName(name);
+		assertFalse(nameData.isForSale());
+		assertEquals(bob.getAddress(), nameData.getOwner());
+		assertNull(nameData.getSaleRecipient());
+
+		BlockUtils.orphanLastBlock(repository);
+
+		nameData = repository.getNameRepository().fromName(name);
+		assertTrue(nameData.isForSale());
+		assertEquals(alice.getAddress(), nameData.getOwner());
+		assertEquals("price incorrect", Long.valueOf(0L), nameData.getSalePrice());
+		assertEquals("sale recipient incorrect", bob.getAddress(), nameData.getSaleRecipient());
+	}
+
+	@Test
+	public void testCancelDirectSellNameRestoresRecipientWhenOrphaned() throws DataException {
+		testRegisterName();
+
+		SellNameTransactionData sellNameTransactionData = new SellNameTransactionData(TestTransaction.generateBase(alice), name, price, bob.getAddress());
+		TransactionUtils.signAndMint(repository, sellNameTransactionData, alice);
+
+		CancelSellNameTransactionData cancelSellNameTransactionData = new CancelSellNameTransactionData(TestTransaction.generateBase(alice), name);
+		TransactionUtils.signAndMint(repository, cancelSellNameTransactionData, alice);
+
+		NameData nameData = repository.getNameRepository().fromName(name);
+		assertFalse(nameData.isForSale());
+		assertNull(nameData.getSalePrice());
+		assertNull(nameData.getSaleRecipient());
+
+		BlockUtils.orphanLastBlock(repository);
+
+		nameData = repository.getNameRepository().fromName(name);
+		assertTrue(nameData.isForSale());
+		assertEquals("price incorrect", price, nameData.getSalePrice());
+		assertEquals("sale recipient incorrect", bob.getAddress(), nameData.getSaleRecipient());
 	}
 
 	@Test

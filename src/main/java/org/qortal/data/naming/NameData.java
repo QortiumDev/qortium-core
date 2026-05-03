@@ -30,6 +30,9 @@ public class NameData {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private Long salePrice;
 
+	@Schema(description = "optional direct-sale recipient address", example = "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v")
+	private String saleRecipient;
+
 	// For internal use - no need to expose this via API
 	@XmlTransient
 	@Schema(hidden = true)
@@ -48,7 +51,7 @@ public class NameData {
 
 	// Typically used when fetching from repository
 	public NameData(String name, String reducedName, String owner, String data, long registered,
-			Long updated, boolean isForSale, Long salePrice,
+			Long updated, boolean isForSale, Long salePrice, String saleRecipient,
 			byte[] reference, int creationGroupId) {
 		this.name = name;
 		this.reducedName = reducedName;
@@ -59,17 +62,18 @@ public class NameData {
 		this.reference = reference;
 		this.isForSale = isForSale;
 		this.salePrice = salePrice;
+		this.saleRecipient = saleRecipient;
 		this.creationGroupId = creationGroupId;
 	}
 
 	// Typically used when registering a new name
 	public NameData(String name, String reducedName, String owner, String data, long registered, byte[] reference, int creationGroupId) {
-		this(name, reducedName, owner, data, registered, null, false, null, reference, creationGroupId);
+		this(name, reducedName, owner, data, registered, null, false, null, null, reference, creationGroupId);
 	}
 
 	// Typically used for name summsry
 	public NameData(String name, String owner) {
-		this(name, null, owner, null, 0L, null, false, null, null, 0);
+		this(name, null, owner, null, 0L, null, false, null, null, null, 0);
 	}
 
 	// Getters / setters
@@ -132,6 +136,14 @@ public class NameData {
 
 	public void setSalePrice(Long salePrice) {
 		this.salePrice = salePrice;
+	}
+
+	public String getSaleRecipient() {
+		return this.saleRecipient;
+	}
+
+	public void setSaleRecipient(String saleRecipient) {
+		this.saleRecipient = saleRecipient;
 	}
 
 	public byte[] getReference() {

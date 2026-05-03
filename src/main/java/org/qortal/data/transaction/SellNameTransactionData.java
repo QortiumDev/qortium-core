@@ -25,6 +25,9 @@ public class SellNameTransactionData extends TransactionData {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long amount;
 
+	@Schema(description = "optional direct-sale recipient address", example = "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v")
+	private String recipient;
+
 	// Constructors
 
 	// For JAXB
@@ -37,11 +40,16 @@ public class SellNameTransactionData extends TransactionData {
 	}
 
 	public SellNameTransactionData(BaseTransactionData baseTransactionData, String name, long amount) {
+		this(baseTransactionData, name, amount, null);
+	}
+
+	public SellNameTransactionData(BaseTransactionData baseTransactionData, String name, long amount, String recipient) {
 		super(TransactionType.SELL_NAME, baseTransactionData);
 
 		this.ownerPublicKey = baseTransactionData.creatorPublicKey;
 		this.name = name;
 		this.amount = amount;
+		this.recipient = recipient;
 	}
 
 	// Getters / setters
@@ -56,6 +64,10 @@ public class SellNameTransactionData extends TransactionData {
 
 	public long getAmount() {
 		return this.amount;
+	}
+
+	public String getRecipient() {
+		return this.recipient;
 	}
 
 }

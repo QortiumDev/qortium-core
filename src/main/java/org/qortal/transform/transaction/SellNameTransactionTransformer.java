@@ -18,8 +18,9 @@ public class SellNameTransactionTransformer extends TransactionTransformer {
 
 	// Property lengths
 	private static final int NAME_SIZE_LENGTH = INT_LENGTH;
+	private static final int RECIPIENT_PRESENT_LENGTH = BOOLEAN_LENGTH;
 
-	private static final int EXTRAS_LENGTH = NAME_SIZE_LENGTH + AMOUNT_LENGTH;
+	private static final int EXTRAS_LENGTH = NAME_SIZE_LENGTH + AMOUNT_LENGTH + RECIPIENT_PRESENT_LENGTH;
 
 	protected static final TransactionLayout layout;
 
@@ -33,6 +34,8 @@ public class SellNameTransactionTransformer extends TransactionTransformer {
 		layout.add("name length", TransformationType.INT);
 		layout.add("name", TransformationType.STRING);
 		layout.add("sale price", TransformationType.AMOUNT);
+		layout.add("has direct-sale recipient?", TransformationType.BOOLEAN);
+		layout.add("direct-sale recipient", TransformationType.ADDRESS);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
 	}
@@ -49,6 +52,9 @@ public class SellNameTransactionTransformer extends TransactionTransformer {
 
 		long amount = byteBuffer.getLong();
 
+		boolean hasRecipient = byteBuffer.get() != 0;
+		String recipient = hasRecipient ? Serialization.deserializeAddress(byteBuffer) : null;
+
 		long fee = byteBuffer.getLong();
 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
@@ -56,13 +62,18 @@ public class SellNameTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, nonce, signature);
 
-		return new SellNameTransactionData(baseTransactionData, name, amount);
+		return new SellNameTransactionData(baseTransactionData, name, amount, recipient);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
 		SellNameTransactionData sellNameTransactionData = (SellNameTransactionData) transactionData;
 
-		return getBaseLength(transactionData) + EXTRAS_LENGTH + Utf8.encodedLength(sellNameTransactionData.getName());
+		int dataLength = getBaseLength(transactionData) + EXTRAS_LENGTH + Utf8.encodedLength(sellNameTransactionData.getName());
+
+		if (sellNameTransactionData.getRecipient() != null)
+			dataLength += ADDRESS_LENGTH;
+
+		return dataLength;
 	}
 
 	public static byte[] toBytes(TransactionData transactionData) throws TransformationException {
@@ -76,6 +87,13 @@ public class SellNameTransactionTransformer extends TransactionTransformer {
 			Serialization.serializeSizedString(bytes, sellNameTransactionData.getName());
 
 			bytes.write(Longs.toByteArray(sellNameTransactionData.getAmount()));
+
+			if (sellNameTransactionData.getRecipient() != null) {
+				bytes.write((byte) 1);
+				Serialization.serializeAddress(bytes, sellNameTransactionData.getRecipient());
+			} else {
+				bytes.write((byte) 0);
+			}
 
 			bytes.write(Longs.toByteArray(sellNameTransactionData.getFee()));
 

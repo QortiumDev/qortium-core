@@ -88,6 +88,11 @@ public class BuyNameTransaction extends Transaction {
 		if (buyer.getAddress().equals(nameData.getOwner()))
 			return ValidationResult.BUYER_ALREADY_OWNER;
 
+		// Check direct sale recipient, if one was set by seller
+		String saleRecipient = nameData.getSaleRecipient();
+		if (saleRecipient != null && !saleRecipient.equals(buyer.getAddress()))
+			return ValidationResult.INVALID_BUYER;
+
 		// Check expected seller currently owns name
 		if (!this.buyNameTransactionData.getSeller().equals(nameData.getOwner()))
 			return ValidationResult.INVALID_SELLER;
