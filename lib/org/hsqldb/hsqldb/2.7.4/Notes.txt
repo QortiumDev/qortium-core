@@ -1,5 +1,14 @@
-This is the production hsqldb-2.7.4 with the manifest file updated 
+This is the production hsqldb-2.7.4 jar with one manifest update:
 
 Sealed: false
 
-Allows the addition of the custom HSQLDBPool and monitoring classes
+This allows Qortium's custom HSQLDBPool and monitoring classes to live in
+org.hsqldb.jdbc without sealed-package failures.
+
+Verify the patch with:
+
+tools/rebuild-hsqldb-jar.sh --verify
+
+The script downloads the official Maven Central jar and confirms that this jar
+differs only by the manifest seal line changing from Sealed: true to
+Sealed: false.

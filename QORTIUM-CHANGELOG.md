@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: document and reproduce local dependency patches
+
+Added a HSQLDB verification/rebuild script that downloads the official Maven Central HSQLDB jar, verifies checksums, and confirms Qortium's checked-in patched jar differs only by changing the manifest seal line from `Sealed: true` to `Sealed: false`. Expanded dependency provenance docs with HSQLDB checksums, the verification process, and the locally vendored WaifUPnP artifact so nonstandard dependencies now have tracked ownership and reproducibility notes.
+
 ### 2026-05-03 - build: own altcoinj dependency fork
 
 Moved the inherited altcoinj Maven dependency from the IceBurst GitHub coordinate to the Qortium-controlled `QuickMythril/altcoinj` fork while keeping the same pinned bitcoinj `0.16` compatibility commit. Expanded dependency provenance notes with the bitcoinj -> libdohj -> altcoinj fork chain and the foreign-chain parameter support carried by that dependency.
