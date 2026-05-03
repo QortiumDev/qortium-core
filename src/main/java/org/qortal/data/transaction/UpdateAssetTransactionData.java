@@ -18,8 +18,6 @@ public class UpdateAssetTransactionData extends TransactionData {
 	private long assetId;
 	@Schema(description = "asset owner's public key", example = "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP")
 	private byte[] ownerPublicKey;
-	@Schema(description = "asset new owner's address", example = "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v")
-	private String newOwner;
 	@Schema(description = "asset new name; empty means no change", example = "GOLD")
 	private String newName;
 	@Schema(description = "asset new description", example = "Gold asset - 1 unit represents one 1kg of gold")
@@ -52,13 +50,12 @@ public class UpdateAssetTransactionData extends TransactionData {
 
 	/** From repository */
 	public UpdateAssetTransactionData(BaseTransactionData baseTransactionData,
-			long assetId, String newOwner, String newName, String newDescription, String newData,
+			long assetId, String newName, String newDescription, String newData,
 			String reducedNewName, byte[] orphanReference) {
 		super(TransactionType.UPDATE_ASSET, baseTransactionData);
 
 		this.assetId = assetId;
 		this.ownerPublicKey = baseTransactionData.creatorPublicKey;
-		this.newOwner = newOwner;
 		this.newName = newName;
 		this.newDescription = newDescription;
 		this.newData = newData;
@@ -68,19 +65,19 @@ public class UpdateAssetTransactionData extends TransactionData {
 
 	/** From repository */
 	public UpdateAssetTransactionData(BaseTransactionData baseTransactionData,
-			long assetId, String newOwner, String newDescription, String newData, byte[] orphanReference) {
-		this(baseTransactionData, assetId, newOwner, "", newDescription, newData, "", orphanReference);
+			long assetId, String newDescription, String newData, byte[] orphanReference) {
+		this(baseTransactionData, assetId, "", newDescription, newData, "", orphanReference);
 	}
 
 	/** From network/API */
-	public UpdateAssetTransactionData(BaseTransactionData baseTransactionData, long assetId, String newOwner, String newName, String newDescription, String newData) {
-		this(baseTransactionData, assetId, newOwner, newName != null ? newName : "", newDescription, newData,
+	public UpdateAssetTransactionData(BaseTransactionData baseTransactionData, long assetId, String newName, String newDescription, String newData) {
+		this(baseTransactionData, assetId, newName != null ? newName : "", newDescription, newData,
 				Unicode.sanitize(newName != null ? newName : ""), null);
 	}
 
 	/** From network/API */
-	public UpdateAssetTransactionData(BaseTransactionData baseTransactionData, long assetId, String newOwner, String newDescription, String newData) {
-		this(baseTransactionData, assetId, newOwner, "", newDescription, newData);
+	public UpdateAssetTransactionData(BaseTransactionData baseTransactionData, long assetId, String newDescription, String newData) {
+		this(baseTransactionData, assetId, "", newDescription, newData);
 	}
 
 	// Getters/Setters
@@ -91,10 +88,6 @@ public class UpdateAssetTransactionData extends TransactionData {
 
 	public byte[] getOwnerPublicKey() {
 		return this.ownerPublicKey;
-	}
-
-	public String getNewOwner() {
-		return this.newOwner;
 	}
 
 	public String getNewName() {

@@ -78,7 +78,10 @@ public abstract class Transaction {
 		UPDATE_ASSET(35, true),
 		REWARD_SHARE(38, false),
 		TRANSFER_PRIVS(40, false),
-		PRESENCE(41, false);
+		PRESENCE(41, false),
+		SELL_ASSET_OWNERSHIP(42, false),
+		CANCEL_SELL_ASSET_OWNERSHIP(43, false),
+		BUY_ASSET_OWNERSHIP(44, false);
 
 		public final int value;
 		public final boolean needsApproval;
@@ -270,6 +273,8 @@ public abstract class Transaction {
 		TEMPORARY_DISABLED(101),
 		GENERAL_TEMPORARY_DISABLED(102),
 		INVALID_BUYER(103),
+		ASSET_ALREADY_FOR_SALE(104),
+		ASSET_NOT_FOR_SALE(105),
 		INVALID_BUT_OK(999),
 		NOT_YET_RELEASED(1000),
 		NOT_SUPPORTED(1001);

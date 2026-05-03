@@ -102,12 +102,11 @@ public class GroupBlockDelayTests extends Common {
 	}
 
 	private UpdateGroupTransaction buildUpdateGroupWithDelays(Repository repository, PrivateKeyAccount account, int groupId, int newMinimumBlockDelay, int newMaximumBlockDelay) throws DataException {
-		String newOwner = account.getAddress();
 		String newDescription = "random test group";
 		final boolean newIsOpen = false;
 		ApprovalThreshold newApprovalThreshold = ApprovalThreshold.PCT40;
 
-		UpdateGroupTransactionData transactionData = new UpdateGroupTransactionData(TestTransaction.generateBase(account), groupId, newOwner, newDescription, newIsOpen, newApprovalThreshold, newMinimumBlockDelay, newMaximumBlockDelay);
+		UpdateGroupTransactionData transactionData = new UpdateGroupTransactionData(TestTransaction.generateBase(account), groupId, newDescription, newIsOpen, newApprovalThreshold, newMinimumBlockDelay, newMaximumBlockDelay);
 		return new UpdateGroupTransaction(repository, transactionData);
 	}
 
@@ -118,7 +117,7 @@ public class GroupBlockDelayTests extends Common {
 
 			int groupId = GroupUtils.createGroup(repository, "alice", "test", true, ApprovalThreshold.ONE, 10, 40);
 
-			UpdateGroupTransactionData transactionData = new UpdateGroupTransactionData(TestTransaction.generateBase(alice), groupId, alice.getAddress(),
+			UpdateGroupTransactionData transactionData = new UpdateGroupTransactionData(TestTransaction.generateBase(alice), groupId,
 					"updated test group", false, ApprovalThreshold.PCT40, 20, 60);
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 
@@ -131,21 +130,6 @@ public class GroupBlockDelayTests extends Common {
 			groupData = repository.getGroupRepository().fromGroupId(groupId);
 			assertEquals(10, groupData.getMinimumBlockDelay());
 			assertEquals(40, groupData.getMaximumBlockDelay());
-		}
-	}
-
-	@Test
-	public void testUpdateGroupOwnerChangeDisabled() throws DataException {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			TestAccount alice = Common.getTestAccount(repository, "alice");
-			TestAccount bob = Common.getTestAccount(repository, "bob");
-
-			int groupId = GroupUtils.createGroup(repository, "alice", "test", true, ApprovalThreshold.ONE, 10, 40);
-
-			UpdateGroupTransactionData transactionData = new UpdateGroupTransactionData(TestTransaction.generateBase(alice), groupId, bob.getAddress(),
-					"updated test group", false, ApprovalThreshold.PCT40, 20, 60);
-			Transaction transaction = new UpdateGroupTransaction(repository, transactionData);
-			assertEquals(ValidationResult.INVALID_GROUP_OWNER, transaction.isValid());
 		}
 	}
 

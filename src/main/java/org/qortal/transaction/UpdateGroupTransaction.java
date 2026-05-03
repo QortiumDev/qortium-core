@@ -3,7 +3,6 @@ package org.qortal.transaction;
 import com.google.common.base.Utf8;
 import org.qortal.account.Account;
 import org.qortal.asset.Asset;
-import org.qortal.crypto.Crypto;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.UpdateGroupTransactionData;
@@ -41,18 +40,10 @@ public class UpdateGroupTransaction extends Transaction {
 		return this.getCreator();
 	}
 
-	public Account getNewOwner() throws DataException {
-		return new Account(this.repository, this.updateGroupTransactionData.getNewOwner());
-	}
-
 	// Processing
 
 	@Override
 	public ValidationResult isValid() throws DataException {
-		// Check new owner address is valid
-		if (!Crypto.isValidAddress(this.updateGroupTransactionData.getNewOwner()))
-			return ValidationResult.INVALID_ADDRESS;
-
 		// Check new approval threshold is valid
 		if (this.updateGroupTransactionData.getNewApprovalThreshold() == null)
 			return ValidationResult.INVALID_GROUP_APPROVAL_THRESHOLD;
@@ -91,10 +82,6 @@ public class UpdateGroupTransaction extends Transaction {
 		if (groupData == null)
 			return ValidationResult.GROUP_DOES_NOT_EXIST;
 
-		// Group ownership transfers are disabled until explicit group sale transactions exist.
-		if (!this.updateGroupTransactionData.getNewOwner().equals(groupData.getOwner()))
-			return ValidationResult.INVALID_GROUP_OWNER;
-
 		boolean groupOwnedByNullAccount = Group.isNullOwner(groupData.getOwner());
 
 		// Require approval if transaction relates to a group owned by the null account
@@ -131,12 +118,6 @@ public class UpdateGroupTransaction extends Transaction {
 		// Check transaction's public key matches group's current owner (except for groups owned by the null account)
 		if (!groupOwnedByNullAccount && !owner.getAddress().equals(groupData.getOwner()))
 			return ValidationResult.INVALID_GROUP_OWNER;
-
-		Account newOwner = getNewOwner();
-
-		// Check new owner is not banned
-		if (this.repository.getGroupRepository().banExists(this.updateGroupTransactionData.getGroupId(), newOwner.getAddress(), this.updateGroupTransactionData.getTimestamp()))
-			return ValidationResult.BANNED_FROM_GROUP;
 
 		if (!this.updateGroupTransactionData.getNewName().isEmpty()) {
 			GroupData newNameGroupData = this.repository.getGroupRepository().fromReducedGroupName(this.updateGroupTransactionData.getReducedNewName());

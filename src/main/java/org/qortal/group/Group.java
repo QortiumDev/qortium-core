@@ -357,28 +357,11 @@ public class Group {
 		// Previous group reference is taken from this transaction's cached copy
 		this.groupData.setReference(updateGroupTransactionData.getGroupReference());
 
-		// Previous Group's owner and/or description taken from referenced transaction
+		// Previous Group's mutable settings taken from referenced transaction
 		this.revertGroupUpdate();
 
 		// Save reverted group data
 		groupRepository.save(this.groupData);
-
-		// If ownership changed we need to do more work. Note groupData's owner is reverted at this point.
-		String newOwner = updateGroupTransactionData.getNewOwner();
-
-		if (!this.groupData.getOwner().equals(newOwner)) {
-			// If this update caused [what was] new owner to become admin, then revoke that now.
-			// (It's possible they were an admin prior to being given ownership so we need to retain that).
-			GroupAdminData groupAdminData = this.getAdmin(newOwner);
-			if (Arrays.equals(groupAdminData.getReference(), updateGroupTransactionData.getSignature()))
-				this.deleteAdmin(newOwner);
-
-			// If this update caused [what was] new owner to become member, then revoke that now.
-			// (It's possible they were a member prior to being given ownership so we need to retain that).
-			GroupMemberData groupMemberData = this.getMember(newOwner);
-			if (Arrays.equals(groupMemberData.getReference(), updateGroupTransactionData.getSignature()))
-				this.deleteMember(newOwner);
-		}
 
 		// Remove cached reference to previous group change from transaction data
 		updateGroupTransactionData.setGroupReference(null);
@@ -410,7 +393,6 @@ public class Group {
 
 			case UPDATE_GROUP: {
 				UpdateGroupTransactionData previousUpdateGroupTransactionData = (UpdateGroupTransactionData) previousTransactionData;
-				this.groupData.setOwner(previousUpdateGroupTransactionData.getNewOwner());
 				if (!previousUpdateGroupTransactionData.getNewName().isEmpty()) {
 					this.groupData.setGroupName(previousUpdateGroupTransactionData.getNewName());
 					this.groupData.setReducedGroupName(previousUpdateGroupTransactionData.getReducedNewName());

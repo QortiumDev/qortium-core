@@ -970,6 +970,150 @@ public class AssetsResource {
 	}
 
 	@POST
+	@Path("/ownership/sell")
+	@Operation(
+		summary = "Build raw, unsigned, SELL_ASSET_OWNERSHIP transaction",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = SellAssetOwnershipTransactionData.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "raw, unsigned, SELL_ASSET_OWNERSHIP transaction encoded in Base58",
+				content = @Content(
+					mediaType = MediaType.TEXT_PLAIN,
+					schema = @Schema(
+						type = "string"
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({
+		ApiError.NON_PRODUCTION, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE, ApiError.TRANSACTION_INVALID
+	})
+	public String sellAssetOwnership(SellAssetOwnershipTransactionData transactionData) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+
+			ValidationResult result = transaction.isValidUnconfirmed();
+			if (result != ValidationResult.OK)
+				throw TransactionsResource.createTransactionInvalidException(request, result);
+
+			byte[] bytes = SellAssetOwnershipTransactionTransformer.toBytes(transactionData);
+			return Base58.encode(bytes);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/ownership/sell/cancel")
+	@Operation(
+		summary = "Build raw, unsigned, CANCEL_SELL_ASSET_OWNERSHIP transaction",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = CancelSellAssetOwnershipTransactionData.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "raw, unsigned, CANCEL_SELL_ASSET_OWNERSHIP transaction encoded in Base58",
+				content = @Content(
+					mediaType = MediaType.TEXT_PLAIN,
+					schema = @Schema(
+						type = "string"
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({
+		ApiError.NON_PRODUCTION, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE, ApiError.TRANSACTION_INVALID
+	})
+	public String cancelSellAssetOwnership(CancelSellAssetOwnershipTransactionData transactionData) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+
+			ValidationResult result = transaction.isValidUnconfirmed();
+			if (result != ValidationResult.OK)
+				throw TransactionsResource.createTransactionInvalidException(request, result);
+
+			byte[] bytes = CancelSellAssetOwnershipTransactionTransformer.toBytes(transactionData);
+			return Base58.encode(bytes);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/ownership/buy")
+	@Operation(
+		summary = "Build raw, unsigned, BUY_ASSET_OWNERSHIP transaction",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = BuyAssetOwnershipTransactionData.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "raw, unsigned, BUY_ASSET_OWNERSHIP transaction encoded in Base58",
+				content = @Content(
+					mediaType = MediaType.TEXT_PLAIN,
+					schema = @Schema(
+						type = "string"
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({
+		ApiError.NON_PRODUCTION, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE, ApiError.TRANSACTION_INVALID
+	})
+	public String buyAssetOwnership(BuyAssetOwnershipTransactionData transactionData) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+
+			ValidationResult result = transaction.isValidUnconfirmed();
+			if (result != ValidationResult.OK)
+				throw TransactionsResource.createTransactionInvalidException(request, result);
+
+			byte[] bytes = BuyAssetOwnershipTransactionTransformer.toBytes(transactionData);
+			return Base58.encode(bytes);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
 	@Path("/transfer")
 	@Operation(
 		summary = "Transfer quantity of asset",

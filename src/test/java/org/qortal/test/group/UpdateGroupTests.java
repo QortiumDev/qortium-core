@@ -39,7 +39,7 @@ public class UpdateGroupTests extends Common {
 			int groupId = GroupUtils.createGroup(repository, "alice", "alpha-group", true, ApprovalThreshold.ONE, 10, 40);
 
 			UpdateGroupTransactionData updateData = new UpdateGroupTransactionData(TestTransaction.generateBase(alice), groupId, "beta-group",
-					alice.getAddress(), "updated test group", false, ApprovalThreshold.PCT40, 20, 60);
+					"updated test group", false, ApprovalThreshold.PCT40, 20, 60);
 			TransactionUtils.signAndMint(repository, updateData, alice);
 
 			assertFalse(repository.getGroupRepository().groupExists("alpha-group"));
@@ -65,7 +65,7 @@ public class UpdateGroupTests extends Common {
 			GroupUtils.createGroup(repository, "alice", "beta-group", true, ApprovalThreshold.ONE, 10, 40);
 
 			UpdateGroupTransactionData updateData = new UpdateGroupTransactionData(TestTransaction.generateBase(alice), groupId, "beta-group",
-					alice.getAddress(), "updated test group", false, ApprovalThreshold.PCT40, 20, 60);
+					"updated test group", false, ApprovalThreshold.PCT40, 20, 60);
 			ValidationResult result = TransactionUtils.signAndImport(repository, updateData, alice);
 			assertEquals(ValidationResult.GROUP_ALREADY_EXISTS, result);
 		}
@@ -79,7 +79,7 @@ public class UpdateGroupTests extends Common {
 			int groupId = GroupUtils.createGroup(repository, "alice", "alpha-group", true, ApprovalThreshold.ONE, 10, 40);
 
 			UpdateGroupTransactionData updateData = new UpdateGroupTransactionData(TestTransaction.generateBase(alice), groupId, "Alpha-Group",
-					alice.getAddress(), "updated test group", false, ApprovalThreshold.PCT40, 20, 60);
+					"updated test group", false, ApprovalThreshold.PCT40, 20, 60);
 			TransactionUtils.signAndMint(repository, updateData, alice);
 
 			GroupData groupData = repository.getGroupRepository().fromGroupName("Alpha-Group");

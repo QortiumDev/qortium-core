@@ -20,6 +20,9 @@ public class AssetData {
 	private String data;
 	private boolean isUnspendable;
 	private int creationGroupId;
+	private boolean isOwnerForSale;
+	private Long ownerSalePrice;
+	private String ownerSaleRecipient;
 
 	// No need to expose this via API
 	@XmlTransient
@@ -39,7 +42,8 @@ public class AssetData {
 
 	// NOTE: key is Long, not long, because it can be null if asset ID/key not yet assigned.
 	public AssetData(Long assetId, String owner, String name, String description, long quantity, boolean isDivisible,
-			String data, boolean isUnspendable, int creationGroupId, byte[] reference, String reducedAssetName) {
+			String data, boolean isUnspendable, int creationGroupId, byte[] reference, String reducedAssetName,
+			boolean isOwnerForSale, Long ownerSalePrice, String ownerSaleRecipient) {
 		this.assetId = assetId;
 		this.owner = owner;
 		this.name = name;
@@ -51,6 +55,15 @@ public class AssetData {
 		this.creationGroupId = creationGroupId;
 		this.reference = reference;
 		this.reducedAssetName = reducedAssetName;
+		this.isOwnerForSale = isOwnerForSale;
+		this.ownerSalePrice = ownerSalePrice;
+		this.ownerSaleRecipient = ownerSaleRecipient;
+	}
+
+	public AssetData(Long assetId, String owner, String name, String description, long quantity, boolean isDivisible,
+			String data, boolean isUnspendable, int creationGroupId, byte[] reference, String reducedAssetName) {
+		this(assetId, owner, name, description, quantity, isDivisible, data, isUnspendable, creationGroupId, reference,
+				reducedAssetName, false, null, null);
 	}
 
 	// New asset with unassigned assetId
@@ -131,6 +144,30 @@ public class AssetData {
 
 	public void setReducedAssetName(String reducedAssetName) {
 		this.reducedAssetName = reducedAssetName;
+	}
+
+	public boolean isOwnerForSale() {
+		return this.isOwnerForSale;
+	}
+
+	public void setIsOwnerForSale(boolean isOwnerForSale) {
+		this.isOwnerForSale = isOwnerForSale;
+	}
+
+	public Long getOwnerSalePrice() {
+		return this.ownerSalePrice;
+	}
+
+	public void setOwnerSalePrice(Long ownerSalePrice) {
+		this.ownerSalePrice = ownerSalePrice;
+	}
+
+	public String getOwnerSaleRecipient() {
+		return this.ownerSaleRecipient;
+	}
+
+	public void setOwnerSaleRecipient(String ownerSaleRecipient) {
+		this.ownerSaleRecipient = ownerSaleRecipient;
 	}
 
 }

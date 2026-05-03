@@ -4,7 +4,6 @@ import com.google.common.base.Utf8;
 import org.qortal.account.Account;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.asset.Asset;
-import org.qortal.crypto.Crypto;
 import org.qortal.data.asset.AssetData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.UpdateAssetTransactionData;
@@ -32,7 +31,7 @@ public class UpdateAssetTransaction extends Transaction {
 
 	@Override
 	public List<String> getRecipientAddresses() throws DataException {
-		return Collections.singletonList(this.updateAssetTransactionData.getNewOwner());
+		return Collections.emptyList();
 	}
 
 	// Navigation
@@ -49,10 +48,6 @@ public class UpdateAssetTransaction extends Transaction {
 		AssetData assetData = this.repository.getAssetRepository().fromAssetId(this.updateAssetTransactionData.getAssetId());
 		if (assetData == null)
 			return ValidationResult.ASSET_DOES_NOT_EXIST;
-
-		// Check new owner address is valid
-		if (!Crypto.isValidAddress(this.updateAssetTransactionData.getNewOwner()))
-			return ValidationResult.INVALID_ADDRESS;
 
 		// Check new name (0 length means DO NOT CHANGE name)
 		String newName = this.updateAssetTransactionData.getNewName();

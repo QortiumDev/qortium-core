@@ -38,12 +38,6 @@ public class UpdateGroupTransactionData extends TransactionData {
 	private String newName;
 
 	@Schema(
-		description = "new owner's address",
-		example = "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v"
-	)
-	private String newOwner;
-
-	@Schema(
 		description = "replacement group description",
 		example = "my group for accounts I like"
 	)
@@ -93,13 +87,12 @@ public class UpdateGroupTransactionData extends TransactionData {
 
 	/** From repository */
 	public UpdateGroupTransactionData(BaseTransactionData baseTransactionData,
-			int groupId, String newName, String newOwner, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
+			int groupId, String newName, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
 			int newMinimumBlockDelay, int newMaximumBlockDelay, String reducedNewName, byte[] groupReference) {
 		super(TransactionType.UPDATE_GROUP, baseTransactionData);
 
 		this.ownerPublicKey = baseTransactionData.creatorPublicKey;
 		this.newName = newName;
-		this.newOwner = newOwner;
 		this.groupId = groupId;
 		this.newDescription = newDescription;
 		this.newIsOpen = newIsOpen;
@@ -112,35 +105,31 @@ public class UpdateGroupTransactionData extends TransactionData {
 
 	/** From repository */
 	public UpdateGroupTransactionData(BaseTransactionData baseTransactionData,
-			int groupId, String newOwner, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
+			int groupId, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
 			int newMinimumBlockDelay, int newMaximumBlockDelay, byte[] groupReference) {
-		this(baseTransactionData, groupId, "", newOwner, newDescription, newIsOpen, newApprovalThreshold,
+		this(baseTransactionData, groupId, "", newDescription, newIsOpen, newApprovalThreshold,
 				newMinimumBlockDelay, newMaximumBlockDelay, "", groupReference);
 	}
 
 	/** From network/API */
 	public UpdateGroupTransactionData(BaseTransactionData baseTransactionData,
-			int groupId, String newName, String newOwner, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
+			int groupId, String newName, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
 			int newMinimumBlockDelay, int newMaximumBlockDelay) {
-		this(baseTransactionData, groupId, newName, newOwner, newDescription, newIsOpen, newApprovalThreshold,
+		this(baseTransactionData, groupId, newName, newDescription, newIsOpen, newApprovalThreshold,
 				newMinimumBlockDelay, newMaximumBlockDelay, Unicode.sanitize(newName), null);
 	}
 
 	/** From network/API */
 	public UpdateGroupTransactionData(BaseTransactionData baseTransactionData,
-			int groupId, String newOwner, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
+			int groupId, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
 			int newMinimumBlockDelay, int newMaximumBlockDelay) {
-		this(baseTransactionData, groupId, newOwner, newDescription, newIsOpen, newApprovalThreshold, newMinimumBlockDelay, newMaximumBlockDelay, null);
+		this(baseTransactionData, groupId, newDescription, newIsOpen, newApprovalThreshold, newMinimumBlockDelay, newMaximumBlockDelay, null);
 	}
 
 	// Getters / setters
 
 	public byte[] getOwnerPublicKey() {
 		return this.ownerPublicKey;
-	}
-
-	public String getNewOwner() {
-		return this.newOwner;
 	}
 
 	public int getGroupId() {

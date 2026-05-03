@@ -9,6 +9,7 @@ import org.qortal.data.account.BlockHeightRange;
 import org.qortal.data.account.BlockHeightRangeAddressAmounts;
 import org.qortal.data.transaction.ATTransactionData;
 import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.BuyAssetOwnershipTransactionData;
 import org.qortal.data.transaction.BuyNameTransactionData;
 import org.qortal.data.transaction.CreateAssetOrderTransactionData;
 import org.qortal.data.transaction.DeployAtTransactionData;
@@ -120,6 +121,10 @@ public class BalanceRecorderUtils {
         else if( transactionData instanceof BuyNameTransactionData) {
             creatorAddress = mapBalanceModificationsForBuyNameTransaction(amountsByAddress, (BuyNameTransactionData) transactionData);
         }
+        // Buy Asset Ownership Transaction
+        else if( transactionData instanceof BuyAssetOwnershipTransactionData) {
+            creatorAddress = mapBalanceModificationsForBuyAssetOwnershipTransaction(amountsByAddress, (BuyAssetOwnershipTransactionData) transactionData);
+        }
         // Create Asset Order Transaction
         else if( transactionData instanceof CreateAssetOrderTransactionData) {
             //TODO I'm not sure how to handle this one. This hasn't been used at this point in the blockchain.
@@ -218,6 +223,18 @@ public class BalanceRecorderUtils {
             buyNameData.getAmount(),
             creatorAddress,
             Optional.of(buyNameData.getSeller())
+        );
+        return creatorAddress;
+    }
+
+    public static String mapBalanceModificationsForBuyAssetOwnershipTransaction(Map<String, Long> amountsByAddress, BuyAssetOwnershipTransactionData transactionData) {
+        String creatorAddress = Crypto.toAddress(transactionData.getCreatorPublicKey());
+
+        mapBalanceModifications(
+            amountsByAddress,
+            transactionData.getAmount(),
+            creatorAddress,
+            Optional.of(transactionData.getSeller())
         );
         return creatorAddress;
     }

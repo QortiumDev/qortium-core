@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: add explicit asset ownership transfers
+
+Removed direct owner-change fields from UPDATE_GROUP and UPDATE_ASSET so those transactions only update mutable metadata and settings. Added explicit SELL_ASSET_OWNERSHIP, CANCEL_SELL_ASSET_OWNERSHIP, and BUY_ASSET_OWNERSHIP transactions, including public sales, direct recipient sales, zero-price direct gifts, orphan restoration, API builders, and native asset ownership-transfer rejection.
+
 ### 2026-05-03 - core: allow asset renames
 
 Added optional asset renaming to UPDATE_ASSET, including reduced-name collision checks, updated transaction persistence and wire format, and orphan restoration for asset name history.

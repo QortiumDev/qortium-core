@@ -1,8 +1,13 @@
 package org.qortal.asset;
 
+import org.qortal.account.Account;
+import org.qortal.account.PublicKeyAccount;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.asset.AssetData;
+import org.qortal.data.transaction.BuyAssetOwnershipTransactionData;
+import org.qortal.data.transaction.CancelSellAssetOwnershipTransactionData;
 import org.qortal.data.transaction.IssueAssetTransactionData;
+import org.qortal.data.transaction.SellAssetOwnershipTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.UpdateAssetTransactionData;
 import org.qortal.repository.DataException;
@@ -77,9 +82,7 @@ public class Asset {
 		// New reference is this transaction's signature
 		this.assetData.setReference(updateAssetTransactionData.getSignature());
 
-		// Update asset's owner, name, description and data
-		this.assetData.setOwner(updateAssetTransactionData.getNewOwner());
-
+		// Update asset's mutable metadata
 		if (!updateAssetTransactionData.getNewName().isEmpty()) {
 			this.assetData.setName(updateAssetTransactionData.getNewName());
 			this.assetData.setReducedAssetName(updateAssetTransactionData.getReducedNewName());
@@ -113,9 +116,8 @@ public class Asset {
 
 		byte[] previousTransactionSignature = this.assetData.getReference();
 
-		// There's always at least one round to potentially revert owner
 		do {
-			// Previous owner, description and/or data taken from referenced transaction
+			// Previous name, description and/or data taken from referenced transaction
 			TransactionData previousTransactionData = this.repository.getTransactionRepository()
 					.fromSignature(previousTransactionSignature);
 
@@ -125,9 +127,6 @@ public class Asset {
 			switch (previousTransactionData.getType()) {
 				case ISSUE_ASSET: {
 					IssueAssetTransactionData previousIssueAssetTransactionData = (IssueAssetTransactionData) previousTransactionData;
-
-					String ownerAddress = Crypto.toAddress(previousIssueAssetTransactionData.getCreatorPublicKey());
-					this.assetData.setOwner(ownerAddress);
 
 					if (needName) {
 						this.assetData.setName(previousIssueAssetTransactionData.getAssetName());
@@ -149,8 +148,6 @@ public class Asset {
 
 				case UPDATE_ASSET: {
 					UpdateAssetTransactionData previousUpdateAssetTransactionData = (UpdateAssetTransactionData) previousTransactionData;
-
-					this.assetData.setOwner(previousUpdateAssetTransactionData.getNewOwner());
 
 					if (needName && !previousUpdateAssetTransactionData.getNewName().isEmpty()) {
 						this.assetData.setName(previousUpdateAssetTransactionData.getNewName());
@@ -175,6 +172,12 @@ public class Asset {
 					break;
 				}
 
+				case BUY_ASSET_OWNERSHIP: {
+					BuyAssetOwnershipTransactionData previousBuyAssetOwnershipTransactionData = (BuyAssetOwnershipTransactionData) previousTransactionData;
+					previousTransactionSignature = previousBuyAssetOwnershipTransactionData.getAssetReference();
+					break;
+				}
+
 				default:
 					throw new IllegalStateException("Invalid referenced transaction when orphaning UPDATE_ASSET");
 			}
@@ -186,6 +189,87 @@ public class Asset {
 
 		// Remove reference to previous asset-changing transaction
 		updateAssetTransactionData.setOrphanReference(null);
+	}
+
+	public void sellOwnership(SellAssetOwnershipTransactionData sellAssetOwnershipTransactionData) throws DataException {
+		this.assetData.setIsOwnerForSale(true);
+		this.assetData.setOwnerSalePrice(sellAssetOwnershipTransactionData.getAmount());
+		this.assetData.setOwnerSaleRecipient(sellAssetOwnershipTransactionData.getRecipient());
+
+		this.repository.getAssetRepository().save(this.assetData);
+	}
+
+	public void unsellOwnership(SellAssetOwnershipTransactionData sellAssetOwnershipTransactionData) throws DataException {
+		this.assetData.setIsOwnerForSale(false);
+		this.assetData.setOwnerSalePrice(null);
+		this.assetData.setOwnerSaleRecipient(null);
+
+		this.repository.getAssetRepository().save(this.assetData);
+	}
+
+	public void cancelSellOwnership(CancelSellAssetOwnershipTransactionData cancelSellAssetOwnershipTransactionData) throws DataException {
+		cancelSellAssetOwnershipTransactionData.setSalePrice(this.assetData.getOwnerSalePrice());
+		cancelSellAssetOwnershipTransactionData.setSaleRecipient(this.assetData.getOwnerSaleRecipient());
+
+		this.assetData.setIsOwnerForSale(false);
+		this.assetData.setOwnerSalePrice(null);
+		this.assetData.setOwnerSaleRecipient(null);
+
+		this.repository.getAssetRepository().save(this.assetData);
+	}
+
+	public void uncancelSellOwnership(CancelSellAssetOwnershipTransactionData cancelSellAssetOwnershipTransactionData) throws DataException {
+		this.assetData.setIsOwnerForSale(true);
+		this.assetData.setOwnerSalePrice(cancelSellAssetOwnershipTransactionData.getSalePrice());
+		this.assetData.setOwnerSaleRecipient(cancelSellAssetOwnershipTransactionData.getSaleRecipient());
+
+		this.repository.getAssetRepository().save(this.assetData);
+	}
+
+	public void buyOwnership(BuyAssetOwnershipTransactionData buyAssetOwnershipTransactionData, boolean modifyBalances) throws DataException {
+		buyAssetOwnershipTransactionData.setAssetReference(this.assetData.getReference());
+		buyAssetOwnershipTransactionData.setSaleRecipient(this.assetData.getOwnerSaleRecipient());
+
+		this.assetData.setIsOwnerForSale(false);
+		this.assetData.setOwnerSalePrice(null);
+		this.assetData.setOwnerSaleRecipient(null);
+
+		if (modifyBalances && buyAssetOwnershipTransactionData.getAmount() != 0) {
+			Account seller = new Account(this.repository, this.assetData.getOwner());
+			seller.modifyAssetBalance(Asset.NATIVE, buyAssetOwnershipTransactionData.getAmount());
+		}
+
+		Account buyer = new PublicKeyAccount(this.repository, buyAssetOwnershipTransactionData.getBuyerPublicKey());
+		this.assetData.setOwner(buyer.getAddress());
+
+		if (modifyBalances && buyAssetOwnershipTransactionData.getAmount() != 0)
+			buyer.modifyAssetBalance(Asset.NATIVE, -buyAssetOwnershipTransactionData.getAmount());
+
+		this.assetData.setReference(buyAssetOwnershipTransactionData.getSignature());
+
+		this.repository.getAssetRepository().save(this.assetData);
+	}
+
+	public void unbuyOwnership(BuyAssetOwnershipTransactionData buyAssetOwnershipTransactionData) throws DataException {
+		this.assetData.setIsOwnerForSale(true);
+		this.assetData.setOwnerSalePrice(buyAssetOwnershipTransactionData.getAmount());
+		this.assetData.setOwnerSaleRecipient(buyAssetOwnershipTransactionData.getSaleRecipient());
+
+		this.assetData.setReference(buyAssetOwnershipTransactionData.getAssetReference());
+		this.assetData.setOwner(buyAssetOwnershipTransactionData.getSeller());
+
+		this.repository.getAssetRepository().save(this.assetData);
+
+		if (buyAssetOwnershipTransactionData.getAmount() != 0) {
+			Account buyer = new PublicKeyAccount(this.repository, buyAssetOwnershipTransactionData.getBuyerPublicKey());
+			buyer.modifyAssetBalance(Asset.NATIVE, buyAssetOwnershipTransactionData.getAmount());
+
+			Account seller = new Account(this.repository, buyAssetOwnershipTransactionData.getSeller());
+			seller.modifyAssetBalance(Asset.NATIVE, -buyAssetOwnershipTransactionData.getAmount());
+		}
+
+		buyAssetOwnershipTransactionData.setAssetReference(null);
+		buyAssetOwnershipTransactionData.setSaleRecipient(null);
 	}
 
 }

@@ -3,8 +3,12 @@ package org.qortal.test.assets;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.asset.Asset;
 import org.qortal.data.asset.AssetData;
+import org.qortal.data.transaction.BuyAssetOwnershipTransactionData;
+import org.qortal.data.transaction.CancelSellAssetOwnershipTransactionData;
 import org.qortal.data.transaction.IssueAssetTransactionData;
+import org.qortal.data.transaction.SellAssetOwnershipTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.UpdateAssetTransactionData;
 import org.qortal.repository.DataException;
@@ -84,7 +88,7 @@ public class MiscTests extends Common {
 
 			String newName = "renamed-asset";
 			TransactionData transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
-					assetId, alice.getAddress(), newName, "", "");
+					assetId, newName, "", "");
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 
 			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
@@ -111,7 +115,7 @@ public class MiscTests extends Common {
 			long assetId = AssetUtils.issueAsset(repository, "alice", "other-asset", 1000L, true);
 
 			TransactionData transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
-					assetId, alice.getAddress(), "TEST-Ásset", "", "");
+					assetId, "TEST-Ásset", "", "");
 			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, alice);
 
 			assertEquals(ValidationResult.ASSET_ALREADY_EXISTS, result);
@@ -127,7 +131,7 @@ public class MiscTests extends Common {
 
 			String newName = "case-asset";
 			TransactionData transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
-					assetId, alice.getAddress(), newName, "", "");
+					assetId, newName, "", "");
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 
 			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
@@ -146,16 +150,16 @@ public class MiscTests extends Common {
 
 			String middleName = "middle-asset";
 			TransactionData transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
-					assetId, alice.getAddress(), middleName, "", "");
+					assetId, middleName, "", "");
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 
 			transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
-					assetId, alice.getAddress(), "", "updated description", "");
+					assetId, "", "updated description", "");
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 
 			String newestName = "newest-asset";
 			transactionData = new UpdateAssetTransactionData(TestTransaction.generateBase(alice),
-					assetId, alice.getAddress(), newestName, "", "");
+					assetId, newestName, "", "");
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 
 			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
@@ -174,6 +178,186 @@ public class MiscTests extends Common {
 			BlockUtils.orphanLastBlock(repository);
 
 			assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(originalName, assetData.getName());
+		}
+	}
+
+	@Test
+	public void testSellAndBuyAssetOwnership() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			long assetId = AssetUtils.issueAsset(repository, "alice", "owned-asset", 1000L, true);
+			long price = 5L * Amounts.MULTIPLIER;
+
+			TransactionData sellData = new SellAssetOwnershipTransactionData(TestTransaction.generateBase(alice), assetId, price);
+			TransactionUtils.signAndMint(repository, sellData, alice);
+
+			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(true, assetData.isOwnerForSale());
+			assertEquals(Long.valueOf(price), assetData.getOwnerSalePrice());
+			assertEquals(null, assetData.getOwnerSaleRecipient());
+
+			TransactionData buyData = new BuyAssetOwnershipTransactionData(TestTransaction.generateBase(bob), assetId, price, alice.getAddress());
+			TransactionUtils.signAndMint(repository, buyData, bob);
+
+			assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(bob.getAddress(), assetData.getOwner());
+			assertEquals(false, assetData.isOwnerForSale());
+			assertEquals(null, assetData.getOwnerSalePrice());
+			assertEquals(null, assetData.getOwnerSaleRecipient());
+		}
+	}
+
+	@Test
+	public void testDirectAssetOwnershipSaleOnlyRecipientCanBuy() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+
+			long assetId = AssetUtils.issueAsset(repository, "alice", "direct-asset", 1000L, true);
+			long price = 5L * Amounts.MULTIPLIER;
+
+			TransactionData sellData = new SellAssetOwnershipTransactionData(TestTransaction.generateBase(alice), assetId, price, bob.getAddress());
+			TransactionUtils.signAndMint(repository, sellData, alice);
+
+			TransactionData chloeBuyData = new BuyAssetOwnershipTransactionData(TestTransaction.generateBase(chloe), assetId, price, alice.getAddress());
+			ValidationResult result = TransactionUtils.signAndImport(repository, chloeBuyData, chloe);
+			assertEquals(ValidationResult.INVALID_BUYER, result);
+
+			TransactionData bobBuyData = new BuyAssetOwnershipTransactionData(TestTransaction.generateBase(bob), assetId, price, alice.getAddress());
+			TransactionUtils.signAndMint(repository, bobBuyData, bob);
+
+			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(bob.getAddress(), assetData.getOwner());
+		}
+	}
+
+	@Test
+	public void testDirectAssetOwnershipSaleAllowsZeroPriceGift() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			long assetId = AssetUtils.issueAsset(repository, "alice", "gift-asset", 1000L, true);
+
+			TransactionData publicZeroPriceSale = new SellAssetOwnershipTransactionData(TestTransaction.generateBase(alice), assetId, 0L);
+			ValidationResult result = TransactionUtils.signAndImport(repository, publicZeroPriceSale, alice);
+			assertEquals(ValidationResult.INVALID_AMOUNT, result);
+
+			TransactionData giftSale = new SellAssetOwnershipTransactionData(TestTransaction.generateBase(alice), assetId, 0L, bob.getAddress());
+			TransactionUtils.signAndMint(repository, giftSale, alice);
+
+			TransactionData bobBuyData = new BuyAssetOwnershipTransactionData(TestTransaction.generateBase(bob), assetId, 0L, alice.getAddress());
+			TransactionUtils.signAndMint(repository, bobBuyData, bob);
+
+			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(bob.getAddress(), assetData.getOwner());
+			assertEquals(false, assetData.isOwnerForSale());
+		}
+	}
+
+	@Test
+	public void testCancelDirectAssetOwnershipSaleRestoresRecipientWhenOrphaned() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			long assetId = AssetUtils.issueAsset(repository, "alice", "cancel-direct-asset", 1000L, true);
+			long price = 5L * Amounts.MULTIPLIER;
+
+			TransactionData sellData = new SellAssetOwnershipTransactionData(TestTransaction.generateBase(alice), assetId, price, bob.getAddress());
+			TransactionUtils.signAndMint(repository, sellData, alice);
+
+			TransactionData cancelData = new CancelSellAssetOwnershipTransactionData(TestTransaction.generateBase(alice), assetId);
+			TransactionUtils.signAndMint(repository, cancelData, alice);
+
+			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(false, assetData.isOwnerForSale());
+			assertEquals(null, assetData.getOwnerSalePrice());
+			assertEquals(null, assetData.getOwnerSaleRecipient());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(true, assetData.isOwnerForSale());
+			assertEquals(Long.valueOf(price), assetData.getOwnerSalePrice());
+			assertEquals(bob.getAddress(), assetData.getOwnerSaleRecipient());
+		}
+	}
+
+	@Test
+	public void testAssetOwnershipBuyOrphanRestoresSaleState() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			long assetId = AssetUtils.issueAsset(repository, "alice", "orphan-buy-asset", 1000L, true);
+			long price = 5L * Amounts.MULTIPLIER;
+
+			TransactionData sellData = new SellAssetOwnershipTransactionData(TestTransaction.generateBase(alice), assetId, price, bob.getAddress());
+			TransactionUtils.signAndMint(repository, sellData, alice);
+
+			TransactionData buyData = new BuyAssetOwnershipTransactionData(TestTransaction.generateBase(bob), assetId, price, alice.getAddress());
+			TransactionUtils.signAndMint(repository, buyData, bob);
+
+			BlockUtils.orphanLastBlock(repository);
+
+			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(alice.getAddress(), assetData.getOwner());
+			assertEquals(true, assetData.isOwnerForSale());
+			assertEquals(Long.valueOf(price), assetData.getOwnerSalePrice());
+			assertEquals(bob.getAddress(), assetData.getOwnerSaleRecipient());
+		}
+	}
+
+	@Test
+	public void testNativeAssetOwnershipSaleUnsupported() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			TransactionData sellData = new SellAssetOwnershipTransactionData(TestTransaction.generateBase(alice), Asset.NATIVE, 1L);
+			assertEquals(ValidationResult.NOT_SUPPORTED, TransactionUtils.signAndImport(repository, sellData, alice));
+
+			TransactionData cancelData = new CancelSellAssetOwnershipTransactionData(TestTransaction.generateBase(alice), Asset.NATIVE);
+			assertEquals(ValidationResult.NOT_SUPPORTED, TransactionUtils.signAndImport(repository, cancelData, alice));
+
+			TransactionData buyData = new BuyAssetOwnershipTransactionData(TestTransaction.generateBase(bob), Asset.NATIVE, 1L, alice.getAddress());
+			assertEquals(ValidationResult.NOT_SUPPORTED, TransactionUtils.signAndImport(repository, buyData, bob));
+		}
+	}
+
+	@Test
+	public void testUpdateAssetNameRevertsThroughOwnershipBuy() throws DataException {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			String originalName = "owned-chain-asset";
+			long assetId = AssetUtils.issueAsset(repository, "alice", originalName, 1000L, true);
+			long price = 5L * Amounts.MULTIPLIER;
+
+			TransactionData sellData = new SellAssetOwnershipTransactionData(TestTransaction.generateBase(alice), assetId, price, bob.getAddress());
+			TransactionUtils.signAndMint(repository, sellData, alice);
+
+			TransactionData buyData = new BuyAssetOwnershipTransactionData(TestTransaction.generateBase(bob), assetId, price, alice.getAddress());
+			TransactionUtils.signAndMint(repository, buyData, bob);
+
+			String newName = "owned-chain-renamed";
+			TransactionData updateData = new UpdateAssetTransactionData(TestTransaction.generateBase(bob), assetId, newName, "", "");
+			TransactionUtils.signAndMint(repository, updateData, bob);
+
+			AssetData assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(bob.getAddress(), assetData.getOwner());
+			assertEquals(newName, assetData.getName());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assetData = repository.getAssetRepository().fromAssetId(assetId);
+			assertEquals(bob.getAddress(), assetData.getOwner());
 			assertEquals(originalName, assetData.getName());
 		}
 	}

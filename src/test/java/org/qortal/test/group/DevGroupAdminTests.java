@@ -892,7 +892,7 @@ public class DevGroupAdminTests extends Common {
 	private UpdateGroupTransactionData createUpdateGroupTransactionData(Repository repository, PrivateKeyAccount updater, int txGroupId, int groupId, String newDescription) throws DataException {
 		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
 
-		return new UpdateGroupTransactionData(TestTransaction.generateBase(updater, txGroupId), groupId, groupData.getOwner(),
+		return new UpdateGroupTransactionData(TestTransaction.generateBase(updater, txGroupId), groupId,
 				newDescription, groupData.isOpen(), groupData.getApprovalThreshold(), groupData.getMinimumBlockDelay(),
 				groupData.getMaximumBlockDelay());
 	}

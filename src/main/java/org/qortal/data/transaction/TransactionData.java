@@ -27,6 +27,7 @@ import java.util.Arrays;
 	PollData.class, VoteOnPollData.class,
 	IssueAssetTransactionData.class, TransferAssetTransactionData.class,
 	CreateAssetOrderTransactionData.class, CancelAssetOrderTransactionData.class,
+	SellAssetOwnershipTransactionData.class, CancelSellAssetOwnershipTransactionData.class, BuyAssetOwnershipTransactionData.class,
 	MultiPaymentTransactionData.class, DeployAtTransactionData.class, MessageTransactionData.class, ATTransactionData.class,
 	CreateGroupTransactionData.class, UpdateGroupTransactionData.class,
 	AddGroupAdminTransactionData.class, RemoveGroupAdminTransactionData.class,

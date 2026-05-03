@@ -347,7 +347,8 @@ public class HSQLDBDatabaseUpdates {
 							+ "quantity BIGINT NOT NULL, is_divisible BOOLEAN NOT NULL, "
 							+ "is_unspendable BOOLEAN NOT NULL DEFAULT FALSE, creation_group_id GroupID NOT NULL DEFAULT 0, "
 							+ "reference Signature NOT NULL, data AssetData NOT NULL DEFAULT '', "
-							+ "reduced_asset_name AssetName NOT NULL, PRIMARY KEY (asset_id))");
+							+ "reduced_asset_name AssetName NOT NULL, is_owner_for_sale BOOLEAN NOT NULL DEFAULT FALSE, "
+							+ "owner_sale_price AssetAmount, owner_sale_recipient AccountAddress, PRIMARY KEY (asset_id))");
 					// For when a user wants to lookup an asset by name
 					stmt.execute("CREATE INDEX AssetNameIndex on Assets (asset_name)");
 					// For looking up assets by 'reduced' name
@@ -389,9 +390,22 @@ public class HSQLDBDatabaseUpdates {
 
 					// Add support for UPDATE_ASSET transactions
 					stmt.execute("CREATE TABLE UpdateAssetTransactions (signature Signature, owner AccountPublicKey NOT NULL, asset_id AssetID NOT NULL, "
-									+ "new_owner AccountAddress NOT NULL, new_name AssetName NOT NULL, "
+									+ "new_name AssetName NOT NULL, "
 									+ "new_description GenericDescription NOT NULL, new_data AssetData NOT NULL, reduced_new_name AssetName NOT NULL, "
 									+ "orphan_reference Signature, " + TRANSACTION_KEYS + ")");
+
+					// Sell Asset Ownership Transactions
+					stmt.execute("CREATE TABLE SellAssetOwnershipTransactions (signature Signature, owner AccountPublicKey NOT NULL, "
+							+ "asset_id AssetID NOT NULL, amount AssetAmount NOT NULL, recipient AccountAddress, " + TRANSACTION_KEYS + ")");
+
+					// Cancel Sell Asset Ownership Transactions
+					stmt.execute("CREATE TABLE CancelSellAssetOwnershipTransactions (signature Signature, owner AccountPublicKey NOT NULL, "
+							+ "asset_id AssetID NOT NULL, sale_price AssetAmount, sale_recipient AccountAddress, " + TRANSACTION_KEYS + ")");
+
+					// Buy Asset Ownership Transactions
+					stmt.execute("CREATE TABLE BuyAssetOwnershipTransactions (signature Signature, buyer AccountPublicKey NOT NULL, "
+							+ "asset_id AssetID NOT NULL, amount AssetAmount NOT NULL, seller AccountAddress NOT NULL, "
+							+ "asset_reference Signature, sale_recipient AccountAddress, " + TRANSACTION_KEYS + ")");
 
 					// Create Asset Order Transactions
 					stmt.execute("CREATE TABLE CreateAssetOrderTransactions (signature Signature, creator AccountPublicKey NOT NULL, "
@@ -508,7 +522,7 @@ public class HSQLDBDatabaseUpdates {
 					// Update group
 					stmt.execute("CREATE TABLE UpdateGroupTransactions (signature Signature, owner AccountPublicKey NOT NULL, group_id GroupID NOT NULL, "
 							+ "new_name GroupName NOT NULL, reduced_new_name GroupName NOT NULL, "
-							+ "new_owner AccountAddress NOT NULL, new_is_open BOOLEAN NOT NULL, new_approval_threshold TINYINT NOT NULL, "
+							+ "new_is_open BOOLEAN NOT NULL, new_approval_threshold TINYINT NOT NULL, "
 							+ "new_min_block_delay INTEGER NOT NULL, new_max_block_delay INTEGER NOT NULL, "
 							+ "group_reference Signature, new_description GenericDescription NOT NULL, " + TRANSACTION_KEYS + ")");
 
@@ -1071,12 +1085,24 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "SellNameTransactions", "recipient", "AccountAddress");
 					addColumnIfMissing(connection, "CancelSellNameTransactions", "sale_recipient", "AccountAddress");
 					addColumnIfMissing(connection, "BuyNameTransactions", "sale_recipient", "AccountAddress");
+					addColumnIfMissing(connection, "Assets", "is_owner_for_sale", "BOOLEAN NOT NULL DEFAULT FALSE");
+					addColumnIfMissing(connection, "Assets", "owner_sale_price", "AssetAmount");
+					addColumnIfMissing(connection, "Assets", "owner_sale_recipient", "AccountAddress");
 					addColumnIfMissing(connection, "UpdateGroupTransactions", "new_name", "GroupName DEFAULT '' NOT NULL");
 					addColumnIfMissing(connection, "UpdateGroupTransactions", "reduced_new_name", "GroupName DEFAULT '' NOT NULL");
+					dropColumnIfExists(connection, "UpdateGroupTransactions", "new_owner");
 					addColumnIfMissing(connection, "UpdateNameTransactions", "is_primary", "BOOLEAN");
 					addColumnIfMissing(connection, "UpdateNameTransactions", "previous_primary_name", "RegisteredName");
 					addColumnIfMissing(connection, "UpdateAssetTransactions", "new_name", "AssetName DEFAULT '' NOT NULL");
 					addColumnIfMissing(connection, "UpdateAssetTransactions", "reduced_new_name", "AssetName DEFAULT '' NOT NULL");
+					dropColumnIfExists(connection, "UpdateAssetTransactions", "new_owner");
+					stmt.execute("CREATE TABLE IF NOT EXISTS SellAssetOwnershipTransactions (signature Signature, owner AccountPublicKey NOT NULL, "
+							+ "asset_id AssetID NOT NULL, amount AssetAmount NOT NULL, recipient AccountAddress, " + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE IF NOT EXISTS CancelSellAssetOwnershipTransactions (signature Signature, owner AccountPublicKey NOT NULL, "
+							+ "asset_id AssetID NOT NULL, sale_price AssetAmount, sale_recipient AccountAddress, " + TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE IF NOT EXISTS BuyAssetOwnershipTransactions (signature Signature, buyer AccountPublicKey NOT NULL, "
+							+ "asset_id AssetID NOT NULL, amount AssetAmount NOT NULL, seller AccountAddress NOT NULL, "
+							+ "asset_reference Signature, sale_recipient AccountAddress, " + TRANSACTION_KEYS + ")");
 					renameColumnIfExists(connection, "TradeBotStates", "qort_amount", "native_amount");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");
