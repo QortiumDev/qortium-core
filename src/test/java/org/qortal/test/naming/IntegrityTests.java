@@ -5,6 +5,7 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.resource.TransactionsResource;
+import org.qortal.arbitrary.misc.Service;
 import org.qortal.block.BlockChain;
 import org.qortal.controller.repository.NamesDatabaseIntegrityCheck;
 import org.qortal.data.naming.NameData;
@@ -24,6 +25,7 @@ import org.qortal.transaction.Transaction;
 import org.qortal.utils.Unicode;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.*;
@@ -608,6 +610,62 @@ public class IntegrityTests extends Common {
             NamesDatabaseIntegrityCheck integrityCheck = new NamesDatabaseIntegrityCheck();
             assertEquals(2, integrityCheck.rebuildName(name, repository));
             assertTrue(repository.getNameRepository().fromName(name).isForSale());
+
+            result = transaction.isValidUnconfirmed();
+            assertEquals("Transaction should be valid after explicit repair", Transaction.ValidationResult.OK, result);
+
+            repository.discardChanges();
+        }
+    }
+
+    @Test
+    public void testArbitraryMissingName() throws DataException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String name = "test-name";
+            String data = "{\"age\":30}";
+
+            RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, data);
+            transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
+            TransactionUtils.signAndMint(repository, transactionData, alice);
+
+            assertEquals(data, repository.getNameRepository().fromName(name).getData());
+
+            // Now delete the name, to simulate a database inconsistency
+            repository.getNameRepository().delete(name);
+            assertNull(repository.getNameRepository().fromName(name));
+
+            BaseTransactionData baseTransactionData = TestTransaction.generateBase(alice);
+            int version = Transaction.getVersionByTimestamp(baseTransactionData.getTimestamp());
+            TransactionData arbitraryTransactionData = new ArbitraryTransactionData(
+                    baseTransactionData,
+                    version,
+                    Service.ARBITRARY_DATA.value,
+                    0,
+                    1,
+                    name,
+                    null,
+                    ArbitraryTransactionData.Method.PUT,
+                    null,
+                    ArbitraryTransactionData.Compression.NONE,
+                    new byte[]{1},
+                    ArbitraryTransactionData.DataType.RAW_DATA,
+                    null,
+                    Collections.emptyList());
+
+            Transaction transaction = Transaction.fromData(repository, arbitraryTransactionData);
+            transaction.sign(alice);
+
+            // Arbitrary validation should not repair the Names table as a side effect
+            transaction.preProcess();
+            Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+            assertEquals("Missing name should remain invalid until explicit repair", Transaction.ValidationResult.NAME_DOES_NOT_EXIST, result);
+            assertNull(repository.getNameRepository().fromName(name));
+
+            // Explicit integrity repair should restore the missing name and make the publish valid
+            NamesDatabaseIntegrityCheck integrityCheck = new NamesDatabaseIntegrityCheck();
+            assertEquals(1, integrityCheck.rebuildName(name, repository));
+            assertEquals(data, repository.getNameRepository().fromName(name).getData());
 
             result = transaction.isValidUnconfirmed();
             assertEquals("Transaction should be valid after explicit repair", Transaction.ValidationResult.OK, result);

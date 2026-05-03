@@ -9,7 +9,6 @@ import org.qortal.arbitrary.metadata.ArbitraryDataTransactionMetadata;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.controller.arbitrary.ArbitraryDataManager;
 import org.qortal.controller.arbitrary.ArbitraryTransactionDataHashWrapper;
-import org.qortal.controller.repository.NamesDatabaseIntegrityCheck;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
 import org.qortal.data.PaymentData;
@@ -220,19 +219,6 @@ public class ArbitraryTransaction extends Transaction {
 
 		// Update caches
 		updateCaches(true);
-	}
-
-	@Override
-	public void preProcess() throws DataException {
-		ArbitraryTransactionData arbitraryTransactionData = (ArbitraryTransactionData) transactionData;
-		if (arbitraryTransactionData.getName() == null)
-			return;
-
-		// Rebuild this name in the Names table from the transaction history
-		// This is necessary because in some rare cases names can be missing from the Names table after registration
-		// but we have been unable to reproduce the issue and track down the root cause
-		NamesDatabaseIntegrityCheck namesDatabaseIntegrityCheck = new NamesDatabaseIntegrityCheck();
-		namesDatabaseIntegrityCheck.rebuildName(arbitraryTransactionData.getName(), this.repository);
 	}
 
 	@Override

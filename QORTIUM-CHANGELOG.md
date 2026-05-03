@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: stop arbitrary name validation repairs
+
+Removed ARBITRARY transaction pre-processing that rebuilt name table state before validation. Added coverage for named arbitrary publishes so validation rejects missing name state until an explicit name integrity rebuild restores the name.
+
 ### 2026-05-03 - core: stop name-sale validation repairs
 
 Removed SELL_NAME, CANCEL_SELL_NAME, and BUY_NAME pre-processing that rebuilt name table state before validation. Updated name integrity tests so sale, cancel-sale, and buy-name validation reject missing current name state until an explicit name integrity rebuild restores the sale state.
