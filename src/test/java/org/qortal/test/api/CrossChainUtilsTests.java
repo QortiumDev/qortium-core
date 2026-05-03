@@ -5,6 +5,9 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.qortal.api.model.CrossChainTradeLedgerEntry;
 import org.qortal.api.resource.CrossChainUtils;
+import org.qortal.crosschain.ChainableServer;
+import org.qortal.crosschain.ElectrumX;
+import org.qortal.crosschain.ServerInfo;
 import org.qortal.test.common.ApiCommon;
 
 import java.io.IOException;
@@ -141,6 +144,30 @@ public class CrossChainUtilsTests extends ApiCommon {
 
         Assert.assertEquals(5, versionDecimal, 0.001);
         Assert.assertFalse(thrown);
+    }
+
+    @Test
+    public void testBuildInfosHasNoCurrentServerWhenDisconnected() {
+        ChainableServer firstServer = new ElectrumX.Server("first.example.com", ChainableServer.ConnectionType.TCP, 50001);
+        ChainableServer secondServer = new ElectrumX.Server("second.example.com", ChainableServer.ConnectionType.SSL, 50002);
+
+        List<ServerInfo> infos = CrossChainUtils.buildInfos(List.of(firstServer, secondServer), null);
+
+        Assert.assertEquals(2, infos.size());
+        Assert.assertFalse(infos.get(0).isCurrent());
+        Assert.assertFalse(infos.get(1).isCurrent());
+    }
+
+    @Test
+    public void testBuildInfosMarksOnlyMatchingCurrentServer() {
+        ChainableServer firstServer = new ElectrumX.Server("first.example.com", ChainableServer.ConnectionType.TCP, 50001);
+        ChainableServer secondServer = new ElectrumX.Server("second.example.com", ChainableServer.ConnectionType.SSL, 50002);
+
+        List<ServerInfo> infos = CrossChainUtils.buildInfos(List.of(firstServer, secondServer), secondServer);
+
+        Assert.assertEquals(2, infos.size());
+        Assert.assertFalse(infos.get(0).isCurrent());
+        Assert.assertTrue(infos.get(1).isCurrent());
     }
 
     @Test

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - api: fix cross-chain current server reporting
+
+Fixed cross-chain server configuration reporting so a disconnected foreign-chain provider no longer marks every configured server as current. The current-server flag now only appears when the provider actually has a matching current server.
+
 ### 2026-05-02 - api: expose minter address in block summaries
 
 Added `minterAddress` to block summary API responses and populated it from reward-share minting state for range and signer-summary endpoints. This makes summary responses consistent with full block responses and avoids requiring clients to resolve minter public keys themselves; signer summaries also now preserve current repository results when there are no archived matches.

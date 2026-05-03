@@ -81,7 +81,7 @@ public class CrossChainUtils {
 
         for( ChainableServer server : servers )
         {
-            infos.add(buildInfo(server, currentServer == null || server.equals(currentServer)));
+            infos.add(buildInfo(server, currentServer != null && server.equals(currentServer)));
         }
 
         return infos;
