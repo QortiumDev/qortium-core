@@ -309,10 +309,21 @@ public class IntegrityTests extends Common {
             Transaction transaction = Transaction.fromData(repository, transactionData);
             transaction.sign(alice);
 
-            // Transaction should be invalid, because the database inconsistency was fixed by RegisterNameTransaction.preProcess()
-            Transaction.ValidationResult result = transaction.importAsUnconfirmed();
-            assertTrue("Transaction should be invalid", Transaction.ValidationResult.OK != result);
-            assertTrue("Name should already be registered", Transaction.ValidationResult.NAME_ALREADY_REGISTERED == result);
+            // Register-name validation should not repair the Names table as a side effect
+            transaction.preProcess();
+            Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+            assertEquals("Transaction should validate against current repository state", Transaction.ValidationResult.OK, result);
+            assertNull(repository.getNameRepository().fromName(newName));
+
+            // Explicit integrity repair should restore the missing name
+            NamesDatabaseIntegrityCheck integrityCheck = new NamesDatabaseIntegrityCheck();
+            assertEquals(2, integrityCheck.rebuildName(newName, repository));
+            assertEquals(newData, repository.getNameRepository().fromName(newName).getData());
+
+            result = transaction.isValidUnconfirmed();
+            assertEquals("Name should already be registered after explicit repair", Transaction.ValidationResult.NAME_ALREADY_REGISTERED, result);
+
+            repository.discardChanges();
         }
     }
 
@@ -344,10 +355,21 @@ public class IntegrityTests extends Common {
             Transaction transaction = Transaction.fromData(repository, transactionData);
             transaction.sign(alice);
 
-            // Transaction should be invalid, because the database inconsistency was fixed by RegisterNameTransaction.preProcess()
-            Transaction.ValidationResult result = transaction.importAsUnconfirmed();
-            assertTrue("Transaction should be invalid", Transaction.ValidationResult.OK != result);
-            assertTrue("Name should already be registered", Transaction.ValidationResult.NAME_ALREADY_REGISTERED == result);
+            // Register-name validation should not repair the Names table as a side effect
+            transaction.preProcess();
+            Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+            assertEquals("Transaction should validate against current repository state", Transaction.ValidationResult.OK, result);
+            assertNull(repository.getNameRepository().fromName(name));
+
+            // Explicit integrity repair should restore the missing name and reduced-name collision
+            NamesDatabaseIntegrityCheck integrityCheck = new NamesDatabaseIntegrityCheck();
+            assertEquals(1, integrityCheck.rebuildName(name, repository));
+            assertEquals(data, repository.getNameRepository().fromName(name).getData());
+
+            result = transaction.isValidUnconfirmed();
+            assertEquals("Name should already be registered after explicit repair", Transaction.ValidationResult.NAME_ALREADY_REGISTERED, result);
+
+            repository.discardChanges();
         }
     }
 

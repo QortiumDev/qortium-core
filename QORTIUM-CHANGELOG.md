@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: stop register-name validation repairs
+
+Removed the REGISTER_NAME validation-time rebuild of name table state so register-name validation no longer mutates repository name data as a side effect. Updated name integrity tests to verify validation uses the current repository state, while explicit name integrity repair still restores missing name data and then causes duplicate registration attempts to be rejected.
+
 ### 2026-05-03 - i18n: synchronize translation bundles
 
 Updated the translation checker so it discovers available language bundles instead of relying on a short hardcoded list. Fixed underscore locale loading for bundles such as zh_CN and zh_TW, removed stale translation keys, added missing current keys across the existing bundles, and cleaned malformed UTF-8 bundle headers so the checker now reports all discovered translation bundles as synchronized.
