@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import org.eclipse.persistence.oxm.annotations.XmlDiscriminatorValue;
 import org.qortal.group.Group.ApprovalThreshold;
 import org.qortal.transaction.Transaction.TransactionType;
+import org.qortal.utils.Unicode;
 
 import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.XmlAccessType;
@@ -29,6 +30,12 @@ public class UpdateGroupTransactionData extends TransactionData {
 		example = "my-group"
 	)
 	private int groupId;
+
+	@Schema(
+		description = "new group name, or empty for no change",
+		example = "my-new-group"
+	)
+	private String newName;
 
 	@Schema(
 		description = "new owner's address",
@@ -59,6 +66,11 @@ public class UpdateGroupTransactionData extends TransactionData {
 	@Schema(description = "new maximum block delay before which transaction approval must be reached")
 	private int newMaximumBlockDelay;
 
+	// For internal use
+	@XmlTransient
+	@Schema(hidden = true)
+	private String reducedNewName;
+
 	/** Reference to CREATE_GROUP or UPDATE_GROUP transaction, used to rebuild group during orphaning. */
 	// For internal use when orphaning
 	@XmlTransient
@@ -76,15 +88,17 @@ public class UpdateGroupTransactionData extends TransactionData {
 
 	public void afterUnmarshal(Unmarshaller u, Object parent) {
 		this.creatorPublicKey = this.ownerPublicKey;
+		this.reducedNewName = this.newName != null ? Unicode.sanitize(this.newName) : null;
 	}
 
 	/** From repository */
 	public UpdateGroupTransactionData(BaseTransactionData baseTransactionData,
-			int groupId, String newOwner, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
-			int newMinimumBlockDelay, int newMaximumBlockDelay, byte[] groupReference) {
+			int groupId, String newName, String newOwner, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
+			int newMinimumBlockDelay, int newMaximumBlockDelay, String reducedNewName, byte[] groupReference) {
 		super(TransactionType.UPDATE_GROUP, baseTransactionData);
 
 		this.ownerPublicKey = baseTransactionData.creatorPublicKey;
+		this.newName = newName;
 		this.newOwner = newOwner;
 		this.groupId = groupId;
 		this.newDescription = newDescription;
@@ -92,7 +106,24 @@ public class UpdateGroupTransactionData extends TransactionData {
 		this.newApprovalThreshold = newApprovalThreshold;
 		this.newMinimumBlockDelay = newMinimumBlockDelay;
 		this.newMaximumBlockDelay = newMaximumBlockDelay;
+		this.reducedNewName = reducedNewName;
 		this.groupReference = groupReference;
+	}
+
+	/** From repository */
+	public UpdateGroupTransactionData(BaseTransactionData baseTransactionData,
+			int groupId, String newOwner, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
+			int newMinimumBlockDelay, int newMaximumBlockDelay, byte[] groupReference) {
+		this(baseTransactionData, groupId, "", newOwner, newDescription, newIsOpen, newApprovalThreshold,
+				newMinimumBlockDelay, newMaximumBlockDelay, "", groupReference);
+	}
+
+	/** From network/API */
+	public UpdateGroupTransactionData(BaseTransactionData baseTransactionData,
+			int groupId, String newName, String newOwner, String newDescription, boolean newIsOpen, ApprovalThreshold newApprovalThreshold,
+			int newMinimumBlockDelay, int newMaximumBlockDelay) {
+		this(baseTransactionData, groupId, newName, newOwner, newDescription, newIsOpen, newApprovalThreshold,
+				newMinimumBlockDelay, newMaximumBlockDelay, Unicode.sanitize(newName), null);
 	}
 
 	/** From network/API */
@@ -116,6 +147,10 @@ public class UpdateGroupTransactionData extends TransactionData {
 		return this.groupId;
 	}
 
+	public String getNewName() {
+		return this.newName;
+	}
+
 	public String getNewDescription() {
 		return this.newDescription;
 	}
@@ -134,6 +169,10 @@ public class UpdateGroupTransactionData extends TransactionData {
 
 	public int getNewMaximumBlockDelay() {
 		return this.newMaximumBlockDelay;
+	}
+
+	public String getReducedNewName() {
+		return this.reducedNewName;
 	}
 
 	public byte[] getGroupReference() {

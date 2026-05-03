@@ -18,23 +18,26 @@ public class HSQLDBUpdateGroupTransactionRepository extends HSQLDBTransactionRep
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT group_id, new_owner, new_description, new_is_open, new_approval_threshold, new_min_block_delay, new_max_block_delay, group_reference FROM UpdateGroupTransactions WHERE signature = ?";
+		String sql = "SELECT group_id, new_name, new_owner, new_description, new_is_open, new_approval_threshold, "
+				+ "new_min_block_delay, new_max_block_delay, reduced_new_name, group_reference FROM UpdateGroupTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
 				return null;
 
 			int groupId = resultSet.getInt(1);
-			String newOwner = resultSet.getString(2);
-			String newDescription = resultSet.getString(3);
-			boolean newIsOpen = resultSet.getBoolean(4);
-			ApprovalThreshold newApprovalThreshold = ApprovalThreshold.valueOf(resultSet.getInt(5));
-			int newMinBlockDelay = resultSet.getInt(6);
-			int newMaxBlockDelay = resultSet.getInt(7);
-			byte[] groupReference = resultSet.getBytes(8);
+			String newName = resultSet.getString(2);
+			String newOwner = resultSet.getString(3);
+			String newDescription = resultSet.getString(4);
+			boolean newIsOpen = resultSet.getBoolean(5);
+			ApprovalThreshold newApprovalThreshold = ApprovalThreshold.valueOf(resultSet.getInt(6));
+			int newMinBlockDelay = resultSet.getInt(7);
+			int newMaxBlockDelay = resultSet.getInt(8);
+			String reducedNewName = resultSet.getString(9);
+			byte[] groupReference = resultSet.getBytes(10);
 
-			return new UpdateGroupTransactionData(baseTransactionData, groupId, newOwner, newDescription, newIsOpen,
-					newApprovalThreshold, newMinBlockDelay, newMaxBlockDelay, groupReference);
+			return new UpdateGroupTransactionData(baseTransactionData, groupId, newName, newOwner, newDescription, newIsOpen,
+					newApprovalThreshold, newMinBlockDelay, newMaxBlockDelay, reducedNewName, groupReference);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch update group transaction from repository", e);
 		}
@@ -47,7 +50,8 @@ public class HSQLDBUpdateGroupTransactionRepository extends HSQLDBTransactionRep
 		HSQLDBSaver saveHelper = new HSQLDBSaver("UpdateGroupTransactions");
 
 		saveHelper.bind("signature", updateGroupTransactionData.getSignature()).bind("owner", updateGroupTransactionData.getOwnerPublicKey())
-				.bind("group_id", updateGroupTransactionData.getGroupId()).bind("new_owner", updateGroupTransactionData.getNewOwner())
+				.bind("group_id", updateGroupTransactionData.getGroupId()).bind("new_name", updateGroupTransactionData.getNewName())
+				.bind("reduced_new_name", updateGroupTransactionData.getReducedNewName()).bind("new_owner", updateGroupTransactionData.getNewOwner())
 				.bind("new_description", updateGroupTransactionData.getNewDescription()).bind("new_is_open", updateGroupTransactionData.getNewIsOpen())
 				.bind("new_approval_threshold", updateGroupTransactionData.getNewApprovalThreshold().value)
 				.bind("new_min_block_delay", updateGroupTransactionData.getNewMinimumBlockDelay())

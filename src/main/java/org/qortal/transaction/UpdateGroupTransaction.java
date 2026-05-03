@@ -10,6 +10,7 @@ import org.qortal.data.transaction.UpdateGroupTransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
+import org.qortal.utils.Unicode;
 
 import java.util.Collections;
 import java.util.List;
@@ -65,6 +66,19 @@ public class UpdateGroupTransaction extends Transaction {
 
 		if (this.updateGroupTransactionData.getNewMaximumBlockDelay() < this.updateGroupTransactionData.getNewMinimumBlockDelay())
 			return ValidationResult.INVALID_GROUP_BLOCK_DELAY;
+
+		// Check new name (0 length means don't update name)
+		String newName = this.updateGroupTransactionData.getNewName();
+		int newNameLength = Utf8.encodedLength(newName);
+		if (newNameLength != 0) {
+			// Check new name size bounds
+			if (newNameLength < Group.MIN_NAME_SIZE || newNameLength > Group.MAX_NAME_SIZE)
+				return ValidationResult.INVALID_NAME_LENGTH;
+
+			// Check new name is in normalized form (no leading/trailing whitespace, etc.)
+			if (!newName.equals(Unicode.normalize(newName)))
+				return ValidationResult.NAME_NOT_NORMALIZED;
+		}
 
 		// Check new description size bounds
 		int newDescriptionLength = Utf8.encodedLength(this.updateGroupTransactionData.getNewDescription());
@@ -123,6 +137,12 @@ public class UpdateGroupTransaction extends Transaction {
 		// Check new owner is not banned
 		if (this.repository.getGroupRepository().banExists(this.updateGroupTransactionData.getGroupId(), newOwner.getAddress(), this.updateGroupTransactionData.getTimestamp()))
 			return ValidationResult.BANNED_FROM_GROUP;
+
+		if (!this.updateGroupTransactionData.getNewName().isEmpty()) {
+			GroupData newNameGroupData = this.repository.getGroupRepository().fromReducedGroupName(this.updateGroupTransactionData.getReducedNewName());
+			if (newNameGroupData != null && !newNameGroupData.getGroupId().equals(groupData.getGroupId()))
+				return ValidationResult.GROUP_ALREADY_EXISTS;
+		}
 
 		return ValidationResult.OK;
 	}

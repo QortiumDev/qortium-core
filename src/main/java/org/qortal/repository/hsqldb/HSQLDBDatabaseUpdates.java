@@ -505,6 +505,7 @@ public class HSQLDBDatabaseUpdates {
 
 					// Update group
 					stmt.execute("CREATE TABLE UpdateGroupTransactions (signature Signature, owner AccountPublicKey NOT NULL, group_id GroupID NOT NULL, "
+							+ "new_name GroupName NOT NULL, reduced_new_name GroupName NOT NULL, "
 							+ "new_owner AccountAddress NOT NULL, new_is_open BOOLEAN NOT NULL, new_approval_threshold TINYINT NOT NULL, "
 							+ "new_min_block_delay INTEGER NOT NULL, new_max_block_delay INTEGER NOT NULL, "
 							+ "group_reference Signature, new_description GenericDescription NOT NULL, " + TRANSACTION_KEYS + ")");
@@ -1068,6 +1069,8 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "SellNameTransactions", "recipient", "AccountAddress");
 					addColumnIfMissing(connection, "CancelSellNameTransactions", "sale_recipient", "AccountAddress");
 					addColumnIfMissing(connection, "BuyNameTransactions", "sale_recipient", "AccountAddress");
+					addColumnIfMissing(connection, "UpdateGroupTransactions", "new_name", "GroupName DEFAULT '' NOT NULL");
+					addColumnIfMissing(connection, "UpdateGroupTransactions", "reduced_new_name", "GroupName DEFAULT '' NOT NULL");
 					renameColumnIfExists(connection, "TradeBotStates", "qort_amount", "native_amount");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");

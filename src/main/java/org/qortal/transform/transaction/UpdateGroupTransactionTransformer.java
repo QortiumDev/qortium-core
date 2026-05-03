@@ -20,6 +20,7 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 
 	// Property lengths
 	private static final int GROUPID_LENGTH = INT_LENGTH;
+	private static final int NEW_NAME_SIZE_LENGTH = INT_LENGTH;
 	private static final int NEW_OWNER_LENGTH = ADDRESS_LENGTH;
 	private static final int NEW_DESCRIPTION_SIZE_LENGTH = INT_LENGTH;
 	private static final int NEW_IS_OPEN_LENGTH = BOOLEAN_LENGTH;
@@ -27,7 +28,7 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 	private static final int NEW_MINIMUM_BLOCK_DELAY_LENGTH = INT_LENGTH;
 	private static final int NEW_MAXIMUM_BLOCK_DELAY_LENGTH = INT_LENGTH;
 
-	private static final int EXTRAS_LENGTH = GROUPID_LENGTH + NEW_OWNER_LENGTH + NEW_DESCRIPTION_SIZE_LENGTH + NEW_IS_OPEN_LENGTH
+	private static final int EXTRAS_LENGTH = GROUPID_LENGTH + NEW_NAME_SIZE_LENGTH + NEW_OWNER_LENGTH + NEW_DESCRIPTION_SIZE_LENGTH + NEW_IS_OPEN_LENGTH
 			+ NEW_APPROVAL_THRESHOLD_LENGTH + NEW_MINIMUM_BLOCK_DELAY_LENGTH + NEW_MAXIMUM_BLOCK_DELAY_LENGTH;
 
 	protected static final TransactionLayout layout;
@@ -40,6 +41,8 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 		layout.add("group owner's public key", TransformationType.PUBLIC_KEY);
 		addMempowFeeNonceToLayout(layout, TransactionType.UPDATE_GROUP);
 		layout.add("group ID", TransformationType.INT);
+		layout.add("group's new name length (0 for no change)", TransformationType.INT);
+		layout.add("group's new name", TransformationType.STRING);
 		layout.add("group's new owner", TransformationType.ADDRESS);
 		layout.add("group's new description length", TransformationType.INT);
 		layout.add("group's new description", TransformationType.STRING);
@@ -61,6 +64,8 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 
 		int groupId = byteBuffer.getInt();
 
+		String newName = Serialization.deserializeSizedString(byteBuffer, Group.MAX_NAME_SIZE);
+
 		String newOwner = Serialization.deserializeAddress(byteBuffer);
 
 		String newDescription = Serialization.deserializeSizedString(byteBuffer, Group.MAX_DESCRIPTION_SIZE);
@@ -80,14 +85,15 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, nonce, signature);
 
-		return new UpdateGroupTransactionData(baseTransactionData, groupId, newOwner, newDescription, newIsOpen,
+		return new UpdateGroupTransactionData(baseTransactionData, groupId, newName, newOwner, newDescription, newIsOpen,
 				newApprovalThreshold, newMinBlockDelay, newMaxBlockDelay);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
 		UpdateGroupTransactionData updateGroupTransactionData = (UpdateGroupTransactionData) transactionData;
 
-		return getBaseLength(transactionData) + EXTRAS_LENGTH + Utf8.encodedLength(updateGroupTransactionData.getNewDescription());
+		return getBaseLength(transactionData) + EXTRAS_LENGTH + Utf8.encodedLength(updateGroupTransactionData.getNewName())
+				+ Utf8.encodedLength(updateGroupTransactionData.getNewDescription());
 	}
 
 	public static byte[] toBytes(TransactionData transactionData) throws TransformationException {
@@ -99,6 +105,8 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 			transformCommonBytes(transactionData, bytes);
 
 			bytes.write(Ints.toByteArray(updateGroupTransactionData.getGroupId()));
+
+			Serialization.serializeSizedString(bytes, updateGroupTransactionData.getNewName());
 
 			Serialization.serializeAddress(bytes, updateGroupTransactionData.getNewOwner());
 

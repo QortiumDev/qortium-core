@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: allow group renames
+
+Added optional group renaming to UPDATE_GROUP, including reduced-name collision checks, updated transaction persistence and wire format, and orphan restoration for group name history.
+
 ### 2026-05-03 - core: fix update group mutable settings
 
 Made UPDATE_GROUP apply and orphan its approval block delay fields. UPDATE_GROUP no longer transfers group ownership or auto-adds the requested owner as a member/admin; ownership changes are reserved for future explicit group sale transactions.

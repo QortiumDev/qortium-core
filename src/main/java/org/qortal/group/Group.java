@@ -337,6 +337,11 @@ public class Group {
 		this.groupData.setReference(updateGroupTransactionData.getSignature());
 
 		// Update Group's mutable settings. Ownership changes are handled by future group-sale transactions.
+		if (!updateGroupTransactionData.getNewName().isEmpty()) {
+			this.groupData.setGroupName(updateGroupTransactionData.getNewName());
+			this.groupData.setReducedGroupName(updateGroupTransactionData.getReducedNewName());
+		}
+
 		this.groupData.setDescription(updateGroupTransactionData.getNewDescription());
 		this.groupData.setIsOpen(updateGroupTransactionData.getNewIsOpen());
 		this.groupData.setApprovalThreshold(updateGroupTransactionData.getNewApprovalThreshold());
@@ -392,6 +397,8 @@ public class Group {
 				String owner = Crypto.toAddress(previousCreateGroupTransactionData.getCreatorPublicKey());
 
 				this.groupData.setOwner(owner);
+				this.groupData.setGroupName(previousCreateGroupTransactionData.getGroupName());
+				this.groupData.setReducedGroupName(previousCreateGroupTransactionData.getReducedGroupName());
 				this.groupData.setDescription(previousCreateGroupTransactionData.getDescription());
 				this.groupData.setIsOpen(previousCreateGroupTransactionData.isOpen());
 				this.groupData.setApprovalThreshold(previousCreateGroupTransactionData.getApprovalThreshold());
@@ -404,6 +411,12 @@ public class Group {
 			case UPDATE_GROUP: {
 				UpdateGroupTransactionData previousUpdateGroupTransactionData = (UpdateGroupTransactionData) previousTransactionData;
 				this.groupData.setOwner(previousUpdateGroupTransactionData.getNewOwner());
+				if (!previousUpdateGroupTransactionData.getNewName().isEmpty()) {
+					this.groupData.setGroupName(previousUpdateGroupTransactionData.getNewName());
+					this.groupData.setReducedGroupName(previousUpdateGroupTransactionData.getReducedNewName());
+				} else {
+					this.revertGroupName(previousUpdateGroupTransactionData.getGroupReference());
+				}
 				this.groupData.setDescription(previousUpdateGroupTransactionData.getNewDescription());
 				this.groupData.setIsOpen(previousUpdateGroupTransactionData.getNewIsOpen());
 				this.groupData.setApprovalThreshold(previousUpdateGroupTransactionData.getNewApprovalThreshold());
@@ -418,6 +431,40 @@ public class Group {
 		}
 
 		// Previous owner will still be admin and member at this point
+	}
+
+	private void revertGroupName(byte[] groupReference) throws DataException {
+		while (true) {
+			TransactionData previousTransactionData = this.repository.getTransactionRepository().fromSignature(groupReference);
+			if (previousTransactionData == null)
+				throw new DataException("Unable to revert group name as referenced transaction not found in repository");
+
+			switch (previousTransactionData.getType()) {
+				case CREATE_GROUP: {
+					CreateGroupTransactionData previousCreateGroupTransactionData = (CreateGroupTransactionData) previousTransactionData;
+
+					this.groupData.setGroupName(previousCreateGroupTransactionData.getGroupName());
+					this.groupData.setReducedGroupName(previousCreateGroupTransactionData.getReducedGroupName());
+					return;
+				}
+
+				case UPDATE_GROUP: {
+					UpdateGroupTransactionData previousUpdateGroupTransactionData = (UpdateGroupTransactionData) previousTransactionData;
+
+					if (!previousUpdateGroupTransactionData.getNewName().isEmpty()) {
+						this.groupData.setGroupName(previousUpdateGroupTransactionData.getNewName());
+						this.groupData.setReducedGroupName(previousUpdateGroupTransactionData.getReducedNewName());
+						return;
+					}
+
+					groupReference = previousUpdateGroupTransactionData.getGroupReference();
+					break;
+				}
+
+				default:
+					throw new IllegalStateException("Unable to revert group name due to unsupported referenced transaction");
+			}
+		}
 	}
 
 	public void promoteToAdmin(AddGroupAdminTransactionData addGroupAdminTransactionData) throws DataException {

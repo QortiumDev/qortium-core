@@ -98,6 +98,44 @@ public class HSQLDBGroupRepository implements GroupRepository {
 	}
 
 	@Override
+	public GroupData fromReducedGroupName(String reducedGroupName) throws DataException {
+		String sql = "SELECT group_id, owner, group_name, description, created_when, updated_when, reference, is_open, "
+				+ "approval_threshold, min_block_delay, max_block_delay, creation_group_id "
+				+ "FROM Groups WHERE reduced_group_name = ?";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, reducedGroupName)) {
+			if (resultSet == null)
+				return null;
+
+			int groupId = resultSet.getInt(1);
+			String owner = resultSet.getString(2);
+			String groupName = resultSet.getString(3);
+			String description = resultSet.getString(4);
+			long created = resultSet.getLong(5);
+
+			// Special handling for possibly-NULL "updated" column
+			Long updated = resultSet.getLong(6);
+			if (updated == 0 && resultSet.wasNull())
+				updated = null;
+
+			byte[] reference = resultSet.getBytes(7);
+			boolean isOpen = resultSet.getBoolean(8);
+
+			ApprovalThreshold approvalThreshold = ApprovalThreshold.valueOf(resultSet.getInt(9));
+
+			int minBlockDelay = resultSet.getInt(10);
+			int maxBlockDelay = resultSet.getInt(11);
+
+			int creationGroupId = resultSet.getInt(12);
+
+			return new GroupData(groupId, owner, groupName, description, created, updated, isOpen,
+					approvalThreshold, minBlockDelay, maxBlockDelay, reference, creationGroupId, reducedGroupName);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch group info from repository", e);
+		}
+	}
+
+	@Override
 	public boolean groupExists(int groupId) throws DataException {
 		try {
 			return this.repository.exists("Groups", "group_id = ?", groupId);

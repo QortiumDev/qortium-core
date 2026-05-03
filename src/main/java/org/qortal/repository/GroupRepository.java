@@ -12,6 +12,8 @@ public interface GroupRepository {
 
 	public GroupData fromGroupName(String groupName) throws DataException;
 
+	public GroupData fromReducedGroupName(String reducedGroupName) throws DataException;
+
 	public boolean groupExists(int groupId) throws DataException;
 
 	public boolean groupExists(String groupName) throws DataException;
