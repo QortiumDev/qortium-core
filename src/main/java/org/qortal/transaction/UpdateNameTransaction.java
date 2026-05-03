@@ -50,12 +50,6 @@ public class UpdateNameTransaction extends Transaction {
 	public ValidationResult isValid() throws DataException {
 		String name = this.updateNameTransactionData.getName();
 
-		// if the account has more than one name, then they cannot update their primary name
-		if( this.repository.getNameRepository().getNamesByOwner(this.getOwner().getAddress()).size() > 1 &&
-				this.getOwner().getPrimaryName().get().equals(name) ) {
-			return ValidationResult.NOT_SUPPORTED;
-		}
-
 		// Check name size bounds
 		int nameLength = Utf8.encodedLength(name);
 		if (nameLength < Name.MIN_NAME_SIZE || nameLength > Name.MAX_NAME_SIZE)
@@ -145,7 +139,8 @@ public class UpdateNameTransaction extends Transaction {
 		NamesDatabaseIntegrityCheck namesDatabaseIntegrityCheck = new NamesDatabaseIntegrityCheck();
 		namesDatabaseIntegrityCheck.rebuildName(updateNameTransactionData.getName(), this.repository);
 
-		if (!Objects.equals(updateNameTransactionData.getName(), updateNameTransactionData.getNewName())) {
+		if (!updateNameTransactionData.getNewName().isEmpty()
+				&& !Objects.equals(updateNameTransactionData.getName(), updateNameTransactionData.getNewName())) {
 			// Renaming - so make sure the new name is rebuilt too
 			namesDatabaseIntegrityCheck.rebuildName(updateNameTransactionData.getNewName(), this.repository);
 		}

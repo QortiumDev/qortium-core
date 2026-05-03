@@ -6,9 +6,7 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.resource.TransactionsResource;
 import org.qortal.block.BlockChain;
 import org.qortal.data.naming.NameData;
-import org.qortal.data.transaction.BuyNameTransactionData;
 import org.qortal.data.transaction.RegisterNameTransactionData;
-import org.qortal.data.transaction.SellNameTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.UpdateNameTransactionData;
 import org.qortal.repository.DataException;
@@ -568,30 +566,7 @@ public class UpdateTests extends Common {
 			// the name alice is trying to update to
 			String newName = "updated-name";
 
-			// update name, assert invalid
-			updateName(repository, initialName, newName, Transaction.ValidationResult.NOT_SUPPORTED, alice);
-
-			// check primary name did not update
-			// check primary name update
-			Optional<String> primaryNameNotUpdateOptional = alice.getPrimaryName();
-			assertTrue(primaryNameNotUpdateOptional.isPresent());
-			assertEquals(initialName, primaryNameNotUpdateOptional.get());
-
-			// sell name 2, assert valid
-			Long amount = 1000000L;
-			SellNameTransactionData transactionData = new SellNameTransactionData(TestTransaction.generateBase(alice), secondName, amount);
-			TransactionUtils.signAndMint(repository, transactionData, alice);
-
-			// Check name is for sale
-			NameData nameData = repository.getNameRepository().fromName(secondName);
-			assertTrue(nameData.isForSale());
-			assertEquals("price incorrect", amount, nameData.getSalePrice());
-
-			// bob buys name 2, assert
-			BuyNameTransactionData bobBuysName2Data = new BuyNameTransactionData(TestTransaction.generateBase(bob), secondName, amount, alice.getAddress());
-			TransactionUtils.signAndMint(repository, bobBuysName2Data, bob);
-
-			// update name, assert valid, assert primary name change
+			// update primary name while multiple names are owned, assert valid and primary name change
 			updateName(repository, initialName, newName, Transaction.ValidationResult.OK, alice);
 
 			// check primary name update
@@ -601,6 +576,49 @@ public class UpdateTests extends Common {
 
 			assertEquals(alice.getPrimaryName(), alice.determinePrimaryName(TransactionsResource.ConfirmationStatus.CONFIRMED));
 			assertEquals(bob.getPrimaryName(), bob.determinePrimaryName(TransactionsResource.ConfirmationStatus.CONFIRMED));
+		}
+	}
+
+	@Test
+	public void testUpdateNamePrimaryFlag() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			String initialName = "initial-name";
+			RegisterNameTransactionData registerNameTransactionData1 = new RegisterNameTransactionData(TestTransaction.generateBase(alice), initialName, "{}");
+			registerNameTransactionData1.setFee(new RegisterNameTransaction(null, null).getUnitFee(registerNameTransactionData1.getTimestamp()));
+			TransactionUtils.signAndMint(repository, registerNameTransactionData1, alice);
+
+			String secondName = "second-name";
+			RegisterNameTransactionData registerNameTransactionData2 = new RegisterNameTransactionData(TestTransaction.generateBase(alice), secondName, "{}");
+			registerNameTransactionData2.setFee(new RegisterNameTransaction(null, null).getUnitFee(registerNameTransactionData2.getTimestamp()));
+			TransactionUtils.signAndMint(repository, registerNameTransactionData2, alice);
+
+			UpdateNameTransactionData setPrimaryData = new UpdateNameTransactionData(TestTransaction.generateBase(alice), secondName, "", "", true);
+			TransactionUtils.signAndMint(repository, setPrimaryData, alice);
+
+			Optional<String> primaryNameOptional = alice.getPrimaryName();
+			assertTrue(primaryNameOptional.isPresent());
+			assertEquals(secondName, primaryNameOptional.get());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			primaryNameOptional = alice.getPrimaryName();
+			assertTrue(primaryNameOptional.isPresent());
+			assertEquals(initialName, primaryNameOptional.get());
+
+			TransactionUtils.deleteUnconfirmedTransactions(repository);
+
+			UpdateNameTransactionData clearPrimaryData = new UpdateNameTransactionData(TestTransaction.generateBase(alice), initialName, "", "", false);
+			TransactionUtils.signAndMint(repository, clearPrimaryData, alice);
+
+			assertFalse(alice.getPrimaryName().isPresent());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			primaryNameOptional = alice.getPrimaryName();
+			assertTrue(primaryNameOptional.isPresent());
+			assertEquals(initialName, primaryNameOptional.get());
 		}
 	}
 

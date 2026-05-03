@@ -126,10 +126,10 @@ public class BuySellTests extends Common {
 		assertEquals(name1, namesByOwner.get(0).getName());
 
 		SellNameTransactionData sellPrimaryNameData = new SellNameTransactionData(TestTransaction.generateBase(alice), name, price);
-		Transaction.ValidationResult sellPrimaryNameResult = TransactionUtils.signAndImport(repository, sellPrimaryNameData, alice);
+		TransactionUtils.signAndMint(repository, sellPrimaryNameData, alice);
 
-		// check that selling primary name is not supported while owning multiple addresses
-		assertTrue(Transaction.ValidationResult.NOT_SUPPORTED.equals(sellPrimaryNameResult));
+		NameData nameData = repository.getNameRepository().fromName(name);
+		assertTrue("primary name should be sellable while owner has multiple names", nameData.isForSale());
 	}
 
 	@Test

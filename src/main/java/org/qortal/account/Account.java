@@ -9,7 +9,10 @@ import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.account.RewardShareData;
+import org.qortal.data.transaction.BuyNameTransactionData;
+import org.qortal.data.transaction.RegisterNameTransactionData;
 import org.qortal.data.transaction.TransactionData;
+import org.qortal.data.transaction.UpdateNameTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.GroupRepository;
 import org.qortal.repository.Repository;
@@ -19,11 +22,12 @@ import org.qortal.utils.Groups;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 
+import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.qortal.utils.Amounts.prettyAmount;
 
@@ -276,66 +280,119 @@ public class Account {
 		// all registered names for the owner
 		List<NameData> names = this.repository.getNameRepository().getNamesByOwner(this.address);
 
-		Optional<String> primaryName;
-
 		// if no registered names, the no primary name possible
 		if (names.isEmpty()) {
-			primaryName = Optional.empty();
+			return Optional.empty();
 		}
-		// if names
-		else {
-			// if one name, then that is the primary name
-			if (names.size() == 1) {
-				primaryName = Optional.of( names.get(0).getName() );
-			}
-			// if more than one name, then seek the earliest name acquisition that was never released
-			else {
-				Map<String, TransactionData> txByName = new HashMap<>(names.size());
 
-				// for each name, get the latest transaction
-				for (NameData nameData : names) {
+		Set<String> currentlyOwnedNames = names.stream().map(NameData::getName).collect(Collectors.toSet());
 
-					// since the name is currently registered to the owner,
-					// we assume the latest transaction involving this name was the transaction that the acquired
-					// name through registration, purchase or update
-					Optional<TransactionData> latestTransaction
-							= this.repository
-							.getTransactionRepository()
-							.getTransactionsInvolvingName(
-									nameData.getName(),
-									confirmationStatus
-							)
-							.stream()
-							.sorted(Comparator.comparing(
-									TransactionData::getTimestamp).reversed()
-							)
-							.findFirst(); // first is the last, since it was reversed
+		List<TransactionData> nameHistory = new ArrayList<>();
+		for (NameData nameData : names)
+			nameHistory.addAll(fetchNameChangingHistory(nameData.getReference(), confirmationStatus));
 
-					// if there is a latest transaction, expected for all registered names
-					if (latestTransaction.isPresent()) {
-						txByName.put(nameData.getName(), latestTransaction.get());
+		nameHistory.sort(Comparator.comparing(TransactionData::getTimestamp));
+
+		Optional<String> primaryName = Optional.empty();
+		for (TransactionData transactionData : nameHistory) {
+			switch (transactionData.getType()) {
+				case REGISTER_NAME: {
+					RegisterNameTransactionData registerNameTransactionData = (RegisterNameTransactionData) transactionData;
+					PublicKeyAccount registrant = new PublicKeyAccount(this.repository, registerNameTransactionData.getRegistrantPublicKey());
+					if (registrant.getAddress().equals(this.address) && primaryName.isEmpty())
+						primaryName = Optional.of(registerNameTransactionData.getName());
+
+					break;
+				}
+
+				case BUY_NAME: {
+					BuyNameTransactionData buyNameTransactionData = (BuyNameTransactionData) transactionData;
+					PublicKeyAccount buyer = new PublicKeyAccount(this.repository, buyNameTransactionData.getBuyerPublicKey());
+					if (buyer.getAddress().equals(this.address) && primaryName.isEmpty())
+						primaryName = Optional.of(buyNameTransactionData.getName());
+
+					break;
+				}
+
+				case UPDATE_NAME: {
+					UpdateNameTransactionData updateNameTransactionData = (UpdateNameTransactionData) transactionData;
+					PublicKeyAccount owner = new PublicKeyAccount(this.repository, updateNameTransactionData.getOwnerPublicKey());
+					if (!owner.getAddress().equals(this.address))
+						break;
+
+					String oldName = updateNameTransactionData.getName();
+					String newName = updateNameTransactionData.getNewName();
+					String updatedName = newName.isEmpty() ? oldName : newName;
+					Boolean primary = updateNameTransactionData.getPrimary();
+
+					if (primary != null) {
+						if (primary)
+							primaryName = Optional.of(updatedName);
+						else if (primaryName.isPresent() && primaryName.get().equals(oldName))
+							primaryName = Optional.empty();
+					} else if (primaryName.isPresent() && primaryName.get().equals(oldName) && !newName.isEmpty()) {
+						primaryName = Optional.of(updatedName);
 					}
-					// if there is no latest transaction, then
-					else {
-						LOGGER.warn("No matching transaction for name: " + nameData.getName());
-					}
+
+					break;
 				}
 
-				// get the first name aqcuistion for this address
-				Optional<Map.Entry<String, TransactionData>> firstNameEntry
-						= txByName.entrySet().stream().sorted(Comparator.comparing(entry -> entry.getValue().getTimestamp())).findFirst();
-
-				// if their is a name acquisition, then the first one is the primary name
-				if (firstNameEntry.isPresent()) {
-					primaryName = Optional.of( firstNameEntry.get().getKey() );
-				}
-				// if there is no nameacquistion, then there is no primary name
-				else {
-					primaryName =  Optional.empty();
-				}
+				default:
+					break;
 			}
 		}
+
+		if (primaryName.isPresent() && !currentlyOwnedNames.contains(primaryName.get()))
+			return Optional.empty();
+
 		return primaryName;
+	}
+
+	private List<TransactionData> fetchNameChangingHistory(byte[] nameReference, TransactionsResource.ConfirmationStatus confirmationStatus) throws DataException {
+		List<TransactionData> nameHistory = new ArrayList<>();
+
+		while (nameReference != null) {
+			TransactionData transactionData = this.repository.getTransactionRepository().fromSignature(nameReference);
+			if (transactionData == null) {
+				LOGGER.warn("No matching transaction for name reference");
+				break;
+			}
+
+			if (matchesConfirmationStatus(transactionData, confirmationStatus))
+				nameHistory.add(transactionData);
+
+			switch (transactionData.getType()) {
+				case REGISTER_NAME:
+					return nameHistory;
+
+				case UPDATE_NAME:
+					nameReference = ((UpdateNameTransactionData) transactionData).getNameReference();
+					break;
+
+				case BUY_NAME:
+					nameReference = ((BuyNameTransactionData) transactionData).getNameReference();
+					break;
+
+				default:
+					return nameHistory;
+			}
+		}
+
+		return nameHistory;
+	}
+
+	private static boolean matchesConfirmationStatus(TransactionData transactionData, TransactionsResource.ConfirmationStatus confirmationStatus) {
+		switch (confirmationStatus) {
+			case CONFIRMED:
+				return transactionData.getBlockHeight() != null;
+
+			case UNCONFIRMED:
+				return transactionData.getBlockHeight() == null;
+
+			case BOTH:
+			default:
+				return true;
+		}
 	}
 
 	/**

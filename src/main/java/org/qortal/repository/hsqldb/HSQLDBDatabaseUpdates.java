@@ -292,7 +292,8 @@ public class HSQLDBDatabaseUpdates {
 
 					// Update Name Transactions
 					stmt.execute("CREATE TABLE UpdateNameTransactions (signature Signature, owner AccountPublicKey NOT NULL, name RegisteredName NOT NULL, "
-							+ "new_name RegisteredName NOT NULL, new_data NameData NOT NULL, reduced_new_name RegisteredName NOT NULL, "
+							+ "new_name RegisteredName NOT NULL, new_data NameData NOT NULL, is_primary BOOLEAN, "
+							+ "reduced_new_name RegisteredName NOT NULL, previous_primary_name RegisteredName, "
 							+ "name_reference Signature, " + TRANSACTION_KEYS + ")");
 
 					// Sell Name Transactions
@@ -1071,6 +1072,8 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "BuyNameTransactions", "sale_recipient", "AccountAddress");
 					addColumnIfMissing(connection, "UpdateGroupTransactions", "new_name", "GroupName DEFAULT '' NOT NULL");
 					addColumnIfMissing(connection, "UpdateGroupTransactions", "reduced_new_name", "GroupName DEFAULT '' NOT NULL");
+					addColumnIfMissing(connection, "UpdateNameTransactions", "is_primary", "BOOLEAN");
+					addColumnIfMissing(connection, "UpdateNameTransactions", "previous_primary_name", "RegisteredName");
 					renameColumnIfExists(connection, "TradeBotStates", "qort_amount", "native_amount");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");

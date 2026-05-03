@@ -426,9 +426,7 @@ public class IntegrityTests extends Common {
             Transaction.ValidationResult result = transaction.importAsUnconfirmed();
             assertTrue("Transaction should be invalid", Transaction.ValidationResult.OK != result);
 
-            // this assertion has been updated, because the primary name logic now comes into play and you cannot update a primary name when there
-            // is other names registered and if your try a NOT SUPPORTED result will be given
-            assertTrue("Destination name should already exist", Transaction.ValidationResult.NOT_SUPPORTED == result);
+            assertTrue("Destination name should already exist", Transaction.ValidationResult.NAME_ALREADY_REGISTERED == result);
 
             assertEquals(alice.getPrimaryName(), alice.determinePrimaryName(TransactionsResource.ConfirmationStatus.CONFIRMED));
         }

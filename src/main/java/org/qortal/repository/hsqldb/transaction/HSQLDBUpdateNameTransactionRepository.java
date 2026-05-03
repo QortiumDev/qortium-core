@@ -17,7 +17,8 @@ public class HSQLDBUpdateNameTransactionRepository extends HSQLDBTransactionRepo
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT name, new_name, new_data, reduced_new_name, name_reference FROM UpdateNameTransactions WHERE signature = ?";
+		String sql = "SELECT name, new_name, new_data, is_primary, reduced_new_name, name_reference, previous_primary_name "
+				+ "FROM UpdateNameTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
@@ -26,10 +27,14 @@ public class HSQLDBUpdateNameTransactionRepository extends HSQLDBTransactionRepo
 			String name = resultSet.getString(1);
 			String newName = resultSet.getString(2);
 			String newData = resultSet.getString(3);
-			String reducedNewName = resultSet.getString(4);
-			byte[] nameReference = resultSet.getBytes(5);
+			Boolean primary = resultSet.getBoolean(4);
+			if (!primary && resultSet.wasNull())
+				primary = null;
+			String reducedNewName = resultSet.getString(5);
+			byte[] nameReference = resultSet.getBytes(6);
+			String previousPrimaryName = resultSet.getString(7);
 
-			return new UpdateNameTransactionData(baseTransactionData, name, newName, newData, reducedNewName, nameReference);
+			return new UpdateNameTransactionData(baseTransactionData, name, newName, newData, primary, reducedNewName, nameReference, previousPrimaryName);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch update name transaction from repository", e);
 		}
@@ -43,8 +48,9 @@ public class HSQLDBUpdateNameTransactionRepository extends HSQLDBTransactionRepo
 
 		saveHelper.bind("signature", updateNameTransactionData.getSignature()).bind("owner", updateNameTransactionData.getOwnerPublicKey())
 				.bind("name", updateNameTransactionData.getName()).bind("new_name", updateNameTransactionData.getNewName())
-				.bind("new_data", updateNameTransactionData.getNewData()).bind("reduced_new_name", updateNameTransactionData.getReducedNewName())
-				.bind("name_reference", updateNameTransactionData.getNameReference());
+				.bind("new_data", updateNameTransactionData.getNewData()).bind("is_primary", updateNameTransactionData.getPrimary())
+				.bind("reduced_new_name", updateNameTransactionData.getReducedNewName()).bind("name_reference", updateNameTransactionData.getNameReference())
+				.bind("previous_primary_name", updateNameTransactionData.getPreviousPrimaryName());
 
 		try {
 			saveHelper.execute(this.repository);

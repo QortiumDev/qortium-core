@@ -48,12 +48,6 @@ public class SellNameTransaction extends Transaction {
 	public ValidationResult isValid() throws DataException {
 		String name = this.sellNameTransactionData.getName();
 
-		// if the account has more than one name, then they cannot sell their primary name
-		if( this.repository.getNameRepository().getNamesByOwner(this.getOwner().getAddress()).size() > 1 &&
-				this.getOwner().getPrimaryName().get().equals(name) ) {
-			return ValidationResult.NOT_SUPPORTED;
-		}
-
 		// Check name size bounds
 		int nameLength = Utf8.encodedLength(name);
 		if (nameLength < 1 || nameLength > Name.MAX_NAME_SIZE)

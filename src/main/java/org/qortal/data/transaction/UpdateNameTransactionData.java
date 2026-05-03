@@ -28,6 +28,9 @@ public class UpdateNameTransactionData extends TransactionData {
 	@Schema(description = "replacement simple name-related info in JSON or text format", example = "Name metadata for this chain")
 	private String newData;
 
+	@Schema(description = "optional primary-name setting for this name after update; null leaves primary-name state unchanged")
+	private Boolean primary;
+
 	// For internal use
 	@XmlTransient
 	@Schema(hidden = true)
@@ -37,6 +40,11 @@ public class UpdateNameTransactionData extends TransactionData {
 	@XmlTransient
 	@Schema(hidden = true)
 	private byte[] nameReference;
+
+	// For internal use when orphaning explicit primary-name changes
+	@XmlTransient
+	@Schema(hidden = true)
+	private String previousPrimaryName;
 
 	// Constructors
 
@@ -51,20 +59,33 @@ public class UpdateNameTransactionData extends TransactionData {
 	}
 
 	/** From repository */
-	public UpdateNameTransactionData(BaseTransactionData baseTransactionData, String name, String newName, String newData, String reducedNewName, byte[] nameReference) {
+	public UpdateNameTransactionData(BaseTransactionData baseTransactionData, String name, String newName, String newData,
+			Boolean primary, String reducedNewName, byte[] nameReference, String previousPrimaryName) {
 		super(TransactionType.UPDATE_NAME, baseTransactionData);
 
 		this.ownerPublicKey = baseTransactionData.creatorPublicKey;
 		this.name = name;
 		this.newName = newName;
 		this.newData = newData;
+		this.primary = primary;
 		this.reducedNewName = reducedNewName;
 		this.nameReference = nameReference;
+		this.previousPrimaryName = previousPrimaryName;
+	}
+
+	/** From repository */
+	public UpdateNameTransactionData(BaseTransactionData baseTransactionData, String name, String newName, String newData, String reducedNewName, byte[] nameReference) {
+		this(baseTransactionData, name, newName, newData, null, reducedNewName, nameReference, null);
+	}
+
+	/** From network */
+	public UpdateNameTransactionData(BaseTransactionData baseTransactionData, String name, String newName, String newData, Boolean primary) {
+		this(baseTransactionData, name, newName, newData, primary, Unicode.sanitize(newName), null, null);
 	}
 
 	/** From network */
 	public UpdateNameTransactionData(BaseTransactionData baseTransactionData, String name, String newName, String newData) {
-		this(baseTransactionData, name, newName, newData, Unicode.sanitize(newName), null);
+		this(baseTransactionData, name, newName, newData, null);
 	}
 
 	// Getters / setters
@@ -85,6 +106,10 @@ public class UpdateNameTransactionData extends TransactionData {
 		return this.newData;
 	}
 
+	public Boolean getPrimary() {
+		return this.primary;
+	}
+
 	public String getReducedNewName() {
 		return this.reducedNewName;
 	}
@@ -95,6 +120,14 @@ public class UpdateNameTransactionData extends TransactionData {
 
 	public void setNameReference(byte[] nameReference) {
 		this.nameReference = nameReference;
+	}
+
+	public String getPreviousPrimaryName() {
+		return this.previousPrimaryName;
+	}
+
+	public void setPreviousPrimaryName(String previousPrimaryName) {
+		this.previousPrimaryName = previousPrimaryName;
 	}
 
 }

@@ -75,6 +75,13 @@ public class Name {
 	}
 
 	public void update(UpdateNameTransactionData updateNameTransactionData) throws DataException {
+		Account account = new Account(this.repository, this.nameData.getOwner());
+		Optional<String> previousPrimaryName = account.getPrimaryName();
+
+		Boolean primary = updateNameTransactionData.getPrimary();
+		if (primary != null)
+			updateNameTransactionData.setPreviousPrimaryName(previousPrimaryName.orElse(null));
+
 		// Update reference in transaction data
 		updateNameTransactionData.setNameReference(this.nameData.getReference());
 
@@ -99,17 +106,16 @@ public class Name {
 		// Save updated name data
 		this.repository.getNameRepository().save(this.nameData);
 
-		Account account = new Account(this.repository, this.nameData.getOwner());
-
-		// If updating the primary name, then set primary name to new name.
-		if (account.getPrimaryName().isEmpty() || account.getPrimaryName().get().equals(updateNameTransactionData.getName())) {
+		if (primary != null) {
+			if (primary)
+				account.setPrimaryName(this.nameData.getName());
+			else if (previousPrimaryName.isPresent() && previousPrimaryName.get().equals(updateNameTransactionData.getName()))
+				account.removePrimaryName();
+		} else if (previousPrimaryName.isPresent() && previousPrimaryName.get().equals(updateNameTransactionData.getName())) {
 			String newName = updateNameTransactionData.getNewName();
 
-			if (newName != null && !"".equals(newName)) {
+			if (newName != null && !"".equals(newName))
 				account.setPrimaryName(newName);
-			} else if (account.getPrimaryName().isPresent()) {
-				account.removePrimaryName();
-			}
 		}
 	}
 
@@ -143,9 +149,19 @@ public class Name {
 		updateNameTransactionData.setNameReference(null);
 
 		Account account = new Account(this.repository, this.nameData.getOwner());
+		Boolean primary = updateNameTransactionData.getPrimary();
 
+		if (primary != null) {
+			String previousPrimaryName = updateNameTransactionData.getPreviousPrimaryName();
+			if (previousPrimaryName != null)
+				account.setPrimaryName(previousPrimaryName);
+			else
+				account.removePrimaryName();
+
+			updateNameTransactionData.setPreviousPrimaryName(null);
+		}
 		// If the primary name is the new updated name, then it needs to be set back to the previous name.
-		if (account.getPrimaryName().isPresent() && account.getPrimaryName().get().equals(updateNameTransactionData.getNewName())) {
+		else if (account.getPrimaryName().isPresent() && account.getPrimaryName().get().equals(updateNameTransactionData.getNewName())) {
 			account.setPrimaryName(updateNameTransactionData.getName());
 		}
 	}
