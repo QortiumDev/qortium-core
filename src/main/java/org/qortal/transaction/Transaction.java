@@ -135,7 +135,6 @@ public abstract class Transaction {
 				case ARBITRARY:
 				case MESSAGE:
 				case CHAT:
-				case PUBLICIZE:
 				case AT:
 				case REWARD_SHARE:
 				case PRESENCE:

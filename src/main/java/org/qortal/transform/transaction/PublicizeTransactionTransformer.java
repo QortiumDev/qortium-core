@@ -1,6 +1,5 @@
 package org.qortal.transform.transaction;
 
-import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.PublicizeTransactionData;
@@ -16,9 +15,7 @@ import java.nio.ByteBuffer;
 public class PublicizeTransactionTransformer extends TransactionTransformer {
 
 	// Property lengths
-	private static final int NONCE_LENGTH = INT_LENGTH;
-
-	private static final int EXTRAS_LENGTH = NONCE_LENGTH;
+	private static final int EXTRAS_LENGTH = 0;
 
 	protected static final TransactionLayout layout;
 
@@ -28,7 +25,7 @@ public class PublicizeTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("sender's public key", TransformationType.PUBLIC_KEY);
-		layout.add("proof-of-work nonce", TransformationType.INT);
+		addMempowFeeNonceToLayout(layout, TransactionType.PUBLICIZE);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
 	}
@@ -39,16 +36,16 @@ public class PublicizeTransactionTransformer extends TransactionTransformer {
 		int txGroupId = byteBuffer.getInt();
 		byte[] senderPublicKey = Serialization.deserializePublicKey(byteBuffer);
 
-		int nonce = byteBuffer.getInt();
+		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.PUBLICIZE);
 
 		long fee = byteBuffer.getLong();
 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
 		byteBuffer.get(signature);
 
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, signature);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, senderPublicKey, fee, nonce, signature);
 
-		return new PublicizeTransactionData(baseTransactionData, nonce);
+		return new PublicizeTransactionData(baseTransactionData, baseTransactionData.getNonce());
 	}
 
 	public static int getDataLength(TransactionData transactionData) {
@@ -63,8 +60,6 @@ public class PublicizeTransactionTransformer extends TransactionTransformer {
 
 			transformCommonBytes(transactionData, bytes);
 
-			bytes.write(Ints.toByteArray(publicizeTransactionData.getNonce()));
-
 			bytes.write(Longs.toByteArray(publicizeTransactionData.getFee()));
 
 			if (publicizeTransactionData.getSignature() != null)
@@ -74,15 +69,6 @@ public class PublicizeTransactionTransformer extends TransactionTransformer {
 		} catch (IOException | ClassCastException e) {
 			throw new TransformationException(e);
 		}
-	}
-
-	public static void clearNonce(byte[] transactionBytes) {
-		int nonceIndex = TYPE_LENGTH + TIMESTAMP_LENGTH + GROUPID_LENGTH + PUBLIC_KEY_LENGTH;
-
-		transactionBytes[nonceIndex++] = (byte) 0;
-		transactionBytes[nonceIndex++] = (byte) 0;
-		transactionBytes[nonceIndex++] = (byte) 0;
-		transactionBytes[nonceIndex++] = (byte) 0;
 	}
 
 }

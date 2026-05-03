@@ -71,16 +71,16 @@ public class AddressesResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.ADDRESS_UNKNOWN, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.REPOSITORY_ISSUE})
 	public AccountData getAccountInfo(@PathParam("address") String address) {
 		if (!Crypto.isValidAddress(address))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			AccountData accountData = repository.getAccountRepository().getAccount(address);
-			// Not found?
+			// Valid addresses can receive funds before their public key is known on chain.
 			if (accountData == null)
-				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
+				accountData = new AccountData(address);
 
 			return accountData;
 		} catch (DataException e) {
@@ -500,7 +500,7 @@ public class AddressesResource {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
 			ValidationResult result = transaction.isValidUnconfirmed();
-			if (result != ValidationResult.OK && result != ValidationResult.INCORRECT_NONCE)
+			if (result != ValidationResult.OK && result != ValidationResult.INSUFFICIENT_FEE)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
 			byte[] bytes = PublicizeTransactionTransformer.toBytes(transactionData);
@@ -560,7 +560,7 @@ public class AddressesResource {
 
 			// Quicker validity check first before we compute nonce
 			ValidationResult result = publicizeTransaction.isValid();
-			if (result != ValidationResult.OK && result != ValidationResult.INCORRECT_NONCE)
+			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
 			publicizeTransaction.computeNonce();

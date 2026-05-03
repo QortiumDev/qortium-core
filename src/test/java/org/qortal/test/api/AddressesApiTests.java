@@ -8,6 +8,7 @@ import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.resource.AddressesResource;
 import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.PublicizeTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.TransferPrivsTransactionData;
 import org.qortal.group.Group;
@@ -29,6 +30,7 @@ import java.util.Collections;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class AddressesApiTests extends ApiCommon {
@@ -43,6 +45,26 @@ public class AddressesApiTests extends ApiCommon {
 	@Test
 	public void testGetAccountInfo() {
 		assertNotNull(this.addressesResource.getAccountInfo(aliceAddress));
+	}
+
+	@Test
+	public void testGetAccountInfoReturnsPlaceholderForValidUnknownAddress() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Account unknownAccount = Common.generateRandomSeedAccount(repository);
+			assertNull(repository.getAccountRepository().getAccount(unknownAccount.getAddress()));
+
+			assertEquals(unknownAccount.getAddress(), this.addressesResource.getAccountInfo(unknownAccount.getAddress()).getAddress());
+		}
+	}
+
+	@Test
+	public void testGetPublicKeyReturnsFalseForValidUnknownAddress() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Account unknownAccount = Common.generateRandomSeedAccount(repository);
+			assertNull(repository.getAccountRepository().getAccount(unknownAccount.getAddress()));
+
+			assertEquals("false", this.addressesResource.getPublicKey(unknownAccount.getAddress()));
+		}
 	}
 
 	@Test
@@ -101,6 +123,29 @@ public class AddressesApiTests extends ApiCommon {
 			assertArrayEquals(sender.getPublicKey(), decodedTransferPrivsTransactionData.getSenderPublicKey());
 			assertEquals(recipient.getAddress(), decodedTransferPrivsTransactionData.getRecipient());
 			assertEquals(fee, decodedTransferPrivsTransactionData.getFee().longValue());
+		}
+	}
+
+	@Test
+	public void testPublicizeBuilderAllowsMissingMempowNonce() throws DataException, TransformationException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount sender = Common.generateRandomSeedAccount(repository);
+			long timestamp = TransactionUtils.nextTimestamp(repository);
+
+			BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, sender.getPublicKey(), 0L, null);
+			PublicizeTransactionData transactionData = new PublicizeTransactionData(baseTransactionData, 0);
+			transactionData.setNonce((Integer) null);
+
+			String rawBytes58 = this.addressesResource.publicize(transactionData);
+			byte[] rawBytes = Base58.decode(rawBytes58);
+			rawBytes = Bytes.concat(rawBytes, new byte[TransactionTransformer.SIGNATURE_LENGTH]);
+
+			TransactionData decodedTransactionData = TransactionTransformer.fromBytes(rawBytes);
+			assertTrue(decodedTransactionData instanceof PublicizeTransactionData);
+
+			PublicizeTransactionData decodedPublicizeTransactionData = (PublicizeTransactionData) decodedTransactionData;
+			assertArrayEquals(sender.getPublicKey(), decodedPublicizeTransactionData.getSenderPublicKey());
+			assertEquals(0L, decodedPublicizeTransactionData.getFee().longValue());
 		}
 	}
 

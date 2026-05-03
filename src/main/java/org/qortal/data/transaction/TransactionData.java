@@ -37,7 +37,7 @@ import java.util.Arrays;
 	UpdateAssetTransactionData.class,
 	RewardShareTransactionData.class,
 	TransferPrivsTransactionData.class,
-	ChatTransactionData.class, PresenceTransactionData.class
+	ChatTransactionData.class, PublicizeTransactionData.class, PresenceTransactionData.class
 })
 //All properties to be converted to JSON via JAXB
 @XmlAccessorType(XmlAccessType.FIELD)

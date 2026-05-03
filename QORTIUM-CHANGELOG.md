@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-02 - core: enable publicize account bootstrap
+
+Re-enabled PUBLICIZE as a fee-or-MemoryPoW transaction so new accounts can publish their public key without needing native coins first. Valid unseen addresses now return placeholder account data instead of an unknown-address error, while public-key lookups still return false until the account key has actually appeared on chain.
+
 ### 2026-05-02 - api: expose addresses in voting API responses
 
 Added direct voter address fields to poll vote API data and VOTE_ON_POLL transaction JSON while keeping the existing voter public key fields. This lets clients display voter addresses without making a separate public-key lookup, and adds regression coverage confirming TRANSFER_PRIVS transaction JSON exposes both the original creator address and recipient address.

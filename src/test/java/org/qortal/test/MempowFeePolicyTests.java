@@ -54,7 +54,6 @@ public class MempowFeePolicyTests extends Common {
 				TransactionType.ARBITRARY,
 				TransactionType.MESSAGE,
 				TransactionType.CHAT,
-				TransactionType.PUBLICIZE,
 				TransactionType.AT,
 				TransactionType.REWARD_SHARE,
 				TransactionType.PRESENCE);
