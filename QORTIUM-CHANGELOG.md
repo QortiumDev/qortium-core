@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: add asset-specific AT payment reads
+
+Added AT chain functions for reading incoming payment amounts by asset id and counting payment entries addressed to the AT. New ATs can now process mixed configured-asset plus native-asset multipayments without changing the legacy single-amount/single-asset functions, which still report mixed-asset multipayments as ambiguous.
+
 ### 2026-05-03 - core: expose MULTI_PAYMENT entries to ATs
 
 Added MULTI_PAYMENT transactions to AT inbox lookup and AT payment decoding. ATs now treat multipayments as payment-like incoming transactions, summing only entries addressed to the AT when they share one asset, while mixed-asset entries to the same AT remain ambiguous for the existing single-amount/single-asset AT functions. Tests cover single-entry multipayments, repeated AT recipients, mixed external recipients, mixed assets, and native fee top-ups.

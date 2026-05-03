@@ -506,6 +506,87 @@ public class ChainATAPI extends API {
 		}
 	}
 
+	public long getAmountFromTransactionInAForAsset(long assetId, MachineState state) {
+		try {
+			if (!this.repository.getAssetRepository().assetExists(assetId))
+				return -1L;
+		} catch (DataException e) {
+			throw new RuntimeException("AT API unable to fetch asset details?", e);
+		}
+
+		TransactionData transactionData = this.getTransactionFromA(state);
+
+		switch (transactionData.getType()) {
+			case PAYMENT:
+				return assetId == Asset.NATIVE ? ((PaymentTransactionData) transactionData).getAmount() : 0L;
+
+			case TRANSFER_ASSET:
+				TransferAssetTransactionData transferAssetTransactionData = (TransferAssetTransactionData) transactionData;
+				return transferAssetTransactionData.getAssetId() == assetId ? transferAssetTransactionData.getAmount() : 0L;
+
+			case MULTI_PAYMENT:
+				long amount = 0L;
+				String atAddress = this.atData.getATAddress();
+
+				for (PaymentData paymentData : ((MultiPaymentTransactionData) transactionData).getPayments())
+					if (atAddress.equals(paymentData.getRecipient()) && paymentData.getAssetId() == assetId)
+						amount += paymentData.getAmount();
+
+				return amount;
+
+			case MESSAGE:
+				MessageTransactionData messageTransactionData = (MessageTransactionData) transactionData;
+				Long messageAssetId = messageTransactionData.getAssetId();
+
+				if (messageTransactionData.getAmount() != 0L && messageAssetId != null && messageAssetId == assetId)
+					return messageTransactionData.getAmount();
+
+				return 0L;
+
+			case AT:
+				ATTransactionData atTransactionData = (ATTransactionData) transactionData;
+
+				if (atTransactionData.getAmount() != null && atTransactionData.getAssetId() != null && atTransactionData.getAssetId() == assetId)
+					return atTransactionData.getAmount();
+
+				return 0L;
+
+			default:
+				return -1L;
+		}
+	}
+
+	public long getPaymentCountFromTransactionInA(MachineState state) {
+		TransactionData transactionData = this.getTransactionFromA(state);
+
+		switch (transactionData.getType()) {
+			case PAYMENT:
+			case TRANSFER_ASSET:
+				return 1L;
+
+			case MULTI_PAYMENT:
+				long paymentCount = 0L;
+				String atAddress = this.atData.getATAddress();
+
+				for (PaymentData paymentData : ((MultiPaymentTransactionData) transactionData).getPayments())
+					if (atAddress.equals(paymentData.getRecipient()))
+						++paymentCount;
+
+				return paymentCount;
+
+			case MESSAGE:
+				MessageTransactionData messageTransactionData = (MessageTransactionData) transactionData;
+				return messageTransactionData.getAmount() != 0L && messageTransactionData.getAssetId() != null ? 1L : 0L;
+
+			case AT:
+				ATTransactionData atTransactionData = (ATTransactionData) transactionData;
+				return atTransactionData.getAmount() != null && atTransactionData.getAssetId() != null ? 1L : 0L;
+
+			default:
+				return 0L;
+		}
+	}
+
 	public long payAssetAmountToB(long assetId, long requestedAmount, MachineState state) {
 		if (requestedAmount < 0)
 			return -1L;

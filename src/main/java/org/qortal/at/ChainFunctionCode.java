@@ -271,6 +271,30 @@ public enum ChainFunctionCode {
 			ChainATAPI api = (ChainATAPI) state.getAPI();
 			functionData.returnValue = api.payAssetAmountToB(functionData.value1, functionData.value2, state);
 		}
+	},
+	/**
+	 * Returns amount of asset id paid to this AT by transaction in A.<br>
+	 * <tt>0x0534 asset-id</tt><br>
+	 * Returns 0 if this asset was not paid by a supported transaction.<br>
+	 * Returns -1 if asset id is unknown or transaction in A has no payment surface.
+	 */
+	GET_AMOUNT_FROM_TX_IN_A_FOR_ASSET(0x0534, 1, true) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			functionData.returnValue = api.getAmountFromTransactionInAForAsset(functionData.value1, state);
+		}
+	},
+	/**
+	 * Returns count of payment entries addressed to this AT by transaction in A.<br>
+	 * <tt>0x0535</tt>
+	 */
+	GET_PAYMENT_COUNT_FROM_TX_IN_A(0x0535, 0, true) {
+		@Override
+		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
+			ChainATAPI api = (ChainATAPI) state.getAPI();
+			functionData.returnValue = api.getPaymentCountFromTransactionInA(state);
+		}
 	};
 
 	public final short value;

@@ -272,6 +272,67 @@ public class ATAssetSupportTests extends Common {
 	}
 
 	@Test
+	public void testMixedAssetMultiPaymentAmountsAreReadableByAsset() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-MULTIPAYMENT-BY-ASSET", 100L * Amounts.MULTIPLIER, true);
+			long nativeAmount = 3L * Amounts.MULTIPLIER;
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, buildIncomingAssetSpecificReaderAT(configuredAssetId), 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			// First AT execution sees no incoming transfer and stops for the next block.
+			BlockUtils.mintBlock(repository);
+
+			sendMultiPayment(repository, deployer, List.of(
+					new PaymentData(atAddress, configuredAssetId, PAYOUT_AMOUNT),
+					new PaymentData(atAddress, Asset.NATIVE, nativeAmount)));
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+
+			assertEquals(-1L, extractLong(atStateData, 0));
+			assertEquals(-1L, extractLong(atStateData, 1));
+			assertEquals(PAYOUT_AMOUNT, extractLong(atStateData, 2));
+			assertEquals(nativeAmount, extractLong(atStateData, 3));
+			assertEquals(2L, extractLong(atStateData, 4));
+		}
+	}
+
+	@Test
+	public void testAssetSpecificMultiPaymentReaderSumsOnlyMatchingAtEntries() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount recipient = Common.getTestAccount(repository, "bob");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-MULTIPAYMENT-BY-ASSET-SUM", 100L * Amounts.MULTIPLIER, true);
+			long secondConfiguredAmount = 3L * Amounts.MULTIPLIER;
+			long nativeAmount = 2L * Amounts.MULTIPLIER;
+			long otherRecipientAmount = 5L * Amounts.MULTIPLIER;
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, buildIncomingAssetSpecificReaderAT(configuredAssetId), 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			// First AT execution sees no incoming transfer and stops for the next block.
+			BlockUtils.mintBlock(repository);
+
+			sendMultiPayment(repository, deployer, List.of(
+					new PaymentData(recipient.getAddress(), configuredAssetId, otherRecipientAmount),
+					new PaymentData(atAddress, configuredAssetId, PAYOUT_AMOUNT),
+					new PaymentData(atAddress, Asset.NATIVE, nativeAmount),
+					new PaymentData(atAddress, configuredAssetId, secondConfiguredAmount)));
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+
+			assertEquals(-1L, extractLong(atStateData, 0));
+			assertEquals(-1L, extractLong(atStateData, 1));
+			assertEquals(PAYOUT_AMOUNT + secondConfiguredAmount, extractLong(atStateData, 2));
+			assertEquals(nativeAmount, extractLong(atStateData, 3));
+			assertEquals(3L, extractLong(atStateData, 4));
+		}
+	}
+
+	@Test
 	public void testNativeMultiPaymentTopUpIsVisibleToAts() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
@@ -466,6 +527,55 @@ public class ATAssetSupportTests extends Common {
 
 				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_AMOUNT_FROM_TX_IN_A, addrAmount));
 				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(ChainFunctionCode.GET_ASSET_ID_FROM_TX_IN_A.value, addrAssetId));
+				codeByteBuffer.put(OpCode.FIN_IMD.compile());
+			} catch (CompilationException e) {
+				throw new IllegalStateException("Unable to compile AT?", e);
+			}
+		}
+
+		return toCreationBytes(codeByteBuffer, dataByteBuffer);
+	}
+
+	private static byte[] buildIncomingAssetSpecificReaderAT(long configuredAssetId) {
+		int addrCounter = 0;
+		final int addrLegacyAmount = addrCounter++;
+		final int addrLegacyAssetId = addrCounter++;
+		final int addrConfiguredAmount = addrCounter++;
+		final int addrNativeAmount = addrCounter++;
+		final int addrPaymentCount = addrCounter++;
+		final int addrConfiguredAssetId = addrCounter++;
+		final int addrNativeAssetId = addrCounter++;
+		final int addrLastTxTimestamp = addrCounter++;
+		final int addrNoTransaction = addrCounter++;
+
+		ByteBuffer dataByteBuffer = ByteBuffer.allocate(addrCounter * MachineState.VALUE_SIZE);
+		dataByteBuffer.putLong(addrConfiguredAssetId * MachineState.VALUE_SIZE, configuredAssetId);
+		dataByteBuffer.putLong(addrNativeAssetId * MachineState.VALUE_SIZE, Asset.NATIVE);
+
+		ByteBuffer codeByteBuffer = ByteBuffer.allocate(768);
+		Integer labelReadTransaction = null;
+
+		for (int pass = 0; pass < 2; ++pass) {
+			codeByteBuffer.clear();
+
+			try {
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_CREATION_TIMESTAMP, addrLastTxTimestamp));
+				codeByteBuffer.put(OpCode.SET_PCS.compile());
+
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PUT_TX_AFTER_TIMESTAMP_INTO_A, addrLastTxTimestamp));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.CHECK_A_IS_ZERO, addrNoTransaction));
+				codeByteBuffer.put(OpCode.BZR_DAT.compile(addrNoTransaction, OpCode.calcOffset(codeByteBuffer, labelReadTransaction)));
+				codeByteBuffer.put(OpCode.STP_IMD.compile());
+
+				labelReadTransaction = codeByteBuffer.position();
+
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_AMOUNT_FROM_TX_IN_A, addrLegacyAmount));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(ChainFunctionCode.GET_ASSET_ID_FROM_TX_IN_A.value, addrLegacyAssetId));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT.compile(ChainFunctionCode.GET_AMOUNT_FROM_TX_IN_A_FOR_ASSET.value,
+						addrConfiguredAmount, addrConfiguredAssetId));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT.compile(ChainFunctionCode.GET_AMOUNT_FROM_TX_IN_A_FOR_ASSET.value,
+						addrNativeAmount, addrNativeAssetId));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(ChainFunctionCode.GET_PAYMENT_COUNT_FROM_TX_IN_A.value, addrPaymentCount));
 				codeByteBuffer.put(OpCode.FIN_IMD.compile());
 			} catch (CompilationException e) {
 				throw new IllegalStateException("Unable to compile AT?", e);
