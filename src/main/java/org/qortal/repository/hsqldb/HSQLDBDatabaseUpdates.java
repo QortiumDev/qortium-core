@@ -247,7 +247,10 @@ public class HSQLDBDatabaseUpdates {
 					// Payments
 					// Arbitrary/Multi-payment/Message/Payment Transaction Payments
 					stmt.execute("CREATE TABLE SharedTransactionPayments (signature Signature, recipient AccountAddress NOT NULL, "
-							+ "amount AssetAmount NOT NULL, asset_id AssetID NOT NULL, " + TRANSACTION_KEYS + ")");
+							+ "amount AssetAmount NOT NULL, asset_id AssetID NOT NULL, payment_index INT NOT NULL, "
+							+ "PRIMARY KEY (signature, payment_index), "
+							+ "FOREIGN KEY (signature) REFERENCES Transactions (signature) ON DELETE CASCADE)");
+					stmt.execute("CREATE INDEX SharedTransactionPaymentsRecipientIndex ON SharedTransactionPayments (recipient, signature)");
 
 					// Payment Transactions
 					stmt.execute("CREATE TABLE PaymentTransactions (signature Signature, sender AccountPublicKey NOT NULL, recipient AccountAddress NOT NULL, "
@@ -1098,6 +1101,8 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "UpdateAssetTransactions", "new_name", "AssetName DEFAULT '' NOT NULL");
 					addColumnIfMissing(connection, "UpdateAssetTransactions", "reduced_new_name", "AssetName DEFAULT '' NOT NULL");
 					dropColumnIfExists(connection, "UpdateAssetTransactions", "new_owner");
+					addColumnIfMissing(connection, "SharedTransactionPayments", "payment_index", "INT NOT NULL DEFAULT 0");
+					stmt.execute("CREATE INDEX IF NOT EXISTS SharedTransactionPaymentsRecipientIndex ON SharedTransactionPayments (recipient, signature)");
 					stmt.execute("CREATE TABLE IF NOT EXISTS SellAssetOwnershipTransactions (signature Signature, owner AccountPublicKey NOT NULL, "
 							+ "asset_id AssetID NOT NULL, amount AssetAmount NOT NULL, recipient AccountAddress, " + TRANSACTION_KEYS + ")");
 					stmt.execute("CREATE TABLE IF NOT EXISTS CancelSellAssetOwnershipTransactions (signature Signature, owner AccountPublicKey NOT NULL, "

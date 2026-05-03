@@ -11,6 +11,7 @@ import org.qortal.asset.Asset;
 import org.qortal.block.BlockChain;
 import org.qortal.block.BlockChain.CiyamAtSettings;
 import org.qortal.crypto.Crypto;
+import org.qortal.data.PaymentData;
 import org.qortal.data.asset.AssetData;
 import org.qortal.data.at.ATData;
 import org.qortal.data.block.BlockData;
@@ -217,6 +218,7 @@ public class ChainATAPI extends API {
 		switch (transactionData.getType()) {
 			case PAYMENT:
 			case TRANSFER_ASSET:
+			case MULTI_PAYMENT:
 				return ATTransactionType.PAYMENT.value;
 
 			case MESSAGE:
@@ -243,6 +245,14 @@ public class ChainATAPI extends API {
 
 			case TRANSFER_ASSET:
 				return ((TransferAssetTransactionData) transactionData).getAmount();
+
+			case MULTI_PAYMENT:
+				MultiPaymentSummary multiPaymentSummary = this.summarizeMultiPaymentToAt((MultiPaymentTransactionData) transactionData);
+
+				if (multiPaymentSummary.hasSingleAsset())
+					return multiPaymentSummary.amount;
+
+				return 0xffffffffffffffffL;
 
 			case MESSAGE:
 				long messageAmount = ((MessageTransactionData) transactionData).getAmount();
@@ -469,6 +479,14 @@ public class ChainATAPI extends API {
 			case TRANSFER_ASSET:
 				return ((TransferAssetTransactionData) transactionData).getAssetId();
 
+			case MULTI_PAYMENT:
+				MultiPaymentSummary multiPaymentSummary = this.summarizeMultiPaymentToAt((MultiPaymentTransactionData) transactionData);
+
+				if (multiPaymentSummary.hasSingleAsset())
+					return multiPaymentSummary.assetId;
+
+				return -1L;
+
 			case MESSAGE:
 				Long messageAssetId = ((MessageTransactionData) transactionData).getAssetId();
 
@@ -630,6 +648,27 @@ public class ChainATAPI extends API {
 		this.pendingAssetPayouts.merge(assetId, amount, Long::sum);
 	}
 
+	private MultiPaymentSummary summarizeMultiPaymentToAt(MultiPaymentTransactionData multiPaymentTransactionData) {
+		MultiPaymentSummary summary = new MultiPaymentSummary();
+		String atAddress = this.atData.getATAddress();
+
+		for (PaymentData paymentData : multiPaymentTransactionData.getPayments()) {
+			if (!atAddress.equals(paymentData.getRecipient()))
+				continue;
+
+			if (!summary.hasPayment) {
+				summary.hasPayment = true;
+				summary.assetId = paymentData.getAssetId();
+			} else if (summary.assetId != paymentData.getAssetId()) {
+				summary.hasMixedAssets = true;
+			}
+
+			summary.amount += paymentData.getAmount();
+		}
+
+		return summary;
+	}
+
 	private long getSpendableAssetBalance(long assetId, MachineState state) {
 		long balance;
 
@@ -712,6 +751,17 @@ public class ChainATAPI extends API {
 	@Override
 	protected void zeroB(MachineState state) {
 		super.zeroB(state);
+	}
+
+	private static class MultiPaymentSummary {
+		private boolean hasPayment;
+		private boolean hasMixedAssets;
+		private long assetId;
+		private long amount;
+
+		private boolean hasSingleAsset() {
+			return this.hasPayment && !this.hasMixedAssets;
+		}
 	}
 
 }

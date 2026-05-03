@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: expose MULTI_PAYMENT entries to ATs
+
+Added MULTI_PAYMENT transactions to AT inbox lookup and AT payment decoding. ATs now treat multipayments as payment-like incoming transactions, summing only entries addressed to the AT when they share one asset, while mixed-asset entries to the same AT remain ambiguous for the existing single-amount/single-asset AT functions. Tests cover single-entry multipayments, repeated AT recipients, mixed external recipients, mixed assets, and native fee top-ups.
+
 ### 2026-05-03 - core: expose MESSAGE payments to ATs
 
 Updated AT transaction decoding so MESSAGE transactions with attached payments continue to report as messages while also exposing their payment amount and asset id through the existing amount and asset-id AT functions. Tests now cover configured-asset message payments, native message fee top-ups, and no-payment messages.

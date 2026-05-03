@@ -12,9 +12,11 @@ import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
 import org.qortal.at.ChainFunctionCode;
+import org.qortal.data.PaymentData;
 import org.qortal.data.at.ATStateData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.MessageTransactionData;
+import org.qortal.data.transaction.MultiPaymentTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.TransferAssetTransactionData;
 import org.qortal.group.Group;
@@ -28,6 +30,7 @@ import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.transaction.DeployAtTransaction;
 import org.qortal.transaction.MessageTransaction;
+import org.qortal.transaction.MultiPaymentTransaction;
 import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.utils.Amounts;
@@ -36,6 +39,7 @@ import org.qortal.utils.BitTwiddling;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
@@ -166,6 +170,126 @@ public class ATAssetSupportTests extends Common {
 
 			assertEquals(PAYOUT_AMOUNT, extractLong(atStateData, 0));
 			assertEquals(configuredAssetId, extractLong(atStateData, 1));
+		}
+	}
+
+	@Test
+	public void testMultiPaymentTransactionIsVisibleToAts() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-MULTIPAYMENT", 100L * Amounts.MULTIPLIER, true);
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, buildIncomingAssetReaderAT(), 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			// First AT execution sees no incoming transfer and stops for the next block.
+			BlockUtils.mintBlock(repository);
+
+			sendMultiPayment(repository, deployer, List.of(new PaymentData(atAddress, configuredAssetId, PAYOUT_AMOUNT)));
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+
+			assertEquals(PAYOUT_AMOUNT, extractLong(atStateData, 0));
+			assertEquals(configuredAssetId, extractLong(atStateData, 1));
+		}
+	}
+
+	@Test
+	public void testMultiPaymentEntriesToAtAreSummedWhenAssetMatches() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-MULTIPAYMENT-SUM", 100L * Amounts.MULTIPLIER, true);
+			long secondAmount = 3L * Amounts.MULTIPLIER;
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, buildIncomingAssetReaderAT(), 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			// First AT execution sees no incoming transfer and stops for the next block.
+			BlockUtils.mintBlock(repository);
+
+			sendMultiPayment(repository, deployer, List.of(
+					new PaymentData(atAddress, configuredAssetId, PAYOUT_AMOUNT),
+					new PaymentData(atAddress, configuredAssetId, secondAmount)));
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+
+			assertEquals(PAYOUT_AMOUNT + secondAmount, extractLong(atStateData, 0));
+			assertEquals(configuredAssetId, extractLong(atStateData, 1));
+		}
+	}
+
+	@Test
+	public void testMultiPaymentOnlyCountsEntriesForAt() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount recipient = Common.getTestAccount(repository, "bob");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-MULTIPAYMENT-RECIPIENTS", 100L * Amounts.MULTIPLIER, true);
+			long otherRecipientAmount = 5L * Amounts.MULTIPLIER;
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, buildIncomingAssetReaderAT(), 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			// First AT execution sees no incoming transfer and stops for the next block.
+			BlockUtils.mintBlock(repository);
+
+			sendMultiPayment(repository, deployer, List.of(
+					new PaymentData(recipient.getAddress(), configuredAssetId, otherRecipientAmount),
+					new PaymentData(atAddress, configuredAssetId, PAYOUT_AMOUNT)));
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+
+			assertEquals(PAYOUT_AMOUNT, extractLong(atStateData, 0));
+			assertEquals(configuredAssetId, extractLong(atStateData, 1));
+		}
+	}
+
+	@Test
+	public void testMixedAssetMultiPaymentToAtIsAmbiguous() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-MULTIPAYMENT-MIXED", 100L * Amounts.MULTIPLIER, true);
+			long nativeAmount = 3L * Amounts.MULTIPLIER;
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, buildIncomingAssetReaderAT(), 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			// First AT execution sees no incoming transfer and stops for the next block.
+			BlockUtils.mintBlock(repository);
+
+			sendMultiPayment(repository, deployer, List.of(
+					new PaymentData(atAddress, configuredAssetId, PAYOUT_AMOUNT),
+					new PaymentData(atAddress, Asset.NATIVE, nativeAmount)));
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+
+			assertEquals(-1L, extractLong(atStateData, 0));
+			assertEquals(-1L, extractLong(atStateData, 1));
+		}
+	}
+
+	@Test
+	public void testNativeMultiPaymentTopUpIsVisibleToAts() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-MULTIPAYMENT-NATIVE", 100L * Amounts.MULTIPLIER, true);
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, buildIncomingAssetReaderAT(), 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			// First AT execution sees no incoming transfer and stops for the next block.
+			BlockUtils.mintBlock(repository);
+
+			sendMultiPayment(repository, deployer, List.of(new PaymentData(atAddress, Asset.NATIVE, PAYOUT_AMOUNT)));
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+
+			assertEquals(PAYOUT_AMOUNT, extractLong(atStateData, 0));
+			assertEquals(Asset.NATIVE, extractLong(atStateData, 1));
 		}
 	}
 
@@ -435,6 +559,19 @@ public class ATAssetSupportTests extends Common {
 
 		MessageTransaction messageTransaction = new MessageTransaction(repository, transactionData);
 		transactionData.setFee(messageTransaction.calcRecommendedFee());
+
+		TransactionUtils.signAndMint(repository, transactionData, sender);
+	}
+
+	private static void sendMultiPayment(Repository repository, PrivateKeyAccount sender, List<PaymentData> payments) throws DataException {
+		long timestamp = TransactionUtils.nextTimestamp(repository);
+		Long fee = null;
+
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, sender.getPublicKey(), fee, null);
+		TransactionData transactionData = new MultiPaymentTransactionData(baseTransactionData, payments);
+
+		MultiPaymentTransaction multiPaymentTransaction = new MultiPaymentTransaction(repository, transactionData);
+		transactionData.setFee(multiPaymentTransaction.calcRecommendedFee());
 
 		TransactionUtils.signAndMint(repository, transactionData, sender);
 	}

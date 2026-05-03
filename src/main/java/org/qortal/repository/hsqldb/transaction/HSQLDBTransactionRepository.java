@@ -264,7 +264,7 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 	 * @throws DataException
 	 */
 	protected List<PaymentData> getPaymentsFromSignature(byte[] signature) throws DataException {
-		String sql = "SELECT recipient, amount, asset_id FROM SharedTransactionPayments WHERE signature = ?";
+		String sql = "SELECT recipient, amount, asset_id FROM SharedTransactionPayments WHERE signature = ? ORDER BY payment_index";
 
 		List<PaymentData> payments = new ArrayList<>();
 
@@ -288,11 +288,13 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 	}
 
 	protected void savePayments(byte[] signature, List<PaymentData> payments) throws DataException {
-		for (PaymentData paymentData : payments) {
+		for (int index = 0; index < payments.size(); ++index) {
+			PaymentData paymentData = payments.get(index);
 			HSQLDBSaver saver = new HSQLDBSaver("SharedTransactionPayments");
 
 			saver.bind("signature", signature).bind("recipient", paymentData.getRecipient())
-				.bind("amount", paymentData.getAmount()).bind("asset_id", paymentData.getAssetId());
+				.bind("amount", paymentData.getAmount()).bind("asset_id", paymentData.getAssetId())
+				.bind("payment_index", index);
 
 			try {
 				saver.execute(this.repository);
