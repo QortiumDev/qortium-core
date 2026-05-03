@@ -12,9 +12,11 @@ import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
 import org.qortal.at.ChainFunctionCode;
+import org.qortal.block.BlockChain;
 import org.qortal.data.PaymentData;
 import org.qortal.data.at.ATStateData;
 import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.IssueAssetTransactionData;
 import org.qortal.data.transaction.MessageTransactionData;
 import org.qortal.data.transaction.MultiPaymentTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -109,16 +111,37 @@ public class ATAssetSupportTests extends Common {
 	}
 
 	@Test
-	public void testWrongAssetTransferToAtIsRejected() throws DataException {
+	public void testNonConfiguredAssetTransferToAtIsAcceptedAndVisible() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
-			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-PRIMARY-ONLY", 100L * Amounts.MULTIPLIER, true);
-			long wrongAssetId = AssetUtils.issueAsset(repository, "alice", "AT-WRONG-ASSET", 100L * Amounts.MULTIPLIER, true);
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-CONFIGURED-ONLY", 100L * Amounts.MULTIPLIER, true);
+			long otherAssetId = AssetUtils.issueAsset(repository, "alice", "AT-OTHER-INCOMING", 100L * Amounts.MULTIPLIER, true);
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, buildAssetBalanceReaderAT(otherAssetId), 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			Account atAccount = deployAtTransaction.getATAccount();
+			String atAddress = atAccount.getAddress();
+
+			transferAsset(repository, deployer, atAddress, otherAssetId, PAYOUT_AMOUNT);
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+
+			assertEquals(PAYOUT_AMOUNT, extractLong(atStateData, 0));
+			assertEquals(PAYOUT_AMOUNT, atAccount.getConfirmedBalance(otherAssetId));
+		}
+	}
+
+	@Test
+	public void testUnspendableAssetTransferToAtIsRejected() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-UNSPENDABLE-CONFIGURED", 100L * Amounts.MULTIPLIER, true);
+			long unspendableAssetId = issueAsset(repository, deployer, "AT-UNSPENDABLE-INCOMING", 100L * Amounts.MULTIPLIER, true, true);
 
 			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, AtUtils.buildSimpleAT(), ASSET_AMOUNT, configuredAssetId, NATIVE_FEE_RESERVE);
 			String atAddress = deployAtTransaction.getATAccount().getAddress();
 
-			assertEquals(ValidationResult.ASSET_DOES_NOT_MATCH_AT, importTransferAsset(repository, deployer, atAddress, wrongAssetId, PAYOUT_AMOUNT));
+			assertEquals(ValidationResult.ASSET_NOT_SPENDABLE, importTransferAsset(repository, deployer, atAddress, unspendableAssetId, PAYOUT_AMOUNT));
 		}
 	}
 
@@ -146,6 +169,67 @@ public class ATAssetSupportTests extends Common {
 			assertEquals(PAYOUT_AMOUNT, extractedPaidAmount);
 			assertEquals(recipientInitialBalance + PAYOUT_AMOUNT, recipient.getConfirmedBalance(configuredAssetId));
 			assertEquals(0L, atAccount.getConfirmedBalance(configuredAssetId));
+			assertEquals(0L, atAccount.getConfirmedBalance(Asset.NATIVE));
+		}
+	}
+
+	@Test
+	public void testAtCanPayNonConfiguredSpendableAsset() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount recipient = Common.getTestAccount(repository, "bob");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-OTHER-PAYOUT-CONFIGURED", 100L * Amounts.MULTIPLIER, true);
+			long otherAssetId = AssetUtils.issueAsset(repository, "alice", "AT-OTHER-PAYOUT", 100L * Amounts.MULTIPLIER, true);
+
+			byte[] creationBytes = buildPayAssetToAddressAT(recipient.getAddress(), otherAssetId, PAYOUT_AMOUNT);
+			long recipientInitialBalance = recipient.getConfirmedBalance(otherAssetId);
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, creationBytes, 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			Account atAccount = deployAtTransaction.getATAccount();
+			String atAddress = atAccount.getAddress();
+
+			transferAsset(repository, deployer, atAddress, otherAssetId, PAYOUT_AMOUNT);
+
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+			long extractedPaidAmount = extractLong(atStateData, 0);
+
+			assertEquals(PAYOUT_AMOUNT, extractedPaidAmount);
+			assertEquals(recipientInitialBalance + PAYOUT_AMOUNT, recipient.getConfirmedBalance(otherAssetId));
+			assertEquals(0L, atAccount.getConfirmedBalance(otherAssetId));
+			assertEquals(0L, atAccount.getConfirmedBalance(Asset.NATIVE));
+		}
+	}
+
+	@Test
+	public void testNonNativeAtCanPayNativeSurplusAfterFees() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount recipient = Common.getTestAccount(repository, "bob");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-NATIVE-SURPLUS-PAYOUT", 100L * Amounts.MULTIPLIER, true);
+			long nativeTopUp = 3L * Amounts.MULTIPLIER;
+			long initialNativeBalance = NATIVE_FEE_RESERVE + nativeTopUp;
+
+			byte[] creationBytes = buildPayAssetToAddressAT(recipient.getAddress(), Asset.NATIVE, initialNativeBalance);
+			long recipientInitialBalance = recipient.getConfirmedBalance(Asset.NATIVE);
+
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, deployer, creationBytes, 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			Account atAccount = deployAtTransaction.getATAccount();
+			String atAddress = atAccount.getAddress();
+
+			transferAsset(repository, deployer, atAddress, Asset.NATIVE, nativeTopUp);
+			long nativeBalanceBeforePayout = atAccount.getConfirmedBalance(Asset.NATIVE);
+
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+			long extractedPaidAmount = extractLong(atStateData, 0);
+			BlockChain.CiyamAtSettings ciyamAtSettings = BlockChain.getInstance().getCiyamAtSettings();
+			long expectedPaidAmount = nativeBalanceBeforePayout - ciyamAtSettings.maxStepsPerRound * ciyamAtSettings.feePerStep;
+
+			assertEquals(expectedPaidAmount, extractedPaidAmount);
+			assertEquals(recipientInitialBalance + expectedPaidAmount, recipient.getConfirmedBalance(Asset.NATIVE));
 			assertEquals(0L, atAccount.getConfirmedBalance(Asset.NATIVE));
 		}
 	}
@@ -453,6 +537,30 @@ public class ATAssetSupportTests extends Common {
 		return toCreationBytes(codeByteBuffer, dataByteBuffer);
 	}
 
+	private static byte[] buildAssetBalanceReaderAT(long assetId) {
+		int addrCounter = 0;
+		final int addrBalance = addrCounter++;
+		final int addrAssetId = addrCounter++;
+
+		ByteBuffer dataByteBuffer = ByteBuffer.allocate(addrCounter * MachineState.VALUE_SIZE);
+		dataByteBuffer.putLong(addrAssetId * MachineState.VALUE_SIZE, assetId);
+
+		ByteBuffer codeByteBuffer = ByteBuffer.allocate(512);
+
+		for (int pass = 0; pass < 2; ++pass) {
+			codeByteBuffer.clear();
+
+			try {
+				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT.compile(ChainFunctionCode.GET_ASSET_BALANCE.value, addrBalance, addrAssetId));
+				codeByteBuffer.put(OpCode.STP_IMD.compile());
+			} catch (CompilationException e) {
+				throw new IllegalStateException("Unable to compile AT?", e);
+			}
+		}
+
+		return toCreationBytes(codeByteBuffer, dataByteBuffer);
+	}
+
 	private static byte[] buildPayAssetToAddressAT(String recipient, long assetId, long amount) {
 		int addrCounter = 0;
 		final int addrResult = addrCounter++;
@@ -656,6 +764,17 @@ public class ATAssetSupportTests extends Common {
 	private static void transferAsset(Repository repository, PrivateKeyAccount sender, String recipient, long assetId, long amount) throws DataException {
 		assertEquals(ValidationResult.OK, importTransferAsset(repository, sender, recipient, assetId, amount));
 		BlockUtils.mintBlock(repository);
+	}
+
+	private static long issueAsset(Repository repository, PrivateKeyAccount issuer, String assetName, long quantity, boolean isDivisible, boolean isUnspendable) throws DataException {
+		long timestamp = TransactionUtils.nextTimestamp(repository);
+
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, issuer.getPublicKey(), AssetUtils.fee, null);
+		TransactionData transactionData = new IssueAssetTransactionData(baseTransactionData, assetName, "desc", quantity, isDivisible, "{}", isUnspendable);
+
+		TransactionUtils.signAndMint(repository, transactionData, issuer);
+
+		return repository.getAssetRepository().fromAssetName(assetName).getAssetId();
 	}
 
 	private static void sendMessage(Repository repository, PrivateKeyAccount sender, String recipient, byte[] data, long amount, Long assetId) throws DataException {

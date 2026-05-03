@@ -594,10 +594,6 @@ public class ChainATAPI extends API {
 		if (requestedAmount == 0)
 			return 0L;
 
-		// For non-native ATs, native balance is reserved for execution fees.
-		if (!this.usesNativeWorkingAsset() && assetId == Asset.NATIVE)
-			return -1L;
-
 		try {
 			AssetData assetData = this.repository.getAssetRepository().fromAssetId(assetId);
 			if (assetData == null || assetData.isUnspendable())
@@ -764,12 +760,16 @@ public class ChainATAPI extends API {
 			}
 
 			if (!this.usesNativeWorkingAsset() && assetId == Asset.NATIVE)
-				balance -= this.calcFinalFees(state);
+				balance -= this.calcMaxRoundFees();
 		}
 
 		balance -= this.getPendingPayout(assetId);
 
 		return Math.max(0L, balance);
+	}
+
+	private long calcMaxRoundFees() {
+		return this.ciyamAtSettings.maxStepsPerRound * this.ciyamAtSettings.feePerStep;
 	}
 
 	private void addPaymentToB(long amount, long assetId, MachineState state) {

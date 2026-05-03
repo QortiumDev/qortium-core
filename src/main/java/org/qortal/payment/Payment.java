@@ -82,13 +82,13 @@ public class Payment {
 			if (assetData == null)
 				return ValidationResult.ASSET_DOES_NOT_EXIST;
 
+			// Do not allow unspendable assets to be trapped inside AT accounts
+			if (recipientIsAT && assetData.isUnspendable())
+				return ValidationResult.ASSET_NOT_SPENDABLE;
+
 			// Do not allow non-owner asset holders to use asset
 			if (assetData.isUnspendable() && !assetData.getOwner().equals(sender.getAddress()))
 				return ValidationResult.ASSET_NOT_SPENDABLE;
-
-			// ATs can receive their configured working asset, plus native asset for execution fees
-			if (atData != null && paymentData.getAssetId() != Asset.NATIVE && paymentData.getAssetId() != atData.getAssetId())
-				return ValidationResult.ASSET_DOES_NOT_MATCH_AT;
 
 			// Check asset amount is integer if asset is not divisible
 			if (!assetData.isDivisible() && paymentData.getAmount() % Amounts.MULTIPLIER != 0)

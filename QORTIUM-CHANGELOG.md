@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - core: allow ATs to use arbitrary spendable assets
+
+Updated AT payment validation so AT accounts can receive any existing spendable asset while still rejecting unspendable assets. ATs can now pay arbitrary spendable assets through the asset-specific payout function, including native asset surplus after reserving the current round's maximum execution fees. Tests cover non-configured asset deposits, payouts, native surplus payouts, and unspendable asset rejection.
+
 ### 2026-05-03 - core: add asset-specific AT payment reads
 
 Added AT chain functions for reading incoming payment amounts by asset id and counting payment entries addressed to the AT. New ATs can now process mixed configured-asset plus native-asset multipayments without changing the legacy single-amount/single-asset functions, which still report mixed-asset multipayments as ambiguous.
