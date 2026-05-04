@@ -260,10 +260,10 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		Object countObj = blockJson.get("count");
 		Object hexObj = blockJson.get("hex");
 
-		if (!(countObj instanceof Long) || !(hexObj instanceof String))
+		if (!(countObj instanceof Number) || !(hexObj instanceof String))
 			throw new ForeignBlockchainException.NetworkException("Missing/invalid 'count' or 'hex' entries in JSON from ElectrumX blockchain.block.headers RPC");
 
-		long returnedCount = (Long) countObj;
+		long returnedCount = ((Number) countObj).longValue();
 		String hex = (String) hexObj;
 
 		List<byte[]> rawBlockHeaders = new ArrayList<>((int) returnedCount);
@@ -534,7 +534,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 				// The code below can remain in place, just in case a peer returns a missing address in the future
 				if (addresses == null || addresses.isEmpty()) {
 					final String message = String.format("No output addresses returned for transaction %s", txHash);
-					LOGGER.warn("{}: No output addresses returned for transaction {}", this.blockchain.getCurrencyCode(), txHash);
+					LOGGER.warn("{}: No output addresses returned for transaction {}", this.getCurrencyCodeForLogging(), txHash);
 
 					uselessServers.add(serverResponse.getElectrumServer().getServer());
 					throw new ForeignBlockchainException(message);
@@ -726,8 +726,12 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 
 		List<ElectrumServer> servers = drainRandomly(this.availableConnections, this.availableConnections.size() / 2);
 
-		LOGGER.info("{} draining count {}", this.blockchain.currencyCode, servers.size());
+		LOGGER.info("{} draining count {}", this.getCurrencyCodeForLogging(), servers.size());
 		return servers;
+	}
+
+	private String getCurrencyCodeForLogging() {
+		return this.blockchain == null ? "ElectrumX" : this.blockchain.getCurrencyCode();
 	}
 
 	public static <T> List<T> drainRandomly(BlockingQueue<T> queue, int numToDrain) {
@@ -815,7 +819,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		if (listSize <= 0) {
 			this.maximumConnections = 0;
 			this.minimumConnections = 0;
-			LOGGER.info("{} has no ElectrumX servers configured", this.blockchain == null ? "ElectrumX" : this.blockchain.getCurrencyCode());
+			LOGGER.info("{} has no ElectrumX servers configured", this.getCurrencyCodeForLogging());
 			return;
 		}
 
@@ -829,7 +833,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		this.maximumConnections = targetConnections;
 		this.minimumConnections = Math.max(1, Math.min(listSize, Math.max(1, targetConnections / 2)));
 
-		LOGGER.info("{} targets {} connections (min {}), listSize {}, avgResponse {}ms", this.blockchain == null ? "ElectrumX" : this.blockchain.getCurrencyCode(), this.maximumConnections, this.minimumConnections, listSize, averageConnectedResponseTime());
+		LOGGER.info("{} targets {} connections (min {}), listSize {}, avgResponse {}ms", this.getCurrencyCodeForLogging(), this.maximumConnections, this.minimumConnections, listSize, averageConnectedResponseTime());
 	}
 
 	private long scoreServer(ChainableServer server) {
@@ -882,8 +886,8 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		}
 		this.lastScoreExtremesDigest = digest;
 
-		LOGGER.info("{} top {} ElectrumX servers: {}", this.blockchain == null ? "ElectrumX" : this.blockchain.getCurrencyCode(), limit, best);
-		LOGGER.info("{} bottom {} ElectrumX servers: {}", this.blockchain == null ? "ElectrumX" : this.blockchain.getCurrencyCode(), limit, worst);
+		LOGGER.info("{} top {} ElectrumX servers: {}", this.getCurrencyCodeForLogging(), limit, best);
+		LOGGER.info("{} bottom {} ElectrumX servers: {}", this.getCurrencyCodeForLogging(), limit, worst);
 	}
 
 	private void recordFailure(ChainableServer server) {
@@ -954,7 +958,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 				serversSnapshot = new ArrayList<>(this.servers);
 			}
 			if (!serversSnapshot.isEmpty()) {
-				LOGGER.info("{} probing {} ElectrumX servers for initial scoring", this.blockchain == null ? "ElectrumX" : this.blockchain.getCurrencyCode(), serversSnapshot.size());
+				LOGGER.info("{} probing {} ElectrumX servers for initial scoring", this.getCurrencyCodeForLogging(), serversSnapshot.size());
 				probeServers(serversSnapshot);
 			}
 			this.initialProbeCompleted = true;
@@ -975,13 +979,13 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	 * @return "result" object from within JSON output
 	 * @throws ForeignBlockchainException if server returns error or something goes wrong
 	 */
-	private ElectrumServerResponse rpc(String method, Object...params) throws ForeignBlockchainException {
+	protected ElectrumServerResponse rpc(String method, Object...params) throws ForeignBlockchainException {
 		this.inFlightRpcCount.incrementAndGet();
 		this.lastRpcTimeMs = System.currentTimeMillis();
 		try {
 			ensureConnectionManagementStarted();
 			if (this.availableConnections.isEmpty()) {
-				LOGGER.debug("{} no available ElectrumX connections; starting connections on demand", this.blockchain.getCurrencyCode());
+				LOGGER.debug("{} no available ElectrumX connections; starting connections on demand", this.getCurrencyCodeForLogging());
 				startMakingConnections();
 			}
 
@@ -1034,13 +1038,13 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	private void monitorConnections() {
 
 		if (this.isIdle() && !this.connections.isEmpty()) {
-			LOGGER.info("{} idle; closing {} ElectrumX connections", this.blockchain.getCurrencyCode(), this.connections.size());
+			LOGGER.info("{} idle; closing {} ElectrumX connections", this.getCurrencyCodeForLogging(), this.connections.size());
 			this.closeAllConnections("idle timeout");
 		}
 
 		LOGGER.info(
 			"{} {} available connections, {} total servers, {} total connections (target {}), {} useless servers",
-			this.blockchain.getCurrencyCode(),
+			this.getCurrencyCodeForLogging(),
 			this.availableConnections.size(),
 			this.servers.size(),
 			this.connections.size(),
@@ -1082,14 +1086,14 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 				return;
 			}
 			if( this.connections.size() < this.minimumConnections ) {
-				LOGGER.debug("{} recovering connections", this.blockchain == null ? "ElectrumX" : this.blockchain.getCurrencyCode());
+				LOGGER.debug("{} recovering connections", this.getCurrencyCodeForLogging());
 				List<ChainableServer> serversSnapshot;
 				synchronized (this.connectionListLock) {
 					serversSnapshot = new ArrayList<>(this.servers);
 				}
 				probeServers(serversSnapshot);
 				startMakingConnections();
-				LOGGER.debug("{} recovered {} connections", this.blockchain == null ? "ElectrumX" : this.blockchain.getCurrencyCode(), this.connections.size());
+				LOGGER.debug("{} recovered {} connections", this.getCurrencyCodeForLogging(), this.connections.size());
 			}
 		} catch (Exception e) {
 			LOGGER.error(e.getMessage(), e);
@@ -1106,7 +1110,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 			this.remainingServers.clear();
 			updateConnectionTargets(this.servers.size());
 			List<ChainableServer> preferredServers = selectPreferredServers(this.maximumConnections);
-			LOGGER.info("{} selecting {} of {} ElectrumX servers by score", this.blockchain == null ? "ElectrumX" : this.blockchain.getCurrencyCode(), preferredServers.size(), this.servers.size());
+			LOGGER.info("{} selecting {} of {} ElectrumX servers by score", this.getCurrencyCodeForLogging(), preferredServers.size(), this.servers.size());
 			this.remainingServers.addAll(preferredServers);
 		}
 
@@ -1137,7 +1141,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 			}
 
 			if (!newlyAdded.isEmpty()) {
-				LOGGER.info("{} probing {} newly discovered ElectrumX servers", this.blockchain == null ? "ElectrumX" : this.blockchain.getCurrencyCode(), newlyAdded.size());
+				LOGGER.info("{} probing {} newly discovered ElectrumX servers", this.getCurrencyCodeForLogging(), newlyAdded.size());
 				probeServers(newlyAdded);
 			}
 
@@ -1190,7 +1194,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	}
 
 	private Optional<ChainableServerConnection> makeConnection(ChainableServer server, String requestedBy) {
-		LOGGER.debug(() -> String.format("Connecting to %s %s", server, this.blockchain.currencyCode));
+		LOGGER.debug(() -> String.format("Connecting to %s %s", server, this.getCurrencyCodeForLogging()));
 
 		try {
 			SocketAddress endpoint = new InetSocketAddress(server.getHostName(), server.getPort());
@@ -1231,7 +1235,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 			}
 
 			recordSuccess(server);
-			LOGGER.debug(() -> String.format("Connected to %s %s", server, this.blockchain.currencyCode));
+			LOGGER.debug(() -> String.format("Connected to %s %s", server, this.getCurrencyCodeForLogging()));
 			this.connections.add(electrumServer);
 			this.availableConnections.add(electrumServer);
 			return Optional.of( this.recorder.recordConnection( server, requestedBy, true, true, EMPTY) );

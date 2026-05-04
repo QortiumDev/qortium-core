@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: keep ElectrumX coverage deterministic
+
+Changed ElectrumX tests so default Maven runs exercise deterministic mock RPC responses instead of depending on public testnet ElectrumX servers, while the live server checks remain available with `-Dqortium.runLiveElectrumXTests=true`. ElectrumX header parsing now accepts numeric JSON counts from servers that return integers, and connection logging no longer assumes a blockchain object is attached when tests construct the provider directly.
+
 ### 2026-05-04 - test: align arbitrary data and asset API checks
 
 Updated arbitrary data tests to match the current PUT-only publishing behavior while still checking explicit PATCH rejection, made binary arbitrary-data diffs fall back to whole-file patches instead of failing on non-text input, adjusted raw on-chain arbitrary-data size checks for AES-GCM overhead, and fixed account persistence so existing genesis account rows gain their public key when the account later signs a transaction. The previously failing arbitrary-data and asset API test groups now pass without involving the external ElectrumX tests.

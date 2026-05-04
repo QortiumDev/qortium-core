@@ -6,6 +6,8 @@ import org.bitcoinj.params.TestNet3Params;
 import org.bitcoinj.script.ScriptBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
+import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
 import org.junit.Test;
 import org.qortal.crosschain.Bitcoin.BitcoinNet;
 import org.qortal.crosschain.*;
@@ -13,13 +15,19 @@ import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.utils.BitTwiddling;
 
 import java.security.Security;
+import java.util.Collections;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.Assume.assumeTrue;
 import static org.junit.Assert.*;
 
+@SuppressWarnings("unchecked")
 public class ElectrumXTests {
+
+	private static final String RUN_LIVE_ELECTRUMX_TESTS_PROPERTY = "qortium.runLiveElectrumXTests";
 
 	static {
 		// This must go before any calls to LogManager/Logger
@@ -35,19 +43,112 @@ public class ElectrumXTests {
 		DEFAULT_ELECTRUMX_PORTS.put(ConnectionType.SSL, 50002);
 	}
 
-	private ElectrumX getInstance() {
+	private ElectrumX getLiveInstance() {
+		assumeTrue(Boolean.getBoolean(RUN_LIVE_ELECTRUMX_TESTS_PROPERTY));
 		return new ElectrumX("Bitcoin-" + BitcoinNet.TEST3.name(), BitcoinNet.TEST3.getGenesisHash(), BitcoinNet.TEST3.getServers(), DEFAULT_ELECTRUMX_PORTS);
 	}
 
 	@Test
 	public void testInstance() {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = new MockElectrumX(Collections.emptyMap());
 		assertNotNull(electrumX);
 	}
 
 	@Test
+	public void testGetCurrentHeightFromMockRpc() throws ForeignBlockchainException {
+		JSONObject response = new JSONObject();
+		response.put("height", 12345L);
+
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.headers.subscribe", response));
+
+		assertEquals(12345, electrumX.getCurrentHeight());
+	}
+
+	@Test
+	public void testRawBlockHeadersAcceptsIntegerCount() throws ForeignBlockchainException {
+		JSONObject response = new JSONObject();
+		response.put("count", Integer.valueOf(2));
+		response.put("hex", "00".repeat(160));
+
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.block.headers", response));
+		List<byte[]> rawBlockHeaders = electrumX.getRawBlockHeaders(1, 2);
+
+		assertEquals(2, rawBlockHeaders.size());
+		assertEquals(80, rawBlockHeaders.get(0).length);
+		assertEquals(80, rawBlockHeaders.get(1).length);
+	}
+
+	@Test
+	public void testRawBlockHeadersRejectsMissingHex() {
+		JSONObject response = new JSONObject();
+		response.put("count", Integer.valueOf(1));
+
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.block.headers", response));
+
+		try {
+			electrumX.getRawBlockHeaders(1, 1);
+			fail("Missing raw header hex should cause network exception");
+		} catch (ForeignBlockchainException e) {
+			assertTrue(e instanceof ForeignBlockchainException.NetworkException);
+		}
+	}
+
+	@Test
+	public void testGetConfirmedBalanceFromMockRpc() throws ForeignBlockchainException {
+		JSONObject response = new JSONObject();
+		response.put("confirmed", 123456789L);
+
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.scripthash.get_balance", response));
+
+		assertEquals(123456789L, electrumX.getConfirmedBalance(new byte[] { 0x01, 0x02 }));
+	}
+
+	@Test
+	public void testGetRawTransactionFromMockRpc() throws ForeignBlockchainException {
+		String txHex = "00".repeat(32);
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.transaction.get", txHex));
+
+		assertArrayEquals(HashCode.fromString(txHex).asBytes(), electrumX.getRawTransaction("ab".repeat(32)));
+	}
+
+	@Test
+	public void testGetUnknownRawTransactionFromMockRpc() {
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.transaction.get",
+				new ForeignBlockchainException.NetworkException(-5, "missing transaction")));
+
+		try {
+			electrumX.getRawTransaction("ab".repeat(32));
+			fail("Missing transaction should cause NotFoundException");
+		} catch (ForeignBlockchainException e) {
+			assertTrue(e instanceof ForeignBlockchainException.NotFoundException);
+		}
+	}
+
+	@Test
+	public void testGetAddressTransactionsFromMockRpc() throws ForeignBlockchainException {
+		JSONObject confirmedTransaction = new JSONObject();
+		confirmedTransaction.put("height", 100L);
+		confirmedTransaction.put("tx_hash", "aa".repeat(32));
+
+		JSONObject unconfirmedTransaction = new JSONObject();
+		unconfirmedTransaction.put("height", 0L);
+		unconfirmedTransaction.put("tx_hash", "bb".repeat(32));
+
+		JSONArray response = new JSONArray();
+		response.add(confirmedTransaction);
+		response.add(unconfirmedTransaction);
+
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.scripthash.get_history", response));
+		List<TransactionHash> transactionHashes = electrumX.getAddressTransactions(new byte[] { 0x01, 0x02 }, false);
+
+		assertEquals(1, transactionHashes.size());
+		assertEquals(100, transactionHashes.get(0).height);
+		assertEquals("aa".repeat(32), transactionHashes.get(0).txHash);
+	}
+
+	@Test
 	public void testGetCurrentHeight() throws ForeignBlockchainException {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 
 		int height = electrumX.getCurrentHeight();
 
@@ -57,7 +158,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testInvalidRequest() {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 		try {
 			electrumX.getRawBlockHeaders(-1, -1);
 		} catch (ForeignBlockchainException e) {
@@ -70,7 +171,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetRecentBlocks() throws ForeignBlockchainException {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 
 		int height = electrumX.getCurrentHeight();
 		assertTrue(height > 10000);
@@ -90,7 +191,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetP2PKHBalance() throws ForeignBlockchainException {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 
 		Address address = Address.fromString(TestNet3Params.get(), "n3GNqMveyvaPvUbH469vDRadqpJMPc84JA");
 		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
@@ -103,7 +204,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetP2SHBalance() throws ForeignBlockchainException {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 
 		Address address = Address.fromString(TestNet3Params.get(), "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF");
 		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
@@ -116,7 +217,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetUnspentOutputs() throws ForeignBlockchainException {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 
 		Address address = Address.fromString(TestNet3Params.get(), "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF");
 		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
@@ -130,7 +231,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetRawTransaction() throws ForeignBlockchainException {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 
 		byte[] txHash = HashCode.fromString("7653fea9ffcd829d45ed2672938419a94951b08175982021e77d619b553f29af").asBytes();
 
@@ -141,7 +242,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetUnknownRawTransaction() {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 
 		byte[] txHash = HashCode.fromString("f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0").asBytes();
 
@@ -156,7 +257,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetTransaction() throws ForeignBlockchainException {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 
 		String txHash = "7653fea9ffcd829d45ed2672938419a94951b08175982021e77d619b553f29af";
 
@@ -168,7 +269,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetUnknownTransaction() {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 
 		String txHash = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0";
 
@@ -183,7 +284,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetAddressTransactions() throws ForeignBlockchainException {
-		ElectrumX electrumX = getInstance();
+		ElectrumX electrumX = getLiveInstance();
 
 		Address address = Address.fromString(TestNet3Params.get(), "2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE");
 		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
@@ -191,6 +292,25 @@ public class ElectrumXTests {
 		List<TransactionHash> transactionHashes = electrumX.getAddressTransactions(script, false);
 
 		assertFalse(transactionHashes.isEmpty());
+	}
+
+	private static class MockElectrumX extends ElectrumX {
+
+		private final Map<String, Object> responsesByMethod;
+
+		private MockElectrumX(Map<String, Object> responsesByMethod) {
+			super("mock", null, Collections.emptyList(), DEFAULT_ELECTRUMX_PORTS);
+			this.responsesByMethod = new HashMap<>(responsesByMethod);
+		}
+
+		@Override
+		protected ElectrumServerResponse rpc(String method, Object... params) throws ForeignBlockchainException {
+			Object response = this.responsesByMethod.get(method);
+			if (response instanceof ForeignBlockchainException)
+				throw (ForeignBlockchainException) response;
+
+			return new ElectrumServerResponse(null, response);
+		}
 	}
 
 }
