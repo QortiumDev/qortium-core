@@ -58,7 +58,7 @@ public class BlockArchiveReader {
                 Integer startHeight = Integer.parseInt(parts[0]);
                 Integer endHeight = Integer.parseInt(parts[1]);
                 Integer range = endHeight - startHeight;
-                map.put(filename, new Triple(startHeight, endHeight, range));
+                map.put(filename, new Triple<>(startHeight, endHeight, range));
             }
         }
         this.fileListCache = Map.copyOf(map);
@@ -176,20 +176,17 @@ public class BlockArchiveReader {
             this.fetchFileList();
         }
 
-        Iterator it = this.fileListCache.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry pair = (Map.Entry) it.next();
-            if (pair == null && pair.getKey() == null && pair.getValue() == null) {
+        for (Map.Entry<String, Triple<Integer, Integer, Integer>> entry : this.fileListCache.entrySet()) {
+            if (entry.getKey() == null || entry.getValue() == null) {
                 continue;
             }
-            Triple<Integer, Integer, Integer> heightInfo = (Triple<Integer, Integer, Integer>) pair.getValue();
+            Triple<Integer, Integer, Integer> heightInfo = entry.getValue();
             Integer startHeight = heightInfo.getA();
             Integer endHeight = heightInfo.getB();
 
             if (height >= startHeight && height <= endHeight) {
                 // Found the correct file
-                String filename = (String) pair.getKey();
-                return filename;
+                return entry.getKey();
             }
         }
 
@@ -319,13 +316,11 @@ public class BlockArchiveReader {
 
         int maxEndHeight = 0;
 
-        Iterator it = this.fileListCache.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry pair = (Map.Entry) it.next();
-            if (pair == null && pair.getKey() == null && pair.getValue() == null) {
+        for (Map.Entry<String, Triple<Integer, Integer, Integer>> entry : this.fileListCache.entrySet()) {
+            if (entry.getValue() == null) {
                 continue;
             }
-            Triple<Integer, Integer, Integer> heightInfo = (Triple<Integer, Integer, Integer>) pair.getValue();
+            Triple<Integer, Integer, Integer> heightInfo = entry.getValue();
             Integer endHeight = heightInfo.getB();
 
             if (endHeight != null && endHeight > maxEndHeight) {

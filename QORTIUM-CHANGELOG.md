@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: clean block archive reader unchecked warnings
+
+Replaced raw archive file-list entries and unchecked casts in the block archive reader with typed map entries. Archive file selection and last-height calculation still use the same cached filename metadata, but the code now compiles without that unchecked warning.
+
 ### 2026-05-03 - build: clean name integrity comparator warning
 
 Replaced the raw comparator used by the name database integrity checker with a typed transaction comparator. This preserves the existing block-height, timestamp, and signature ordering while removing the next unchecked compiler notice from the warning cleanup pass.
