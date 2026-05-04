@@ -4,7 +4,7 @@ Qortium ships built-in Electrum server seeds in the coin classes and also loads 
 
 `src/main/resources/crosschain/electrum-servers.json`
 
-At runtime, Qortium uses the generated resource when it contains entries for the selected coin/network. If the resource is missing, invalid, or has no entries for that coin/network, the built-in seeds remain the fallback.
+At runtime, Qortium uses the generated resource when it contains entries for the selected coin/network. SSL servers are preferred; TCP servers are used only when no SSL servers are available. If the resource is missing, invalid, or has no entries for that coin/network, the built-in seeds remain the fallback with the same SSL preference.
 
 ## Refreshing The List
 
@@ -20,6 +20,7 @@ The refresh tool:
 - scrapes OK TCP/SSL rows from `https://1209k.com/bitcoin-eye/ele.php`
 - asks a limited number of Electrum servers for `server.peers.subscribe`
 - verifies candidates with `server.version`, `server.features`, expected genesis hash, and `blockchain.headers.subscribe`
+- keeps SSL servers when any are available, falling back to TCP only if no SSL servers verify
 - writes a refreshed `crosschain/electrum-servers.json`
 
 Useful options:

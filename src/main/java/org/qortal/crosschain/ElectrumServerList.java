@@ -22,6 +22,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public final class ElectrumServerList {
 
@@ -35,9 +36,9 @@ public final class ElectrumServerList {
 	public static Collection<Server> getServers(String coinCode, String networkName, Collection<Server> fallbackServers) {
 		List<Server> generatedServers = loadGeneratedServers(coinCode, networkName);
 		if (generatedServers.isEmpty())
-			return fallbackServers;
+			return preferSslServers(fallbackServers);
 
-		return generatedServers;
+		return preferSslServers(generatedServers);
 	}
 
 	static List<Server> loadGeneratedServers(String coinCode, String networkName) {
@@ -110,6 +111,20 @@ public final class ElectrumServerList {
 		}
 
 		return new ArrayList<>(new LinkedHashSet<>(servers));
+	}
+
+	static List<Server> preferSslServers(Collection<Server> servers) {
+		if (servers == null || servers.isEmpty())
+			return Collections.emptyList();
+
+		List<Server> secureServers = servers.stream()
+				.filter(server -> server.getConnectionType() == ConnectionType.SSL)
+				.collect(Collectors.toList());
+
+		if (!secureServers.isEmpty())
+			return secureServers;
+
+		return new ArrayList<>(servers);
 	}
 
 	private static Server parseServer(JSONObject serverJson) {

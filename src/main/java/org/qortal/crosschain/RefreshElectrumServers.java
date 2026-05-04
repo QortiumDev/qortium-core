@@ -102,7 +102,14 @@ public final class RefreshElectrumServers {
 				}
 			}
 
-			candidates = sortCandidates(ElectrumServerDiscovery.dedupeCandidates(candidates));
+			List<CandidateServer> dedupedCandidates = ElectrumServerDiscovery.dedupeCandidates(candidates);
+			candidates = preferSslCandidates(dedupedCandidates);
+			if (candidates.size() < dedupedCandidates.size())
+				System.out.printf("%s: selected %d SSL servers over %d TCP servers%n", coinConfig.coinCode, candidates.size(), dedupedCandidates.size() - candidates.size());
+			else if (!candidates.isEmpty() && candidates.get(0).getServer().getConnectionType() == ConnectionType.TCP)
+				System.out.printf("%s: no SSL servers available; keeping %d TCP servers%n", coinConfig.coinCode, candidates.size());
+
+			candidates = sortCandidates(candidates);
 
 			Map<String, List<CandidateServer>> networks = new LinkedHashMap<>();
 			networks.put("MAIN", candidates);
@@ -297,6 +304,14 @@ public final class RefreshElectrumServers {
 				.thenComparing(candidate -> candidate.getServer().getHostName())
 				.thenComparingInt(candidate -> candidate.getServer().getPort()));
 		return candidates;
+	}
+
+	static List<CandidateServer> preferSslCandidates(List<CandidateServer> candidates) {
+		List<CandidateServer> secureCandidates = candidates.stream()
+				.filter(candidate -> candidate.getServer().getConnectionType() == ConnectionType.SSL)
+				.collect(Collectors.toList());
+
+		return secureCandidates.isEmpty() ? candidates : secureCandidates;
 	}
 
 	private static void writeGeneratedServers(Path outputPath, Map<String, Map<String, List<CandidateServer>>> generatedServers) throws IOException {

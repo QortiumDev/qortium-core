@@ -104,6 +104,38 @@ public class ElectrumServerListTests {
 		assertFalse(servers.contains(fallbackServer));
 	}
 
+	@Test
+	public void testServerSelectionPrefersSslWhenAvailable() {
+		Server sslServer = new Server("ssl.example.com", ConnectionType.SSL, 50002);
+		Server tcpServer = new Server("tcp.example.com", ConnectionType.TCP, 50001);
+
+		List<Server> servers = ElectrumServerList.preferSslServers(List.of(tcpServer, sslServer));
+
+		assertEquals(1, servers.size());
+		assertEquals(sslServer, servers.get(0));
+	}
+
+	@Test
+	public void testServerSelectionKeepsTcpWhenNoSslAvailable() {
+		Server tcpServer = new Server("tcp.example.com", ConnectionType.TCP, 50001);
+
+		List<Server> servers = ElectrumServerList.preferSslServers(List.of(tcpServer));
+
+		assertEquals(1, servers.size());
+		assertEquals(tcpServer, servers.get(0));
+	}
+
+	@Test
+	public void testRefreshSelectionPrefersSslWhenAvailable() {
+		CandidateServer sslCandidate = new CandidateServer(new Server("ssl.example.com", ConnectionType.SSL, 50002), "test");
+		CandidateServer tcpCandidate = new CandidateServer(new Server("tcp.example.com", ConnectionType.TCP, 50001), "test");
+
+		List<CandidateServer> candidates = RefreshElectrumServers.preferSslCandidates(List.of(tcpCandidate, sslCandidate));
+
+		assertEquals(1, candidates.size());
+		assertEquals(sslCandidate, candidates.get(0));
+	}
+
 	private static String row(String host, String port, String protocol, String status) {
 		return "<tr>"
 				+ td(host)
