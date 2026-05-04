@@ -17,7 +17,7 @@ public class HSQLDBTransferPrivsTransactionRepository extends HSQLDBTransactionR
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT recipient, previous_recipient_existed, previous_sender_blocks_minted FROM TransferPrivsTransactions WHERE signature = ?";
+		String sql = "SELECT recipient, previous_sender_blocks_minted FROM TransferPrivsTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
@@ -25,15 +25,11 @@ public class HSQLDBTransferPrivsTransactionRepository extends HSQLDBTransactionR
 
 			String recipient = resultSet.getString(1);
 
-			Boolean previousRecipientExisted = resultSet.getBoolean(2);
-			if (!previousRecipientExisted && resultSet.wasNull())
-				previousRecipientExisted = null;
-
-			Integer previousSenderBlocksMinted = resultSet.getInt(3);
+			Integer previousSenderBlocksMinted = resultSet.getInt(2);
 			if (previousSenderBlocksMinted == 0 && resultSet.wasNull())
 				previousSenderBlocksMinted = null;
 
-			return new TransferPrivsTransactionData(baseTransactionData, recipient, previousRecipientExisted, previousSenderBlocksMinted);
+			return new TransferPrivsTransactionData(baseTransactionData, recipient, previousSenderBlocksMinted);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch transfer privs transaction from repository", e);
 		}
@@ -46,7 +42,6 @@ public class HSQLDBTransferPrivsTransactionRepository extends HSQLDBTransactionR
 		HSQLDBSaver saveHelper = new HSQLDBSaver("TransferPrivsTransactions");
 		saveHelper.bind("signature", transferPrivsTransactionData.getSignature()).bind("sender", transferPrivsTransactionData.getSenderPublicKey())
 				.bind("recipient", transferPrivsTransactionData.getRecipient())
-				.bind("previous_recipient_existed", transferPrivsTransactionData.getPreviousRecipientExisted())
 				.bind("previous_sender_blocks_minted", transferPrivsTransactionData.getPreviousSenderBlocksMinted());
 
 		try {

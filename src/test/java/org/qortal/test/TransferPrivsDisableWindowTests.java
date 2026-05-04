@@ -12,7 +12,6 @@ import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
-import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.Common;
 import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
@@ -38,7 +37,7 @@ public class TransferPrivsDisableWindowTests extends Common {
 	public void testTransferPrivsStillValidInsideFormerDisableWindow() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount sender = Common.getTestAccount(repository, "alice");
-			Account recipient = AccountUtils.createRandomAccount(repository);
+			Account recipient = Common.generateRandomSeedAccount(repository);
 
 			long fee = 1L * Amounts.MULTIPLIER;
 

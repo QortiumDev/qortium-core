@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: enforce clean transfer-privs recipients
+
+Simplified TRANSFER_PRIVS processing for Qortium's new-chain rules so privilege transfers only create and populate a previously unused recipient account, removed the obsolete stored flag for transfers into existing recipients, and replaced the ignored transfer-privs test class with active coverage for clean-recipient success, orphan cleanup, funded non-genesis senders, and rejection of already-used recipient accounts.
+
 ### 2026-05-04 - test: make block serialization deterministic
 
 Replaced the ignored random all-transaction block serialization test with deterministic round-trip coverage for an empty minted block and a minted block containing a payment transaction. The test now checks block length, serialized block metadata, transaction count, and embedded transaction bytes without trying to synthesize unrelated transaction setup inside a single fragile test.

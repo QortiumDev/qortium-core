@@ -97,20 +97,17 @@ public class TransferPrivsTransaction extends Transaction {
 		int sendersBlocksMinted = senderData.getBlocksMinted();
 
 		AccountData recipientData = accountRepository.getAccount(recipient.getAddress());
-		boolean previousRecipientExisted = recipientData != null;
-		int recipientBlocksMinted = previousRecipientExisted ? recipientData.getBlocksMinted() : 0;
+		if (recipientData != null)
+			throw new DataException("TRANSFER_PRIVS recipient account already exists");
 
-		if (!previousRecipientExisted) {
-			recipient.ensureAccount();
-			recipientData = accountRepository.getAccount(recipient.getAddress());
-		}
+		recipient.ensureAccount();
+		recipientData = accountRepository.getAccount(recipient.getAddress());
 
 		// Save prior values
-		this.transferPrivsTransactionData.setPreviousRecipientExisted(previousRecipientExisted);
 		this.transferPrivsTransactionData.setPreviousSenderBlocksMinted(sendersBlocksMinted);
 
-		// Combine blocks minted
-		recipientData.setBlocksMinted(recipientBlocksMinted + sendersBlocksMinted);
+		// Transfer blocks minted
+		recipientData.setBlocksMinted(sendersBlocksMinted);
 		accountRepository.setMintedBlockCount(recipientData);
 
 		// Determine new recipient level based on blocks
@@ -155,8 +152,6 @@ public class TransferPrivsTransaction extends Transaction {
 		final AccountRepository accountRepository = this.repository.getAccountRepository();
 
 		AccountData senderData = accountRepository.getAccount(sender.getAddress());
-		AccountData recipientData = accountRepository.getAccount(recipient.getAddress());
-		Boolean previousRecipientExisted = this.transferPrivsTransactionData.getPreviousRecipientExisted();
 
 		final List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 		final int maximumLevel = cumulativeBlocksByLevel.size() - 1;
@@ -177,29 +172,10 @@ public class TransferPrivsTransaction extends Transaction {
 				break;
 			}
 
-		if (Boolean.TRUE.equals(previousRecipientExisted)) {
-			// Restore recipient block minted count
-			recipientData.setBlocksMinted(recipientData.getBlocksMinted() - this.transferPrivsTransactionData.getPreviousSenderBlocksMinted());
-			accountRepository.setMintedBlockCount(recipientData);
-
-			// Recalculate recipient's level
-			effectiveBlocksMinted = recipientData.getBlocksMinted();
-			for (int newLevel = maximumLevel; newLevel > 0; --newLevel)
-				if (effectiveBlocksMinted >= cumulativeBlocksByLevel.get(newLevel)) {
-					// Account level
-					recipientData.setLevel(newLevel);
-					accountRepository.setLevel(recipientData);
-					LOGGER.trace(() -> String.format("TRANSFER_PRIVS recipient %s reset to level %d", recipientData.getAddress(), recipientData.getLevel()));
-
-					break;
-				}
-		} else {
-			// Recipient didn't exist before now
-			accountRepository.delete(recipient.getAddress());
-		}
+		// Recipient did not exist before this transfer.
+		accountRepository.delete(recipient.getAddress());
 
 		// Clear values in transaction data
-		this.transferPrivsTransactionData.setPreviousRecipientExisted(null);
 		this.transferPrivsTransactionData.setPreviousSenderBlocksMinted(null);
 
 		// Save this transaction

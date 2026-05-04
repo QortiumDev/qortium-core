@@ -613,7 +613,6 @@ public class HSQLDBDatabaseUpdates {
 				case 17:
 					// TRANSFER_PRIVS transaction
 					stmt.execute("CREATE TABLE TransferPrivsTransactions (signature Signature, sender AccountPublicKey NOT NULL, recipient AccountAddress NOT NULL, "
-							+ "previous_recipient_existed BOOLEAN, "
 							+ "previous_sender_blocks_minted_adjustment INT, previous_sender_blocks_minted INT, "
 							+ TRANSACTION_KEYS + ")");
 					break;
@@ -1119,6 +1118,7 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");
 					stmt.execute("ALTER TABLE TransferPrivsTransactions DROP COLUMN previous_sender_blocks_minted_adjustment");
+					dropColumnIfExists(connection, "TransferPrivsTransactions", "previous_recipient_existed");
 					break;
 
 				default:

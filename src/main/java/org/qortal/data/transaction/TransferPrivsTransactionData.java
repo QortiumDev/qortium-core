@@ -22,10 +22,6 @@ public class TransferPrivsTransactionData extends TransactionData {
 	// No need to ever expose this via API
 	@XmlTransient
 	@Schema(hidden = true)
-	private Boolean previousRecipientExisted;
-
-	@XmlTransient
-	@Schema(hidden = true)
 	private Integer previousSenderBlocksMinted;
 
 	// Constructors
@@ -41,20 +37,18 @@ public class TransferPrivsTransactionData extends TransactionData {
 
 	/** Constructs using data from repository. */
 	public TransferPrivsTransactionData(BaseTransactionData baseTransactionData, String recipient,
-			Boolean previousRecipientExisted,
 			Integer previousSenderBlocksMinted) {
 		super(TransactionType.TRANSFER_PRIVS, baseTransactionData);
 
 		this.senderPublicKey = baseTransactionData.creatorPublicKey;
 		this.recipient = recipient;
 
-		this.previousRecipientExisted = previousRecipientExisted;
 		this.previousSenderBlocksMinted = previousSenderBlocksMinted;
 	}
 
 	/** Constructs using data from network/API. */
 	public TransferPrivsTransactionData(BaseTransactionData baseTransactionData, String recipient) {
-		this(baseTransactionData, recipient, null, null);
+		this(baseTransactionData, recipient, null);
 	}
 
 	// Getters/setters
@@ -65,14 +59,6 @@ public class TransferPrivsTransactionData extends TransactionData {
 
 	public String getRecipient() {
 		return this.recipient;
-	}
-
-	public Boolean getPreviousRecipientExisted() {
-		return this.previousRecipientExisted;
-	}
-
-	public void setPreviousRecipientExisted(Boolean previousRecipientExisted) {
-		this.previousRecipientExisted = previousRecipientExisted;
 	}
 
 	public Integer getPreviousSenderBlocksMinted() {
