@@ -45,11 +45,13 @@ public class ElectrumServer {
 
         if (this.server.getConnectionType() == ElectrumX.Server.ConnectionType.SSL) {
             SSLSocketFactory factory = TrustlessSSLSocketFactory.getSocketFactory();
-            this.socket = factory.createSocket(this.socket, server.getHostName(), server.getPort(), true);
+            SSLSocket sslSocket = (SSLSocket) factory.createSocket(this.socket, server.getHostName(), server.getPort(), true);
+            TrustlessSSLSocketFactory.configureSocket(sslSocket);
+            this.socket = sslSocket;
             this.socket.setSoTimeout(timeout);
             this.socket.setTcpNoDelay(true);
             this.socket.getOutputStream().flush();
-            ((SSLSocket) this.socket).startHandshake();
+            sslSocket.startHandshake();
         }
 
         this.scanner = new Scanner(this.socket.getInputStream());

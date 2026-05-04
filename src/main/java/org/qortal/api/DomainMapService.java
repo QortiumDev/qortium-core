@@ -17,6 +17,7 @@ import org.qortal.api.resource.AnnotationPostProcessor;
 import org.qortal.api.resource.ApiDefinition;
 import org.qortal.network.Network;
 import org.qortal.settings.Settings;
+import org.qortal.utils.SslUtils;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -70,7 +71,7 @@ public class DomainMapService {
 					throw new RuntimeException("Failed to start SSL API due to broken keystore");
 
 				// BouncyCastle-specific SSLContext build
-				SSLContext sslContext = SSLContext.getInstance("TLSv1.3", "BCJSSE");
+				SSLContext sslContext = SSLContext.getInstance("TLS", "BCJSSE");
 				KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance("PKIX", "BCJSSE");
 
 				KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType(), "BC");
@@ -84,6 +85,7 @@ public class DomainMapService {
 
 				SslContextFactory.Server sslContextFactory = new SslContextFactory.Server();
 				sslContextFactory.setSslContext(sslContext);
+				SslUtils.configureServerTls(sslContextFactory);
 
 				this.server = new Server();
 

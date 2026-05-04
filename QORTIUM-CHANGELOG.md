@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - crypto: tighten TLS protocol defaults
+
+Restricted API, gateway, domain-map, dev-proxy, and Electrum SSL setup to modern TLS defaults. Server-side Jetty SSL now uses a shared TLS policy that enables TLS 1.3/TLS 1.2, excludes legacy SSL/TLS protocol names, and includes HTTP/2-safe AEAD cipher suites. Electrum SSL sockets now request the `TLS` context instead of the legacy `SSL` alias and enable only TLS 1.3/TLS 1.2 when supported.
+
 ### 2026-05-03 - build: update Bouncy Castle to 1.84
 
 Updated all Bouncy Castle runtime dependencies from `1.78.1` to `1.84`, covering the core provider, TLS/JSSE provider, PKIX certificate utilities, and shared utility jar. This keeps Qortium on the current Bouncy Castle release line before the follow-up TLS and encryption hardening changes.

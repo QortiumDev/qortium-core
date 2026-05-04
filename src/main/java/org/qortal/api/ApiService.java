@@ -6,7 +6,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.alpn.server.ALPNServerConnectionFactory;
 import org.eclipse.jetty.http.HttpVersion;
-import org.eclipse.jetty.http2.HTTP2Cipher;
 import org.eclipse.jetty.http2.server.HTTP2ServerConnectionFactory;
 import org.eclipse.jetty.rewrite.handler.RedirectPatternRule;
 import org.eclipse.jetty.rewrite.handler.RewriteHandler;
@@ -191,11 +190,7 @@ public class ApiService {
 				// Disable Hostname Verification (Fixes "localhost" ALPN issues)
 				sslContextFactory.setEndpointIdentificationAlgorithm(null);
 
-				// We explicitly tell the server: "You MUST use a cipher that allows HTTP/2"
-				sslContextFactory.setIncludeCipherSuites("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256");
-				// HTTP/2 strict cipher compliance
-				sslContextFactory.setCipherComparator(HTTP2Cipher.COMPARATOR);
-				sslContextFactory.setUseCipherSuitesOrder(true);
+				SslUtils.configureServerTls(sslContextFactory);
 
 				this.server = new Server();
 

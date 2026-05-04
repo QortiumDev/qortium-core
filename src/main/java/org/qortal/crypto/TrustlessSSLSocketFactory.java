@@ -1,9 +1,14 @@
 package org.qortal.crypto;
 
 import javax.net.ssl.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import java.security.cert.X509Certificate;
 
 public abstract class TrustlessSSLSocketFactory {
+
+	private static final String[] SECURE_TLS_PROTOCOLS = { "TLSv1.3", "TLSv1.2" };
 
 	/**
 	 * Creates a SSLSocketFactory that ignore certificate chain validation because ElectrumX servers use mostly
@@ -27,7 +32,7 @@ public abstract class TrustlessSSLSocketFactory {
 	private static final SSLContext sc;
 	static {
 		try {
-			sc = SSLContext.getInstance("SSL");
+			sc = SSLContext.getInstance("TLS");
 			sc.init(null, TRUSTLESS_MANAGER, new java.security.SecureRandom());
 		} catch (Exception e) {
 			throw new RuntimeException(e);
@@ -36,5 +41,17 @@ public abstract class TrustlessSSLSocketFactory {
 
 	public static SSLSocketFactory getSocketFactory() {
 		return sc.getSocketFactory();
+	}
+
+	public static void configureSocket(SSLSocket socket) {
+		Set<String> supportedProtocols = Set.of(socket.getSupportedProtocols());
+		List<String> enabledProtocols = new ArrayList<>();
+
+		for (String protocol : SECURE_TLS_PROTOCOLS)
+			if (supportedProtocols.contains(protocol))
+				enabledProtocols.add(protocol);
+
+		if (!enabledProtocols.isEmpty())
+			socket.setEnabledProtocols(enabledProtocols.toArray(String[]::new));
 	}
 }

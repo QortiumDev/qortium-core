@@ -15,6 +15,8 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.util.io.pem.PemObject;
 import org.bouncycastle.util.io.pem.PemReader;
 import org.bouncycastle.util.io.pem.PemWriter;
+import org.eclipse.jetty.http2.HTTP2Cipher;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.qortal.settings.Settings;
 
 import java.io.*;
@@ -45,6 +47,15 @@ public class SslUtils {
     private static final String SERVER_KEY_PATH = "server.key";
     private static final String LOCAL_CA_SUBJECT = "CN=qortium-local-ca";
     private static final String LOCAL_SERVER_SUBJECT = "CN=qortium-local-server";
+    private static final String[] SECURE_TLS_PROTOCOLS = { "TLSv1.3", "TLSv1.2" };
+    private static final String[] LEGACY_TLS_PROTOCOLS = { "SSL", "SSLv2", "SSLv2Hello", "SSLv3", "TLSv1", "TLSv1.1" };
+    private static final String[] HTTP_TLS_CIPHER_SUITES = {
+            "TLS_AES_128_GCM_SHA256",
+            "TLS_AES_256_GCM_SHA384",
+            "TLS_CHACHA20_POLY1305_SHA256",
+            "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+            "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+    };
 
     static {
         Security.addProvider(new BouncyCastleProvider());
@@ -96,6 +107,14 @@ public class SslUtils {
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate SSL certificates", e);
         }
+    }
+
+    public static void configureServerTls(SslContextFactory.Server sslContextFactory) {
+        sslContextFactory.setIncludeProtocols(SECURE_TLS_PROTOCOLS);
+        sslContextFactory.setExcludeProtocols(LEGACY_TLS_PROTOCOLS);
+        sslContextFactory.setIncludeCipherSuites(HTTP_TLS_CIPHER_SUITES);
+        sslContextFactory.setCipherComparator(HTTP2Cipher.COMPARATOR);
+        sslContextFactory.setUseCipherSuitesOrder(true);
     }
 
     private static void createServerCertificate(KeyPair caKeyPair) throws Exception {

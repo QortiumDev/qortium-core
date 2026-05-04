@@ -18,6 +18,7 @@ import org.qortal.api.resource.ApiDefinition;
 import org.qortal.network.Network;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
+import org.qortal.utils.SslUtils;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -85,6 +86,7 @@ public class DevProxyService {
 
 				SslContextFactory.Server sslContextFactory = new SslContextFactory.Server();
 				sslContextFactory.setSslContext(sslContext);
+				SslUtils.configureServerTls(sslContextFactory);
 
 				this.server = new Server();
 
