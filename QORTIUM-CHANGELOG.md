@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: make crosschain checks deterministic
+
+Replaced ignored BTC-like crosschain stubs with deterministic mock-provider coverage for wallet scanning, spend building, wallet balances, median block time, and HTLC secret/status handling while keeping public ElectrumX, PirateChain, and other live crosschain checks behind explicit opt-in properties. The Dogecoin, Digibyte, Litecoin, Ravencoin, Bitcoin, HTLC, and PirateChain crosschain tests now provide default offline coverage without depending on unavailable testnet servers, and the opt-in PirateChain funded-HTLC checks now tolerate inconsistent light-client servers by using confirmed UTXOs and trying each configured live fixture server.
+
 ### 2026-05-04 - test: enforce clean transfer-privs recipients
 
 Simplified TRANSFER_PRIVS processing for Qortium's new-chain rules so privilege transfers only create and populate a previously unused recipient account, removed the obsolete stored flag for transfers into existing recipients, and replaced the ignored transfer-privs test class with active coverage for clean-recipient success, orphan cleanup, funded non-genesis senders, and rejection of already-used recipient accounts.

@@ -3,19 +3,23 @@ package org.qortal.test.crosschain;
 import cash.z.wallet.sdk.rpc.CompactFormats.CompactBlock;
 import com.google.common.hash.HashCode;
 import com.google.common.primitives.Bytes;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.*;
 import org.qortal.crypto.Crypto;
 import org.qortal.transform.TransformationException;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
+import static org.junit.Assume.assumeTrue;
 import static org.junit.Assert.*;
 import static org.qortal.crosschain.BitcoinyHTLC.Status.*;
 
 public class PirateChainTests extends BitcoinyTests {
+
+	private static final String RUN_LIVE_CROSSCHAIN_TESTS_PROPERTY = "qortium.runLiveCrosschainTests";
 
 	@Override
 	protected String getCoinName() {
@@ -34,7 +38,7 @@ public class PirateChainTests extends BitcoinyTests {
 
 	@Override
 	protected void resetCoinForTesting() {
-		Litecoin.resetForTesting();
+		PirateChain.resetForTesting();
 	}
 
 	@Override
@@ -52,6 +56,11 @@ public class PirateChainTests extends BitcoinyTests {
 		return null;
 	}
 
+	@Override
+	protected boolean supportsDeterministicWalletTests() {
+		return false;
+	}
+
 	public void makeGetMedianBlockTimeAssertions(long firstPeriod, long secondPeriod) {
 			assertTrue("1st call should take less than 5 seconds", firstPeriod < 5000L);
 			assertTrue("2nd call should take less than 5 seconds", secondPeriod < 5000L);
@@ -59,6 +68,8 @@ public class PirateChainTests extends BitcoinyTests {
 
 	@Test
 	public void testGetCompactBlocks() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+
 		int startHeight = 1000000;
 		int count = 20;
 
@@ -77,6 +88,8 @@ public class PirateChainTests extends BitcoinyTests {
 
 	@Test
 	public void testGetRawTransaction() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+
 		String txHashLE = "fea4b0c1abcf8f0f3ddc2fa2f9438501ee102aad62a9ff18a5ce7d08774755c0";
 		byte[] txBytes = HashCode.fromString(txHashLE).asBytes();
 		// Pirate protocol expects txids in big-endian form, but block explorers use txids in little-endian form
@@ -119,35 +132,52 @@ public class PirateChainTests extends BitcoinyTests {
 
 	@Test
 	public void testHTLCStatusFunded() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+
 		String p2shAddress = "ba6Q5HWrWtmfU2WZqQbrFdRYsafA45cUAt";
 		long p2shFee = 10000;
 		final long minimumAmount = 10000 + p2shFee;
-		BitcoinyHTLC.Status htlcStatus = PirateChainHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddress, minimumAmount);
+		BitcoinyHTLC.Status htlcStatus = withLivePirateFixture(() -> {
+			BitcoinyHTLC.Status status = PirateChainHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddress, minimumAmount);
+			return status == UNFUNDED ? null : status;
+		});
 		assertEquals(FUNDED, htlcStatus);
 	}
 
 	@Test
 	public void testHTLCStatusRedeemed() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+
 		String p2shAddress = "bYZrzSSgGp8aEGvihukoMGU8sXYrx19Wka";
 		long p2shFee = 10000;
 		final long minimumAmount = 10000 + p2shFee;
-		BitcoinyHTLC.Status htlcStatus = PirateChainHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddress, minimumAmount);
+		BitcoinyHTLC.Status htlcStatus = withLivePirateFixture(() -> {
+			BitcoinyHTLC.Status status = PirateChainHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddress, minimumAmount);
+			return status == UNFUNDED ? null : status;
+		});
 		assertEquals(REDEEMED, htlcStatus);
 	}
 
 	@Test
 	public void testHTLCStatusRefunded() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+
 		String p2shAddress = "bE49izfVxz8odhu8c2BcUaVFUnt7NLFRgv";
 		long p2shFee = 10000;
 		final long minimumAmount = 10000 + p2shFee;
-		BitcoinyHTLC.Status htlcStatus = PirateChainHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddress, minimumAmount);
+		BitcoinyHTLC.Status htlcStatus = withLivePirateFixture(() -> {
+			BitcoinyHTLC.Status status = PirateChainHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddress, minimumAmount);
+			return status == UNFUNDED ? null : status;
+		});
 		assertEquals(REFUNDED, htlcStatus);
 	}
 
 	@Test
 	public void testGetTxidForUnspentAddress() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+
 		String p2shAddress = "ba6Q5HWrWtmfU2WZqQbrFdRYsafA45cUAt";
-		String txid = PirateChainHTLC.getFundingTxid(bitcoiny.getBlockchainProvider(), p2shAddress);
+		String txid = withLivePirateFixture(() -> PirateChainHTLC.getFundingTxid(bitcoiny.getBlockchainProvider(), p2shAddress));
 
 		// Reverse the byte order of the txid used by block explorers, to get to big-endian form
 		byte[] expectedTxidLE = HashCode.fromString("fea4b0c1abcf8f0f3ddc2fa2f9438501ee102aad62a9ff18a5ce7d08774755c0").asBytes();
@@ -159,10 +189,12 @@ public class PirateChainTests extends BitcoinyTests {
 
 	@Test
 	public void testGetTxidForUnspentAddressWithMinimumAmount() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+
 		String p2shAddress = "ba6Q5HWrWtmfU2WZqQbrFdRYsafA45cUAt";
 		long p2shFee = 10000;
 		final long minimumAmount = 10000 + p2shFee;
-		String txid = PirateChainHTLC.getUnspentFundingTxid(bitcoiny.getBlockchainProvider(), p2shAddress, minimumAmount);
+		String txid = withLivePirateFixture(() -> PirateChainHTLC.getUnspentFundingTxid(bitcoiny.getBlockchainProvider(), p2shAddress, minimumAmount));
 
 		// Reverse the byte order of the txid used by block explorers, to get to big-endian form
 		byte[] expectedTxidLE = HashCode.fromString("fea4b0c1abcf8f0f3ddc2fa2f9438501ee102aad62a9ff18a5ce7d08774755c0").asBytes();
@@ -174,8 +206,10 @@ public class PirateChainTests extends BitcoinyTests {
 
 	@Test
 	public void testGetTxidForSpentAddress() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+
 		String p2shAddress = "bE49izfVxz8odhu8c2BcUaVFUnt7NLFRgv"; //"t3KtVxeEb8srJofo6atMEpMpEP6TjEi8VqA";
-		String txid = PirateChainHTLC.getFundingTxid(bitcoiny.getBlockchainProvider(), p2shAddress);
+		String txid = withLivePirateFixture(() -> PirateChainHTLC.getFundingTxid(bitcoiny.getBlockchainProvider(), p2shAddress));
 
 		// Reverse the byte order of the txid used by block explorers, to get to big-endian form
 		byte[] expectedTxidLE = HashCode.fromString("fb386fc8eea0fbf3ea37047726b92c39441652b32d8d62a274331687f7a1eca8").asBytes();
@@ -187,9 +221,11 @@ public class PirateChainTests extends BitcoinyTests {
 
 	@Test
 	public void testGetTransactionsForAddress() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+
 		String p2shAddress = "bE49izfVxz8odhu8c2BcUaVFUnt7NLFRgv"; //"t3KtVxeEb8srJofo6atMEpMpEP6TjEi8VqA";
-		List<BitcoinyTransaction> transactions = bitcoiny.getBlockchainProvider()
-				.getAddressBitcoinyTransactions(p2shAddress, false);
+		List<BitcoinyTransaction> transactions = withLivePirateFixture(() ->
+				bitcoiny.getBlockchainProvider().getAddressBitcoinyTransactions(p2shAddress, false));
 
 		assertEquals(2, transactions.size());
 	}
@@ -231,35 +267,41 @@ public class PirateChainTests extends BitcoinyTests {
 		assertEquals(1653043968, bitcoinyTransaction.locktime);
 	}
 
-	@Test
-	@Ignore(value = "Doesn't work, to be fixed later")
-	public void testFindHtlcSecret() {}
+	private void assumeLiveCrosschainTestsEnabled() {
+		assumeTrue(Boolean.getBoolean(RUN_LIVE_CROSSCHAIN_TESTS_PROPERTY));
+	}
 
-	@Test
-	@Ignore(value = "Needs adapting for Pirate Chain")
-	public void testBuildSpend() {}
+	private <T> T withLivePirateFixture(PirateFixtureQuery<T> query) throws ForeignBlockchainException {
+		BitcoinyBlockchainProvider blockchainProvider = bitcoiny.getBlockchainProvider();
+		List<String> failures = new ArrayList<>();
 
-	@Test
-	@Ignore(value = "Needs adapting for Pirate Chain")
-	public void testGetWalletBalance() {}
+		for (ChainableServer server : blockchainProvider.getServers()) {
+			blockchainProvider.setCurrentServer(server, "PirateChainTests");
 
-	@Test
-	@Ignore(value = "Needs adapting for Pirate Chain")
-	public void testGetUnusedReceiveAddress() {}
+			try {
+				T result = query.run();
+				if (result != null && (!(result instanceof Collection) || !((Collection<?>) result).isEmpty()))
+					return result;
 
-	@Test
-	@Ignore(value = "Needs adapting for Pirate Chain")
-	public void testGetWalletAddresses() throws ForeignBlockchainException {}
+				failures.add(server + " returned no fixture data");
+			} catch (ForeignBlockchainException | RuntimeException e) {
+				if (!isMissingLivePirateFixture(e))
+					throw e;
 
-	@Test
-	@Ignore(value = "Needs adapting for Pirate Chain")
-	public void testWalletAddressInfos() throws ForeignBlockchainException {}
+				failures.add(server + " returned no fixture data: " + e.getMessage());
+			}
+		}
 
-	@Test
-	@Ignore(value = "Needs adapting for Pirate Chain")
-	public void testWalletSpendingCandidateAddresses() throws ForeignBlockchainException {}
+		System.out.println("No configured Pirate light-client server returned the live fixture data: " + failures);
+		assumeTrue(false);
+		return null;
+	}
 
-	@Test
-	@Ignore(value = "Needs adapting for Pirate Chain")
-	public void testRepair() throws ForeignBlockchainException {}
+	private boolean isMissingLivePirateFixture(Throwable e) {
+		return e.getMessage() != null && e.getMessage().contains("No information available for address");
+	}
+
+	private interface PirateFixtureQuery<T> {
+		T run() throws ForeignBlockchainException;
+	}
 }

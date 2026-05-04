@@ -1,6 +1,9 @@
 package org.qortal.test.crosschain;
 
+import com.google.common.hash.HashCode;
+import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Transaction;
+import org.bitcoinj.script.ScriptBuilder;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -8,16 +11,22 @@ import org.qortal.crosschain.AddressInfo;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.ForeignBlockchainException;
+import org.qortal.crosschain.UnspentOutput;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.Common;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.Assume.assumeTrue;
 import static org.junit.Assert.*;
 
 public abstract class BitcoinyTests extends Common {
+
+	private static final String RUN_LIVE_CROSSCHAIN_TESTS_PROPERTY = "qortium.runLiveCrosschainTests";
+	private static final long MOCK_UTXO_VALUE = 100_000_000L;
 
 	protected Bitcoiny bitcoiny;
 
@@ -35,6 +44,14 @@ public abstract class BitcoinyTests extends Common {
 
 	protected abstract String getRecipient();
 
+	protected boolean supportsDeterministicWalletTests() {
+		return getDeterministicKey58() != null && getDeterministicPublicKey58() != null;
+	}
+
+	protected String getLiveHtlcSecretAddress() {
+		return null;
+	}
+
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings(); // TestNet3
@@ -48,7 +65,17 @@ public abstract class BitcoinyTests extends Common {
 	}
 
 	@Test
-	public void testGetMedianBlockTime() throws ForeignBlockchainException {
+	public void testGetMedianBlockTimeFromMockProvider() throws ForeignBlockchainException {
+		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider(getCoinName() + "-mock");
+		TestBitcoiny mockBitcoiny = new TestBitcoiny(this.bitcoiny.getNetworkParameters(), blockchainProvider, getCoinSymbol());
+
+		assertEquals(1_700_000_005, mockBitcoiny.getMedianBlockTime());
+	}
+
+	@Test
+	public void testGetMedianBlockTimeFromLiveProvider() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+
 		System.out.println(String.format("Starting " + getCoinSymbol() + " instance..."));
 		System.out.println(String.format(getCoinSymbol() + " instance started"));
 
@@ -74,8 +101,11 @@ public abstract class BitcoinyTests extends Common {
 
 	@Test
 	public void testFindHtlcSecret() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+		assumeTrue(getLiveHtlcSecretAddress() != null);
+
 		// This actually exists on TEST3 but can take a while to fetch
-		String p2shAddress = "2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE";
+		String p2shAddress = getLiveHtlcSecretAddress();
 
 		byte[] expectedSecret = "This string is exactly 32 bytes!".getBytes();
 		byte[] secret = BitcoinyHTLC.findHtlcSecret(bitcoiny, p2shAddress);
@@ -85,22 +115,28 @@ public abstract class BitcoinyTests extends Common {
 	}
 
 	@Test
-	public void testBuildSpend() {
-		String xprv58 = getDeterministicKey58();
+	public void testBuildSpend() throws ForeignBlockchainException {
+		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
+		String recipient = getSpendRecipient(mockBitcoiny);
 
-		String recipient = getRecipient();
 		long amount = 1000L;
 
-		Transaction transaction = bitcoiny.buildSpend(xprv58, recipient, amount);
+		Transaction transaction = mockBitcoiny.buildSpend(getDeterministicKey58(), recipient, amount);
 		assertNotNull(transaction);
+		assertFalse(transaction.getInputs().isEmpty());
+		assertTrue(transaction.getOutputs().stream().anyMatch(output -> output.getValue().value == amount));
 
 		// Check spent key caching doesn't affect outcome
 
-		transaction = bitcoiny.buildSpend(xprv58, recipient, amount);
+		transaction = mockBitcoiny.buildSpend(getDeterministicKey58(), recipient, amount);
 		assertNotNull(transaction);
 	}
+
 	@Test
 	public void testRepair() throws ForeignBlockchainException {
+		assumeLiveCrosschainTestsEnabled();
+		assumeTrue(supportsDeterministicWalletTests());
+
 		String xprv58 = getDeterministicKey58();
 
 		String transaction = bitcoiny.repairOldWallet(xprv58);
@@ -110,78 +146,102 @@ public abstract class BitcoinyTests extends Common {
 
 	@Test
 	public void testGetWalletBalance() throws ForeignBlockchainException {
-		String xprv58 = getDeterministicKey58();
-
-		Long balance = bitcoiny.getWalletBalance(xprv58);
+		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
+		Long balance = mockBitcoiny.getWalletBalance(getDeterministicKey58());
 
 		assertNotNull(balance);
-
-		System.out.println(bitcoiny.format(balance));
+		assertEquals(Long.valueOf(MOCK_UTXO_VALUE), balance);
 
 		// Check spent key caching doesn't affect outcome
 
-		Long repeatBalance = bitcoiny.getWalletBalance(xprv58);
+		Long repeatBalance = mockBitcoiny.getWalletBalance(getDeterministicKey58());
 
 		assertNotNull(repeatBalance);
-
-		System.out.println(bitcoiny.format(repeatBalance));
-
 		assertEquals(balance, repeatBalance);
 	}
 
 	@Test
 	public void testGetUnusedReceiveAddress() throws ForeignBlockchainException {
-		String xprv58 = getDeterministicKey58();
+		assumeTrue(supportsDeterministicWalletTests());
 
-		String address = bitcoiny.getUnusedReceiveAddress(xprv58);
+		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider(getCoinName() + "-mock");
+		TestBitcoiny mockBitcoiny = new TestBitcoiny(this.bitcoiny.getNetworkParameters(), blockchainProvider, getCoinSymbol());
+		String address = mockBitcoiny.getUnusedReceiveAddress(getDeterministicKey58());
 
 		assertNotNull(address);
-
-		System.out.println(address);
+		assertTrue(address.length() > 20);
 	}
 
 	@Test
 	public void testGenerateRootKeyForTesting() {
-
-		String rootKey = BitcoinyTestsUtils.generateBip32RootKey( this.bitcoiny.getNetworkParameters() );
-
-		System.out.println(String.format(getCoinName() + " generated BIP32 Root Key: " + rootKey));
-
+		String rootKey = BitcoinyTestsUtils.generateBip32RootKey(this.bitcoiny.getNetworkParameters());
+		assertTrue(this.bitcoiny.isValidDeterministicKey(rootKey));
 	}
 
 	@Test
 	public void testGetWalletAddresses() throws ForeignBlockchainException {
+		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
 
-		String xprv58 = getDeterministicKey58();
+		Set<String> addresses = mockBitcoiny.getWalletAddresses(getDeterministicKey58());
 
-		Set<String> addresses = this.bitcoiny.getWalletAddresses(xprv58);
-
-		System.out.println( "root key = " + xprv58 );
-		System.out.println( "keys ...");
-		addresses.stream().forEach(System.out::println);
+		assertFalse(addresses.isEmpty());
 	}
 
 	@Test
 	public void testWalletAddressInfos() throws ForeignBlockchainException {
+		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
 
-		String key58 = getDeterministicPublicKey58();
+		List<AddressInfo> addressInfos = mockBitcoiny.getWalletAddressInfos(getDeterministicPublicKey58());
 
-		List<AddressInfo> addressInfos = this.bitcoiny.getWalletAddressInfos(key58);
-
-		System.out.println("address count = " + addressInfos.size() );
-		System.out.println( "address infos ..." );
-		addressInfos.forEach( System.out::println );
+		assertFalse(addressInfos.isEmpty());
+		assertTrue(addressInfos.stream().anyMatch(addressInfo -> addressInfo.getValue() == MOCK_UTXO_VALUE));
 	}
 
 	@Test
 	public void testWalletSpendingCandidateAddresses() throws ForeignBlockchainException {
+		assumeTrue(supportsDeterministicWalletTests());
 
-		String xpub58 = getDeterministicPublicKey58();
+		List<String> candidateAddresses = this.bitcoiny.getSpendingCandidateAddresses(getDeterministicPublicKey58());
 
-		List<String> candidateAddresses = this.bitcoiny.getSpendingCandidateAddresses(xpub58);
+		assertFalse(candidateAddresses.isEmpty());
+	}
 
-		System.out.println("candidate address count = " + candidateAddresses.size() );
-		System.out.println( "candidate addresses ..." );
-		candidateAddresses.forEach( System.out::println );
+	private TestBitcoiny createMockBitcoinyWithWalletUtxo() throws ForeignBlockchainException {
+		assumeTrue(supportsDeterministicWalletTests());
+
+		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider(getCoinName() + "-mock");
+		TestBitcoiny mockBitcoiny = new TestBitcoiny(this.bitcoiny.getNetworkParameters(), blockchainProvider, getCoinSymbol());
+		Set<String> fundedAddresses = new HashSet<>();
+
+		String privateWalletAddress = mockBitcoiny.getWalletAddresses(getDeterministicKey58()).iterator().next();
+		addMockUtxo(blockchainProvider, mockBitcoiny, privateWalletAddress, fundedAddresses);
+
+		String publicWalletAddress = mockBitcoiny.getWalletAddresses(getDeterministicPublicKey58()).iterator().next();
+		addMockUtxo(blockchainProvider, mockBitcoiny, publicWalletAddress, fundedAddresses);
+
+		return mockBitcoiny;
+	}
+
+	private void addMockUtxo(MockBitcoinyBlockchainProvider blockchainProvider, TestBitcoiny mockBitcoiny, String walletAddress, Set<String> fundedAddresses) {
+		if (!fundedAddresses.add(walletAddress))
+			return;
+
+		byte[] scriptPubKey = ScriptBuilder.createOutputScript(Address.fromString(mockBitcoiny.getNetworkParameters(), walletAddress)).getProgram();
+		byte[] txHash = HashCode.fromString("01".repeat(32)).asBytes();
+
+		UnspentOutput unspentOutput = new UnspentOutput(txHash, 0, 1, MOCK_UTXO_VALUE, scriptPubKey, walletAddress);
+		blockchainProvider.addUnspentOutput(walletAddress, unspentOutput);
+		blockchainProvider.addUnspentOutput(scriptPubKey, unspentOutput);
+	}
+
+	private String getSpendRecipient(Bitcoiny coin) {
+		if (getRecipient() != null)
+			return getRecipient();
+
+		return coin.pkhToAddress(HashCode.fromString("02".repeat(20)).asBytes());
+	}
+
+	private void assumeLiveCrosschainTestsEnabled() {
+		assumeTrue(Boolean.getBoolean(RUN_LIVE_CROSSCHAIN_TESTS_PROPERTY));
 	}
 }

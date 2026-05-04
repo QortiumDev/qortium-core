@@ -1,7 +1,5 @@
 package org.qortal.test.crosschain;
 
-import org.junit.Ignore;
-import org.junit.Test;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.Digibyte;
 
@@ -41,13 +39,4 @@ public class DigibyteTests extends BitcoinyTests {
 	protected String getRecipient() {
 		return null;
 	}
-
-	@Test
-	@Ignore(value = "Doesn't work, to be fixed later")
-	public void testFindHtlcSecret() {}
-
-	@Test
-	@Ignore(value = "No testnet nodes available, so we can't regularly test buildSpend yet")
-	public void testBuildSpend() {}
-
-	}
+}

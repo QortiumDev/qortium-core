@@ -39,4 +39,9 @@ public class BitcoinTests extends BitcoinyTests {
 	protected String getRecipient() {
 		return "2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE";
 	}
+
+	@Override
+	protected String getLiveHtlcSecretAddress() {
+		return "2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE";
+	}
 }

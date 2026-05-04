@@ -274,6 +274,19 @@ public class PirateChainHTLC {
 
 		byte[] ourScriptPubKey = addressToScriptPubKey(p2shAddress);
 
+		// Confirmed UTXO lookup is the most reliable way to identify a still-funded Pirate HTLC.
+		for (UnspentOutput unspentOutput : blockchain.getUnspentOutputs(p2shAddress, BitcoinyBlockchainProvider.EXCLUDE_UNCONFIRMED)) {
+			if (!Arrays.equals(ourScriptPubKey, unspentOutput.script))
+				continue;
+
+			if (unspentOutput.value < minimumAmount)
+				continue;
+
+			cachedStatus = Status.FUNDED;
+			STATUS_CACHE.put(compoundKey, cachedStatus);
+			return cachedStatus;
+		}
+
 		// Note: we can't include unconfirmed transactions here because the Pirate light wallet server requires a block range
 		List<BitcoinyTransaction> transactions = blockchain.getAddressBitcoinyTransactions(p2shAddress, BitcoinyBlockchainProvider.EXCLUDE_UNCONFIRMED);
 

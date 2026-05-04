@@ -1,7 +1,5 @@
 package org.qortal.test.crosschain;
 
-import org.junit.Ignore;
-import org.junit.Test;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.Litecoin;
 
@@ -41,8 +39,4 @@ public class LitecoinTests extends BitcoinyTests {
 	protected String getRecipient() {
 		return "2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE";
 	}
-
-	@Test
-	@Ignore(value = "Doesn't work, to be fixed later")
-	public void testFindHtlcSecret() {}
 }
