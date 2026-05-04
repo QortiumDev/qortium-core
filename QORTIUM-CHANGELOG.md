@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: harden live bootstrap host checks
+
+Kept bootstrap host availability checks opt-in behind `-Dqortium.runLiveBootstrapChecks=true`, but changed explicit live runs to fail when no hosts are configured instead of silently skipping. Live checks now use bounded HTTP timeouts and can target release hosts directly with `-Dqortium.liveBootstrapHosts=https://host-one,https://host-two`.
+
 ### 2026-05-04 - test: keep ElectrumX coverage deterministic
 
 Changed ElectrumX tests so default Maven runs exercise deterministic mock RPC responses instead of depending on public testnet ElectrumX servers, while the live server checks remain available with `-Dqortium.runLiveElectrumXTests=true`. ElectrumX header parsing now accepts numeric JSON counts from servers that return integers or numeric strings, retries another server after malformed block-header JSON, and connection logging no longer assumes a blockchain object is attached when tests construct the provider directly.

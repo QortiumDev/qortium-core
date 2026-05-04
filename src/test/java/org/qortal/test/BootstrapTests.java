@@ -33,6 +33,13 @@ import static org.junit.Assume.assumeTrue;
 
 public class BootstrapTests extends Common {
 
+    private static final String RUN_LIVE_BOOTSTRAP_CHECKS_PROPERTY = "qortium.runLiveBootstrapChecks";
+    private static final String LIVE_BOOTSTRAP_HOSTS_PROPERTY = "qortium.liveBootstrapHosts";
+    private static final int LIVE_BOOTSTRAP_CONNECT_TIMEOUT_MS = 10_000;
+    private static final int LIVE_BOOTSTRAP_READ_TIMEOUT_MS = 10_000;
+    private static final long MINIMUM_BOOTSTRAP_SIZE = 100 * 1024 * 1024L;
+    private static final long MAXIMUM_BOOTSTRAP_AGE = 3 * 24 * 60 * 60 * 1000L;
+
     @Before
     public void beforeTest() throws DataException, IOException {
         Common.useSettingsAndDb(Common.testSettingsFilename, false);
@@ -243,14 +250,27 @@ public class BootstrapTests extends Common {
     }
 
     @Test
-    public void testBootstrapHosts() throws IOException {
-        assumeTrue(Boolean.getBoolean("qortium.runLiveBootstrapChecks"));
-        assumeTrue(Settings.getInstance().hasBootstrapHostsConfigured());
+    public void testLiveBootstrapHostsPropertyOverridesSettings() {
+        String originalLiveBootstrapHostsProperty = System.getProperty(LIVE_BOOTSTRAP_HOSTS_PROPERTY);
 
-        String[] bootstrapHosts = Settings.getInstance().getBootstrapHosts();
+        try {
+            System.setProperty(LIVE_BOOTSTRAP_HOSTS_PROPERTY, " https://bootstrap-one.example ,, https://bootstrap-two.example ");
+
+            assertArrayEquals(
+                    new String[] {"https://bootstrap-one.example", "https://bootstrap-two.example"},
+                    this.getLiveBootstrapHosts());
+        } finally {
+            restoreSystemProperty(LIVE_BOOTSTRAP_HOSTS_PROPERTY, originalLiveBootstrapHostsProperty);
+        }
+    }
+
+    @Test
+    public void testBootstrapHosts() throws IOException {
+        assumeTrue(Boolean.getBoolean(RUN_LIVE_BOOTSTRAP_CHECKS_PROPERTY));
+
+        String[] bootstrapHosts = this.getLiveBootstrapHosts();
+        assertTrue(String.format("No bootstrap hosts configured. Set -D%s or bootstrapHosts in settings.", LIVE_BOOTSTRAP_HOSTS_PROPERTY), bootstrapHosts.length > 0);
         String[] bootstrapTypes = { "archive" }; // , "toponly", "full"
-        boolean invalidFile = false;
-        boolean invalidDate = false;
 
         for (String host : bootstrapHosts) {
             for (String type : bootstrapTypes) {
@@ -260,28 +280,51 @@ public class BootstrapTests extends Common {
                 // Make a HEAD request to check the status of each bootstrap file
                 URL url = new URL(bootstrapUrl);
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("HEAD");
-                connection.connect();
-                long fileSize = connection.getContentLengthLong();
-                long lastModified = connection.getLastModified();
-                connection.disconnect();
+                long fileSize;
+                long lastModified;
+                try {
+                    connection.setConnectTimeout(LIVE_BOOTSTRAP_CONNECT_TIMEOUT_MS);
+                    connection.setReadTimeout(LIVE_BOOTSTRAP_READ_TIMEOUT_MS);
+                    connection.setRequestMethod("HEAD");
+                    connection.connect();
+                    fileSize = connection.getContentLengthLong();
+                    lastModified = connection.getLastModified();
+                } finally {
+                    connection.disconnect();
+                }
 
-                // Ensure the bootstrap exists and has a size greated than 100MiB
+                // Ensure the bootstrap exists and has a size greater than 100MiB
                 System.out.println(String.format("%s %s size is %d bytes", host, type, fileSize));
-                if(fileSize < 100*1024*1024L)
-                    invalidFile = true;
-                //assertTrue("Bootstrap size must be at least 100MiB", fileSize > 100*1024*1024L);
+                assertTrue(String.format("%s size must be at least 100MiB", bootstrapUrl), fileSize >= MINIMUM_BOOTSTRAP_SIZE);
 
                 // Ensure the bootstrap has been published recently (in the last 3 days)
-                long minimumLastMofifiedTimestamp = NTP.getTime() - (3 * 24 * 60 * 60 * 1000L);
+                long minimumLastModifiedTimestamp = NTP.getTime() - MAXIMUM_BOOTSTRAP_AGE;
                 System.out.println(String.format("%s %s last modified timestamp is %d", host, type, lastModified));
-                if(lastModified < minimumLastMofifiedTimestamp)
-                    invalidDate = true;
-                //assertTrue("Bootstrap last modified date must be in the last 3 days", lastModified > minimumLastMofifiedTimestamp);
+                assertTrue(String.format("%s last modified date must be in the last 3 days", bootstrapUrl), lastModified >= minimumLastModifiedTimestamp);
             }
         }
-        assertFalse("File size must be at least 100MiB", invalidFile);
-        assertFalse("Bootstrap last modified date must be in the last 3 days",invalidDate);
+    }
+
+    private String[] getLiveBootstrapHosts() {
+        String bootstrapHostsProperty = System.getProperty(LIVE_BOOTSTRAP_HOSTS_PROPERTY);
+        if (bootstrapHostsProperty == null || bootstrapHostsProperty.trim().isEmpty())
+            return Settings.getInstance().getBootstrapHosts();
+
+        List<String> bootstrapHosts = new ArrayList<>();
+        for (String bootstrapHost : bootstrapHostsProperty.split(",")) {
+            String trimmedHost = bootstrapHost.trim();
+            if (!trimmedHost.isEmpty())
+                bootstrapHosts.add(trimmedHost);
+        }
+
+        return bootstrapHosts.toArray(new String[0]);
+    }
+
+    private static void restoreSystemProperty(String propertyName, String originalValue) {
+        if (originalValue == null)
+            System.clearProperty(propertyName);
+        else
+            System.setProperty(propertyName, originalValue);
     }
 
     private void deleteBootstraps() throws IOException {
