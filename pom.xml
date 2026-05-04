@@ -11,7 +11,7 @@
 
 		<altcoinj.version>d7cf6ac</altcoinj.version> <!-- QuickMythril/altcoinj bitcoinj 0.16 fork point -->
 		<bitcoinj.version>0.16.3</bitcoinj.version>
-		<bouncycastle.version>1.78.1</bouncycastle.version>
+		<bouncycastle.version>1.84</bouncycastle.version>
 		<build.timestamp>${maven.build.timestamp}</build.timestamp>
 		<ciyam-at.version>1b731d1</ciyam-at.version> <!-- QuickMythril/AT v1.4.3 fork point -->
 		<commons-net.version>3.9.0</commons-net.version>

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: update Bouncy Castle to 1.84
+
+Updated all Bouncy Castle runtime dependencies from `1.78.1` to `1.84`, covering the core provider, TLS/JSSE provider, PKIX certificate utilities, and shared utility jar. This keeps Qortium on the current Bouncy Castle release line before the follow-up TLS and encryption hardening changes.
+
 ### 2026-05-03 - network: replace vendored UPnP with jUPnP
 
 Replaced the inherited locally vendored WaifUPnP jar with the maintained `org.jupnp:org.jupnp` Maven Central dependency. Added a small internal port-mapping abstraction so P2P and QDN networking no longer call a specific UPnP library directly, while keeping automatic router mapping best-effort and non-fatal if a router does not support it.
