@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: clarify HSQLDB varargs binds
+
+Updated HSQLDB repository queries that bind typed arrays into varargs helper methods so the arrays are explicitly treated as SQL bind parameter lists. This preserves the existing query behavior while removing javac warnings about ambiguous non-varargs calls.
+
 ### 2026-05-03 - build: disable implicit javac annotation processing
 
 Set the Maven compiler plugin to disable javac annotation processing explicitly. Qortium's normal build relies on Maven code-generation plugins for generated sources rather than javac annotation processors, so this keeps current behavior while avoiding javac's warning about future annotation-processing defaults.

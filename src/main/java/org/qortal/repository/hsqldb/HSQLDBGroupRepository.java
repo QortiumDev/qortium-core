@@ -893,7 +893,7 @@ public class HSQLDBGroupRepository implements GroupRepository {
 
 		List<GroupJoinRequestData> joinRequests = new ArrayList<>();
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), groupIds.toArray(new Integer[0]))) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), (Object[]) groupIds.toArray(new Integer[0]))) {
 			if (resultSet == null)
 				return joinRequests;
 

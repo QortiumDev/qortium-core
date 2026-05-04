@@ -397,7 +397,7 @@ public class HSQLDBNameRepository implements NameRepository {
 			}
 			sql.append(")");
 
-			try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), batch.toArray(new String[0]))) {
+			try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), (Object[]) batch.toArray(new String[0]))) {
 				if (resultSet != null) {
 					do {
 						String owner = resultSet.getString(1);

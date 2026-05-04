@@ -92,7 +92,7 @@ public class HSQLDBATRepository implements ATRepository {
 				;
 
 		List<ATData> list;
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, atAddresses.toArray(new String[atAddresses.size()]))) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, (Object[]) atAddresses.toArray(new String[atAddresses.size()]))) {
 			if (resultSet == null) {
 				return new ArrayList<>(0);
 			}
@@ -475,7 +475,7 @@ public class HSQLDBATRepository implements ATRepository {
 
 		List<ATStateData> stateDataList;
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, atAddresses.toArray(new String[atAddresses.size()]))) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, (Object[]) atAddresses.toArray(new String[atAddresses.size()]))) {
 			if (resultSet == null)
 				return new ArrayList<>(0);
 

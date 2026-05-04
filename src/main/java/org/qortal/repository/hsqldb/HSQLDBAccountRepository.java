@@ -237,7 +237,7 @@ public class HSQLDBAccountRepository implements AccountRepository {
 		sql.append(String.join(", ", Collections.nCopies(addresses.size(), "?")));
 		sql.append(")");
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), addresses.toArray(new String[addresses.size()]))) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), (Object[]) addresses.toArray(new String[addresses.size()]))) {
 			if (resultSet == null)
 				return new ArrayList<>(0);
 
