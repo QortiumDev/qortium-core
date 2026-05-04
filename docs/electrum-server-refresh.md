@@ -4,7 +4,7 @@ Qortium ships built-in Electrum server seeds in the coin classes and also loads 
 
 `src/main/resources/crosschain/electrum-servers.json`
 
-At runtime, Qortium merges the generated resource with the built-in seeds. If the resource is missing or invalid, the built-in seeds remain the fallback.
+At runtime, Qortium uses the generated resource when it contains entries for the selected coin/network. If the resource is missing, invalid, or has no entries for that coin/network, the built-in seeds remain the fallback.
 
 ## Refreshing The List
 

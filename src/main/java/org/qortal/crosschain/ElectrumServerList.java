@@ -22,7 +22,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 public final class ElectrumServerList {
 
@@ -38,7 +37,7 @@ public final class ElectrumServerList {
 		if (generatedServers.isEmpty())
 			return fallbackServers;
 
-		return mergeServers(generatedServers, fallbackServers);
+		return generatedServers;
 	}
 
 	static List<Server> loadGeneratedServers(String coinCode, String networkName) {
@@ -96,13 +95,6 @@ public final class ElectrumServerList {
 		}
 
 		return serversByCoin;
-	}
-
-	static Collection<Server> mergeServers(Collection<Server> preferredServers, Collection<Server> fallbackServers) {
-		Set<Server> merged = new LinkedHashSet<>();
-		merged.addAll(preferredServers);
-		merged.addAll(fallbackServers);
-		return new ArrayList<>(merged);
 	}
 
 	private static List<Server> parseServerArray(JSONArray serverArray) {

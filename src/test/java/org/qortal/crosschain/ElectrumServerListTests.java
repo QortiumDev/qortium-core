@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("unchecked")
@@ -65,7 +66,7 @@ public class ElectrumServerListTests {
 	}
 
 	@Test
-	public void testParseGeneratedResourceAndMergeFallback() throws Exception {
+	public void testParseGeneratedResourceAndFallbackBehavior() throws Exception {
 		String json = "{"
 				+ "\"servers\": {"
 				+ "\"BTC\": {"
@@ -85,14 +86,22 @@ public class ElectrumServerListTests {
 		assertEquals(1, generated.size());
 		assertEquals(new Server("generated.example.com", ConnectionType.SSL, 50002), generated.get(0));
 
-		Collection<Server> merged = ElectrumServerList.mergeServers(generated, List.of(
-				new Server("generated.example.com", ConnectionType.SSL, 50002),
+		Collection<Server> servers = ElectrumServerList.getServers("NOPE", "MAIN", List.of(
 				new Server("fallback.example.com", ConnectionType.SSL, 50002)
 		));
 
-		assertEquals(2, merged.size());
-		assertTrue(merged.contains(new Server("generated.example.com", ConnectionType.SSL, 50002)));
-		assertTrue(merged.contains(new Server("fallback.example.com", ConnectionType.SSL, 50002)));
+		assertEquals(1, servers.size());
+		assertTrue(servers.contains(new Server("fallback.example.com", ConnectionType.SSL, 50002)));
+	}
+
+	@Test
+	public void testGeneratedResourceDoesNotAppendFallbackServers() {
+		Server fallbackServer = new Server("fallback.example.com", ConnectionType.SSL, 50002);
+
+		Collection<Server> servers = ElectrumServerList.getServers("BTC", "MAIN", List.of(fallbackServer));
+
+		assertTrue(servers.size() > 1);
+		assertFalse(servers.contains(fallbackServer));
 	}
 
 	private static String row(String host, String port, String protocol, String status) {
