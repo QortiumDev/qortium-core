@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - api: replace deprecated optional SSL connector
+
+Replaced the API service's deprecated Jetty `OptionalSslConnectionFactory` usage with the supported `DetectorConnectionFactory` plus `SslConnectionFactory` pattern. The API connector still detects TLS on the shared API port, routes encrypted connections through ALPN for HTTP/2 or HTTP/1.1, and falls through to HTTP/1.1 for clear-text requests.
+
 ### 2026-05-03 - build: clean low-risk compiler notices
 
 Updated the AT logger wrapper to use Java's standard supplier type instead of Log4j's deprecated supplier interface, and marked the network-message clone helper's generic clone cast as intentionally unchecked. This removes low-risk compiler notices without changing message cloning or custom AT log-level behavior.

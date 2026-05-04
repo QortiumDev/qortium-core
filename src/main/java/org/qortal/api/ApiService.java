@@ -218,13 +218,13 @@ public class ApiService {
 				// It hands off to ALPN once decryption is done
 				SslConnectionFactory ssl = new SslConnectionFactory(sslContextFactory, alpn.getProtocol());
 
-				// Peeks at the first bytes. - If TLS -> sends to 'ssl';  Plain -> sends to 'http1'.
-				OptionalSslConnectionFactory optionalSsl = new OptionalSslConnectionFactory(ssl, http1.getProtocol());
+				// Peeks at the first bytes. If TLS, upgrade through SSL/ALPN; otherwise fall through to HTTP/1.1.
+				DetectorConnectionFactory sslDetector = new DetectorConnectionFactory(ssl);
 
 				// 5. The Unified Connector
-				// Order: Detector -> SSL -> ALPN -> H2 -> HTTP1
+				// Order: Detector -> HTTP1 fallback -> ALPN -> H2
 				ServerConnector sslConnector = new ServerConnector(this.server,
-						optionalSsl, ssl, alpn, h2, http1);
+						sslDetector, http1, alpn, h2);
 
 				sslConnector.setPort(Settings.getInstance().getApiPort());
 				sslConnector.setHost(Network.getInstance().getBindAddress());
