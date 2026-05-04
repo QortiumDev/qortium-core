@@ -209,6 +209,7 @@ public abstract class Message {
 		}
 	}
 
+	@SuppressWarnings("unchecked")
 	public static <M extends Message> M cloneWithNewId(M message, int newId) {
 		M clone;
 

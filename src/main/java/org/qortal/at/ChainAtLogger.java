@@ -9,7 +9,8 @@ import org.apache.logging.log4j.message.MessageFactory;
 import org.apache.logging.log4j.spi.AbstractLogger;
 import org.apache.logging.log4j.spi.ExtendedLoggerWrapper;
 import org.apache.logging.log4j.util.MessageSupplier;
-import org.apache.logging.log4j.util.Supplier;
+
+import java.util.function.Supplier;
 
 /**
  * Extended Logger interface with convenience methods for
@@ -687,13 +688,8 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      *            the format depends on the message factory.
      * @since Log4j-2.4
      */
-    public void error(final Supplier<?> msgSupplier) {
+    public void error(final Supplier<String> msgSupplier) {
         logger.logIfEnabled(FQCN, ERROR, null, msgSupplier, (Throwable) null);
-    }
-
-    /** Java 8 version */
-    public void error(final java.util.function.Supplier<String> msgSupplier) {
-        logger.logIfEnabled(FQCN, ERROR, null, () -> msgSupplier.get(), (Throwable) null);
     }
 
     /**
@@ -705,7 +701,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @param t the exception to log, including its stack trace.
      * @since Log4j-2.4
      */
-    public void error(final Supplier<?> msgSupplier, final Throwable t) {
+    public void error(final Supplier<String> msgSupplier, final Throwable t) {
         logger.logIfEnabled(FQCN, ERROR, null, msgSupplier, t);
     }
 
@@ -718,7 +714,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      *            the format depends on the message factory.
      * @since Log4j-2.4
      */
-    public void error(final Marker marker, final Supplier<?> msgSupplier) {
+    public void error(final Marker marker, final Supplier<String> msgSupplier) {
         logger.logIfEnabled(FQCN, ERROR, marker, msgSupplier, (Throwable) null);
     }
 
@@ -732,7 +728,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @since Log4j-2.4
      */
     public void error(final Marker marker, final String message, final Supplier<?>... paramSuppliers) {
-        logger.logIfEnabled(FQCN, ERROR, marker, message, paramSuppliers);
+        logger.logIfEnabled(FQCN, ERROR, marker, message, (Object[]) paramSuppliers);
     }
 
     /**
@@ -746,7 +742,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @param t A Throwable or null.
      * @since Log4j-2.4
      */
-    public void error(final Marker marker, final Supplier<?> msgSupplier, final Throwable t) {
+    public void error(final Marker marker, final Supplier<String> msgSupplier, final Throwable t) {
         logger.logIfEnabled(FQCN, ERROR, marker, msgSupplier, t);
     }
 
@@ -759,7 +755,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @since Log4j-2.4
      */
     public void error(final String message, final Supplier<?>... paramSuppliers) {
-        logger.logIfEnabled(FQCN, ERROR, null, message, paramSuppliers);
+        logger.logIfEnabled(FQCN, ERROR, null, message, (Object[]) paramSuppliers);
     }
 
     /**
@@ -1376,13 +1372,8 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      *            the format depends on the message factory.
      * @since Log4j-2.4
      */
-    public void debug(final Supplier<?> msgSupplier) {
+    public void debug(final Supplier<String> msgSupplier) {
         logger.logIfEnabled(FQCN, DEBUG, null, msgSupplier, (Throwable) null);
-    }
-
-    /** Java 8 version */
-    public void debug(final java.util.function.Supplier<String> msgSupplier) {
-        logger.logIfEnabled(FQCN, DEBUG, null, () -> msgSupplier.get(), (Throwable) null);
     }
 
     /**
@@ -1394,7 +1385,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @param t the exception to log, including its stack trace.
      * @since Log4j-2.4
      */
-    public void debug(final Supplier<?> msgSupplier, final Throwable t) {
+    public void debug(final Supplier<String> msgSupplier, final Throwable t) {
         logger.logIfEnabled(FQCN, DEBUG, null, msgSupplier, t);
     }
 
@@ -1407,7 +1398,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      *            the format depends on the message factory.
      * @since Log4j-2.4
      */
-    public void debug(final Marker marker, final Supplier<?> msgSupplier) {
+    public void debug(final Marker marker, final Supplier<String> msgSupplier) {
         logger.logIfEnabled(FQCN, DEBUG, marker, msgSupplier, (Throwable) null);
     }
 
@@ -1421,7 +1412,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @since Log4j-2.4
      */
     public void debug(final Marker marker, final String message, final Supplier<?>... paramSuppliers) {
-        logger.logIfEnabled(FQCN, DEBUG, marker, message, paramSuppliers);
+        logger.logIfEnabled(FQCN, DEBUG, marker, message, (Object[]) paramSuppliers);
     }
 
     /**
@@ -1435,7 +1426,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @param t A Throwable or null.
      * @since Log4j-2.4
      */
-    public void debug(final Marker marker, final Supplier<?> msgSupplier, final Throwable t) {
+    public void debug(final Marker marker, final Supplier<String> msgSupplier, final Throwable t) {
         logger.logIfEnabled(FQCN, DEBUG, marker, msgSupplier, t);
     }
 
@@ -1448,7 +1439,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @since Log4j-2.4
      */
     public void debug(final String message, final Supplier<?>... paramSuppliers) {
-        logger.logIfEnabled(FQCN, DEBUG, null, message, paramSuppliers);
+        logger.logIfEnabled(FQCN, DEBUG, null, message, (Object[]) paramSuppliers);
     }
 
     /**
@@ -2065,13 +2056,8 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      *            the format depends on the message factory.
      * @since Log4j-2.4
      */
-    public void echo(final Supplier<?> msgSupplier) {
+    public void echo(final Supplier<String> msgSupplier) {
         logger.logIfEnabled(FQCN, ECHO, null, msgSupplier, (Throwable) null);
-    }
-
-    /** Java 8 version */
-    public void echo(final java.util.function.Supplier<String> msgSupplier) {
-        logger.logIfEnabled(FQCN, ECHO, null, () -> msgSupplier.get(), (Throwable) null);
     }
 
     /**
@@ -2083,7 +2069,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @param t the exception to log, including its stack trace.
      * @since Log4j-2.4
      */
-    public void echo(final Supplier<?> msgSupplier, final Throwable t) {
+    public void echo(final Supplier<String> msgSupplier, final Throwable t) {
         logger.logIfEnabled(FQCN, ECHO, null, msgSupplier, t);
     }
 
@@ -2096,7 +2082,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      *            the format depends on the message factory.
      * @since Log4j-2.4
      */
-    public void echo(final Marker marker, final Supplier<?> msgSupplier) {
+    public void echo(final Marker marker, final Supplier<String> msgSupplier) {
         logger.logIfEnabled(FQCN, ECHO, marker, msgSupplier, (Throwable) null);
     }
 
@@ -2110,7 +2096,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @since Log4j-2.4
      */
     public void echo(final Marker marker, final String message, final Supplier<?>... paramSuppliers) {
-        logger.logIfEnabled(FQCN, ECHO, marker, message, paramSuppliers);
+        logger.logIfEnabled(FQCN, ECHO, marker, message, (Object[]) paramSuppliers);
     }
 
     /**
@@ -2124,7 +2110,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @param t A Throwable or null.
      * @since Log4j-2.4
      */
-    public void echo(final Marker marker, final Supplier<?> msgSupplier, final Throwable t) {
+    public void echo(final Marker marker, final Supplier<String> msgSupplier, final Throwable t) {
         logger.logIfEnabled(FQCN, ECHO, marker, msgSupplier, t);
     }
 
@@ -2137,7 +2123,7 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
      * @since Log4j-2.4
      */
     public void echo(final String message, final Supplier<?>... paramSuppliers) {
-        logger.logIfEnabled(FQCN, ECHO, null, message, paramSuppliers);
+        logger.logIfEnabled(FQCN, ECHO, null, message, (Object[]) paramSuppliers);
     }
 
     /**
@@ -2194,4 +2180,3 @@ public final class ChainAtLogger extends ExtendedLoggerWrapper implements org.ci
         logger.logIfEnabled(FQCN, ECHO, null, msgSupplier, t);
     }
 }
-

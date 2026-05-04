@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: clean low-risk compiler notices
+
+Updated the AT logger wrapper to use Java's standard supplier type instead of Log4j's deprecated supplier interface, and marked the network-message clone helper's generic clone cast as intentionally unchecked. This removes low-risk compiler notices without changing message cloning or custom AT log-level behavior.
+
 ### 2026-05-03 - build: clarify HSQLDB varargs binds
 
 Updated HSQLDB repository queries that bind typed arrays into varargs helper methods so the arrays are explicitly treated as SQL bind parameter lists. This preserves the existing query behavior while removing javac warnings about ambiguous non-varargs calls.
