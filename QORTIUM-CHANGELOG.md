@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: clean import export unchecked warning
+
+Tightened repository import/export JSON handling by typing the parsed result, validating exported array items before treating them as JSON objects, and using try-with-resources for backup file writes. This preserves the existing backup formats while removing the unchecked compiler notice from the HSQLDB import/export helper.
+
 ### 2026-05-03 - build: clean block archive reader unchecked warnings
 
 Replaced raw archive file-list entries and unchecked casts in the block archive reader with typed map entries. Archive file selection and last-height calculation still use the same cached filename metadata, but the code now compiles without that unchecked warning.

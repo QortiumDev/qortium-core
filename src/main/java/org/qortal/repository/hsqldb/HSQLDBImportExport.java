@@ -78,9 +78,9 @@ public class HSQLDBImportExport {
 
             // Write current trade bot data (just the ones currently in the database)
             String fileName = Paths.get(backupDirectory.toString(), "TradeBotStates.json").toString();
-            FileWriter writer = new FileWriter(fileName);
-            writer.write(currentTradeBotDataJsonWrapper.toString(2));
-            writer.close();
+            try (FileWriter writer = new FileWriter(fileName)) {
+                writer.write(currentTradeBotDataJsonWrapper.toString(2));
+            }
 
         } catch (DataException | IOException e) {
             throw new DataException("Unable to export trade bot states from repository");
@@ -133,7 +133,7 @@ public class HSQLDBImportExport {
 
                 Iterator<Object> iterator = data.iterator();
                 while(iterator.hasNext()) {
-                    JSONObject existingTradeBotDataItem = (JSONObject)iterator.next();
+                    JSONObject existingTradeBotDataItem = requireJsonObject(iterator.next());
                     String existingTradePrivateKey = (String) existingTradeBotDataItem.get("tradePrivateKey");
                     // Check if we already have an entry for this trade
                     boolean found = allTradeBotData.stream().anyMatch(tradeBotData -> Base58.encode(tradeBotData.getTradePrivateKey()).equals(existingTradePrivateKey));
@@ -150,9 +150,9 @@ public class HSQLDBImportExport {
             allTradeBotDataJsonWrapper.put("data", allTradeBotDataJson);
 
             // Write ALL trade bot data to archive (current plus states that are no longer in the database)
-            FileWriter  writer = new FileWriter(fileName);
-            writer.write(allTradeBotDataJsonWrapper.toString(2));
-            writer.close();
+            try (FileWriter writer = new FileWriter(fileName)) {
+                writer.write(allTradeBotDataJsonWrapper.toString(2));
+            }
 
         } catch (DataException | IOException e) {
             throw new DataException("Unable to export trade bot states from repository");
@@ -187,9 +187,9 @@ public class HSQLDBImportExport {
 
             // Write current trade bot data (just the ones currently in the database)
             String fileName = Paths.get(backupDirectory.toString(), "MintingAccounts.json").toString();
-            FileWriter writer = new FileWriter(fileName);
-            writer.write(currentMintingAccountDataJsonWrapper.toString(2));
-            writer.close();
+            try (FileWriter writer = new FileWriter(fileName)) {
+                writer.write(currentMintingAccountDataJsonWrapper.toString(2));
+            }
 
         } catch (DataException | IOException e) {
             throw new DataException("Unable to export minting accounts from repository");
@@ -230,7 +230,7 @@ public class HSQLDBImportExport {
 
         Iterator<Object> iterator = data.iterator();
         while(iterator.hasNext()) {
-            JSONObject dataJsonObject = (JSONObject)iterator.next();
+            JSONObject dataJsonObject = requireJsonObject(iterator.next());
 
             if (type.equals("tradeBotStates")) {
                 HSQLDBImportExport.importTradeBotDataJSON(dataJsonObject, repository);
@@ -254,6 +254,13 @@ public class HSQLDBImportExport {
     private static void importMintingAccountDataJSON(JSONObject mintingAccountDataJson, Repository repository) throws DataException {
         MintingAccountData mintingAccountData = MintingAccountData.fromJson(mintingAccountDataJson);
         repository.getAccountRepository().save(mintingAccountData);
+    }
+
+    private static JSONObject requireJsonObject(Object value) throws DataException {
+        if (value instanceof JSONObject)
+            return (JSONObject) value;
+
+        throw new DataException("Unexpected non-object item in exported repository JSON data");
     }
 
     public static Path getExportDirectory(boolean createIfNotExists) throws DataException {
@@ -309,7 +316,7 @@ public class HSQLDBImportExport {
             }
         }
 
-        return new Triple(type, dataset, data);
+        return new Triple<>(type, dataset, data);
     }
 
 }
