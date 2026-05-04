@@ -373,7 +373,7 @@ public class AdminResource {
 				return array.toString(4);
 			}
 			else if (settingValue instanceof List) {
-				JSONArray array = new JSONArray((List<Object>) settingValue);
+				JSONArray array = new JSONArray((List<?>) settingValue);
 				return array.toString(4);
 			}
 

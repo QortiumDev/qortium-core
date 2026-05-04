@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: clean remaining low-risk compiler notices
+
+Removed raw map types from the API map adapter, replaced unchecked cache-filter test casts with checked helper methods, updated utility code to use current SevenZ and ICU Unicode APIs, and removed the deprecated trade-bot `xprv58` response fallback in favor of the existing `foreignKey` field. This keeps the baseline API stricter while reducing compiler noise before tackling the remaining third-party cross-chain deprecations.
+
 ### 2026-05-03 - api: replace deprecated optional SSL connector
 
 Replaced the API service's deprecated Jetty `OptionalSslConnectionFactory` usage with the supported `DetectorConnectionFactory` plus `SslConnectionFactory` pattern. The API connector still detects TLS on the shared API port, routes encrypted connections through ALPN for HTTP/2 or HTTP/1.1, and falls through to HTTP/1.1 for clear-text requests.

@@ -11,11 +11,6 @@ public class TradeBotRespondRequest {
 	@Schema(description = "local-chain AT address", example = "Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	public String atAddress;
 
-	@Deprecated
-	@Schema(description = "Bitcoin BIP32 extended private key. DEPRECATED: use foreignKey instead", hidden = true,
-			example = "xprv___________________________________________________________________________________________________________")
-	public String xprv58;
-
 	@Schema(description = "Foreign blockchain private key, e.g. BIP32 'm' key for Bitcoin/Litecoin starting with 'xprv'",
 			example = "xprv___________________________________________________________________________________________________________")
 	public String foreignKey;

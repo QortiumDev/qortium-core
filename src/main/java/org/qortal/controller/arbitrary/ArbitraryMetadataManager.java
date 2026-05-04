@@ -574,7 +574,7 @@ public class ArbitraryMetadataManager {
             try (final Repository repository = RepositoryManager.getRepository()) {
 
                 // Firstly we need to lookup this file on chain to get its metadata hash
-                transactionDataList = repository.getTransactionRepository().fromSignatures(new ArrayList(signatureBySignature58.values()));
+                transactionDataList = repository.getTransactionRepository().fromSignatures(new ArrayList<>(signatureBySignature58.values()));
             } catch (DataException e) {
                 LOGGER.error(String.format("Repository issue while fetching arbitrary transactions"), e);
                 return;
@@ -612,7 +612,7 @@ public class ArbitraryMetadataManager {
                                 Peer peer = peerMessage.peer;
 
                                 // We have the metadata file, so update requests map to reflect that we've sent it
-                                Triple newEntry = new Triple<>(null, null, nowBySignature58.get(signature58));
+                                Triple<String, Peer, Long> newEntry = new Triple<>(null, null, nowBySignature58.get(signature58));
                                 arbitraryMetadataRequests.put(message.getId(), newEntry);
 
                                 ArbitraryMetadataMessage arbitraryMetadataMessage = new ArbitraryMetadataMessage(entry.getValue().getSignature(), metadataFile);

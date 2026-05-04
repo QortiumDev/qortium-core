@@ -31,32 +31,33 @@ public class SevenZ {
     }
 
     public static void decompress(String in, File destination) throws IOException {
-        SevenZFile sevenZFile = new SevenZFile(new File(in));
-        SevenZArchiveEntry entry;
-        while ((entry = sevenZFile.getNextEntry()) != null){
-            if (entry.isDirectory()){
-                continue;
-            }
-            File curfile = new File(destination, entry.getName());
-            File parent = curfile.getParentFile();
-            if (!parent.exists()) {
-                parent.mkdirs();
-            }
-            long fileSize = entry.getSize();
+        try (SevenZFile sevenZFile = SevenZFile.builder().setFile(new File(in)).get()) {
+            SevenZArchiveEntry entry;
+            while ((entry = sevenZFile.getNextEntry()) != null){
+                if (entry.isDirectory()){
+                    continue;
+                }
+                File curfile = new File(destination, entry.getName());
+                File parent = curfile.getParentFile();
+                if (!parent.exists()) {
+                    parent.mkdirs();
+                }
+                long fileSize = entry.getSize();
 
-            FileOutputStream out = new FileOutputStream(curfile);
-            byte[] b = new byte[1024 * 1024];
-            int count;
-            long extracted = 0;
+                try (FileOutputStream out = new FileOutputStream(curfile)) {
+                    byte[] b = new byte[1024 * 1024];
+                    int count;
+                    long extracted = 0;
 
-            while ((count = sevenZFile.read(b)) > 0) {
-                out.write(b, 0, count);
-                extracted += count;
+                    while ((count = sevenZFile.read(b)) > 0) {
+                        out.write(b, 0, count);
+                        extracted += count;
 
-                int progress = (int)((double)extracted / (double)fileSize * 100);
-                SplashFrame.getInstance().updateStatus(String.format("Extracting %s... (%d%%)", curfile.getName(), progress));
+                        int progress = (int)((double)extracted / (double)fileSize * 100);
+                        SplashFrame.getInstance().updateStatus(String.format("Extracting %s... (%d%%)", curfile.getName(), progress));
+                    }
+                }
             }
-            out.close();
         }
     }
 

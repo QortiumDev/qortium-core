@@ -4,6 +4,7 @@ import com.google.common.base.CharMatcher;
 import com.ibm.icu.text.CaseMap;
 import com.ibm.icu.text.Normalizer2;
 import com.ibm.icu.text.UnicodeSet;
+import com.ibm.icu.text.UnicodeSetSpanner;
 import net.codebox.homoglyph.HomoglyphBuilder;
 
 import java.io.*;
@@ -32,6 +33,8 @@ public abstract class Unicode {
 			+ HANGUL_JUNGSEONG_FILLER + HANGUL_FILLER + HALFWIDTH_HANGUL_FILLER);
 	private static final UnicodeSet removableOtherUniset = new UnicodeSet("[[:Other:]]").freeze();
 	private static final UnicodeSet removableUniset = new UnicodeSet("[[:Mark:][:Other:]]").freeze();
+	private static final UnicodeSetSpanner removableOtherSpanner = new UnicodeSetSpanner(removableOtherUniset);
+	private static final UnicodeSetSpanner removableSpanner = new UnicodeSetSpanner(removableUniset);
 
 
 	private static int[] homoglyphCodePoints;
@@ -73,7 +76,7 @@ public abstract class Unicode {
 		output = replaceVisualBlanksWithWhitespace(output);
 
 		// Remove invisible controls and other unsafe non-rendering codepoints
-		output = removableOtherUniset.stripFrom(output, true);
+		output = removableOtherSpanner.deleteFrom(output);
 
 		// Normalize whitespace
 		output = CharMatcher.whitespace().trimAndCollapseFrom(output, ' ');
@@ -115,7 +118,7 @@ public abstract class Unicode {
 		output = CharMatcher.whitespace().trimAndCollapseFrom(output, ' ');
 
 		// Remove accents, combining marks - see https://www.unicode.org/reports/tr44/#GC_Values_Table
-		output = removableUniset.stripFrom(output, true);
+		output = removableSpanner.deleteFrom(output);
 
 		// Convert to lowercase
 		output = CaseMap.toLower().apply(Locale.ROOT, output);

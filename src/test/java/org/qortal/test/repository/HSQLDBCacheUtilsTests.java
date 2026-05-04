@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 public class HSQLDBCacheUtilsTests {
 
@@ -671,17 +672,17 @@ public class HSQLDBCacheUtilsTests {
         Optional<Service> service = Optional.ofNullable((Service) valueByKey.get(SERVICE));
         Optional<String> query = Optional.ofNullable( (String) valueByKey.get(QUERY));
         Optional<String> identifier = Optional.ofNullable((String) valueByKey.get(IDENTIFIER));
-        Optional<List<String>> names = Optional.ofNullable((List<String>) valueByKey.get(NAMES));
+        Optional<List<String>> names = optionalStringList(valueByKey.get(NAMES));
         Optional<String> title = Optional.ofNullable((String) valueByKey.get(TITLE));
         Optional<String> description = Optional.ofNullable((String) valueByKey.get(DESCRIPTION));
         boolean prefixOnly = valueByKey.containsKey(PREFIX_ONLY);
-        Optional<List<String>> exactMatchNames = Optional.ofNullable((List<String>) valueByKey.get(EXACT_MATCH_NAMES));
-        Optional<List<String>> keywords = Optional.ofNullable((List<String>) valueByKey.get(KEYWORDS));
+        Optional<List<String>> exactMatchNames = optionalStringList(valueByKey.get(EXACT_MATCH_NAMES));
+        Optional<List<String>> keywords = optionalStringList(valueByKey.get(KEYWORDS));
         boolean defaultResource = valueByKey.containsKey(DEFAULT_RESOURCE);
         Optional<SearchMode> mode = Optional.of((SearchMode) valueByKey.getOrDefault(MODE, SearchMode.ALL));
         Optional<Integer> minLevel = Optional.ofNullable((Integer) valueByKey.get(MIN_LEVEL));
-        Optional<Supplier<List<String>>> followedOnly = Optional.ofNullable((Supplier<List<String>>) valueByKey.get(FOLLOWED_ONLY));
-        Optional<Supplier<List<String>>> excludeBlocked = Optional.ofNullable((Supplier<List<String>>) valueByKey.get(EXCLUDE_BLOCKED));
+        Optional<Supplier<List<String>>> followedOnly = optionalStringListSupplier(valueByKey.get(FOLLOWED_ONLY));
+        Optional<Supplier<List<String>>> excludeBlocked = optionalStringListSupplier(valueByKey.get(EXCLUDE_BLOCKED));
         Optional<Boolean> includeMetadata = Optional.ofNullable((Boolean) valueByKey.get(INCLUDE_METADATA));
         Optional<Boolean> includeStatus = Optional.ofNullable((Boolean) valueByKey.get(INCLUDE_STATUS));
         Optional<Long> before = Optional.ofNullable((Long) valueByKey.get(BEFORE));
@@ -719,5 +720,37 @@ public class HSQLDBCacheUtilsTests {
         Assert.assertEquals(sizeToAssert, filteredList.size());
 
         return filteredList;
+    }
+
+    private static Optional<List<String>> optionalStringList(Object value) {
+        if (value == null)
+            return Optional.empty();
+
+        Assert.assertTrue(value instanceof List<?>);
+
+        return Optional.of(toStringList((List<?>) value));
+    }
+
+    private static Optional<Supplier<List<String>>> optionalStringListSupplier(Object value) {
+        if (value == null)
+            return Optional.empty();
+
+        Assert.assertTrue(value instanceof Supplier<?>);
+
+        Supplier<?> supplier = (Supplier<?>) value;
+        return Optional.of(() -> {
+            Object suppliedValue = supplier.get();
+            Assert.assertTrue(suppliedValue instanceof List<?>);
+            return toStringList((List<?>) suppliedValue);
+        });
+    }
+
+    private static List<String> toStringList(List<?> values) {
+        return values.stream()
+                .map(value -> {
+                    Assert.assertTrue(value instanceof String);
+                    return (String) value;
+                })
+                .collect(Collectors.toList());
     }
 }

@@ -227,10 +227,6 @@ public class CrossChainTradeBotResource {
 	private String createTradeBotResponse(TradeBotRespondRequest tradeBotRespondRequest) {
 		final String atAddress = tradeBotRespondRequest.atAddress;
 
-		// We prefer foreignKey to deprecated xprv58
-		if (tradeBotRespondRequest.foreignKey == null)
-			tradeBotRespondRequest.foreignKey = tradeBotRespondRequest.xprv58;
-
 		if (tradeBotRespondRequest.foreignKey == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
