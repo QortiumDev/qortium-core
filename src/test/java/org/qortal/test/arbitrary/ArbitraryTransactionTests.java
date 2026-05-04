@@ -12,6 +12,7 @@ import org.qortal.arbitrary.misc.Category;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.block.BlockChain;
 import org.qortal.controller.arbitrary.ArbitraryDataManager;
+import org.qortal.crypto.AES;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.PaymentData;
 import org.qortal.data.transaction.ArbitraryTransactionData;
@@ -337,7 +338,7 @@ public class ArbitraryTransactionTests extends Common {
             String identifier = null; // Not used for this test
             Service service = Service.ARBITRARY_DATA;
             int chunkSize = 1000;
-            int dataLength = 239; // Max possible size. Becomes 256 bytes after encryption.
+            int dataLength = (int) (ArbitraryTransaction.MAX_DATA_SIZE - AES.getEncryptedFileSize(0)); // Max plaintext size for raw encrypted data.
 
             // Register the name to Alice
             RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, "");
@@ -392,7 +393,7 @@ public class ArbitraryTransactionTests extends Common {
             String identifier = null; // Not used for this test
             Service service = Service.ARBITRARY_DATA;
             int chunkSize = 1000;
-            int dataLength = 239; // Max possible size. Becomes 256 bytes after encryption.
+            int dataLength = (int) (ArbitraryTransaction.MAX_DATA_SIZE - AES.getEncryptedFileSize(0)); // Max plaintext size for raw encrypted data.
 
             String title = "Test title";
             String description = "Test description";

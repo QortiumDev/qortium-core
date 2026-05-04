@@ -91,9 +91,10 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 	@Override
 	public void ensureAccount(AccountData accountData) throws DataException {
-		String sql = "INSERT IGNORE INTO Accounts (account, public_key) VALUES (?, ?)"; // MySQL syntax
+		String sql = "INSERT INTO Accounts (account, public_key) VALUES (?, ?) "
+				+ "ON DUPLICATE KEY UPDATE public_key = IFNULL(public_key, ?)"; // MySQL syntax
 		try {
-			this.repository.executeCheckedUpdate(sql, accountData.getAddress(), accountData.getPublicKey());
+			this.repository.executeCheckedUpdate(sql, accountData.getAddress(), accountData.getPublicKey(), accountData.getPublicKey());
 		} catch (SQLException e) {
 			throw new DataException("Unable to ensure minimal account in repository", e);
 		}

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: align arbitrary data and asset API checks
+
+Updated arbitrary data tests to match the current PUT-only publishing behavior while still checking explicit PATCH rejection, made binary arbitrary-data diffs fall back to whole-file patches instead of failing on non-text input, adjusted raw on-chain arbitrary-data size checks for AES-GCM overhead, and fixed account persistence so existing genesis account rows gain their public key when the account later signs a transaction. The previously failing arbitrary-data and asset API test groups now pass without involving the external ElectrumX tests.
+
 ### 2026-05-04 - core: reserve asset 0 for explicit native bootstrap
 
 Changed asset issuance so normal assets can be issued before the native asset exists while still starting at asset ID `1`, leaving asset ID `0` reserved for an explicit native bootstrap request. `ISSUE_ASSET` now carries an optional requested asset ID, only accepts `0` for development-group-approved native bootstrap, rejects repeated native bootstrap attempts after asset `0` exists, and keeps zero-quantity issuance limited to the native asset. Tests now cover normal pre-native asset issuance, native bootstrap after normal assets, one-time native creation, rejected non-native ID requests, and serialization round trips for the new field.

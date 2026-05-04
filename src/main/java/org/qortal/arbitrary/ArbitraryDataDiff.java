@@ -318,7 +318,7 @@ public class ArbitraryDataDiff {
         Path destination = Paths.get(destinationBasePathAbsolute.toString(), afterPathRelative.toString());
         long beforeSize = Files.size(beforePathAbsolute);
         long afterSize = Files.size(afterPathAbsolute);
-        DiffType diffType;
+        DiffType diffType = null;
 
         if (beforeSize > MAX_DIFF_FILE_SIZE || afterSize > MAX_DIFF_FILE_SIZE) {
             // Files are large, so don't attempt a diff
@@ -328,11 +328,17 @@ public class ArbitraryDataDiff {
         else {
             // Attempt to create patch using java-diff-utils
             UnifiedDiffPatch unifiedDiffPatch = new UnifiedDiffPatch(beforePathAbsolute, afterPathAbsolute, destination);
-            unifiedDiffPatch.create();
-            if (unifiedDiffPatch.isValid()) {
+            try {
+                unifiedDiffPatch.create();
+            } catch (IOException e) {
+                this.copyFilePathToBaseDir(afterPathAbsolute, destinationBasePathAbsolute, afterPathRelative);
+                diffType = DiffType.COMPLETE_FILE;
+            }
+
+            if (diffType == null && unifiedDiffPatch.isValid()) {
                 diffType = DiffType.UNIFIED_DIFF;
             }
-            else {
+            else if (diffType == null) {
                 // Diff failed validation, so copy the whole file instead
                 this.copyFilePathToBaseDir(afterPathAbsolute, destinationBasePathAbsolute, afterPathRelative);
                 diffType = DiffType.COMPLETE_FILE;

@@ -9,7 +9,6 @@ import org.qortal.arbitrary.ArbitraryDataFile;
 import org.qortal.arbitrary.ArbitraryDataFile.ResourceIdType;
 import org.qortal.arbitrary.ArbitraryDataReader;
 import org.qortal.arbitrary.exception.MissingDataException;
-import org.qortal.arbitrary.metadata.ArbitraryDataMetadataPatch;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.controller.arbitrary.ArbitraryDataManager;
 import org.qortal.crypto.Crypto;
@@ -46,7 +45,7 @@ public class ArbitraryDataTests extends Common {
     }
 
     @Test
-    public void testCombineMultipleLayers() throws DataException, IOException, MissingDataException {
+    public void testPatchPublishingAfterPutIsUnsupported() throws DataException, IOException, MissingDataException {
         try (final Repository repository = RepositoryManager.getRepository()) {
             PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
             String publicKey58 = Base58.encode(alice.getPublicKey());
@@ -63,33 +62,15 @@ public class ArbitraryDataTests extends Common {
             Path path1 = Paths.get("src/test/resources/arbitrary/demo1");
             ArbitraryUtils.createAndMintTxn(repository, publicKey58, path1, name, identifier, Method.PUT, service, alice);
 
-            // Create PATCH transaction
+            // Explicit PATCH publishing is no longer supported
             Path path2 = Paths.get("src/test/resources/arbitrary/demo2");
-            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path2, name, identifier, Method.PATCH, service, alice);
+            try {
+                ArbitraryUtils.createAndMintTxn(repository, publicKey58, path2, name, identifier, Method.PATCH, service, alice);
+                fail("Creating PATCH transaction should fail because PATCH publishing is unsupported");
 
-            // Create another PATCH transaction
-            Path path3 = Paths.get("src/test/resources/arbitrary/demo3");
-            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path3, name, identifier, Method.PATCH, service, alice);
-
-            // Now build the latest data state for this name
-            ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(name, ResourceIdType.NAME, service, identifier);
-            arbitraryDataReader.loadSynchronously(true);
-            Path finalPath = arbitraryDataReader.getFilePath();
-
-            // Ensure it exists
-            assertTrue(Files.exists(finalPath));
-
-            // Its directory hash should match the hash of demo3
-            ArbitraryDataDigest path3Digest = new ArbitraryDataDigest(path3);
-            path3Digest.compute();
-            ArbitraryDataDigest finalPathDigest = new ArbitraryDataDigest(finalPath);
-            finalPathDigest.compute();
-            assertEquals(path3Digest.getHash58(), finalPathDigest.getHash58());
-
-            // .. and its directory hash should also match the one included in the metadata
-            ArbitraryDataMetadataPatch patchMetadata = new ArbitraryDataMetadataPatch(finalPath);
-            patchMetadata.read();
-            assertArrayEquals(patchMetadata.getCurrentHash(), path3Digest.getHash());
+            } catch (DataException expectedException) {
+                assertTrue(expectedException.getMessage().contains("Unsupported method specified: PATCH"));
+            }
 
         }
     }
@@ -107,11 +88,10 @@ public class ArbitraryDataTests extends Common {
             try {
                 Path path1 = Paths.get("src/test/resources/arbitrary/demo1");
                 ArbitraryUtils.createAndMintTxn(repository, publicKey58, path1, name, identifier, Method.PATCH, service, alice);
-                fail("Creating transaction should fail due to nonexistent PUT transaction");
+                fail("Creating PATCH transaction should fail because PATCH publishing is unsupported");
 
             } catch (DataException expectedException) {
-                assertTrue(expectedException.getMessage().contains(String.format("Couldn't find PUT transaction for " +
-                        "name %s, service %s and identifier ", name, service)));
+                assertTrue(expectedException.getMessage().contains("Unsupported method specified: PATCH"));
             }
 
         }
@@ -161,10 +141,10 @@ public class ArbitraryDataTests extends Common {
             // Bob attempts to update Alice's data
             PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
 
-            // Create PATCH transaction, ensuring that an exception is thrown
+            // Bob attempts to overwrite Alice's data, ensuring that an exception is thrown
             try {
                 Path path2 = Paths.get("src/test/resources/arbitrary/demo2");
-                ArbitraryUtils.createAndMintTxn(repository, Base58.encode(bob.getPublicKey()), path2, name, identifier, Method.PATCH, service, bob);
+                ArbitraryUtils.createAndMintTxn(repository, Base58.encode(bob.getPublicKey()), path2, name, identifier, Method.PUT, service, bob);
                 fail("Creating transaction should fail due to the name being registered to Alice instead of Bob");
 
             } catch (DataException expectedException) {
@@ -198,9 +178,9 @@ public class ArbitraryDataTests extends Common {
             ArbitraryDataDigest initialLayerDigest = new ArbitraryDataDigest(initialLayerPath);
             initialLayerDigest.compute();
 
-            // Create PATCH transaction
+            // Create replacement PUT transaction
             Path path2 = Paths.get("src/test/resources/arbitrary/demo2");
-            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path2, name, identifier, Method.PATCH, service, alice);
+            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path2, name, identifier, Method.PUT, service, alice);
 
             // Rebuild the latest state
             ArbitraryDataReader arbitraryDataReader2 = new ArbitraryDataReader(name, ResourceIdType.NAME, service, identifier);
@@ -267,9 +247,9 @@ public class ArbitraryDataTests extends Common {
             ArbitraryDataDigest initialLayerDigest = new ArbitraryDataDigest(initialLayerPath);
             initialLayerDigest.compute();
 
-            // Create PATCH transaction
+            // Create replacement PUT transaction
             Path path2 = Paths.get("src/test/resources/arbitrary/demo2");
-            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path2, name, identifier, Method.PATCH, service, alice);
+            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path2, name, identifier, Method.PUT, service, alice);
 
             // Rebuild the latest state
             ArbitraryDataReader arbitraryDataReader2 = new ArbitraryDataReader(name, ResourceIdType.NAME, service, identifier);
@@ -451,9 +431,9 @@ public class ArbitraryDataTests extends Common {
             Path path1 = Paths.get("src/test/resources/arbitrary/demo1");
             ArbitraryUtils.createAndMintTxn(repository, publicKey58, path1, name, identifier, Method.PUT, service, alice);
 
-            // Create PATCH transaction
+            // Create replacement PUT transaction
             Path path2 = Paths.get("src/test/resources/arbitrary/demo2");
-            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path2, name, identifier, Method.PATCH, service, alice);
+            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path2, name, identifier, Method.PUT, service, alice);
 
             // Now build the latest data state for this name
             ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(name, ResourceIdType.NAME, service, identifier);
@@ -469,11 +449,6 @@ public class ArbitraryDataTests extends Common {
             ArbitraryDataDigest finalPathDigest = new ArbitraryDataDigest(finalPath);
             finalPathDigest.compute();
             assertEquals(path2Digest.getHash58(), finalPathDigest.getHash58());
-
-            // .. and its directory hash should also match the one included in the metadata
-            ArbitraryDataMetadataPatch patchMetadata = new ArbitraryDataMetadataPatch(finalPath);
-            patchMetadata.read();
-            assertArrayEquals(patchMetadata.getCurrentHash(), path2Digest.getHash());
 
         }
     }
