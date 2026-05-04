@@ -1,7 +1,6 @@
 package org.qortal.test;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.Block;
@@ -14,14 +13,13 @@ import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
+import org.qortal.test.common.transaction.PaymentTestTransaction;
 import org.qortal.transaction.Transaction;
-import org.qortal.transaction.Transaction.TransactionType;
 import org.qortal.transform.Transformer;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.block.BlockTransformation;
 import org.qortal.transform.block.BlockTransformer;
 import org.qortal.transform.transaction.TransactionTransformer;
-import org.qortal.utils.Base58;
 
 import java.util.Arrays;
 import java.util.Deque;
@@ -113,59 +111,50 @@ public class BlockTests extends Common {
 	}
 
 	@Test
-	@Ignore(value = "Doesn't work, to be fixed later")
-	public void testBlockSerialization() throws DataException, TransformationException {
+	public void testBlockSerializationWithoutTransactions() throws DataException, TransformationException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Block block = BlockUtils.mintBlock(repository);
+			BlockTransformation blockInfo = assertBlockSerializationRoundTrip(block);
+
+			assertEquals("Transaction count differs", 0, blockInfo.getTransactions().size());
+			assertTrue("Unexpected transactions in serialized block", blockInfo.getTransactions().isEmpty());
+		}
+	}
+
+	@Test
+	public void testBlockSerializationWithPaymentTransaction() throws DataException, TransformationException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount signingAccount = Common.getTestAccount(repository, "alice");
+			TransactionData paymentTransactionData = PaymentTestTransaction.randomTransaction(repository, signingAccount, true);
 
-			// TODO: Fill block with random, valid transactions of every type (except GENESIS or AT)
-			// This isn't as trivial as it seems as some transactions rely on others.
-			// e.g. CANCEL_ASSET_ORDER needs a prior CREATE_ASSET_ORDER
-			for (Transaction.TransactionType txType : Transaction.TransactionType.values()) {
-				if (txType == TransactionType.GENESIS || txType == TransactionType.AT)
-					continue;
+			TransactionUtils.signAndImportValid(repository, paymentTransactionData, signingAccount);
 
-				TransactionData transactionData = TransactionUtils.randomTransaction(repository, signingAccount, txType, true);
-				Transaction transaction = Transaction.fromData(repository, transactionData);
-				transaction.sign(signingAccount);
+			Block block = BlockUtils.mintBlock(repository);
+			BlockTransformation blockInfo = assertBlockSerializationRoundTrip(block);
 
-				Transaction.ValidationResult validationResult = transaction.importAsUnconfirmed();
-				if (validationResult != Transaction.ValidationResult.OK)
-					fail(String.format("Invalid (%s) test transaction, type %s", validationResult.name(), txType.name()));
-			}
-
-			// We might need to wait until transactions' timestamps are valid for the block we're about to generate
-			try {
-				Thread.sleep(1L);
-			} catch (InterruptedException e) {
-			}
-
-			BlockUtils.mintBlock(repository);
-
-			BlockData blockData = repository.getBlockRepository().getLastBlock();
-			Block block = new Block(repository, blockData);
-			assertTrue(block.isSignatureValid());
-
-			byte[] bytes = BlockTransformer.toBytes(block);
-
-			assertEquals(BlockTransformer.getDataLength(block), bytes.length);
-
-			BlockTransformation blockInfo = BlockTransformer.fromBytes(bytes);
-
-			// Compare transactions
-			List<TransactionData> deserializedTransactions = blockInfo.getTransactions();
-			assertEquals("Transaction count differs", blockData.getTransactionCount(), deserializedTransactions.size());
-
-			for (int i = 0; i < blockData.getTransactionCount(); ++i) {
-				TransactionData deserializedTransactionData = deserializedTransactions.get(i);
-				Transaction originalTransaction = block.getTransactions().get(i);
-				TransactionData originalTransactionData = originalTransaction.getTransactionData();
-
-				assertEquals("Transaction signature differs", Base58.encode(originalTransactionData.getSignature()), Base58.encode(deserializedTransactionData.getSignature()));
-				assertEquals("Transaction declared length differs", TransactionTransformer.getDataLength(originalTransactionData), TransactionTransformer.getDataLength(deserializedTransactionData));
-				assertEquals("Transaction serialized length differs", TransactionTransformer.toBytes(originalTransactionData).length, TransactionTransformer.toBytes(deserializedTransactionData).length);
-			}
+			assertEquals("Transaction count differs", 1, blockInfo.getTransactions().size());
+			assertSerializedTransactionEquals(block.getTransactions().get(0).getTransactionData(), blockInfo.getTransactions().get(0));
 		}
+	}
+
+	private BlockTransformation assertBlockSerializationRoundTrip(Block block) throws DataException, TransformationException {
+		assertTrue(block.isSignatureValid());
+
+		byte[] bytes = BlockTransformer.toBytes(block);
+		assertEquals(BlockTransformer.getDataLength(block), bytes.length);
+
+		BlockTransformation blockInfo = BlockTransformer.fromBytes(bytes);
+		BlockUtils.assertEqual(block.getBlockData(), blockInfo.getBlockData());
+		assertEquals("Transaction count differs", block.getBlockData().getTransactionCount(), blockInfo.getTransactions().size());
+
+		return blockInfo;
+	}
+
+	private void assertSerializedTransactionEquals(TransactionData expected, TransactionData actual) throws TransformationException {
+		assertEquals("Transaction type differs", expected.getType(), actual.getType());
+		assertArrayEquals("Transaction signature differs", expected.getSignature(), actual.getSignature());
+		assertEquals("Transaction declared length differs", TransactionTransformer.getDataLength(expected), TransactionTransformer.getDataLength(actual));
+		assertArrayEquals("Transaction serialized bytes differ", TransactionTransformer.toBytes(expected), TransactionTransformer.toBytes(actual));
 	}
 
 	@Test

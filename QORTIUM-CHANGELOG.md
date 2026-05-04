@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: make block serialization deterministic
+
+Replaced the ignored random all-transaction block serialization test with deterministic round-trip coverage for an empty minted block and a minted block containing a payment transaction. The test now checks block length, serialized block metadata, transaction count, and embedded transaction bytes without trying to synthesize unrelated transaction setup inside a single fragile test.
+
 ### 2026-05-04 - test: unskip useful PoW and block timestamp checks
 
 Converted MemoryPoW tests from a fully ignored class into fast deterministic default coverage, including an 8 MiB difficulty-8 compute smoke test. The long MemoryPoW benchmark is split by difficulty and remains available via `-Dqortium.runLongMempowTests=true`. The block timestamp API now returns genesis when it is the nearest block at or before the requested timestamp, and the previously ignored timestamp API test now asserts deterministic genesis and minted-block lookups.
