@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - network: replace vendored UPnP with jUPnP
+
+Replaced the inherited locally vendored WaifUPnP jar with the maintained `org.jupnp:org.jupnp` Maven Central dependency. Added a small internal port-mapping abstraction so P2P and QDN networking no longer call a specific UPnP library directly, while keeping automatic router mapping best-effort and non-fatal if a router does not support it.
+
 ### 2026-05-03 - build: document and reproduce local dependency patches
 
 Added a HSQLDB verification/rebuild script that downloads the official Maven Central HSQLDB jar, verifies checksums, and confirms Qortium's checked-in patched jar differs only by changing the manifest seal line from `Sealed: true` to `Sealed: false`. Expanded dependency provenance docs with HSQLDB checksums, the verification process, and the locally vendored WaifUPnP artifact so nonstandard dependencies now have tracked ownership and reproducibility notes.

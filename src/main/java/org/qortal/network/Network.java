@@ -1,6 +1,5 @@
 package org.qortal.network;
 
-import com.dosse.upnp.UPnP;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
@@ -15,6 +14,8 @@ import org.qortal.data.network.PeerData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.network.message.*;
 import org.qortal.network.task.*;
+import org.qortal.network.upnp.PortMapperFactory;
+import org.qortal.network.upnp.PortMappingResult;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -341,9 +342,10 @@ public class Network {
         // Attempt to set up UPnP for P2P. All errors are ignored.
         int networkPort = Settings.getInstance().getListenPort();
         if (Settings.getInstance().isUPnPEnabled()) {
-            UPnP.openPortTCP(networkPort);
-            if (UPnP.isMappedTCP(networkPort)){
-                this.ourExternalIpAddress = UPnP.getExternalAddress();
+            PortMappingResult portMappingResult = PortMapperFactory.getInstance().openTcpPort(networkPort, "Qortium P2P");
+            if (portMappingResult.isMapped()){
+                portMappingResult.getExternalAddress()
+                        .ifPresent(externalAddress -> this.ourExternalIpAddress = externalAddress.getHostAddress());
                 LOGGER.info("UPnP Mapped for P2P, port: {}", networkPort);
             }
                 
@@ -351,7 +353,7 @@ public class Network {
                 LOGGER.warn("Unable to map P2P port: {} with UPnP, port in use?", networkPort);
         }
         else {
-            UPnP.closePortTCP(networkPort);
+            PortMapperFactory.getInstance().closeTcpPort(networkPort);
         }
 
         // Start dedicated I/O thread (select/read/write only) and scheduler (feeds worker pool)
@@ -2943,7 +2945,7 @@ public class Network {
 
         // Release uPnP if it was enabled
         try {
-            UPnP.closePortTCP(Settings.getInstance().getListenPort());
+            PortMapperFactory.getInstance().closeTcpPort(Settings.getInstance().getListenPort());
         } catch (Exception e) {
             // do nothing
         }

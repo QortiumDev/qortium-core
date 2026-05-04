@@ -79,20 +79,9 @@ patched jar for inspection. The generated jar is verified by extracted content;
 its byte-for-byte checksum can differ because ZIP metadata is not normalized by
 the basic rebuild path.
 
-## WaifUPnP
+## Retired local dependencies
 
-Qortium keeps WaifUPnP in the local `lib/` Maven repository:
-
-- Maven coordinate: `com.dosse:WaifUPnP`
-- Version pin: `1.3`
-- Local jar: `lib/com/dosse/WaifUPnP/1.3/WaifUPnP-1.3.jar`
-- Local jar SHA-256:
-  `eaca3aebe57e90fc32906cbad960218a4479e2ebb7cecff48e9ee3767ce8b644`
-- Local POM SHA-256:
-  `87cde7ec6ce795bc3968ae9b1b49ce1f80137f8111ae9751c69ab5a5228bcb84`
-
-This is inherited UPnP support used for local network port mapping. It is not
-consensus-critical, but because it is vendored locally instead of resolved from
-Maven Central it is tracked here for release reproducibility. A later networking
-cleanup can decide whether to keep this jar, replace it with a maintained UPnP
-library, or make UPnP support optional/removable.
+Qortium previously carried `com.dosse:WaifUPnP:1.3` in the local `lib/` Maven
+repository for automatic router port mapping. That inherited jar was replaced
+with the maintained Maven Central dependency `org.jupnp:org.jupnp`, so UPnP is
+no longer a locally vendored dependency.

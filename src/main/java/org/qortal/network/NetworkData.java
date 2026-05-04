@@ -1,6 +1,5 @@
 package org.qortal.network;
 
-import com.dosse.upnp.UPnP;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters;
@@ -15,6 +14,8 @@ import org.qortal.crypto.Crypto;
 import org.qortal.data.network.PeerData;
 import org.qortal.network.message.*;
 import org.qortal.network.task.*;
+import org.qortal.network.upnp.PortMapperFactory;
+import org.qortal.network.upnp.PortMappingResult;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -302,16 +303,17 @@ public class NetworkData {
         // Attempt to set up UPnP for QDN. All errors are ignored.
         int qdnPort = Settings.getInstance().getQDNListenPort();
         if (Settings.getInstance().isUPnPEnabled()) {
-            UPnP.openPortTCP(qdnPort);
-            if (UPnP.isMappedTCP(qdnPort)) {
-                this.ourExternalIpAddress = UPnP.getExternalAddress();
+            PortMappingResult portMappingResult = PortMapperFactory.getInstance().openTcpPort(qdnPort, "Qortium QDN");
+            if (portMappingResult.isMapped()) {
+                portMappingResult.getExternalAddress()
+                        .ifPresent(externalAddress -> this.ourExternalIpAddress = externalAddress.getHostAddress());
                 LOGGER.info("UPnP Mapped for QDN, port: {}", qdnPort);
             } else {
                 LOGGER.warn("Unable to map QDN port: {} with UPnP, port in use?", qdnPort);
             }
         }
         else {
-            UPnP.closePortTCP(qdnPort);
+            PortMapperFactory.getInstance().closeTcpPort(qdnPort);
         }
 
         this.ioThread = new Thread(this::runIOLoop, "NetworkData-IO");
@@ -2634,7 +2636,7 @@ public class NetworkData {
         }
 
         try {  // DeMap QDN uPnP so other nodes can use it when we are done
-            UPnP.closePortTCP(Settings.getInstance().getQDNListenPort());
+            PortMapperFactory.getInstance().closeTcpPort(Settings.getInstance().getQDNListenPort());
         } catch (Exception e) {
             // do nothing
         }
