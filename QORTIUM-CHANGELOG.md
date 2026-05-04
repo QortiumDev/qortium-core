@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - crypto: update X25519 field decode call
+
+Updated the Ed25519 helper's X25519 field decoding call to Bouncy Castle's current no-offset overload. This preserves the same point-decoding behavior while removing the final Bouncy Castle deprecation warning introduced by the dependency update.
+
 ### 2026-05-03 - crosschain: update deprecated library API usage
 
 Updated the Pirate Chain trade bot to call bitcoinj's current Bech32 encoding API explicitly, and documented the remaining non-dust-output overrides as intentional compatibility points with bitcoinj/libdohj's abstract network-parameter interface. This keeps cross-chain behavior unchanged while reducing avoidable dependency deprecation warnings.

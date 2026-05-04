@@ -235,7 +235,7 @@ public abstract class BouncyCastleEd25519
         int x_0 = (py[POINT_BYTES - 1] & 0x80) >>> 7;
         py[POINT_BYTES - 1] &= 0x7F;
 
-        F.decode(py, 0, r.y);
+        F.decode255(py, r.y);
 
         int[] u = F.create();
         int[] v = F.create();
