@@ -79,14 +79,11 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 
 import java.io.BufferedWriter;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import javax.crypto.CipherInputStream;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.FileNameMap;
 import java.net.URLConnection;
@@ -890,43 +887,15 @@ public class ArbitraryResource {
 				continue;
 			}
 
-			// Decrypt if a secret key is present (RAW_DATA is always AES-CBC encrypted, no compression)
+			// Decrypt if a secret key is present (RAW_DATA is AES-GCM encrypted, no compression)
 			byte[] secret = txData.getSecret();
 			if (secret != null && secret.length > 0) {
 				try {
 					javax.crypto.SecretKey aesKey = new SecretKeySpec(secret, 0, secret.length, "AES");
-					ByteArrayInputStream encryptedStream = new ByteArrayInputStream(rawData);
-					byte[] decrypted;
-					try (CipherInputStream cipherStream = AES.createDecryptingInputStream("AES/CBC/PKCS5Padding", aesKey, encryptedStream);
-						 ByteArrayOutputStream decryptedOut = new ByteArrayOutputStream()) {
-						byte[] buf = new byte[4096];
-						int n;
-						while ((n = cipherStream.read(buf)) != -1) {
-							decryptedOut.write(buf, 0, n);
-						}
-						decrypted = decryptedOut.toByteArray();
-					}
-					rawData = decrypted;
+					rawData = AES.decryptBytes(aesKey, rawData);
 				} catch (Exception e) {
-					// Fall back to legacy AES algorithm
-					try {
-						javax.crypto.SecretKey aesKey = new SecretKeySpec(secret, 0, secret.length, "AES");
-						ByteArrayInputStream encryptedStream = new ByteArrayInputStream(rawData);
-						byte[] decrypted;
-						try (CipherInputStream cipherStream = AES.createDecryptingInputStream("AES", aesKey, encryptedStream);
-							 ByteArrayOutputStream decryptedOut = new ByteArrayOutputStream()) {
-							byte[] buf = new byte[4096];
-							int n;
-							while ((n = cipherStream.read(buf)) != -1) {
-								decryptedOut.write(buf, 0, n);
-							}
-							decrypted = decryptedOut.toByteArray();
-						}
-						rawData = decrypted;
-					} catch (Exception e2) {
-						results.add(ArbitraryResourceDataResponse.error(req.service, req.name, req.identifier, "Failed to decrypt data"));
-						continue;
-					}
+					results.add(ArbitraryResourceDataResponse.error(req.service, req.name, req.identifier, "Failed to decrypt data"));
+					continue;
 				}
 			}
 

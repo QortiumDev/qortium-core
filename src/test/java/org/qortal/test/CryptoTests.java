@@ -327,7 +327,7 @@ public class CryptoTests extends Common {
 
 		// Encrypt
 		SecretKey aesKey = AES.generateKey(256);
-		AES.encryptFile("AES", aesKey, inputFilePath, outputFilePath);
+		AES.encryptFile(aesKey, inputFilePath, outputFilePath);
 		assertTrue(Files.exists(Paths.get(outputFilePath)));
 		byte[] encryptedBytes = Files.readAllBytes(Paths.get(outputFilePath));
 
@@ -338,7 +338,7 @@ public class CryptoTests extends Common {
 		// Decrypt
 		String encryptedFilePath = outputFilePath;
 		assertFalse(Files.exists(Paths.get(decryptedFilePath)));
-		AES.decryptFile("AES", aesKey, encryptedFilePath, decryptedFilePath);
+		AES.decryptFile(aesKey, encryptedFilePath, decryptedFilePath);
 		assertTrue(Files.exists(Paths.get(decryptedFilePath)));
 
 		// Delete the output file
@@ -355,8 +355,8 @@ public class CryptoTests extends Common {
 		outputStream.write(randomBytes);
 
 		// Now encrypt the data one more time using the same key
-		// This is to ensure the initialization vector produces a different result
-		AES.encryptFile("AES", aesKey, inputFilePath, reencryptedFilePath);
+		// This is to ensure the AES-GCM nonce produces a different result
+		AES.encryptFile(aesKey, inputFilePath, reencryptedFilePath);
 		assertTrue(Files.exists(Paths.get(reencryptedFilePath)));
 
 		// Make sure the ciphertexts do not match

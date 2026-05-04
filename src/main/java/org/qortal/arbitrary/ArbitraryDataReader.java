@@ -78,9 +78,6 @@ public class ArbitraryDataReader {
     // The resource being read
     ArbitraryDataResource arbitraryDataResource = null;
 
-    // Track if decrypt+unzip was combined in a single pass (optimization)
-    private boolean decryptAndUnzipCombined = false;
-
     // Track resources that are currently being loaded, to avoid duplicate concurrent builds
     // TODO: all builds could be handled by the build queue (even synchronous ones), to avoid the need for this
     private static Map<String, Long> inProgress = Collections.synchronizedMap(new HashMap<>());
@@ -250,11 +247,7 @@ public class ArbitraryDataReader {
             this.deleteExistingFiles();
             this.fetch();
             this.decrypt();
-            
-            // Only uncompress if we haven't already done it during decrypt
-            if (!this.decryptAndUnzipCombined) {
-                this.uncompress();
-            }
+            this.uncompress();
             
             this.validate();
 
@@ -535,99 +528,15 @@ public class ArbitraryDataReader {
     }
 
     private void decrypt() throws DataException {
-        // Check if we can combine decrypt+unzip for better performance
-        // This optimization eliminates an intermediate disk write/read cycle
-        byte[] secret = this.secret58 != null ? Base58.decode(this.secret58) : null;
-        Compression compression = transactionData != null ? transactionData.getCompression() : Compression.ZIP;
-        
-        if (secret != null && secret.length == Transformer.AES256_LENGTH && compression == Compression.ZIP) {
-            // Try combined decrypt+unzip first (optimization)
-            try {
-                this.decryptAndUnzipCombined("AES/CBC/PKCS5Padding");
-                this.decryptAndUnzipCombined = true;
-                return;
-            } catch (DataException e) {
-                LOGGER.debug("Combined decrypt+unzip failed with AES/CBC/PKCS5Padding, trying fallback: {}", e.getMessage());
-                try {
-                    // Fall back to legacy AES algorithm
-                    this.decryptAndUnzipCombined("AES");
-                    this.decryptAndUnzipCombined = true;
-                    return;
-                } catch (DataException e2) {
-                    LOGGER.info("Combined decrypt+unzip failed, falling back to separate operations: {}", e2.getMessage());
-                    // Fall through to separate decrypt/uncompress
-                }
-            }
-        }
-        
-        // Standard separate decrypt (for unencrypted, NONE compression, or if combined failed)
-        try {
-            // First try with explicit parameters (CBC mode with PKCS5 padding)
-            this.decryptUsingAlgo("AES/CBC/PKCS5Padding");
-
-        } catch (DataException e) {
-            LOGGER.info("Unable to decrypt using specific parameters: {}", e.getMessage());
-            // Something went wrong, so fall back to default AES params (necessary for legacy resource support)
-            this.decryptUsingAlgo("AES");
-
-            // TODO: delete files and block this resource if privateDataEnabled is false and the second attempt fails too
-        }
-    }
-
-    /**
-     * Combined decrypt and unzip in a single streaming pass.
-     * This optimization eliminates the intermediate decrypted file, reducing disk I/O by ~50%.
-     * 
-     * @param algorithm The encryption algorithm to use
-     * @throws DataException If decryption or extraction fails
-     */
-    private void decryptAndUnzipCombined(String algorithm) throws DataException {
-        byte[] secret = this.secret58 != null ? Base58.decode(this.secret58) : null;
-        if (secret == null || secret.length != Transformer.AES256_LENGTH) {
-            throw new DataException("Invalid secret key for combined decrypt+unzip");
-        }
-        
-        if (this.filePath == null || !Files.exists(this.filePath)) {
-            throw new DataException("Can't decrypt+unzip non-existent file path");
-        }
-        
-        try {
-            LOGGER.debug("Decrypting and unzipping {} in single pass using algorithm {}...", this.arbitraryDataResource, algorithm);
-            SecretKey aesKey = new SecretKeySpec(secret, 0, secret.length, "AES");
-            
-            // Use combined decrypt+unzip which streams directly to destination
-            ZipUtils.decryptAndUnzip(algorithm, aesKey, this.filePath.toString(), 
-                    this.uncompressedPath.getParent().toString());
-            
-            LOGGER.debug("Finished decrypting and unzipping {} using algorithm {}", this.arbitraryDataResource, algorithm);
-            
-            // Verify the uncompressed directory was created
-            if (!this.uncompressedPath.toFile().exists()) {
-                throw new DataException(String.format("Uncompressed directory not created at %s", this.uncompressedPath));
-            }
-            
-            // Update filePath to point to uncompressed directory
-            // Don't delete the original ArbitraryDataFile chunk - it needs to be preserved for peer sharing
-            this.filePath = this.uncompressedPath;
-            
-        } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException | NoSuchPaddingException
-                | InvalidKeyException | IOException e) {
-            LOGGER.info(String.format("Exception when decrypting+unzipping %s using algorithm %s", this.arbitraryDataResource, algorithm), e);
-            throw new DataException(String.format("Unable to decrypt+unzip file at path %s using algorithm %s: %s", 
-                    this.filePath, algorithm, e.getMessage()));
-        }
-    }
-
-    private void decryptUsingAlgo(String algorithm) throws DataException {
         // Decrypt if we have the secret key.
         byte[] secret = this.secret58 != null ? Base58.decode(this.secret58) : null;
         if (secret != null && secret.length == Transformer.AES256_LENGTH) {
             try {
-                LOGGER.debug("Decrypting {} using algorithm {}...", this.arbitraryDataResource, algorithm);
+                LOGGER.debug("Decrypting {} using {}...", this.arbitraryDataResource, AES.GCM_TRANSFORMATION);
                 Path unencryptedPath = Paths.get(this.workingPath.toString(), "zipped.zip");
                 SecretKey aesKey = new SecretKeySpec(secret, 0, secret.length, "AES");
-                AES.decryptFile(algorithm, aesKey, this.filePath.toString(), unencryptedPath.toString());
-                LOGGER.debug("Finished decrypting {} using algorithm {}", this.arbitraryDataResource, algorithm);
+                AES.decryptFile(aesKey, this.filePath.toString(), unencryptedPath.toString());
+                LOGGER.debug("Finished decrypting {} using {}", this.arbitraryDataResource, AES.GCM_TRANSFORMATION);
 
                 // Replace filePath pointer with the encrypted file path
                 // Don't delete the original ArbitraryDataFile, as this is handled in the cleanup phase
@@ -635,8 +544,8 @@ public class ArbitraryDataReader {
 
             } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException | NoSuchPaddingException
                     | BadPaddingException | IllegalBlockSizeException | IOException | InvalidKeyException e) {
-                LOGGER.info(String.format("Exception when decrypting %s using algorithm %s", this.arbitraryDataResource, algorithm), e);
-                throw new DataException(String.format("Unable to decrypt file at path %s using algorithm %s: %s", this.filePath, algorithm, e.getMessage()));
+                LOGGER.info(String.format("Exception when decrypting %s using %s", this.arbitraryDataResource, AES.GCM_TRANSFORMATION), e);
+                throw new DataException(String.format("Unable to decrypt file at path %s using %s: %s", this.filePath, AES.GCM_TRANSFORMATION, e.getMessage()));
             }
         } else {
             // Assume it is unencrypted. This will be the case when we have built a custom path by combining
@@ -645,11 +554,6 @@ public class ArbitraryDataReader {
     }
 
     private void uncompress() throws IOException, DataException {
-        // Skip if we already did combined decrypt+unzip
-        if (this.decryptAndUnzipCombined) {
-            return;
-        }
-        
         if (this.filePath == null || !Files.exists(this.filePath)) {
             throw new DataException("Can't uncompress non-existent file path");
         }

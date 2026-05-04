@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - crypto: use AES-GCM for QDN encryption
+
+Replaced the baseline QDN/arbitrary-data AES file encryption format with `AES/GCM/NoPadding`. New encrypted payloads now store a 12-byte GCM nonce followed by ciphertext and the 16-byte authentication tag, removing the inherited CBC padding format and legacy AES fallback paths. Decryption now writes to a temporary file and only moves the plaintext into place after the GCM authentication tag verifies.
+
 ### 2026-05-03 - crypto: tighten TLS protocol defaults
 
 Restricted API, gateway, domain-map, dev-proxy, and Electrum SSL setup to modern TLS defaults. Server-side Jetty SSL now uses a shared TLS policy that enables TLS 1.3/TLS 1.2, excludes legacy SSL/TLS protocol names, and includes HTTP/2-safe AEAD cipher suites. Electrum SSL sockets now request the `TLS` context instead of the legacy `SSL` alias and enable only TLS 1.3/TLS 1.2 when supported.

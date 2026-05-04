@@ -49,9 +49,8 @@ public class ArbitraryEncryptionTests extends Common {
         assertFalse(Files.exists(outputFilePath));
 
         // Encrypt...
-        String algorithm = "AES/CBC/PKCS5Padding";
         SecretKey aesKey = AES.generateKey(256);
-        AES.encryptFile(algorithm, aesKey, inputFilePath.toString(), outputFilePath.toString());
+        AES.encryptFile(aesKey, inputFilePath.toString(), outputFilePath.toString());
 
         assertTrue(Files.exists(inputFilePath));
         assertTrue(Files.exists(outputFilePath));
@@ -66,7 +65,7 @@ public class ArbitraryEncryptionTests extends Common {
         assertFalse(Files.exists(decryptedFile));
 
         // Now decrypt...
-        AES.decryptFile(algorithm, aesKey, outputFilePath.toString(), decryptedFile.toString());
+        AES.decryptFile(aesKey, outputFilePath.toString(), decryptedFile.toString());
 
         // Ensure resulting file exists
         assertTrue(Files.exists(decryptedFile));
@@ -97,17 +96,15 @@ public class ArbitraryEncryptionTests extends Common {
             assertEquals(size, inputFilePath.toFile().length());
 
             // Encrypt...
-            String algorithm = "AES/CBC/PKCS5Padding";
             SecretKey aesKey = AES.generateKey(256);
-            AES.encryptFile(algorithm, aesKey, inputFilePath.toString(), outputFilePath.toString());
+            AES.encryptFile(aesKey, inputFilePath.toString(), outputFilePath.toString());
 
             assertTrue(Files.exists(inputFilePath));
             assertTrue(Files.exists(outputFilePath));
 
             final long expectedSize = AES.getEncryptedFileSize(inputFilePath.toFile().length());
-            System.out.println(String.format("Plaintext size: %d bytes, Ciphertext size: %d bytes", inputFilePath.toFile().length(), outputFilePath.toFile().length()));
 
-            // Ensure encryption added a fixed amount of space to the output file
+            // Ensure encryption added the AES-GCM nonce and authentication tag.
             assertEquals(expectedSize, outputFilePath.toFile().length());
 
             // Ensure encrypted file's hash differs from the original
@@ -120,13 +117,44 @@ public class ArbitraryEncryptionTests extends Common {
             assertFalse(Files.exists(decryptedFile));
 
             // Now decrypt...
-            AES.decryptFile(algorithm, aesKey, outputFilePath.toString(), decryptedFile.toString());
+            AES.decryptFile(aesKey, outputFilePath.toString(), decryptedFile.toString());
 
             // Ensure resulting file exists
             assertTrue(Files.exists(decryptedFile));
 
             // And make sure it matches the original input file
             assertTrue(Arrays.equals(Crypto.digest(inputFilePath.toFile()), Crypto.digest(decryptedFile.toFile())));
+        }
+    }
+
+    @Test
+    public void testTamperedEncryptionFailsAuthentication() throws IOException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, NoSuchPaddingException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException {
+        Path inputFilePath = Files.createTempFile("inputFile", null);
+        Path outputDirectory = Files.createTempDirectory("outputDirectory");
+        Path outputFilePath = Paths.get(outputDirectory.toString(), "encrypted");
+        inputFilePath.toFile().deleteOnExit();
+        outputDirectory.toFile().deleteOnExit();
+
+        byte[] data = new byte[128];
+        new Random().nextBytes(data);
+        Files.write(inputFilePath, data, StandardOpenOption.CREATE);
+
+        SecretKey aesKey = AES.generateKey(256);
+        AES.encryptFile(aesKey, inputFilePath.toString(), outputFilePath.toString());
+
+        byte[] encryptedBytes = Files.readAllBytes(outputFilePath);
+        encryptedBytes[encryptedBytes.length - 1] ^= 1;
+        Files.write(outputFilePath, encryptedBytes, StandardOpenOption.TRUNCATE_EXISTING);
+
+        Path decryptedDirectory = Files.createTempDirectory("decryptedDirectory");
+        Path decryptedFile = Paths.get(decryptedDirectory.toString(), "decrypted");
+        decryptedDirectory.toFile().deleteOnExit();
+
+        try {
+            AES.decryptFile(aesKey, outputFilePath.toString(), decryptedFile.toString());
+            fail("Tampered AES-GCM ciphertext should fail authentication");
+        } catch (BadPaddingException e) {
+            assertFalse(Files.exists(decryptedFile));
         }
     }
 

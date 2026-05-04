@@ -21,215 +21,170 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *
  */
 
 package org.qortal.crypto;
 
-import javax.crypto.*;
-import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.KeyGenerator;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
-import java.util.Base64;
+import java.util.Arrays;
 
 public class AES {
 
-    public static String encrypt(String algorithm, String input, SecretKey key, IvParameterSpec iv)
-            throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException,
-            InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
-        Cipher cipher = Cipher.getInstance(algorithm);
-        cipher.init(Cipher.ENCRYPT_MODE, key, iv);
-        byte[] cipherText = cipher.doFinal(input.getBytes());
-        return Base64.getEncoder()
-                .encodeToString(cipherText);
-    }
+    public static final String GCM_TRANSFORMATION = "AES/GCM/NoPadding";
 
-    public static String decrypt(String algorithm, String cipherText, SecretKey key, IvParameterSpec iv)
-            throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException,
-            InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
-        Cipher cipher = Cipher.getInstance(algorithm);
-        cipher.init(Cipher.DECRYPT_MODE, key, iv);
-        byte[] plainText = cipher.doFinal(Base64.getDecoder()
-                .decode(cipherText));
-        return new String(plainText);
-    }
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static final int GCM_NONCE_LENGTH = 12;
+    private static final int GCM_TAG_LENGTH = 16;
+    private static final int GCM_TAG_LENGTH_BITS = GCM_TAG_LENGTH * 8;
+    private static final int BUFFER_SIZE = 256 * 1024;
 
     public static SecretKey generateKey(int n) throws NoSuchAlgorithmException {
         KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
         keyGenerator.init(n);
-        SecretKey key = keyGenerator.generateKey();
-        return key;
+        return keyGenerator.generateKey();
     }
 
     public static SecretKey getKeyFromPassword(String password, String salt)
             throws NoSuchAlgorithmException, InvalidKeySpecException {
         SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
         KeySpec spec = new PBEKeySpec(password.toCharArray(), salt.getBytes(), 65536, 256);
-        SecretKey secret = new SecretKeySpec(factory.generateSecret(spec)
-                .getEncoded(), "AES");
-        return secret;
+        return new SecretKeySpec(factory.generateSecret(spec).getEncoded(), "AES");
     }
 
-    public static IvParameterSpec generateIv() {
-        byte[] iv = new byte[16];
-        new SecureRandom().nextBytes(iv);
-        return new IvParameterSpec(iv);
-    }
-
-    public static void encryptFile(String algorithm, SecretKey key,
-                                   String inputFilePath, String outputFilePath) throws IOException,
-            NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException,
-            BadPaddingException, IllegalBlockSizeException {
-
-        File inputFile = new File(inputFilePath);
-        File outputFile = new File(outputFilePath);
-
-        IvParameterSpec iv = AES.generateIv();
-        Cipher cipher = Cipher.getInstance(algorithm);
-        cipher.init(Cipher.ENCRYPT_MODE, key, iv);
-        FileInputStream inputStream = new FileInputStream(inputFile);
-        FileOutputStream outputStream = new FileOutputStream(outputFile);
-
-        // Prepend the output stream with the 16 byte initialization vector
-        outputStream.write(iv.getIV());
-
-        byte[] buffer = new byte[65536];
-        int bytesRead;
-        while ((bytesRead = inputStream.read(buffer)) != -1) {
-            byte[] output = cipher.update(buffer, 0, bytesRead);
-            if (output != null) {
-                outputStream.write(output);
-            }
-        }
-        byte[] outputBytes = cipher.doFinal();
-        if (outputBytes != null) {
-            outputStream.write(outputBytes);
-        }
-        inputStream.close();
-        outputStream.close();
-    }
-
-    public static void decryptFile(String algorithm, SecretKey key, String encryptedFilePath,
-                                   String decryptedFilePath) throws IOException, NoSuchPaddingException,
+    public static byte[] encryptBytes(SecretKey key, byte[] input) throws NoSuchPaddingException,
             NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException,
             BadPaddingException, IllegalBlockSizeException {
+        byte[] nonce = generateNonce();
+        Cipher cipher = createGcmCipher(Cipher.ENCRYPT_MODE, key, nonce);
+        byte[] cipherText = cipher.doFinal(input);
 
-        File encryptedFile = new File(encryptedFilePath);
-        File decryptedFile = new File(decryptedFilePath);
+        byte[] output = new byte[nonce.length + cipherText.length];
+        System.arraycopy(nonce, 0, output, 0, nonce.length);
+        System.arraycopy(cipherText, 0, output, nonce.length, cipherText.length);
+        return output;
+    }
 
-        File parent = decryptedFile.getParentFile();
-        if (!parent.isDirectory() && !parent.mkdirs()) {
-            throw new IOException("Failed to create directory " + parent);
-        }
+    public static byte[] decryptBytes(SecretKey key, byte[] encryptedBytes) throws NoSuchPaddingException,
+            NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException,
+            BadPaddingException, IllegalBlockSizeException, IOException {
+        if (encryptedBytes.length < GCM_NONCE_LENGTH + GCM_TAG_LENGTH)
+            throw new IOException("Encrypted data is too short to contain AES-GCM nonce and tag");
 
-        // Buffer size: 256KB - good balance between performance and memory for all machines
-        final int BUFFER_SIZE = 256 * 1024;
-        
-        try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(encryptedFile), BUFFER_SIZE);
-             BufferedOutputStream outputStream = new BufferedOutputStream(new FileOutputStream(decryptedFile), BUFFER_SIZE)) {
+        byte[] nonce = Arrays.copyOfRange(encryptedBytes, 0, GCM_NONCE_LENGTH);
+        byte[] cipherText = Arrays.copyOfRange(encryptedBytes, GCM_NONCE_LENGTH, encryptedBytes.length);
+        Cipher cipher = createGcmCipher(Cipher.DECRYPT_MODE, key, nonce);
+        return cipher.doFinal(cipherText);
+    }
 
-            // Read the initialization vector from the first 16 bytes of the file
-            byte[] iv = new byte[16];
-            inputStream.read(iv);
-            Cipher cipher = Cipher.getInstance(algorithm);
-            cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
+    public static void encryptFile(SecretKey key, String inputFilePath, String outputFilePath) throws IOException,
+            NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException,
+            BadPaddingException, IllegalBlockSizeException {
+        byte[] nonce = generateNonce();
+        Cipher cipher = createGcmCipher(Cipher.ENCRYPT_MODE, key, nonce);
+
+        try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(inputFilePath), BUFFER_SIZE);
+             BufferedOutputStream outputStream = new BufferedOutputStream(new FileOutputStream(outputFilePath), BUFFER_SIZE)) {
+
+            outputStream.write(nonce);
 
             byte[] buffer = new byte[BUFFER_SIZE];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
                 byte[] output = cipher.update(buffer, 0, bytesRead);
-                if (output != null) {
+                if (output != null)
                     outputStream.write(output);
-                }
             }
+
+            byte[] outputBytes = cipher.doFinal();
+            if (outputBytes != null)
+                outputStream.write(outputBytes);
+        }
+    }
+
+    public static void decryptFile(SecretKey key, String encryptedFilePath, String decryptedFilePath) throws IOException,
+            NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException,
+            BadPaddingException, IllegalBlockSizeException {
+        Path decryptedPath = Path.of(decryptedFilePath);
+        Path parent = decryptedPath.getParent();
+        if (parent != null && !Files.isDirectory(parent))
+            Files.createDirectories(parent);
+
+        Path tempPath = parent != null
+                ? Files.createTempFile(parent, decryptedPath.getFileName().toString(), ".tmp")
+                : Files.createTempFile(decryptedPath.getFileName().toString(), ".tmp");
+
+        try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(encryptedFilePath), BUFFER_SIZE);
+             BufferedOutputStream outputStream = new BufferedOutputStream(new FileOutputStream(tempPath.toFile()), BUFFER_SIZE)) {
+
+            byte[] nonce = inputStream.readNBytes(GCM_NONCE_LENGTH);
+            if (nonce.length != GCM_NONCE_LENGTH)
+                throw new IOException("Failed to read AES-GCM nonce");
+
+            Cipher cipher = createGcmCipher(Cipher.DECRYPT_MODE, key, nonce);
+
+            byte[] buffer = new byte[BUFFER_SIZE];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                byte[] output = cipher.update(buffer, 0, bytesRead);
+                if (output != null)
+                    outputStream.write(output);
+            }
+
             byte[] output = cipher.doFinal();
-            if (output != null) {
+            if (output != null)
                 outputStream.write(output);
-            }
+        } catch (IOException | NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException
+                 | InvalidKeyException | BadPaddingException | IllegalBlockSizeException e) {
+            Files.deleteIfExists(tempPath);
+            throw e;
         }
-    }
 
-    public static SealedObject encryptObject(String algorithm, Serializable object, SecretKey key,
-                                             IvParameterSpec iv) throws NoSuchPaddingException, NoSuchAlgorithmException,
-            InvalidAlgorithmParameterException, InvalidKeyException, IOException, IllegalBlockSizeException {
-        Cipher cipher = Cipher.getInstance(algorithm);
-        cipher.init(Cipher.ENCRYPT_MODE, key, iv);
-        SealedObject sealedObject = new SealedObject(object, cipher);
-        return sealedObject;
-    }
-
-    public static Serializable decryptObject(String algorithm, SealedObject sealedObject, SecretKey key,
-                                             IvParameterSpec iv) throws NoSuchPaddingException, NoSuchAlgorithmException,
-            InvalidAlgorithmParameterException, InvalidKeyException, ClassNotFoundException,
-            BadPaddingException, IllegalBlockSizeException, IOException {
-        Cipher cipher = Cipher.getInstance(algorithm);
-        cipher.init(Cipher.DECRYPT_MODE, key, iv);
-        Serializable unsealObject = (Serializable) sealedObject.getObject(cipher);
-        return unsealObject;
-    }
-
-    public static String encryptPasswordBased(String plainText, SecretKey key, IvParameterSpec iv)
-            throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException,
-            InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
-        cipher.init(Cipher.ENCRYPT_MODE, key, iv);
-        return Base64.getEncoder()
-                .encodeToString(cipher.doFinal(plainText.getBytes()));
-    }
-
-    public static String decryptPasswordBased(String cipherText, SecretKey key, IvParameterSpec iv)
-            throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException,
-            InvalidKeyException, BadPaddingException, IllegalBlockSizeException {
-        Cipher cipher = Cipher.getInstance("AES/CBC/PKCS5PADDING");
-        cipher.init(Cipher.DECRYPT_MODE, key, iv);
-        return new String(cipher.doFinal(Base64.getDecoder()
-                .decode(cipherText)));
-    }
-
-    /**
-     * Creates a CipherInputStream for decrypting an encrypted file stream.
-     * This allows streaming decryption without writing to a temporary file.
-     * 
-     * @param algorithm The encryption algorithm (e.g., "AES/CBC/PKCS5Padding")
-     * @param key The secret key for decryption
-     * @param encryptedInputStream The input stream containing encrypted data (with IV in first 16 bytes)
-     * @return A CipherInputStream that decrypts data as it's read
-     * @throws IOException If reading the IV fails
-     * @throws NoSuchPaddingException If the padding scheme is not available
-     * @throws NoSuchAlgorithmException If the algorithm is not available
-     * @throws InvalidAlgorithmParameterException If the IV is invalid
-     * @throws InvalidKeyException If the key is invalid
-     */
-    public static CipherInputStream createDecryptingInputStream(String algorithm, SecretKey key, 
-            InputStream encryptedInputStream) throws IOException, NoSuchPaddingException, 
-            NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
-        
-        // Read the initialization vector from the first 16 bytes
-        byte[] iv = new byte[16];
-        int bytesRead = encryptedInputStream.read(iv);
-        if (bytesRead != 16) {
-            throw new IOException("Failed to read initialization vector (expected 16 bytes, got " + bytesRead + ")");
+        try {
+            Files.move(tempPath, decryptedPath, StandardCopyOption.REPLACE_EXISTING);
+        } catch (IOException e) {
+            Files.deleteIfExists(tempPath);
+            throw e;
         }
-        
-        Cipher cipher = Cipher.getInstance(algorithm);
-        cipher.init(Cipher.DECRYPT_MODE, key, new IvParameterSpec(iv));
-        
-        return new CipherInputStream(encryptedInputStream, cipher);
     }
 
     public static long getEncryptedFileSize(long inFileSize) {
-        // To calculate the resulting file size, add 16 (for the IV), then round up to the nearest multiple of 16
-        final int ivSize = 16;
-        final int chunkSize = 16;
-        final int expectedSize = Math.round((inFileSize + ivSize) / chunkSize) * chunkSize + chunkSize;
-        return expectedSize;
+        return inFileSize + GCM_NONCE_LENGTH + GCM_TAG_LENGTH;
+    }
+
+    private static byte[] generateNonce() {
+        byte[] nonce = new byte[GCM_NONCE_LENGTH];
+        SECURE_RANDOM.nextBytes(nonce);
+        return nonce;
+    }
+
+    private static Cipher createGcmCipher(int mode, SecretKey key, byte[] nonce) throws NoSuchPaddingException,
+            NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
+        Cipher cipher = Cipher.getInstance(GCM_TRANSFORMATION);
+        cipher.init(mode, key, new GCMParameterSpec(GCM_TAG_LENGTH_BITS, nonce));
+        return cipher;
     }
 
 }
