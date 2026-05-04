@@ -36,7 +36,7 @@ own chain.
 
 ### 2026-05-04 - test: keep ElectrumX coverage deterministic
 
-Changed ElectrumX tests so default Maven runs exercise deterministic mock RPC responses instead of depending on public testnet ElectrumX servers, while the live server checks remain available with `-Dqortium.runLiveElectrumXTests=true`. ElectrumX header parsing now accepts numeric JSON counts from servers that return integers, and connection logging no longer assumes a blockchain object is attached when tests construct the provider directly.
+Changed ElectrumX tests so default Maven runs exercise deterministic mock RPC responses instead of depending on public testnet ElectrumX servers, while the live server checks remain available with `-Dqortium.runLiveElectrumXTests=true`. ElectrumX header parsing now accepts numeric JSON counts from servers that return integers or numeric strings, retries another server after malformed block-header JSON, and connection logging no longer assumes a blockchain object is attached when tests construct the provider directly.
 
 ### 2026-05-04 - test: align arbitrary data and asset API checks
 

@@ -251,7 +251,27 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	 */
 	@Override
 	public List<byte[]> getRawBlockHeaders(int startHeight, int count) throws ForeignBlockchainException {
-		Object blockObj = this.rpc("blockchain.block.headers", startHeight, count).getResponse();
+		ForeignBlockchainException.NetworkException lastException = null;
+		int attempts = Math.max(1, this.maximumConnections);
+
+		for (int attempt = 0; attempt < attempts; attempt++) {
+			ElectrumServerResponse serverResponse = this.rpc("blockchain.block.headers", startHeight, count);
+			Object blockObj = serverResponse.getResponse();
+
+			try {
+				return parseRawBlockHeaders(blockObj, count);
+			} catch (ForeignBlockchainException.NetworkException e) {
+				lastException = e;
+
+				if (!closeMalformedResponseServer(serverResponse, "Unexpected JSON format from ElectrumX blockchain.block.headers RPC"))
+					throw e;
+			}
+		}
+
+		throw lastException;
+	}
+
+	private List<byte[]> parseRawBlockHeaders(Object blockObj, int count) throws ForeignBlockchainException {
 		if (!(blockObj instanceof JSONObject))
 			throw new ForeignBlockchainException.NetworkException("Unexpected output from ElectrumX blockchain.block.headers RPC");
 
@@ -259,11 +279,12 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 
 		Object countObj = blockJson.get("count");
 		Object hexObj = blockJson.get("hex");
+		Long parsedReturnedCount = parseJsonLong(countObj);
 
-		if (!(countObj instanceof Number) || !(hexObj instanceof String))
+		if (parsedReturnedCount == null || !(hexObj instanceof String))
 			throw new ForeignBlockchainException.NetworkException("Missing/invalid 'count' or 'hex' entries in JSON from ElectrumX blockchain.block.headers RPC");
 
-		long returnedCount = ((Number) countObj).longValue();
+		long returnedCount = parsedReturnedCount;
 		String hex = (String) hexObj;
 
 		List<byte[]> rawBlockHeaders = new ArrayList<>((int) returnedCount);
@@ -303,6 +324,33 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		}
 
 		return rawBlockHeaders;
+	}
+
+	private boolean closeMalformedResponseServer(ElectrumServerResponse serverResponse, String reason) {
+		ElectrumServer electrumServer = serverResponse.getElectrumServer();
+		if (electrumServer == null)
+			return false;
+
+		ChainableServer server = electrumServer.getServer();
+		recordFailure(server);
+		this.connections.remove(electrumServer);
+		this.availableConnections.remove(electrumServer);
+		electrumServer.closeServer(this.getClass().getSimpleName(), reason);
+		return true;
+	}
+
+	private Long parseJsonLong(Object value) {
+		if (value instanceof Number)
+			return ((Number) value).longValue();
+
+		if (value instanceof String)
+			try {
+				return Long.parseLong((String) value);
+			} catch (NumberFormatException e) {
+				return null;
+			}
+
+		return null;
 	}
 
 	/**

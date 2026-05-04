@@ -79,6 +79,20 @@ public class ElectrumXTests {
 	}
 
 	@Test
+	public void testRawBlockHeadersAcceptsStringCount() throws ForeignBlockchainException {
+		JSONObject response = new JSONObject();
+		response.put("count", "2");
+		response.put("hex", "00".repeat(160));
+
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.block.headers", response));
+		List<byte[]> rawBlockHeaders = electrumX.getRawBlockHeaders(1, 2);
+
+		assertEquals(2, rawBlockHeaders.size());
+		assertEquals(80, rawBlockHeaders.get(0).length);
+		assertEquals(80, rawBlockHeaders.get(1).length);
+	}
+
+	@Test
 	public void testRawBlockHeadersRejectsMissingHex() {
 		JSONObject response = new JSONObject();
 		response.put("count", Integer.valueOf(1));
