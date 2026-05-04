@@ -144,7 +144,8 @@ public class Dogecoin extends Bitcoiny {
 		if (instance == null && Settings.getInstance().isWalletEnabled("DOGE")) {
 			DogecoinNet dogecoinNet = Settings.getInstance().getDogecoinNet();
 
-			BitcoinyBlockchainProvider electrumX = new ElectrumX("Dogecoin-" + dogecoinNet.name(), dogecoinNet.getGenesisHash(), dogecoinNet.getServers(), DEFAULT_ELECTRUMX_PORTS);
+			BitcoinyBlockchainProvider electrumX = new ElectrumX("Dogecoin-" + dogecoinNet.name(), dogecoinNet.getGenesisHash(),
+					ElectrumServerList.getServers(CURRENCY_CODE, dogecoinNet.name(), dogecoinNet.getServers()), DEFAULT_ELECTRUMX_PORTS);
 			Context bitcoinjContext = new Context(dogecoinNet.getParams());
 
 			instance = new Dogecoin(dogecoinNet, electrumX, bitcoinjContext, CURRENCY_CODE);

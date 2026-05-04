@@ -211,7 +211,8 @@ public class Bitcoin extends Bitcoiny {
 		if (instance == null && Settings.getInstance().isWalletEnabled("BTC")) {
 			BitcoinNet bitcoinNet = Settings.getInstance().getBitcoinNet();
 
-			BitcoinyBlockchainProvider electrumX = new ElectrumX("Bitcoin-" + bitcoinNet.name(), bitcoinNet.getGenesisHash(), bitcoinNet.getServers(), DEFAULT_ELECTRUMX_PORTS);
+			BitcoinyBlockchainProvider electrumX = new ElectrumX("Bitcoin-" + bitcoinNet.name(), bitcoinNet.getGenesisHash(),
+					ElectrumServerList.getServers(CURRENCY_CODE, bitcoinNet.name(), bitcoinNet.getServers()), DEFAULT_ELECTRUMX_PORTS);
 			Context bitcoinjContext = new Context(bitcoinNet.getParams());
 
 			instance = new Bitcoin(bitcoinNet, electrumX, bitcoinjContext, CURRENCY_CODE);

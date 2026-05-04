@@ -144,7 +144,8 @@ public class Digibyte extends Bitcoiny {
 		if (instance == null && Settings.getInstance().isWalletEnabled("DGB")) {
 			DigibyteNet digibyteNet = Settings.getInstance().getDigibyteNet();
 
-			BitcoinyBlockchainProvider electrumX = new ElectrumX("Digibyte-" + digibyteNet.name(), digibyteNet.getGenesisHash(), digibyteNet.getServers(), DEFAULT_ELECTRUMX_PORTS);
+			BitcoinyBlockchainProvider electrumX = new ElectrumX("Digibyte-" + digibyteNet.name(), digibyteNet.getGenesisHash(),
+					ElectrumServerList.getServers(CURRENCY_CODE, digibyteNet.name(), digibyteNet.getServers()), DEFAULT_ELECTRUMX_PORTS);
 			Context bitcoinjContext = new Context(digibyteNet.getParams());
 
 			instance = new Digibyte(digibyteNet, electrumX, bitcoinjContext, CURRENCY_CODE);

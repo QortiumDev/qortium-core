@@ -167,7 +167,8 @@ public class Litecoin extends Bitcoiny {
 		if (instance == null && Settings.getInstance().isWalletEnabled("LTC")) {
 			LitecoinNet litecoinNet = Settings.getInstance().getLitecoinNet();
 
-			BitcoinyBlockchainProvider electrumX = new ElectrumX("Litecoin-" + litecoinNet.name(), litecoinNet.getGenesisHash(), litecoinNet.getServers(), DEFAULT_ELECTRUMX_PORTS);
+			BitcoinyBlockchainProvider electrumX = new ElectrumX("Litecoin-" + litecoinNet.name(), litecoinNet.getGenesisHash(),
+					ElectrumServerList.getServers(CURRENCY_CODE, litecoinNet.name(), litecoinNet.getServers()), DEFAULT_ELECTRUMX_PORTS);
 			Context bitcoinjContext = new Context(litecoinNet.getParams());
 
 			instance = new Litecoin(litecoinNet, electrumX, bitcoinjContext, CURRENCY_CODE);

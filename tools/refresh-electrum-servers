@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)
+repo_dir="${script_dir}/.."
+
+cd "${repo_dir}"
+
+mvn -q -DskipTests compile dependency:build-classpath -Dmdep.outputFile=target/electrum-refresh.classpath
+
+classpath="target/classes:$(cat target/electrum-refresh.classpath)"
+java -cp "${classpath}" org.qortal.crosschain.RefreshElectrumServers "$@"

@@ -1,0 +1,115 @@
+{
+  "generatedAt": "2026-05-04T22:19:52.199933341Z",
+  "servers": {
+    "BTC": {
+      "MAIN": [
+        {"host": "104.198.149.61", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "128.0.190.26", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "157.245.172.236", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "260.whyza.net", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "34.136.93.37", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "34.67.22.216", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "34.68.133.78", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "alviss.coinjoined.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "b.1209k.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "b6.1209k.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "bitcoin.dermichi.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "bitcoin.lu.ke", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "bitcoin.lukechilds.co", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "blkhub.net", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "btc.aftrek.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "btc.hodler.ninja", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "btc.ocf.sh", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "btce.iiiiiii.biz", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "caleb.vegas", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "d762li0k0g.d.firewalla.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "de.poiuty.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "dijon.anties.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "eai.coincited.net", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum-btc.leblancnet.us", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.bitaroo.net", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.bitrefill.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.brainshome.de", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.emzy.de", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.kendigisland.xyz", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.thomasfischbach.de", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum0.snel.it", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum1.cipig.net", "port": 20000, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum2.cipig.net", "port": 20000, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum3.cipig.net", "port": 20000, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrumx-core.1209k.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrumx.blockfinance-eco.li", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrumx.indoor.app", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrumx.iodata.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "elx.bitske.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "exs.dyshek.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "guichet.centure.cc", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "hodl.artyomk13.me", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "hodlers.beer", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "kareoke.qoppa.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "kirsche.emzy.de", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "kittyserver.ddnsfree.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "lille.anties.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "marseille.anties.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "node1.btccuracao.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "osr1ex1.compumundohipermegared.one", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "paris.anties.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "ragtor.duckdns.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "stavver.dyshek.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "vmd63185.contaboserver.net", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "xtrum.com", "port": 50002, "protocol": "SSL", "source": "builtin"}
+      ]
+    },
+    "LTC": {
+      "MAIN": [
+        {"host": "137.184.250.112", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "146.190.15.65", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "157.230.64.188", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "188.166.208.106", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "209.38.53.75", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "24.199.78.132", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "5.161.216.180", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "5.78.97.174", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "backup.electrum-ltc.org", "port": 443, "protocol": "SSL", "source": "builtin"},
+        {"host": "backup.electrum-ltc.org", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum-ltc.bysh.me", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum-ltc.petrkr.net", "port": 60002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.jochen-hoenicke.de", "port": 50091, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.ltc.xurious.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.petrkr.net", "port": 60002, "protocol": "SSL", "source": "builtin"},
+        {"host": "fury.fiatfaucet.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "litecoin.stackwallet.com", "port": 20063, "protocol": "SSL", "source": "builtin"},
+        {"host": "ltc-electrum.cakewallet.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "ltc.aftrek.org", "port": 50002, "protocol": "SSL", "source": "builtin"}
+      ]
+    },
+    "DOGE": {
+      "MAIN": [
+        {"host": "dogecoin.stackwallet.com", "port": 50022, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.qortal.link", "port": 54002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum1.cipig.net", "port": 20060, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum2.cipig.net", "port": 20060, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum3.cipig.net", "port": 20060, "protocol": "SSL", "source": "builtin"}
+      ]
+    },
+    "DGB": {
+      "MAIN": [
+        {"host": "electrum.cipig.net", "port": 20059, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum.qortal.link", "port": 55002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum1.cipig.net", "port": 20059, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum2.cipig.net", "port": 20059, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum3.cipig.net", "port": 20059, "protocol": "SSL", "source": "builtin"}
+      ]
+    },
+    "RVN": {
+      "MAIN": [
+        {"host": "electrum.qortal.link", "port": 56002, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum1.cipig.net", "port": 20051, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum2.cipig.net", "port": 20051, "protocol": "SSL", "source": "builtin"},
+        {"host": "electrum3.cipig.net", "port": 20051, "protocol": "SSL", "source": "builtin"},
+        {"host": "rvn-dashboard.com", "port": 50002, "protocol": "SSL", "source": "builtin"},
+        {"host": "rvn4lyfe.com", "port": 50002, "protocol": "SSL", "source": "builtin"}
+      ]
+    }
+  }
+}

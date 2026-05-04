@@ -694,54 +694,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 
 				if( !(peersObject instanceof JSONArray) ) continue;
 
-				for (Object rawPeer : (JSONArray) peersObject) {
-
-					JSONArray peer = (JSONArray) rawPeer;
-					if (peer.size() < 3)
-						// We're expecting at least 3 fields for each peer entry: IP, hostname, features
-						continue;
-
-					String hostname = (String) peer.get(1);
-					JSONArray features = (JSONArray) peer.get(2);
-
-					for (Object rawFeature : features) {
-						String feature = (String) rawFeature;
-						Server.ConnectionType connectionType = null;
-						Integer port = null;
-
-						switch (feature.charAt(0)) {
-							case 's':
-								connectionType = Server.ConnectionType.SSL;
-								port = this.defaultPorts.get(connectionType);
-								break;
-
-							case 't':
-								connectionType = Server.ConnectionType.TCP;
-								port = this.defaultPorts.get(connectionType);
-								break;
-
-							default:
-								// e.g. could be 'v' for protocol version, or 'p' for pruning limit
-								break;
-						}
-
-						if (connectionType == null || port == null)
-							// We couldn't extract any peer aainfo?
-							continue;
-
-						// Possible non-default port?
-						if (feature.length() > 1)
-							try {
-								port = Integer.parseInt(feature.substring(1));
-							} catch (NumberFormatException e) {
-								// no good
-								continue; // for-loop above
-							}
-
-						Server newServer = new Server(hostname, connectionType, port);
-						newServers.add(newServer);
-					}
-				}
+				newServers.addAll(ElectrumServerDiscovery.parsePeerServers(peersObject, this.defaultPorts));
 			}
 		} catch (Exception e) {
 			LOGGER.error(e.getMessage(), e);

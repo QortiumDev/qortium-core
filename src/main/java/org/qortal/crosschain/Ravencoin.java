@@ -145,7 +145,8 @@ public class Ravencoin extends Bitcoiny {
 		if (instance == null && Settings.getInstance().isWalletEnabled("RVN")) {
 			RavencoinNet ravencoinNet = Settings.getInstance().getRavencoinNet();
 
-			BitcoinyBlockchainProvider electrumX = new ElectrumX("Ravencoin-" + ravencoinNet.name(), ravencoinNet.getGenesisHash(), ravencoinNet.getServers(), DEFAULT_ELECTRUMX_PORTS);
+			BitcoinyBlockchainProvider electrumX = new ElectrumX("Ravencoin-" + ravencoinNet.name(), ravencoinNet.getGenesisHash(),
+					ElectrumServerList.getServers(CURRENCY_CODE, ravencoinNet.name(), ravencoinNet.getServers()), DEFAULT_ELECTRUMX_PORTS);
 			Context bitcoinjContext = new Context(ravencoinNet.getParams());
 
 			instance = new Ravencoin(ravencoinNet, electrumX, bitcoinjContext, CURRENCY_CODE);
