@@ -29,7 +29,6 @@
 		<hsqldb.version>2.7.4</hsqldb.version>
 		<icu4j.version>76.1</icu4j.version>
 		<java-diff-utils.version>4.15</java-diff-utils.version>
-		<javax.servlet-api.version>4.0.1</javax.servlet-api.version>
 		<jaxb-runtime.version>2.3.9</jaxb-runtime.version>
 		<jersey.version>2.47</jersey.version>
 		<jetty.version>10.0.26</jetty.version> <!-- Next logical jump -->
@@ -38,7 +37,6 @@
 		<jsoup.version>1.18.1</jsoup.version>
 		<junit-jupiter-engine.version>5.11.0-M2</junit-jupiter-engine.version>
 		<log4j.version>2.23.1</log4j.version>
-		<mail.version>1.5.0-b01</mail.version>
 		<maven-build-helper-plugin.version>3.6.0</maven-build-helper-plugin.version>
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<maven-dependency-plugin.version>3.6.1</maven-dependency-plugin.version>
@@ -387,6 +385,8 @@
 								<exclude>META-INF/*.SF</exclude>
 								<exclude>META-INF/*.DSA</exclude>
 								<exclude>META-INF/*.RSA</exclude>
+								<exclude>module-info.class</exclude>
+								<exclude>META-INF/versions/**/module-info.class</exclude>
 								<exclude>**/*.js.map</exclude>
 							</excludes>
 						</filter>
@@ -469,22 +469,6 @@
 			<artifactId>jersey-media-json-jackson</artifactId>
 			<version>3.1.10</version>
 		</dependency> -->
-		<!-- https://mvnrepository.com/artifact/org.codehaus.mojo/build-helper-maven-plugin -->
-		<dependency>
-			<groupId>org.codehaus.mojo</groupId>
-			<artifactId>build-helper-maven-plugin</artifactId>
-			<version>${maven-build-helper-plugin.version}</version>
-			<scope>provided</scope>
-			<!-- needed for build, not for runtime -->
-		</dependency>
-		<!-- https://mvnrepository.com/artifact/com.github.bohnman/package-info-maven-plugin -->
-		<dependency>
-			<groupId>com.github.bohnman</groupId>
-			<artifactId>package-info-maven-plugin</artifactId>
-			<version>${maven-package-info-plugin.version}</version>
-			<scope>provided</scope>
-			<!-- needed for build, not for runtime -->
-		</dependency>
 		<!-- HSQLDB for repository should use local version with Sealed: false -->
 		<dependency>
 			<groupId>org.hsqldb</groupId>
@@ -496,6 +480,28 @@
 			<groupId>com.github.QuickMythril</groupId>
 			<artifactId>AT</artifactId>
 			<version>${ciyam-at.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-surefire-plugin</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-source-plugin</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-javadoc-plugin</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-jar-plugin</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<!-- UPnP support -->
 		<dependency>
@@ -638,17 +644,6 @@
 			<artifactId>slf4j-api</artifactId>
 			<version>${slf4j.version}</version>
 		</dependency>
-		<!-- Servlet related -->
-		<dependency>
-			<groupId>javax.servlet</groupId>
-			<artifactId>javax.servlet-api</artifactId>
-			<version>${javax.servlet-api.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>javax.mail</groupId>
-			<artifactId>mail</artifactId>
-			<version>${mail.version}</version>
-		</dependency>
 		<!-- Unicode homoglyph utilities -->
 		<dependency>
 			<groupId>net.codebox</groupId>
@@ -742,6 +737,16 @@
 			<groupId>org.glassfish.jersey.media</groupId>
 			<artifactId>jersey-media-moxy</artifactId>
 			<version>${jersey.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>jakarta.json</groupId>
+					<artifactId>jakarta.json-api</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>jakarta.activation</groupId>
+					<artifactId>jakarta.activation-api</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.glassfish.jersey.media</groupId>
@@ -753,16 +758,14 @@
 			<groupId>io.swagger.core.v3</groupId>
 			<artifactId>swagger-jaxrs2</artifactId>
 			<version>${swagger-api.version}</version>
-		</dependency>
-		<dependency>
-			<groupId>io.swagger.core.v3</groupId>
-			<artifactId>swagger-jaxrs2-servlet-initializer</artifactId>
-			<version>${swagger-api.version}</version>
 			<exclusions>
 				<exclusion>
-					<!-- excluded because included in swagger-jaxrs2-servlet-initializer -->
-					<groupId>io.swagger.core.v3</groupId>
-					<artifactId>swagger-integration</artifactId>
+					<groupId>javax.xml.bind</groupId>
+					<artifactId>jaxb-api</artifactId>
+				</exclusion>
+				<exclusion>
+					<groupId>jakarta.activation</groupId>
+					<artifactId>jakarta.activation-api</artifactId>
 				</exclusion>
 			</exclusions>
 		</dependency>
@@ -845,6 +848,12 @@
 			<groupId>org.glassfish.jaxb</groupId>
 			<artifactId>jaxb-runtime</artifactId>
 			<version>${jaxb-runtime.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>jakarta.activation</groupId>
+					<artifactId>jakarta.activation-api</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.tika</groupId>

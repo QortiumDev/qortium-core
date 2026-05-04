@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: keep Maven plugins out of runtime shade
+
+Removed Maven build plugins from the project's runtime dependency list while leaving them configured in the build plugin section, excluded Maven plugin artifacts that the AT dependency publishes transitively as compile dependencies, removed unused or redundant runtime dependencies for JavaMail, the direct servlet API, and Swagger's servlet initializer, excluded duplicate JAXB, JSON-P, and activation API jars where equivalent implementation/runtime jars remain available, and filtered Java module descriptors out of the shaded runtime jar. The package-info and build-helper plugins are still available during the build, but build-tool dependency trees and several duplicate API jars are no longer pulled into Qortium's shaded runtime jar.
+
 ### 2026-05-03 - build: clean import export unchecked warning
 
 Tightened repository import/export JSON handling by typing the parsed result, validating exported array items before treating them as JSON objects, and using try-with-resources for backup file writes. This preserves the existing backup formats while removing the unchecked compiler notice from the HSQLDB import/export helper.
