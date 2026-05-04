@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: clean name integrity comparator warning
+
+Replaced the raw comparator used by the name database integrity checker with a typed transaction comparator. This preserves the existing block-height, timestamp, and signature ordering while removing the next unchecked compiler notice from the warning cleanup pass.
+
 ### 2026-05-03 - crypto: update X25519 field decode call
 
 Updated the Ed25519 helper's X25519 field decoding call to Bouncy Castle's current no-offset overload. This preserves the same point-decoding behavior while removing the final Bouncy Castle deprecation warning introduced by the dependency update.

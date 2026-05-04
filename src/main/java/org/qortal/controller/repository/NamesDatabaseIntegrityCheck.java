@@ -559,26 +559,22 @@ public class NamesDatabaseIntegrityCheck {
     }
 
     private void sortTransactions(List<TransactionData> transactions) {
-        Collections.sort(transactions, new Comparator() {
-            public int compare(Object o1, Object o2) {
-                TransactionData td1 = (TransactionData) o1;
-                TransactionData td2 = (TransactionData) o2;
+        transactions.sort((td1, td2) -> {
+            // Sort by block height first
+            int heightComparison = td1.getBlockHeight().compareTo(td2.getBlockHeight());
+            if (heightComparison != 0) {
+                return heightComparison;
+            }
 
-                // Sort by block height first
-                int heightComparison = td1.getBlockHeight().compareTo(td2.getBlockHeight());
-                if (heightComparison != 0) {
-                    return heightComparison;
-                }
+            // Same height so compare timestamps
+            int timestampComparison = Long.compare(td1.getTimestamp(), td2.getTimestamp());
+            if (timestampComparison != 0) {
+                return timestampComparison;
+            }
 
-                // Same height so compare timestamps
-                int timestampComparison = Long.compare(td1.getTimestamp(), td2.getTimestamp());
-                if (timestampComparison != 0) {
-                    return timestampComparison;
-                }
-
-                // Same timestamp so compare signatures
-                return new BigInteger(td1.getSignature()).compareTo(new BigInteger(td2.getSignature()));
-            }});
+            // Same timestamp so compare signatures
+            return new BigInteger(td1.getSignature()).compareTo(new BigInteger(td2.getSignature()));
+        });
     }
 
 }
