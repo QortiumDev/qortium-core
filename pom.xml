@@ -98,6 +98,7 @@
 				<version>${maven-compiler-plugin.version}</version>
 				<configuration>
 					<release>11</release>
+					<proc>none</proc>
 				</configuration>
 			</plugin>
 			<!-- unpack swagger-ui to target folder -->

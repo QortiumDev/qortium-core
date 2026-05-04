@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - build: disable implicit javac annotation processing
+
+Set the Maven compiler plugin to disable javac annotation processing explicitly. Qortium's normal build relies on Maven code-generation plugins for generated sources rather than javac annotation processors, so this keeps current behavior while avoiding javac's warning about future annotation-processing defaults.
+
 ### 2026-05-03 - crypto: use AES-GCM for QDN encryption
 
 Replaced the baseline QDN/arbitrary-data AES file encryption format with `AES/GCM/NoPadding`. New encrypted payloads now store a 12-byte GCM nonce followed by ciphertext and the 16-byte authentication tag, removing the inherited CBC padding format and legacy AES fallback paths. Decryption now writes to a temporary file and only moves the plaintext into place after the GCM authentication tag verifies.
