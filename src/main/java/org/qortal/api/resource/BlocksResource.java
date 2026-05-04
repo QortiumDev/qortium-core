@@ -599,7 +599,7 @@ public class BlocksResource {
 
 			// Try the Blocks table
 			int height = repository.getBlockRepository().getHeightFromTimestamp(timestamp);
-			if (height > 1) {
+			if (height >= 1) {
 				// Found match in Blocks table
 				blockData = repository.getBlockRepository().fromHeight(height);
 				if (includeOnlineSignatures == null || !includeOnlineSignatures) {
@@ -610,7 +610,7 @@ public class BlocksResource {
 
 			// Not found in Blocks table, so try the archive
 			height = repository.getBlockArchiveRepository().getHeightFromTimestamp(timestamp);
-			if (height > 1) {
+			if (height >= 1) {
 				// Found match in archive
 				blockData = repository.getBlockArchiveRepository().fromHeight(height);
 			}

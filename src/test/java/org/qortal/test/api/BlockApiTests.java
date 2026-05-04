@@ -1,13 +1,13 @@
 package org.qortal.test.api;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
 import org.qortal.api.resource.BlocksResource;
 import org.qortal.block.GenesisBlock;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.block.BlockData;
 import org.qortal.data.block.BlockSummaryData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
@@ -82,9 +82,19 @@ public class BlockApiTests extends ApiCommon {
 	}
 
 	@Test
-	@Ignore(value = "Doesn't work, to be fixed later")
 	public void testGetBlockByTimestamp() throws DataException {
-		assertNotNull(this.blocksResource.getByTimestamp(System.currentTimeMillis(), false));
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			BlockData genesisBlockData = GenesisBlock.getInstance(repository).getBlockData();
+
+			BlockData blockData = this.blocksResource.getByTimestamp(genesisBlockData.getTimestamp(), false);
+			assertNotNull(blockData);
+			assertEquals(Integer.valueOf(1), blockData.getHeight());
+
+			BlockData mintedBlockData = BlockUtils.mintBlock(repository).getBlockData();
+			blockData = this.blocksResource.getByTimestamp(mintedBlockData.getTimestamp(), false);
+			assertNotNull(blockData);
+			assertEquals(mintedBlockData.getHeight(), blockData.getHeight());
+		}
 	}
 
 	@Test

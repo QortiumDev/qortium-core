@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: unskip useful PoW and block timestamp checks
+
+Converted MemoryPoW tests from a fully ignored class into fast deterministic default coverage, with the long benchmark available via `-Dqortium.runLongMempowTests=true`. The block timestamp API now returns genesis when it is the nearest block at or before the requested timestamp, and the previously ignored timestamp API test now asserts deterministic genesis and minted-block lookups.
+
 ### 2026-05-04 - test: harden live bootstrap host checks
 
 Kept bootstrap host availability checks opt-in behind `-Dqortium.runLiveBootstrapChecks=true`, but changed explicit live runs to fail when no hosts are configured instead of silently skipping. Live checks now use bounded HTTP timeouts and can target release hosts directly with `-Dqortium.liveBootstrapHosts=https://host-one,https://host-two`.

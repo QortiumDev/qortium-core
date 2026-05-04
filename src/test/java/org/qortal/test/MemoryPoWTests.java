@@ -1,47 +1,53 @@
 package org.qortal.test;
 
-import org.junit.Ignore;
+import org.junit.Before;
 import org.junit.Test;
 import org.qortal.crypto.MemoryPoW;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.Common;
+import org.qortal.utils.NTP;
 
 import java.util.Random;
 
 import static org.junit.Assert.*;
+import static org.junit.Assume.assumeTrue;
 
-@Ignore (value="Tests Work Fine - VERY Long Run time (1hr+)")
 public class MemoryPoWTests {
 
-	private static final int workBufferLength = 8 * 1024 * 1024;
+	private static final String RUN_LONG_MEMPOW_TESTS_PROPERTY = "qortium.runLongMempowTests";
+	private static final int FAST_WORK_BUFFER_LENGTH = 64 * 1024;
+	private static final int FULL_WORK_BUFFER_LENGTH = 8 * 1024 * 1024;
+
+	@Before
+	public void beforeTest() {
+		NTP.setFixedOffset(0L);
+	}
 
 	@Test
 	public void testCompute() {
-		Random random = new Random();
-
-		byte[] data = new byte[256];
-		random.nextBytes(data);
-
-		final int difficulty = 8;
+		byte[] data = new byte[] { (byte) 0xaa, (byte) 0xbb, (byte) 0xcc };
+		int difficulty = 8;
+		int expectedNonce = 55;
 
 		long startTime = System.currentTimeMillis();
 
-		Integer	nonce = MemoryPoW.compute2(data, workBufferLength, difficulty);
+		Integer	nonce = MemoryPoW.compute2(data, FAST_WORK_BUFFER_LENGTH, difficulty);
 
 		long finishTime = System.currentTimeMillis();
 
-		assertNotNull(nonce);
-
-		System.out.printf("Memory-hard PoW (buffer size: %dKB, leading zeros: %d) took %dms, nonce: %d%n", workBufferLength / 1024,
+		System.out.printf("Memory-hard PoW (buffer size: %dKB, leading zeros: %d) took %dms, nonce: %d%n", FAST_WORK_BUFFER_LENGTH / 1024,
 				difficulty,
 				finishTime - startTime,
 				nonce);
 
-		assertTrue(MemoryPoW.verify2(data, workBufferLength, difficulty, nonce));
+		assertEquals(expectedNonce, nonce.intValue());
+		assertTrue(MemoryPoW.verify2(data, FAST_WORK_BUFFER_LENGTH, difficulty, nonce));
 	}
 
 	@Test
 	public void testMultipleComputes() throws DataException {
+		assumeTrue(Boolean.getBoolean(RUN_LONG_MEMPOW_TESTS_PROPERTY));
+
 		Common.useDefaultSettings();
 		Random random = new Random();
 
@@ -61,7 +67,7 @@ public class MemoryPoWTests {
 				random.nextBytes(data);
 
 				final long startTime = System.currentTimeMillis();
-				int nonce = MemoryPoW.compute2(data, workBufferLength, difficulty);
+				int nonce = MemoryPoW.compute2(data, FULL_WORK_BUFFER_LENGTH, difficulty);
 				times[i] = System.currentTimeMillis() - startTime;
 
 				timesS1 += times[i];
@@ -87,15 +93,15 @@ public class MemoryPoWTests {
 		byte[] data = new byte[] { (byte) 0xaa, (byte) 0xbb, (byte) 0xcc };
 
 		int difficulty = 8;
-		int expectedNonce = 326;
-		int nonce = MemoryPoW.compute2(data, workBufferLength, difficulty);
+		int expectedNonce = 55;
+		int nonce = MemoryPoW.compute2(data, FAST_WORK_BUFFER_LENGTH, difficulty);
 
 		System.out.println(String.format("Difficulty %d, nonce: %d", difficulty, nonce));
 		assertEquals(expectedNonce, nonce);
 
-		difficulty = 14;
-		expectedNonce = 11032;
-		nonce = MemoryPoW.compute2(data, workBufferLength, difficulty);
+		difficulty = 10;
+		expectedNonce = 1356;
+		nonce = MemoryPoW.compute2(data, FAST_WORK_BUFFER_LENGTH, difficulty);
 
 		System.out.printf("Difficulty %d, nonce: %d%n", difficulty, nonce);
 		assertEquals(expectedNonce, nonce);
@@ -107,11 +113,11 @@ public class MemoryPoWTests {
 
 		int difficulty = 8;
 		int expectedNonce = 326;
-		assertTrue(MemoryPoW.verify2(data, workBufferLength, difficulty, expectedNonce));
+		assertTrue(MemoryPoW.verify2(data, FULL_WORK_BUFFER_LENGTH, difficulty, expectedNonce));
 
 		difficulty = 14;
 		expectedNonce = 11032;
-		assertTrue(MemoryPoW.verify2(data, workBufferLength, difficulty, expectedNonce));
+		assertTrue(MemoryPoW.verify2(data, FULL_WORK_BUFFER_LENGTH, difficulty, expectedNonce));
 	}
 
 }
