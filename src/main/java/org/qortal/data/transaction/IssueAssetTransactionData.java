@@ -27,6 +27,9 @@ public class IssueAssetTransactionData extends TransactionData {
 	@Schema(accessMode = AccessMode.READ_ONLY)
 	private Long assetId = null;
 
+	@Schema(description = "optional requested asset ID; only 0 is valid, for native asset bootstrap", example = "0")
+	private Long requestedAssetId = null;
+
 	@Schema(description = "asset issuer's public key", example = "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP")
 	private byte[] issuerPublicKey;
 
@@ -81,12 +84,13 @@ public class IssueAssetTransactionData extends TransactionData {
 	}
 
 	/** From repository */
-	public IssueAssetTransactionData(BaseTransactionData baseTransactionData, Long assetId, String assetName,
+	public IssueAssetTransactionData(BaseTransactionData baseTransactionData, Long assetId, Long requestedAssetId, String assetName,
 			String description, long quantity, boolean isDivisible, String data, boolean isUnspendable,
 			String reducedAssetName) {
 		super(TransactionType.ISSUE_ASSET, baseTransactionData);
 
 		this.assetId = assetId;
+		this.requestedAssetId = requestedAssetId;
 		this.issuerPublicKey = baseTransactionData.creatorPublicKey;
 		this.assetName = assetName;
 		this.description = description;
@@ -97,10 +101,25 @@ public class IssueAssetTransactionData extends TransactionData {
 		this.reducedAssetName = reducedAssetName;
 	}
 
+	/** From repository */
+	public IssueAssetTransactionData(BaseTransactionData baseTransactionData, Long assetId, String assetName,
+			String description, long quantity, boolean isDivisible, String data, boolean isUnspendable,
+			String reducedAssetName) {
+		this(baseTransactionData, assetId, null, assetName, description, quantity, isDivisible, data, isUnspendable,
+				reducedAssetName);
+	}
+
 	/** From network/API */
 	public IssueAssetTransactionData(BaseTransactionData baseTransactionData, String assetName, String description,
 			long quantity, boolean isDivisible, String data, boolean isUnspendable) {
-		this(baseTransactionData, null, assetName, description, quantity, isDivisible, data, isUnspendable,
+		this(baseTransactionData, null, null, assetName, description, quantity, isDivisible, data, isUnspendable,
+				Unicode.sanitize(assetName));
+	}
+
+	/** From network/API */
+	public IssueAssetTransactionData(BaseTransactionData baseTransactionData, Long requestedAssetId, String assetName, String description,
+			long quantity, boolean isDivisible, String data, boolean isUnspendable) {
+		this(baseTransactionData, null, requestedAssetId, assetName, description, quantity, isDivisible, data, isUnspendable,
 				Unicode.sanitize(assetName));
 	}
 
@@ -112,6 +131,14 @@ public class IssueAssetTransactionData extends TransactionData {
 
 	public void setAssetId(Long assetId) {
 		this.assetId = assetId;
+	}
+
+	public Long getRequestedAssetId() {
+		return this.requestedAssetId;
+	}
+
+	public void setRequestedAssetId(Long requestedAssetId) {
+		this.requestedAssetId = requestedAssetId;
 	}
 
 	public byte[] getIssuerPublicKey() {

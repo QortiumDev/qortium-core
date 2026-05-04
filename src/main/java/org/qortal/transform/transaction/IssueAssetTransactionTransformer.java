@@ -23,9 +23,10 @@ public class IssueAssetTransactionTransformer extends TransactionTransformer {
 	private static final int IS_DIVISIBLE_LENGTH = BOOLEAN_LENGTH;
 	private static final int DATA_SIZE_LENGTH = INT_LENGTH;
 	private static final int IS_UNSPENDABLE_LENGTH = BOOLEAN_LENGTH;
+	private static final int REQUESTED_ASSET_ID_PRESENT_LENGTH = BOOLEAN_LENGTH;
 
 	private static final int EXTRAS_LENGTH = NAME_SIZE_LENGTH + DESCRIPTION_SIZE_LENGTH + QUANTITY_LENGTH
-			+ IS_DIVISIBLE_LENGTH + DATA_SIZE_LENGTH + IS_UNSPENDABLE_LENGTH;
+			+ IS_DIVISIBLE_LENGTH + DATA_SIZE_LENGTH + IS_UNSPENDABLE_LENGTH + REQUESTED_ASSET_ID_PRESENT_LENGTH;
 
 	protected static final TransactionLayout layout;
 
@@ -36,6 +37,8 @@ public class IssueAssetTransactionTransformer extends TransactionTransformer {
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("asset issuer's public key", TransformationType.PUBLIC_KEY);
 		addMempowFeeNonceToLayout(layout, TransactionType.ISSUE_ASSET);
+		layout.add("has requested asset ID?", TransformationType.BOOLEAN);
+		layout.add("? requested asset ID", TransformationType.LONG);
 		layout.add("asset name length", TransformationType.INT);
 		layout.add("asset name", TransformationType.STRING);
 		layout.add("asset description length", TransformationType.INT);
@@ -57,6 +60,9 @@ public class IssueAssetTransactionTransformer extends TransactionTransformer {
 
 		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.ISSUE_ASSET);
 
+		boolean hasRequestedAssetId = byteBuffer.get() != 0;
+		Long requestedAssetId = hasRequestedAssetId ? byteBuffer.getLong() : null;
+
 		String assetName = Serialization.deserializeSizedString(byteBuffer, Asset.MAX_NAME_SIZE);
 
 		String description = Serialization.deserializeSizedString(byteBuffer, Asset.MAX_DESCRIPTION_SIZE);
@@ -76,13 +82,14 @@ public class IssueAssetTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, issuerPublicKey, fee, nonce, signature);
 
-		return new IssueAssetTransactionData(baseTransactionData, assetName, description, quantity, isDivisible, data, isUnspendable);
+		return new IssueAssetTransactionData(baseTransactionData, requestedAssetId, assetName, description, quantity, isDivisible, data, isUnspendable);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
 		IssueAssetTransactionData issueAssetTransactionData = (IssueAssetTransactionData) transactionData;
 
 		return getBaseLength(transactionData) + EXTRAS_LENGTH
+				+ (issueAssetTransactionData.getRequestedAssetId() != null ? ASSET_ID_LENGTH : 0)
 				+ Utf8.encodedLength(issueAssetTransactionData.getAssetName())
 				+ Utf8.encodedLength(issueAssetTransactionData.getDescription())
 				+ Utf8.encodedLength(issueAssetTransactionData.getData());
@@ -95,6 +102,11 @@ public class IssueAssetTransactionTransformer extends TransactionTransformer {
 			ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
 			transformCommonBytes(transactionData, bytes);
+
+			Long requestedAssetId = issueAssetTransactionData.getRequestedAssetId();
+			bytes.write((byte) (requestedAssetId != null ? 1 : 0));
+			if (requestedAssetId != null)
+				bytes.write(Longs.toByteArray(requestedAssetId));
 
 			Serialization.serializeSizedString(bytes, issueAssetTransactionData.getAssetName());
 

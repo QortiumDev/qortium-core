@@ -60,7 +60,7 @@
 		"version": 4,
 		"timestamp": 0,
 		"transactions": [
-			{ "type": "ISSUE_ASSET", "assetName": "NATIVE", "description": "Native test asset", "data": "", "quantity": 0, "isDivisible": true, "fee": 0 },
+			{ "type": "ISSUE_ASSET", "requestedAssetId": 0, "assetName": "NATIVE", "description": "Native test asset", "data": "", "quantity": 0, "isDivisible": true, "fee": 0 },
 			{ "type": "GENESIS", "recipient": "QgV4s3xnzLhVBEJxcYui4u4q11yhUHsd9v", "amount": "1000000000" },
 			{ "type": "GENESIS", "recipient": "QixPbJUwsaHsVEofJdozU9zgVqkK6aYhrK", "amount": "1000000" },
 			{ "type": "GENESIS", "recipient": "QaUpHNhT3Ygx6avRiKobuLdusppR5biXjL", "amount": "1000000" },

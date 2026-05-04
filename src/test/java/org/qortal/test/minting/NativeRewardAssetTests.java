@@ -3,6 +3,7 @@ package org.qortal.test.minting;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.asset.Asset;
+import org.qortal.data.asset.AssetData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -18,6 +19,16 @@ public class NativeRewardAssetTests extends Common {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
+	}
+
+	@Test
+	public void testGenesisNativeAssetUsesReservedId() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			AssetData nativeAssetData = repository.getAssetRepository().fromAssetName("NATIVE");
+
+			assertEquals(Asset.NATIVE, (long) nativeAssetData.getAssetId());
+			assertTrue(repository.getAssetRepository().assetExists(Asset.NATIVE));
+		}
 	}
 
 	@Test

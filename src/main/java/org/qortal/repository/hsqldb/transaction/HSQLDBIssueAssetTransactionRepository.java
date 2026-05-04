@@ -17,7 +17,7 @@ public class HSQLDBIssueAssetTransactionRepository extends HSQLDBTransactionRepo
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT asset_name, description, quantity, is_divisible, data, is_unspendable, asset_id, reduced_asset_name "
+		String sql = "SELECT asset_name, description, quantity, is_divisible, data, is_unspendable, asset_id, requested_asset_id, reduced_asset_name "
 				+ "FROM IssueAssetTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
@@ -36,9 +36,13 @@ public class HSQLDBIssueAssetTransactionRepository extends HSQLDBTransactionRepo
 			if (assetId == 0 && resultSet.wasNull())
 				assetId = null;
 
-			String reducedAssetName = resultSet.getString(8);
+			Long requestedAssetId = resultSet.getLong(8);
+			if (requestedAssetId == 0 && resultSet.wasNull())
+				requestedAssetId = null;
 
-			return new IssueAssetTransactionData(baseTransactionData, assetId, assetName, description, quantity, isDivisible,
+			String reducedAssetName = resultSet.getString(9);
+
+			return new IssueAssetTransactionData(baseTransactionData, assetId, requestedAssetId, assetName, description, quantity, isDivisible,
 					data, isUnspendable, reducedAssetName);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch issue asset transaction from repository", e);
@@ -55,7 +59,8 @@ public class HSQLDBIssueAssetTransactionRepository extends HSQLDBTransactionRepo
 				.bind("asset_name", issueAssetTransactionData.getAssetName()).bind("reduced_asset_name", issueAssetTransactionData.getReducedAssetName())
 				.bind("description", issueAssetTransactionData.getDescription()).bind("quantity", issueAssetTransactionData.getQuantity())
 				.bind("is_divisible", issueAssetTransactionData.isDivisible()).bind("data", issueAssetTransactionData.getData())
-				.bind("is_unspendable", issueAssetTransactionData.isUnspendable()).bind("asset_id", issueAssetTransactionData.getAssetId());
+				.bind("is_unspendable", issueAssetTransactionData.isUnspendable()).bind("asset_id", issueAssetTransactionData.getAssetId())
+				.bind("requested_asset_id", issueAssetTransactionData.getRequestedAssetId());
 
 		try {
 			saveHelper.execute(this.repository);

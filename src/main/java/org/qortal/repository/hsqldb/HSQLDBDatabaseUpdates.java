@@ -357,10 +357,10 @@ public class HSQLDBDatabaseUpdates {
 					// For looking up assets by 'reduced' name
 					stmt.execute("CREATE INDEX AssetReducedNameIndex on Assets (reduced_asset_name)");
 
-					// We need a corresponding trigger to make sure new asset_id values are assigned sequentially start from 0
+					// We need a corresponding trigger to make sure new non-native asset_id values are assigned sequentially start from 1
 					stmt.execute("CREATE TRIGGER Asset_ID_Trigger BEFORE INSERT ON Assets "
 							+ "REFERENCING NEW ROW AS new_row FOR EACH ROW WHEN (new_row.asset_id IS NULL) "
-							+ "SET new_row.asset_id = (SELECT IFNULL(MAX(asset_id) + 1, 0) FROM Assets)");
+							+ "SET new_row.asset_id = (SELECT IFNULL(MAX(asset_id) + 1, 1) FROM Assets WHERE asset_id >= 1)");
 
 					// Asset Orders
 					stmt.execute("CREATE TABLE AssetOrders (asset_order_id AssetOrderID, creator AccountPublicKey NOT NULL, "
@@ -383,7 +383,7 @@ public class HSQLDBDatabaseUpdates {
 
 					// Issue Asset Transactions
 					stmt.execute("CREATE TABLE IssueAssetTransactions (signature Signature, issuer AccountPublicKey NOT NULL, asset_name AssetName NOT NULL, "
-							+ "description GenericDescription NOT NULL, quantity BIGINT NOT NULL, is_divisible BOOLEAN NOT NULL, asset_id AssetID, "
+							+ "description GenericDescription NOT NULL, quantity BIGINT NOT NULL, is_divisible BOOLEAN NOT NULL, asset_id AssetID, requested_asset_id AssetID, "
 							+ "is_unspendable BOOLEAN NOT NULL, data AssetData NOT NULL DEFAULT '', reduced_asset_name AssetName NOT NULL, "
 							+ TRANSACTION_KEYS + ")");
 
@@ -1089,6 +1089,7 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "SellNameTransactions", "recipient", "AccountAddress");
 					addColumnIfMissing(connection, "CancelSellNameTransactions", "sale_recipient", "AccountAddress");
 					addColumnIfMissing(connection, "BuyNameTransactions", "sale_recipient", "AccountAddress");
+					addColumnIfMissing(connection, "IssueAssetTransactions", "requested_asset_id", "AssetID");
 					addColumnIfMissing(connection, "DeployATTransactions", "native_fee_reserve", "AssetAmount NOT NULL DEFAULT 0");
 					addColumnIfMissing(connection, "Assets", "is_owner_for_sale", "BOOLEAN NOT NULL DEFAULT FALSE");
 					addColumnIfMissing(connection, "Assets", "owner_sale_price", "AssetAmount");
@@ -1110,6 +1111,10 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE TABLE IF NOT EXISTS BuyAssetOwnershipTransactions (signature Signature, buyer AccountPublicKey NOT NULL, "
 							+ "asset_id AssetID NOT NULL, amount AssetAmount NOT NULL, seller AccountAddress NOT NULL, "
 							+ "asset_reference Signature, sale_recipient AccountAddress, " + TRANSACTION_KEYS + ")");
+					stmt.execute("DROP TRIGGER IF EXISTS Asset_ID_Trigger");
+					stmt.execute("CREATE TRIGGER Asset_ID_Trigger BEFORE INSERT ON Assets "
+							+ "REFERENCING NEW ROW AS new_row FOR EACH ROW WHEN (new_row.asset_id IS NULL) "
+							+ "SET new_row.asset_id = (SELECT IFNULL(MAX(asset_id) + 1, 1) FROM Assets WHERE asset_id >= 1)");
 					renameColumnIfExists(connection, "TradeBotStates", "qort_amount", "native_amount");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");

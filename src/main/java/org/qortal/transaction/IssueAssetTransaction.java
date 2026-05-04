@@ -70,16 +70,17 @@ public class IssueAssetTransaction extends Transaction {
 
 		long quantity = this.issueAssetTransactionData.getQuantity();
 		boolean nativeAssetExists = this.repository.getAssetRepository().assetExists(Asset.NATIVE);
+		boolean isNativeBootstrap = this.isNativeBootstrap();
 
-		ValidationResult nativeBootstrapResult = this.validateNativeAssetBootstrapRules(nativeAssetExists);
-		if (nativeBootstrapResult != ValidationResult.OK)
-			return nativeBootstrapResult;
+		ValidationResult requestedAssetIdResult = this.validateRequestedAssetId(nativeAssetExists);
+		if (requestedAssetIdResult != ValidationResult.OK)
+			return requestedAssetIdResult;
 
 		// Check quantity. The native asset may bootstrap with zero initial supply.
 		if (quantity < 0 || quantity > Asset.MAX_QUANTITY)
 			return ValidationResult.INVALID_QUANTITY;
 
-		if (quantity == 0 && nativeAssetExists)
+		if (quantity == 0 && !isNativeBootstrap)
 			return ValidationResult.INVALID_QUANTITY;
 
 		// Check quantity versus indivisibility
@@ -97,9 +98,9 @@ public class IssueAssetTransaction extends Transaction {
 
 	@Override
 	public ValidationResult isProcessable() throws DataException {
-		// Re-check zero-quantity assets at approval time, in case asset 0 was issued while this transaction was pending.
-		if (this.issueAssetTransactionData.getQuantity() == 0 && this.repository.getAssetRepository().assetExists(Asset.NATIVE))
-			return ValidationResult.INVALID_QUANTITY;
+		// Re-check native bootstrap at approval time, in case asset 0 was issued while this transaction was pending.
+		if (this.isNativeBootstrap() && this.repository.getAssetRepository().assetExists(Asset.NATIVE))
+			return ValidationResult.ASSET_ALREADY_EXISTS;
 
 		// Check the name isn't already taken
 		if (this.repository.getAssetRepository().reducedAssetNameExists(this.issueAssetTransactionData.getReducedAssetName()))
@@ -113,6 +114,9 @@ public class IssueAssetTransaction extends Transaction {
 	public void process() throws DataException {
 		// Issue asset
 		Asset asset = new Asset(this.repository, this.issueAssetTransactionData);
+		if (this.isNativeBootstrap())
+			asset.getAssetData().setAssetId(Asset.NATIVE);
+
 		asset.issue();
 
 		// Add asset to issuer
@@ -143,9 +147,21 @@ public class IssueAssetTransaction extends Transaction {
 		this.repository.getTransactionRepository().save(this.issueAssetTransactionData);
 	}
 
-	private ValidationResult validateNativeAssetBootstrapRules(boolean nativeAssetExists) throws DataException {
-		if (nativeAssetExists)
+	private boolean isNativeBootstrap() {
+		Long requestedAssetId = this.issueAssetTransactionData.getRequestedAssetId();
+		return requestedAssetId != null && requestedAssetId == Asset.NATIVE;
+	}
+
+	private ValidationResult validateRequestedAssetId(boolean nativeAssetExists) throws DataException {
+		Long requestedAssetId = this.issueAssetTransactionData.getRequestedAssetId();
+		if (requestedAssetId == null)
 			return ValidationResult.OK;
+
+		if (requestedAssetId != Asset.NATIVE)
+			return ValidationResult.ASSET_DOES_NOT_EXIST;
+
+		if (nativeAssetExists)
+			return ValidationResult.ASSET_ALREADY_EXISTS;
 
 		// Genesis configs can seed assets explicitly; runtime no-native bootstrap is development-group gated.
 		int blockchainHeight = this.repository.getBlockRepository().getBlockchainHeight();

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - core: reserve asset 0 for explicit native bootstrap
+
+Changed asset issuance so normal assets can be issued before the native asset exists while still starting at asset ID `1`, leaving asset ID `0` reserved for an explicit native bootstrap request. `ISSUE_ASSET` now carries an optional requested asset ID, only accepts `0` for development-group-approved native bootstrap, rejects repeated native bootstrap attempts after asset `0` exists, and keeps zero-quantity issuance limited to the native asset. Tests now cover normal pre-native asset issuance, native bootstrap after normal assets, one-time native creation, rejected non-native ID requests, and serialization round trips for the new field.
+
 ### 2026-05-03 - build: keep Maven plugins out of runtime shade
 
 Removed Maven build plugins from the project's runtime dependency list while leaving them configured in the build plugin section, excluded Maven plugin artifacts that the AT dependency publishes transitively as compile dependencies, removed unused or redundant runtime dependencies for JavaMail, the direct servlet API, and Swagger's servlet initializer, excluded duplicate JAXB, JSON-P, and activation API jars where equivalent implementation/runtime jars remain available, and filtered Java module descriptors out of the shaded runtime jar. The package-info and build-helper plugins are still available during the build, but build-tool dependency trees and several duplicate API jars are no longer pulled into Qortium's shaded runtime jar.
