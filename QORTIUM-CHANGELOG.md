@@ -36,7 +36,7 @@ own chain.
 
 ### 2026-05-04 - test: unskip useful PoW and block timestamp checks
 
-Converted MemoryPoW tests from a fully ignored class into fast deterministic default coverage, with the long benchmark available via `-Dqortium.runLongMempowTests=true`. The block timestamp API now returns genesis when it is the nearest block at or before the requested timestamp, and the previously ignored timestamp API test now asserts deterministic genesis and minted-block lookups.
+Converted MemoryPoW tests from a fully ignored class into fast deterministic default coverage, including an 8 MiB difficulty-8 compute smoke test. The long MemoryPoW benchmark is split by difficulty and remains available via `-Dqortium.runLongMempowTests=true`. The block timestamp API now returns genesis when it is the nearest block at or before the requested timestamp, and the previously ignored timestamp API test now asserts deterministic genesis and minted-block lookups.
 
 ### 2026-05-04 - test: harden live bootstrap host checks
 
