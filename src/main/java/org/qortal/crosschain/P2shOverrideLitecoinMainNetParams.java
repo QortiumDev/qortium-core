@@ -43,6 +43,7 @@ public class P2shOverrideLitecoinMainNetParams extends NetworkParameters {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public Coin getMinNonDustOutput() {
         return this.params.getMinNonDustOutput();
     }

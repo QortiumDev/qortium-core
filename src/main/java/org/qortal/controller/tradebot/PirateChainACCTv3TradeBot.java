@@ -747,7 +747,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		long feeTimestamp = calcFeeTimestamp(lockTimeA, crossChainTradeData.tradeTimeout);
 		long p2shFee = PirateChain.getInstance().getP2shFee(feeTimestamp);
 		long minimumAmountA = crossChainTradeData.expectedForeignAmount + p2shFee;
-		String receivingAddress = Bech32.encode("zs", receivingAccountInfo);
+		String receivingAddress = Bech32.encode(Bech32.Encoding.BECH32, "zs", receivingAccountInfo);
 
 		BitcoinyHTLC.Status htlcStatusA = PirateChainHTLC.determineHtlcStatus(pirateChain.getBlockchainProvider(), p2shAddress, minimumAmountA);
 

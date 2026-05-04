@@ -185,6 +185,7 @@ public class DeterminedNetworkParams extends NetworkParameters implements Altcoi
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public Coin getMinNonDustOutput() {
 
         return Coin.valueOf(this.minNonDustOutput);

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-03 - crosschain: update deprecated library API usage
+
+Updated the Pirate Chain trade bot to call bitcoinj's current Bech32 encoding API explicitly, and documented the remaining non-dust-output overrides as intentional compatibility points with bitcoinj/libdohj's abstract network-parameter interface. This keeps cross-chain behavior unchanged while reducing avoidable dependency deprecation warnings.
+
 ### 2026-05-03 - build: clean remaining low-risk compiler notices
 
 Removed raw map types from the API map adapter, replaced unchecked cache-filter test casts with checked helper methods, updated utility code to use current SevenZ and ICU Unicode APIs, and removed the deprecated trade-bot `xprv58` response fallback in favor of the existing `foreignKey` field. This keeps the baseline API stricter while reducing compiler noise before tackling the remaining third-party cross-chain deprecations.
