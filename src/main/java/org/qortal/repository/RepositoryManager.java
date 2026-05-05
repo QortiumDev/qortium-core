@@ -8,10 +8,10 @@ import org.qortal.data.at.ATData;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.transaction.ATTransactionData;
 import org.qortal.data.transaction.TransactionData;
-import org.qortal.gui.SplashFrame;
 import org.qortal.settings.Settings;
 import org.qortal.transaction.Transaction;
 import org.qortal.transform.block.BlockTransformation;
+import org.qortal.utils.StartupStatus;
 
 import java.sql.SQLException;
 import java.util.*;
@@ -103,7 +103,7 @@ public abstract class RepositoryManager {
 
 			LOGGER.info("Rebuilding transaction sequences - this will take a while...");
 
-			SplashFrame.getInstance().updateStatus("Rebuilding transactions - please wait...");
+			StartupStatus.update("Rebuilding transactions - please wait...");
 
 			int blockchainHeight = repository.getBlockRepository().getBlockchainHeight();
 			int totalTransactionCount = 0;

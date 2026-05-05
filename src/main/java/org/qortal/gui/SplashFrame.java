@@ -3,6 +3,7 @@ package org.qortal.gui;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.controller.Controller;
+import org.qortal.utils.StartupStatus;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -14,6 +15,7 @@ import java.util.List;
 public class SplashFrame {
 
 	protected static final Logger LOGGER = LogManager.getLogger(SplashFrame.class);
+	private static final String TITLE = "Qortium Core";
 
 	private static SplashFrame instance;
 	private JFrame splashDialog;
@@ -72,26 +74,40 @@ public class SplashFrame {
 			return;
 		}
 
-		this.splashDialog = new JFrame();
+		try {
+			this.splashDialog = new JFrame(TITLE);
 
-		List<Image> icons = new ArrayList<>();
-		icons.add(Gui.loadImage("icons/icon16.png"));
-		icons.add(Gui.loadImage("icons/qortium_ui_tray_synced.png"));
-		icons.add(Gui.loadImage("icons/qortium_ui_tray_syncing_time-alt.png"));
-		icons.add(Gui.loadImage("icons/qortium_ui_tray_minting.png"));
-		icons.add(Gui.loadImage("icons/qortium_ui_tray_syncing.png"));
-		icons.add(Gui.loadImage("icons/icon64.png"));
-		icons.add(Gui.loadImage("icons/Qlogo_128.png"));
-		this.splashDialog.setIconImages(icons);
+			List<Image> icons = new ArrayList<>();
+			icons.add(Gui.loadImage("icons/icon16.png"));
+			icons.add(Gui.loadImage("icons/qortium_ui_tray_synced.png"));
+			icons.add(Gui.loadImage("icons/qortium_ui_tray_syncing_time-alt.png"));
+			icons.add(Gui.loadImage("icons/qortium_ui_tray_minting.png"));
+			icons.add(Gui.loadImage("icons/qortium_ui_tray_syncing.png"));
+			icons.add(Gui.loadImage("icons/icon64.png"));
+			icons.add(Gui.loadImage("icons/Qlogo_128.png"));
+			this.splashDialog.setIconImages(icons);
 
-		this.splashPanel = new SplashPanel();
-		this.splashDialog.getContentPane().add(this.splashPanel);
-		this.splashDialog.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-		this.splashDialog.setUndecorated(true);
-		this.splashDialog.pack();
-		this.splashDialog.setLocationRelativeTo(null);
-		this.splashDialog.setBackground(Color.BLACK);
-		this.splashDialog.setVisible(true);
+			this.splashPanel = new SplashPanel();
+			this.splashDialog.getContentPane().add(this.splashPanel);
+			this.splashDialog.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+			this.splashDialog.setUndecorated(true);
+			this.splashDialog.pack();
+			this.splashDialog.setLocationRelativeTo(null);
+			this.splashDialog.setBackground(Color.BLACK);
+			this.splashDialog.setVisible(true);
+
+			StartupStatus.setUpdater(this::updateStatus);
+		} catch (AWTError | RuntimeException e) {
+			LOGGER.info("Unable to initialize splash screen: {}", e.getMessage());
+			try {
+				if (this.splashDialog != null)
+					this.splashDialog.dispose();
+			} catch (AWTError | RuntimeException ignored) {
+				// Already handling a GUI initialization failure.
+			}
+			this.splashPanel = null;
+			this.splashDialog = null;
+		}
 	}
 
 	public static SplashFrame getInstance() {
@@ -102,17 +118,28 @@ public class SplashFrame {
 	}
 
 	public void setVisible(boolean b) {
-		this.splashDialog.setVisible(b);
+		if (this.splashDialog != null)
+			this.splashDialog.setVisible(b);
 	}
 
 	public void dispose() {
-		this.splashDialog.dispose();
+		StartupStatus.clearUpdater();
+
+		if (this.splashDialog != null)
+			this.splashDialog.dispose();
+
+		this.splashDialog = null;
+		this.splashPanel = null;
 	}
 
 	public void updateStatus(String text) {
-		if (this.splashPanel != null) {
-			this.splashPanel.updateStatus(text);
-		}
+		if (this.splashPanel == null)
+			return;
+
+		SwingUtilities.invokeLater(() -> {
+			if (this.splashPanel != null)
+				this.splashPanel.updateStatus(text);
+		});
 	}
 
 }

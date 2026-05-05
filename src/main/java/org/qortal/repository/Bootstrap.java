@@ -9,13 +9,13 @@ import org.qortal.crypto.Crypto;
 import org.qortal.data.account.MintingAccountData;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.crosschain.TradeBotData;
-import org.qortal.gui.SplashFrame;
 import org.qortal.network.Network;
 import org.qortal.repository.hsqldb.HSQLDBImportExport;
 import org.qortal.repository.hsqldb.HSQLDBRepositoryFactory;
 import org.qortal.settings.Settings;
 import org.qortal.utils.NTP;
 import org.qortal.utils.SevenZ;
+import org.qortal.utils.StartupStatus;
 
 import java.io.BufferedInputStream;
 import java.io.FileOutputStream;
@@ -397,7 +397,7 @@ public class Bootstrap {
         String bootstrapUrl = String.format("%s/%s", bootstrapHost, bootstrapFilename);
         String type = Settings.getInstance().isTopOnly() ? "top-only" : "full node";
 
-        SplashFrame.getInstance().updateStatus(String.format("Downloading %s bootstrap...", type));
+        StartupStatus.update(String.format("Downloading %s bootstrap...", type));
         LOGGER.info(String.format("Downloading %s bootstrap from %s ...", type, bootstrapUrl));
 
         // Delete an existing file if it exists
@@ -437,7 +437,7 @@ public class Bootstrap {
 
                 if (fileSize > 0) {
                     double progress = (double)downloaded / (double)fileSize * 100;
-                    SplashFrame.getInstance().updateStatus(String.format("Downloading %s bootstrap... (%.1f%%)", type, progress));
+                    StartupStatus.update(String.format("Downloading %s bootstrap... (%.1f%%)", type, progress));
                 }
             }
 
@@ -526,7 +526,7 @@ public class Bootstrap {
 
     private void updateStatus(String text) {
         LOGGER.info(text);
-        SplashFrame.getInstance().updateStatus(text);
+        StartupStatus.update(text);
     }
 
 }

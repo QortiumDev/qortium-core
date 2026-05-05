@@ -9,8 +9,6 @@ package org.qortal.utils;
 import org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry;
 import org.apache.commons.compress.archivers.sevenz.SevenZFile;
 import org.apache.commons.compress.archivers.sevenz.SevenZOutputFile;
-import org.qortal.gui.SplashFrame;
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -54,7 +52,7 @@ public class SevenZ {
                         extracted += count;
 
                         int progress = (int)((double)extracted / (double)fileSize * 100);
-                        SplashFrame.getInstance().updateStatus(String.format("Extracting %s... (%d%%)", curfile.getName(), progress));
+                        StartupStatus.update(String.format("Extracting %s... (%d%%)", curfile.getName(), progress));
                     }
                 }
             }

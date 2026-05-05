@@ -4,7 +4,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.controller.Controller;
 import org.qortal.controller.tradebot.TradeStates;
-import org.qortal.gui.SplashFrame;
+import org.qortal.utils.StartupStatus;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -29,13 +29,13 @@ public class HSQLDBDatabaseUpdates {
 	public static boolean updateDatabase(Connection connection) throws SQLException {
 		final boolean wasPristine = fetchDatabaseVersion(connection) == 0;
 
-		SplashFrame.getInstance().updateStatus("Upgrading database, please wait...");
+		StartupStatus.update("Upgrading database, please wait...");
 
 		while (databaseUpdating(connection, wasPristine))
 			incrementDatabaseVersion(connection);
 
 		String text = String.format("Starting Qortium Core v%s...", Controller.getInstance().getVersionStringWithoutPrefix());
-		SplashFrame.getInstance().updateStatus(text);
+		StartupStatus.update(text);
 
 		return wasPristine;
 	}

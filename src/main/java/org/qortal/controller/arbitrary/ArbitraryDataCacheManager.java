@@ -7,7 +7,6 @@ import org.qortal.data.arbitrary.ArbitraryResourceData;
 import org.qortal.data.transaction.ArbitraryTransactionData;
 import org.qortal.event.DataMonitorEvent;
 import org.qortal.event.EventBus;
-import org.qortal.gui.SplashFrame;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -15,6 +14,7 @@ import org.qortal.repository.hsqldb.HSQLDBDatabaseUpdates;
 import org.qortal.settings.Settings;
 import org.qortal.transaction.ArbitraryTransaction;
 import org.qortal.utils.Base58;
+import org.qortal.utils.StartupStatus;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -97,7 +97,7 @@ public class ArbitraryDataCacheManager extends Thread {
             // if latest signature column is added, but not populated, then populate now
             if( databaseVersion > 51 && !isLatestSignaturePopulated(connection)) {
 
-                SplashFrame.getInstance().updateStatus("Gathering latest signatures for QDN ...");
+                StartupStatus.update("Gathering latest signatures for QDN ...");
                 LOGGER.info("Gathering latest signatures for QDN ...");
 
                 try (Statement arbitraryTransactionSelectionStatement = connection.createStatement()) {
@@ -185,7 +185,7 @@ public class ArbitraryDataCacheManager extends Thread {
         } catch (SQLException e) {
             throw new DataException(e.getMessage());
         } finally {
-            SplashFrame.getInstance().updateStatus("Proceeding to Start Qortium ...");
+            StartupStatus.update("Proceeding to Start Qortium ...");
         }
     }
 
@@ -324,7 +324,7 @@ public class ArbitraryDataCacheManager extends Thread {
             }
 
             LOGGER.info("Building arbitrary resources cache...");
-            SplashFrame.getInstance().updateStatus("Building QDN cache - please wait...");
+            StartupStatus.update("Building QDN cache - please wait...");
 
             final int batchSize = Settings.getInstance().getBuildArbitraryResourcesBatchSize();
             int offset = 0;
@@ -413,7 +413,7 @@ public class ArbitraryDataCacheManager extends Thread {
     private boolean refreshArbitraryStatuses(Repository repository) throws DataException {
         try {
             LOGGER.info("Refreshing arbitrary resource statuses for locally hosted transactions...");
-            SplashFrame.getInstance().updateStatus("Refreshing statuses - please wait...");
+            StartupStatus.update("Refreshing statuses - please wait...");
 
             final int batchSize = Settings.getInstance().getBuildArbitraryResourcesBatchSize();
             int offset = 0;

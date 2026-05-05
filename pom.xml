@@ -8,6 +8,8 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<skipJUnitTests>true</skipJUnitTests>
+		<!-- Override with -Dtest.awt.headless=false when intentionally running GUI tests with a display. -->
+		<test.awt.headless>true</test.awt.headless>
 
 		<altcoinj.version>d7cf6ac</altcoinj.version> <!-- QuickMythril/altcoinj bitcoinj 0.16 fork point -->
 		<bitcoinj.version>0.16.3</bitcoinj.version>
@@ -441,6 +443,7 @@
 					<skipTests>${skipJUnitTests}</skipTests>
 					<systemPropertyVariables>
 						<hsqldb.method_class_names>org.qortal.test.RepositoryTests.*</hsqldb.method_class_names>
+						<java.awt.headless>${test.awt.headless}</java.awt.headless>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>
