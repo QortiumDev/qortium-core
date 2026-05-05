@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: tighten crosschain HTLC fixture coverage
+
+Expanded BTC-like crosschain HTLC tests so the default suite builds deterministic in-memory fixtures for secret discovery and funded-status detection across supported coins, instead of relying on inherited live fixture checks for coins without known public HTLC data. Live PirateChain fixture checks now fail clearly when no configured light-client server returns the expected fixture data, and the testing guide now includes concrete commands for each opt-in integration test group.
+
 ### 2026-05-04 - test: add deterministic bootstrap and ElectrumX coverage
 
 Added local deterministic coverage for bootstrap host HTTP checks and ElectrumX UTXO parsing so the default test suite validates more of the external-service logic without depending on public infrastructure. Bootstrap tests now exercise HEAD request status handling, archive size validation, and freshness validation against a loopback HTTP server, while ElectrumX tests now cover mock unspent-output parsing and confirmed/unconfirmed filtering. Explicit live ElectrumX runs also fail clearly if no Bitcoin testnet servers are configured.

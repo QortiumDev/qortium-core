@@ -23,6 +23,31 @@ protocol parsing with mock RPC responses. Public hosts remain integration checks
 - `-Dqortium.runLiveElectrumXTests=true`
   Runs public ElectrumX server checks. The default suite uses mock ElectrumX responses for deterministic protocol coverage. Explicit live runs fail if no Bitcoin TEST3 ElectrumX servers are configured.
 - `-Dqortium.runLiveCrosschainTests=true`
-  Runs live crosschain checks that depend on public networks and fixture data. Default crosschain tests should prefer mock providers.
+  Runs live crosschain checks that depend on public networks and fixture data. Default crosschain tests prefer mock providers, including deterministic HTLC fixtures for BTC-like chains. Live fixture checks fail when the explicitly requested fixture data is unavailable.
 - `-Dqortium.runLiveRepositoryIntegrityChecks=true`
   Scans the repository configured by `settings.json` for reduced-name integrity issues. This intentionally targets live local data and is skipped by default.
+
+## Example Commands
+
+```bash
+# Fast deterministic test run
+mvn test -DskipJUnitTests=false
+
+# Long MemoryPoW benchmarks
+mvn test -DskipJUnitTests=false -Dqortium.runLongMempowTests=true -Dtest=org.qortal.test.MemoryPoWTests
+
+# Display-backed GUI checks
+mvn test -DskipJUnitTests=false -Dtest.awt.headless=false -Dtest=org.qortal.test.GuiTests
+
+# Live bootstrap host checks
+mvn test -DskipJUnitTests=false -Dqortium.runLiveBootstrapChecks=true -Dtest=org.qortal.test.BootstrapTests
+
+# Live ElectrumX server checks
+mvn test -DskipJUnitTests=false -Dqortium.runLiveElectrumXTests=true -Dtest=org.qortal.test.crosschain.ElectrumXTests
+
+# Live crosschain checks
+mvn test -DskipJUnitTests=false -Dqortium.runLiveCrosschainTests=true -Dtest='org.qortal.test.crosschain.*Tests'
+
+# Live local repository integrity scan
+mvn test -DskipJUnitTests=false -Dqortium.runLiveRepositoryIntegrityChecks=true -Dtest=org.qortal.test.naming.IntegrityTests
+```

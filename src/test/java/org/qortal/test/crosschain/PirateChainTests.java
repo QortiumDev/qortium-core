@@ -61,6 +61,11 @@ public class PirateChainTests extends BitcoinyTests {
 		return false;
 	}
 
+	@Override
+	protected boolean supportsDeterministicHtlcTests() {
+		return false;
+	}
+
 	public void makeGetMedianBlockTimeAssertions(long firstPeriod, long secondPeriod) {
 			assertTrue("1st call should take less than 5 seconds", firstPeriod < 5000L);
 			assertTrue("2nd call should take less than 5 seconds", secondPeriod < 5000L);
@@ -292,9 +297,7 @@ public class PirateChainTests extends BitcoinyTests {
 			}
 		}
 
-		System.out.println("No configured Pirate light-client server returned the live fixture data: " + failures);
-		assumeTrue(false);
-		return null;
+		throw new AssertionError("No configured Pirate light-client server returned the live fixture data: " + failures);
 	}
 
 	private boolean isMissingLivePirateFixture(Throwable e) {
