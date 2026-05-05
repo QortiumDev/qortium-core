@@ -1,0 +1,37 @@
+name: GUI display tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  guiDisplayTests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Cache local Maven repository
+        uses: actions/cache@v3
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Set up the Java JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'adopt'
+
+      - name: Install xvfb
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      - name: Load custom deps
+        run: |
+          mvn -B install -DskipTests=true --file pom.xml
+
+      - name: Run GUI display tests
+        run: |
+          xvfb-run -a mvn -B test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false -Dtest=org.qortal.test.GuiTests --file pom.xml

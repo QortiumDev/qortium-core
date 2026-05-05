@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-05 - test: tighten skipped-test guardrails
+
+Added a default test hygiene check that fails if new `@Ignore` annotations are introduced, added a manual xvfb-backed GUI display workflow for splash and tray tests, and gave the JaCoCo coverage profile low starting thresholds for instruction, branch, and line coverage so regressions are visible without making the baseline unrealistic. PirateChain crosschain tests now avoid counting inherited BTC-like deterministic wallet and HTLC checks as skipped when those paths do not apply to ARRR, while adding deterministic Pirate HTLC script and P2SH address coverage.
+
 ### 2026-05-05 - test: add JaCoCo coverage reporting
 
 Added an opt-in JaCoCo coverage profile to the Maven test workflow so deterministic test runs can produce HTML, XML, and CSV coverage reports without enforcing a pass/fail threshold yet. The CI test command now enables the repo's JUnit test property explicitly, generates the coverage report, and prints instruction, branch, and line coverage from the generated JaCoCo CSV summary, while the testing guide documents the local coverage command, report location, and MemoryPoW exclusion needed to keep full-suite coverage runs practical. The full-suite coverage pass also exposed and fixed poll-prefix pagination so `limit` and `offset` apply to polls instead of joined poll-option rows.

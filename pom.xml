@@ -32,6 +32,9 @@
 		<icu4j.version>76.1</icu4j.version>
 		<java-diff-utils.version>4.15</java-diff-utils.version>
 		<jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
+		<jacoco.minimum.branch.coverage>0.20</jacoco.minimum.branch.coverage>
+		<jacoco.minimum.instruction.coverage>0.30</jacoco.minimum.instruction.coverage>
+		<jacoco.minimum.line.coverage>0.30</jacoco.minimum.line.coverage>
 		<jaxb-runtime.version>2.3.9</jaxb-runtime.version>
 		<jersey.version>2.47</jersey.version>
 		<jetty.version>10.0.26</jetty.version> <!-- Next logical jump -->
@@ -879,12 +882,40 @@
 								<!-- Coverage instrumentation makes this performance-sensitive PoW loop too slow for full-suite runs. -->
 								<exclude>org/qortal/crypto/MemoryPoW*</exclude>
 							</excludes>
+							<rules>
+								<rule>
+									<element>BUNDLE</element>
+									<limits>
+										<limit>
+											<counter>INSTRUCTION</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>${jacoco.minimum.instruction.coverage}</minimum>
+										</limit>
+										<limit>
+											<counter>BRANCH</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>${jacoco.minimum.branch.coverage}</minimum>
+										</limit>
+										<limit>
+											<counter>LINE</counter>
+											<value>COVEREDRATIO</value>
+											<minimum>${jacoco.minimum.line.coverage}</minimum>
+										</limit>
+									</limits>
+								</rule>
+							</rules>
 						</configuration>
 						<executions>
 							<execution>
 								<id>prepare-agent</id>
 								<goals>
 									<goal>prepare-agent</goal>
+								</goals>
+							</execution>
+							<execution>
+								<id>check-baseline</id>
+								<goals>
+									<goal>check</goal>
 								</goals>
 							</execution>
 						</executions>

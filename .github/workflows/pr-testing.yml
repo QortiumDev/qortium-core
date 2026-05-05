@@ -28,7 +28,7 @@ jobs:
 
     - name: Run all tests
       run: |
-        mvn -B clean test jacoco:report -Pcoverage -DskipJUnitTests=false --file pom.xml
+        mvn -B clean test jacoco:report jacoco:check -Pcoverage -DskipJUnitTests=false --file pom.xml
 
     - name: Log coverage percentage
       run: |

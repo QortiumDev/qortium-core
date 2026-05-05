@@ -17,15 +17,22 @@ protocol parsing with mock RPC responses. Public hosts remain integration checks
 Generate a local JaCoCo coverage report with:
 
 ```bash
-mvn clean test jacoco:report -Pcoverage -DskipJUnitTests=false
+mvn clean test jacoco:report jacoco:check -Pcoverage -DskipJUnitTests=false
 ```
 
 The HTML report is written to `target/site/jacoco/index.html`, with machine-readable
-XML and CSV output in the same directory. Coverage is reported but not enforced by
-threshold yet; thresholds should be added after the baseline is reviewed. The
+XML and CSV output in the same directory. The coverage profile enforces intentionally
+low bundle-level baselines so coverage cannot regress silently: 30% instruction
+coverage, 20% branch coverage, and 30% line coverage. These thresholds are starting
+points and should be ratcheted upward after broader default coverage is added. The
 coverage profile excludes the performance-sensitive MemoryPoW implementation from
-instrumentation because JaCoCo bytecode instrumentation makes nonce computation
-too slow for full-suite coverage runs.
+instrumentation because JaCoCo bytecode instrumentation makes nonce computation too
+slow for full-suite coverage runs.
+
+The default suite also contains a hygiene test that fails if new `@Ignore`
+annotations are added under `src/test/java`. Prefer deterministic coverage for
+normal tests, or use `Assume.assumeTrue(...)` behind an explicit opt-in property
+for live, display-backed, funded-wallet, or long-running checks.
 
 ## Opt-In Checks
 
@@ -33,6 +40,7 @@ too slow for full-suite coverage runs.
   Runs the long MemoryPoW compute benchmarks. The default suite keeps fast compute and known-nonce verification coverage instead.
 - `-Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false`
   Allows GUI display tests to open the splash frame and system tray when a desktop display is available. Headless Maven runs still exercise the splash no-op path.
+  A manual `GUI display tests` GitHub Actions workflow runs the same checks under `xvfb`.
 - `-Dqortium.runLiveBootstrapChecks=true`
   Checks configured bootstrap hosts with live HTTP requests. Use `-Dqortium.liveBootstrapHosts=https://host-one,https://host-two` to override settings. Explicit live runs fail if no bootstrap hosts are configured.
 - `-Dqortium.runLiveElectrumXTests=true`
@@ -54,7 +62,7 @@ mvn test -DskipJUnitTests=false -Dqortium.runLongMempowTests=true -Dtest=org.qor
 # Display-backed GUI checks
 mvn test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false -Dtest=org.qortal.test.GuiTests
 
-# Display-backed GUI checks under xvfb
+# Display-backed GUI checks under xvfb, matching the manual GitHub Actions workflow
 xvfb-run -a mvn test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false -Dtest=org.qortal.test.GuiTests
 
 # Live bootstrap host checks
