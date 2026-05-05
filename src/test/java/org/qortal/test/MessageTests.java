@@ -32,6 +32,8 @@ import static org.junit.Assert.*;
 
 public class MessageTests extends Common {
 
+	private static final int TEST_POW_BUFFER_SIZE = 8 * 1024;
+	private static final int TEST_POW_DIFFICULTY = 4;
 	private static final String recipient = Common.getTestAccount(null, "bob").getAddress();
 
 
@@ -114,59 +116,48 @@ public class MessageTests extends Common {
 	@Test
 	public void atRecipientNoFeeWithNonce() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			String atRecipient = deployAt();
 			MessageTransaction transaction = testFeeNonce(repository, false, true, atRecipient, true);
 
-			// Transaction should be confirmable because it's to an AT, and therefore should be present in a block
+			// Transaction should be confirmable because it's to an AT.
 			assertTrue(transaction.isConfirmable());
-			TransactionUtils.signAndMint(repository, transaction.getTransactionData(), alice);
-			assertTrue(isTransactionConfirmed(repository, transaction));
+			assertTrue(transaction.isSignatureValid());
+			importUnconfirmed(transaction);
 			assertEquals(16, transaction.getPoWDifficulty());
-
-			BlockUtils.orphanLastBlock(repository);
 		}
 	}
 
 	@Test
 	public void regularRecipientNoFeeWithNonce() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
-
 			// Transaction should not be present in db yet
 			List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(null, recipient, null, null, null);
 			assertTrue(messageTransactionsData.isEmpty());
 
 			MessageTransaction transaction = testFeeNonce(repository, false, true, recipient, true);
 
-			// Transaction shouldn't be confirmable because it's not to an AT, and therefore shouldn't be present in a block
+			// Transaction shouldn't be confirmable because it's not to an AT.
 			assertFalse(transaction.isConfirmable());
-			TransactionUtils.signAndMint(repository, transaction.getTransactionData(), alice);
-			assertFalse(isTransactionConfirmed(repository, transaction));
+			assertTrue(transaction.isSignatureValid());
+			importUnconfirmed(transaction);
 			assertEquals(12, transaction.getPoWDifficulty());
 
 			// Transaction should be found when trade bot searches for it
 			messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(null, recipient, null, null, null);
 			assertEquals(1, messageTransactionsData.size());
-
-			BlockUtils.orphanLastBlock(repository);
 		}
 	}
 
 	@Test
 	public void noRecipientNoFeeWithNonce() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
-
 			MessageTransaction transaction = testFeeNonce(repository, false, true, null, true);
 
-			// Transaction shouldn't be confirmable because it's not to an AT, and therefore shouldn't be present in a block
+			// Transaction shouldn't be confirmable because it's not to an AT.
 			assertFalse(transaction.isConfirmable());
-			TransactionUtils.signAndMint(repository, transaction.getTransactionData(), alice);
-			assertFalse(isTransactionConfirmed(repository, transaction));
+			assertTrue(transaction.isSignatureValid());
+			importUnconfirmed(transaction);
 			assertEquals(12, transaction.getPoWDifficulty());
-
-			BlockUtils.orphanLastBlock(repository);
 		}
 	}
 
@@ -211,17 +202,14 @@ public class MessageTests extends Common {
 			// Set mempowTransactionUpdatesTimestamp to a high value, so that it hasn't activated key
 			FieldUtils.writeField(BlockChain.getInstance(), "mempowTransactionUpdatesTimestamp", Long.MAX_VALUE, true);
 
-			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			String atRecipient = deployAt();
 			MessageTransaction transaction = testFeeNonce(repository, false, true, atRecipient, true);
 
 			// Transaction should be confirmable because all MESSAGE transactions confirmed prior to the feature trigger
 			assertTrue(transaction.isConfirmable());
-			TransactionUtils.signAndMint(repository, transaction.getTransactionData(), alice);
-			assertTrue(isTransactionConfirmed(repository, transaction));
+			assertTrue(transaction.isSignatureValid());
+			importUnconfirmed(transaction);
 			assertEquals(14, transaction.getPoWDifficulty()); // Legacy difficulty was 14 in all cases
-
-			BlockUtils.orphanLastBlock(repository);
 		}
 	}
 
@@ -232,16 +220,13 @@ public class MessageTests extends Common {
 			// Set mempowTransactionUpdatesTimestamp to a high value, so that it hasn't activated key
 			FieldUtils.writeField(BlockChain.getInstance(), "mempowTransactionUpdatesTimestamp", Long.MAX_VALUE, true);
 
-			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			MessageTransaction transaction = testFeeNonce(repository, false, true, recipient, true);
 
 			// Transaction should be confirmable because all MESSAGE transactions confirmed prior to the feature trigger
 			assertTrue(transaction.isConfirmable());
-			TransactionUtils.signAndMint(repository, transaction.getTransactionData(), alice);
-			assertTrue(isTransactionConfirmed(repository, transaction)); // All MESSAGE transactions would confirm before feature trigger
+			assertTrue(transaction.isSignatureValid());
+			importUnconfirmed(transaction);
 			assertEquals(14, transaction.getPoWDifficulty()); // Legacy difficulty was 14 in all cases
-
-			BlockUtils.orphanLastBlock(repository);
 		}
 	}
 
@@ -313,7 +298,7 @@ public class MessageTests extends Common {
 		BaseTransactionData baseTransactionData = TestTransaction.generateBase(alice, txGroupId);
 		MessageTransactionData transactionData = buildMessageTransactionData(baseTransactionData, nonce, recipient, amount, assetId, data, isText, isEncrypted);
 
-		MessageTransaction transaction = new MessageTransaction(repository, transactionData);
+		MessageTransaction transaction = new FastPoWMessageTransaction(repository, transactionData);
 
 		if (withFee)
 			transactionData.setFee(transaction.calcRecommendedFee());
@@ -331,6 +316,10 @@ public class MessageTests extends Common {
 		assertEquals(isValid, transaction.isSignatureValid());
 
 		return transaction;
+	}
+
+	private void importUnconfirmed(MessageTransaction transaction) throws DataException {
+		assertEquals(ValidationResult.OK, transaction.importAsUnconfirmed());
 	}
 
 	private MessageTransaction testMessage(int txGroupId, String recipient, long amount, Long assetId) throws DataException {
@@ -385,6 +374,22 @@ public class MessageTests extends Common {
 	private static MessageTransactionData buildMessageTransactionData(BaseTransactionData baseTransactionData, int nonce, String recipient, long amount, Long assetId, byte[] data, boolean isText, boolean isEncrypted) {
 		int version = Transaction.getVersionByTimestamp(baseTransactionData.getTimestamp());
 		return new MessageTransactionData(baseTransactionData, version, nonce, recipient, amount, assetId, data, isText, isEncrypted);
+	}
+
+	private static class FastPoWMessageTransaction extends MessageTransaction {
+		private FastPoWMessageTransaction(Repository repository, TransactionData transactionData) {
+			super(repository, transactionData);
+		}
+
+		@Override
+		protected int getPoWBufferSize() {
+			return TEST_POW_BUFFER_SIZE;
+		}
+
+		@Override
+		protected int getPoWNonceDifficulty() {
+			return TEST_POW_DIFFICULTY;
+		}
 	}
 
 }

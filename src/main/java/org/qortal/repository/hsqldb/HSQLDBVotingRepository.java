@@ -111,6 +111,10 @@ public class HSQLDBVotingRepository implements VotingRepository {
 	@Override
 	public List<PollDataWithVotes> getPollsByPrefix(String prefix, Integer limit, Integer offset) throws DataException {
 		StringBuilder sql = new StringBuilder(1024);
+		StringBuilder pollNamesSql = new StringBuilder(256);
+
+		pollNamesSql.append("SELECT poll_name FROM Polls WHERE poll_name LIKE ? ORDER BY poll_name");
+		HSQLDBRepository.limitOffsetSql(pollNamesSql, limit, offset);
 
 		// Query to get all polls matching prefix with their options and aggregated vote data
 		sql.append("SELECT ");
@@ -118,15 +122,15 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		sql.append("  po.option_index, po.option_name, ");
 		sql.append("  COUNT(pv.voter) AS vote_count, ");
 		sql.append("  COALESCE(SUM(a.blocks_minted), 0) AS vote_weight ");
-		sql.append("FROM Polls p ");
+		sql.append("FROM (");
+		sql.append(pollNamesSql);
+		sql.append(") matching_polls ");
+		sql.append("JOIN Polls p ON p.poll_name = matching_polls.poll_name ");
 		sql.append("LEFT JOIN PollOptions po ON p.poll_name = po.poll_name ");
 		sql.append("LEFT JOIN PollVotes pv ON p.poll_name = pv.poll_name AND po.option_index = pv.option_index ");
 		sql.append("LEFT JOIN Accounts a ON pv.voter = a.public_key ");
-		sql.append("WHERE p.poll_name LIKE ? ");
 		sql.append("GROUP BY p.poll_name, p.description, p.creator, p.owner, p.published_when, po.option_index, po.option_name ");
 		sql.append("ORDER BY p.poll_name, po.option_index");
-
-		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
 
 		List<PollDataWithVotes> results = new ArrayList<>();
 		Map<String, PollDataWithVotes> pollMap = new LinkedHashMap<>();

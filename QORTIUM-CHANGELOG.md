@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-05 - test: add JaCoCo coverage reporting
+
+Added an opt-in JaCoCo coverage profile to the Maven test workflow so deterministic test runs can produce HTML, XML, and CSV coverage reports without enforcing a pass/fail threshold yet. The CI test command now enables the repo's JUnit test property explicitly, generates the coverage report, and prints instruction, branch, and line coverage from the generated JaCoCo CSV summary, while the testing guide documents the local coverage command, report location, and MemoryPoW exclusion needed to keep full-suite coverage runs practical. The full-suite coverage pass also exposed and fixed poll-prefix pagination so `limit` and `offset` apply to polls instead of joined poll-option rows.
+
 ### 2026-05-05 - test: require explicit GUI display opt-in
 
 Tightened the GUI test split so splash and system-tray display tests now require both a display-capable JVM and `-Dqortium.runGuiDisplayTests=true`, while the normal headless Maven path continues to exercise the splash no-op behavior. The testing guide now documents the GUI display opt-in command, including an `xvfb-run` example for automated display-backed runs.

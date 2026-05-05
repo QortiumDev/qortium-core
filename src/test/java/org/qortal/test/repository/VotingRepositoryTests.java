@@ -136,7 +136,11 @@ public class VotingRepositoryTests extends Common {
 
 			assertNotNull(allResults);
 			assertNotNull(offsetResults);
-			assertTrue(offsetResults.size() < allResults.size() || allResults.size() <= 2);
+			assertEquals(5, allResults.size());
+			assertEquals(3, offsetResults.size());
+			assertEquals("app-library-APP-rating-OffsetTest3", offsetResults.get(0).getPollData().getPollName());
+			assertEquals("app-library-APP-rating-OffsetTest4", offsetResults.get(1).getPollData().getPollName());
+			assertEquals("app-library-APP-rating-OffsetTest5", offsetResults.get(2).getPollData().getPollName());
 		}
 	}
 

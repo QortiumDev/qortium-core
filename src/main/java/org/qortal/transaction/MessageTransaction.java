@@ -105,7 +105,7 @@ public class MessageTransaction extends Transaction {
 		MessageTransactionTransformer.clearNonce(transactionBytes);
 
 		// Calculate nonce
-		this.messageTransactionData.setNonce(MemoryPoW.compute2(transactionBytes, POW_BUFFER_SIZE, getPoWDifficulty()));
+		this.messageTransactionData.setNonce(MemoryPoW.compute2(transactionBytes, getPoWBufferSize(), getPoWNonceDifficulty()));
 	}
 
 	public int getPoWDifficulty() {
@@ -116,6 +116,14 @@ public class MessageTransaction extends Transaction {
 		}
 		// Before feature trigger timestamp, so use existing difficulty value
 		return POW_DIFFICULTY_V1;
+	}
+
+	protected int getPoWBufferSize() {
+		return POW_BUFFER_SIZE;
+	}
+
+	protected int getPoWNonceDifficulty() {
+		return getPoWDifficulty();
 	}
 
 	/**
@@ -232,7 +240,7 @@ public class MessageTransaction extends Transaction {
 		MessageTransactionTransformer.clearNonce(transactionBytes);
 
 		// Check nonce
-		return MemoryPoW.verify2(transactionBytes, POW_BUFFER_SIZE, getPoWDifficulty(), nonce);
+		return MemoryPoW.verify2(transactionBytes, getPoWBufferSize(), getPoWNonceDifficulty(), nonce);
 	}
 
 	@Override

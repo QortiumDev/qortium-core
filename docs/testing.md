@@ -12,6 +12,21 @@ Default coverage should prefer local stand-ins for external systems. Bootstrap t
 exercise HTTP HEAD handling with a loopback server, and ElectrumX tests exercise
 protocol parsing with mock RPC responses. Public hosts remain integration checks.
 
+## Coverage Reports
+
+Generate a local JaCoCo coverage report with:
+
+```bash
+mvn clean test jacoco:report -Pcoverage -DskipJUnitTests=false
+```
+
+The HTML report is written to `target/site/jacoco/index.html`, with machine-readable
+XML and CSV output in the same directory. Coverage is reported but not enforced by
+threshold yet; thresholds should be added after the baseline is reviewed. The
+coverage profile excludes the performance-sensitive MemoryPoW implementation from
+instrumentation because JaCoCo bytecode instrumentation makes nonce computation
+too slow for full-suite coverage runs.
+
 ## Opt-In Checks
 
 - `-Dqortium.runLongMempowTests=true`
