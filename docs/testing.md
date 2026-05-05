@@ -8,6 +8,10 @@ Run the deterministic tests with:
 mvn test -DskipJUnitTests=false
 ```
 
+Default coverage should prefer local stand-ins for external systems. Bootstrap tests
+exercise HTTP HEAD handling with a loopback server, and ElectrumX tests exercise
+protocol parsing with mock RPC responses. Public hosts remain integration checks.
+
 ## Opt-In Checks
 
 - `-Dqortium.runLongMempowTests=true`
@@ -15,9 +19,9 @@ mvn test -DskipJUnitTests=false
 - `-Dtest.awt.headless=false`
   Allows GUI display tests to open the splash frame and system tray when a desktop display is available. Headless Maven runs still exercise the splash no-op path.
 - `-Dqortium.runLiveBootstrapChecks=true`
-  Checks configured bootstrap hosts with live HTTP requests. Use `-Dqortium.liveBootstrapHosts=https://host-one,https://host-two` to override settings.
+  Checks configured bootstrap hosts with live HTTP requests. Use `-Dqortium.liveBootstrapHosts=https://host-one,https://host-two` to override settings. Explicit live runs fail if no bootstrap hosts are configured.
 - `-Dqortium.runLiveElectrumXTests=true`
-  Runs public ElectrumX server checks. The default suite uses mock ElectrumX responses for deterministic protocol coverage.
+  Runs public ElectrumX server checks. The default suite uses mock ElectrumX responses for deterministic protocol coverage. Explicit live runs fail if no Bitcoin TEST3 ElectrumX servers are configured.
 - `-Dqortium.runLiveCrosschainTests=true`
   Runs live crosschain checks that depend on public networks and fixture data. Default crosschain tests should prefer mock providers.
 - `-Dqortium.runLiveRepositoryIntegrityChecks=true`

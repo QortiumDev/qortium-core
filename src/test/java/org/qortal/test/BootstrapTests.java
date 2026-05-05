@@ -1,5 +1,6 @@
 package org.qortal.test;
 
+import com.sun.net.httpserver.HttpServer;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
@@ -19,11 +20,15 @@ import org.qortal.utils.NTP;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -265,6 +270,70 @@ public class BootstrapTests extends Common {
     }
 
     @Test
+    public void testBootstrapHeadRequestUsesLoopbackServer() throws IOException {
+        long fileSize = MINIMUM_BOOTSTRAP_SIZE + 1;
+        long lastModified = (NTP.getTime() / 1000L) * 1000L;
+        List<String> requestMethods = new ArrayList<>();
+        HttpServer server = this.createBootstrapHeadServer(HttpURLConnection.HTTP_OK, fileSize, lastModified, requestMethods);
+
+        try {
+            server.start();
+            String bootstrapUrl = this.getLoopbackBootstrapUrl(server);
+
+            BootstrapHead bootstrapHead = this.fetchBootstrapHead(bootstrapUrl);
+
+            assertEquals(1, requestMethods.size());
+            assertEquals("HEAD", requestMethods.get(0));
+            assertEquals(fileSize, bootstrapHead.fileSize);
+            assertEquals(lastModified, bootstrapHead.lastModified);
+            this.assertBootstrapHeadIsCurrent(bootstrapUrl, bootstrapHead);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    public void testBootstrapHeadRequestRejectsHttpErrors() throws IOException {
+        HttpServer server = this.createBootstrapHeadServer(HttpURLConnection.HTTP_NOT_FOUND, 0L, NTP.getTime(), new ArrayList<>());
+
+        try {
+            server.start();
+            String bootstrapUrl = this.getLoopbackBootstrapUrl(server);
+
+            try {
+                this.fetchBootstrapHead(bootstrapUrl);
+                fail("HTTP errors should fail bootstrap HEAD validation");
+            } catch (IOException e) {
+                assertTrue(e.getMessage().contains("HTTP 404"));
+            }
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    public void testBootstrapHeadValidationRejectsSmallFile() {
+        try {
+            this.assertBootstrapHeadIsCurrent("https://bootstrap.example/bootstrap-archive.7z",
+                    new BootstrapHead(MINIMUM_BOOTSTRAP_SIZE - 1, NTP.getTime()));
+            fail("Bootstrap archive below the minimum size should fail validation");
+        } catch (AssertionError e) {
+            assertTrue(e.getMessage().contains("at least 100MiB"));
+        }
+    }
+
+    @Test
+    public void testBootstrapHeadValidationRejectsStaleFile() {
+        try {
+            this.assertBootstrapHeadIsCurrent("https://bootstrap.example/bootstrap-archive.7z",
+                    new BootstrapHead(MINIMUM_BOOTSTRAP_SIZE, NTP.getTime() - MAXIMUM_BOOTSTRAP_AGE - 1000L));
+            fail("Stale bootstrap archive should fail validation");
+        } catch (AssertionError e) {
+            assertTrue(e.getMessage().contains("last modified date"));
+        }
+    }
+
+    @Test
     public void testBootstrapHosts() throws IOException {
         assumeTrue(Boolean.getBoolean(RUN_LIVE_BOOTSTRAP_CHECKS_PROPERTY));
 
@@ -277,32 +346,59 @@ public class BootstrapTests extends Common {
                 String bootstrapFilename = String.format("bootstrap-%s.7z", type);
                 String bootstrapUrl = String.format("%s/%s", host, bootstrapFilename);
 
-                // Make a HEAD request to check the status of each bootstrap file
-                URL url = new URL(bootstrapUrl);
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                long fileSize;
-                long lastModified;
-                try {
-                    connection.setConnectTimeout(LIVE_BOOTSTRAP_CONNECT_TIMEOUT_MS);
-                    connection.setReadTimeout(LIVE_BOOTSTRAP_READ_TIMEOUT_MS);
-                    connection.setRequestMethod("HEAD");
-                    connection.connect();
-                    fileSize = connection.getContentLengthLong();
-                    lastModified = connection.getLastModified();
-                } finally {
-                    connection.disconnect();
-                }
+                BootstrapHead bootstrapHead = this.fetchBootstrapHead(bootstrapUrl);
 
-                // Ensure the bootstrap exists and has a size greater than 100MiB
-                System.out.println(String.format("%s %s size is %d bytes", host, type, fileSize));
-                assertTrue(String.format("%s size must be at least 100MiB", bootstrapUrl), fileSize >= MINIMUM_BOOTSTRAP_SIZE);
-
-                // Ensure the bootstrap has been published recently (in the last 3 days)
-                long minimumLastModifiedTimestamp = NTP.getTime() - MAXIMUM_BOOTSTRAP_AGE;
-                System.out.println(String.format("%s %s last modified timestamp is %d", host, type, lastModified));
-                assertTrue(String.format("%s last modified date must be in the last 3 days", bootstrapUrl), lastModified >= minimumLastModifiedTimestamp);
+                System.out.println(String.format("%s %s size is %d bytes", host, type, bootstrapHead.fileSize));
+                System.out.println(String.format("%s %s last modified timestamp is %d", host, type, bootstrapHead.lastModified));
+                this.assertBootstrapHeadIsCurrent(bootstrapUrl, bootstrapHead);
             }
         }
+    }
+
+    private BootstrapHead fetchBootstrapHead(String bootstrapUrl) throws IOException {
+        URL url = new URL(bootstrapUrl);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+
+        try {
+            connection.setConnectTimeout(LIVE_BOOTSTRAP_CONNECT_TIMEOUT_MS);
+            connection.setReadTimeout(LIVE_BOOTSTRAP_READ_TIMEOUT_MS);
+            connection.setRequestMethod("HEAD");
+
+            int responseCode = connection.getResponseCode();
+            if (responseCode != HttpURLConnection.HTTP_OK)
+                throw new IOException(String.format("%s returned HTTP %d", bootstrapUrl, responseCode));
+
+            return new BootstrapHead(connection.getContentLengthLong(), connection.getLastModified());
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    private void assertBootstrapHeadIsCurrent(String bootstrapUrl, BootstrapHead bootstrapHead) {
+        assertTrue(String.format("%s size must be at least 100MiB", bootstrapUrl), bootstrapHead.fileSize >= MINIMUM_BOOTSTRAP_SIZE);
+
+        long minimumLastModifiedTimestamp = NTP.getTime() - MAXIMUM_BOOTSTRAP_AGE;
+        assertTrue(String.format("%s last modified date must be in the last 3 days", bootstrapUrl), bootstrapHead.lastModified >= minimumLastModifiedTimestamp);
+    }
+
+    private HttpServer createBootstrapHeadServer(int responseCode, long fileSize, long lastModified, List<String> requestMethods) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/bootstrap-archive.7z", exchange -> {
+            try {
+                requestMethods.add(exchange.getRequestMethod());
+                exchange.getResponseHeaders().set("Content-Length", Long.toString(fileSize));
+                exchange.getResponseHeaders().set("Last-Modified", DateTimeFormatter.RFC_1123_DATE_TIME.format(Instant.ofEpochMilli(lastModified).atZone(ZoneOffset.UTC)));
+                exchange.sendResponseHeaders(responseCode, -1);
+            } finally {
+                exchange.close();
+            }
+        });
+
+        return server;
+    }
+
+    private String getLoopbackBootstrapUrl(HttpServer server) {
+        return String.format("http://127.0.0.1:%d/bootstrap-archive.7z", server.getAddress().getPort());
     }
 
     private String[] getLiveBootstrapHosts() {
@@ -325,6 +421,16 @@ public class BootstrapTests extends Common {
             System.clearProperty(propertyName);
         else
             System.setProperty(propertyName, originalValue);
+    }
+
+    private static class BootstrapHead {
+        private final long fileSize;
+        private final long lastModified;
+
+        private BootstrapHead(long fileSize, long lastModified) {
+            this.fileSize = fileSize;
+            this.lastModified = lastModified;
+        }
     }
 
     private void deleteBootstraps() throws IOException {

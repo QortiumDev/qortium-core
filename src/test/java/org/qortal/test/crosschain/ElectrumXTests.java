@@ -15,6 +15,7 @@ import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.utils.BitTwiddling;
 
 import java.security.Security;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -45,7 +46,9 @@ public class ElectrumXTests {
 
 	private ElectrumX getLiveInstance() {
 		assumeTrue(Boolean.getBoolean(RUN_LIVE_ELECTRUMX_TESTS_PROPERTY));
-		return new ElectrumX("Bitcoin-" + BitcoinNet.TEST3.name(), BitcoinNet.TEST3.getGenesisHash(), BitcoinNet.TEST3.getServers(), DEFAULT_ELECTRUMX_PORTS);
+		Collection<ElectrumX.Server> servers = BitcoinNet.TEST3.getServers();
+		assertFalse("No Bitcoin TEST3 ElectrumX servers are configured for explicit live ElectrumX checks", servers.isEmpty());
+		return new ElectrumX("Bitcoin-" + BitcoinNet.TEST3.name(), BitcoinNet.TEST3.getGenesisHash(), servers, DEFAULT_ELECTRUMX_PORTS);
 	}
 
 	@Test
@@ -158,6 +161,53 @@ public class ElectrumXTests {
 		assertEquals(1, transactionHashes.size());
 		assertEquals(100, transactionHashes.get(0).height);
 		assertEquals("aa".repeat(32), transactionHashes.get(0).txHash);
+	}
+
+	@Test
+	public void testGetUnspentOutputsFromMockRpc() throws ForeignBlockchainException {
+		JSONObject confirmedOutput = new JSONObject();
+		confirmedOutput.put("height", 100L);
+		confirmedOutput.put("tx_hash", "cc".repeat(32));
+		confirmedOutput.put("tx_pos", 1L);
+		confirmedOutput.put("value", 5000L);
+
+		JSONObject unconfirmedOutput = new JSONObject();
+		unconfirmedOutput.put("height", 0L);
+		unconfirmedOutput.put("tx_hash", "dd".repeat(32));
+		unconfirmedOutput.put("tx_pos", 2L);
+		unconfirmedOutput.put("value", 6000L);
+
+		JSONArray response = new JSONArray();
+		response.add(confirmedOutput);
+		response.add(unconfirmedOutput);
+
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.scripthash.listunspent", response));
+		List<UnspentOutput> confirmedOutputs = electrumX.getUnspentOutputs(new byte[] { 0x01, 0x02 }, false);
+
+		assertEquals(1, confirmedOutputs.size());
+		assertArrayEquals(HashCode.fromString("cc".repeat(32)).asBytes(), confirmedOutputs.get(0).hash);
+		assertEquals(1, confirmedOutputs.get(0).index);
+		assertEquals(100, confirmedOutputs.get(0).height);
+		assertEquals(5000L, confirmedOutputs.get(0).value);
+
+		List<UnspentOutput> allOutputs = electrumX.getUnspentOutputs(new byte[] { 0x01, 0x02 }, true);
+		assertEquals(2, allOutputs.size());
+		assertArrayEquals(HashCode.fromString("dd".repeat(32)).asBytes(), allOutputs.get(1).hash);
+		assertEquals(2, allOutputs.get(1).index);
+		assertEquals(0, allOutputs.get(1).height);
+		assertEquals(6000L, allOutputs.get(1).value);
+	}
+
+	@Test
+	public void testGetUnspentOutputsRejectsMalformedResponse() {
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.scripthash.listunspent", "not-an-array"));
+
+		try {
+			electrumX.getUnspentOutputs(new byte[] { 0x01, 0x02 }, false);
+			fail("Malformed unspent output response should fail");
+		} catch (ForeignBlockchainException e) {
+			assertTrue(e.getMessage().contains("Expected array output"));
+		}
 	}
 
 	@Test

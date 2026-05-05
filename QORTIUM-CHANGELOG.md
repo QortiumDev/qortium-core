@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: add deterministic bootstrap and ElectrumX coverage
+
+Added local deterministic coverage for bootstrap host HTTP checks and ElectrumX UTXO parsing so the default test suite validates more of the external-service logic without depending on public infrastructure. Bootstrap tests now exercise HEAD request status handling, archive size validation, and freshness validation against a loopback HTTP server, while ElectrumX tests now cover mock unspent-output parsing and confirmed/unconfirmed filtering. Explicit live ElectrumX runs also fail clearly if no Bitcoin testnet servers are configured.
+
 ### 2026-05-04 - test: improve opt-in test defaults
 
 Made conditional test groups more useful in normal Maven runs by adding a headless splash no-op test, keeping graphical splash and tray checks scoped to display-capable runs, and extending MemoryPoW's default coverage with known full-buffer verification fixtures through difficulty 14 while leaving expensive compute benchmarks opt-in. Added a testing guide that lists the remaining opt-in properties for long MemoryPoW, GUI display, live bootstrap, live ElectrumX, live crosschain, and live repository integrity checks.
