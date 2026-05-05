@@ -4,7 +4,9 @@ import com.google.common.hash.HashCode;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.ApplyUpdate;
-import org.qortal.api.ApiRequest;
+import org.qortal.arbitrary.ArbitraryDataFile.ResourceIdType;
+import org.qortal.arbitrary.ArbitraryDataReader;
+import org.qortal.arbitrary.exception.MissingDataException;
 import org.qortal.block.BlockChain;
 import org.qortal.data.transaction.ArbitraryTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -16,7 +18,7 @@ import org.qortal.repository.RepositoryManager;
 import org.qortal.settings.Settings;
 import org.qortal.transaction.ArbitraryTransaction;
 import org.qortal.transaction.Transaction.TransactionType;
-import org.qortal.transform.Transformer;
+import org.qortal.utils.Base58;
 import org.qortal.utils.Groups;
 
 import java.awt.TrayIcon.MessageType;
@@ -24,7 +26,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -51,9 +52,6 @@ public class AutoUpdate extends Thread {
 
 	private static final int UPDATE_SERVICE = 1;
 
-	private static final int GIT_COMMIT_HASH_LENGTH = 20; // SHA-1
-	private static final int EXPECTED_DATA_LENGTH = Transformer.TIMESTAMP_LENGTH + GIT_COMMIT_HASH_LENGTH + Transformer.SHA256_LENGTH;
-
 	/** This byte value used to hide contents from deep-inspection firewalls in case they block updates. */
 	public static final byte XOR_VALUE = (byte) 0x5a;
 
@@ -75,8 +73,8 @@ public class AutoUpdate extends Thread {
 	public void run() {
 		Thread.currentThread().setName("Auto-update");
 
-		if (!Settings.getInstance().hasAutoUpdateReposConfigured()) {
-			LOGGER.warn("Auto-update is enabled but no autoUpdateRepos are configured. Skipping auto-update service.");
+		if (!Settings.getInstance().isQdnEnabled()) {
+			LOGGER.warn("Auto-update is enabled but QDN is disabled. Skipping auto-update service.");
 			return;
 		}
 
@@ -116,44 +114,35 @@ public class AutoUpdate extends Thread {
 				if (!(transactionData instanceof ArbitraryTransactionData))
 					continue;
 
-				// Transaction needs to be newer than this build
-				if (transactionData.getTimestamp() <= buildTimestamp)
-					continue;
-
 				ArbitraryTransaction arbitraryTransaction = new ArbitraryTransaction(repository, transactionData);
 				if (!arbitraryTransaction.isDataLocal())
 					continue; // We can't access data
 
-				// TODO: check arbitrary data length (pre-fetch) matches build timestamp (8) + git commit length (20) + sha256 hash length (32) = 60 bytes
-
 				byte[] data = arbitraryTransaction.fetchData();
-				if (data.length != EXPECTED_DATA_LENGTH) {
-					LOGGER.debug(String.format("Arbitrary data length %d doesn't match %d", data.length, EXPECTED_DATA_LENGTH));
+				AutoUpdateManifest manifest;
+				try {
+					manifest = AutoUpdateManifest.parse(data);
+				} catch (IllegalArgumentException e) {
+					LOGGER.debug("Ignoring invalid auto-update manifest {}: {}", HashCode.fromBytes(signature), e.getMessage());
 					continue;
 				}
 
-				ByteBuffer byteBuffer = ByteBuffer.wrap(data);
+				if (!manifest.isQdnManifest()) {
+					LOGGER.warn("Ignoring legacy HTTP auto-update manifest {} because this build only supports QDN auto-update transport",
+							HashCode.fromBytes(signature));
+					continue;
+				}
 
-				long updateTimestamp = byteBuffer.getLong();
-				if (updateTimestamp <= buildTimestamp)
+				if (manifest.getTimestamp() <= buildTimestamp)
 					continue; // update is the same, or older, than current code
 
-				byte[] commitHash = new byte[GIT_COMMIT_HASH_LENGTH];
-				byteBuffer.get(commitHash);
+				LOGGER.info("Update's git commit hash: {}", manifest.getCommitHashHex());
 
-				byte[] downloadHash = new byte[Transformer.SHA256_LENGTH];
-				byteBuffer.get(downloadHash);
-
-				LOGGER.info(String.format("Update's git commit hash: %s", HashCode.fromBytes(commitHash).toString()));
-
-				String[] autoUpdateRepos = Settings.getInstance().getAutoUpdateRepos();
-				for (String repo : autoUpdateRepos)
-					if (attemptUpdate(commitHash, downloadHash, repo)) {
-						// Consider ourselves updated so don't re-re-re-download
-						buildTimestamp = System.currentTimeMillis();
-						attemptedUpdate = true;
-						break;
-					}
+				if (attemptUpdate(manifest)) {
+					// Consider ourselves updated so don't re-re-re-download
+					buildTimestamp = System.currentTimeMillis();
+					attemptedUpdate = true;
+				}
 			} catch (DataException e) {
 				LOGGER.warn("Repository issue to find updates", e);
 				// Keep going I guess...
@@ -168,69 +157,140 @@ public class AutoUpdate extends Thread {
 		this.interrupt();
 	}
 
-	private static boolean attemptUpdate(byte[] commitHash, byte[] downloadHash, String repoBaseUri) {
-		String repoUri = String.format(repoBaseUri, HashCode.fromBytes(commitHash).toString());
-		LOGGER.info(String.format("Fetching update from %s", repoUri));
-		Path newJar = Paths.get(NEW_JAR_FILENAME);
-
-		try (InputStream in = ApiRequest.fetchStream(repoUri)) {
-			MessageDigest sha256;
-			try {
-				sha256 = MessageDigest.getInstance("SHA-256");
-			} catch (NoSuchAlgorithmException e) {
-				return true; // not repo's fault
-			}
-
-			// Save input stream into new JAR
-			LOGGER.debug(String.format("Saving update from %s into %s", repoUri, newJar.toString()));
-
-			try (OutputStream out = Files.newOutputStream(newJar)) {
-				byte[] buffer = new byte[1024 * 1024];
-				do {
-					int nread = in.read(buffer);
-					if (nread == -1)
-						break;
-
-					// Hash is based on XORed version
-					sha256.update(buffer, 0, nread);
-
-					// ReXOR before writing
-					for (int i = 0; i < nread; ++i)
-						buffer[i] ^= XOR_VALUE;
-
-					out.write(buffer, 0, nread);
-				} while (true);
-				out.flush();
-
-				// Check hash
-				byte[] hash = sha256.digest();
-				if (!Arrays.equals(downloadHash, hash)) {
-					LOGGER.warn(String.format("Downloaded JAR's hash %s doesn't match %s", HashCode.fromBytes(hash).toString(), HashCode.fromBytes(downloadHash).toString()));
-
-					try {
-						Files.deleteIfExists(newJar);
-					} catch (IOException de) {
-						LOGGER.warn(String.format("Failed to delete download: %s", de.getMessage()));
-					}
-
-					return false;
-				}
-			} catch (IOException e) {
-				LOGGER.warn(String.format("Failed to save update from %s into %s: %s", repoUri, newJar.toString(), e.getMessage()));
-
-				try {
-					Files.deleteIfExists(newJar);
-				} catch (IOException de) {
-					LOGGER.warn(String.format("Failed to delete partial download: %s", de.getMessage()));
-				}
-
-				return false; // failed - try another repo
-			}
-		} catch (IOException e) {
-			LOGGER.warn(String.format("Failed to fetch update from %s: %s", repoUri, e.getMessage()));
-			return false; // failed - try another repo
+	private static boolean attemptUpdate(AutoUpdateManifest manifest) {
+		if (manifest.getBinarySignature() != null) {
+			LOGGER.info("Fetching update from pinned QDN {} transaction {} path {}",
+					manifest.getQdnService(), manifest.getBinarySignature58(), manifest.getQdnPath());
+		} else {
+			LOGGER.info("Fetching update from QDN {}/{}/{} path {}",
+					manifest.getQdnService(), manifest.getQdnName(), manifest.getQdnIdentifier(), manifest.getQdnPath());
 		}
 
+		Path newJar = Paths.get(NEW_JAR_FILENAME);
+
+		try {
+			Path updatePath = resolveQdnUpdatePath(manifest);
+			try (InputStream in = Files.newInputStream(updatePath)) {
+				if (!writeVerifiedUpdate(in, manifest.getUpdateHash(), newJar, updatePath.toString()))
+					return false;
+			}
+		} catch (DataException | IOException | MissingDataException e) {
+			LOGGER.warn("Failed to fetch update from QDN: {}", e.getMessage());
+			return false;
+		}
+
+		return applyUpdate(newJar);
+	}
+
+	static Path resolveQdnUpdatePath(AutoUpdateManifest manifest) throws DataException, IOException, MissingDataException {
+		byte[] expectedSignature = manifest.getBinarySignature();
+		if (expectedSignature != null)
+			return resolvePinnedQdnUpdatePath(manifest, expectedSignature);
+
+		ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(
+				manifest.getQdnName(), ResourceIdType.NAME, manifest.getQdnService(), manifest.getQdnIdentifier());
+		return loadQdnUpdatePath(arbitraryDataReader, manifest);
+	}
+
+	private static Path resolvePinnedQdnUpdatePath(AutoUpdateManifest manifest, byte[] binarySignature)
+			throws DataException, IOException, MissingDataException {
+		ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(
+				Base58.encode(binarySignature), ResourceIdType.TRANSACTION_DATA, manifest.getQdnService(), null);
+		arbitraryDataReader.setTransactionData(getPinnedQdnBinaryTransaction(manifest, binarySignature));
+		return loadQdnUpdatePath(arbitraryDataReader, manifest);
+	}
+
+	private static ArbitraryTransactionData getPinnedQdnBinaryTransaction(AutoUpdateManifest manifest, byte[] binarySignature) throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TransactionData transactionData = repository.getTransactionRepository().fromSignature(binarySignature);
+			if (!(transactionData instanceof ArbitraryTransactionData))
+				throw new DataException("Pinned QDN update transaction signature does not identify an ARBITRARY transaction");
+
+			ArbitraryTransactionData arbitraryTransactionData = (ArbitraryTransactionData) transactionData;
+			if (arbitraryTransactionData.getService() != manifest.getQdnService())
+				throw new DataException("Pinned QDN update transaction service does not match manifest");
+
+			return arbitraryTransactionData;
+		}
+	}
+
+	private static Path loadQdnUpdatePath(ArbitraryDataReader arbitraryDataReader, AutoUpdateManifest manifest)
+			throws DataException, IOException, MissingDataException {
+		arbitraryDataReader.loadSynchronously(false);
+
+		Path outputPath = arbitraryDataReader.getFilePath();
+		if (outputPath == null)
+			throw new DataException("QDN update resource did not produce an output path");
+
+		Path updatePath = outputPath.resolve(manifest.getQdnPath()).normalize();
+		if (!updatePath.startsWith(outputPath.normalize()))
+			throw new DataException("QDN update path escapes resource directory");
+
+		if (!Files.isRegularFile(updatePath))
+			updatePath = findSingleFileFallback(outputPath, updatePath);
+
+		return updatePath;
+	}
+
+	private static Path findSingleFileFallback(Path outputPath, Path requestedPath) throws IOException {
+		try (java.util.stream.Stream<Path> stream = Files.list(outputPath)) {
+			List<Path> files = stream
+					.filter(Files::isRegularFile)
+					.filter(path -> !".qdn".equals(path.getFileName().toString()))
+					.collect(Collectors.toList());
+
+			if (files.size() == 1)
+				return files.get(0);
+		}
+
+		throw new IOException(String.format("QDN update file not found: %s", requestedPath));
+	}
+
+	static boolean writeVerifiedUpdate(InputStream in, byte[] downloadHash, Path newJar, String sourceDescription) {
+		MessageDigest sha256;
+		try {
+			sha256 = MessageDigest.getInstance("SHA-256");
+		} catch (NoSuchAlgorithmException e) {
+			LOGGER.error("SHA-256 digest is unavailable", e);
+			return false;
+		}
+
+		LOGGER.debug("Saving update from {} into {}", sourceDescription, newJar);
+
+		try (OutputStream out = Files.newOutputStream(newJar)) {
+			byte[] buffer = new byte[1024 * 1024];
+			do {
+				int nread = in.read(buffer);
+				if (nread == -1)
+					break;
+
+				// Hash is based on XORed version
+				sha256.update(buffer, 0, nread);
+
+				// ReXOR before writing
+				for (int i = 0; i < nread; ++i)
+					buffer[i] ^= XOR_VALUE;
+
+				out.write(buffer, 0, nread);
+			} while (true);
+			out.flush();
+
+			byte[] hash = sha256.digest();
+			if (!Arrays.equals(downloadHash, hash)) {
+				LOGGER.warn("Downloaded update hash {} doesn't match {}", HashCode.fromBytes(hash), HashCode.fromBytes(downloadHash));
+				deleteUpdateFile(newJar, "download");
+				return false;
+			}
+		} catch (IOException e) {
+			LOGGER.warn("Failed to save update from {} into {}: {}", sourceDescription, newJar, e.getMessage());
+			deleteUpdateFile(newJar, "partial download");
+			return false;
+		}
+
+		return true;
+	}
+
+	private static boolean applyUpdate(Path newJar) {
 		// Give repository a chance to backup in case things go badly wrong (if enabled)
 		if (Settings.getInstance().getRepositoryBackupInterval() > 0) {
 			try {
@@ -285,7 +345,15 @@ public class AutoUpdate extends Thread {
 			LOGGER.warn(String.format("Failed to delete update download: %s", de.getMessage()));
 		}
 
-		return false; // failed - allow retries/repo fallback
+		return false; // failed - allow retry
+	}
+
+	private static void deleteUpdateFile(Path newJar, String description) {
+		try {
+			Files.deleteIfExists(newJar);
+		} catch (IOException de) {
+			LOGGER.warn("Failed to delete {}: {}", description, de.getMessage());
+		}
 	}
 
 	static List<String> buildJavaCandidates(Path javaBinary) {

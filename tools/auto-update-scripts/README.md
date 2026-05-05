@@ -1,135 +1,97 @@
-# Qortium Auto-Update Publisher Scripts
+# Qortium QDN Auto-Update Scripts
 
-Qortium ships with automatic updates disabled by default.
+Qortium auto-update is disabled by default. To receive updates, a node must set
+`"autoUpdateEnabled": true` and leave QDN enabled. The old `autoUpdateRepos`
+GitHub mirror setting is no longer required by the updater.
 
-To use this inherited auto-update flow in the fork, an operator must
-explicitly enable `"autoUpdateEnabled": true` and configure
-`"autoUpdateRepos"` in `settings.json`.
+The update flow now uses two ARBITRARY transactions:
 
-This toolkit modernizes and automates the Qortium auto-update process. It includes:
+- `AUTO_UPDATE_BINARY`: a QDN resource containing the XORed `qortium.update`
+  file.
+- `AUTO_UPDATE`: a compact on-chain manifest submitted in the configured
+  development group. The manifest pins the exact binary transaction signature,
+  Git commit hash, build timestamp, and SHA-256 of the XORed update bytes.
 
-- A Bash script (`build-auto-update.sh`) to build and push the update
-- A Python script (`publish-auto-update.py`) to publish the auto-update transaction
-- Full support for dry-run mode, interactive or scripted use, and secure key input
+The network only accepts the manifest after normal development-group approval.
+For the null-owned development group, admin-submitted update manifests still
+remain pending until enough admins approve. If there are no usable admins, the
+approval logic falls back to members according to group rules.
 
----
+## Prerequisites
 
-## 🧰 Prerequisites
+- A synced local Qortium node with API access.
+- A local checkout of the Qortium repository.
+- A Base58 private key that can submit the manifest in the development group.
+- A QDN name owned by the publishing key for the binary resource.
 
-- You must be a **non-admin member** of the Qortium development group
-- A Qortium core node must be running locally (default API port: `12391`)
-- You need the latest version of the `qortium` repo cloned locally
+The publisher defaults to the QDN name `qortium`, but any owned name can be used
+with `--qdn-name`. The approved manifest pins the binary transaction signature,
+so update validation does not depend on mutable latest-name lookup.
 
----
+## Build
 
-## 🚀 Workflow Overview
-
-### 1. Run the Build Script
-
-This script:
-- Auto-increments the version in `pom.xml`
-- Rebuilds the JAR file
-- XORs it into a `.update` file
-- Creates a new `auto-update-<hash>` branch with only the update
-- Pushes it to the repo
+Run:
 
 ```bash
 ./tools/auto-update-scripts/build-auto-update.sh
 ```
 
-You'll be prompted to:
-- Confirm or modify the version number
-- Push the version tag and update branch, and final commit.
-- Optionally run the publisher script at the end
+The build script:
 
-> ✅ Dry-run mode is supported to preview the full process.
+- increments `pom.xml` interactively;
+- commits and tags the version bump;
+- builds the JAR;
+- creates the XORed `qortium.update` file;
+- optionally runs the QDN publisher.
 
----
+It no longer creates or pushes `auto-update-<hash>` branches.
 
-### 2. Publish the Auto-Update
+## Publish
 
-You can either:
-- Let the build script call it for you
-- Or run it manually:
-
-```bash
-# Run manually with interactive key prompt and auto-detected latest update:
-python3 tools/auto-update-scripts/publish-auto-update.py
-
-# Or specify a commit hash:
-python3 tools/auto-update-scripts/publish-auto-update.py 0b37666d
-
-# Or pass both from another script:
-python3 tools/auto-update-scripts/publish-auto-update.py <privkey> <commit_hash>
-```
-
-> 🔐 Private key is always prompted securely unless passed explicitly (e.g. from automation).
-
-This script will:
-- Detect the latest `auto-update-<hash>` branch (or use the one you specify)
-- Validate that the commit exists
-- Restore the `.update` file if missing
-- Compute its SHA256 hash
-- Build and sign the transaction
-- Submit it to your local node
-
-> ✅ `--dry-run` is supported to show what would happen without sending anything.
-
----
-
-## 🛠 Advanced Options
-
-- Log files are created in `~/qortium-auto-update-logs` by default
-- You can override the log directory interactively
-- Branch naming is standardized: `auto-update-<short-commit-hash>`
-- The `.update` file is XOR-obfuscated using Qortium's built-in logic
-- Your commit must already exist on the main repo (e.g. via push or PR merge)
-
----
-
-## 📌 Notes
-
-- **Do not use Git LFS** - Qortium nodes download `.update` files using raw HTTP from GitHub
-We may build LFS support in the future, but for now it is NOT utilized, and will NOT work. 
-(Other locations for the publish of the .update file will be utilized in the future, 
-preferably utilizing QDN via gateway nodes, until auto-update setup can be re-written to
-leverage QDN directly.) 
-- GitHub will warn if `.update` files exceed 50MB, but auto-update still works.
-(In the past there HAVE been issues with accounts getting banned due to publish of .update file,
-however, as of recently (April 2025) it seems they are only warning, and not banning. But we 
-will be modifying the need for this in the future anyway.) 
-- Update mirrors will be added in the future, and others can be added in settings as well.
-
----
-
-## ✅ Example End-to-End (Manual)
+Run manually:
 
 ```bash
-cd ~/git-repos/qortium
-./tools/auto-update-scripts/build-auto-update.sh
-# follow prompts...
-
-# then manually publish:
-python3 tools/auto-update-scripts/publish-auto-update.py
+python3 tools/auto-update-scripts/publish-auto-update.py <private-key> <commit>
 ```
 
----
-
-## 🧪 Test Without Sending
+Or prompt securely for the private key:
 
 ```bash
-./build-auto-update.sh   # enable dry-run when prompted
-# OR
-python3 publish-auto-update.py 0b37666d --dry-run
+python3 tools/auto-update-scripts/publish-auto-update.py <commit>
 ```
 
----
+Useful options:
 
-## 🙌 Contributors
+```bash
+python3 tools/auto-update-scripts/publish-auto-update.py \
+  --qdn-name my-update-name \
+  --tx-group-id 1 \
+  --port 12391 \
+  <commit>
+```
 
-Modernization by [@crowetic](https://github.com/crowetic) 
-Based on original Perl scripts by Qortal core devs, specifically @catbref.
+The publisher:
 
----
+- reads the local `qortium.update`;
+- computes its SHA-256 hash;
+- publishes it to `AUTO_UPDATE_BINARY/<name>/<full-commit-hash>`;
+- computes and signs the QDN binary transaction;
+- builds a compact `QAU1` manifest that pins that binary signature;
+- submits the `AUTO_UPDATE` manifest transaction for group approval.
 
-Questions or issues? Use the configured Qortium development group channels for this fork.
+Use `--dry-run` to verify the local commit, update file, QDN identity, and hash
+without building or submitting transactions.
+
+## Approval
+
+After publishing, approve the `AUTO_UPDATE` manifest transaction using the
+normal group-approval tools. For example:
+
+```bash
+./tools/approve-auto-update.sh
+```
+
+The updater ignores unapproved update manifests. Once approved and confirmed,
+auto-update-enabled nodes fetch the pinned QDN binary, verify the SHA-256 hash
+over the XORed bytes, decode it to `new-qortium.jar`, and restart through the
+standard apply-update path.

@@ -19,6 +19,7 @@ import static java.util.stream.Collectors.toMap;
 
 public enum Service {
     AUTO_UPDATE(1, false, null, false, false, null),
+    AUTO_UPDATE_BINARY(2, false, null, true, false, null),
     ARBITRARY_DATA(100, false, null, false, false, null),
     QCHAT_ATTACHMENT(120, true, 1024*1024L, true, false, null) {
         @Override

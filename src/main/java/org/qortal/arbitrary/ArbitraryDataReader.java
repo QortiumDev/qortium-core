@@ -447,6 +447,8 @@ public class ArbitraryDataReader {
             throw new DataException(String.format("Transaction data not found for signature %s", this.resourceId));
         }
 
+        this.transactionData = transactionData;
+
         // Load secret
         byte[] secret = transactionData.getSecret();
         if (secret != null) {

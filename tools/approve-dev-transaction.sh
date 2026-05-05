@@ -41,7 +41,7 @@ address=$( curl --silent --url "http://localhost:${port}/addresses/convert/${pub
 printf "Your address: %s\n" ${address}
 
 # Grab last reference
-lastref=$( curl --silent --url "http://localhost:${port}/addresses/lastreference/{$address}" );
+lastref=$( curl --silent --url "http://localhost:${port}/addresses/lastreference/${address}" );
 printf "Your last reference: %s\n" ${lastref}
 
 # Build GROUP_APPROVAL transaction

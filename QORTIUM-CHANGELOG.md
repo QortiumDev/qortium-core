@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-05 - core: route auto-updates through QDN
+
+Changed auto-update transport so approved update manifests now point to QDN-hosted `AUTO_UPDATE_BINARY` resources instead of GitHub auto-update branches. The updater starts from `autoUpdateEnabled` without requiring `autoUpdateRepos`, ignores legacy HTTP manifests, fetches the pinned QDN binary transaction by signature when available, verifies the SHA-256 hash of the XORed update bytes, and then uses the existing apply-update restart path. The publish/build helper scripts now create a local `qortium.update`, publish it to QDN, submit a compact dev-group `AUTO_UPDATE` manifest for approval, and document the new approval workflow.
+
 ### 2026-05-05 - test: tighten skipped-test guardrails
 
 Added a default test hygiene check that fails if new `@Ignore` annotations are introduced, added a manual xvfb-backed GUI display workflow for splash and tray tests, and gave the JaCoCo coverage profile low starting thresholds for instruction, branch, and line coverage so regressions are visible without making the baseline unrealistic. PirateChain crosschain tests now avoid counting inherited BTC-like deterministic wallet and HTLC checks as skipped when those paths do not apply to ARRR, while adding deterministic Pirate HTLC script and P2SH address coverage.

@@ -62,7 +62,7 @@ else
 fi
 
 # === Run Python Publisher Option ===
-read -rp "Run the Python publish_auto_update script at the end? (y/N): " pub_choice
+read -rp "Run the QDN auto-update publisher script at the end? (y/N): " pub_choice
 if [[ "${pub_choice}" =~ ^[Yy]$ ]]; then
   RUN_PUBLISH=true
   read -rp "Run Python script in dry-run mode? (y/N): " pub_dry
@@ -193,38 +193,18 @@ jar_file="${jar_files[0]:-}"
 echo "Creating ${project}.update..."
 $DRY_RUN || java -cp "${jar_file}" org.qortal.XorUpdate "${jar_file}" "${project}.update"
 
-# === Create Auto-Update Branch ===
-update_branch="auto-update-${short_hash}"
-
-echo "Creating update branch: ${update_branch}"
-if git show-ref --verify --quiet "refs/heads/${update_branch}"; then
-  run_git branch -D "${update_branch}"
-fi
-
-run_git checkout --orphan "${update_branch}"
-$DRY_RUN || git rm -rf . > /dev/null 2>&1 || true
-
-run_git add "${project}.update"
-run_git commit -m "XORed auto-update JAR for commit ${short_hash}"
-
-confirm_or_exit "About to push auto-update branch '${update_branch}' to origin."
-run_git push --set-upstream origin "${update_branch}"
-
-# === Return to Original Branch ===
-echo "Switching back to original branch: ${current_branch}"
-run_git checkout --force "${current_branch}"
-echo "Done. ${project}.update is committed to ${update_branch}."
+echo "Done. ${project}.update is ready for QDN publishing."
 
 # === Summary Output ===
 echo
 echo "======================================"
-echo "✅ Auto-Update Build Complete!"
+echo "Auto-Update Build Complete"
 echo "--------------------------------------"
 echo "Project:           ${project}"
 echo "Version:           ${new_version}"
 echo "Tag:               v${new_version}"
 echo "Commit Hash:       ${short_hash}"
-echo "Auto-Update Branch: auto-update-${short_hash}"
+echo "Update File:       ${git_dir}/${project}.update"
 echo
 echo "Pushed to:         ${git_origin}"
 echo "Logs saved to:     ${LOG_FILE}"
@@ -233,10 +213,10 @@ echo
 # === Provide additional information regarding publish script, and private key. ===
 if $RUN_PUBLISH; then
   echo "...===...===...===...===...===..."
-  echo 
+  echo
   echo "CONTINUING TO EXECUTE PUBLISH SCRIPT AS SELECTED"
   echo
-  echo "This will publish the AUTO-UPDATE TRANSACTION for signing by the DEVELOPER GROUP ADMINS"
+  echo "This will publish the update binary to QDN and submit the AUTO_UPDATE manifest for developer group approval."
   echo 
   echo "NOTICE: For security, when prompted for PRIVATE KEY, you will NOT see the input, SIMPLY PASTE/TYPE KEY AND PUSH ENTER."
   echo
@@ -245,7 +225,7 @@ fi
 
 # === Optionally Run Python Publisher ===
 if $RUN_PUBLISH; then
-  echo "Running Python publish_auto_update script..."
+  echo "Running QDN auto-update publisher script..."
   if [[ -f "${PUBLISH_SCRIPT}" ]]; then
     read -rsp "Enter your Base58 private key: " PRIVATE_KEY
     echo
