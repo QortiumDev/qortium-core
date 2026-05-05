@@ -62,22 +62,33 @@ public final class RefreshElectrumServers {
 			return;
 		}
 
-		Map<String, CoinConfig> coinConfigs = coinConfigs();
+		List<CoinConfig> coinConfigs = coinConfigs();
+		for (String coinCode : options.coinCodes) {
+			if (coinConfigs.stream().noneMatch(coinConfig -> coinConfig.coinCode.equals(coinCode)))
+				throw new IllegalArgumentException("Unsupported coin: " + coinCode);
+		}
+
+		if (options.updateBuiltinsOnly) {
+			Map<String, Map<String, List<CandidateServer>>> generatedServers = readGeneratedServers(options.outputPath);
+			updateBuiltInServers(coinConfigs, generatedServers, options);
+			System.out.printf("Updated Java built-in Electrum server fallbacks from %s with %s%n", options.outputPath, builtinLimitSummary(options.builtinLimit));
+			return;
+		}
+
 		Map<String, Map<String, List<CandidateServer>>> generatedServers = new LinkedHashMap<>();
 
-		for (String coinCode : options.coinCodes) {
-			CoinConfig coinConfig = coinConfigs.get(coinCode);
-			if (coinConfig == null)
-				throw new IllegalArgumentException("Unsupported coin: " + coinCode);
+		for (CoinConfig coinConfig : coinConfigs) {
+			if (!options.coinCodes.contains(coinConfig.coinCode))
+				continue;
 
 			List<CandidateServer> builtInCandidates = ElectrumServerDiscovery.fromBuiltIn(coinConfig.builtInServers);
 			List<CandidateServer> candidates = new ArrayList<>(builtInCandidates);
-			System.out.printf("%s: starting with %d built-in servers%n", coinConfig.coinCode, candidates.size());
+			System.out.printf("%s: starting with %d built-in servers%n", coinConfig.label(), candidates.size());
 
-			if (!options.skip1209k) {
+			if (!options.skip1209k && coinConfig.chain1209k != null) {
 				List<CandidateServer> scrapedServers = fetch1209kServers(coinConfig, options);
 				candidates.addAll(scrapedServers);
-				System.out.printf("%s: added %d OK servers from 1209k%n", coinConfig.coinCode, scrapedServers.size());
+				System.out.printf("%s: added %d OK servers from 1209k%n", coinConfig.label(), scrapedServers.size());
 			}
 
 			candidates = ElectrumServerDiscovery.dedupeCandidates(candidates);
@@ -85,19 +96,19 @@ public final class RefreshElectrumServers {
 			if (!options.skipPeerDiscovery) {
 				List<CandidateServer> peerServers = discoverPeerServers(coinConfig, candidates, options);
 				candidates.addAll(peerServers);
-				System.out.printf("%s: added %d servers from Electrum peer discovery%n", coinConfig.coinCode, peerServers.size());
+				System.out.printf("%s: added %d servers from Electrum peer discovery%n", coinConfig.label(), peerServers.size());
 			}
 
 			candidates = ElectrumServerDiscovery.dedupeCandidates(candidates);
 
 			if (options.verify) {
 				List<CandidateServer> verifiedServers = verifyCandidates(coinConfig, candidates, options);
-				System.out.printf("%s: kept %d verified servers from %d candidates%n", coinConfig.coinCode, verifiedServers.size(), candidates.size());
+				System.out.printf("%s: kept %d verified servers from %d candidates%n", coinConfig.label(), verifiedServers.size(), candidates.size());
 
 				if (!verifiedServers.isEmpty())
 					candidates = verifiedServers;
 				else {
-					System.out.printf("%s: no verified servers; keeping built-in fallback seeds in generated file%n", coinConfig.coinCode);
+					System.out.printf("%s: no verified servers; keeping built-in fallback seeds in generated file%n", coinConfig.label());
 					candidates = builtInCandidates;
 				}
 			}
@@ -105,19 +116,23 @@ public final class RefreshElectrumServers {
 			List<CandidateServer> dedupedCandidates = ElectrumServerDiscovery.dedupeCandidates(candidates);
 			candidates = preferSslCandidates(dedupedCandidates);
 			if (candidates.size() < dedupedCandidates.size())
-				System.out.printf("%s: selected %d SSL servers over %d TCP servers%n", coinConfig.coinCode, candidates.size(), dedupedCandidates.size() - candidates.size());
+				System.out.printf("%s: selected %d SSL servers over %d TCP servers%n", coinConfig.label(), candidates.size(), dedupedCandidates.size() - candidates.size());
 			else if (!candidates.isEmpty() && candidates.get(0).getServer().getConnectionType() == ConnectionType.TCP)
-				System.out.printf("%s: no SSL servers available; keeping %d TCP servers%n", coinConfig.coinCode, candidates.size());
+				System.out.printf("%s: no SSL servers available; keeping %d TCP servers%n", coinConfig.label(), candidates.size());
 
 			candidates = sortCandidates(candidates);
 
-			Map<String, List<CandidateServer>> networks = new LinkedHashMap<>();
-			networks.put("MAIN", candidates);
-			generatedServers.put(coinConfig.coinCode, networks);
+			generatedServers.computeIfAbsent(coinConfig.coinCode, ignored -> new LinkedHashMap<>())
+					.put(coinConfig.networkName, candidates);
 		}
 
 		writeGeneratedServers(options.outputPath, generatedServers);
 		System.out.printf("Wrote generated Electrum server list to %s%n", options.outputPath);
+
+		if (options.updateBuiltins) {
+			updateBuiltInServers(coinConfigs, generatedServers, options);
+			System.out.printf("Updated Java built-in Electrum server fallbacks with %s%n", builtinLimitSummary(options.builtinLimit));
+		}
 	}
 
 	private static List<CandidateServer> fetch1209kServers(CoinConfig coinConfig, Options options) {
@@ -134,7 +149,7 @@ public final class RefreshElectrumServers {
 				return ElectrumServerDiscovery.parse1209kHtml(readAll(reader));
 			}
 		} catch (IOException e) {
-			System.out.printf("%s: unable to fetch 1209k list from %s: %s%n", coinConfig.coinCode, url, e.getMessage());
+			System.out.printf("%s: unable to fetch 1209k list from %s: %s%n", coinConfig.label(), url, e.getMessage());
 			return Collections.emptyList();
 		}
 	}
@@ -154,7 +169,7 @@ public final class RefreshElectrumServers {
 			try {
 				discovered.addAll(queryPeerServers(coinConfig, seedServer, options));
 			} catch (Exception e) {
-				System.out.printf("%s: peer discovery failed via %s: %s%n", coinConfig.coinCode, seedServer, e.getMessage());
+				System.out.printf("%s: peer discovery failed via %s: %s%n", coinConfig.label(), seedServer, e.getMessage());
 			}
 		}
 
@@ -297,13 +312,21 @@ public final class RefreshElectrumServers {
 		return responseJson.get("result");
 	}
 
-	private static List<CandidateServer> sortCandidates(List<CandidateServer> candidates) {
+	static List<CandidateServer> sortCandidates(List<CandidateServer> candidates) {
 		candidates.sort(Comparator
-				.comparing((CandidateServer candidate) -> candidate.getResponseTimeMillis() == null ? Long.MAX_VALUE : candidate.getResponseTimeMillis())
-				.thenComparing(candidate -> candidate.getServer().getConnectionType() == ConnectionType.SSL ? 0 : 1)
-				.thenComparing(candidate -> candidate.getServer().getHostName())
-				.thenComparingInt(candidate -> candidate.getServer().getPort()));
+				.comparing((CandidateServer candidate) -> isNumericHost(candidate.getServer().getHostName()) ? 0 : 1)
+				.thenComparing(candidate -> candidate.getServer().getHostName().toLowerCase(Locale.ROOT))
+				.thenComparingInt(candidate -> candidate.getServer().getPort())
+				.thenComparing(candidate -> candidate.getServer().getConnectionType().name()));
 		return candidates;
+	}
+
+	private static boolean isNumericHost(String hostName) {
+		if (hostName == null || hostName.isBlank())
+			return false;
+
+		String firstLabel = hostName.split("\\.", 2)[0];
+		return !firstLabel.isBlank() && firstLabel.chars().allMatch(Character::isDigit);
 	}
 
 	static List<CandidateServer> preferSslCandidates(List<CandidateServer> candidates) {
@@ -320,6 +343,115 @@ public final class RefreshElectrumServers {
 			Files.createDirectories(outputPath.getParent());
 
 		Files.write(outputPath, json.getBytes(StandardCharsets.UTF_8));
+	}
+
+	static Map<String, Map<String, List<CandidateServer>>> readGeneratedServers(Path inputPath) throws IOException, org.json.simple.parser.ParseException {
+		try (Reader reader = Files.newBufferedReader(inputPath, StandardCharsets.UTF_8)) {
+			Map<String, Map<String, List<Server>>> parsedServers = ElectrumServerList.parseServerResource(reader);
+			Map<String, Map<String, List<CandidateServer>>> generatedServers = new LinkedHashMap<>();
+
+			for (Map.Entry<String, Map<String, List<Server>>> coinEntry : parsedServers.entrySet()) {
+				Map<String, List<CandidateServer>> networks = new LinkedHashMap<>();
+
+				for (Map.Entry<String, List<Server>> networkEntry : coinEntry.getValue().entrySet()) {
+					List<CandidateServer> candidates = networkEntry.getValue().stream()
+							.map(server -> new CandidateServer(server, "generated"))
+							.collect(Collectors.toList());
+					networks.put(networkEntry.getKey(), candidates);
+				}
+
+				generatedServers.put(coinEntry.getKey(), networks);
+			}
+
+			return generatedServers;
+		}
+	}
+
+	private static void updateBuiltInServers(List<CoinConfig> coinConfigs, Map<String, Map<String, List<CandidateServer>>> generatedServers, Options options) throws IOException {
+		Map<Path, String> sourceByPath = new LinkedHashMap<>();
+
+		for (CoinConfig coinConfig : coinConfigs) {
+			if (!options.coinCodes.contains(coinConfig.coinCode) || coinConfig.sourcePath == null || coinConfig.networkName == null)
+				continue;
+
+			List<CandidateServer> candidates = generatedServers
+					.getOrDefault(coinConfig.coinCode, Collections.emptyMap())
+					.get(coinConfig.networkName);
+			if (candidates == null || candidates.isEmpty())
+				continue;
+
+			String source = sourceByPath.computeIfAbsent(coinConfig.sourcePath, path -> {
+				try {
+					return Files.readString(path);
+				} catch (IOException e) {
+					throw new IllegalStateException("Unable to read " + path, e);
+				}
+			});
+
+			sourceByPath.put(coinConfig.sourcePath, replaceBuiltInServerList(source, coinConfig.networkName, candidates, options.builtinLimit));
+		}
+
+		for (Map.Entry<Path, String> entry : sourceByPath.entrySet())
+			Files.writeString(entry.getKey(), entry.getValue(), StandardCharsets.UTF_8);
+	}
+
+	static String replaceBuiltInServerList(String source, String networkName, List<CandidateServer> candidates, Integer limit) {
+		String enumMarker = "\t\t" + networkName + " {";
+		int enumStart = source.indexOf(enumMarker);
+		if (enumStart < 0)
+			throw new IllegalArgumentException("Unable to find enum constant " + networkName);
+
+		int methodStart = source.indexOf(" getServers() {", enumStart);
+		if (methodStart < 0)
+			throw new IllegalArgumentException("Unable to find getServers() for " + networkName);
+
+		String listStartMarker = "return Arrays.asList(\n";
+		int listStart = source.indexOf(listStartMarker, methodStart);
+		if (listStart < 0)
+			throw new IllegalArgumentException("Unable to find server list start for " + networkName);
+		listStart += listStartMarker.length();
+
+		String listEndMarker = "\n\t\t\t\t);";
+		int listEnd = source.indexOf(listEndMarker, listStart);
+		if (listEnd < 0)
+			throw new IllegalArgumentException("Unable to find server list end for " + networkName);
+
+		return source.substring(0, listStart)
+				+ toBuiltInServerList(candidates, limit)
+				+ source.substring(listEnd);
+	}
+
+	private static String toBuiltInServerList(List<CandidateServer> candidates, Integer limit) {
+		List<CandidateServer> limitedCandidates = limit == null
+				? candidates
+				: candidates.stream()
+						.limit(limit)
+						.collect(Collectors.toList());
+
+		StringBuilder builder = new StringBuilder();
+		builder.append("\t\t\t\t\t// Generated by tools/refresh-electrum-servers --update-builtins\n");
+
+		for (int index = 0; index < limitedCandidates.size(); index++) {
+			Server server = limitedCandidates.get(index).getServer();
+			builder.append("\t\t\t\t\tnew Server(\"")
+					.append(JSONValue.escape(server.getHostName()))
+					.append("\", Server.ConnectionType.")
+					.append(server.getConnectionType().name())
+					.append(", ")
+					.append(server.getPort())
+					.append(")");
+
+			if (index < limitedCandidates.size() - 1) {
+				builder.append(",");
+				builder.append("\n");
+			}
+		}
+
+		return builder.toString();
+	}
+
+	private static String builtinLimitSummary(Integer builtinLimit) {
+		return builtinLimit == null ? "no per-network limit" : "up to " + builtinLimit + " servers per network";
 	}
 
 	private static String toJson(Map<String, Map<String, List<CandidateServer>>> generatedServers) {
@@ -380,27 +512,32 @@ public final class RefreshElectrumServers {
 		return builder.toString();
 	}
 
-	private static Map<String, CoinConfig> coinConfigs() {
-		Map<String, CoinConfig> configs = new LinkedHashMap<>();
-		addCoin(configs, "BTC", "btc", Bitcoin.BitcoinNet.MAIN.getGenesisHash(), Bitcoin.BitcoinNet.MAIN.getServers());
-		addCoin(configs, "LTC", "ltc", Litecoin.LitecoinNet.MAIN.getGenesisHash(), Litecoin.LitecoinNet.MAIN.getServers());
-		addCoin(configs, "DOGE", "doge", Dogecoin.DogecoinNet.MAIN.getGenesisHash(), Dogecoin.DogecoinNet.MAIN.getServers());
-		addCoin(configs, "DGB", "dgb", Digibyte.DigibyteNet.MAIN.getGenesisHash(), Digibyte.DigibyteNet.MAIN.getServers());
-		addCoin(configs, "RVN", "rvn", Ravencoin.RavencoinNet.MAIN.getGenesisHash(), Ravencoin.RavencoinNet.MAIN.getServers());
+	private static List<CoinConfig> coinConfigs() {
+		List<CoinConfig> configs = new ArrayList<>();
+		addCoin(configs, "BTC", "MAIN", "btc", Bitcoin.BitcoinNet.MAIN.getGenesisHash(), Bitcoin.BitcoinNet.MAIN.getServers(), "src/main/java/org/qortal/crosschain/Bitcoin.java");
+		addCoin(configs, "BTC", "TEST3", "tbtc", Bitcoin.BitcoinNet.TEST3.getGenesisHash(), Bitcoin.BitcoinNet.TEST3.getServers(), "src/main/java/org/qortal/crosschain/Bitcoin.java");
+		addCoin(configs, "LTC", "MAIN", "ltc", Litecoin.LitecoinNet.MAIN.getGenesisHash(), Litecoin.LitecoinNet.MAIN.getServers(), "src/main/java/org/qortal/crosschain/Litecoin.java");
+		addCoin(configs, "LTC", "TEST3", "tltc", Litecoin.LitecoinNet.TEST3.getGenesisHash(), Litecoin.LitecoinNet.TEST3.getServers(), "src/main/java/org/qortal/crosschain/Litecoin.java");
+		addCoin(configs, "DOGE", "MAIN", "doge", Dogecoin.DogecoinNet.MAIN.getGenesisHash(), Dogecoin.DogecoinNet.MAIN.getServers(), "src/main/java/org/qortal/crosschain/Dogecoin.java");
+		addCoin(configs, "DGB", "MAIN", "dgb", Digibyte.DigibyteNet.MAIN.getGenesisHash(), Digibyte.DigibyteNet.MAIN.getServers(), "src/main/java/org/qortal/crosschain/Digibyte.java");
+		addCoin(configs, "RVN", "MAIN", "rvn", Ravencoin.RavencoinNet.MAIN.getGenesisHash(), Ravencoin.RavencoinNet.MAIN.getServers(), "src/main/java/org/qortal/crosschain/Ravencoin.java");
 		return configs;
 	}
 
-	private static void addCoin(Map<String, CoinConfig> configs, String coinCode, String chain1209k, String genesisHash, Collection<Server> builtInServers) {
-		configs.put(coinCode, new CoinConfig(coinCode, chain1209k, genesisHash, new ArrayList<>(builtInServers)));
+	private static void addCoin(List<CoinConfig> configs, String coinCode, String networkName, String chain1209k, String genesisHash, Collection<Server> builtInServers, String sourcePath) {
+		configs.add(new CoinConfig(coinCode, networkName, chain1209k, genesisHash, new ArrayList<>(builtInServers), Paths.get(sourcePath)));
 	}
 
 	private static void printUsage() {
 		System.out.println("usage: tools/refresh-electrum-servers [options]");
 		System.out.println("  --output <path>        Output JSON path (default: " + DEFAULT_OUTPUT_PATH + ")");
-		System.out.println("  --coins <csv>          Coins to refresh (default: BTC,LTC,DOGE,DGB,RVN)");
+		System.out.println("  --coins <csv>          Coins to refresh (default: BTC,LTC,DOGE,DGB,RVN; BTC/LTC include TEST3)");
 		System.out.println("  --skip-1209k           Do not scrape 1209k.com");
 		System.out.println("  --skip-peers           Do not query Electrum server.peers.subscribe");
 		System.out.println("  --skip-verify          Keep discovered servers without live genesis/height checks");
+		System.out.println("  --update-builtins      Also update Java hardcoded fallback server lists");
+		System.out.println("  --update-builtins-only Update Java hardcoded fallback lists from the existing JSON resource");
+		System.out.println("  --builtin-limit <n>    Max hardcoded fallback servers per network (default: unlimited)");
 		System.out.println("  --timeout-ms <ms>      Network timeout per request (default: 5000)");
 		System.out.println("  --max-peer-seeds <n>   Number of seeds per coin to ask for peers (default: 8)");
 		System.out.println("  --threads <n>          Verification worker count (default: 12)");
@@ -408,15 +545,23 @@ public final class RefreshElectrumServers {
 
 	private static final class CoinConfig {
 		private final String coinCode;
+		private final String networkName;
 		private final String chain1209k;
 		private final String genesisHash;
 		private final List<Server> builtInServers;
+		private final Path sourcePath;
 
-		private CoinConfig(String coinCode, String chain1209k, String genesisHash, List<Server> builtInServers) {
+		private CoinConfig(String coinCode, String networkName, String chain1209k, String genesisHash, List<Server> builtInServers, Path sourcePath) {
 			this.coinCode = coinCode;
+			this.networkName = networkName;
 			this.chain1209k = chain1209k;
 			this.genesisHash = genesisHash;
 			this.builtInServers = builtInServers;
+			this.sourcePath = sourcePath;
+		}
+
+		private String label() {
+			return this.coinCode + "-" + this.networkName;
 		}
 	}
 
@@ -426,18 +571,24 @@ public final class RefreshElectrumServers {
 		private final boolean skip1209k;
 		private final boolean skipPeerDiscovery;
 		private final boolean verify;
+		private final boolean updateBuiltins;
+		private final boolean updateBuiltinsOnly;
+		private final Integer builtinLimit;
 		private final int timeoutMs;
 		private final int maxPeerSeeds;
 		private final int threads;
 		private final boolean help;
 
 		private Options(Path outputPath, Set<String> coinCodes, boolean skip1209k, boolean skipPeerDiscovery,
-				boolean verify, int timeoutMs, int maxPeerSeeds, int threads, boolean help) {
+				boolean verify, boolean updateBuiltins, boolean updateBuiltinsOnly, Integer builtinLimit, int timeoutMs, int maxPeerSeeds, int threads, boolean help) {
 			this.outputPath = outputPath;
 			this.coinCodes = coinCodes;
 			this.skip1209k = skip1209k;
 			this.skipPeerDiscovery = skipPeerDiscovery;
 			this.verify = verify;
+			this.updateBuiltins = updateBuiltins;
+			this.updateBuiltinsOnly = updateBuiltinsOnly;
+			this.builtinLimit = builtinLimit;
 			this.timeoutMs = timeoutMs;
 			this.maxPeerSeeds = maxPeerSeeds;
 			this.threads = threads;
@@ -450,6 +601,9 @@ public final class RefreshElectrumServers {
 			boolean skip1209k = false;
 			boolean skipPeerDiscovery = false;
 			boolean verify = true;
+			boolean updateBuiltins = false;
+			boolean updateBuiltinsOnly = false;
+			Integer builtinLimit = null;
 			int timeoutMs = 5000;
 			int maxPeerSeeds = 8;
 			int threads = 12;
@@ -483,6 +637,19 @@ public final class RefreshElectrumServers {
 						verify = false;
 						break;
 
+					case "--update-builtins":
+						updateBuiltins = true;
+						break;
+
+					case "--update-builtins-only":
+						updateBuiltins = true;
+						updateBuiltinsOnly = true;
+						break;
+
+					case "--builtin-limit":
+						builtinLimit = parsePositiveInt(requireValue(args, ++index, arg), arg);
+						break;
+
 					case "--timeout-ms":
 						timeoutMs = parsePositiveInt(requireValue(args, ++index, arg), arg);
 						break;
@@ -500,7 +667,7 @@ public final class RefreshElectrumServers {
 				}
 			}
 
-			return new Options(outputPath, coinCodes, skip1209k, skipPeerDiscovery, verify, timeoutMs, maxPeerSeeds, threads, help);
+			return new Options(outputPath, coinCodes, skip1209k, skipPeerDiscovery, verify, updateBuiltins, updateBuiltinsOnly, builtinLimit, timeoutMs, maxPeerSeeds, threads, help);
 		}
 
 		private static String requireValue(String[] args, int index, String option) {
