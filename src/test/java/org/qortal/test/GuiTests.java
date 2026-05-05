@@ -13,6 +13,8 @@ import java.awt.TrayIcon.MessageType;
 
 public class GuiTests {
 
+	private static final String RUN_GUI_DISPLAY_TESTS_PROPERTY = "qortium.runGuiDisplayTests";
+
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
@@ -54,6 +56,7 @@ public class GuiTests {
 	}
 
 	private void assumeDisplayAvailable() {
+		Assume.assumeTrue(Boolean.getBoolean(RUN_GUI_DISPLAY_TESTS_PROPERTY));
 		Assume.assumeTrue(!GraphicsEnvironment.isHeadless());
 	}
 

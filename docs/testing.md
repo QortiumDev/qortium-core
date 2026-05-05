@@ -16,7 +16,7 @@ protocol parsing with mock RPC responses. Public hosts remain integration checks
 
 - `-Dqortium.runLongMempowTests=true`
   Runs the long MemoryPoW compute benchmarks. The default suite keeps fast compute and known-nonce verification coverage instead.
-- `-Dtest.awt.headless=false`
+- `-Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false`
   Allows GUI display tests to open the splash frame and system tray when a desktop display is available. Headless Maven runs still exercise the splash no-op path.
 - `-Dqortium.runLiveBootstrapChecks=true`
   Checks configured bootstrap hosts with live HTTP requests. Use `-Dqortium.liveBootstrapHosts=https://host-one,https://host-two` to override settings. Explicit live runs fail if no bootstrap hosts are configured.
@@ -37,7 +37,10 @@ mvn test -DskipJUnitTests=false
 mvn test -DskipJUnitTests=false -Dqortium.runLongMempowTests=true -Dtest=org.qortal.test.MemoryPoWTests
 
 # Display-backed GUI checks
-mvn test -DskipJUnitTests=false -Dtest.awt.headless=false -Dtest=org.qortal.test.GuiTests
+mvn test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false -Dtest=org.qortal.test.GuiTests
+
+# Display-backed GUI checks under xvfb
+xvfb-run -a mvn test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false -Dtest=org.qortal.test.GuiTests
 
 # Live bootstrap host checks
 mvn test -DskipJUnitTests=false -Dqortium.runLiveBootstrapChecks=true -Dtest=org.qortal.test.BootstrapTests

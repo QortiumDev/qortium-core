@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-05 - test: require explicit GUI display opt-in
+
+Tightened the GUI test split so splash and system-tray display tests now require both a display-capable JVM and `-Dqortium.runGuiDisplayTests=true`, while the normal headless Maven path continues to exercise the splash no-op behavior. The testing guide now documents the GUI display opt-in command, including an `xvfb-run` example for automated display-backed runs.
+
 ### 2026-05-04 - test: tighten crosschain HTLC fixture coverage
 
 Expanded BTC-like crosschain HTLC tests so the default suite builds deterministic in-memory fixtures for secret discovery and funded-status detection across supported coins, instead of relying on inherited live fixture checks for coins without known public HTLC data. Live PirateChain fixture checks now fail clearly when no configured light-client server returns the expected fixture data, and the testing guide now includes concrete commands for each opt-in integration test group.
