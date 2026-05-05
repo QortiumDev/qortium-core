@@ -1,38 +1,30 @@
 package org.qortal.test.network;
 
-import com.google.common.primitives.Ints;
-import io.druid.extendedset.intset.ConciseSet;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.qortal.block.Block;
 import org.qortal.controller.BlockMinter;
 import org.qortal.controller.OnlineAccountsManager;
-import org.qortal.data.network.OnlineAccountData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.settings.Settings;
-import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.Common;
 import org.qortal.utils.Base58;
 import org.qortal.utils.NTP;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class OnlineAccountsTests extends Common {
 
-    private static final Random RANDOM = new Random();
     static {
         // This must go before any calls to LogManager/Logger
         System.setProperty("java.util.logging.manager", "org.apache.logging.log4j.jul.LogManager");
@@ -81,32 +73,5 @@ public class OnlineAccountsTests extends Common {
             System.out.println(String.format("onlineAccountSignatures count: %d", onlineAccountSignatures.size()));
             assertTrue(onlineAccountSignatures.size() >= 2);
         }
-    }
-
-    @Test
-    @Ignore(value = "For informational use")
-    public void testOnlineAccountNonceCompression() throws IOException {
-        List<OnlineAccountData> onlineAccounts = AccountUtils.generateOnlineAccounts(5000);
-
-        // Build array of nonce values
-        List<Integer> accountNonces = new ArrayList<>();
-        for (OnlineAccountData onlineAccountData : onlineAccounts) {
-            accountNonces.add(onlineAccountData.getNonce());
-        }
-
-        // Write nonces into ConciseSet
-        ConciseSet nonceSet = new ConciseSet();
-        nonceSet = nonceSet.convert(accountNonces);
-        byte[] conciseEncodedNonces = nonceSet.toByteBuffer().array();
-
-        // Also write to regular byte array of ints, for comparison
-        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        for (Integer nonce : accountNonces) {
-            bytes.write(Ints.toByteArray(nonce));
-        }
-        byte[] standardEncodedNonces = bytes.toByteArray();
-
-        System.out.println(String.format("Standard: %d", standardEncodedNonces.length));
-        System.out.println(String.format("Concise: %d", conciseEncodedNonces.length));
     }
 }

@@ -1,7 +1,6 @@
 package org.qortal.test.naming;
 
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.resource.TransactionsResource;
@@ -25,12 +24,16 @@ import org.qortal.transaction.Transaction;
 import org.qortal.utils.Unicode;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.Assume.assumeTrue;
 import static org.junit.Assert.*;
 
 public class IntegrityTests extends Common {
+
+    private static final String RUN_LIVE_REPOSITORY_INTEGRITY_CHECKS_PROPERTY = "qortium.runLiveRepositoryIntegrityChecks";
 
     @Before
     public void beforeTest() throws DataException {
@@ -58,6 +61,25 @@ public class IntegrityTests extends Common {
 
             // Ensure the name still exists and the data is still correct
             assertEquals(data, repository.getNameRepository().fromName(name).getData());
+
+            repository.discardChanges();
+        }
+    }
+
+    @Test
+    public void testStoredReducedNameMatchesUnicodeSanitize() throws DataException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String name = "TEST-nÁme";
+            String data = "{\"age\":30}";
+
+            RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, data);
+            transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
+            TransactionUtils.signAndMint(repository, transactionData, alice);
+
+            NameData nameData = repository.getNameRepository().fromName(name);
+            assertNotNull(nameData);
+            assertEquals(Unicode.sanitize(name), nameData.getReducedName());
 
             repository.discardChanges();
         }
@@ -684,9 +706,10 @@ public class IntegrityTests extends Common {
         }
     }
 
-    @Ignore("Checks 'live' repository")
     @Test
-    public void testRepository() throws DataException {
+    public void testLiveRepositoryReducedNameIntegrity() throws DataException {
+        assumeTrue(Boolean.getBoolean(RUN_LIVE_REPOSITORY_INTEGRITY_CHECKS_PROPERTY));
+
         Common.setShouldRetainRepositoryAfterTest(true);
         Settings.fileInstance("settings.json"); // use 'live' settings
 
@@ -697,18 +720,17 @@ public class IntegrityTests extends Common {
 
         try (final Repository repository = RepositoryManager.getRepository()) {
             List<NameData> names = repository.getNameRepository().getAllNames();
+            List<String> integrityFailures = new ArrayList<>();
 
             for (NameData nameData : names) {
                 String reReduced = Unicode.sanitize(nameData.getName());
 
                 if (reReduced.isBlank()) {
-                    System.err.println(String.format("Name '%s' reduced to blank",
-                            nameData.getName()
-                    ));
+                    integrityFailures.add(String.format("Name '%s' reduced to blank", nameData.getName()));
                 }
 
                 if (!nameData.getReducedName().equals(reReduced)) {
-                    System.out.println(String.format("Name '%s' reduced form was '%s' but is now '%s'",
+                    integrityFailures.add(String.format("Name '%s' reduced form was '%s' but is now '%s'",
                             nameData.getName(),
                             nameData.getReducedName(),
                             reReduced
@@ -718,13 +740,15 @@ public class IntegrityTests extends Common {
                     names.stream()
                             .filter(tmpNameData -> tmpNameData.getReducedName().equals(reReduced))
                             .forEach(tmpNameData ->
-                                    System.err.println(String.format("Name '%s' new reduced form also matches name '%s'",
+                                    integrityFailures.add(String.format("Name '%s' new reduced form also matches name '%s'",
                                             nameData.getName(),
                                             tmpNameData.getName()
                                     ))
                             );
                 }
             }
+
+            assertTrue(String.join(System.lineSeparator(), integrityFailures), integrityFailures.isEmpty());
         }
     }
 }

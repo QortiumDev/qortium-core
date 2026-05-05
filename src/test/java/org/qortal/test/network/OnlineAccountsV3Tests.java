@@ -8,6 +8,7 @@ import org.qortal.data.network.OnlineAccountData;
 import org.qortal.network.message.GetOnlineAccountsV3Message;
 import org.qortal.network.message.Message;
 import org.qortal.network.message.MessageException;
+import org.qortal.network.message.OnlineAccountsV3Message;
 import org.qortal.transform.Transformer;
 
 import java.nio.ByteBuffer;
@@ -113,6 +114,42 @@ public class OnlineAccountsV3Tests {
         validateSerialization(hashesByTimestampThenByteOut);
     }
 
+    @Test
+    public void testOnlineAccountsV3NonceSerialization() throws MessageException {
+        List<OnlineAccountData> onlineAccountsOut = Arrays.asList(
+                generateOnlineAccount(123456L, 1),
+                generateOnlineAccount(123456L, 2),
+                generateOnlineAccount(123456L, 3)
+        );
+
+        Message messageOut = new OnlineAccountsV3Message(onlineAccountsOut);
+        ByteBuffer byteBuffer = ByteBuffer.wrap(messageOut.toBytes()).asReadOnlyBuffer();
+
+        OnlineAccountsV3Message messageIn = (OnlineAccountsV3Message) Message.fromByteBuffer(byteBuffer);
+        List<OnlineAccountData> onlineAccountsIn = messageIn.getOnlineAccounts();
+
+        assertEquals(onlineAccountsOut.size(), onlineAccountsIn.size());
+
+        for (int i = 0; i < onlineAccountsOut.size(); ++i)
+            assertOnlineAccountEquals(onlineAccountsOut.get(i), onlineAccountsIn.get(i));
+    }
+
+    @Test
+    public void testOnlineAccountsV3SkipsMissingNonce() throws MessageException {
+        OnlineAccountData missingNonce = generateOnlineAccount(123456L, null);
+        OnlineAccountData validNonce = generateOnlineAccount(123456L, 4);
+        OnlineAccountData negativeNonce = generateOnlineAccount(123456L, -1);
+
+        Message messageOut = new OnlineAccountsV3Message(Arrays.asList(missingNonce, validNonce, negativeNonce));
+        ByteBuffer byteBuffer = ByteBuffer.wrap(messageOut.toBytes()).asReadOnlyBuffer();
+
+        OnlineAccountsV3Message messageIn = (OnlineAccountsV3Message) Message.fromByteBuffer(byteBuffer);
+        List<OnlineAccountData> onlineAccountsIn = messageIn.getOnlineAccounts();
+
+        assertEquals(1, onlineAccountsIn.size());
+        assertOnlineAccountEquals(validNonce, onlineAccountsIn.get(0));
+    }
+
     private void validateSerialization(Map<Long, Map<Byte, byte[]>> hashesByTimestampThenByteOut) throws MessageException {
         Message messageOut = new GetOnlineAccountsV3Message(hashesByTimestampThenByteOut);
         byte[] messageBytes = messageOut.toBytes();
@@ -173,6 +210,23 @@ public class OnlineAccountsV3Tests {
         }
 
         return onlineAccounts;
+    }
+
+    private OnlineAccountData generateOnlineAccount(long timestamp, Integer nonce) {
+        byte[] signature = new byte[Transformer.SIGNATURE_LENGTH];
+        RANDOM.nextBytes(signature);
+
+        byte[] publicKey = new byte[Transformer.PUBLIC_KEY_LENGTH];
+        RANDOM.nextBytes(publicKey);
+
+        return new OnlineAccountData(timestamp, signature, publicKey, nonce);
+    }
+
+    private void assertOnlineAccountEquals(OnlineAccountData expected, OnlineAccountData actual) {
+        assertEquals(expected.getTimestamp(), actual.getTimestamp());
+        assertArrayEquals(expected.getSignature(), actual.getSignature());
+        assertArrayEquals(expected.getPublicKey(), actual.getPublicKey());
+        assertEquals(expected.getNonce(), actual.getNonce());
     }
 
 }

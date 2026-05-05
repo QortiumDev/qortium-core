@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: replace ignored tests with active coverage
+
+Removed the remaining `@Ignore` annotations from the test suite by turning the skipped online-account API placeholder into deterministic empty-state API coverage, replacing the old nonce-compression diagnostic with active `ONLINE_ACCOUNTS_V3` nonce serialization checks, and changing the live repository name-integrity scan into an explicit opt-in check with real assertions. The name integrity tests now also cover deterministic reduced-name persistence without depending on a live repository.
+
 ### 2026-05-04 - test: make crosschain checks deterministic
 
 Replaced ignored BTC-like crosschain stubs with deterministic mock-provider coverage for wallet scanning, spend building, wallet balances, median block time, and HTLC secret/status handling while keeping public ElectrumX, PirateChain, and other live crosschain checks behind explicit opt-in properties. The Dogecoin, Digibyte, Litecoin, Ravencoin, Bitcoin, HTLC, and PirateChain crosschain tests now provide default offline coverage without depending on unavailable testnet servers, and the opt-in PirateChain funded-HTLC checks now tolerate inconsistent light-client servers by using confirmed UTXOs and trying each configured live fixture server.

@@ -2,11 +2,12 @@ package org.qortal.test.api;
 
 import com.google.common.primitives.Bytes;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.resource.AddressesResource;
+import org.qortal.controller.OnlineAccountsManager;
+import org.qortal.data.network.OnlineAccountLevel;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.PublicizeTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -26,6 +27,7 @@ import org.qortal.utils.Base58;
 import javax.xml.bind.annotation.XmlSeeAlso;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -68,19 +70,18 @@ public class AddressesApiTests extends ApiCommon {
 	}
 
 	@Test
-	@Ignore(value = "No Logic Coded")
 	public void testGetOnlineAccounts() {
-		// Add and remove users as online checking count after minting
-		// TODO: Need to construct logic
-		// this.addressesResource.getOnlineAccounts(), empty Array, Size = 0
-		assertNotNull(this.addressesResource.getOnlineAccounts());
-		int blocksToMint = 5;
-		// Add 2 accounts to the online array, mint some blocks
-		// Assert number of accountsOnline == 2
-		// Remove an account from onlineStatus, mint some blocks
-		// Assert number of accountsOnline == 1
-		// Add two accounts as online, mint some blocks
-		// Asset number of accountsOnline == 3
+		OnlineAccountsManager.getInstance().removeAllOnlineAccounts();
+
+		assertTrue(this.addressesResource.getOnlineAccounts().isEmpty());
+
+		List<OnlineAccountLevel> onlineAccountLevels = this.addressesResource.getOnlineAccountsByLevel();
+		assertEquals(11, onlineAccountLevels.size());
+
+		for (int level = 0; level <= 10; ++level) {
+			assertEquals(level, onlineAccountLevels.get(level).getLevel());
+			assertEquals(0, onlineAccountLevels.get(level).getCount());
+		}
 	}
 
 	@Test
