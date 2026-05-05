@@ -15,12 +15,24 @@ public class GuiTests {
 
 	@Before
 	public void beforeTest() throws DataException {
-		Assume.assumeTrue(!GraphicsEnvironment.isHeadless());
 		Common.useDefaultSettings();
 	}
 
 	@Test
+	public void testSplashFrameHeadlessNoOp() {
+		Assume.assumeTrue(GraphicsEnvironment.isHeadless());
+
+		SplashFrame splashFrame = SplashFrame.getInstance();
+		splashFrame.updateStatus("Testing headless splash status");
+		splashFrame.setVisible(true);
+		splashFrame.setVisible(false);
+		splashFrame.dispose();
+	}
+
+	@Test
 	public void testSplashFrame() throws InterruptedException {
+		assumeDisplayAvailable();
+
 		SplashFrame splashFrame = SplashFrame.getInstance();
 
 		Thread.sleep(2000L);
@@ -30,6 +42,8 @@ public class GuiTests {
 
 	@Test
 	public void testSysTray() throws InterruptedException {
+		assumeDisplayAvailable();
+
 		SysTray.getInstance();
 
 		SysTray.getInstance().showMessage("Testing...", "Tray icon should disappear in 10 seconds", MessageType.INFO);
@@ -37,6 +51,10 @@ public class GuiTests {
 		Thread.sleep(10_000L);
 
 		SysTray.getInstance().dispose();
+	}
+
+	private void assumeDisplayAvailable() {
+		Assume.assumeTrue(!GraphicsEnvironment.isHeadless());
 	}
 
 }

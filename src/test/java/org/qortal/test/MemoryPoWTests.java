@@ -19,6 +19,16 @@ public class MemoryPoWTests {
 	private static final int FULL_WORK_BUFFER_LENGTH = 8 * 1024 * 1024;
 	private static final int LONG_SAMPLE_SIZE = 10;
 	private static final long LONG_STDDEV_DIVISOR = LONG_SAMPLE_SIZE * (LONG_SAMPLE_SIZE - 1);
+	private static final byte[] TEST_DATA = new byte[] { (byte) 0xaa, (byte) 0xbb, (byte) 0xcc };
+	private static final int[][] FULL_BUFFER_VERIFY_FIXTURES = new int[][] {
+			{ 8, 326 },
+			{ 9, 326 },
+			{ 10, 643 },
+			{ 11, 1671 },
+			{ 12, 9059 },
+			{ 13, 9059 },
+			{ 14, 11032 }
+	};
 
 	@Before
 	public void beforeTest() {
@@ -27,13 +37,12 @@ public class MemoryPoWTests {
 
 	@Test
 	public void testCompute() {
-		byte[] data = new byte[] { (byte) 0xaa, (byte) 0xbb, (byte) 0xcc };
 		int difficulty = 8;
 		int expectedNonce = 55;
 
 		long startTime = System.currentTimeMillis();
 
-		Integer	nonce = MemoryPoW.compute2(data, FAST_WORK_BUFFER_LENGTH, difficulty);
+		Integer	nonce = MemoryPoW.compute2(TEST_DATA, FAST_WORK_BUFFER_LENGTH, difficulty);
 
 		long finishTime = System.currentTimeMillis();
 
@@ -43,17 +52,16 @@ public class MemoryPoWTests {
 				nonce);
 
 		assertEquals(expectedNonce, nonce.intValue());
-		assertTrue(MemoryPoW.verify2(data, FAST_WORK_BUFFER_LENGTH, difficulty, nonce));
+		assertTrue(MemoryPoW.verify2(TEST_DATA, FAST_WORK_BUFFER_LENGTH, difficulty, nonce));
 	}
 
 	@Test
 	public void testFullBufferComputeDifficulty8() {
-		byte[] data = new byte[] { (byte) 0xaa, (byte) 0xbb, (byte) 0xcc };
 		int difficulty = 8;
 		int expectedNonce = 326;
 
 		long startTime = System.currentTimeMillis();
-		int nonce = MemoryPoW.compute2(data, FULL_WORK_BUFFER_LENGTH, difficulty);
+		int nonce = MemoryPoW.compute2(TEST_DATA, FULL_WORK_BUFFER_LENGTH, difficulty);
 		long finishTime = System.currentTimeMillis();
 
 		System.out.printf("Memory-hard PoW (buffer size: %dKB, leading zeros: %d) took %dms, nonce: %d%n", FULL_WORK_BUFFER_LENGTH / 1024,
@@ -62,7 +70,7 @@ public class MemoryPoWTests {
 				nonce);
 
 		assertEquals(expectedNonce, nonce);
-		assertTrue(MemoryPoW.verify2(data, FULL_WORK_BUFFER_LENGTH, difficulty, nonce));
+		assertTrue(MemoryPoW.verify2(TEST_DATA, FULL_WORK_BUFFER_LENGTH, difficulty, nonce));
 	}
 
 	@Test
@@ -112,18 +120,16 @@ public class MemoryPoWTests {
 
 	@Test
 	public void testKnownCompute2() {
-		byte[] data = new byte[] { (byte) 0xaa, (byte) 0xbb, (byte) 0xcc };
-
 		int difficulty = 8;
 		int expectedNonce = 55;
-		int nonce = MemoryPoW.compute2(data, FAST_WORK_BUFFER_LENGTH, difficulty);
+		int nonce = MemoryPoW.compute2(TEST_DATA, FAST_WORK_BUFFER_LENGTH, difficulty);
 
 		System.out.println(String.format("Difficulty %d, nonce: %d", difficulty, nonce));
 		assertEquals(expectedNonce, nonce);
 
 		difficulty = 10;
 		expectedNonce = 1356;
-		nonce = MemoryPoW.compute2(data, FAST_WORK_BUFFER_LENGTH, difficulty);
+		nonce = MemoryPoW.compute2(TEST_DATA, FAST_WORK_BUFFER_LENGTH, difficulty);
 
 		System.out.printf("Difficulty %d, nonce: %d%n", difficulty, nonce);
 		assertEquals(expectedNonce, nonce);
@@ -131,15 +137,13 @@ public class MemoryPoWTests {
 
 	@Test
 	public void testKnownVerify() {
-		byte[] data = new byte[] { (byte) 0xaa, (byte) 0xbb, (byte) 0xcc };
+		for (int[] fixture : FULL_BUFFER_VERIFY_FIXTURES) {
+			int difficulty = fixture[0];
+			int expectedNonce = fixture[1];
 
-		int difficulty = 8;
-		int expectedNonce = 326;
-		assertTrue(MemoryPoW.verify2(data, FULL_WORK_BUFFER_LENGTH, difficulty, expectedNonce));
-
-		difficulty = 14;
-		expectedNonce = 11032;
-		assertTrue(MemoryPoW.verify2(data, FULL_WORK_BUFFER_LENGTH, difficulty, expectedNonce));
+			assertTrue(String.format("Difficulty %d should verify nonce %d", difficulty, expectedNonce),
+					MemoryPoW.verify2(TEST_DATA, FULL_WORK_BUFFER_LENGTH, difficulty, expectedNonce));
+		}
 	}
 
 	private void runLongComputeBenchmark(int difficulty) throws DataException {

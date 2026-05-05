@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-04 - test: improve opt-in test defaults
+
+Made conditional test groups more useful in normal Maven runs by adding a headless splash no-op test, keeping graphical splash and tray checks scoped to display-capable runs, and extending MemoryPoW's default coverage with known full-buffer verification fixtures through difficulty 14 while leaving expensive compute benchmarks opt-in. Added a testing guide that lists the remaining opt-in properties for long MemoryPoW, GUI display, live bootstrap, live ElectrumX, live crosschain, and live repository integrity checks.
+
 ### 2026-05-04 - test: replace ignored tests with active coverage
 
 Removed the remaining `@Ignore` annotations from the test suite by turning the skipped online-account API placeholder into deterministic empty-state API coverage, replacing the old nonce-compression diagnostic with active `ONLINE_ACCOUNTS_V3` nonce serialization checks, and changing the live repository name-integrity scan into an explicit opt-in check with real assertions. The name integrity tests now also cover deterministic reduced-name persistence without depending on a live repository.
