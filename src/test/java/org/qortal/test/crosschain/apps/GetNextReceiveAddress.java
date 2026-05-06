@@ -3,10 +3,8 @@ package org.qortal.test.crosschain.apps;
 import org.bitcoinj.core.AddressFormatException;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
-import org.qortal.crosschain.Bitcoin;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.ForeignBlockchainException;
-import org.qortal.crosschain.Litecoin;
 import org.qortal.settings.Settings;
 
 import java.security.Security;
@@ -22,7 +20,8 @@ public class GetNextReceiveAddress {
 		if (error != null)
 			System.err.println(error);
 
-		System.err.println(String.format("usage: GetNextReceiveAddress (-b | -l) <xprv/xpub>"));
+		System.err.println(String.format("usage: GetNextReceiveAddress <coin> <xprv/xpub>"));
+		System.err.println("where: " + Common.bitcoinyUsage());
 		System.err.println(String.format("example (testnet): GetNextReceiveAddress -l tpubD6NzVbkrYhZ4X3jV96Wo3Kr8Au2v9cUUEmPRk1smwduFrRVfBjkkw49rRYjgff1fGSktFMfabbvv8b1dmfyLjjbDax6QGyxpsNsx5PXukCB"));
 		System.exit(1);
 	}
@@ -41,18 +40,7 @@ public class GetNextReceiveAddress {
 
 		int argIndex = 0;
 		try {
-			switch (args[argIndex++]) {
-				case "-b":
-					bitcoiny = Bitcoin.getInstance();
-					break;
-
-				case "-l":
-					bitcoiny = Litecoin.getInstance();
-					break;
-
-				default:
-					usage("Only Bitcoin (-b) or Litecoin (-l) supported");
-			}
+			bitcoiny = Common.getBitcoiny(args[argIndex++]);
 
 			key58 = args[argIndex++];
 

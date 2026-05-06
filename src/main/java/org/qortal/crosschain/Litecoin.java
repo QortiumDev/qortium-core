@@ -3,7 +3,6 @@ package org.qortal.crosschain;
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
 import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.Context;
 import org.bitcoinj.core.LegacyAddress;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.script.Script;
@@ -11,16 +10,13 @@ import org.libdohj.params.LitecoinMainNetParams;
 import org.libdohj.params.LitecoinRegTestParams;
 import org.libdohj.params.LitecoinTestNet3Params;
 import org.qortal.crosschain.ElectrumX.Server;
-import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.settings.Settings;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.EnumMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class Litecoin extends Bitcoiny {
+public class Litecoin extends ConfiguredBitcoiny {
 
 	public static final String CURRENCY_CODE = "LTC";
 
@@ -32,15 +28,12 @@ public class Litecoin extends Bitcoiny {
 	private static final long MAINNET_FEE = 1000L;
 	private static final long NON_MAINNET_FEE = 1000L; // enough for TESTNET3 and should be OK for REGTEST
 
-	private static final Map<ElectrumX.Server.ConnectionType, Integer> DEFAULT_ELECTRUMX_PORTS = new EnumMap<>(ElectrumX.Server.ConnectionType.class);
 	public static final LitecoinMainNetParamsP2ShOverride MAIN_NET_PARAMS_P2SH_OVERRIDE = new LitecoinMainNetParamsP2ShOverride(50);
 
-	static {
-		DEFAULT_ELECTRUMX_PORTS.put(ConnectionType.TCP, 50001);
-		DEFAULT_ELECTRUMX_PORTS.put(ConnectionType.SSL, 50002);
-	}
+	private static final BitcoinyChainConfig CONFIG = new BitcoinyChainConfig("Litecoin", CURRENCY_CODE,
+			DEFAULT_FEE_PER_KB, MINIMUM_ORDER_AMOUNT, BitcoinyChainConfig.defaultElectrumXPorts());
 
-	public enum LitecoinNet {
+	public enum LitecoinNet implements BitcoinyNetwork {
 		MAIN {
 			@Override
 			public NetworkParameters getParams() {
@@ -157,28 +150,13 @@ public class Litecoin extends Bitcoiny {
 
 	private static Litecoin instance;
 
-	private final LitecoinNet litecoinNet;
-
-	// Constructors and instance
-
-	private Litecoin(LitecoinNet litecoinNet, BitcoinyBlockchainProvider blockchain, Context bitcoinjContext, String currencyCode) {
-		super(blockchain, bitcoinjContext, currencyCode, DEFAULT_FEE_PER_KB);
-		this.litecoinNet = litecoinNet;
-
-		LOGGER.info(() -> String.format("Starting Litecoin support using %s", this.litecoinNet.name()));
+	private Litecoin(LitecoinNet litecoinNet) {
+		super(CONFIG, litecoinNet);
 	}
 
 	public static synchronized Litecoin getInstance() {
 		if (instance == null && Settings.getInstance().isWalletEnabled("LTC")) {
-			LitecoinNet litecoinNet = Settings.getInstance().getLitecoinNet();
-
-			BitcoinyBlockchainProvider electrumX = new ElectrumX("Litecoin-" + litecoinNet.name(), litecoinNet.getGenesisHash(),
-					ElectrumServerList.getServers(CURRENCY_CODE, litecoinNet.name(), litecoinNet.getServers()), DEFAULT_ELECTRUMX_PORTS);
-			Context bitcoinjContext = new Context(litecoinNet.getParams());
-
-			instance = new Litecoin(litecoinNet, electrumX, bitcoinjContext, CURRENCY_CODE);
-
-			electrumX.setBlockchain(instance);
+			instance = new Litecoin(Settings.getInstance().getLitecoinNet());
 		}
 
 		return instance;
@@ -188,35 +166,6 @@ public class Litecoin extends Bitcoiny {
 
 	public static synchronized void resetForTesting() {
 		instance = null;
-	}
-
-	// Actual useful methods for use by other classes
-
-	@Override
-	public long getMinimumOrderAmount() {
-		return MINIMUM_ORDER_AMOUNT;
-	}
-
-	/**
-	 * Returns estimated LTC fee, in sats per 1000bytes, optionally for historic timestamp.
-	 * 
-	 * @param timestamp optional milliseconds since epoch, or null for 'now'
-	 * @return sats per 1000bytes, or throws ForeignBlockchainException if something went wrong
-	 */
-	@Override
-	public long getP2shFee(Long timestamp) throws ForeignBlockchainException {
-		return this.litecoinNet.getP2shFee(timestamp);
-	}
-
-	@Override
-	public long getFeeRequired() {
-		return this.litecoinNet.getFeeRequired();
-	}
-
-	@Override
-	public void setFeeRequired(long fee) {
-
-		this.litecoinNet.setFeeRequired( fee );
 	}
 
 	/**

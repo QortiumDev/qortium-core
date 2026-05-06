@@ -11,7 +11,6 @@ import org.bitcoinj.script.ScriptBuilder;
 import org.bouncycastle.util.Strings;
 import org.json.simple.JSONObject;
 import org.qortal.api.model.CrossChainTradeLedgerEntry;
-import org.qortal.api.model.crosschain.BitcoinyTBDRequest;
 import org.qortal.asset.Asset;
 import org.qortal.crosschain.*;
 import org.qortal.data.account.AccountBalanceData;
@@ -579,33 +578,6 @@ public class CrossChainUtils {
                 server.getPort(),
                 server.getConnectionType().toString(),
                 false);
-    }
-
-    /**
-     * Get Bitcoiny TBD (To Be Determined)
-     *
-     * @param bitcoinyTBDRequest the parameters for the Bitcoiny TBD
-     * @return the Bitcoiny TBD
-     * @throws DataException
-     */
-    public static BitcoinyTBD getBitcoinyTBD(BitcoinyTBDRequest bitcoinyTBDRequest) throws DataException {
-
-        try {
-            DeterminedNetworkParams networkParams = new DeterminedNetworkParams(bitcoinyTBDRequest);
-
-            BitcoinyTBD bitcoinyTBD
-                    = BitcoinyTBD.getInstance(bitcoinyTBDRequest.getCode())
-                        .orElse(BitcoinyTBD.buildInstance(
-                                bitcoinyTBDRequest,
-                                networkParams)
-                        );
-
-            return bitcoinyTBD;
-        } catch (Exception e) {
-            LOGGER.error(e.getMessage(), e);
-        }
-
-        return null;
     }
 
     /**

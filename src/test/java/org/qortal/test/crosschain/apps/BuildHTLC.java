@@ -5,10 +5,8 @@ import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.script.Script.ScriptType;
-import org.qortal.crosschain.Bitcoin;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyHTLC;
-import org.qortal.crosschain.Litecoin;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -20,8 +18,8 @@ public class BuildHTLC {
 		if (error != null)
 			System.err.println(error);
 
-		System.err.println(String.format("usage: BuildHTLC (-b | -l) <refund-P2PKH> <amount> <redeem-P2PKH> <HASH160-of-secret> <locktime>"));
-		System.err.println("where: -b means use Bitcoin, -l means use Litecoin");
+		System.err.println(String.format("usage: BuildHTLC <coin> <refund-P2PKH> <amount> <redeem-P2PKH> <HASH160-of-secret> <locktime>"));
+		System.err.println("where: " + Common.bitcoinyUsage());
 		System.err.println(String.format("example: BuildHTLC -l "
 				+ "msAfaDaJ8JiprxxFaAXEEPxKK3JaZCYpLv \\\n"
 				+ "\t0.00008642 \\\n"
@@ -48,18 +46,7 @@ public class BuildHTLC {
 
 		int argIndex = 0;
 		try {
-			switch (args[argIndex++]) {
-				case "-b":
-					bitcoiny = Bitcoin.getInstance();
-					break;
-
-				case "-l":
-					bitcoiny = Litecoin.getInstance();
-					break;
-
-				default:
-					usage("Only Bitcoin (-b) or Litecoin (-l) supported");
-			}
+			bitcoiny = Common.getBitcoiny(args[argIndex++]);
 			params = bitcoiny.getNetworkParameters();
 
 			refundAddress = Address.fromString(params, args[argIndex++]);

@@ -22,7 +22,8 @@ public class GetWalletTransactions {
 		if (error != null)
 			System.err.println(error);
 
-		System.err.println(String.format("usage: GetWalletTransactions (-b | -l) <xprv/xpub>"));
+		System.err.println(String.format("usage: GetWalletTransactions <coin> <xprv/xpub>"));
+		System.err.println("where: " + Common.bitcoinyUsage());
 		System.err.println(String.format("example (testnet): GetWalletTransactions -l tpubD6NzVbkrYhZ4X3jV96Wo3Kr8Au2v9cUUEmPRk1smwduFrRVfBjkkw49rRYjgff1fGSktFMfabbvv8b1dmfyLjjbDax6QGyxpsNsx5PXukCB"));
 		System.exit(1);
 	}
@@ -41,18 +42,7 @@ public class GetWalletTransactions {
 
 		int argIndex = 0;
 		try {
-			switch (args[argIndex++]) {
-				case "-b":
-					bitcoiny = Bitcoin.getInstance();
-					break;
-
-				case "-l":
-					bitcoiny = Litecoin.getInstance();
-					break;
-
-				default:
-					usage("Only Bitcoin (-b) or Litecoin (-l) supported");
-			}
+			bitcoiny = Common.getBitcoiny(args[argIndex++]);
 
 			key58 = args[argIndex++];
 

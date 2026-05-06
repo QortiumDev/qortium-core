@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-05 - crosschain: configure Bitcoiny coins generically
+
+Moved the remaining BTC-like coin wrappers onto a shared configured Bitcoiny implementation so Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin now reuse the same provider setup, fee, and minimum-order plumbing. The unused dynamic BitcoinyTBD experiment was removed, the supported-blockchain registry now carries stable currency codes, and the crosschain helper apps can resolve any configured Bitcoiny chain instead of being limited to hard-coded BTC and LTC switches.
+
 ### 2026-05-05 - crosschain: add generic Bitcoiny ACCTv3
 
 Replaced the duplicated Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin ACCTv3 and trade-bot implementations with one shared Bitcoiny ACCTv3 path that stores the selected foreign blockchain in the AT data itself. Trade offers, trade-bot responses, websocket updates, HTLC helpers, price estimates, and foreign-fee handling now read the foreign chain from parsed trade data instead of inferring it from separate per-coin classes, while PirateChain remains on its dedicated ACCT path.

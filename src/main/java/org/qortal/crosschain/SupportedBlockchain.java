@@ -11,12 +11,12 @@ import java.util.stream.Collectors;
 
 public enum SupportedBlockchain {
 
-	BITCOIN(1, Bitcoin::getInstance, true),
-	LITECOIN(2, Litecoin::getInstance, true),
-	DOGECOIN(3, Dogecoin::getInstance, true),
-	DIGIBYTE(4, Digibyte::getInstance, true),
-	RAVENCOIN(5, Ravencoin::getInstance, true),
-	PIRATECHAIN(6, PirateChain::getInstance, false);
+	BITCOIN(1, Bitcoin.CURRENCY_CODE, Bitcoin::getInstance, true),
+	LITECOIN(2, Litecoin.CURRENCY_CODE, Litecoin::getInstance, true),
+	DOGECOIN(3, Dogecoin.CURRENCY_CODE, Dogecoin::getInstance, true),
+	DIGIBYTE(4, Digibyte.CURRENCY_CODE, Digibyte::getInstance, true),
+	RAVENCOIN(5, Ravencoin.CURRENCY_CODE, Ravencoin::getInstance, true),
+	PIRATECHAIN(6, PirateChain.CURRENCY_CODE, PirateChain::getInstance, false);
 
 	private static final Supplier<ACCT> BITCOINY_ACCT_SUPPLIER = BitcoinyACCTv3::getInstance;
 	private static final Supplier<ACCT> PIRATECHAIN_ACCT_SUPPLIER = PirateChainACCTv3::getInstance;
@@ -43,11 +43,13 @@ public enum SupportedBlockchain {
 			.collect(Collectors.toUnmodifiableMap(SupportedBlockchain::getForeignBlockchainId, blockchain -> blockchain));
 
 	private final int foreignBlockchainId;
+	private final String currencyCode;
 	private final Supplier<ForeignBlockchain> instanceSupplier;
 	private final boolean bitcoiny;
 
-	SupportedBlockchain(int foreignBlockchainId, Supplier<ForeignBlockchain> instanceSupplier, boolean bitcoiny) {
+	SupportedBlockchain(int foreignBlockchainId, String currencyCode, Supplier<ForeignBlockchain> instanceSupplier, boolean bitcoiny) {
 		this.foreignBlockchainId = foreignBlockchainId;
+		this.currencyCode = currencyCode;
 		this.instanceSupplier = instanceSupplier;
 		this.bitcoiny = bitcoiny;
 	}
@@ -64,8 +66,17 @@ public enum SupportedBlockchain {
 		return this.foreignBlockchainId;
 	}
 
+	public String getCurrencyCode() {
+		return this.currencyCode;
+	}
+
 	public boolean isBitcoiny() {
 		return this.bitcoiny;
+	}
+
+	public Bitcoiny getBitcoinyInstance() {
+		ForeignBlockchain foreignBlockchain = this.getInstance();
+		return foreignBlockchain instanceof Bitcoiny ? (Bitcoiny) foreignBlockchain : null;
 	}
 
 	public static EnumSet<SupportedBlockchain> bitcoinyBlockchains() {

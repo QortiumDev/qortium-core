@@ -1,23 +1,19 @@
 package org.qortal.crosschain;
 
 import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.Context;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.RegTestParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.qortal.crosschain.ElectrumX.Server;
-import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.settings.Settings;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.EnumMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class Bitcoin extends Bitcoiny {
+public class Bitcoin extends ConfiguredBitcoiny {
 
 	public static final String CURRENCY_CODE = "BTC";
 
@@ -33,13 +29,10 @@ public class Bitcoin extends Bitcoiny {
 
 	private static final long NON_MAINNET_FEE = 1000L; // enough for TESTNET3 and should be OK for REGTEST
 
-	private static final Map<ElectrumX.Server.ConnectionType, Integer> DEFAULT_ELECTRUMX_PORTS = new EnumMap<>(ElectrumX.Server.ConnectionType.class);
-	static {
-		DEFAULT_ELECTRUMX_PORTS.put(ConnectionType.TCP, 50001);
-		DEFAULT_ELECTRUMX_PORTS.put(ConnectionType.SSL, 50002);
-	}
+	private static final BitcoinyChainConfig CONFIG = new BitcoinyChainConfig("Bitcoin", CURRENCY_CODE,
+			DEFAULT_FEE_PER_KB, MINIMUM_ORDER_AMOUNT, BitcoinyChainConfig.defaultElectrumXPorts());
 
-	public enum BitcoinNet {
+	public enum BitcoinNet implements BitcoinyNetwork {
 		MAIN {
 			@Override
 			public NetworkParameters getParams() {
@@ -465,28 +458,13 @@ public class Bitcoin extends Bitcoiny {
 
 	private static Bitcoin instance;
 
-	private final BitcoinNet bitcoinNet;
-
-	// Constructors and instance
-
-	private Bitcoin(BitcoinNet bitcoinNet, BitcoinyBlockchainProvider blockchain, Context bitcoinjContext, String currencyCode) {
-		super(blockchain, bitcoinjContext, currencyCode, DEFAULT_FEE_PER_KB);
-		this.bitcoinNet = bitcoinNet;
-
-		LOGGER.info(() -> String.format("Starting Bitcoin support using %s", this.bitcoinNet.name()));
+	private Bitcoin(BitcoinNet bitcoinNet) {
+		super(CONFIG, bitcoinNet);
 	}
 
 	public static synchronized Bitcoin getInstance() {
 		if (instance == null && Settings.getInstance().isWalletEnabled("BTC")) {
-			BitcoinNet bitcoinNet = Settings.getInstance().getBitcoinNet();
-
-			BitcoinyBlockchainProvider electrumX = new ElectrumX("Bitcoin-" + bitcoinNet.name(), bitcoinNet.getGenesisHash(),
-					ElectrumServerList.getServers(CURRENCY_CODE, bitcoinNet.name(), bitcoinNet.getServers()), DEFAULT_ELECTRUMX_PORTS);
-			Context bitcoinjContext = new Context(bitcoinNet.getParams());
-
-			instance = new Bitcoin(bitcoinNet, electrumX, bitcoinjContext, CURRENCY_CODE);
-
-			electrumX.setBlockchain(instance);
+			instance = new Bitcoin(Settings.getInstance().getBitcoinNet());
 		}
 
 		return instance;
@@ -498,34 +476,8 @@ public class Bitcoin extends Bitcoiny {
 		instance = null;
 	}
 
-	@Override
-	public long getMinimumOrderAmount() {
-		return MINIMUM_ORDER_AMOUNT;
-	}
-
 	// Actual useful methods for use by other classes
 
-	/**
-	 * Returns estimated BTC fee, in sats per 1000bytes, optionally for historic timestamp.
-	 * 
-	 * @param timestamp optional milliseconds since epoch, or null for 'now'
-	 * @return sats per 1000bytes, or throws ForeignBlockchainException if something went wrong
-	 */
-	@Override
-	public long getP2shFee(Long timestamp) throws ForeignBlockchainException {
-		return this.bitcoinNet.getP2shFee(timestamp);
-	}
-
-	@Override
-	public long getFeeRequired() {
-		return this.bitcoinNet.getFeeRequired();
-	}
-
-	@Override
-	public void setFeeRequired(long fee) {
-
-		this.bitcoinNet.setFeeRequired( fee );
-	}
 	/**
  	* Returns bitcoinj transaction sending <tt>amount</tt> to <tt>recipient</tt> using 20 sat/byte fee.
  	*

@@ -3,10 +3,8 @@ package org.qortal.test.crosschain.apps;
 import com.google.common.hash.HashCode;
 import org.bitcoinj.core.*;
 import org.bitcoinj.script.Script.ScriptType;
-import org.qortal.crosschain.Bitcoin;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyHTLC;
-import org.qortal.crosschain.Litecoin;
 import org.qortal.crypto.Crypto;
 
 import java.util.Arrays;
@@ -23,8 +21,8 @@ public class RefundHTLC {
 		if (error != null)
 			System.err.println(error);
 
-		System.err.println(String.format("usage: RefundHTLC (-b | -l) <P2SH-address> <refund-PRIVATE-KEY> <redeem-P2PKH> <HASH160-of-secret> <locktime> <output-address>"));
-		System.err.println("where: -b means use Bitcoin, -l means use Litecoin");
+		System.err.println(String.format("usage: RefundHTLC <coin> <P2SH-address> <refund-PRIVATE-KEY> <redeem-P2PKH> <HASH160-of-secret> <locktime> <output-address>"));
+		System.err.println("where: " + Common.bitcoinyUsage());
 		System.err.println(String.format("example: RefundHTLC -l "
 				+ "2N4378NbEVGjmiUmoUD9g1vCY6kyx9tDUJ6 \\\n"
 				+ "\tef8f31b49c31b4a140aebcd9605fded88cc2dad0844c4b984f9191a5a416f72d3801e16447b0 \\\n"
@@ -53,18 +51,7 @@ public class RefundHTLC {
 
 		int argIndex = 0;
 		try {
-			switch (args[argIndex++]) {
-				case "-b":
-					bitcoiny = Bitcoin.getInstance();
-					break;
-
-				case "-l":
-					bitcoiny = Litecoin.getInstance();
-					break;
-
-				default:
-					usage("Only Bitcoin (-b) or Litecoin (-l) supported");
-			}
+			bitcoiny = Common.getBitcoiny(args[argIndex++]);
 			params = bitcoiny.getNetworkParameters();
 
 			p2shAddress = Address.fromString(params, args[argIndex++]);

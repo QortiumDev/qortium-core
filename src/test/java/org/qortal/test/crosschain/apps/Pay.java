@@ -4,9 +4,7 @@ import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
-import org.qortal.crosschain.Bitcoin;
 import org.qortal.crosschain.Bitcoiny;
-import org.qortal.crosschain.Litecoin;
 
 public class Pay {
 
@@ -14,8 +12,8 @@ public class Pay {
 		if (error != null)
 			System.err.println(error);
 
-		System.err.println(String.format("usage: Pay (-b | -l) <xprv58> <recipient> <LTC-amount>"));
-		System.err.println("where: -b means use Bitcoin, -l means use Litecoin");
+		System.err.println(String.format("usage: Pay <coin> <xprv58> <recipient> <amount>"));
+		System.err.println("where: " + Common.bitcoinyUsage());
 		System.err.println(String.format("example: Pay -l "
 				+ "tprv8ZgxMBicQKsPdahhFSrCdvC1bsWyzHHZfTneTVqUXN6s1wEtZLwAkZXzFP6TYLg2aQMecZLXLre5bTVGajEB55L1HYJcawpdFG66STVAWPJ \\\n"
 				+ "\tmsAfaDaJ8JiprxxFaAXEEPxKK3JaZCYpLv \\\n"
@@ -38,18 +36,7 @@ public class Pay {
 
 		int argIndex = 0;
 		try {
-			switch (args[argIndex++]) {
-				case "-b":
-					bitcoiny = Bitcoin.getInstance();
-					break;
-
-				case "-l":
-					bitcoiny = Litecoin.getInstance();
-					break;
-
-				default:
-					usage("Only Bitcoin (-b) or Litecoin (-l) supported");
-			}
+			bitcoiny = Common.getBitcoiny(args[argIndex++]);
 			params = bitcoiny.getNetworkParameters();
 
 			xprv58 = args[argIndex++];

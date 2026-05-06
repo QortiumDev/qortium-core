@@ -82,6 +82,21 @@ public abstract class BitcoinyTests extends Common {
 	}
 
 	@Test
+	public void testConfiguredFeesAndMinimumOrder() {
+		assertTrue(bitcoiny.getMinimumOrderAmount() >= 0);
+
+		long originalFeeRequired = bitcoiny.getFeeRequired();
+		long updatedFeeRequired = originalFeeRequired + 1;
+
+		try {
+			bitcoiny.setFeeRequired(updatedFeeRequired);
+			assertEquals(updatedFeeRequired, bitcoiny.getFeeRequired());
+		} finally {
+			bitcoiny.setFeeRequired(originalFeeRequired);
+		}
+	}
+
+	@Test
 	public void testGetMedianBlockTimeFromLiveProvider() throws ForeignBlockchainException {
 		assumeLiveCrosschainTestsEnabled();
 

@@ -5,10 +5,8 @@ import org.bitcoinj.core.AddressFormatException;
 import org.bitcoinj.core.TransactionOutput;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
-import org.qortal.crosschain.Bitcoin;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.ForeignBlockchainException;
-import org.qortal.crosschain.Litecoin;
 import org.qortal.settings.Settings;
 
 import java.security.Security;
@@ -25,7 +23,8 @@ public class GetTransaction {
 		if (error != null)
 			System.err.println(error);
 
-		System.err.println(String.format("usage: GetTransaction (-b | -l) <tx-hash>"));
+		System.err.println(String.format("usage: GetTransaction <coin> <tx-hash>"));
+		System.err.println("where: " + Common.bitcoinyUsage());
 		System.err.println(String.format("example (mainnet): GetTransaction -b 816407e79568f165f13e09e9912c5f2243e0a23a007cec425acedc2e89284660"));
 		System.err.println(String.format("example (testnet): GetTransaction -b 3bfd17a492a4e3d6cb7204e17e20aca6c1ab82e1828bd1106eefbaf086fb8a4e"));
 		System.exit(1);
@@ -45,18 +44,7 @@ public class GetTransaction {
 
 		int argIndex = 0;
 		try {
-			switch (args[argIndex++]) {
-				case "-b":
-					bitcoiny = Bitcoin.getInstance();
-					break;
-
-				case "-l":
-					bitcoiny = Litecoin.getInstance();
-					break;
-
-				default:
-					usage("Only Bitcoin (-b) or Litecoin (-l) supported");
-			}
+			bitcoiny = Common.getBitcoiny(args[argIndex++]);
 
 			transactionId = HashCode.fromString(args[argIndex++]).asBytes();
 		} catch (NumberFormatException | AddressFormatException e) {

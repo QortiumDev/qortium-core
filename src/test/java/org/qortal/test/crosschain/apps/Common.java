@@ -8,6 +8,7 @@ import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.ForeignBlockchainException;
+import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.settings.Settings;
 import org.qortal.utils.NTP;
 
@@ -17,8 +18,13 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 public abstract class Common {
+
+	public static String bitcoinyUsage() {
+		return "use -b/-l, BTC/LTC/DOGE/DGB/RVN, or one of: BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN";
+	}
 
 	public static void init() {
 		Security.insertProviderAt(new BouncyCastleProvider(), 0);
@@ -27,6 +33,48 @@ public abstract class Common {
 		Settings.fileInstance("settings-test.json");
 
 		NTP.setFixedOffset(0L);
+	}
+
+	public static Bitcoiny getBitcoiny(String selector) {
+		SupportedBlockchain blockchain;
+		String normalizedSelector = selector.toUpperCase(Locale.ROOT);
+
+		switch (normalizedSelector) {
+			case "-B":
+			case "BTC":
+				blockchain = SupportedBlockchain.BITCOIN;
+				break;
+
+			case "-L":
+			case "LTC":
+				blockchain = SupportedBlockchain.LITECOIN;
+				break;
+
+			case "DOGE":
+				blockchain = SupportedBlockchain.DOGECOIN;
+				break;
+
+			case "DGB":
+				blockchain = SupportedBlockchain.DIGIBYTE;
+				break;
+
+			case "RVN":
+				blockchain = SupportedBlockchain.RAVENCOIN;
+				break;
+
+			default:
+				blockchain = SupportedBlockchain.fromString(normalizedSelector);
+				break;
+		}
+
+		if (blockchain == null || !blockchain.isBitcoiny())
+			throw new IllegalArgumentException(bitcoinyUsage());
+
+		Bitcoiny bitcoiny = blockchain.getBitcoinyInstance();
+		if (bitcoiny == null)
+			throw new IllegalArgumentException(String.format("%s wallet is not enabled", blockchain.getCurrencyCode()));
+
+		return bitcoiny;
 	}
 
 	public static long getP2shFee(Bitcoiny bitcoiny) {
