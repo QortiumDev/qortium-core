@@ -5,14 +5,15 @@ import org.junit.Test;
 import org.bitcoinj.core.Block;
 import org.bitcoinj.core.NetworkParameters;
 import org.libdohj.params.DogecoinMainNetParams;
-import org.libdohj.params.DogecoinTestNet3Params;
 import org.libdohj.params.DigibyteMainNetParams;
+import org.libdohj.params.LitecoinMainNetParams;
 import org.libdohj.params.RavencoinMainNetParams;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
 import org.qortal.test.common.Common;
 
 import java.lang.reflect.Field;
+import java.net.URL;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -94,16 +95,16 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
-	public void testSpecsContainStandardNetworks() {
+	public void testSpecsDeclareSupportedNetworks() {
 		for (BitcoinyChainSpec spec : BitcoinyChainSpecs.all()) {
 			assertNotNull(spec.getNetwork(BitcoinyChainSpecs.MAIN));
-			assertNotNull(spec.getNetwork(BitcoinyChainSpecs.TEST3));
-			assertNotNull(spec.getNetwork(BitcoinyChainSpecs.REGTEST));
-
 			assertEquals(BitcoinyChainSpecs.MAIN, spec.getNetwork(BitcoinyChainSpecs.MAIN).name());
-			assertEquals(BitcoinyChainSpecs.TEST3, spec.getNetwork(BitcoinyChainSpecs.TEST3).name());
-			assertEquals(BitcoinyChainSpecs.REGTEST, spec.getNetwork(BitcoinyChainSpecs.REGTEST).name());
 		}
+
+		assertNotNull(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3));
+		assertNotNull(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.REGTEST));
+		assertNotNull(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST4));
+		assertNotNull(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.REGTEST));
 	}
 
 	@Test
@@ -114,6 +115,88 @@ public class BitcoinyChainSpecsTests {
 				assertNotNull(refreshConfig.getChain1209k());
 			}
 		}
+	}
+
+	@Test
+	public void testUnsupportedNonMainnetNetworksAreNotAdvertised() {
+		assertNull(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST4));
+		assertNull(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST3));
+
+		for (BitcoinyChainSpec spec : new BitcoinyChainSpec[] {
+				BitcoinyChainSpecs.DOGECOIN,
+				BitcoinyChainSpecs.DIGIBYTE,
+				BitcoinyChainSpecs.RAVENCOIN,
+				BitcoinyChainSpecs.DASH
+		}) {
+			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST3));
+			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST4));
+			assertNull(spec.getNetwork(BitcoinyChainSpecs.REGTEST));
+		}
+	}
+
+	@Test(expected = RuntimeException.class)
+	public void testSettingsRejectUnsupportedBitcoinyNetworks() {
+		URL testSettingsUrl = BitcoinyChainSpecsTests.class.getClassLoader().getResource("test-settings-v2-unsupported-bitcoiny-network.json");
+		assertNotNull("Test settings JSON file not found", testSettingsUrl);
+
+		Settings.fileInstance(testSettingsUrl.getPath());
+	}
+
+	@Test
+	public void testLitecoinUsesSharedStaticMainNetParamsWithLegacyParity() {
+		NetworkParameters legacyParams = LitecoinMainNetParams.get();
+		NetworkParameters litecoinMainNetParams = BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+
+		assertTrue(litecoinMainNetParams instanceof StaticBitcoinyParams);
+		assertNetworkParamParity(legacyParams, litecoinMainNetParams);
+		assertEquals("12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", litecoinMainNetParams.getGenesisBlock().getHashAsString());
+	}
+
+	@Test
+	public void testLitecoinUsesSharedStaticTestNet4Params() {
+		BitcoinyNetwork litecoinTest4 = BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST4);
+		NetworkParameters litecoinTest4Params = litecoinTest4.getParams();
+		Block genesisBlock = litecoinTest4Params.getGenesisBlock();
+
+		assertTrue(litecoinTest4Params instanceof StaticBitcoinyParams);
+		assertEquals(BitcoinyChainSpecs.TEST4, litecoinTest4.name());
+		assertEquals("4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0", litecoinTest4.getGenesisHash());
+		assertEquals(litecoinTest4.getGenesisHash(), genesisBlock.getHashAsString());
+		assertEquals("97ddfbbae6be97fd6cdf3e7ca13232a3afff2353e29badfab7f73011edd4ced9", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1486949366L, genesisBlock.getTimeSeconds());
+		assertEquals(0x1e0ffff0L, genesisBlock.getDifficultyTarget());
+		assertEquals(293345L, genesisBlock.getNonce());
+		assertEquals(111, litecoinTest4Params.getAddressHeader());
+		assertEquals(196, litecoinTest4Params.getP2SHHeader());
+		assertEquals(239, litecoinTest4Params.getDumpedPrivateKeyHeader());
+		assertEquals("tltc", litecoinTest4Params.getSegwitAddressHrp());
+		assertEquals(0x043587cf, litecoinTest4Params.getBip32HeaderP2PKHpub());
+		assertEquals(0x04358394, litecoinTest4Params.getBip32HeaderP2PKHpriv());
+	}
+
+	@Test
+	public void testLitecoinUsesSharedStaticRegTestParams() {
+		NetworkParameters litecoinRegTestParams = BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.REGTEST).getParams();
+		Block genesisBlock = litecoinRegTestParams.getGenesisBlock();
+
+		assertTrue(litecoinRegTestParams instanceof StaticBitcoinyParams);
+		assertEquals("regtest", litecoinRegTestParams.getId());
+		assertEquals("regtest", litecoinRegTestParams.getPaymentProtocolId());
+		assertEquals("530827f38f93b43ed12af0b3ad25a288dc02ed74d6d7857862df51fc56c416f9", genesisBlock.getHashAsString());
+		assertEquals(1296688602L, genesisBlock.getTimeSeconds());
+		assertEquals(0x207fffffL, genesisBlock.getDifficultyTarget());
+		assertEquals(0L, genesisBlock.getNonce());
+		assertEquals(Integer.MAX_VALUE, litecoinRegTestParams.getInterval());
+		assertEquals(19444, litecoinRegTestParams.getPort());
+		assertEquals("rltc", litecoinRegTestParams.getSegwitAddressHrp());
+	}
+
+	@Test
+	public void testLitecoinCurrentP2shAddressNormalizerUsesSharedStaticParams() {
+		NetworkParameters litecoinMainNetParams = BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+
+		assertEquals("31nM1WuowNDzocNxPPW9NQWJEtwWpjfcLj",
+				BitcoinyChainSpecs.LITECOIN.normalizeAddress("M7zVKQKmtV5Rc7erVGVVC3khZbXxsS5HEX", litecoinMainNetParams));
 	}
 
 	@Test
@@ -134,16 +217,6 @@ public class BitcoinyChainSpecsTests {
 		assertTrue(dogecoinMainNetParams instanceof StaticBitcoinyParams);
 		assertNetworkParamParity(legacyParams, dogecoinMainNetParams);
 		assertEquals("1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", dogecoinMainNetParams.getGenesisBlock().getHashAsString());
-	}
-
-	@Test
-	public void testDogecoinUsesSharedStaticTestNetParamsWithLegacyParity() {
-		NetworkParameters legacyParams = DogecoinTestNet3Params.get();
-		NetworkParameters dogecoinTestNetParams = BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.TEST3).getParams();
-
-		assertTrue(dogecoinTestNetParams instanceof StaticBitcoinyParams);
-		assertNetworkParamParity(legacyParams, dogecoinTestNetParams);
-		assertEquals("bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e", dogecoinTestNetParams.getGenesisBlock().getHashAsString());
 	}
 
 	@Test
@@ -174,7 +247,7 @@ public class BitcoinyChainSpecsTests {
 		Settings settings = Settings.getInstance();
 
 		assertSame(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3), settings.getBitcoinyNetwork(BitcoinyChainSpecs.BITCOIN_CURRENCY_CODE));
-		assertSame(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST3), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE.toLowerCase()));
+		assertSame(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST4), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE.toLowerCase()));
 		assertSame(BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DOGECOIN_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.DASH.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DASH_CURRENCY_CODE));
 	}

@@ -371,7 +371,7 @@
         {"host": "ltc.rentonisk.com", "port": 50002, "protocol": "SSL", "source": "builtin,1209k,peer", "responseTimeMillis": 235},
         {"host": "ltc2.publicrypto.com", "port": 60002, "protocol": "SSL", "source": "builtin,peer", "responseTimeMillis": 335}
       ],
-      "TEST3": [
+      "TEST4": [
         {"host": "electrum-ltc.bysh.me", "port": 51002, "protocol": "SSL", "source": "builtin,1209k,peer", "responseTimeMillis": 773},
         {"host": "electrum.ltc.xurious.com", "port": 51002, "protocol": "SSL", "source": "builtin,1209k,peer", "responseTimeMillis": 299}
       ]

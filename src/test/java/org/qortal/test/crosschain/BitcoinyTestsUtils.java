@@ -19,7 +19,7 @@ public class BitcoinyTestsUtils {
 
         Common.useDefaultSettings();
 
-        final String rootKey = generateBip32RootKey(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST3).getParams());
+        final String rootKey = generateBip32RootKey(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST4).getParams());
         String address = ForeignBlockchainRegistry.fromStringRequired("LITECOIN").getBitcoinyInstance().getUnusedReceiveAddress(rootKey);
 
         System.out.println("rootKey = " + rootKey);

@@ -7,8 +7,6 @@ import org.bitcoinj.core.*;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.libdohj.params.LitecoinRegTestParams;
-import org.libdohj.params.LitecoinTestNet3Params;
 import org.libdohj.params.PirateChainMainNetParams;
 import org.qortal.api.model.crosschain.PirateChainSendRequest;
 import org.qortal.controller.PirateChainWalletController;
@@ -76,7 +74,7 @@ public class PirateChain extends Bitcoiny {
 		TEST3 {
 			@Override
 			public NetworkParameters getParams() {
-				return LitecoinTestNet3Params.get();
+				return BitcoinyChainSpecs.litecoinTestNetParams();
 			}
 
 			@Override
@@ -97,7 +95,7 @@ public class PirateChain extends Bitcoiny {
 		REGTEST {
 			@Override
 			public NetworkParameters getParams() {
-				return LitecoinRegTestParams.get();
+				return BitcoinyChainSpecs.litecoinRegTestParams();
 			}
 
 			@Override

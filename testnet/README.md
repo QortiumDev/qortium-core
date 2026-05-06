@@ -24,7 +24,8 @@
 - Make sure to add `"isTestNet": true,`
 - Make sure to reference testnet blockchain config file: `"blockchainConfig": "testchain.json",`
 - It is a good idea to use a separate database: `"repositoryPath": "db-testnet",`
-- You might also need to add a `"bitcoinyNetworks"` map that points each BTC-like coin you use at `"TEST3"`
+- You might also need to add a `"bitcoinyNetworks"` map for supported foreign test networks. Currently Bitcoin uses `"TEST3"` and Litecoin uses `"TEST4"`.
+- Disable wallets for any foreign coins that do not have a supported test network unless you intentionally want to use their mainnet.
 - Also make sure to use a custom `listenPort` (not 62391 or 12391) to ensure that transactions remain isolated to your testnet.
 
 ## Other nodes
@@ -99,10 +100,13 @@ Your options are:
   "isTestNet": true,
   "bitcoinyNetworks": {
     "BTC": "TEST3",
-    "LTC": "TEST3",
-    "DOGE": "TEST3",
-    "DGB": "TEST3",
-    "RVN": "TEST3"
+    "LTC": "TEST4"
+  },
+  "wallets": {
+    "DOGE": false,
+    "DGB": false,
+    "RVN": false,
+    "DASH": false
   },
   "repositoryPath": "db-testnet",
   "blockchainConfig": "testchain.json",

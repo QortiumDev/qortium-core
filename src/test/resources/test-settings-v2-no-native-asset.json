@@ -2,7 +2,7 @@
   "repositoryPath": "testdb",
   "bitcoinyNetworks": {
     "BTC": "TEST3",
-    "LTC": "TEST3"
+    "LTC": "TEST4"
   },
   "restrictedApi": false,
   "blockchainConfig": "src/test/resources/test-chain-v2-no-native-asset.json",

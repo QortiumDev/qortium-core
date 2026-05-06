@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: migrate Litecoin to static params
+
+Moved Litecoin mainnet, testnet4, and regtest away from inherited libdohj parameter classes and onto the shared `StaticBitcoinyParams` model, including Litecoin's custom genesis transaction, scrypt chain hashes, network headers, DNS seeds, monetary settings, and deterministic tests for the static params. The Litecoin public test network is now named `TEST4` to match the genesis hash and Electrum servers already used by Qortium, and the old Litecoin P2SH address normalizer now uses shared static params instead of a libdohj subclass. Unsupported Dogecoin, DigiByte, Ravencoin, and Dash testnet/regtest choices are no longer advertised until those networks have real params and usable servers.
+
 ### 2026-05-06 - crosschain: migrate Dogecoin to static params
 
 Moved Dogecoin mainnet and testnet away from the inherited libdohj parameter classes and onto the shared `StaticBitcoinyParams` model, including Dogecoin's custom genesis transaction, no-fixed-cap money setting, network headers, DNS seeds, and parity tests against the previous params. This also corrects the registered Dogecoin testnet genesis hash so the DOGE testnet spec points at Dogecoin's actual testnet instead of the inherited Litecoin testnet value, and tightens the shared static genesis handling so non-double-SHA chains like Dash and Ravencoin can expose their configured chain hashes consistently in tests.

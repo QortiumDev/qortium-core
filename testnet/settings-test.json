@@ -8,10 +8,13 @@
   "allowConnectionsWithOlderPeerVersions": false,
   "bitcoinyNetworks": {
     "BTC": "TEST3",
-    "LTC": "TEST3",
-    "DOGE": "TEST3",
-    "DGB": "TEST3",
-    "RVN": "TEST3"
+    "LTC": "TEST4"
+  },
+  "wallets": {
+    "DOGE": false,
+    "DGB": false,
+    "RVN": false,
+    "DASH": false
   },
   "repositoryPath": "db-testnet",
   "blockchainConfig": "testchain.json",

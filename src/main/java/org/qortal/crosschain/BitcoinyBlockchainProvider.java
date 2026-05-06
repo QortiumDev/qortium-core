@@ -15,7 +15,7 @@ public abstract class BitcoinyBlockchainProvider {
 	/** Sets the blockchain using this provider instance */
 	public abstract void setBlockchain(Bitcoiny blockchain);
 
-	/** Returns ID unique to bitcoiny network (e.g. "Litecoin-TEST3") */
+	/** Returns ID unique to bitcoiny network (e.g. "Litecoin-TEST4") */
 	public abstract String getNetId();
 
 	/** Returns current blockchain height. */

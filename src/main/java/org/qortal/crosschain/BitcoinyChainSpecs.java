@@ -11,9 +11,6 @@ import org.bitcoinj.script.Script;
 import org.bitcoinj.utils.MonetaryFormat;
 import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.crosschain.ElectrumX.Server;
-import org.libdohj.params.LitecoinMainNetParams;
-import org.libdohj.params.LitecoinRegTestParams;
-import org.libdohj.params.LitecoinTestNet3Params;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -27,6 +24,7 @@ public final class BitcoinyChainSpecs {
 
 	public static final String MAIN = "MAIN";
 	public static final String TEST3 = "TEST3";
+	public static final String TEST4 = "TEST4";
 	public static final String REGTEST = "REGTEST";
 	public static final String BITCOIN_CURRENCY_CODE = "BTC";
 	public static final String LITECOIN_CURRENCY_CODE = "LTC";
@@ -35,9 +33,67 @@ public final class BitcoinyChainSpecs {
 	public static final String RAVENCOIN_CURRENCY_CODE = "RVN";
 	public static final String DASH_CURRENCY_CODE = "DASH";
 
-	private static final LitecoinMainNetParamsP2ShOverride LITECOIN_MAIN_NET_PARAMS_P2SH_OVERRIDE = new LitecoinMainNetParamsP2ShOverride(50);
+	private static final String LITECOIN_GENESIS_COINBASE_SCRIPT = "04ffff001d0104404e592054696d65732030352f4f63742f32303131205374657665204a6f62732c204170706c65e280997320566973696f6e6172792c2044696573206174203536";
+	private static final String LITECOIN_GENESIS_MERKLE_ROOT = "97ddfbbae6be97fd6cdf3e7ca13232a3afff2353e29badfab7f73011edd4ced9";
+	private static final String LITECOIN_GENESIS_OUTPUT_SCRIPT = "040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9";
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
+	private static final NetworkParameters LITECOIN_MAIN_NET_PARAMS = litecoinParams("org.litecoin.production", "org.litecoin.production", "ltc")
+			.genesis(1317972665L, 2084524493L, 0x1e0ffff0L, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2")
+			.genesisHeader(1L, LITECOIN_GENESIS_MERKLE_ROOT)
+			.genesisTransaction(LITECOIN_GENESIS_COINBASE_SCRIPT, Coin.COIN.multiply(50L), LITECOIN_GENESIS_OUTPUT_SCRIPT)
+			.port(9333)
+			.packetMagic(0xfbc0b6dbL)
+			.addressHeaders(48, 5, 176)
+			.segwitAddressHrp("ltc")
+			.coinbaseAndSubsidy(100, 840_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(750, 950, 1000)
+			.dnsSeeds("dnsseed.litecointools.com", "dnsseed.litecoinpool.org", "dnsseed.ltc.xurious.com",
+					"dnsseed.koin-project.com", "dnsseed.weminemnc.com")
+			.build();
+	private static final NetworkParameters LITECOIN_CURRENT_P2SH_MAIN_NET_PARAMS = litecoinParams("org.litecoin.production", "org.litecoin.production", "ltc")
+			.genesis(1317972665L, 2084524493L, 0x1e0ffff0L, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2")
+			.genesisHeader(1L, LITECOIN_GENESIS_MERKLE_ROOT)
+			.genesisTransaction(LITECOIN_GENESIS_COINBASE_SCRIPT, Coin.COIN.multiply(50L), LITECOIN_GENESIS_OUTPUT_SCRIPT)
+			.port(9333)
+			.packetMagic(0xfbc0b6dbL)
+			.addressHeaders(48, 50, 176)
+			.segwitAddressHrp("ltc")
+			.coinbaseAndSubsidy(100, 840_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(750, 950, 1000)
+			.dnsSeeds("dnsseed.litecointools.com", "dnsseed.litecoinpool.org", "dnsseed.ltc.xurious.com",
+					"dnsseed.koin-project.com", "dnsseed.weminemnc.com")
+			.build();
+	private static final NetworkParameters LITECOIN_TEST_NET_PARAMS = litecoinParams("org.litecoin.test", "org.litecoin.test", "tltc")
+			.genesis(1486949366L, 293345L, 0x1e0ffff0L, "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0")
+			.genesisHeader(1L, LITECOIN_GENESIS_MERKLE_ROOT)
+			.genesisTransaction(LITECOIN_GENESIS_COINBASE_SCRIPT, Coin.COIN.multiply(50L), LITECOIN_GENESIS_OUTPUT_SCRIPT)
+			.port(19333)
+			.packetMagic(0xfcc1b7dcL)
+			.addressHeaders(111, 196, 239)
+			.segwitAddressHrp("tltc")
+			.coinbaseAndSubsidy(30, 100_000)
+			.bip32Headers(0x043587cf, 0x04358394)
+			.majorityWindow(51, 75, 100)
+			.dnsSeeds("testnet-seed.litecointools.com", "testnet-seed.ltc.xurious.com", "dnsseed.wemine-testnet.com")
+			.build();
+	private static final NetworkParameters LITECOIN_REG_TEST_PARAMS = litecoinParams("regtest", "regtest", "rltc")
+			.genesis(1296688602L, 0L, 0x207fffffL, "530827f38f93b43ed12af0b3ad25a288dc02ed74d6d7857862df51fc56c416f9")
+			.genesisHeader(1L, LITECOIN_GENESIS_MERKLE_ROOT)
+			.genesisTransaction(LITECOIN_GENESIS_COINBASE_SCRIPT, Coin.COIN.multiply(50L), LITECOIN_GENESIS_OUTPUT_SCRIPT)
+			.maxTarget(0x207fffffL)
+			.interval(Integer.MAX_VALUE)
+			.port(19444)
+			.packetMagic(0xfabfb5daL)
+			.addressHeaders(111, 196, 239)
+			.segwitAddressHrp("rltc")
+			.coinbaseAndSubsidy(30, 150)
+			.bip32Headers(0x043587cf, 0x04358394)
+			.majorityWindow(51, 75, 100)
+			.dnsSeeds("testnet-seed.litecointools.com", "testnet-seed.ltc.xurious.com", "dnsseed.wemine-testnet.com")
+			.build();
 	private static final NetworkParameters DOGECOIN_MAIN_NET_PARAMS = dogecoinParams("org.dogecoin.production", "org.dogecoin.production")
 			.genesis(1386325540L, 99943L, 0x1e0ffff0L, "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691")
 			.genesisHeader(1L, "5b2a3f53f605d62c53e62932dac6925e3d74afa5a4b459745c36d42d0ed26a69")
@@ -52,21 +108,6 @@ public final class BitcoinyChainSpecs {
 			.bip32Headers(0x02facafd, 0x02fac398)
 			.majorityWindow(1500, 1900, 2000)
 			.dnsSeeds("seed.dogecoin.com", "seed.multidoge.org", "seed2.multidoge.org", "seed.doger.dogecoin.com")
-			.build();
-	private static final NetworkParameters DOGECOIN_TEST_NET_PARAMS = dogecoinParams("org.dogecoin.test", "test")
-			.genesis(1391503289L, 997879L, 0x1e0ffff0L, "bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e")
-			.genesisHeader(1L, "5b2a3f53f605d62c53e62932dac6925e3d74afa5a4b459745c36d42d0ed26a69")
-			.genesisTransaction(
-					"04ffff001d0104084e696e746f6e646f",
-					Coin.COIN.multiply(88L),
-					"040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9")
-			.port(44556)
-			.packetMagic(0xfcc1b7dcL)
-			.addressHeaders(113, 196, 241)
-			.coinbaseAndSubsidy(30, 100_000)
-			.bip32Headers(0x043587cf, 0x04358394)
-			.majorityWindow(501, 750, 1000)
-			.dnsSeeds("testseed.jrn.me.uk")
 			.build();
 	private static final NetworkParameters DIGIBYTE_MAIN_NET_PARAMS = digibyteParams("main", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
 			.genesis(1389388394L, 2447652L, 0x1e0ffff0L, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496")
@@ -111,28 +152,6 @@ public final class BitcoinyChainSpecs {
 			.majorityWindow(1815, 1900, 2016)
 			.dnsSeeds("dnsseed.dash.org")
 			.build();
-	private static final NetworkParameters DASH_TEST_NET_PARAMS = dashParams("org.dash.test", NetworkParameters.PAYMENT_PROTOCOL_ID_TESTNET)
-			.genesis(1390666206L, 3861367235L, 0x1e0ffff0L, "00000bafbc94add76cb75e2ec92894837288a481e5c005f6563d91623bf8bc2c")
-			.port(19999)
-			.packetMagic(0xcee2caffL)
-			.addressHeaders(140, 19, 239)
-			.coinbaseAndSubsidy(100, 210240)
-			.bip32Headers(0x043587CF, 0x04358394)
-			.majorityWindow(1512, 1900, 2016)
-			.dnsSeeds("testnet-seed.dashdot.io")
-			.build();
-	private static final NetworkParameters DASH_REGTEST_PARAMS = dashParams("org.dash.regtest", NetworkParameters.PAYMENT_PROTOCOL_ID_REGTEST)
-			.genesis(1417713337L, 1096447L, 0x207fffffL, "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e")
-			.maxTarget(0x207fffffL)
-			.port(19899)
-			.packetMagic(0xfcc1b7dcL)
-			.addressHeaders(140, 19, 239)
-			.coinbaseAndSubsidy(100, 150)
-			.bip32Headers(0x043587CF, 0x04358394)
-			.majorityWindow(108, 144, 144)
-			.dnsSeeds("dummySeed.invalid")
-			.build();
-
 	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", 1, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
 			.mainnet(MainNetParams::get, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", 1_500L, "btc")
 			.test3(TestNet3Params::get, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", 1_500L, 1_000L, "tbtc")
@@ -141,34 +160,26 @@ public final class BitcoinyChainSpecs {
 			.build();
 
 	public static final BitcoinyChainSpec LITECOIN = spec("LITECOIN", 2, "Litecoin", LITECOIN_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
-			.mainnet(LitecoinMainNetParams::get, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", 1_000L, "ltc")
-			.test3(LitecoinTestNet3Params::get, "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0", 1_000L, 1_000L, "tltc")
-			.regtest(LitecoinRegTestParams::get, 1_000L, 1_000L)
+			.mainnet(() -> LITECOIN_MAIN_NET_PARAMS, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", 1_000L, "ltc")
+			.test4(() -> LITECOIN_TEST_NET_PARAMS, "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0", 1_000L, 1_000L, "tltc")
+			.regtest(() -> LITECOIN_REG_TEST_PARAMS, 1_000L, 1_000L)
 			.addressNormalizer(BitcoinyChainSpecs::normalizeLitecoinAddress)
 			.build();
 
 	public static final BitcoinyChainSpec DOGECOIN = spec("DOGECOIN", 3, "Dogecoin", DOGECOIN_CURRENCY_CODE, Coin.valueOf(1_000_000), 100_000_000L)
 			.mainnet(() -> DOGECOIN_MAIN_NET_PARAMS, "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", 100_000L, "doge")
-			.test3(() -> DOGECOIN_TEST_NET_PARAMS, "bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e", 100_000L, 10_000L, null)
-			.regtest(() -> null, 100_000L, 10_000L)
 			.build();
 
 	public static final BitcoinyChainSpec DIGIBYTE = spec("DIGIBYTE", 4, "Digibyte", DIGIBYTE_CURRENCY_CODE, Coin.valueOf(100_000), 1_000_000)
 			.mainnet(() -> DIGIBYTE_MAIN_NET_PARAMS, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", 10_000L, "dgb")
-			.test3(TestNet3Params::get, "308ea0711d5763be2995670dd9ca9872753561285a84da1d58be58acaa822252", 10_000L, 10_000L, null)
-			.regtest(RegTestParams::get, 10_000L, 10_000L)
 			.build();
 
 	public static final BitcoinyChainSpec RAVENCOIN = spec("RAVENCOIN", 5, "Ravencoin", RAVENCOIN_CURRENCY_CODE, Coin.valueOf(1_125_000), 1_000_000)
 			.mainnet(() -> RAVENCOIN_MAIN_NET_PARAMS, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", 1_000_000L, "rvn")
-			.test3(TestNet3Params::get, "000000ecfc5e6324a079542221d00e10362bdc894d56500c414060eea8a3ad5a", 1_000_000L, 1_000_000L, null)
-			.regtest(RegTestParams::get, 1_000_000L, 1_000_000L)
 			.build();
 
 	public static final BitcoinyChainSpec DASH = spec("DASH", 7, "Dash", DASH_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
 			.mainnet(() -> DASH_MAIN_NET_PARAMS, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", 10_000L, "dash")
-			.test3(() -> DASH_TEST_NET_PARAMS, "00000bafbc94add76cb75e2ec92894837288a481e5c005f6563d91623bf8bc2c", 10_000L, 10_000L, null)
-			.regtest(() -> DASH_REGTEST_PARAMS, 10_000L, 10_000L)
 			.build();
 
 	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH);
@@ -185,6 +196,29 @@ public final class BitcoinyChainSpecs {
 
 	private static SpecBuilder spec(String canonicalName, int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
 		return new SpecBuilder(canonicalName, foreignBlockchainId, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount);
+	}
+
+	static NetworkParameters litecoinTestNetParams() {
+		return LITECOIN_TEST_NET_PARAMS;
+	}
+
+	static NetworkParameters litecoinRegTestParams() {
+		return LITECOIN_REG_TEST_PARAMS;
+	}
+
+	private static StaticBitcoinyParams.Builder litecoinParams(String id, String paymentProtocolId, String segwitAddressHrp) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "litecoin")
+				.maxTarget(0x1e0fffffL)
+				.targetTimespan(302_400)
+				.interval(2016)
+				.segwitAddressHrp(segwitAddressHrp)
+				.maxMoney(Coin.COIN.multiply(21_000_000L))
+				.minNonDustOutput(Coin.valueOf(100_000L))
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, "LITE")
+						.code(3, "mLITE")
+						.code(7, "Liteoshi"))
+				.difficultyValidationFailure("Litecoin difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	private static StaticBitcoinyParams.Builder dogecoinParams(String id, String paymentProtocolId) {
@@ -264,7 +298,7 @@ public final class BitcoinyChainSpecs {
 
 	private static boolean isCurrentLitecoinP2shAddress(String address) {
 		try {
-			Script.ScriptType addressType = Address.fromString(LITECOIN_MAIN_NET_PARAMS_P2SH_OVERRIDE, address).getOutputScriptType();
+			Script.ScriptType addressType = Address.fromString(LITECOIN_CURRENT_P2SH_MAIN_NET_PARAMS, address).getOutputScriptType();
 			return addressType == Script.ScriptType.P2SH;
 		} catch (Exception e) {
 			return false;
@@ -273,7 +307,7 @@ public final class BitcoinyChainSpecs {
 
 	private static String convertLitecoinP2shAddress(String p2shAddress, NetworkParameters targetParams) {
 		try {
-			Address address = LegacyAddress.fromBase58(LITECOIN_MAIN_NET_PARAMS_P2SH_OVERRIDE, p2shAddress);
+			Address address = LegacyAddress.fromBase58(LITECOIN_CURRENT_P2SH_MAIN_NET_PARAMS, p2shAddress);
 			return LegacyAddress.fromScriptHash(targetParams, address.getHash()).toString();
 		} catch (Exception e) {
 			return null;
@@ -305,6 +339,12 @@ public final class BitcoinyChainSpecs {
 		private SpecBuilder test3(Supplier<NetworkParameters> paramsSupplier, String genesisHash, long feeRequired, long p2shFee, String chain1209k) {
 			this.networks.add(StaticBitcoinyNetwork.nonMainnet(TEST3, paramsSupplier, NO_SERVERS, genesisHash, feeRequired, p2shFee));
 			this.addRefresh(TEST3, chain1209k);
+			return this;
+		}
+
+		private SpecBuilder test4(Supplier<NetworkParameters> paramsSupplier, String genesisHash, long feeRequired, long p2shFee, String chain1209k) {
+			this.networks.add(StaticBitcoinyNetwork.nonMainnet(TEST4, paramsSupplier, NO_SERVERS, genesisHash, feeRequired, p2shFee));
+			this.addRefresh(TEST4, chain1209k);
 			return this;
 		}
 

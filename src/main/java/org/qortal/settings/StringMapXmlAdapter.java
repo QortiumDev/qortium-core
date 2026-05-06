@@ -18,7 +18,7 @@ import java.util.Map.Entry;
  * <pre>
  * "bitcoinyNetworks": {
  *   "BTC": "TEST3",
- *   "LTC": "MAIN"
+ *   "LTC": "TEST4"
  * }
  * </pre>
  */
