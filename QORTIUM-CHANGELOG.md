@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: route foreign fees through registry
+
+Moved foreign-fee offer scanning, local fee processing, backup/import, and ACCT lookup from the `SupportedBlockchain` facade to `ForeignBlockchainRegistry` entries. Foreign-fee handling now iterates the registry and processes any enabled registry entry backed by a `Bitcoiny` runtime, keeping this runtime path ready for new registered BTC-like chains without adding enum cases. Also cleaned the archive trade-bot import test so it commits imported repository changes before close, avoiding a repository leak diagnostic during focused verification.
+
 ### 2026-05-06 - crosschain: route API filters through registry
 
 Moved crosschain API and websocket blockchain filters from `SupportedBlockchain` enum parameters to `ForeignBlockchainRegistry` string lookups. API callers can now use registry names or currency codes, websocket sessions normalize filters to canonical registry names, and the remaining trade/ledger/P2SH helper paths resolve ACCT and Bitcoiny instances through the registry instead of adding new enum dependencies. The shared API test helper now also fails when an expected API error is not thrown, making invalid-filter regression tests meaningful.

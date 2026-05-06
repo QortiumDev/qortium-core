@@ -323,6 +323,8 @@ public class ImportExportTests extends Common {
             TradeBotData repositoryTradeBotData = repository.getCrossChainRepository().getTradeBotData(tradePrivateKey);
             assertNotNull(repositoryTradeBotData);
             assertEquals(tradeBotData.toJson().toString(), repositoryTradeBotData.toJson().toString());
+
+            repository.saveChanges();
         }
     }
 

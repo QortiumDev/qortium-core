@@ -10,8 +10,7 @@ import org.qortal.controller.tradebot.TradeStates;
 import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.Bitcoiny;
-import org.qortal.crosschain.ForeignBlockchain;
-import org.qortal.crosschain.SupportedBlockchain;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.at.ATData;
 import org.qortal.data.crosschain.CrossChainTradeData;
@@ -543,8 +542,8 @@ public class ForeignFeesManager implements Listener {
         // lockdown map while reseting offers by address
         synchronized( this.offersByAddress) {
 
-            // for each supported foreign blockchaine, get AT data for trade offers
-            for ( SupportedBlockchain blockchain : SupportedBlockchain.values()) {
+            // for each supported foreign blockchain, get AT data for trade offers
+            for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
                 crossChainTradeOffers.addAll( getCrossTradeOffers(repository, blockchain) );
             }
 
@@ -603,7 +602,7 @@ public class ForeignFeesManager implements Listener {
      *
      * @throws DataException
      */
-    private static List<CrossChainTradeData> getCrossTradeOffers(Repository repository, SupportedBlockchain blockchain) throws DataException {
+    private static List<CrossChainTradeData> getCrossTradeOffers(Repository repository, ForeignBlockchainRegistry.Entry blockchain) throws DataException {
 
         // get ACCT for the foreign blockchain
         ACCT acct = blockchain.getLatestAcct();
@@ -645,7 +644,7 @@ public class ForeignFeesManager implements Listener {
             return Optional.empty();
         }
 
-        ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
+        ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
         if (acct == null) {
             return Optional.empty();
         }
@@ -720,10 +719,10 @@ public class ForeignFeesManager implements Listener {
 
         Set<String> addressesThatNeedSignatures = new HashSet<>();
 
-        for( SupportedBlockchain supportedBlockchain : SupportedBlockchain.values() ) {
-            ForeignBlockchain blockchain = supportedBlockchain.getInstance();
-            if( blockchain instanceof Bitcoiny )
-                addressesThatNeedSignatures.addAll( processLocalForeignFeesForCoin((Bitcoiny) blockchain) );
+        for (ForeignBlockchainRegistry.Entry foreignBlockchain : ForeignBlockchainRegistry.entries()) {
+            Bitcoiny bitcoiny = foreignBlockchain.getBitcoinyInstance();
+            if (bitcoiny != null)
+                addressesThatNeedSignatures.addAll(processLocalForeignFeesForCoin(foreignBlockchain, bitcoiny));
         }
 
         for( String addressThatNeedsSignature : addressesThatNeedSignatures ) {
@@ -731,16 +730,28 @@ public class ForeignFeesManager implements Listener {
         }
     }
 
+    private Set<String> processLocalForeignFeesForCoin(final Bitcoiny bitcoiny) {
+        ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromString(bitcoiny.getCurrencyCode());
+
+        if (foreignBlockchain == null) {
+            LOGGER.warn("Unable to resolve foreign blockchain for fee update: {}", bitcoiny.getCurrencyCode());
+            return new HashSet<>(0);
+        }
+
+        return processLocalForeignFeesForCoin(foreignBlockchain, bitcoiny);
+    }
+
     /**
      * Process foreign fees for coin
      *
      * Collect foreign fees for trades waiting locally and store to this manager.
      *
+     * @param foreignBlockchain the foreign blockchain registry entry
      * @param bitcoiny the coin
      *
      * @return addresses that need fee signatures
      */
-    private Set<String> processLocalForeignFeesForCoin(final Bitcoiny bitcoiny) {
+    private Set<String> processLocalForeignFeesForCoin(final ForeignBlockchainRegistry.Entry foreignBlockchain, final Bitcoiny bitcoiny) {
 
         Set<String> addressesThatNeedSignatures = new HashSet<>();
 
@@ -761,8 +772,8 @@ public class ForeignFeesManager implements Listener {
                     = allTradeBotData.stream()
                     .filter(d -> d.getStateValue() == TradeStates.State.BOB_WAITING_FOR_MESSAGE.value)
                     .filter(d -> {
-                        SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(d.getForeignBlockchain());
-                        return supportedBlockchain != null && supportedBlockchain.getInstance().equals(bitcoiny);
+                        ForeignBlockchainRegistry.Entry tradeForeignBlockchain = ForeignBlockchainRegistry.fromString(d.getForeignBlockchain());
+                        return tradeForeignBlockchain == foreignBlockchain;
                     })
                     .collect(Collectors.toList());
 
@@ -773,7 +784,7 @@ public class ForeignFeesManager implements Listener {
 
                 // process trade offer first,
                 // then reset the fee signatures needed status next relative to prior status
-                if(processTradeOfferInWaiting(now, tradeOfferWaiting) ) {
+                if(processTradeOfferInWaiting(now, tradeOfferWaiting, bitcoiny) ) {
                     addressesThatNeedSignatures.add(tradeOfferWaiting.getCreatorAddress());
                 }
             }
@@ -819,16 +830,22 @@ public class ForeignFeesManager implements Listener {
      * @throws IOException
      */
     private boolean processTradeOfferInWaiting(Long now, TradeBotData tradeOfferWaiting) throws IOException {
+        // derive the foreign blockchain for the trade offer waiting
+        String foreignBlockchain = tradeOfferWaiting.getForeignBlockchain();
+        Bitcoiny bitcoiny = ForeignBlockchainRegistry.getBitcoinyInstance(foreignBlockchain);
+
+        return processTradeOfferInWaiting(now, tradeOfferWaiting, bitcoiny);
+    }
+
+    private boolean processTradeOfferInWaiting(Long now, TradeBotData tradeOfferWaiting, Bitcoiny bitcoiny) throws IOException {
 
         boolean isFeeWaiting = false;
 
-        // derive the supported blockchain for the trade offer waiting
         String foreignBlockchain = tradeOfferWaiting.getForeignBlockchain();
-        Bitcoiny bitcoiny = SupportedBlockchain.getBitcoinyInstance(foreignBlockchain);
 
         LOGGER.debug("trade offer waiting: blockchain = " + foreignBlockchain);
 
-        // if the supported blockchain is a Bitcoiny blockchain, then the fee will be available
+        // if the foreign blockchain is a Bitcoiny blockchain, then the fee will be available
         if (bitcoiny != null) {
 
             // get the foreign blockchain, the AT address and the foreign fee set to this node
@@ -1046,15 +1063,15 @@ public class ForeignFeesManager implements Listener {
             Path backupDirectory = HSQLDBImportExport.getExportDirectory(true);
 
             // start list of required foreign fees
-            List<ForeignFeeData> foreignFees = new ArrayList<>(SupportedBlockchain.values().length);
+            List<ForeignFeeData> foreignFees = new ArrayList<>(ForeignBlockchainRegistry.entries().size());
 
             // for each blockchain name, get the blockchain and collect the foreign fee for this node
-            for( SupportedBlockchain supportedBlockchain : SupportedBlockchain.values()) {
-                ForeignBlockchain blockchain = supportedBlockchain.getInstance();
+            for (ForeignBlockchainRegistry.Entry foreignBlockchain : ForeignBlockchainRegistry.entries()) {
+                Bitcoiny bitcoiny = foreignBlockchain.getBitcoinyInstance();
 
                 // if the blockchain supports fees, add the data to the list
-                if( blockchain instanceof Bitcoiny ) {
-                    foreignFees.add( new ForeignFeeData(supportedBlockchain.name(), feeGetter.apply((Bitcoiny) blockchain)) );
+                if (bitcoiny != null) {
+                    foreignFees.add(new ForeignFeeData(foreignBlockchain.name(), feeGetter.apply(bitcoiny)));
                 }
             }
 
@@ -1168,12 +1185,12 @@ public class ForeignFeesManager implements Listener {
         ForeignFeeData requiredForeignFeeData = ForeignFeeData.fromJson( requiredForeignFeeDataJson );
 
         // the blockchain
-        SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(requiredForeignFeeData.getBlockchain());
-        ForeignBlockchain blockchain = supportedBlockchain == null ? null : supportedBlockchain.getInstance();
+        ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromString(requiredForeignFeeData.getBlockchain());
+        Bitcoiny bitcoiny = foreignBlockchain == null ? null : foreignBlockchain.getBitcoinyInstance();
 
         // if the blockchain is Bitcoiny, then get the required fee and set it to blockchain
-        if( blockchain != null && blockchain instanceof Bitcoiny ) {
-            ((Bitcoiny) blockchain).setFeeRequired( requiredForeignFeeData.getFee() );
+        if (bitcoiny != null) {
+            bitcoiny.setFeeRequired(requiredForeignFeeData.getFee());
         }
         else {
             LOGGER.warn("no support for required fee import: blockchain = " + requiredForeignFeeData.getBlockchain());
@@ -1193,12 +1210,12 @@ public class ForeignFeesManager implements Listener {
         ForeignFeeData lockingForeignFeeData = ForeignFeeData.fromJson(lockingForeignFeeDataJson);
 
         // get the blockchain
-        SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(lockingForeignFeeData.getBlockchain());
-        ForeignBlockchain blockchain = supportedBlockchain == null ? null : supportedBlockchain.getInstance();
+        ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromString(lockingForeignFeeData.getBlockchain());
+        Bitcoiny bitcoiny = foreignBlockchain == null ? null : foreignBlockchain.getBitcoinyInstance();
 
         // if the blockchain is Bitcoiny, then set the locking fee to it
-        if( blockchain != null && blockchain instanceof Bitcoiny ) {
-            ((Bitcoiny) blockchain).setFeePerKb(Coin.valueOf(lockingForeignFeeData.getFee()));
+        if (bitcoiny != null) {
+            bitcoiny.setFeePerKb(Coin.valueOf(lockingForeignFeeData.getFee()));
         }
         else {
             LOGGER.warn("no support for locking fee import: blockchain = " + lockingForeignFeeData.getBlockchain());
