@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: centralize Bitcoiny chain definitions
+
+Centralized the BTC-like chain lifecycle behind shared Bitcoiny chain definitions so Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin no longer each maintain their own singleton setup. Built-in Electrum fallback servers now live in one `BitcoinyServers` helper, and the refresh tool updates those named fallback lists directly while preserving the generated JSON server resource as the preferred runtime source.
+
 ### 2026-05-05 - crosschain: condense Bitcoiny chain plumbing
 
 Reduced duplicated Bitcoin-like chain code by moving common network metadata into shared static Bitcoiny network delegates, adding a generic send request model, and replacing the separate Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin API resources with one generic Bitcoiny resource that resolves chains by name or ticker. Litecoin address normalization now lives behind the shared Bitcoiny address hook so the generic send path can preserve its P2SH handling.

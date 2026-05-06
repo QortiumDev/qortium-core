@@ -1,6 +1,6 @@
 # Electrum Server Refresh
 
-Qortium ships built-in Electrum server seeds in the coin classes and also loads a generated resource from:
+Qortium ships built-in Electrum server seeds in `BitcoinyServers` and also loads a generated resource from:
 
 `src/main/resources/crosschain/electrum-servers.json`
 
@@ -37,7 +37,7 @@ tools/refresh-electrum-servers --update-builtins-only
 
 Use `--skip-verify` only when generating a seed file from trusted local inputs. Verified refreshes are preferred because they prune stale servers and reject servers from the wrong chain.
 
-By default the script updates only the generated JSON resource. Use `--update-builtins` when you also want to refresh the hardcoded Java fallback lists in the coin classes. Use `--update-builtins-only` to rewrite the Java fallback lists from an already refreshed JSON resource without repeating live network checks. The hardcoded lists are unlimited by default; use `--builtin-limit` when you want to cap the number of fallback servers written per network.
+By default the script updates only the generated JSON resource. Use `--update-builtins` when you also want to refresh the hardcoded Java fallback lists in `BitcoinyServers`. Use `--update-builtins-only` to rewrite the Java fallback lists from an already refreshed JSON resource without repeating live network checks. The hardcoded lists are unlimited by default; use `--builtin-limit` when you want to cap the number of fallback servers written per network.
 
 ## Scope
 
