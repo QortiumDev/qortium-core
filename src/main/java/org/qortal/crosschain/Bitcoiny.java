@@ -617,10 +617,10 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	}
 
 	/**
-	 * Returns unspent Bitcoin balance given 'm' BIP32 key.
+	 * Returns unspent foreign-chain balance given 'm' BIP32 key.
 	 *
-	 * @param key58 BIP32/HD extended Bitcoin private/public key
-	 * @return unspent BTC balance, or null if unable to determine balance
+	 * @param key58 BIP32/HD extended private/public key
+	 * @return unspent foreign-chain balance, or null if unable to determine balance
 	 */
 	public Long getWalletBalance(String key58) throws ForeignBlockchainException {
 		Long balance = 0L;
@@ -1589,7 +1589,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	/**
 	 * Returns first unused receive address given a BIP32 key.
 	 *
-	 * @param key58 BIP32/HD extended Bitcoin private/public key
+	 * @param key58 BIP32/HD extended private/public key
 	 * @return P2PKH address
 	 * @throws ForeignBlockchainException if something went wrong
 	 */

@@ -8,7 +8,7 @@ import javax.xml.bind.annotation.XmlAccessorType;
 @XmlAccessorType(XmlAccessType.FIELD)
 public class AddressRequest {
 
-	@Schema(description = "Litecoin BIP32 extended public key", example = "tpub___________________________________________________________________________________________________________")
+	@Schema(description = "Foreign blockchain BIP32 extended public key", example = "tpub___________________________________________________________________________________________________________")
 	public String xpub58;
 
 	public AddressRequest() {

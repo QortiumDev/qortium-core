@@ -230,7 +230,7 @@ public class CrossChainPirateChainResource {
 	)
 	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_CRITERIA, ApiError.INVALID_ADDRESS, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
 	@SecurityRequirement(name = "apiKey")
-	public String sendBitcoin(@HeaderParam(Security.API_KEY_HEADER) String apiKey, PirateChainSendRequest pirateChainSendRequest) {
+	public String sendPirateChain(@HeaderParam(Security.API_KEY_HEADER) String apiKey, PirateChainSendRequest pirateChainSendRequest) {
 		Security.checkApiCallAllowed(request);
 
 		if (pirateChainSendRequest.arrrAmount <= 0)

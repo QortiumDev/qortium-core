@@ -561,7 +561,7 @@ public class PirateChainACCTv3 implements ACCT {
 		codeByteBuffer.get(codeBytes);
 
 		assert Arrays.equals(Crypto.digest(codeBytes), PirateChainACCTv3.CODE_BYTES_HASH)
-			: String.format("BTCACCT.CODE_BYTES_HASH mismatch: expected %s, actual %s", HashCode.fromBytes(CODE_BYTES_HASH), HashCode.fromBytes(Crypto.digest(codeBytes)));
+			: String.format("PirateChainACCTv3.CODE_BYTES_HASH mismatch: expected %s, actual %s", HashCode.fromBytes(CODE_BYTES_HASH), HashCode.fromBytes(Crypto.digest(codeBytes)));
 
 		final short ciyamAtVersion = 2;
 		final short numCallStackPages = 0;

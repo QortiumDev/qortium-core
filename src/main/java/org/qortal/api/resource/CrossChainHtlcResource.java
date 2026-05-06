@@ -179,7 +179,7 @@ public class CrossChainHtlcResource {
 	@Path("/redeem/{ataddress}")
 	@Operation(
 			summary = "Redeems HTLC associated with supplied AT",
-			description = "To be used by a native-asset seller (Bob) who needs to redeem LTC/DOGE/etc proceeds that are stuck in a P2SH.<br>" +
+			description = "To be used by a native-asset seller (Bob) who needs to redeem foreign-chain proceeds that are stuck in a P2SH.<br>" +
 					"This requires Bob's trade bot data to be present in the database for this AT.<br>" +
 					"It will fail if the buyer has yet to redeem the native asset held in the AT.",
 			responses = {
@@ -238,7 +238,7 @@ public class CrossChainHtlcResource {
 	@Path("/redeemAll")
 	@Operation(
 			summary = "Redeems HTLC for all applicable ATs in tradebot data",
-			description = "To be used by a native-asset seller (Bob) who needs to redeem LTC/DOGE/etc proceeds that are stuck in P2SH transactions.<br>" +
+			description = "To be used by a native-asset seller (Bob) who needs to redeem foreign-chain proceeds that are stuck in P2SH transactions.<br>" +
 					"This requires Bob's trade bot data to be present in the database for any ATs that need redeeming.<br>" +
 					"Returns true if at least one trade is redeemed. More detail is available in the log.txt.* file.",
 			responses = {
@@ -425,7 +425,7 @@ public class CrossChainHtlcResource {
 	@Path("/refund/{ataddress}")
 	@Operation(
 			summary = "Refunds HTLC associated with supplied AT",
-			description = "To be used by a native-asset buyer (Alice) who needs to refund their LTC/DOGE/etc that is stuck in a P2SH.<br>" +
+			description = "To be used by a native-asset buyer (Alice) who needs to refund foreign-chain funds that are stuck in a P2SH.<br>" +
 					"This requires Alice's trade bot data to be present in the database for this AT.<br>" +
 					"It will fail if it's already redeemed by the seller, or if the lockTime (60 minutes) hasn't passed yet.",
 			responses = {
@@ -474,7 +474,7 @@ public class CrossChainHtlcResource {
 	@Path("/refundAll")
 	@Operation(
 			summary = "Refunds HTLC for all applicable ATs in tradebot data",
-			description = "To be used by a native-asset buyer (Alice) who needs to refund their LTC/DOGE/etc proceeds that are stuck in P2SH transactions.<br>" +
+			description = "To be used by a native-asset buyer (Alice) who needs to refund foreign-chain funds that are stuck in P2SH transactions.<br>" +
 					"This requires Alice's trade bot data to be present in the database for this AT.<br>" +
 					"It will fail if it's already redeemed by the seller, or if the lockTime (60 minutes) hasn't passed yet.",
 			responses = {

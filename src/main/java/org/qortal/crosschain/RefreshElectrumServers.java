@@ -450,7 +450,7 @@ public final class RefreshElectrumServers {
 	private static void printUsage() {
 		System.out.println("usage: tools/refresh-electrum-servers [options]");
 		System.out.println("  --output <path>        Output JSON path (default: " + DEFAULT_OUTPUT_PATH + ")");
-		System.out.println("  --coins <csv>          Coins to refresh (default: BTC,LTC,DOGE,DGB,RVN; BTC/LTC include TEST3)");
+		System.out.println("  --coins <csv>          Coins to refresh (default: " + String.join(",", BitcoinyChainSpecs.currencyCodes()) + ")");
 		System.out.println("  --skip-1209k           Do not scrape 1209k.com");
 		System.out.println("  --skip-peers           Do not query Electrum server.peers.subscribe");
 		System.out.println("  --skip-verify          Keep discovered servers without live genesis/height checks");
