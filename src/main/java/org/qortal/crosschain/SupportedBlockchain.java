@@ -1,137 +1,99 @@
 package org.qortal.crosschain;
 
 import org.qortal.utils.ByteArray;
-import org.qortal.utils.Triple;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
+import java.util.EnumSet;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public enum SupportedBlockchain {
 
-	BITCOIN(Arrays.asList(
-				Triple.valueOf(BitcoinACCTv3.NAME, BitcoinACCTv3.CODE_BYTES_HASH, BitcoinACCTv3::getInstance)
-			)) {
-		@Override
-		public ForeignBlockchain getInstance() {
-			return Bitcoin.getInstance();
-		}
+	BITCOIN(1, Bitcoin::getInstance, true),
+	LITECOIN(2, Litecoin::getInstance, true),
+	DOGECOIN(3, Dogecoin::getInstance, true),
+	DIGIBYTE(4, Digibyte::getInstance, true),
+	RAVENCOIN(5, Ravencoin::getInstance, true),
+	PIRATECHAIN(6, PirateChain::getInstance, false);
 
-		@Override
-		public ACCT getLatestAcct() {
-			return BitcoinACCTv3.getInstance();
-		}
-	},
+	private static final Supplier<ACCT> BITCOINY_ACCT_SUPPLIER = BitcoinyACCTv3::getInstance;
+	private static final Supplier<ACCT> PIRATECHAIN_ACCT_SUPPLIER = PirateChainACCTv3::getInstance;
 
-	LITECOIN(Arrays.asList(
-			Triple.valueOf(LitecoinACCTv3.NAME, LitecoinACCTv3.CODE_BYTES_HASH, LitecoinACCTv3::getInstance)
-		)) {
-		@Override
-		public ForeignBlockchain getInstance() {
-			return Litecoin.getInstance();
-		}
+	private static final Map<ByteArray, Supplier<ACCT>> bitcoinyAcctMap = Collections.singletonMap(
+			ByteArray.wrap(BitcoinyACCTv3.CODE_BYTES_HASH), BITCOINY_ACCT_SUPPLIER);
 
-		@Override
-		public ACCT getLatestAcct() {
-			return LitecoinACCTv3.getInstance();
-		}
-	},
+	private static final Map<ByteArray, Supplier<ACCT>> pirateChainAcctMap = Collections.singletonMap(
+			ByteArray.wrap(PirateChainACCTv3.CODE_BYTES_HASH), PIRATECHAIN_ACCT_SUPPLIER);
 
-	DOGECOIN(Arrays.asList(
-			Triple.valueOf(DogecoinACCTv3.NAME, DogecoinACCTv3.CODE_BYTES_HASH, DogecoinACCTv3::getInstance)
-		)) {
-		@Override
-		public ForeignBlockchain getInstance() {
-			return Dogecoin.getInstance();
-		}
+	private static final Map<ByteArray, Supplier<ACCT>> supportedAcctsByCodeHash = Map.of(
+			ByteArray.wrap(BitcoinyACCTv3.CODE_BYTES_HASH), BITCOINY_ACCT_SUPPLIER,
+			ByteArray.wrap(PirateChainACCTv3.CODE_BYTES_HASH), PIRATECHAIN_ACCT_SUPPLIER);
 
-		@Override
-		public ACCT getLatestAcct() {
-			return DogecoinACCTv3.getInstance();
-		}
-	},
-
-	DIGIBYTE(Arrays.asList(
-			Triple.valueOf(DigibyteACCTv3.NAME, DigibyteACCTv3.CODE_BYTES_HASH, DigibyteACCTv3::getInstance)
-		)) {
-		@Override
-		public ForeignBlockchain getInstance() {
-			return Digibyte.getInstance();
-		}
-
-		@Override
-		public ACCT getLatestAcct() {
-			return DigibyteACCTv3.getInstance();
-		}
-	},
-
-	RAVENCOIN(Arrays.asList(
-			Triple.valueOf(RavencoinACCTv3.NAME, RavencoinACCTv3.CODE_BYTES_HASH, RavencoinACCTv3::getInstance)
-		)) {
-		@Override
-		public ForeignBlockchain getInstance() {
-			return Ravencoin.getInstance();
-		}
-
-		@Override
-		public ACCT getLatestAcct() {
-			return RavencoinACCTv3.getInstance();
-		}
-	},
-
-	PIRATECHAIN(Arrays.asList(
-			Triple.valueOf(PirateChainACCTv3.NAME, PirateChainACCTv3.CODE_BYTES_HASH, PirateChainACCTv3::getInstance)
-	)) {
-		@Override
-		public ForeignBlockchain getInstance() {
-			return PirateChain.getInstance();
-		}
-
-		@Override
-		public ACCT getLatestAcct() {
-			return PirateChainACCTv3.getInstance();
-		}
-	};
-
-	private static final Map<ByteArray, Supplier<ACCT>> supportedAcctsByCodeHash = Arrays.stream(SupportedBlockchain.values())
-			.map(supportedBlockchain -> supportedBlockchain.supportedAccts)
-			.flatMap(List::stream)
-			.collect(Collectors.toUnmodifiableMap(triple -> ByteArray.wrap(triple.getB()), Triple::getC));
-
-	private static final Map<String, Supplier<ACCT>> supportedAcctsByName = Arrays.stream(SupportedBlockchain.values())
-			.map(supportedBlockchain -> supportedBlockchain.supportedAccts)
-			.flatMap(List::stream)
-			.collect(Collectors.toUnmodifiableMap(Triple::getA, Triple::getC));
+	private static final Map<String, Supplier<ACCT>> supportedAcctsByName = Map.of(
+			BitcoinyACCTv3.NAME, BITCOINY_ACCT_SUPPLIER,
+			PirateChainACCTv3.NAME, PIRATECHAIN_ACCT_SUPPLIER);
 
 	private static final Map<String, SupportedBlockchain> blockchainsByName = Arrays.stream(SupportedBlockchain.values())
 			.collect(Collectors.toUnmodifiableMap(Enum::name, blockchain -> blockchain));
 
-	private final List<Triple<String, byte[], Supplier<ACCT>>> supportedAccts;
+	private static final Map<Integer, SupportedBlockchain> bitcoinyBlockchainsById = Arrays.stream(SupportedBlockchain.values())
+			.filter(SupportedBlockchain::isBitcoiny)
+			.collect(Collectors.toUnmodifiableMap(SupportedBlockchain::getForeignBlockchainId, blockchain -> blockchain));
 
-	SupportedBlockchain(List<Triple<String, byte[], Supplier<ACCT>>> supportedAccts) {
-		this.supportedAccts = supportedAccts;
+	private final int foreignBlockchainId;
+	private final Supplier<ForeignBlockchain> instanceSupplier;
+	private final boolean bitcoiny;
+
+	SupportedBlockchain(int foreignBlockchainId, Supplier<ForeignBlockchain> instanceSupplier, boolean bitcoiny) {
+		this.foreignBlockchainId = foreignBlockchainId;
+		this.instanceSupplier = instanceSupplier;
+		this.bitcoiny = bitcoiny;
 	}
 
-	public abstract ForeignBlockchain getInstance();
-	public abstract ACCT getLatestAcct();
+	public ForeignBlockchain getInstance() {
+		return this.instanceSupplier.get();
+	}
+
+	public ACCT getLatestAcct() {
+		return this.bitcoiny ? BitcoinyACCTv3.getInstance() : PirateChainACCTv3.getInstance();
+	}
+
+	public int getForeignBlockchainId() {
+		return this.foreignBlockchainId;
+	}
+
+	public boolean isBitcoiny() {
+		return this.bitcoiny;
+	}
+
+	public static EnumSet<SupportedBlockchain> bitcoinyBlockchains() {
+		return Arrays.stream(values())
+				.filter(SupportedBlockchain::isBitcoiny)
+				.collect(Collectors.toCollection(() -> EnumSet.noneOf(SupportedBlockchain.class)));
+	}
 
 	public static Map<ByteArray, Supplier<ACCT>> getAcctMap() {
 		return supportedAcctsByCodeHash;
 	}
 
 	public static SupportedBlockchain fromString(String name) {
+		if (name == null)
+			return null;
+
 		return blockchainsByName.get(name);
+	}
+
+	public static SupportedBlockchain fromForeignBlockchainId(int foreignBlockchainId) {
+		return bitcoinyBlockchainsById.get(foreignBlockchainId);
 	}
 
 	public static Map<ByteArray, Supplier<ACCT>> getFilteredAcctMap(SupportedBlockchain blockchain) {
 		if (blockchain == null)
 			return getAcctMap();
 
-		return blockchain.supportedAccts.stream()
-				.collect(Collectors.toUnmodifiableMap(triple -> ByteArray.wrap(triple.getB()), Triple::getC));
+		return blockchain.isBitcoiny() ? bitcoinyAcctMap : pirateChainAcctMap;
 	}
 
 	public static Map<ByteArray, Supplier<ACCT>> getFilteredAcctMap(String specificBlockchain) {
@@ -149,7 +111,6 @@ public enum SupportedBlockchain {
 		ByteArray wrappedCodeHash = ByteArray.wrap(codeHash);
 
 		Supplier<ACCT> acctInstanceSupplier = supportedAcctsByCodeHash.get(wrappedCodeHash);
-
 		if (acctInstanceSupplier == null)
 			return null;
 
@@ -158,7 +119,6 @@ public enum SupportedBlockchain {
 
 	public static ACCT getAcctByName(String acctName) {
 		Supplier<ACCT> acctInstanceSupplier = supportedAcctsByName.get(acctName);
-
 		if (acctInstanceSupplier == null)
 			return null;
 

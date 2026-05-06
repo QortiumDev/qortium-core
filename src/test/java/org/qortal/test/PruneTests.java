@@ -8,7 +8,8 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
 import org.qortal.controller.BlockMinter;
 import org.qortal.crosschain.AcctMode;
-import org.qortal.crosschain.LitecoinACCTv3;
+import org.qortal.crosschain.BitcoinyACCTv3;
+import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.data.at.ATData;
 import org.qortal.data.at.ATStateData;
 import org.qortal.data.block.BlockData;
@@ -134,7 +135,7 @@ public class PruneTests extends Common {
             BlockUtils.mintBlocks(repository, 25);
 
             // Send creator's address to AT, instead of typical partner's address
-            byte[] messageData = LitecoinACCTv3.getInstance().buildCancelMessage(deployer.getAddress());
+            byte[] messageData = BitcoinyACCTv3.getInstance().buildCancelMessage(deployer.getAddress());
             long txTimestamp = System.currentTimeMillis();
             MessageTransaction messageTransaction = sendMessage(repository, deployer, messageData, atAddress, txTimestamp);
 
@@ -152,7 +153,7 @@ public class PruneTests extends Common {
             assertTrue(atData.getIsFinished());
 
             // AT should be in CANCELLED mode
-            CrossChainTradeData tradeData = LitecoinACCTv3.getInstance().populateTradeData(repository, atData);
+            CrossChainTradeData tradeData = BitcoinyACCTv3.getInstance().populateTradeData(repository, atData);
             assertEquals(AcctMode.CANCELLED, tradeData.mode);
 
             // Test orphaning - should be possible because the previous AT state at height 3 is still available
@@ -163,7 +164,7 @@ public class PruneTests extends Common {
 
     // Helper methods for AT testing
     private DeployAtTransaction doDeploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress) throws DataException {
-        byte[] creationBytes = LitecoinACCTv3.buildTradeAT(tradeAddress, litecoinPublicKeyHash, redeemAmount, litecoinAmount, tradeTimeout);
+        byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(SupportedBlockchain.LITECOIN, tradeAddress, litecoinPublicKeyHash, redeemAmount, litecoinAmount, tradeTimeout);
 
         long txTimestamp = System.currentTimeMillis();
         Long fee = null;

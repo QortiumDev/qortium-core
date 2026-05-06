@@ -800,7 +800,7 @@ public class HSQLDBDatabaseUpdates {
 				case 32:
 					// Multiple blockchains, ACCTs and trade-bots
 					stmt.execute("ALTER TABLE TradeBotStates ADD COLUMN acct_name VARCHAR(40) BEFORE trade_state");
-					stmt.execute("UPDATE TradeBotStates SET acct_name = 'BitcoinACCTv3' WHERE acct_name IS NULL");
+					stmt.execute("UPDATE TradeBotStates SET acct_name = 'BitcoinyACCTv3' WHERE acct_name IS NULL");
 					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN acct_name SET NOT NULL");
 
 					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN trade_state RENAME TO trade_state_value");

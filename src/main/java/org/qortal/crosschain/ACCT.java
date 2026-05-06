@@ -15,8 +15,6 @@ public interface ACCT {
 
 	public int getModeByteOffset();
 
-	public ForeignBlockchain getBlockchain();
-
 	public CrossChainTradeData populateTradeData(Repository repository, ATData atData) throws DataException;
 
 	public List<CrossChainTradeData> populateTradeDataList(Repository respository, List<ATData> atDataList) throws DataException;

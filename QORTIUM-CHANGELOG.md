@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-05 - crosschain: add generic Bitcoiny ACCTv3
+
+Replaced the duplicated Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin ACCTv3 and trade-bot implementations with one shared Bitcoiny ACCTv3 path that stores the selected foreign blockchain in the AT data itself. Trade offers, trade-bot responses, websocket updates, HTLC helpers, price estimates, and foreign-fee handling now read the foreign chain from parsed trade data instead of inferring it from separate per-coin classes, while PirateChain remains on its dedicated ACCT path.
+
 ### 2026-05-05 - api: add manual QDN auto-update controls
 
 Added restricted `GET /admin/update` and `POST /admin/update` endpoints so operators can manually check for and schedule the latest approved QDN auto-update even when automatic background updates are disabled. The manual path reuses the same approved development-group manifest lookup, QDN binary validation, SHA-256 verification, and apply-update restart flow as the background updater, with status details returned for unavailable, current, newer, and already-installing cases.

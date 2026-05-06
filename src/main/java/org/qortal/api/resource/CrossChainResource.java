@@ -117,16 +117,19 @@ public class CrossChainResource {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getFilteredAcctMap(foreignBlockchain);
+			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchain);
+			Integer repositoryLimit = postFilterPaging ? null : limit;
+			Integer repositoryOffset = postFilterPaging ? null : offset;
 
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
 				byte[] codeHash = acctInfo.getKey().value;
 				ACCT acct = acctInfo.getValue().get();
 
-				List<ATData> atsData = repository.getATRepository().getATsByFunctionality(codeHash, isExecutable, limit, offset, reverse);
+				List<ATData> atsData = repository.getATRepository().getATsByFunctionality(codeHash, isExecutable, repositoryLimit, repositoryOffset, reverse);
 
 				for (ATData atData : atsData) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
-					if (crossChainTradeData.mode == AcctMode.OFFERING) {
+					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchain) && crossChainTradeData.mode == AcctMode.OFFERING) {
 						crossChainTrades.add(crossChainTradeData);
 					}
 				}
@@ -142,6 +145,13 @@ public class CrossChainResource {
 
 			// Remove any trades that have had too many failures
 			crossChainTrades = TradeBot.getInstance().removeFailedTrades(repository, crossChainTrades);
+
+			if (postFilterPaging && offset != null && offset > 0) {
+				if (offset >= crossChainTrades.size())
+					crossChainTrades = Collections.emptyList();
+				else
+					crossChainTrades = crossChainTrades.subList(offset, crossChainTrades.size());
+			}
 
 			if (limit != null && limit > 0) {
 				// Make sure to not return more than the limit
@@ -195,7 +205,7 @@ public class CrossChainResource {
 
 				for (ATData atData : atsData) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
-					if (crossChainTradeData.mode == AcctMode.OFFERING) {
+					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchain) && crossChainTradeData.mode == AcctMode.OFFERING) {
 						crossChainTrades.add(crossChainTradeData);
 					}
 				}
@@ -244,6 +254,8 @@ public class CrossChainResource {
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
+			if (crossChainTradeData == null)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			decorateTradeDataWithPresence(crossChainTradeData);
 
@@ -327,6 +339,9 @@ public class CrossChainResource {
 			List<CrossChainTradeSummary> crossChainTrades = new ArrayList<>();
 
 			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getFilteredAcctMap(foreignBlockchain);
+			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchain);
+			Integer repositoryLimit = postFilterPaging ? null : limit;
+			Integer repositoryOffset = postFilterPaging ? null : offset;
 
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
 				byte[] codeHash = acctInfo.getKey().value;
@@ -334,10 +349,12 @@ public class CrossChainResource {
 
 				List<ATStateData> atStates = repository.getATRepository().getMatchingFinalATStates(codeHash, buyerPublicKey, sellerPublicKey,
 						isFinished, acct.getModeByteOffset(), (long) AcctMode.REDEEMED.value, minimumFinalHeight,
-						limit, offset, reverse);
+						repositoryLimit, repositoryOffset, reverse);
 
 				for (ATStateData atState : atStates) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
+					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchain))
+						continue;
 
 					// We also need block timestamp for use as trade timestamp
 					long timestamp = repository.getBlockRepository().getTimestampFromHeight(atState.getHeight());
@@ -357,6 +374,13 @@ public class CrossChainResource {
 			}
 			else {
 				crossChainTrades.sort((a, b) -> Longs.compare(a.getTradeTimestamp(), b.getTradeTimestamp()));
+			}
+
+			if (postFilterPaging && offset != null && offset > 0) {
+				if (offset >= crossChainTrades.size())
+					crossChainTrades = Collections.emptyList();
+				else
+					crossChainTrades = crossChainTrades.subList(offset, crossChainTrades.size());
 			}
 
 			if (limit != null && limit > 0) {
@@ -630,14 +654,24 @@ public class CrossChainResource {
 			long totalNative = 0;
 
 			Map<Long, CrossChainTradeData> reverseSortedTradeData = new TreeMap<>(Collections.reverseOrder());
+			boolean postFilterSharedBitcoinyStates = needsPostFilterPaging(foreignBlockchain);
 
 			// Collect recent AT states for each ACCT version
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
 				byte[] codeHash = acctInfo.getKey().value;
 				ACCT acct = acctInfo.getValue().get();
 
-				List<ATStateData> atStates = repository.getATRepository().getMatchingFinalATStatesQuorum(codeHash,
-						isFinished, acct.getModeByteOffset(), (long) AcctMode.REDEEMED.value, minimumCount, maximumCount, minimumPeriod);
+				List<ATStateData> atStates;
+				if (postFilterSharedBitcoinyStates) {
+					atStates = repository.getATRepository().getMatchingFinalATStates(codeHash, null, null,
+							isFinished, acct.getModeByteOffset(), (long) AcctMode.REDEEMED.value, null,
+							null, null, true);
+				} else {
+					atStates = repository.getATRepository().getMatchingFinalATStatesQuorum(codeHash,
+							isFinished, acct.getModeByteOffset(), (long) AcctMode.REDEEMED.value, minimumCount, maximumCount, minimumPeriod);
+				}
+				if (atStates == null)
+					continue;
 
 				for (ATStateData atState : atStates) {
 					// We also need block timestamp for use as trade timestamp
@@ -648,6 +682,9 @@ public class CrossChainResource {
 					}
 
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
+					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchain))
+						continue;
+
 					reverseSortedTradeData.put(timestamp, crossChainTradeData);
 				}
 			}
@@ -725,6 +762,8 @@ public class CrossChainResource {
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
 			CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
+			if (crossChainTradeData == null)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			if (crossChainTradeData.mode != AcctMode.OFFERING)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
@@ -779,13 +818,18 @@ public class CrossChainResource {
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
 			ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
-
-			if( acct == null || !(acct.getBlockchain() instanceof Bitcoiny) )
+			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-			Bitcoiny bitcoiny = (Bitcoiny) acct.getBlockchain();
-
 			CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
+			if (crossChainTradeData == null)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+			SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(crossChainTradeData.foreignBlockchain);
+			if (supportedBlockchain == null || !(supportedBlockchain.getInstance() instanceof Bitcoiny))
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+			Bitcoiny bitcoiny = (Bitcoiny) supportedBlockchain.getInstance();
 
 			Optional<String> p2sh
 					= CrossChainUtils.getP2ShAddressForAT(atAddress, repository, bitcoiny, crossChainTradeData);
@@ -891,5 +935,13 @@ public class CrossChainResource {
 
 	private static void decorateTradeDataWithPresence(CrossChainTradeData crossChainTradeData) {
 		TradeBot.getInstance().decorateTradeDataWithPresence(crossChainTradeData);
+	}
+
+	private static boolean matchesForeignBlockchain(CrossChainTradeData crossChainTradeData, SupportedBlockchain foreignBlockchain) {
+		return crossChainTradeData != null && (foreignBlockchain == null || foreignBlockchain.name().equals(crossChainTradeData.foreignBlockchain));
+	}
+
+	private static boolean needsPostFilterPaging(SupportedBlockchain foreignBlockchain) {
+		return foreignBlockchain != null && foreignBlockchain.isBitcoiny();
 	}
 }

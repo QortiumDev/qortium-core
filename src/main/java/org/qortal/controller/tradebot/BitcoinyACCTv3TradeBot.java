@@ -44,25 +44,25 @@ import java.util.stream.Collectors;
  * 	<li>Trade-bot entries</li>
  * </ul>
  */
-public class BitcoinACCTv3TradeBot implements AcctTradeBot {
+public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 
-	private static final Logger LOGGER = LogManager.getLogger(BitcoinACCTv3TradeBot.class);
+	private static final Logger LOGGER = LogManager.getLogger(BitcoinyACCTv3TradeBot.class);
 
 	/** Maximum time Bob waits for his AT creation transaction to be confirmed into a block. (milliseconds) */
 	private static final long MAX_AT_CONFIRMATION_PERIOD = 24 * 60 * 60 * 1000L; // ms
 
-	private static BitcoinACCTv3TradeBot instance;
+	private static BitcoinyACCTv3TradeBot instance;
 
 	private final List<String> endStates = Arrays.asList(State.BOB_DONE, State.BOB_REFUNDED, State.ALICE_DONE, State.ALICE_REFUNDING_A, State.ALICE_REFUNDED).stream()
 			.map(State::name)
 			.collect(Collectors.toUnmodifiableList());
 
-	private BitcoinACCTv3TradeBot() {
+	private BitcoinyACCTv3TradeBot() {
 	}
 
-	public static synchronized BitcoinACCTv3TradeBot getInstance() {
+	public static synchronized BitcoinyACCTv3TradeBot getInstance() {
 		if (instance == null)
-			instance = new BitcoinACCTv3TradeBot();
+			instance = new BitcoinyACCTv3TradeBot();
 
 		return instance;
 	}
@@ -73,7 +73,7 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 	}
 
 	/**
-	 * Creates a new trade-bot entry from the "Bob" viewpoint, i.e. OFFERing NATIVE in exchange for BTC.
+	 * Creates a new trade-bot entry from the "Bob" viewpoint, i.e. OFFERing NATIVE in exchange for foreign-chain currency.
 	 * <p>
 	 * Generates:
 	 * <ul>
@@ -82,14 +82,14 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 	 * Derives:
 	 * <ul>
 	 * 	<li>'native' (local-chain) public key, public key hash, address (starting with Q)</li>
-	 * 	<li>'foreign' (as in Bitcoin) public key, public key hash</li>
+	 * 	<li>'foreign' public key, public key hash</li>
 	 * </ul>
 	 * A local-chain AT is then constructed including the following as constants in the 'data segment':
 	 * <ul>
 	 * 	<li>'native'/local-chain 'trade' address - used as a MESSAGE contact</li>
-	 * 	<li>'foreign'/Bitcoin public key hash - used by Alice's P2SH scripts to allow redeem</li>
+	 * 	<li>'foreign' public key hash - used by Alice's P2SH scripts to allow redeem</li>
 	 * 	<li>native asset amount on offer by Bob</li>
-	 * 	<li>BTC amount expected in return by Bob (from Alice)</li>
+	 * 	<li>foreign-chain amount expected in return by Bob (from Alice)</li>
 	 * 	<li>trading timeout, in case things go wrong and everyone needs to refund</li>
 	 * </ul>
 	 * Returns a DEPLOY_AT transaction that needs to be signed and broadcast to the local-chain network.
@@ -102,6 +102,10 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 	 * @throws DataException
 	 */
 	public byte[] createTrade(Repository repository, TradeBotCreateRequest tradeBotCreateRequest) throws DataException {
+		SupportedBlockchain supportedBlockchain = tradeBotCreateRequest.foreignBlockchain;
+		Bitcoiny bitcoiny = getBitcoiny(supportedBlockchain);
+		String foreignCurrencyCode = bitcoiny.getCurrencyCode();
+
 		byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
 
 		byte[] tradeNativePublicKey = TradeBot.deriveTradeNativePublicKey(tradePrivateKey);
@@ -111,17 +115,17 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 		byte[] tradeForeignPublicKey = TradeBot.deriveTradeForeignPublicKey(tradePrivateKey);
 		byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
 
-		// Convert Bitcoin receiving address into public key hash (we only support P2PKH at this time)
-		Address bitcoinReceivingAddress;
+		// Convert foreign receiving address into public key hash (we only support P2PKH at this time)
+		Address foreignReceivingAddress;
 		try {
-			bitcoinReceivingAddress = Address.fromString(Bitcoin.getInstance().getNetworkParameters(), tradeBotCreateRequest.receivingAddress);
+			foreignReceivingAddress = Address.fromString(bitcoiny.getNetworkParameters(), tradeBotCreateRequest.receivingAddress);
 		} catch (AddressFormatException e) {
-			throw new DataException("Unsupported Bitcoin receiving address: " + tradeBotCreateRequest.receivingAddress);
+			throw new DataException(String.format("Unsupported %s receiving address: %s", foreignCurrencyCode, tradeBotCreateRequest.receivingAddress));
 		}
-		if (bitcoinReceivingAddress.getOutputScriptType() != ScriptType.P2PKH)
-			throw new DataException("Unsupported Bitcoin receiving address: " + tradeBotCreateRequest.receivingAddress);
+		if (foreignReceivingAddress.getOutputScriptType() != ScriptType.P2PKH)
+			throw new DataException(String.format("Unsupported %s receiving address: %s", foreignCurrencyCode, tradeBotCreateRequest.receivingAddress));
 
-		byte[] bitcoinReceivingAccountInfo = bitcoinReceivingAddress.getHash();
+		byte[] foreignReceivingAccountInfo = foreignReceivingAddress.getHash();
 
 		PublicKeyAccount creator = new PublicKeyAccount(repository, tradeBotCreateRequest.creatorPublicKey);
 
@@ -132,11 +136,11 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 		byte[] signature = null;
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, creator.getPublicKey(), fee, signature);
 
-		String name = "NATIVE/BTC ACCT";
-		String description = "NATIVE/BTC cross-chain trade";
+		String name = String.format("NATIVE/%s ACCT", foreignCurrencyCode);
+		String description = String.format("NATIVE/%s cross-chain trade", foreignCurrencyCode);
 		String aTType = "ACCT";
-		String tags = "ACCT NATIVE BTC";
-		byte[] creationBytes = BitcoinACCTv3.buildTradeAT(tradeNativeAddress, tradeForeignPublicKeyHash, tradeBotCreateRequest.nativeAmount,
+		String tags = String.format("ACCT NATIVE %s", foreignCurrencyCode);
+		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(supportedBlockchain, tradeNativeAddress, tradeForeignPublicKeyHash, tradeBotCreateRequest.nativeAmount,
 				tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
 		long amount = tradeBotCreateRequest.fundingNativeAmount;
 
@@ -149,14 +153,14 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 		DeployAtTransaction.ensureATAddress(deployAtTransactionData);
 		String atAddress = deployAtTransactionData.getAtAddress();
 
-		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinACCTv3.NAME,
+		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinyACCTv3.NAME,
 				State.BOB_WAITING_FOR_AT_CONFIRM.name(), State.BOB_WAITING_FOR_AT_CONFIRM.value,
 				creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.nativeAmount,
 				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
 				null, null,
-				SupportedBlockchain.BITCOIN.name(),
+				supportedBlockchain.name(),
 				tradeForeignPublicKey, tradeForeignPublicKeyHash,
-				tradeBotCreateRequest.foreignAmount, null, null, null, bitcoinReceivingAccountInfo);
+				tradeBotCreateRequest.foreignAmount, null, null, null, foreignReceivingAccountInfo);
 
 		TradeBot.updateTradeBotState(repository, tradeBotData, () -> String.format("Built AT %s. Waiting for deployment", atAddress));
 
@@ -172,15 +176,15 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 	}
 
 	/**
-	 * Creates a trade-bot entry from the 'Alice' viewpoint, i.e. matching BTC to an existing offer.
+	 * Creates a trade-bot entry from the 'Alice' viewpoint, i.e. matching foreign-chain currency to an existing offer.
 	 * <p>
 	 * Requires a chosen trade offer from Bob, passed by <tt>crossChainTradeData</tt>
-	 * and access to a Bitcoin wallet via <tt>xprv58</tt>.
+	 * and access to a foreign-chain wallet via <tt>xprv58</tt>.
 	 * <p>
 	 * The <tt>crossChainTradeData</tt> contains the current trade offer state
 	 * as extracted from the AT's data segment.
 	 * <p>
-	 * Access to a funded wallet is via a Bitcoin BIP32 hierarchical deterministic key,
+	 * Access to a funded wallet is via a BIP32 hierarchical deterministic key,
 	 * passed via <tt>xprv58</tt>.
 	 * <b>This key will be stored in your node's database</b>
 	 * to allow trade-bot to create/fund the necessary P2SH transactions!
@@ -190,15 +194,14 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 	 * As an example, the xprv58 can be extract from a <i>legacy, password-less</i>
 	 * Electrum wallet by going to the console tab and entering:<br>
 	 * <tt>wallet.keystore.xprv</tt><br>
-	 * which should result in a base58 string starting with either 'xprv' (for Bitcoin main-net)
-	 * or 'tprv' for (Bitcoin test-net).
+	 * usually a base58 string starting with either 'xprv' for main-net or 'tprv' for test-net.
 	 * <p>
 	 * It is envisaged that the value in <tt>xprv58</tt> will actually come from a local-chain UI-managed wallet.
 	 * <p>
 	 * If sufficient funds are available, <b>this method will actually fund the P2SH-A</b>
-	 * with the Bitcoin amount expected by 'Bob'.
+	 * with the foreign-chain amount expected by 'Bob'.
 	 * <p>
-	 * If the Bitcoin transaction is successfully broadcast to the network then
+	 * If the funding transaction is successfully broadcast to the network then
 	 * we also send a MESSAGE to Bob's trade-bot to let them know.
 	 * <p>
 	 * The trade-bot entry is saved to the repository and the cross-chain trading process commences.
@@ -206,10 +209,12 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 	 * @param repository
 	 * @param crossChainTradeData chosen trade OFFER that Alice wants to match
 	 * @param xprv58 funded wallet xprv in base58
-	 * @return true if P2SH-A funding transaction successfully broadcast to Bitcoin network, false otherwise
+	 * @return true if P2SH-A funding transaction successfully broadcast to the foreign network, false otherwise
 	 * @throws DataException
 	 */
 	public ResponseResult startResponse(Repository repository, ATData atData, ACCT acct, CrossChainTradeData crossChainTradeData, String xprv58, String receivingAddress) throws DataException {
+		Bitcoiny bitcoiny = getBitcoiny(crossChainTradeData.foreignBlockchain);
+
 		byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
 		byte[] secretA = TradeBot.generateSecret();
 		byte[] hashOfSecretA = Crypto.hash160(secretA);
@@ -226,12 +231,12 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 		long now = NTP.getTime();
 		int lockTimeA = crossChainTradeData.tradeTimeout * 60 + (int) (now / 1000L);
 
-		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinACCTv3.NAME,
+		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinyACCTv3.NAME,
 				State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
 				receivingAddress, crossChainTradeData.atAddress, now, crossChainTradeData.nativeAmount,
 				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
 				secretA, hashOfSecretA,
-				SupportedBlockchain.BITCOIN.name(),
+				crossChainTradeData.foreignBlockchain,
 				tradeForeignPublicKey, tradeForeignPublicKeyHash,
 				crossChainTradeData.expectedForeignAmount, xprv58, null, lockTimeA, receivingPublicKeyHash);
 
@@ -242,9 +247,9 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 		// Check we have enough funds via xprv58 to fund P2SH to cover expectedForeignAmount
 		long p2shFee;
 		try {
-			p2shFee = Bitcoin.getInstance().getP2shFee(now);
+			p2shFee = bitcoiny.getP2shFee(now);
 		} catch (ForeignBlockchainException e) {
-			LOGGER.debug("Couldn't estimate Bitcoin fees?");
+			LOGGER.debug("Couldn't estimate foreign-chain fees?");
 			return ResponseResult.NETWORK_ISSUE;
 		}
 
@@ -254,17 +259,17 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 
 		// P2SH-A to be funded
 		byte[] redeemScriptBytes = BitcoinyHTLC.buildScript(tradeForeignPublicKeyHash, lockTimeA, crossChainTradeData.creatorForeignPKH, hashOfSecretA);
-		String p2shAddress = Bitcoin.getInstance().deriveP2shAddress(redeemScriptBytes);
+		String p2shAddress = bitcoiny.deriveP2shAddress(redeemScriptBytes);
 
 		// Build transaction for funding P2SH-A
-		Transaction p2shFundingTransaction = Bitcoin.getInstance().buildSpend(tradeBotData.getForeignKey(), p2shAddress, amountA);
+		Transaction p2shFundingTransaction = bitcoiny.buildSpend(tradeBotData.getForeignKey(), p2shAddress, amountA);
 		if (p2shFundingTransaction == null) {
 			LOGGER.debug("Unable to build P2SH-A funding transaction - lack of funds?");
 			return ResponseResult.BALANCE_ISSUE;
 		}
 
 		try {
-			Bitcoin.getInstance().broadcastTransaction(p2shFundingTransaction);
+			bitcoiny.broadcastTransaction(p2shFundingTransaction);
 		} catch (ForeignBlockchainException e) {
 			// We couldn't fund P2SH-A at this time
 			LOGGER.debug("Couldn't broadcast P2SH-A funding transaction?");
@@ -358,7 +363,7 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 			}
 
 			if (tradeBotState.requiresTradeData) {
-				tradeData = BitcoinACCTv3.getInstance().populateTradeData(repository, atData);
+				tradeData = BitcoinyACCTv3.getInstance().populateTradeData(repository, atData);
 				if (tradeData == null) {
 					LOGGER.warn(() -> String.format("Unable to fetch ACCT trade data for AT %s from repository", tradeBotData.getAtAddress()));
 					return;
@@ -439,7 +444,7 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 	 * <p>
 	 * Details from Alice are used to derive P2SH-A address and this is checked for funding balance.
 	 * <p>
-	 * Assuming P2SH-A has at least expected Bitcoin balance,
+	 * Assuming P2SH-A has at least the expected foreign-chain balance,
 	 * Bob's trade-bot constructs a zero-fee, PoW MESSAGE to send to Bob's AT with more trade details.
 	 * <p>
 	 * On processing this MESSAGE, Bob's AT should switch into 'TRADE' mode and only trade with Alice.
@@ -457,7 +462,7 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 			return;
 		}
 
-		Bitcoin bitcoin = Bitcoin.getInstance();
+		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 
 		String address = tradeBotData.getTradeNativeAddress();
 		List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(null, address, null, null, null);
@@ -466,27 +471,27 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 			if (messageTransactionData.isText())
 				continue;
 
-			// We're expecting: HASH160(secret-A), Alice's Bitcoin pubkeyhash and lockTime-A
+				// We're expecting: HASH160(secret-A), Alice's foreign-chain pubkeyhash and lockTime-A
 			byte[] messageData = messageTransactionData.getData();
-			BitcoinACCTv3.OfferMessageData offerMessageData = BitcoinACCTv3.extractOfferMessageData(messageData);
+			BitcoinyACCTv3.OfferMessageData offerMessageData = BitcoinyACCTv3.extractOfferMessageData(messageData);
 			if (offerMessageData == null)
 				continue;
 
-			byte[] aliceForeignPublicKeyHash = offerMessageData.partnerBitcoinPKH;
+			byte[] aliceForeignPublicKeyHash = offerMessageData.partnerForeignPKH;
 			byte[] hashOfSecretA = offerMessageData.hashOfSecretA;
 			int lockTimeA = (int) offerMessageData.lockTimeA;
 			long messageTimestamp = messageTransactionData.getTimestamp();
-			int refundTimeout = BitcoinACCTv3.calcRefundTimeout(messageTimestamp, lockTimeA);
+			int refundTimeout = BitcoinyACCTv3.calcRefundTimeout(messageTimestamp, lockTimeA);
 
 			// Determine P2SH-A address and confirm funded
 			byte[] redeemScriptA = BitcoinyHTLC.buildScript(aliceForeignPublicKeyHash, lockTimeA, tradeBotData.getTradeForeignPublicKeyHash(), hashOfSecretA);
-			String p2shAddressA = bitcoin.deriveP2shAddress(redeemScriptA);
+			String p2shAddressA = bitcoiny.deriveP2shAddress(redeemScriptA);
 
 			long feeTimestamp = calcFeeTimestamp(lockTimeA, crossChainTradeData.tradeTimeout);
-			long p2shFee = Bitcoin.getInstance().getP2shFee(feeTimestamp);
+			long p2shFee = bitcoiny.getP2shFee(feeTimestamp);
 			final long minimumAmountA = tradeBotData.getForeignAmount() + p2shFee;
 
-			BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoin.getBlockchainProvider(), p2shAddressA, minimumAmountA);
+			BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
 
 			switch (htlcStatusA) {
 				case UNFUNDED:
@@ -516,7 +521,7 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 			String aliceNativeAddress = Crypto.toAddress(messageTransactionData.getCreatorPublicKey());
 
 			// Build outgoing message, padding each part to 32 bytes to make it easier for AT to consume
-			byte[] outgoingMessageData = BitcoinACCTv3.buildTradeMessage(aliceNativeAddress, aliceForeignPublicKeyHash, hashOfSecretA, lockTimeA, refundTimeout);
+			byte[] outgoingMessageData = BitcoinyACCTv3.buildTradeMessage(aliceNativeAddress, aliceForeignPublicKeyHash, hashOfSecretA, lockTimeA, refundTimeout);
 			String messageRecipient = tradeBotData.getAtAddress();
 
 			boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, outgoingMessageData);
@@ -565,7 +570,7 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 	 * <p>
 	 * If all is well, trade-bot then redeems AT using Alice's secret-A, releasing Bob's NATIVE to Alice.
 	 * <p>
-	 * In revealing a valid secret-A, Bob can then redeem the BTC funds from P2SH-A.
+	 * In revealing a valid secret-A, Bob can then redeem the foreign-chain funds from P2SH-A.
 	 * <p>
 	 * @throws ForeignBlockchainException
 	 */
@@ -574,19 +579,19 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 		if (aliceUnexpectedState(repository, tradeBotData, atData, crossChainTradeData))
 			return;
 
-		Bitcoin bitcoin = Bitcoin.getInstance();
+		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 		int lockTimeA = tradeBotData.getLockTimeA();
 
 		// Refund P2SH-A if we've passed lockTime-A
 		if (NTP.getTime() >= lockTimeA * 1000L) {
 			byte[] redeemScriptA = BitcoinyHTLC.buildScript(tradeBotData.getTradeForeignPublicKeyHash(), lockTimeA, crossChainTradeData.creatorForeignPKH, tradeBotData.getHashOfSecret());
-			String p2shAddressA = bitcoin.deriveP2shAddress(redeemScriptA);
+			String p2shAddressA = bitcoiny.deriveP2shAddress(redeemScriptA);
 
 			long feeTimestamp = calcFeeTimestamp(lockTimeA, crossChainTradeData.tradeTimeout);
-			long p2shFee = Bitcoin.getInstance().getP2shFee(feeTimestamp);
+			long p2shFee = bitcoiny.getP2shFee(feeTimestamp);
 			long minimumAmountA = crossChainTradeData.expectedForeignAmount + p2shFee;
 
-			BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoin.getBlockchainProvider(), p2shAddressA, minimumAmountA);
+			BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
 
 			switch (htlcStatusA) {
 				case UNFUNDED:
@@ -632,7 +637,7 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 		}
 
 		long recipientMessageTimestamp = messageTransactionsData.get(0).getTimestamp();
-		int refundTimeout = BitcoinACCTv3.calcRefundTimeout(recipientMessageTimestamp, lockTimeA);
+		int refundTimeout = BitcoinyACCTv3.calcRefundTimeout(recipientMessageTimestamp, lockTimeA);
 
 		// Our calculated refundTimeout should match AT's refundTimeout
 		if (refundTimeout != crossChainTradeData.refundTimeout) {
@@ -646,7 +651,7 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 		// Send 'redeem' MESSAGE to AT using both secret
 		byte[] secretA = tradeBotData.getSecret();
 		String receivingAddress = Base58.encode(tradeBotData.getReceivingAccountInfo()); // Actually contains whole address, not just PKH
-		byte[] messageData = BitcoinACCTv3.buildRedeemMessage(secretA, receivingAddress);
+		byte[] messageData = BitcoinyACCTv3.buildRedeemMessage(secretA, receivingAddress);
 		String messageRecipient = tradeBotData.getAtAddress();
 
 		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, messageData);
@@ -683,15 +688,15 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 	}
 
 	/**
-	 * Trade-bot is waiting for Alice to redeem Bob's AT, thus revealing secret-A which is required to spend the BTC funds from P2SH-A.
+	 * Trade-bot is waiting for Alice to redeem Bob's AT, thus revealing secret-A which is required to spend the foreign-chain funds from P2SH-A.
 	 * <p>
 	 * It's possible that Bob's AT has reached its trading timeout and automatically refunded NATIVE back to Bob. In which case,
 	 * trade-bot is done with this specific trade and finalizes in refunded state.
 	 * <p>
-	 * Assuming trade-bot can extract a valid secret-A from Alice's MESSAGE then trade-bot uses that to redeem the BTC funds from P2SH-A
-	 * to Bob's 'foreign'/Bitcoin trade legacy-format address, as derived from trade private key.
+	 * Assuming trade-bot can extract a valid secret-A from Alice's MESSAGE then trade-bot uses that to redeem the foreign-chain funds from P2SH-A
+	 * to Bob's foreign-chain trade legacy-format address, as derived from trade private key.
 	 * <p>
-	 * (This could potentially be 'improved' to send BTC to any address of Bob's choosing by changing the transaction output).
+	 * (This could potentially be improved to send funds to any address of Bob's choosing by changing the transaction output).
 	 * <p>
 	 * If trade-bot successfully broadcasts the transaction, then this specific trade is done.
 	 * @throws ForeignBlockchainException
@@ -705,14 +710,14 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 
 		// If AT is REFUNDED or CANCELLED then something has gone wrong
 		if (crossChainTradeData.mode == AcctMode.REFUNDED || crossChainTradeData.mode == AcctMode.CANCELLED) {
-			// Alice hasn't redeemed the native asset, so there is no point in trying to redeem the BTC
+				// Alice hasn't redeemed the native asset, so there is no point in trying to redeem the foreign-chain funds
 			TradeBot.updateTradeBotState(repository, tradeBotData, State.BOB_REFUNDED,
 					() -> String.format("AT %s has auto-refunded - trade aborted", tradeBotData.getAtAddress()));
 
 			return;
 		}
 
-		byte[] secretA = BitcoinACCTv3.getInstance().findSecretA(repository, crossChainTradeData);
+		byte[] secretA = BitcoinyACCTv3.getInstance().findSecretA(repository, crossChainTradeData);
 		if (secretA == null) {
 			LOGGER.debug(() -> String.format("Unable to find secret-A from redeem message to AT %s?", tradeBotData.getAtAddress()));
 			return;
@@ -720,18 +725,18 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 
 		// Use secret-A to redeem P2SH-A
 
-		Bitcoin bitcoin = Bitcoin.getInstance();
+		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 
 		byte[] receivingAccountInfo = tradeBotData.getReceivingAccountInfo();
 		int lockTimeA = crossChainTradeData.lockTimeA;
 		byte[] redeemScriptA = BitcoinyHTLC.buildScript(crossChainTradeData.partnerForeignPKH, lockTimeA, crossChainTradeData.creatorForeignPKH, crossChainTradeData.hashOfSecretA);
-		String p2shAddressA = bitcoin.deriveP2shAddress(redeemScriptA);
+		String p2shAddressA = bitcoiny.deriveP2shAddress(redeemScriptA);
 
 		// Fee for redeem/refund is subtracted from P2SH-A balance.
 		long feeTimestamp = calcFeeTimestamp(lockTimeA, crossChainTradeData.tradeTimeout);
-		long p2shFee = Bitcoin.getInstance().getP2shFee(feeTimestamp);
+		long p2shFee = bitcoiny.getP2shFee(feeTimestamp);
 		long minimumAmountA = crossChainTradeData.expectedForeignAmount + p2shFee;
-		BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoin.getBlockchainProvider(), p2shAddressA, minimumAmountA);
+		BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
 
 		switch (htlcStatusA) {
 			case UNFUNDED:
@@ -752,17 +757,17 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 			case FUNDED: {
 				Coin redeemAmount = Coin.valueOf(crossChainTradeData.expectedForeignAmount);
 				ECKey redeemKey = ECKey.fromPrivate(tradeBotData.getTradePrivateKey());
-				List<TransactionOutput> fundingOutputs = bitcoin.getUnspentOutputs(p2shAddressA, false);
+				List<TransactionOutput> fundingOutputs = bitcoiny.getUnspentOutputs(p2shAddressA, false);
 
-				Transaction p2shRedeemTransaction = BitcoinyHTLC.buildRedeemTransaction(bitcoin.getNetworkParameters(), redeemAmount, redeemKey,
+				Transaction p2shRedeemTransaction = BitcoinyHTLC.buildRedeemTransaction(bitcoiny.getNetworkParameters(), redeemAmount, redeemKey,
 						fundingOutputs, redeemScriptA, secretA, receivingAccountInfo);
 
-				bitcoin.broadcastTransaction(p2shRedeemTransaction);
+				bitcoiny.broadcastTransaction(p2shRedeemTransaction);
 				break;
 			}
 		}
 
-		String receivingAddress = bitcoin.pkhToAddress(receivingAccountInfo);
+		String receivingAddress = bitcoiny.pkhToAddress(receivingAccountInfo);
 
 		TradeBot.updateTradeBotState(repository, tradeBotData, State.BOB_DONE,
 				() -> String.format("P2SH-A %s redeemed. Funds should arrive at %s", tradeBotData.getAtAddress(), receivingAddress));
@@ -780,21 +785,21 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 		if (NTP.getTime() <= lockTimeA * 1000L)
 			return;
 
-		Bitcoin bitcoin = Bitcoin.getInstance();
+		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 
 		// We can't refund P2SH-A until median block time has passed lockTime-A (see BIP113)
-		int medianBlockTime = bitcoin.getMedianBlockTime();
+		int medianBlockTime = bitcoiny.getMedianBlockTime();
 		if (medianBlockTime <= lockTimeA)
 			return;
 
 		byte[] redeemScriptA = BitcoinyHTLC.buildScript(tradeBotData.getTradeForeignPublicKeyHash(), lockTimeA, crossChainTradeData.creatorForeignPKH, tradeBotData.getHashOfSecret());
-		String p2shAddressA = bitcoin.deriveP2shAddress(redeemScriptA);
+		String p2shAddressA = bitcoiny.deriveP2shAddress(redeemScriptA);
 
 		// Fee for redeem/refund is subtracted from P2SH-A balance.
 		long feeTimestamp = calcFeeTimestamp(lockTimeA, crossChainTradeData.tradeTimeout);
-		long p2shFee = Bitcoin.getInstance().getP2shFee(feeTimestamp);
+		long p2shFee = bitcoiny.getP2shFee(feeTimestamp);
 		long minimumAmountA = crossChainTradeData.expectedForeignAmount + p2shFee;
-		BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoin.getBlockchainProvider(), p2shAddressA, minimumAmountA);
+		BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
 
 		switch (htlcStatusA) {
 			case UNFUNDED:
@@ -816,16 +821,16 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 			case FUNDED:{
 				Coin refundAmount = Coin.valueOf(crossChainTradeData.expectedForeignAmount);
 				ECKey refundKey = ECKey.fromPrivate(tradeBotData.getTradePrivateKey());
-				List<TransactionOutput> fundingOutputs = bitcoin.getUnspentOutputs(p2shAddressA, false);
+				List<TransactionOutput> fundingOutputs = bitcoiny.getUnspentOutputs(p2shAddressA, false);
 
 				// Determine receive address for refund
-				String receiveAddress = bitcoin.getUnusedReceiveAddress(tradeBotData.getForeignKey());
-				Address receiving = Address.fromString(bitcoin.getNetworkParameters(), receiveAddress);
+				String receiveAddress = bitcoiny.getUnusedReceiveAddress(tradeBotData.getForeignKey());
+				Address receiving = Address.fromString(bitcoiny.getNetworkParameters(), receiveAddress);
 
-				Transaction p2shRefundTransaction = BitcoinyHTLC.buildRefundTransaction(bitcoin.getNetworkParameters(), refundAmount, refundKey,
+				Transaction p2shRefundTransaction = BitcoinyHTLC.buildRefundTransaction(bitcoiny.getNetworkParameters(), refundAmount, refundKey,
 						fundingOutputs, redeemScriptA, lockTimeA, receiving.getHash());
 
-				bitcoin.broadcastTransaction(p2shRefundTransaction);
+				bitcoiny.broadcastTransaction(p2shRefundTransaction);
 				break;
 			}
 		}
@@ -872,6 +877,18 @@ public class BitcoinACCTv3TradeBot implements AcctTradeBot {
 		}
 
 		return true;
+	}
+
+	private Bitcoiny getBitcoiny(String foreignBlockchain) throws DataException {
+		SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(foreignBlockchain);
+		return getBitcoiny(supportedBlockchain);
+	}
+
+	private Bitcoiny getBitcoiny(SupportedBlockchain supportedBlockchain) throws DataException {
+		if (supportedBlockchain == null || !(supportedBlockchain.getInstance() instanceof Bitcoiny))
+			throw new DataException("Unsupported Bitcoiny blockchain");
+
+		return (Bitcoiny) supportedBlockchain.getInstance();
 	}
 
 	private long calcFeeTimestamp(int lockTimeA, int tradeTimeout) {

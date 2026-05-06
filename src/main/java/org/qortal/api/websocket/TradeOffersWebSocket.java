@@ -104,7 +104,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 								isFinished, dataByteOffset, expectedValue, minimumFinalHeight,
 								null, null, null);
 
-						crossChainOfferSummaries.addAll(produceSummaries(repository, acct, atStates, blockData.getTimestamp()));
+						crossChainOfferSummaries.addAll(produceSummaries(repository, acct, atStates, blockData.getTimestamp(), blockchain));
 					}
 
 					// Remove any entries unchanged from last time
@@ -264,8 +264,8 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 				cachedInfo.previousAtModes.putAll(initialAtStates.stream().collect(Collectors.toMap(ATStateData::getATAddress, atState -> AcctMode.OFFERING)));
 
 				// Convert to offer summaries
-				cachedInfo.currentSummaries.putAll(produceSummaries(repository, acct, initialAtStates, null).stream()
-						.collect(Collectors.toMap(CrossChainOfferSummary::getAtAddress, offerSummary -> offerSummary)));
+					cachedInfo.currentSummaries.putAll(produceSummaries(repository, acct, initialAtStates, null, blockchain).stream()
+							.collect(Collectors.toMap(CrossChainOfferSummary::getAtAddress, offerSummary -> offerSummary)));
 			}
 		}
 	}
@@ -297,6 +297,10 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 
 				for (ATStateData historicAtState : historicAtStates) {
 					CrossChainOfferSummary historicOfferSummary = produceSummary(repository, acct, historicAtState, null, null);
+					if (historicOfferSummary == null)
+						continue;
+					if (!blockchain.name().equals(historicOfferSummary.getForeignBlockchain()))
+						continue;
 					if (!isHistoric.test(historicOfferSummary))
 						continue;
 
@@ -314,6 +318,8 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		if (crossChainTradeData == null) {
 			crossChainTradeData = acct.populateTradeData(repository, atState);
 		}
+		if (crossChainTradeData == null)
+			return null;
 
 		long atStateTimestamp;
 		if (crossChainTradeData.mode == AcctMode.OFFERING)
@@ -325,7 +331,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		return new CrossChainOfferSummary(crossChainTradeData, atStateTimestamp);
 	}
 
-	private static List<CrossChainOfferSummary> produceSummaries(Repository repository, ACCT acct, List<ATStateData> atStates, Long timestamp) throws DataException {
+	private static List<CrossChainOfferSummary> produceSummaries(Repository repository, ACCT acct, List<ATStateData> atStates, Long timestamp, SupportedBlockchain blockchain) throws DataException {
 		List<CrossChainOfferSummary> offerSummaries = new ArrayList<>();
 		List<CrossChainTradeData> crossChainTrades = new ArrayList<>();
 		List<ATStateData> atStatesByTrade = new ArrayList<>();
@@ -333,6 +339,8 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		for (ATStateData atState : atStates) {
 			CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
 			if (crossChainTradeData == null)
+				continue;
+			if (blockchain != null && !blockchain.name().equals(crossChainTradeData.foreignBlockchain))
 				continue;
 
 			crossChainTrades.add(crossChainTradeData);

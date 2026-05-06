@@ -100,11 +100,7 @@ public class TradeBot implements Listener {
 
 	private static final Map<Class<? extends ACCT>, Supplier<AcctTradeBot>> acctTradeBotSuppliers = new HashMap<>();
 	static {
-		acctTradeBotSuppliers.put(BitcoinACCTv3.class, BitcoinACCTv3TradeBot::getInstance);
-		acctTradeBotSuppliers.put(LitecoinACCTv3.class, LitecoinACCTv3TradeBot::getInstance);
-		acctTradeBotSuppliers.put(DogecoinACCTv3.class, DogecoinACCTv3TradeBot::getInstance);
-		acctTradeBotSuppliers.put(DigibyteACCTv3.class, DigibyteACCTv3TradeBot::getInstance);
-		acctTradeBotSuppliers.put(RavencoinACCTv3.class, RavencoinACCTv3TradeBot::getInstance);
+		acctTradeBotSuppliers.put(BitcoinyACCTv3.class, BitcoinyACCTv3TradeBot::getInstance);
 		acctTradeBotSuppliers.put(PirateChainACCTv3.class, PirateChainACCTv3TradeBot::getInstance);
 	}
 
@@ -257,7 +253,7 @@ public class TradeBot implements Listener {
 			Bitcoiny bitcoiny) throws DataException {
 		AcctTradeBot acctTradeBot = findTradeBotForAcct(acct);
 		if (acctTradeBot == null) {
-			LOGGER.debug(() -> String.format("Couldn't find ACCT trade-bot for %s", acct.getBlockchain()));
+			LOGGER.debug(() -> String.format("Couldn't find ACCT trade-bot for %s", acct.getClass().getSimpleName()));
 			return ResponseResult.NETWORK_ISSUE;
 		}
 

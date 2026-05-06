@@ -2,8 +2,6 @@ package org.qortal.crosschain;
 
 import com.google.common.hash.HashCode;
 import com.google.common.primitives.Bytes;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.ciyam.at.*;
 import org.qortal.account.Account;
 import org.qortal.api.resource.CrossChainUtils;
@@ -31,7 +29,7 @@ import static org.ciyam.at.OpCode.calcOffset;
  * 
  * <p>
  * <ul>
- * <li>Bob generates Bitcoin & local-chain 'trade' keys
+ * <li>Bob generates foreign-chain & local-chain 'trade' keys
  * 		<ul>
  * 			<li>private key required to sign P2SH redeem tx</li>
  * 			<li>private key could be used to create 'secret' (e.g. double-SHA256)</li>
@@ -44,12 +42,12 @@ import static org.ciyam.at.OpCode.calcOffset;
  * </li>
  * <li>Alice finds local-chain AT and wants to trade
  * 		<ul>
- * 			<li>Alice generates Bitcoin & local-chain 'trade' keys</li>
- * 			<li>Alice funds Bitcoin P2SH-A</li>
+ * 			<li>Alice generates foreign-chain & local-chain 'trade' keys</li>
+ * 			<li>Alice funds foreign-chain P2SH-A</li>
  * 			<li>Alice sends 'offer' MESSAGE to Bob from her local-chain trade address, containing:
  * 				<ul>
  * 					<li>hash-of-secret-A</li>
- * 					<li>her 'trade' Bitcoin PKH</li>
+ * 					<li>her foreign-chain trade PKH</li>
  * 				</ul>
  * 			</li>
  * 		</ul>
@@ -60,7 +58,7 @@ import static org.ciyam.at.OpCode.calcOffset;
  * 			<li>Sends 'trade' MESSAGE to local-chain AT from his trade address, containing:
  * 				<ul>
  * 					<li>Alice's trade local-chain address</li>
- * 					<li>Alice's trade Bitcoin PKH</li>
+ * 					<li>Alice's foreign-chain trade PKH</li>
  * 					<li>hash-of-secret-A</li>
  * 				</ul>
  * 			</li>
@@ -79,17 +77,15 @@ import static org.ciyam.at.OpCode.calcOffset;
  * </li>
  * <li>Bob checks AT, extracts secret-A
  * 		<ul>
- * 			<li>Bob redeems P2SH-A using his Bitcoin trade key and secret-A</li>
- * 			<li>P2SH-A BTC funds end up at Bitcoin address determined by redeem transaction output(s)</li>
+ * 			<li>Bob redeems P2SH-A using his foreign-chain trade key and secret-A</li>
+ * 			<li>P2SH-A funds end up at the foreign-chain address determined by redeem transaction output(s)</li>
  * 		</ul>
  * </li>
  * </ul>
  */
-public class BitcoinACCTv3 implements ACCT {
+public class BitcoinyACCTv3 implements ACCT {
 
-	private static final Logger LOGGER = LogManager.getLogger(BitcoinACCTv3.class);
-
-	public static final String NAME = BitcoinACCTv3.class.getSimpleName();
+	public static final String NAME = BitcoinyACCTv3.class.getSimpleName();
 	public static final byte[] CODE_BYTES_HASH = HashCode.fromString("676fb9350708dafa054eb0262d655039e393c1eb4918ec582f8d45524c9b4860").asBytes(); // SHA256 of AT code bytes
 
 	public static final int SECRET_LENGTH = 32;
@@ -100,27 +96,27 @@ public class BitcoinACCTv3 implements ACCT {
 	public static final int MODE_BYTE_OFFSET = MachineState.HEADER_LENGTH + (MODE_VALUE_OFFSET * MachineState.VALUE_SIZE);
 
 	public static class OfferMessageData {
-		public byte[] partnerBitcoinPKH;
+		public byte[] partnerForeignPKH;
 		public byte[] hashOfSecretA;
 		public long lockTimeA;
 	}
-	public static final int OFFER_MESSAGE_LENGTH = 20 /*partnerBitcoinPKH*/ + 20 /*hashOfSecretA*/ + 8 /*lockTimeA*/;
+	public static final int OFFER_MESSAGE_LENGTH = 20 /*partnerForeignPKH*/ + 20 /*hashOfSecretA*/ + 8 /*lockTimeA*/;
 	public static final int TRADE_MESSAGE_LENGTH = 32 /*partner's local-chain trade address (padded from 25 to 32)*/
-			+ 24 /*partner's Bitcoin PKH (padded from 20 to 24)*/
+			+ 24 /*partner's foreign-chain PKH (padded from 20 to 24)*/
 			+ 8 /*AT trade timeout (minutes)*/
 			+ 24 /*hash of secret-A (padded from 20 to 24)*/
 			+ 8 /*lockTimeA*/;
 	public static final int REDEEM_MESSAGE_LENGTH = 32 /*secret-A*/ + 32 /*partner's local-chain receiving address padded from 25 to 32*/;
 	public static final int CANCEL_MESSAGE_LENGTH = 32 /*AT creator's local-chain address*/;
 
-	private static BitcoinACCTv3 instance;
+	private static BitcoinyACCTv3 instance;
 
-	private BitcoinACCTv3() {
+	private BitcoinyACCTv3() {
 	}
 
-	public static synchronized BitcoinACCTv3 getInstance() {
+	public static synchronized BitcoinyACCTv3 getInstance() {
 		if (instance == null)
-			instance = new BitcoinACCTv3();
+			instance = new BitcoinyACCTv3();
 
 		return instance;
 	}
@@ -135,11 +131,6 @@ public class BitcoinACCTv3 implements ACCT {
 		return MODE_BYTE_OFFSET;
 	}
 
-	@Override
-	public ForeignBlockchain getBlockchain() {
-		return Bitcoin.getInstance();
-	}
-
 	/**
 	 * Returns local-chain AT creation bytes for cross-chain trading AT.
 	 * <p>
@@ -147,14 +138,18 @@ public class BitcoinACCTv3 implements ACCT {
 	 * 32-byte secret to the AT, before the AT automatically refunds the AT's creator.
 	 * 
 	 * @param creatorTradeAddress AT creator's trade local-chain address
-	 * @param bitcoinPublicKeyHash 20-byte HASH160 of creator's trade Bitcoin public key
+	 * @param foreignBlockchain foreign blockchain for this trade
+	 * @param foreignPublicKeyHash 20-byte HASH160 of creator's trade foreign-chain public key
 	 * @param nativeAmount how much native asset to pay trade partner if they send correct 32-byte secrets to AT
-	 * @param bitcoinAmount how much BTC the AT creator is expecting to trade
+	 * @param foreignAmount how much foreign-chain currency the AT creator is expecting to trade
 	 * @param tradeTimeout suggested timeout for entire trade
 	 */
-	public static byte[] buildTradeAT(String creatorTradeAddress, byte[] bitcoinPublicKeyHash, long nativeAmount, long bitcoinAmount, int tradeTimeout) {
-		if (bitcoinPublicKeyHash.length != 20)
-			throw new IllegalArgumentException("Bitcoin public key hash should be 20 bytes");
+	public static byte[] buildTradeAT(SupportedBlockchain foreignBlockchain, String creatorTradeAddress, byte[] foreignPublicKeyHash, long nativeAmount, long foreignAmount, int tradeTimeout) {
+		if (foreignBlockchain == null || !(foreignBlockchain.getInstance() instanceof Bitcoiny))
+			throw new IllegalArgumentException("Unsupported Bitcoiny blockchain");
+
+		if (foreignPublicKeyHash.length != 20)
+			throw new IllegalArgumentException("Foreign public key hash should be 20 bytes");
 
 		// Labels for data segment addresses
 		int addrCounter = 0;
@@ -166,11 +161,11 @@ public class BitcoinACCTv3 implements ACCT {
 		final int addrCreatorTradeAddress3 = addrCounter++;
 		final int addrCreatorTradeAddress4 = addrCounter++;
 
-		final int addrBitcoinPublicKeyHash = addrCounter;
+		final int addrForeignPublicKeyHash = addrCounter;
 		addrCounter += 4;
 
 		final int addrNativeAmount = addrCounter++;
-		final int addrBitcoinAmount = addrCounter++;
+		final int addrForeignAmount = addrCounter++;
 		final int addrTradeTimeout = addrCounter++;
 
 		final int addrMessageTxnType = addrCounter++;
@@ -181,8 +176,8 @@ public class BitcoinACCTv3 implements ACCT {
 		final int addrPartnerAddressPointer = addrCounter++;
 		final int addrMessageSenderPointer = addrCounter++;
 
-		final int addrTradeMessagePartnerBitcoinPKHOffset = addrCounter++;
-		final int addrPartnerBitcoinPKHPointer = addrCounter++;
+		final int addrTradeMessagePartnerForeignPKHOffset = addrCounter++;
+		final int addrPartnerForeignPKHPointer = addrCounter++;
 		final int addrTradeMessageHashOfSecretAOffset = addrCounter++;
 		final int addrHashOfSecretAPointer = addrCounter++;
 
@@ -228,7 +223,7 @@ public class BitcoinACCTv3 implements ACCT {
 		final int addrHashOfSecretA = addrCounter;
 		addrCounter += 4;
 
-		final int addrPartnerBitcoinPKH = addrCounter;
+		final int addrPartnerForeignPKH = addrCounter;
 		addrCounter += 4;
 
 		final int addrPartnerReceivingAddress = addrCounter;
@@ -236,6 +231,8 @@ public class BitcoinACCTv3 implements ACCT {
 
 		final int addrMode = addrCounter++;
 		assert addrMode == MODE_VALUE_OFFSET : String.format("addrMode %d does not match MODE_VALUE_OFFSET %d", addrMode, MODE_VALUE_OFFSET);
+
+		final int addrForeignBlockchainId = addrCounter++;
 
 		// Data segment
 		ByteBuffer dataByteBuffer = ByteBuffer.allocate(addrCounter * MachineState.VALUE_SIZE);
@@ -245,17 +242,17 @@ public class BitcoinACCTv3 implements ACCT {
 		byte[] creatorTradeAddressBytes = Base58.decode(creatorTradeAddress);
 		dataByteBuffer.put(Bytes.ensureCapacity(creatorTradeAddressBytes, 32, 0));
 
-		// Bitcoin public key hash
-		assert dataByteBuffer.position() == addrBitcoinPublicKeyHash * MachineState.VALUE_SIZE : "addrBitcoinPublicKeyHash incorrect";
-		dataByteBuffer.put(Bytes.ensureCapacity(bitcoinPublicKeyHash, 32, 0));
+		// Foreign public key hash
+		assert dataByteBuffer.position() == addrForeignPublicKeyHash * MachineState.VALUE_SIZE : "addrForeignPublicKeyHash incorrect";
+		dataByteBuffer.put(Bytes.ensureCapacity(foreignPublicKeyHash, 32, 0));
 
 		// Redeem native amount
 		assert dataByteBuffer.position() == addrNativeAmount * MachineState.VALUE_SIZE : "addrNativeAmount incorrect";
 		dataByteBuffer.putLong(nativeAmount);
 
-		// Expected Bitcoin amount
-		assert dataByteBuffer.position() == addrBitcoinAmount * MachineState.VALUE_SIZE : "addrBitcoinAmount incorrect";
-		dataByteBuffer.putLong(bitcoinAmount);
+		// Expected foreign amount
+		assert dataByteBuffer.position() == addrForeignAmount * MachineState.VALUE_SIZE : "addrForeignAmount incorrect";
+		dataByteBuffer.putLong(foreignAmount);
 
 		// Suggested trade timeout (minutes)
 		assert dataByteBuffer.position() == addrTradeTimeout * MachineState.VALUE_SIZE : "addrTradeTimeout incorrect";
@@ -285,13 +282,13 @@ public class BitcoinACCTv3 implements ACCT {
 		assert dataByteBuffer.position() == addrMessageSenderPointer * MachineState.VALUE_SIZE : "addrMessageSenderPointer incorrect";
 		dataByteBuffer.putLong(addrMessageSender1);
 
-		// Offset into 'trade' MESSAGE data payload for extracting partner's Bitcoin PKH
-		assert dataByteBuffer.position() == addrTradeMessagePartnerBitcoinPKHOffset * MachineState.VALUE_SIZE : "addrTradeMessagePartnerBitcoinPKHOffset incorrect";
+		// Offset into 'trade' MESSAGE data payload for extracting partner's foreign PKH
+		assert dataByteBuffer.position() == addrTradeMessagePartnerForeignPKHOffset * MachineState.VALUE_SIZE : "addrTradeMessagePartnerForeignPKHOffset incorrect";
 		dataByteBuffer.putLong(32L);
 
-		// Index into data segment of partner's Bitcoin PKH, used by GET_B_IND
-		assert dataByteBuffer.position() == addrPartnerBitcoinPKHPointer * MachineState.VALUE_SIZE : "addrPartnerBitcoinPKHPointer incorrect";
-		dataByteBuffer.putLong(addrPartnerBitcoinPKH);
+		// Index into data segment of partner's foreign PKH, used by GET_B_IND
+		assert dataByteBuffer.position() == addrPartnerForeignPKHPointer * MachineState.VALUE_SIZE : "addrPartnerForeignPKHPointer incorrect";
+		dataByteBuffer.putLong(addrPartnerForeignPKH);
 
 		// Offset into 'trade' MESSAGE data payload for extracting hash-of-secret-A
 		assert dataByteBuffer.position() == addrTradeMessageHashOfSecretAOffset * MachineState.VALUE_SIZE : "addrTradeMessageHashOfSecretAOffset incorrect";
@@ -316,6 +313,8 @@ public class BitcoinACCTv3 implements ACCT {
 		dataByteBuffer.putLong(addrPartnerReceivingAddress);
 
 		assert dataByteBuffer.position() == addrEndOfConstants * MachineState.VALUE_SIZE : "dataByteBuffer position not at end of constants";
+		dataByteBuffer.position(addrForeignBlockchainId * MachineState.VALUE_SIZE);
+		dataByteBuffer.putLong(foreignBlockchain.getForeignBlockchainId());
 
 		// Code labels
 		Integer labelRefund = null;
@@ -428,10 +427,10 @@ public class BitcoinACCTv3 implements ACCT {
 				// Save B register into data segment starting at addrPartnerAddress1 (as pointed to by addrPartnerAddressPointer)
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerAddressPointer));
 
-				// Extract trade partner's Bitcoin public key hash (PKH) from message into B
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(ChainFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrTradeMessagePartnerBitcoinPKHOffset));
-				// Store partner's Bitcoin PKH (we only really use values from B1-B3)
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerBitcoinPKHPointer));
+				// Extract trade partner's foreign public key hash (PKH) from message into B
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(ChainFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrTradeMessagePartnerForeignPKHOffset));
+				// Store partner's foreign PKH (we only really use values from B1-B3)
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerForeignPKHPointer));
 				// Extract AT trade timeout (minutes) (from B4)
 				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_B4, addrRefundTimeout));
 
@@ -537,7 +536,7 @@ public class BitcoinACCTv3 implements ACCT {
 				/* Refund balance back to AT creator */
 				labelRefund = codeByteBuffer.position();
 
-				/* NOP - to ensure BITCOIN ACCT is unique */
+				/* Keep the generic ACCTv3 bytecode stable. */
 				codeByteBuffer.put(OpCode.NOP.compile());
 
 				// Set refunded mode
@@ -545,7 +544,7 @@ public class BitcoinACCTv3 implements ACCT {
 				// We're finished forever (finishing auto-refunds remaining balance to AT creator)
 				codeByteBuffer.put(OpCode.FIN_IMD.compile());
 			} catch (CompilationException e) {
-				throw new IllegalStateException("Unable to compile BTC-NATIVE ACCT?", e);
+				throw new IllegalStateException("Unable to compile Bitcoiny-NATIVE ACCT?", e);
 			}
 		}
 
@@ -554,8 +553,8 @@ public class BitcoinACCTv3 implements ACCT {
 		byte[] codeBytes = new byte[codeByteBuffer.limit()];
 		codeByteBuffer.get(codeBytes);
 
-		assert Arrays.equals(Crypto.digest(codeBytes), BitcoinACCTv3.CODE_BYTES_HASH)
-			: String.format("BTCACCT.CODE_BYTES_HASH mismatch: expected %s, actual %s", HashCode.fromBytes(CODE_BYTES_HASH), HashCode.fromBytes(Crypto.digest(codeBytes)));
+		assert Arrays.equals(Crypto.digest(codeBytes), BitcoinyACCTv3.CODE_BYTES_HASH)
+			: String.format("BitcoinyACCTv3.CODE_BYTES_HASH mismatch: expected %s, actual %s", HashCode.fromBytes(CODE_BYTES_HASH), HashCode.fromBytes(Crypto.digest(codeBytes)));
 
 		final short ciyamAtVersion = 2;
 		final short numCallStackPages = 0;
@@ -600,7 +599,6 @@ public class BitcoinACCTv3 implements ACCT {
 
 		CrossChainTradeData tradeData = new CrossChainTradeData();
 
-		tradeData.foreignBlockchain = SupportedBlockchain.BITCOIN.name();
 		tradeData.acctName = NAME;
 
 		tradeData.atAddress = atAddress;
@@ -626,7 +624,7 @@ public class BitcoinACCTv3 implements ACCT {
 		tradeData.creatorTradeAddress = Base58.encode(addressBytes);
 		dataByteBuffer.position(dataByteBuffer.position() + 32 - addressBytes.length);
 
-		// Creator's Bitcoin/foreign public key hash
+		// Creator's foreign public key hash
 		tradeData.creatorForeignPKH = new byte[20];
 		dataByteBuffer.get(tradeData.creatorForeignPKH);
 		dataByteBuffer.position(dataByteBuffer.position() + 32 - tradeData.creatorForeignPKH.length); // skip to 32 bytes
@@ -637,7 +635,7 @@ public class BitcoinACCTv3 implements ACCT {
 		// Redeem payout
 		tradeData.nativeAmount = dataByteBuffer.getLong();
 
-		// Expected BTC amount
+		// Expected foreign amount
 		tradeData.expectedForeignAmount = dataByteBuffer.getLong();
 
 		// Trade timeout
@@ -661,10 +659,10 @@ public class BitcoinACCTv3 implements ACCT {
 		// Skip pointer to message sender
 		dataByteBuffer.position(dataByteBuffer.position() + 8);
 
-		// Skip 'trade' message data offset for partner's Bitcoin PKH
+		// Skip 'trade' message data offset for partner's foreign PKH
 		dataByteBuffer.position(dataByteBuffer.position() + 8);
 
-		// Skip pointer to partner's Bitcoin PKH
+		// Skip pointer to partner's foreign PKH
 		dataByteBuffer.position(dataByteBuffer.position() + 8);
 
 		// Skip 'trade' message data offset for hash-of-secret-A
@@ -730,19 +728,28 @@ public class BitcoinACCTv3 implements ACCT {
 		dataByteBuffer.get(hashOfSecretA);
 		dataByteBuffer.position(dataByteBuffer.position() + 32 - hashOfSecretA.length); // skip to 32 bytes
 
-		// Potential partner's Bitcoin PKH
-		byte[] partnerBitcoinPKH = new byte[20];
-		dataByteBuffer.get(partnerBitcoinPKH);
-		dataByteBuffer.position(dataByteBuffer.position() + 32 - partnerBitcoinPKH.length); // skip to 32 bytes
+		// Potential partner's foreign PKH
+		byte[] partnerForeignPKH = new byte[20];
+		dataByteBuffer.get(partnerForeignPKH);
+		dataByteBuffer.position(dataByteBuffer.position() + 32 - partnerForeignPKH.length); // skip to 32 bytes
 
 		// Partner's receiving address (if present)
 		byte[] partnerReceivingAddress = new byte[25];
 		dataByteBuffer.get(partnerReceivingAddress);
 		dataByteBuffer.position(dataByteBuffer.position() + 32 - partnerReceivingAddress.length); // skip to 32 bytes
 
-		// Trade AT's 'mode'
-		long modeValue = dataByteBuffer.getLong();
-		AcctMode mode = AcctMode.valueOf((int) (modeValue & 0xffL));
+			// Trade AT's 'mode'
+			long modeValue = dataByteBuffer.getLong();
+			AcctMode mode = AcctMode.valueOf((int) (modeValue & 0xffL));
+
+			// Foreign blockchain ID stored after the values used by AT bytecode.
+			if (dataByteBuffer.remaining() < MachineState.VALUE_SIZE)
+				return null;
+
+			SupportedBlockchain foreignBlockchain = SupportedBlockchain.fromForeignBlockchainId((int) dataByteBuffer.getLong());
+			if (foreignBlockchain == null || !(foreignBlockchain.getInstance() instanceof Bitcoiny))
+				return null;
+		tradeData.foreignBlockchain = foreignBlockchain.name();
 
 		/* End of variables */
 
@@ -752,7 +759,7 @@ public class BitcoinACCTv3 implements ACCT {
 			tradeData.tradeRefundHeight = new Timestamp(tradeRefundTimestamp).blockHeight;
 			tradeData.partnerAddress = partnerAddress;
 			tradeData.hashOfSecretA = hashOfSecretA;
-			tradeData.partnerForeignPKH = partnerBitcoinPKH;
+			tradeData.partnerForeignPKH = partnerForeignPKH;
 			tradeData.lockTimeA = lockTimeA;
 
 			if (mode == AcctMode.REDEEMED)
@@ -772,7 +779,7 @@ public class BitcoinACCTv3 implements ACCT {
 			return null;
 
 		OfferMessageData offerMessageData = new OfferMessageData();
-		offerMessageData.partnerBitcoinPKH = Arrays.copyOfRange(messageData, 0, 20);
+		offerMessageData.partnerForeignPKH = Arrays.copyOfRange(messageData, 0, 20);
 		offerMessageData.hashOfSecretA = Arrays.copyOfRange(messageData, 20, 40);
 		offerMessageData.lockTimeA = BitTwiddling.longFromBEBytes(messageData, 40);
 
@@ -780,14 +787,14 @@ public class BitcoinACCTv3 implements ACCT {
 	}
 
 	/** Returns 'trade' MESSAGE payload for AT creator to send to AT. */
-	public static byte[] buildTradeMessage(String partnerTradeAddress, byte[] partnerBitcoinPKH, byte[] hashOfSecretA, int lockTimeA, int refundTimeout) {
+	public static byte[] buildTradeMessage(String partnerTradeAddress, byte[] partnerForeignPKH, byte[] hashOfSecretA, int lockTimeA, int refundTimeout) {
 		byte[] data = new byte[TRADE_MESSAGE_LENGTH];
 		byte[] partnerAddressBytes = Base58.decode(partnerTradeAddress);
 		byte[] lockTimeABytes = BitTwiddling.toBEByteArray((long) lockTimeA);
 		byte[] refundTimeoutBytes = BitTwiddling.toBEByteArray((long) refundTimeout);
 
 		System.arraycopy(partnerAddressBytes, 0, data, 0, partnerAddressBytes.length);
-		System.arraycopy(partnerBitcoinPKH, 0, data, 32, partnerBitcoinPKH.length);
+		System.arraycopy(partnerForeignPKH, 0, data, 32, partnerForeignPKH.length);
 		System.arraycopy(refundTimeoutBytes, 0, data, 56, refundTimeoutBytes.length);
 		System.arraycopy(hashOfSecretA, 0, data, 64, hashOfSecretA.length);
 		System.arraycopy(lockTimeABytes, 0, data, 88, lockTimeABytes.length);

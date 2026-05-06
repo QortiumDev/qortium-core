@@ -90,7 +90,7 @@ public class CrossChainTradeBotResource {
 			if (foreignBlockchain == null)
 				return allTradeBotData;
 
-			return allTradeBotData.stream().filter(tradeBotData -> tradeBotData.getForeignBlockchain().equals(foreignBlockchain.name())).collect(Collectors.toList());
+			return allTradeBotData.stream().filter(tradeBotData -> foreignBlockchain.name().equals(tradeBotData.getForeignBlockchain())).collect(Collectors.toList());
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
@@ -249,12 +249,13 @@ public class CrossChainTradeBotResource {
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
-			if (!acct.getBlockchain().isValidWalletKey(tradeBotRespondRequest.foreignKey))
-				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
-
 			CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
 			if (crossChainTradeData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+
+			SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(crossChainTradeData.foreignBlockchain);
+			if (supportedBlockchain == null || !supportedBlockchain.getInstance().isValidWalletKey(tradeBotRespondRequest.foreignKey))
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
 			if (crossChainTradeData.mode != AcctMode.OFFERING)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
@@ -299,6 +300,7 @@ public class CrossChainTradeBotResource {
 
 			List<CrossChainTradeData> crossChainTradeDataList = new ArrayList<>(respondRequests.addresses.size());
 			Optional<ACCT> acct = Optional.empty();
+			Optional<SupportedBlockchain> supportedBlockchain = Optional.empty();
 
 			for(String atAddress : respondRequests.addresses ) {
 
@@ -319,26 +321,26 @@ public class CrossChainTradeBotResource {
 				ACCT acctUsingAtData = TradeBot.getInstance().getAcctUsingAtData(atData);
 				if (acctUsingAtData == null)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
-				// if the optional is empty,
-				// then ensure the ACCT blockchain is a Bitcoiny blockchain, but not Pirate Chain and fill the optional
-				// Even though the Pirate Chain protocol does support multi send,
-				// the Pirate Chain API we are using does not support multi send
-				else if( acct.isEmpty() ) {
-					if( !(acctUsingAtData.getBlockchain() instanceof Bitcoiny) ||
-							acctUsingAtData.getBlockchain() instanceof PirateChain )
-						throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
-					acct = Optional.of(acctUsingAtData);
-				}
-				// if the optional is filled, then ensure it is equal to the AT in this iteration
-				else if( !acctUsingAtData.getCodeBytesHash().equals(acct.get().getCodeBytesHash()) )
-					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
-
-				if (!acctUsingAtData.getBlockchain().isValidWalletKey(respondRequests.foreignKey))
-					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
-
 				CrossChainTradeData crossChainTradeData = acctUsingAtData.populateTradeData(repository, atData);
 				if (crossChainTradeData == null)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+
+				SupportedBlockchain blockchain = SupportedBlockchain.fromString(crossChainTradeData.foreignBlockchain);
+				if (blockchain == null || !(blockchain.getInstance() instanceof Bitcoiny) || blockchain.getInstance() instanceof PirateChain)
+					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+				if (acct.isEmpty())
+					acct = Optional.of(acctUsingAtData);
+				else if (!acctUsingAtData.getCodeBytesHash().equals(acct.get().getCodeBytesHash()))
+					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+				if (supportedBlockchain.isEmpty())
+					supportedBlockchain = Optional.of(blockchain);
+				else if (supportedBlockchain.get() != blockchain)
+					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+				if (!blockchain.getInstance().isValidWalletKey(respondRequests.foreignKey))
+					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
 				if (crossChainTradeData.mode != AcctMode.OFFERING)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
@@ -364,7 +366,7 @@ public class CrossChainTradeBotResource {
 						crossChainTradeDataList,
 						respondRequests.receivingAddress,
 						respondRequests.foreignKey,
-						(Bitcoiny) acct.get().getBlockchain());
+						(Bitcoiny) supportedBlockchain.get().getInstance());
 
 			switch (result) {
 				case OK:

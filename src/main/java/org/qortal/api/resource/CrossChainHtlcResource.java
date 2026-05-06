@@ -285,15 +285,15 @@ public class CrossChainHtlcResource {
 					continue;
 				}
 
-				Bitcoiny bitcoiny = (Bitcoiny) acct.getBlockchain();
-				if (Objects.equals(bitcoiny.getCurrencyCode(), "ARRR")) {
-					LOGGER.info("Skipping AT {} because ARRR is currently unsupported", atAddress);
-					continue;
-				}
-
 				CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
 				if (crossChainTradeData == null) {
 					LOGGER.info("Couldn't find crosschain trade data for AT {}", atAddress);
+					continue;
+				}
+
+				Bitcoiny bitcoiny = getBitcoiny(crossChainTradeData);
+				if (Objects.equals(bitcoiny.getCurrencyCode(), "ARRR")) {
+					LOGGER.info("Skipping AT {} because ARRR is currently unsupported", atAddress);
 					continue;
 				}
 
@@ -369,7 +369,7 @@ public class CrossChainHtlcResource {
 
 			// Use secret-A to redeem P2SH-A
 
-			Bitcoiny bitcoiny = (Bitcoiny) acct.getBlockchain();
+			Bitcoiny bitcoiny = getBitcoiny(crossChainTradeData);
 
 			int lockTime = crossChainTradeData.lockTimeA;
 			byte[] redeemScriptA = BitcoinyHTLC.buildScript(crossChainTradeData.partnerForeignPKH, lockTime, crossChainTradeData.creatorForeignPKH, crossChainTradeData.hashOfSecretA);
@@ -457,7 +457,7 @@ public class CrossChainHtlcResource {
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			// Determine foreign blockchain receive address for refund
-			Bitcoiny bitcoiny = (Bitcoiny) acct.getBlockchain();
+			Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 			String receiveAddress = bitcoiny.getUnusedReceiveAddress(tradeBotData.getForeignKey());
 
 			return this.doRefundHtlc(atAddress, receiveAddress);
@@ -534,7 +534,7 @@ public class CrossChainHtlcResource {
 
 				try {
 					// Determine foreign blockchain receive address for refund
-					Bitcoiny bitcoiny = (Bitcoiny) acct.getBlockchain();
+					Bitcoiny bitcoiny = getBitcoiny(crossChainTradeData);
 					String receivingAddress = bitcoiny.getUnusedReceiveAddress(tradeBotData.getForeignKey());
 
 					LOGGER.info("Attempting to refund P2SH balance associated with AT {}...", atAddress);
@@ -592,7 +592,7 @@ public class CrossChainHtlcResource {
 				if (tradeBotData == null)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-				Bitcoiny bitcoiny = (Bitcoiny) acct.getBlockchain();
+				Bitcoiny bitcoiny = getBitcoiny(crossChainTradeData);
 				int lockTime = tradeBotData.getLockTimeA();
 
 				// We can't refund P2SH-A until lockTime-A has passed
@@ -693,6 +693,18 @@ public class CrossChainHtlcResource {
 
 	private long calcFeeTimestamp(int lockTimeA, int tradeTimeout) {
 		return (lockTimeA - tradeTimeout * 60) * 1000L;
+	}
+
+	private Bitcoiny getBitcoiny(CrossChainTradeData crossChainTradeData) {
+		return getBitcoiny(crossChainTradeData.foreignBlockchain);
+	}
+
+	private Bitcoiny getBitcoiny(String foreignBlockchain) {
+		SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(foreignBlockchain);
+		if (supportedBlockchain == null || !(supportedBlockchain.getInstance() instanceof Bitcoiny))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		return (Bitcoiny) supportedBlockchain.getInstance();
 	}
 
 }

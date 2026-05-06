@@ -13,7 +13,7 @@ import org.qortal.account.PublicKeyAccount;
 import org.qortal.controller.tradebot.TradeStates;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.Litecoin;
-import org.qortal.crosschain.LitecoinACCTv3;
+import org.qortal.crosschain.BitcoinyACCTv3;
 import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.MintingAccountData;
@@ -407,7 +407,7 @@ public class ImportExportTests extends Common {
         long foreignAmount = 1234;
         long nativeAmount= 5678;
 
-        TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, LitecoinACCTv3.NAME,
+        TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinyACCTv3.NAME,
                 TradeStates.State.BOB_WAITING_FOR_AT_CONFIRM.name(), TradeStates.State.BOB_WAITING_FOR_AT_CONFIRM.value,
                 creator.getAddress(), atAddress, timestamp, nativeAmount,
                 tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,

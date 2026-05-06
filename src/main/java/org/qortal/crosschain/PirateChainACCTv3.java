@@ -131,11 +131,6 @@ public class PirateChainACCTv3 implements ACCT {
 		return MODE_BYTE_OFFSET;
 	}
 
-	@Override
-	public ForeignBlockchain getBlockchain() {
-		return PirateChain.getInstance();
-	}
-
 	/**
 	 * Returns local-chain AT creation bytes for cross-chain trading AT.
 	 * <p>

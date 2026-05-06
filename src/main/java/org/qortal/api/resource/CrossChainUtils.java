@@ -759,11 +759,14 @@ public class CrossChainUtils {
                 null, null, false
         );
 
-        String foreignBlockchainCurrencyCode = acct.getBlockchain().getCurrencyCode();
-
         // for each trade, build ledger entry, collect ledger entry
         for (ATStateData atState : atStates) {
             CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
+            SupportedBlockchain foreignBlockchain = SupportedBlockchain.fromString(crossChainTradeData.foreignBlockchain);
+            if (foreignBlockchain == null)
+                continue;
+
+            String foreignBlockchainCurrencyCode = foreignBlockchain.getInstance().getCurrencyCode();
 
             // We also need block timestamp for use as trade timestamp
             long localTimestamp = repository.getBlockRepository().getTimestampFromHeight(atState.getHeight());
