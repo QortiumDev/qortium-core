@@ -14,7 +14,7 @@ Run:
 tools/refresh-electrum-servers
 ```
 
-The refresh tool:
+The refresh tool derives its supported BTC-like coins and refreshable networks from `BitcoinyChainSpecs`. It:
 
 - starts with the built-in BTC, LTC, DOGE, DGB, and RVN mainnet seeds, plus BTC and LTC testnet seeds
 - scrapes OK TCP/SSL rows from `https://1209k.com/bitcoin-eye/ele.php`

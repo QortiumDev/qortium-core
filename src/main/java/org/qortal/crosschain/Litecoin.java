@@ -1,46 +1,27 @@
 package org.qortal.crosschain;
 
 import org.bitcoinj.core.Address;
-import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.LegacyAddress;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.script.Script;
-import org.libdohj.params.LitecoinMainNetParams;
-import org.libdohj.params.LitecoinRegTestParams;
-import org.libdohj.params.LitecoinTestNet3Params;
 import org.qortal.settings.Settings;
 
 public class Litecoin extends ConfiguredBitcoiny {
 
-	public static final String CURRENCY_CODE = "LTC";
-
-	private static final Coin DEFAULT_FEE_PER_KB = Coin.valueOf(10000); // 0.0001 LTC per 1000 bytes
-
-	private static final long MINIMUM_ORDER_AMOUNT = 1000000; // 0.01 LTC minimum order, to avoid dust errors
-
-	// Temporary values until a dynamic fee system is written.
-	private static final long MAINNET_FEE = 1000L;
-	private static final long NON_MAINNET_FEE = 1000L; // enough for TESTNET3 and should be OK for REGTEST
+	public static final String CURRENCY_CODE = BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE;
 
 	public static final LitecoinMainNetParamsP2ShOverride MAIN_NET_PARAMS_P2SH_OVERRIDE = new LitecoinMainNetParamsP2ShOverride(50);
 
-	private static final BitcoinyChainConfig CONFIG = new BitcoinyChainConfig("Litecoin", CURRENCY_CODE,
-			DEFAULT_FEE_PER_KB, MINIMUM_ORDER_AMOUNT, BitcoinyChainConfig.defaultElectrumXPorts());
+	private static final BitcoinyChainConfig CONFIG = BitcoinyChainSpecs.LITECOIN.getConfig();
 	static final BitcoinyChainDefinition<Litecoin> DEFINITION = new BitcoinyChainDefinition<>(
 			CONFIG,
 			() -> Settings.getInstance().getLitecoinNet(),
 			Litecoin::new);
 
 	public enum LitecoinNet implements DelegatingBitcoinyNetwork {
-		MAIN(StaticBitcoinyNetwork.mainnet(LitecoinMainNetParams::get,
-				BitcoinyServers.litecoinMain(),
-				"12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", MAINNET_FEE)),
-		TEST3(StaticBitcoinyNetwork.nonMainnet("TEST3", LitecoinTestNet3Params::get,
-				BitcoinyServers.litecoinTest3(),
-				"4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0", MAINNET_FEE, NON_MAINNET_FEE)),
-		REGTEST(StaticBitcoinyNetwork.nonMainnet("REGTEST", LitecoinRegTestParams::get,
-				BitcoinyServers.localRegtest(),
-				null, MAINNET_FEE, NON_MAINNET_FEE));
+		MAIN(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.MAIN)),
+		TEST3(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST3)),
+		REGTEST(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.REGTEST));
 
 		private final BitcoinyNetwork delegate;
 

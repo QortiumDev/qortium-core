@@ -12,11 +12,11 @@ import java.util.stream.Collectors;
 
 public enum SupportedBlockchain {
 
-	BITCOIN(1, Bitcoin.DEFINITION),
-	LITECOIN(2, Litecoin.DEFINITION),
-	DOGECOIN(3, Dogecoin.DEFINITION),
-	DIGIBYTE(4, Digibyte.DEFINITION),
-	RAVENCOIN(5, Ravencoin.DEFINITION),
+	BITCOIN(BitcoinyChainSpecs.BITCOIN, Bitcoin.DEFINITION),
+	LITECOIN(BitcoinyChainSpecs.LITECOIN, Litecoin.DEFINITION),
+	DOGECOIN(BitcoinyChainSpecs.DOGECOIN, Dogecoin.DEFINITION),
+	DIGIBYTE(BitcoinyChainSpecs.DIGIBYTE, Digibyte.DEFINITION),
+	RAVENCOIN(BitcoinyChainSpecs.RAVENCOIN, Ravencoin.DEFINITION),
 	PIRATECHAIN(6, PirateChain.CURRENCY_CODE, PirateChain::getInstance, false);
 
 	private static final Supplier<ACCT> BITCOINY_ACCT_SUPPLIER = BitcoinyACCTv3::getInstance;
@@ -58,8 +58,8 @@ public enum SupportedBlockchain {
 		this.bitcoiny = bitcoiny;
 	}
 
-	SupportedBlockchain(int foreignBlockchainId, BitcoinyChainDefinition<? extends Bitcoiny> definition) {
-		this(foreignBlockchainId, definition.getCurrencyCode(), definition::getInstance, true);
+	SupportedBlockchain(BitcoinyChainSpec spec, BitcoinyChainDefinition<? extends Bitcoiny> definition) {
+		this(spec.getForeignBlockchainId(), spec.getCurrencyCode(), definition::getInstance, true);
 	}
 
 	public ForeignBlockchain getInstance() {

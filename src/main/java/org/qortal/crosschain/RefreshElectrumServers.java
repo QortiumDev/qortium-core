@@ -533,13 +533,13 @@ public final class RefreshElectrumServers {
 
 	private static List<CoinConfig> coinConfigs() {
 		List<CoinConfig> configs = new ArrayList<>();
-		addCoin(configs, "BTC", "MAIN", "btc", Bitcoin.BitcoinNet.MAIN.getGenesisHash(), Bitcoin.BitcoinNet.MAIN.getServers(), BUILT_IN_SERVER_SOURCE_PATH, "bitcoinMain");
-		addCoin(configs, "BTC", "TEST3", "tbtc", Bitcoin.BitcoinNet.TEST3.getGenesisHash(), Bitcoin.BitcoinNet.TEST3.getServers(), BUILT_IN_SERVER_SOURCE_PATH, "bitcoinTest3");
-		addCoin(configs, "LTC", "MAIN", "ltc", Litecoin.LitecoinNet.MAIN.getGenesisHash(), Litecoin.LitecoinNet.MAIN.getServers(), BUILT_IN_SERVER_SOURCE_PATH, "litecoinMain");
-		addCoin(configs, "LTC", "TEST3", "tltc", Litecoin.LitecoinNet.TEST3.getGenesisHash(), Litecoin.LitecoinNet.TEST3.getServers(), BUILT_IN_SERVER_SOURCE_PATH, "litecoinTest3");
-		addCoin(configs, "DOGE", "MAIN", "doge", Dogecoin.DogecoinNet.MAIN.getGenesisHash(), Dogecoin.DogecoinNet.MAIN.getServers(), BUILT_IN_SERVER_SOURCE_PATH, "dogecoinMain");
-		addCoin(configs, "DGB", "MAIN", "dgb", Digibyte.DigibyteNet.MAIN.getGenesisHash(), Digibyte.DigibyteNet.MAIN.getServers(), BUILT_IN_SERVER_SOURCE_PATH, "digibyteMain");
-		addCoin(configs, "RVN", "MAIN", "rvn", Ravencoin.RavencoinNet.MAIN.getGenesisHash(), Ravencoin.RavencoinNet.MAIN.getServers(), BUILT_IN_SERVER_SOURCE_PATH, "ravencoinMain");
+		for (BitcoinyChainSpec spec : BitcoinyChainSpecs.all()) {
+			for (BitcoinyChainSpec.ElectrumServerRefreshConfig refreshConfig : spec.getElectrumServerRefreshConfigs()) {
+				BitcoinyNetwork network = spec.getNetwork(refreshConfig.getNetworkName());
+				addCoin(configs, spec.getCurrencyCode(), refreshConfig.getNetworkName(), refreshConfig.getChain1209k(),
+						network.getGenesisHash(), network.getServers(), BUILT_IN_SERVER_SOURCE_PATH, refreshConfig.getBuiltInSourceMarker());
+			}
+		}
 		return configs;
 	}
 
@@ -621,7 +621,7 @@ public final class RefreshElectrumServers {
 
 		private static Options parse(String[] args) {
 			Path outputPath = Paths.get(DEFAULT_OUTPUT_PATH);
-			Set<String> coinCodes = new LinkedHashSet<>(Arrays.asList("BTC", "LTC", "DOGE", "DGB", "RVN"));
+			Set<String> coinCodes = new LinkedHashSet<>(BitcoinyChainSpecs.currencyCodes());
 			boolean skip1209k = false;
 			boolean skipPeerDiscovery = false;
 			boolean verify = true;

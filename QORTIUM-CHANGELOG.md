@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: register Bitcoiny chain specs
+
+Moved BTC-like chain metadata into a shared Bitcoiny chain specification registry so Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin now describe their display names, ticker symbols, supported networks, fee defaults, minimum order amounts, and Electrum refresh metadata in one reusable place. The existing coin wrappers and settings remain compatible for now, but they now delegate their network definitions to the registry, giving future coins a single model to copy into instead of scattering metadata across wrappers and tools.
+
 ### 2026-05-06 - crosschain: centralize Bitcoiny chain definitions
 
 Centralized the BTC-like chain lifecycle behind shared Bitcoiny chain definitions so Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin no longer each maintain their own singleton setup. Built-in Electrum fallback servers now live in one `BitcoinyServers` helper, and the refresh tool updates those named fallback lists directly while preserving the generated JSON server resource as the preferred runtime source.
