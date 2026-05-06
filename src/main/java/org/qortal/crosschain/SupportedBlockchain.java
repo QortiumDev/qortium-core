@@ -1,6 +1,5 @@
 package org.qortal.crosschain;
 
-import org.qortal.settings.Settings;
 import org.qortal.utils.ByteArray;
 
 import java.util.EnumSet;
@@ -9,75 +8,51 @@ import java.util.function.Supplier;
 
 public enum SupportedBlockchain {
 
-	BITCOIN(BitcoinyChainSpecs.BITCOIN),
-	LITECOIN(BitcoinyChainSpecs.LITECOIN),
-	DOGECOIN(BitcoinyChainSpecs.DOGECOIN),
-	DIGIBYTE(BitcoinyChainSpecs.DIGIBYTE),
-	RAVENCOIN(BitcoinyChainSpecs.RAVENCOIN),
-	PIRATECHAIN(6, PirateChain.CURRENCY_CODE, PirateChain::getInstance, false);
+	BITCOIN,
+	LITECOIN,
+	DOGECOIN,
+	DIGIBYTE,
+	RAVENCOIN,
+	PIRATECHAIN;
 
-	private final int foreignBlockchainId;
-	private final String currencyCode;
-	private final Supplier<ForeignBlockchain> instanceSupplier;
-	private final boolean bitcoiny;
-	private final BitcoinyChainSpec bitcoinySpec;
-	private final BitcoinyChainDefinition<? extends Bitcoiny> bitcoinyDefinition;
+	private ForeignBlockchainRegistry.Entry entry() {
+		ForeignBlockchainRegistry.Entry entry = ForeignBlockchainRegistry.fromString(this.name());
+		if (entry == null)
+			throw new IllegalStateException("No foreign blockchain registry entry for " + this.name());
 
-	SupportedBlockchain(int foreignBlockchainId, String currencyCode, Supplier<ForeignBlockchain> instanceSupplier, boolean bitcoiny) {
-		this.foreignBlockchainId = foreignBlockchainId;
-		this.currencyCode = currencyCode;
-		this.instanceSupplier = instanceSupplier;
-		this.bitcoiny = bitcoiny;
-		this.bitcoinySpec = null;
-		this.bitcoinyDefinition = null;
-	}
-
-	SupportedBlockchain(BitcoinyChainSpec spec) {
-		this.foreignBlockchainId = spec.getForeignBlockchainId();
-		this.currencyCode = spec.getCurrencyCode();
-		this.bitcoiny = true;
-		this.bitcoinySpec = spec;
-		this.bitcoinyDefinition = new BitcoinyChainDefinition<>(
-				spec.getConfig(),
-				() -> Settings.getInstance().getBitcoinyNetwork(spec.getCurrencyCode()),
-				(config, network) -> new RegisteredBitcoiny(spec, network));
-		this.instanceSupplier = this.bitcoinyDefinition::getInstance;
+		return entry;
 	}
 
 	public ForeignBlockchain getInstance() {
-		return this.instanceSupplier.get();
+		return this.entry().getInstance();
 	}
 
 	public ACCT getLatestAcct() {
-		return this.bitcoiny ? BitcoinyACCTv3.getInstance() : PirateChainACCTv3.getInstance();
+		return this.entry().getLatestAcct();
 	}
 
 	public int getForeignBlockchainId() {
-		return this.foreignBlockchainId;
+		return this.entry().getForeignBlockchainId();
 	}
 
 	public String getCurrencyCode() {
-		return this.currencyCode;
+		return this.entry().getCurrencyCode();
 	}
 
 	public boolean isBitcoiny() {
-		return this.bitcoiny;
+		return this.entry().isBitcoiny();
 	}
 
 	public BitcoinyChainSpec getBitcoinySpec() {
-		return this.bitcoinySpec;
+		return this.entry().getBitcoinySpec();
 	}
 
 	public Bitcoiny getBitcoinyInstance() {
-		ForeignBlockchain foreignBlockchain = this.getInstance();
-		return foreignBlockchain instanceof Bitcoiny ? (Bitcoiny) foreignBlockchain : null;
+		return this.entry().getBitcoinyInstance();
 	}
 
 	public void resetForTesting() {
-		if (this.bitcoinyDefinition != null)
-			this.bitcoinyDefinition.resetForTesting();
-		else if (this == PIRATECHAIN)
-			PirateChain.resetForTesting();
+		this.entry().resetForTesting();
 	}
 
 	public static EnumSet<SupportedBlockchain> bitcoinyBlockchains() {

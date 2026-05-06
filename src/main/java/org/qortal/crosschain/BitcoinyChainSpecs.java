@@ -41,33 +41,33 @@ public final class BitcoinyChainSpecs {
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
 
-	public static final BitcoinyChainSpec BITCOIN = spec(1, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
+	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", 1, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
 			.mainnet(MainNetParams::get, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", 1_500L, "btc")
 			.test3(TestNet3Params::get, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", 1_500L, 1_000L, "tbtc")
 			.regtest(RegTestParams::get, 1_500L, 1_000L)
 			.defaultSpendFeePerByte(20L)
 			.build();
 
-	public static final BitcoinyChainSpec LITECOIN = spec(2, "Litecoin", LITECOIN_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+	public static final BitcoinyChainSpec LITECOIN = spec("LITECOIN", 2, "Litecoin", LITECOIN_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
 			.mainnet(LitecoinMainNetParams::get, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", 1_000L, "ltc")
 			.test3(LitecoinTestNet3Params::get, "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0", 1_000L, 1_000L, "tltc")
 			.regtest(LitecoinRegTestParams::get, 1_000L, 1_000L)
 			.addressNormalizer(BitcoinyChainSpecs::normalizeLitecoinAddress)
 			.build();
 
-	public static final BitcoinyChainSpec DOGECOIN = spec(3, "Dogecoin", DOGECOIN_CURRENCY_CODE, Coin.valueOf(1_000_000), 100_000_000L)
+	public static final BitcoinyChainSpec DOGECOIN = spec("DOGECOIN", 3, "Dogecoin", DOGECOIN_CURRENCY_CODE, Coin.valueOf(1_000_000), 100_000_000L)
 			.mainnet(DogecoinMainNetParams::get, "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", 100_000L, "doge")
 			.test3(DogecoinTestNet3Params::get, "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0", 100_000L, 10_000L, null)
 			.regtest(() -> null, 100_000L, 10_000L)
 			.build();
 
-	public static final BitcoinyChainSpec DIGIBYTE = spec(4, "Digibyte", DIGIBYTE_CURRENCY_CODE, Coin.valueOf(100_000), 1_000_000)
+	public static final BitcoinyChainSpec DIGIBYTE = spec("DIGIBYTE", 4, "Digibyte", DIGIBYTE_CURRENCY_CODE, Coin.valueOf(100_000), 1_000_000)
 			.mainnet(DigibyteMainNetParams::get, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", 10_000L, "dgb")
 			.test3(TestNet3Params::get, "308ea0711d5763be2995670dd9ca9872753561285a84da1d58be58acaa822252", 10_000L, 10_000L, null)
 			.regtest(RegTestParams::get, 10_000L, 10_000L)
 			.build();
 
-	public static final BitcoinyChainSpec RAVENCOIN = spec(5, "Ravencoin", RAVENCOIN_CURRENCY_CODE, Coin.valueOf(1_125_000), 1_000_000)
+	public static final BitcoinyChainSpec RAVENCOIN = spec("RAVENCOIN", 5, "Ravencoin", RAVENCOIN_CURRENCY_CODE, Coin.valueOf(1_125_000), 1_000_000)
 			.mainnet(RavencoinMainNetParams::get, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", 1_000_000L, "rvn")
 			.test3(TestNet3Params::get, "000000ecfc5e6324a079542221d00e10362bdc894d56500c414060eea8a3ad5a", 1_000_000L, 1_000_000L, null)
 			.regtest(RegTestParams::get, 1_000_000L, 1_000_000L)
@@ -85,8 +85,8 @@ public final class BitcoinyChainSpecs {
 	private BitcoinyChainSpecs() {
 	}
 
-	private static SpecBuilder spec(int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
-		return new SpecBuilder(foreignBlockchainId, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount);
+	private static SpecBuilder spec(String canonicalName, int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
+		return new SpecBuilder(canonicalName, foreignBlockchainId, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount);
 	}
 
 	private static BitcoinyChainSpec.ElectrumServerRefreshConfig refresh(String networkName, String chain1209k) {
@@ -134,6 +134,7 @@ public final class BitcoinyChainSpecs {
 	}
 
 	private static final class SpecBuilder {
+		private final String canonicalName;
 		private final int foreignBlockchainId;
 		private final BitcoinyChainConfig config;
 		private final List<BitcoinyNetwork> networks = new ArrayList<>();
@@ -141,7 +142,8 @@ public final class BitcoinyChainSpecs {
 		private Long defaultSpendFeePerByte;
 		private BitcoinyChainSpec.AddressNormalizer addressNormalizer;
 
-		private SpecBuilder(int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
+		private SpecBuilder(String canonicalName, int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
+			this.canonicalName = canonicalName;
 			this.foreignBlockchainId = foreignBlockchainId;
 			this.config = new BitcoinyChainConfig(displayName, currencyCode, defaultFeePerKb, minimumOrderAmount,
 					BitcoinyChainConfig.defaultElectrumXPorts());
@@ -175,7 +177,7 @@ public final class BitcoinyChainSpecs {
 		}
 
 		private BitcoinyChainSpec build() {
-			return new BitcoinyChainSpec(this.foreignBlockchainId, this.config, this.networks, this.refreshConfigs,
+			return new BitcoinyChainSpec(this.canonicalName, this.foreignBlockchainId, this.config, this.networks, this.refreshConfigs,
 					this.defaultSpendFeePerByte, this.addressNormalizer);
 		}
 

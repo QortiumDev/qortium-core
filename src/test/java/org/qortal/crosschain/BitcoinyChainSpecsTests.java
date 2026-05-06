@@ -23,12 +23,25 @@ public class BitcoinyChainSpecsTests {
 
 	@Test
 	public void testSpecRegistryMatchesSupportedBitcoinyBlockchains() {
+		Set<String> specCanonicalNames = BitcoinyChainSpecs.all().stream()
+				.map(BitcoinyChainSpec::getCanonicalName)
+				.collect(Collectors.toSet());
+
 		Set<String> specCurrencyCodes = BitcoinyChainSpecs.all().stream()
 				.map(BitcoinyChainSpec::getCurrencyCode)
 				.collect(Collectors.toSet());
 
+		Set<String> supportedNames = SupportedBlockchain.bitcoinyBlockchains().stream()
+				.map(SupportedBlockchain::name)
+				.collect(Collectors.toSet());
+
 		Set<String> supportedCurrencyCodes = SupportedBlockchain.bitcoinyBlockchains().stream()
 				.map(SupportedBlockchain::getCurrencyCode)
+				.collect(Collectors.toSet());
+
+		Set<String> registeredNames = ForeignBlockchainRegistry.entries().stream()
+				.filter(ForeignBlockchainRegistry.Entry::isBitcoiny)
+				.map(ForeignBlockchainRegistry.Entry::name)
 				.collect(Collectors.toSet());
 
 		Set<String> registeredCurrencyCodes = ForeignBlockchainRegistry.entries().stream()
@@ -36,12 +49,16 @@ public class BitcoinyChainSpecsTests {
 				.map(ForeignBlockchainRegistry.Entry::getCurrencyCode)
 				.collect(Collectors.toSet());
 
+		assertEquals(specCanonicalNames, supportedNames);
+		assertEquals(specCanonicalNames, registeredNames);
 		assertEquals(supportedCurrencyCodes, specCurrencyCodes);
 		assertEquals(specCurrencyCodes, registeredCurrencyCodes);
 
 		for (SupportedBlockchain blockchain : SupportedBlockchain.bitcoinyBlockchains()) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(blockchain.getCurrencyCode());
 			assertNotNull(spec);
+			assertEquals(blockchain.name(), spec.getCanonicalName());
+			assertSame(spec, blockchain.getBitcoinySpec());
 			assertEquals(blockchain.getForeignBlockchainId(), spec.getForeignBlockchainId());
 			assertEquals(blockchain, SupportedBlockchain.fromForeignBlockchainId(spec.getForeignBlockchainId()));
 		}
@@ -52,6 +69,7 @@ public class BitcoinyChainSpecsTests {
 		for (SupportedBlockchain blockchain : SupportedBlockchain.values()) {
 			ForeignBlockchainRegistry.Entry byName = ForeignBlockchainRegistry.fromString(blockchain.name().toLowerCase());
 			assertNotNull(byName);
+			assertEquals(blockchain.name(), byName.name());
 			assertSame(blockchain, byName.getFacade());
 
 			ForeignBlockchainRegistry.Entry byCurrencyCode = ForeignBlockchainRegistry.fromString(blockchain.getCurrencyCode().toLowerCase());

@@ -11,6 +11,7 @@ import java.util.Map;
 
 public final class BitcoinyChainSpec {
 
+	private final String canonicalName;
 	private final int foreignBlockchainId;
 	private final BitcoinyChainConfig config;
 	private final Map<String, BitcoinyNetwork> networksByName;
@@ -20,11 +21,17 @@ public final class BitcoinyChainSpec {
 
 	public BitcoinyChainSpec(int foreignBlockchainId, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs) {
-		this(foreignBlockchainId, config, networks, electrumServerRefreshConfigs, null, null);
+		this(config.getCurrencyCode(), foreignBlockchainId, config, networks, electrumServerRefreshConfigs, null, null);
 	}
 
 	public BitcoinyChainSpec(int foreignBlockchainId, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer) {
+		this(config.getCurrencyCode(), foreignBlockchainId, config, networks, electrumServerRefreshConfigs, defaultSpendFeePerByte, addressNormalizer);
+	}
+
+	public BitcoinyChainSpec(String canonicalName, int foreignBlockchainId, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
+			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer) {
+		this.canonicalName = canonicalName;
 		this.foreignBlockchainId = foreignBlockchainId;
 		this.config = config;
 		this.networksByName = toNetworksByName(networks);
@@ -41,6 +48,10 @@ public final class BitcoinyChainSpec {
 		}
 
 		return Collections.unmodifiableMap(networksByName);
+	}
+
+	public String getCanonicalName() {
+		return this.canonicalName;
 	}
 
 	public int getForeignBlockchainId() {
