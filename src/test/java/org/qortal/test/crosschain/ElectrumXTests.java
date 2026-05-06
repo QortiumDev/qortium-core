@@ -2,7 +2,7 @@ package org.qortal.test.crosschain;
 
 import com.google.common.hash.HashCode;
 import org.bitcoinj.core.Address;
-import org.bitcoinj.params.TestNet3Params;
+import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.script.ScriptBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
@@ -257,7 +257,7 @@ public class ElectrumXTests {
 	public void testGetP2PKHBalance() throws ForeignBlockchainException {
 		ElectrumX electrumX = getLiveInstance();
 
-		Address address = Address.fromString(TestNet3Params.get(), "n3GNqMveyvaPvUbH469vDRadqpJMPc84JA");
+		Address address = Address.fromString(bitcoinTest3Params(), "n3GNqMveyvaPvUbH469vDRadqpJMPc84JA");
 		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
 		long balance = electrumX.getConfirmedBalance(script);
 
@@ -270,7 +270,7 @@ public class ElectrumXTests {
 	public void testGetP2SHBalance() throws ForeignBlockchainException {
 		ElectrumX electrumX = getLiveInstance();
 
-		Address address = Address.fromString(TestNet3Params.get(), "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF");
+		Address address = Address.fromString(bitcoinTest3Params(), "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF");
 		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
 		long balance = electrumX.getConfirmedBalance(script);
 
@@ -283,7 +283,7 @@ public class ElectrumXTests {
 	public void testGetUnspentOutputs() throws ForeignBlockchainException {
 		ElectrumX electrumX = getLiveInstance();
 
-		Address address = Address.fromString(TestNet3Params.get(), "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF");
+		Address address = Address.fromString(bitcoinTest3Params(), "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF");
 		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
 		List<UnspentOutput> unspentOutputs = electrumX.getUnspentOutputs(script, false);
 
@@ -350,12 +350,16 @@ public class ElectrumXTests {
 	public void testGetAddressTransactions() throws ForeignBlockchainException {
 		ElectrumX electrumX = getLiveInstance();
 
-		Address address = Address.fromString(TestNet3Params.get(), "2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE");
+		Address address = Address.fromString(bitcoinTest3Params(), "2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE");
 		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
 
 		List<TransactionHash> transactionHashes = electrumX.getAddressTransactions(script, false);
 
 		assertFalse(transactionHashes.isEmpty());
+	}
+
+	private static NetworkParameters bitcoinTest3Params() {
+		return BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3).getParams();
 	}
 
 	private static class MockElectrumX extends ElectrumX {

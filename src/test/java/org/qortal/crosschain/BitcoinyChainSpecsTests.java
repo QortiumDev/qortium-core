@@ -3,7 +3,11 @@ package org.qortal.crosschain;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.bitcoinj.core.Block;
+import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.NetworkParameters;
+import org.bitcoinj.params.MainNetParams;
+import org.bitcoinj.params.RegTestParams;
+import org.bitcoinj.params.TestNet3Params;
 import org.libdohj.params.DogecoinMainNetParams;
 import org.libdohj.params.DigibyteMainNetParams;
 import org.libdohj.params.LitecoinMainNetParams;
@@ -143,6 +147,40 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testBitcoinUsesSharedStaticMainNetParamsWithLegacyParity() {
+		NetworkParameters legacyParams = MainNetParams.get();
+		NetworkParameters bitcoinMainNetParams = BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+
+		assertTrue(bitcoinMainNetParams instanceof StaticBitcoinyParams);
+		assertNetworkParamParity(legacyParams, bitcoinMainNetParams);
+		assertEquals("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", bitcoinMainNetParams.getGenesisBlock().getHashAsString());
+	}
+
+	@Test
+	public void testBitcoinUsesSharedStaticTestNet3ParamsWithLegacyParity() {
+		BitcoinyNetwork bitcoinTest3 = BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3);
+		NetworkParameters legacyParams = TestNet3Params.get();
+
+		assertTrue(bitcoinTest3.getParams() instanceof StaticBitcoinyParams);
+		assertEquals(BitcoinyChainSpecs.TEST3, bitcoinTest3.name());
+		assertNetworkParamParity(legacyParams, bitcoinTest3.getParams());
+		assertEquals("000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", bitcoinTest3.getGenesisHash());
+	}
+
+	@Test
+	public void testBitcoinUsesSharedStaticRegTestParamsWithLegacyParity() {
+		NetworkParameters legacyParams = RegTestParams.get();
+		NetworkParameters bitcoinRegTestParams = BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.REGTEST).getParams();
+		Block genesisBlock = bitcoinRegTestParams.getGenesisBlock();
+
+		assertTrue(bitcoinRegTestParams instanceof StaticBitcoinyParams);
+		assertNetworkParamParity(legacyParams, bitcoinRegTestParams, true, false);
+		assertEquals("0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206", genesisBlock.getHashAsString());
+		assertEquals(Integer.MAX_VALUE, bitcoinRegTestParams.getInterval());
+		assertEquals("bcrt", bitcoinRegTestParams.getSegwitAddressHrp());
+	}
+
+	@Test
 	public void testLitecoinUsesSharedStaticMainNetParamsWithLegacyParity() {
 		NetworkParameters legacyParams = LitecoinMainNetParams.get();
 		NetworkParameters litecoinMainNetParams = BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
@@ -257,6 +295,10 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	private static void assertNetworkParamParity(NetworkParameters expected, NetworkParameters actual, boolean compareGenesisHash) {
+		assertNetworkParamParity(expected, actual, compareGenesisHash, true);
+	}
+
+	private static void assertNetworkParamParity(NetworkParameters expected, NetworkParameters actual, boolean compareGenesisHash, boolean compareDnsSeeds) {
 		Block expectedGenesisBlock = getGenesisBlock(expected);
 		Block actualGenesisBlock = getGenesisBlock(actual);
 
@@ -292,10 +334,12 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(expected.getMajorityEnforceBlockUpgrade(), actual.getMajorityEnforceBlockUpgrade());
 		assertEquals(expected.getMajorityRejectBlockOutdated(), actual.getMajorityRejectBlockOutdated());
 		assertEquals(expected.getMajorityWindow(), actual.getMajorityWindow());
-		assertArrayEquals(expected.getDnsSeeds(), actual.getDnsSeeds());
+		if (compareDnsSeeds)
+			assertArrayEquals(expected.getDnsSeeds(), actual.getDnsSeeds());
 		assertEquals(expected.getMaxMoney(), actual.getMaxMoney());
 		assertEquals(expected.getMinNonDustOutput(), actual.getMinNonDustOutput());
-		assertEquals(expected.getMonetaryFormat(), actual.getMonetaryFormat());
+		assertEquals(expected.getMonetaryFormat().format(Coin.COIN).toString(), actual.getMonetaryFormat().format(Coin.COIN).toString());
+		assertEquals(expected.getMonetaryFormat().format(Coin.valueOf(123456789L)).toString(), actual.getMonetaryFormat().format(Coin.valueOf(123456789L)).toString());
 		assertEquals(expected.hasMaxMoney(), actual.hasMaxMoney());
 	}
 

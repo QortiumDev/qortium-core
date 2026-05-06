@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: migrate Bitcoin to static params
+
+Moved Bitcoin mainnet, testnet3, and regtest away from bitcoinj's network parameter classes and onto the shared `StaticBitcoinyParams` model, including Bitcoin's genesis transaction, network headers, DNS seeds, BIP32 headers, segwit address prefixes, regtest settings, and deterministic parity tests against the previous params. This keeps BTC on the same reusable parameter path as the other Bitcoiny coins while preserving the existing `MAIN`, `TEST3`, and `REGTEST` network choices.
+
 ### 2026-05-06 - crosschain: migrate Litecoin to static params
 
 Moved Litecoin mainnet, testnet4, and regtest away from inherited libdohj parameter classes and onto the shared `StaticBitcoinyParams` model, including Litecoin's custom genesis transaction, scrypt chain hashes, network headers, DNS seeds, monetary settings, and deterministic tests for the static params. The Litecoin public test network is now named `TEST4` to match the genesis hash and Electrum servers already used by Qortium, and the old Litecoin P2SH address normalizer now uses shared static params instead of a libdohj subclass. Unsupported Dogecoin, DigiByte, Ravencoin, and Dash testnet/regtest choices are no longer advertised until those networks have real params and usable servers.
