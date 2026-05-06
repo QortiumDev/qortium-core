@@ -11,8 +11,6 @@ import org.bitcoinj.script.Script;
 import org.bitcoinj.utils.MonetaryFormat;
 import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.crosschain.ElectrumX.Server;
-import org.libdohj.params.DogecoinMainNetParams;
-import org.libdohj.params.DogecoinTestNet3Params;
 import org.libdohj.params.LitecoinMainNetParams;
 import org.libdohj.params.LitecoinRegTestParams;
 import org.libdohj.params.LitecoinTestNet3Params;
@@ -40,6 +38,36 @@ public final class BitcoinyChainSpecs {
 	private static final LitecoinMainNetParamsP2ShOverride LITECOIN_MAIN_NET_PARAMS_P2SH_OVERRIDE = new LitecoinMainNetParamsP2ShOverride(50);
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
+	private static final NetworkParameters DOGECOIN_MAIN_NET_PARAMS = dogecoinParams("org.dogecoin.production", "org.dogecoin.production")
+			.genesis(1386325540L, 99943L, 0x1e0ffff0L, "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691")
+			.genesisHeader(1L, "5b2a3f53f605d62c53e62932dac6925e3d74afa5a4b459745c36d42d0ed26a69")
+			.genesisTransaction(
+					"04ffff001d0104084e696e746f6e646f",
+					Coin.COIN.multiply(88L),
+					"040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9")
+			.port(22556)
+			.packetMagic(0xc0c0c0c0L)
+			.addressHeaders(30, 22, 158)
+			.coinbaseAndSubsidy(100, 100_000)
+			.bip32Headers(0x02facafd, 0x02fac398)
+			.majorityWindow(1500, 1900, 2000)
+			.dnsSeeds("seed.dogecoin.com", "seed.multidoge.org", "seed2.multidoge.org", "seed.doger.dogecoin.com")
+			.build();
+	private static final NetworkParameters DOGECOIN_TEST_NET_PARAMS = dogecoinParams("org.dogecoin.test", "test")
+			.genesis(1391503289L, 997879L, 0x1e0ffff0L, "bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e")
+			.genesisHeader(1L, "5b2a3f53f605d62c53e62932dac6925e3d74afa5a4b459745c36d42d0ed26a69")
+			.genesisTransaction(
+					"04ffff001d0104084e696e746f6e646f",
+					Coin.COIN.multiply(88L),
+					"040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9")
+			.port(44556)
+			.packetMagic(0xfcc1b7dcL)
+			.addressHeaders(113, 196, 241)
+			.coinbaseAndSubsidy(30, 100_000)
+			.bip32Headers(0x043587cf, 0x04358394)
+			.majorityWindow(501, 750, 1000)
+			.dnsSeeds("testseed.jrn.me.uk")
+			.build();
 	private static final NetworkParameters DIGIBYTE_MAIN_NET_PARAMS = digibyteParams("main", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
 			.genesis(1389388394L, 2447652L, 0x1e0ffff0L, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496")
 			.genesisHeader(1L, "72ddd9496b004221ed0557358846d9248ecd4c440ebd28ed901efc18757d0fad")
@@ -120,8 +148,8 @@ public final class BitcoinyChainSpecs {
 			.build();
 
 	public static final BitcoinyChainSpec DOGECOIN = spec("DOGECOIN", 3, "Dogecoin", DOGECOIN_CURRENCY_CODE, Coin.valueOf(1_000_000), 100_000_000L)
-			.mainnet(DogecoinMainNetParams::get, "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", 100_000L, "doge")
-			.test3(DogecoinTestNet3Params::get, "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0", 100_000L, 10_000L, null)
+			.mainnet(() -> DOGECOIN_MAIN_NET_PARAMS, "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", 100_000L, "doge")
+			.test3(() -> DOGECOIN_TEST_NET_PARAMS, "bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e", 100_000L, 10_000L, null)
 			.regtest(() -> null, 100_000L, 10_000L)
 			.build();
 
@@ -157,6 +185,20 @@ public final class BitcoinyChainSpecs {
 
 	private static SpecBuilder spec(String canonicalName, int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
 		return new SpecBuilder(canonicalName, foreignBlockchainId, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount);
+	}
+
+	private static StaticBitcoinyParams.Builder dogecoinParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "dogecoin")
+				.maxTarget(0x1e0fffffL)
+				.targetTimespan(14_400)
+				.interval(240)
+				.minNonDustOutput(Coin.COIN)
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, "DOGE")
+						.code(3, "mDOGE")
+						.code(7, "Koinu"))
+				.hasMaxMoney(false)
+				.difficultyValidationFailure("Dogecoin difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	private static StaticBitcoinyParams.Builder digibyteParams(String id, String paymentProtocolId) {

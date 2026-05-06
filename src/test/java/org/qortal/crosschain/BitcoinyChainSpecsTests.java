@@ -2,13 +2,17 @@ package org.qortal.crosschain;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.bitcoinj.core.Block;
 import org.bitcoinj.core.NetworkParameters;
+import org.libdohj.params.DogecoinMainNetParams;
+import org.libdohj.params.DogecoinTestNet3Params;
 import org.libdohj.params.DigibyteMainNetParams;
 import org.libdohj.params.RavencoinMainNetParams;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
 import org.qortal.test.common.Common;
 
+import java.lang.reflect.Field;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -123,12 +127,33 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testDogecoinUsesSharedStaticMainNetParamsWithLegacyParity() {
+		NetworkParameters legacyParams = DogecoinMainNetParams.get();
+		NetworkParameters dogecoinMainNetParams = BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+
+		assertTrue(dogecoinMainNetParams instanceof StaticBitcoinyParams);
+		assertNetworkParamParity(legacyParams, dogecoinMainNetParams);
+		assertEquals("1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", dogecoinMainNetParams.getGenesisBlock().getHashAsString());
+	}
+
+	@Test
+	public void testDogecoinUsesSharedStaticTestNetParamsWithLegacyParity() {
+		NetworkParameters legacyParams = DogecoinTestNet3Params.get();
+		NetworkParameters dogecoinTestNetParams = BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.TEST3).getParams();
+
+		assertTrue(dogecoinTestNetParams instanceof StaticBitcoinyParams);
+		assertNetworkParamParity(legacyParams, dogecoinTestNetParams);
+		assertEquals("bb0a78264637406b6360aad926284d544d7049f45189db5664f3c4d07350559e", dogecoinTestNetParams.getGenesisBlock().getHashAsString());
+	}
+
+	@Test
 	public void testRavencoinUsesSharedStaticParamsWithLegacyParity() {
 		NetworkParameters legacyParams = RavencoinMainNetParams.get();
 		NetworkParameters ravencoinMainNetParams = BitcoinyChainSpecs.RAVENCOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
 
 		assertTrue(ravencoinMainNetParams instanceof StaticBitcoinyParams);
-		assertNetworkParamParity(legacyParams, ravencoinMainNetParams);
+		// Legacy Ravencoin params expose bitcoinj's double-SHA header hash, while the chain uses X16R.
+		assertNetworkParamParity(legacyParams, ravencoinMainNetParams, false);
 		assertEquals("0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", ravencoinMainNetParams.getGenesisBlock().getHashAsString());
 	}
 
@@ -155,24 +180,32 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	private static void assertNetworkParamParity(NetworkParameters expected, NetworkParameters actual) {
+		assertNetworkParamParity(expected, actual, true);
+	}
+
+	private static void assertNetworkParamParity(NetworkParameters expected, NetworkParameters actual, boolean compareGenesisHash) {
+		Block expectedGenesisBlock = getGenesisBlock(expected);
+		Block actualGenesisBlock = getGenesisBlock(actual);
+
 		assertEquals(expected.getId(), actual.getId());
 		assertEquals(expected.getPaymentProtocolId(), actual.getPaymentProtocolId());
 		assertEquals(expected.getUriScheme(), actual.getUriScheme());
-		assertEquals(expected.getGenesisBlock().getHash(), actual.getGenesisBlock().getHash());
-		assertEquals(expected.getGenesisBlock().getVersion(), actual.getGenesisBlock().getVersion());
-		assertEquals(expected.getGenesisBlock().getMerkleRoot(), actual.getGenesisBlock().getMerkleRoot());
-		assertEquals(expected.getGenesisBlock().getTimeSeconds(), actual.getGenesisBlock().getTimeSeconds());
-		assertEquals(expected.getGenesisBlock().getDifficultyTarget(), actual.getGenesisBlock().getDifficultyTarget());
-		assertEquals(expected.getGenesisBlock().getNonce(), actual.getGenesisBlock().getNonce());
-		assertEquals(expected.getGenesisBlock().hasTransactions(), actual.getGenesisBlock().hasTransactions());
-		assertEquals(expected.getGenesisBlock().getTransactions().size(), actual.getGenesisBlock().getTransactions().size());
-		for (int index = 0; index < expected.getGenesisBlock().getTransactions().size(); index++)
-			assertEquals(expected.getGenesisBlock().getTransactions().get(index).getHash(), actual.getGenesisBlock().getTransactions().get(index).getHash());
+		if (compareGenesisHash)
+			assertEquals(expectedGenesisBlock.getHash(), actualGenesisBlock.getHash());
+		assertEquals(expectedGenesisBlock.getVersion(), actualGenesisBlock.getVersion());
+		assertEquals(expectedGenesisBlock.getMerkleRoot(), actualGenesisBlock.getMerkleRoot());
+		assertEquals(expectedGenesisBlock.getTimeSeconds(), actualGenesisBlock.getTimeSeconds());
+		assertEquals(expectedGenesisBlock.getDifficultyTarget(), actualGenesisBlock.getDifficultyTarget());
+		assertEquals(expectedGenesisBlock.getNonce(), actualGenesisBlock.getNonce());
+		assertEquals(expectedGenesisBlock.hasTransactions(), actualGenesisBlock.hasTransactions());
+		assertEquals(expectedGenesisBlock.getTransactions().size(), actualGenesisBlock.getTransactions().size());
+		for (int index = 0; index < expectedGenesisBlock.getTransactions().size(); index++)
+			assertEquals(expectedGenesisBlock.getTransactions().get(index).getHash(), actualGenesisBlock.getTransactions().get(index).getHash());
 		assertEquals(expected.getMaxTarget(), actual.getMaxTarget());
 		assertEquals(expected.getTargetTimespan(), actual.getTargetTimespan());
 		assertEquals(expected.getInterval(), actual.getInterval());
 		assertEquals(expected.getPort(), actual.getPort());
-		assertEquals(expected.getPacketMagic(), actual.getPacketMagic());
+		assertEquals(expected.getPacketMagic() & 0xffffffffL, actual.getPacketMagic() & 0xffffffffL);
 		assertEquals(expected.getAddressHeader(), actual.getAddressHeader());
 		assertEquals(expected.getP2SHHeader(), actual.getP2SHHeader());
 		assertEquals(expected.getDumpedPrivateKeyHeader(), actual.getDumpedPrivateKeyHeader());
@@ -191,5 +224,31 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(expected.getMinNonDustOutput(), actual.getMinNonDustOutput());
 		assertEquals(expected.getMonetaryFormat(), actual.getMonetaryFormat());
 		assertEquals(expected.hasMaxMoney(), actual.hasMaxMoney());
+	}
+
+	private static Block getGenesisBlock(NetworkParameters params) {
+		try {
+			return params.getGenesisBlock();
+		} catch (AbstractMethodError e) {
+			return getLegacyGenesisBlock(params);
+		}
+	}
+
+	private static Block getLegacyGenesisBlock(NetworkParameters params) {
+		Class<?> paramsClass = params.getClass();
+
+		while (paramsClass != null) {
+			try {
+				Field genesisBlockField = paramsClass.getDeclaredField("genesisBlock");
+				genesisBlockField.setAccessible(true);
+				return (Block) genesisBlockField.get(params);
+			} catch (NoSuchFieldException e) {
+				paramsClass = paramsClass.getSuperclass();
+			} catch (ReflectiveOperationException e) {
+				throw new AssertionError("Unable to read legacy genesis block for " + params.getId(), e);
+			}
+		}
+
+		throw new AssertionError("No legacy genesis block field found for " + params.getId());
 	}
 }

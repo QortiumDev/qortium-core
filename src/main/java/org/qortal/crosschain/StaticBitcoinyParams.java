@@ -38,6 +38,7 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 	private final Coin maxMoney;
 	private final Coin minNonDustOutput;
 	private final MonetaryFormat monetaryFormat;
+	private final Boolean hasMaxMoney;
 
 	private StaticBitcoinyParams(Builder builder) {
 		this.id = builder.id;
@@ -56,6 +57,7 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 		this.maxMoney = builder.maxMoney;
 		this.minNonDustOutput = builder.minNonDustOutput;
 		this.monetaryFormat = builder.monetaryFormat;
+		this.hasMaxMoney = builder.hasMaxMoney;
 
 		this.targetTimespan = builder.targetTimespan;
 		this.interval = builder.interval;
@@ -86,16 +88,22 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 	public Block getGenesisBlock() {
 		synchronized (this.genesisHash) {
 			if (this.genesisBlock == null) {
+				Block generatedGenesisBlock;
 				if (this.genesisMerkleRoot == null) {
-					this.genesisBlock = Block.createGenesis(this);
-					this.genesisBlock.setDifficultyTarget(this.genesisDifficultyTarget);
-					this.genesisBlock.setTime(this.genesisTime);
-					this.genesisBlock.setNonce(this.genesisNonce);
+					generatedGenesisBlock = Block.createGenesis(this);
+					generatedGenesisBlock.setDifficultyTarget(this.genesisDifficultyTarget);
+					generatedGenesisBlock.setTime(this.genesisTime);
+					generatedGenesisBlock.setNonce(this.genesisNonce);
 				} else {
 					List<Transaction> genesisTransactions = this.genesisCoinbaseScript == null ? List.of() : List.of(createGenesisTransaction());
-					this.genesisBlock = new Block(this, this.genesisVersion, Sha256Hash.ZERO_HASH, this.genesisMerkleRoot,
+					generatedGenesisBlock = new Block(this, this.genesisVersion, Sha256Hash.ZERO_HASH, this.genesisMerkleRoot,
 							this.genesisTime, this.genesisDifficultyTarget, this.genesisNonce, genesisTransactions);
 				}
+
+				List<Transaction> transactions = generatedGenesisBlock.getTransactions() == null ? List.of() : generatedGenesisBlock.getTransactions();
+				this.genesisBlock = new StaticGenesisBlock(this, generatedGenesisBlock.getVersion(), generatedGenesisBlock.getPrevBlockHash(),
+						generatedGenesisBlock.getMerkleRoot(), generatedGenesisBlock.getTimeSeconds(), generatedGenesisBlock.getDifficultyTarget(),
+						generatedGenesisBlock.getNonce(), transactions, this.genesisHash);
 
 				if (!this.genesisBlock.getHash().equals(this.genesisHash))
 					throw new IllegalStateException("Invalid genesis hash for " + this.id);
@@ -147,6 +155,11 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 	}
 
 	@Override
+	public boolean hasMaxMoney() {
+		return this.hasMaxMoney != null ? this.hasMaxMoney : super.hasMaxMoney();
+	}
+
+	@Override
 	public void checkDifficultyTransitions(StoredBlock storedPrev, Block next, BlockStore blockStore) throws VerificationException, BlockStoreException {
 		throw new VerificationException(this.difficultyValidationFailure);
 	}
@@ -188,6 +201,7 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 		private Coin maxMoney;
 		private Coin minNonDustOutput;
 		private MonetaryFormat monetaryFormat;
+		private Boolean hasMaxMoney;
 
 		private Builder(String id, String paymentProtocolId, String uriScheme) {
 			this.id = id;
@@ -298,6 +312,11 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 			return this;
 		}
 
+		Builder hasMaxMoney(boolean hasMaxMoney) {
+			this.hasMaxMoney = hasMaxMoney;
+			return this;
+		}
+
 		Builder difficultyValidationFailure(String difficultyValidationFailure) {
 			this.difficultyValidationFailure = difficultyValidationFailure;
 			return this;
@@ -305,6 +324,26 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 
 		StaticBitcoinyParams build() {
 			return new StaticBitcoinyParams(this);
+		}
+	}
+
+	private static final class StaticGenesisBlock extends Block {
+		private final Sha256Hash configuredHash;
+
+		private StaticGenesisBlock(NetworkParameters params, long version, Sha256Hash prevBlockHash, Sha256Hash merkleRoot, long time, long difficultyTarget, long nonce,
+				List<Transaction> transactions, Sha256Hash configuredHash) {
+			super(params, version, prevBlockHash, merkleRoot, time, difficultyTarget, nonce, transactions);
+			this.configuredHash = configuredHash;
+		}
+
+		@Override
+		public Sha256Hash getHash() {
+			return this.configuredHash;
+		}
+
+		@Override
+		public String getHashAsString() {
+			return this.configuredHash.toString();
 		}
 	}
 }

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: migrate Dogecoin to static params
+
+Moved Dogecoin mainnet and testnet away from the inherited libdohj parameter classes and onto the shared `StaticBitcoinyParams` model, including Dogecoin's custom genesis transaction, no-fixed-cap money setting, network headers, DNS seeds, and parity tests against the previous params. This also corrects the registered Dogecoin testnet genesis hash so the DOGE testnet spec points at Dogecoin's actual testnet instead of the inherited Litecoin testnet value, and tightens the shared static genesis handling so non-double-SHA chains like Dash and Ravencoin can expose their configured chain hashes consistently in tests.
+
 ### 2026-05-06 - crosschain: migrate DigiByte to static params
 
 Moved DigiByte mainnet away from the inherited libdohj parameter class and onto the shared `StaticBitcoinyParams` model, reusing the custom genesis transaction/header support introduced for Ravencoin and adding parity tests against the previous DigiByte params. This continues reducing production reliance on altcoinj/libdohj-specific params classes while keeping runtime wallet, HTLC, and ACCT behavior covered by the shared Bitcoiny tests.
