@@ -194,7 +194,11 @@ public class TradeBot implements Listener {
 	 */
 	public byte[] createTrade(Repository repository, TradeBotCreateRequest tradeBotCreateRequest) throws DataException {
 		// Fetch latest ACCT version for requested foreign blockchain
-		ACCT acct = tradeBotCreateRequest.foreignBlockchain.getLatestAcct();
+		ForeignBlockchainRegistry.Entry foreignBlockchain = tradeBotCreateRequest.resolveForeignBlockchain();
+		if (foreignBlockchain == null)
+			throw new DataException("Unsupported foreign blockchain");
+
+		ACCT acct = foreignBlockchain.getLatestAcct();
 
 		AcctTradeBot acctTradeBot = findTradeBotForAcct(acct);
 		if (acctTradeBot == null)

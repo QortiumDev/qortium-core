@@ -25,6 +25,7 @@ import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.Bitcoiny;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.ForeignBlockchain;
 import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.crypto.Crypto;
@@ -119,10 +120,11 @@ public class CrossChainTradeBotResource {
 	public String tradeBotCreator(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotCreateRequest tradeBotCreateRequest) {
 		Security.checkApiCallAllowed(request);
 
-		if (tradeBotCreateRequest.foreignBlockchain == null)
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = tradeBotCreateRequest.resolveForeignBlockchain();
+		if (foreignBlockchainEntry == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-		ForeignBlockchain foreignBlockchain = tradeBotCreateRequest.foreignBlockchain.getInstance();
+		ForeignBlockchain foreignBlockchain = foreignBlockchainEntry.getInstance();
 
 		if (!foreignBlockchain.isValidAddress(tradeBotCreateRequest.receivingAddress))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);

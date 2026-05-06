@@ -1,7 +1,7 @@
 package org.qortal.api.model.crosschain;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import org.qortal.crosschain.SupportedBlockchain;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
@@ -21,8 +21,8 @@ public class TradeBotCreateRequest {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public long fundingNativeAmount;
 
-	@Schema(description = "Foreign blockchain", example = "BITCOIN", implementation = SupportedBlockchain.class)
-	public SupportedBlockchain foreignBlockchain;
+	@Schema(description = "Foreign blockchain name or currency code", example = "BITCOIN")
+	public String foreignBlockchain;
 
 	@Schema(description = "Foreign blockchain amount wanted in return", example = "0.00864200", type = "number")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
@@ -35,6 +35,10 @@ public class TradeBotCreateRequest {
 	public String receivingAddress;
 
 	public TradeBotCreateRequest() {
+	}
+
+	public ForeignBlockchainRegistry.Entry resolveForeignBlockchain() {
+		return ForeignBlockchainRegistry.fromString(this.foreignBlockchain);
 	}
 
 }

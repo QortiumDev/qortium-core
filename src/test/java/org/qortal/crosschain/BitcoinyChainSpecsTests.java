@@ -11,6 +11,7 @@ import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 public class BitcoinyChainSpecsTests {
@@ -30,7 +31,13 @@ public class BitcoinyChainSpecsTests {
 				.map(SupportedBlockchain::getCurrencyCode)
 				.collect(Collectors.toSet());
 
+		Set<String> registeredCurrencyCodes = ForeignBlockchainRegistry.entries().stream()
+				.filter(ForeignBlockchainRegistry.Entry::isBitcoiny)
+				.map(ForeignBlockchainRegistry.Entry::getCurrencyCode)
+				.collect(Collectors.toSet());
+
 		assertEquals(supportedCurrencyCodes, specCurrencyCodes);
+		assertEquals(specCurrencyCodes, registeredCurrencyCodes);
 
 		for (SupportedBlockchain blockchain : SupportedBlockchain.bitcoinyBlockchains()) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(blockchain.getCurrencyCode());
@@ -38,6 +45,26 @@ public class BitcoinyChainSpecsTests {
 			assertEquals(blockchain.getForeignBlockchainId(), spec.getForeignBlockchainId());
 			assertEquals(blockchain, SupportedBlockchain.fromForeignBlockchainId(spec.getForeignBlockchainId()));
 		}
+	}
+
+	@Test
+	public void testForeignBlockchainRegistryResolvesNamesCurrencyCodesAndBitcoinyIds() {
+		for (SupportedBlockchain blockchain : SupportedBlockchain.values()) {
+			ForeignBlockchainRegistry.Entry byName = ForeignBlockchainRegistry.fromString(blockchain.name().toLowerCase());
+			assertNotNull(byName);
+			assertSame(blockchain, byName.getFacade());
+
+			ForeignBlockchainRegistry.Entry byCurrencyCode = ForeignBlockchainRegistry.fromString(blockchain.getCurrencyCode().toLowerCase());
+			assertSame(byName, byCurrencyCode);
+
+			assertSame(blockchain, SupportedBlockchain.fromString(blockchain.getCurrencyCode()));
+
+			if (blockchain.isBitcoiny())
+				assertSame(byName, ForeignBlockchainRegistry.fromForeignBlockchainId(blockchain.getForeignBlockchainId()));
+		}
+
+		assertNull(ForeignBlockchainRegistry.fromString("unknown"));
+		assertNull(ForeignBlockchainRegistry.fromString("   "));
 	}
 
 	@Test

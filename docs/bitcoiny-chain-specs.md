@@ -26,6 +26,8 @@ Missing entries default to `MAIN`. Supported network names are currently `MAIN`,
 
 Adding another BTC-like coin should start with a new `BitcoinyChainSpec` builder entry. The builder keeps the common mainnet, testnet, regtest, Electrum refresh, fee, and minimum-order wiring in one place, so a new coin entry should mostly supply chain metadata and any needed explicit hooks. The registry then feeds network resolution, runtime startup, supported-chain lookup, and the Electrum server refresh tool. Coin-specific behavior should be added to the spec as an explicit hook, as with Bitcoin's default spend fee override and Litecoin's P2SH address normalization.
 
+`ForeignBlockchainRegistry` is the central lookup point for crosschain runtime code. It resolves canonical names and currency codes, maps Bitcoiny foreign-chain ids back to registered chains, exposes the shared ACCT registry, and keeps `SupportedBlockchain` as a transitional facade for older API/query plumbing.
+
 ## Tests
 
 The shared BTC-like wallet, HTLC, and fee tests live in `RegisteredBitcoinyTests`. Add a fixture there for any new registered Bitcoiny chain so the common deterministic coverage runs without creating another per-coin test class.

@@ -102,8 +102,8 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 	 * @throws DataException
 	 */
 	public byte[] createTrade(Repository repository, TradeBotCreateRequest tradeBotCreateRequest) throws DataException {
-		SupportedBlockchain supportedBlockchain = tradeBotCreateRequest.foreignBlockchain;
-		Bitcoiny bitcoiny = getBitcoiny(supportedBlockchain);
+		ForeignBlockchainRegistry.Entry foreignBlockchain = tradeBotCreateRequest.resolveForeignBlockchain();
+		Bitcoiny bitcoiny = getBitcoiny(foreignBlockchain);
 		String foreignCurrencyCode = bitcoiny.getCurrencyCode();
 
 		byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
@@ -140,7 +140,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		String description = String.format("NATIVE/%s cross-chain trade", foreignCurrencyCode);
 		String aTType = "ACCT";
 		String tags = String.format("ACCT NATIVE %s", foreignCurrencyCode);
-		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(supportedBlockchain, tradeNativeAddress, tradeForeignPublicKeyHash, tradeBotCreateRequest.nativeAmount,
+		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(foreignBlockchain.getFacade(), tradeNativeAddress, tradeForeignPublicKeyHash, tradeBotCreateRequest.nativeAmount,
 				tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
 		long amount = tradeBotCreateRequest.fundingNativeAmount;
 
@@ -158,7 +158,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 				creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.nativeAmount,
 				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
 				null, null,
-				supportedBlockchain.name(),
+				foreignBlockchain.name(),
 				tradeForeignPublicKey, tradeForeignPublicKeyHash,
 				tradeBotCreateRequest.foreignAmount, null, null, null, foreignReceivingAccountInfo);
 
@@ -887,11 +887,11 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		return bitcoiny;
 	}
 
-	private Bitcoiny getBitcoiny(SupportedBlockchain supportedBlockchain) throws DataException {
-		if (supportedBlockchain == null || !supportedBlockchain.isBitcoiny())
+	private Bitcoiny getBitcoiny(ForeignBlockchainRegistry.Entry foreignBlockchain) throws DataException {
+		if (foreignBlockchain == null || !foreignBlockchain.isBitcoiny())
 			throw new DataException("Unsupported Bitcoiny blockchain");
 
-		Bitcoiny bitcoiny = supportedBlockchain.getBitcoinyInstance();
+		Bitcoiny bitcoiny = foreignBlockchain.getBitcoinyInstance();
 		if (bitcoiny == null)
 			throw new DataException("Unsupported Bitcoiny blockchain");
 

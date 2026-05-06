@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: add foreign blockchain registry
+
+Added a central foreign blockchain registry that resolves chain names, currency codes, Bitcoiny foreign-chain ids, and ACCT implementations from one place while keeping `SupportedBlockchain` as a temporary compatibility facade. Trade-bot offer creation now accepts a foreign blockchain string, so the API can move toward data-driven chain registration instead of requiring callers to serialize a Java enum. Bitcoiny wallet creation now also propagates the selected bitcoinj context consistently, which keeps registered multi-coin tests isolated when BTC-like chains run in one JVM.
+
 ### 2026-05-06 - crosschain: streamline Bitcoiny spec definitions
 
 Condensed the Bitcoiny chain specification registry with a reusable builder so each BTC-like chain now supplies mostly metadata instead of repeating the same mainnet, testnet, regtest, fee, and Electrum refresh wiring. Remaining user-facing crosschain text was also made more generic so the API describes foreign-chain funds and supported Bitcoiny chains instead of naming only the originally supported coins.

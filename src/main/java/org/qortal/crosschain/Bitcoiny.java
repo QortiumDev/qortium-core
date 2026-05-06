@@ -588,6 +588,7 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	 * @throws ForeignBlockchainException
 	 */
 	public List<String> getSpendingCandidateAddresses(String key58) throws ForeignBlockchainException {
+		Context.propagate(this.bitcoinjContext);
 
 		Wallet wallet = Wallet.fromWatchingKeyB58(this.params, key58, DeterministicHierarchy.BIP32_STANDARDISATION_TIME_SECS);
 		wallet.setUTXOProvider(new WalletAwareUTXOProvider(this, wallet));
@@ -1858,6 +1859,8 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	}
 
 	protected Wallet walletFromDeterministicKey58(String key58) {
+		Context.propagate(this.bitcoinjContext);
+
 		DeterministicKey dKey = DeterministicKey.deserializeB58(null, key58, this.params);
 
 		if (dKey.hasPrivKey())
