@@ -59,10 +59,6 @@ public class CrossChainHtlcResource {
 			@PathParam("locktime") int lockTime,
 			@PathParam("redeemPKH") String redeemPKH,
 			@PathParam("hashOfSecret") String hashOfSecret) {
-		SupportedBlockchain blockchain = SupportedBlockchain.valueOf(blockchainName);
-		if (blockchain == null)
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
-
 		byte[] refunderPubKeyHash;
 		byte[] redeemerPubKeyHash;
 		byte[] decodedHashOfSecret;
@@ -87,7 +83,7 @@ public class CrossChainHtlcResource {
 
 		byte[] redeemScript = BitcoinyHTLC.buildScript(refunderPubKeyHash, lockTime, redeemerPubKeyHash, decodedHashOfSecret);
 
-		Bitcoiny bitcoiny = (Bitcoiny) blockchain.getInstance();
+		Bitcoiny bitcoiny = getBitcoiny(blockchainName);
 
 		return bitcoiny.deriveP2shAddress(redeemScript);
 	}
@@ -113,10 +109,6 @@ public class CrossChainHtlcResource {
 			@PathParam("hashOfSecret") String hashOfSecret) {
 		Security.checkApiCallAllowed(request);
 
-		SupportedBlockchain blockchain = SupportedBlockchain.valueOf(blockchainName);
-		if (blockchain == null)
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
-
 		byte[] refunderPubKeyHash;
 		byte[] redeemerPubKeyHash;
 		byte[] decodedHashOfSecret;
@@ -141,7 +133,7 @@ public class CrossChainHtlcResource {
 
 		byte[] redeemScript = BitcoinyHTLC.buildScript(refunderPubKeyHash, lockTime, redeemerPubKeyHash, decodedHashOfSecret);
 
-		Bitcoiny bitcoiny = (Bitcoiny) blockchain.getInstance();
+		Bitcoiny bitcoiny = getBitcoiny(blockchainName);
 
 		String p2shAddress = bitcoiny.deriveP2shAddress(redeemScript);
 
@@ -198,7 +190,7 @@ public class CrossChainHtlcResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -280,7 +272,7 @@ public class CrossChainHtlcResource {
 					continue;
 				}
 
-				ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
+				ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
 				if (acct == null) {
 					continue;
 				}
@@ -340,7 +332,7 @@ public class CrossChainHtlcResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -452,7 +444,7 @@ public class CrossChainHtlcResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -516,7 +508,7 @@ public class CrossChainHtlcResource {
 					continue;
 				}
 
-				ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
+				ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
 				if (acct == null) {
 					continue;
 				}
@@ -566,7 +558,7 @@ public class CrossChainHtlcResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -700,7 +692,7 @@ public class CrossChainHtlcResource {
 	}
 
 	private Bitcoiny getBitcoiny(String foreignBlockchain) {
-		Bitcoiny bitcoiny = SupportedBlockchain.getBitcoinyInstance(foreignBlockchain);
+		Bitcoiny bitcoiny = ForeignBlockchainRegistry.getBitcoinyInstance(foreignBlockchain);
 		if (bitcoiny == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 

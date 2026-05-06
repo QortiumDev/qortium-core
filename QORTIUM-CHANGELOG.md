@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: route backend ACCT lookups through registry
+
+Added direct `ForeignBlockchainRegistry` helpers for registered Bitcoiny entries, entry names, and required-name validation, then moved trade-bot, presence, and HTLC lookup paths off the temporary `SupportedBlockchain` facade. This keeps new backend crosschain code pointed at the data-driven registry while the enum remains only as compatibility plumbing for older callers.
+
 ### 2026-05-06 - crosschain: resolve Bitcoiny ACCT chains through registry
 
 Moved Bitcoiny ACCT build and parse logic off the `SupportedBlockchain` facade so shared Bitcoiny trade ATs now accept registry entries and resolve stored foreign-chain ids through `ForeignBlockchainRegistry`. This keeps the core ACCT format path data-driven and makes future BTC-like coins depend on registry metadata instead of enum-specific build helpers.

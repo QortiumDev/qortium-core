@@ -66,9 +66,20 @@ public final class ForeignBlockchainRegistry {
 		return ENTRIES;
 	}
 
-	public static EnumSet<SupportedBlockchain> bitcoinyFacades() {
+	public static Collection<Entry> bitcoinyEntries() {
 		return ENTRIES.stream()
 				.filter(Entry::isBitcoiny)
+				.collect(Collectors.toUnmodifiableList());
+	}
+
+	public static Collection<String> entryNames() {
+		return ENTRIES.stream()
+				.map(Entry::name)
+				.collect(Collectors.toUnmodifiableList());
+	}
+
+	public static EnumSet<SupportedBlockchain> bitcoinyFacades() {
+		return bitcoinyEntries().stream()
 				.map(Entry::getFacade)
 				.filter(Objects::nonNull)
 				.collect(Collectors.toCollection(() -> EnumSet.noneOf(SupportedBlockchain.class)));
@@ -83,6 +94,14 @@ public final class ForeignBlockchainRegistry {
 			return null;
 
 		return ENTRIES_BY_NAME.get(normalizedName);
+	}
+
+	public static Entry fromStringRequired(String name) {
+		Entry entry = fromString(name);
+		if (entry == null)
+			throw new IllegalArgumentException("Unsupported foreign blockchain: " + name);
+
+		return entry;
 	}
 
 	public static Entry fromRegisteredBitcoinyString(String name) {

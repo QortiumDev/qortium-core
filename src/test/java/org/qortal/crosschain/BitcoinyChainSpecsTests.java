@@ -13,6 +13,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 public class BitcoinyChainSpecsTests {
 
@@ -39,20 +40,23 @@ public class BitcoinyChainSpecsTests {
 				.map(SupportedBlockchain::getCurrencyCode)
 				.collect(Collectors.toSet());
 
-		Set<String> registeredNames = ForeignBlockchainRegistry.entries().stream()
-				.filter(ForeignBlockchainRegistry.Entry::isBitcoiny)
+		Set<String> registeredNames = ForeignBlockchainRegistry.bitcoinyEntries().stream()
 				.map(ForeignBlockchainRegistry.Entry::name)
 				.collect(Collectors.toSet());
 
-		Set<String> registeredCurrencyCodes = ForeignBlockchainRegistry.entries().stream()
-				.filter(ForeignBlockchainRegistry.Entry::isBitcoiny)
+		Set<String> registeredCurrencyCodes = ForeignBlockchainRegistry.bitcoinyEntries().stream()
 				.map(ForeignBlockchainRegistry.Entry::getCurrencyCode)
+				.collect(Collectors.toSet());
+
+		Set<String> entryNames = ForeignBlockchainRegistry.entryNames().stream()
 				.collect(Collectors.toSet());
 
 		assertEquals(specCanonicalNames, supportedNames);
 		assertEquals(specCanonicalNames, registeredNames);
 		assertEquals(supportedCurrencyCodes, specCurrencyCodes);
 		assertEquals(specCurrencyCodes, registeredCurrencyCodes);
+		assertTrue(entryNames.containsAll(supportedNames));
+		assertTrue(entryNames.contains(SupportedBlockchain.PIRATECHAIN.name()));
 
 		for (SupportedBlockchain blockchain : SupportedBlockchain.bitcoinyBlockchains()) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(blockchain.getCurrencyCode());
@@ -74,6 +78,7 @@ public class BitcoinyChainSpecsTests {
 
 			ForeignBlockchainRegistry.Entry byCurrencyCode = ForeignBlockchainRegistry.fromString(blockchain.getCurrencyCode().toLowerCase());
 			assertSame(byName, byCurrencyCode);
+			assertSame(byName, ForeignBlockchainRegistry.fromStringRequired(blockchain.getCurrencyCode()));
 
 			assertSame(blockchain, SupportedBlockchain.fromString(blockchain.getCurrencyCode()));
 
@@ -83,6 +88,11 @@ public class BitcoinyChainSpecsTests {
 
 		assertNull(ForeignBlockchainRegistry.fromString("unknown"));
 		assertNull(ForeignBlockchainRegistry.fromString("   "));
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void testForeignBlockchainRegistryRejectsUnknownRequiredName() {
+		ForeignBlockchainRegistry.fromStringRequired("unknown");
 	}
 
 	@Test

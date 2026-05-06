@@ -7,7 +7,7 @@ import org.qortal.account.Account;
 import org.qortal.controller.OnlineAccountsManager;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.ACCT;
-import org.qortal.crosschain.SupportedBlockchain;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
 import org.qortal.data.at.ATData;
@@ -170,7 +170,7 @@ public class PresenceTransaction extends Transaction {
 		if (!Crypto.verify(this.transactionData.getCreatorPublicKey(), timestampSignature, timestampBytes))
 			return ValidationResult.INVALID_TIMESTAMP_SIGNATURE;
 
-		Map<ByteArray, Supplier<ACCT>> acctSuppliersByCodeHash = SupportedBlockchain.getAcctMap();
+		Map<ByteArray, Supplier<ACCT>> acctSuppliersByCodeHash = ForeignBlockchainRegistry.getAcctMap();
 		Set<ByteArray> codeHashes = acctSuppliersByCodeHash.keySet();
 		boolean isExecutable = true;
 

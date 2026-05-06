@@ -148,7 +148,7 @@ public class TradeBot implements Listener {
 		if (codeHash == null)
 			return null;
 
-		return SupportedBlockchain.getAcctByCodeHash(codeHash);
+		return ForeignBlockchainRegistry.getAcctByCodeHash(codeHash);
 	}
 
 	public CrossChainTradeData populateTradeData(Repository repository, ATData atData) throws DataException {
@@ -277,7 +277,7 @@ public class TradeBot implements Listener {
 
 		boolean canDelete = false;
 
-		ACCT acct = SupportedBlockchain.getAcctByName(tradeBotData.getAcctName());
+		ACCT acct = ForeignBlockchainRegistry.getAcctByName(tradeBotData.getAcctName());
 		if (acct == null)
 			// We can't/no longer support this ACCT
 			canDelete = true;
@@ -319,7 +319,7 @@ public class TradeBot implements Listener {
 			for (TradeBotData tradeBotData : allTradeBotData)
 				try (final Repository repository = RepositoryManager.getRepository()) {
 					// Find ACCT-specific trade-bot for this entry
-					ACCT acct = SupportedBlockchain.getAcctByName(tradeBotData.getAcctName());
+					ACCT acct = ForeignBlockchainRegistry.getAcctByName(tradeBotData.getAcctName());
 					if (acct == null) {
 						LOGGER.debug(() -> String.format("Couldn't find ACCT matching name %s", tradeBotData.getAcctName()));
 						continue;
@@ -613,7 +613,7 @@ public class TradeBot implements Listener {
 			// Timestamps after this are too far into the future
 			long futureThreshold = now + PRESENCE_LIFETIME;
 
-			Map<ByteArray, Supplier<ACCT>> acctSuppliersByCodeHash = SupportedBlockchain.getAcctMap();
+			Map<ByteArray, Supplier<ACCT>> acctSuppliersByCodeHash = ForeignBlockchainRegistry.getAcctMap();
 
 			int newCount = 0;
 

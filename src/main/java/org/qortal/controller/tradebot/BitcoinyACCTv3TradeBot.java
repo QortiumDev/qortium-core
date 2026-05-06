@@ -880,7 +880,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 	}
 
 	private Bitcoiny getBitcoiny(String foreignBlockchain) throws DataException {
-		Bitcoiny bitcoiny = SupportedBlockchain.getRegisteredBitcoinyInstance(foreignBlockchain);
+		Bitcoiny bitcoiny = ForeignBlockchainRegistry.getRegisteredBitcoinyInstance(foreignBlockchain);
 		if (bitcoiny == null)
 			throw new DataException("Unsupported Bitcoiny blockchain");
 
