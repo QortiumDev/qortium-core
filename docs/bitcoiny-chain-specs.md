@@ -28,6 +28,8 @@ Adding another BTC-like coin should start with a new `BitcoinyChainSpec` builder
 
 `ForeignBlockchainRegistry` is the central lookup point for crosschain runtime code. It resolves canonical names and currency codes, maps Bitcoiny foreign-chain ids back to registered chains, owns the runtime instance definitions, exposes the shared ACCT registry, and keeps `SupportedBlockchain` as a transitional facade for older API/query plumbing.
 
+The shared Bitcoiny ACCT stores only the registered foreign-chain id in AT data. Build and parse paths resolve that id through `ForeignBlockchainRegistry`, so the ACCT code does not depend on the temporary `SupportedBlockchain` enum facade.
+
 ## Tests
 
 The shared BTC-like wallet, HTLC, and fee tests live in `RegisteredBitcoinyTests`. Add a fixture there for any new registered Bitcoiny chain so the common deterministic coverage runs without creating another per-coin test class.

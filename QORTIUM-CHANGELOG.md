@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: resolve Bitcoiny ACCT chains through registry
+
+Moved Bitcoiny ACCT build and parse logic off the `SupportedBlockchain` facade so shared Bitcoiny trade ATs now accept registry entries and resolve stored foreign-chain ids through `ForeignBlockchainRegistry`. This keeps the core ACCT format path data-driven and makes future BTC-like coins depend on registry metadata instead of enum-specific build helpers.
+
 ### 2026-05-06 - crosschain: move Bitcoiny lifecycle into registry
 
 Moved registered Bitcoiny runtime ownership out of the `SupportedBlockchain` enum and into `ForeignBlockchainRegistry`, which now builds BTC-like entries directly from `BitcoinyChainSpecs` and the PirateChain entry explicitly. Bitcoiny specs now carry canonical registry names, and `SupportedBlockchain` is reduced to a compatibility facade that delegates instance lookup, ACCT lookup, ids, currency codes, and test resets back to the registry.

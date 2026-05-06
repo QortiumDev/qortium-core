@@ -140,7 +140,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		String description = String.format("NATIVE/%s cross-chain trade", foreignCurrencyCode);
 		String aTType = "ACCT";
 		String tags = String.format("ACCT NATIVE %s", foreignCurrencyCode);
-		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(foreignBlockchain.getFacade(), tradeNativeAddress, tradeForeignPublicKeyHash, tradeBotCreateRequest.nativeAmount,
+		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(foreignBlockchain, tradeNativeAddress, tradeForeignPublicKeyHash, tradeBotCreateRequest.nativeAmount,
 				tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
 		long amount = tradeBotCreateRequest.fundingNativeAmount;
 

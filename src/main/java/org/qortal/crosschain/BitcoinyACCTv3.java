@@ -137,14 +137,14 @@ public class BitcoinyACCTv3 implements ACCT {
 	 * <tt>tradeTimeout</tt> (minutes) is the time window for the trade partner to send the
 	 * 32-byte secret to the AT, before the AT automatically refunds the AT's creator.
 	 * 
-	 * @param creatorTradeAddress AT creator's trade local-chain address
 	 * @param foreignBlockchain foreign blockchain for this trade
+	 * @param creatorTradeAddress AT creator's trade local-chain address
 	 * @param foreignPublicKeyHash 20-byte HASH160 of creator's trade foreign-chain public key
 	 * @param nativeAmount how much native asset to pay trade partner if they send correct 32-byte secrets to AT
 	 * @param foreignAmount how much foreign-chain currency the AT creator is expecting to trade
 	 * @param tradeTimeout suggested timeout for entire trade
 	 */
-	public static byte[] buildTradeAT(SupportedBlockchain foreignBlockchain, String creatorTradeAddress, byte[] foreignPublicKeyHash, long nativeAmount, long foreignAmount, int tradeTimeout) {
+	public static byte[] buildTradeAT(ForeignBlockchainRegistry.Entry foreignBlockchain, String creatorTradeAddress, byte[] foreignPublicKeyHash, long nativeAmount, long foreignAmount, int tradeTimeout) {
 		if (foreignBlockchain == null || !foreignBlockchain.isBitcoiny())
 			throw new IllegalArgumentException("Unsupported Bitcoiny blockchain");
 
@@ -746,7 +746,7 @@ public class BitcoinyACCTv3 implements ACCT {
 			if (dataByteBuffer.remaining() < MachineState.VALUE_SIZE)
 				return null;
 
-			SupportedBlockchain foreignBlockchain = SupportedBlockchain.fromForeignBlockchainId((int) dataByteBuffer.getLong());
+			ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromForeignBlockchainId((int) dataByteBuffer.getLong());
 			if (foreignBlockchain == null || !foreignBlockchain.isBitcoiny())
 				return null;
 		tradeData.foreignBlockchain = foreignBlockchain.name();

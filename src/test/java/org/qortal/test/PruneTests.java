@@ -9,7 +9,7 @@ import org.qortal.asset.Asset;
 import org.qortal.controller.BlockMinter;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.BitcoinyACCTv3;
-import org.qortal.crosschain.SupportedBlockchain;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.data.at.ATData;
 import org.qortal.data.at.ATStateData;
 import org.qortal.data.block.BlockData;
@@ -164,7 +164,7 @@ public class PruneTests extends Common {
 
     // Helper methods for AT testing
     private DeployAtTransaction doDeploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress) throws DataException {
-        byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(SupportedBlockchain.LITECOIN, tradeAddress, litecoinPublicKeyHash, redeemAmount, litecoinAmount, tradeTimeout);
+        byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(ForeignBlockchainRegistry.fromString("LITECOIN"), tradeAddress, litecoinPublicKeyHash, redeemAmount, litecoinAmount, tradeTimeout);
 
         long txTimestamp = System.currentTimeMillis();
         Long fee = null;

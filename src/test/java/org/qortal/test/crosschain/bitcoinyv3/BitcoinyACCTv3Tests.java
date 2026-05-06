@@ -7,6 +7,7 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
 import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.BitcoinyACCTv3;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.data.at.ATData;
 import org.qortal.data.crosschain.CrossChainTradeData;
@@ -37,7 +38,7 @@ public class BitcoinyACCTv3Tests extends ACCTTests {
 
 	@Override
 	protected byte[] buildTradeAT(String address, byte[] publicKey, long redeemAmount, long foreignAmount, int tradeTimeout) {
-		return BitcoinyACCTv3.buildTradeAT(SupportedBlockchain.BITCOIN, address, publicKey, redeemAmount, foreignAmount, tradeTimeout);
+		return BitcoinyACCTv3.buildTradeAT(ForeignBlockchainRegistry.fromString("BITCOIN"), address, publicKey, redeemAmount, foreignAmount, tradeTimeout);
 	}
 
 	@Override
@@ -107,7 +108,8 @@ public class BitcoinyACCTv3Tests extends ACCTTests {
 	}
 
 	private DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress, SupportedBlockchain blockchain) throws DataException {
-		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(blockchain, tradeAddress, foreignPublicKeyHash, redeemAmount, foreignAmount, tradeTimeout);
+		ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromString(blockchain.name());
+		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(foreignBlockchain, tradeAddress, foreignPublicKeyHash, redeemAmount, foreignAmount, tradeTimeout);
 
 		long txTimestamp = System.currentTimeMillis();
 		Long fee = null;
