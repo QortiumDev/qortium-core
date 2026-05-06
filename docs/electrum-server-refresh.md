@@ -19,6 +19,7 @@ tools/refresh-electrum-servers
 The refresh tool derives its supported BTC-like coins and refreshable networks from `BitcoinyChainSpecs`. It:
 
 - starts with the existing generated JSON resource when present
+- preserves existing generated server source and response-time metadata for coins that are not refreshed
 - scrapes OK TCP/SSL rows from `https://1209k.com/bitcoin-eye/ele.php`
 - asks a limited number of Electrum servers for `server.peers.subscribe`
 - verifies candidates with `server.version`, `server.features`, expected genesis hash, and `blockchain.headers.subscribe`

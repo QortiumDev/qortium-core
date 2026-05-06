@@ -3,6 +3,8 @@ package org.qortal.crosschain;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.JSONValue;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 import org.qortal.api.resource.CrossChainUtils;
 import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.crosschain.ElectrumServerDiscovery.CandidateServer;
@@ -334,33 +336,118 @@ public final class RefreshElectrumServers {
 		Files.write(outputPath, json.getBytes(StandardCharsets.UTF_8));
 	}
 
-	static Map<String, Map<String, List<CandidateServer>>> readGeneratedServers(Path inputPath) throws IOException, org.json.simple.parser.ParseException {
+	static Map<String, Map<String, List<CandidateServer>>> readGeneratedServers(Path inputPath) throws IOException, ParseException {
 		try (Reader reader = Files.newBufferedReader(inputPath, StandardCharsets.UTF_8)) {
-			Map<String, Map<String, List<Server>>> parsedServers = ElectrumServerList.parseServerResource(reader);
-			Map<String, Map<String, List<CandidateServer>>> generatedServers = new LinkedHashMap<>();
+			Object parsed = new JSONParser().parse(reader);
+			if (!(parsed instanceof JSONObject))
+				return new LinkedHashMap<>();
 
-			for (Map.Entry<String, Map<String, List<Server>>> coinEntry : parsedServers.entrySet()) {
-				Map<String, List<CandidateServer>> networks = new LinkedHashMap<>();
+			JSONObject root = (JSONObject) parsed;
+			Object serversObject = root.get("servers");
+			if (!(serversObject instanceof JSONObject))
+				return new LinkedHashMap<>();
 
-				for (Map.Entry<String, List<Server>> networkEntry : coinEntry.getValue().entrySet()) {
-					List<CandidateServer> candidates = networkEntry.getValue().stream()
-							.map(server -> new CandidateServer(server, "generated"))
-							.collect(Collectors.toList());
-					networks.put(networkEntry.getKey(), candidates);
-				}
-
-				generatedServers.put(coinEntry.getKey(), networks);
-			}
-
-			return generatedServers;
+			Map<String, Map<String, List<CandidateServer>>> parsedServers = parseGeneratedServerResource((JSONObject) serversObject);
+			return orderGeneratedServers(parsedServers);
 		}
 	}
 
-	static Map<String, Map<String, List<CandidateServer>>> readGeneratedServersIfPresent(Path inputPath) throws IOException, org.json.simple.parser.ParseException {
+	static Map<String, Map<String, List<CandidateServer>>> readGeneratedServersIfPresent(Path inputPath) throws IOException, ParseException {
 		if (!Files.exists(inputPath))
 			return new LinkedHashMap<>();
 
 		return readGeneratedServers(inputPath);
+	}
+
+	private static Map<String, Map<String, List<CandidateServer>>> parseGeneratedServerResource(JSONObject serversJson) {
+		Map<String, Map<String, List<CandidateServer>>> generatedServers = new LinkedHashMap<>();
+
+		for (Object coinKeyObject : serversJson.keySet()) {
+			Object networksObject = serversJson.get(coinKeyObject);
+			if (!(coinKeyObject instanceof String) || !(networksObject instanceof JSONObject))
+				continue;
+
+			Map<String, List<CandidateServer>> networks = new LinkedHashMap<>();
+			JSONObject networksJson = (JSONObject) networksObject;
+
+			for (Object networkKeyObject : networksJson.keySet()) {
+				Object serverArrayObject = networksJson.get(networkKeyObject);
+				if (!(networkKeyObject instanceof String) || !(serverArrayObject instanceof JSONArray))
+					continue;
+
+				List<CandidateServer> candidates = parseGeneratedServerArray((JSONArray) serverArrayObject);
+				if (!candidates.isEmpty())
+					networks.put(normalizeKey((String) networkKeyObject), candidates);
+			}
+
+			if (!networks.isEmpty())
+				generatedServers.put(normalizeKey((String) coinKeyObject), networks);
+		}
+
+		return generatedServers;
+	}
+
+	private static List<CandidateServer> parseGeneratedServerArray(JSONArray serverArray) {
+		List<CandidateServer> candidates = new ArrayList<>();
+
+		for (Object serverObject : serverArray) {
+			if (!(serverObject instanceof JSONObject))
+				continue;
+
+			CandidateServer candidate = parseGeneratedServer((JSONObject) serverObject);
+			if (candidate != null)
+				candidates.add(candidate);
+		}
+
+		return ElectrumServerDiscovery.dedupeCandidates(candidates);
+	}
+
+	private static CandidateServer parseGeneratedServer(JSONObject serverJson) {
+		String hostName = parseString(serverJson.get("host"));
+		if (hostName == null)
+			hostName = parseString(serverJson.get("hostname"));
+		if (hostName == null || hostName.toLowerCase(Locale.ROOT).endsWith(".onion"))
+			return null;
+
+		Integer port = parsePort(serverJson.get("port"));
+		if (port == null)
+			return null;
+
+		String protocol = parseString(serverJson.get("protocol"));
+		if (protocol == null)
+			protocol = parseString(serverJson.get("connectionType"));
+
+		ConnectionType connectionType = ElectrumServerDiscovery.parseConnectionType(protocol);
+		if (connectionType == null)
+			return null;
+
+		CandidateServer candidate = new CandidateServer(new Server(hostName, connectionType, port), parseSources(serverJson.get("source")));
+		candidate.setResponseTimeMillis(parseResponseTimeMillis(serverJson.get("responseTimeMillis")));
+
+		return candidate;
+	}
+
+	private static Map<String, Map<String, List<CandidateServer>>> orderGeneratedServers(Map<String, Map<String, List<CandidateServer>>> parsedServers) {
+		Map<String, Map<String, List<CandidateServer>>> orderedServers = new LinkedHashMap<>();
+
+		for (BitcoinyChainSpec spec : BitcoinyChainSpecs.all()) {
+			Map<String, List<CandidateServer>> parsedNetworks = parsedServers.remove(spec.getCurrencyCode());
+			if (parsedNetworks == null)
+				continue;
+
+			Map<String, List<CandidateServer>> orderedNetworks = new LinkedHashMap<>();
+			for (BitcoinyNetwork network : spec.getNetworks()) {
+				List<CandidateServer> candidates = parsedNetworks.remove(network.name());
+				if (candidates != null)
+					orderedNetworks.put(network.name(), candidates);
+			}
+			orderedNetworks.putAll(parsedNetworks);
+
+			orderedServers.put(spec.getCurrencyCode(), orderedNetworks);
+		}
+
+		orderedServers.putAll(parsedServers);
+		return orderedServers;
 	}
 
 	private static List<CandidateServer> copyCandidates(List<CandidateServer> candidates) {
@@ -371,6 +458,47 @@ public final class RefreshElectrumServers {
 					return copy;
 				})
 				.collect(Collectors.toList());
+	}
+
+	private static String parseString(Object value) {
+		if (!(value instanceof String))
+			return null;
+
+		String string = ((String) value).trim();
+		return string.isEmpty() ? null : string;
+	}
+
+	private static Integer parsePort(Object value) {
+		if (value instanceof Number)
+			return ElectrumServerDiscovery.parsePort(String.valueOf(((Number) value).intValue()));
+
+		if (value instanceof String)
+			return ElectrumServerDiscovery.parsePort((String) value);
+
+		return null;
+	}
+
+	private static Set<String> parseSources(Object value) {
+		String source = parseString(value);
+		if (source == null)
+			return Collections.emptySet();
+
+		return Arrays.stream(source.split(","))
+				.map(String::trim)
+				.filter(part -> !part.isEmpty())
+				.collect(Collectors.toCollection(LinkedHashSet::new));
+	}
+
+	private static Long parseResponseTimeMillis(Object value) {
+		if (!(value instanceof Number))
+			return null;
+
+		long responseTimeMillis = ((Number) value).longValue();
+		return responseTimeMillis <= 0 ? null : responseTimeMillis;
+	}
+
+	private static String normalizeKey(String value) {
+		return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
 	}
 
 	private static String toJson(Map<String, Map<String, List<CandidateServer>>> generatedServers) {

@@ -109,11 +109,24 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testDashUsesSharedStaticParams() {
+		BitcoinyNetwork dashMainNet = BitcoinyChainSpecs.DASH.getNetwork(BitcoinyChainSpecs.MAIN);
+
+		assertTrue(dashMainNet.getParams() instanceof StaticBitcoinyParams);
+		assertEquals(76, dashMainNet.getParams().getAddressHeader());
+		assertEquals(16, dashMainNet.getParams().getP2SHHeader());
+		assertEquals(0x0488B21E, dashMainNet.getParams().getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, dashMainNet.getParams().getBip32HeaderP2PKHpriv());
+		assertEquals("00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", dashMainNet.getParams().getGenesisBlock().getHashAsString());
+	}
+
+	@Test
 	public void testSettingsResolveRegisteredNetworks() {
 		Settings settings = Settings.getInstance();
 
 		assertSame(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3), settings.getBitcoinyNetwork(BitcoinyChainSpecs.BITCOIN_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST3), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE.toLowerCase()));
 		assertSame(BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DOGECOIN_CURRENCY_CODE));
+		assertSame(BitcoinyChainSpecs.DASH.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DASH_CURRENCY_CODE));
 	}
 }

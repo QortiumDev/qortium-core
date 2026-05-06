@@ -183,7 +183,7 @@ public class ElectrumServerListTests {
 				+ "\"servers\": {"
 				+ "\"BTC\": {"
 				+ "\"MAIN\": ["
-				+ "{\"host\":\"generated.example.com\",\"port\":50002,\"protocol\":\"SSL\"}"
+				+ "{\"host\":\"generated.example.com\",\"port\":50002,\"protocol\":\"SSL\",\"source\":\"builtin,1209k\",\"responseTimeMillis\":123}"
 				+ "]"
 				+ "}"
 				+ "}"
@@ -194,6 +194,8 @@ public class ElectrumServerListTests {
 		Map<String, Map<String, List<CandidateServer>>> missing = RefreshElectrumServers.readGeneratedServersIfPresent(missingJson);
 
 		assertEquals(new Server("generated.example.com", ConnectionType.SSL, 50002), generated.get("BTC").get("MAIN").get(0).getServer());
+		assertEquals("builtin,1209k", generated.get("BTC").get("MAIN").get(0).getSourceSummary());
+		assertEquals(Long.valueOf(123L), generated.get("BTC").get("MAIN").get(0).getResponseTimeMillis());
 		assertTrue(missing.isEmpty());
 	}
 

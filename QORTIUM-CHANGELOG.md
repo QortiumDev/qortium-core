@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: add Dash Bitcoiny support
+
+Added Dash as the first new reusable BTC-like chain after the Bitcoiny registry cleanup, including shared static network parameters, registry/spec metadata, verified SSL Electrum seeds, shared deterministic wallet/HTLC/ACCT test coverage, and documentation for selecting the Dash network. The Electrum refresh tool now also preserves existing generated server source and response-time metadata when refreshing a single coin, preventing unrelated server-list churn.
+
 ### 2026-05-06 - crosschain: remove supported-blockchain facade
 
 Removed the temporary `SupportedBlockchain` enum facade and moved the remaining wallet settings, PirateChain ACCT, PirateChain trade-bot, and test/helper lookups onto `ForeignBlockchainRegistry` entries. The registry now also owns ACCT-to-trade-bot routing, so new registered crosschain families can add runtime, ACCT, and trade-bot routing in one central lookup path instead of updating a separate trade-bot map.

@@ -36,10 +36,42 @@ public final class BitcoinyChainSpecs {
 	public static final String DOGECOIN_CURRENCY_CODE = "DOGE";
 	public static final String DIGIBYTE_CURRENCY_CODE = "DGB";
 	public static final String RAVENCOIN_CURRENCY_CODE = "RVN";
+	public static final String DASH_CURRENCY_CODE = "DASH";
 
 	private static final LitecoinMainNetParamsP2ShOverride LITECOIN_MAIN_NET_PARAMS_P2SH_OVERRIDE = new LitecoinMainNetParamsP2ShOverride(50);
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
+	private static final NetworkParameters DASH_MAIN_NET_PARAMS = dashParams("org.dash.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
+			.genesis(1390095618L, 28917698L, 0x1e0ffff0L, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6")
+			.port(9999)
+			.packetMagic(0xbf0c6bbdL)
+			.addressHeaders(76, 16, 204)
+			.coinbaseAndSubsidy(100, 210240)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(1815, 1900, 2016)
+			.dnsSeeds("dnsseed.dash.org")
+			.build();
+	private static final NetworkParameters DASH_TEST_NET_PARAMS = dashParams("org.dash.test", NetworkParameters.PAYMENT_PROTOCOL_ID_TESTNET)
+			.genesis(1390666206L, 3861367235L, 0x1e0ffff0L, "00000bafbc94add76cb75e2ec92894837288a481e5c005f6563d91623bf8bc2c")
+			.port(19999)
+			.packetMagic(0xcee2caffL)
+			.addressHeaders(140, 19, 239)
+			.coinbaseAndSubsidy(100, 210240)
+			.bip32Headers(0x043587CF, 0x04358394)
+			.majorityWindow(1512, 1900, 2016)
+			.dnsSeeds("testnet-seed.dashdot.io")
+			.build();
+	private static final NetworkParameters DASH_REGTEST_PARAMS = dashParams("org.dash.regtest", NetworkParameters.PAYMENT_PROTOCOL_ID_REGTEST)
+			.genesis(1417713337L, 1096447L, 0x207fffffL, "000008ca1832a4baf228eb1553c03d3a2c8e02399550dd6ea8d65cec3ef23d2e")
+			.maxTarget(0x207fffffL)
+			.port(19899)
+			.packetMagic(0xfcc1b7dcL)
+			.addressHeaders(140, 19, 239)
+			.coinbaseAndSubsidy(100, 150)
+			.bip32Headers(0x043587CF, 0x04358394)
+			.majorityWindow(108, 144, 144)
+			.dnsSeeds("dummySeed.invalid")
+			.build();
 
 	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", 1, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
 			.mainnet(MainNetParams::get, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", 1_500L, "btc")
@@ -73,7 +105,13 @@ public final class BitcoinyChainSpecs {
 			.regtest(RegTestParams::get, 1_000_000L, 1_000_000L)
 			.build();
 
-	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN);
+	public static final BitcoinyChainSpec DASH = spec("DASH", 7, "Dash", DASH_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+			.mainnet(() -> DASH_MAIN_NET_PARAMS, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", 10_000L, "dash")
+			.test3(() -> DASH_TEST_NET_PARAMS, "00000bafbc94add76cb75e2ec92894837288a481e5c005f6563d91623bf8bc2c", 10_000L, 10_000L, null)
+			.regtest(() -> DASH_REGTEST_PARAMS, 10_000L, 10_000L)
+			.build();
+
+	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH);
 
 	private static final List<String> CURRENCY_CODES = ALL.stream()
 			.map(BitcoinyChainSpec::getCurrencyCode)
@@ -87,6 +125,13 @@ public final class BitcoinyChainSpecs {
 
 	private static SpecBuilder spec(String canonicalName, int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
 		return new SpecBuilder(canonicalName, foreignBlockchainId, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount);
+	}
+
+	private static StaticBitcoinyParams.Builder dashParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "dash")
+				.maxTarget(0x1e0fffffL)
+				.targetTimespan(24 * 60 * 60)
+				.difficultyValidationFailure("Dash difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	private static BitcoinyChainSpec.ElectrumServerRefreshConfig refresh(String networkName, String chain1209k) {
