@@ -73,6 +73,8 @@ public class ApiCommon extends Common {
 				if (responsePeriod > maxResponsePeriod)
 					fail(String.format("API call response period %d ms greater than max allowed (%d ms)", responsePeriod, maxResponsePeriod));
 			}
+
+			fail("ApiException expected: " + expectedApiError);
 		} catch (ApiException e) {
 			ApiError actualApiError = ApiError.fromCode(e.error);
 			assertEquals(expectedApiError, actualApiError);

@@ -26,7 +26,7 @@ import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.ForeignBlockchainException;
-import org.qortal.crosschain.SupportedBlockchain;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.at.ATData;
 import org.qortal.data.at.ATStateData;
@@ -103,8 +103,8 @@ public class CrossChainResource {
 			@Parameter(
 				description = "Limit to specific blockchain",
 				example = "LITECOIN",
-				schema = @Schema(implementation = SupportedBlockchain.class)
-			) @QueryParam("foreignBlockchain") SupportedBlockchain foreignBlockchain,
+				schema = @Schema(type = "string")
+			) @QueryParam("foreignBlockchain") String foreignBlockchain,
 			@Parameter( ref = "limit") @QueryParam("limit") Integer limit,
 			@Parameter( ref = "offset" ) @QueryParam("offset") Integer offset,
 			@Parameter( ref = "reverse" ) @QueryParam("reverse") Boolean reverse) {
@@ -114,10 +114,11 @@ public class CrossChainResource {
 
 		final boolean isExecutable = true;
 		List<CrossChainTradeData> crossChainTrades = new ArrayList<>();
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = resolveForeignBlockchainFilter(foreignBlockchain);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getFilteredAcctMap(foreignBlockchain);
-			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchain);
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
+			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchainEntry);
 			Integer repositoryLimit = postFilterPaging ? null : limit;
 			Integer repositoryOffset = postFilterPaging ? null : offset;
 
@@ -129,7 +130,7 @@ public class CrossChainResource {
 
 				for (ATData atData : atsData) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
-					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchain) && crossChainTradeData.mode == AcctMode.OFFERING) {
+					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) && crossChainTradeData.mode == AcctMode.OFFERING) {
 						crossChainTrades.add(crossChainTradeData);
 					}
 				}
@@ -188,14 +189,15 @@ public class CrossChainResource {
 			@Parameter(
 					description = "Limit to specific blockchain",
 					example = "LITECOIN",
-					schema = @Schema(implementation = SupportedBlockchain.class)
-			) @QueryParam("foreignBlockchain") SupportedBlockchain foreignBlockchain) {
+					schema = @Schema(type = "string")
+			) @QueryParam("foreignBlockchain") String foreignBlockchain) {
 
 		final boolean isExecutable = true;
 		List<CrossChainTradeData> crossChainTrades = new ArrayList<>();
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = resolveForeignBlockchainFilter(foreignBlockchain);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getFilteredAcctMap(foreignBlockchain);
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
 
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
 				byte[] codeHash = acctInfo.getKey().value;
@@ -205,7 +207,7 @@ public class CrossChainResource {
 
 				for (ATData atData : atsData) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
-					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchain) && crossChainTradeData.mode == AcctMode.OFFERING) {
+					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) && crossChainTradeData.mode == AcctMode.OFFERING) {
 						crossChainTrades.add(crossChainTradeData);
 					}
 				}
@@ -249,7 +251,7 @@ public class CrossChainResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -287,8 +289,8 @@ public class CrossChainResource {
 			@Parameter(
 					description = "Limit to specific blockchain",
 					example = "LITECOIN",
-					schema = @Schema(implementation = SupportedBlockchain.class)
-				) @QueryParam("foreignBlockchain") SupportedBlockchain foreignBlockchain,
+					schema = @Schema(type = "string")
+				) @QueryParam("foreignBlockchain") String foreignBlockchain,
 			@Parameter(
 				description = "Only return trades that completed on/after this timestamp (milliseconds since epoch)",
 				example = "1597310000000"
@@ -315,6 +317,7 @@ public class CrossChainResource {
 		byte[] sellerPublicKey = decodePublicKey(sellerPublicKey58);
 
 		final Boolean isFinished = Boolean.TRUE;
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = resolveForeignBlockchainFilter(foreignBlockchain);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Integer minimumFinalHeight = null;
@@ -338,8 +341,8 @@ public class CrossChainResource {
 
 			List<CrossChainTradeSummary> crossChainTrades = new ArrayList<>();
 
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getFilteredAcctMap(foreignBlockchain);
-			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchain);
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
+			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchainEntry);
 			Integer repositoryLimit = postFilterPaging ? null : limit;
 			Integer repositoryOffset = postFilterPaging ? null : offset;
 
@@ -353,7 +356,7 @@ public class CrossChainResource {
 
 				for (ATStateData atState : atStates) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
-					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchain))
+					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry))
 						continue;
 
 					// We also need block timestamp for use as trade timestamp
@@ -568,7 +571,7 @@ public class CrossChainResource {
 
 			List<CrossChainTradeLedgerEntry> crossChainTradeLedgerEntries = new ArrayList<>();
 
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getAcctMap();
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getAcctMap();
 
 			// collect ledger entries for each ACCT
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
@@ -624,8 +627,8 @@ public class CrossChainResource {
 			@Parameter(
 					description = "foreign blockchain",
 					example = "LITECOIN",
-					schema = @Schema(implementation = SupportedBlockchain.class)
-				) @PathParam("blockchain") SupportedBlockchain foreignBlockchain,
+					schema = @Schema(type = "string")
+				) @PathParam("blockchain") String foreignBlockchain,
 			@Parameter(
 					description = "Maximum number of trades to include in price calculation",
 					example = "10",
@@ -636,9 +639,7 @@ public class CrossChainResource {
 					example = "false",
 					schema = @Schema(type = "boolean", defaultValue = "false")
 			) @QueryParam("inverse") Boolean inverse) {
-		// foreignBlockchain is required
-		if (foreignBlockchain == null)
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = resolveRequiredForeignBlockchain(foreignBlockchain);
 
 		// We want both a minimum of 5 trades and enough trades to span at least 4 hours
 		int minimumCount = 5;
@@ -648,13 +649,13 @@ public class CrossChainResource {
 		boolean useInversePrice = (inverse != null && inverse);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getFilteredAcctMap(foreignBlockchain);
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
 
 			long totalForeign = 0;
 			long totalNative = 0;
 
 			Map<Long, CrossChainTradeData> reverseSortedTradeData = new TreeMap<>(Collections.reverseOrder());
-			boolean postFilterSharedBitcoinyStates = needsPostFilterPaging(foreignBlockchain);
+			boolean postFilterSharedBitcoinyStates = needsPostFilterPaging(foreignBlockchainEntry);
 
 			// Collect recent AT states for each ACCT version
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
@@ -682,7 +683,7 @@ public class CrossChainResource {
 					}
 
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
-					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchain))
+					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry))
 						continue;
 
 					reverseSortedTradeData.put(timestamp, crossChainTradeData);
@@ -757,7 +758,7 @@ public class CrossChainResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ATData atData = fetchAtDataWithChecking(repository, cancelRequest.atAddress);
 
-			ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
@@ -817,7 +818,7 @@ public class CrossChainResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = SupportedBlockchain.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -825,7 +826,7 @@ public class CrossChainResource {
 			if (crossChainTradeData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-			Bitcoiny bitcoiny = SupportedBlockchain.getBitcoinyInstance(crossChainTradeData.foreignBlockchain);
+			Bitcoiny bitcoiny = ForeignBlockchainRegistry.getBitcoinyInstance(crossChainTradeData.foreignBlockchain);
 			if (bitcoiny == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -866,14 +867,12 @@ public class CrossChainResource {
 	public List<TransactionSummary> getForeignTransactionActivity(@HeaderParam(Security.API_KEY_HEADER) String apiKey, @Parameter(
 			description = "Limit to specific blockchain",
 			example = "LITECOIN",
-			schema = @Schema(implementation = SupportedBlockchain.class)
-	) @QueryParam("foreignBlockchain") SupportedBlockchain foreignBlockchain) {
+			schema = @Schema(type = "string")
+	) @QueryParam("foreignBlockchain") String foreignBlockchain) {
 		Security.checkApiCallAllowed(request);
 
-		if (foreignBlockchain == null)
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
-
-		Bitcoiny bitcoiny = foreignBlockchain.getBitcoinyInstance();
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = resolveRequiredForeignBlockchain(foreignBlockchain);
+		Bitcoiny bitcoiny = foreignBlockchainEntry.getBitcoinyInstance();
 		if (bitcoiny == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -883,7 +882,7 @@ public class CrossChainResource {
 
 			// sort from last lock to first lock
 			return CrossChainUtils
-					.getForeignTradeSummaries(foreignBlockchain, repository, bitcoiny).stream()
+					.getForeignTradeSummaries(foreignBlockchainEntry, repository, bitcoiny).stream()
 					.sorted(Comparator.comparing(TransactionSummary::getLockingTimestamp).reversed())
 					.collect(Collectors.toList());
 		}
@@ -937,11 +936,30 @@ public class CrossChainResource {
 		TradeBot.getInstance().decorateTradeDataWithPresence(crossChainTradeData);
 	}
 
-	private static boolean matchesForeignBlockchain(CrossChainTradeData crossChainTradeData, SupportedBlockchain foreignBlockchain) {
+	private ForeignBlockchainRegistry.Entry resolveForeignBlockchainFilter(String foreignBlockchain) {
+		if (foreignBlockchain == null)
+			return null;
+
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = ForeignBlockchainRegistry.fromString(foreignBlockchain);
+		if (foreignBlockchainEntry == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		return foreignBlockchainEntry;
+	}
+
+	private ForeignBlockchainRegistry.Entry resolveRequiredForeignBlockchain(String foreignBlockchain) {
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = resolveForeignBlockchainFilter(foreignBlockchain);
+		if (foreignBlockchainEntry == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		return foreignBlockchainEntry;
+	}
+
+	private static boolean matchesForeignBlockchain(CrossChainTradeData crossChainTradeData, ForeignBlockchainRegistry.Entry foreignBlockchain) {
 		return crossChainTradeData != null && (foreignBlockchain == null || foreignBlockchain.name().equals(crossChainTradeData.foreignBlockchain));
 	}
 
-	private static boolean needsPostFilterPaging(SupportedBlockchain foreignBlockchain) {
+	private static boolean needsPostFilterPaging(ForeignBlockchainRegistry.Entry foreignBlockchain) {
 		return foreignBlockchain != null && foreignBlockchain.isBitcoiny();
 	}
 }

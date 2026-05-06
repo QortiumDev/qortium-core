@@ -5,7 +5,7 @@ import org.eclipse.jetty.websocket.api.WriteCallback;
 import org.eclipse.jetty.websocket.api.annotations.*;
 import org.eclipse.jetty.websocket.server.JettyWebSocketServletFactory;
 import org.qortal.controller.tradebot.TradeBot;
-import org.qortal.crosschain.SupportedBlockchain;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.data.crosschain.TradeBotData;
 import org.qortal.event.Event;
 import org.qortal.event.EventBus;
@@ -89,22 +89,27 @@ public class TradeBotWebSocket extends ApiWebSocket implements Listener {
         List<String> foreignBlockchains = queryParams.get("foreignBlockchain");
         final String foreignBlockchain = (foreignBlockchains == null || foreignBlockchains.isEmpty()) ? null : foreignBlockchains.get(0);
 
-        if (foreignBlockchain != null && SupportedBlockchain.fromString(foreignBlockchain) == null) {
-            session.close(4003, "unknown blockchain: " + foreignBlockchain);
-            return;
+        ForeignBlockchainRegistry.Entry foreignBlockchainEntry = null;
+        if (foreignBlockchain != null) {
+            foreignBlockchainEntry = ForeignBlockchainRegistry.fromString(foreignBlockchain);
+            if (foreignBlockchainEntry == null) {
+                session.close(4003, "unknown blockchain: " + foreignBlockchain);
+                return;
+            }
         }
 
-        if (foreignBlockchain != null)
-            sessionBlockchain.put(session, foreignBlockchain);
+        String normalizedForeignBlockchain = foreignBlockchainEntry == null ? null : foreignBlockchainEntry.name();
+        if (normalizedForeignBlockchain != null)
+            sessionBlockchain.put(session, normalizedForeignBlockchain);
 
         try (final Repository repository = RepositoryManager.getRepository()) {
             List<TradeBotData> tradeBotEntries = new ArrayList<>();
 
             if (!excludeInitialData) {
                 tradeBotEntries = repository.getCrossChainRepository().getAllTradeBotData();
-                if (foreignBlockchain != null) {
+                if (normalizedForeignBlockchain != null) {
                     tradeBotEntries = tradeBotEntries.stream()
-                            .filter(tradeBotData -> tradeBotData.getForeignBlockchain().equals(foreignBlockchain))
+                            .filter(tradeBotData -> tradeBotData.getForeignBlockchain().equals(normalizedForeignBlockchain))
                             .collect(Collectors.toList());
                 }
             }

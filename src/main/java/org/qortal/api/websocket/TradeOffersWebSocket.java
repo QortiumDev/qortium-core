@@ -11,7 +11,7 @@ import org.qortal.controller.Synchronizer;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.AcctMode;
-import org.qortal.crosschain.SupportedBlockchain;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.data.at.ATStateData;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.crosschain.CrossChainTradeData;
@@ -89,8 +89,8 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 			final Long expectedValue = null;
 			final Integer minimumFinalHeight = blockData.getHeight();
 
-			for (SupportedBlockchain blockchain : SupportedBlockchain.values()) {
-				Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getFilteredAcctMap(blockchain);
+			for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
+				Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(blockchain);
 				List<CrossChainOfferSummary> crossChainOfferSummaries = new ArrayList<>();
 
 				synchronized (cachedInfoByBlockchain) {
@@ -166,15 +166,19 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		List<String> foreignBlockchains = queryParams.get("foreignBlockchain");
 		final String foreignBlockchain = (foreignBlockchains == null || foreignBlockchains.isEmpty()) ? null : foreignBlockchains.get(0);
 
-		// Make sure blockchain (if any) is valid
-		if (foreignBlockchain != null && SupportedBlockchain.fromString(foreignBlockchain) == null) {
-			session.close(4003, "unknown blockchain: " + foreignBlockchain);
-			return;
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = null;
+		if (foreignBlockchain != null) {
+			foreignBlockchainEntry = ForeignBlockchainRegistry.fromString(foreignBlockchain);
+			if (foreignBlockchainEntry == null) {
+				session.close(4003, "unknown blockchain: " + foreignBlockchain);
+				return;
+			}
 		}
 
 		// Save session's preferred blockchain, if given
-		if (foreignBlockchain != null)
-			sessionBlockchain.put(session, foreignBlockchain);
+		String normalizedForeignBlockchain = foreignBlockchainEntry == null ? null : foreignBlockchainEntry.name();
+		if (normalizedForeignBlockchain != null)
+			sessionBlockchain.put(session, normalizedForeignBlockchain);
 
 		List<CrossChainOfferSummary> crossChainOfferSummaries = new ArrayList<>();
 
@@ -182,11 +186,11 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		if (!excludeInitialData) {
 			synchronized (cachedInfoByBlockchain) {
 				Collection<CachedOfferInfo> cachedInfos;
-				if (foreignBlockchain == null)
+				if (normalizedForeignBlockchain == null)
 					// No preferred blockchain, so iterate through all of them
 					cachedInfos = cachedInfoByBlockchain.values();
 				else
-					cachedInfos = Collections.singleton(cachedInfoByBlockchain.computeIfAbsent(foreignBlockchain, k -> new CachedOfferInfo()));
+					cachedInfos = Collections.singleton(cachedInfoByBlockchain.computeIfAbsent(normalizedForeignBlockchain, k -> new CachedOfferInfo()));
 
 				for (CachedOfferInfo cachedInfo : cachedInfos) {
 					crossChainOfferSummaries.addAll(cachedInfo.currentSummaries.values());
@@ -245,8 +249,8 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		Boolean isFinished = Boolean.FALSE;
 		Long expectedValue = (long) AcctMode.OFFERING.value;
 
-		for (SupportedBlockchain blockchain : SupportedBlockchain.values()) {
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getFilteredAcctMap(blockchain);
+		for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(blockchain);
 			CachedOfferInfo cachedInfo = cachedInfoByBlockchain.computeIfAbsent(blockchain.name(), k -> new CachedOfferInfo());
 
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
@@ -281,8 +285,8 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		Boolean isFinished = Boolean.TRUE;
 		++minimumFinalHeight; // because height is just *before* timestamp
 
-		for (SupportedBlockchain blockchain : SupportedBlockchain.values()) {
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = SupportedBlockchain.getFilteredAcctMap(blockchain);
+		for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(blockchain);
 			CachedOfferInfo cachedInfo = cachedInfoByBlockchain.computeIfAbsent(blockchain.name(), k -> new CachedOfferInfo());
 
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
@@ -331,7 +335,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		return new CrossChainOfferSummary(crossChainTradeData, atStateTimestamp);
 	}
 
-	private static List<CrossChainOfferSummary> produceSummaries(Repository repository, ACCT acct, List<ATStateData> atStates, Long timestamp, SupportedBlockchain blockchain) throws DataException {
+	private static List<CrossChainOfferSummary> produceSummaries(Repository repository, ACCT acct, List<ATStateData> atStates, Long timestamp, ForeignBlockchainRegistry.Entry blockchain) throws DataException {
 		List<CrossChainOfferSummary> offerSummaries = new ArrayList<>();
 		List<CrossChainTradeData> crossChainTrades = new ArrayList<>();
 		List<ATStateData> atStatesByTrade = new ArrayList<>();

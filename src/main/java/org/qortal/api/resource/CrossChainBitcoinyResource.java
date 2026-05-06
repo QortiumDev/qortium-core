@@ -21,11 +21,11 @@ import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.ChainableServer;
 import org.qortal.crosschain.ElectrumX;
 import org.qortal.crosschain.ForeignBlockchainException;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.ServerConfigurationInfo;
 import org.qortal.crosschain.ServerConnectionInfo;
 import org.qortal.crosschain.ServerInfo;
 import org.qortal.crosschain.SimpleTransaction;
-import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.settings.Settings;
 
 import javax.servlet.http.HttpServletRequest;
@@ -45,16 +45,16 @@ public class CrossChainBitcoinyResource {
 	@Context
 	HttpServletRequest request;
 
-	private SupportedBlockchain getSupportedBlockchain(String blockchain) {
-		SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromRegisteredBitcoinyString(blockchain);
-		if (supportedBlockchain == null)
+	private ForeignBlockchainRegistry.Entry getBitcoinyEntry(String blockchain) {
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = ForeignBlockchainRegistry.fromRegisteredBitcoinyString(blockchain);
+		if (foreignBlockchainEntry == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-		return supportedBlockchain;
+		return foreignBlockchainEntry;
 	}
 
 	private Bitcoiny getBitcoiny(String blockchain) {
-		Bitcoiny bitcoiny = getSupportedBlockchain(blockchain).getBitcoinyInstance();
+		Bitcoiny bitcoiny = getBitcoinyEntry(blockchain).getBitcoinyInstance();
 		if (bitcoiny == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE);
 
@@ -70,7 +70,7 @@ public class CrossChainBitcoinyResource {
 			}
 	)
 	public ForeignCoinStatus getWalletStatus(@PathParam("blockchain") String blockchain) {
-		Bitcoiny bitcoiny = getSupportedBlockchain(blockchain).getBitcoinyInstance();
+		Bitcoiny bitcoiny = getBitcoinyEntry(blockchain).getBitcoinyInstance();
 		boolean isEnabled = bitcoiny != null;
 		int connections = 0;
 		int known = 0;
@@ -96,9 +96,9 @@ public class CrossChainBitcoinyResource {
 			@PathParam("blockchain") String blockchain) {
 		Security.checkApiCallAllowed(request);
 
-		SupportedBlockchain supportedBlockchain = getSupportedBlockchain(blockchain);
-		Settings.getInstance().enableWallet(supportedBlockchain.getCurrencyCode());
-		Bitcoiny bitcoiny = supportedBlockchain.getBitcoinyInstance();
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = getBitcoinyEntry(blockchain);
+		Settings.getInstance().enableWallet(foreignBlockchainEntry.getCurrencyCode());
+		Bitcoiny bitcoiny = foreignBlockchainEntry.getBitcoinyInstance();
 
 		try {
 			Thread.sleep(100);

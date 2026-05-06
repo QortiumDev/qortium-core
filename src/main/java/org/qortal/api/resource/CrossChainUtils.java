@@ -175,14 +175,14 @@ public class CrossChainUtils {
      * @throws ForeignBlockchainException
      */
     public static List<TransactionSummary> getForeignTradeSummaries(
-            SupportedBlockchain foreignBlockchain,
+            ForeignBlockchainRegistry.Entry foreignBlockchain,
             Repository repository,
             Bitcoiny bitcoiny) throws DataException, ForeignBlockchainException {
 
         // get all the AT address for the given blockchain
         List<String> atAddresses
                 = repository.getCrossChainRepository().getAllTradeBotData().stream()
-                    .filter(data -> foreignBlockchain.name().toLowerCase().equals(data.getForeignBlockchain().toLowerCase()))
+                    .filter(data -> foreignBlockchain.name().equalsIgnoreCase(data.getForeignBlockchain()))
                     //.filter( data -> data.getForeignKey().equals( xpriv )) // TODO
                     .map(data -> data.getAtAddress())
                     .collect(Collectors.toList());
@@ -300,8 +300,8 @@ public class CrossChainUtils {
             CrossChainTradeData crossChainTradeData,
             TradeBotData tradeBotData) {
 
-        // Pirate Chain does not support this
-        if( SupportedBlockchain.PIRATECHAIN.name().equals(tradeBotData.getForeignBlockchain())) return Optional.empty();
+        ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromString(tradeBotData.getForeignBlockchain());
+        if (foreignBlockchain == null || !foreignBlockchain.isBitcoiny()) return Optional.empty();
 
         // need to get the trade PKH from the trade bot
         if( tradeBotData.getTradeForeignPublicKeyHash() == null ) return Optional.empty();
@@ -734,11 +734,11 @@ public class CrossChainUtils {
         // for each trade, build ledger entry, collect ledger entry
         for (ATStateData atState : atStates) {
             CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
-            SupportedBlockchain foreignBlockchain = SupportedBlockchain.fromString(crossChainTradeData.foreignBlockchain);
+            ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromString(crossChainTradeData.foreignBlockchain);
             if (foreignBlockchain == null)
                 continue;
 
-            String foreignBlockchainCurrencyCode = foreignBlockchain.getInstance().getCurrencyCode();
+            String foreignBlockchainCurrencyCode = foreignBlockchain.getCurrencyCode();
 
             // We also need block timestamp for use as trade timestamp
             long localTimestamp = repository.getBlockRepository().getTimestampFromHeight(atState.getHeight());

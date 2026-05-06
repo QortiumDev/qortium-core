@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: route API filters through registry
+
+Moved crosschain API and websocket blockchain filters from `SupportedBlockchain` enum parameters to `ForeignBlockchainRegistry` string lookups. API callers can now use registry names or currency codes, websocket sessions normalize filters to canonical registry names, and the remaining trade/ledger/P2SH helper paths resolve ACCT and Bitcoiny instances through the registry instead of adding new enum dependencies. The shared API test helper now also fails when an expected API error is not thrown, making invalid-filter regression tests meaningful.
+
 ### 2026-05-06 - crosschain: route backend ACCT lookups through registry
 
 Added direct `ForeignBlockchainRegistry` helpers for registered Bitcoiny entries, entry names, and required-name validation, then moved trade-bot, presence, and HTLC lookup paths off the temporary `SupportedBlockchain` facade. This keeps new backend crosschain code pointed at the data-driven registry while the enum remains only as compatibility plumbing for older callers.
