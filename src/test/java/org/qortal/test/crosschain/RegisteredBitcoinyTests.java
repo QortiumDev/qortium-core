@@ -3,7 +3,7 @@ package org.qortal.test.crosschain;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.qortal.crosschain.Bitcoiny;
-import org.qortal.crosschain.SupportedBlockchain;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -20,23 +20,23 @@ public class RegisteredBitcoinyTests extends BitcoinyTests {
 	@Parameterized.Parameters
 	public static Collection<Object[]> chainFixtures() {
 		return Arrays.asList(new Object[][] {
-				{ new ChainFixture(SupportedBlockchain.BITCOIN, "Bitcoin", "BTC",
+				{ new ChainFixture(ForeignBlockchainRegistry.fromStringRequired("BITCOIN"), "Bitcoin", "BTC",
 						"tprv8ZgxMBicQKsPdahhFSrCdvC1bsWyzHHZfTneTVqUXN6s1wEtZLwAkZXzFP6TYLg2aQMecZLXLre5bTVGajEB55L1HYJcawpdFG66STVAWPJ",
 						"tpubDCxs3oB9X7XJYkQGU6gfPwd4h3NEiBGA8mfD1aEbZiG5x3BTH4cJqszDP6dtoHPPjZNEj5jPxuSWHCvjg9AHz4dNg6w5vQhv1B8KwWKpxoz",
 						"2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE") },
-				{ new ChainFixture(SupportedBlockchain.LITECOIN, "Litecoin", "LTC",
+				{ new ChainFixture(ForeignBlockchainRegistry.fromStringRequired("LITECOIN"), "Litecoin", "LTC",
 						"tprv8ZgxMBicQKsPdahhFSrCdvC1bsWyzHHZfTneTVqUXN6s1wEtZLwAkZXzFP6TYLg2aQMecZLXLre5bTVGajEB55L1HYJcawpdFG66STVAWPJ",
 						"tpubDCxs3oB9X7XJYkQGU6gfPwd4h3NEiBGA8mfD1aEbZiG5x3BTH4cJqszDP6dtoHPPjZNEj5jPxuSWHCvjg9AHz4dNg6w5vQhv1B8KwWKpxoz",
 						"2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE") },
-				{ new ChainFixture(SupportedBlockchain.DOGECOIN, "Dogecoin", "DOGE",
+				{ new ChainFixture(ForeignBlockchainRegistry.fromStringRequired("DOGECOIN"), "Dogecoin", "DOGE",
 						"dgpv51eADS3spNJh9drNeW1Tc1P9z2LyaQRXPBortsq6yice1k47C2u2Prvgxycr2ihNBWzKZ2LthcBBGiYkWZ69KUTVkcLVbnjq7pD8mnApEru",
 						"dgub8rqf3khHiPeYE3cNn3Y4DQQ411nAnFpuSUPt5k5GJZQsydsTLkaf4onaWn4N8pHvrV3oNMEATKoPGTFZwm2Uhh7Dy9gYwA7rkSv6oLofbag",
 						null) },
-				{ new ChainFixture(SupportedBlockchain.DIGIBYTE, "Digibyte", "DGB",
+				{ new ChainFixture(ForeignBlockchainRegistry.fromStringRequired("DIGIBYTE"), "Digibyte", "DGB",
 						"xprv9z8QpS7vxwMC2fCnG1oZc6c4aFRLgsqSF86yWrJBKEzMY3T3ySCo85x8Uv5FxTavAQwgEDy1g3iLRT5kdtFjoNNBKukLTMzKwCUn1Abwoxg",
 						"xpub6D7mDwepoJuVF9HFN3LZyEYo8HFq6LZHcM2aKEhnsaXLQqnCWyX3ftGcLDcjYmiPCc9GNX4VjfT32hwvYQnh9H5Z5diAvMsXRrxFmckyNoR",
 						null) },
-				{ new ChainFixture(SupportedBlockchain.RAVENCOIN, "Ravencoin", "RVN",
+				{ new ChainFixture(ForeignBlockchainRegistry.fromStringRequired("RAVENCOIN"), "Ravencoin", "RVN",
 						"xprv9z8QpS7vxwMC2fCnG1oZc6c4aFRLgsqSF86yWrJBKEzMY3T3ySCo85x8Uv5FxTavAQwgEDy1g3iLRT5kdtFjoNNBKukLTMzKwCUn1Abwoxg",
 						"xpub6D7mDwepoJuVF9HFN3LZyEYo8HFq6LZHcM2aKEhnsaXLQqnCWyX3ftGcLDcjYmiPCc9GNX4VjfT32hwvYQnh9H5Z5diAvMsXRrxFmckyNoR",
 						null) }
@@ -55,12 +55,12 @@ public class RegisteredBitcoinyTests extends BitcoinyTests {
 
 	@Override
 	protected Bitcoiny getCoin() {
-		return this.fixture.blockchain.getBitcoinyInstance();
+		return this.fixture.foreignBlockchain.getBitcoinyInstance();
 	}
 
 	@Override
 	protected void resetCoinForTesting() {
-		this.fixture.blockchain.resetForTesting();
+		this.fixture.foreignBlockchain.resetForTesting();
 	}
 
 	@Override
@@ -79,16 +79,16 @@ public class RegisteredBitcoinyTests extends BitcoinyTests {
 	}
 
 	private static class ChainFixture {
-		private final SupportedBlockchain blockchain;
+		private final ForeignBlockchainRegistry.Entry foreignBlockchain;
 		private final String coinName;
 		private final String coinSymbol;
 		private final String deterministicKey58;
 		private final String deterministicPublicKey58;
 		private final String recipient;
 
-		private ChainFixture(SupportedBlockchain blockchain, String coinName, String coinSymbol,
+		private ChainFixture(ForeignBlockchainRegistry.Entry foreignBlockchain, String coinName, String coinSymbol,
 				String deterministicKey58, String deterministicPublicKey58, String recipient) {
-			this.blockchain = blockchain;
+			this.foreignBlockchain = foreignBlockchain;
 			this.coinName = coinName;
 			this.coinSymbol = coinSymbol;
 			this.deterministicKey58 = deterministicKey58;

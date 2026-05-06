@@ -144,7 +144,7 @@ Initial recommendation:
 ### Cross-Chain ACCT Coupling
 
 The v3 ACCT classes still describe trades in terms of Qortal-side addresses,
-`qortalAtAddress`, and `SupportedBlockchain`.
+`qortalAtAddress`, and registry-selected foreign blockchains.
 
 This area mixes two concerns:
 

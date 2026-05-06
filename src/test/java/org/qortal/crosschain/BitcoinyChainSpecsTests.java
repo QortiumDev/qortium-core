@@ -23,21 +23,13 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
-	public void testSpecRegistryMatchesSupportedBitcoinyBlockchains() {
+	public void testSpecRegistryMatchesRegisteredBitcoinyBlockchains() {
 		Set<String> specCanonicalNames = BitcoinyChainSpecs.all().stream()
 				.map(BitcoinyChainSpec::getCanonicalName)
 				.collect(Collectors.toSet());
 
 		Set<String> specCurrencyCodes = BitcoinyChainSpecs.all().stream()
 				.map(BitcoinyChainSpec::getCurrencyCode)
-				.collect(Collectors.toSet());
-
-		Set<String> supportedNames = SupportedBlockchain.bitcoinyBlockchains().stream()
-				.map(SupportedBlockchain::name)
-				.collect(Collectors.toSet());
-
-		Set<String> supportedCurrencyCodes = SupportedBlockchain.bitcoinyBlockchains().stream()
-				.map(SupportedBlockchain::getCurrencyCode)
 				.collect(Collectors.toSet());
 
 		Set<String> registeredNames = ForeignBlockchainRegistry.bitcoinyEntries().stream()
@@ -51,39 +43,37 @@ public class BitcoinyChainSpecsTests {
 		Set<String> entryNames = ForeignBlockchainRegistry.entryNames().stream()
 				.collect(Collectors.toSet());
 
-		assertEquals(specCanonicalNames, supportedNames);
 		assertEquals(specCanonicalNames, registeredNames);
-		assertEquals(supportedCurrencyCodes, specCurrencyCodes);
 		assertEquals(specCurrencyCodes, registeredCurrencyCodes);
-		assertTrue(entryNames.containsAll(supportedNames));
-		assertTrue(entryNames.contains(SupportedBlockchain.PIRATECHAIN.name()));
+		assertTrue(entryNames.containsAll(specCanonicalNames));
+		assertTrue(entryNames.contains(ForeignBlockchainRegistry.PIRATECHAIN_NAME));
 
-		for (SupportedBlockchain blockchain : SupportedBlockchain.bitcoinyBlockchains()) {
+		for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.bitcoinyEntries()) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(blockchain.getCurrencyCode());
 			assertNotNull(spec);
 			assertEquals(blockchain.name(), spec.getCanonicalName());
 			assertSame(spec, blockchain.getBitcoinySpec());
 			assertEquals(blockchain.getForeignBlockchainId(), spec.getForeignBlockchainId());
-			assertEquals(blockchain, SupportedBlockchain.fromForeignBlockchainId(spec.getForeignBlockchainId()));
+			assertSame(blockchain, ForeignBlockchainRegistry.fromForeignBlockchainId(spec.getForeignBlockchainId()));
 		}
 	}
 
 	@Test
 	public void testForeignBlockchainRegistryResolvesNamesCurrencyCodesAndBitcoinyIds() {
-		for (SupportedBlockchain blockchain : SupportedBlockchain.values()) {
+		for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
 			ForeignBlockchainRegistry.Entry byName = ForeignBlockchainRegistry.fromString(blockchain.name().toLowerCase());
 			assertNotNull(byName);
 			assertEquals(blockchain.name(), byName.name());
-			assertSame(blockchain, byName.getFacade());
+			assertSame(blockchain, byName);
 
 			ForeignBlockchainRegistry.Entry byCurrencyCode = ForeignBlockchainRegistry.fromString(blockchain.getCurrencyCode().toLowerCase());
 			assertSame(byName, byCurrencyCode);
 			assertSame(byName, ForeignBlockchainRegistry.fromStringRequired(blockchain.getCurrencyCode()));
 
-			assertSame(blockchain, SupportedBlockchain.fromString(blockchain.getCurrencyCode()));
-
 			if (blockchain.isBitcoiny())
 				assertSame(byName, ForeignBlockchainRegistry.fromForeignBlockchainId(blockchain.getForeignBlockchainId()));
+			else
+				assertNull(ForeignBlockchainRegistry.fromForeignBlockchainId(blockchain.getForeignBlockchainId()));
 		}
 
 		assertNull(ForeignBlockchainRegistry.fromString("unknown"));

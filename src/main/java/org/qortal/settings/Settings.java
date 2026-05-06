@@ -37,8 +37,8 @@ import org.qortal.controller.arbitrary.ArbitraryDataStorageManager.StoragePolicy
 import org.qortal.crosschain.BitcoinyChainSpec;
 import org.qortal.crosschain.BitcoinyChainSpecs;
 import org.qortal.crosschain.BitcoinyNetwork;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.PirateChain.PirateChainNet;
-import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.network.message.MessageType;
 import org.qortal.utils.EnumUtils;
 
@@ -1076,9 +1076,9 @@ public class Settings {
 	}
 
 	public boolean isWalletEnabled(String coinKey) {
-		SupportedBlockchain blockchain = SupportedBlockchain.fromString(coinKey);
-		if (blockchain != null)
-			coinKey = blockchain.getCurrencyCode();
+		ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromString(coinKey);
+		if (foreignBlockchain != null)
+			coinKey = foreignBlockchain.getCurrencyCode();
 
 		if (this.wallets == null || !this.wallets.containsKey(coinKey))
 			return true;
@@ -1087,30 +1087,30 @@ public class Settings {
 	}
 
 	public boolean enableWallet(String coinKey) {
-		SupportedBlockchain blockchain = SupportedBlockchain.fromString(coinKey);
-		if (blockchain == null) {
+		ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromString(coinKey);
+		if (foreignBlockchain == null) {
 			LOGGER.warn("Unknown coinKey: " + coinKey);
 			return false;
 		}
 
-		this.wallets.put(blockchain.getCurrencyCode(), true);	// Next call to wallet.getInstance() will create it if needed
+		this.wallets.put(foreignBlockchain.getCurrencyCode(), true);	// Next call to wallet.getInstance() will create it if needed
 		return true;		
 	}
 
 	public boolean disableWallet(String coinKey) {
-		SupportedBlockchain blockchain = SupportedBlockchain.fromString(coinKey);
-		if (blockchain == null) {
+		ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromString(coinKey);
+		if (foreignBlockchain == null) {
 			LOGGER.warn("Unknown coinKey: " + coinKey);
 			return false;
 		}
 
-		if (blockchain == SupportedBlockchain.PIRATECHAIN) {
+		if (ForeignBlockchainRegistry.PIRATECHAIN_NAME.equals(foreignBlockchain.name())) {
 			PirateChainWalletController pirateWalletController = PirateChainWalletController.getInstance();
 			if (pirateWalletController != null)
 				pirateWalletController.shutdown();
 		}
 
-		this.wallets.put(blockchain.getCurrencyCode(), false);
+		this.wallets.put(foreignBlockchain.getCurrencyCode(), false);
 		return true;		
 	}
 

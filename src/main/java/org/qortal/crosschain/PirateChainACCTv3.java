@@ -606,7 +606,7 @@ public class PirateChainACCTv3 implements ACCT {
 
 		CrossChainTradeData tradeData = new CrossChainTradeData();
 
-		tradeData.foreignBlockchain = SupportedBlockchain.PIRATECHAIN.name();
+		tradeData.foreignBlockchain = ForeignBlockchainRegistry.PIRATECHAIN_NAME;
 		tradeData.acctName = NAME;
 
 		tradeData.atAddress = atAddress;

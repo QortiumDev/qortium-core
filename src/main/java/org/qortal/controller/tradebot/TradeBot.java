@@ -98,12 +98,6 @@ public class TradeBot implements Listener {
 		}
 	}
 
-	private static final Map<Class<? extends ACCT>, Supplier<AcctTradeBot>> acctTradeBotSuppliers = new HashMap<>();
-	static {
-		acctTradeBotSuppliers.put(BitcoinyACCTv3.class, BitcoinyACCTv3TradeBot::getInstance);
-		acctTradeBotSuppliers.put(PirateChainACCTv3.class, PirateChainACCTv3TradeBot::getInstance);
-	}
-
 	private static TradeBot instance;
 
 	private final Map<ByteArray, Long> ourTradePresenceTimestampsByPubkey = Collections.synchronizedMap(new HashMap<>());
@@ -408,11 +402,7 @@ public class TradeBot implements Listener {
 	}
 
 	/*package*/ static AcctTradeBot findTradeBotForAcct(ACCT acct) {
-		Supplier<AcctTradeBot> acctTradeBotSupplier = acctTradeBotSuppliers.get(acct.getClass());
-		if (acctTradeBotSupplier == null)
-			return null;
-
-		return acctTradeBotSupplier.get();
+		return ForeignBlockchainRegistry.getTradeBotForAcct(acct);
 	}
 
 	// PRESENCE-related

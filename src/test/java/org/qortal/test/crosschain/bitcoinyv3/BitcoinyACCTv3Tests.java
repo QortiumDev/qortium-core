@@ -8,7 +8,6 @@ import org.qortal.asset.Asset;
 import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.BitcoinyACCTv3;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
-import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.data.at.ATData;
 import org.qortal.data.crosschain.CrossChainTradeData;
 import org.qortal.data.transaction.BaseTransactionData;
@@ -82,7 +81,7 @@ public class BitcoinyACCTv3Tests extends ACCTTests {
 			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
 			PrivateKeyAccount tradeAccount = createTradeAccount(repository);
 
-			for (SupportedBlockchain blockchain : SupportedBlockchain.bitcoinyBlockchains()) {
+			for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.bitcoinyEntries()) {
 				DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), blockchain);
 				Account at = deployAtTransaction.getATAccount();
 
@@ -96,27 +95,26 @@ public class BitcoinyACCTv3Tests extends ACCTTests {
 	}
 
 	@Test
-	public void testSupportedBlockchainLookupByNameAndCurrencyCode() {
-		for (SupportedBlockchain blockchain : SupportedBlockchain.values()) {
-			assertEquals(blockchain, SupportedBlockchain.fromString(blockchain.name()));
-			assertEquals(blockchain, SupportedBlockchain.fromString(blockchain.name().toLowerCase()));
-			assertEquals(blockchain, SupportedBlockchain.fromString(blockchain.getCurrencyCode()));
-			assertEquals(blockchain, SupportedBlockchain.fromString(blockchain.getCurrencyCode().toLowerCase()));
+	public void testForeignBlockchainRegistryLookupByNameAndCurrencyCode() {
+		for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
+			assertSame(blockchain, ForeignBlockchainRegistry.fromString(blockchain.name()));
+			assertSame(blockchain, ForeignBlockchainRegistry.fromString(blockchain.name().toLowerCase()));
+			assertSame(blockchain, ForeignBlockchainRegistry.fromString(blockchain.getCurrencyCode()));
+			assertSame(blockchain, ForeignBlockchainRegistry.fromString(blockchain.getCurrencyCode().toLowerCase()));
 		}
 
-		assertNull(SupportedBlockchain.fromString("unknown"));
+		assertNull(ForeignBlockchainRegistry.fromString("unknown"));
 	}
 
-	private DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress, SupportedBlockchain blockchain) throws DataException {
-		ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromString(blockchain.name());
-		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(foreignBlockchain, tradeAddress, foreignPublicKeyHash, redeemAmount, foreignAmount, tradeTimeout);
+	private DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress, ForeignBlockchainRegistry.Entry blockchain) throws DataException {
+		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(blockchain, tradeAddress, foreignPublicKeyHash, redeemAmount, foreignAmount, tradeTimeout);
 
 		long txTimestamp = System.currentTimeMillis();
 		Long fee = null;
-		String name = "NATIVE-" + blockchain.getInstance().getCurrencyCode() + " cross-chain trade";
+		String name = "NATIVE-" + blockchain.getCurrencyCode() + " cross-chain trade";
 		String description = "Local-chain-" + blockchain.name() + " cross-chain trade";
 		String atType = "ACCT";
-		String tags = "NATIVE-" + blockchain.getInstance().getCurrencyCode() + " ACCT";
+		String tags = "NATIVE-" + blockchain.getCurrencyCode() + " ACCT";
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), fee, null);
 		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.NATIVE);

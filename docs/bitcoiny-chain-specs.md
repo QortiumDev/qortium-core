@@ -26,9 +26,9 @@ Missing entries default to `MAIN`. Supported network names are currently `MAIN`,
 
 Adding another BTC-like coin should start with a new `BitcoinyChainSpec` builder entry. The builder keeps the common mainnet, testnet, regtest, Electrum refresh, fee, and minimum-order wiring in one place, so a new coin entry should mostly supply chain metadata and any needed explicit hooks. The registry then feeds network resolution, runtime startup, supported-chain lookup, and the Electrum server refresh tool. Coin-specific behavior should be added to the spec as an explicit hook, as with Bitcoin's default spend fee override and Litecoin's P2SH address normalization.
 
-`ForeignBlockchainRegistry` is the central lookup point for crosschain runtime code. It resolves canonical names and currency codes, maps Bitcoiny foreign-chain ids back to registered chains, owns the runtime instance definitions, exposes registry iteration helpers and the shared ACCT registry, drives API/websocket blockchain filters from string names instead of enum parameters, and feeds foreign-fee processing and backup/import paths. `SupportedBlockchain` remains only as a transitional facade for older compatibility callers. New backend code should use the registry directly instead of adding new `SupportedBlockchain` dependencies.
+`ForeignBlockchainRegistry` is the central lookup point for crosschain runtime code. It resolves canonical names and currency codes, maps Bitcoiny foreign-chain ids back to registered chains, owns the runtime instance definitions, exposes registry iteration helpers, owns the shared ACCT and trade-bot routing registries, drives API/websocket blockchain filters from string names instead of enum parameters, and feeds foreign-fee processing and backup/import paths. New backend code should use the registry directly.
 
-The shared Bitcoiny ACCT stores only the registered foreign-chain id in AT data. Build and parse paths resolve that id through `ForeignBlockchainRegistry`, so the ACCT code does not depend on the temporary `SupportedBlockchain` enum facade.
+The shared Bitcoiny ACCT stores only the registered foreign-chain id in AT data. Build and parse paths resolve that id through `ForeignBlockchainRegistry`, so the ACCT code does not need per-coin enum cases.
 
 ## Tests
 

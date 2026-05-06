@@ -106,7 +106,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 	 */
 	public byte[] createTrade(Repository repository, TradeBotCreateRequest tradeBotCreateRequest) throws DataException {
 		ForeignBlockchainRegistry.Entry foreignBlockchain = tradeBotCreateRequest.resolveForeignBlockchain();
-		if (foreignBlockchain == null || foreignBlockchain.getFacade() != SupportedBlockchain.PIRATECHAIN)
+		if (foreignBlockchain == null || !ForeignBlockchainRegistry.PIRATECHAIN_NAME.equals(foreignBlockchain.name()))
 			throw new DataException("Unsupported Pirate Chain blockchain");
 
 		byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
@@ -243,7 +243,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 				receivingAddress, crossChainTradeData.atAddress, now, crossChainTradeData.nativeAmount,
 				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
 				secretA, hashOfSecretA,
-				SupportedBlockchain.PIRATECHAIN.name(),
+				ForeignBlockchainRegistry.PIRATECHAIN_NAME,
 				tradeForeignPublicKey, tradeForeignPublicKeyHash,
 				crossChainTradeData.expectedForeignAmount, seed58, null, lockTimeA, receivingPublicKeyHash);
 

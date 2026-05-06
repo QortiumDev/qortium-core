@@ -16,7 +16,7 @@ import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.BitcoinyTransaction;
 import org.qortal.crosschain.ForeignBlockchainException;
-import org.qortal.crosschain.SupportedBlockchain;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.TransactionHash;
 import org.qortal.crypto.Crypto;
 import org.qortal.repository.DataException;
@@ -35,18 +35,24 @@ public class HtlcTests extends Common {
 
 	private Bitcoiny bitcoin;
 	private Bitcoiny litecoin;
+	private ForeignBlockchainRegistry.Entry bitcoinEntry;
+	private ForeignBlockchainRegistry.Entry litecoinEntry;
 
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings(); // TestNet3
-		bitcoin = SupportedBlockchain.BITCOIN.getBitcoinyInstance();
-		litecoin = SupportedBlockchain.LITECOIN.getBitcoinyInstance();
+		bitcoinEntry = ForeignBlockchainRegistry.fromStringRequired("BITCOIN");
+		litecoinEntry = ForeignBlockchainRegistry.fromStringRequired("LITECOIN");
+		bitcoin = bitcoinEntry.getBitcoinyInstance();
+		litecoin = litecoinEntry.getBitcoinyInstance();
 	}
 
 	@After
 	public void afterTest() {
-		SupportedBlockchain.BITCOIN.resetForTesting();
-		SupportedBlockchain.LITECOIN.resetForTesting();
+		bitcoinEntry.resetForTesting();
+		litecoinEntry.resetForTesting();
+		bitcoinEntry = null;
+		litecoinEntry = null;
 		bitcoin = null;
 		litecoin = null;
 	}

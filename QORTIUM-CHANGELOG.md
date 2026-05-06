@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: remove supported-blockchain facade
+
+Removed the temporary `SupportedBlockchain` enum facade and moved the remaining wallet settings, PirateChain ACCT, PirateChain trade-bot, and test/helper lookups onto `ForeignBlockchainRegistry` entries. The registry now also owns ACCT-to-trade-bot routing, so new registered crosschain families can add runtime, ACCT, and trade-bot routing in one central lookup path instead of updating a separate trade-bot map.
+
 ### 2026-05-06 - crosschain: route foreign fees through registry
 
 Moved foreign-fee offer scanning, local fee processing, backup/import, and ACCT lookup from the `SupportedBlockchain` facade to `ForeignBlockchainRegistry` entries. Foreign-fee handling now iterates the registry and processes any enabled registry entry backed by a `Bitcoiny` runtime, keeping this runtime path ready for new registered BTC-like chains without adding enum cases. Also cleaned the archive trade-bot import test so it commits imported repository changes before close, avoiding a repository leak diagnostic during focused verification.

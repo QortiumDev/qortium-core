@@ -9,7 +9,7 @@ import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyChainSpecs;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.ForeignBlockchainException;
-import org.qortal.crosschain.SupportedBlockchain;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.settings.Settings;
 import org.qortal.utils.NTP;
 
@@ -43,7 +43,7 @@ public abstract class Common {
 		else if ("-L".equals(normalizedSelector))
 			normalizedSelector = BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE;
 
-		SupportedBlockchain blockchain = SupportedBlockchain.fromRegisteredBitcoinyString(normalizedSelector);
+		ForeignBlockchainRegistry.Entry blockchain = ForeignBlockchainRegistry.fromRegisteredBitcoinyString(normalizedSelector);
 		if (blockchain == null)
 			throw new IllegalArgumentException(bitcoinyUsage());
 

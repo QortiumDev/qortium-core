@@ -1,38 +1,44 @@
 package org.qortal.crosschain;
 
+import org.qortal.controller.tradebot.AcctTradeBot;
+import org.qortal.controller.tradebot.BitcoinyACCTv3TradeBot;
+import org.qortal.controller.tradebot.PirateChainACCTv3TradeBot;
 import org.qortal.settings.Settings;
 import org.qortal.utils.ByteArray;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public final class ForeignBlockchainRegistry {
 
+	public static final String PIRATECHAIN_NAME = "PIRATECHAIN";
+
 	private static final Supplier<ACCT> BITCOINY_ACCT_SUPPLIER = BitcoinyACCTv3::getInstance;
 	private static final Supplier<ACCT> PIRATECHAIN_ACCT_SUPPLIER = PirateChainACCTv3::getInstance;
+	private static final Supplier<AcctTradeBot> BITCOINY_TRADE_BOT_SUPPLIER = BitcoinyACCTv3TradeBot::getInstance;
+	private static final Supplier<AcctTradeBot> PIRATECHAIN_TRADE_BOT_SUPPLIER = PirateChainACCTv3TradeBot::getInstance;
 
-	private static final Map<ByteArray, Supplier<ACCT>> BITCOINY_ACCT_MAP = Collections.singletonMap(
-			ByteArray.wrap(BitcoinyACCTv3.CODE_BYTES_HASH), BITCOINY_ACCT_SUPPLIER);
-
-	private static final Map<ByteArray, Supplier<ACCT>> PIRATECHAIN_ACCT_MAP = Collections.singletonMap(
-			ByteArray.wrap(PirateChainACCTv3.CODE_BYTES_HASH), PIRATECHAIN_ACCT_SUPPLIER);
+	private static final ByteArray BITCOINY_ACCT_CODE_HASH = ByteArray.wrap(BitcoinyACCTv3.CODE_BYTES_HASH);
+	private static final ByteArray PIRATECHAIN_ACCT_CODE_HASH = ByteArray.wrap(PirateChainACCTv3.CODE_BYTES_HASH);
 
 	private static final Map<ByteArray, Supplier<ACCT>> SUPPORTED_ACCTS_BY_CODE_HASH = Map.of(
-			ByteArray.wrap(BitcoinyACCTv3.CODE_BYTES_HASH), BITCOINY_ACCT_SUPPLIER,
-			ByteArray.wrap(PirateChainACCTv3.CODE_BYTES_HASH), PIRATECHAIN_ACCT_SUPPLIER);
+			BITCOINY_ACCT_CODE_HASH, BITCOINY_ACCT_SUPPLIER,
+			PIRATECHAIN_ACCT_CODE_HASH, PIRATECHAIN_ACCT_SUPPLIER);
 
 	private static final Map<String, Supplier<ACCT>> SUPPORTED_ACCTS_BY_NAME = Map.of(
 			BitcoinyACCTv3.NAME, BITCOINY_ACCT_SUPPLIER,
 			PirateChainACCTv3.NAME, PIRATECHAIN_ACCT_SUPPLIER);
+
+	private static final Map<Class<? extends ACCT>, Supplier<AcctTradeBot>> TRADE_BOTS_BY_ACCT_CLASS = Map.of(
+			BitcoinyACCTv3.class, BITCOINY_TRADE_BOT_SUPPLIER,
+			PirateChainACCTv3.class, PIRATECHAIN_TRADE_BOT_SUPPLIER);
 
 	private static final List<Entry> ENTRIES = buildEntries();
 
@@ -52,11 +58,12 @@ public final class ForeignBlockchainRegistry {
 			entries.add(Entry.bitcoiny(spec));
 
 		entries.add(Entry.foreign(
-				"PIRATECHAIN",
+				PIRATECHAIN_NAME,
 				6,
 				PirateChain.CURRENCY_CODE,
 				PirateChain::getInstance,
 				PIRATECHAIN_ACCT_SUPPLIER,
+				PIRATECHAIN_ACCT_CODE_HASH,
 				PirateChain::resetForTesting));
 
 		return Collections.unmodifiableList(entries);
@@ -76,13 +83,6 @@ public final class ForeignBlockchainRegistry {
 		return ENTRIES.stream()
 				.map(Entry::name)
 				.collect(Collectors.toUnmodifiableList());
-	}
-
-	public static EnumSet<SupportedBlockchain> bitcoinyFacades() {
-		return bitcoinyEntries().stream()
-				.map(Entry::getFacade)
-				.filter(Objects::nonNull)
-				.collect(Collectors.toCollection(() -> EnumSet.noneOf(SupportedBlockchain.class)));
 	}
 
 	public static Entry fromString(String name) {
@@ -131,14 +131,7 @@ public final class ForeignBlockchainRegistry {
 		if (entry == null)
 			return getAcctMap();
 
-		return entry.isBitcoiny() ? BITCOINY_ACCT_MAP : PIRATECHAIN_ACCT_MAP;
-	}
-
-	public static Map<ByteArray, Supplier<ACCT>> getFilteredAcctMap(SupportedBlockchain facade) {
-		if (facade == null)
-			return getAcctMap();
-
-		return getFilteredAcctMap(fromString(facade.name()));
+		return Collections.singletonMap(entry.getAcctCodeHash(), entry.acctSupplier);
 	}
 
 	public static Map<ByteArray, Supplier<ACCT>> getFilteredAcctMap(String specificBlockchain) {
@@ -170,6 +163,17 @@ public final class ForeignBlockchainRegistry {
 		return acctInstanceSupplier.get();
 	}
 
+	public static AcctTradeBot getTradeBotForAcct(ACCT acct) {
+		if (acct == null)
+			return null;
+
+		Supplier<AcctTradeBot> acctTradeBotSupplier = TRADE_BOTS_BY_ACCT_CLASS.get(acct.getClass());
+		if (acctTradeBotSupplier == null)
+			return null;
+
+		return acctTradeBotSupplier.get();
+	}
+
 	private static Map<String, Entry> buildEntriesByName() {
 		Map<String, Entry> entriesByName = new LinkedHashMap<>();
 
@@ -191,17 +195,19 @@ public final class ForeignBlockchainRegistry {
 		private final String currencyCode;
 		private final Supplier<? extends ForeignBlockchain> instanceSupplier;
 		private final Supplier<ACCT> acctSupplier;
+		private final ByteArray acctCodeHash;
 		private final Runnable resetForTesting;
 		private final boolean bitcoiny;
 		private final BitcoinyChainSpec bitcoinySpec;
 
 		private Entry(String name, int foreignBlockchainId, String currencyCode, Supplier<? extends ForeignBlockchain> instanceSupplier,
-				Supplier<ACCT> acctSupplier, Runnable resetForTesting, boolean bitcoiny, BitcoinyChainSpec bitcoinySpec) {
+				Supplier<ACCT> acctSupplier, ByteArray acctCodeHash, Runnable resetForTesting, boolean bitcoiny, BitcoinyChainSpec bitcoinySpec) {
 			this.name = name;
 			this.foreignBlockchainId = foreignBlockchainId;
 			this.currencyCode = currencyCode;
 			this.instanceSupplier = instanceSupplier;
 			this.acctSupplier = acctSupplier;
+			this.acctCodeHash = acctCodeHash;
 			this.resetForTesting = resetForTesting;
 			this.bitcoiny = bitcoiny;
 			this.bitcoinySpec = bitcoinySpec;
@@ -219,26 +225,19 @@ public final class ForeignBlockchainRegistry {
 					spec.getCurrencyCode(),
 					definition::getInstance,
 					BITCOINY_ACCT_SUPPLIER,
+					BITCOINY_ACCT_CODE_HASH,
 					definition::resetForTesting,
 					true,
 					spec);
 		}
 
 		private static Entry foreign(String name, int foreignBlockchainId, String currencyCode, Supplier<? extends ForeignBlockchain> instanceSupplier,
-				Supplier<ACCT> acctSupplier, Runnable resetForTesting) {
-			return new Entry(name, foreignBlockchainId, currencyCode, instanceSupplier, acctSupplier, resetForTesting, false, null);
+				Supplier<ACCT> acctSupplier, ByteArray acctCodeHash, Runnable resetForTesting) {
+			return new Entry(name, foreignBlockchainId, currencyCode, instanceSupplier, acctSupplier, acctCodeHash, resetForTesting, false, null);
 		}
 
 		public String name() {
 			return this.name;
-		}
-
-		public SupportedBlockchain getFacade() {
-			try {
-				return SupportedBlockchain.valueOf(this.name);
-			} catch (IllegalArgumentException e) {
-				return null;
-			}
 		}
 
 		public ForeignBlockchain getInstance() {
@@ -247,6 +246,10 @@ public final class ForeignBlockchainRegistry {
 
 		public ACCT getLatestAcct() {
 			return this.acctSupplier.get();
+		}
+
+		public ByteArray getAcctCodeHash() {
+			return this.acctCodeHash;
 		}
 
 		public int getForeignBlockchainId() {
