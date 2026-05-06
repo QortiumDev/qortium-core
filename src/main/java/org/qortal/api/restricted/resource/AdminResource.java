@@ -25,6 +25,7 @@ import org.qortal.api.model.CertificateSanInfo;
 import org.qortal.api.model.NodeInfo;
 import org.qortal.api.model.NodeStatus;
 import org.qortal.block.BlockChain;
+import org.qortal.controller.AutoUpdate;
 import org.qortal.controller.BootstrapNode;
 import org.qortal.controller.Controller;
 import org.qortal.controller.RestartNode;
@@ -442,6 +443,52 @@ public class AdminResource {
 		}).start();
 
 		return "true";
+	}
+
+	@GET
+	@Path("/update")
+	@Operation(
+		summary = "Check for a newer approved auto-update",
+		description = "Checks the latest approved development-group auto-update manifest without installing it.",
+		responses = {
+			@ApiResponse(
+				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = AutoUpdate.UpdateCheckResult.class))
+			)
+		}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public AutoUpdate.UpdateCheckResult updateStatus(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
+		Security.checkApiCallAllowed(request);
+
+		try {
+			return AutoUpdate.checkLatestUpdate();
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/update")
+	@Operation(
+		summary = "Install the latest approved auto-update",
+		description = "Checks the latest approved development-group auto-update manifest and schedules install if it is newer than this build.",
+		responses = {
+			@ApiResponse(
+				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = AutoUpdate.UpdateCheckResult.class))
+			)
+		}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public AutoUpdate.UpdateCheckResult installUpdate(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
+		Security.checkApiCallAllowed(request);
+
+		try {
+			return AutoUpdate.requestManualUpdate();
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
 	}
 
 	@GET

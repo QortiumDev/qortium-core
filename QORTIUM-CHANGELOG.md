@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-05 - api: add manual QDN auto-update controls
+
+Added restricted `GET /admin/update` and `POST /admin/update` endpoints so operators can manually check for and schedule the latest approved QDN auto-update even when automatic background updates are disabled. The manual path reuses the same approved development-group manifest lookup, QDN binary validation, SHA-256 verification, and apply-update restart flow as the background updater, with status details returned for unavailable, current, newer, and already-installing cases.
+
 ### 2026-05-05 - core: route auto-updates through QDN
 
 Changed auto-update transport so approved update manifests now point to QDN-hosted `AUTO_UPDATE_BINARY` resources instead of GitHub auto-update branches. The updater starts from `autoUpdateEnabled` without requiring `autoUpdateRepos`, ignores legacy HTTP manifests, fetches the pinned QDN binary transaction by signature when available, verifies the SHA-256 hash of the XORed update bytes, and then uses the existing apply-update restart path. The publish/build helper scripts now create a local `qortium.update`, publish it to QDN, submit a compact dev-group `AUTO_UPDATE` manifest for approval, and document the new approval workflow.

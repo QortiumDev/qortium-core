@@ -95,3 +95,25 @@ The updater ignores unapproved update manifests. Once approved and confirmed,
 auto-update-enabled nodes fetch the pinned QDN binary, verify the SHA-256 hash
 over the XORed bytes, decode it to `new-qortium.jar`, and restart through the
 standard apply-update path.
+
+## Manual Checks
+
+Nodes with `"autoUpdateEnabled": false` can still use the restricted admin API
+to check or install an approved update manually:
+
+```bash
+curl -H "X-API-KEY: $(cat apikey.txt)" \
+  http://localhost:12391/admin/update
+```
+
+To schedule installation of the latest approved update when it is newer than the
+running build:
+
+```bash
+curl -X POST -H "X-API-KEY: $(cat apikey.txt)" \
+  http://localhost:12391/admin/update
+```
+
+Both endpoints use the same approved development-group manifest lookup and QDN
+hash verification as automatic background updates. The `POST` endpoint returns a
+status response before the node begins the apply-update restart flow.

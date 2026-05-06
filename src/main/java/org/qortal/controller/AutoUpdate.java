@@ -37,6 +37,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /* NOTE: It is CRITICAL that we use OpenJDK and not Java SE because our uber jar repacks BouncyCastle which, in turn, unsigns BC causing it to be rejected as a security provider by Java SE. */
@@ -51,11 +52,25 @@ public class AutoUpdate extends Thread {
 	private static final long CHECK_INTERVAL = 20 * 60 * 1000L; // ms
 
 	private static final int UPDATE_SERVICE = 1;
+	private static final long MANUAL_UPDATE_DELAY = 1000L;
+
+	public static final String STATUS_QDN_DISABLED = "QDN_DISABLED";
+	public static final String STATUS_NO_DEV_GROUPS = "NO_DEV_GROUPS";
+	public static final String STATUS_NO_APPROVED_UPDATE = "NO_APPROVED_UPDATE";
+	public static final String STATUS_UNSUPPORTED_TRANSACTION = "UNSUPPORTED_TRANSACTION";
+	public static final String STATUS_MANIFEST_NOT_LOCAL = "MANIFEST_NOT_LOCAL";
+	public static final String STATUS_INVALID_MANIFEST = "INVALID_MANIFEST";
+	public static final String STATUS_LEGACY_MANIFEST = "LEGACY_MANIFEST";
+	public static final String STATUS_NOT_NEWER = "NOT_NEWER";
+	public static final String STATUS_UPDATE_AVAILABLE = "UPDATE_AVAILABLE";
+	public static final String STATUS_INSTALL_IN_PROGRESS = "INSTALL_IN_PROGRESS";
+	public static final String STATUS_INSTALL_STARTED = "INSTALL_STARTED";
 
 	/** This byte value used to hide contents from deep-inspection firewalls in case they block updates. */
 	public static final byte XOR_VALUE = (byte) 0x5a;
 
 	private static AutoUpdate instance;
+	private static final AtomicBoolean updateInstallInProgress = new AtomicBoolean(false);
 
 	private volatile boolean isStopping = false;
 
@@ -78,7 +93,7 @@ public class AutoUpdate extends Thread {
 			return;
 		}
 
-		long buildTimestamp = Controller.getInstance().getBuildTimestamp() * 1000L;
+		long buildTimestamp = getCurrentBuildTimestamp();
 		boolean attemptedUpdate = false;
 
 		while (!isStopping) {
@@ -97,48 +112,15 @@ public class AutoUpdate extends Thread {
 					// Whatever
 				}
 
-			// Look for "update" tx which is arbitrary tx in a configured dev group with service 1 and timestamp later than buildTimestamp
-			try (final Repository repository = RepositoryManager.getRepository()) {
-				int blockchainHeight = repository.getBlockRepository().getBlockchainHeight();
-				List<Integer> devGroupIds = Groups.getGroupIdsAtHeight(BlockChain.getInstance().getDevGroupIds(), blockchainHeight);
-				if (devGroupIds.isEmpty()) {
-					LOGGER.warn(String.format("Auto-update is enabled but no devGroupIds are configured at height %d. Skipping update lookup.", blockchainHeight));
-					continue;
-				}
-
-				byte[] signature = repository.getTransactionRepository().getLatestAutoUpdateTransaction(TransactionType.ARBITRARY, devGroupIds, UPDATE_SERVICE);
-				if (signature == null)
+			try {
+				UpdateLookup lookup = lookupLatestUpdate(buildTimestamp);
+				logSkippedLookup(lookup.status);
+				if (!lookup.status.updateAvailable)
 					continue;
 
-				TransactionData transactionData = repository.getTransactionRepository().fromSignature(signature);
-				if (!(transactionData instanceof ArbitraryTransactionData))
-					continue;
+				LOGGER.info("Update's git commit hash: {}", lookup.status.commitHash);
 
-				ArbitraryTransaction arbitraryTransaction = new ArbitraryTransaction(repository, transactionData);
-				if (!arbitraryTransaction.isDataLocal())
-					continue; // We can't access data
-
-				byte[] data = arbitraryTransaction.fetchData();
-				AutoUpdateManifest manifest;
-				try {
-					manifest = AutoUpdateManifest.parse(data);
-				} catch (IllegalArgumentException e) {
-					LOGGER.debug("Ignoring invalid auto-update manifest {}: {}", HashCode.fromBytes(signature), e.getMessage());
-					continue;
-				}
-
-				if (!manifest.isQdnManifest()) {
-					LOGGER.warn("Ignoring legacy HTTP auto-update manifest {} because this build only supports QDN auto-update transport",
-							HashCode.fromBytes(signature));
-					continue;
-				}
-
-				if (manifest.getTimestamp() <= buildTimestamp)
-					continue; // update is the same, or older, than current code
-
-				LOGGER.info("Update's git commit hash: {}", manifest.getCommitHashHex());
-
-				if (attemptUpdate(manifest)) {
+				if (attemptUpdate(lookup.manifest)) {
 					// Consider ourselves updated so don't re-re-re-download
 					buildTimestamp = System.currentTimeMillis();
 					attemptedUpdate = true;
@@ -157,7 +139,148 @@ public class AutoUpdate extends Thread {
 		this.interrupt();
 	}
 
+	public static UpdateCheckResult checkLatestUpdate() throws DataException {
+		return lookupLatestUpdate(getCurrentBuildTimestamp()).status;
+	}
+
+	public static UpdateCheckResult requestManualUpdate() throws DataException {
+		UpdateLookup lookup = lookupLatestUpdate(getCurrentBuildTimestamp());
+		if (!lookup.status.updateAvailable)
+			return lookup.status;
+
+		if (!updateInstallInProgress.compareAndSet(false, true)) {
+			lookup.status.installing = true;
+			lookup.status.status = STATUS_INSTALL_IN_PROGRESS;
+			lookup.status.message = "An update install is already in progress";
+			return lookup.status;
+		}
+
+		lookup.status.installing = true;
+		lookup.status.installStarted = true;
+		lookup.status.status = STATUS_INSTALL_STARTED;
+		lookup.status.message = "Update install has been scheduled";
+
+		AutoUpdateManifest manifest = lookup.manifest;
+		new Thread(() -> {
+			try {
+				Thread.sleep(MANUAL_UPDATE_DELAY);
+				if (!attemptUpdateAlreadyMarkedInProgress(manifest))
+					LOGGER.warn("Manual auto-update attempt failed");
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				LOGGER.warn("Manual auto-update attempt was interrupted before it started");
+				updateInstallInProgress.set(false);
+			}
+		}, "Manual auto-update").start();
+
+		return lookup.status;
+	}
+
+	private static long getCurrentBuildTimestamp() {
+		return Controller.getInstance().getBuildTimestamp() * 1000L;
+	}
+
+	private static UpdateLookup lookupLatestUpdate(long buildTimestamp) throws DataException {
+		UpdateCheckResult status = new UpdateCheckResult();
+		status.currentBuildTimestamp = buildTimestamp;
+		status.autoUpdateEnabled = Settings.getInstance().isAutoUpdateEnabled();
+		status.qdnEnabled = Settings.getInstance().isQdnEnabled();
+		status.installing = updateInstallInProgress.get();
+
+		if (!status.qdnEnabled)
+			return UpdateLookup.withoutManifest(status, STATUS_QDN_DISABLED,
+					"QDN is disabled, so QDN auto-updates cannot be checked");
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int blockchainHeight = repository.getBlockRepository().getBlockchainHeight();
+			status.blockchainHeight = blockchainHeight;
+			List<Integer> devGroupIds = Groups.getGroupIdsAtHeight(BlockChain.getInstance().getDevGroupIds(), blockchainHeight);
+			status.devGroupIds = devGroupIds;
+			if (devGroupIds.isEmpty())
+				return UpdateLookup.withoutManifest(status, STATUS_NO_DEV_GROUPS,
+						String.format("No development group IDs are configured at height %d", blockchainHeight));
+
+			byte[] signature = repository.getTransactionRepository().getLatestAutoUpdateTransaction(TransactionType.ARBITRARY, devGroupIds, UPDATE_SERVICE);
+			if (signature == null)
+				return UpdateLookup.withoutManifest(status, STATUS_NO_APPROVED_UPDATE,
+						"No approved auto-update manifest was found");
+
+			status.manifestSignature = Base58.encode(signature);
+			TransactionData transactionData = repository.getTransactionRepository().fromSignature(signature);
+			if (!(transactionData instanceof ArbitraryTransactionData))
+				return UpdateLookup.withoutManifest(status, STATUS_UNSUPPORTED_TRANSACTION,
+						"Latest auto-update transaction is not an ARBITRARY transaction");
+
+			ArbitraryTransaction arbitraryTransaction = new ArbitraryTransaction(repository, transactionData);
+			if (!arbitraryTransaction.isDataLocal())
+				return UpdateLookup.withoutManifest(status, STATUS_MANIFEST_NOT_LOCAL,
+						"Latest auto-update manifest data is not available locally");
+
+			byte[] data = arbitraryTransaction.fetchData();
+			AutoUpdateManifest manifest;
+			try {
+				manifest = AutoUpdateManifest.parse(data);
+			} catch (IllegalArgumentException e) {
+				return UpdateLookup.withoutManifest(status, STATUS_INVALID_MANIFEST,
+						String.format("Invalid auto-update manifest: %s", e.getMessage()));
+			}
+
+			populateManifestStatus(status, manifest);
+
+			if (!manifest.isQdnManifest())
+				return UpdateLookup.withoutManifest(status, STATUS_LEGACY_MANIFEST,
+						"Legacy HTTP auto-update manifests are not supported by this build");
+
+			if (manifest.getTimestamp() <= buildTimestamp)
+				return UpdateLookup.withoutManifest(status, STATUS_NOT_NEWER,
+						"Latest approved auto-update manifest is not newer than this build");
+
+			status.updateAvailable = true;
+			status.status = STATUS_UPDATE_AVAILABLE;
+			status.message = "A newer approved auto-update is available";
+			return new UpdateLookup(status, manifest);
+		}
+	}
+
+	private static void populateManifestStatus(UpdateCheckResult status, AutoUpdateManifest manifest) {
+		status.updateTimestamp = manifest.getTimestamp();
+		status.commitHash = manifest.getCommitHashHex();
+		status.binarySignature = manifest.getBinarySignature58();
+		status.qdnService = manifest.getQdnService().name();
+		status.qdnName = manifest.getQdnName();
+		status.qdnIdentifier = manifest.getQdnIdentifier();
+		status.qdnPath = manifest.getQdnPath();
+	}
+
+	private static void logSkippedLookup(UpdateCheckResult status) {
+		if (STATUS_NO_DEV_GROUPS.equals(status.status)) {
+			LOGGER.warn("Auto-update is enabled but {}. Skipping update lookup.", status.message);
+		} else if (STATUS_INVALID_MANIFEST.equals(status.status)) {
+			LOGGER.debug("Ignoring invalid auto-update manifest {}: {}", status.manifestSignature, status.message);
+		} else if (STATUS_LEGACY_MANIFEST.equals(status.status)) {
+			LOGGER.warn("Ignoring legacy HTTP auto-update manifest {} because this build only supports QDN auto-update transport",
+					status.manifestSignature);
+		}
+	}
+
 	private static boolean attemptUpdate(AutoUpdateManifest manifest) {
+		if (!updateInstallInProgress.compareAndSet(false, true)) {
+			LOGGER.warn("Skipping auto-update because another update install is already in progress");
+			return false;
+		}
+
+		return attemptUpdateAlreadyMarkedInProgress(manifest);
+	}
+
+	private static boolean attemptUpdateAlreadyMarkedInProgress(AutoUpdateManifest manifest) {
+		try {
+			return attemptUpdateInternal(manifest);
+		} finally {
+			updateInstallInProgress.set(false);
+		}
+	}
+
+	private static boolean attemptUpdateInternal(AutoUpdateManifest manifest) {
 		if (manifest.getBinarySignature() != null) {
 			LOGGER.info("Fetching update from pinned QDN {} transaction {} path {}",
 					manifest.getQdnService(), manifest.getBinarySignature58(), manifest.getQdnPath());
@@ -180,6 +303,44 @@ public class AutoUpdate extends Thread {
 		}
 
 		return applyUpdate(newJar);
+	}
+
+	private static class UpdateLookup {
+		private final UpdateCheckResult status;
+		private final AutoUpdateManifest manifest;
+
+		private UpdateLookup(UpdateCheckResult status, AutoUpdateManifest manifest) {
+			this.status = status;
+			this.manifest = manifest;
+		}
+
+		private static UpdateLookup withoutManifest(UpdateCheckResult status, String statusCode, String message) {
+			status.status = statusCode;
+			status.message = message;
+			status.updateAvailable = false;
+			return new UpdateLookup(status, null);
+		}
+	}
+
+	public static class UpdateCheckResult {
+		public boolean autoUpdateEnabled;
+		public boolean qdnEnabled;
+		public boolean updateAvailable;
+		public boolean installing;
+		public boolean installStarted;
+		public String status;
+		public String message;
+		public long currentBuildTimestamp;
+		public Integer blockchainHeight;
+		public List<Integer> devGroupIds;
+		public Long updateTimestamp;
+		public String commitHash;
+		public String manifestSignature;
+		public String binarySignature;
+		public String qdnService;
+		public String qdnName;
+		public String qdnIdentifier;
+		public String qdnPath;
 	}
 
 	static Path resolveQdnUpdatePath(AutoUpdateManifest manifest) throws DataException, IOException, MissingDataException {
