@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: migrate DigiByte to static params
+
+Moved DigiByte mainnet away from the inherited libdohj parameter class and onto the shared `StaticBitcoinyParams` model, reusing the custom genesis transaction/header support introduced for Ravencoin and adding parity tests against the previous DigiByte params. This continues reducing production reliance on altcoinj/libdohj-specific params classes while keeping runtime wallet, HTLC, and ACCT behavior covered by the shared Bitcoiny tests.
+
 ### 2026-05-06 - crosschain: migrate Ravencoin to static params
 
 Moved Ravencoin mainnet away from the inherited libdohj parameter class and onto the shared `StaticBitcoinyParams` model, including custom genesis-header support, interval and monetary parameter hooks, and parity tests against the previous Ravencoin params. This is the first existing BTC-like coin migrated to the shared parameter model and establishes the safer pattern for moving the remaining coins away from altcoinj/libdohj-specific params classes.

@@ -3,6 +3,7 @@ package org.qortal.crosschain;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.bitcoinj.core.NetworkParameters;
+import org.libdohj.params.DigibyteMainNetParams;
 import org.libdohj.params.RavencoinMainNetParams;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
@@ -109,6 +110,16 @@ public class BitcoinyChainSpecsTests {
 				assertNotNull(refreshConfig.getChain1209k());
 			}
 		}
+	}
+
+	@Test
+	public void testDigibyteUsesSharedStaticParamsWithLegacyParity() {
+		NetworkParameters legacyParams = DigibyteMainNetParams.get();
+		NetworkParameters digibyteMainNetParams = BitcoinyChainSpecs.DIGIBYTE.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+
+		assertTrue(digibyteMainNetParams instanceof StaticBitcoinyParams);
+		assertNetworkParamParity(legacyParams, digibyteMainNetParams);
+		assertEquals("7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", digibyteMainNetParams.getGenesisBlock().getHashAsString());
 	}
 
 	@Test

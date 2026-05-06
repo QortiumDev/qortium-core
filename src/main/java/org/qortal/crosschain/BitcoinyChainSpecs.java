@@ -11,7 +11,6 @@ import org.bitcoinj.script.Script;
 import org.bitcoinj.utils.MonetaryFormat;
 import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.crosschain.ElectrumX.Server;
-import org.libdohj.params.DigibyteMainNetParams;
 import org.libdohj.params.DogecoinMainNetParams;
 import org.libdohj.params.DogecoinTestNet3Params;
 import org.libdohj.params.LitecoinMainNetParams;
@@ -41,6 +40,24 @@ public final class BitcoinyChainSpecs {
 	private static final LitecoinMainNetParamsP2ShOverride LITECOIN_MAIN_NET_PARAMS_P2SH_OVERRIDE = new LitecoinMainNetParamsP2ShOverride(50);
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
+	private static final NetworkParameters DIGIBYTE_MAIN_NET_PARAMS = digibyteParams("main", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
+			.genesis(1389388394L, 2447652L, 0x1e0ffff0L, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496")
+			.genesisHeader(1L, "72ddd9496b004221ed0557358846d9248ecd4c440ebd28ed901efc18757d0fad")
+			.genesisTransaction(
+					"04ffff001d01044555534120546f6461793a2031302f4a616e2f323031342c205461726765743a20446174612073746f6c656e2066726f6d20757020746f203131304d20637573746f6d657273",
+					Coin.valueOf(8_000, 0),
+					"00")
+			.port(12024)
+			.packetMagic(0xfac3b6daL)
+			.addressHeaders(30, 63, 128)
+			.segwitAddressHrp("dgb")
+			.coinbaseAndSubsidy(100, 210_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.bip32SegwitHeaders(0x04b24746, 0x04b2430c)
+			.majorityWindow(750, 950, 1000)
+			.dnsSeeds("seed1.digibyte.io", "seed2.digibyte.io", "seed3.digibyte.io", "seed.digibyte.io",
+					"digihash.co", "digiexplorer.info", "seed.digibyteprojects.com")
+			.build();
 	private static final NetworkParameters RAVENCOIN_MAIN_NET_PARAMS = ravencoinParams("main", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
 			.genesis(1514999494L, 25023712L, 0x1e00ffffL, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90")
 			.genesisHeader(4L, "28ff00a867739a352523808d301f504bc4547699398d70faf2266a8bae5f3516")
@@ -109,7 +126,7 @@ public final class BitcoinyChainSpecs {
 			.build();
 
 	public static final BitcoinyChainSpec DIGIBYTE = spec("DIGIBYTE", 4, "Digibyte", DIGIBYTE_CURRENCY_CODE, Coin.valueOf(100_000), 1_000_000)
-			.mainnet(DigibyteMainNetParams::get, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", 10_000L, "dgb")
+			.mainnet(() -> DIGIBYTE_MAIN_NET_PARAMS, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", 10_000L, "dgb")
 			.test3(TestNet3Params::get, "308ea0711d5763be2995670dd9ca9872753561285a84da1d58be58acaa822252", 10_000L, 10_000L, null)
 			.regtest(RegTestParams::get, 10_000L, 10_000L)
 			.build();
@@ -140,6 +157,20 @@ public final class BitcoinyChainSpecs {
 
 	private static SpecBuilder spec(String canonicalName, int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
 		return new SpecBuilder(canonicalName, foreignBlockchainId, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount);
+	}
+
+	private static StaticBitcoinyParams.Builder digibyteParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "digibyte")
+				.maxTarget(0x1e0fffffL)
+				.targetTimespan(8_640)
+				.interval(2016)
+				.maxMoney(Coin.COIN.multiply(21_000_000L))
+				.minNonDustOutput(Coin.valueOf(546L))
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, "DGB")
+						.code(3, "mDGB")
+						.code(7, "Digioshi"))
+				.difficultyValidationFailure("DigiByte difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	private static StaticBitcoinyParams.Builder ravencoinParams(String id, String paymentProtocolId) {
