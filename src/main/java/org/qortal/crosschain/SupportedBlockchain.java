@@ -131,6 +131,21 @@ public enum SupportedBlockchain {
 		return blockchain != null ? blockchain : blockchainsByCurrencyCode.get(normalizedName);
 	}
 
+	public static SupportedBlockchain fromRegisteredBitcoinyString(String name) {
+		SupportedBlockchain blockchain = fromString(name);
+		return blockchain != null && blockchain.isBitcoiny() ? blockchain : null;
+	}
+
+	public static Bitcoiny getRegisteredBitcoinyInstance(String name) {
+		SupportedBlockchain blockchain = fromRegisteredBitcoinyString(name);
+		return blockchain == null ? null : blockchain.getBitcoinyInstance();
+	}
+
+	public static Bitcoiny getBitcoinyInstance(String name) {
+		SupportedBlockchain blockchain = fromString(name);
+		return blockchain == null ? null : blockchain.getBitcoinyInstance();
+	}
+
 	public static SupportedBlockchain fromForeignBlockchainId(int foreignBlockchainId) {
 		return bitcoinyBlockchainsById.get(foreignBlockchainId);
 	}

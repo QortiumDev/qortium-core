@@ -25,3 +25,7 @@ Missing entries default to `MAIN`. Supported network names are currently `MAIN`,
 ## Adding A Coin
 
 Adding another BTC-like coin should start with a new `BitcoinyChainSpec` entry. The registry then feeds network resolution, runtime startup, supported-chain lookup, and the Electrum server refresh tool. Coin-specific behavior should be added to the spec as an explicit hook, as with Bitcoin's default spend fee override and Litecoin's P2SH address normalization.
+
+## Tests
+
+The shared BTC-like wallet, HTLC, and fee tests live in `RegisteredBitcoinyTests`. Add a fixture there for any new registered Bitcoiny chain so the common deterministic coverage runs without creating another per-coin test class.

@@ -825,11 +825,9 @@ public class CrossChainResource {
 			if (crossChainTradeData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-			SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(crossChainTradeData.foreignBlockchain);
-			if (supportedBlockchain == null || !(supportedBlockchain.getInstance() instanceof Bitcoiny))
+			Bitcoiny bitcoiny = SupportedBlockchain.getBitcoinyInstance(crossChainTradeData.foreignBlockchain);
+			if (bitcoiny == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
-
-			Bitcoiny bitcoiny = (Bitcoiny) supportedBlockchain.getInstance();
 
 			Optional<String> p2sh
 					= CrossChainUtils.getP2ShAddressForAT(atAddress, repository, bitcoiny, crossChainTradeData);
@@ -872,10 +870,12 @@ public class CrossChainResource {
 	) @QueryParam("foreignBlockchain") SupportedBlockchain foreignBlockchain) {
 		Security.checkApiCallAllowed(request);
 
-		if (!(foreignBlockchain.getInstance() instanceof Bitcoiny))
+		if (foreignBlockchain == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-		Bitcoiny bitcoiny = (Bitcoiny) foreignBlockchain.getInstance() ;
+		Bitcoiny bitcoiny = foreignBlockchain.getBitcoinyInstance();
+		if (bitcoiny == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 		org.bitcoinj.core.Context.propagate( bitcoiny.getBitcoinjContext() );
 

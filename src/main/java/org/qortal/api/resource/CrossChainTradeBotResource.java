@@ -26,7 +26,6 @@ import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.ForeignBlockchain;
-import org.qortal.crosschain.PirateChain;
 import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.at.ATData;
@@ -253,8 +252,8 @@ public class CrossChainTradeBotResource {
 			if (crossChainTradeData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
-			SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(crossChainTradeData.foreignBlockchain);
-			if (supportedBlockchain == null || !supportedBlockchain.getInstance().isValidWalletKey(tradeBotRespondRequest.foreignKey))
+			Bitcoiny bitcoiny = SupportedBlockchain.getBitcoinyInstance(crossChainTradeData.foreignBlockchain);
+			if (bitcoiny == null || !bitcoiny.isValidWalletKey(tradeBotRespondRequest.foreignKey))
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
 			if (crossChainTradeData.mode != AcctMode.OFFERING)
@@ -325,8 +324,12 @@ public class CrossChainTradeBotResource {
 				if (crossChainTradeData == null)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
-				SupportedBlockchain blockchain = SupportedBlockchain.fromString(crossChainTradeData.foreignBlockchain);
-				if (blockchain == null || !(blockchain.getInstance() instanceof Bitcoiny) || blockchain.getInstance() instanceof PirateChain)
+				SupportedBlockchain blockchain = SupportedBlockchain.fromRegisteredBitcoinyString(crossChainTradeData.foreignBlockchain);
+				if (blockchain == null)
+					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+				Bitcoiny bitcoiny = blockchain.getBitcoinyInstance();
+				if (bitcoiny == null)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 				if (acct.isEmpty())
@@ -339,7 +342,7 @@ public class CrossChainTradeBotResource {
 				else if (supportedBlockchain.get() != blockchain)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-				if (!blockchain.getInstance().isValidWalletKey(respondRequests.foreignKey))
+				if (!bitcoiny.isValidWalletKey(respondRequests.foreignKey))
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
 				if (crossChainTradeData.mode != AcctMode.OFFERING)
@@ -366,7 +369,7 @@ public class CrossChainTradeBotResource {
 						crossChainTradeDataList,
 						respondRequests.receivingAddress,
 						respondRequests.foreignKey,
-						(Bitcoiny) supportedBlockchain.get().getInstance());
+						supportedBlockchain.get().getBitcoinyInstance());
 
 			switch (result) {
 				case OK:

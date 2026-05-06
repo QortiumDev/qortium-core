@@ -46,8 +46,8 @@ public class CrossChainBitcoinyResource {
 	HttpServletRequest request;
 
 	private SupportedBlockchain getSupportedBlockchain(String blockchain) {
-		SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(blockchain);
-		if (supportedBlockchain == null || !supportedBlockchain.isBitcoiny())
+		SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromRegisteredBitcoinyString(blockchain);
+		if (supportedBlockchain == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 		return supportedBlockchain;

@@ -145,7 +145,7 @@ public class BitcoinyACCTv3 implements ACCT {
 	 * @param tradeTimeout suggested timeout for entire trade
 	 */
 	public static byte[] buildTradeAT(SupportedBlockchain foreignBlockchain, String creatorTradeAddress, byte[] foreignPublicKeyHash, long nativeAmount, long foreignAmount, int tradeTimeout) {
-		if (foreignBlockchain == null || !(foreignBlockchain.getInstance() instanceof Bitcoiny))
+		if (foreignBlockchain == null || !foreignBlockchain.isBitcoiny())
 			throw new IllegalArgumentException("Unsupported Bitcoiny blockchain");
 
 		if (foreignPublicKeyHash.length != 20)
@@ -747,7 +747,7 @@ public class BitcoinyACCTv3 implements ACCT {
 				return null;
 
 			SupportedBlockchain foreignBlockchain = SupportedBlockchain.fromForeignBlockchainId((int) dataByteBuffer.getLong());
-			if (foreignBlockchain == null || !(foreignBlockchain.getInstance() instanceof Bitcoiny))
+			if (foreignBlockchain == null || !foreignBlockchain.isBitcoiny())
 				return null;
 		tradeData.foreignBlockchain = foreignBlockchain.name();
 

@@ -824,15 +824,14 @@ public class ForeignFeesManager implements Listener {
 
         // derive the supported blockchain for the trade offer waiting
         String foreignBlockchain = tradeOfferWaiting.getForeignBlockchain();
-        SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(foreignBlockchain);
+        Bitcoiny bitcoiny = SupportedBlockchain.getBitcoinyInstance(foreignBlockchain);
 
         LOGGER.debug("trade offer waiting: blockchain = " + foreignBlockchain);
 
         // if the supported blockchain is a Bitcoiny blockchain, then the fee will be available
-        if (supportedBlockchain.getInstance() instanceof Bitcoiny) {
+        if (bitcoiny != null) {
 
-            // get the foreign blockcahin, the AT address and the foreign fee set to this node
-            Bitcoiny bitcoiny = (Bitcoiny) supportedBlockchain.getInstance();
+            // get the foreign blockchain, the AT address and the foreign fee set to this node
             String atAddress = tradeOfferWaiting.getAtAddress();
             int fee = Math.toIntExact(bitcoiny.getFeeRequired());
 

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: parameterize Bitcoiny chain tests
+
+Replaced the duplicated Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin crosschain test classes with one registered Bitcoiny test suite driven by per-chain fixtures, so new BTC-like coins can reuse the same deterministic wallet, fee, and HTLC coverage without another copied test wrapper. Bitcoiny chain lookup is now centralized in `SupportedBlockchain`, reducing repeated type checks across the API, trade-bot, foreign-fee, and helper-app paths.
+
 ### 2026-05-06 - crosschain: collapse Bitcoiny coin wrappers
 
 Replaced the separate Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin runtime wrappers with one registry-backed Bitcoiny implementation that is created from each chain specification. BTC-like network selection now uses a generic `bitcoinyNetworks` settings map keyed by currency code, Bitcoin's default spend fee and Litecoin's address normalization live in the shared chain specs, and the generic Bitcoiny API route now validates supported chains through the registry instead of hardcoding every coin in the path.

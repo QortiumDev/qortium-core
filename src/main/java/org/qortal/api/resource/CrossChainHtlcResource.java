@@ -700,11 +700,11 @@ public class CrossChainHtlcResource {
 	}
 
 	private Bitcoiny getBitcoiny(String foreignBlockchain) {
-		SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(foreignBlockchain);
-		if (supportedBlockchain == null || !(supportedBlockchain.getInstance() instanceof Bitcoiny))
+		Bitcoiny bitcoiny = SupportedBlockchain.getBitcoinyInstance(foreignBlockchain);
+		if (bitcoiny == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-		return (Bitcoiny) supportedBlockchain.getInstance();
+		return bitcoiny;
 	}
 
 }

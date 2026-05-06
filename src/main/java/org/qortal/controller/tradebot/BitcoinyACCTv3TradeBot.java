@@ -880,15 +880,22 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 	}
 
 	private Bitcoiny getBitcoiny(String foreignBlockchain) throws DataException {
-		SupportedBlockchain supportedBlockchain = SupportedBlockchain.fromString(foreignBlockchain);
-		return getBitcoiny(supportedBlockchain);
+		Bitcoiny bitcoiny = SupportedBlockchain.getRegisteredBitcoinyInstance(foreignBlockchain);
+		if (bitcoiny == null)
+			throw new DataException("Unsupported Bitcoiny blockchain");
+
+		return bitcoiny;
 	}
 
 	private Bitcoiny getBitcoiny(SupportedBlockchain supportedBlockchain) throws DataException {
-		if (supportedBlockchain == null || !(supportedBlockchain.getInstance() instanceof Bitcoiny))
+		if (supportedBlockchain == null || !supportedBlockchain.isBitcoiny())
 			throw new DataException("Unsupported Bitcoiny blockchain");
 
-		return (Bitcoiny) supportedBlockchain.getInstance();
+		Bitcoiny bitcoiny = supportedBlockchain.getBitcoinyInstance();
+		if (bitcoiny == null)
+			throw new DataException("Unsupported Bitcoiny blockchain");
+
+		return bitcoiny;
 	}
 
 	private long calcFeeTimestamp(int lockTimeA, int tradeTimeout) {

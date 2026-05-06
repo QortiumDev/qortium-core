@@ -43,9 +43,8 @@ public abstract class Common {
 		else if ("-L".equals(normalizedSelector))
 			normalizedSelector = BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE;
 
-		SupportedBlockchain blockchain = SupportedBlockchain.fromString(normalizedSelector);
-
-		if (blockchain == null || !blockchain.isBitcoiny())
+		SupportedBlockchain blockchain = SupportedBlockchain.fromRegisteredBitcoinyString(normalizedSelector);
+		if (blockchain == null)
 			throw new IllegalArgumentException(bitcoinyUsage());
 
 		Bitcoiny bitcoiny = blockchain.getBitcoinyInstance();
