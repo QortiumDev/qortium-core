@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: migrate Ravencoin to static params
+
+Moved Ravencoin mainnet away from the inherited libdohj parameter class and onto the shared `StaticBitcoinyParams` model, including custom genesis-header support, interval and monetary parameter hooks, and parity tests against the previous Ravencoin params. This is the first existing BTC-like coin migrated to the shared parameter model and establishes the safer pattern for moving the remaining coins away from altcoinj/libdohj-specific params classes.
+
 ### 2026-05-06 - crosschain: add Dash Bitcoiny support
 
 Added Dash as the first new reusable BTC-like chain after the Bitcoiny registry cleanup, including shared static network parameters, registry/spec metadata, verified SSL Electrum seeds, shared deterministic wallet/HTLC/ACCT test coverage, and documentation for selecting the Dash network. The Electrum refresh tool now also preserves existing generated server source and response-time metadata when refreshing a single coin, preventing unrelated server-list churn.

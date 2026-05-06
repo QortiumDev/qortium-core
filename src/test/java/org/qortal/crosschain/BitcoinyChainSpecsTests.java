@@ -2,6 +2,8 @@ package org.qortal.crosschain;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.bitcoinj.core.NetworkParameters;
+import org.libdohj.params.RavencoinMainNetParams;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
 import org.qortal.test.common.Common;
@@ -9,6 +11,7 @@ import org.qortal.test.common.Common;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -109,6 +112,16 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testRavencoinUsesSharedStaticParamsWithLegacyParity() {
+		NetworkParameters legacyParams = RavencoinMainNetParams.get();
+		NetworkParameters ravencoinMainNetParams = BitcoinyChainSpecs.RAVENCOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+
+		assertTrue(ravencoinMainNetParams instanceof StaticBitcoinyParams);
+		assertNetworkParamParity(legacyParams, ravencoinMainNetParams);
+		assertEquals("0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", ravencoinMainNetParams.getGenesisBlock().getHashAsString());
+	}
+
+	@Test
 	public void testDashUsesSharedStaticParams() {
 		BitcoinyNetwork dashMainNet = BitcoinyChainSpecs.DASH.getNetwork(BitcoinyChainSpecs.MAIN);
 
@@ -128,5 +141,44 @@ public class BitcoinyChainSpecsTests {
 		assertSame(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST3), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE.toLowerCase()));
 		assertSame(BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DOGECOIN_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.DASH.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DASH_CURRENCY_CODE));
+	}
+
+	private static void assertNetworkParamParity(NetworkParameters expected, NetworkParameters actual) {
+		assertEquals(expected.getId(), actual.getId());
+		assertEquals(expected.getPaymentProtocolId(), actual.getPaymentProtocolId());
+		assertEquals(expected.getUriScheme(), actual.getUriScheme());
+		assertEquals(expected.getGenesisBlock().getHash(), actual.getGenesisBlock().getHash());
+		assertEquals(expected.getGenesisBlock().getVersion(), actual.getGenesisBlock().getVersion());
+		assertEquals(expected.getGenesisBlock().getMerkleRoot(), actual.getGenesisBlock().getMerkleRoot());
+		assertEquals(expected.getGenesisBlock().getTimeSeconds(), actual.getGenesisBlock().getTimeSeconds());
+		assertEquals(expected.getGenesisBlock().getDifficultyTarget(), actual.getGenesisBlock().getDifficultyTarget());
+		assertEquals(expected.getGenesisBlock().getNonce(), actual.getGenesisBlock().getNonce());
+		assertEquals(expected.getGenesisBlock().hasTransactions(), actual.getGenesisBlock().hasTransactions());
+		assertEquals(expected.getGenesisBlock().getTransactions().size(), actual.getGenesisBlock().getTransactions().size());
+		for (int index = 0; index < expected.getGenesisBlock().getTransactions().size(); index++)
+			assertEquals(expected.getGenesisBlock().getTransactions().get(index).getHash(), actual.getGenesisBlock().getTransactions().get(index).getHash());
+		assertEquals(expected.getMaxTarget(), actual.getMaxTarget());
+		assertEquals(expected.getTargetTimespan(), actual.getTargetTimespan());
+		assertEquals(expected.getInterval(), actual.getInterval());
+		assertEquals(expected.getPort(), actual.getPort());
+		assertEquals(expected.getPacketMagic(), actual.getPacketMagic());
+		assertEquals(expected.getAddressHeader(), actual.getAddressHeader());
+		assertEquals(expected.getP2SHHeader(), actual.getP2SHHeader());
+		assertEquals(expected.getDumpedPrivateKeyHeader(), actual.getDumpedPrivateKeyHeader());
+		assertEquals(expected.getSegwitAddressHrp(), actual.getSegwitAddressHrp());
+		assertEquals(expected.getSpendableCoinbaseDepth(), actual.getSpendableCoinbaseDepth());
+		assertEquals(expected.getSubsidyDecreaseBlockCount(), actual.getSubsidyDecreaseBlockCount());
+		assertEquals(expected.getBip32HeaderP2PKHpub(), actual.getBip32HeaderP2PKHpub());
+		assertEquals(expected.getBip32HeaderP2PKHpriv(), actual.getBip32HeaderP2PKHpriv());
+		assertEquals(expected.getBip32HeaderP2WPKHpub(), actual.getBip32HeaderP2WPKHpub());
+		assertEquals(expected.getBip32HeaderP2WPKHpriv(), actual.getBip32HeaderP2WPKHpriv());
+		assertEquals(expected.getMajorityEnforceBlockUpgrade(), actual.getMajorityEnforceBlockUpgrade());
+		assertEquals(expected.getMajorityRejectBlockOutdated(), actual.getMajorityRejectBlockOutdated());
+		assertEquals(expected.getMajorityWindow(), actual.getMajorityWindow());
+		assertArrayEquals(expected.getDnsSeeds(), actual.getDnsSeeds());
+		assertEquals(expected.getMaxMoney(), actual.getMaxMoney());
+		assertEquals(expected.getMinNonDustOutput(), actual.getMinNonDustOutput());
+		assertEquals(expected.getMonetaryFormat(), actual.getMonetaryFormat());
+		assertEquals(expected.hasMaxMoney(), actual.hasMaxMoney());
 	}
 }

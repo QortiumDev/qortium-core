@@ -8,6 +8,7 @@ import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.RegTestParams;
 import org.bitcoinj.params.TestNet3Params;
 import org.bitcoinj.script.Script;
+import org.bitcoinj.utils.MonetaryFormat;
 import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.crosschain.ElectrumX.Server;
 import org.libdohj.params.DigibyteMainNetParams;
@@ -16,7 +17,6 @@ import org.libdohj.params.DogecoinTestNet3Params;
 import org.libdohj.params.LitecoinMainNetParams;
 import org.libdohj.params.LitecoinRegTestParams;
 import org.libdohj.params.LitecoinTestNet3Params;
-import org.libdohj.params.RavencoinMainNetParams;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -41,6 +41,21 @@ public final class BitcoinyChainSpecs {
 	private static final LitecoinMainNetParamsP2ShOverride LITECOIN_MAIN_NET_PARAMS_P2SH_OVERRIDE = new LitecoinMainNetParamsP2ShOverride(50);
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
+	private static final NetworkParameters RAVENCOIN_MAIN_NET_PARAMS = ravencoinParams("main", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
+			.genesis(1514999494L, 25023712L, 0x1e00ffffL, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90")
+			.genesisHeader(4L, "28ff00a867739a352523808d301f504bc4547699398d70faf2266a8bae5f3516")
+			.genesisTransaction(
+					"0004ffff001d01044c4d5468652054696d65732030332f4a616e2f3230313820426974636f696e206973206e616d65206f66207468652067616d6520666f72206e65772067656e65726174696f6e206f66206669726d73",
+					Coin.valueOf(5_000, 0),
+					"04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f")
+			.port(8767)
+			.packetMagic(0x5241564eL)
+			.addressHeaders(60, 122, 128)
+			.coinbaseAndSubsidy(100, 2_100_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(750, 950, 1000)
+			.dnsSeeds("seed-raven.bitactivate.com", "seed-raven.ravencoin.com", "seed-raven.ravencoin.org")
+			.build();
 	private static final NetworkParameters DASH_MAIN_NET_PARAMS = dashParams("org.dash.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
 			.genesis(1390095618L, 28917698L, 0x1e0ffff0L, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6")
 			.port(9999)
@@ -100,7 +115,7 @@ public final class BitcoinyChainSpecs {
 			.build();
 
 	public static final BitcoinyChainSpec RAVENCOIN = spec("RAVENCOIN", 5, "Ravencoin", RAVENCOIN_CURRENCY_CODE, Coin.valueOf(1_125_000), 1_000_000)
-			.mainnet(RavencoinMainNetParams::get, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", 1_000_000L, "rvn")
+			.mainnet(() -> RAVENCOIN_MAIN_NET_PARAMS, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", 1_000_000L, "rvn")
 			.test3(TestNet3Params::get, "000000ecfc5e6324a079542221d00e10362bdc894d56500c414060eea8a3ad5a", 1_000_000L, 1_000_000L, null)
 			.regtest(RegTestParams::get, 1_000_000L, 1_000_000L)
 			.build();
@@ -125,6 +140,20 @@ public final class BitcoinyChainSpecs {
 
 	private static SpecBuilder spec(String canonicalName, int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
 		return new SpecBuilder(canonicalName, foreignBlockchainId, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount);
+	}
+
+	private static StaticBitcoinyParams.Builder ravencoinParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "ravencoin")
+				.maxTarget(0x1e00ffffL)
+				.targetTimespan(120_960)
+				.interval(2016)
+				.maxMoney(Coin.COIN.multiply(21_000_000L))
+				.minNonDustOutput(Coin.valueOf(2_730L))
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, "RVN")
+						.code(3, "mRVN")
+						.code(7, "Ravenoshi"))
+				.difficultyValidationFailure("Ravencoin difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	private static StaticBitcoinyParams.Builder dashParams(String id, String paymentProtocolId) {
