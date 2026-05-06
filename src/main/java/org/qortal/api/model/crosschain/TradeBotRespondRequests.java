@@ -10,7 +10,7 @@ import java.util.List;
 @XmlAccessorType(XmlAccessType.FIELD)
 public class TradeBotRespondRequests {
 
-	@Schema(description = "Foreign blockchain private key, e.g. BIP32 'm' key for Bitcoin/Litecoin starting with 'xprv'",
+	@Schema(description = "Foreign blockchain private key, e.g. BIP32 'm' key for supported Bitcoiny chains",
 			example = "xprv___________________________________________________________________________________________________________")
 	public String foreignKey;
 

@@ -773,8 +773,6 @@ public class PirateChainACCTv3 implements ACCT {
 			tradeData.mode = AcctMode.OFFERING;
 		}
 
-		tradeData.duplicateDeprecated();
-
 		return tradeData;
 	}
 
@@ -792,14 +790,14 @@ public class PirateChainACCTv3 implements ACCT {
 	}
 
 	/** Returns 'trade' MESSAGE payload for AT creator to send to AT. */
-	public static byte[] buildTradeMessage(String partnerTradeAddress, byte[] partnerBitcoinPublicKey, byte[] hashOfSecretA, int lockTimeA, int refundTimeout) {
+	public static byte[] buildTradeMessage(String partnerTradeAddress, byte[] partnerPirateChainPublicKey, byte[] hashOfSecretA, int lockTimeA, int refundTimeout) {
 		byte[] data = new byte[TRADE_MESSAGE_LENGTH];
 		byte[] partnerAddressBytes = Base58.decode(partnerTradeAddress);
 		byte[] lockTimeABytes = BitTwiddling.toBEByteArray((long) lockTimeA);
 		byte[] refundTimeoutBytes = BitTwiddling.toBEByteArray((long) refundTimeout);
 
 		System.arraycopy(partnerAddressBytes, 0, data, 0, partnerAddressBytes.length);
-		System.arraycopy(partnerBitcoinPublicKey, 0, data, 32, partnerBitcoinPublicKey.length);
+		System.arraycopy(partnerPirateChainPublicKey, 0, data, 32, partnerPirateChainPublicKey.length);
 		System.arraycopy(refundTimeoutBytes, 0, data, 72, refundTimeoutBytes.length);
 		System.arraycopy(hashOfSecretA, 0, data, 80, hashOfSecretA.length);
 		System.arraycopy(lockTimeABytes, 0, data, 104, lockTimeABytes.length);

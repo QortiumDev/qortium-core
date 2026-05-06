@@ -11,7 +11,7 @@ public class TradeBotRespondRequest {
 	@Schema(description = "local-chain AT address", example = "Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	public String atAddress;
 
-	@Schema(description = "Foreign blockchain private key, e.g. BIP32 'm' key for Bitcoin/Litecoin starting with 'xprv'",
+	@Schema(description = "Foreign blockchain private key, e.g. BIP32 'm' key for supported Bitcoiny chains",
 			example = "xprv___________________________________________________________________________________________________________")
 	public String foreignKey;
 

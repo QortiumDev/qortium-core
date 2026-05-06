@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: simplify Bitcoiny seed and API data
+
+Moved Bitcoiny Electrum server fallback data fully into the generated JSON resource so the refresh tool no longer rewrites Java hardcoded server lists, and existing generated seeds are preserved as refresh input before 1209k and Electrum peer discovery add updates. The Bitcoiny trade and HTLC API models also drop old Bitcoin-only compatibility aliases in favor of generic foreign-chain fields, reducing baseline API clutter for new chains.
+
 ### 2026-05-06 - crosschain: parameterize Bitcoiny chain tests
 
 Replaced the duplicated Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin crosschain test classes with one registered Bitcoiny test suite driven by per-chain fixtures, so new BTC-like coins can reuse the same deterministic wallet, fee, and HTLC coverage without another copied test wrapper. Bitcoiny chain lookup is now centralized in `SupportedBlockchain`, reducing repeated type checks across the API, trade-bot, foreign-fee, and helper-app paths.

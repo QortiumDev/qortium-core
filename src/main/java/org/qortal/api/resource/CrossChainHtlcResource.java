@@ -154,8 +154,8 @@ public class CrossChainHtlcResource {
 			long p2shBalance = bitcoiny.getConfirmedBalance(p2shAddress.toString());
 
 			CrossChainBitcoinyHTLCStatus htlcStatus = new CrossChainBitcoinyHTLCStatus();
-			htlcStatus.bitcoinP2shAddress = p2shAddress;
-			htlcStatus.bitcoinP2shBalance = BigDecimal.valueOf(p2shBalance, 8);
+			htlcStatus.p2shAddress = p2shAddress;
+			htlcStatus.p2shBalance = BigDecimal.valueOf(p2shBalance, 8);
 
 			List<TransactionOutput> fundingOutputs = bitcoiny.getUnspentOutputs(p2shAddress.toString(), false);
 
@@ -166,7 +166,7 @@ public class CrossChainHtlcResource {
 
 			if (now >= medianBlockTime * 1000L) {
 				// See if we can extract secret
-				htlcStatus.secret = BitcoinyHTLC.findHtlcSecret(bitcoiny, htlcStatus.bitcoinP2shAddress);
+				htlcStatus.secret = BitcoinyHTLC.findHtlcSecret(bitcoiny, htlcStatus.p2shAddress);
 			}
 
 			return htlcStatus;

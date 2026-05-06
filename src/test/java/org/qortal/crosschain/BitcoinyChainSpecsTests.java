@@ -59,7 +59,6 @@ public class BitcoinyChainSpecsTests {
 			for (BitcoinyChainSpec.ElectrumServerRefreshConfig refreshConfig : spec.getElectrumServerRefreshConfigs()) {
 				assertNotNull(spec.getNetwork(refreshConfig.getNetworkName()));
 				assertNotNull(refreshConfig.getChain1209k());
-				assertNotNull(refreshConfig.getBuiltInSourceMarker());
 			}
 		}
 	}

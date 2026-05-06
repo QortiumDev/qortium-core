@@ -10,10 +10,10 @@ import java.math.BigDecimal;
 public class CrossChainBitcoinyHTLCStatus {
 
 	@Schema(description = "P2SH address", example = "3CdH27kTpV8dcFHVRYjQ8EEV5FJg9X8pSJ (mainnet), 2fMiRRXVsxhZeyfum9ifybZvaMHbQTmwdZw (testnet)")
-	public String bitcoinP2shAddress;
+	public String p2shAddress;
 
 	@Schema(description = "P2SH balance")
-	public BigDecimal bitcoinP2shBalance;
+	public BigDecimal p2shBalance;
 
 	@Schema(description = "Can HTLC redeem yet?")
 	public boolean canRedeem;

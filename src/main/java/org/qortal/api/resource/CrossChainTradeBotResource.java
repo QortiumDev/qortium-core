@@ -115,7 +115,6 @@ public class CrossChainTradeBotResource {
 		}
 	)
 	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.INSUFFICIENT_BALANCE, ApiError.REPOSITORY_ISSUE, ApiError.ORDER_SIZE_TOO_SMALL})
-	@SuppressWarnings("deprecation")
 	@SecurityRequirement(name = "apiKey")
 	public String tradeBotCreator(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotCreateRequest tradeBotCreateRequest) {
 		Security.checkApiCallAllowed(request);
@@ -124,10 +123,6 @@ public class CrossChainTradeBotResource {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 		ForeignBlockchain foreignBlockchain = tradeBotCreateRequest.foreignBlockchain.getInstance();
-
-		// We prefer foreignAmount to deprecated bitcoinAmount
-		if (tradeBotCreateRequest.foreignAmount == null)
-			tradeBotCreateRequest.foreignAmount = tradeBotCreateRequest.bitcoinAmount;
 
 		if (!foreignBlockchain.isValidAddress(tradeBotCreateRequest.receivingAddress))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
@@ -186,7 +181,6 @@ public class CrossChainTradeBotResource {
 		}
 	)
 	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, ApiError.REPOSITORY_ISSUE})
-	@SuppressWarnings("deprecation")
 	@SecurityRequirement(name = "apiKey")
 	public String tradeBotResponder(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotRespondRequest tradeBotRespondRequest) {
 		Security.checkApiCallAllowed(request);
@@ -215,7 +209,6 @@ public class CrossChainTradeBotResource {
 			}
 	)
 	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, ApiError.REPOSITORY_ISSUE})
-	@SuppressWarnings("deprecation")
 	@SecurityRequirement(name = "apiKey")
 	public String tradeBotResponderMultiple(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotRespondRequests tradeBotRespondRequest) {
 		Security.checkApiCallAllowed(request);

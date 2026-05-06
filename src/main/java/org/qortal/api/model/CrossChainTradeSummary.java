@@ -1,6 +1,5 @@
 package org.qortal.api.model;
 
-import io.swagger.v3.oas.annotations.media.Schema;
 import org.qortal.data.crosschain.CrossChainTradeData;
 
 import javax.xml.bind.annotation.XmlAccessType;
@@ -15,11 +14,6 @@ public class CrossChainTradeSummary {
 
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long nativeAmount;
-
-	@Deprecated
-	@Schema(description = "DEPRECATED: use foreignAmount instead")
-	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	private long btcAmount;
 
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long foreignAmount;
@@ -38,7 +32,6 @@ public class CrossChainTradeSummary {
 		this.tradeTimestamp = timestamp;
 		this.nativeAmount = crossChainTradeData.nativeAmount;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
-		this.btcAmount = this.foreignAmount;
 		this.sellerAddress = crossChainTradeData.creatorAddress;
 		this.buyerReceivingAddress = crossChainTradeData.partnerReceivingAddress;
 		this.atAddress = crossChainTradeData.atAddress;
@@ -50,10 +43,6 @@ public class CrossChainTradeSummary {
 
 	public long getNativeAmount() {
 		return this.nativeAmount;
-	}
-
-	public long getBtcAmount() {
-		return this.btcAmount;
 	}
 
 	public long getForeignAmount() { return this.foreignAmount; }

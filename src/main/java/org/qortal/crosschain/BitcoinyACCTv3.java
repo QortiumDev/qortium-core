@@ -768,8 +768,6 @@ public class BitcoinyACCTv3 implements ACCT {
 			tradeData.mode = AcctMode.OFFERING;
 		}
 
-		tradeData.duplicateDeprecated();
-
 		return tradeData;
 	}
 

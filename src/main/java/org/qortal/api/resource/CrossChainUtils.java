@@ -625,14 +625,14 @@ public class CrossChainUtils {
     /**
      * Build Offer Message
      *
-     * @param partnerBitcoinPKH
+     * @param partnerForeignPKH
      * @param hashOfSecretA
      * @param lockTimeA
      * @return  'offer' MESSAGE payload for trade partner to send to AT creator's trade address
      */
-    public static byte[] buildOfferMessage(byte[] partnerBitcoinPKH, byte[] hashOfSecretA, int lockTimeA) {
+    public static byte[] buildOfferMessage(byte[] partnerForeignPKH, byte[] hashOfSecretA, int lockTimeA) {
         byte[] lockTimeABytes = BitTwiddling.toBEByteArray((long) lockTimeA);
-        return Bytes.concat(partnerBitcoinPKH, hashOfSecretA, lockTimeABytes);
+        return Bytes.concat(partnerForeignPKH, hashOfSecretA, lockTimeABytes);
     }
 
     /**

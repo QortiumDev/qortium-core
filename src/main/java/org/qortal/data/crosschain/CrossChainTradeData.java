@@ -22,10 +22,6 @@ public class CrossChainTradeData {
 	@Schema(description = "AT creator's ephemeral trading key-pair represented as local-chain address")
 	public String creatorTradeAddress;
 
-	@Deprecated
-	@Schema(description = "DEPRECATED: use creatorForeignPKH instead")
-	public byte[] creatorBitcoinPKH;
-
 	@Schema(description = "AT creator's foreign blockchain trade public-key-hash (PKH)")
 	public byte[] creatorForeignPKH;
 
@@ -61,11 +57,6 @@ public class CrossChainTradeData {
 	@Schema(description = "Actual local-chain block height when AT will automatically refund to AT creator (after trade begins)")
 	public Integer tradeRefundHeight;
 
-	@Deprecated
-	@Schema(description = "DEPRECATED: use expectedForeignAmount instread")
-	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long expectedBitcoin;
-
 	@Schema(description = "Amount, in foreign blockchain currency, that AT creator expects trade partner to pay out (excluding miner fees)")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public long expectedForeignAmount;
@@ -78,10 +69,6 @@ public class CrossChainTradeData {
 
 	@Schema(description = "Suggested P2SH-B nLockTime based on trade timeout")
 	public Integer lockTimeB;
-
-	@Deprecated
-	@Schema(description = "DEPRECATED: use partnerForeignPKH instead")
-	public byte[] partnerBitcoinPKH;
 
 	@Schema(description = "Trade partner's foreign blockchain public-key-hash (PKH)")
 	public byte[] partnerForeignPKH;
@@ -103,12 +90,6 @@ public class CrossChainTradeData {
 
 	// Necessary for JAXB
 	public CrossChainTradeData() {
-	}
-
-	public void duplicateDeprecated() {
-		this.creatorBitcoinPKH = this.creatorForeignPKH;
-		this.expectedBitcoin = this.expectedForeignAmount;
-		this.partnerBitcoinPKH = this.partnerForeignPKH;
 	}
 
 }

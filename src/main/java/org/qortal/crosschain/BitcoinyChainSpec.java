@@ -86,12 +86,10 @@ public final class BitcoinyChainSpec {
 	public static final class ElectrumServerRefreshConfig {
 		private final String networkName;
 		private final String chain1209k;
-		private final String builtInSourceMarker;
 
-		public ElectrumServerRefreshConfig(String networkName, String chain1209k, String builtInSourceMarker) {
+		public ElectrumServerRefreshConfig(String networkName, String chain1209k) {
 			this.networkName = networkName;
 			this.chain1209k = chain1209k;
-			this.builtInSourceMarker = builtInSourceMarker;
 		}
 
 		public String getNetworkName() {
@@ -100,10 +98,6 @@ public final class BitcoinyChainSpec {
 
 		public String getChain1209k() {
 			return this.chain1209k;
-		}
-
-		public String getBuiltInSourceMarker() {
-			return this.builtInSourceMarker;
 		}
 	}
 }

@@ -42,11 +42,6 @@ public class TradeBotData {
 	private byte[] tradeForeignPublicKey;
 	private byte[] tradeForeignPublicKeyHash;
 
-	@Deprecated
-	@Schema(description = "DEPRECATED: use foreignAmount instead", type = "number")
-	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	private long bitcoinAmount;
-
 	@Schema(description = "amount in foreign blockchain currency", type = "number")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long foreignAmount;
@@ -90,8 +85,6 @@ public class TradeBotData {
 		this.foreignBlockchain = foreignBlockchain;
 		this.tradeForeignPublicKey = tradeForeignPublicKey;
 		this.tradeForeignPublicKeyHash = tradeForeignPublicKeyHash;
-		// deprecated copy
-		this.bitcoinAmount = foreignAmount;
 		this.foreignAmount = foreignAmount;
 		this.foreignKey = foreignKey;
 		this.lastTransactionSignature = lastTransactionSignature;

@@ -21,7 +21,6 @@ import java.util.Set;
 
 public final class ElectrumServerDiscovery {
 
-	public static final String SOURCE_BUILT_IN = "builtin";
 	public static final String SOURCE_1209K = "1209k";
 	public static final String SOURCE_PEER = "peer";
 
@@ -68,14 +67,6 @@ public final class ElectrumServerDiscovery {
 		public void addSources(Collection<String> sources) {
 			this.sources.addAll(sources);
 		}
-	}
-
-	public static List<CandidateServer> fromBuiltIn(Collection<Server> servers) {
-		List<CandidateServer> candidates = new ArrayList<>();
-		for (Server server : servers)
-			candidates.add(new CandidateServer(server, SOURCE_BUILT_IN));
-
-		return candidates;
 	}
 
 	public static List<CandidateServer> parse1209kHtml(String html) {
