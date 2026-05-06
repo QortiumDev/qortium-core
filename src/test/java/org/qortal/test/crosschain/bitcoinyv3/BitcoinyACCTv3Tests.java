@@ -94,6 +94,18 @@ public class BitcoinyACCTv3Tests extends ACCTTests {
 		}
 	}
 
+	@Test
+	public void testSupportedBlockchainLookupByNameAndCurrencyCode() {
+		for (SupportedBlockchain blockchain : SupportedBlockchain.values()) {
+			assertEquals(blockchain, SupportedBlockchain.fromString(blockchain.name()));
+			assertEquals(blockchain, SupportedBlockchain.fromString(blockchain.name().toLowerCase()));
+			assertEquals(blockchain, SupportedBlockchain.fromString(blockchain.getCurrencyCode()));
+			assertEquals(blockchain, SupportedBlockchain.fromString(blockchain.getCurrencyCode().toLowerCase()));
+		}
+
+		assertNull(SupportedBlockchain.fromString("unknown"));
+	}
+
 	private DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress, SupportedBlockchain blockchain) throws DataException {
 		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(blockchain, tradeAddress, foreignPublicKeyHash, redeemAmount, foreignAmount, tradeTimeout);
 

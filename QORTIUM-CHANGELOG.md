@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-05 - crosschain: condense Bitcoiny chain plumbing
+
+Reduced duplicated Bitcoin-like chain code by moving common network metadata into shared static Bitcoiny network delegates, adding a generic send request model, and replacing the separate Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin API resources with one generic Bitcoiny resource that resolves chains by name or ticker. Litecoin address normalization now lives behind the shared Bitcoiny address hook so the generic send path can preserve its P2SH handling.
+
 ### 2026-05-05 - crosschain: configure Bitcoiny coins generically
 
 Moved the remaining BTC-like coin wrappers onto a shared configured Bitcoiny implementation so Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin now reuse the same provider setup, fee, and minimum-order plumbing. The unused dynamic BitcoinyTBD experiment was removed, the supported-blockchain registry now carries stable currency codes, and the crosschain helper apps can resolve any configured Bitcoiny chain instead of being limited to hard-coded BTC and LTC switches.

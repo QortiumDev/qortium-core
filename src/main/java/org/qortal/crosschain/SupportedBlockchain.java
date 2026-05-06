@@ -5,6 +5,7 @@ import org.qortal.utils.ByteArray;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -37,6 +38,9 @@ public enum SupportedBlockchain {
 
 	private static final Map<String, SupportedBlockchain> blockchainsByName = Arrays.stream(SupportedBlockchain.values())
 			.collect(Collectors.toUnmodifiableMap(Enum::name, blockchain -> blockchain));
+
+	private static final Map<String, SupportedBlockchain> blockchainsByCurrencyCode = Arrays.stream(SupportedBlockchain.values())
+			.collect(Collectors.toUnmodifiableMap(SupportedBlockchain::getCurrencyCode, blockchain -> blockchain));
 
 	private static final Map<Integer, SupportedBlockchain> bitcoinyBlockchainsById = Arrays.stream(SupportedBlockchain.values())
 			.filter(SupportedBlockchain::isBitcoiny)
@@ -93,7 +97,10 @@ public enum SupportedBlockchain {
 		if (name == null)
 			return null;
 
-		return blockchainsByName.get(name);
+		String normalizedName = name.toUpperCase(Locale.ROOT);
+
+		SupportedBlockchain blockchain = blockchainsByName.get(normalizedName);
+		return blockchain != null ? blockchain : blockchainsByCurrencyCode.get(normalizedName);
 	}
 
 	public static SupportedBlockchain fromForeignBlockchainId(int foreignBlockchainId) {
@@ -111,7 +118,7 @@ public enum SupportedBlockchain {
 		if (specificBlockchain == null)
 			return getAcctMap();
 
-		SupportedBlockchain blockchain = blockchainsByName.get(specificBlockchain);
+		SupportedBlockchain blockchain = fromString(specificBlockchain);
 		if (blockchain == null)
 			return Collections.emptyMap();
 

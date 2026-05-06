@@ -158,6 +158,10 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 		}
 	}
 
+	public String normalizeAddress(String address) {
+		return address;
+	}
+
 	/** Returns P2PKH address using passed public key hash. */
 	public String pkhToAddress(byte[] publicKeyHash) {
 		Context.propagate(this.bitcoinjContext);
