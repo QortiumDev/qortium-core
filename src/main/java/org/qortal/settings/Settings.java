@@ -9,6 +9,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -31,20 +32,13 @@ import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.eclipse.persistence.jaxb.UnmarshallerProperties;
 import org.qortal.block.BlockChain;
-import org.qortal.controller.arbitrary.ArbitraryDataStorageManager.StoragePolicy;
-import org.qortal.crosschain.Bitcoin.BitcoinNet;
-//import org.qortal.controller.BitcoinWalletController;
-import org.qortal.crosschain.Digibyte.DigibyteNet;
-//import org.qortal.controller.DigibyteWalletController;
-import org.qortal.crosschain.Dogecoin.DogecoinNet;
-//import org.qortal.controller.DogecoinWalletController;
-//import org.qortal.crosschain.Litecoin.LitecoinNet;
-import org.qortal.crosschain.Litecoin.*;
-import org.qortal.crosschain.Litecoin; 
-import org.qortal.crosschain.PirateChain.PirateChainNet;
 import org.qortal.controller.PirateChainWalletController;
-import org.qortal.crosschain.Ravencoin.RavencoinNet;
-//import org.qortal.controller.RavencoinWalletController;
+import org.qortal.controller.arbitrary.ArbitraryDataStorageManager.StoragePolicy;
+import org.qortal.crosschain.BitcoinyChainSpec;
+import org.qortal.crosschain.BitcoinyChainSpecs;
+import org.qortal.crosschain.BitcoinyNetwork;
+import org.qortal.crosschain.PirateChain.PirateChainNet;
+import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.network.message.MessageType;
 import org.qortal.utils.EnumUtils;
 
@@ -266,13 +260,10 @@ public class Settings {
 
 	// Which blockchains this node is running
 	@XmlJavaTypeAdapter(WalletsMapXmlAdapter.class)
-    private Map<String, Boolean> wallets = new HashMap<>();
+	private Map<String, Boolean> wallets = new HashMap<>();
 	private String blockchainConfig = null; // use default from resources
-	private BitcoinNet bitcoinNet = BitcoinNet.MAIN;
-	private LitecoinNet litecoinNet = LitecoinNet.MAIN;
-	private DogecoinNet dogecoinNet = DogecoinNet.MAIN;
-	private DigibyteNet digibyteNet = DigibyteNet.MAIN;
-	private RavencoinNet ravencoinNet = RavencoinNet.MAIN;
+	@XmlJavaTypeAdapter(StringMapXmlAdapter.class)
+	private Map<String, String> bitcoinyNetworks = defaultBitcoinyNetworks();
 	private PirateChainNet pirateChainNet = PirateChainNet.MAIN;
 	// Also crosschain-related:
 	/** Whether to show SysTray pop-up notifications when trade-bot entries change state */
@@ -771,6 +762,8 @@ public class Settings {
 	}
 
 	private void validate() {
+		normaliseBitcoinyNetworks();
+
 		// Validation goes here
 		if (this.minBlockchainPeers < 1 && !singleNodeTestnet)
 			throwValidationError("minBlockchainPeers must be at least 1");
@@ -787,6 +780,38 @@ public class Settings {
 			String possibleValues = EnumUtils.getNames(StoragePolicy.class, ", ");
 			throwValidationError(String.format("storagePolicy must be one of: %s", possibleValues));
 		}
+	}
+
+	private static Map<String, String> defaultBitcoinyNetworks() {
+		Map<String, String> networks = new LinkedHashMap<>();
+		for (String currencyCode : BitcoinyChainSpecs.currencyCodes())
+			networks.put(currencyCode, BitcoinyChainSpecs.MAIN);
+
+		return networks;
+	}
+
+	private void normaliseBitcoinyNetworks() {
+		Map<String, String> normalisedNetworks = defaultBitcoinyNetworks();
+		if (this.bitcoinyNetworks != null) {
+			for (Map.Entry<String, String> entry : this.bitcoinyNetworks.entrySet()) {
+				if (entry.getKey() == null || entry.getValue() == null)
+					continue;
+
+				String currencyCode = entry.getKey().trim().toUpperCase(Locale.ROOT);
+				String networkName = entry.getValue().trim().toUpperCase(Locale.ROOT);
+
+				BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(currencyCode);
+				if (spec == null)
+					throwValidationError("Unsupported Bitcoiny network coin: " + entry.getKey());
+
+				if (spec.getNetwork(networkName) == null)
+					throwValidationError(String.format("Unsupported %s Bitcoiny network: %s", currencyCode, entry.getValue()));
+
+				normalisedNetworks.put(currencyCode, networkName);
+			}
+		}
+
+		this.bitcoinyNetworks = normalisedNetworks;
 	}
 
 	private void setAdditionalDefaults() {
@@ -1050,63 +1075,42 @@ public class Settings {
 		return this.maxDataPeerConnectionTime;
 	}
 
-    public boolean isWalletEnabled(String coinKey) {
+	public boolean isWalletEnabled(String coinKey) {
+		SupportedBlockchain blockchain = SupportedBlockchain.fromString(coinKey);
+		if (blockchain != null)
+			coinKey = blockchain.getCurrencyCode();
 
-        if ( this.wallets == null || !this.wallets.containsKey(coinKey)) {
-            return true;
-        }
+		if (this.wallets == null || !this.wallets.containsKey(coinKey))
+			return true;
 
-        return this.wallets.get(coinKey);
-    }
+		return this.wallets.get(coinKey);
+	}
 
 	public boolean enableWallet(String coinKey) {
-		this.wallets.put(coinKey, true);	// Next call to wallet.getInstance() will create it if needed
+		SupportedBlockchain blockchain = SupportedBlockchain.fromString(coinKey);
+		if (blockchain == null) {
+			LOGGER.warn("Unknown coinKey: " + coinKey);
+			return false;
+		}
+
+		this.wallets.put(blockchain.getCurrencyCode(), true);	// Next call to wallet.getInstance() will create it if needed
 		return true;		
 	}
 
 	public boolean disableWallet(String coinKey) {
-		switch (coinKey) {
-			case "BTC":
-				// BitcoinWallet bitcoinWallet = BitcoinWallet.getInstance();
-				// if (bitcoinWallet != null) {
-				// 	bitcoinWallet.shutdown();
-				// }
-				break;
-			case "LTC":
-				if (Litecoin.getInstance() != null) {
-					//Litecoin.getInstance().shutdown();
-				}
-				break;
-			case "DOGE":
-				// DogecoinWallet dogecoinWallet = DogecoinWalletController.getInstance();
-				// if (dogecoinWallet != null) {
-				// 	dogecoinWallet.shutdown();
-				// }
-				break;
-			case "DGB":
-				// DigibyteWallet digibyteWallet = DigibyteWalletController.getInstance();
-				// if (digibyteWallet != null) {
-				// 	digibyteWallet.shutdown();
-				// }
-				break;
-			case "RVN":
-				// RavencoinWallet ravencoinWallet = RavencoinWalletController.getInstance();
-				// if (ravencoinWallet != null) {
-				// 	ravencoinWallet.shutdown();
-				// }
-				break;
-			case "ARRR":
-				PirateChainWalletController pirateWalletController = PirateChainWalletController.getInstance();
-				if (pirateWalletController != null) {
-					pirateWalletController.shutdown();
-				}
-				break;
-			default:
-				// Unknown coinKey, nothing to do
-				LOGGER.warn("Unknown coinKey: " + coinKey);
-				return false;
-		}  
-		this.wallets.put(coinKey, false);
+		SupportedBlockchain blockchain = SupportedBlockchain.fromString(coinKey);
+		if (blockchain == null) {
+			LOGGER.warn("Unknown coinKey: " + coinKey);
+			return false;
+		}
+
+		if (blockchain == SupportedBlockchain.PIRATECHAIN) {
+			PirateChainWalletController pirateWalletController = PirateChainWalletController.getInstance();
+			if (pirateWalletController != null)
+				pirateWalletController.shutdown();
+		}
+
+		this.wallets.put(blockchain.getCurrencyCode(), false);
 		return true;		
 	}
 
@@ -1114,24 +1118,24 @@ public class Settings {
 		return this.blockchainConfig;
 	}
 
-	public BitcoinNet getBitcoinNet() {
-		return this.bitcoinNet;
+	public BitcoinyNetwork getBitcoinyNetwork(String currencyCode) {
+		BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(currencyCode);
+		if (spec == null)
+			throw new IllegalArgumentException("Unsupported Bitcoiny coin: " + currencyCode);
+
+		BitcoinyNetwork network = spec.getNetwork(getBitcoinyNetworkName(spec.getCurrencyCode()));
+		if (network == null)
+			throw new IllegalArgumentException(String.format("Unsupported %s Bitcoiny network: %s", spec.getCurrencyCode(), getBitcoinyNetworkName(spec.getCurrencyCode())));
+
+		return network;
 	}
 
-	public LitecoinNet getLitecoinNet() {
-		return this.litecoinNet;
-	}
+	public String getBitcoinyNetworkName(String currencyCode) {
+		String normalisedCurrencyCode = currencyCode.toUpperCase(Locale.ROOT);
+		if (this.bitcoinyNetworks == null)
+			return BitcoinyChainSpecs.MAIN;
 
-	public DogecoinNet getDogecoinNet() {
-		return this.dogecoinNet;
-	}
-
-	public DigibyteNet getDigibyteNet() {
-		return this.digibyteNet;
-	}
-
-	public RavencoinNet getRavencoinNet() {
-		return this.ravencoinNet;
+		return this.bitcoinyNetworks.getOrDefault(normalisedCurrencyCode, BitcoinyChainSpecs.MAIN);
 	}
 
 	public PirateChainNet getPirateChainNet() {

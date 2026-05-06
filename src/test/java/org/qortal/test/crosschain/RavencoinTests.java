@@ -1,7 +1,7 @@
 package org.qortal.test.crosschain;
 
 import org.qortal.crosschain.Bitcoiny;
-import org.qortal.crosschain.Ravencoin;
+import org.qortal.crosschain.SupportedBlockchain;
 
 public class RavencoinTests extends BitcoinyTests {
 
@@ -17,12 +17,12 @@ public class RavencoinTests extends BitcoinyTests {
 
 	@Override
 	protected Bitcoiny getCoin() {
-		return Ravencoin.getInstance();
+		return SupportedBlockchain.RAVENCOIN.getBitcoinyInstance();
 	}
 
 	@Override
 	protected void resetCoinForTesting() {
-		Ravencoin.resetForTesting();
+		SupportedBlockchain.RAVENCOIN.resetForTesting();
 	}
 
 	@Override

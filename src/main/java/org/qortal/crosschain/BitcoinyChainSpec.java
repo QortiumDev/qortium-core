@@ -1,5 +1,7 @@
 package org.qortal.crosschain;
 
+import org.bitcoinj.core.NetworkParameters;
+
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -13,13 +15,22 @@ public final class BitcoinyChainSpec {
 	private final BitcoinyChainConfig config;
 	private final Map<String, BitcoinyNetwork> networksByName;
 	private final List<ElectrumServerRefreshConfig> electrumServerRefreshConfigs;
+	private final Long defaultSpendFeePerByte;
+	private final AddressNormalizer addressNormalizer;
 
 	public BitcoinyChainSpec(int foreignBlockchainId, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs) {
+		this(foreignBlockchainId, config, networks, electrumServerRefreshConfigs, null, null);
+	}
+
+	public BitcoinyChainSpec(int foreignBlockchainId, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
+			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer) {
 		this.foreignBlockchainId = foreignBlockchainId;
 		this.config = config;
 		this.networksByName = toNetworksByName(networks);
 		this.electrumServerRefreshConfigs = Collections.unmodifiableList(new ArrayList<>(electrumServerRefreshConfigs));
+		this.defaultSpendFeePerByte = defaultSpendFeePerByte;
+		this.addressNormalizer = addressNormalizer;
 	}
 
 	private static Map<String, BitcoinyNetwork> toNetworksByName(Collection<? extends BitcoinyNetwork> networks) {
@@ -54,6 +65,22 @@ public final class BitcoinyChainSpec {
 
 	public List<ElectrumServerRefreshConfig> getElectrumServerRefreshConfigs() {
 		return this.electrumServerRefreshConfigs;
+	}
+
+	public Long getDefaultSpendFeePerByte() {
+		return this.defaultSpendFeePerByte;
+	}
+
+	public String normalizeAddress(String address, NetworkParameters networkParameters) {
+		if (this.addressNormalizer == null)
+			return address;
+
+		return this.addressNormalizer.normalize(address, networkParameters);
+	}
+
+	@FunctionalInterface
+	public interface AddressNormalizer {
+		String normalize(String address, NetworkParameters networkParameters);
 	}
 
 	public static final class ElectrumServerRefreshConfig {

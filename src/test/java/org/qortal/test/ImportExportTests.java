@@ -12,7 +12,6 @@ import org.junit.Test;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.controller.tradebot.TradeStates;
 import org.qortal.controller.tradebot.TradeBot;
-import org.qortal.crosschain.Litecoin;
 import org.qortal.crosschain.BitcoinyACCTv3;
 import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.crypto.Crypto;
@@ -392,7 +391,7 @@ public class ImportExportTests extends Common {
         // Convert Litecoin receiving address into public key hash (we only support P2PKH at this time)
         Address litecoinReceivingAddress;
         try {
-            litecoinReceivingAddress = Address.fromString(Litecoin.getInstance().getNetworkParameters(), receivingAddress);
+            litecoinReceivingAddress = Address.fromString(SupportedBlockchain.LITECOIN.getBitcoinyInstance().getNetworkParameters(), receivingAddress);
         } catch (AddressFormatException e) {
             throw new DataException("Unsupported Litecoin receiving address: " + receivingAddress);
         }

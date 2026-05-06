@@ -12,12 +12,11 @@ import org.bitcoinj.script.ScriptBuilder;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.qortal.crosschain.Bitcoin;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.BitcoinyTransaction;
 import org.qortal.crosschain.ForeignBlockchainException;
-import org.qortal.crosschain.Litecoin;
+import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.crosschain.TransactionHash;
 import org.qortal.crypto.Crypto;
 import org.qortal.repository.DataException;
@@ -34,20 +33,20 @@ public class HtlcTests extends Common {
 	private static final byte[] EXPECTED_SECRET = "This string is exactly 32 bytes!".getBytes();
 	private static final int LOCK_TIME = 1_700_000_000;
 
-	private Bitcoin bitcoin;
-	private Litecoin litecoin;
+	private Bitcoiny bitcoin;
+	private Bitcoiny litecoin;
 
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings(); // TestNet3
-		bitcoin = Bitcoin.getInstance();
-		litecoin = Litecoin.getInstance();
+		bitcoin = SupportedBlockchain.BITCOIN.getBitcoinyInstance();
+		litecoin = SupportedBlockchain.LITECOIN.getBitcoinyInstance();
 	}
 
 	@After
 	public void afterTest() {
-		Bitcoin.resetForTesting();
-		Litecoin.resetForTesting();
+		SupportedBlockchain.BITCOIN.resetForTesting();
+		SupportedBlockchain.LITECOIN.resetForTesting();
 		bitcoin = null;
 		litecoin = null;
 	}

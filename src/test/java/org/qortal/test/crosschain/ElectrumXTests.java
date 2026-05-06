@@ -9,7 +9,6 @@ import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.junit.Test;
-import org.qortal.crosschain.Bitcoin.BitcoinNet;
 import org.qortal.crosschain.*;
 import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.utils.BitTwiddling;
@@ -46,9 +45,10 @@ public class ElectrumXTests {
 
 	private ElectrumX getLiveInstance() {
 		assumeTrue(Boolean.getBoolean(RUN_LIVE_ELECTRUMX_TESTS_PROPERTY));
-		Collection<ElectrumX.Server> servers = BitcoinNet.TEST3.getServers();
+		BitcoinyNetwork bitcoinTest3 = BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3);
+		Collection<ElectrumX.Server> servers = bitcoinTest3.getServers();
 		assertFalse("No Bitcoin TEST3 ElectrumX servers are configured for explicit live ElectrumX checks", servers.isEmpty());
-		return new ElectrumX("Bitcoin-" + BitcoinNet.TEST3.name(), BitcoinNet.TEST3.getGenesisHash(), servers, DEFAULT_ELECTRUMX_PORTS);
+		return new ElectrumX("Bitcoin-" + bitcoinTest3.name(), bitcoinTest3.getGenesisHash(), servers, DEFAULT_ELECTRUMX_PORTS);
 	}
 
 	@Test

@@ -24,7 +24,7 @@
 - Make sure to add `"isTestNet": true,`
 - Make sure to reference testnet blockchain config file: `"blockchainConfig": "testchain.json",`
 - It is a good idea to use a separate database: `"repositoryPath": "db-testnet",`
-- You might also need to add `"bitcoinNet": "TEST3",` and `"litecoinNet": "TEST3",`
+- You might also need to add a `"bitcoinyNetworks"` map that points each BTC-like coin you use at `"TEST3"`
 - Also make sure to use a custom `listenPort` (not 62391 or 12391) to ensure that transactions remain isolated to your testnet.
 
 ## Other nodes
@@ -97,11 +97,13 @@ Your options are:
 ```
 {
   "isTestNet": true,
-  "bitcoinNet": "TEST3",
-  "litecoinNet": "TEST3",
-  "dogecoinNet": "TEST3",
-  "digibyteNet": "TEST3",
-  "ravencoinNet": "TEST3",
+  "bitcoinyNetworks": {
+    "BTC": "TEST3",
+    "LTC": "TEST3",
+    "DOGE": "TEST3",
+    "DGB": "TEST3",
+    "RVN": "TEST3"
+  },
   "repositoryPath": "db-testnet",
   "blockchainConfig": "testchain.json",
   "minBlockchainPeers": 1,

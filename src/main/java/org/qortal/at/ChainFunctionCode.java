@@ -7,7 +7,7 @@ import org.ciyam.at.FunctionData;
 import org.ciyam.at.IllegalFunctionCodeException;
 import org.ciyam.at.MachineState;
 import org.qortal.account.Account;
-import org.qortal.crosschain.Bitcoin;
+import org.qortal.crosschain.BitcoinyChainSpecs;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.repository.DataException;
@@ -147,7 +147,8 @@ public enum ChainFunctionCode {
 	CONVERT_B_TO_P2SH(0x0511, 0, false) {
 		@Override
 		protected void postCheckExecute(FunctionData functionData, MachineState state, short rawFunctionCode) throws ExecutionException {
-			byte addressPrefix = Settings.getInstance().getBitcoinNet() == Bitcoin.BitcoinNet.MAIN ? 0x05 : (byte) 0xc4;
+			String bitcoinNetworkName = Settings.getInstance().getBitcoinyNetworkName(BitcoinyChainSpecs.BITCOIN_CURRENCY_CODE);
+			byte addressPrefix = BitcoinyChainSpecs.MAIN.equals(bitcoinNetworkName) ? 0x05 : (byte) 0xc4;
 
 			convertAddressInB(addressPrefix, state);
 		}

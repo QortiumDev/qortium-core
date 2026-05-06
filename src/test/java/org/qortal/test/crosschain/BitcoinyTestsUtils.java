@@ -7,8 +7,9 @@ import org.bitcoinj.script.Script;
 import org.bitcoinj.wallet.DeterministicKeyChain;
 import org.bitcoinj.wallet.DeterministicSeed;
 import org.bitcoinj.wallet.Wallet;
+import org.qortal.crosschain.BitcoinyChainSpecs;
 import org.qortal.crosschain.ForeignBlockchainException;
-import org.qortal.crosschain.Litecoin;
+import org.qortal.crosschain.SupportedBlockchain;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.Common;
 
@@ -18,8 +19,8 @@ public class BitcoinyTestsUtils {
 
         Common.useDefaultSettings();
 
-        final String rootKey = generateBip32RootKey( Litecoin.LitecoinNet.TEST3.getParams());
-        String address = Litecoin.getInstance().getUnusedReceiveAddress(rootKey);
+        final String rootKey = generateBip32RootKey(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST3).getParams());
+        String address = SupportedBlockchain.LITECOIN.getBitcoinyInstance().getUnusedReceiveAddress(rootKey);
 
         System.out.println("rootKey = " + rootKey);
         System.out.println("address = " + address);

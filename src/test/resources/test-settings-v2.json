@@ -1,7 +1,9 @@
 {
   "repositoryPath": "testdb",
-  "bitcoinNet": "TEST3",
-  "litecoinNet": "TEST3",
+  "bitcoinyNetworks": {
+    "BTC": "TEST3",
+    "LTC": "TEST3"
+  },
   "restrictedApi": false,
   "blockchainConfig": "src/test/resources/test-chain-v2.json",
   "exportPath": "qortium-backup-test",

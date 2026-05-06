@@ -1,9 +1,13 @@
 package org.qortal.crosschain;
 
+import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
+import org.bitcoinj.core.LegacyAddress;
+import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.RegTestParams;
 import org.bitcoinj.params.TestNet3Params;
+import org.bitcoinj.script.Script;
 import org.libdohj.params.DigibyteMainNetParams;
 import org.libdohj.params.DogecoinMainNetParams;
 import org.libdohj.params.DogecoinTestNet3Params;
@@ -14,6 +18,7 @@ import org.libdohj.params.RavencoinMainNetParams;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -27,6 +32,8 @@ public final class BitcoinyChainSpecs {
 	public static final String DOGECOIN_CURRENCY_CODE = "DOGE";
 	public static final String DIGIBYTE_CURRENCY_CODE = "DGB";
 	public static final String RAVENCOIN_CURRENCY_CODE = "RVN";
+
+	private static final LitecoinMainNetParamsP2ShOverride LITECOIN_MAIN_NET_PARAMS_P2SH_OVERRIDE = new LitecoinMainNetParamsP2ShOverride(50);
 
 	public static final BitcoinyChainSpec BITCOIN = new BitcoinyChainSpec(
 			1,
@@ -44,7 +51,9 @@ public final class BitcoinyChainSpecs {
 							null, 1_500L, 1_000L)),
 			List.of(
 					refresh(MAIN, "btc", "bitcoinMain"),
-					refresh(TEST3, "tbtc", "bitcoinTest3")));
+					refresh(TEST3, "tbtc", "bitcoinTest3")),
+			20L,
+			null);
 
 	public static final BitcoinyChainSpec LITECOIN = new BitcoinyChainSpec(
 			2,
@@ -62,7 +71,9 @@ public final class BitcoinyChainSpecs {
 							null, 1_000L, 1_000L)),
 			List.of(
 					refresh(MAIN, "ltc", "litecoinMain"),
-					refresh(TEST3, "tltc", "litecoinTest3")));
+					refresh(TEST3, "tltc", "litecoinTest3")),
+			null,
+			BitcoinyChainSpecs::normalizeLitecoinAddress);
 
 	public static final BitcoinyChainSpec DOGECOIN = new BitcoinyChainSpec(
 			3,
@@ -138,6 +149,34 @@ public final class BitcoinyChainSpecs {
 	}
 
 	public static BitcoinyChainSpec fromCurrencyCode(String currencyCode) {
-		return BY_CURRENCY_CODE.get(currencyCode);
+		if (currencyCode == null)
+			return null;
+
+		return BY_CURRENCY_CODE.get(currencyCode.toUpperCase(Locale.ROOT));
+	}
+
+	private static String normalizeLitecoinAddress(String address, NetworkParameters targetParams) {
+		if (!isCurrentLitecoinP2shAddress(address))
+			return address;
+
+		return convertLitecoinP2shAddress(address, targetParams);
+	}
+
+	private static boolean isCurrentLitecoinP2shAddress(String address) {
+		try {
+			Script.ScriptType addressType = Address.fromString(LITECOIN_MAIN_NET_PARAMS_P2SH_OVERRIDE, address).getOutputScriptType();
+			return addressType == Script.ScriptType.P2SH;
+		} catch (Exception e) {
+			return false;
+		}
+	}
+
+	private static String convertLitecoinP2shAddress(String p2shAddress, NetworkParameters targetParams) {
+		try {
+			Address address = LegacyAddress.fromBase58(LITECOIN_MAIN_NET_PARAMS_P2SH_OVERRIDE, p2shAddress);
+			return LegacyAddress.fromScriptHash(targetParams, address.getHash()).toString();
+		} catch (Exception e) {
+			return null;
+		}
 	}
 }

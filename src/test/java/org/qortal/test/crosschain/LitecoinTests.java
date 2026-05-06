@@ -1,7 +1,7 @@
 package org.qortal.test.crosschain;
 
 import org.qortal.crosschain.Bitcoiny;
-import org.qortal.crosschain.Litecoin;
+import org.qortal.crosschain.SupportedBlockchain;
 
 public class LitecoinTests extends BitcoinyTests {
 
@@ -17,12 +17,12 @@ public class LitecoinTests extends BitcoinyTests {
 
 	@Override
 	protected Bitcoiny getCoin() {
-		return Litecoin.getInstance();
+		return SupportedBlockchain.LITECOIN.getBitcoinyInstance();
 	}
 
 	@Override
 	protected void resetCoinForTesting() {
-		Litecoin.resetForTesting();
+		SupportedBlockchain.LITECOIN.resetForTesting();
 	}
 
 	@Override

@@ -6,6 +6,7 @@ import org.bitcoinj.core.TransactionOutput;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.qortal.crosschain.Bitcoiny;
+import org.qortal.crosschain.BitcoinyChainSpecs;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.SupportedBlockchain;
@@ -23,7 +24,7 @@ import java.util.Locale;
 public abstract class Common {
 
 	public static String bitcoinyUsage() {
-		return "use -b/-l, BTC/LTC/DOGE/DGB/RVN, or one of: BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN";
+		return "use -b/-l, a Bitcoiny currency code such as " + String.join("/", BitcoinyChainSpecs.currencyCodes()) + ", or a supported Bitcoiny blockchain name";
 	}
 
 	public static void init() {
@@ -36,36 +37,13 @@ public abstract class Common {
 	}
 
 	public static Bitcoiny getBitcoiny(String selector) {
-		SupportedBlockchain blockchain;
 		String normalizedSelector = selector.toUpperCase(Locale.ROOT);
+		if ("-B".equals(normalizedSelector))
+			normalizedSelector = BitcoinyChainSpecs.BITCOIN_CURRENCY_CODE;
+		else if ("-L".equals(normalizedSelector))
+			normalizedSelector = BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE;
 
-		switch (normalizedSelector) {
-			case "-B":
-			case "BTC":
-				blockchain = SupportedBlockchain.BITCOIN;
-				break;
-
-			case "-L":
-			case "LTC":
-				blockchain = SupportedBlockchain.LITECOIN;
-				break;
-
-			case "DOGE":
-				blockchain = SupportedBlockchain.DOGECOIN;
-				break;
-
-			case "DGB":
-				blockchain = SupportedBlockchain.DIGIBYTE;
-				break;
-
-			case "RVN":
-				blockchain = SupportedBlockchain.RAVENCOIN;
-				break;
-
-			default:
-				blockchain = SupportedBlockchain.fromString(normalizedSelector);
-				break;
-		}
+		SupportedBlockchain blockchain = SupportedBlockchain.fromString(normalizedSelector);
 
 		if (blockchain == null || !blockchain.isBitcoiny())
 			throw new IllegalArgumentException(bitcoinyUsage());

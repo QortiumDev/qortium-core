@@ -1,5 +1,6 @@
 package org.qortal.crosschain;
 
+import org.qortal.settings.Settings;
 import org.qortal.utils.ByteArray;
 
 import java.util.Arrays;
@@ -12,11 +13,11 @@ import java.util.stream.Collectors;
 
 public enum SupportedBlockchain {
 
-	BITCOIN(BitcoinyChainSpecs.BITCOIN, Bitcoin.DEFINITION),
-	LITECOIN(BitcoinyChainSpecs.LITECOIN, Litecoin.DEFINITION),
-	DOGECOIN(BitcoinyChainSpecs.DOGECOIN, Dogecoin.DEFINITION),
-	DIGIBYTE(BitcoinyChainSpecs.DIGIBYTE, Digibyte.DEFINITION),
-	RAVENCOIN(BitcoinyChainSpecs.RAVENCOIN, Ravencoin.DEFINITION),
+	BITCOIN(BitcoinyChainSpecs.BITCOIN),
+	LITECOIN(BitcoinyChainSpecs.LITECOIN),
+	DOGECOIN(BitcoinyChainSpecs.DOGECOIN),
+	DIGIBYTE(BitcoinyChainSpecs.DIGIBYTE),
+	RAVENCOIN(BitcoinyChainSpecs.RAVENCOIN),
 	PIRATECHAIN(6, PirateChain.CURRENCY_CODE, PirateChain::getInstance, false);
 
 	private static final Supplier<ACCT> BITCOINY_ACCT_SUPPLIER = BitcoinyACCTv3::getInstance;
@@ -50,16 +51,28 @@ public enum SupportedBlockchain {
 	private final String currencyCode;
 	private final Supplier<ForeignBlockchain> instanceSupplier;
 	private final boolean bitcoiny;
+	private final BitcoinyChainSpec bitcoinySpec;
+	private final BitcoinyChainDefinition<? extends Bitcoiny> bitcoinyDefinition;
 
 	SupportedBlockchain(int foreignBlockchainId, String currencyCode, Supplier<ForeignBlockchain> instanceSupplier, boolean bitcoiny) {
 		this.foreignBlockchainId = foreignBlockchainId;
 		this.currencyCode = currencyCode;
 		this.instanceSupplier = instanceSupplier;
 		this.bitcoiny = bitcoiny;
+		this.bitcoinySpec = null;
+		this.bitcoinyDefinition = null;
 	}
 
-	SupportedBlockchain(BitcoinyChainSpec spec, BitcoinyChainDefinition<? extends Bitcoiny> definition) {
-		this(spec.getForeignBlockchainId(), spec.getCurrencyCode(), definition::getInstance, true);
+	SupportedBlockchain(BitcoinyChainSpec spec) {
+		this.foreignBlockchainId = spec.getForeignBlockchainId();
+		this.currencyCode = spec.getCurrencyCode();
+		this.bitcoiny = true;
+		this.bitcoinySpec = spec;
+		this.bitcoinyDefinition = new BitcoinyChainDefinition<>(
+				spec.getConfig(),
+				() -> Settings.getInstance().getBitcoinyNetwork(spec.getCurrencyCode()),
+				(config, network) -> new RegisteredBitcoiny(spec, network));
+		this.instanceSupplier = this.bitcoinyDefinition::getInstance;
 	}
 
 	public ForeignBlockchain getInstance() {
@@ -82,9 +95,20 @@ public enum SupportedBlockchain {
 		return this.bitcoiny;
 	}
 
+	public BitcoinyChainSpec getBitcoinySpec() {
+		return this.bitcoinySpec;
+	}
+
 	public Bitcoiny getBitcoinyInstance() {
 		ForeignBlockchain foreignBlockchain = this.getInstance();
 		return foreignBlockchain instanceof Bitcoiny ? (Bitcoiny) foreignBlockchain : null;
+	}
+
+	public void resetForTesting() {
+		if (this.bitcoinyDefinition != null)
+			this.bitcoinyDefinition.resetForTesting();
+		else if (this == PIRATECHAIN)
+			PirateChain.resetForTesting();
 	}
 
 	public static EnumSet<SupportedBlockchain> bitcoinyBlockchains() {

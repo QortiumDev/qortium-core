@@ -6,11 +6,13 @@
   "singleNodeTestnet": false,
   "minPeerVersion": "4.5.2",
   "allowConnectionsWithOlderPeerVersions": false,
-  "bitcoinNet": "TEST3",
-  "litecoinNet": "TEST3",
-  "dogecoinNet": "TEST3",
-  "digibyteNet": "TEST3",
-  "ravencoinNet": "TEST3",
+  "bitcoinyNetworks": {
+    "BTC": "TEST3",
+    "LTC": "TEST3",
+    "DOGE": "TEST3",
+    "DGB": "TEST3",
+    "RVN": "TEST3"
+  },
   "repositoryPath": "db-testnet",
   "blockchainConfig": "testchain.json",
   "minBlockchainPeers": 1,

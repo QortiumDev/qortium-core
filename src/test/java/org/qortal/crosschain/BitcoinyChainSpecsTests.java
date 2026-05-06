@@ -3,6 +3,7 @@ package org.qortal.crosschain;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.qortal.repository.DataException;
+import org.qortal.settings.Settings;
 import org.qortal.test.common.Common;
 
 import java.util.Set;
@@ -64,25 +65,11 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
-	public void testCoinEnumsDelegateToRegisteredNetworks() {
-		assertSame(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.MAIN), Bitcoin.BitcoinNet.MAIN.getDelegate());
-		assertSame(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3), Bitcoin.BitcoinNet.TEST3.getDelegate());
-		assertSame(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.REGTEST), Bitcoin.BitcoinNet.REGTEST.getDelegate());
+	public void testSettingsResolveRegisteredNetworks() {
+		Settings settings = Settings.getInstance();
 
-		assertSame(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.MAIN), Litecoin.LitecoinNet.MAIN.getDelegate());
-		assertSame(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST3), Litecoin.LitecoinNet.TEST3.getDelegate());
-		assertSame(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.REGTEST), Litecoin.LitecoinNet.REGTEST.getDelegate());
-
-		assertSame(BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.MAIN), Dogecoin.DogecoinNet.MAIN.getDelegate());
-		assertSame(BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.TEST3), Dogecoin.DogecoinNet.TEST3.getDelegate());
-		assertSame(BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.REGTEST), Dogecoin.DogecoinNet.REGTEST.getDelegate());
-
-		assertSame(BitcoinyChainSpecs.DIGIBYTE.getNetwork(BitcoinyChainSpecs.MAIN), Digibyte.DigibyteNet.MAIN.getDelegate());
-		assertSame(BitcoinyChainSpecs.DIGIBYTE.getNetwork(BitcoinyChainSpecs.TEST3), Digibyte.DigibyteNet.TEST3.getDelegate());
-		assertSame(BitcoinyChainSpecs.DIGIBYTE.getNetwork(BitcoinyChainSpecs.REGTEST), Digibyte.DigibyteNet.REGTEST.getDelegate());
-
-		assertSame(BitcoinyChainSpecs.RAVENCOIN.getNetwork(BitcoinyChainSpecs.MAIN), Ravencoin.RavencoinNet.MAIN.getDelegate());
-		assertSame(BitcoinyChainSpecs.RAVENCOIN.getNetwork(BitcoinyChainSpecs.TEST3), Ravencoin.RavencoinNet.TEST3.getDelegate());
-		assertSame(BitcoinyChainSpecs.RAVENCOIN.getNetwork(BitcoinyChainSpecs.REGTEST), Ravencoin.RavencoinNet.REGTEST.getDelegate());
+		assertSame(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3), settings.getBitcoinyNetwork(BitcoinyChainSpecs.BITCOIN_CURRENCY_CODE));
+		assertSame(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST3), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE.toLowerCase()));
+		assertSame(BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DOGECOIN_CURRENCY_CODE));
 	}
 }

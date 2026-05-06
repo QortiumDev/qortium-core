@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: collapse Bitcoiny coin wrappers
+
+Replaced the separate Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin runtime wrappers with one registry-backed Bitcoiny implementation that is created from each chain specification. BTC-like network selection now uses a generic `bitcoinyNetworks` settings map keyed by currency code, Bitcoin's default spend fee and Litecoin's address normalization live in the shared chain specs, and the generic Bitcoiny API route now validates supported chains through the registry instead of hardcoding every coin in the path.
+
 ### 2026-05-06 - crosschain: register Bitcoiny chain specs
 
 Moved BTC-like chain metadata into a shared Bitcoiny chain specification registry so Bitcoin, Litecoin, Dogecoin, DigiByte, and Ravencoin now describe their display names, ticker symbols, supported networks, fee defaults, minimum order amounts, and Electrum refresh metadata in one reusable place. The existing coin wrappers and settings remain compatible for now, but they now delegate their network definitions to the registry, giving future coins a single model to copy into instead of scattering metadata across wrappers and tools.
