@@ -23,27 +23,19 @@ The IceBurst `v1.4.3` fork point mainly added JitPack/Maven build support and
 dependency updates on top of the Qortal-era `catbref/AT` lineage. The core AT VM
 behavior used by Qortium should remain unchanged at this fork point.
 
-## altcoinj
+## bitcoinj
 
-Qortium depends on altcoinj through a Qortium-controlled fork:
+Qortium currently depends directly on upstream bitcoinj for the remaining
+Bitcoin-like transaction signing and compatibility boundary:
 
-- Maven coordinate: `com.github.QuickMythril:altcoinj`
-- Version pin: `d7cf6ac`
-- Local checkout: `~/git/altcoinj`
-- Upstream lineage: `bitcoinj/bitcoinj` -> `dogecoin/libdohj` ->
-  `jjos2372/altcoinj` -> `Qortal/altcoinj` -> `IceBurst/altcoinj` ->
-  `QuickMythril/altcoinj`
+- Maven coordinate: `org.bitcoinj:bitcoinj-core`
+- Version pin: `0.16.3`
 
-The pinned commit is the same IceBurst commit that inherited Qortal Core already
-used for bitcoinj `0.16` compatibility. Moving the dependency to
-`QuickMythril/altcoinj` is intended to be behavior-neutral while giving Qortium
-ownership of the inherited foreign-chain support dependency.
-
-The Qortal-era altcoinj lineage carries the non-Bitcoin network parameter support
-used by Qortium's inherited cross-chain code, including Litecoin, Dogecoin,
-DigiByte, Ravencoin, and incomplete Pirate Chain parameters. Any larger update
-to current `dogecoin/libdohj` or `bitcoinj` should be treated as a dedicated
-cross-chain compatibility project, not as provenance cleanup.
+The shared BTC-like parameter, address, script, wallet-scan, raw-transaction,
+UTXO, and ACCT identity paths have moved into Qortium code. bitcoinj remains in
+use for transaction construction/signing and a few compatibility types. Removing
+that final dependency boundary should be treated as a dedicated crosschain
+signing project, not as provenance cleanup.
 
 ## HSQLDB
 
@@ -79,7 +71,15 @@ patched jar for inspection. The generated jar is verified by extracted content;
 its byte-for-byte checksum can differ because ZIP metadata is not normalized by
 the basic rebuild path.
 
-## Retired local dependencies
+## Retired Dependencies
+
+Qortium previously depended on `com.github.QuickMythril:altcoinj:d7cf6ac`, an
+inherited fork lineage from `bitcoinj/bitcoinj` -> `dogecoin/libdohj` ->
+`jjos2372/altcoinj` -> `Qortal/altcoinj` -> `IceBurst/altcoinj` ->
+`QuickMythril/altcoinj`. That dependency carried inherited non-Bitcoin network
+parameter support for Litecoin, Dogecoin, DigiByte, Ravencoin, and incomplete
+Pirate Chain parameters. Qortium removed the altcoinj/libdohj dependency after
+moving registered BTC-like coins and PirateChain onto shared static parameters.
 
 Qortium previously carried `com.dosse:WaifUPnP:1.3` in the local `lib/` Maven
 repository for automatic router port mapping. That inherited jar was replaced

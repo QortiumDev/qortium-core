@@ -11,6 +11,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.crosschain.AddressInfo;
 import org.qortal.crosschain.Bitcoiny;
+import org.qortal.crosschain.BitcoinyBlockchainProvider;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.BitcoinyScript;
 import org.qortal.crosschain.BitcoinyTransaction;
@@ -182,10 +183,11 @@ public abstract class BitcoinyTests extends Common {
 	@Test
 	public void testGetWalletBalance() throws ForeignBlockchainException {
 		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
+		long expectedBalance = getMockWalletBalance(mockBitcoiny);
 		Long balance = mockBitcoiny.getWalletBalance(getDeterministicKey58());
 
 		assertNotNull(balance);
-		assertEquals(Long.valueOf(MOCK_UTXO_VALUE), balance);
+		assertEquals(Long.valueOf(expectedBalance), balance);
 
 		// Check repeated balance lookups don't affect outcome
 
@@ -298,6 +300,19 @@ public abstract class BitcoinyTests extends Common {
 		UnspentOutput unspentOutput = new UnspentOutput(txHash, 0, 1, MOCK_UTXO_VALUE, scriptPubKey, walletAddress);
 		blockchainProvider.addUnspentOutput(walletAddress, unspentOutput);
 		blockchainProvider.addUnspentOutput(scriptPubKey, unspentOutput);
+	}
+
+	private long getMockWalletBalance(TestBitcoiny mockBitcoiny) throws ForeignBlockchainException {
+		long expectedBalance = 0L;
+		for (String address : mockBitcoiny.getWalletAddresses(getDeterministicKey58())) {
+			expectedBalance += mockBitcoiny.getBlockchainProvider()
+					.getUnspentOutputs(address, BitcoinyBlockchainProvider.INCLUDE_UNCONFIRMED)
+					.stream()
+					.mapToLong(unspentOutput -> unspentOutput.value)
+					.sum();
+		}
+
+		return expectedBalance;
 	}
 
 	private String getSpendRecipient(Bitcoiny coin) {

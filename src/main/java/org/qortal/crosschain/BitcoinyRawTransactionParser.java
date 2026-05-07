@@ -41,6 +41,14 @@ public final class BitcoinyRawTransactionParser {
 		}
 	}
 
+	private static String toHex(byte[] bytes) {
+		StringBuilder builder = new StringBuilder(bytes.length * 2);
+		for (byte value : bytes)
+			builder.append(String.format("%02x", value & 0xff));
+
+		return builder.toString();
+	}
+
 	private static final class Parser {
 		private final byte[] bytes;
 		private int offset = 0;
@@ -114,8 +122,7 @@ public final class BitcoinyRawTransactionParser {
 				byte[] scriptSig = readVarBytes();
 				int sequence = readInt32();
 
-				inputs.add(new BitcoinyTransaction.Input(HashCode.fromBytes(scriptSig).toString(),
-						sequence, HashCode.fromBytes(previousTxHash).toString(), outputVout));
+				inputs.add(new BitcoinyTransaction.Input(toHex(scriptSig), sequence, toHex(previousTxHash), outputVout));
 			}
 
 			return inputs;
@@ -131,7 +138,7 @@ public final class BitcoinyRawTransactionParser {
 				long value = readInt64();
 				byte[] scriptPubKey = readVarBytes();
 
-				outputs.add(new BitcoinyTransaction.Output(HashCode.fromBytes(scriptPubKey).toString(), value));
+				outputs.add(new BitcoinyTransaction.Output(toHex(scriptPubKey), value));
 			}
 
 			return outputs;

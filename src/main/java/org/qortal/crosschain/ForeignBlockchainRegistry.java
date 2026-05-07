@@ -44,9 +44,7 @@ public final class ForeignBlockchainRegistry {
 
 	private static final Map<String, Entry> ENTRIES_BY_NAME = buildEntriesByName();
 
-	private static final Map<Integer, Entry> BITCOINY_ENTRIES_BY_ID = ENTRIES.stream()
-			.filter(Entry::isBitcoiny)
-			.collect(Collectors.toUnmodifiableMap(Entry::getForeignBlockchainId, entry -> entry));
+	private static final Map<String, Entry> BITCOINY_ENTRIES_BY_CHAIN_ID = buildBitcoinyEntriesByChainId();
 
 	private ForeignBlockchainRegistry() {
 	}
@@ -59,7 +57,6 @@ public final class ForeignBlockchainRegistry {
 
 		entries.add(Entry.foreign(
 				PIRATECHAIN_NAME,
-				6,
 				PirateChain.CURRENCY_CODE,
 				PirateChain::getInstance,
 				PIRATECHAIN_ACCT_SUPPLIER,
@@ -119,8 +116,26 @@ public final class ForeignBlockchainRegistry {
 		return entry == null ? null : entry.getBitcoinyInstance();
 	}
 
-	public static Entry fromForeignBlockchainId(int foreignBlockchainId) {
-		return BITCOINY_ENTRIES_BY_ID.get(foreignBlockchainId);
+	public static Entry fromBitcoinyChainId(String chainId) {
+		if (chainId == null)
+			return null;
+
+		try {
+			return BITCOINY_ENTRIES_BY_CHAIN_ID.get(Bip122ChainId.normalize(chainId));
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
+	}
+
+	public static Entry fromBitcoinyChainIdReference(byte[] chainIdReference) {
+		if (chainIdReference == null)
+			return null;
+
+		try {
+			return fromBitcoinyChainId(Bip122ChainId.fromReferenceBytes(chainIdReference));
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
 	}
 
 	public static Map<ByteArray, Supplier<ACCT>> getAcctMap() {
@@ -185,13 +200,31 @@ public final class ForeignBlockchainRegistry {
 		return Collections.unmodifiableMap(entriesByName);
 	}
 
+	private static Map<String, Entry> buildBitcoinyEntriesByChainId() {
+		Map<String, Entry> entriesByChainId = new LinkedHashMap<>();
+
+		for (Entry entry : ENTRIES) {
+			if (!entry.isBitcoiny())
+				continue;
+
+			for (BitcoinyNetwork network : entry.getBitcoinySpec().getNetworks()) {
+				Entry previous = entriesByChainId.put(network.getChainId(), entry);
+				if (previous != null)
+					throw new IllegalStateException(String.format("Duplicate Bitcoiny chain id %s for %s and %s",
+							network.getChainId(), previous.name(), entry.name()));
+			}
+		}
+
+		return Collections.unmodifiableMap(entriesByChainId);
+	}
+
 	private static String normalize(String name) {
 		return name.trim().toUpperCase(Locale.ROOT);
 	}
 
 	public static final class Entry {
 		private final String name;
-		private final int foreignBlockchainId;
+		private final Integer slip44CoinType;
 		private final String currencyCode;
 		private final Supplier<? extends ForeignBlockchain> instanceSupplier;
 		private final Supplier<ACCT> acctSupplier;
@@ -200,10 +233,10 @@ public final class ForeignBlockchainRegistry {
 		private final boolean bitcoiny;
 		private final BitcoinyChainSpec bitcoinySpec;
 
-		private Entry(String name, int foreignBlockchainId, String currencyCode, Supplier<? extends ForeignBlockchain> instanceSupplier,
+		private Entry(String name, Integer slip44CoinType, String currencyCode, Supplier<? extends ForeignBlockchain> instanceSupplier,
 				Supplier<ACCT> acctSupplier, ByteArray acctCodeHash, Runnable resetForTesting, boolean bitcoiny, BitcoinyChainSpec bitcoinySpec) {
 			this.name = name;
-			this.foreignBlockchainId = foreignBlockchainId;
+			this.slip44CoinType = slip44CoinType;
 			this.currencyCode = currencyCode;
 			this.instanceSupplier = instanceSupplier;
 			this.acctSupplier = acctSupplier;
@@ -221,7 +254,7 @@ public final class ForeignBlockchainRegistry {
 
 			return new Entry(
 					spec.getCanonicalName(),
-					spec.getForeignBlockchainId(),
+					spec.getSlip44CoinType(),
 					spec.getCurrencyCode(),
 					definition::getInstance,
 					BITCOINY_ACCT_SUPPLIER,
@@ -231,9 +264,9 @@ public final class ForeignBlockchainRegistry {
 					spec);
 		}
 
-		private static Entry foreign(String name, int foreignBlockchainId, String currencyCode, Supplier<? extends ForeignBlockchain> instanceSupplier,
+		private static Entry foreign(String name, String currencyCode, Supplier<? extends ForeignBlockchain> instanceSupplier,
 				Supplier<ACCT> acctSupplier, ByteArray acctCodeHash, Runnable resetForTesting) {
-			return new Entry(name, foreignBlockchainId, currencyCode, instanceSupplier, acctSupplier, acctCodeHash, resetForTesting, false, null);
+			return new Entry(name, null, currencyCode, instanceSupplier, acctSupplier, acctCodeHash, resetForTesting, false, null);
 		}
 
 		public String name() {
@@ -252,8 +285,8 @@ public final class ForeignBlockchainRegistry {
 			return this.acctCodeHash;
 		}
 
-		public int getForeignBlockchainId() {
-			return this.foreignBlockchainId;
+		public Integer getSlip44CoinType() {
+			return this.slip44CoinType;
 		}
 
 		public String getCurrencyCode() {
@@ -266,6 +299,18 @@ public final class ForeignBlockchainRegistry {
 
 		public BitcoinyChainSpec getBitcoinySpec() {
 			return this.bitcoinySpec;
+		}
+
+		public String getActiveChainId() {
+			if (!this.isBitcoiny())
+				return null;
+
+			return Settings.getInstance().getBitcoinyNetwork(this.currencyCode).getChainId();
+		}
+
+		public byte[] getActiveChainIdReferenceBytes() {
+			String chainId = this.getActiveChainId();
+			return chainId == null ? null : Bip122ChainId.toReferenceBytes(chainId);
 		}
 
 		public Bitcoiny getBitcoinyInstance() {

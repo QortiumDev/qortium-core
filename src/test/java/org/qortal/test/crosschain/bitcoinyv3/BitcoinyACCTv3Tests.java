@@ -1,14 +1,18 @@
 package org.qortal.test.crosschain.bitcoinyv3;
 
 import com.google.common.hash.HashCode;
+import org.ciyam.at.MachineState;
 import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
 import org.qortal.crosschain.ACCT;
+import org.qortal.crosschain.Bip122ChainId;
 import org.qortal.crosschain.BitcoinyACCTv3;
+import org.qortal.crosschain.BitcoinyNetwork;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.data.at.ATData;
+import org.qortal.data.at.ATStateData;
 import org.qortal.data.crosschain.CrossChainTradeData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.DeployAtTransactionData;
@@ -21,6 +25,8 @@ import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.crosschain.ACCTTests;
 import org.qortal.transaction.DeployAtTransaction;
+
+import java.util.Arrays;
 
 import static org.junit.Assert.*;
 
@@ -76,7 +82,7 @@ public class BitcoinyACCTv3Tests extends ACCTTests {
 	}
 
 	@Test
-	public void testForeignBlockchainIdRoundTrip() throws DataException {
+	public void testForeignBlockchainChainIdRoundTrip() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
 			PrivateKeyAccount tradeAccount = createTradeAccount(repository);
@@ -89,9 +95,46 @@ public class BitcoinyACCTv3Tests extends ACCTTests {
 				CrossChainTradeData tradeData = BitcoinyACCTv3.getInstance().populateTradeData(repository, atData);
 
 				assertEquals(blockchain.name(), tradeData.foreignBlockchain);
+				assertNotNull(blockchain.getActiveChainId());
 				assertArrayEquals(BitcoinyACCTv3.CODE_BYTES_HASH, atData.getCodeHash());
 			}
 		}
+	}
+
+	@Test
+	public void testRejectsInactiveBitcoinyChainId() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = createTradeAccount(repository);
+
+			for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.bitcoinyEntries()) {
+				BitcoinyNetwork inactiveNetwork = blockchain.getBitcoinySpec().getNetworks().stream()
+						.filter(network -> !network.getChainId().equals(blockchain.getActiveChainId()))
+						.findFirst()
+						.orElse(null);
+
+				if (inactiveNetwork == null)
+					continue;
+
+				DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), blockchain);
+				Account at = deployAtTransaction.getATAccount();
+				ATStateData atStateData = repository.getATRepository().getLatestATState(at.getAddress());
+
+				byte[] stateData = Arrays.copyOf(atStateData.getStateData(), atStateData.getStateData().length);
+				byte[] inactiveChainIdReference = Bip122ChainId.toReferenceBytes(inactiveNetwork.getChainId());
+				System.arraycopy(inactiveChainIdReference, 0, stateData, BitcoinyACCTv3.MODE_BYTE_OFFSET + MachineState.VALUE_SIZE,
+						inactiveChainIdReference.length);
+
+				ATStateData mismatchedState = new ATStateData(atStateData.getATAddress(), atStateData.getHeight(), stateData,
+						atStateData.getStateHash(), atStateData.getFees(), atStateData.isInitial(),
+						atStateData.getSleepUntilMessageTimestamp());
+
+				assertNull(BitcoinyACCTv3.getInstance().populateTradeData(repository, mismatchedState));
+				return;
+			}
+		}
+
+		fail("No registered Bitcoiny chain has an inactive network for mismatch coverage");
 	}
 
 	@Test

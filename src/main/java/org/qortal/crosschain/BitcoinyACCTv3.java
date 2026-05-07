@@ -232,7 +232,8 @@ public class BitcoinyACCTv3 implements ACCT {
 		final int addrMode = addrCounter++;
 		assert addrMode == MODE_VALUE_OFFSET : String.format("addrMode %d does not match MODE_VALUE_OFFSET %d", addrMode, MODE_VALUE_OFFSET);
 
-		final int addrForeignBlockchainId = addrCounter++;
+		final int addrForeignBlockchainChainId = addrCounter;
+		addrCounter += Bip122ChainId.REFERENCE_BYTE_LENGTH / MachineState.VALUE_SIZE;
 
 		// Data segment
 		ByteBuffer dataByteBuffer = ByteBuffer.allocate(addrCounter * MachineState.VALUE_SIZE);
@@ -313,8 +314,8 @@ public class BitcoinyACCTv3 implements ACCT {
 		dataByteBuffer.putLong(addrPartnerReceivingAddress);
 
 		assert dataByteBuffer.position() == addrEndOfConstants * MachineState.VALUE_SIZE : "dataByteBuffer position not at end of constants";
-		dataByteBuffer.position(addrForeignBlockchainId * MachineState.VALUE_SIZE);
-		dataByteBuffer.putLong(foreignBlockchain.getForeignBlockchainId());
+		dataByteBuffer.position(addrForeignBlockchainChainId * MachineState.VALUE_SIZE);
+		dataByteBuffer.put(foreignBlockchain.getActiveChainIdReferenceBytes());
 
 		// Code labels
 		Integer labelRefund = null;
@@ -738,17 +739,22 @@ public class BitcoinyACCTv3 implements ACCT {
 		dataByteBuffer.get(partnerReceivingAddress);
 		dataByteBuffer.position(dataByteBuffer.position() + 32 - partnerReceivingAddress.length); // skip to 32 bytes
 
-			// Trade AT's 'mode'
-			long modeValue = dataByteBuffer.getLong();
-			AcctMode mode = AcctMode.valueOf((int) (modeValue & 0xffL));
+		// Trade AT's 'mode'
+		long modeValue = dataByteBuffer.getLong();
+		AcctMode mode = AcctMode.valueOf((int) (modeValue & 0xffL));
 
-			// Foreign blockchain ID stored after the values used by AT bytecode.
-			if (dataByteBuffer.remaining() < MachineState.VALUE_SIZE)
-				return null;
+		// BIP122 chain reference stored after the values used by AT bytecode.
+		if (dataByteBuffer.remaining() < Bip122ChainId.REFERENCE_BYTE_LENGTH)
+			return null;
 
-			ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromForeignBlockchainId((int) dataByteBuffer.getLong());
-			if (foreignBlockchain == null || !foreignBlockchain.isBitcoiny())
-				return null;
+		byte[] chainIdReference = new byte[Bip122ChainId.REFERENCE_BYTE_LENGTH];
+		dataByteBuffer.get(chainIdReference);
+
+		ForeignBlockchainRegistry.Entry foreignBlockchain = ForeignBlockchainRegistry.fromBitcoinyChainIdReference(chainIdReference);
+		if (foreignBlockchain == null || !foreignBlockchain.isBitcoiny()
+				|| !Arrays.equals(chainIdReference, foreignBlockchain.getActiveChainIdReferenceBytes()))
+			return null;
+
 		tradeData.foreignBlockchain = foreignBlockchain.name();
 
 		/* End of variables */

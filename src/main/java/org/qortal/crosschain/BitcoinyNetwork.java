@@ -14,6 +14,8 @@ public interface BitcoinyNetwork {
 
 	String getGenesisHash();
 
+	String getChainId();
+
 	long getP2shFee(Long timestamp) throws ForeignBlockchainException;
 
 	long getFeeRequired();

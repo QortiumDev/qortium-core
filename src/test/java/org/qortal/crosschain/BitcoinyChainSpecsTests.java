@@ -14,6 +14,7 @@ import org.qortal.test.common.Common;
 
 import java.lang.reflect.Field;
 import java.net.URL;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -29,6 +30,49 @@ public class BitcoinyChainSpecsTests {
 	@BeforeClass
 	public static void beforeClass() throws DataException {
 		Common.useDefaultSettings();
+	}
+
+	@Test
+	public void testRegisteredBitcoinyChainManifest() {
+		for (ChainManifest expected : List.of(
+				new ChainManifest("BITCOIN", "BTC", BitcoinyChainSpecs.BITCOIN_SLIP44_COIN_TYPE, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", Set.of(BitcoinyChainSpecs.MAIN, BitcoinyChainSpecs.TEST3, BitcoinyChainSpecs.REGTEST), 0, 5, 128, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("LITECOIN", "LTC", BitcoinyChainSpecs.LITECOIN_SLIP44_COIN_TYPE, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", Set.of(BitcoinyChainSpecs.MAIN, BitcoinyChainSpecs.TEST4, BitcoinyChainSpecs.REGTEST), 48, 5, 176, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("DOGECOIN", "DOGE", BitcoinyChainSpecs.DOGECOIN_SLIP44_COIN_TYPE, "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", Set.of(BitcoinyChainSpecs.MAIN), 30, 22, 158, 0x02facafd, 0x02fac398),
+				new ChainManifest("DIGIBYTE", "DGB", BitcoinyChainSpecs.DIGIBYTE_SLIP44_COIN_TYPE, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", Set.of(BitcoinyChainSpecs.MAIN), 30, 63, 128, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("RAVENCOIN", "RVN", BitcoinyChainSpecs.RAVENCOIN_SLIP44_COIN_TYPE, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", Set.of(BitcoinyChainSpecs.MAIN), 60, 122, 128, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("DASH", "DASH", BitcoinyChainSpecs.DASH_SLIP44_COIN_TYPE, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", Set.of(BitcoinyChainSpecs.MAIN), 76, 16, 204, 0x0488B21E, 0x0488ADE4))) {
+			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(expected.currencyCode);
+			assertNotNull(expected.currencyCode, spec);
+			assertEquals(expected.canonicalName, spec.getCanonicalName());
+			assertEquals(expected.slip44CoinType, spec.getSlip44CoinType());
+
+			ForeignBlockchainRegistry.Entry entry = ForeignBlockchainRegistry.fromStringRequired(expected.canonicalName);
+			assertSame(spec, entry.getBitcoinySpec());
+			assertEquals(Integer.valueOf(expected.slip44CoinType), entry.getSlip44CoinType());
+
+			Set<String> supportedNetworkNames = spec.getNetworks().stream()
+					.map(BitcoinyNetwork::name)
+					.collect(Collectors.toSet());
+			assertEquals(expected.supportedNetworkNames, supportedNetworkNames);
+
+			BitcoinyNetwork mainnet = spec.getNetwork(BitcoinyChainSpecs.MAIN);
+			assertNotNull(mainnet);
+			assertEquals(expected.mainnetGenesisHash, mainnet.getGenesisHash());
+			assertEquals(Bip122ChainId.fromBlockHash(expected.mainnetGenesisHash), mainnet.getChainId());
+			assertSame(entry, ForeignBlockchainRegistry.fromBitcoinyChainId(mainnet.getChainId()));
+			assertSame(entry, ForeignBlockchainRegistry.fromBitcoinyChainIdReference(Bip122ChainId.toReferenceBytes(mainnet.getChainId())));
+
+			NetworkParameters mainnetParams = mainnet.getParams();
+			assertEquals(expected.addressHeader, mainnetParams.getAddressHeader());
+			assertEquals(expected.p2shHeader, mainnetParams.getP2SHHeader());
+			assertEquals(expected.dumpedPrivateKeyHeader, mainnetParams.getDumpedPrivateKeyHeader());
+			assertEquals(expected.bip32PublicHeader, mainnetParams.getBip32HeaderP2PKHpub());
+			assertEquals(expected.bip32PrivateHeader, mainnetParams.getBip32HeaderP2PKHpriv());
+		}
+
+		ForeignBlockchainRegistry.Entry pirateChain = ForeignBlockchainRegistry.fromStringRequired(ForeignBlockchainRegistry.PIRATECHAIN_NAME);
+		assertNull(pirateChain.getSlip44CoinType());
+		assertNull(pirateChain.getActiveChainId());
 	}
 
 	@Test
@@ -62,13 +106,15 @@ public class BitcoinyChainSpecsTests {
 			assertNotNull(spec);
 			assertEquals(blockchain.name(), spec.getCanonicalName());
 			assertSame(spec, blockchain.getBitcoinySpec());
-			assertEquals(blockchain.getForeignBlockchainId(), spec.getForeignBlockchainId());
-			assertSame(blockchain, ForeignBlockchainRegistry.fromForeignBlockchainId(spec.getForeignBlockchainId()));
+			assertEquals(blockchain.getSlip44CoinType(), Integer.valueOf(spec.getSlip44CoinType()));
+
+			for (BitcoinyNetwork network : spec.getNetworks())
+				assertSame(blockchain, ForeignBlockchainRegistry.fromBitcoinyChainId(network.getChainId()));
 		}
 	}
 
 	@Test
-	public void testForeignBlockchainRegistryResolvesNamesCurrencyCodesAndBitcoinyIds() {
+	public void testForeignBlockchainRegistryResolvesNamesCurrencyCodesAndBitcoinyChainIds() {
 		for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
 			ForeignBlockchainRegistry.Entry byName = ForeignBlockchainRegistry.fromString(blockchain.name().toLowerCase());
 			assertNotNull(byName);
@@ -79,14 +125,18 @@ public class BitcoinyChainSpecsTests {
 			assertSame(byName, byCurrencyCode);
 			assertSame(byName, ForeignBlockchainRegistry.fromStringRequired(blockchain.getCurrencyCode()));
 
-			if (blockchain.isBitcoiny())
-				assertSame(byName, ForeignBlockchainRegistry.fromForeignBlockchainId(blockchain.getForeignBlockchainId()));
-			else
-				assertNull(ForeignBlockchainRegistry.fromForeignBlockchainId(blockchain.getForeignBlockchainId()));
+			if (blockchain.isBitcoiny()) {
+				for (BitcoinyNetwork network : blockchain.getBitcoinySpec().getNetworks())
+					assertSame(byName, ForeignBlockchainRegistry.fromBitcoinyChainId(network.getChainId()));
+			} else {
+				assertNull(blockchain.getActiveChainId());
+			}
 		}
 
 		assertNull(ForeignBlockchainRegistry.fromString("unknown"));
 		assertNull(ForeignBlockchainRegistry.fromString("   "));
+		assertNull(ForeignBlockchainRegistry.fromBitcoinyChainId("unknown"));
+		assertNull(ForeignBlockchainRegistry.fromBitcoinyChainIdReference(new byte[1]));
 	}
 
 	@Test(expected = IllegalArgumentException.class)
@@ -465,5 +515,33 @@ public class BitcoinyChainSpecsTests {
 		}
 
 		throw new AssertionError("No legacy genesis block field found for " + params.getId());
+	}
+
+	private static class ChainManifest {
+		private final String canonicalName;
+		private final String currencyCode;
+		private final int slip44CoinType;
+		private final String mainnetGenesisHash;
+		private final Set<String> supportedNetworkNames;
+		private final int addressHeader;
+		private final int p2shHeader;
+		private final int dumpedPrivateKeyHeader;
+		private final int bip32PublicHeader;
+		private final int bip32PrivateHeader;
+
+		private ChainManifest(String canonicalName, String currencyCode, int slip44CoinType, String mainnetGenesisHash,
+				Set<String> supportedNetworkNames, int addressHeader, int p2shHeader, int dumpedPrivateKeyHeader,
+				int bip32PublicHeader, int bip32PrivateHeader) {
+			this.canonicalName = canonicalName;
+			this.currencyCode = currencyCode;
+			this.slip44CoinType = slip44CoinType;
+			this.mainnetGenesisHash = mainnetGenesisHash;
+			this.supportedNetworkNames = supportedNetworkNames;
+			this.addressHeader = addressHeader;
+			this.p2shHeader = p2shHeader;
+			this.dumpedPrivateKeyHeader = dumpedPrivateKeyHeader;
+			this.bip32PublicHeader = bip32PublicHeader;
+			this.bip32PrivateHeader = bip32PrivateHeader;
+		}
 	}
 }

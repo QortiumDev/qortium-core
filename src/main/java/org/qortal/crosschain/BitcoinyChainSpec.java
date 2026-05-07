@@ -12,27 +12,27 @@ import java.util.Map;
 public final class BitcoinyChainSpec {
 
 	private final String canonicalName;
-	private final int foreignBlockchainId;
+	private final int slip44CoinType;
 	private final BitcoinyChainConfig config;
 	private final Map<String, BitcoinyNetwork> networksByName;
 	private final List<ElectrumServerRefreshConfig> electrumServerRefreshConfigs;
 	private final Long defaultSpendFeePerByte;
 	private final AddressNormalizer addressNormalizer;
 
-	public BitcoinyChainSpec(int foreignBlockchainId, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
+	public BitcoinyChainSpec(int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs) {
-		this(config.getCurrencyCode(), foreignBlockchainId, config, networks, electrumServerRefreshConfigs, null, null);
+		this(config.getCurrencyCode(), slip44CoinType, config, networks, electrumServerRefreshConfigs, null, null);
 	}
 
-	public BitcoinyChainSpec(int foreignBlockchainId, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
+	public BitcoinyChainSpec(int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer) {
-		this(config.getCurrencyCode(), foreignBlockchainId, config, networks, electrumServerRefreshConfigs, defaultSpendFeePerByte, addressNormalizer);
+		this(config.getCurrencyCode(), slip44CoinType, config, networks, electrumServerRefreshConfigs, defaultSpendFeePerByte, addressNormalizer);
 	}
 
-	public BitcoinyChainSpec(String canonicalName, int foreignBlockchainId, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
+	public BitcoinyChainSpec(String canonicalName, int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer) {
 		this.canonicalName = canonicalName;
-		this.foreignBlockchainId = foreignBlockchainId;
+		this.slip44CoinType = slip44CoinType;
 		this.config = config;
 		this.networksByName = toNetworksByName(networks);
 		this.electrumServerRefreshConfigs = Collections.unmodifiableList(new ArrayList<>(electrumServerRefreshConfigs));
@@ -54,8 +54,8 @@ public final class BitcoinyChainSpec {
 		return this.canonicalName;
 	}
 
-	public int getForeignBlockchainId() {
-		return this.foreignBlockchainId;
+	public int getSlip44CoinType() {
+		return this.slip44CoinType;
 	}
 
 	public BitcoinyChainConfig getConfig() {

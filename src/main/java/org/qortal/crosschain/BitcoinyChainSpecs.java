@@ -26,6 +26,15 @@ public final class BitcoinyChainSpecs {
 	public static final String DIGIBYTE_CURRENCY_CODE = "DGB";
 	public static final String RAVENCOIN_CURRENCY_CODE = "RVN";
 	public static final String DASH_CURRENCY_CODE = "DASH";
+	public static final int BITCOIN_SLIP44_COIN_TYPE = 0;
+	public static final int LITECOIN_SLIP44_COIN_TYPE = 2;
+	public static final int DOGECOIN_SLIP44_COIN_TYPE = 3;
+	public static final int DASH_SLIP44_COIN_TYPE = 5;
+	public static final int NAMECOIN_SLIP44_COIN_TYPE = 7;
+	public static final int DIGIBYTE_SLIP44_COIN_TYPE = 20;
+	public static final int FIRO_SLIP44_COIN_TYPE = 136;
+	public static final int KOMODO_SLIP44_COIN_TYPE = 141;
+	public static final int RAVENCOIN_SLIP44_COIN_TYPE = 175;
 
 	private static final String BITCOIN_GENESIS_COINBASE_SCRIPT = "04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73";
 	private static final String BITCOIN_GENESIS_MERKLE_ROOT = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
@@ -195,33 +204,33 @@ public final class BitcoinyChainSpecs {
 			.majorityWindow(1815, 1900, 2016)
 			.dnsSeeds("dnsseed.dash.org")
 			.build();
-	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", 1, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
+	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", BITCOIN_SLIP44_COIN_TYPE, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
 			.mainnet(() -> BITCOIN_MAIN_NET_PARAMS, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", 1_500L, "btc")
 			.test3(() -> BITCOIN_TEST_NET_PARAMS, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", 1_500L, 1_000L, "tbtc")
 			.regtest(() -> BITCOIN_REG_TEST_PARAMS, 1_500L, 1_000L)
 			.defaultSpendFeePerByte(20L)
 			.build();
 
-	public static final BitcoinyChainSpec LITECOIN = spec("LITECOIN", 2, "Litecoin", LITECOIN_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+	public static final BitcoinyChainSpec LITECOIN = spec("LITECOIN", LITECOIN_SLIP44_COIN_TYPE, "Litecoin", LITECOIN_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
 			.mainnet(() -> LITECOIN_MAIN_NET_PARAMS, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", 1_000L, "ltc")
 			.test4(() -> LITECOIN_TEST_NET_PARAMS, "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0", 1_000L, 1_000L, "tltc")
 			.regtest(() -> LITECOIN_REG_TEST_PARAMS, 1_000L, 1_000L)
 			.addressNormalizer(BitcoinyChainSpecs::normalizeLitecoinAddress)
 			.build();
 
-	public static final BitcoinyChainSpec DOGECOIN = spec("DOGECOIN", 3, "Dogecoin", DOGECOIN_CURRENCY_CODE, Coin.valueOf(1_000_000), 100_000_000L)
+	public static final BitcoinyChainSpec DOGECOIN = spec("DOGECOIN", DOGECOIN_SLIP44_COIN_TYPE, "Dogecoin", DOGECOIN_CURRENCY_CODE, Coin.valueOf(1_000_000), 100_000_000L)
 			.mainnet(() -> DOGECOIN_MAIN_NET_PARAMS, "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", 100_000L, "doge")
 			.build();
 
-	public static final BitcoinyChainSpec DIGIBYTE = spec("DIGIBYTE", 4, "Digibyte", DIGIBYTE_CURRENCY_CODE, Coin.valueOf(100_000), 1_000_000)
+	public static final BitcoinyChainSpec DIGIBYTE = spec("DIGIBYTE", DIGIBYTE_SLIP44_COIN_TYPE, "Digibyte", DIGIBYTE_CURRENCY_CODE, Coin.valueOf(100_000), 1_000_000)
 			.mainnet(() -> DIGIBYTE_MAIN_NET_PARAMS, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", 10_000L, "dgb")
 			.build();
 
-	public static final BitcoinyChainSpec RAVENCOIN = spec("RAVENCOIN", 5, "Ravencoin", RAVENCOIN_CURRENCY_CODE, Coin.valueOf(1_125_000), 1_000_000)
+	public static final BitcoinyChainSpec RAVENCOIN = spec("RAVENCOIN", RAVENCOIN_SLIP44_COIN_TYPE, "Ravencoin", RAVENCOIN_CURRENCY_CODE, Coin.valueOf(1_125_000), 1_000_000)
 			.mainnet(() -> RAVENCOIN_MAIN_NET_PARAMS, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", 1_000_000L, "rvn")
 			.build();
 
-	public static final BitcoinyChainSpec DASH = spec("DASH", 7, "Dash", DASH_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+	public static final BitcoinyChainSpec DASH = spec("DASH", DASH_SLIP44_COIN_TYPE, "Dash", DASH_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
 			.mainnet(() -> DASH_MAIN_NET_PARAMS, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", 10_000L, "dash")
 			.build();
 
@@ -237,8 +246,8 @@ public final class BitcoinyChainSpecs {
 	private BitcoinyChainSpecs() {
 	}
 
-	private static SpecBuilder spec(String canonicalName, int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
-		return new SpecBuilder(canonicalName, foreignBlockchainId, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount);
+	private static SpecBuilder spec(String canonicalName, int slip44CoinType, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
+		return new SpecBuilder(canonicalName, slip44CoinType, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount);
 	}
 
 	private static StaticBitcoinyParams.Builder bitcoinParams(String id, String paymentProtocolId, String segwitAddressHrp) {
@@ -369,16 +378,16 @@ public final class BitcoinyChainSpecs {
 
 	private static final class SpecBuilder {
 		private final String canonicalName;
-		private final int foreignBlockchainId;
+		private final int slip44CoinType;
 		private final BitcoinyChainConfig config;
 		private final List<BitcoinyNetwork> networks = new ArrayList<>();
 		private final List<BitcoinyChainSpec.ElectrumServerRefreshConfig> refreshConfigs = new ArrayList<>();
 		private Long defaultSpendFeePerByte;
 		private BitcoinyChainSpec.AddressNormalizer addressNormalizer;
 
-		private SpecBuilder(String canonicalName, int foreignBlockchainId, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
+		private SpecBuilder(String canonicalName, int slip44CoinType, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
 			this.canonicalName = canonicalName;
-			this.foreignBlockchainId = foreignBlockchainId;
+			this.slip44CoinType = slip44CoinType;
 			this.config = new BitcoinyChainConfig(displayName, currencyCode, defaultFeePerKb, minimumOrderAmount,
 					BitcoinyChainConfig.defaultElectrumXPorts());
 		}
@@ -389,14 +398,32 @@ public final class BitcoinyChainSpecs {
 			return this;
 		}
 
+		private SpecBuilder mainnet(Supplier<NetworkParameters> paramsSupplier, String genesisHash, String chainId, long feeRequired, String chain1209k) {
+			this.networks.add(StaticBitcoinyNetwork.mainnet(paramsSupplier, NO_SERVERS, genesisHash, chainId, feeRequired));
+			this.addRefresh(MAIN, chain1209k);
+			return this;
+		}
+
 		private SpecBuilder test3(Supplier<NetworkParameters> paramsSupplier, String genesisHash, long feeRequired, long p2shFee, String chain1209k) {
 			this.networks.add(StaticBitcoinyNetwork.nonMainnet(TEST3, paramsSupplier, NO_SERVERS, genesisHash, feeRequired, p2shFee));
 			this.addRefresh(TEST3, chain1209k);
 			return this;
 		}
 
+		private SpecBuilder test3(Supplier<NetworkParameters> paramsSupplier, String genesisHash, String chainId, long feeRequired, long p2shFee, String chain1209k) {
+			this.networks.add(StaticBitcoinyNetwork.nonMainnet(TEST3, paramsSupplier, NO_SERVERS, genesisHash, chainId, feeRequired, p2shFee));
+			this.addRefresh(TEST3, chain1209k);
+			return this;
+		}
+
 		private SpecBuilder test4(Supplier<NetworkParameters> paramsSupplier, String genesisHash, long feeRequired, long p2shFee, String chain1209k) {
 			this.networks.add(StaticBitcoinyNetwork.nonMainnet(TEST4, paramsSupplier, NO_SERVERS, genesisHash, feeRequired, p2shFee));
+			this.addRefresh(TEST4, chain1209k);
+			return this;
+		}
+
+		private SpecBuilder test4(Supplier<NetworkParameters> paramsSupplier, String genesisHash, String chainId, long feeRequired, long p2shFee, String chain1209k) {
+			this.networks.add(StaticBitcoinyNetwork.nonMainnet(TEST4, paramsSupplier, NO_SERVERS, genesisHash, chainId, feeRequired, p2shFee));
 			this.addRefresh(TEST4, chain1209k);
 			return this;
 		}
@@ -417,7 +444,7 @@ public final class BitcoinyChainSpecs {
 		}
 
 		private BitcoinyChainSpec build() {
-			return new BitcoinyChainSpec(this.canonicalName, this.foreignBlockchainId, this.config, this.networks, this.refreshConfigs,
+			return new BitcoinyChainSpec(this.canonicalName, this.slip44CoinType, this.config, this.networks, this.refreshConfigs,
 					this.defaultSpendFeePerByte, this.addressNormalizer);
 		}
 
