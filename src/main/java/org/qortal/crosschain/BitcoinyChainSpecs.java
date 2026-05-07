@@ -29,6 +29,7 @@ public final class BitcoinyChainSpecs {
 	public static final String NAMECOIN_CURRENCY_CODE = "NMC";
 	public static final String FIRO_CURRENCY_CODE = "FIRO";
 	public static final String KOMODO_CURRENCY_CODE = "KMD";
+	public static final String LBRY_CREDITS_CURRENCY_CODE = "LBC";
 	public static final int BITCOIN_SLIP44_COIN_TYPE = 0;
 	public static final int LITECOIN_SLIP44_COIN_TYPE = 2;
 	public static final int DOGECOIN_SLIP44_COIN_TYPE = 3;
@@ -37,6 +38,7 @@ public final class BitcoinyChainSpecs {
 	public static final int DIGIBYTE_SLIP44_COIN_TYPE = 20;
 	public static final int FIRO_SLIP44_COIN_TYPE = 136;
 	public static final int KOMODO_SLIP44_COIN_TYPE = 141;
+	public static final int LBRY_CREDITS_SLIP44_COIN_TYPE = 140;
 	public static final int RAVENCOIN_SLIP44_COIN_TYPE = 175;
 
 	private static final String BITCOIN_GENESIS_COINBASE_SCRIPT = "04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73";
@@ -50,6 +52,7 @@ public final class BitcoinyChainSpecs {
 	private static final String NAMECOIN_GENESIS_OUTPUT_SCRIPT = "04b620369050cd899ffbbc4e8ee51e8c4534a855bb463439d63d235d4779685d8b6f4870a238cf365ac94fa13ef9a2a22cd99d0d5ee86dcabcafce36c7acf43ce5";
 	private static final String FIRO_GENESIS_MERKLE_ROOT = "365d2aa75d061370c9aefdabac3985716b1e3b4bb7c4af4ed54f25e5aaa42783";
 	private static final String KOMODO_GENESIS_MERKLE_ROOT = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
+	private static final String LBRY_CREDITS_GENESIS_MERKLE_ROOT = "b8211c82c3d15bcd78bba57005b86fed515149a53a425eb592c07af99fe559cc";
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
 	private static final NetworkParameters BITCOIN_MAIN_NET_PARAMS = bitcoinParams("org.bitcoin.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, "bc")
@@ -251,6 +254,18 @@ public final class BitcoinyChainSpecs {
 			.dnsSeeds("kmd.komodoseeds.org", "seeds1.kmd.sh", "kmdseed.cipig.net",
 					"kmdseeds.lordofthechains.com", "kmd.komodoseeds.com", "dynamic.komodoseeds.com")
 			.build();
+	private static final NetworkParameters LBRY_CREDITS_MAIN_NET_PARAMS = lbryCreditsParams("main", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
+			.genesis(1446058291L, 1287L, 0x1f00ffffL, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463")
+			.genesisHeader(1L, LBRY_CREDITS_GENESIS_MERKLE_ROOT)
+			.port(9246)
+			.packetMagic(0xfae4aaf1L)
+			.addressHeaders(0x55, 0x7a, 0x1c)
+			.segwitAddressHrp("lbc")
+			.coinbaseAndSubsidy(100, 32)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(750, 950, 1000)
+			.dnsSeeds("dnsseed1.lbry.io", "dnsseed2.lbry.io", "dnsseed3.lbry.io")
+			.build();
 	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", BITCOIN_SLIP44_COIN_TYPE, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
 			.mainnet(() -> BITCOIN_MAIN_NET_PARAMS, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", 1_500L, "btc")
 			.test3(() -> BITCOIN_TEST_NET_PARAMS, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", 1_500L, 1_000L, "tbtc")
@@ -295,7 +310,12 @@ public final class BitcoinyChainSpecs {
 			.transactionFormat(BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
 			.build();
 
-	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, NAMECOIN, FIRO, KOMODO);
+	public static final BitcoinyChainSpec LBRY_CREDITS = spec("LBRYCREDITS", LBRY_CREDITS_SLIP44_COIN_TYPE, "LBRY Credits", LBRY_CREDITS_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+			.mainnet(() -> LBRY_CREDITS_MAIN_NET_PARAMS, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463", 10_000L, "lbc")
+			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isLbryClaimOutputScript(scriptPubKey))
+			.build();
+
+	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, NAMECOIN, FIRO, KOMODO, LBRY_CREDITS);
 
 	private static final List<String> CURRENCY_CODES = ALL.stream()
 			.map(BitcoinyChainSpec::getCurrencyCode)
@@ -434,6 +454,20 @@ public final class BitcoinyChainSpecs {
 						.code(3, "mKMD")
 						.code(7, "Komodoshi"))
 				.difficultyValidationFailure("Komodo difficulty verification is not implemented for Electrum-backed parameters");
+	}
+
+	private static StaticBitcoinyParams.Builder lbryCreditsParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "lbry")
+				.maxTarget("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+				.targetTimespan(150)
+				.interval(1)
+				.hasMaxMoney(false)
+				.minNonDustOutput(Coin.valueOf(546L))
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, LBRY_CREDITS_CURRENCY_CODE)
+						.code(3, "mLBC")
+						.code(7, "Dewey"))
+				.difficultyValidationFailure("LBRY Credits difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	private static BitcoinyChainSpec.ElectrumServerRefreshConfig refresh(String networkName, String chain1209k) {

@@ -26,6 +26,9 @@ public final class BitcoinyScript {
 	private static final int OP_NAME_NEW = 0x51;
 	private static final int OP_NAME_FIRSTUPDATE = 0x52;
 	private static final int OP_NAME_UPDATE = 0x53;
+	private static final int OP_CLAIM_NAME = 0xb5;
+	private static final int OP_SUPPORT_CLAIM = 0xb6;
+	private static final int OP_UPDATE_CLAIM = 0xb7;
 
 	private BitcoinyScript() {
 	}
@@ -141,6 +144,45 @@ public final class BitcoinyScript {
 				if (offset < 0 || offset + 2 >= script.length)
 					return false;
 				if ((script[offset++] & 0xff) != OP_2DROP || (script[offset++] & 0xff) != OP_DROP)
+					return false;
+				return offset < script.length;
+
+			default:
+				return false;
+		}
+	}
+
+	public static boolean isLbryClaimOutputScript(byte[] script) {
+		if (script == null || script.length == 0)
+			return false;
+
+		int offset = 1;
+		switch (script[0] & 0xff) {
+			case OP_CLAIM_NAME:
+				offset = readPushDataEnd(script, offset);
+				offset = readPushDataEnd(script, offset);
+				if (offset < 0 || offset + 2 >= script.length)
+					return false;
+				if ((script[offset++] & 0xff) != OP_2DROP || (script[offset++] & 0xff) != OP_DROP)
+					return false;
+				return offset < script.length;
+
+			case OP_SUPPORT_CLAIM:
+				offset = readPushDataEnd(script, offset);
+				offset = readPushDataEnd(script, offset);
+				if (offset < 0 || offset + 2 >= script.length)
+					return false;
+				if ((script[offset++] & 0xff) != OP_2DROP || (script[offset++] & 0xff) != OP_DROP)
+					return false;
+				return offset < script.length;
+
+			case OP_UPDATE_CLAIM:
+				offset = readPushDataEnd(script, offset);
+				offset = readPushDataEnd(script, offset);
+				offset = readPushDataEnd(script, offset);
+				if (offset < 0 || offset + 2 >= script.length)
+					return false;
+				if ((script[offset++] & 0xff) != OP_2DROP || (script[offset++] & 0xff) != OP_2DROP)
 					return false;
 				return offset < script.length;
 

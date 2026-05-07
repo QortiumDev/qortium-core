@@ -19,10 +19,11 @@ Mainnet chain ids for the currently registered BTC-like chains are:
 | `bip122:000000000062b72c5e2ceb45fbc8587e` | `NAMECOIN` | `NMC` |
 | `bip122:4381deb85b1b2c9843c222944b616d99` | `FIRO` | `FIRO` |
 | `bip122:027e3758c3a65b12aa1046462b486d0a` | `KOMODO` | `KMD` |
+| `bip122:9c89283ba0f3227f6c03b70216b9f665` | `LBRYCREDITS` | `LBC` |
 | `bip122:7497ea1b465eb39f1c8f507bc877078f` | `DIGIBYTE` | `DGB` |
 | `bip122:0000006b444bc2f2ffe627be9d9e7e7a` | `RAVENCOIN` | `RVN` |
 
-SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, NMC `7`, DGB `20`, FIRO `136` (listed in SLIP-44 as XZC/ZCoin), KMD `141`, and RVN `175`.
+SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, NMC `7`, DGB `20`, FIRO `136` (listed in SLIP-44 as XZC/ZCoin), LBC `140`, KMD `141`, and RVN `175`.
 
 ## Network Settings
 
@@ -39,7 +40,8 @@ Use `bitcoinyNetworks` in `settings.json` to choose the active network for BTC-l
     "DASH": "MAIN",
     "NMC": "MAIN",
     "FIRO": "MAIN",
-    "KMD": "MAIN"
+    "KMD": "MAIN",
+    "LBC": "MAIN"
   }
 }
 ```
@@ -76,6 +78,8 @@ Namecoin is registered for ordinary NMC wallet, HTLC, and ACCT trade support. Na
 Firo is registered for ordinary transparent FIRO wallet, HTLC, and ACCT trade support. Spark, Lelantus, Zerocoin, and exchange-address flows are intentionally not implemented as part of generic BTC-like support.
 
 Komodo is registered for transparent KMD wallet, HTLC, and ACCT trade support through Electrum-compatible servers. KMD is not a legacy-Bitcoin transaction clone: spends and HTLC transactions use the Sapling transparent transaction format while staying in the generic Bitcoiny runtime. Shielded KMD wallet behavior is intentionally not implemented.
+
+LBRY Credits is registered for ordinary transparent LBC wallet, HTLC, and ACCT trade support. LBRY claim, publish, update, and content-discovery flows are intentionally not implemented as part of generic BTC-like support, but detected claim/support/update outputs are filtered out of normal wallet spend selection so claim UTXOs are not accidentally spent as plain LBC.
 
 ## Tests
 

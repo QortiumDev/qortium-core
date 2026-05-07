@@ -46,7 +46,8 @@ public class BitcoinyChainSpecsTests {
 				new ChainManifest("DASH", "DASH", BitcoinyChainSpecs.DASH_SLIP44_COIN_TYPE, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", Set.of(BitcoinyChainSpecs.MAIN), 76, 16, 204, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("NAMECOIN", "NMC", BitcoinyChainSpecs.NAMECOIN_SLIP44_COIN_TYPE, "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770", Set.of(BitcoinyChainSpecs.MAIN), 52, 13, 180, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("FIRO", "FIRO", BitcoinyChainSpecs.FIRO_SLIP44_COIN_TYPE, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", Set.of(BitcoinyChainSpecs.MAIN), 82, 7, 210, 0x0488B21E, 0x0488ADE4),
-				new ChainManifest("KOMODO", "KMD", BitcoinyChainSpecs.KOMODO_SLIP44_COIN_TYPE, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", Set.of(BitcoinyChainSpecs.MAIN), 60, 85, 188, 0x0488B21E, 0x0488ADE4))) {
+				new ChainManifest("KOMODO", "KMD", BitcoinyChainSpecs.KOMODO_SLIP44_COIN_TYPE, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", Set.of(BitcoinyChainSpecs.MAIN), 60, 85, 188, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("LBRYCREDITS", "LBC", BitcoinyChainSpecs.LBRY_CREDITS_SLIP44_COIN_TYPE, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463", Set.of(BitcoinyChainSpecs.MAIN), 0x55, 0x7a, 0x1c, 0x0488B21E, 0x0488ADE4))) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(expected.currencyCode);
 			assertNotNull(expected.currencyCode, spec);
 			assertEquals(expected.canonicalName, spec.getCanonicalName());
@@ -185,7 +186,8 @@ public class BitcoinyChainSpecsTests {
 				BitcoinyChainSpecs.DASH,
 				BitcoinyChainSpecs.NAMECOIN,
 				BitcoinyChainSpecs.FIRO,
-				BitcoinyChainSpecs.KOMODO
+				BitcoinyChainSpecs.KOMODO,
+				BitcoinyChainSpecs.LBRY_CREDITS
 		}) {
 			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST3));
 			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST4));
@@ -503,6 +505,47 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testLbryCreditsUsesSharedStaticParams() {
+		BitcoinyNetwork lbryMainNet = BitcoinyChainSpecs.LBRY_CREDITS.getNetwork(BitcoinyChainSpecs.MAIN);
+		NetworkParameters lbryMainNetParams = lbryMainNet.getParams();
+		Block genesisBlock = lbryMainNetParams.getGenesisBlock();
+
+		assertTrue(lbryMainNetParams instanceof StaticBitcoinyParams);
+		assertEquals("main", lbryMainNetParams.getId());
+		assertEquals(NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, lbryMainNetParams.getPaymentProtocolId());
+		assertEquals("lbry", lbryMainNetParams.getUriScheme());
+		assertEquals("9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463", genesisBlock.getHashAsString());
+		assertEquals(1L, genesisBlock.getVersion());
+		assertEquals("b8211c82c3d15bcd78bba57005b86fed515149a53a425eb592c07af99fe559cc", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1446058291L, genesisBlock.getTimeSeconds());
+		assertEquals(0x1f00ffffL, genesisBlock.getDifficultyTarget());
+		assertEquals(1287L, genesisBlock.getNonce());
+		assertEquals(new BigInteger("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16), lbryMainNetParams.getMaxTarget());
+		assertEquals(150, lbryMainNetParams.getTargetTimespan());
+		assertEquals(1, lbryMainNetParams.getInterval());
+		assertEquals(9246, lbryMainNetParams.getPort());
+		assertEquals(0xfae4aaf1L, lbryMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(0x55, lbryMainNetParams.getAddressHeader());
+		assertEquals(0x7a, lbryMainNetParams.getP2SHHeader());
+		assertEquals(0x1c, lbryMainNetParams.getDumpedPrivateKeyHeader());
+		assertEquals("lbc", lbryMainNetParams.getSegwitAddressHrp());
+		assertEquals(100, lbryMainNetParams.getSpendableCoinbaseDepth());
+		assertEquals(32, lbryMainNetParams.getSubsidyDecreaseBlockCount());
+		assertEquals(0x0488B21E, lbryMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, lbryMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(Coin.valueOf(546L), lbryMainNetParams.getMinNonDustOutput());
+		assertFalse(lbryMainNetParams.hasMaxMoney());
+		assertEquals("LBC 1.00", lbryMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
+		assertTrue(BitcoinyChainSpecs.LBRY_CREDITS.hasSpendableOutputScriptFilter());
+		assertTrue(BitcoinyChainSpecs.LBRY_CREDITS.isSpendableOutputScript(BitcoinyScript.p2pkhScript(new byte[20])));
+		assertTrue(BitcoinyChainSpecs.LBRY_CREDITS.isSpendableOutputScript(BitcoinyScript.p2shScript(new byte[20])));
+		assertFalse(BitcoinyChainSpecs.LBRY_CREDITS.isSpendableOutputScript(buildLbryClaimScript(BitcoinyScript.p2pkhScript(new byte[20]))));
+		assertFalse(BitcoinyChainSpecs.LBRY_CREDITS.isSpendableOutputScript(buildLbrySupportScript(BitcoinyScript.p2pkhScript(new byte[20]))));
+		assertFalse(BitcoinyChainSpecs.LBRY_CREDITS.isSpendableOutputScript(buildLbryUpdateScript(BitcoinyScript.p2pkhScript(new byte[20]))));
+		assertFalse(BitcoinyScript.isLbryClaimOutputScript(new byte[] { (byte) 0xb5, 0x01, 0x01 }));
+	}
+
+	@Test
 	public void testPirateChainUsesSharedStaticMainNetParams() {
 		NetworkParameters pirateMainNetParams = PirateChain.PirateChainNet.MAIN.getParams();
 		Block genesisBlock = pirateMainNetParams.getGenesisBlock();
@@ -545,6 +588,7 @@ public class BitcoinyChainSpecsTests {
 		assertSame(BitcoinyChainSpecs.NAMECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.NAMECOIN_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.FIRO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.FIRO_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.KOMODO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.KOMODO_CURRENCY_CODE));
+		assertSame(BitcoinyChainSpecs.LBRY_CREDITS.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LBRY_CREDITS_CURRENCY_CODE));
 	}
 
 	private static byte[] buildNameNewScript(byte[] lockScript) {
@@ -571,6 +615,34 @@ public class BitcoinyChainSpecsTests {
 				BitcoinyScript.pushData("d/qortium".getBytes(StandardCharsets.UTF_8)),
 				BitcoinyScript.pushData("value".getBytes(StandardCharsets.UTF_8)),
 				new byte[] { 0x6d, 0x75 },
+				lockScript);
+	}
+
+	private static byte[] buildLbryClaimScript(byte[] lockScript) {
+		return concat(
+				new byte[] { (byte) 0xb5 },
+				BitcoinyScript.pushData("qortium".getBytes(StandardCharsets.UTF_8)),
+				BitcoinyScript.pushData("claim metadata".getBytes(StandardCharsets.UTF_8)),
+				new byte[] { 0x6d, 0x75 },
+				lockScript);
+	}
+
+	private static byte[] buildLbrySupportScript(byte[] lockScript) {
+		return concat(
+				new byte[] { (byte) 0xb6 },
+				BitcoinyScript.pushData("qortium".getBytes(StandardCharsets.UTF_8)),
+				BitcoinyScript.pushData(new byte[20]),
+				new byte[] { 0x6d, 0x75 },
+				lockScript);
+	}
+
+	private static byte[] buildLbryUpdateScript(byte[] lockScript) {
+		return concat(
+				new byte[] { (byte) 0xb7 },
+				BitcoinyScript.pushData("qortium".getBytes(StandardCharsets.UTF_8)),
+				BitcoinyScript.pushData(new byte[20]),
+				BitcoinyScript.pushData("updated metadata".getBytes(StandardCharsets.UTF_8)),
+				new byte[] { 0x6d, 0x6d },
 				lockScript);
 	}
 

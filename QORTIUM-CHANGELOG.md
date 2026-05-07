@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: add LBRY Credits Bitcoiny support
+
+Added LBRY Credits as a registered BTC-like crosschain coin using the shared Bitcoiny chain-spec model, including mainnet chain identity, SLIP-44 wallet metadata, LBC address headers, Electrum server refresh metadata, common wallet/HTLC/ACCT test coverage, and chain-spec documentation. This enables ordinary transparent LBC trade and wallet support while deliberately leaving LBRY claim, publish, update, and content-discovery features outside the generic BTC-like path; detected claim outputs are filtered out of normal wallet spend selection so they are not accidentally spent as plain LBC.
+
 ### 2026-05-07 - crosschain: add Komodo Bitcoiny support
 
 Added Komodo as a registered transparent Bitcoiny crosschain coin with mainnet chain identity, SLIP-44 metadata, BIP122 routing, KMD address headers, Electrum server refresh metadata, and common registry coverage. Because KMD uses Sapling-era transaction rules, the generic Bitcoiny runtime now has a signed raw transaction wrapper and a Sapling-transparent signing path for KMD sends and HTLC redeem/refund transactions, while shielded KMD wallet behavior remains out of scope.

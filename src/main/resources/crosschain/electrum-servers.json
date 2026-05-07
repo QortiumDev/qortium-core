@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-07T20:20:48.497279332Z",
+  "generatedAt": "2026-05-07T21:15:06.049011223Z",
   "servers": {
     "BTC": {
       "MAIN": [
@@ -430,6 +430,11 @@
         {"host": "electrum1.cipig.net", "port": 20001, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 2859},
         {"host": "electrum2.cipig.net", "port": 20001, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 2846},
         {"host": "electrum3.cipig.net", "port": 20001, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 2865}
+      ]
+    },
+    "LBC": {
+      "MAIN": [
+        {"host": "lbc.electrum1.cipig.net", "port": 10067, "protocol": "TCP", "source": "1209k", "responseTimeMillis": 3273}
       ]
     }
   }
