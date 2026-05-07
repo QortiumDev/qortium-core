@@ -5,6 +5,7 @@ import org.bitcoinj.core.*;
 import org.bitcoinj.script.Script.ScriptType;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyHTLC;
+import org.qortal.crosschain.UnspentOutput;
 import org.qortal.crypto.Crypto;
 
 import java.util.Arrays;
@@ -116,7 +117,7 @@ public class RefundHTLC {
 			return;
 
 		// Grab all unspent outputs
-		List<TransactionOutput> unspentOutputs = Common.getUnspentOutputs(bitcoiny, p2shAddress.toString());
+		List<UnspentOutput> unspentOutputs = Common.getUnspentOutputs(bitcoiny, p2shAddress.toString());
 		if (unspentOutputs.isEmpty())
 			return;
 

@@ -105,7 +105,7 @@ public class BitcoinyHTLC {
 	 * @return Signed transaction for spending P2SH
 	 */
 	public static Transaction buildP2shTransaction(NetworkParameters params, Coin amount, ECKey spendKey,
-			List<TransactionOutput> fundingOutputs, byte[] redeemScriptBytes,
+			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes,
 			Long lockTime, Function<byte[], Script> scriptSigBuilder, byte[] outputPublicKeyHash) {
 		Transaction transaction = new Transaction(params);
 		transaction.setVersion(2);
@@ -114,10 +114,11 @@ public class BitcoinyHTLC {
 		transaction.addOutput(amount, ScriptBuilder.createP2PKHOutputScript(outputPublicKeyHash));
 
 		for (int inputIndex = 0; inputIndex < fundingOutputs.size(); ++inputIndex) {
-			TransactionOutput fundingOutput = fundingOutputs.get(inputIndex);
+			UnspentOutput fundingOutput = fundingOutputs.get(inputIndex);
+			TransactionOutPoint fundingOutPoint = new TransactionOutPoint(params, fundingOutput.index, Sha256Hash.wrap(fundingOutput.hash));
 
 			// Input (without scriptSig prior to signing)
-			TransactionInput input = new TransactionInput(params, null, redeemScriptBytes, fundingOutput.getOutPointFor());
+			TransactionInput input = new TransactionInput(params, null, redeemScriptBytes, fundingOutPoint);
 			if (lockTime != null)
 				input.setSequenceNumber(LOCKTIME_NO_RBF_SEQUENCE); // Use max-value - 1, so lockTime can be used but not RBF
 			else
@@ -160,7 +161,7 @@ public class BitcoinyHTLC {
 	 * @return Signed transaction for refunding P2SH
 	 */
 	public static Transaction buildRefundTransaction(NetworkParameters params, Coin refundAmount, ECKey refundKey,
-			List<TransactionOutput> fundingOutputs, byte[] redeemScriptBytes, long lockTime, byte[] receivingAccountInfo) {
+			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, long lockTime, byte[] receivingAccountInfo) {
 		Function<byte[], Script> refundSigScriptBuilder = (txSigBytes) -> {
 			// Build scriptSig with...
 			ScriptBuilder scriptBuilder = new ScriptBuilder();
@@ -195,7 +196,7 @@ public class BitcoinyHTLC {
 	 * @return Signed transaction for redeeming P2SH
 	 */
 	public static Transaction buildRedeemTransaction(NetworkParameters params, Coin redeemAmount, ECKey redeemKey,
-			List<TransactionOutput> fundingOutputs, byte[] redeemScriptBytes, byte[] secret, byte[] receivingAccountInfo) {
+			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, byte[] secret, byte[] receivingAccountInfo) {
 		Function<byte[], Script> redeemSigScriptBuilder = (txSigBytes) -> {
 			// Build scriptSig with...
 			ScriptBuilder scriptBuilder = new ScriptBuilder();

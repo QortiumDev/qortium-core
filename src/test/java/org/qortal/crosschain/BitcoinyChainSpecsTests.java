@@ -8,10 +8,6 @@ import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.RegTestParams;
 import org.bitcoinj.params.TestNet3Params;
-import org.libdohj.params.DogecoinMainNetParams;
-import org.libdohj.params.DigibyteMainNetParams;
-import org.libdohj.params.LitecoinMainNetParams;
-import org.libdohj.params.RavencoinMainNetParams;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
 import org.qortal.test.common.Common;
@@ -181,13 +177,31 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
-	public void testLitecoinUsesSharedStaticMainNetParamsWithLegacyParity() {
-		NetworkParameters legacyParams = LitecoinMainNetParams.get();
+	public void testLitecoinUsesSharedStaticMainNetParams() {
 		NetworkParameters litecoinMainNetParams = BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+		Block genesisBlock = litecoinMainNetParams.getGenesisBlock();
 
 		assertTrue(litecoinMainNetParams instanceof StaticBitcoinyParams);
-		assertNetworkParamParity(legacyParams, litecoinMainNetParams);
-		assertEquals("12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", litecoinMainNetParams.getGenesisBlock().getHashAsString());
+		assertEquals("org.litecoin.production", litecoinMainNetParams.getId());
+		assertEquals("org.litecoin.production", litecoinMainNetParams.getPaymentProtocolId());
+		assertEquals("litecoin", litecoinMainNetParams.getUriScheme());
+		assertEquals("12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", genesisBlock.getHashAsString());
+		assertEquals("97ddfbbae6be97fd6cdf3e7ca13232a3afff2353e29badfab7f73011edd4ced9", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1317972665L, genesisBlock.getTimeSeconds());
+		assertEquals(0x1e0ffff0L, genesisBlock.getDifficultyTarget());
+		assertEquals(2084524493L, genesisBlock.getNonce());
+		assertEquals(302_400, litecoinMainNetParams.getTargetTimespan());
+		assertEquals(2016, litecoinMainNetParams.getInterval());
+		assertEquals(9333, litecoinMainNetParams.getPort());
+		assertEquals(0xfbc0b6dbL, litecoinMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(48, litecoinMainNetParams.getAddressHeader());
+		assertEquals(5, litecoinMainNetParams.getP2SHHeader());
+		assertEquals(176, litecoinMainNetParams.getDumpedPrivateKeyHeader());
+		assertEquals("ltc", litecoinMainNetParams.getSegwitAddressHrp());
+		assertEquals(100, litecoinMainNetParams.getSpendableCoinbaseDepth());
+		assertEquals(840_000, litecoinMainNetParams.getSubsidyDecreaseBlockCount());
+		assertEquals(0x0488B21E, litecoinMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, litecoinMainNetParams.getBip32HeaderP2PKHpriv());
 	}
 
 	@Test
@@ -238,34 +252,86 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
-	public void testDigibyteUsesSharedStaticParamsWithLegacyParity() {
-		NetworkParameters legacyParams = DigibyteMainNetParams.get();
+	public void testDigibyteUsesSharedStaticParams() {
 		NetworkParameters digibyteMainNetParams = BitcoinyChainSpecs.DIGIBYTE.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+		Block genesisBlock = digibyteMainNetParams.getGenesisBlock();
 
 		assertTrue(digibyteMainNetParams instanceof StaticBitcoinyParams);
-		assertNetworkParamParity(legacyParams, digibyteMainNetParams);
-		assertEquals("7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", digibyteMainNetParams.getGenesisBlock().getHashAsString());
+		assertEquals("main", digibyteMainNetParams.getId());
+		assertEquals(NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, digibyteMainNetParams.getPaymentProtocolId());
+		assertEquals("digibyte", digibyteMainNetParams.getUriScheme());
+		assertEquals("7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", genesisBlock.getHashAsString());
+		assertEquals("72ddd9496b004221ed0557358846d9248ecd4c440ebd28ed901efc18757d0fad", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1389388394L, genesisBlock.getTimeSeconds());
+		assertEquals(0x1e0ffff0L, genesisBlock.getDifficultyTarget());
+		assertEquals(2447652L, genesisBlock.getNonce());
+		assertEquals(8_640, digibyteMainNetParams.getTargetTimespan());
+		assertEquals(2016, digibyteMainNetParams.getInterval());
+		assertEquals(12024, digibyteMainNetParams.getPort());
+		assertEquals(0xfac3b6daL, digibyteMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(30, digibyteMainNetParams.getAddressHeader());
+		assertEquals(63, digibyteMainNetParams.getP2SHHeader());
+		assertEquals(128, digibyteMainNetParams.getDumpedPrivateKeyHeader());
+		assertEquals("dgb", digibyteMainNetParams.getSegwitAddressHrp());
+		assertEquals(0x0488B21E, digibyteMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, digibyteMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(0x04b24746, digibyteMainNetParams.getBip32HeaderP2WPKHpub());
+		assertEquals(0x04b2430c, digibyteMainNetParams.getBip32HeaderP2WPKHpriv());
 	}
 
 	@Test
-	public void testDogecoinUsesSharedStaticMainNetParamsWithLegacyParity() {
-		NetworkParameters legacyParams = DogecoinMainNetParams.get();
+	public void testDogecoinUsesSharedStaticMainNetParams() {
 		NetworkParameters dogecoinMainNetParams = BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+		Block genesisBlock = dogecoinMainNetParams.getGenesisBlock();
 
 		assertTrue(dogecoinMainNetParams instanceof StaticBitcoinyParams);
-		assertNetworkParamParity(legacyParams, dogecoinMainNetParams);
-		assertEquals("1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", dogecoinMainNetParams.getGenesisBlock().getHashAsString());
+		assertEquals("org.dogecoin.production", dogecoinMainNetParams.getId());
+		assertEquals("org.dogecoin.production", dogecoinMainNetParams.getPaymentProtocolId());
+		assertEquals("dogecoin", dogecoinMainNetParams.getUriScheme());
+		assertEquals("1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", genesisBlock.getHashAsString());
+		assertEquals("5b2a3f53f605d62c53e62932dac6925e3d74afa5a4b459745c36d42d0ed26a69", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1386325540L, genesisBlock.getTimeSeconds());
+		assertEquals(0x1e0ffff0L, genesisBlock.getDifficultyTarget());
+		assertEquals(99943L, genesisBlock.getNonce());
+		assertEquals(14_400, dogecoinMainNetParams.getTargetTimespan());
+		assertEquals(240, dogecoinMainNetParams.getInterval());
+		assertEquals(22556, dogecoinMainNetParams.getPort());
+		assertEquals(0xc0c0c0c0L, dogecoinMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(30, dogecoinMainNetParams.getAddressHeader());
+		assertEquals(22, dogecoinMainNetParams.getP2SHHeader());
+		assertEquals(158, dogecoinMainNetParams.getDumpedPrivateKeyHeader());
+		assertNull(dogecoinMainNetParams.getSegwitAddressHrp());
+		assertEquals(0x02facafd, dogecoinMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x02fac398, dogecoinMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(Coin.COIN, dogecoinMainNetParams.getMinNonDustOutput());
+		assertEquals(false, dogecoinMainNetParams.hasMaxMoney());
 	}
 
 	@Test
-	public void testRavencoinUsesSharedStaticParamsWithLegacyParity() {
-		NetworkParameters legacyParams = RavencoinMainNetParams.get();
+	public void testRavencoinUsesSharedStaticParams() {
 		NetworkParameters ravencoinMainNetParams = BitcoinyChainSpecs.RAVENCOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+		Block genesisBlock = ravencoinMainNetParams.getGenesisBlock();
 
 		assertTrue(ravencoinMainNetParams instanceof StaticBitcoinyParams);
-		// Legacy Ravencoin params expose bitcoinj's double-SHA header hash, while the chain uses X16R.
-		assertNetworkParamParity(legacyParams, ravencoinMainNetParams, false);
-		assertEquals("0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", ravencoinMainNetParams.getGenesisBlock().getHashAsString());
+		assertEquals("main", ravencoinMainNetParams.getId());
+		assertEquals(NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, ravencoinMainNetParams.getPaymentProtocolId());
+		assertEquals("ravencoin", ravencoinMainNetParams.getUriScheme());
+		assertEquals("0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", genesisBlock.getHashAsString());
+		assertEquals(4L, genesisBlock.getVersion());
+		assertEquals("28ff00a867739a352523808d301f504bc4547699398d70faf2266a8bae5f3516", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1514999494L, genesisBlock.getTimeSeconds());
+		assertEquals(0x1e00ffffL, genesisBlock.getDifficultyTarget());
+		assertEquals(25023712L, genesisBlock.getNonce());
+		assertEquals(120_960, ravencoinMainNetParams.getTargetTimespan());
+		assertEquals(2016, ravencoinMainNetParams.getInterval());
+		assertEquals(8767, ravencoinMainNetParams.getPort());
+		assertEquals(0x5241564eL, ravencoinMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(60, ravencoinMainNetParams.getAddressHeader());
+		assertEquals(122, ravencoinMainNetParams.getP2SHHeader());
+		assertEquals(128, ravencoinMainNetParams.getDumpedPrivateKeyHeader());
+		assertNull(ravencoinMainNetParams.getSegwitAddressHrp());
+		assertEquals(2_100_000, ravencoinMainNetParams.getSubsidyDecreaseBlockCount());
+		assertEquals(Coin.valueOf(2_730L), ravencoinMainNetParams.getMinNonDustOutput());
 	}
 
 	@Test
@@ -278,6 +344,38 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(0x0488B21E, dashMainNet.getParams().getBip32HeaderP2PKHpub());
 		assertEquals(0x0488ADE4, dashMainNet.getParams().getBip32HeaderP2PKHpriv());
 		assertEquals("00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", dashMainNet.getParams().getGenesisBlock().getHashAsString());
+	}
+
+	@Test
+	public void testPirateChainUsesSharedStaticMainNetParams() {
+		NetworkParameters pirateMainNetParams = PirateChain.PirateChainNet.MAIN.getParams();
+		Block genesisBlock = pirateMainNetParams.getGenesisBlock();
+
+		assertTrue(pirateMainNetParams instanceof StaticBitcoinyParams);
+		assertEquals("main", pirateMainNetParams.getId());
+		assertEquals("main", pirateMainNetParams.getPaymentProtocolId());
+		assertEquals("pirate", pirateMainNetParams.getUriScheme());
+		assertEquals(PirateChain.PirateChainNet.MAIN.getGenesisHash(), genesisBlock.getHashAsString());
+		assertEquals(4L, genesisBlock.getVersion());
+		assertEquals("31e71120c25cd57fd138dfeba98799f2e314bad9ece0b0632fd2a779c9ebb4c2", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1231006505L, genesisBlock.getTimeSeconds());
+		assertEquals(0x200f0f0fL, genesisBlock.getDifficultyTarget());
+		assertEquals(11L, genesisBlock.getNonce());
+		assertEquals(302_400, pirateMainNetParams.getTargetTimespan());
+		assertEquals(5040, pirateMainNetParams.getInterval());
+		assertEquals(7770, pirateMainNetParams.getPort());
+		assertEquals(0xf9beb4d9L, pirateMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(60, pirateMainNetParams.getAddressHeader());
+		assertEquals(85, pirateMainNetParams.getP2SHHeader());
+		assertEquals(188, pirateMainNetParams.getDumpedPrivateKeyHeader());
+		assertEquals("zs", pirateMainNetParams.getSegwitAddressHrp());
+		assertEquals(100, pirateMainNetParams.getSpendableCoinbaseDepth());
+		assertEquals(210_000, pirateMainNetParams.getSubsidyDecreaseBlockCount());
+		assertEquals(0x0488B21E, pirateMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, pirateMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(Coin.COIN.multiply(200_000_000L), pirateMainNetParams.getMaxMoney());
+		assertEquals(Coin.valueOf(100_000L), pirateMainNetParams.getMinNonDustOutput());
+		assertEquals("PIRATE 1.00", pirateMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
 	}
 
 	@Test

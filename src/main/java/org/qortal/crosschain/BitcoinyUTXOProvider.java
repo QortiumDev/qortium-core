@@ -1,5 +1,6 @@
 package org.qortal.crosschain;
 
+import com.google.common.hash.HashCode;
 import org.bitcoinj.core.*;
 import org.bitcoinj.script.Script;
 import org.bitcoinj.script.ScriptBuilder;
@@ -50,9 +51,15 @@ public class BitcoinyUTXOProvider implements UTXOProvider {
      * @throws ForeignBlockchainException
      */
     private UTXO toUTXO(UnspentOutput unspentOutput) throws ForeignBlockchainException {
-        List<TransactionOutput> transactionOutputs = this.bitcoiny.getOutputs(unspentOutput.hash);
+        byte[] scriptPubKeyBytes = unspentOutput.script;
 
-        TransactionOutput transactionOutput = transactionOutputs.get(unspentOutput.index);
+        if (scriptPubKeyBytes == null) {
+            List<BitcoinyTransaction.Output> transactionOutputs = this.bitcoiny.getOutputs(unspentOutput.hash);
+            BitcoinyTransaction.Output transactionOutput = transactionOutputs.get(unspentOutput.index);
+            scriptPubKeyBytes = HashCode.fromString(transactionOutput.scriptPubKey).asBytes();
+        }
+
+        Script scriptPubKey = new Script(scriptPubKeyBytes);
 
         return new UTXO(
                         Sha256Hash.wrap(unspentOutput.hash),
@@ -60,7 +67,7 @@ public class BitcoinyUTXOProvider implements UTXOProvider {
                         Coin.valueOf(unspentOutput.value),
                         unspentOutput.height,
                 false,
-                        transactionOutput.getScriptPubKey()
+                        scriptPubKey
         );
     }
 

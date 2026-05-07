@@ -4,10 +4,10 @@ import cash.z.wallet.sdk.rpc.CompactFormats;
 import com.google.common.hash.HashCode;
 import com.rust.litewalletjni.LiteWalletJni;
 import org.bitcoinj.core.*;
+import org.bitcoinj.utils.MonetaryFormat;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
-import org.libdohj.params.PirateChainMainNetParams;
 import org.qortal.api.model.crosschain.PirateChainSendRequest;
 import org.qortal.controller.PirateChainWalletController;
 import org.qortal.crosschain.PirateLightClient.Server;
@@ -36,6 +36,33 @@ public class PirateChain extends Bitcoiny {
 	private static final long MAINNET_FEE = 10000L; // 0.0001 ARRR
 	private static final long NON_MAINNET_FEE = 10000L; // 0.0001 ARRR
 
+	private static final String MAINNET_GENESIS_HASH = "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71";
+
+	private static final NetworkParameters MAINNET_PARAMS = StaticBitcoinyParams.builder("main", "main", "pirate")
+			.genesis(1231006505L, 11L, 0x200f0f0fL, MAINNET_GENESIS_HASH)
+			.genesisHeader(4L, "31e71120c25cd57fd138dfeba98799f2e314bad9ece0b0632fd2a779c9ebb4c2")
+			.maxTarget(0x200f0f0fL)
+			.targetTimespan(302_400)
+			.interval(5040)
+			.port(7770)
+			.packetMagic(0xf9beb4d9L)
+			.addressHeaders(60, 85, 188)
+			.segwitAddressHrp("zs")
+			.coinbaseAndSubsidy(100, 210_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(750, 950, 1000)
+			.dnsSeeds("pirate1.cryptoforge.cc", "pirate2.cryptoforge.cc", "pirate3.cryptoforge.cc",
+					"explorer.cryptoforge.cc", "explorer.pirate.black", "mseed.dexstats.info",
+					"seed.komodostats.com", "bootstrap.arrr.black")
+			.maxMoney(Coin.COIN.multiply(200_000_000L))
+			.minNonDustOutput(Coin.valueOf(100_000L))
+			.monetaryFormat(MonetaryFormat.BTC.noCode()
+					.code(0, "PIRATE")
+					.code(3, "mPIRATE")
+					.code(7, "zatoshi"))
+			.difficultyValidationFailure("PirateChain difficulty verification is not implemented for light-client parameters")
+			.build();
+
 	private static final Map<ConnectionType, Integer> DEFAULT_LITEWALLET_PORTS = new EnumMap<>(ConnectionType.class);
 	static {
 		DEFAULT_LITEWALLET_PORTS.put(ConnectionType.TCP, 9067);
@@ -46,7 +73,7 @@ public class PirateChain extends Bitcoiny {
 		MAIN {
 			@Override
 			public NetworkParameters getParams() {
-				return PirateChainMainNetParams.get();
+				return MAINNET_PARAMS;
 			}
 
 			@Override
@@ -63,7 +90,7 @@ public class PirateChain extends Bitcoiny {
 
 			@Override
 			public String getGenesisHash() {
-				return "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71";
+				return MAINNET_GENESIS_HASH;
 			}
 
 			@Override

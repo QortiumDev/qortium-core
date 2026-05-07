@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: remove altcoinj and internalize outputs
+
+Removed the remaining altcoinj/libdohj dependency by moving PirateChain mainnet onto Qortium's shared static network parameter model and replacing the old libdohj parity tests for Litecoin, Dogecoin, DigiByte, and Ravencoin with deterministic static-parameter checks. Bitcoiny unspent-output and transaction-output lookups now return Qortium value objects instead of bitcoinj `TransactionOutput` objects, so HTLC redeem/refund code accepts resolved `UnspentOutput` data and only converts back to bitcoinj structures internally while signing.
+
 ### 2026-05-06 - crosschain: migrate Bitcoin to static params
 
 Moved Bitcoin mainnet, testnet3, and regtest away from bitcoinj's network parameter classes and onto the shared `StaticBitcoinyParams` model, including Bitcoin's genesis transaction, network headers, DNS seeds, BIP32 headers, segwit address prefixes, regtest settings, and deterministic parity tests against the previous params. This keeps BTC on the same reusable parameter path as the other Bitcoiny coins while preserving the existing `MAIN`, `TEST3`, and `REGTEST` network choices.

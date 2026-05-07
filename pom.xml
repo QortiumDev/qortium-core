@@ -11,7 +11,6 @@
 		<!-- Override with -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false when intentionally running GUI tests with a display. -->
 		<test.awt.headless>true</test.awt.headless>
 
-		<altcoinj.version>d7cf6ac</altcoinj.version> <!-- QuickMythril/altcoinj bitcoinj 0.16 fork point -->
 		<bitcoinj.version>0.16.3</bitcoinj.version>
 		<bouncycastle.version>1.84</bouncycastle.version>
 		<build.timestamp>${maven.build.timestamp}</build.timestamp>
@@ -526,18 +525,6 @@
 					<groupId>com.google.protobuf</groupId>
 					<artifactId>protobuf-javalite</artifactId>
 				</exclusion>
-				<exclusion>
-					<groupId>org.bouncycastle</groupId>
-					<artifactId>*</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
-		<!-- For Litecoin, etc. support, requires bitcoinj -->
-		<dependency>
-			<groupId>com.github.QuickMythril</groupId>
-			<artifactId>altcoinj</artifactId>
-			<version>${altcoinj.version}</version>
-			<exclusions>
 				<exclusion>
 					<groupId>org.bouncycastle</groupId>
 					<artifactId>*</artifactId>

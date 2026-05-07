@@ -2,7 +2,6 @@ package org.qortal.test.crosschain.apps;
 
 import com.google.common.hash.HashCode;
 import org.bitcoinj.core.Transaction;
-import org.bitcoinj.core.TransactionOutput;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.qortal.crosschain.Bitcoiny;
@@ -10,6 +9,7 @@ import org.qortal.crosschain.BitcoinyChainSpecs;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
+import org.qortal.crosschain.UnspentOutput;
 import org.qortal.settings.Settings;
 import org.qortal.utils.NTP;
 
@@ -113,8 +113,8 @@ public abstract class Common {
 		return balance;
 	}
 
-	public static List<TransactionOutput> getUnspentOutputs(Bitcoiny bitcoiny, String address58) {
-		List<TransactionOutput> unspentOutputs = Collections.emptyList();
+	public static List<UnspentOutput> getUnspentOutputs(Bitcoiny bitcoiny, String address58) {
+		List<UnspentOutput> unspentOutputs = Collections.emptyList();
 
 		try {
 			unspentOutputs = bitcoiny.getUnspentOutputs(address58, false);
@@ -128,10 +128,10 @@ public abstract class Common {
 				(unspentOutputs.size() != 1 ? "s" : ""),
 				address58));
 
-		for (TransactionOutput fundingOutput : unspentOutputs)
+		for (UnspentOutput fundingOutput : unspentOutputs)
 			System.out.println(String.format("Output %s:%d amount %s",
-					HashCode.fromBytes(fundingOutput.getParentTransactionHash().getBytes()), fundingOutput.getIndex(),
-					bitcoiny.format(fundingOutput.getValue())));
+					HashCode.fromBytes(fundingOutput.hash), fundingOutput.index,
+					bitcoiny.format(fundingOutput.value)));
 
 		if (unspentOutputs.isEmpty())
 			System.err.println(String.format("Can't use spent/unfunded %s", address58));

@@ -2,10 +2,10 @@ package org.qortal.test.crosschain.apps;
 
 import com.google.common.hash.HashCode;
 import org.bitcoinj.core.AddressFormatException;
-import org.bitcoinj.core.TransactionOutput;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.qortal.crosschain.Bitcoiny;
+import org.qortal.crosschain.BitcoinyTransaction;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.settings.Settings;
 
@@ -54,7 +54,7 @@ public class GetTransaction {
 		System.out.println(String.format("Using %s", bitcoiny.getBlockchainProvider().getNetId()));
 
 		// Grab all outputs from transaction
-		List<TransactionOutput> fundingOutputs;
+		List<BitcoinyTransaction.Output> fundingOutputs;
 		try {
 			fundingOutputs = bitcoiny.getOutputs(transactionId);
 		} catch (ForeignBlockchainException e) {
@@ -64,8 +64,10 @@ public class GetTransaction {
 
 		System.out.println(String.format("Found %d output%s", fundingOutputs.size(), (fundingOutputs.size() != 1 ? "s" : "")));
 
-		for (TransactionOutput fundingOutput : fundingOutputs)
-			System.out.println(String.format("Output %d: %s", fundingOutput.getIndex(), fundingOutput.getValue().toPlainString()));
+		for (int outputIndex = 0; outputIndex < fundingOutputs.size(); ++outputIndex) {
+			BitcoinyTransaction.Output fundingOutput = fundingOutputs.get(outputIndex);
+			System.out.println(String.format("Output %d: %s", outputIndex, bitcoiny.format(fundingOutput.value)));
+		}
 	}
 
 }

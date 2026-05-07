@@ -246,24 +246,23 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	 * @return list of unspent outputs, or empty list if address unknown
 	 * @throws ForeignBlockchainException if there was an error.
 	 */
-	// TODO: don't return bitcoinj-based objects like TransactionOutput, use BitcoinyTransaction.Output instead
-	public List<TransactionOutput> getUnspentOutputs(String base58Address, boolean includeUnconfirmed) throws ForeignBlockchainException {
+	public List<UnspentOutput> getUnspentOutputs(String base58Address, boolean includeUnconfirmed) throws ForeignBlockchainException {
 
 		List<UnspentOutput> unspentOutputs = this.blockchainProvider.getUnspentOutputs(addressToScriptPubKey(base58Address), includeUnconfirmed);
 
-		List<Optional<TransactionOutput>> unspentTransactionOutputs = new ArrayList<>();
+		List<Optional<UnspentOutput>> resolvedUnspentOutputs = new ArrayList<>();
 		for (UnspentOutput unspentOutput : unspentOutputs) {
-			unspentTransactionOutputs.add( getTransactionOutput(unspentOutput));
+			resolvedUnspentOutputs.add(resolveUnspentOutput(unspentOutput));
 		}
 
-		long missingCount = unspentTransactionOutputs.stream().filter(Optional::isEmpty).count();
+		long missingCount = resolvedUnspentOutputs.stream().filter(Optional::isEmpty).count();
 		if (missingCount > 0) {
 			throw new ForeignBlockchainException(String.format(
 					"Failed to resolve %d/%d unspent outputs for %s",
 					missingCount, unspentOutputs.size(), base58Address));
 		}
 
-		return unspentTransactionOutputs.stream().filter(Optional::isPresent)
+		return resolvedUnspentOutputs.stream().filter(Optional::isPresent)
 				.map(Optional::get)
 				.collect(Collectors.toList());
 	}
@@ -320,43 +319,42 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	}
 
 	/**
-	 * Get Transaction Output
+	 * Resolve unspent output
 	 *
-	 * Get transaction output from unspent output.
+	 * Resolve script metadata for an unspent output without exposing bitcoinj TransactionOutput to callers.
 	 *
 	 * @param unspentOutput the unspent output
 	 *
-	 * @return the transaction output
+	 * @return the resolved unspent output
 	 */
-	private Optional<TransactionOutput> getTransactionOutput(UnspentOutput unspentOutput)  {
+	private Optional<UnspentOutput> resolveUnspentOutput(UnspentOutput unspentOutput)  {
 		try {
-			List<TransactionOutput> outputs = this.getOutputs(unspentOutput.hash);
+			if (unspentOutput.script != null)
+				return Optional.of(unspentOutput);
+
+			List<BitcoinyTransaction.Output> outputs = this.getOutputs(unspentOutput.hash);
 			if (unspentOutput.index < 0 || unspentOutput.index >= outputs.size()) {
 				LOGGER.error("Output index {} out of range for transaction {} ({} outputs)",
 						unspentOutput.index, HashCode.fromBytes(unspentOutput.hash), outputs.size());
 				return Optional.empty();
 			}
 
-			TransactionOutput transactionOutput = outputs.get(unspentOutput.index);
+			BitcoinyTransaction.Output transactionOutput = outputs.get(unspentOutput.index);
 
 			// Sanity-check provider UTXO metadata against raw tx decode so we fail early on inconsistencies.
-			if (transactionOutput.getValue().value != unspentOutput.value) {
+			if (transactionOutput.value != unspentOutput.value) {
 				LOGGER.error("UTXO value mismatch for {}:{} (provider={}, rawTx={})",
 						HashCode.fromBytes(unspentOutput.hash), unspentOutput.index,
-						unspentOutput.value, transactionOutput.getValue().value);
+						unspentOutput.value, transactionOutput.value);
 				return Optional.empty();
 			}
 
-			if (unspentOutput.script != null) {
-				byte[] outputScript = transactionOutput.getScriptPubKey().getProgram();
-				if (!Arrays.equals(unspentOutput.script, outputScript)) {
-					LOGGER.error("UTXO script mismatch for {}:{}",
-							HashCode.fromBytes(unspentOutput.hash), unspentOutput.index);
-					return Optional.empty();
-				}
-			}
+			String outputAddress = unspentOutput.address;
+			if (outputAddress == null && transactionOutput.addresses != null && !transactionOutput.addresses.isEmpty())
+				outputAddress = transactionOutput.addresses.get(0);
 
-			return Optional.of(transactionOutput);
+			return Optional.of(new UnspentOutput(unspentOutput.hash, unspentOutput.index, unspentOutput.height,
+					unspentOutput.value, HashCode.fromString(transactionOutput.scriptPubKey).asBytes(), outputAddress));
 		} catch (Exception e) {
 			LOGGER.error(e.getMessage(), e);
 			return Optional.empty();
@@ -374,13 +372,19 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 			return new Script(unspentOutput.script);
 
 		try {
-			List<TransactionOutput> transactionOutputs = this.getOutputs(unspentOutput.hash);
+			List<BitcoinyTransaction.Output> transactionOutputs = this.getOutputs(unspentOutput.hash);
 			if (unspentOutput.index < 0 || unspentOutput.index >= transactionOutputs.size()) {
 				throw new ForeignBlockchainException(String.format("Output index %d out of range for transaction %s",
 						unspentOutput.index, HashCode.fromBytes(unspentOutput.hash)));
 			}
 
-			return transactionOutputs.get(unspentOutput.index).getScriptPubKey();
+			String scriptPubKeyHex = transactionOutputs.get(unspentOutput.index).scriptPubKey;
+			if (scriptPubKeyHex == null || scriptPubKeyHex.isEmpty()) {
+				throw new ForeignBlockchainException(String.format("Missing scriptPubKey for output %d of transaction %s",
+						unspentOutput.index, HashCode.fromBytes(unspentOutput.hash)));
+			}
+
+			return new Script(HashCode.fromString(scriptPubKeyHex).asBytes());
 		} catch (ForeignBlockchainException | RuntimeException e) {
 			String txHash = HashCode.fromBytes(unspentOutput.hash).toString();
 			LOGGER.debug("Raw transaction decode failed for {}. Falling back to provider metadata: {}", txHash, e.getMessage());
@@ -412,8 +416,7 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	 * @return list of outputs, or empty list if transaction unknown
 	 * @throws ForeignBlockchainException if there was an error.
 	 */
-	// TODO: don't return bitcoinj-based objects like TransactionOutput, use BitcoinyTransaction.Output instead
-	public List<TransactionOutput> getOutputs(byte[] txHash) throws ForeignBlockchainException {
+	public List<BitcoinyTransaction.Output> getOutputs(byte[] txHash) throws ForeignBlockchainException {
 		Exception lastException = null;
 
 		for (int retry = 0; retry <= RETRIES; retry++) {
@@ -422,7 +425,9 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 
 				Context.propagate(bitcoinjContext);
 				Transaction transaction = new Transaction(this.params, rawTransactionBytes);
-				return transaction.getOutputs();
+				return transaction.getOutputs().stream()
+						.map(this::toBitcoinyOutput)
+						.collect(Collectors.toList());
 			} catch (ForeignBlockchainException | RuntimeException e) {
 				lastException = e;
 			}
@@ -432,6 +437,11 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 				HashCode.fromBytes(txHash),
 				lastException == null ? "unknown error" : lastException.getMessage());
 		throw new ForeignBlockchainException(message);
+	}
+
+	private BitcoinyTransaction.Output toBitcoinyOutput(TransactionOutput output) {
+		String scriptPubKey = HashCode.fromBytes(output.getScriptPubKey().getProgram()).toString();
+		return new BitcoinyTransaction.Output(scriptPubKey, output.getValue().value);
 	}
 
 	/**

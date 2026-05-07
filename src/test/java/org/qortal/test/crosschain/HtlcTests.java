@@ -7,7 +7,6 @@ import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
-import org.bitcoinj.core.TransactionOutput;
 import org.bitcoinj.script.ScriptBuilder;
 import org.junit.After;
 import org.junit.Before;
@@ -18,6 +17,7 @@ import org.qortal.crosschain.BitcoinyTransaction;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.TransactionHash;
+import org.qortal.crosschain.UnspentOutput;
 import org.qortal.crypto.Crypto;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.Common;
@@ -140,7 +140,8 @@ public class HtlcTests extends Common {
 		String fundingTxHash = fundingTransaction.getTxId().toString();
 
 		if (includeRedeemTransaction) {
-			TransactionOutput fundingOutput = fundingTransaction.getOutput(0);
+			UnspentOutput fundingOutput = new UnspentOutput(HashCode.fromString(fundingTxHash).asBytes(), 0, 10, 20_000L,
+					fundingTransaction.getOutput(0).getScriptPubKey().getProgram(), p2shAddress);
 			Transaction redeemTransaction = BitcoinyHTLC.buildRedeemTransaction(params, Coin.valueOf(19_000L), redeemKey,
 					Collections.singletonList(fundingOutput), redeemScriptBytes, EXPECTED_SECRET, redeemKey.getPubKeyHash());
 			String redeemTxHash = redeemTransaction.getTxId().toString();
