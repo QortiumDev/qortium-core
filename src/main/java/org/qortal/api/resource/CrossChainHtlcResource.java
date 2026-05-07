@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bitcoinj.core.*;
-import org.bitcoinj.script.Script;
 import org.qortal.api.*;
 import org.qortal.api.model.CrossChainBitcoinyHTLCStatus;
 import org.qortal.crosschain.*;
@@ -659,12 +658,17 @@ public class CrossChainHtlcResource {
 							List<UnspentOutput> fundingOutputs = bitcoiny.getUnspentOutputs(p2shAddressA, false);
 
 							// Validate the destination foreign blockchain address
-							Address receiving = Address.fromString(bitcoiny.getNetworkParameters(), receiveAddress);
-							if (receiving.getOutputScriptType() != Script.ScriptType.P2PKH)
+							BitcoinyAddress receiving;
+							try {
+								receiving = BitcoinyAddress.fromString(bitcoiny.getNetworkParameters(), receiveAddress);
+							} catch (IllegalArgumentException e) {
+								throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+							}
+							if (!receiving.isP2PKH())
 								throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 							Transaction p2shRefundTransaction = BitcoinyHTLC.buildRefundTransaction(bitcoiny.getNetworkParameters(), refundAmount, refundKey,
-									fundingOutputs, redeemScriptA, lockTime, receiving.getHash());
+									fundingOutputs, redeemScriptA, lockTime, receiving.getPayload());
 
 							bitcoiny.broadcastTransaction(p2shRefundTransaction);
 						}

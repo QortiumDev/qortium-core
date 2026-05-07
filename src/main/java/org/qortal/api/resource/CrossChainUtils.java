@@ -3,10 +3,7 @@ package org.qortal.api.resource;
 import com.google.common.primitives.Bytes;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
-import org.bitcoinj.script.Script;
-import org.bitcoinj.script.ScriptBuilder;
 
 import org.bouncycastle.util.Strings;
 import org.json.simple.JSONObject;
@@ -344,11 +341,10 @@ public class CrossChainUtils {
      */
     public static TransactionSummary getForeignTradeSummary(Bitcoiny bitcoiny, String p2shAddress, String atAddress)
             throws ForeignBlockchainException {
-        Script outputScript = ScriptBuilder.createOutputScript(
-                Address.fromString(bitcoiny.getNetworkParameters(), p2shAddress));
+        byte[] outputScript = BitcoinyScript.scriptPubKey(bitcoiny.getNetworkParameters(), p2shAddress);
 
         List<TransactionHash> hashes
-                = bitcoiny.getAddressTransactions( outputScript.getProgram(), true);
+                = bitcoiny.getAddressTransactions( outputScript, true);
 
         TransactionSummary summary;
 

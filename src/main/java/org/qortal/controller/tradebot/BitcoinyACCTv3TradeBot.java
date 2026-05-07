@@ -3,7 +3,6 @@ package org.qortal.controller.tradebot;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bitcoinj.core.*;
-import org.bitcoinj.script.Script.ScriptType;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.api.model.crosschain.TradeBotCreateRequest;
@@ -116,16 +115,16 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
 
 		// Convert foreign receiving address into public key hash (we only support P2PKH at this time)
-		Address foreignReceivingAddress;
+		BitcoinyAddress foreignReceivingAddress;
 		try {
-			foreignReceivingAddress = Address.fromString(bitcoiny.getNetworkParameters(), tradeBotCreateRequest.receivingAddress);
-		} catch (AddressFormatException e) {
+			foreignReceivingAddress = BitcoinyAddress.fromString(bitcoiny.getNetworkParameters(), tradeBotCreateRequest.receivingAddress);
+		} catch (IllegalArgumentException e) {
 			throw new DataException(String.format("Unsupported %s receiving address: %s", foreignCurrencyCode, tradeBotCreateRequest.receivingAddress));
 		}
-		if (foreignReceivingAddress.getOutputScriptType() != ScriptType.P2PKH)
+		if (!foreignReceivingAddress.isP2PKH())
 			throw new DataException(String.format("Unsupported %s receiving address: %s", foreignCurrencyCode, tradeBotCreateRequest.receivingAddress));
 
-		byte[] foreignReceivingAccountInfo = foreignReceivingAddress.getHash();
+		byte[] foreignReceivingAccountInfo = foreignReceivingAddress.getPayload();
 
 		PublicKeyAccount creator = new PublicKeyAccount(repository, tradeBotCreateRequest.creatorPublicKey);
 
@@ -825,10 +824,10 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 
 				// Determine receive address for refund
 				String receiveAddress = bitcoiny.getUnusedReceiveAddress(tradeBotData.getForeignKey());
-				Address receiving = Address.fromString(bitcoiny.getNetworkParameters(), receiveAddress);
+				BitcoinyAddress receiving = BitcoinyAddress.fromString(bitcoiny.getNetworkParameters(), receiveAddress);
 
 				Transaction p2shRefundTransaction = BitcoinyHTLC.buildRefundTransaction(bitcoiny.getNetworkParameters(), refundAmount, refundKey,
-						fundingOutputs, redeemScriptA, lockTimeA, receiving.getHash());
+						fundingOutputs, redeemScriptA, lockTimeA, receiving.getPayload());
 
 				bitcoiny.broadcastTransaction(p2shRefundTransaction);
 				break;

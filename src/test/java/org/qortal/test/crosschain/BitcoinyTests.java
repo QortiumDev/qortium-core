@@ -6,13 +6,13 @@ import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
-import org.bitcoinj.script.ScriptBuilder;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.crosschain.AddressInfo;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyHTLC;
+import org.qortal.crosschain.BitcoinyScript;
 import org.qortal.crosschain.BitcoinyTransaction;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.TransactionHash;
@@ -259,7 +259,7 @@ public abstract class BitcoinyTests extends Common {
 		ECKey redeemKey = ECKey.fromPrivate(HashCode.fromString("22".repeat(32)).asBytes());
 		byte[] redeemScriptBytes = BitcoinyHTLC.buildScript(refundKey.getPubKeyHash(), HTLC_LOCK_TIME, redeemKey.getPubKeyHash(), Crypto.hash160(EXPECTED_HTLC_SECRET));
 		String p2shAddress = mockBitcoiny.deriveP2shAddress(redeemScriptBytes);
-		byte[] p2shScriptPubKey = ScriptBuilder.createOutputScript(Address.fromString(params, p2shAddress)).getProgram();
+		byte[] p2shScriptPubKey = BitcoinyScript.scriptPubKey(params, p2shAddress);
 		Transaction fundingTransaction = new Transaction(params);
 		fundingTransaction.addOutput(Coin.valueOf(20_000L), Address.fromString(params, p2shAddress));
 		String fundingTxHash = fundingTransaction.getTxId().toString();
@@ -286,7 +286,7 @@ public abstract class BitcoinyTests extends Common {
 		if (!fundedAddresses.add(walletAddress))
 			return;
 
-		byte[] scriptPubKey = ScriptBuilder.createOutputScript(Address.fromString(mockBitcoiny.getNetworkParameters(), walletAddress)).getProgram();
+		byte[] scriptPubKey = BitcoinyScript.scriptPubKey(mockBitcoiny.getNetworkParameters(), walletAddress);
 		byte[] txHash = HashCode.fromString("01".repeat(32)).asBytes();
 
 		UnspentOutput unspentOutput = new UnspentOutput(txHash, 0, 1, MOCK_UTXO_VALUE, scriptPubKey, walletAddress);

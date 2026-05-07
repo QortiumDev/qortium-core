@@ -1,8 +1,6 @@
 package org.qortal.test.crosschain.apps;
 
-import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
 import org.qortal.crosschain.Bitcoiny;
 
@@ -28,22 +26,22 @@ public class Pay {
 		Common.init();
 
 		Bitcoiny bitcoiny = null;
-		NetworkParameters params = null;
 
 		String xprv58 = null;
-		Address address = null;
+		String address = null;
 		Coin amount = null;
 
 		int argIndex = 0;
 		try {
 			bitcoiny = Common.getBitcoiny(args[argIndex++]);
-			params = bitcoiny.getNetworkParameters();
 
 			xprv58 = args[argIndex++];
 			if (!bitcoiny.isValidDeterministicKey(xprv58))
 				usage("xprv invalid");
 
-			address = Address.fromString(params, args[argIndex++]);
+			address = args[argIndex++];
+			if (!bitcoiny.isValidAddress(address))
+				usage("Address invalid");
 
 			amount = Coin.parseCoin(args[argIndex++]);
 		} catch (IllegalArgumentException e) {
@@ -55,7 +53,7 @@ public class Pay {
 		System.out.println(String.format("Address: %s", address));
 		System.out.println(String.format("Amount: %s", amount.toPlainString()));
 
-		Transaction transaction = bitcoiny.buildSpend(xprv58, address.toString(), amount.value);
+		Transaction transaction = bitcoiny.buildSpend(xprv58, address, amount.value);
 		if (transaction == null) {
 			System.err.println("Insufficent funds");
 			System.exit(1);

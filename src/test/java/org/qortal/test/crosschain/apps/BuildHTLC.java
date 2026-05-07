@@ -1,11 +1,10 @@
 package org.qortal.test.crosschain.apps;
 
 import com.google.common.hash.HashCode;
-import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.script.Script.ScriptType;
 import org.qortal.crosschain.Bitcoiny;
+import org.qortal.crosschain.BitcoinyAddress;
 import org.qortal.crosschain.BitcoinyHTLC;
 
 import java.time.Instant;
@@ -38,9 +37,9 @@ public class BuildHTLC {
 		Bitcoiny bitcoiny = null;
 		NetworkParameters params = null;
 
-		Address refundAddress = null;
+		BitcoinyAddress refundAddress = null;
 		Coin amount = null;
-		Address redeemAddress = null;
+		BitcoinyAddress redeemAddress = null;
 		byte[] hashOfSecret = null;
 		int lockTime = 0;
 
@@ -49,14 +48,14 @@ public class BuildHTLC {
 			bitcoiny = Common.getBitcoiny(args[argIndex++]);
 			params = bitcoiny.getNetworkParameters();
 
-			refundAddress = Address.fromString(params, args[argIndex++]);
-			if (refundAddress.getOutputScriptType() != ScriptType.P2PKH)
+			refundAddress = BitcoinyAddress.fromString(params, args[argIndex++]);
+			if (!refundAddress.isP2PKH())
 				usage("Refund address must be in P2PKH form");
 
 			amount = Coin.parseCoin(args[argIndex++]);
 
-			redeemAddress = Address.fromString(params, args[argIndex++]);
-			if (redeemAddress.getOutputScriptType() != ScriptType.P2PKH)
+			redeemAddress = BitcoinyAddress.fromString(params, args[argIndex++]);
+			if (!redeemAddress.isP2PKH())
 				usage("Redeem address must be in P2PKH form");
 
 			hashOfSecret = HashCode.fromString(args[argIndex++]).asBytes();
@@ -84,7 +83,7 @@ public class BuildHTLC {
 		System.out.println(String.format("Script lockTime: %s (%d)", LocalDateTime.ofInstant(Instant.ofEpochSecond(lockTime), ZoneOffset.UTC), lockTime));
 		System.out.println(String.format("Hash of secret: %s", HashCode.fromBytes(hashOfSecret)));
 
-		byte[] redeemScriptBytes = BitcoinyHTLC.buildScript(refundAddress.getHash(), lockTime, redeemAddress.getHash(), hashOfSecret);
+		byte[] redeemScriptBytes = BitcoinyHTLC.buildScript(refundAddress.getPayload(), lockTime, redeemAddress.getPayload(), hashOfSecret);
 		System.out.println(String.format("Raw script bytes: %s", HashCode.fromBytes(redeemScriptBytes)));
 
 		String p2shAddress = bitcoiny.deriveP2shAddress(redeemScriptBytes);

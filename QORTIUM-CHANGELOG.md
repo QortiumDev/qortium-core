@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-06 - crosschain: add Bitcoiny address scripts
+
+Added internal Bitcoiny address and script helpers for Base58Check addresses, segwit address decoding, and standard P2PKH/P2SH/witness output scripts. Wallet scanning, HTLC status checks, Litecoin P2SH normalization, crosschain API validation, and related tests now use those Qortium helpers for address hashes and scriptPubKeys instead of asking bitcoinj to build them, while transaction signing remains on bitcoinj for a later replacement step.
+
 ### 2026-05-06 - crosschain: remove altcoinj and internalize outputs
 
 Removed the remaining altcoinj/libdohj dependency by moving PirateChain mainnet onto Qortium's shared static network parameter model and replacing the old libdohj parity tests for Litecoin, Dogecoin, DigiByte, and Ravencoin with deterministic static-parameter checks. Bitcoiny unspent-output and transaction-output lookups now return Qortium value objects instead of bitcoinj `TransactionOutput` objects, so HTLC redeem/refund code accepts resolved `UnspentOutput` data and only converts back to bitcoinj structures internally while signing.

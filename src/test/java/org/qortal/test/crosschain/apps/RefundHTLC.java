@@ -2,8 +2,8 @@ package org.qortal.test.crosschain.apps;
 
 import com.google.common.hash.HashCode;
 import org.bitcoinj.core.*;
-import org.bitcoinj.script.Script.ScriptType;
 import org.qortal.crosschain.Bitcoiny;
+import org.qortal.crosschain.BitcoinyAddress;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.UnspentOutput;
 import org.qortal.crypto.Crypto;
@@ -43,20 +43,20 @@ public class RefundHTLC {
 		Bitcoiny bitcoiny = null;
 		NetworkParameters params = null;
 
-		Address p2shAddress = null;
+		BitcoinyAddress p2shAddress = null;
 		byte[] refundPrivateKey = null;
-		Address redeemAddress = null;
+		BitcoinyAddress redeemAddress = null;
 		byte[] hashOfSecret = null;
 		int lockTime = 0;
-		Address outputAddress = null;
+		BitcoinyAddress outputAddress = null;
 
 		int argIndex = 0;
 		try {
 			bitcoiny = Common.getBitcoiny(args[argIndex++]);
 			params = bitcoiny.getNetworkParameters();
 
-			p2shAddress = Address.fromString(params, args[argIndex++]);
-			if (p2shAddress.getOutputScriptType() != ScriptType.P2SH)
+			p2shAddress = BitcoinyAddress.fromString(params, args[argIndex++]);
+			if (p2shAddress.getType() != BitcoinyAddress.Type.P2SH)
 				usage("P2SH address invalid");
 
 			refundPrivateKey = HashCode.fromString(args[argIndex++]).asBytes();
@@ -66,8 +66,8 @@ public class RefundHTLC {
 			if (refundPrivateKey.length != 32)
 				usage("Refund private key must be 32 bytes");
 
-			redeemAddress = Address.fromString(params, args[argIndex++]);
-			if (redeemAddress.getOutputScriptType() != ScriptType.P2PKH)
+			redeemAddress = BitcoinyAddress.fromString(params, args[argIndex++]);
+			if (!redeemAddress.isP2PKH())
 				usage("Redeem address must be in P2PKH form");
 
 			hashOfSecret = HashCode.fromString(args[argIndex++]).asBytes();
@@ -76,8 +76,8 @@ public class RefundHTLC {
 
 			lockTime = Integer.parseInt(args[argIndex++]);
 
-			outputAddress = Address.fromString(params, args[argIndex++]);
-			if (outputAddress.getOutputScriptType() != ScriptType.P2PKH)
+			outputAddress = BitcoinyAddress.fromString(params, args[argIndex++]);
+			if (!outputAddress.isP2PKH())
 				usage("Output address invalid");
 		} catch (IllegalArgumentException e) {
 			usage(String.format("Invalid argument %d: %s", argIndex, e.getMessage()));
@@ -92,14 +92,13 @@ public class RefundHTLC {
 		System.out.println(String.format("Attempting to refund HTLC %s to %s", p2shAddress, outputAddress));
 
 		ECKey refundKey = ECKey.fromPrivate(refundPrivateKey);
-		Address refundAddress = Address.fromKey(params, refundKey, ScriptType.P2PKH);
 
-		byte[] redeemScriptBytes = BitcoinyHTLC.buildScript(refundAddress.getHash(), lockTime, redeemAddress.getHash(), hashOfSecret);
+		byte[] redeemScriptBytes = BitcoinyHTLC.buildScript(refundKey.getPubKeyHash(), lockTime, redeemAddress.getPayload(), hashOfSecret);
 
 		byte[] redeemScriptHash = Crypto.hash160(redeemScriptBytes);
-		Address derivedP2shAddress = LegacyAddress.fromScriptHash(params, redeemScriptHash);
+		String derivedP2shAddress = BitcoinyAddress.fromScriptHash(params, redeemScriptHash).toString();
 
-		if (!derivedP2shAddress.equals(p2shAddress)) {
+		if (!derivedP2shAddress.equals(p2shAddress.toString())) {
 			System.err.println(String.format("Raw script bytes: %s", HashCode.fromBytes(redeemScriptBytes)));
 			System.err.println(String.format("Derived P2SH address %s does not match given address %s", derivedP2shAddress, p2shAddress));
 			System.exit(2);
@@ -136,7 +135,7 @@ public class RefundHTLC {
 		System.out.println(String.format("Spending %s of outputs, with %s as mining fee", bitcoiny.format(refundAmount), bitcoiny.format(p2shFee)));
 
 		Transaction refundTransaction = BitcoinyHTLC.buildRefundTransaction(bitcoiny.getNetworkParameters(), refundAmount, refundKey,
-				unspentOutputs, redeemScriptBytes, lockTime, outputAddress.getHash());
+				unspentOutputs, redeemScriptBytes, lockTime, outputAddress.getPayload());
 
 		Common.broadcastTransaction(bitcoiny, refundTransaction);
 	}

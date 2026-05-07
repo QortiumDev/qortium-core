@@ -1,9 +1,7 @@
 package org.qortal.test.crosschain;
 
 import com.google.common.hash.HashCode;
-import org.bitcoinj.core.Address;
 import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.script.ScriptBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.json.simple.JSONArray;
@@ -257,8 +255,8 @@ public class ElectrumXTests {
 	public void testGetP2PKHBalance() throws ForeignBlockchainException {
 		ElectrumX electrumX = getLiveInstance();
 
-		Address address = Address.fromString(bitcoinTest3Params(), "n3GNqMveyvaPvUbH469vDRadqpJMPc84JA");
-		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
+		String address = "n3GNqMveyvaPvUbH469vDRadqpJMPc84JA";
+		byte[] script = BitcoinyScript.scriptPubKey(bitcoinTest3Params(), address);
 		long balance = electrumX.getConfirmedBalance(script);
 
 		assertTrue(balance > 0L);
@@ -270,8 +268,8 @@ public class ElectrumXTests {
 	public void testGetP2SHBalance() throws ForeignBlockchainException {
 		ElectrumX electrumX = getLiveInstance();
 
-		Address address = Address.fromString(bitcoinTest3Params(), "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF");
-		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
+		String address = "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF";
+		byte[] script = BitcoinyScript.scriptPubKey(bitcoinTest3Params(), address);
 		long balance = electrumX.getConfirmedBalance(script);
 
 		assertTrue(balance > 0L);
@@ -283,8 +281,8 @@ public class ElectrumXTests {
 	public void testGetUnspentOutputs() throws ForeignBlockchainException {
 		ElectrumX electrumX = getLiveInstance();
 
-		Address address = Address.fromString(bitcoinTest3Params(), "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF");
-		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
+		String address = "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF";
+		byte[] script = BitcoinyScript.scriptPubKey(bitcoinTest3Params(), address);
 		List<UnspentOutput> unspentOutputs = electrumX.getUnspentOutputs(script, false);
 
 		assertFalse(unspentOutputs.isEmpty());
@@ -350,8 +348,7 @@ public class ElectrumXTests {
 	public void testGetAddressTransactions() throws ForeignBlockchainException {
 		ElectrumX electrumX = getLiveInstance();
 
-		Address address = Address.fromString(bitcoinTest3Params(), "2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE");
-		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
+		byte[] script = BitcoinyScript.scriptPubKey(bitcoinTest3Params(), "2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE");
 
 		List<TransactionHash> transactionHashes = electrumX.getAddressTransactions(script, false);
 

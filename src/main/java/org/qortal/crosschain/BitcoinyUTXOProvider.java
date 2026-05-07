@@ -3,7 +3,6 @@ package org.qortal.crosschain;
 import com.google.common.hash.HashCode;
 import org.bitcoinj.core.*;
 import org.bitcoinj.script.Script;
-import org.bitcoinj.script.ScriptBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -27,8 +26,7 @@ public class BitcoinyUTXOProvider implements UTXOProvider {
             List<UTXO> utxos = new ArrayList<>();
 
             for( ECKey key : keys) {
-                Address address = Address.fromKey(this.bitcoiny.params, key, Script.ScriptType.P2PKH);
-                byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
+                byte[] script = BitcoinyScript.p2pkhScript(key.getPubKeyHash());
 
                 // collection UTXO's for all confirmed unspent outputs
                 for (UnspentOutput output : this.bitcoiny.blockchainProvider.getUnspentOutputs(script, true)) {

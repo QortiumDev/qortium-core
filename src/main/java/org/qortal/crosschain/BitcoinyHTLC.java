@@ -111,7 +111,7 @@ public class BitcoinyHTLC {
 		transaction.setVersion(2);
 
 		// Output is back to P2SH funder
-		transaction.addOutput(amount, ScriptBuilder.createP2PKHOutputScript(outputPublicKeyHash));
+		transaction.addOutput(amount, new Script(BitcoinyScript.p2pkhScript(outputPublicKeyHash)));
 
 		for (int inputIndex = 0; inputIndex < fundingOutputs.size(); ++inputIndex) {
 			UnspentOutput fundingOutput = fundingOutputs.get(inputIndex);
@@ -257,9 +257,9 @@ public class BitcoinyHTLC {
 					continue;
 
 				byte[] redeemScriptHash = Crypto.hash160(redeemScriptBytes);
-				Address inputAddress = LegacyAddress.fromScriptHash(params, redeemScriptHash);
+				String inputAddress = BitcoinyAddress.fromScriptHash(params, redeemScriptHash).toString();
 
-				if (!inputAddress.toString().equals(p2shAddress))
+				if (!inputAddress.equals(p2shAddress))
 					// Input isn't spending our HTLC
 					continue;
 

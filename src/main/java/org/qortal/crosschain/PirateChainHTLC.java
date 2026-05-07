@@ -143,9 +143,9 @@ public class PirateChainHTLC {
 					continue;
 
 				byte[] redeemScriptHash = Crypto.hash160(redeemScriptBytes);
-				Address inputAddress = LegacyAddress.fromScriptHash(params, redeemScriptHash);
+				String inputAddress = BitcoinyAddress.fromScriptHash(params, redeemScriptHash).toString();
 
-				if (!inputAddress.toString().equals(p2shAddress))
+				if (!inputAddress.equals(p2shAddress))
 					// Input isn't spending our HTLC
 					continue;
 

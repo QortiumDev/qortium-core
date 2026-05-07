@@ -303,9 +303,8 @@ public class PirateChain extends Bitcoiny {
 
 	/** Returns 'b' prefixed P2SH address using passed redeem script. */
 	public String deriveP2shAddressBPrefix(byte[] redeemScriptBytes) {
-		Context.propagate(bitcoinjContext);
 		byte[] redeemScriptHash = Crypto.hash160(redeemScriptBytes);
-		return LegacyAddress.fromScriptHash(this.params, redeemScriptHash).toString();
+		return BitcoinyAddress.fromScriptHash(this.params, redeemScriptHash).toString();
 	}
 
 	public Long getWalletBalance(String entropy58) throws ForeignBlockchainException {

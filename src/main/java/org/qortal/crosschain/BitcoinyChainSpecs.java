@@ -1,10 +1,7 @@
 package org.qortal.crosschain;
 
-import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.LegacyAddress;
 import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.script.Script;
 import org.bitcoinj.utils.MonetaryFormat;
 import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.crosschain.ElectrumX.Server;
@@ -354,8 +351,8 @@ public final class BitcoinyChainSpecs {
 
 	private static boolean isCurrentLitecoinP2shAddress(String address) {
 		try {
-			Script.ScriptType addressType = Address.fromString(LITECOIN_CURRENT_P2SH_MAIN_NET_PARAMS, address).getOutputScriptType();
-			return addressType == Script.ScriptType.P2SH;
+			BitcoinyAddress bitcoinyAddress = BitcoinyAddress.fromString(LITECOIN_CURRENT_P2SH_MAIN_NET_PARAMS, address);
+			return bitcoinyAddress.getType() == BitcoinyAddress.Type.P2SH;
 		} catch (Exception e) {
 			return false;
 		}
@@ -363,8 +360,8 @@ public final class BitcoinyChainSpecs {
 
 	private static String convertLitecoinP2shAddress(String p2shAddress, NetworkParameters targetParams) {
 		try {
-			Address address = LegacyAddress.fromBase58(LITECOIN_CURRENT_P2SH_MAIN_NET_PARAMS, p2shAddress);
-			return LegacyAddress.fromScriptHash(targetParams, address.getHash()).toString();
+			BitcoinyAddress address = BitcoinyAddress.fromString(LITECOIN_CURRENT_P2SH_MAIN_NET_PARAMS, p2shAddress);
+			return BitcoinyAddress.fromScriptHash(targetParams, address.getPayload()).toString();
 		} catch (Exception e) {
 			return null;
 		}

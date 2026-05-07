@@ -10,7 +10,6 @@ import org.bitcoinj.crypto.DeterministicKey;
 import org.bitcoinj.params.AbstractBitcoinNetParams;
 import org.bitcoinj.script.Script;
 import org.bitcoinj.script.Script.ScriptType;
-import org.bitcoinj.script.ScriptBuilder;
 import org.bitcoinj.wallet.DeterministicKeyChain;
 import org.bitcoinj.wallet.KeyChain;
 import org.bitcoinj.wallet.SendRequest;
@@ -124,10 +123,12 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	@Override
 	public boolean isValidAddress(String address) {
 		try {
-			ScriptType addressType = Address.fromString(this.params, address).getOutputScriptType();
+			BitcoinyAddress bitcoinyAddress = BitcoinyAddress.fromString(this.params, address);
 
-			return addressType == ScriptType.P2PKH || addressType == ScriptType.P2SH || addressType == ScriptType.P2WPKH;
-		} catch (AddressFormatException e) {
+			return bitcoinyAddress.getType() == BitcoinyAddress.Type.P2PKH
+					|| bitcoinyAddress.getType() == BitcoinyAddress.Type.P2SH
+					|| bitcoinyAddress.getType() == BitcoinyAddress.Type.P2WPKH;
+		} catch (IllegalArgumentException e) {
 			LOGGER.error(String.format("Unrecognised address format: %s", address));
 			return false;
 		}
@@ -164,15 +165,13 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 
 	/** Returns P2PKH address using passed public key hash. */
 	public String pkhToAddress(byte[] publicKeyHash) {
-		Context.propagate(this.bitcoinjContext);
-		return LegacyAddress.fromPubKeyHash(this.params, publicKeyHash).toString();
+		return BitcoinyAddress.fromPubKeyHash(this.params, publicKeyHash).toString();
 	}
 
 	/** Returns P2SH address using passed redeem script. */
 	public String deriveP2shAddress(byte[] redeemScriptBytes) {
-		Context.propagate(bitcoinjContext);
 		byte[] redeemScriptHash = Crypto.hash160(redeemScriptBytes);
-		return LegacyAddress.fromScriptHash(this.params, redeemScriptHash).toString();
+		return BitcoinyAddress.fromScriptHash(this.params, redeemScriptHash).toString();
 	}
 
 	/**
@@ -609,7 +608,7 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 
 		List<String> spendingCandidateAddresses
 				= spendingKeys.stream()
-					.map(spendingKey -> Address.fromKey(this.params, spendingKey, ScriptType.P2PKH ).toString())
+					.map(spendingKey -> pkhToAddress(spendingKey.getPubKeyHash()))
 					.collect(Collectors.toList());
 
 		return spendingCandidateAddresses;
@@ -893,11 +892,11 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 		boolean foundTransaction = false;
 
 		for (DeterministicKey dKey : keysToProcess) {
-			Address address = Address.fromKey(this.params, dKey, ScriptType.P2PKH);
-			keySet.add(address.toString());
+			String address = pkhToAddress(dKey.getPubKeyHash());
+			keySet.add(address);
 
 			// Schedule transaction check
-			transactionChecks.add(executor.submit(() -> getTransactions(address, futures, executor)));
+			transactionChecks.add(executor.submit(() -> getTransactions(BitcoinyScript.p2pkhScript(dKey.getPubKeyHash()), futures, executor)));
 		}
 
 		// Wait for transaction check results
@@ -1065,16 +1064,16 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 */
 	public Optional<AddressInfo> buildAddressInfo(DeterministicKey key)  {
 
-		Address address = Address.fromKey(this.params, key, ScriptType.P2PKH);
+		String address = pkhToAddress(key.getPubKeyHash());
 
 		try {
-			int transactionCount = getAddressTransactions(ScriptBuilder.createOutputScript(address).getProgram(), true).size();
+			int transactionCount = getAddressTransactions(BitcoinyScript.p2pkhScript(key.getPubKeyHash()), true).size();
 
 			return Optional.of(
 				new AddressInfo(
-					address.toString(),
+					address,
 					toIntegerList( key.getPath()),
-					summingUnspentOutputs(address.toString()),
+					summingUnspentOutputs(address),
 					key.getPathAsString(),
 					transactionCount,
 					true)
@@ -1125,7 +1124,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 		return
 			walletKeys.stream()
-				.map( key -> Address.fromKey(this.params, key, ScriptType.P2PKH).toString() )
+				.map(key -> pkhToAddress(key.getPubKeyHash()))
 				.collect(Collectors.toSet());
 	}
 
@@ -1178,8 +1177,8 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 		// for each key, collect address, determine additional key generation
 		for (DeterministicKey dKey : keys) {
 
-			Address address = Address.fromKey(this.params, dKey, ScriptType.P2PKH);
-			keySet.add(address.toString());
+			String address = pkhToAddress(dKey.getPubKeyHash());
+			keySet.add(address);
 
 			// if the key already has a verified transaction history
 			if( this.blockchainCache.keyHasHistory( dKey ) ){
@@ -1187,7 +1186,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 			}
 			// if the key does not have a verified transaction history
 			else {
-				transactionChecks.add( () -> checkForTransactions(dKey, address));
+				transactionChecks.add( () -> checkForTransactions(dKey, BitcoinyScript.p2pkhScript(dKey.getPubKeyHash())));
 			}
 		}
 
@@ -1228,7 +1227,6 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 		for (DeterministicKey dKey : keys) {
 
-			Address address = Address.fromKey(this.params, dKey, ScriptType.P2PKH);
 			keySet.add(dKey);
 
 			// if the key already has a verified transaction history
@@ -1237,7 +1235,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 			}
 			// if the key does not have a verified transaction history
 			else {
-				transactionChecks.add( () -> checkForTransactions(dKey, address) );
+				transactionChecks.add( () -> checkForTransactions(dKey, BitcoinyScript.p2pkhScript(dKey.getPubKeyHash())) );
 			}
 		}
 
@@ -1323,16 +1321,13 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 * Any transactions for this address?
 	 *
 	 * @param dKey the key that generated this address
-	 * @param address the address
+	 * @param script the address script
 	 *
 	 * @return true if there are any transactions for this address, false if there are no transactions
 	 *
 	 * @throws ForeignBlockchainException
 	 */
-	private boolean checkForTransactions(DeterministicKey dKey, Address address) {
-		// Check for transactions
-		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
-
+	private boolean checkForTransactions(DeterministicKey dKey, byte[] script) {
 		try {
 			// Ask for transaction history - if it's empty then key has never been used
 			List<TransactionHash> historicTransactionHashes = this.getAddressTransactions(script, true);
@@ -1358,7 +1353,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 *
 	 * Get all the transactions for an address, asynchronously.
 	 *
-	 * @param address the address
+	 * @param script the address script
 	 * @param futures where the transaction fetch tasks get collected
 	 * @param executor for asychronous processing
 	 *
@@ -1366,13 +1361,10 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 *
 	 * @throws ForeignBlockchainException
 	 */
-	private boolean getTransactions(Address address, List<Supplier<Optional<BitcoinyTransaction>>> futures, ExecutorService executor) throws ForeignBlockchainException {
+	private boolean getTransactions(byte[] script, List<Supplier<Optional<BitcoinyTransaction>>> futures, ExecutorService executor) throws ForeignBlockchainException {
 
 		// return value
 		boolean processAdditionalKeys = false;
-
-		// Check for transactions
-		byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
 
 		// Ask for transaction history - if it's empty then key has never been used
 		List<TransactionHash> historicTransactionHashes = this.getAddressTransactions(script, true);
@@ -1439,8 +1431,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 				}
 				else {
 					// Check for transactions
-					Address address = Address.fromKey(this.params, dKey, ScriptType.P2PKH);
-					byte[] script = ScriptBuilder.createOutputScript(address).getProgram();
+					byte[] script = BitcoinyScript.p2pkhScript(dKey.getPubKeyHash());
 
 					// Ask for transaction history - if it's empty then key has never been used
 					List<TransactionHash> historicTransactionHashes = this.getAddressTransactions(script, true);
@@ -1612,11 +1603,12 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 		do {
 			// the next receive funds address
-			Address address = Address.fromKey(this.params, keyChain.getKey(KeyChain.KeyPurpose.RECEIVE_FUNDS), ScriptType.P2PKH);
+			DeterministicKey key = keyChain.getKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
+			String address = pkhToAddress(key.getPubKeyHash());
 
 			// if zero transactions, return address
-			if(getAddressTransactions(ScriptBuilder.createOutputScript(address).getProgram(), true).isEmpty())
-				return address.toString();
+			if(getAddressTransactions(BitcoinyScript.p2pkhScript(key.getPubKeyHash()), true).isEmpty())
+				return address;
 
 			// else try the next receive funds address
 		} while (true);
@@ -1863,9 +1855,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	}
 
 	protected byte[] addressToScriptPubKey(String base58Address) {
-		Context.propagate(this.bitcoinjContext);
-		Address address = Address.fromString(this.params, base58Address);
-		return ScriptBuilder.createOutputScript(address).getProgram();
+		return BitcoinyScript.scriptPubKey(this.params, base58Address);
 	}
 
 	protected Wallet walletFromDeterministicKey58(String key58) {
