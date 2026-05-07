@@ -49,10 +49,10 @@ document:
 If any of those pieces are missing, keep the chain documented as planned rather
 than registering runtime support that compiles but cannot operate.
 
-## KMD Routing Note
+## Transparent KMD/VRSC Routing Note
 
-KMD is registered through `BitcoinyChainSpecs` as transparent KMD over
-Electrum-compatible servers. It uses Sapling transparent transaction
-serialization/signing inside the generic Bitcoiny runtime, but it does not use
-the Zcash-family native wallet layer because shielded KMD wallet support is not
-part of the current integration.
+KMD and VRSC are registered through `BitcoinyChainSpecs` as transparent
+Electrum-compatible Bitcoiny chains. They use Sapling transparent transaction
+serialization/signing inside the generic Bitcoiny runtime, but they do not use
+the Zcash-family native wallet layer because shielded wallet support is not part
+of those integrations.

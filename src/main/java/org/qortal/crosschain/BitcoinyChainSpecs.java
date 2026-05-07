@@ -30,6 +30,7 @@ public final class BitcoinyChainSpecs {
 	public static final String NAMECOIN_CURRENCY_CODE = "NMC";
 	public static final String FIRO_CURRENCY_CODE = "FIRO";
 	public static final String KOMODO_CURRENCY_CODE = "KMD";
+	public static final String VERUS_CURRENCY_CODE = "VRSC";
 	public static final String LBRY_CREDITS_CURRENCY_CODE = "LBC";
 	public static final String VERGE_CURRENCY_CODE = "XVG";
 	public static final int BITCOIN_SLIP44_COIN_TYPE = 0;
@@ -41,6 +42,7 @@ public final class BitcoinyChainSpecs {
 	public static final int DIGIBYTE_SLIP44_COIN_TYPE = 20;
 	public static final int FIRO_SLIP44_COIN_TYPE = 136;
 	public static final int KOMODO_SLIP44_COIN_TYPE = 141;
+	public static final int VERUS_SLIP44_COIN_TYPE = 133;
 	public static final int LBRY_CREDITS_SLIP44_COIN_TYPE = 140;
 	public static final int RAVENCOIN_SLIP44_COIN_TYPE = 175;
 	public static final int VERGE_SLIP44_COIN_TYPE = 77;
@@ -56,6 +58,7 @@ public final class BitcoinyChainSpecs {
 	private static final String NAMECOIN_GENESIS_OUTPUT_SCRIPT = "04b620369050cd899ffbbc4e8ee51e8c4534a855bb463439d63d235d4779685d8b6f4870a238cf365ac94fa13ef9a2a22cd99d0d5ee86dcabcafce36c7acf43ce5";
 	private static final String FIRO_GENESIS_MERKLE_ROOT = "365d2aa75d061370c9aefdabac3985716b1e3b4bb7c4af4ed54f25e5aaa42783";
 	private static final String KOMODO_GENESIS_MERKLE_ROOT = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
+	private static final String VERUS_MAINNET_CHAIN_ID = "bip122:ac2cd7d37177140ea4991cf630c0b9c7";
 	private static final String LBRY_CREDITS_GENESIS_MERKLE_ROOT = "b8211c82c3d15bcd78bba57005b86fed515149a53a425eb592c07af99fe559cc";
 	private static final String PEERCOIN_GENESIS_MERKLE_ROOT = "3c2d8f85fab4d17aac558cc648a1a58acff0de6deb890c29985690052c5993c2";
 	private static final String VERGE_GENESIS_MERKLE_ROOT = "1c83275d9151711eec3aec37d829837cc3c2730b2bdfd00ec5e8e5dce675fd00";
@@ -272,6 +275,17 @@ public final class BitcoinyChainSpecs {
 			.dnsSeeds("kmd.komodoseeds.org", "seeds1.kmd.sh", "kmdseed.cipig.net",
 					"kmdseeds.lordofthechains.com", "kmd.komodoseeds.com", "dynamic.komodoseeds.com")
 			.build();
+	private static final NetworkParameters VERUS_MAIN_NET_PARAMS = verusParams("org.verus.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
+			.genesis(1231006505L, 11L, 0x200f0f0fL, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71")
+			.genesisHeader(1L, KOMODO_GENESIS_MERKLE_ROOT)
+			.port(7770)
+			.packetMagic(0xf9eee48dL)
+			.addressHeaders(60, 85, 188)
+			.coinbaseAndSubsidy(100, 840_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(750, 950, 4000)
+			.dnsSeeds("seeds.verus.io")
+			.build();
 	private static final NetworkParameters LBRY_CREDITS_MAIN_NET_PARAMS = lbryCreditsParams("main", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
 			.genesis(1446058291L, 1287L, 0x1f00ffffL, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463")
 			.genesisHeader(1L, LBRY_CREDITS_GENESIS_MERKLE_ROOT)
@@ -347,6 +361,11 @@ public final class BitcoinyChainSpecs {
 			.transactionFormat(BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
 			.build();
 
+	public static final BitcoinyChainSpec VERUS = spec("VERUSCOIN", VERUS_SLIP44_COIN_TYPE, "VerusCoin", VERUS_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+			.mainnet(() -> VERUS_MAIN_NET_PARAMS, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", VERUS_MAINNET_CHAIN_ID, 10_000L, "vrsc")
+			.transactionFormat(BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			.build();
+
 	public static final BitcoinyChainSpec LBRY_CREDITS = spec("LBRYCREDITS", LBRY_CREDITS_SLIP44_COIN_TYPE, "LBRY Credits", LBRY_CREDITS_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
 			.mainnet(() -> LBRY_CREDITS_MAIN_NET_PARAMS, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463", 10_000L, "lbc")
 			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isLbryClaimOutputScript(scriptPubKey))
@@ -358,7 +377,7 @@ public final class BitcoinyChainSpecs {
 			.transactionFormat(BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			.build();
 
-	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, PEERCOIN, NAMECOIN, FIRO, KOMODO, LBRY_CREDITS, VERGE);
+	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, PEERCOIN, NAMECOIN, FIRO, KOMODO, VERUS, LBRY_CREDITS, VERGE);
 
 	private static final List<String> CURRENCY_CODES = ALL.stream()
 			.map(BitcoinyChainSpec::getCurrencyCode)
@@ -517,6 +536,20 @@ public final class BitcoinyChainSpecs {
 						.code(3, "mKMD")
 						.code(7, "Komodoshi"))
 				.difficultyValidationFailure("Komodo difficulty verification is not implemented for Electrum-backed parameters");
+	}
+
+	private static StaticBitcoinyParams.Builder verusParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "verus")
+				.maxTarget("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f")
+				.targetTimespan(17 * 60)
+				.interval(17)
+				.hasMaxMoney(false)
+				.minNonDustOutput(Coin.valueOf(1000L))
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, VERUS_CURRENCY_CODE)
+						.code(3, "mVRSC")
+						.code(7, "Verusoshi"))
+				.difficultyValidationFailure("VerusCoin difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	private static StaticBitcoinyParams.Builder lbryCreditsParams(String id, String paymentProtocolId) {

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: add VerusCoin Bitcoiny support
+
+Added VerusCoin as a registered transparent Bitcoiny crosschain coin using the shared chain-spec model, including VRSC wallet metadata, address headers, SSL Electrum server refresh metadata, common wallet/HTLC/ACCT coverage, and chain-spec documentation. Because VRSC shares KMD's genesis block, the generic Bitcoiny ACCT uses a Verus checkpoint-based BIP122 chain reference so VRSC trades cannot collide with KMD, while VerusID, PBaaS, reserve/multicurrency transactions, and shielded wallet behavior remain outside the generic BTC-like path.
+
 ### 2026-05-07 - crosschain: add Verge Bitcoiny support
 
 Added Verge as a registered BTC-like crosschain coin using the shared Bitcoiny chain-spec model, including mainnet chain identity, SLIP-44 wallet metadata, XVG address headers, SSL Electrum server refresh metadata, common wallet/HTLC/ACCT test coverage, and chain-spec documentation. Because XVG uses six decimal places and includes a transaction timestamp field in ordinary transparent transactions, the shared Bitcoiny runtime now has a timestamped legacy transaction builder/parser for XVG spends and HTLC redeem/refund transactions while leaving Verge stealth, messaging, and Tor/I2P routing features outside generic BTC-like support.

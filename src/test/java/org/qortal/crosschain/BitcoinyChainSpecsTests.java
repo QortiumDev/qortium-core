@@ -48,6 +48,7 @@ public class BitcoinyChainSpecsTests {
 				new ChainManifest("NAMECOIN", "NMC", BitcoinyChainSpecs.NAMECOIN_SLIP44_COIN_TYPE, "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770", Set.of(BitcoinyChainSpecs.MAIN), 52, 13, 180, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("FIRO", "FIRO", BitcoinyChainSpecs.FIRO_SLIP44_COIN_TYPE, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", Set.of(BitcoinyChainSpecs.MAIN), 82, 7, 210, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("KOMODO", "KMD", BitcoinyChainSpecs.KOMODO_SLIP44_COIN_TYPE, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", Set.of(BitcoinyChainSpecs.MAIN), 60, 85, 188, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("VERUSCOIN", "VRSC", BitcoinyChainSpecs.VERUS_SLIP44_COIN_TYPE, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", "bip122:ac2cd7d37177140ea4991cf630c0b9c7", Set.of(BitcoinyChainSpecs.MAIN), 60, 85, 188, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("LBRYCREDITS", "LBC", BitcoinyChainSpecs.LBRY_CREDITS_SLIP44_COIN_TYPE, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463", Set.of(BitcoinyChainSpecs.MAIN), 0x55, 0x7a, 0x1c, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("VERGE", "XVG", BitcoinyChainSpecs.VERGE_SLIP44_COIN_TYPE, "00000fc63692467faeb20cdb3b53200dc601d75bdfa1001463304cc790d77278", Set.of(BitcoinyChainSpecs.MAIN), 30, 33, 158, 0x022D2533, 0x0221312B))) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(expected.currencyCode);
@@ -67,7 +68,7 @@ public class BitcoinyChainSpecsTests {
 			BitcoinyNetwork mainnet = spec.getNetwork(BitcoinyChainSpecs.MAIN);
 			assertNotNull(mainnet);
 			assertEquals(expected.mainnetGenesisHash, mainnet.getGenesisHash());
-			assertEquals(Bip122ChainId.fromBlockHash(expected.mainnetGenesisHash), mainnet.getChainId());
+			assertEquals(expected.mainnetChainId, mainnet.getChainId());
 			assertSame(entry, ForeignBlockchainRegistry.fromBitcoinyChainId(mainnet.getChainId()));
 			assertSame(entry, ForeignBlockchainRegistry.fromBitcoinyChainIdReference(Bip122ChainId.toReferenceBytes(mainnet.getChainId())));
 
@@ -190,6 +191,7 @@ public class BitcoinyChainSpecsTests {
 				BitcoinyChainSpecs.NAMECOIN,
 				BitcoinyChainSpecs.FIRO,
 				BitcoinyChainSpecs.KOMODO,
+				BitcoinyChainSpecs.VERUS,
 				BitcoinyChainSpecs.LBRY_CREDITS,
 				BitcoinyChainSpecs.VERGE
 		}) {
@@ -548,6 +550,46 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testVerusCoinUsesSharedStaticParams() {
+		BitcoinyNetwork verusMainNet = BitcoinyChainSpecs.VERUS.getNetwork(BitcoinyChainSpecs.MAIN);
+		NetworkParameters verusMainNetParams = verusMainNet.getParams();
+		Block genesisBlock = verusMainNetParams.getGenesisBlock();
+
+		assertTrue(verusMainNetParams instanceof StaticBitcoinyParams);
+		assertEquals(BitcoinyTransactionFormat.SAPLING_TRANSPARENT, BitcoinyChainSpecs.VERUS.getTransactionFormat());
+		assertEquals("bip122:ac2cd7d37177140ea4991cf630c0b9c7", verusMainNet.getChainId());
+		assertFalse(BitcoinyChainSpecs.KOMODO.getNetwork(BitcoinyChainSpecs.MAIN).getChainId().equals(verusMainNet.getChainId()));
+		assertEquals("org.verus.production", verusMainNetParams.getId());
+		assertEquals(NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, verusMainNetParams.getPaymentProtocolId());
+		assertEquals("verus", verusMainNetParams.getUriScheme());
+		assertEquals("027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", genesisBlock.getHashAsString());
+		assertEquals(1L, genesisBlock.getVersion());
+		assertEquals("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1231006505L, genesisBlock.getTimeSeconds());
+		assertEquals(0x200f0f0fL, genesisBlock.getDifficultyTarget());
+		assertEquals(11L, genesisBlock.getNonce());
+		assertEquals(new BigInteger("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f", 16), verusMainNetParams.getMaxTarget());
+		assertEquals(17 * 60, verusMainNetParams.getTargetTimespan());
+		assertEquals(17, verusMainNetParams.getInterval());
+		assertEquals(7770, verusMainNetParams.getPort());
+		assertEquals(0xf9eee48dL, verusMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(60, verusMainNetParams.getAddressHeader());
+		assertEquals(85, verusMainNetParams.getP2SHHeader());
+		assertEquals(188, verusMainNetParams.getDumpedPrivateKeyHeader());
+		assertNull(verusMainNetParams.getSegwitAddressHrp());
+		assertEquals(100, verusMainNetParams.getSpendableCoinbaseDepth());
+		assertEquals(840_000, verusMainNetParams.getSubsidyDecreaseBlockCount());
+		assertEquals(0x0488B21E, verusMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, verusMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(750, verusMainNetParams.getMajorityEnforceBlockUpgrade());
+		assertEquals(950, verusMainNetParams.getMajorityRejectBlockOutdated());
+		assertEquals(4000, verusMainNetParams.getMajorityWindow());
+		assertEquals(Coin.valueOf(1000L), verusMainNetParams.getMinNonDustOutput());
+		assertFalse(verusMainNetParams.hasMaxMoney());
+		assertEquals("VRSC 1.00", verusMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
+	}
+
+	@Test
 	public void testLbryCreditsUsesSharedStaticParams() {
 		BitcoinyNetwork lbryMainNet = BitcoinyChainSpecs.LBRY_CREDITS.getNetwork(BitcoinyChainSpecs.MAIN);
 		NetworkParameters lbryMainNetParams = lbryMainNet.getParams();
@@ -671,6 +713,7 @@ public class BitcoinyChainSpecsTests {
 		assertSame(BitcoinyChainSpecs.NAMECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.NAMECOIN_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.FIRO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.FIRO_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.KOMODO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.KOMODO_CURRENCY_CODE));
+		assertSame(BitcoinyChainSpecs.VERUS.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.VERUS_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.LBRY_CREDITS.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LBRY_CREDITS_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.VERGE.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.VERGE_CURRENCY_CODE));
 	}
@@ -829,6 +872,7 @@ public class BitcoinyChainSpecsTests {
 		private final String currencyCode;
 		private final int slip44CoinType;
 		private final String mainnetGenesisHash;
+		private final String mainnetChainId;
 		private final Set<String> supportedNetworkNames;
 		private final int addressHeader;
 		private final int p2shHeader;
@@ -839,10 +883,18 @@ public class BitcoinyChainSpecsTests {
 		private ChainManifest(String canonicalName, String currencyCode, int slip44CoinType, String mainnetGenesisHash,
 				Set<String> supportedNetworkNames, int addressHeader, int p2shHeader, int dumpedPrivateKeyHeader,
 				int bip32PublicHeader, int bip32PrivateHeader) {
+			this(canonicalName, currencyCode, slip44CoinType, mainnetGenesisHash, Bip122ChainId.fromBlockHash(mainnetGenesisHash),
+					supportedNetworkNames, addressHeader, p2shHeader, dumpedPrivateKeyHeader, bip32PublicHeader, bip32PrivateHeader);
+		}
+
+		private ChainManifest(String canonicalName, String currencyCode, int slip44CoinType, String mainnetGenesisHash,
+				String mainnetChainId, Set<String> supportedNetworkNames, int addressHeader, int p2shHeader, int dumpedPrivateKeyHeader,
+				int bip32PublicHeader, int bip32PrivateHeader) {
 			this.canonicalName = canonicalName;
 			this.currencyCode = currencyCode;
 			this.slip44CoinType = slip44CoinType;
 			this.mainnetGenesisHash = mainnetGenesisHash;
+			this.mainnetChainId = mainnetChainId;
 			this.supportedNetworkNames = supportedNetworkNames;
 			this.addressHeader = addressHeader;
 			this.p2shHeader = p2shHeader;

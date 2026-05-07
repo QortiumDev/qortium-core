@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-07T22:57:48.219473378Z",
+  "generatedAt": "2026-05-07T23:31:53.720178165Z",
   "servers": {
     "BTC": {
       "MAIN": [
@@ -435,6 +435,13 @@
         {"host": "electrum1.cipig.net", "port": 20001, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 2859},
         {"host": "electrum2.cipig.net", "port": 20001, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 2846},
         {"host": "electrum3.cipig.net", "port": 20001, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 2865}
+      ]
+    },
+    "VRSC": {
+      "MAIN": [
+        {"host": "el0.verus.io", "port": 17486, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 944},
+        {"host": "el1.verus.io", "port": 17486, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 830},
+        {"host": "el2.verus.io", "port": 17486, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 884}
       ]
     },
     "LBC": {
