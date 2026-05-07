@@ -60,6 +60,13 @@ Before coding a new coin, do a compatibility precheck:
 - ElectrumX support for headers, balances, UTXOs, transaction fetches, and broadcasts
 - no fork-id or replay-protection signing rule that bitcoinj's current signing boundary cannot produce
 
+KMD is the next planned BTC-like candidate if the target support is transparent
+KMD over Electrum-compatible servers. Do the same compatibility precheck before
+adding it, especially transaction signing rules, address/script behavior, and
+Electrum broadcast support. If a KMD path needs Sapling/lightwalletd native
+wallet support instead, it belongs with the Zcash-family native-wallet work
+rather than this generic Bitcoiny path.
+
 Before adding a coin, collect and verify:
 
 - canonical name, currency code, display name, stable SLIP-44 coin type if one exists, default fee, and minimum order amount

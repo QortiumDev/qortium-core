@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - docs: document Zcash-family native wallet requirements
+
+Documented why HUSH, Zcash, and other Sapling-family chains should remain planned rather than active until their Rust JNI wallet libraries, QDN wallet packages, Sapling parameter files, lightwalletd servers, wallet behavior, parser behavior, and live verification path are reproducible. Also clarified that KMD should use the generic BTC-like Bitcoiny path if the intended support is transparent Electrum-compatible KMD, and only use the Zcash-family path if native Sapling wallet support is actually required.
+
 ### 2026-05-07 - crosschain: add generic Zcash-family support
 
 Moved Pirate Chain wallet, lightwalletd, QDN wallet-library loading, and raw Zcash-style transaction parsing onto shared Zcash-family foundations, leaving the existing Pirate classes as thin compatibility wrappers. This avoids copying the Pirate-specific wallet/controller/light-client code when later adding HUSH, Zcash, or other Sapling-family chains, while keeping Pirate Chain as the only active Zcash-family runtime for now and documenting the remaining transparent-parser boundary.
