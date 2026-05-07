@@ -6,9 +6,6 @@ import org.bitcoinj.core.*;
 import org.bitcoinj.core.Transaction.SigHash;
 import org.bitcoinj.crypto.TransactionSignature;
 import org.bitcoinj.script.Script;
-import org.bitcoinj.script.ScriptBuilder;
-import org.bitcoinj.script.ScriptChunk;
-import org.bitcoinj.script.ScriptOpCodes;
 import org.qortal.crypto.Crypto;
 import org.qortal.utils.Base58;
 import org.qortal.utils.BitTwiddling;
@@ -106,7 +103,7 @@ public class BitcoinyHTLC {
 	 */
 	public static Transaction buildP2shTransaction(NetworkParameters params, Coin amount, ECKey spendKey,
 			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes,
-			Long lockTime, Function<byte[], Script> scriptSigBuilder, byte[] outputPublicKeyHash) {
+			Long lockTime, Function<byte[], byte[]> scriptSigBuilder, byte[] outputPublicKeyHash) {
 		Transaction transaction = new Transaction(params);
 		transaction.setVersion(2);
 
@@ -139,10 +136,10 @@ public class BitcoinyHTLC {
 			byte[] txSigBytes = txSig.encodeToBitcoin();
 
 			// Build scriptSig using lambda and tx signature
-			Script scriptSig = scriptSigBuilder.apply(txSigBytes);
+			byte[] scriptSigBytes = scriptSigBuilder.apply(txSigBytes);
 
 			// Set input scriptSig
-			transaction.getInput(inputIndex).setScriptSig(scriptSig);
+			transaction.getInput(inputIndex).setScriptSig(new Script(scriptSigBytes));
 		}
 
 		return transaction;
@@ -162,25 +159,14 @@ public class BitcoinyHTLC {
 	 */
 	public static Transaction buildRefundTransaction(NetworkParameters params, Coin refundAmount, ECKey refundKey,
 			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, long lockTime, byte[] receivingAccountInfo) {
-		Function<byte[], Script> refundSigScriptBuilder = (txSigBytes) -> {
-			// Build scriptSig with...
-			ScriptBuilder scriptBuilder = new ScriptBuilder();
-
-			// transaction signature
-			scriptBuilder.addChunk(new ScriptChunk(txSigBytes.length, txSigBytes));
-
-			// redeem public key
-			byte[] refundPubKey = refundKey.getPubKey();
-			scriptBuilder.addChunk(new ScriptChunk(refundPubKey.length, refundPubKey));
-
-			// redeem script
-			scriptBuilder.addChunk(new ScriptChunk(ScriptOpCodes.OP_PUSHDATA1, redeemScriptBytes));
-
-			return scriptBuilder.build();
-		};
+		byte[] refundPubKey = refundKey.getPubKey();
+		Function<byte[], byte[]> refundScriptSigBuilder = (txSigBytes) -> Bytes.concat(
+				BitcoinyScript.pushData(txSigBytes),
+				BitcoinyScript.pushData(refundPubKey),
+				BitcoinyScript.pushData(redeemScriptBytes));
 
 		// Send funds back to funding address
-		return buildP2shTransaction(params, refundAmount, refundKey, fundingOutputs, redeemScriptBytes, lockTime, refundSigScriptBuilder, receivingAccountInfo);
+		return buildP2shTransaction(params, refundAmount, refundKey, fundingOutputs, redeemScriptBytes, lockTime, refundScriptSigBuilder, receivingAccountInfo);
 	}
 
 	/**
@@ -197,27 +183,14 @@ public class BitcoinyHTLC {
 	 */
 	public static Transaction buildRedeemTransaction(NetworkParameters params, Coin redeemAmount, ECKey redeemKey,
 			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, byte[] secret, byte[] receivingAccountInfo) {
-		Function<byte[], Script> redeemSigScriptBuilder = (txSigBytes) -> {
-			// Build scriptSig with...
-			ScriptBuilder scriptBuilder = new ScriptBuilder();
+		byte[] redeemPubKey = redeemKey.getPubKey();
+		Function<byte[], byte[]> redeemScriptSigBuilder = (txSigBytes) -> Bytes.concat(
+				BitcoinyScript.pushData(secret),
+				BitcoinyScript.pushData(txSigBytes),
+				BitcoinyScript.pushData(redeemPubKey),
+				BitcoinyScript.pushData(redeemScriptBytes));
 
-			// secret
-			scriptBuilder.addChunk(new ScriptChunk(secret.length, secret));
-
-			// transaction signature
-			scriptBuilder.addChunk(new ScriptChunk(txSigBytes.length, txSigBytes));
-
-			// redeem public key
-			byte[] redeemPubKey = redeemKey.getPubKey();
-			scriptBuilder.addChunk(new ScriptChunk(redeemPubKey.length, redeemPubKey));
-
-			// redeem script
-			scriptBuilder.addChunk(new ScriptChunk(ScriptOpCodes.OP_PUSHDATA1, redeemScriptBytes));
-
-			return scriptBuilder.build();
-		};
-
-		return buildP2shTransaction(params, redeemAmount, redeemKey, fundingOutputs, redeemScriptBytes, null, redeemSigScriptBuilder, receivingAccountInfo);
+		return buildP2shTransaction(params, redeemAmount, redeemKey, fundingOutputs, redeemScriptBytes, null, redeemScriptSigBuilder, receivingAccountInfo);
 	}
 
 	/**

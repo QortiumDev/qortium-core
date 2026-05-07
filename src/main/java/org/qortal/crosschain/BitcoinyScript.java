@@ -84,6 +84,28 @@ public final class BitcoinyScript {
 		return script;
 	}
 
+	public static byte[] pushData(byte[] data) {
+		if (data == null)
+			throw new IllegalArgumentException("Missing push data");
+
+		if (data.length <= 75) {
+			byte[] script = new byte[1 + data.length];
+			script[0] = (byte) data.length;
+			System.arraycopy(data, 0, script, 1, data.length);
+			return script;
+		}
+
+		if (data.length <= 0xff) {
+			byte[] script = new byte[2 + data.length];
+			script[0] = (byte) OP_PUSHDATA1;
+			script[1] = (byte) data.length;
+			System.arraycopy(data, 0, script, 2, data.length);
+			return script;
+		}
+
+		throw new IllegalArgumentException("Push data is too large");
+	}
+
 	public static List<byte[]> extractScriptSigChunks(byte[] scriptSigBytes) {
 		List<byte[]> chunks = new ArrayList<>();
 

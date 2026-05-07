@@ -229,10 +229,10 @@ public class PirateChainTests extends BitcoinyTests {
 		byte[] p2shScriptPubKey = BitcoinyScript.scriptPubKey(mockBitcoiny.getNetworkParameters(), p2shAddress);
 		String redeemTxHash = "11".repeat(32);
 		byte[] scriptSig = Bytes.concat(
-				pushData(secret),
-				pushData(HashCode.fromString("304502").asBytes()),
-				pushData(redeemerPublicKey),
-				pushData(redeemScript));
+				BitcoinyScript.pushData(secret),
+				BitcoinyScript.pushData(HashCode.fromString("304502").asBytes()),
+				BitcoinyScript.pushData(redeemerPublicKey),
+				BitcoinyScript.pushData(redeemScript));
 
 		blockchainProvider.addAddressTransaction(p2shScriptPubKey, new TransactionHash(10, redeemTxHash));
 		blockchainProvider.addRawTransaction(redeemTxHash, rawTransactionWithScriptSig(scriptSig));
@@ -411,13 +411,6 @@ public class PirateChainTests extends BitcoinyTests {
 
 	private interface PirateFixtureQuery<T> {
 		T run() throws ForeignBlockchainException;
-	}
-
-	private static byte[] pushData(byte[] data) {
-		if (data.length <= 75)
-			return Bytes.concat(new byte[] { (byte) data.length }, data);
-
-		return Bytes.concat(new byte[] { 0x4c, (byte) data.length }, data);
 	}
 
 	private static byte[] rawTransactionWithScriptSig(byte[] scriptSig) {

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: internalize HTLC scriptSig building
+
+Moved HTLC refund and redeem scriptSig construction onto Qortium-owned push-data serialization instead of bitcoinj ScriptBuilder and ScriptChunk helpers. HTLC transaction signing still uses bitcoinj at the transaction boundary, but the actual secret, signature, public-key, and redeem-script stack encoding is now shared through BitcoinyScript and covered by deterministic tests.
+
 ### 2026-05-07 - crosschain: internalize HTLC scriptSig parsing
 
 Moved HTLC secret discovery onto Qortium-owned raw transaction and scriptSig push parsing for both Bitcoin-like and PirateChain HTLCs, using the generic Bitcoiny raw parser for Bitcoin-like transactions and the Pirate decoder for Zcash-style Pirate transactions. The shared Bitcoiny script helper now extracts push-data chunks directly, so HTLC read-only secret/status paths no longer need bitcoinj transaction or script parsing, while HTLC transaction signing remains on bitcoinj until the dedicated transaction builder is replaced.

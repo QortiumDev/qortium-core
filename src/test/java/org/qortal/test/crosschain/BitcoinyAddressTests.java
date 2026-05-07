@@ -91,10 +91,29 @@ public class BitcoinyAddressTests {
 	}
 
 	@Test
+	public void testPushDataScripts() {
+		assertEquals("00", HashCode.fromBytes(BitcoinyScript.pushData(new byte[0])).toString());
+		assertEquals("02aabb", HashCode.fromBytes(BitcoinyScript.pushData(HashCode.fromString("aabb").asBytes())).toString());
+
+		byte[] pushData1Bytes = HashCode.fromString("11".repeat(76)).asBytes();
+		assertEquals("4c4c" + "11".repeat(76), HashCode.fromBytes(BitcoinyScript.pushData(pushData1Bytes)).toString());
+	}
+
+	@Test
 	public void testExtractScriptSigChunksRejectsMalformedPushes() {
 		assertTrue(BitcoinyScript.extractScriptSigChunks(HashCode.fromString("4c").asBytes()).isEmpty());
 		assertTrue(BitcoinyScript.extractScriptSigChunks(HashCode.fromString("03aabb").asBytes()).isEmpty());
 		assertTrue(BitcoinyScript.extractScriptSigChunks(HashCode.fromString("4d0100").asBytes()).isEmpty());
+	}
+
+	@Test
+	public void testPushDataRejectsTooLargePayloads() {
+		try {
+			BitcoinyScript.pushData(new byte[256]);
+			fail("Expected large push data to be rejected");
+		} catch (IllegalArgumentException e) {
+			// Expected
+		}
 	}
 
 	private static NetworkParameters bitcoinTest3Params() {
