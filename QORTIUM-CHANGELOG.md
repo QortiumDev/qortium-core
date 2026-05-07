@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: internalize Bitcoiny spend output lookup
+
+Moved Bitcoiny spend preparation onto Qortium's deterministic key scanner for locating spendable outputs before bitcoinj signs the transaction. The remaining bitcoinj spend boundary now receives a precomputed UTXO list instead of driving wallet/keychain address discovery itself, and the old bitcoinj-specific key scanning helpers were removed while preserving existing single-recipient and multi-recipient spend behavior.
+
 ### 2026-05-07 - crosschain: remove legacy Bitcoiny wallet repair
 
 Removed the old Bitcoiny wallet repair endpoint and its pre-2024 key-scanning path, which was only relevant to historical wallets from the inherited chain and depended on a bitcoinj UTXO provider. New Qortium baseline chains keep the normal deterministic wallet balance, address, and spend paths while dropping this legacy repair surface as part of the ongoing bitcoinj dependency reduction.

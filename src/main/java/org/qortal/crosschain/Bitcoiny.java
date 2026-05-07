@@ -5,10 +5,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bitcoinj.core.*;
 import org.bitcoinj.crypto.DeterministicHierarchy;
-import org.bitcoinj.crypto.DeterministicKey;
 import org.bitcoinj.params.AbstractBitcoinNetParams;
 import org.bitcoinj.script.Script;
-import org.bitcoinj.wallet.DeterministicKeyChain;
 import org.bitcoinj.wallet.SendRequest;
 import org.bitcoinj.wallet.Wallet;
 import org.qortal.api.model.SimpleForeignTransaction;
@@ -48,10 +46,6 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	protected Long transactionsCacheTimestamp;
 	protected String transactionsCacheXpub;
 	protected static long TRANSACTIONS_CACHE_TIMEOUT = 2 * 60 * 1000L; // 2 minutes
-
-	/** Keys that have been previously marked as fully spent,<br>
-	 * i.e. keys with transactions but with no unspent outputs. */
-	protected final Set<ECKey> spentKeys = Collections.synchronizedSet(new HashSet<>());
 
 	/** How many wallet keys to generate in each batch. */
 	private static final int WALLET_KEY_LOOKAHEAD_INCREMENT = 3;
@@ -263,57 +257,6 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	}
 
 	/**
-	 * Get UTXOs Asynchronously
-	 *
-	 * @param address the foreign coin address
-	 * @param includeUnconfirmed true to include unconfirmed outputs, otherwise false
-	 *
-	 * @return the UTXOs
-	 *
-	 * @throws ForeignBlockchainException
-	 */
-	private List<Supplier<Optional<UTXO>>> getUTXOSuppliers(String address, boolean includeUnconfirmed) throws ForeignBlockchainException {
-		List<UnspentOutput> unspentOutputs = this.blockchainProvider.getUnspentOutputs(address, true);
-
-		List<Supplier<Optional<UTXO>>> utxoSuppliers = new ArrayList<>();
-
-		final boolean coinbase = false;
-
-		for (UnspentOutput unspentOutput : unspentOutputs) {
-			utxoSuppliers.add(() -> buildUTXO(coinbase, unspentOutput) );
-		}
-
-		return utxoSuppliers;
-	}
-
-	/**
-	 * Build UTXO
-	 *
-	 * Build UTXo from a an unspent output
-	 *
-	 * @param coinbase true if coinbase transaction, otherwise false
-	 * @param unspentOutput the unpent output to build from
-	 *
-	 * @return the UTXO
-	 *
-	 * @throws ForeignBlockchainException
-	 */
-	private Optional<UTXO> buildUTXO(boolean coinbase, UnspentOutput unspentOutput)  {
-		try {
-			Script scriptPubKey = this.getScriptPubKey(unspentOutput);
-
-			UTXO utxo = new UTXO(Sha256Hash.wrap(unspentOutput.hash), unspentOutput.index,
-					Coin.valueOf(unspentOutput.value), unspentOutput.height, coinbase,
-					scriptPubKey);
-
-			return Optional.of(utxo);
-		} catch (Exception e) {
-			LOGGER.warn(e.getMessage());
-			return Optional.empty();
-		}
-	}
-
-	/**
 	 * Resolve unspent output
 	 *
 	 * Resolve script metadata for an unspent output without exposing bitcoinj TransactionOutput to callers.
@@ -519,7 +462,9 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 		Context.propagate(bitcoinjContext);
 
 		Wallet wallet = Wallet.fromSpendingKeyB58(this.params, xprv58, DeterministicHierarchy.BIP32_STANDARDISATION_TIME_SECS);
-		wallet.setUTXOProvider(new WalletAwareUTXOProvider(this, wallet));
+		SpendableOutputs spendableOutputs = getSpendableOutputs(xprv58, true);
+		primeWalletForSpend(wallet, spendableOutputs);
+		wallet.setUTXOProvider(new PrecomputedUTXOProvider(this, spendableOutputs.outputs));
 
 		Address destination = Address.fromString(this.params, recipient);
 		SendRequest sendRequest = SendRequest.to(destination, Coin.valueOf(amount));
@@ -552,7 +497,9 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 		Context.propagate(bitcoinjContext);
 
 		Wallet wallet = Wallet.fromSpendingKeyB58(this.params, xprv58, DeterministicHierarchy.BIP32_STANDARDISATION_TIME_SECS);
-		wallet.setUTXOProvider(new WalletAwareUTXOProvider(this, wallet));
+		SpendableOutputs spendableOutputs = getSpendableOutputs(xprv58, true);
+		primeWalletForSpend(wallet, spendableOutputs);
+		wallet.setUTXOProvider(new PrecomputedUTXOProvider(this, spendableOutputs.outputs));
 
 		Transaction transaction = new Transaction(this.params);
 
@@ -1111,56 +1058,6 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	}
 
 	/**
-	 * Process Keys
-	 *
-	 * Generate keys asynchronously
-	 *
-	 * @param executor for asynchronous processing
-	 * @param keys the keys generated
-	 * @param keyChain the key chain to generate the keys from
-	 * @param unusedCounter starts at zero, increases during recursion
-	 *
-	 * @return the addresses derived from the keys
-	 */
-	private Set<String> processKeys(ExecutorService executor, List<DeterministicKey> keys, DeterministicKeyChain keyChain, int unusedCounter) throws ForeignBlockchainException {
-
-		// the return value
-		Set<String> keySet = new HashSet<>();
-
-		boolean needToProcessAdditionalKeys = false;
-
-		List<Supplier<Boolean>> transactionChecks = new ArrayList<>(keys.size());
-
-		// for each key, collect address, determine additional key generation
-		for (DeterministicKey dKey : keys) {
-
-			String address = pkhToAddress(dKey.getPubKeyHash());
-			keySet.add(address);
-
-			// if the key already has a verified transaction history
-			if( this.blockchainCache.keyHasHistory( dKey ) ){
-				needToProcessAdditionalKeys = true;
-			}
-			// if the key does not have a verified transaction history
-			else {
-				transactionChecks.add( () -> checkForTransactions(dKey, BitcoinyScript.p2pkhScript(dKey.getPubKeyHash())));
-			}
-		}
-
-		// process more keys
-		if( needToProcessAdditionalKeys || anyTrue( executor, transactionChecks, RETRIES )) {
-			keySet.addAll(processKeys(executor, generateMoreKeys(keyChain), keyChain, 0));
-		}
-		// if no additional keys were already processed and the if the gap limit held, then process additional keys
-		else if ( unusedCounter < Settings.getInstance().getGapLimit()) {
-
-			keySet.addAll(processKeys(executor, generateMoreKeys(keyChain), keyChain, unusedCounter + WALLET_KEY_LOOKAHEAD_INCREMENT));
-		}
-
-		return keySet;
-	}
-
-	/**
 	 * Process Keys Only
 	 *
 	 * Generate keys asynchronously, no addresses are generated
@@ -1288,10 +1185,6 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 *
 	 * @throws ForeignBlockchainException
 	 */
-	private boolean checkForTransactions(DeterministicKey dKey, byte[] script) {
-		return checkForTransactions(HashCode.fromBytes(dKey.getPubKey()).toString(), script);
-	}
-
 	private boolean checkForTransactions(BitcoinyDeterministicKey dKey, byte[] script) {
 		return checkForTransactions(dKey.getCacheKey(), script);
 	}
@@ -1514,38 +1407,70 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 	public abstract void setFeeRequired(long fee);
 
-	// UTXOProvider support
+	private SpendableOutputs getSpendableOutputs(String key58, boolean includeUnconfirmed) {
+		try {
+			Set<BitcoinyDeterministicKey> walletKeys = getWalletKeysWithExecutor(key58, EXECUTOR);
+			List<UnspentOutput> spendableOutputs = new ArrayList<>();
+			int highestLeafIndex = 0;
 
-	static class WalletAwareUTXOProvider implements UTXOProvider {
+			for (BitcoinyDeterministicKey key : walletKeys) {
+				highestLeafIndex = Math.max(highestLeafIndex, getLeafIndex(key));
+
+				byte[] script = BitcoinyScript.p2pkhScript(key.getPublicKeyHash());
+				List<UnspentOutput> unspentOutputs = this.blockchainProvider.getUnspentOutputs(script, includeUnconfirmed);
+				for (UnspentOutput unspentOutput : unspentOutputs) {
+					Optional<UnspentOutput> resolvedUnspentOutput = resolveUnspentOutput(unspentOutput);
+					if (resolvedUnspentOutput.isEmpty())
+						throw new ForeignBlockchainException(String.format("Unable to resolve spendable output %s:%d",
+								HashCode.fromBytes(unspentOutput.hash), unspentOutput.index));
+
+					spendableOutputs.add(resolvedUnspentOutput.get());
+				}
+			}
+
+			int walletLookaheadSize = Math.max(WALLET_KEY_LOOKAHEAD_INCREMENT, highestLeafIndex + 1);
+			return new SpendableOutputs(spendableOutputs, walletLookaheadSize);
+		} catch (ForeignBlockchainException e) {
+			LOGGER.warn("Unable to collect spendable {} outputs: {}", this.currencyCode, e.getMessage());
+			return SpendableOutputs.empty();
+		}
+	}
+
+	private static int getLeafIndex(BitcoinyDeterministicKey key) {
+		List<Integer> path = key.getPath();
+		if (path.isEmpty())
+			return 0;
+
+		return path.get(path.size() - 1) & Integer.MAX_VALUE;
+	}
+
+	private static void primeWalletForSpend(Wallet wallet, SpendableOutputs spendableOutputs) {
+		wallet.getActiveKeyChain().setLookaheadSize(spendableOutputs.walletLookaheadSize);
+		wallet.getActiveKeyChain().setLookaheadThreshold(0);
+		wallet.getActiveKeyChain().maybeLookAhead();
+	}
+
+	private UTXO toBitcoinjUTXO(UnspentOutput unspentOutput) throws ForeignBlockchainException {
+		Script scriptPubKey = this.getScriptPubKey(unspentOutput);
+		return new UTXO(Sha256Hash.wrap(unspentOutput.hash), unspentOutput.index,
+				Coin.valueOf(unspentOutput.value), unspentOutput.height, false, scriptPubKey);
+	}
+
+	static class PrecomputedUTXOProvider implements UTXOProvider {
 		private final Bitcoiny bitcoiny;
-		private final Wallet wallet;
+		private final List<UnspentOutput> spendableOutputs;
 
-		private final DeterministicKeyChain keyChain;
-
-		public WalletAwareUTXOProvider(Bitcoiny bitcoiny, Wallet wallet) {
+		public PrecomputedUTXOProvider(Bitcoiny bitcoiny, List<UnspentOutput> spendableOutputs) {
 			this.bitcoiny = bitcoiny;
-			this.wallet = wallet;
-			this.keyChain = this.wallet.getActiveKeyChain();
-
-			// Set up wallet's key chain
-			this.keyChain.setLookaheadSize(Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT);
-			this.keyChain.maybeLookAhead();
+			this.spendableOutputs = new ArrayList<>(spendableOutputs);
 		}
 
 		@Override
 		public List<UTXO> getOpenTransactionOutputs(List<ECKey> keys) throws UTXOProviderException {
-
-			List<Supplier<Optional<UTXO>>> utxoSuppliers = new ArrayList<>();
-
 			try {
-				Set<String> addresses = bitcoiny.processKeys(EXECUTOR, this.keyChain.getLeafKeys(), this.keyChain, 0);
-
-				for( String address : addresses ) {
-					utxoSuppliers.addAll( bitcoiny.getUTXOSuppliers( address, true) );
-				}
-
-				List<UTXO> utxos = getUtxos(utxoSuppliers, EXECUTOR, RETRIES);
-
+				List<UTXO> utxos = new ArrayList<>(this.spendableOutputs.size());
+				for (UnspentOutput spendableOutput : this.spendableOutputs)
+					utxos.add(this.bitcoiny.toBitcoinjUTXO(spendableOutput));
 				return utxos;
 			} catch (Exception e) {
 				throw new UTXOProviderException(e.getMessage());
@@ -1565,76 +1490,6 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 		public NetworkParameters getParams() {
 			return this.bitcoiny.params;
 		}
-	}
-
-	/**
-	 * Get UTXOs
-	 *
-	 * @param suppliers the UTXO suppliers, empty to provoke a retry if there are connection problems
-	 * @param executor the executor
-	 * @param retries the number of retries allowed
-	 *
-	 * @return the UTXOs
-	 *
-	 * @throws InterruptedException
-	 * @throws ExecutionException
-	 * @throws ForeignBlockchainException
-	 */
-	private static List<UTXO> getUtxos(List<Supplier<Optional<UTXO>>> suppliers, ExecutorService executor, int retries) throws InterruptedException, ExecutionException, ForeignBlockchainException {
-
-		List<UTXO> utxos = new ArrayList<>(suppliers.size());
-
-		// for recursion if necessary
-		List<Supplier<Optional<UTXO>>> suppliersToRetry = new ArrayList<>(suppliers.size());
-
-		Map<Integer, Supplier<Optional<UTXO>>> supplierMap = new HashMap<>(suppliers.size());
-		Map<Integer, Future<Optional<UTXO>>> futureMap = new HashMap<>(suppliers.size());
-
-		int index = 0;
-
-		for (Supplier<Optional<UTXO>> supplier : suppliers) {
-
-			Future<Optional<UTXO>> future = executor.submit(() -> supplier.get());
-
-			supplierMap.put(index, supplier);
-			futureMap.put(index, future);
-
-			index++;
-		}
-
-		final int count = index;
-
-		for( index = 0; index < count; index++) {
-			Future<Optional<UTXO>> future = futureMap.get(index);
-
-			try {
-				Optional<UTXO> utxo = future.get(TIMEOUT, TimeUnit.SECONDS);
-
-				if (utxo.isPresent()) {
-					utxos.add(utxo.get());
-				} else {
-					suppliersToRetry.add(supplierMap.get(index));
-				}
-			} catch (TimeoutException e) {
-				suppliersToRetry.add(supplierMap.get(index));
-			}
-		}
-
-		for( Future<Optional<UTXO>> future: futureMap.values()) {
-			future.cancel(true);
-		}
-
-		if( !suppliersToRetry.isEmpty() ) {
-
-			if( retries > 0 ) {
-				utxos.addAll(getUtxos(suppliersToRetry, executor, retries - 1));
-			}
-			else {
-				throw new ForeignBlockchainException("can't get all UTXOs");
-			}
-		}
-
-		return utxos;
 	}
 
 	private Long summingUnspentOutputs(String walletAddress) throws ForeignBlockchainException {
@@ -1733,28 +1588,25 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 	// Utility methods for us
 
-	protected static List<DeterministicKey> generateMoreKeys(DeterministicKeyChain keyChain) {
-		int existingLeafKeyCount = keyChain.getLeafKeys().size();
-
-		// Increase lookahead size...
-		keyChain.setLookaheadSize(keyChain.getLookaheadSize() + Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT);
-		// ...and lookahead threshold (minimum number of keys to generate)...
-		keyChain.setLookaheadThreshold(0);
-		// ...so that this call will generate more keys
-		keyChain.maybeLookAhead();
-
-		// This returns *all* keys
-		List<DeterministicKey> allLeafKeys = keyChain.getLeafKeys();
-
-		// Only return newly generated keys
-		return allLeafKeys.subList(existingLeafKeyCount, allLeafKeys.size());
-	}
-
 	protected static List<BitcoinyDeterministicKey> generateMoreKeys(BitcoinyDeterministicKeyChain keyChain, int existingLeafKeyCount) {
 		return keyChain.getMoreLeafKeys(existingLeafKeyCount, Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT);
 	}
 
 	protected byte[] addressToScriptPubKey(String base58Address) {
 		return BitcoinyScript.scriptPubKey(this.params, base58Address);
+	}
+
+	private static class SpendableOutputs {
+		private final List<UnspentOutput> outputs;
+		private final int walletLookaheadSize;
+
+		private SpendableOutputs(List<UnspentOutput> outputs, int walletLookaheadSize) {
+			this.outputs = outputs;
+			this.walletLookaheadSize = walletLookaheadSize;
+		}
+
+		private static SpendableOutputs empty() {
+			return new SpendableOutputs(Collections.emptyList(), WALLET_KEY_LOOKAHEAD_INCREMENT);
+		}
 	}
 }

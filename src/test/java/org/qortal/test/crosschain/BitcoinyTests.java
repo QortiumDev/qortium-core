@@ -23,7 +23,9 @@ import org.qortal.test.common.Common;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.Assume.assumeTrue;
@@ -155,10 +157,26 @@ public abstract class BitcoinyTests extends Common {
 		assertFalse(transaction.getInputs().isEmpty());
 		assertTrue(transaction.getOutputs().stream().anyMatch(output -> output.getValue().value == amount));
 
-		// Check spent key caching doesn't affect outcome
+		// Check repeated spend building doesn't affect outcome
 
 		transaction = mockBitcoiny.buildSpend(getDeterministicKey58(), recipient, amount);
 		assertNotNull(transaction);
+	}
+
+	@Test
+	public void testBuildSpendMultiple() throws ForeignBlockchainException {
+		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
+
+		Map<String, Long> amountByRecipient = new LinkedHashMap<>();
+		amountByRecipient.put(getSpendRecipient(mockBitcoiny), 1000L);
+		amountByRecipient.put(mockBitcoiny.pkhToAddress(HashCode.fromString("03".repeat(20)).asBytes()), 2000L);
+
+		Transaction transaction = mockBitcoiny.buildSpendMultiple(getDeterministicKey58(), amountByRecipient, null);
+
+		assertNotNull(transaction);
+		assertFalse(transaction.getInputs().isEmpty());
+		assertTrue(transaction.getOutputs().stream().anyMatch(output -> output.getValue().value == 1000L));
+		assertTrue(transaction.getOutputs().stream().anyMatch(output -> output.getValue().value == 2000L));
 	}
 
 	@Test
@@ -169,7 +187,7 @@ public abstract class BitcoinyTests extends Common {
 		assertNotNull(balance);
 		assertEquals(Long.valueOf(MOCK_UTXO_VALUE), balance);
 
-		// Check spent key caching doesn't affect outcome
+		// Check repeated balance lookups don't affect outcome
 
 		Long repeatBalance = mockBitcoiny.getWalletBalance(getDeterministicKey58());
 
