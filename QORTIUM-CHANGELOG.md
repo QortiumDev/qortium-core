@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: internalize Bitcoiny raw transaction parsing
+
+Added a Qortium-owned raw transaction parser for Bitcoin-like transaction inputs, outputs, lock time, legacy encoding, and segwit witness skipping. Bitcoiny output resolution now reads raw transaction output scripts and values through this parser instead of constructing a bitcoinj `Transaction`, moving another read-only crosschain path off bitcoinj while keeping spend construction and signing on bitcoinj for the later transaction-builder replacement.
+
 ### 2026-05-06 - crosschain: internalize Bitcoiny wallet derivation
 
 Added Qortium-owned BIP32 extended-key parsing and public child-key derivation for Bitcoin-like wallets, including Base58Check validation, secp256k1 public derivation, and deterministic P2PKH scan address generation. Wallet balance scans, transaction history scans, address-info lookups, unused receive-address selection, and spending-candidate previews now use the internal derivation path instead of bitcoinj Wallet/keychain APIs, while actual spend construction and signing remain on bitcoinj until the transaction-builder replacement is ready.

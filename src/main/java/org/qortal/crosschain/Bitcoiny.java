@@ -419,11 +419,8 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 			try {
 				byte[] rawTransactionBytes = this.blockchainProvider.getRawTransaction(txHash);
 
-				Context.propagate(bitcoinjContext);
-				Transaction transaction = new Transaction(this.params, rawTransactionBytes);
-				return transaction.getOutputs().stream()
-						.map(this::toBitcoinyOutput)
-						.collect(Collectors.toList());
+				BitcoinyTransaction transaction = BitcoinyRawTransactionParser.parse(HashCode.fromBytes(txHash).toString(), rawTransactionBytes);
+				return transaction.outputs;
 			} catch (ForeignBlockchainException | RuntimeException e) {
 				lastException = e;
 			}
@@ -433,11 +430,6 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 				HashCode.fromBytes(txHash),
 				lastException == null ? "unknown error" : lastException.getMessage());
 		throw new ForeignBlockchainException(message);
-	}
-
-	private BitcoinyTransaction.Output toBitcoinyOutput(TransactionOutput output) {
-		String scriptPubKey = HashCode.fromBytes(output.getScriptPubKey().getProgram()).toString();
-		return new BitcoinyTransaction.Output(scriptPubKey, output.getValue().value);
 	}
 
 	/**
