@@ -162,18 +162,6 @@ public abstract class BitcoinyTests extends Common {
 	}
 
 	@Test
-	public void testRepair() throws ForeignBlockchainException {
-		assumeLiveCrosschainTestsEnabled();
-		assumeTrue(supportsDeterministicWalletTests());
-
-		String xprv58 = getDeterministicKey58();
-
-		String transaction = bitcoiny.repairOldWallet(xprv58);
-
-		assertNotNull(transaction);
-	}
-
-	@Test
 	public void testGetWalletBalance() throws ForeignBlockchainException {
 		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
 		Long balance = mockBitcoiny.getWalletBalance(getDeterministicKey58());

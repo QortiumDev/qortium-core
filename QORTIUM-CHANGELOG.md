@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: remove legacy Bitcoiny wallet repair
+
+Removed the old Bitcoiny wallet repair endpoint and its pre-2024 key-scanning path, which was only relevant to historical wallets from the inherited chain and depended on a bitcoinj UTXO provider. New Qortium baseline chains keep the normal deterministic wallet balance, address, and spend paths while dropping this legacy repair surface as part of the ongoing bitcoinj dependency reduction.
+
 ### 2026-05-07 - crosschain: internalize HTLC scriptSig building
 
 Moved HTLC refund and redeem scriptSig construction onto Qortium-owned push-data serialization instead of bitcoinj ScriptBuilder and ScriptChunk helpers. HTLC transaction signing still uses bitcoinj at the transaction boundary, but the actual secret, signature, public-key, and redeem-script stack encoding is now shared through BitcoinyScript and covered by deterministic tests.

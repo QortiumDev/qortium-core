@@ -403,35 +403,6 @@ public class CrossChainBitcoinyResource {
 		}
 	}
 
-	@POST
-	@Path("/repair")
-	@Operation(
-			summary = "Sends all coins in wallet to primary receive address",
-			requestBody = @RequestBody(
-					required = true,
-					content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
-			),
-			responses = {
-					@ApiResponse(content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string", description = "transaction hash")))
-			}
-	)
-	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE})
-	@SecurityRequirement(name = "apiKey")
-	public String repairOldWallet(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
-			@PathParam("blockchain") String blockchain, String key58) {
-		Security.checkApiCallAllowed(request);
-
-		Bitcoiny bitcoiny = getBitcoiny(blockchain);
-		if (!bitcoiny.isValidDeterministicKey(key58))
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
-
-		try {
-			return bitcoiny.repairOldWallet(key58);
-		} catch (ForeignBlockchainException e) {
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE);
-		}
-	}
-
 	@GET
 	@Path("/feekb")
 	@Operation(

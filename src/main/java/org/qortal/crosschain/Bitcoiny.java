@@ -8,7 +8,6 @@ import org.bitcoinj.crypto.DeterministicHierarchy;
 import org.bitcoinj.crypto.DeterministicKey;
 import org.bitcoinj.params.AbstractBitcoinNetParams;
 import org.bitcoinj.script.Script;
-import org.bitcoinj.script.Script.ScriptType;
 import org.bitcoinj.wallet.DeterministicKeyChain;
 import org.bitcoinj.wallet.SendRequest;
 import org.bitcoinj.wallet.Wallet;
@@ -1364,77 +1363,6 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 		return processAdditionalKeys;
 	}
 
-	/**
-	 * Get Old Wallet Keys
-	 *
-	 * Get wallet keys using the old key generation algorithm. This is used for diagnosing and repairing wallets
-	 * created before 2024.
-	 *
-	 * @param masterPrivateKey
-	 *
-	 * @return the keys
-	 *
-	 * @throws ForeignBlockchainException
-	 */
-	private List<DeterministicKey> getOldWalletKeys(String masterPrivateKey) throws ForeignBlockchainException {
-		Context.propagate(bitcoinjContext);
-
-		Wallet wallet = walletFromDeterministicKey58(masterPrivateKey);
-		DeterministicKeyChain keyChain = wallet.getActiveKeyChain();
-
-		keyChain.setLookaheadSize(Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT);
-		keyChain.maybeLookAhead();
-
-		List<DeterministicKey> keys = new ArrayList<>(keyChain.getLeafKeys());
-
-		int unusedCounter = 0;
-		int ki = 0;
-		do {
-			boolean areAllKeysUnused = true;
-
-			for (; areAllKeysUnused && ki < keys.size(); ++ki) {
-				DeterministicKey dKey = keys.get(ki);
-
-				// if the key already has a verified transaction history
-				if( this.blockchainCache.keyHasHistory(dKey)) {
-					areAllKeysUnused = false;
-				}
-				else {
-					// Check for transactions
-					byte[] script = BitcoinyScript.p2pkhScript(dKey.getPubKeyHash());
-
-					// Ask for transaction history - if it's empty then key has never been used
-					List<TransactionHash> historicTransactionHashes = this.getAddressTransactions(script, true);
-
-					if (!historicTransactionHashes.isEmpty()) {
-						areAllKeysUnused = false;
-						this.blockchainCache.addKeyWithHistory(dKey);
-					}
-				}
-			}
-
-			if (areAllKeysUnused) {
-				// No transactions
-				if (unusedCounter >= Settings.getInstance().getGapLimit()) {
-					// ... and we've hit our search limit
-					break;
-				}
-				// We haven't hit our search limit yet so increment the counter and keep looking
-				unusedCounter += WALLET_KEY_LOOKAHEAD_INCREMENT;
-			} else {
-				// Some keys in this batch were used, so reset the counter
-				unusedCounter = 0;
-			}
-
-			// Generate some more keys
-			keys.addAll(generateMoreKeys(keyChain));
-
-			// Process new keys
-		} while (true);
-
-		return keys;
-	}
-
 	protected SimpleTransaction convertToSimpleTransaction(BitcoinyTransaction t, Set<String> keySet) {
 		long amount = 0;
 		long total = 0L;
@@ -1828,65 +1756,5 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 	protected byte[] addressToScriptPubKey(String base58Address) {
 		return BitcoinyScript.scriptPubKey(this.params, base58Address);
-	}
-
-	protected Wallet walletFromDeterministicKey58(String key58) {
-		Context.propagate(this.bitcoinjContext);
-
-		DeterministicKey dKey = DeterministicKey.deserializeB58(null, key58, this.params);
-
-		if (dKey.hasPrivKey())
-			return Wallet.fromSpendingKeyB58(this.params, key58, DeterministicHierarchy.BIP32_STANDARDISATION_TIME_SECS);
-		else
-			return Wallet.fromWatchingKeyB58(this.params, key58, DeterministicHierarchy.BIP32_STANDARDISATION_TIME_SECS);
-	}
-
-	/**
-	 * Repair Wallet
-	 *
-	 * Repair wallets generated before 2024 by moving all the address balances to the first address.
-	 *
-	 * @param privateMasterKey
-	 *
-	 * @return the transaction Id of the spend operation that moves the balances or the exception name if an exception
-	 * is thrown
-	 *
-	 * @throws ForeignBlockchainException
-	 */
-	public String repairOldWallet(String privateMasterKey) throws ForeignBlockchainException {
-
-		// create a deterministic wallet to satisfy the bitcoinj API
-		Wallet wallet = Wallet.createDeterministic(this.bitcoinjContext, ScriptType.P2PKH);
-
-		// use the blockchain resources of this instance for UTXO provision
-		wallet.setUTXOProvider(new BitcoinyUTXOProvider( this ));
-
-		// import in each that is generated using the old key generation algorithm
-		List<DeterministicKey> walletKeys = getOldWalletKeys(privateMasterKey);
-
-		for( DeterministicKey key : walletKeys) {
-			wallet.importKey(ECKey.fromPrivate(key.getPrivKey()));
-		}
-
-		// get the primary receive address
-		Address firstAddress = Address.fromKey(this.params, walletKeys.get(0), ScriptType.P2PKH);
-
-		// send all the imported coins to the primary receive address
-		SendRequest sendRequest = SendRequest.emptyWallet(firstAddress);
-		sendRequest.feePerKb = this.getFeePerKb();
-
-		try {
-			// allow the wallet to build the send request transaction and broadcast
-			wallet.completeTx(sendRequest);
-			broadcastTransaction(sendRequest.tx);
-
-			// return the transaction Id
-			return sendRequest.tx.getTxId().toString();
-		}
-		catch( Exception e ) {
-			// log error and return exception name
-			LOGGER.error(e.getMessage(), e);
-			return e.getClass().getSimpleName();
-		}
 	}
 }

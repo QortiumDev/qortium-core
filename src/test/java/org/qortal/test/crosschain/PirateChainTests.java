@@ -88,11 +88,6 @@ public class PirateChainTests extends BitcoinyTests {
 	}
 
 	@Override
-	public void testRepair() {
-		// PirateChain repair needs live wallet/light-client state, not the inherited BTC-like deterministic wallet flow.
-	}
-
-	@Override
 	public void testGetWalletBalance() {
 		// PirateChain wallet balance needs live wallet/light-client state, not the inherited BTC-like deterministic wallet flow.
 	}
