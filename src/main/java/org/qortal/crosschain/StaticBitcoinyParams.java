@@ -18,6 +18,7 @@ import org.bitcoinj.utils.MonetaryFormat;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.List;
 
@@ -61,7 +62,7 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 
 		this.targetTimespan = builder.targetTimespan;
 		this.interval = builder.interval;
-		this.maxTarget = Utils.decodeCompactBits(builder.maxTargetCompact);
+		this.maxTarget = builder.maxTarget != null ? builder.maxTarget : Utils.decodeCompactBits(builder.maxTargetCompact);
 		this.port = builder.port;
 		this.packetMagic = builder.packetMagic;
 		this.dumpedPrivateKeyHeader = builder.dumpedPrivateKeyHeader;
@@ -178,6 +179,7 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 		private Coin genesisOutputValue;
 		private String genesisOutputScript;
 		private String genesisHash;
+		private BigInteger maxTarget;
 		private long maxTargetCompact;
 		private int targetTimespan = NetworkParameters.TARGET_TIMESPAN;
 		private int interval = NetworkParameters.INTERVAL;
@@ -231,7 +233,14 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 		}
 
 		Builder maxTarget(long maxTargetCompact) {
+			this.maxTarget = null;
 			this.maxTargetCompact = maxTargetCompact;
+			return this;
+		}
+
+		Builder maxTarget(String maxTargetHex) {
+			this.maxTarget = new BigInteger(maxTargetHex, 16);
+			this.maxTargetCompact = 0;
 			return this;
 		}
 

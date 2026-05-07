@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: add Firo Bitcoiny support
+
+Added Firo as a registered BTC-like crosschain coin using the shared Bitcoiny chain-spec model, including mainnet chain identity, SLIP-44 wallet metadata, transparent address headers, exact PoW limit parameters, SSL-first Electrum server seeds, common wallet/HTLC/ACCT test coverage, and chain-spec documentation. This enables ordinary transparent FIRO trade and wallet support while deliberately leaving Spark, Lelantus, Zerocoin, and exchange-address flows outside the generic BTC-like path.
+
 ### 2026-05-07 - crosschain: add Namecoin Bitcoiny support
 
 Added Namecoin as a registered BTC-like crosschain coin using the shared Bitcoiny chain-spec model, including verified mainnet parameters, BIP122 chain identity, SLIP-44 wallet metadata, SSL-first Electrum server refresh support, common wallet/HTLC/ACCT test coverage, and chain-spec documentation. This adds ordinary NMC trade and wallet support while deliberately leaving Namecoin name registration/update features for a later pass; detected Namecoin name outputs are filtered out of normal wallet spend selection so name UTXOs are not accidentally spent as plain NMC.

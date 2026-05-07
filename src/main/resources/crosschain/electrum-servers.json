@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-07T16:02:57.785728026Z",
+  "generatedAt": "2026-05-07T16:40:19.933990778Z",
   "servers": {
     "BTC": {
       "MAIN": [
@@ -416,6 +416,13 @@
         {"host": "162.212.154.52", "port": 50002, "protocol": "SSL", "source": "peer", "responseTimeMillis": 921},
         {"host": "46.229.238.187", "port": 57002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 1288},
         {"host": "nmc2.bitcoins.sk", "port": 57002, "protocol": "SSL", "source": "1209k,peer", "responseTimeMillis": 1287}
+      ]
+    },
+    "FIRO": {
+      "MAIN": [
+        {"host": "electrumx01.firo.org", "port": 50002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 1797},
+        {"host": "electrumx02.firo.org", "port": 50002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 941},
+        {"host": "firo.stackwallet.com", "port": 50002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 941}
       ]
     }
   }

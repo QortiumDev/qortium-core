@@ -27,6 +27,7 @@ public final class BitcoinyChainSpecs {
 	public static final String RAVENCOIN_CURRENCY_CODE = "RVN";
 	public static final String DASH_CURRENCY_CODE = "DASH";
 	public static final String NAMECOIN_CURRENCY_CODE = "NMC";
+	public static final String FIRO_CURRENCY_CODE = "FIRO";
 	public static final int BITCOIN_SLIP44_COIN_TYPE = 0;
 	public static final int LITECOIN_SLIP44_COIN_TYPE = 2;
 	public static final int DOGECOIN_SLIP44_COIN_TYPE = 3;
@@ -46,6 +47,7 @@ public final class BitcoinyChainSpecs {
 	private static final String NAMECOIN_GENESIS_COINBASE_SCRIPT = "04ff7f001c020a024a2e2e2e2063686f6f7365207768617420636f6d6573206e6578742e20204c69766573206f6620796f7572206f776e2c206f7220612072657475726e20746f20636861696e732e202d2d2056";
 	private static final String NAMECOIN_GENESIS_MERKLE_ROOT = "41c62dbd9068c89a449525e3cd5ac61b20ece28c3c38b3f35b2161f0e6d3cb0d";
 	private static final String NAMECOIN_GENESIS_OUTPUT_SCRIPT = "04b620369050cd899ffbbc4e8ee51e8c4534a855bb463439d63d235d4779685d8b6f4870a238cf365ac94fa13ef9a2a22cd99d0d5ee86dcabcafce36c7acf43ce5";
+	private static final String FIRO_GENESIS_MERKLE_ROOT = "365d2aa75d061370c9aefdabac3985716b1e3b4bb7c4af4ed54f25e5aaa42783";
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
 	private static final NetworkParameters BITCOIN_MAIN_NET_PARAMS = bitcoinParams("org.bitcoin.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, "bc")
@@ -222,6 +224,19 @@ public final class BitcoinyChainSpecs {
 			.dnsSeeds("nmc.seed.quisquis.de", "seed.nmc.markasoftware.com", "dnsseed1.nmc.dotbit.zone",
 					"dnsseed2.nmc.dotbit.zone", "dnsseed.nmc.testls.space", "namecoin.seed.cypherstack.com")
 			.build();
+	private static final NetworkParameters FIRO_MAIN_NET_PARAMS = firoParams("org.firo.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
+			.genesis(1414776286L, 142392L, 0x1e0ffff0L, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233")
+			.genesisHeader(2L, FIRO_GENESIS_MERKLE_ROOT)
+			.port(8168)
+			.packetMagic(0xe3d9fef1L)
+			.addressHeaders(82, 7, 210)
+			.coinbaseAndSubsidy(100, 840_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(750, 950, 1000)
+			.dnsSeeds("amsterdam.firo.org", "australia.firo.org", "chicago.firo.org", "london.firo.org",
+					"frankfurt.firo.org", "newjersey.firo.org", "sanfrancisco.firo.org", "tokyo.firo.org",
+					"singapore.firo.org")
+			.build();
 	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", BITCOIN_SLIP44_COIN_TYPE, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
 			.mainnet(() -> BITCOIN_MAIN_NET_PARAMS, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", 1_500L, "btc")
 			.test3(() -> BITCOIN_TEST_NET_PARAMS, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", 1_500L, 1_000L, "tbtc")
@@ -257,7 +272,11 @@ public final class BitcoinyChainSpecs {
 			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isNamecoinNameOutputScript(scriptPubKey))
 			.build();
 
-	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, NAMECOIN);
+	public static final BitcoinyChainSpec FIRO = spec("FIRO", FIRO_SLIP44_COIN_TYPE, "Firo", FIRO_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+			.mainnet(() -> FIRO_MAIN_NET_PARAMS, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", 10_000L, "firo")
+			.build();
+
+	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, NAMECOIN, FIRO);
 
 	private static final List<String> CURRENCY_CODES = ALL.stream()
 			.map(BitcoinyChainSpec::getCurrencyCode)
@@ -368,6 +387,20 @@ public final class BitcoinyChainSpecs {
 						.code(3, "mNMC")
 						.code(7, "Nameoshi"))
 				.difficultyValidationFailure("Namecoin difficulty verification is not implemented for Electrum-backed parameters");
+	}
+
+	private static StaticBitcoinyParams.Builder firoParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "firo")
+				.maxTarget("00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+				.targetTimespan(60 * 60)
+				.interval(6)
+				.hasMaxMoney(false)
+				.minNonDustOutput(Coin.valueOf(1000L))
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, FIRO_CURRENCY_CODE)
+						.code(3, "mFIRO")
+						.code(7, "Firoshi"))
+				.difficultyValidationFailure("Firo difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	private static BitcoinyChainSpec.ElectrumServerRefreshConfig refresh(String networkName, String chain1209k) {

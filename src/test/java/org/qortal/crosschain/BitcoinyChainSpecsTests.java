@@ -13,6 +13,7 @@ import org.qortal.settings.Settings;
 import org.qortal.test.common.Common;
 
 import java.lang.reflect.Field;
+import java.math.BigInteger;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -43,7 +44,8 @@ public class BitcoinyChainSpecsTests {
 				new ChainManifest("DIGIBYTE", "DGB", BitcoinyChainSpecs.DIGIBYTE_SLIP44_COIN_TYPE, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", Set.of(BitcoinyChainSpecs.MAIN), 30, 63, 128, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("RAVENCOIN", "RVN", BitcoinyChainSpecs.RAVENCOIN_SLIP44_COIN_TYPE, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", Set.of(BitcoinyChainSpecs.MAIN), 60, 122, 128, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("DASH", "DASH", BitcoinyChainSpecs.DASH_SLIP44_COIN_TYPE, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", Set.of(BitcoinyChainSpecs.MAIN), 76, 16, 204, 0x0488B21E, 0x0488ADE4),
-				new ChainManifest("NAMECOIN", "NMC", BitcoinyChainSpecs.NAMECOIN_SLIP44_COIN_TYPE, "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770", Set.of(BitcoinyChainSpecs.MAIN), 52, 13, 180, 0x0488B21E, 0x0488ADE4))) {
+				new ChainManifest("NAMECOIN", "NMC", BitcoinyChainSpecs.NAMECOIN_SLIP44_COIN_TYPE, "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770", Set.of(BitcoinyChainSpecs.MAIN), 52, 13, 180, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("FIRO", "FIRO", BitcoinyChainSpecs.FIRO_SLIP44_COIN_TYPE, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", Set.of(BitcoinyChainSpecs.MAIN), 82, 7, 210, 0x0488B21E, 0x0488ADE4))) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(expected.currencyCode);
 			assertNotNull(expected.currencyCode, spec);
 			assertEquals(expected.canonicalName, spec.getCanonicalName());
@@ -180,7 +182,8 @@ public class BitcoinyChainSpecsTests {
 				BitcoinyChainSpecs.DIGIBYTE,
 				BitcoinyChainSpecs.RAVENCOIN,
 				BitcoinyChainSpecs.DASH,
-				BitcoinyChainSpecs.NAMECOIN
+				BitcoinyChainSpecs.NAMECOIN,
+				BitcoinyChainSpecs.FIRO
 		}) {
 			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST3));
 			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST4));
@@ -433,6 +436,38 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testFiroUsesSharedStaticParams() {
+		BitcoinyNetwork firoMainNet = BitcoinyChainSpecs.FIRO.getNetwork(BitcoinyChainSpecs.MAIN);
+		NetworkParameters firoMainNetParams = firoMainNet.getParams();
+		Block genesisBlock = firoMainNetParams.getGenesisBlock();
+
+		assertTrue(firoMainNetParams instanceof StaticBitcoinyParams);
+		assertEquals("org.firo.production", firoMainNetParams.getId());
+		assertEquals(NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, firoMainNetParams.getPaymentProtocolId());
+		assertEquals("firo", firoMainNetParams.getUriScheme());
+		assertEquals("4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", genesisBlock.getHashAsString());
+		assertEquals(2L, genesisBlock.getVersion());
+		assertEquals("365d2aa75d061370c9aefdabac3985716b1e3b4bb7c4af4ed54f25e5aaa42783", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1414776286L, genesisBlock.getTimeSeconds());
+		assertEquals(0x1e0ffff0L, genesisBlock.getDifficultyTarget());
+		assertEquals(142392L, genesisBlock.getNonce());
+		assertEquals(new BigInteger("00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16), firoMainNetParams.getMaxTarget());
+		assertEquals(60 * 60, firoMainNetParams.getTargetTimespan());
+		assertEquals(6, firoMainNetParams.getInterval());
+		assertEquals(8168, firoMainNetParams.getPort());
+		assertEquals(0xe3d9fef1L, firoMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(82, firoMainNetParams.getAddressHeader());
+		assertEquals(7, firoMainNetParams.getP2SHHeader());
+		assertEquals(210, firoMainNetParams.getDumpedPrivateKeyHeader());
+		assertNull(firoMainNetParams.getSegwitAddressHrp());
+		assertEquals(0x0488B21E, firoMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, firoMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(Coin.valueOf(1000L), firoMainNetParams.getMinNonDustOutput());
+		assertFalse(firoMainNetParams.hasMaxMoney());
+		assertEquals("FIRO 1.00", firoMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
+	}
+
+	@Test
 	public void testPirateChainUsesSharedStaticMainNetParams() {
 		NetworkParameters pirateMainNetParams = PirateChain.PirateChainNet.MAIN.getParams();
 		Block genesisBlock = pirateMainNetParams.getGenesisBlock();
@@ -473,6 +508,7 @@ public class BitcoinyChainSpecsTests {
 		assertSame(BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DOGECOIN_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.DASH.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DASH_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.NAMECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.NAMECOIN_CURRENCY_CODE));
+		assertSame(BitcoinyChainSpecs.FIRO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.FIRO_CURRENCY_CODE));
 	}
 
 	private static byte[] buildNameNewScript(byte[] lockScript) {

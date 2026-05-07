@@ -2,7 +2,7 @@
 
 BTC-like crosschain support is driven by `BitcoinyChainSpecs`.
 
-Each spec defines the chain's canonical registry name, currency code, SLIP-44 coin type, display name, fee defaults, minimum order amount, supported networks, BIP122 chain ids, genesis hashes, and Electrum refresh metadata. The runtime creates one generic `RegisteredBitcoiny` instance from the selected spec and network instead of maintaining separate Bitcoin, Litecoin, Dogecoin, DigiByte, Ravencoin, and Dash wrapper classes.
+Each spec defines the chain's canonical registry name, currency code, SLIP-44 coin type, display name, fee defaults, minimum order amount, supported networks, BIP122 chain ids, genesis hashes, and Electrum refresh metadata. The runtime creates one generic `RegisteredBitcoiny` instance from the selected spec and network instead of maintaining separate per-coin wrapper classes.
 
 ## Chain IDs
 
@@ -17,10 +17,11 @@ Mainnet chain ids for the currently registered BTC-like chains are:
 | `bip122:1a91e3dace36e2be3bf030a65679fe82` | `DOGECOIN` | `DOGE` |
 | `bip122:00000ffd590b1485b3caadc19b22e637` | `DASH` | `DASH` |
 | `bip122:000000000062b72c5e2ceb45fbc8587e` | `NAMECOIN` | `NMC` |
+| `bip122:4381deb85b1b2c9843c222944b616d99` | `FIRO` | `FIRO` |
 | `bip122:7497ea1b465eb39f1c8f507bc877078f` | `DIGIBYTE` | `DGB` |
 | `bip122:0000006b444bc2f2ffe627be9d9e7e7a` | `RAVENCOIN` | `RVN` |
 
-SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, NMC `7`, DGB `20`, and RVN `175`. Planned next SLIP-44 values for BTC-like chains are FIRO `136` (listed in SLIP-44 as XZC/ZCoin) and KMD `141`.
+SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, NMC `7`, DGB `20`, FIRO `136` (listed in SLIP-44 as XZC/ZCoin), and RVN `175`. Planned next SLIP-44 value for BTC-like chains is KMD `141`.
 
 ## Network Settings
 
@@ -35,7 +36,8 @@ Use `bitcoinyNetworks` in `settings.json` to choose the active network for BTC-l
     "DGB": "MAIN",
     "RVN": "MAIN",
     "DASH": "MAIN",
-    "NMC": "MAIN"
+    "NMC": "MAIN",
+    "FIRO": "MAIN"
   }
 }
 ```
@@ -68,6 +70,8 @@ Before adding a coin, collect and verify:
 - manifest coverage in `BitcoinyChainSpecsTests` and common wallet/HTLC coverage in `RegisteredBitcoinyTests`
 
 Namecoin is registered for ordinary NMC wallet, HTLC, and ACCT trade support. Name registration/update flows are intentionally not implemented in core yet, but detected Namecoin name outputs are filtered out of normal wallet spend selection so they are not accidentally spent as plain NMC UTXOs.
+
+Firo is registered for ordinary transparent FIRO wallet, HTLC, and ACCT trade support. Spark, Lelantus, Zerocoin, and exchange-address flows are intentionally not implemented as part of generic BTC-like support.
 
 ## Tests
 
