@@ -47,7 +47,6 @@ import org.apache.logging.log4j.Logger;
 import org.qortal.controller.PirateChainWalletController;
 
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 public class LiteWalletJni {
 
@@ -71,6 +70,24 @@ public class LiteWalletJni {
         if (loaded) {
             return;
         }
+
+        String libFileName = PirateChainWalletController.getRustLibFilename();
+        if (libFileName == null) {
+            String osName = System.getProperty("os.name");
+            String osArchitecture = System.getProperty("os.arch");
+            LOGGER.info("Library not found for OS: {}, arch: {}", osName, osArchitecture);
+            return;
+        }
+
+        Path libPath = PirateChainWalletController.getRustLibOuterDirectory().resolve(libFileName);
+        loadLibrary(libPath);
+    }
+
+    public static void loadLibrary(Path libPath) {
+        if (loaded) {
+            return;
+        }
+
         String osName = System.getProperty("os.name");
         String osArchitecture = System.getProperty("os.arch");
 
@@ -78,13 +95,6 @@ public class LiteWalletJni {
         LOGGER.info("OS Architecture: {}", osArchitecture);
 
         try {
-            String libFileName = PirateChainWalletController.getRustLibFilename();
-            if (libFileName == null) {
-                LOGGER.info("Library not found for OS: {}, arch: {}", osName, osArchitecture);
-                return;
-            }
-
-            Path libPath = Paths.get(PirateChainWalletController.getRustLibOuterDirectory().toString(), libFileName);
             System.load(libPath.toAbsolutePath().toString());
             loaded = true;
         }

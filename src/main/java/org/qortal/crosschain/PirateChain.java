@@ -1,7 +1,6 @@
 package org.qortal.crosschain;
 
 import cash.z.wallet.sdk.rpc.CompactFormats;
-import com.google.common.hash.HashCode;
 import com.rust.litewalletjni.LiteWalletJni;
 import org.bitcoinj.core.*;
 import org.bitcoinj.utils.MonetaryFormat;
@@ -15,9 +14,7 @@ import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.crypto.Crypto;
 import org.qortal.settings.Settings;
 import org.qortal.transform.TransformationException;
-import org.qortal.utils.BitTwiddling;
 
-import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -27,6 +24,15 @@ import java.util.concurrent.atomic.AtomicLong;
 public class PirateChain extends Bitcoiny {
 
 	public static final String CURRENCY_CODE = "ARRR";
+	public static final ZcashFamilyWalletConfig WALLET_CONFIG = new ZcashFamilyWalletConfig(
+			"Pirate Chain",
+			CURRENCY_CODE,
+			"PirateChain",
+			"EsfUw54perxkEtfoUoL7Z97XPrNsZRZXePVZPz3cwRm9qyEPSofD5KmgVpDqVitQp7LhnZRmL6z2V9hEe1YS45T",
+			"ARRRWalletEncryption",
+			"zs",
+			() -> Settings.getInstance().getArrrDefaultBirthday(),
+			PirateChain::getInstance);
 
 	private static final Coin DEFAULT_FEE_PER_KB = Coin.valueOf(10000); // 0.0001 ARRR per 1000 bytes
 
@@ -690,91 +696,7 @@ public class PirateChain extends Bitcoiny {
 	}
 
 	public static BitcoinyTransaction deserializeRawTransaction(String rawTransactionHex) throws TransformationException {
-		byte[] rawTransactionData = HashCode.fromString(rawTransactionHex).asBytes();
-		ByteBuffer byteBuffer = ByteBuffer.wrap(rawTransactionData);
-
-		// Header
-		int header = BitTwiddling.readU32(byteBuffer);
-		boolean overwintered = ((header >> 31 & 0xff) == 255);
-		int version = header & 0x7FFFFFFF;
-
-		// Version group ID
-		int versionGroupId = 0;
-		if (overwintered) {
-			versionGroupId = BitTwiddling.readU32(byteBuffer);
-		}
-
-		boolean isOverwinterV3 = overwintered && versionGroupId == 0x03C48270 && version == 3;
-		boolean isSaplingV4 = overwintered && versionGroupId == 0x892F2085 && version == 4;
-		if (overwintered && !(isOverwinterV3 || isSaplingV4)) {
-			throw new TransformationException("Unknown transaction format");
-		}
-
-		// Inputs
-		List<BitcoinyTransaction.Input> inputs = new ArrayList<>();
-		int vinCount = BitTwiddling.readU8(byteBuffer);
-		for (int i=0; i<vinCount; i++) {
-			// Outpoint hash
-			byte[] outpointHashBytes = new byte[32];
-			byteBuffer.get(outpointHashBytes);
-			String outpointHash = HashCode.fromBytes(outpointHashBytes).toString();
-
-			// vout
-			int vout = BitTwiddling.readU32(byteBuffer);
-
-			// scriptSig
-			int scriptSigLength = BitTwiddling.readU8(byteBuffer);
-			byte[] scriptSigBytes = new byte[scriptSigLength];
-			byteBuffer.get(scriptSigBytes);
-			String scriptSig = HashCode.fromBytes(scriptSigBytes).toString();
-
-			int sequence = BitTwiddling.readU32(byteBuffer);
-
-			BitcoinyTransaction.Input input = new BitcoinyTransaction.Input(scriptSig, sequence, outpointHash, vout);
-			inputs.add(input);
-		}
-
-		// Outputs
-		List<BitcoinyTransaction.Output> outputs = new ArrayList<>();
-		int voutCount = BitTwiddling.readU8(byteBuffer);
-		for (int i=0; i<voutCount; i++) {
-			// Amount
-			byte[] amountBytes = new byte[8];
-			byteBuffer.get(amountBytes);
-			long amount = BitTwiddling.longFromLEBytes(amountBytes, 0);
-
-			// Script pubkey
-			int scriptPubkeySize = BitTwiddling.readU8(byteBuffer);
-			byte[] scriptPubkeyBytes = new byte[scriptPubkeySize];
-			byteBuffer.get(scriptPubkeyBytes);
-			String scriptPubKey = HashCode.fromBytes(scriptPubkeyBytes).toString();
-
-			outputs.add(new BitcoinyTransaction.Output(scriptPubKey, amount, null));
-		}
-
-		// Locktime
-		byte[] locktimeBytes = new byte[4];
-		byteBuffer.get(locktimeBytes);
-		int locktime = BitTwiddling.intFromLEBytes(locktimeBytes, 0);
-
-		// Expiry height
-		int expiryHeight = 0;
-		if (isOverwinterV3 || isSaplingV4) {
-			byte[] expiryHeightBytes = new byte[4];
-			byteBuffer.get(expiryHeightBytes);
-			expiryHeight = BitTwiddling.intFromLEBytes(expiryHeightBytes, 0);
-		}
-
-		String txHash = null; // Not present in raw transaction data
-		int size = 0; // Not present in raw transaction data
-		Integer timestamp = null; // Not present in raw transaction data
-
-		// Note: this is incomplete, as sapling spend info is not yet parsed. We don't need it for our
-		// current trade bot implementation, but it could be added in the future, for completeness.
-		// See link below for reference:
-		// https://github.com/PirateNetwork/librustzcash/blob/2981c4d2860f7cd73282fed885daac0323ff0280/zcash_primitives/src/transaction/mod.rs#L197
-
-		return new BitcoinyTransaction(txHash, size, locktime, timestamp, inputs, outputs);
+		return ZcashFamilyTransactionParser.deserializeRawTransaction(rawTransactionHex);
 	}
 
 }

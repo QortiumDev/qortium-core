@@ -113,6 +113,34 @@ public class PirateChainTests extends BitcoinyTests {
 	}
 
 	@Test
+	public void testPirateWalletConfigUsesZcashFamilySettings() {
+		ZcashFamilyWalletConfig config = PirateChain.WALLET_CONFIG;
+
+		assertEquals("Pirate Chain", config.getDisplayName());
+		assertEquals("ARRR", config.getCurrencyCode());
+		assertEquals("PirateChain", config.getWalletDirectoryName());
+		assertEquals("ARRRWalletEncryption", config.getWalletEncryptionPrefix());
+		assertEquals("zs", config.getPrivateAddressHrp());
+		assertTrue(config.getRustLibOuterDirectory().toString().contains("PirateChain"));
+		assertTrue(config.getRustLibOuterDirectory().toString().contains("EsfUw54p"));
+	}
+
+	@Test
+	public void testGenericParserBacksPirateCompatibilityParser() throws TransformationException {
+		String transactionDataHex = "0400008085202f8900000000000000000000";
+		String transactionHash = "0000000000000000000000000000000000000000000000000000000000000001";
+
+		BitcoinyTransaction genericTransaction = ZcashFamilyTransactionParser.deserializeRawTransaction(transactionHash, HashCode.fromString(transactionDataHex).asBytes());
+		BitcoinyTransaction pirateTransaction = PirateChain.deserializeRawTransaction(transactionDataHex);
+
+		assertEquals(transactionHash, genericTransaction.txHash);
+		assertEquals(transactionDataHex.length() / 2, genericTransaction.size);
+		assertEquals(genericTransaction.inputs.size(), pirateTransaction.inputs.size());
+		assertEquals(genericTransaction.outputs.size(), pirateTransaction.outputs.size());
+		assertEquals(genericTransaction.locktime, pirateTransaction.locktime);
+	}
+
+	@Test
 	public void testGetCompactBlocks() throws ForeignBlockchainException {
 		assumeLiveCrosschainTestsEnabled();
 

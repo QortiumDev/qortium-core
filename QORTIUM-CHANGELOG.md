@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: add generic Zcash-family support
+
+Moved Pirate Chain wallet, lightwalletd, QDN wallet-library loading, and raw Zcash-style transaction parsing onto shared Zcash-family foundations, leaving the existing Pirate classes as thin compatibility wrappers. This avoids copying the Pirate-specific wallet/controller/light-client code when later adding HUSH, Zcash, or other Sapling-family chains, while keeping Pirate Chain as the only active Zcash-family runtime for now and documenting the remaining transparent-parser boundary.
+
 ### 2026-05-07 - crosschain: add Firo Bitcoiny support
 
 Added Firo as a registered BTC-like crosschain coin using the shared Bitcoiny chain-spec model, including mainnet chain identity, SLIP-44 wallet metadata, transparent address headers, exact PoW limit parameters, SSL-first Electrum server seeds, common wallet/HTLC/ACCT test coverage, and chain-spec documentation. This enables ordinary transparent FIRO trade and wallet support while deliberately leaving Spark, Lelantus, Zerocoin, and exchange-address flows outside the generic BTC-like path.
