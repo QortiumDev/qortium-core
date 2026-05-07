@@ -1,5 +1,6 @@
 package org.qortal.crosschain;
 
+import com.google.common.hash.HashCode;
 import org.bitcoinj.crypto.DeterministicKey;
 import org.qortal.settings.Settings;
 
@@ -20,7 +21,7 @@ public class BlockchainCache {
      *
      * Deterministic Keys with any transaction history.
      */
-    private Queue<DeterministicKey> keysWithHistory = new ConcurrentLinkedDeque<>();
+    private Queue<String> keysWithHistory = new ConcurrentLinkedDeque<>();
 
     /**
      * Transactions By Hash
@@ -42,7 +43,10 @@ public class BlockchainCache {
      * @param key a deterministic key with a verified history
      */
     public void addKeyWithHistory(DeterministicKey key) {
+        addKeyWithHistory(HashCode.fromBytes(key.getPubKey()).toString());
+    }
 
+    public void addKeyWithHistory(String key) {
         if( this.keysWithHistory.size() > CACHE_LIMIT ) {
             this.keysWithHistory.remove();
         }
@@ -58,6 +62,10 @@ public class BlockchainCache {
      * @return true if the key has a history, otherwise false
      */
     public boolean keyHasHistory( DeterministicKey key ) {
+        return keyHasHistory(HashCode.fromBytes(key.getPubKey()).toString());
+    }
+
+    public boolean keyHasHistory( String key ) {
         return this.keysWithHistory.contains(key);
     }
 

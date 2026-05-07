@@ -4,14 +4,12 @@ import com.google.common.hash.HashCode;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bitcoinj.core.*;
-import org.bitcoinj.crypto.ChildNumber;
 import org.bitcoinj.crypto.DeterministicHierarchy;
 import org.bitcoinj.crypto.DeterministicKey;
 import org.bitcoinj.params.AbstractBitcoinNetParams;
 import org.bitcoinj.script.Script;
 import org.bitcoinj.script.Script.ScriptType;
 import org.bitcoinj.wallet.DeterministicKeyChain;
-import org.bitcoinj.wallet.KeyChain;
 import org.bitcoinj.wallet.SendRequest;
 import org.bitcoinj.wallet.Wallet;
 import org.qortal.api.model.SimpleForeignTransaction;
@@ -151,8 +149,7 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 
 	public boolean isValidDeterministicKey(String key58) {
 		try {
-			Context.propagate(this.bitcoinjContext);
-			DeterministicKey.deserializeB58(null, key58, this.params);
+			BitcoinyDeterministicKey.fromBase58(this.params, key58);
 			return true;
 		} catch (IllegalArgumentException e) {
 			return false;
@@ -597,18 +594,12 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	 * @throws ForeignBlockchainException
 	 */
 	public List<String> getSpendingCandidateAddresses(String key58) throws ForeignBlockchainException {
-		Context.propagate(this.bitcoinjContext);
-
-		Wallet wallet = Wallet.fromWatchingKeyB58(this.params, key58, DeterministicHierarchy.BIP32_STANDARDISATION_TIME_SECS);
-		wallet.setUTXOProvider(new WalletAwareUTXOProvider(this, wallet));
-
-		// from Wallet.getStoredOutputsFromUTXOProvider()
-		List<ECKey> spendingKeys = wallet.getImportedKeys();
-		spendingKeys.addAll(wallet.getActiveKeyChain().getLeafKeys());
+		BitcoinyDeterministicKeyChain keyChain = BitcoinyDeterministicKeyChain.fromBase58(this.params, key58);
+		List<BitcoinyDeterministicKey> spendingKeys = keyChain.getInitialLeafKeys(Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT);
 
 		List<String> spendingCandidateAddresses
 				= spendingKeys.stream()
-					.map(spendingKey -> pkhToAddress(spendingKey.getPubKeyHash()))
+					.map(spendingKey -> pkhToAddress(spendingKey.getPublicKeyHash()))
 					.collect(Collectors.toList());
 
 		return spendingCandidateAddresses;
@@ -740,15 +731,8 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 			}
 		}
 
-		Context.propagate(bitcoinjContext);
-
-		Wallet wallet = walletFromDeterministicKey58(key58);
-		DeterministicKeyChain keyChain = wallet.getActiveKeyChain();
-
-		keyChain.setLookaheadSize(Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT);
-		keyChain.maybeLookAhead();
-
-		List<DeterministicKey> keys = new ArrayList<>(keyChain.getLeafKeys());
+		BitcoinyDeterministicKeyChain keyChain = BitcoinyDeterministicKeyChain.fromBase58(this.params, key58);
+		List<BitcoinyDeterministicKey> keys = keyChain.getInitialLeafKeys(Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT);
 
 		// Use thread-safe list for futures
 		List<Supplier<Optional<BitcoinyTransaction>>> suppliers = Collections.synchronizedList(new ArrayList<>());
@@ -877,27 +861,29 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 	private Set<String> processKeysWithTransactionFuturesIterative(
 	ExecutorService executor,
-	List<DeterministicKey> initialKeys,
-	DeterministicKeyChain keyChain,
+	List<BitcoinyDeterministicKey> initialKeys,
+	BitcoinyDeterministicKeyChain keyChain,
 	List<Supplier<Optional<BitcoinyTransaction>>> futures
 ) throws ForeignBlockchainException {
 
 	Set<String> keySet = new HashSet<>();
 	int unusedCounter = 0;
 
-	List<DeterministicKey> keysToProcess = new ArrayList<>(initialKeys);
+	List<BitcoinyDeterministicKey> keysToProcess = new ArrayList<>(initialKeys);
+	int processedKeyCount = 0;
 
 	while (!keysToProcess.isEmpty()) {
 		List<Future<Boolean>> transactionChecks = new ArrayList<>(keysToProcess.size());
 		boolean foundTransaction = false;
 
-		for (DeterministicKey dKey : keysToProcess) {
-			String address = pkhToAddress(dKey.getPubKeyHash());
+		for (BitcoinyDeterministicKey dKey : keysToProcess) {
+			String address = pkhToAddress(dKey.getPublicKeyHash());
 			keySet.add(address);
 
 			// Schedule transaction check
-			transactionChecks.add(executor.submit(() -> getTransactions(BitcoinyScript.p2pkhScript(dKey.getPubKeyHash()), futures, executor)));
+			transactionChecks.add(executor.submit(() -> getTransactions(BitcoinyScript.p2pkhScript(dKey.getPublicKeyHash()), futures, executor)));
 		}
+		processedKeyCount += keysToProcess.size();
 
 		// Wait for transaction check results
 		for (Future<Boolean> check : transactionChecks) {
@@ -922,7 +908,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 		}
 
 		// Generate next batch of keys
-		keysToProcess = generateMoreKeys(keyChain);
+		keysToProcess = generateMoreKeys(keyChain, processedKeyCount);
 	}
 
 	return keySet;
@@ -962,13 +948,13 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	public List<AddressInfo> getWalletAddressInfos(String key58) throws ForeignBlockchainException {
 
 		// generate keys asynchronously
-		Set<DeterministicKey> walletKeys = getWalletKeysWithExecutor(key58, EXECUTOR);
+		Set<BitcoinyDeterministicKey> walletKeys = getWalletKeysWithExecutor(key58, EXECUTOR);
 
 		// collect all address info build tasks
 		List<Supplier<Optional<AddressInfo>>> suppliers = new ArrayList<>(walletKeys.size());
 
 		// build info for each key, one address per key
-		for(DeterministicKey key : walletKeys) {
+		for(BitcoinyDeterministicKey key : walletKeys) {
 			suppliers.add(() -> buildAddressInfo(key));
 		}
 
@@ -1062,17 +1048,17 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 *
 	 * @return the info for the address generated, empty if there is a connection problem
 	 */
-	public Optional<AddressInfo> buildAddressInfo(DeterministicKey key)  {
+	public Optional<AddressInfo> buildAddressInfo(BitcoinyDeterministicKey key)  {
 
-		String address = pkhToAddress(key.getPubKeyHash());
+		String address = pkhToAddress(key.getPublicKeyHash());
 
 		try {
-			int transactionCount = getAddressTransactions(BitcoinyScript.p2pkhScript(key.getPubKeyHash()), true).size();
+			int transactionCount = getAddressTransactions(BitcoinyScript.p2pkhScript(key.getPublicKeyHash()), true).size();
 
 			return Optional.of(
 				new AddressInfo(
 					address,
-					toIntegerList( key.getPath()),
+					key.getPath(),
 					summingUnspentOutputs(address),
 					key.getPathAsString(),
 					transactionCount,
@@ -1083,24 +1069,7 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 		}
 	}
 
-	/**
-	 * Convert BitcoinJ key path type to a simple integer list.
-	 *
-	 * Accepts both older and newer bitcoinj path implementations.
-	 */
-	private static List<Integer> toIntegerList(Iterable<ChildNumber> path) {
-		List<Integer> integers = new ArrayList<>();
-
-		for (ChildNumber childNumber : path) {
-			integers.add(childNumber.num());
-		}
-
-		return integers;
-	}
-
 	public Set<String> getWalletAddresses(String key58) throws ForeignBlockchainException {
-		Context.propagate(bitcoinjContext);
-
 		// generate keys asynchronously and get the addresses, return value
 		Set<String> addresses = getWalletAddressesWithExecutor(key58, EXECUTOR);
 
@@ -1120,11 +1089,11 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 * @throws ForeignBlockchainException
 	 */
 	public Set<String> getWalletAddressesWithExecutor(String key58, ExecutorService executor) throws ForeignBlockchainException {
-		Set<DeterministicKey> walletKeys = getWalletKeysWithExecutor(key58, executor);
+		Set<BitcoinyDeterministicKey> walletKeys = getWalletKeysWithExecutor(key58, executor);
 
 		return
 			walletKeys.stream()
-				.map(key -> pkhToAddress(key.getPubKeyHash()))
+				.map(key -> pkhToAddress(key.getPublicKeyHash()))
 				.collect(Collectors.toSet());
 	}
 
@@ -1140,15 +1109,12 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 *
 	 * @throws ForeignBlockchainException
 	 */
-	public Set<DeterministicKey> getWalletKeysWithExecutor(String key58, ExecutorService executor) throws ForeignBlockchainException {
-		Wallet wallet = walletFromDeterministicKey58(key58);
-		DeterministicKeyChain keyChain = wallet.getActiveKeyChain();
-
-		keyChain.setLookaheadSize(Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT);
-		keyChain.maybeLookAhead();
+	public Set<BitcoinyDeterministicKey> getWalletKeysWithExecutor(String key58, ExecutorService executor) throws ForeignBlockchainException {
+		BitcoinyDeterministicKeyChain keyChain = BitcoinyDeterministicKeyChain.fromBase58(this.params, key58);
 
 		// the return value
-		Set<DeterministicKey> keySet = processKeysOnly(executor, new ArrayList<>(keyChain.getLeafKeys()), keyChain, 0);
+		Set<BitcoinyDeterministicKey> keySet = processKeysOnly(executor, keyChain.getInitialLeafKeys(Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT),
+				keyChain, 0, 0);
 
 		return keySet;
 	}
@@ -1217,35 +1183,39 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 *
 	 * @throws ForeignBlockchainException
 	 */
-	private Set<DeterministicKey> processKeysOnly(ExecutorService executor, List<DeterministicKey> keys, DeterministicKeyChain keyChain, int unusedCounter) throws ForeignBlockchainException {
+	private Set<BitcoinyDeterministicKey> processKeysOnly(ExecutorService executor, List<BitcoinyDeterministicKey> keys,
+			BitcoinyDeterministicKeyChain keyChain, int unusedCounter, int existingLeafKeyCount) throws ForeignBlockchainException {
 
-		Set<DeterministicKey> keySet = new HashSet<>();
+		Set<BitcoinyDeterministicKey> keySet = new HashSet<>();
 
 		boolean needToProcessAdditionalKeys = false;
 
 		List<Supplier<Boolean>> transactionChecks = new ArrayList<>(keys.size());
 
-		for (DeterministicKey dKey : keys) {
+		for (BitcoinyDeterministicKey dKey : keys) {
 
 			keySet.add(dKey);
 
 			// if the key already has a verified transaction history
-			if( this.blockchainCache.keyHasHistory( dKey ) ){
+			if( this.blockchainCache.keyHasHistory( dKey.getCacheKey() ) ){
 				needToProcessAdditionalKeys = true;
 			}
 			// if the key does not have a verified transaction history
 			else {
-				transactionChecks.add( () -> checkForTransactions(dKey, BitcoinyScript.p2pkhScript(dKey.getPubKeyHash())) );
+				transactionChecks.add( () -> checkForTransactions(dKey, BitcoinyScript.p2pkhScript(dKey.getPublicKeyHash())) );
 			}
 		}
 
+		int processedLeafKeyCount = existingLeafKeyCount + keys.size();
+
 		if( needToProcessAdditionalKeys || anyTrue( executor, transactionChecks, RETRIES )) {
-			keySet.addAll(processKeysOnly(executor, generateMoreKeys(keyChain), keyChain, 0));
+			keySet.addAll(processKeysOnly(executor, generateMoreKeys(keyChain, processedLeafKeyCount), keyChain, 0, processedLeafKeyCount));
 		}
 		// if no additional keys were already processed and the if the gap limit held, then process additional keys
 		else if ( unusedCounter < Settings.getInstance().getGapLimit()) {
 
-			keySet.addAll(processKeysOnly(executor, generateMoreKeys(keyChain), keyChain, unusedCounter + WALLET_KEY_LOOKAHEAD_INCREMENT));
+			keySet.addAll(processKeysOnly(executor, generateMoreKeys(keyChain, processedLeafKeyCount), keyChain,
+					unusedCounter + WALLET_KEY_LOOKAHEAD_INCREMENT, processedLeafKeyCount));
 		}
 
 		return keySet;
@@ -1328,13 +1298,21 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 * @throws ForeignBlockchainException
 	 */
 	private boolean checkForTransactions(DeterministicKey dKey, byte[] script) {
+		return checkForTransactions(HashCode.fromBytes(dKey.getPubKey()).toString(), script);
+	}
+
+	private boolean checkForTransactions(BitcoinyDeterministicKey dKey, byte[] script) {
+		return checkForTransactions(dKey.getCacheKey(), script);
+	}
+
+	private boolean checkForTransactions(String keyCacheKey, byte[] script) {
 		try {
 			// Ask for transaction history - if it's empty then key has never been used
 			List<TransactionHash> historicTransactionHashes = this.getAddressTransactions(script, true);
 
 			// if the key has history, then it should be processing additional keys
 			if (!historicTransactionHashes.isEmpty()) {
-				this.blockchainCache.addKeyWithHistory(dKey);
+				this.blockchainCache.addKeyWithHistory(keyCacheKey);
 				return true;
 			}
 		} catch (ForeignBlockchainException e) {
@@ -1596,18 +1574,16 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	 * @throws ForeignBlockchainException if something went wrong
 	 */
 	public String getUnusedReceiveAddress(String key58) throws ForeignBlockchainException {
-		Context.propagate(bitcoinjContext);
-
-		Wallet wallet = walletFromDeterministicKey58(key58);
-		DeterministicKeyChain keyChain = wallet.getActiveKeyChain();
+		BitcoinyDeterministicKeyChain keyChain = BitcoinyDeterministicKeyChain.fromBase58(this.params, key58);
+		int receiveKeyIndex = 0;
 
 		do {
 			// the next receive funds address
-			DeterministicKey key = keyChain.getKey(KeyChain.KeyPurpose.RECEIVE_FUNDS);
-			String address = pkhToAddress(key.getPubKeyHash());
+			BitcoinyDeterministicKey key = keyChain.getReceiveKey(receiveKeyIndex++);
+			String address = pkhToAddress(key.getPublicKeyHash());
 
 			// if zero transactions, return address
-			if(getAddressTransactions(BitcoinyScript.p2pkhScript(key.getPubKeyHash()), true).isEmpty())
+			if(getAddressTransactions(BitcoinyScript.p2pkhScript(key.getPublicKeyHash()), true).isEmpty())
 				return address;
 
 			// else try the next receive funds address
@@ -1852,6 +1828,10 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 
 		// Only return newly generated keys
 		return allLeafKeys.subList(existingLeafKeyCount, allLeafKeys.size());
+	}
+
+	protected static List<BitcoinyDeterministicKey> generateMoreKeys(BitcoinyDeterministicKeyChain keyChain, int existingLeafKeyCount) {
+		return keyChain.getMoreLeafKeys(existingLeafKeyCount, Bitcoiny.WALLET_KEY_LOOKAHEAD_INCREMENT);
 	}
 
 	protected byte[] addressToScriptPubKey(String base58Address) {
