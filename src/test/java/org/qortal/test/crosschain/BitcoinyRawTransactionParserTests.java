@@ -4,7 +4,11 @@ import com.google.common.hash.HashCode;
 import org.junit.Test;
 import org.qortal.crosschain.BitcoinyRawTransactionParser;
 import org.qortal.crosschain.BitcoinyTransaction;
+import org.qortal.crosschain.BitcoinyTransactionData;
 import org.qortal.crypto.Crypto;
+
+import java.util.Collections;
+import java.util.List;
 
 import static org.junit.Assert.*;
 
@@ -48,6 +52,49 @@ public class BitcoinyRawTransactionParserTests {
 		assertEquals(P2PKH_SCRIPT, transaction.outputs.get(0).scriptPubKey);
 		assertEquals(5L, transaction.outputs.get(1).value);
 		assertEquals(P2SH_SCRIPT, transaction.outputs.get(1).scriptPubKey);
+	}
+
+	@Test
+	public void testSerializesLegacyTransaction() {
+		BitcoinyTransactionData transaction = new BitcoinyTransactionData(1,
+				Collections.singletonList(new BitcoinyTransactionData.Input(reverseHex(PREVIOUS_TX_HASH_WIRE), 2,
+						HashCode.fromString("aabbcc").asBytes(), 0xfffffffeL)),
+				List.of(
+						new BitcoinyTransactionData.Output(10_000L, HashCode.fromString(P2PKH_SCRIPT).asBytes()),
+						new BitcoinyTransactionData.Output(5L, HashCode.fromString(P2SH_SCRIPT).asBytes())),
+				0x12345678L);
+
+		assertEquals(LEGACY_RAW_HEX, HashCode.fromBytes(transaction.serialize()).toString());
+		assertEquals(transactionHash(LEGACY_RAW_HEX), transaction.txHash());
+	}
+
+	@Test
+	public void testAdaptsParsedLegacyTransaction() {
+		BitcoinyTransaction parsedTransaction = BitcoinyRawTransactionParser.parse(HashCode.fromString(LEGACY_RAW_HEX).asBytes());
+		BitcoinyTransactionData transaction = BitcoinyTransactionData.fromParsedLegacy(1, parsedTransaction);
+
+		assertEquals(LEGACY_RAW_HEX, HashCode.fromBytes(transaction.serialize()).toString());
+		assertEquals(parsedTransaction.txHash, transaction.txHash());
+	}
+
+	@Test
+	public void testSerializesLargeVariableLengthFields() {
+		String largeInputScript = "11".repeat(253);
+		String largeOutputScript = "22".repeat(253);
+		BitcoinyTransactionData transaction = new BitcoinyTransactionData(2,
+				Collections.singletonList(new BitcoinyTransactionData.Input(reverseHex(PREVIOUS_TX_HASH_WIRE), 1,
+						HashCode.fromString(largeInputScript).asBytes(), BitcoinyTransactionData.NO_LOCKTIME_SEQUENCE)),
+				Collections.singletonList(new BitcoinyTransactionData.Output(1L, HashCode.fromString(largeOutputScript).asBytes())),
+				0L);
+
+		String rawHex = HashCode.fromBytes(transaction.serialize()).toString();
+		assertTrue(rawHex.contains("fdfd00" + largeInputScript));
+		assertTrue(rawHex.contains("fdfd00" + largeOutputScript));
+
+		BitcoinyTransaction parsedTransaction = BitcoinyRawTransactionParser.parse(transaction.serialize());
+		assertEquals(largeInputScript, parsedTransaction.inputs.get(0).scriptSig);
+		assertEquals(largeOutputScript, parsedTransaction.outputs.get(0).scriptPubKey);
+		assertEquals(transaction.txHash(), parsedTransaction.txHash);
 	}
 
 	@Test
@@ -106,6 +153,38 @@ public class BitcoinyRawTransactionParserTests {
 			fail("Expected trailing data to be rejected");
 		} catch (IllegalArgumentException e) {
 			assertTrue(e.getMessage().contains("trailing"));
+		}
+	}
+
+	@Test
+	public void testRejectsInvalidTransactionData() {
+		try {
+			new BitcoinyTransactionData.Input("00", 0, new byte[0], BitcoinyTransactionData.NO_LOCKTIME_SEQUENCE);
+			fail("Expected short transaction hash to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("previous transaction hash"));
+		}
+
+		try {
+			new BitcoinyTransactionData.Input("xx".repeat(32), 0, new byte[0], BitcoinyTransactionData.NO_LOCKTIME_SEQUENCE);
+			fail("Expected non-hex transaction hash to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("hexadecimal previous transaction hash"));
+		}
+
+		try {
+			new BitcoinyTransactionData.Output(-1L, new byte[0]);
+			fail("Expected negative output value to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("Negative output value"));
+		}
+
+		try {
+			new BitcoinyTransactionData(1, Collections.emptyList(),
+					Collections.singletonList(new BitcoinyTransactionData.Output(0L, new byte[0])), 0L);
+			fail("Expected empty inputs to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("no inputs"));
 		}
 	}
 

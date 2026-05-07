@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: add internal Bitcoiny transaction model
+
+Added a Qortium-owned Bitcoiny transaction value object that serializes legacy Bitcoin-like inputs, outputs, locktime, variable-length fields, and transaction IDs deterministically. The new tests round-trip parser fixtures through this write-side model, giving the project a covered transaction serialization layer before attempting to replace bitcoinj's remaining signing boundary.
+
 ### 2026-05-07 - crosschain: internalize Bitcoiny spend output lookup
 
 Moved Bitcoiny spend preparation onto Qortium's deterministic key scanner for locating spendable outputs before bitcoinj signs the transaction. The remaining bitcoinj spend boundary now receives a precomputed UTXO list instead of driving wallet/keychain address discovery itself, and the old bitcoinj-specific key scanning helpers were removed while preserving existing single-recipient and multi-recipient spend behavior.
