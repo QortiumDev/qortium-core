@@ -261,7 +261,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		String p2shAddress = bitcoiny.deriveP2shAddress(redeemScriptBytes);
 
 		// Build transaction for funding P2SH-A
-		Transaction p2shFundingTransaction = bitcoiny.buildSpend(tradeBotData.getForeignKey(), p2shAddress, amountA);
+		BitcoinySignedTransaction p2shFundingTransaction = bitcoiny.buildSpendTransaction(tradeBotData.getForeignKey(), p2shAddress, amountA);
 		if (p2shFundingTransaction == null) {
 			LOGGER.debug("Unable to build P2SH-A funding transaction - lack of funds?");
 			return ResponseResult.BALANCE_ISSUE;
@@ -758,7 +758,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 				ECKey redeemKey = ECKey.fromPrivate(tradeBotData.getTradePrivateKey());
 				List<UnspentOutput> fundingOutputs = bitcoiny.getUnspentOutputs(p2shAddressA, false);
 
-				Transaction p2shRedeemTransaction = BitcoinyHTLC.buildRedeemTransaction(bitcoiny.getNetworkParameters(), redeemAmount, redeemKey,
+				BitcoinySignedTransaction p2shRedeemTransaction = bitcoiny.buildHtlcRedeemTransaction(redeemAmount, redeemKey,
 						fundingOutputs, redeemScriptA, secretA, receivingAccountInfo);
 
 				bitcoiny.broadcastTransaction(p2shRedeemTransaction);
@@ -826,7 +826,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 				String receiveAddress = bitcoiny.getUnusedReceiveAddress(tradeBotData.getForeignKey());
 				BitcoinyAddress receiving = BitcoinyAddress.fromString(bitcoiny.getNetworkParameters(), receiveAddress);
 
-				Transaction p2shRefundTransaction = BitcoinyHTLC.buildRefundTransaction(bitcoiny.getNetworkParameters(), refundAmount, refundKey,
+				BitcoinySignedTransaction p2shRefundTransaction = bitcoiny.buildHtlcRefundTransaction(refundAmount, refundKey,
 						fundingOutputs, redeemScriptA, lockTimeA, receiving.getPayload());
 
 				bitcoiny.broadcastTransaction(p2shRefundTransaction);

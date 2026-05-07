@@ -51,7 +51,8 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	private static final int WALLET_KEY_LOOKAHEAD_INCREMENT = 3;
 
 	/** Byte offset into raw block headers to block timestamp. */
-	private static final int TIMESTAMP_OFFSET = 4 + 32 + 32;
+	protected static final int TIMESTAMP_OFFSET = 4 + 32 + 32;
+	private static final int BLOCK_HEADER_LENGTH = 80;
 
 	protected Coin feePerKb;
 
@@ -177,7 +178,8 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 		if (blockHeaders.size() < 11)
 			throw new ForeignBlockchainException("Not enough blocks to determine median block time");
 
-		List<Integer> blockTimestamps = blockHeaders.stream().map(blockHeader -> BitTwiddling.intFromLEBytes(blockHeader, TIMESTAMP_OFFSET)).collect(Collectors.toList());
+		int timestampOffset = getBlockHeaderTimestampOffset();
+		List<Integer> blockTimestamps = blockHeaders.stream().map(blockHeader -> BitTwiddling.intFromLEBytes(blockHeader, timestampOffset)).collect(Collectors.toList());
 
 		// Descending order
 		blockTimestamps.sort((a, b) -> Integer.compare(b, a));
@@ -218,6 +220,34 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	 * @throws ForeignBlockchainException if something went wrong
 	 */
 	public abstract long getP2shFee(Long timestamp) throws ForeignBlockchainException;
+
+	public int getBlockHeaderTimestampOffset() {
+		return TIMESTAMP_OFFSET;
+	}
+
+	public List<byte[]> splitRawBlockHeaders(byte[] rawBlockHeaders, int count) throws ForeignBlockchainException {
+		List<byte[]> blockHeaders = new ArrayList<>((int) count);
+
+		if (rawBlockHeaders.length == count * BLOCK_HEADER_LENGTH) {
+			for (int i = 0; i < count; ++i)
+				blockHeaders.add(Arrays.copyOfRange(rawBlockHeaders, i * BLOCK_HEADER_LENGTH, (i + 1) * BLOCK_HEADER_LENGTH));
+
+			return blockHeaders;
+		}
+
+		if (rawBlockHeaders.length > count * BLOCK_HEADER_LENGTH) {
+			int referenceVersion = BitTwiddling.intFromLEBytes(rawBlockHeaders, 0);
+			for (int i = 0; i <= rawBlockHeaders.length - BLOCK_HEADER_LENGTH; ++i) {
+				if (BitTwiddling.intFromLEBytes(rawBlockHeaders, i) == referenceVersion)
+					blockHeaders.add(Arrays.copyOfRange(rawBlockHeaders, i, i + BLOCK_HEADER_LENGTH));
+			}
+
+			if (blockHeaders.size() == count)
+				return blockHeaders;
+		}
+
+		throw new ForeignBlockchainException.NetworkException("Unexpected raw header contents in ElectrumX blockchain.block.headers RPC");
+	}
 
 	/**
 	 * Returns confirmed balance, based on passed payment script.
@@ -365,7 +395,7 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 			try {
 				byte[] rawTransactionBytes = this.blockchainProvider.getRawTransaction(txHash);
 
-				BitcoinyTransaction transaction = BitcoinyRawTransactionParser.parse(HashCode.fromBytes(txHash).toString(), rawTransactionBytes);
+				BitcoinyTransaction transaction = deserializeRawTransaction(HashCode.fromBytes(txHash).toString(), rawTransactionBytes);
 				return transaction.outputs;
 			} catch (ForeignBlockchainException | RuntimeException e) {
 				lastException = e;
@@ -451,6 +481,48 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	 */
 	public void broadcastTransaction(Transaction transaction) throws ForeignBlockchainException {
 		this.blockchainProvider.broadcastTransaction(transaction.bitcoinSerialize());
+	}
+
+	public void broadcastTransaction(BitcoinySignedTransaction transaction) throws ForeignBlockchainException {
+		this.blockchainProvider.broadcastTransaction(transaction.getRawTransaction());
+	}
+
+	public BitcoinySignedTransaction buildSpendTransaction(String xprv58, String recipient, long amount, Long feePerByte) {
+		Transaction transaction = buildSpend(xprv58, recipient, amount, feePerByte);
+		return transaction == null ? null : BitcoinySignedTransaction.fromBitcoinj(transaction);
+	}
+
+	public BitcoinySignedTransaction buildSpendTransaction(String xprv58, String recipient, long amount) {
+		return buildSpendTransaction(xprv58, recipient, amount, null);
+	}
+
+	public BitcoinySignedTransaction buildSpendMultipleTransaction(String xprv58, Map<String, Long> amountByRecipient, Long feePerByte) {
+		Transaction transaction = buildSpendMultiple(xprv58, amountByRecipient, feePerByte);
+		return transaction == null ? null : BitcoinySignedTransaction.fromBitcoinj(transaction);
+	}
+
+	public BitcoinySignedTransaction buildHtlcRedeemTransaction(Coin redeemAmount, ECKey redeemKey,
+			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, byte[] secret, byte[] receivingAccountInfo) throws ForeignBlockchainException {
+		return BitcoinySignedTransaction.fromBitcoinj(BitcoinyHTLC.buildRedeemTransaction(this.params, redeemAmount, redeemKey,
+				fundingOutputs, redeemScriptBytes, secret, receivingAccountInfo));
+	}
+
+	public BitcoinySignedTransaction buildHtlcRefundTransaction(Coin refundAmount, ECKey refundKey,
+			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, long lockTime, byte[] receivingAccountInfo) throws ForeignBlockchainException {
+		return BitcoinySignedTransaction.fromBitcoinj(BitcoinyHTLC.buildRefundTransaction(this.params, refundAmount, refundKey,
+				fundingOutputs, redeemScriptBytes, lockTime, receivingAccountInfo));
+	}
+
+	public BitcoinyTransaction deserializeRawTransaction(byte[] rawTransaction) throws ForeignBlockchainException {
+		return deserializeRawTransaction(null, rawTransaction);
+	}
+
+	public BitcoinyTransaction deserializeRawTransaction(String txHash, byte[] rawTransaction) throws ForeignBlockchainException {
+		try {
+			return BitcoinyRawTransactionParser.parse(txHash, rawTransaction);
+		} catch (RuntimeException e) {
+			throw new ForeignBlockchainException(String.format("Unable to deserialize raw transaction: %s", e.getMessage()));
+		}
 	}
 
 	/**
@@ -1055,6 +1127,10 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 				keyChain, 0, 0);
 
 		return keySet;
+	}
+
+	Set<BitcoinyDeterministicKey> getWalletKeys(String key58) throws ForeignBlockchainException {
+		return getWalletKeysWithExecutor(key58, EXECUTOR);
 	}
 
 	/**

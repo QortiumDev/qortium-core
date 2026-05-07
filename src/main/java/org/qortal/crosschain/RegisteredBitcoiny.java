@@ -1,6 +1,12 @@
 package org.qortal.crosschain;
 
+import org.bitcoinj.core.Coin;
+import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.Transaction;
+import org.qortal.transform.TransformationException;
+
+import java.util.List;
+import java.util.Map;
 
 final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 
@@ -27,11 +33,100 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	}
 
 	@Override
+	public Transaction buildSpend(String xprv58, String recipient, long amount, Long feePerByte) {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			throw unsupportedBitcoinjTransactionFormat();
+
+		return super.buildSpend(xprv58, recipient, amount, feePerByte);
+	}
+
+	@Override
 	public Transaction buildSpend(String xprv58, String recipient, long amount) {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			throw unsupportedBitcoinjTransactionFormat();
+
 		Long defaultSpendFeePerByte = this.spec.getDefaultSpendFeePerByte();
 		if (defaultSpendFeePerByte != null)
 			return buildSpend(xprv58, recipient, amount, defaultSpendFeePerByte);
 
 		return super.buildSpend(xprv58, recipient, amount);
+	}
+
+	@Override
+	public Transaction buildSpendMultiple(String xprv58, Map<String, Long> amountByRecipient, Long feePerByte) {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			throw unsupportedBitcoinjTransactionFormat();
+
+		return super.buildSpendMultiple(xprv58, amountByRecipient, feePerByte);
+	}
+
+	@Override
+	public BitcoinySignedTransaction buildSpendTransaction(String xprv58, String recipient, long amount, Long feePerByte) {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			return SaplingTransparentTransactionBuilder.buildSpend(this, xprv58, recipient, amount, feePerByte);
+
+		return super.buildSpendTransaction(xprv58, recipient, amount, feePerByte);
+	}
+
+	@Override
+	public BitcoinySignedTransaction buildSpendMultipleTransaction(String xprv58, Map<String, Long> amountByRecipient, Long feePerByte) {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			return SaplingTransparentTransactionBuilder.buildSpend(this, xprv58, amountByRecipient, feePerByte);
+
+		return super.buildSpendMultipleTransaction(xprv58, amountByRecipient, feePerByte);
+	}
+
+	@Override
+	public BitcoinySignedTransaction buildHtlcRedeemTransaction(Coin redeemAmount, ECKey redeemKey, List<UnspentOutput> fundingOutputs,
+			byte[] redeemScriptBytes, byte[] secret, byte[] receivingAccountInfo) throws ForeignBlockchainException {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			return SaplingTransparentTransactionBuilder.buildRedeem(this, redeemAmount, redeemKey, fundingOutputs,
+					redeemScriptBytes, secret, receivingAccountInfo);
+
+		return super.buildHtlcRedeemTransaction(redeemAmount, redeemKey, fundingOutputs, redeemScriptBytes, secret, receivingAccountInfo);
+	}
+
+	@Override
+	public BitcoinySignedTransaction buildHtlcRefundTransaction(Coin refundAmount, ECKey refundKey, List<UnspentOutput> fundingOutputs,
+			byte[] redeemScriptBytes, long lockTime, byte[] receivingAccountInfo) throws ForeignBlockchainException {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			return SaplingTransparentTransactionBuilder.buildRefund(this, refundAmount, refundKey, fundingOutputs,
+					redeemScriptBytes, lockTime, receivingAccountInfo);
+
+		return super.buildHtlcRefundTransaction(refundAmount, refundKey, fundingOutputs, redeemScriptBytes, lockTime, receivingAccountInfo);
+	}
+
+	@Override
+	public int getBlockHeaderTimestampOffset() {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			return 4 + 32 + 32 + 32;
+
+		return super.getBlockHeaderTimestampOffset();
+	}
+
+	@Override
+	public List<byte[]> splitRawBlockHeaders(byte[] rawBlockHeaders, int count) throws ForeignBlockchainException {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			return SaplingTransparentTransactionBuilder.splitBlockHeaders(rawBlockHeaders, count);
+
+		return super.splitRawBlockHeaders(rawBlockHeaders, count);
+	}
+
+	@Override
+	public BitcoinyTransaction deserializeRawTransaction(String txHash, byte[] rawTransaction) throws ForeignBlockchainException {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT) {
+			try {
+				return ZcashFamilyTransactionParser.deserializeRawTransaction(txHash, rawTransaction);
+			} catch (TransformationException e) {
+				throw new ForeignBlockchainException(e.getMessage());
+			}
+		}
+
+		return super.deserializeRawTransaction(txHash, rawTransaction);
+	}
+
+	private UnsupportedOperationException unsupportedBitcoinjTransactionFormat() {
+		return new UnsupportedOperationException(String.format("%s transactions must be built with BitcoinySignedTransaction APIs",
+				this.spec.getCurrencyCode()));
 	}
 }

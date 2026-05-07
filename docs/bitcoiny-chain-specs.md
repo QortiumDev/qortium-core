@@ -18,10 +18,11 @@ Mainnet chain ids for the currently registered BTC-like chains are:
 | `bip122:00000ffd590b1485b3caadc19b22e637` | `DASH` | `DASH` |
 | `bip122:000000000062b72c5e2ceb45fbc8587e` | `NAMECOIN` | `NMC` |
 | `bip122:4381deb85b1b2c9843c222944b616d99` | `FIRO` | `FIRO` |
+| `bip122:027e3758c3a65b12aa1046462b486d0a` | `KOMODO` | `KMD` |
 | `bip122:7497ea1b465eb39f1c8f507bc877078f` | `DIGIBYTE` | `DGB` |
 | `bip122:0000006b444bc2f2ffe627be9d9e7e7a` | `RAVENCOIN` | `RVN` |
 
-SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, NMC `7`, DGB `20`, FIRO `136` (listed in SLIP-44 as XZC/ZCoin), and RVN `175`. Planned next SLIP-44 value for BTC-like chains is KMD `141`.
+SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, NMC `7`, DGB `20`, FIRO `136` (listed in SLIP-44 as XZC/ZCoin), KMD `141`, and RVN `175`.
 
 ## Network Settings
 
@@ -37,7 +38,8 @@ Use `bitcoinyNetworks` in `settings.json` to choose the active network for BTC-l
     "RVN": "MAIN",
     "DASH": "MAIN",
     "NMC": "MAIN",
-    "FIRO": "MAIN"
+    "FIRO": "MAIN",
+    "KMD": "MAIN"
   }
 }
 ```
@@ -54,18 +56,11 @@ The shared Bitcoiny ACCT stores only the active network's BIP122 chain reference
 
 Before coding a new coin, do a compatibility precheck:
 
-- standard legacy transaction serialization and standard SIGHASH behavior, or a clear plan for a coin-specific signing hook
+- standard legacy transaction serialization and standard SIGHASH behavior, or an explicit `BitcoinyTransactionFormat`/signing hook
 - standard P2PKH and P2SH script/address behavior, or an explicit address/script normalization hook
 - usable BIP32 headers and deterministic wallet derivation behavior
 - ElectrumX support for headers, balances, UTXOs, transaction fetches, and broadcasts
 - no fork-id or replay-protection signing rule that bitcoinj's current signing boundary cannot produce
-
-KMD is the next planned BTC-like candidate if the target support is transparent
-KMD over Electrum-compatible servers. Do the same compatibility precheck before
-adding it, especially transaction signing rules, address/script behavior, and
-Electrum broadcast support. If a KMD path needs Sapling/lightwalletd native
-wallet support instead, it belongs with the Zcash-family native-wallet work
-rather than this generic Bitcoiny path.
 
 Before adding a coin, collect and verify:
 
@@ -79,6 +74,8 @@ Before adding a coin, collect and verify:
 Namecoin is registered for ordinary NMC wallet, HTLC, and ACCT trade support. Name registration/update flows are intentionally not implemented in core yet, but detected Namecoin name outputs are filtered out of normal wallet spend selection so they are not accidentally spent as plain NMC UTXOs.
 
 Firo is registered for ordinary transparent FIRO wallet, HTLC, and ACCT trade support. Spark, Lelantus, Zerocoin, and exchange-address flows are intentionally not implemented as part of generic BTC-like support.
+
+Komodo is registered for transparent KMD wallet, HTLC, and ACCT trade support through Electrum-compatible servers. KMD is not a legacy-Bitcoin transaction clone: spends and HTLC transactions use the Sapling transparent transaction format while staying in the generic Bitcoiny runtime. Shielded KMD wallet behavior is intentionally not implemented.
 
 ## Tests
 

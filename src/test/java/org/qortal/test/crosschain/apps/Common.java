@@ -1,12 +1,12 @@
 package org.qortal.test.crosschain.apps;
 
 import com.google.common.hash.HashCode;
-import org.bitcoinj.core.Transaction;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyChainSpecs;
 import org.qortal.crosschain.BitcoinyHTLC;
+import org.qortal.crosschain.BitcoinySignedTransaction;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.UnspentOutput;
@@ -156,8 +156,8 @@ public abstract class Common {
 		return htlcStatus;
 	}
 
-	public static void broadcastTransaction(Bitcoiny bitcoiny, Transaction transaction) {
-		byte[] rawTransactionBytes = transaction.bitcoinSerialize();
+	public static void broadcastTransaction(Bitcoiny bitcoiny, BitcoinySignedTransaction transaction) {
+		byte[] rawTransactionBytes = transaction.getRawTransaction();
 
 		System.out.println(String.format("%nRaw transaction bytes:%n%s%n", HashCode.fromBytes(rawTransactionBytes).toString()));
 

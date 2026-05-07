@@ -1,8 +1,8 @@
 package org.qortal.test.crosschain.apps;
 
 import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.Transaction;
 import org.qortal.crosschain.Bitcoiny;
+import org.qortal.crosschain.BitcoinySignedTransaction;
 
 public class Pay {
 
@@ -53,7 +53,7 @@ public class Pay {
 		System.out.println(String.format("Address: %s", address));
 		System.out.println(String.format("Amount: %s", amount.toPlainString()));
 
-		Transaction transaction = bitcoiny.buildSpend(xprv58, address, amount.value);
+		BitcoinySignedTransaction transaction = bitcoiny.buildSpendTransaction(xprv58, address, amount.value);
 		if (transaction == null) {
 			System.err.println("Insufficent funds");
 			System.exit(1);

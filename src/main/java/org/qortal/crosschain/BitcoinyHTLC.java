@@ -209,7 +209,7 @@ public class BitcoinyHTLC {
 		List<byte[]> rawTransactions = bitcoiny.getAddressTransactions(p2shAddress);
 
 		for (byte[] rawTransaction : rawTransactions) {
-			BitcoinyTransaction transaction = BitcoinyRawTransactionParser.parse(rawTransaction);
+			BitcoinyTransaction transaction = bitcoiny.deserializeRawTransaction(rawTransaction);
 
 			// Cycle through inputs, looking for one that spends our HTLC
 			for (BitcoinyTransaction.Input input : transaction.inputs) {

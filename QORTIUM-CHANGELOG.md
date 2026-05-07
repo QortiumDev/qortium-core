@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: add Komodo Bitcoiny support
+
+Added Komodo as a registered transparent Bitcoiny crosschain coin with mainnet chain identity, SLIP-44 metadata, BIP122 routing, KMD address headers, Electrum server refresh metadata, and common registry coverage. Because KMD uses Sapling-era transaction rules, the generic Bitcoiny runtime now has a signed raw transaction wrapper and a Sapling-transparent signing path for KMD sends and HTLC redeem/refund transactions, while shielded KMD wallet behavior remains out of scope.
+
 ### 2026-05-07 - docs: document Zcash-family native wallet requirements
 
 Documented why HUSH, Zcash, and other Sapling-family chains should remain planned rather than active until their Rust JNI wallet libraries, QDN wallet packages, Sapling parameter files, lightwalletd servers, wallet behavior, parser behavior, and live verification path are reproducible. Also clarified that KMD should use the generic BTC-like Bitcoiny path if the intended support is transparent Electrum-compatible KMD, and only use the Zcash-family path if native Sapling wallet support is actually required.

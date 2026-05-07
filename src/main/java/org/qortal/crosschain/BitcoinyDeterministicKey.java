@@ -147,6 +147,13 @@ public final class BitcoinyDeterministicKey {
 		return Arrays.copyOf(this.publicKey, this.publicKey.length);
 	}
 
+	public byte[] getPrivateKey() {
+		if (this.privateKey == null)
+			return null;
+
+		return Arrays.copyOf(this.privateKey, this.privateKey.length);
+	}
+
 	public byte[] getPublicKeyHash() {
 		return Crypto.hash160(this.publicKey);
 	}

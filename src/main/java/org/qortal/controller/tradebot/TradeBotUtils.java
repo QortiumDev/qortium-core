@@ -2,12 +2,12 @@ package org.qortal.controller.tradebot;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bitcoinj.core.Transaction;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.resource.CrossChainUtils;
 import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyHTLC;
+import org.qortal.crosschain.BitcoinySignedTransaction;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.crosschain.CrossChainTradeData;
@@ -154,7 +154,7 @@ public class TradeBotUtils {
         }
 
         // Build transaction for funding P2SH-A
-        Transaction p2shFundingTransaction = bitcoiny.buildSpendMultiple(foreignKey, valueByP2shAddress, null);
+        BitcoinySignedTransaction p2shFundingTransaction = bitcoiny.buildSpendMultipleTransaction(foreignKey, valueByP2shAddress, null);
         if (p2shFundingTransaction == null) {
             LOGGER.debug("Unable to build P2SH-A funding transaction - lack of funds?");
             return AcctTradeBot.ResponseResult.BALANCE_ISSUE;

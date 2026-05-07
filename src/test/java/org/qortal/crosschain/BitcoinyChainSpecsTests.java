@@ -45,7 +45,8 @@ public class BitcoinyChainSpecsTests {
 				new ChainManifest("RAVENCOIN", "RVN", BitcoinyChainSpecs.RAVENCOIN_SLIP44_COIN_TYPE, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", Set.of(BitcoinyChainSpecs.MAIN), 60, 122, 128, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("DASH", "DASH", BitcoinyChainSpecs.DASH_SLIP44_COIN_TYPE, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", Set.of(BitcoinyChainSpecs.MAIN), 76, 16, 204, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("NAMECOIN", "NMC", BitcoinyChainSpecs.NAMECOIN_SLIP44_COIN_TYPE, "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770", Set.of(BitcoinyChainSpecs.MAIN), 52, 13, 180, 0x0488B21E, 0x0488ADE4),
-				new ChainManifest("FIRO", "FIRO", BitcoinyChainSpecs.FIRO_SLIP44_COIN_TYPE, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", Set.of(BitcoinyChainSpecs.MAIN), 82, 7, 210, 0x0488B21E, 0x0488ADE4))) {
+				new ChainManifest("FIRO", "FIRO", BitcoinyChainSpecs.FIRO_SLIP44_COIN_TYPE, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", Set.of(BitcoinyChainSpecs.MAIN), 82, 7, 210, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("KOMODO", "KMD", BitcoinyChainSpecs.KOMODO_SLIP44_COIN_TYPE, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", Set.of(BitcoinyChainSpecs.MAIN), 60, 85, 188, 0x0488B21E, 0x0488ADE4))) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(expected.currencyCode);
 			assertNotNull(expected.currencyCode, spec);
 			assertEquals(expected.canonicalName, spec.getCanonicalName());
@@ -183,7 +184,8 @@ public class BitcoinyChainSpecsTests {
 				BitcoinyChainSpecs.RAVENCOIN,
 				BitcoinyChainSpecs.DASH,
 				BitcoinyChainSpecs.NAMECOIN,
-				BitcoinyChainSpecs.FIRO
+				BitcoinyChainSpecs.FIRO,
+				BitcoinyChainSpecs.KOMODO
 		}) {
 			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST3));
 			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST4));
@@ -468,6 +470,39 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testKomodoUsesSharedStaticParams() {
+		BitcoinyNetwork komodoMainNet = BitcoinyChainSpecs.KOMODO.getNetwork(BitcoinyChainSpecs.MAIN);
+		NetworkParameters komodoMainNetParams = komodoMainNet.getParams();
+		Block genesisBlock = komodoMainNetParams.getGenesisBlock();
+
+		assertTrue(komodoMainNetParams instanceof StaticBitcoinyParams);
+		assertEquals(BitcoinyTransactionFormat.SAPLING_TRANSPARENT, BitcoinyChainSpecs.KOMODO.getTransactionFormat());
+		assertEquals("org.komodo.production", komodoMainNetParams.getId());
+		assertEquals(NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, komodoMainNetParams.getPaymentProtocolId());
+		assertEquals("komodo", komodoMainNetParams.getUriScheme());
+		assertEquals("027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", genesisBlock.getHashAsString());
+		assertEquals(1L, genesisBlock.getVersion());
+		assertEquals("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1231006505L, genesisBlock.getTimeSeconds());
+		assertEquals(0x200f0f0fL, genesisBlock.getDifficultyTarget());
+		assertEquals(11L, genesisBlock.getNonce());
+		assertEquals(new BigInteger("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f", 16), komodoMainNetParams.getMaxTarget());
+		assertEquals(17 * 60, komodoMainNetParams.getTargetTimespan());
+		assertEquals(17, komodoMainNetParams.getInterval());
+		assertEquals(7770, komodoMainNetParams.getPort());
+		assertEquals(0xf9eee48dL, komodoMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(60, komodoMainNetParams.getAddressHeader());
+		assertEquals(85, komodoMainNetParams.getP2SHHeader());
+		assertEquals(188, komodoMainNetParams.getDumpedPrivateKeyHeader());
+		assertNull(komodoMainNetParams.getSegwitAddressHrp());
+		assertEquals(0x0488B21E, komodoMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, komodoMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(Coin.valueOf(1000L), komodoMainNetParams.getMinNonDustOutput());
+		assertFalse(komodoMainNetParams.hasMaxMoney());
+		assertEquals("KMD 1.00", komodoMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
+	}
+
+	@Test
 	public void testPirateChainUsesSharedStaticMainNetParams() {
 		NetworkParameters pirateMainNetParams = PirateChain.PirateChainNet.MAIN.getParams();
 		Block genesisBlock = pirateMainNetParams.getGenesisBlock();
@@ -509,6 +544,7 @@ public class BitcoinyChainSpecsTests {
 		assertSame(BitcoinyChainSpecs.DASH.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DASH_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.NAMECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.NAMECOIN_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.FIRO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.FIRO_CURRENCY_CODE));
+		assertSame(BitcoinyChainSpecs.KOMODO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.KOMODO_CURRENCY_CODE));
 	}
 
 	private static byte[] buildNameNewScript(byte[] lockScript) {

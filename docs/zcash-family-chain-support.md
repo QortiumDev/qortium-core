@@ -51,8 +51,8 @@ than registering runtime support that compiles but cannot operate.
 
 ## KMD Routing Note
 
-KMD should be evaluated separately before implementation. If the support target
-is transparent KMD over Electrum-compatible servers, add it through
-`BitcoinyChainSpecs` like the other BTC-like transparent coins. Only route KMD
-through the Zcash-family layer if the intended support requires a
-Sapling/lightwalletd-style native wallet package.
+KMD is registered through `BitcoinyChainSpecs` as transparent KMD over
+Electrum-compatible servers. It uses Sapling transparent transaction
+serialization/signing inside the generic Bitcoiny runtime, but it does not use
+the Zcash-family native wallet layer because shielded KMD wallet support is not
+part of the current integration.

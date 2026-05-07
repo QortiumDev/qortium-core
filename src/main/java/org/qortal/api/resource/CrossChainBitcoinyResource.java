@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.bitcoinj.core.Transaction;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
@@ -18,6 +17,7 @@ import org.qortal.api.model.crosschain.BitcoinySendRequest;
 import org.qortal.api.model.crosschain.ForeignCoinStatus;
 import org.qortal.crosschain.AddressInfo;
 import org.qortal.crosschain.Bitcoiny;
+import org.qortal.crosschain.BitcoinySignedTransaction;
 import org.qortal.crosschain.ChainableServer;
 import org.qortal.crosschain.ElectrumX;
 import org.qortal.crosschain.ForeignBlockchainException;
@@ -256,7 +256,7 @@ public class CrossChainBitcoinyResource {
 		if (!bitcoiny.isValidDeterministicKey(bitcoinySendRequest.xprv58))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
-		Transaction spendTransaction = bitcoiny.buildSpend(bitcoinySendRequest.xprv58,
+		BitcoinySignedTransaction spendTransaction = bitcoiny.buildSpendTransaction(bitcoinySendRequest.xprv58,
 				receivingAddress,
 				bitcoinySendRequest.amount,
 				bitcoinySendRequest.feePerByte);
@@ -270,7 +270,7 @@ public class CrossChainBitcoinyResource {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE);
 		}
 
-		return spendTransaction.getTxId().toString();
+		return spendTransaction.getTxHash();
 	}
 
 	@GET

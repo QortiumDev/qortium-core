@@ -5,6 +5,8 @@ import org.bitcoinj.core.*;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyAddress;
 import org.qortal.crosschain.BitcoinyHTLC;
+import org.qortal.crosschain.BitcoinySignedTransaction;
+import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.UnspentOutput;
 import org.qortal.crypto.Crypto;
 
@@ -137,8 +139,15 @@ public class RedeemHTLC {
 
 		System.out.println(String.format("Spending %s of outputs, with %s as mining fee", bitcoiny.format(redeemAmount), bitcoiny.format(p2shFee)));
 
-		Transaction redeemTransaction = BitcoinyHTLC.buildRedeemTransaction(bitcoiny.getNetworkParameters(), redeemAmount, redeemKey,
-				unspentOutputs, redeemScriptBytes, secret, outputAddress.getPayload());
+		BitcoinySignedTransaction redeemTransaction;
+		try {
+			redeemTransaction = bitcoiny.buildHtlcRedeemTransaction(redeemAmount, redeemKey,
+					unspentOutputs, redeemScriptBytes, secret, outputAddress.getPayload());
+		} catch (ForeignBlockchainException e) {
+			System.err.println(String.format("Unable to build redeem transaction: %s", e.getMessage()));
+			System.exit(1);
+			return;
+		}
 
 		Common.broadcastTransaction(bitcoiny, redeemTransaction);
 	}

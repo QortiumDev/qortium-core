@@ -287,41 +287,20 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		long returnedCount = parsedReturnedCount;
 		String hex = (String) hexObj;
 
-		List<byte[]> rawBlockHeaders = new ArrayList<>((int) returnedCount);
-
 		byte[] raw = HashCode.fromString(hex).asBytes();
+		if (this.blockchain != null)
+			return this.blockchain.splitRawBlockHeaders(raw, (int) returnedCount);
 
-		// Most chains use a fixed length 80 byte header, so block headers can be split up by dividing the hex into
-		// 80-byte segments. However, some chains such as DOGE use variable length headers due to AuxPoW or other
-		// reasons. In these cases we can identify the start of each block header by the location of the block version
-		// numbers. Each block starts with a version number, and for DOGE this is easily identifiable (6422788) at the
-		// time of writing (Jul 2021). If we encounter a chain that is using more generic version numbers (e.g. 1)
-		// and can't be used to accurately identify block indexes, then there are sufficient checks to ensure an
-		// exception is thrown.
+		return splitFixedLengthBlockHeaders(raw, (int) returnedCount);
+	}
 
-		if (raw.length == returnedCount * BLOCK_HEADER_LENGTH) {
-			// Fixed-length header (BTC, LTC, etc)
-			for (int i = 0; i < returnedCount; ++i) {
-				rawBlockHeaders.add(Arrays.copyOfRange(raw, i * BLOCK_HEADER_LENGTH, (i + 1) * BLOCK_HEADER_LENGTH));
-			}
-		}
-		else if (raw.length > returnedCount * BLOCK_HEADER_LENGTH) {
-			// Assume AuxPoW variable length header (DOGE)
-			int referenceVersion = BitTwiddling.intFromLEBytes(raw, 0); // DOGE uses 6422788 at time of commit (Jul 2021)
-			for (int i = 0; i < raw.length - 4; ++i) {
-				// Locate the start of each block by its version number
-				if (BitTwiddling.intFromLEBytes(raw, i) == referenceVersion) {
-					rawBlockHeaders.add(Arrays.copyOfRange(raw, i, i + BLOCK_HEADER_LENGTH));
-				}
-			}
-			// Ensure that we found the correct number of block headers
-			if (rawBlockHeaders.size() != count) {
-				throw new ForeignBlockchainException.NetworkException("Unexpected raw header contents in JSON from ElectrumX blockchain.block.headers RPC.");
-			}
-		}
-		else if (raw.length != returnedCount * BLOCK_HEADER_LENGTH) {
+	private static List<byte[]> splitFixedLengthBlockHeaders(byte[] raw, int count) throws ForeignBlockchainException.NetworkException {
+		if (raw.length != count * BLOCK_HEADER_LENGTH)
 			throw new ForeignBlockchainException.NetworkException("Unexpected raw header length in JSON from ElectrumX blockchain.block.headers RPC");
-		}
+
+		List<byte[]> rawBlockHeaders = new ArrayList<>(count);
+		for (int i = 0; i < count; ++i)
+			rawBlockHeaders.add(Arrays.copyOfRange(raw, i * BLOCK_HEADER_LENGTH, (i + 1) * BLOCK_HEADER_LENGTH));
 
 		return rawBlockHeaders;
 	}

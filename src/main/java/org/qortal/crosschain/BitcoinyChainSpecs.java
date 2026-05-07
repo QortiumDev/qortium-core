@@ -28,6 +28,7 @@ public final class BitcoinyChainSpecs {
 	public static final String DASH_CURRENCY_CODE = "DASH";
 	public static final String NAMECOIN_CURRENCY_CODE = "NMC";
 	public static final String FIRO_CURRENCY_CODE = "FIRO";
+	public static final String KOMODO_CURRENCY_CODE = "KMD";
 	public static final int BITCOIN_SLIP44_COIN_TYPE = 0;
 	public static final int LITECOIN_SLIP44_COIN_TYPE = 2;
 	public static final int DOGECOIN_SLIP44_COIN_TYPE = 3;
@@ -48,6 +49,7 @@ public final class BitcoinyChainSpecs {
 	private static final String NAMECOIN_GENESIS_MERKLE_ROOT = "41c62dbd9068c89a449525e3cd5ac61b20ece28c3c38b3f35b2161f0e6d3cb0d";
 	private static final String NAMECOIN_GENESIS_OUTPUT_SCRIPT = "04b620369050cd899ffbbc4e8ee51e8c4534a855bb463439d63d235d4779685d8b6f4870a238cf365ac94fa13ef9a2a22cd99d0d5ee86dcabcafce36c7acf43ce5";
 	private static final String FIRO_GENESIS_MERKLE_ROOT = "365d2aa75d061370c9aefdabac3985716b1e3b4bb7c4af4ed54f25e5aaa42783";
+	private static final String KOMODO_GENESIS_MERKLE_ROOT = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
 	private static final NetworkParameters BITCOIN_MAIN_NET_PARAMS = bitcoinParams("org.bitcoin.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, "bc")
@@ -237,6 +239,18 @@ public final class BitcoinyChainSpecs {
 					"frankfurt.firo.org", "newjersey.firo.org", "sanfrancisco.firo.org", "tokyo.firo.org",
 					"singapore.firo.org")
 			.build();
+	private static final NetworkParameters KOMODO_MAIN_NET_PARAMS = komodoParams("org.komodo.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
+			.genesis(1231006505L, 11L, 0x200f0f0fL, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71")
+			.genesisHeader(1L, KOMODO_GENESIS_MERKLE_ROOT)
+			.port(7770)
+			.packetMagic(0xf9eee48dL)
+			.addressHeaders(60, 85, 188)
+			.coinbaseAndSubsidy(100, 840_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(3000, 3800, 4000)
+			.dnsSeeds("kmd.komodoseeds.org", "seeds1.kmd.sh", "kmdseed.cipig.net",
+					"kmdseeds.lordofthechains.com", "kmd.komodoseeds.com", "dynamic.komodoseeds.com")
+			.build();
 	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", BITCOIN_SLIP44_COIN_TYPE, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
 			.mainnet(() -> BITCOIN_MAIN_NET_PARAMS, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", 1_500L, "btc")
 			.test3(() -> BITCOIN_TEST_NET_PARAMS, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", 1_500L, 1_000L, "tbtc")
@@ -276,7 +290,12 @@ public final class BitcoinyChainSpecs {
 			.mainnet(() -> FIRO_MAIN_NET_PARAMS, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", 10_000L, "firo")
 			.build();
 
-	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, NAMECOIN, FIRO);
+	public static final BitcoinyChainSpec KOMODO = spec("KOMODO", KOMODO_SLIP44_COIN_TYPE, "Komodo", KOMODO_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+			.mainnet(() -> KOMODO_MAIN_NET_PARAMS, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", 10_000L, "kmd")
+			.transactionFormat(BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+			.build();
+
+	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, NAMECOIN, FIRO, KOMODO);
 
 	private static final List<String> CURRENCY_CODES = ALL.stream()
 			.map(BitcoinyChainSpec::getCurrencyCode)
@@ -403,6 +422,20 @@ public final class BitcoinyChainSpecs {
 				.difficultyValidationFailure("Firo difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
+	private static StaticBitcoinyParams.Builder komodoParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "komodo")
+				.maxTarget("0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f")
+				.targetTimespan(17 * 60)
+				.interval(17)
+				.hasMaxMoney(false)
+				.minNonDustOutput(Coin.valueOf(1000L))
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, KOMODO_CURRENCY_CODE)
+						.code(3, "mKMD")
+						.code(7, "Komodoshi"))
+				.difficultyValidationFailure("Komodo difficulty verification is not implemented for Electrum-backed parameters");
+	}
+
 	private static BitcoinyChainSpec.ElectrumServerRefreshConfig refresh(String networkName, String chain1209k) {
 		return new BitcoinyChainSpec.ElectrumServerRefreshConfig(networkName, chain1209k);
 	}
@@ -456,6 +489,7 @@ public final class BitcoinyChainSpecs {
 		private Long defaultSpendFeePerByte;
 		private BitcoinyChainSpec.AddressNormalizer addressNormalizer;
 		private BitcoinyChainSpec.SpendableOutputScriptFilter spendableOutputScriptFilter;
+		private BitcoinyTransactionFormat transactionFormat = BitcoinyTransactionFormat.LEGACY;
 
 		private SpecBuilder(String canonicalName, int slip44CoinType, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
 			this.canonicalName = canonicalName;
@@ -520,9 +554,14 @@ public final class BitcoinyChainSpecs {
 			return this;
 		}
 
+		private SpecBuilder transactionFormat(BitcoinyTransactionFormat transactionFormat) {
+			this.transactionFormat = transactionFormat;
+			return this;
+		}
+
 		private BitcoinyChainSpec build() {
 			return new BitcoinyChainSpec(this.canonicalName, this.slip44CoinType, this.config, this.networks, this.refreshConfigs,
-					this.defaultSpendFeePerByte, this.addressNormalizer, this.spendableOutputScriptFilter);
+					this.defaultSpendFeePerByte, this.addressNormalizer, this.spendableOutputScriptFilter, this.transactionFormat);
 		}
 
 		private void addRefresh(String networkName, String chain1209k) {

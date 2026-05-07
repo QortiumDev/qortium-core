@@ -19,6 +19,7 @@ public final class BitcoinyChainSpec {
 	private final Long defaultSpendFeePerByte;
 	private final AddressNormalizer addressNormalizer;
 	private final SpendableOutputScriptFilter spendableOutputScriptFilter;
+	private final BitcoinyTransactionFormat transactionFormat;
 
 	public BitcoinyChainSpec(int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs) {
@@ -38,6 +39,13 @@ public final class BitcoinyChainSpec {
 	public BitcoinyChainSpec(String canonicalName, int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer,
 			SpendableOutputScriptFilter spendableOutputScriptFilter) {
+		this(canonicalName, slip44CoinType, config, networks, electrumServerRefreshConfigs, defaultSpendFeePerByte, addressNormalizer,
+				spendableOutputScriptFilter, BitcoinyTransactionFormat.LEGACY);
+	}
+
+	public BitcoinyChainSpec(String canonicalName, int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
+			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer,
+			SpendableOutputScriptFilter spendableOutputScriptFilter, BitcoinyTransactionFormat transactionFormat) {
 		this.canonicalName = canonicalName;
 		this.slip44CoinType = slip44CoinType;
 		this.config = config;
@@ -46,6 +54,7 @@ public final class BitcoinyChainSpec {
 		this.defaultSpendFeePerByte = defaultSpendFeePerByte;
 		this.addressNormalizer = addressNormalizer;
 		this.spendableOutputScriptFilter = spendableOutputScriptFilter;
+		this.transactionFormat = transactionFormat;
 	}
 
 	private static Map<String, BitcoinyNetwork> toNetworksByName(Collection<? extends BitcoinyNetwork> networks) {
@@ -103,6 +112,10 @@ public final class BitcoinyChainSpec {
 
 	public boolean isSpendableOutputScript(byte[] scriptPubKey) {
 		return this.spendableOutputScriptFilter == null || this.spendableOutputScriptFilter.isSpendable(scriptPubKey);
+	}
+
+	public BitcoinyTransactionFormat getTransactionFormat() {
+		return this.transactionFormat;
 	}
 
 	@FunctionalInterface

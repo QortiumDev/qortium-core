@@ -394,7 +394,7 @@ public class CrossChainHtlcResource {
 					ECKey redeemKey = ECKey.fromPrivate(decodedTradePrivateKey);
 					List<UnspentOutput> fundingOutputs = bitcoiny.getUnspentOutputs(p2shAddressA, false);
 
-					Transaction p2shRedeemTransaction = BitcoinyHTLC.buildRedeemTransaction(bitcoiny.getNetworkParameters(), redeemAmount, redeemKey,
+					BitcoinySignedTransaction p2shRedeemTransaction = bitcoiny.buildHtlcRedeemTransaction(redeemAmount, redeemKey,
 							fundingOutputs, redeemScriptA, decodedSecret, foreignBlockchainReceivingAccountInfo);
 
 					bitcoiny.broadcastTransaction(p2shRedeemTransaction);
@@ -667,7 +667,7 @@ public class CrossChainHtlcResource {
 							if (!receiving.isP2PKH())
 								throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-							Transaction p2shRefundTransaction = BitcoinyHTLC.buildRefundTransaction(bitcoiny.getNetworkParameters(), refundAmount, refundKey,
+							BitcoinySignedTransaction p2shRefundTransaction = bitcoiny.buildHtlcRefundTransaction(refundAmount, refundKey,
 									fundingOutputs, redeemScriptA, lockTime, receiving.getPayload());
 
 							bitcoiny.broadcastTransaction(p2shRefundTransaction);

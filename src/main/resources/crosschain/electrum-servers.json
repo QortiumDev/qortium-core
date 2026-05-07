@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-07T16:40:19.933990778Z",
+  "generatedAt": "2026-05-07T20:20:48.497279332Z",
   "servers": {
     "BTC": {
       "MAIN": [
@@ -423,6 +423,13 @@
         {"host": "electrumx01.firo.org", "port": 50002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 1797},
         {"host": "electrumx02.firo.org", "port": 50002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 941},
         {"host": "firo.stackwallet.com", "port": 50002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 941}
+      ]
+    },
+    "KMD": {
+      "MAIN": [
+        {"host": "electrum1.cipig.net", "port": 20001, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 2859},
+        {"host": "electrum2.cipig.net", "port": 20001, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 2846},
+        {"host": "electrum3.cipig.net", "port": 20001, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 2865}
       ]
     }
   }

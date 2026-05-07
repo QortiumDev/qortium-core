@@ -5,6 +5,8 @@ import org.bitcoinj.core.*;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyAddress;
 import org.qortal.crosschain.BitcoinyHTLC;
+import org.qortal.crosschain.BitcoinySignedTransaction;
+import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.UnspentOutput;
 import org.qortal.crypto.Crypto;
 
@@ -134,8 +136,15 @@ public class RefundHTLC {
 
 		System.out.println(String.format("Spending %s of outputs, with %s as mining fee", bitcoiny.format(refundAmount), bitcoiny.format(p2shFee)));
 
-		Transaction refundTransaction = BitcoinyHTLC.buildRefundTransaction(bitcoiny.getNetworkParameters(), refundAmount, refundKey,
-				unspentOutputs, redeemScriptBytes, lockTime, outputAddress.getPayload());
+		BitcoinySignedTransaction refundTransaction;
+		try {
+			refundTransaction = bitcoiny.buildHtlcRefundTransaction(refundAmount, refundKey,
+					unspentOutputs, redeemScriptBytes, lockTime, outputAddress.getPayload());
+		} catch (ForeignBlockchainException e) {
+			System.err.println(String.format("Unable to build refund transaction: %s", e.getMessage()));
+			System.exit(1);
+			return;
+		}
 
 		Common.broadcastTransaction(bitcoiny, refundTransaction);
 	}
