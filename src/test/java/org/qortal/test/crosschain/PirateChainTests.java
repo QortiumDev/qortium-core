@@ -217,6 +217,30 @@ public class PirateChainTests extends BitcoinyTests {
 	}
 
 	@Test
+	public void testFindPirateHtlcSecretFromMockProvider() throws ForeignBlockchainException {
+		byte[] refunderPublicKey = HashCode.fromString("02" + "11".repeat(32)).asBytes();
+		byte[] redeemerPublicKey = HashCode.fromString("03" + "22".repeat(32)).asBytes();
+		byte[] secret = HashCode.fromString("33".repeat(32)).asBytes();
+		byte[] redeemScript = PirateChainHTLC.buildScript(refunderPublicKey, 1_700_000_000, redeemerPublicKey, Crypto.hash160(secret));
+
+		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider("PirateChain-mock-htlc");
+		TestBitcoiny mockBitcoiny = new TestBitcoiny(bitcoiny.getNetworkParameters(), blockchainProvider, getCoinSymbol());
+		String p2shAddress = mockBitcoiny.deriveP2shAddress(redeemScript);
+		byte[] p2shScriptPubKey = BitcoinyScript.scriptPubKey(mockBitcoiny.getNetworkParameters(), p2shAddress);
+		String redeemTxHash = "11".repeat(32);
+		byte[] scriptSig = Bytes.concat(
+				pushData(secret),
+				pushData(HashCode.fromString("304502").asBytes()),
+				pushData(redeemerPublicKey),
+				pushData(redeemScript));
+
+		blockchainProvider.addAddressTransaction(p2shScriptPubKey, new TransactionHash(10, redeemTxHash));
+		blockchainProvider.addRawTransaction(redeemTxHash, rawTransactionWithScriptSig(scriptSig));
+
+		assertArrayEquals(secret, PirateChainHTLC.findHtlcSecret(mockBitcoiny, p2shAddress));
+	}
+
+	@Test
 	public void testHTLCStatusFunded() throws ForeignBlockchainException {
 		assumeLiveCrosschainTestsEnabled();
 
@@ -387,5 +411,20 @@ public class PirateChainTests extends BitcoinyTests {
 
 	private interface PirateFixtureQuery<T> {
 		T run() throws ForeignBlockchainException;
+	}
+
+	private static byte[] pushData(byte[] data) {
+		if (data.length <= 75)
+			return Bytes.concat(new byte[] { (byte) data.length }, data);
+
+		return Bytes.concat(new byte[] { 0x4c, (byte) data.length }, data);
+	}
+
+	private static byte[] rawTransactionWithScriptSig(byte[] scriptSig) {
+		return Bytes.concat(
+				HashCode.fromString("0100000001" + "00".repeat(32) + "00000000").asBytes(),
+				new byte[] { (byte) scriptSig.length },
+				scriptSig,
+				HashCode.fromString("ffffffff0000000000").asBytes());
 	}
 }

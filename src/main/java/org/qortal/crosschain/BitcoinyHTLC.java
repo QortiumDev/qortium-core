@@ -236,12 +236,11 @@ public class BitcoinyHTLC {
 		List<byte[]> rawTransactions = bitcoiny.getAddressTransactions(p2shAddress);
 
 		for (byte[] rawTransaction : rawTransactions) {
-			Transaction transaction = new Transaction(params, rawTransaction);
+			BitcoinyTransaction transaction = BitcoinyRawTransactionParser.parse(rawTransaction);
 
 			// Cycle through inputs, looking for one that spends our HTLC
-			for (TransactionInput input : transaction.getInputs()) {
-				Script scriptSig = input.getScriptSig();
-				List<ScriptChunk> scriptChunks = scriptSig.getChunks();
+			for (BitcoinyTransaction.Input input : transaction.inputs) {
+				List<byte[]> scriptChunks = BitcoinyScript.extractScriptSigChunks(HashCode.fromString(input.scriptSig).asBytes());
 
 				// Expected number of script chunks for redeem. Refund might not have the same number.
 				int expectedChunkCount = 1 /*secret*/ + 1 /*sig*/ + 1 /*pubkey*/ + 1 /*redeemScript*/;
@@ -249,12 +248,7 @@ public class BitcoinyHTLC {
 					continue;
 
 				// We're expecting last chunk to contain the actual redeemScript
-				ScriptChunk lastChunk = scriptChunks.get(scriptChunks.size() - 1);
-				byte[] redeemScriptBytes = lastChunk.data;
-
-				// If non-push scripts, redeemScript will be null
-				if (redeemScriptBytes == null)
-					continue;
+				byte[] redeemScriptBytes = scriptChunks.get(scriptChunks.size() - 1);
 
 				byte[] redeemScriptHash = Crypto.hash160(redeemScriptBytes);
 				String inputAddress = BitcoinyAddress.fromScriptHash(params, redeemScriptHash).toString();
@@ -263,7 +257,7 @@ public class BitcoinyHTLC {
 					// Input isn't spending our HTLC
 					continue;
 
-				secret = scriptChunks.get(0).data;
+				secret = scriptChunks.get(0);
 				if (secret.length != BitcoinyHTLC.SECRET_LENGTH)
 					continue;
 
@@ -317,7 +311,7 @@ public class BitcoinyHTLC {
 
 			String scriptSig = bitcoinyTransaction.inputs.get(0).scriptSig;
 
-			List<byte[]> scriptSigChunks = extractScriptSigChunks(HashCode.fromString(scriptSig).asBytes());
+			List<byte[]> scriptSigChunks = BitcoinyScript.extractScriptSigChunks(HashCode.fromString(scriptSig).asBytes());
 			if (scriptSigChunks.size() < 3 || scriptSigChunks.size() > 4)
 				// Not valid chunks for our form of HTLC
 				continue;
@@ -369,37 +363,6 @@ public class BitcoinyHTLC {
 		cachedStatus = Status.UNFUNDED;
 		STATUS_CACHE.put(compoundKey, cachedStatus);
 		return cachedStatus;
-	}
-
-	private static List<byte[]> extractScriptSigChunks(byte[] scriptSigBytes) {
-		List<byte[]> chunks = new ArrayList<>();
-
-		int offset = 0;
-		int previousOffset = 0;
-		while (offset < scriptSigBytes.length) {
-			byte pushOp = scriptSigBytes[offset++];
-
-			if (pushOp < 0 || pushOp > 0x4c)
-				// Unacceptable OP
-				return Collections.emptyList();
-
-			// Special treatment for OP_PUSHDATA1
-			if (pushOp == 0x4c) {
-				if (offset >= scriptSigBytes.length)
-					// Run out of scriptSig bytes?
-					return Collections.emptyList();
-
-				pushOp = scriptSigBytes[offset++];
-			}
-
-			previousOffset = offset;
-			offset += Byte.toUnsignedInt(pushOp);
-
-			byte[] chunk = Arrays.copyOfRange(scriptSigBytes, previousOffset, offset);
-			chunks.add(chunk);
-		}
-
-		return chunks;
 	}
 
 	private static byte[] addressToScriptPubKey(String p2shAddress) {

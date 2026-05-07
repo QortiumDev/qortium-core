@@ -2,6 +2,11 @@ package org.qortal.crosschain;
 
 import org.bitcoinj.core.NetworkParameters;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Script helpers for standard Bitcoin-like output scripts.
  */
@@ -13,6 +18,7 @@ public final class BitcoinyScript {
 	private static final int OP_EQUAL = 0x87;
 	private static final int OP_EQUALVERIFY = 0x88;
 	private static final int OP_CHECKSIG = 0xac;
+	private static final int OP_PUSHDATA1 = 0x4c;
 
 	private BitcoinyScript() {
 	}
@@ -76,5 +82,32 @@ public final class BitcoinyScript {
 		System.arraycopy(witnessProgram, 0, script, 2, witnessProgram.length);
 
 		return script;
+	}
+
+	public static List<byte[]> extractScriptSigChunks(byte[] scriptSigBytes) {
+		List<byte[]> chunks = new ArrayList<>();
+
+		int offset = 0;
+		while (offset < scriptSigBytes.length) {
+			int pushLength = scriptSigBytes[offset++] & 0xff;
+
+			if (pushLength > OP_PUSHDATA1)
+				return Collections.emptyList();
+
+			if (pushLength == OP_PUSHDATA1) {
+				if (offset >= scriptSigBytes.length)
+					return Collections.emptyList();
+
+				pushLength = scriptSigBytes[offset++] & 0xff;
+			}
+
+			if (pushLength > scriptSigBytes.length - offset)
+				return Collections.emptyList();
+
+			chunks.add(Arrays.copyOfRange(scriptSigBytes, offset, offset + pushLength));
+			offset += pushLength;
+		}
+
+		return chunks;
 	}
 }

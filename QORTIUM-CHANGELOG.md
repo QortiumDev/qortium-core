@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: internalize HTLC scriptSig parsing
+
+Moved HTLC secret discovery onto Qortium-owned raw transaction and scriptSig push parsing for both Bitcoin-like and PirateChain HTLCs, using the generic Bitcoiny raw parser for Bitcoin-like transactions and the Pirate decoder for Zcash-style Pirate transactions. The shared Bitcoiny script helper now extracts push-data chunks directly, so HTLC read-only secret/status paths no longer need bitcoinj transaction or script parsing, while HTLC transaction signing remains on bitcoinj until the dedicated transaction builder is replaced.
+
 ### 2026-05-07 - crosschain: internalize Bitcoiny raw transaction parsing
 
 Added a Qortium-owned raw transaction parser for Bitcoin-like transaction inputs, outputs, lock time, legacy encoding, and segwit witness skipping. Bitcoiny output resolution now reads raw transaction output scripts and values through this parser instead of constructing a bitcoinj `Transaction`, moving another read-only crosschain path off bitcoinj while keeping spend construction and signing on bitcoinj for the later transaction-builder replacement.

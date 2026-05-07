@@ -11,6 +11,8 @@ import org.qortal.crosschain.BitcoinyAddress;
 import org.qortal.crosschain.BitcoinyChainSpecs;
 import org.qortal.crosschain.BitcoinyScript;
 
+import java.util.List;
+
 import static org.junit.Assert.*;
 
 public class BitcoinyAddressTests {
@@ -76,6 +78,23 @@ public class BitcoinyAddressTests {
 
 		assertEquals("a91400112233445566778899aabbccddeeff0011223387",
 				HashCode.fromBytes(BitcoinyScript.p2shScript(HASH160)).toString());
+	}
+
+	@Test
+	public void testExtractScriptSigChunks() {
+		List<byte[]> chunks = BitcoinyScript.extractScriptSigChunks(HashCode.fromString("02aabb4c0311223300").asBytes());
+
+		assertEquals(3, chunks.size());
+		assertEquals("aabb", HashCode.fromBytes(chunks.get(0)).toString());
+		assertEquals("112233", HashCode.fromBytes(chunks.get(1)).toString());
+		assertEquals(0, chunks.get(2).length);
+	}
+
+	@Test
+	public void testExtractScriptSigChunksRejectsMalformedPushes() {
+		assertTrue(BitcoinyScript.extractScriptSigChunks(HashCode.fromString("4c").asBytes()).isEmpty());
+		assertTrue(BitcoinyScript.extractScriptSigChunks(HashCode.fromString("03aabb").asBytes()).isEmpty());
+		assertTrue(BitcoinyScript.extractScriptSigChunks(HashCode.fromString("4d0100").asBytes()).isEmpty());
 	}
 
 	private static NetworkParameters bitcoinTest3Params() {
