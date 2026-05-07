@@ -35,6 +35,9 @@ public class BitcoinyRawTransactionParserTests {
 			+ LEGACY_RAW_HEX.substring(8);
 	private static final String PEERCOIN_VERSION3_RAW_HEX = "03000000"
 			+ LEGACY_RAW_HEX.substring(8);
+	private static final String TIMESTAMPED_LEGACY_RAW_HEX = "01000000"
+			+ "44332211"
+			+ LEGACY_RAW_HEX.substring(8);
 
 	@Test
 	public void testParsesLegacyTransaction() {
@@ -86,6 +89,20 @@ public class BitcoinyRawTransactionParserTests {
 	}
 
 	@Test
+	public void testParsesTimestampedLegacyTransaction() {
+		byte[] rawTransactionBytes = HashCode.fromString(TIMESTAMPED_LEGACY_RAW_HEX).asBytes();
+		BitcoinyTransaction transaction = BitcoinyRawTransactionParser.parse(BitcoinyTransactionFormat.TIMESTAMPED_LEGACY, rawTransactionBytes);
+
+		assertEquals(transactionHash(TIMESTAMPED_LEGACY_RAW_HEX), transaction.txHash);
+		assertEquals(rawTransactionBytes.length, transaction.size);
+		assertEquals(0x12345678, transaction.locktime);
+		assertEquals(1, transaction.inputs.size());
+		assertEquals(2, transaction.outputs.size());
+		assertEquals(10_000L, transaction.outputs.get(0).value);
+		assertEquals(P2PKH_SCRIPT, transaction.outputs.get(0).scriptPubKey);
+	}
+
+	@Test
 	public void testSerializesLegacyTransaction() {
 		BitcoinyTransactionData transaction = new BitcoinyTransactionData(1,
 				Collections.singletonList(new BitcoinyTransactionData.Input(reverseHex(PREVIOUS_TX_HASH_WIRE), 2,
@@ -97,6 +114,20 @@ public class BitcoinyRawTransactionParserTests {
 
 		assertEquals(LEGACY_RAW_HEX, HashCode.fromBytes(transaction.serialize()).toString());
 		assertEquals(transactionHash(LEGACY_RAW_HEX), transaction.txHash());
+	}
+
+	@Test
+	public void testSerializesTimestampedLegacyTransaction() {
+		BitcoinyTransactionData transaction = new BitcoinyTransactionData(1, 0x11223344L,
+				Collections.singletonList(new BitcoinyTransactionData.Input(reverseHex(PREVIOUS_TX_HASH_WIRE), 2,
+						HashCode.fromString("aabbcc").asBytes(), 0xfffffffeL)),
+				List.of(
+						new BitcoinyTransactionData.Output(10_000L, HashCode.fromString(P2PKH_SCRIPT).asBytes()),
+						new BitcoinyTransactionData.Output(5L, HashCode.fromString(P2SH_SCRIPT).asBytes())),
+				0x12345678L);
+
+		assertEquals(TIMESTAMPED_LEGACY_RAW_HEX, HashCode.fromBytes(transaction.serialize()).toString());
+		assertEquals(transactionHash(TIMESTAMPED_LEGACY_RAW_HEX), transaction.txHash());
 	}
 
 	@Test

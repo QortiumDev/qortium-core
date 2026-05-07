@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: add Verge Bitcoiny support
+
+Added Verge as a registered BTC-like crosschain coin using the shared Bitcoiny chain-spec model, including mainnet chain identity, SLIP-44 wallet metadata, XVG address headers, SSL Electrum server refresh metadata, common wallet/HTLC/ACCT test coverage, and chain-spec documentation. Because XVG uses six decimal places and includes a transaction timestamp field in ordinary transparent transactions, the shared Bitcoiny runtime now has a timestamped legacy transaction builder/parser for XVG spends and HTLC redeem/refund transactions while leaving Verge stealth, messaging, and Tor/I2P routing features outside generic BTC-like support.
+
 ### 2026-05-07 - crosschain: add Peercoin Bitcoiny support
 
 Added Peercoin as a registered BTC-like crosschain coin using the shared Bitcoiny chain-spec model, including mainnet chain identity, SLIP-44 wallet metadata, PPC address headers, SSL Electrum server refresh metadata, common wallet/HTLC/ACCT test coverage, and chain-spec documentation. Because PPC uses six decimal places and Peercoin's current transaction serialization, the shared Bitcoiny runtime now carries per-chain decimal metadata and builds PPC spend and HTLC transactions as version 3 while still being able to parse older pre-version-3 Peercoin transactions that include a transaction timestamp field.

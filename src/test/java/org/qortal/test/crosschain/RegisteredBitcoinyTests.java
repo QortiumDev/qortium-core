@@ -63,6 +63,10 @@ public class RegisteredBitcoinyTests extends BitcoinyTests {
 				{ new ChainFixture(ForeignBlockchainRegistry.fromStringRequired("LBRYCREDITS"), "LBRY Credits", "LBC",
 						"xprv9z8QpS7vxwMC2fCnG1oZc6c4aFRLgsqSF86yWrJBKEzMY3T3ySCo85x8Uv5FxTavAQwgEDy1g3iLRT5kdtFjoNNBKukLTMzKwCUn1Abwoxg",
 						"xpub6D7mDwepoJuVF9HFN3LZyEYo8HFq6LZHcM2aKEhnsaXLQqnCWyX3ftGcLDcjYmiPCc9GNX4VjfT32hwvYQnh9H5Z5diAvMsXRrxFmckyNoR",
+						null) },
+				{ new ChainFixture(ForeignBlockchainRegistry.fromStringRequired("VERGE"), "Verge", "XVG",
+						"TDt9Ee2cL2o71x13ZrmAGDPnxA2eey8jra3hXYNoww7zCKqSb6qi9Q78g4szyLsTpf8GEUAVWpxJcMDnatsxrXaLB9E5kdvviG9rtEZ3kz4vs8a",
+						"ToEA6mwKngS8q39wQLXVVNSLoKFpVtRJi8TvSsTCydsqrAZQhRrMrHvjcFZd2YbVvUNf6oStUiNnmKhCyd3Bmsy9CCp6YJy92kYZmij3jMjPrGo",
 						null) }
 		});
 	}

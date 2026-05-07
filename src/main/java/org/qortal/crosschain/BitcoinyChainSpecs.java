@@ -31,6 +31,7 @@ public final class BitcoinyChainSpecs {
 	public static final String FIRO_CURRENCY_CODE = "FIRO";
 	public static final String KOMODO_CURRENCY_CODE = "KMD";
 	public static final String LBRY_CREDITS_CURRENCY_CODE = "LBC";
+	public static final String VERGE_CURRENCY_CODE = "XVG";
 	public static final int BITCOIN_SLIP44_COIN_TYPE = 0;
 	public static final int LITECOIN_SLIP44_COIN_TYPE = 2;
 	public static final int DOGECOIN_SLIP44_COIN_TYPE = 3;
@@ -42,6 +43,7 @@ public final class BitcoinyChainSpecs {
 	public static final int KOMODO_SLIP44_COIN_TYPE = 141;
 	public static final int LBRY_CREDITS_SLIP44_COIN_TYPE = 140;
 	public static final int RAVENCOIN_SLIP44_COIN_TYPE = 175;
+	public static final int VERGE_SLIP44_COIN_TYPE = 77;
 
 	private static final String BITCOIN_GENESIS_COINBASE_SCRIPT = "04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73";
 	private static final String BITCOIN_GENESIS_MERKLE_ROOT = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
@@ -56,6 +58,7 @@ public final class BitcoinyChainSpecs {
 	private static final String KOMODO_GENESIS_MERKLE_ROOT = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
 	private static final String LBRY_CREDITS_GENESIS_MERKLE_ROOT = "b8211c82c3d15bcd78bba57005b86fed515149a53a425eb592c07af99fe559cc";
 	private static final String PEERCOIN_GENESIS_MERKLE_ROOT = "3c2d8f85fab4d17aac558cc648a1a58acff0de6deb890c29985690052c5993c2";
+	private static final String VERGE_GENESIS_MERKLE_ROOT = "1c83275d9151711eec3aec37d829837cc3c2730b2bdfd00ec5e8e5dce675fd00";
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
 	private static final NetworkParameters BITCOIN_MAIN_NET_PARAMS = bitcoinParams("org.bitcoin.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, "bc")
@@ -281,6 +284,19 @@ public final class BitcoinyChainSpecs {
 			.majorityWindow(750, 950, 1000)
 			.dnsSeeds("dnsseed1.lbry.io", "dnsseed2.lbry.io", "dnsseed3.lbry.io")
 			.build();
+	private static final NetworkParameters VERGE_MAIN_NET_PARAMS = vergeParams("org.verge.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
+			.genesis(1412878964L, 1473191L, 0x1e0fffffL, "00000fc63692467faeb20cdb3b53200dc601d75bdfa1001463304cc790d77278")
+			.genesisHeader(1L, VERGE_GENESIS_MERKLE_ROOT)
+			.port(21102)
+			.packetMagic(0xf7a77effL)
+			.addressHeaders(30, 33, 158)
+			.segwitAddressHrp("vg")
+			.coinbaseAndSubsidy(120, 500_000)
+			.bip32Headers(0x022D2533, 0x0221312B)
+			.majorityWindow(100, 100, 200)
+			.dnsSeeds("seed1.verge-blockchain.com", "seed2.verge-blockchain.com", "seed3.verge-blockchain.com",
+					"xvg.nownodes.io")
+			.build();
 	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", BITCOIN_SLIP44_COIN_TYPE, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
 			.mainnet(() -> BITCOIN_MAIN_NET_PARAMS, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", 1_500L, "btc")
 			.test3(() -> BITCOIN_TEST_NET_PARAMS, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", 1_500L, 1_000L, "tbtc")
@@ -336,7 +352,13 @@ public final class BitcoinyChainSpecs {
 			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isLbryClaimOutputScript(scriptPubKey))
 			.build();
 
-	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, PEERCOIN, NAMECOIN, FIRO, KOMODO, LBRY_CREDITS);
+	public static final BitcoinyChainSpec VERGE = spec("VERGE", VERGE_SLIP44_COIN_TYPE, "Verge", VERGE_CURRENCY_CODE,
+			Coin.valueOf(10_000), 1_000_000, 6)
+			.mainnet(() -> VERGE_MAIN_NET_PARAMS, "00000fc63692467faeb20cdb3b53200dc601d75bdfa1001463304cc790d77278", 10_000L, "xvg")
+			.transactionFormat(BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
+			.build();
+
+	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, PEERCOIN, NAMECOIN, FIRO, KOMODO, LBRY_CREDITS, VERGE);
 
 	private static final List<String> CURRENCY_CODES = ALL.stream()
 			.map(BitcoinyChainSpec::getCurrencyCode)
@@ -509,6 +531,21 @@ public final class BitcoinyChainSpecs {
 						.code(3, "mLBC")
 						.code(7, "Dewey"))
 				.difficultyValidationFailure("LBRY Credits difficulty verification is not implemented for Electrum-backed parameters");
+	}
+
+	private static StaticBitcoinyParams.Builder vergeParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "verge")
+				.maxTarget("00000fffff000000000000000000000000000000000000000000000000000000")
+				.targetTimespan(30)
+				.interval(1)
+				.maxMoney(Coin.valueOf(16_555_000_000L * 1_000_000L))
+				.minNonDustOutput(Coin.valueOf(10_000L))
+				.monetaryFormat(new MonetaryFormat().noCode()
+						.code(2, VERGE_CURRENCY_CODE)
+						.shift(2)
+						.minDecimals(2)
+						.repeatOptionalDecimals(1, 4))
+				.difficultyValidationFailure("Verge difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	private static BitcoinyChainSpec.ElectrumServerRefreshConfig refresh(String networkName, String chain1209k) {

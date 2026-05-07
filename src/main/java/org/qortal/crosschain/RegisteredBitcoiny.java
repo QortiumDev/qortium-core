@@ -50,7 +50,8 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 
 	@Override
 	public Transaction buildSpend(String xprv58, String recipient, long amount, Long feePerByte) {
-		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			throw unsupportedBitcoinjTransactionFormat();
 
 		return super.buildSpend(xprv58, recipient, amount, feePerByte);
@@ -58,7 +59,8 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 
 	@Override
 	public Transaction buildSpend(String xprv58, String recipient, long amount) {
-		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			throw unsupportedBitcoinjTransactionFormat();
 
 		Long defaultSpendFeePerByte = this.spec.getDefaultSpendFeePerByte();
@@ -70,7 +72,8 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 
 	@Override
 	public Transaction buildSpendMultiple(String xprv58, Map<String, Long> amountByRecipient, Long feePerByte) {
-		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			throw unsupportedBitcoinjTransactionFormat();
 
 		return super.buildSpendMultiple(xprv58, amountByRecipient, feePerByte);
@@ -81,6 +84,9 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
 			return SaplingTransparentTransactionBuilder.buildSpend(this, xprv58, recipient, amount, feePerByte);
 
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
+			return TimestampedLegacyTransactionBuilder.buildSpend(this, xprv58, recipient, amount, feePerByte);
+
 		return super.buildSpendTransaction(xprv58, recipient, amount, feePerByte);
 	}
 
@@ -88,6 +94,9 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	public BitcoinySignedTransaction buildSpendMultipleTransaction(String xprv58, Map<String, Long> amountByRecipient, Long feePerByte) {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
 			return SaplingTransparentTransactionBuilder.buildSpend(this, xprv58, amountByRecipient, feePerByte);
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
+			return TimestampedLegacyTransactionBuilder.buildSpend(this, xprv58, amountByRecipient, feePerByte);
 
 		return super.buildSpendMultipleTransaction(xprv58, amountByRecipient, feePerByte);
 	}
@@ -99,6 +108,10 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 			return SaplingTransparentTransactionBuilder.buildRedeem(this, redeemAmount, redeemKey, fundingOutputs,
 					redeemScriptBytes, secret, receivingAccountInfo);
 
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
+			return TimestampedLegacyTransactionBuilder.buildRedeem(this, redeemAmount, redeemKey, fundingOutputs,
+					redeemScriptBytes, secret, receivingAccountInfo);
+
 		return super.buildHtlcRedeemTransaction(redeemAmount, redeemKey, fundingOutputs, redeemScriptBytes, secret, receivingAccountInfo);
 	}
 
@@ -107,6 +120,10 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 			byte[] redeemScriptBytes, long lockTime, byte[] receivingAccountInfo) throws ForeignBlockchainException {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
 			return SaplingTransparentTransactionBuilder.buildRefund(this, refundAmount, refundKey, fundingOutputs,
+					redeemScriptBytes, lockTime, receivingAccountInfo);
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
+			return TimestampedLegacyTransactionBuilder.buildRefund(this, refundAmount, refundKey, fundingOutputs,
 					redeemScriptBytes, lockTime, receivingAccountInfo);
 
 		return super.buildHtlcRefundTransaction(refundAmount, refundKey, fundingOutputs, redeemScriptBytes, lockTime, receivingAccountInfo);
@@ -141,6 +158,14 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.PEERCOIN) {
 			try {
 				return BitcoinyRawTransactionParser.parse(BitcoinyTransactionFormat.PEERCOIN, txHash, rawTransaction);
+			} catch (RuntimeException e) {
+				throw new ForeignBlockchainException(String.format("Unable to deserialize raw transaction: %s", e.getMessage()));
+			}
+		}
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY) {
+			try {
+				return BitcoinyRawTransactionParser.parse(BitcoinyTransactionFormat.TIMESTAMPED_LEGACY, txHash, rawTransaction);
 			} catch (RuntimeException e) {
 				throw new ForeignBlockchainException(String.format("Unable to deserialize raw transaction: %s", e.getMessage()));
 			}

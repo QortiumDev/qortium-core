@@ -73,7 +73,7 @@ public final class BitcoinyRawTransactionParser {
 			int version = readInt32();
 			int prefixEnd = this.offset;
 
-			if (transactionFormat == BitcoinyTransactionFormat.PEERCOIN && version < 3) {
+			if (hasTransactionTimestamp(transactionFormat, version)) {
 				readInt32();
 				prefixEnd = this.offset;
 			}
@@ -124,6 +124,11 @@ public final class BitcoinyRawTransactionParser {
 			System.arraycopy(this.bytes, lockTimeStart, txHashBytes, prefixLength + baseSectionLength, 4);
 
 			return txHashBytes;
+		}
+
+		private boolean hasTransactionTimestamp(BitcoinyTransactionFormat transactionFormat, int version) {
+			return transactionFormat == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY
+					|| (transactionFormat == BitcoinyTransactionFormat.PEERCOIN && version < 3);
 		}
 
 		private List<BitcoinyTransaction.Input> readInputs(long inputCount) {

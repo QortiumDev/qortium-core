@@ -48,7 +48,8 @@ public class BitcoinyChainSpecsTests {
 				new ChainManifest("NAMECOIN", "NMC", BitcoinyChainSpecs.NAMECOIN_SLIP44_COIN_TYPE, "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770", Set.of(BitcoinyChainSpecs.MAIN), 52, 13, 180, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("FIRO", "FIRO", BitcoinyChainSpecs.FIRO_SLIP44_COIN_TYPE, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", Set.of(BitcoinyChainSpecs.MAIN), 82, 7, 210, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("KOMODO", "KMD", BitcoinyChainSpecs.KOMODO_SLIP44_COIN_TYPE, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", Set.of(BitcoinyChainSpecs.MAIN), 60, 85, 188, 0x0488B21E, 0x0488ADE4),
-				new ChainManifest("LBRYCREDITS", "LBC", BitcoinyChainSpecs.LBRY_CREDITS_SLIP44_COIN_TYPE, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463", Set.of(BitcoinyChainSpecs.MAIN), 0x55, 0x7a, 0x1c, 0x0488B21E, 0x0488ADE4))) {
+				new ChainManifest("LBRYCREDITS", "LBC", BitcoinyChainSpecs.LBRY_CREDITS_SLIP44_COIN_TYPE, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463", Set.of(BitcoinyChainSpecs.MAIN), 0x55, 0x7a, 0x1c, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("VERGE", "XVG", BitcoinyChainSpecs.VERGE_SLIP44_COIN_TYPE, "00000fc63692467faeb20cdb3b53200dc601d75bdfa1001463304cc790d77278", Set.of(BitcoinyChainSpecs.MAIN), 30, 33, 158, 0x022D2533, 0x0221312B))) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(expected.currencyCode);
 			assertNotNull(expected.currencyCode, spec);
 			assertEquals(expected.canonicalName, spec.getCanonicalName());
@@ -189,7 +190,8 @@ public class BitcoinyChainSpecsTests {
 				BitcoinyChainSpecs.NAMECOIN,
 				BitcoinyChainSpecs.FIRO,
 				BitcoinyChainSpecs.KOMODO,
-				BitcoinyChainSpecs.LBRY_CREDITS
+				BitcoinyChainSpecs.LBRY_CREDITS,
+				BitcoinyChainSpecs.VERGE
 		}) {
 			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST3));
 			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST4));
@@ -587,6 +589,45 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testVergeUsesSharedStaticParams() {
+		BitcoinyNetwork vergeMainNet = BitcoinyChainSpecs.VERGE.getNetwork(BitcoinyChainSpecs.MAIN);
+		NetworkParameters vergeMainNetParams = vergeMainNet.getParams();
+		Block genesisBlock = vergeMainNetParams.getGenesisBlock();
+
+		assertTrue(vergeMainNetParams instanceof StaticBitcoinyParams);
+		assertEquals(BitcoinyTransactionFormat.TIMESTAMPED_LEGACY, BitcoinyChainSpecs.VERGE.getTransactionFormat());
+		assertEquals("org.verge.production", vergeMainNetParams.getId());
+		assertEquals(NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, vergeMainNetParams.getPaymentProtocolId());
+		assertEquals("verge", vergeMainNetParams.getUriScheme());
+		assertEquals("00000fc63692467faeb20cdb3b53200dc601d75bdfa1001463304cc790d77278", genesisBlock.getHashAsString());
+		assertEquals(1L, genesisBlock.getVersion());
+		assertEquals("1c83275d9151711eec3aec37d829837cc3c2730b2bdfd00ec5e8e5dce675fd00", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1412878964L, genesisBlock.getTimeSeconds());
+		assertEquals(0x1e0fffffL, genesisBlock.getDifficultyTarget());
+		assertEquals(1473191L, genesisBlock.getNonce());
+		assertEquals(new BigInteger("00000fffff000000000000000000000000000000000000000000000000000000", 16), vergeMainNetParams.getMaxTarget());
+		assertEquals(30, vergeMainNetParams.getTargetTimespan());
+		assertEquals(1, vergeMainNetParams.getInterval());
+		assertEquals(21102, vergeMainNetParams.getPort());
+		assertEquals(0xf7a77effL, vergeMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(30, vergeMainNetParams.getAddressHeader());
+		assertEquals(33, vergeMainNetParams.getP2SHHeader());
+		assertEquals(158, vergeMainNetParams.getDumpedPrivateKeyHeader());
+		assertEquals("vg", vergeMainNetParams.getSegwitAddressHrp());
+		assertEquals(120, vergeMainNetParams.getSpendableCoinbaseDepth());
+		assertEquals(500_000, vergeMainNetParams.getSubsidyDecreaseBlockCount());
+		assertEquals(0x022D2533, vergeMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0221312B, vergeMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(Coin.valueOf(16_555_000_000L * 1_000_000L), vergeMainNetParams.getMaxMoney());
+		assertEquals(Coin.valueOf(10_000L), vergeMainNetParams.getMinNonDustOutput());
+		assertEquals("XVG 1.00", vergeMainNetParams.getMonetaryFormat().format(Coin.valueOf(1_000_000L)).toString());
+		assertEquals(6, BitcoinyChainSpecs.VERGE.getConfig().getDecimalPlaces());
+
+		RegisteredBitcoiny verge = new RegisteredBitcoiny(BitcoinyChainSpecs.VERGE, vergeMainNet);
+		assertEquals("1.234567 XVG", verge.format(1_234_567L));
+	}
+
+	@Test
 	public void testPirateChainUsesSharedStaticMainNetParams() {
 		NetworkParameters pirateMainNetParams = PirateChain.PirateChainNet.MAIN.getParams();
 		Block genesisBlock = pirateMainNetParams.getGenesisBlock();
@@ -631,6 +672,7 @@ public class BitcoinyChainSpecsTests {
 		assertSame(BitcoinyChainSpecs.FIRO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.FIRO_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.KOMODO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.KOMODO_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.LBRY_CREDITS.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LBRY_CREDITS_CURRENCY_CODE));
+		assertSame(BitcoinyChainSpecs.VERGE.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.VERGE_CURRENCY_CODE));
 	}
 
 	private static byte[] buildNameNewScript(byte[] lockScript) {

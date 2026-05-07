@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-07T21:56:12.376701767Z",
+  "generatedAt": "2026-05-07T22:57:48.219473378Z",
   "servers": {
     "BTC": {
       "MAIN": [
@@ -411,6 +411,11 @@
         {"host": "electrum3.cipig.net", "port": 20061, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 3470}
       ]
     },
+    "PPC": {
+      "MAIN": [
+        {"host": "electrum.peercoinexplorer.net", "port": 50002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 1019}
+      ]
+    },
     "NMC": {
       "MAIN": [
         {"host": "162.212.154.52", "port": 50002, "protocol": "SSL", "source": "peer", "responseTimeMillis": 921},
@@ -437,9 +442,10 @@
         {"host": "lbc.electrum1.cipig.net", "port": 10067, "protocol": "TCP", "source": "1209k", "responseTimeMillis": 3273}
       ]
     },
-    "PPC": {
+    "XVG": {
       "MAIN": [
-        {"host": "electrum.peercoinexplorer.net", "port": 50002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 1019}
+        {"host": "electrum-verge.cloud", "port": 50002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 209},
+        {"host": "electrumx-verge.cloud", "port": 50002, "protocol": "SSL", "source": "1209k", "responseTimeMillis": 216}
       ]
     }
   }

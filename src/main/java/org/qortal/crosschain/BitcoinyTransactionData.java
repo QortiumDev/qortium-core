@@ -15,11 +15,16 @@ public final class BitcoinyTransactionData {
 	public static final long NO_LOCKTIME_SEQUENCE = 0xffffffffL;
 
 	private final int version;
+	private final Long timestamp;
 	private final List<Input> inputs;
 	private final List<Output> outputs;
 	private final long lockTime;
 
 	public BitcoinyTransactionData(int version, List<Input> inputs, List<Output> outputs, long lockTime) {
+		this(version, null, inputs, outputs, lockTime);
+	}
+
+	public BitcoinyTransactionData(int version, Long timestamp, List<Input> inputs, List<Output> outputs, long lockTime) {
 		if (inputs == null)
 			throw new IllegalArgumentException("Missing transaction inputs");
 		if (outputs == null)
@@ -29,9 +34,12 @@ public final class BitcoinyTransactionData {
 		if (outputs.isEmpty())
 			throw new IllegalArgumentException("Transaction has no outputs");
 
+		if (timestamp != null)
+			validateUnsignedInt(timestamp, "timestamp");
 		validateUnsignedInt(lockTime, "lockTime");
 
 		this.version = version;
+		this.timestamp = timestamp;
 		this.inputs = Collections.unmodifiableList(new ArrayList<>(inputs));
 		this.outputs = Collections.unmodifiableList(new ArrayList<>(outputs));
 		this.lockTime = lockTime;
@@ -57,6 +65,10 @@ public final class BitcoinyTransactionData {
 		return this.version;
 	}
 
+	public Long getTimestamp() {
+		return this.timestamp;
+	}
+
 	public List<Input> getInputs() {
 		return this.inputs;
 	}
@@ -73,6 +85,9 @@ public final class BitcoinyTransactionData {
 		ByteArrayOutputStream output = new ByteArrayOutputStream();
 
 		writeInt32(output, this.version);
+		if (this.timestamp != null)
+			writeUnsignedInt32(output, this.timestamp);
+
 		writeVarInt(output, this.inputs.size());
 		for (Input input : this.inputs)
 			input.serialize(output);
