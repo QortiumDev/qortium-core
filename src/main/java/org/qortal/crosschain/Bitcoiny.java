@@ -226,6 +226,9 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	 * @throws ForeignBlockchainException if there was an error
 	 */
 	public long getConfirmedBalance(String base58Address) throws ForeignBlockchainException {
+		if (hasSpendableOutputScriptFilter())
+			return summingUnspentOutputs(base58Address);
+
 		return this.blockchainProvider.getConfirmedBalance(addressToScriptPubKey(base58Address));
 	}
 
@@ -253,6 +256,7 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 
 		return resolvedUnspentOutputs.stream().filter(Optional::isPresent)
 				.map(Optional::get)
+				.filter(this::isSpendableOutput)
 				.collect(Collectors.toList());
 	}
 
@@ -645,11 +649,7 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 
 	private Optional<Long> getUnspentValueFromAddress(String address) {
 		try {
-			long value = this.blockchainProvider.getUnspentOutputs(address, true)
-					.stream()
-					.mapToLong(unspentOutput -> unspentOutput.value)
-					.sum();
-			return Optional.of(value);
+			return Optional.of(summingUnspentOutputs(address));
 		} catch (Exception e) {
 			LOGGER.warn("Failed to fetch unspent value for address {}: {}", address, e.getMessage());
 			return Optional.empty();
@@ -1424,7 +1424,8 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 						throw new ForeignBlockchainException(String.format("Unable to resolve spendable output %s:%d",
 								HashCode.fromBytes(unspentOutput.hash), unspentOutput.index));
 
-					spendableOutputs.add(resolvedUnspentOutput.get());
+					if (isSpendableOutput(resolvedUnspentOutput.get()))
+						spendableOutputs.add(resolvedUnspentOutput.get());
 				}
 			}
 
@@ -1442,6 +1443,18 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 			return 0;
 
 		return path.get(path.size() - 1) & Integer.MAX_VALUE;
+	}
+
+	protected boolean hasSpendableOutputScriptFilter() {
+		return false;
+	}
+
+	protected boolean isSpendableOutputScript(byte[] scriptPubKey) {
+		return true;
+	}
+
+	private boolean isSpendableOutput(UnspentOutput unspentOutput) {
+		return unspentOutput.script != null && isSpendableOutputScript(unspentOutput.script);
 	}
 
 	private static void primeWalletForSpend(Wallet wallet, SpendableOutputs spendableOutputs) {
@@ -1493,7 +1506,10 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 	}
 
 	private Long summingUnspentOutputs(String walletAddress) throws ForeignBlockchainException {
-		return this.blockchainProvider.getUnspentOutputs(walletAddress, true).stream()
+		List<UnspentOutput> unspentOutputs = hasSpendableOutputScriptFilter()
+				? getUnspentOutputs(walletAddress, true)
+				: this.blockchainProvider.getUnspentOutputs(walletAddress, true);
+		return unspentOutputs.stream()
 				.mapToLong(unspentOutput -> unspentOutput.value)
 				.sum();
 	}

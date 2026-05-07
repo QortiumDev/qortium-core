@@ -17,6 +17,16 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	}
 
 	@Override
+	protected boolean hasSpendableOutputScriptFilter() {
+		return this.spec.hasSpendableOutputScriptFilter();
+	}
+
+	@Override
+	protected boolean isSpendableOutputScript(byte[] scriptPubKey) {
+		return this.spec.isSpendableOutputScript(scriptPubKey);
+	}
+
+	@Override
 	public Transaction buildSpend(String xprv58, String recipient, long amount) {
 		Long defaultSpendFeePerByte = this.spec.getDefaultSpendFeePerByte();
 		if (defaultSpendFeePerByte != null)

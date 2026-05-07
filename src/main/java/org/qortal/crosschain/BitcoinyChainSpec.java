@@ -18,19 +18,26 @@ public final class BitcoinyChainSpec {
 	private final List<ElectrumServerRefreshConfig> electrumServerRefreshConfigs;
 	private final Long defaultSpendFeePerByte;
 	private final AddressNormalizer addressNormalizer;
+	private final SpendableOutputScriptFilter spendableOutputScriptFilter;
 
 	public BitcoinyChainSpec(int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs) {
-		this(config.getCurrencyCode(), slip44CoinType, config, networks, electrumServerRefreshConfigs, null, null);
+		this(config.getCurrencyCode(), slip44CoinType, config, networks, electrumServerRefreshConfigs, null, null, null);
 	}
 
 	public BitcoinyChainSpec(int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer) {
-		this(config.getCurrencyCode(), slip44CoinType, config, networks, electrumServerRefreshConfigs, defaultSpendFeePerByte, addressNormalizer);
+		this(config.getCurrencyCode(), slip44CoinType, config, networks, electrumServerRefreshConfigs, defaultSpendFeePerByte, addressNormalizer, null);
 	}
 
 	public BitcoinyChainSpec(String canonicalName, int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer) {
+		this(canonicalName, slip44CoinType, config, networks, electrumServerRefreshConfigs, defaultSpendFeePerByte, addressNormalizer, null);
+	}
+
+	public BitcoinyChainSpec(String canonicalName, int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
+			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer,
+			SpendableOutputScriptFilter spendableOutputScriptFilter) {
 		this.canonicalName = canonicalName;
 		this.slip44CoinType = slip44CoinType;
 		this.config = config;
@@ -38,6 +45,7 @@ public final class BitcoinyChainSpec {
 		this.electrumServerRefreshConfigs = Collections.unmodifiableList(new ArrayList<>(electrumServerRefreshConfigs));
 		this.defaultSpendFeePerByte = defaultSpendFeePerByte;
 		this.addressNormalizer = addressNormalizer;
+		this.spendableOutputScriptFilter = spendableOutputScriptFilter;
 	}
 
 	private static Map<String, BitcoinyNetwork> toNetworksByName(Collection<? extends BitcoinyNetwork> networks) {
@@ -89,9 +97,22 @@ public final class BitcoinyChainSpec {
 		return this.addressNormalizer.normalize(address, networkParameters);
 	}
 
+	public boolean hasSpendableOutputScriptFilter() {
+		return this.spendableOutputScriptFilter != null;
+	}
+
+	public boolean isSpendableOutputScript(byte[] scriptPubKey) {
+		return this.spendableOutputScriptFilter == null || this.spendableOutputScriptFilter.isSpendable(scriptPubKey);
+	}
+
 	@FunctionalInterface
 	public interface AddressNormalizer {
 		String normalize(String address, NetworkParameters networkParameters);
+	}
+
+	@FunctionalInterface
+	public interface SpendableOutputScriptFilter {
+		boolean isSpendable(byte[] scriptPubKey);
 	}
 
 	public static final class ElectrumServerRefreshConfig {

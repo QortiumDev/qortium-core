@@ -19,6 +19,13 @@ public final class BitcoinyScript {
 	private static final int OP_EQUALVERIFY = 0x88;
 	private static final int OP_CHECKSIG = 0xac;
 	private static final int OP_PUSHDATA1 = 0x4c;
+	private static final int OP_PUSHDATA2 = 0x4d;
+	private static final int OP_PUSHDATA4 = 0x4e;
+	private static final int OP_2DROP = 0x6d;
+	private static final int OP_DROP = 0x75;
+	private static final int OP_NAME_NEW = 0x51;
+	private static final int OP_NAME_FIRSTUPDATE = 0x52;
+	private static final int OP_NAME_UPDATE = 0x53;
 
 	private BitcoinyScript() {
 	}
@@ -104,6 +111,81 @@ public final class BitcoinyScript {
 		}
 
 		throw new IllegalArgumentException("Push data is too large");
+	}
+
+	public static boolean isNamecoinNameOutputScript(byte[] script) {
+		if (script == null || script.length == 0)
+			return false;
+
+		int offset = 1;
+		switch (script[0] & 0xff) {
+			case OP_NAME_NEW:
+				offset = readPushDataEnd(script, offset);
+				if (offset < 0 || offset >= script.length || (script[offset++] & 0xff) != OP_2DROP)
+					return false;
+				return offset < script.length;
+
+			case OP_NAME_FIRSTUPDATE:
+				offset = readPushDataEnd(script, offset);
+				offset = readPushDataEnd(script, offset);
+				offset = readPushDataEnd(script, offset);
+				if (offset < 0 || offset + 2 >= script.length)
+					return false;
+				if ((script[offset++] & 0xff) != OP_2DROP || (script[offset++] & 0xff) != OP_2DROP)
+					return false;
+				return offset < script.length;
+
+			case OP_NAME_UPDATE:
+				offset = readPushDataEnd(script, offset);
+				offset = readPushDataEnd(script, offset);
+				if (offset < 0 || offset + 2 >= script.length)
+					return false;
+				if ((script[offset++] & 0xff) != OP_2DROP || (script[offset++] & 0xff) != OP_DROP)
+					return false;
+				return offset < script.length;
+
+			default:
+				return false;
+		}
+	}
+
+	private static int readPushDataEnd(byte[] script, int offset) {
+		if (offset < 0 || offset >= script.length)
+			return -1;
+
+		int opcode = script[offset++] & 0xff;
+		long length;
+
+		if (opcode < OP_PUSHDATA1) {
+			length = opcode;
+		} else if (opcode == OP_PUSHDATA1) {
+			if (offset >= script.length)
+				return -1;
+
+			length = script[offset++] & 0xff;
+		} else if (opcode == OP_PUSHDATA2) {
+			if (offset + 1 >= script.length)
+				return -1;
+
+			length = (script[offset] & 0xffL) | ((script[offset + 1] & 0xffL) << 8);
+			offset += 2;
+		} else if (opcode == OP_PUSHDATA4) {
+			if (offset + 3 >= script.length)
+				return -1;
+
+			length = (script[offset] & 0xffL)
+					| ((script[offset + 1] & 0xffL) << 8)
+					| ((script[offset + 2] & 0xffL) << 16)
+					| ((script[offset + 3] & 0xffL) << 24);
+			offset += 4;
+		} else {
+			return -1;
+		}
+
+		if (length > script.length - offset)
+			return -1;
+
+		return offset + (int) length;
 	}
 
 	public static List<byte[]> extractScriptSigChunks(byte[] scriptSigBytes) {

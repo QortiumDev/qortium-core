@@ -22,6 +22,7 @@ import org.qortal.crypto.Crypto;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.Common;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -198,6 +199,29 @@ public abstract class BitcoinyTests extends Common {
 	}
 
 	@Test
+	public void testWalletBalanceAndSpendIgnoreFilteredOutputs() throws ForeignBlockchainException {
+		assumeTrue(supportsDeterministicWalletTests());
+
+		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider(getCoinName() + "-mock-filtered-utxo");
+		TestBitcoiny mockBitcoiny = new TestBitcoiny(this.bitcoiny.getNetworkParameters(), blockchainProvider, getCoinSymbol(),
+				scriptPubKey -> !BitcoinyScript.isNamecoinNameOutputScript(scriptPubKey));
+		String walletAddress = mockBitcoiny.getWalletAddresses(getDeterministicKey58()).iterator().next();
+		byte[] walletScript = BitcoinyScript.scriptPubKey(mockBitcoiny.getNetworkParameters(), walletAddress);
+		byte[] nameUpdateScript = buildNameUpdateScript(walletScript);
+
+		blockchainProvider.addUnspentOutput(walletScript,
+				new UnspentOutput(HashCode.fromString("03".repeat(32)).asBytes(), 0, 1, 50_000L, walletScript, walletAddress));
+		blockchainProvider.addUnspentOutput(walletScript,
+				new UnspentOutput(HashCode.fromString("04".repeat(32)).asBytes(), 0, 1, MOCK_UTXO_VALUE, nameUpdateScript, walletAddress));
+
+		assertEquals(Long.valueOf(50_000L), mockBitcoiny.getWalletBalance(getDeterministicKey58()));
+		assertEquals(50_000L, mockBitcoiny.getConfirmedBalance(walletAddress));
+		assertTrue(mockBitcoiny.getWalletAddressInfos(getDeterministicKey58()).stream()
+				.anyMatch(addressInfo -> addressInfo.getAddress().equals(walletAddress) && addressInfo.getValue() == 50_000L));
+		assertNull(mockBitcoiny.buildSpend(getDeterministicKey58(), getSpendRecipient(mockBitcoiny), 90_000L));
+	}
+
+	@Test
 	public void testGetUnusedReceiveAddress() throws ForeignBlockchainException {
 		assumeTrue(supportsDeterministicWalletTests());
 
@@ -320,6 +344,30 @@ public abstract class BitcoinyTests extends Common {
 			return getRecipient();
 
 		return coin.pkhToAddress(HashCode.fromString("02".repeat(20)).asBytes());
+	}
+
+	private static byte[] buildNameUpdateScript(byte[] lockScript) {
+		return concat(
+				new byte[] { 0x53 },
+				BitcoinyScript.pushData("d/qortium".getBytes(StandardCharsets.UTF_8)),
+				BitcoinyScript.pushData("value".getBytes(StandardCharsets.UTF_8)),
+				new byte[] { 0x6d, 0x75 },
+				lockScript);
+	}
+
+	private static byte[] concat(byte[]... arrays) {
+		int length = 0;
+		for (byte[] array : arrays)
+			length += array.length;
+
+		byte[] result = new byte[length];
+		int offset = 0;
+		for (byte[] array : arrays) {
+			System.arraycopy(array, 0, result, offset, array.length);
+			offset += array.length;
+		}
+
+		return result;
 	}
 
 	private void assumeLiveCrosschainTestsEnabled() {

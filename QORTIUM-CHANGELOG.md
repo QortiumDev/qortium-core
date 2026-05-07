@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: add Namecoin Bitcoiny support
+
+Added Namecoin as a registered BTC-like crosschain coin using the shared Bitcoiny chain-spec model, including verified mainnet parameters, BIP122 chain identity, SLIP-44 wallet metadata, SSL-first Electrum server refresh support, common wallet/HTLC/ACCT test coverage, and chain-spec documentation. This adds ordinary NMC trade and wallet support while deliberately leaving Namecoin name registration/update features for a later pass; detected Namecoin name outputs are filtered out of normal wallet spend selection so name UTXOs are not accidentally spent as plain NMC.
+
 ### 2026-05-07 - crosschain: add Bitcoiny chain spec guardrails
 
 Changed shared Bitcoiny trade ATs to store the active network's BIP122 chain reference instead of a Qortium-assigned numeric foreign-chain id, while keeping SLIP-44 coin types as wallet metadata for coins that have them. The chain-spec docs now list the registered mainnet BIP122 ids, planned SLIP-44 wallet metadata for Namecoin, Firo, and Komodo, a compatibility precheck, and a reusable coin-spec checklist for future BTC-like chain additions. The dependency provenance docs now mark altcoinj/libdohj as retired and document the remaining upstream bitcoinj signing boundary. The Bitcoiny spec tests now include a compact manifest check for each registered BTC-like chain's SLIP-44 metadata, BIP122 chain id, supported networks, mainnet genesis hash, address headers, and BIP32 headers so accidental identity changes or incomplete chain registration are caught before more coins are added. The broader crosschain tests also fixed a raw transaction parser edge case for valid empty input scripts and made the shared wallet balance fixture derive its expected balance from the mock provider instead of assuming only one funded wallet address.

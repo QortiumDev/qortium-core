@@ -26,6 +26,7 @@ public final class BitcoinyChainSpecs {
 	public static final String DIGIBYTE_CURRENCY_CODE = "DGB";
 	public static final String RAVENCOIN_CURRENCY_CODE = "RVN";
 	public static final String DASH_CURRENCY_CODE = "DASH";
+	public static final String NAMECOIN_CURRENCY_CODE = "NMC";
 	public static final int BITCOIN_SLIP44_COIN_TYPE = 0;
 	public static final int LITECOIN_SLIP44_COIN_TYPE = 2;
 	public static final int DOGECOIN_SLIP44_COIN_TYPE = 3;
@@ -42,6 +43,9 @@ public final class BitcoinyChainSpecs {
 	private static final String LITECOIN_GENESIS_COINBASE_SCRIPT = "04ffff001d0104404e592054696d65732030352f4f63742f32303131205374657665204a6f62732c204170706c65e280997320566973696f6e6172792c2044696573206174203536";
 	private static final String LITECOIN_GENESIS_MERKLE_ROOT = "97ddfbbae6be97fd6cdf3e7ca13232a3afff2353e29badfab7f73011edd4ced9";
 	private static final String LITECOIN_GENESIS_OUTPUT_SCRIPT = "040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9";
+	private static final String NAMECOIN_GENESIS_COINBASE_SCRIPT = "04ff7f001c020a024a2e2e2e2063686f6f7365207768617420636f6d6573206e6578742e20204c69766573206f6620796f7572206f776e2c206f7220612072657475726e20746f20636861696e732e202d2d2056";
+	private static final String NAMECOIN_GENESIS_MERKLE_ROOT = "41c62dbd9068c89a449525e3cd5ac61b20ece28c3c38b3f35b2161f0e6d3cb0d";
+	private static final String NAMECOIN_GENESIS_OUTPUT_SCRIPT = "04b620369050cd899ffbbc4e8ee51e8c4534a855bb463439d63d235d4779685d8b6f4870a238cf365ac94fa13ef9a2a22cd99d0d5ee86dcabcafce36c7acf43ce5";
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
 	private static final NetworkParameters BITCOIN_MAIN_NET_PARAMS = bitcoinParams("org.bitcoin.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, "bc")
@@ -204,6 +208,20 @@ public final class BitcoinyChainSpecs {
 			.majorityWindow(1815, 1900, 2016)
 			.dnsSeeds("dnsseed.dash.org")
 			.build();
+	private static final NetworkParameters NAMECOIN_MAIN_NET_PARAMS = namecoinParams("org.namecoin.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, "nc")
+			.genesis(1303000001L, 0xa21ea192L, 0x1c007fffL, "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770")
+			.genesisHeader(1L, NAMECOIN_GENESIS_MERKLE_ROOT)
+			.genesisTransaction(NAMECOIN_GENESIS_COINBASE_SCRIPT, Coin.COIN.multiply(50L), NAMECOIN_GENESIS_OUTPUT_SCRIPT)
+			.port(8334)
+			.packetMagic(0xf9beb4feL)
+			.addressHeaders(52, 13, 180)
+			.segwitAddressHrp("nc")
+			.coinbaseAndSubsidy(100, 210_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(1815, 1916, 2016)
+			.dnsSeeds("nmc.seed.quisquis.de", "seed.nmc.markasoftware.com", "dnsseed1.nmc.dotbit.zone",
+					"dnsseed2.nmc.dotbit.zone", "dnsseed.nmc.testls.space", "namecoin.seed.cypherstack.com")
+			.build();
 	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", BITCOIN_SLIP44_COIN_TYPE, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
 			.mainnet(() -> BITCOIN_MAIN_NET_PARAMS, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", 1_500L, "btc")
 			.test3(() -> BITCOIN_TEST_NET_PARAMS, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", 1_500L, 1_000L, "tbtc")
@@ -234,7 +252,12 @@ public final class BitcoinyChainSpecs {
 			.mainnet(() -> DASH_MAIN_NET_PARAMS, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", 10_000L, "dash")
 			.build();
 
-	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH);
+	public static final BitcoinyChainSpec NAMECOIN = spec("NAMECOIN", NAMECOIN_SLIP44_COIN_TYPE, "Namecoin", NAMECOIN_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+			.mainnet(() -> NAMECOIN_MAIN_NET_PARAMS, "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770", 10_000L, "nmc")
+			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isNamecoinNameOutputScript(scriptPubKey))
+			.build();
+
+	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, NAMECOIN);
 
 	private static final List<String> CURRENCY_CODES = ALL.stream()
 			.map(BitcoinyChainSpec::getCurrencyCode)
@@ -332,6 +355,21 @@ public final class BitcoinyChainSpecs {
 				.difficultyValidationFailure("Dash difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
+	private static StaticBitcoinyParams.Builder namecoinParams(String id, String paymentProtocolId, String segwitAddressHrp) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "namecoin")
+				.maxTarget(0x1d00ffffL)
+				.targetTimespan(NetworkParameters.TARGET_TIMESPAN)
+				.interval(NetworkParameters.INTERVAL)
+				.segwitAddressHrp(segwitAddressHrp)
+				.maxMoney(Coin.COIN.multiply(21_000_000L))
+				.minNonDustOutput(Coin.valueOf(546L))
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, "NMC")
+						.code(3, "mNMC")
+						.code(7, "Nameoshi"))
+				.difficultyValidationFailure("Namecoin difficulty verification is not implemented for Electrum-backed parameters");
+	}
+
 	private static BitcoinyChainSpec.ElectrumServerRefreshConfig refresh(String networkName, String chain1209k) {
 		return new BitcoinyChainSpec.ElectrumServerRefreshConfig(networkName, chain1209k);
 	}
@@ -384,6 +422,7 @@ public final class BitcoinyChainSpecs {
 		private final List<BitcoinyChainSpec.ElectrumServerRefreshConfig> refreshConfigs = new ArrayList<>();
 		private Long defaultSpendFeePerByte;
 		private BitcoinyChainSpec.AddressNormalizer addressNormalizer;
+		private BitcoinyChainSpec.SpendableOutputScriptFilter spendableOutputScriptFilter;
 
 		private SpecBuilder(String canonicalName, int slip44CoinType, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
 			this.canonicalName = canonicalName;
@@ -443,9 +482,14 @@ public final class BitcoinyChainSpecs {
 			return this;
 		}
 
+		private SpecBuilder spendableOutputScriptFilter(BitcoinyChainSpec.SpendableOutputScriptFilter spendableOutputScriptFilter) {
+			this.spendableOutputScriptFilter = spendableOutputScriptFilter;
+			return this;
+		}
+
 		private BitcoinyChainSpec build() {
 			return new BitcoinyChainSpec(this.canonicalName, this.slip44CoinType, this.config, this.networks, this.refreshConfigs,
-					this.defaultSpendFeePerByte, this.addressNormalizer);
+					this.defaultSpendFeePerByte, this.addressNormalizer, this.spendableOutputScriptFilter);
 		}
 
 		private void addRefresh(String networkName, String chain1209k) {

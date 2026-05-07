@@ -5,12 +5,21 @@ import org.bitcoinj.core.Context;
 import org.bitcoinj.core.NetworkParameters;
 import org.qortal.crosschain.Bitcoiny;
 
+import java.util.function.Predicate;
+
 class TestBitcoiny extends Bitcoiny {
 
 	private long feeRequired = 1_000L;
+	private final Predicate<byte[]> spendableOutputScriptFilter;
 
 	TestBitcoiny(NetworkParameters params, MockBitcoinyBlockchainProvider blockchainProvider, String currencyCode) {
+		this(params, blockchainProvider, currencyCode, null);
+	}
+
+	TestBitcoiny(NetworkParameters params, MockBitcoinyBlockchainProvider blockchainProvider, String currencyCode,
+			Predicate<byte[]> spendableOutputScriptFilter) {
 		super(blockchainProvider, new Context(params), currencyCode, Coin.valueOf(1_000L));
+		this.spendableOutputScriptFilter = spendableOutputScriptFilter;
 		blockchainProvider.setBlockchain(this);
 	}
 
@@ -27,6 +36,16 @@ class TestBitcoiny extends Bitcoiny {
 	@Override
 	public void setFeeRequired(long fee) {
 		this.feeRequired = fee;
+	}
+
+	@Override
+	protected boolean hasSpendableOutputScriptFilter() {
+		return this.spendableOutputScriptFilter != null;
+	}
+
+	@Override
+	protected boolean isSpendableOutputScript(byte[] scriptPubKey) {
+		return this.spendableOutputScriptFilter == null || this.spendableOutputScriptFilter.test(scriptPubKey);
 	}
 
 }

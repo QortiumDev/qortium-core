@@ -14,12 +14,14 @@ import org.qortal.test.common.Common;
 
 import java.lang.reflect.Field;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -40,7 +42,8 @@ public class BitcoinyChainSpecsTests {
 				new ChainManifest("DOGECOIN", "DOGE", BitcoinyChainSpecs.DOGECOIN_SLIP44_COIN_TYPE, "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", Set.of(BitcoinyChainSpecs.MAIN), 30, 22, 158, 0x02facafd, 0x02fac398),
 				new ChainManifest("DIGIBYTE", "DGB", BitcoinyChainSpecs.DIGIBYTE_SLIP44_COIN_TYPE, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", Set.of(BitcoinyChainSpecs.MAIN), 30, 63, 128, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("RAVENCOIN", "RVN", BitcoinyChainSpecs.RAVENCOIN_SLIP44_COIN_TYPE, "0000006b444bc2f2ffe627be9d9e7e7a0730000870ef6eb6da46c8eae389df90", Set.of(BitcoinyChainSpecs.MAIN), 60, 122, 128, 0x0488B21E, 0x0488ADE4),
-				new ChainManifest("DASH", "DASH", BitcoinyChainSpecs.DASH_SLIP44_COIN_TYPE, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", Set.of(BitcoinyChainSpecs.MAIN), 76, 16, 204, 0x0488B21E, 0x0488ADE4))) {
+				new ChainManifest("DASH", "DASH", BitcoinyChainSpecs.DASH_SLIP44_COIN_TYPE, "00000ffd590b1485b3caadc19b22e6379c733355108f107a430458cdf3407ab6", Set.of(BitcoinyChainSpecs.MAIN), 76, 16, 204, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("NAMECOIN", "NMC", BitcoinyChainSpecs.NAMECOIN_SLIP44_COIN_TYPE, "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770", Set.of(BitcoinyChainSpecs.MAIN), 52, 13, 180, 0x0488B21E, 0x0488ADE4))) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(expected.currencyCode);
 			assertNotNull(expected.currencyCode, spec);
 			assertEquals(expected.canonicalName, spec.getCanonicalName());
@@ -176,7 +179,8 @@ public class BitcoinyChainSpecsTests {
 				BitcoinyChainSpecs.DOGECOIN,
 				BitcoinyChainSpecs.DIGIBYTE,
 				BitcoinyChainSpecs.RAVENCOIN,
-				BitcoinyChainSpecs.DASH
+				BitcoinyChainSpecs.DASH,
+				BitcoinyChainSpecs.NAMECOIN
 		}) {
 			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST3));
 			assertNull(spec.getNetwork(BitcoinyChainSpecs.TEST4));
@@ -397,6 +401,38 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testNamecoinUsesSharedStaticParams() {
+		BitcoinyNetwork namecoinMainNet = BitcoinyChainSpecs.NAMECOIN.getNetwork(BitcoinyChainSpecs.MAIN);
+		NetworkParameters namecoinMainNetParams = namecoinMainNet.getParams();
+		Block genesisBlock = namecoinMainNetParams.getGenesisBlock();
+
+		assertTrue(namecoinMainNetParams instanceof StaticBitcoinyParams);
+		assertEquals("org.namecoin.production", namecoinMainNetParams.getId());
+		assertEquals(NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, namecoinMainNetParams.getPaymentProtocolId());
+		assertEquals("namecoin", namecoinMainNetParams.getUriScheme());
+		assertEquals("000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770", genesisBlock.getHashAsString());
+		assertEquals("41c62dbd9068c89a449525e3cd5ac61b20ece28c3c38b3f35b2161f0e6d3cb0d", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1303000001L, genesisBlock.getTimeSeconds());
+		assertEquals(0x1c007fffL, genesisBlock.getDifficultyTarget());
+		assertEquals(0xa21ea192L, genesisBlock.getNonce());
+		assertEquals(NetworkParameters.TARGET_TIMESPAN, namecoinMainNetParams.getTargetTimespan());
+		assertEquals(NetworkParameters.INTERVAL, namecoinMainNetParams.getInterval());
+		assertEquals(8334, namecoinMainNetParams.getPort());
+		assertEquals(0xf9beb4feL, namecoinMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(52, namecoinMainNetParams.getAddressHeader());
+		assertEquals(13, namecoinMainNetParams.getP2SHHeader());
+		assertEquals(180, namecoinMainNetParams.getDumpedPrivateKeyHeader());
+		assertEquals("nc", namecoinMainNetParams.getSegwitAddressHrp());
+		assertEquals(0x0488B21E, namecoinMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, namecoinMainNetParams.getBip32HeaderP2PKHpriv());
+		assertTrue(BitcoinyChainSpecs.NAMECOIN.hasSpendableOutputScriptFilter());
+		assertTrue(BitcoinyChainSpecs.NAMECOIN.isSpendableOutputScript(BitcoinyScript.p2pkhScript(new byte[20])));
+		assertFalse(BitcoinyChainSpecs.NAMECOIN.isSpendableOutputScript(buildNameNewScript(BitcoinyScript.p2pkhScript(new byte[20]))));
+		assertFalse(BitcoinyChainSpecs.NAMECOIN.isSpendableOutputScript(buildNameFirstUpdateScript(BitcoinyScript.p2pkhScript(new byte[20]))));
+		assertFalse(BitcoinyChainSpecs.NAMECOIN.isSpendableOutputScript(buildNameUpdateScript(BitcoinyScript.p2pkhScript(new byte[20]))));
+	}
+
+	@Test
 	public void testPirateChainUsesSharedStaticMainNetParams() {
 		NetworkParameters pirateMainNetParams = PirateChain.PirateChainNet.MAIN.getParams();
 		Block genesisBlock = pirateMainNetParams.getGenesisBlock();
@@ -436,6 +472,49 @@ public class BitcoinyChainSpecsTests {
 		assertSame(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST4), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE.toLowerCase()));
 		assertSame(BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DOGECOIN_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.DASH.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DASH_CURRENCY_CODE));
+		assertSame(BitcoinyChainSpecs.NAMECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.NAMECOIN_CURRENCY_CODE));
+	}
+
+	private static byte[] buildNameNewScript(byte[] lockScript) {
+		return concat(
+				new byte[] { 0x51 },
+				BitcoinyScript.pushData("commitment".getBytes(StandardCharsets.UTF_8)),
+				new byte[] { 0x6d },
+				lockScript);
+	}
+
+	private static byte[] buildNameFirstUpdateScript(byte[] lockScript) {
+		return concat(
+				new byte[] { 0x52 },
+				BitcoinyScript.pushData("d/qortium".getBytes(StandardCharsets.UTF_8)),
+				BitcoinyScript.pushData("salt".getBytes(StandardCharsets.UTF_8)),
+				BitcoinyScript.pushData("value".getBytes(StandardCharsets.UTF_8)),
+				new byte[] { 0x6d, 0x6d },
+				lockScript);
+	}
+
+	private static byte[] buildNameUpdateScript(byte[] lockScript) {
+		return concat(
+				new byte[] { 0x53 },
+				BitcoinyScript.pushData("d/qortium".getBytes(StandardCharsets.UTF_8)),
+				BitcoinyScript.pushData("value".getBytes(StandardCharsets.UTF_8)),
+				new byte[] { 0x6d, 0x75 },
+				lockScript);
+	}
+
+	private static byte[] concat(byte[]... arrays) {
+		int length = 0;
+		for (byte[] array : arrays)
+			length += array.length;
+
+		byte[] result = new byte[length];
+		int offset = 0;
+		for (byte[] array : arrays) {
+			System.arraycopy(array, 0, result, offset, array.length);
+			offset += array.length;
+		}
+
+		return result;
 	}
 
 	private static void assertNetworkParamParity(NetworkParameters expected, NetworkParameters actual) {
