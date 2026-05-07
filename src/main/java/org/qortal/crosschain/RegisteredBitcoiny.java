@@ -23,6 +23,22 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	}
 
 	@Override
+	protected Integer getSpendTransactionVersion() {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.PEERCOIN)
+			return 3;
+
+		return super.getSpendTransactionVersion();
+	}
+
+	@Override
+	protected int getHtlcTransactionVersion() {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.PEERCOIN)
+			return 3;
+
+		return super.getHtlcTransactionVersion();
+	}
+
+	@Override
 	protected boolean hasSpendableOutputScriptFilter() {
 		return this.spec.hasSpendableOutputScriptFilter();
 	}
@@ -119,6 +135,14 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 				return ZcashFamilyTransactionParser.deserializeRawTransaction(txHash, rawTransaction);
 			} catch (TransformationException e) {
 				throw new ForeignBlockchainException(e.getMessage());
+			}
+		}
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.PEERCOIN) {
+			try {
+				return BitcoinyRawTransactionParser.parse(BitcoinyTransactionFormat.PEERCOIN, txHash, rawTransaction);
+			} catch (RuntimeException e) {
+				throw new ForeignBlockchainException(String.format("Unable to deserialize raw transaction: %s", e.getMessage()));
 			}
 		}
 

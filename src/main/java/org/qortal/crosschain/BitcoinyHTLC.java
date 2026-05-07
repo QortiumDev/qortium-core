@@ -104,8 +104,15 @@ public class BitcoinyHTLC {
 	public static Transaction buildP2shTransaction(NetworkParameters params, Coin amount, ECKey spendKey,
 			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes,
 			Long lockTime, Function<byte[], byte[]> scriptSigBuilder, byte[] outputPublicKeyHash) {
+		return buildP2shTransaction(params, amount, spendKey, fundingOutputs, redeemScriptBytes, lockTime, scriptSigBuilder,
+				outputPublicKeyHash, 2);
+	}
+
+	public static Transaction buildP2shTransaction(NetworkParameters params, Coin amount, ECKey spendKey,
+			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes,
+			Long lockTime, Function<byte[], byte[]> scriptSigBuilder, byte[] outputPublicKeyHash, int transactionVersion) {
 		Transaction transaction = new Transaction(params);
-		transaction.setVersion(2);
+		transaction.setVersion(transactionVersion);
 
 		// Output is back to P2SH funder
 		transaction.addOutput(amount, new Script(BitcoinyScript.p2pkhScript(outputPublicKeyHash)));
@@ -159,6 +166,11 @@ public class BitcoinyHTLC {
 	 */
 	public static Transaction buildRefundTransaction(NetworkParameters params, Coin refundAmount, ECKey refundKey,
 			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, long lockTime, byte[] receivingAccountInfo) {
+		return buildRefundTransaction(params, refundAmount, refundKey, fundingOutputs, redeemScriptBytes, lockTime, receivingAccountInfo, 2);
+	}
+
+	public static Transaction buildRefundTransaction(NetworkParameters params, Coin refundAmount, ECKey refundKey,
+			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, long lockTime, byte[] receivingAccountInfo, int transactionVersion) {
 		byte[] refundPubKey = refundKey.getPubKey();
 		Function<byte[], byte[]> refundScriptSigBuilder = (txSigBytes) -> Bytes.concat(
 				BitcoinyScript.pushData(txSigBytes),
@@ -166,7 +178,8 @@ public class BitcoinyHTLC {
 				BitcoinyScript.pushData(redeemScriptBytes));
 
 		// Send funds back to funding address
-		return buildP2shTransaction(params, refundAmount, refundKey, fundingOutputs, redeemScriptBytes, lockTime, refundScriptSigBuilder, receivingAccountInfo);
+		return buildP2shTransaction(params, refundAmount, refundKey, fundingOutputs, redeemScriptBytes, lockTime, refundScriptSigBuilder,
+				receivingAccountInfo, transactionVersion);
 	}
 
 	/**
@@ -183,6 +196,11 @@ public class BitcoinyHTLC {
 	 */
 	public static Transaction buildRedeemTransaction(NetworkParameters params, Coin redeemAmount, ECKey redeemKey,
 			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, byte[] secret, byte[] receivingAccountInfo) {
+		return buildRedeemTransaction(params, redeemAmount, redeemKey, fundingOutputs, redeemScriptBytes, secret, receivingAccountInfo, 2);
+	}
+
+	public static Transaction buildRedeemTransaction(NetworkParameters params, Coin redeemAmount, ECKey redeemKey,
+			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, byte[] secret, byte[] receivingAccountInfo, int transactionVersion) {
 		byte[] redeemPubKey = redeemKey.getPubKey();
 		Function<byte[], byte[]> redeemScriptSigBuilder = (txSigBytes) -> Bytes.concat(
 				BitcoinyScript.pushData(secret),
@@ -190,7 +208,8 @@ public class BitcoinyHTLC {
 				BitcoinyScript.pushData(redeemPubKey),
 				BitcoinyScript.pushData(redeemScriptBytes));
 
-		return buildP2shTransaction(params, redeemAmount, redeemKey, fundingOutputs, redeemScriptBytes, null, redeemScriptSigBuilder, receivingAccountInfo);
+		return buildP2shTransaction(params, redeemAmount, redeemKey, fundingOutputs, redeemScriptBytes, null, redeemScriptSigBuilder,
+				receivingAccountInfo, transactionVersion);
 	}
 
 	/**

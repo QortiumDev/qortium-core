@@ -140,6 +140,52 @@ public class ElectrumXTests {
 	}
 
 	@Test
+	public void testVerboseTransactionOutputUsesConfiguredDecimalPlaces() throws ForeignBlockchainException {
+		JSONObject outputScript = new JSONObject();
+		outputScript.put("hex", "76a914" + "11".repeat(20) + "88ac");
+		outputScript.put("addresses", new JSONArray());
+		((JSONArray) outputScript.get("addresses")).add("mock-address");
+
+		JSONObject output = new JSONObject();
+		output.put("value", 1.234567D);
+		output.put("scriptPubKey", outputScript);
+
+		JSONObject transaction = new JSONObject();
+		transaction.put("size", 100L);
+		transaction.put("locktime", 0L);
+		transaction.put("vin", new JSONArray());
+		transaction.put("vout", new JSONArray());
+		((JSONArray) transaction.get("vout")).add(output);
+
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.transaction.get", transaction), 6);
+
+		assertEquals(1_234_567L, electrumX.getTransaction("mock-tx").outputs.get(0).value);
+	}
+
+	@Test
+	public void testVerboseTransactionOutputDefaultsToEightDecimalPlaces() throws ForeignBlockchainException {
+		JSONObject outputScript = new JSONObject();
+		outputScript.put("hex", "76a914" + "11".repeat(20) + "88ac");
+		outputScript.put("addresses", new JSONArray());
+		((JSONArray) outputScript.get("addresses")).add("mock-address");
+
+		JSONObject output = new JSONObject();
+		output.put("value", 1.23456789D);
+		output.put("scriptPubKey", outputScript);
+
+		JSONObject transaction = new JSONObject();
+		transaction.put("size", 100L);
+		transaction.put("locktime", 0L);
+		transaction.put("vin", new JSONArray());
+		transaction.put("vout", new JSONArray());
+		((JSONArray) transaction.get("vout")).add(output);
+
+		ElectrumX electrumX = new MockElectrumX(Collections.singletonMap("blockchain.transaction.get", transaction));
+
+		assertEquals(123_456_789L, electrumX.getTransaction("mock-tx").outputs.get(0).value);
+	}
+
+	@Test
 	public void testGetAddressTransactionsFromMockRpc() throws ForeignBlockchainException {
 		JSONObject confirmedTransaction = new JSONObject();
 		confirmedTransaction.put("height", 100L);
@@ -364,7 +410,11 @@ public class ElectrumXTests {
 		private final Map<String, Object> responsesByMethod;
 
 		private MockElectrumX(Map<String, Object> responsesByMethod) {
-			super("mock", null, Collections.emptyList(), DEFAULT_ELECTRUMX_PORTS);
+			this(responsesByMethod, 8);
+		}
+
+		private MockElectrumX(Map<String, Object> responsesByMethod, int coinDecimalPlaces) {
+			super("mock", null, Collections.emptyList(), DEFAULT_ELECTRUMX_PORTS, coinDecimalPlaces);
 			this.responsesByMethod = new HashMap<>(responsesByMethod);
 		}
 

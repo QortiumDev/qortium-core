@@ -12,14 +12,21 @@ public class BitcoinyChainConfig {
 	private final String currencyCode;
 	private final Coin defaultFeePerKb;
 	private final long minimumOrderAmount;
+	private final int decimalPlaces;
 	private final Map<ConnectionType, Integer> defaultElectrumXPorts;
 
 	public BitcoinyChainConfig(String displayName, String currencyCode, Coin defaultFeePerKb,
 			long minimumOrderAmount, Map<ConnectionType, Integer> defaultElectrumXPorts) {
+		this(displayName, currencyCode, defaultFeePerKb, minimumOrderAmount, 8, defaultElectrumXPorts);
+	}
+
+	public BitcoinyChainConfig(String displayName, String currencyCode, Coin defaultFeePerKb,
+			long minimumOrderAmount, int decimalPlaces, Map<ConnectionType, Integer> defaultElectrumXPorts) {
 		this.displayName = displayName;
 		this.currencyCode = currencyCode;
 		this.defaultFeePerKb = defaultFeePerKb;
 		this.minimumOrderAmount = minimumOrderAmount;
+		this.decimalPlaces = decimalPlaces;
 		this.defaultElectrumXPorts = new EnumMap<>(defaultElectrumXPorts);
 	}
 
@@ -37,6 +44,10 @@ public class BitcoinyChainConfig {
 
 	public long getMinimumOrderAmount() {
 		return this.minimumOrderAmount;
+	}
+
+	public int getDecimalPlaces() {
+		return this.decimalPlaces;
 	}
 
 	public Map<ConnectionType, Integer> getDefaultElectrumXPorts() {

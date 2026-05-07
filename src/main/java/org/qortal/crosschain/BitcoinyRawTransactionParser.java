@@ -16,15 +16,26 @@ public final class BitcoinyRawTransactionParser {
 	}
 
 	public static BitcoinyTransaction parse(byte[] rawTransactionBytes) {
-		return parse(null, rawTransactionBytes);
+		return parse(BitcoinyTransactionFormat.LEGACY, null, rawTransactionBytes);
 	}
 
 	public static BitcoinyTransaction parse(String txHash, byte[] rawTransactionBytes) {
+		return parse(BitcoinyTransactionFormat.LEGACY, txHash, rawTransactionBytes);
+	}
+
+	public static BitcoinyTransaction parse(BitcoinyTransactionFormat transactionFormat, byte[] rawTransactionBytes) {
+		return parse(transactionFormat, null, rawTransactionBytes);
+	}
+
+	public static BitcoinyTransaction parse(BitcoinyTransactionFormat transactionFormat, String txHash, byte[] rawTransactionBytes) {
 		if (rawTransactionBytes == null)
 			throw new IllegalArgumentException("Missing raw transaction bytes");
 
+		if (transactionFormat == null)
+			throw new IllegalArgumentException("Missing transaction format");
+
 		Parser parser = new Parser(rawTransactionBytes);
-		return parser.parse(txHash);
+		return parser.parse(transactionFormat, txHash);
 	}
 
 	private static String transactionHash(byte[] transactionBytes) {
@@ -57,9 +68,15 @@ public final class BitcoinyRawTransactionParser {
 			this.bytes = bytes;
 		}
 
-		private BitcoinyTransaction parse(String txHash) {
+		private BitcoinyTransaction parse(BitcoinyTransactionFormat transactionFormat, String txHash) {
 			int transactionStart = this.offset;
-			readInt32();
+			int version = readInt32();
+			int prefixEnd = this.offset;
+
+			if (transactionFormat == BitcoinyTransactionFormat.PEERCOIN && version < 3) {
+				readInt32();
+				prefixEnd = this.offset;
+			}
 
 			int inputSectionStart = this.offset;
 			int markerOrInputCount = readUnsignedByte();
@@ -91,20 +108,20 @@ public final class BitcoinyRawTransactionParser {
 				throw new IllegalArgumentException("Raw transaction has trailing data");
 
 			String resolvedTxHash = txHash == null
-					? transactionHash(transactionBytesForTxHash(transactionStart, inputSectionStart, baseTransactionEnd, lockTimeStart))
+					? transactionHash(transactionBytesForTxHash(transactionStart, prefixEnd, inputSectionStart, baseTransactionEnd, lockTimeStart))
 					: txHash;
 
 			return new BitcoinyTransaction(resolvedTxHash, this.bytes.length, lockTime, null, inputs, outputs);
 		}
 
-		private byte[] transactionBytesForTxHash(int transactionStart, int inputSectionStart, int baseTransactionEnd, int lockTimeStart) {
-			int versionLength = 4;
+		private byte[] transactionBytesForTxHash(int transactionStart, int prefixEnd, int inputSectionStart, int baseTransactionEnd, int lockTimeStart) {
+			int prefixLength = prefixEnd - transactionStart;
 			int baseSectionLength = baseTransactionEnd - inputSectionStart;
-			byte[] txHashBytes = new byte[versionLength + baseSectionLength + 4];
+			byte[] txHashBytes = new byte[prefixLength + baseSectionLength + 4];
 
-			System.arraycopy(this.bytes, transactionStart, txHashBytes, 0, versionLength);
-			System.arraycopy(this.bytes, inputSectionStart, txHashBytes, versionLength, baseSectionLength);
-			System.arraycopy(this.bytes, lockTimeStart, txHashBytes, versionLength + baseSectionLength, 4);
+			System.arraycopy(this.bytes, transactionStart, txHashBytes, 0, prefixLength);
+			System.arraycopy(this.bytes, inputSectionStart, txHashBytes, prefixLength, baseSectionLength);
+			System.arraycopy(this.bytes, lockTimeStart, txHashBytes, prefixLength + baseSectionLength, 4);
 
 			return txHashBytes;
 		}

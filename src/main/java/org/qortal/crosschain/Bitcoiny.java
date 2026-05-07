@@ -225,6 +225,20 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 		return TIMESTAMP_OFFSET;
 	}
 
+	protected Integer getSpendTransactionVersion() {
+		return null;
+	}
+
+	protected int getHtlcTransactionVersion() {
+		return 2;
+	}
+
+	private void configureSpendTransaction(Transaction transaction) {
+		Integer transactionVersion = getSpendTransactionVersion();
+		if (transactionVersion != null)
+			transaction.setVersion(transactionVersion);
+	}
+
 	public List<byte[]> splitRawBlockHeaders(byte[] rawBlockHeaders, int count) throws ForeignBlockchainException {
 		List<byte[]> blockHeaders = new ArrayList<>((int) count);
 
@@ -504,13 +518,13 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 	public BitcoinySignedTransaction buildHtlcRedeemTransaction(Coin redeemAmount, ECKey redeemKey,
 			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, byte[] secret, byte[] receivingAccountInfo) throws ForeignBlockchainException {
 		return BitcoinySignedTransaction.fromBitcoinj(BitcoinyHTLC.buildRedeemTransaction(this.params, redeemAmount, redeemKey,
-				fundingOutputs, redeemScriptBytes, secret, receivingAccountInfo));
+				fundingOutputs, redeemScriptBytes, secret, receivingAccountInfo, getHtlcTransactionVersion()));
 	}
 
 	public BitcoinySignedTransaction buildHtlcRefundTransaction(Coin refundAmount, ECKey refundKey,
 			List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, long lockTime, byte[] receivingAccountInfo) throws ForeignBlockchainException {
 		return BitcoinySignedTransaction.fromBitcoinj(BitcoinyHTLC.buildRefundTransaction(this.params, refundAmount, refundKey,
-				fundingOutputs, redeemScriptBytes, lockTime, receivingAccountInfo));
+				fundingOutputs, redeemScriptBytes, lockTime, receivingAccountInfo, getHtlcTransactionVersion()));
 	}
 
 	public BitcoinyTransaction deserializeRawTransaction(byte[] rawTransaction) throws ForeignBlockchainException {
@@ -544,6 +558,7 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 
 		Address destination = Address.fromString(this.params, recipient);
 		SendRequest sendRequest = SendRequest.to(destination, Coin.valueOf(amount));
+		configureSpendTransaction(sendRequest.tx);
 
 		if (feePerByte != null)
 			sendRequest.feePerKb = Coin.valueOf(feePerByte * 1000L); // Note: 1000 not 1024
@@ -578,6 +593,7 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 		wallet.setUTXOProvider(new PrecomputedUTXOProvider(this, spendableOutputs.outputs));
 
 		Transaction transaction = new Transaction(this.params);
+		configureSpendTransaction(transaction);
 
 		for(Map.Entry<String, Long> amountForRecipient : amountByRecipient.entrySet()) {
 			Address destination = Address.fromString(this.params, amountForRecipient.getKey());

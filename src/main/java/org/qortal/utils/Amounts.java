@@ -12,7 +12,14 @@ public abstract class Amounts {
 	public static final BigInteger ROUNDING = MULTIPLIER_BI.subtract(BigInteger.ONE);
 
 	public static String prettyAmount(long amount) {
-		return String.format("%d.%08d", amount / MULTIPLIER, amount % MULTIPLIER);
+		return prettyAmount(amount, 8);
+	}
+
+	public static String prettyAmount(long amount, int decimalPlaces) {
+		if (decimalPlaces < 0)
+			throw new IllegalArgumentException("Decimal places cannot be negative");
+
+		return BigDecimal.valueOf(amount, decimalPlaces).toPlainString();
 	}
 
 	public static BigDecimal toBigDecimal(long amount) {

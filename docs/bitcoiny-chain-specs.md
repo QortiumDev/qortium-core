@@ -16,6 +16,7 @@ Mainnet chain ids for the currently registered BTC-like chains are:
 | `bip122:12a765e31ffd4059bada1e25190f6e98` | `LITECOIN` | `LTC` |
 | `bip122:1a91e3dace36e2be3bf030a65679fe82` | `DOGECOIN` | `DOGE` |
 | `bip122:00000ffd590b1485b3caadc19b22e637` | `DASH` | `DASH` |
+| `bip122:0000000032fe677166d54963b62a4677` | `PEERCOIN` | `PPC` |
 | `bip122:000000000062b72c5e2ceb45fbc8587e` | `NAMECOIN` | `NMC` |
 | `bip122:4381deb85b1b2c9843c222944b616d99` | `FIRO` | `FIRO` |
 | `bip122:027e3758c3a65b12aa1046462b486d0a` | `KOMODO` | `KMD` |
@@ -23,7 +24,7 @@ Mainnet chain ids for the currently registered BTC-like chains are:
 | `bip122:7497ea1b465eb39f1c8f507bc877078f` | `DIGIBYTE` | `DGB` |
 | `bip122:0000006b444bc2f2ffe627be9d9e7e7a` | `RAVENCOIN` | `RVN` |
 
-SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, NMC `7`, DGB `20`, FIRO `136` (listed in SLIP-44 as XZC/ZCoin), LBC `140`, KMD `141`, and RVN `175`.
+SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, PPC `6`, NMC `7`, DGB `20`, FIRO `136` (listed in SLIP-44 as XZC/ZCoin), LBC `140`, KMD `141`, and RVN `175`.
 
 ## Network Settings
 
@@ -38,6 +39,7 @@ Use `bitcoinyNetworks` in `settings.json` to choose the active network for BTC-l
     "DGB": "MAIN",
     "RVN": "MAIN",
     "DASH": "MAIN",
+    "PPC": "MAIN",
     "NMC": "MAIN",
     "FIRO": "MAIN",
     "KMD": "MAIN",
@@ -72,6 +74,8 @@ Before adding a coin, collect and verify:
 - Electrum refresh metadata for each public network, plus refreshed SSL-first hardcoded servers
 - address normalization hooks, output spendability filters, or default spend-fee hooks only when the chain needs them
 - manifest coverage in `BitcoinyChainSpecsTests` and common wallet/HTLC coverage in `RegisteredBitcoinyTests`
+
+Peercoin is registered for ordinary transparent PPC wallet, HTLC, and ACCT trade support. PPC uses six decimal places instead of the usual eight, so shared Bitcoiny config carries per-chain decimal metadata for formatting and Electrum verbose transaction parsing. PPC also uses Peercoin's version-3 transaction format for newly built spends and HTLC transactions so they do not include the pre-version-3 transaction timestamp field.
 
 Namecoin is registered for ordinary NMC wallet, HTLC, and ACCT trade support. Name registration/update flows are intentionally not implemented in core yet, but detected Namecoin name outputs are filtered out of normal wallet spend selection so they are not accidentally spent as plain NMC UTXOs.
 

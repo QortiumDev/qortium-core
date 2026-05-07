@@ -189,12 +189,19 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	private final Map<ChainableServer, Long> serverLastProbeTime = new ConcurrentHashMap<>();
 	private volatile boolean initialProbeCompleted = false;
 	private volatile String lastScoreExtremesDigest = "";
+	private final int coinDecimalPlaces;
 
 	// Constructors
 
 	public ElectrumX(String netId, String genesisHash, Collection<Server> initialServerList, Map<Server.ConnectionType, Integer> defaultPorts) {
+		this(netId, genesisHash, initialServerList, defaultPorts, 8);
+	}
+
+	public ElectrumX(String netId, String genesisHash, Collection<Server> initialServerList, Map<Server.ConnectionType, Integer> defaultPorts,
+			int coinDecimalPlaces) {
 		this.netId = netId;
 		this.expectedGenesisHash = genesisHash;
+		this.coinDecimalPlaces = coinDecimalPlaces;
 		this.servers.addAll(initialServerList);
 		this.defaultPorts.putAll(defaultPorts);
 
@@ -534,7 +541,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 				JSONObject outputJson = (JSONObject) outputObj;
 
 				String scriptPubKey = (String) ((JSONObject) outputJson.get("scriptPubKey")).get("hex");
-				long value = BigDecimal.valueOf((Double) outputJson.get("value")).setScale(8).unscaledValue().longValue();
+				long value = parseCoinValue(outputJson.get("value"));
 
 				// address too, if present in the "addresses" array
 				List<String> addresses = null;
@@ -578,13 +585,23 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 			}
 
 			return transaction;
-		} catch (NullPointerException | ClassCastException e) {
+		} catch (NullPointerException | ClassCastException | NumberFormatException | ArithmeticException e) {
 			// Unexpected / invalid response from ElectrumX server
 		}
 
 		this.connections.remove(serverResponse.getElectrumServer());
 		serverResponse.getElectrumServer().closeServer(this.getClass().getSimpleName(), "Unexpected JSON format from ElectrumX blockchain.transaction.get RPC");
 		return getTransaction(txHash);
+	}
+
+	private long parseCoinValue(Object value) {
+		if (!(value instanceof Number) && !(value instanceof String))
+			throw new ClassCastException("Expected numeric output value from ElectrumX blockchain.transaction.get RPC");
+
+		return new BigDecimal(value.toString())
+				.setScale(this.coinDecimalPlaces)
+				.unscaledValue()
+				.longValueExact();
 	}
 
 	/**

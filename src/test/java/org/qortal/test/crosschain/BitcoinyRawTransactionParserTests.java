@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.qortal.crosschain.BitcoinyRawTransactionParser;
 import org.qortal.crosschain.BitcoinyTransaction;
 import org.qortal.crosschain.BitcoinyTransactionData;
+import org.qortal.crosschain.BitcoinyTransactionFormat;
 import org.qortal.crypto.Crypto;
 
 import java.util.Collections;
@@ -29,6 +30,11 @@ public class BitcoinyRawTransactionParserTests {
 			+ "0500000000000000"
 			+ "17" + P2SH_SCRIPT
 			+ "78563412";
+	private static final String PEERCOIN_PRE_VERSION3_RAW_HEX = "02000000"
+			+ "88776655"
+			+ LEGACY_RAW_HEX.substring(8);
+	private static final String PEERCOIN_VERSION3_RAW_HEX = "03000000"
+			+ LEGACY_RAW_HEX.substring(8);
 
 	@Test
 	public void testParsesLegacyTransaction() {
@@ -52,6 +58,31 @@ public class BitcoinyRawTransactionParserTests {
 		assertEquals(P2PKH_SCRIPT, transaction.outputs.get(0).scriptPubKey);
 		assertEquals(5L, transaction.outputs.get(1).value);
 		assertEquals(P2SH_SCRIPT, transaction.outputs.get(1).scriptPubKey);
+	}
+
+	@Test
+	public void testParsesPeercoinPreVersion3TransactionWithTimestamp() {
+		byte[] rawTransactionBytes = HashCode.fromString(PEERCOIN_PRE_VERSION3_RAW_HEX).asBytes();
+		BitcoinyTransaction transaction = BitcoinyRawTransactionParser.parse(BitcoinyTransactionFormat.PEERCOIN, rawTransactionBytes);
+
+		assertEquals(transactionHash(PEERCOIN_PRE_VERSION3_RAW_HEX), transaction.txHash);
+		assertEquals(rawTransactionBytes.length, transaction.size);
+		assertEquals(0x12345678, transaction.locktime);
+		assertEquals(1, transaction.inputs.size());
+		assertEquals(2, transaction.outputs.size());
+		assertEquals(10_000L, transaction.outputs.get(0).value);
+		assertEquals(P2PKH_SCRIPT, transaction.outputs.get(0).scriptPubKey);
+	}
+
+	@Test
+	public void testParsesPeercoinVersion3TransactionWithoutTimestamp() {
+		BitcoinyTransaction transaction = BitcoinyRawTransactionParser.parse(BitcoinyTransactionFormat.PEERCOIN,
+				HashCode.fromString(PEERCOIN_VERSION3_RAW_HEX).asBytes());
+
+		assertEquals(transactionHash(PEERCOIN_VERSION3_RAW_HEX), transaction.txHash);
+		assertEquals(0x12345678, transaction.locktime);
+		assertEquals(1, transaction.inputs.size());
+		assertEquals(2, transaction.outputs.size());
 	}
 
 	@Test

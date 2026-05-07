@@ -1,6 +1,7 @@
 package org.qortal.crosschain;
 
 import org.bitcoinj.core.Context;
+import org.qortal.utils.Amounts;
 
 public class ConfiguredBitcoiny extends Bitcoiny {
 
@@ -10,7 +11,7 @@ public class ConfiguredBitcoiny extends Bitcoiny {
 	protected ConfiguredBitcoiny(BitcoinyChainConfig config, BitcoinyNetwork network) {
 		super(new ElectrumX(config.getDisplayName() + "-" + network.name(), network.getGenesisHash(),
 						ElectrumServerList.getServers(config.getCurrencyCode(), network.name(), network.getServers()),
-						config.getDefaultElectrumXPorts()),
+						config.getDefaultElectrumXPorts(), config.getDecimalPlaces()),
 				new Context(network.getParams()),
 				config.getCurrencyCode(),
 				config.getDefaultFeePerKb());
@@ -28,6 +29,11 @@ public class ConfiguredBitcoiny extends Bitcoiny {
 
 	protected BitcoinyNetwork getNetwork() {
 		return this.network;
+	}
+
+	@Override
+	public String format(long amount) {
+		return Amounts.prettyAmount(amount, this.config.getDecimalPlaces()) + " " + this.config.getCurrencyCode();
 	}
 
 	@Override

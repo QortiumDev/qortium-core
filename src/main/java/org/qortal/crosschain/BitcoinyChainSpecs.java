@@ -26,6 +26,7 @@ public final class BitcoinyChainSpecs {
 	public static final String DIGIBYTE_CURRENCY_CODE = "DGB";
 	public static final String RAVENCOIN_CURRENCY_CODE = "RVN";
 	public static final String DASH_CURRENCY_CODE = "DASH";
+	public static final String PEERCOIN_CURRENCY_CODE = "PPC";
 	public static final String NAMECOIN_CURRENCY_CODE = "NMC";
 	public static final String FIRO_CURRENCY_CODE = "FIRO";
 	public static final String KOMODO_CURRENCY_CODE = "KMD";
@@ -34,6 +35,7 @@ public final class BitcoinyChainSpecs {
 	public static final int LITECOIN_SLIP44_COIN_TYPE = 2;
 	public static final int DOGECOIN_SLIP44_COIN_TYPE = 3;
 	public static final int DASH_SLIP44_COIN_TYPE = 5;
+	public static final int PEERCOIN_SLIP44_COIN_TYPE = 6;
 	public static final int NAMECOIN_SLIP44_COIN_TYPE = 7;
 	public static final int DIGIBYTE_SLIP44_COIN_TYPE = 20;
 	public static final int FIRO_SLIP44_COIN_TYPE = 136;
@@ -53,6 +55,7 @@ public final class BitcoinyChainSpecs {
 	private static final String FIRO_GENESIS_MERKLE_ROOT = "365d2aa75d061370c9aefdabac3985716b1e3b4bb7c4af4ed54f25e5aaa42783";
 	private static final String KOMODO_GENESIS_MERKLE_ROOT = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
 	private static final String LBRY_CREDITS_GENESIS_MERKLE_ROOT = "b8211c82c3d15bcd78bba57005b86fed515149a53a425eb592c07af99fe559cc";
+	private static final String PEERCOIN_GENESIS_MERKLE_ROOT = "3c2d8f85fab4d17aac558cc648a1a58acff0de6deb890c29985690052c5993c2";
 	private static final List<Server> NO_SERVERS = List.of();
 	private static final List<Server> LOCAL_REGTEST_SERVERS = List.of(new Server("localhost", ConnectionType.SSL, 50002));
 	private static final NetworkParameters BITCOIN_MAIN_NET_PARAMS = bitcoinParams("org.bitcoin.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, "bc")
@@ -229,6 +232,18 @@ public final class BitcoinyChainSpecs {
 			.dnsSeeds("nmc.seed.quisquis.de", "seed.nmc.markasoftware.com", "dnsseed1.nmc.dotbit.zone",
 					"dnsseed2.nmc.dotbit.zone", "dnsseed.nmc.testls.space", "namecoin.seed.cypherstack.com")
 			.build();
+	private static final NetworkParameters PEERCOIN_MAIN_NET_PARAMS = peercoinParams("org.peercoin.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, "peercoin")
+			.genesis(1345084287L, 2179302059L, 0x1d00ffffL, "0000000032fe677166d54963b62a4677d8957e87c508eaa4fd7eb1c880cd27e3")
+			.genesisHeader(1L, PEERCOIN_GENESIS_MERKLE_ROOT)
+			.port(9901)
+			.packetMagic(0xe6e8e9e5L)
+			.addressHeaders(55, 117, 183)
+			.segwitAddressHrp("pc")
+			.coinbaseAndSubsidy(500, 210_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(1815, 1900, 2016)
+			.dnsSeeds("seed.peercoin.net", "seed2.peercoin.net", "seed.peercoin-library.org", "seed.ppcoin.info")
+			.build();
 	private static final NetworkParameters FIRO_MAIN_NET_PARAMS = firoParams("org.firo.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
 			.genesis(1414776286L, 142392L, 0x1e0ffff0L, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233")
 			.genesisHeader(2L, FIRO_GENESIS_MERKLE_ROOT)
@@ -301,6 +316,12 @@ public final class BitcoinyChainSpecs {
 			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isNamecoinNameOutputScript(scriptPubKey))
 			.build();
 
+	public static final BitcoinyChainSpec PEERCOIN = spec("PEERCOIN", PEERCOIN_SLIP44_COIN_TYPE, "Peercoin", PEERCOIN_CURRENCY_CODE,
+			Coin.valueOf(10_000), 1_000_000, 6)
+			.mainnet(() -> PEERCOIN_MAIN_NET_PARAMS, "0000000032fe677166d54963b62a4677d8957e87c508eaa4fd7eb1c880cd27e3", 10_000L, "ppc")
+			.transactionFormat(BitcoinyTransactionFormat.PEERCOIN)
+			.build();
+
 	public static final BitcoinyChainSpec FIRO = spec("FIRO", FIRO_SLIP44_COIN_TYPE, "Firo", FIRO_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
 			.mainnet(() -> FIRO_MAIN_NET_PARAMS, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", 10_000L, "firo")
 			.build();
@@ -315,7 +336,7 @@ public final class BitcoinyChainSpecs {
 			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isLbryClaimOutputScript(scriptPubKey))
 			.build();
 
-	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, NAMECOIN, FIRO, KOMODO, LBRY_CREDITS);
+	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, PEERCOIN, NAMECOIN, FIRO, KOMODO, LBRY_CREDITS);
 
 	private static final List<String> CURRENCY_CODES = ALL.stream()
 			.map(BitcoinyChainSpec::getCurrencyCode)
@@ -328,7 +349,12 @@ public final class BitcoinyChainSpecs {
 	}
 
 	private static SpecBuilder spec(String canonicalName, int slip44CoinType, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
-		return new SpecBuilder(canonicalName, slip44CoinType, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount);
+		return spec(canonicalName, slip44CoinType, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount, 8);
+	}
+
+	private static SpecBuilder spec(String canonicalName, int slip44CoinType, String displayName, String currencyCode, Coin defaultFeePerKb,
+			long minimumOrderAmount, int decimalPlaces) {
+		return new SpecBuilder(canonicalName, slip44CoinType, displayName, currencyCode, defaultFeePerKb, minimumOrderAmount, decimalPlaces);
 	}
 
 	private static StaticBitcoinyParams.Builder bitcoinParams(String id, String paymentProtocolId, String segwitAddressHrp) {
@@ -428,6 +454,21 @@ public final class BitcoinyChainSpecs {
 				.difficultyValidationFailure("Namecoin difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
+	private static StaticBitcoinyParams.Builder peercoinParams(String id, String paymentProtocolId, String uriScheme) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, uriScheme)
+				.maxTarget(0x1d00ffffL)
+				.targetTimespan(7 * 24 * 60 * 60)
+				.interval(1008)
+				.maxMoney(Coin.valueOf(21_000_000L * 1_000_000L))
+				.minNonDustOutput(Coin.valueOf(10_000L))
+				.monetaryFormat(new MonetaryFormat().noCode()
+						.code(2, PEERCOIN_CURRENCY_CODE)
+						.shift(2)
+						.minDecimals(2)
+						.repeatOptionalDecimals(1, 4))
+				.difficultyValidationFailure("Peercoin difficulty verification is not implemented for Electrum-backed parameters");
+	}
+
 	private static StaticBitcoinyParams.Builder firoParams(String id, String paymentProtocolId) {
 		return StaticBitcoinyParams.builder(id, paymentProtocolId, "firo")
 				.maxTarget("00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
@@ -525,10 +566,11 @@ public final class BitcoinyChainSpecs {
 		private BitcoinyChainSpec.SpendableOutputScriptFilter spendableOutputScriptFilter;
 		private BitcoinyTransactionFormat transactionFormat = BitcoinyTransactionFormat.LEGACY;
 
-		private SpecBuilder(String canonicalName, int slip44CoinType, String displayName, String currencyCode, Coin defaultFeePerKb, long minimumOrderAmount) {
+		private SpecBuilder(String canonicalName, int slip44CoinType, String displayName, String currencyCode, Coin defaultFeePerKb,
+				long minimumOrderAmount, int decimalPlaces) {
 			this.canonicalName = canonicalName;
 			this.slip44CoinType = slip44CoinType;
-			this.config = new BitcoinyChainConfig(displayName, currencyCode, defaultFeePerKb, minimumOrderAmount,
+			this.config = new BitcoinyChainConfig(displayName, currencyCode, defaultFeePerKb, minimumOrderAmount, decimalPlaces,
 					BitcoinyChainConfig.defaultElectrumXPorts());
 		}
 

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-07 - crosschain: add Peercoin Bitcoiny support
+
+Added Peercoin as a registered BTC-like crosschain coin using the shared Bitcoiny chain-spec model, including mainnet chain identity, SLIP-44 wallet metadata, PPC address headers, SSL Electrum server refresh metadata, common wallet/HTLC/ACCT test coverage, and chain-spec documentation. Because PPC uses six decimal places and Peercoin's current transaction serialization, the shared Bitcoiny runtime now carries per-chain decimal metadata and builds PPC spend and HTLC transactions as version 3 while still being able to parse older pre-version-3 Peercoin transactions that include a transaction timestamp field.
+
 ### 2026-05-07 - crosschain: add LBRY Credits Bitcoiny support
 
 Added LBRY Credits as a registered BTC-like crosschain coin using the shared Bitcoiny chain-spec model, including mainnet chain identity, SLIP-44 wallet metadata, LBC address headers, Electrum server refresh metadata, common wallet/HTLC/ACCT test coverage, and chain-spec documentation. This enables ordinary transparent LBC trade and wallet support while deliberately leaving LBRY claim, publish, update, and content-discovery features outside the generic BTC-like path; detected claim outputs are filtered out of normal wallet spend selection so they are not accidentally spent as plain LBC.
