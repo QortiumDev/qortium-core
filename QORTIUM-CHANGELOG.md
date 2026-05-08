@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-08 - crosschain: add transparent Zcash Bitcoiny support
+
+Added Zcash as a registered transparent-only Bitcoiny crosschain coin with ZEC mainnet chain identity, SLIP-44 wallet metadata, two-byte `t1`/`t3` address prefixes, SSL Electrum server metadata, and deterministic transaction-builder coverage. ZEC spends and HTLC redeem/refund transactions use ZIP225/v5 transparent serialization while shielded, unified, Sapling, and Orchard wallet flows remain outside the generic BTC-like path.
+
 ### 2026-05-08 - crosschain: add Bitcoin Cash testnet4 support
 
 Added Bitcoin Cash TEST4 as a supported BCH network using BCHN testnet4 parameters, `bchtest:` CashAddr metadata, and generated Electrum server metadata from the 1209k `tbch4` list. BCH mainnet remains the default when no network override is configured.

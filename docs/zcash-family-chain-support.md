@@ -6,26 +6,26 @@ run through shared `ZcashFamily*` foundations, while `PirateChain`,
 `PirateWallet`, `PirateLightClient`, and `PirateChainWalletController` remain as
 thin compatibility wrappers for existing API and runtime callers.
 
-This is intended as the base for later HUSH and Zcash work, but Java wrappers
-are not enough to enable another chain. A new Zcash-family chain should supply a
-wallet config, lightwalletd server list, network parameters, wallet-library QDN
-metadata, address HRP, default birthday, and any chain-specific transaction
-parser extensions. Do not add another full copy of the Pirate
-wallet/controller/light-client code.
+This is intended as the base for later HUSH and full shielded Zcash work, but
+Java wrappers are not enough to enable another native wallet chain. A new
+Zcash-family native chain should supply a wallet config, lightwalletd server
+list, network parameters, wallet-library QDN metadata, address HRP, default
+birthday, and any chain-specific transaction parser extensions. Do not add
+another full copy of the Pirate wallet/controller/light-client code.
 
 The current generic transaction parser intentionally reads only the transparent
 fields used by the existing HTLC paths: transparent inputs, transparent outputs,
 locktime, and expiry height. Shielded spend/output parsing should be added only
 when a chain integration needs full shielded transaction introspection.
 
-## Deferred HUSH/Zcash Work
+## Deferred HUSH/Zcash Native Wallet Work
 
-HUSH and Zcash-style chain support is paused until the native wallet side is
-real and reproducible. Pirate Chain works because Qortium already knows how to
-load the ARRR Rust JNI wallet library from QDN and where to find the ARRR
-`coinparams.json`, Sapling spend, and Sapling output files. Another
-Sapling-family chain needs the same operational foundation before it should be
-registered as active runtime support.
+HUSH and shielded Zcash-style wallet support is paused until the native wallet
+side is real and reproducible. Pirate Chain works because Qortium already knows
+how to load the ARRR Rust JNI wallet library from QDN and where to find the
+ARRR `coinparams.json`, Sapling spend, and Sapling output files. Another
+Sapling-family native wallet chain needs the same operational foundation before
+it should be registered as active native runtime support.
 
 Before enabling HUSH, Zcash, or another Sapling-family chain, verify and
 document:
@@ -46,13 +46,15 @@ document:
 - opt-in live tests that prove the published native library and lightwalletd
   servers can initialize and sync a wallet
 
-If any of those pieces are missing, keep the chain documented as planned rather
-than registering runtime support that compiles but cannot operate.
+If any of those pieces are missing, keep native wallet support documented as
+planned rather than registering runtime support that compiles but cannot
+operate.
 
-## Transparent KMD/VRSC Routing Note
+## Transparent KMD/VRSC/ZEC Routing Note
 
-KMD and VRSC are registered through `BitcoinyChainSpecs` as transparent
-Electrum-compatible Bitcoiny chains. They use Sapling transparent transaction
-serialization/signing inside the generic Bitcoiny runtime, but they do not use
-the Zcash-family native wallet layer because shielded wallet support is not part
-of those integrations.
+KMD, VRSC, and ZEC are registered through `BitcoinyChainSpecs` as transparent
+Electrum-compatible Bitcoiny chains. KMD and VRSC use Sapling transparent
+transaction serialization/signing inside the generic Bitcoiny runtime. ZEC uses
+the ZIP225/v5 transparent transaction route and only accepts `t1`/`t3`
+transparent addresses. These integrations do not use the Zcash-family native
+wallet layer because shielded wallet support is not part of those integrations.

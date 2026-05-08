@@ -26,6 +26,10 @@ public final class BitcoinySignedTransaction {
 		return new BitcoinySignedTransaction(rawTransaction, HashCode.fromBytes(txHashBytes).toString());
 	}
 
+	public static BitcoinySignedTransaction fromRawWithTxHash(byte[] rawTransaction, String txHash) {
+		return new BitcoinySignedTransaction(rawTransaction, txHash);
+	}
+
 	public byte[] getRawTransaction() {
 		return Arrays.copyOf(this.rawTransaction, this.rawTransaction.length);
 	}

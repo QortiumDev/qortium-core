@@ -22,6 +22,7 @@ Mainnet chain ids for the currently registered BTC-like chains are:
 | `bip122:4381deb85b1b2c9843c222944b616d99` | `FIRO` | `FIRO` |
 | `bip122:027e3758c3a65b12aa1046462b486d0a` | `KOMODO` | `KMD` |
 | `bip122:ac2cd7d37177140ea4991cf630c0b9c7` | `VERUSCOIN` | `VRSC` |
+| `bip122:00040fe8ec8471911baa1db1266ea15d` | `ZCASH` | `ZEC` |
 | `bip122:9c89283ba0f3227f6c03b70216b9f665` | `LBRYCREDITS` | `LBC` |
 | `bip122:00000fc63692467faeb20cdb3b53200d` | `VERGE` | `XVG` |
 | `bip122:7497ea1b465eb39f1c8f507bc877078f` | `DIGIBYTE` | `DGB` |
@@ -29,7 +30,7 @@ Mainnet chain ids for the currently registered BTC-like chains are:
 
 Bitcoin Cash shares Bitcoin's genesis block, so its AT chain reference uses the first 16 bytes of the first BCH-only fork block hash instead of the shared genesis hash. VRSC shares KMD's genesis block, so its AT chain reference uses the first 16 bytes of Verus block 10000's checkpoint hash instead of the shared genesis hash.
 
-SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, PPC `6`, NMC `7`, DGB `20`, XVG `77`, VRSC `133` (used by upstream Verus wallet metadata even though SLIP-44 labels 133 as Zcash), FIRO `136` (listed in SLIP-44 as XZC/ZCoin), LBC `140`, KMD `141`, BCH `145`, and RVN `175`.
+SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, PPC `6`, NMC `7`, DGB `20`, XVG `77`, ZEC `133`, VRSC `133` (used by upstream Verus wallet metadata even though SLIP-44 labels 133 as Zcash), FIRO `136` (listed in SLIP-44 as XZC/ZCoin), LBC `140`, KMD `141`, BCH `145`, and RVN `175`.
 
 ## Network Settings
 
@@ -50,6 +51,7 @@ Use `bitcoinyNetworks` in `settings.json` to choose the active network for BTC-l
     "FIRO": "MAIN",
     "KMD": "MAIN",
     "VRSC": "MAIN",
+    "ZEC": "MAIN",
     "LBC": "MAIN",
     "XVG": "MAIN"
   }
@@ -94,6 +96,8 @@ Firo is registered for ordinary transparent FIRO wallet, HTLC, and ACCT trade su
 Komodo is registered for transparent KMD wallet, HTLC, and ACCT trade support through Electrum-compatible servers. KMD is not a legacy-Bitcoin transaction clone: spends and HTLC transactions use the Sapling transparent transaction format while staying in the generic Bitcoiny runtime. Shielded KMD wallet behavior is intentionally not implemented.
 
 VerusCoin is registered for ordinary transparent VRSC wallet, HTLC, and ACCT trade support through Electrum-compatible servers. VRSC shares KMD's genesis and Sapling-transparent transaction route, but it uses a Verus checkpoint-based BIP122 reference so trades cannot collide with KMD. VerusID, PBaaS, reserve/multicurrency transactions, and shielded wallet behavior are intentionally outside generic BTC-like support.
+
+Zcash is registered for transparent-only ZEC wallet, HTLC, and ACCT trade support through Electrum-compatible servers. It supports `t1` and `t3` transparent addresses, two-byte Zcash Base58 address prefixes, and ZIP225/v5 transparent transaction building. Shielded, unified, Sapling, and Orchard wallet flows are intentionally outside generic BTC-like support.
 
 LBRY Credits is registered for ordinary transparent LBC wallet, HTLC, and ACCT trade support. LBRY claim, publish, update, and content-discovery flows are intentionally not implemented as part of generic BTC-like support, but detected claim/support/update outputs are filtered out of normal wallet spend selection so claim UTXOs are not accidentally spent as plain LBC.
 

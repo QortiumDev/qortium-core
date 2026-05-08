@@ -50,6 +50,7 @@ public class BitcoinyChainSpecsTests {
 				new ChainManifest("FIRO", "FIRO", BitcoinyChainSpecs.FIRO_SLIP44_COIN_TYPE, "4381deb85b1b2c9843c222944b616d997516dcbd6a964e1eaf0def0830695233", Set.of(BitcoinyChainSpecs.MAIN), 82, 7, 210, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("KOMODO", "KMD", BitcoinyChainSpecs.KOMODO_SLIP44_COIN_TYPE, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", Set.of(BitcoinyChainSpecs.MAIN), 60, 85, 188, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("VERUSCOIN", "VRSC", BitcoinyChainSpecs.VERUS_SLIP44_COIN_TYPE, "027e3758c3a65b12aa1046462b486d0a63bfa1beae327897f56c5cfb7daaae71", "bip122:ac2cd7d37177140ea4991cf630c0b9c7", Set.of(BitcoinyChainSpecs.MAIN), 60, 85, 188, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("ZCASH", "ZEC", BitcoinyChainSpecs.ZCASH_SLIP44_COIN_TYPE, "00040fe8ec8471911baa1db1266ea15dd06b4a8a5c453883c000b031973dce08", Set.of(BitcoinyChainSpecs.MAIN), 0x1cb8, 0x1cbd, 128, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("LBRYCREDITS", "LBC", BitcoinyChainSpecs.LBRY_CREDITS_SLIP44_COIN_TYPE, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463", Set.of(BitcoinyChainSpecs.MAIN), 0x55, 0x7a, 0x1c, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("VERGE", "XVG", BitcoinyChainSpecs.VERGE_SLIP44_COIN_TYPE, "00000fc63692467faeb20cdb3b53200dc601d75bdfa1001463304cc790d77278", Set.of(BitcoinyChainSpecs.MAIN), 30, 33, 158, 0x022D2533, 0x0221312B))) {
 			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(expected.currencyCode);
@@ -196,6 +197,7 @@ public class BitcoinyChainSpecsTests {
 				BitcoinyChainSpecs.FIRO,
 				BitcoinyChainSpecs.KOMODO,
 				BitcoinyChainSpecs.VERUS,
+				BitcoinyChainSpecs.ZCASH,
 				BitcoinyChainSpecs.LBRY_CREDITS,
 				BitcoinyChainSpecs.VERGE
 		}) {
@@ -682,6 +684,45 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testZcashUsesSharedStaticParams() {
+		BitcoinyNetwork zcashMainNet = BitcoinyChainSpecs.ZCASH.getNetwork(BitcoinyChainSpecs.MAIN);
+		NetworkParameters zcashMainNetParams = zcashMainNet.getParams();
+		Block genesisBlock = zcashMainNetParams.getGenesisBlock();
+
+		assertTrue(zcashMainNetParams instanceof StaticBitcoinyParams);
+		assertEquals(BitcoinyTransactionFormat.ZCASH_TRANSPARENT, BitcoinyChainSpecs.ZCASH.getTransactionFormat());
+		assertEquals("bip122:00040fe8ec8471911baa1db1266ea15d", zcashMainNet.getChainId());
+		assertEquals("org.zcash.production", zcashMainNetParams.getId());
+		assertEquals(NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, zcashMainNetParams.getPaymentProtocolId());
+		assertEquals("zcash", zcashMainNetParams.getUriScheme());
+		assertEquals("00040fe8ec8471911baa1db1266ea15dd06b4a8a5c453883c000b031973dce08", genesisBlock.getHashAsString());
+		assertEquals(4L, genesisBlock.getVersion());
+		assertEquals("c4eaa58879081de3c24a7b117ed2b28300e7ec4c4c1dff1d3f1268b7857a4ddb", genesisBlock.getMerkleRoot().toString());
+		assertEquals(1477641360L, genesisBlock.getTimeSeconds());
+		assertEquals(0x1f07ffffL, genesisBlock.getDifficultyTarget());
+		assertEquals(4695L, genesisBlock.getNonce());
+		assertEquals(new BigInteger("0007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16), zcashMainNetParams.getMaxTarget());
+		assertEquals(17 * 75, zcashMainNetParams.getTargetTimespan());
+		assertEquals(17, zcashMainNetParams.getInterval());
+		assertEquals(8233, zcashMainNetParams.getPort());
+		assertEquals(0x24e92764L, zcashMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(0x1cb8, zcashMainNetParams.getAddressHeader());
+		assertEquals(0x1cbd, zcashMainNetParams.getP2SHHeader());
+		assertEquals(128, zcashMainNetParams.getDumpedPrivateKeyHeader());
+		assertNull(zcashMainNetParams.getSegwitAddressHrp());
+		assertEquals(100, zcashMainNetParams.getSpendableCoinbaseDepth());
+		assertEquals(1_680_000, zcashMainNetParams.getSubsidyDecreaseBlockCount());
+		assertEquals(0x0488B21E, zcashMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, zcashMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(750, zcashMainNetParams.getMajorityEnforceBlockUpgrade());
+		assertEquals(950, zcashMainNetParams.getMajorityRejectBlockOutdated());
+		assertEquals(4000, zcashMainNetParams.getMajorityWindow());
+		assertEquals(Coin.COIN.multiply(21_000_000L), zcashMainNetParams.getMaxMoney());
+		assertEquals(Coin.valueOf(1000L), zcashMainNetParams.getMinNonDustOutput());
+		assertEquals("ZEC 1.00", zcashMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
+	}
+
+	@Test
 	public void testLbryCreditsUsesSharedStaticParams() {
 		BitcoinyNetwork lbryMainNet = BitcoinyChainSpecs.LBRY_CREDITS.getNetwork(BitcoinyChainSpecs.MAIN);
 		NetworkParameters lbryMainNetParams = lbryMainNet.getParams();
@@ -807,6 +848,7 @@ public class BitcoinyChainSpecsTests {
 		assertSame(BitcoinyChainSpecs.FIRO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.FIRO_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.KOMODO.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.KOMODO_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.VERUS.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.VERUS_CURRENCY_CODE));
+		assertSame(BitcoinyChainSpecs.ZCASH.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.ZCASH_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.LBRY_CREDITS.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LBRY_CREDITS_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.VERGE.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.VERGE_CURRENCY_CODE));
 	}

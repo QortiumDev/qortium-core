@@ -51,6 +51,7 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	@Override
 	public Transaction buildSpend(String xprv58, String recipient, long amount, Long feePerByte) {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT
 				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY
 				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
 			throw unsupportedBitcoinjTransactionFormat();
@@ -61,6 +62,7 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	@Override
 	public Transaction buildSpend(String xprv58, String recipient, long amount) {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT
 				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY
 				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
 			throw unsupportedBitcoinjTransactionFormat();
@@ -75,6 +77,7 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	@Override
 	public Transaction buildSpendMultiple(String xprv58, Map<String, Long> amountByRecipient, Long feePerByte) {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT
 				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY
 				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
 			throw unsupportedBitcoinjTransactionFormat();
@@ -86,6 +89,9 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	public BitcoinySignedTransaction buildSpendTransaction(String xprv58, String recipient, long amount, Long feePerByte) {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
 			return SaplingTransparentTransactionBuilder.buildSpend(this, xprv58, recipient, amount, feePerByte);
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT)
+			return ZcashTransparentTransactionBuilder.buildSpend(this, xprv58, recipient, amount, feePerByte);
 
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			return TimestampedLegacyTransactionBuilder.buildSpend(this, xprv58, recipient, amount, feePerByte);
@@ -101,6 +107,9 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
 			return SaplingTransparentTransactionBuilder.buildSpend(this, xprv58, amountByRecipient, feePerByte);
 
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT)
+			return ZcashTransparentTransactionBuilder.buildSpend(this, xprv58, amountByRecipient, feePerByte);
+
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			return TimestampedLegacyTransactionBuilder.buildSpend(this, xprv58, amountByRecipient, feePerByte);
 
@@ -115,6 +124,10 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 			byte[] redeemScriptBytes, byte[] secret, byte[] receivingAccountInfo) throws ForeignBlockchainException {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
 			return SaplingTransparentTransactionBuilder.buildRedeem(this, redeemAmount, redeemKey, fundingOutputs,
+					redeemScriptBytes, secret, receivingAccountInfo);
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT)
+			return ZcashTransparentTransactionBuilder.buildRedeem(this, redeemAmount, redeemKey, fundingOutputs,
 					redeemScriptBytes, secret, receivingAccountInfo);
 
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
@@ -135,6 +148,10 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 			return SaplingTransparentTransactionBuilder.buildRefund(this, refundAmount, refundKey, fundingOutputs,
 					redeemScriptBytes, lockTime, receivingAccountInfo);
 
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT)
+			return ZcashTransparentTransactionBuilder.buildRefund(this, refundAmount, refundKey, fundingOutputs,
+					redeemScriptBytes, lockTime, receivingAccountInfo);
+
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			return TimestampedLegacyTransactionBuilder.buildRefund(this, refundAmount, refundKey, fundingOutputs,
 					redeemScriptBytes, lockTime, receivingAccountInfo);
@@ -148,7 +165,8 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 
 	@Override
 	public int getBlockHeaderTimestampOffset() {
-		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT)
 			return 4 + 32 + 32 + 32;
 
 		return super.getBlockHeaderTimestampOffset();
@@ -156,7 +174,8 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 
 	@Override
 	public List<byte[]> splitRawBlockHeaders(byte[] rawBlockHeaders, int count) throws ForeignBlockchainException {
-		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT)
 			return SaplingTransparentTransactionBuilder.splitBlockHeaders(rawBlockHeaders, count);
 
 		return super.splitRawBlockHeaders(rawBlockHeaders, count);
@@ -164,7 +183,8 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 
 	@Override
 	public BitcoinyTransaction deserializeRawTransaction(String txHash, byte[] rawTransaction) throws ForeignBlockchainException {
-		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT) {
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.ZCASH_TRANSPARENT) {
 			try {
 				return ZcashFamilyTransactionParser.deserializeRawTransaction(txHash, rawTransaction);
 			} catch (TransformationException e) {

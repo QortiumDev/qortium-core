@@ -32,6 +32,7 @@ public final class BitcoinyChainSpecs {
 	public static final String FIRO_CURRENCY_CODE = "FIRO";
 	public static final String KOMODO_CURRENCY_CODE = "KMD";
 	public static final String VERUS_CURRENCY_CODE = "VRSC";
+	public static final String ZCASH_CURRENCY_CODE = "ZEC";
 	public static final String LBRY_CREDITS_CURRENCY_CODE = "LBC";
 	public static final String VERGE_CURRENCY_CODE = "XVG";
 	public static final int BITCOIN_SLIP44_COIN_TYPE = 0;
@@ -45,6 +46,7 @@ public final class BitcoinyChainSpecs {
 	public static final int FIRO_SLIP44_COIN_TYPE = 136;
 	public static final int KOMODO_SLIP44_COIN_TYPE = 141;
 	public static final int VERUS_SLIP44_COIN_TYPE = 133;
+	public static final int ZCASH_SLIP44_COIN_TYPE = 133;
 	public static final int LBRY_CREDITS_SLIP44_COIN_TYPE = 140;
 	public static final int RAVENCOIN_SLIP44_COIN_TYPE = 175;
 	public static final int VERGE_SLIP44_COIN_TYPE = 77;
@@ -63,6 +65,9 @@ public final class BitcoinyChainSpecs {
 	private static final String NAMECOIN_GENESIS_OUTPUT_SCRIPT = "04b620369050cd899ffbbc4e8ee51e8c4534a855bb463439d63d235d4779685d8b6f4870a238cf365ac94fa13ef9a2a22cd99d0d5ee86dcabcafce36c7acf43ce5";
 	private static final String FIRO_GENESIS_MERKLE_ROOT = "365d2aa75d061370c9aefdabac3985716b1e3b4bb7c4af4ed54f25e5aaa42783";
 	private static final String KOMODO_GENESIS_MERKLE_ROOT = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
+	private static final String ZCASH_GENESIS_COINBASE_SCRIPT = "04ffff071f0104455a6361736830623963346565663862376363343137656535303031653335303039383462366665613335363833613763616331343161303433633432303634383335643334";
+	private static final String ZCASH_GENESIS_MERKLE_ROOT = "c4eaa58879081de3c24a7b117ed2b28300e7ec4c4c1dff1d3f1268b7857a4ddb";
+	private static final String ZCASH_GENESIS_OUTPUT_SCRIPT = "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f";
 	private static final String BITCOIN_CASH_MAINNET_CHAIN_ID = "bip122:000000000000000000651ef99cb9fcbe";
 	private static final String VERUS_MAINNET_CHAIN_ID = "bip122:ac2cd7d37177140ea4991cf630c0b9c7";
 	private static final String LBRY_CREDITS_GENESIS_MERKLE_ROOT = "b8211c82c3d15bcd78bba57005b86fed515149a53a425eb592c07af99fe559cc";
@@ -335,6 +340,18 @@ public final class BitcoinyChainSpecs {
 			.majorityWindow(750, 950, 4000)
 			.dnsSeeds("seeds.verus.io")
 			.build();
+	private static final NetworkParameters ZCASH_MAIN_NET_PARAMS = zcashParams("org.zcash.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
+			.genesis(1477641360L, 4695L, 0x1f07ffffL, "00040fe8ec8471911baa1db1266ea15dd06b4a8a5c453883c000b031973dce08")
+			.genesisHeader(4L, ZCASH_GENESIS_MERKLE_ROOT)
+			.genesisTransaction(ZCASH_GENESIS_COINBASE_SCRIPT, Coin.ZERO, ZCASH_GENESIS_OUTPUT_SCRIPT)
+			.port(8233)
+			.packetMagic(0x24e92764L)
+			.addressHeaders(0x1cb8, 0x1cbd, 128)
+			.coinbaseAndSubsidy(100, 1_680_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(750, 950, 4000)
+			.dnsSeeds("dnsseed.z.cash", "dnsseed.str4d.xyz", "mainnet.seeder.zfnd.org", "mainnet.is.yolo.money")
+			.build();
 	private static final NetworkParameters LBRY_CREDITS_MAIN_NET_PARAMS = lbryCreditsParams("main", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
 			.genesis(1446058291L, 1287L, 0x1f00ffffL, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463")
 			.genesisHeader(1L, LBRY_CREDITS_GENESIS_MERKLE_ROOT)
@@ -425,6 +442,11 @@ public final class BitcoinyChainSpecs {
 			.transactionFormat(BitcoinyTransactionFormat.SAPLING_TRANSPARENT)
 			.build();
 
+	public static final BitcoinyChainSpec ZCASH = spec("ZCASH", ZCASH_SLIP44_COIN_TYPE, "Zcash", ZCASH_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
+			.mainnet(() -> ZCASH_MAIN_NET_PARAMS, "00040fe8ec8471911baa1db1266ea15dd06b4a8a5c453883c000b031973dce08", 10_000L, "zec")
+			.transactionFormat(BitcoinyTransactionFormat.ZCASH_TRANSPARENT)
+			.build();
+
 	public static final BitcoinyChainSpec LBRY_CREDITS = spec("LBRYCREDITS", LBRY_CREDITS_SLIP44_COIN_TYPE, "LBRY Credits", LBRY_CREDITS_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
 			.mainnet(() -> LBRY_CREDITS_MAIN_NET_PARAMS, "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463", 10_000L, "lbc")
 			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isLbryClaimOutputScript(scriptPubKey))
@@ -436,7 +458,7 @@ public final class BitcoinyChainSpecs {
 			.transactionFormat(BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			.build();
 
-	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, BITCOIN_CASH, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, PEERCOIN, NAMECOIN, FIRO, KOMODO, VERUS, LBRY_CREDITS, VERGE);
+	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, BITCOIN_CASH, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, PEERCOIN, NAMECOIN, FIRO, KOMODO, VERUS, ZCASH, LBRY_CREDITS, VERGE);
 
 	private static final List<String> CURRENCY_CODES = ALL.stream()
 			.map(BitcoinyChainSpec::getCurrencyCode)
@@ -621,6 +643,20 @@ public final class BitcoinyChainSpecs {
 						.code(3, "mVRSC")
 						.code(7, "Verusoshi"))
 				.difficultyValidationFailure("VerusCoin difficulty verification is not implemented for Electrum-backed parameters");
+	}
+
+	private static StaticBitcoinyParams.Builder zcashParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "zcash")
+				.maxTarget("0007ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+				.targetTimespan(17 * 75)
+				.interval(17)
+				.maxMoney(Coin.COIN.multiply(21_000_000L))
+				.minNonDustOutput(Coin.valueOf(1000L))
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, ZCASH_CURRENCY_CODE)
+						.code(3, "mZEC")
+						.code(7, "Zatoshi"))
+				.difficultyValidationFailure("Zcash difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	private static StaticBitcoinyParams.Builder lbryCreditsParams(String id, String paymentProtocolId) {

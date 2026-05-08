@@ -64,7 +64,7 @@ public final class BitcoinyAddress {
 			throw new IllegalArgumentException("Missing Base58 address");
 
 		byte[] decoded = Base58.decode(address);
-		if (decoded == null || decoded.length != 25)
+		if (decoded == null || decoded.length < 1 + Bitcoiny.HASH160_LENGTH + 4)
 			throw new IllegalArgumentException("Invalid Base58Check address length");
 
 		byte[] payload = Arrays.copyOf(decoded, decoded.length - 4);
@@ -73,16 +73,19 @@ public final class BitcoinyAddress {
 			if (decoded[payload.length + index] != checksum[index])
 				throw new IllegalArgumentException("Invalid Base58Check address checksum");
 
-		int header = payload[0] & 0xff;
-		byte[] hash = Arrays.copyOfRange(payload, 1, payload.length);
-		if (hash.length != Bitcoiny.HASH160_LENGTH)
-			throw new IllegalArgumentException("Invalid Base58Check address payload length");
+		byte[] addressHeader = headerBytes(params.getAddressHeader());
+		if (startsWith(payload, addressHeader)) {
+			byte[] hash = Arrays.copyOfRange(payload, addressHeader.length, payload.length);
+			if (hash.length == Bitcoiny.HASH160_LENGTH)
+				return new BitcoinyAddress(Type.P2PKH, hash, address);
+		}
 
-		if (header == params.getAddressHeader())
-			return new BitcoinyAddress(Type.P2PKH, hash, address);
-
-		if (header == params.getP2SHHeader())
-			return new BitcoinyAddress(Type.P2SH, hash, address);
+		byte[] p2shHeader = headerBytes(params.getP2SHHeader());
+		if (startsWith(payload, p2shHeader)) {
+			byte[] hash = Arrays.copyOfRange(payload, p2shHeader.length, payload.length);
+			if (hash.length == Bitcoiny.HASH160_LENGTH)
+				return new BitcoinyAddress(Type.P2SH, hash, address);
+		}
 
 		throw new IllegalArgumentException("Address version is not valid for this network");
 	}
@@ -104,12 +107,16 @@ public final class BitcoinyAddress {
 	}
 
 	private static BitcoinyAddress fromHash(int header, Type type, byte[] hash) {
+		return fromHash(headerBytes(header), type, hash);
+	}
+
+	private static BitcoinyAddress fromHash(byte[] header, Type type, byte[] hash) {
 		if (hash == null || hash.length != Bitcoiny.HASH160_LENGTH)
 			throw new IllegalArgumentException("Expected 20-byte address hash");
 
-		byte[] payload = new byte[1 + hash.length];
-		payload[0] = (byte) header;
-		System.arraycopy(hash, 0, payload, 1, hash.length);
+		byte[] payload = new byte[header.length + hash.length];
+		System.arraycopy(header, 0, payload, 0, header.length);
+		System.arraycopy(hash, 0, payload, header.length, hash.length);
 
 		byte[] checksum = Crypto.doubleDigest(payload);
 		byte[] encoded = new byte[payload.length + 4];
@@ -117,6 +124,35 @@ public final class BitcoinyAddress {
 		System.arraycopy(checksum, 0, encoded, payload.length, 4);
 
 		return new BitcoinyAddress(type, hash, Base58.encode(encoded));
+	}
+
+	private static byte[] headerBytes(int header) {
+		if (header < 0)
+			throw new IllegalArgumentException("Address header cannot be negative");
+
+		if (header <= 0xff)
+			return new byte[] { (byte) header };
+
+		int byteCount = 0;
+		for (int value = header; value != 0; value >>>= 8)
+			++byteCount;
+
+		byte[] bytes = new byte[byteCount];
+		for (int index = byteCount - 1, value = header; index >= 0; --index, value >>>= 8)
+			bytes[index] = (byte) value;
+
+		return bytes;
+	}
+
+	private static boolean startsWith(byte[] bytes, byte[] prefix) {
+		if (bytes.length < prefix.length)
+			return false;
+
+		for (int index = 0; index < prefix.length; ++index)
+			if (bytes[index] != prefix[index])
+				return false;
+
+		return true;
 	}
 
 	private static BitcoinyAddress fromCashAddressHash(String prefix, int version, Type type, byte[] hash) {

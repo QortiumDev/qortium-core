@@ -68,6 +68,10 @@ public class RegisteredBitcoinyTests extends BitcoinyTests {
 						"xprv9z8QpS7vxwMC2fCnG1oZc6c4aFRLgsqSF86yWrJBKEzMY3T3ySCo85x8Uv5FxTavAQwgEDy1g3iLRT5kdtFjoNNBKukLTMzKwCUn1Abwoxg",
 						"xpub6D7mDwepoJuVF9HFN3LZyEYo8HFq6LZHcM2aKEhnsaXLQqnCWyX3ftGcLDcjYmiPCc9GNX4VjfT32hwvYQnh9H5Z5diAvMsXRrxFmckyNoR",
 						null) },
+				{ new ChainFixture(ForeignBlockchainRegistry.fromStringRequired("ZCASH"), "Zcash", "ZEC",
+						"xprv9z8QpS7vxwMC2fCnG1oZc6c4aFRLgsqSF86yWrJBKEzMY3T3ySCo85x8Uv5FxTavAQwgEDy1g3iLRT5kdtFjoNNBKukLTMzKwCUn1Abwoxg",
+						"xpub6D7mDwepoJuVF9HFN3LZyEYo8HFq6LZHcM2aKEhnsaXLQqnCWyX3ftGcLDcjYmiPCc9GNX4VjfT32hwvYQnh9H5Z5diAvMsXRrxFmckyNoR",
+						null) },
 				{ new ChainFixture(ForeignBlockchainRegistry.fromStringRequired("LBRYCREDITS"), "LBRY Credits", "LBC",
 						"xprv9z8QpS7vxwMC2fCnG1oZc6c4aFRLgsqSF86yWrJBKEzMY3T3ySCo85x8Uv5FxTavAQwgEDy1g3iLRT5kdtFjoNNBKukLTMzKwCUn1Abwoxg",
 						"xpub6D7mDwepoJuVF9HFN3LZyEYo8HFq6LZHcM2aKEhnsaXLQqnCWyX3ftGcLDcjYmiPCc9GNX4VjfT32hwvYQnh9H5Z5diAvMsXRrxFmckyNoR",
@@ -116,7 +120,8 @@ public class RegisteredBitcoinyTests extends BitcoinyTests {
 
 	@Override
 	protected boolean supportsBitcoinjSpendTests() {
-		return !"BITCOINCASH".equals(this.fixture.foreignBlockchain.name());
+		return !"BITCOINCASH".equals(this.fixture.foreignBlockchain.name())
+				&& !"ZCASH".equals(this.fixture.foreignBlockchain.name());
 	}
 
 	private static class ChainFixture {
