@@ -38,7 +38,7 @@ Use `bitcoinyNetworks` in `settings.json` to choose the active network for BTC-l
 ```json
 {
   "bitcoinyNetworks": {
-    "BTC": "TEST3",
+    "BTC": "TEST4",
     "BCH": "MAIN",
     "LTC": "TEST4",
     "DOGE": "MAIN",
@@ -56,7 +56,7 @@ Use `bitcoinyNetworks` in `settings.json` to choose the active network for BTC-l
 }
 ```
 
-Missing entries default to `MAIN`. Supported network names are currently `MAIN`, `TEST3`, `TEST4`, and `REGTEST`, but each chain only advertises networks that have explicit params and usable server support.
+Missing entries default to `MAIN`. Supported network names are currently `MAIN`, `TEST3`, `TEST4`, and `REGTEST`, but each chain only advertises networks that have explicit params and usable server support. BTC keeps legacy `TEST3` available, but `TEST4` is the preferred Bitcoin test network for new test settings.
 
 ## Adding A Coin
 

@@ -68,11 +68,17 @@ public final class RefreshElectrumServers {
 			if (coinConfigs.stream().noneMatch(coinConfig -> coinConfig.coinCode.equals(coinCode)))
 				throw new IllegalArgumentException("Unsupported coin: " + coinCode);
 		}
+		for (String networkName : options.networkNames) {
+			if (coinConfigs.stream().noneMatch(coinConfig -> options.coinCodes.contains(coinConfig.coinCode) && coinConfig.networkName.equals(networkName)))
+				throw new IllegalArgumentException("Unsupported network for selected coins: " + networkName);
+		}
 
 		Map<String, Map<String, List<CandidateServer>>> generatedServers = readGeneratedServersIfPresent(options.outputPath);
 
 		for (CoinConfig coinConfig : coinConfigs) {
 			if (!options.coinCodes.contains(coinConfig.coinCode))
+				continue;
+			if (!options.networkNames.isEmpty() && !options.networkNames.contains(coinConfig.networkName))
 				continue;
 
 			List<CandidateServer> existingCandidates = copyCandidates(generatedServers
@@ -579,6 +585,7 @@ public final class RefreshElectrumServers {
 		System.out.println("usage: tools/refresh-electrum-servers [options]");
 		System.out.println("  --output <path>        Output JSON path (default: " + DEFAULT_OUTPUT_PATH + ")");
 		System.out.println("  --coins <csv>          Coins to refresh (default: " + String.join(",", BitcoinyChainSpecs.currencyCodes()) + ")");
+		System.out.println("  --networks <csv>       Networks to refresh for selected coins (default: all refreshable networks)");
 		System.out.println("  --skip-1209k           Do not scrape 1209k.com");
 		System.out.println("  --skip-peers           Do not query Electrum server.peers.subscribe");
 		System.out.println("  --skip-verify          Keep discovered servers without live genesis/height checks");
@@ -609,6 +616,7 @@ public final class RefreshElectrumServers {
 	private static final class Options {
 		private final Path outputPath;
 		private final Set<String> coinCodes;
+		private final Set<String> networkNames;
 		private final boolean skip1209k;
 		private final boolean skipPeerDiscovery;
 		private final boolean verify;
@@ -617,10 +625,11 @@ public final class RefreshElectrumServers {
 		private final int threads;
 		private final boolean help;
 
-		private Options(Path outputPath, Set<String> coinCodes, boolean skip1209k, boolean skipPeerDiscovery,
+		private Options(Path outputPath, Set<String> coinCodes, Set<String> networkNames, boolean skip1209k, boolean skipPeerDiscovery,
 				boolean verify, int timeoutMs, int maxPeerSeeds, int threads, boolean help) {
 			this.outputPath = outputPath;
 			this.coinCodes = coinCodes;
+			this.networkNames = networkNames;
 			this.skip1209k = skip1209k;
 			this.skipPeerDiscovery = skipPeerDiscovery;
 			this.verify = verify;
@@ -633,6 +642,7 @@ public final class RefreshElectrumServers {
 		private static Options parse(String[] args) {
 			Path outputPath = Paths.get(DEFAULT_OUTPUT_PATH);
 			Set<String> coinCodes = new LinkedHashSet<>(BitcoinyChainSpecs.currencyCodes());
+			Set<String> networkNames = new LinkedHashSet<>();
 			boolean skip1209k = false;
 			boolean skipPeerDiscovery = false;
 			boolean verify = true;
@@ -655,6 +665,10 @@ public final class RefreshElectrumServers {
 
 					case "--coins":
 						coinCodes = parseCoins(requireValue(args, ++index, arg));
+						break;
+
+					case "--networks":
+						networkNames = parseNetworks(requireValue(args, ++index, arg));
 						break;
 
 					case "--skip-1209k":
@@ -686,7 +700,7 @@ public final class RefreshElectrumServers {
 				}
 			}
 
-			return new Options(outputPath, coinCodes, skip1209k, skipPeerDiscovery, verify, timeoutMs, maxPeerSeeds, threads, help);
+			return new Options(outputPath, coinCodes, networkNames, skip1209k, skipPeerDiscovery, verify, timeoutMs, maxPeerSeeds, threads, help);
 		}
 
 		private static String requireValue(String[] args, int index, String option) {
@@ -701,6 +715,14 @@ public final class RefreshElectrumServers {
 					.map(String::trim)
 					.filter(coin -> !coin.isEmpty())
 					.map(coin -> coin.toUpperCase(Locale.ROOT))
+					.collect(Collectors.toCollection(LinkedHashSet::new));
+		}
+
+		private static Set<String> parseNetworks(String csv) {
+			return Arrays.stream(csv.split(","))
+					.map(String::trim)
+					.filter(network -> !network.isEmpty())
+					.map(network -> network.toUpperCase(Locale.ROOT))
 					.collect(Collectors.toCollection(LinkedHashSet::new));
 		}
 

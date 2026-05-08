@@ -16,6 +16,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -197,6 +198,44 @@ public class ElectrumServerListTests {
 		assertEquals("builtin,1209k", generated.get("BTC").get("MAIN").get(0).getSourceSummary());
 		assertEquals(Long.valueOf(123L), generated.get("BTC").get("MAIN").get(0).getResponseTimeMillis());
 		assertTrue(missing.isEmpty());
+	}
+
+	@Test
+	public void testRefreshNetworkFilterPreservesUnselectedNetworks() throws Exception {
+		Path directory = Files.createTempDirectory("electrum-server-list-test");
+		Path outputJson = directory.resolve("electrum-servers.json");
+
+		String json = "{"
+				+ "\"servers\": {"
+				+ "\"BTC\": {"
+				+ "\"MAIN\": [{\"host\":\"main.example.com\",\"port\":50002,\"protocol\":\"SSL\"}],"
+				+ "\"TEST3\": [{\"host\":\"test3.example.com\",\"port\":50002,\"protocol\":\"SSL\"}],"
+				+ "\"TEST4\": ["
+				+ "{\"host\":\"test4-tcp.example.com\",\"port\":50001,\"protocol\":\"TCP\"},"
+				+ "{\"host\":\"test4-ssl.example.com\",\"port\":50002,\"protocol\":\"SSL\"}"
+				+ "]"
+				+ "}"
+				+ "}"
+				+ "}";
+		Files.write(outputJson, json.getBytes(StandardCharsets.UTF_8));
+
+		RefreshElectrumServers.main(new String[] {
+				"--output", outputJson.toString(),
+				"--coins", "BTC",
+				"--networks", BitcoinyChainSpecs.TEST4,
+				"--skip-1209k",
+				"--skip-peers",
+				"--skip-verify"
+		});
+
+		Map<String, Map<String, List<CandidateServer>>> generated = RefreshElectrumServers.readGeneratedServers(outputJson);
+		Map<String, List<CandidateServer>> bitcoinNetworks = generated.get("BTC");
+
+		assertEquals(Set.of(BitcoinyChainSpecs.MAIN, BitcoinyChainSpecs.TEST3, BitcoinyChainSpecs.TEST4), bitcoinNetworks.keySet());
+		assertEquals(new Server("main.example.com", ConnectionType.SSL, 50002), bitcoinNetworks.get(BitcoinyChainSpecs.MAIN).get(0).getServer());
+		assertEquals(new Server("test3.example.com", ConnectionType.SSL, 50002), bitcoinNetworks.get(BitcoinyChainSpecs.TEST3).get(0).getServer());
+		assertEquals(List.of(new Server("test4-ssl.example.com", ConnectionType.SSL, 50002)),
+				bitcoinNetworks.get(BitcoinyChainSpecs.TEST4).stream().map(CandidateServer::getServer).collect(Collectors.toList()));
 	}
 
 	private static String row(String host, String port, String protocol, String status) {

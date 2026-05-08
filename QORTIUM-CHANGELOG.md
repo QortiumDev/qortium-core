@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-08 - crosschain: add Bitcoin testnet4 support
+
+Added Bitcoin TEST4 as a supported BTC network using the BIP94 testnet4 genesis parameters, refreshed Electrum server metadata from the 1209k `tbtc4` list, and moved the default test settings from BTC TEST3 to BTC TEST4 while keeping TEST3 available for legacy fixtures. The Electrum server refresh tool can now restrict a refresh to selected networks, making it possible to update BTC TEST4 without rewriting existing BTC mainnet or TEST3 server entries.
+
 ### 2026-05-08 - crosschain: add Bitcoin Cash Bitcoiny support
 
 Added Bitcoin Cash as a registered Bitcoiny crosschain coin with BCH wallet metadata, CashAddr address support, a fork-specific BIP122 trade reference, refreshed SSL Electrum servers, and common wallet/HTLC/ACCT coverage. Because BCH shares Bitcoin's genesis and uses fork-ID transaction signatures, the generic runtime now has a BCH signing path that keeps BCH trades distinct from BTC trades while filtering out CashToken-prefixed outputs so token UTXOs are not accidentally spent as plain BCH.

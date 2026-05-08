@@ -44,7 +44,7 @@ for live, display-backed, funded-wallet, or long-running checks.
 - `-Dqortium.runLiveBootstrapChecks=true`
   Checks configured bootstrap hosts with live HTTP requests. Use `-Dqortium.liveBootstrapHosts=https://host-one,https://host-two` to override settings. Explicit live runs fail if no bootstrap hosts are configured.
 - `-Dqortium.runLiveElectrumXTests=true`
-  Runs public ElectrumX server checks. The default suite uses mock ElectrumX responses for deterministic protocol coverage. Explicit live runs fail if no Bitcoin TEST3 ElectrumX servers are configured.
+  Runs public ElectrumX server checks. The default suite uses mock ElectrumX responses for deterministic protocol coverage. Explicit live infrastructure checks prefer Bitcoin TEST4 servers, while legacy funded-address fixture checks still use Bitcoin TEST3 fixtures.
 - `-Dqortium.runLiveCrosschainTests=true`
   Runs live crosschain checks that depend on public networks and fixture data. Default crosschain tests prefer mock providers, including deterministic HTLC fixtures for BTC-like chains. Live fixture checks fail when the explicitly requested fixture data is unavailable.
 - `-Dqortium.runLiveRepositoryIntegrityChecks=true`

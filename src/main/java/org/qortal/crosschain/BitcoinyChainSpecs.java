@@ -52,6 +52,9 @@ public final class BitcoinyChainSpecs {
 	private static final String BITCOIN_GENESIS_COINBASE_SCRIPT = "04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73";
 	private static final String BITCOIN_GENESIS_MERKLE_ROOT = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
 	private static final String BITCOIN_GENESIS_OUTPUT_SCRIPT = "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f";
+	private static final String BITCOIN_TEST4_GENESIS_COINBASE_SCRIPT = "04ffff001d01044c4c30332f4d61792f323032342030303030303030303030303030303030303030303165626435386332343439373062336161396437383362623030313031316662653865613865393865303065";
+	private static final String BITCOIN_TEST4_GENESIS_MERKLE_ROOT = "7aa0a7ae1e223414cb807e40cd57e667b718e42aaf9306db9102fe28912b7b4e";
+	private static final String BITCOIN_TEST4_GENESIS_OUTPUT_SCRIPT = "000000000000000000000000000000000000000000000000000000000000000000";
 	private static final String LITECOIN_GENESIS_COINBASE_SCRIPT = "04ffff001d0104404e592054696d65732030352f4f63742f32303131205374657665204a6f62732c204170706c65e280997320566973696f6e6172792c2044696573206174203536";
 	private static final String LITECOIN_GENESIS_MERKLE_ROOT = "97ddfbbae6be97fd6cdf3e7ca13232a3afff2353e29badfab7f73011edd4ced9";
 	private static final String LITECOIN_GENESIS_OUTPUT_SCRIPT = "040184710fa689ad5023690c80f3a49c8f13f8d45b8c857fbcbc8bc4a8e4d3eb4b10f4d4604fa08dce601aaf0f470216fe1b51850b4acf21b179c45070ac7b03a9";
@@ -97,6 +100,20 @@ public final class BitcoinyChainSpecs {
 			.majorityWindow(51, 75, 100)
 			.dnsSeeds("testnet-seed.bitcoin.jonasschnelli.ch", "seed.tbtc.petertodd.net",
 					"seed.testnet.bitcoin.sprovoost.nl", "testnet-seed.bluematt.me")
+			.build();
+	private static final NetworkParameters BITCOIN_TEST4_NET_PARAMS = bitcoinParams("org.bitcoin.test4", NetworkParameters.PAYMENT_PROTOCOL_ID_TESTNET, "tb")
+			.genesis(1714777860L, 393743547L, 0x1d00ffffL, "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043")
+			.genesisHeader(1L, BITCOIN_TEST4_GENESIS_MERKLE_ROOT)
+			.genesisTransaction(BITCOIN_TEST4_GENESIS_COINBASE_SCRIPT, Coin.COIN.multiply(50L), BITCOIN_TEST4_GENESIS_OUTPUT_SCRIPT)
+			.port(48333)
+			.packetMagic(0x1c163f28L)
+			.addressHeaders(111, 196, 239)
+			.segwitAddressHrp("tb")
+			.coinbaseAndSubsidy(100, 210_000)
+			.bip32Headers(0x043587cf, 0x04358394)
+			.bip32SegwitHeaders(0x045f1cf6, 0x045f18bc)
+			.majorityWindow(51, 75, 100)
+			.dnsSeeds("seed.testnet4.bitcoin.sprovoost.nl", "seed.testnet4.wiz.biz")
 			.build();
 	private static final NetworkParameters BITCOIN_REG_TEST_PARAMS = bitcoinParams("org.bitcoin.regtest", NetworkParameters.PAYMENT_PROTOCOL_ID_REGTEST, "bcrt")
 			.genesis(1296688602L, 2L, 0x207fffffL, "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206")
@@ -332,6 +349,7 @@ public final class BitcoinyChainSpecs {
 	public static final BitcoinyChainSpec BITCOIN = spec("BITCOIN", BITCOIN_SLIP44_COIN_TYPE, "Bitcoin", BITCOIN_CURRENCY_CODE, Coin.valueOf(5_000), 100_000)
 			.mainnet(() -> BITCOIN_MAIN_NET_PARAMS, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", 1_500L, "btc")
 			.test3(() -> BITCOIN_TEST_NET_PARAMS, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943", 1_500L, 1_000L, "tbtc")
+			.test4(() -> BITCOIN_TEST4_NET_PARAMS, "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043", 1_500L, 1_000L, "tbtc4")
 			.regtest(() -> BITCOIN_REG_TEST_PARAMS, 1_500L, 1_000L)
 			.defaultSpendFeePerByte(20L)
 			.build();

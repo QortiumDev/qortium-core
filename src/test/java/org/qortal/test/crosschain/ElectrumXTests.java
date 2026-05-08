@@ -41,11 +41,19 @@ public class ElectrumXTests {
 		DEFAULT_ELECTRUMX_PORTS.put(ConnectionType.SSL, 50002);
 	}
 
-	private ElectrumX getLiveInstance() {
+	private ElectrumX getLiveBitcoinTest4Instance() {
+		assumeTrue(Boolean.getBoolean(RUN_LIVE_ELECTRUMX_TESTS_PROPERTY));
+		BitcoinyNetwork bitcoinTest4 = BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST4);
+		Collection<ElectrumX.Server> servers = bitcoinTest4.getServers();
+		assertFalse("No Bitcoin TEST4 ElectrumX servers are configured for explicit live ElectrumX checks", servers.isEmpty());
+		return new ElectrumX("Bitcoin-" + bitcoinTest4.name(), bitcoinTest4.getGenesisHash(), servers, DEFAULT_ELECTRUMX_PORTS);
+	}
+
+	private ElectrumX getLiveBitcoinTest3FixtureInstance() {
 		assumeTrue(Boolean.getBoolean(RUN_LIVE_ELECTRUMX_TESTS_PROPERTY));
 		BitcoinyNetwork bitcoinTest3 = BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3);
 		Collection<ElectrumX.Server> servers = bitcoinTest3.getServers();
-		assertFalse("No Bitcoin TEST3 ElectrumX servers are configured for explicit live ElectrumX checks", servers.isEmpty());
+		assertFalse("No Bitcoin TEST3 ElectrumX servers are configured for legacy fixture checks", servers.isEmpty());
 		return new ElectrumX("Bitcoin-" + bitcoinTest3.name(), bitcoinTest3.getGenesisHash(), servers, DEFAULT_ELECTRUMX_PORTS);
 	}
 
@@ -256,17 +264,17 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetCurrentHeight() throws ForeignBlockchainException {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest4Instance();
 
 		int height = electrumX.getCurrentHeight();
 
 		assertTrue(height > 10000);
-		System.out.println("Current TEST3 height: " + height);
+		System.out.println("Current TEST4 height: " + height);
 	}
 
 	@Test
 	public void testInvalidRequest() {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest4Instance();
 		try {
 			electrumX.getRawBlockHeaders(-1, -1);
 		} catch (ForeignBlockchainException e) {
@@ -279,7 +287,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetRecentBlocks() throws ForeignBlockchainException {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest4Instance();
 
 		int height = electrumX.getCurrentHeight();
 		assertTrue(height > 10000);
@@ -299,7 +307,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetP2PKHBalance() throws ForeignBlockchainException {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest3FixtureInstance();
 
 		String address = "n3GNqMveyvaPvUbH469vDRadqpJMPc84JA";
 		byte[] script = BitcoinyScript.scriptPubKey(bitcoinTest3Params(), address);
@@ -312,7 +320,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetP2SHBalance() throws ForeignBlockchainException {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest3FixtureInstance();
 
 		String address = "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF";
 		byte[] script = BitcoinyScript.scriptPubKey(bitcoinTest3Params(), address);
@@ -325,7 +333,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetUnspentOutputs() throws ForeignBlockchainException {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest3FixtureInstance();
 
 		String address = "2N4szZUfigj7fSBCEX4PaC8TVbC5EvidaVF";
 		byte[] script = BitcoinyScript.scriptPubKey(bitcoinTest3Params(), address);
@@ -339,7 +347,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetRawTransaction() throws ForeignBlockchainException {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest3FixtureInstance();
 
 		byte[] txHash = HashCode.fromString("7653fea9ffcd829d45ed2672938419a94951b08175982021e77d619b553f29af").asBytes();
 
@@ -350,7 +358,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetUnknownRawTransaction() {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest4Instance();
 
 		byte[] txHash = HashCode.fromString("f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0").asBytes();
 
@@ -365,7 +373,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetTransaction() throws ForeignBlockchainException {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest3FixtureInstance();
 
 		String txHash = "7653fea9ffcd829d45ed2672938419a94951b08175982021e77d619b553f29af";
 
@@ -377,7 +385,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetUnknownTransaction() {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest4Instance();
 
 		String txHash = "f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0";
 
@@ -392,7 +400,7 @@ public class ElectrumXTests {
 
 	@Test
 	public void testGetAddressTransactions() throws ForeignBlockchainException {
-		ElectrumX electrumX = getLiveInstance();
+		ElectrumX electrumX = getLiveBitcoinTest3FixtureInstance();
 
 		byte[] script = BitcoinyScript.scriptPubKey(bitcoinTest3Params(), "2N8WCg52ULCtDSMjkgVTm5mtPdCsUptkHWE");
 
