@@ -18,7 +18,7 @@ public class TradeBotRespondRequests {
 	@XmlElement(name = "addresses")
 	public List<String> addresses;
 
-	@Schema(description = "local-chain address for receiving NATIVE from AT", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
+	@Schema(description = "local-chain address for receiving the offered local asset from AT", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
 	public String receivingAddress;
 
 	public TradeBotRespondRequests() {

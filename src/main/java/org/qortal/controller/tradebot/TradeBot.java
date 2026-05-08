@@ -155,7 +155,7 @@ public class TradeBot implements Listener {
 
 	/**
 	 * Creates a new trade-bot entry from the "Bob" viewpoint,
-	 * i.e. OFFERing NATIVE in exchange for foreign blockchain currency.
+	 * i.e. offering a local-chain asset in exchange for foreign blockchain currency.
 	 * <p>
 	 * Generates:
 	 * <ul>
@@ -164,16 +164,16 @@ public class TradeBot implements Listener {
 	 * </ul>
 	 * Derives:
 	 * <ul>
-	 * 	<li>'native' (local-chain) public key, public key hash, address (starting with Q)</li>
+	 * 	<li>local-chain public key, public key hash, address (starting with Q)</li>
 	 * 	<li>'foreign' public key, public key hash</li>
 	 *	<li>hash(es) of secret(s)</li>
 	 * </ul>
 	 * A local-chain AT is then constructed including the following as constants in the 'data segment':
 	 * <ul>
-	 * 	<li>'native' local-chain 'trade' address - used to MESSAGE AT</li>
+	 * 	<li>local-chain 'trade' address - used to MESSAGE AT</li>
 	 * 	<li>'foreign' public key hash - used by Alice's to allow redeem of currency on foreign blockchain</li>
 	 * 	<li>hash(es) of secret(s) - used by AT (optional) and foreign blockchain as needed</li>
-	 * 	<li>native asset amount on offer by Bob</li>
+	 * 	<li>local asset id and amount on offer by Bob</li>
 	 * 	<li>foreign currency amount expected in return by Bob (from Alice)</li>
 	 * 	<li>trading timeout, in case things go wrong and everyone needs to refund</li>
 	 * </ul>
@@ -203,7 +203,7 @@ public class TradeBot implements Listener {
 
 	/**
 	 * Creates a trade-bot entry from the 'Alice' viewpoint,
-	 * i.e. matching foreign blockchain currency to an existing NATIVE offer.
+	 * i.e. matching foreign blockchain currency to an existing local asset offer.
 	 * <p>
 	 * Requires a chosen trade offer from Bob, passed by <tt>crossChainTradeData</tt>
 	 * and access to a foreign blockchain wallet via <tt>foreignKey</tt>.
@@ -230,14 +230,14 @@ public class TradeBot implements Listener {
 
 	/**
 	 * Creates a trade-bot entries from the 'Alice' viewpoint,
-	 * i.e. matching foreign blockchain currency to existing NATIVE offers.
+	 * i.e. matching foreign blockchain currency to existing local asset offers.
 	 * <p>
 	 * Requires chosen trade offers from Bob, passed by <tt>crossChainTradeData</tt>
 	 * and access to a foreign blockchain wallet via <tt>foreignKey</tt>.
 	 * <p>
 	 * @param repository
 	 * @param crossChainTradeDataList chosen trade OFFERs that Alice wants to match
-	 * @param receiveAddress Alice's local-chain address to receive her NATIVE
+	 * @param receiveAddress Alice's local-chain address to receive the offered local asset
 	 * @param foreignKey foreign blockchain wallet key
 	 * @param bitcoiny
 	 * @throws DataException
@@ -342,7 +342,7 @@ public class TradeBot implements Listener {
 		return new ECKey().getPrivKeyBytes();
 	}
 
-	public static byte[] deriveTradeNativePublicKey(byte[] privateKey) {
+	public static byte[] deriveTradeLocalPublicKey(byte[] privateKey) {
 		return Crypto.toPublicKey(privateKey);
 	}
 
@@ -437,8 +437,8 @@ public class TradeBot implements Listener {
 			throws DataException {
 		String atAddress = tradeBotData.getAtAddress();
 
-		PrivateKeyAccount tradeNativeAccount = new PrivateKeyAccount(repository, tradeBotData.getTradePrivateKey());
-		String signerAddress = tradeNativeAccount.getAddress();
+			PrivateKeyAccount tradeLocalAccount = new PrivateKeyAccount(repository, tradeBotData.getTradePrivateKey());
+			String signerAddress = tradeLocalAccount.getAddress();
 
 		/*
 		* There's no point in Alice trying to broadcast presence for an AT that isn't locked to her,
@@ -452,7 +452,7 @@ public class TradeBot implements Listener {
 
 		long now = NTP.getTime();
 		long newExpiry = generateExpiry(now);
-		ByteArray pubkeyByteArray = ByteArray.wrap(tradeNativeAccount.getPublicKey());
+			ByteArray pubkeyByteArray = ByteArray.wrap(tradeLocalAccount.getPublicKey());
 
 		// If map entry's timestamp is missing, or within early renewal period, use the new expiry - otherwise use existing timestamp.
 		synchronized (this.ourTradePresenceTimestampsByPubkey) {
@@ -468,10 +468,10 @@ public class TradeBot implements Listener {
 		}
 
 		// Create signature
-		byte[] signature = tradeNativeAccount.sign(Longs.toByteArray(newExpiry));
+			byte[] signature = tradeLocalAccount.sign(Longs.toByteArray(newExpiry));
 
 		// Add new trade presence to queue to be broadcast around network
-		TradePresenceData tradePresenceData = new TradePresenceData(newExpiry, tradeNativeAccount.getPublicKey(), signature, atAddress);
+			TradePresenceData tradePresenceData = new TradePresenceData(newExpiry, tradeLocalAccount.getPublicKey(), signature, atAddress);
 		this.pendingTradePresences.add(tradePresenceData);
 
 		this.allTradePresencesByPubkey.put(pubkeyByteArray, tradePresenceData);

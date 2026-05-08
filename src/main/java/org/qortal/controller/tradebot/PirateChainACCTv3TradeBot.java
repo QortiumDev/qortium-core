@@ -10,9 +10,9 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.api.model.crosschain.TradeBotCreateRequest;
 import org.qortal.api.resource.CrossChainUtils;
-import org.qortal.asset.Asset;
 import org.qortal.crosschain.*;
 import org.qortal.crypto.Crypto;
+import org.qortal.data.asset.AssetData;
 import org.qortal.data.at.ATData;
 import org.qortal.data.crosschain.CrossChainTradeData;
 import org.qortal.data.crosschain.TradeBotData;
@@ -76,7 +76,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 	}
 
 	/**
-	 * Creates a new trade-bot entry from the "Bob" viewpoint, i.e. OFFERing NATIVE in exchange for ARRR.
+	 * Creates a new trade-bot entry from the "Bob" viewpoint, i.e. offering a local-chain asset in exchange for ARRR.
 	 * <p>
 	 * Generates:
 	 * <ul>
@@ -84,14 +84,14 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 	 * </ul>
 	 * Derives:
 	 * <ul>
-	 * 	<li>'native' (local-chain) public key, public key hash, address (starting with Q)</li>
+	 * 	<li>local-chain public key, public key hash, address (starting with Q)</li>
 	 * 	<li>'foreign' (as in PirateChain) public key, public key hash</li>
 	 * </ul>
 	 * A local-chain AT is then constructed including the following as constants in the 'data segment':
 	 * <ul>
-	 * 	<li>'native'/local-chain 'trade' address - used as a MESSAGE contact</li>
+	 * 	<li>local-chain 'trade' address - used as a MESSAGE contact</li>
 	 * 	<li>'foreign'/PirateChain public key hash - used by Alice's P2SH scripts to allow redeem</li>
-	 * 	<li>native asset amount on offer by Bob</li>
+	 * 	<li>local asset id and amount on offer by Bob</li>
 	 * 	<li>ARRR amount expected in return by Bob (from Alice)</li>
 	 * 	<li>trading timeout, in case things go wrong and everyone needs to refund</li>
 	 * </ul>
@@ -111,9 +111,9 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 
 		byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
 
-		byte[] tradeNativePublicKey = TradeBot.deriveTradeNativePublicKey(tradePrivateKey);
-		byte[] tradeNativePublicKeyHash = Crypto.hash160(tradeNativePublicKey);
-		String tradeNativeAddress = Crypto.toAddress(tradeNativePublicKey);
+		byte[] tradeLocalPublicKey = TradeBot.deriveTradeLocalPublicKey(tradePrivateKey);
+		byte[] tradeLocalPublicKeyHash = Crypto.hash160(tradeLocalPublicKey);
+		String tradeLocalAddress = Crypto.toAddress(tradeLocalPublicKey);
 
 		byte[] tradeForeignPublicKey = TradeBot.deriveTradeForeignPublicKey(tradePrivateKey);
 		byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
@@ -140,15 +140,21 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		byte[] signature = null;
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, creator.getPublicKey(), fee, signature);
 
-		String name = "NATIVE/ARRR ACCT";
-		String description = "NATIVE/ARRR cross-chain trade";
-		String aTType = "ACCT";
-		String tags = "ACCT NATIVE ARRR";
-		byte[] creationBytes = PirateChainACCTv3.buildTradeAT(tradeNativeAddress, tradeForeignPublicKey, tradeBotCreateRequest.nativeAmount,
-				tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
-		long amount = tradeBotCreateRequest.fundingNativeAmount;
+			AssetData localAssetData = repository.getAssetRepository().fromAssetId(tradeBotCreateRequest.localAssetId);
+			if (localAssetData == null)
+				throw new DataException("Local asset does not exist: " + tradeBotCreateRequest.localAssetId);
 
-		DeployAtTransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, aTType, tags, creationBytes, amount, Asset.NATIVE);
+			String localAssetLabel = localAssetData.getName() != null ? localAssetData.getName() : "asset-" + tradeBotCreateRequest.localAssetId;
+			String name = String.format("%s/ARRR ACCT", localAssetLabel);
+			String description = String.format("%s/ARRR cross-chain trade", localAssetLabel);
+			String aTType = "ACCT";
+			String tags = String.format("ACCT asset-%d ARRR", tradeBotCreateRequest.localAssetId);
+			byte[] creationBytes = PirateChainACCTv3.buildTradeAT(tradeLocalAddress, tradeForeignPublicKey, tradeBotCreateRequest.localAmount,
+					tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
+			long amount = tradeBotCreateRequest.fundingLocalAmount;
+
+			DeployAtTransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, aTType, tags, creationBytes,
+					amount, tradeBotCreateRequest.localAssetId, tradeBotCreateRequest.nativeFeeReserve);
 
 		DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
 		fee = deployAtTransaction.calcRecommendedFee();
@@ -157,12 +163,12 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		DeployAtTransaction.ensureATAddress(deployAtTransactionData);
 		String atAddress = deployAtTransactionData.getAtAddress();
 
-		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, PirateChainACCTv3.NAME,
-				State.BOB_WAITING_FOR_AT_CONFIRM.name(), State.BOB_WAITING_FOR_AT_CONFIRM.value,
-				creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.nativeAmount,
-				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
-				null, null,
-				foreignBlockchain.name(),
+			TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, PirateChainACCTv3.NAME,
+					State.BOB_WAITING_FOR_AT_CONFIRM.name(), State.BOB_WAITING_FOR_AT_CONFIRM.value,
+					creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.localAssetId, tradeBotCreateRequest.localAmount,
+					tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
+					null, null,
+					foreignBlockchain.name(),
 				tradeForeignPublicKey, tradeForeignPublicKeyHash,
 				tradeBotCreateRequest.foreignAmount, null, null, null, pirateChainReceivingAccountInfo);
 
@@ -222,28 +228,28 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		byte[] secretA = TradeBot.generateSecret();
 		byte[] hashOfSecretA = Crypto.hash160(secretA);
 
-		byte[] tradeNativePublicKey = TradeBot.deriveTradeNativePublicKey(tradePrivateKey);
-		byte[] tradeNativePublicKeyHash = Crypto.hash160(tradeNativePublicKey);
-		String tradeNativeAddress = Crypto.toAddress(tradeNativePublicKey);
+		byte[] tradeLocalPublicKey = TradeBot.deriveTradeLocalPublicKey(tradePrivateKey);
+		byte[] tradeLocalPublicKeyHash = Crypto.hash160(tradeLocalPublicKey);
+		String tradeLocalAddress = Crypto.toAddress(tradeLocalPublicKey);
 
 		byte[] tradeForeignPublicKey = TradeBot.deriveTradeForeignPublicKey(tradePrivateKey);
 		byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
 		byte[] receivingPublicKeyHash = Base58.decode(receivingAddress); // Actually the whole address, not just PKH
 
-		String tradePrivateKey58 = Base58.encode(tradePrivateKey);
-        String tradeForeignPublicKey58 = Base58.encode(tradeForeignPublicKey);
-		String secret58 = Base58.encode(secretA);
+			String tradePrivateKey58 = Base58.encode(tradePrivateKey);
+			String tradeForeignPublicKey58 = Base58.encode(tradeForeignPublicKey);
+			String secret58 = Base58.encode(secretA);
 
 		// We need to generate lockTime-A: add tradeTimeout to now
 		long now = NTP.getTime();
 		int lockTimeA = crossChainTradeData.tradeTimeout * 60 + (int) (now / 1000L);
 
-		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, PirateChainACCTv3.NAME,
-				State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
-				receivingAddress, crossChainTradeData.atAddress, now, crossChainTradeData.nativeAmount,
-				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
-				secretA, hashOfSecretA,
-				ForeignBlockchainRegistry.PIRATECHAIN_NAME,
+			TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, PirateChainACCTv3.NAME,
+					State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
+					receivingAddress, crossChainTradeData.atAddress, now, crossChainTradeData.localAssetId, crossChainTradeData.localAmount,
+					tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
+					secretA, hashOfSecretA,
+					ForeignBlockchainRegistry.PIRATECHAIN_NAME,
 				tradeForeignPublicKey, tradeForeignPublicKeyHash,
 				crossChainTradeData.expectedForeignAmount, seed58, null, lockTimeA, receivingPublicKeyHash);
 
@@ -284,7 +290,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		byte[] messageData = CrossChainUtils.buildOfferMessage(tradeBotData.getTradeForeignPublicKey(), tradeBotData.getHashOfSecret(), tradeBotData.getLockTimeA());
 		String messageRecipient = crossChainTradeData.creatorTradeAddress;
 
-		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, messageData);
+		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeLocalPublicKey(), messageRecipient, messageData);
 		if (!isMessageAlreadySent) {
 			// Do this in a new thread so caller doesn't have to wait for computeNonce()
 			// In the unlikely event that the transaction doesn't validate then the buy won't happen and eventually Alice's AT will be refunded
@@ -478,7 +484,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 
 		PirateChain pirateChain = PirateChain.getInstance();
 
-		String address = tradeBotData.getTradeNativeAddress();
+		String address = tradeBotData.getTradeLocalAddress();
 		List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(null, address, null, null, null);
 
 		for (MessageTransactionData messageTransactionData : messageTransactionsData) {
@@ -538,7 +544,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 			byte[] outgoingMessageData = PirateChainACCTv3.buildTradeMessage(aliceNativeAddress, aliceForeignPublicKey, hashOfSecretA, lockTimeA, refundTimeout);
 			String messageRecipient = tradeBotData.getAtAddress();
 
-			boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, outgoingMessageData);
+			boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeLocalPublicKey(), messageRecipient, outgoingMessageData);
 			if (!isMessageAlreadySent) {
 				PrivateKeyAccount sender = new PrivateKeyAccount(repository, tradeBotData.getTradePrivateKey());
 				MessageTransaction outgoingMessageTransaction = MessageTransaction.build(repository, sender, Group.NO_GROUP, messageRecipient, outgoingMessageData, false, false);
@@ -643,7 +649,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		// AT is in TRADE mode and locked to us as checked by aliceUnexpectedState() above
 
 		// Find our MESSAGE to AT from previous state
-		List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(tradeBotData.getTradeNativePublicKey(),
+		List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(tradeBotData.getTradeLocalPublicKey(),
 				crossChainTradeData.creatorTradeAddress, null, null, null);
 		if (messageTransactionsData == null || messageTransactionsData.isEmpty()) {
 			LOGGER.warn(() -> String.format("Unable to find our message to trade creator %s?", crossChainTradeData.creatorTradeAddress));
@@ -668,7 +674,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		byte[] messageData = PirateChainACCTv3.buildRedeemMessage(secretA, receivingAddress);
 		String messageRecipient = tradeBotData.getAtAddress();
 
-		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, messageData);
+		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeLocalPublicKey(), messageRecipient, messageData);
 		if (!isMessageAlreadySent) {
 			PrivateKeyAccount sender = new PrivateKeyAccount(repository, tradeBotData.getTradePrivateKey());
 			MessageTransaction messageTransaction = MessageTransaction.build(repository, sender, Group.NO_GROUP, messageRecipient, messageData, false, false);
@@ -882,7 +888,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		if (!atData.getIsFinished() && crossChainTradeData.mode == AcctMode.OFFERING)
 			return false;
 
-		boolean isAtLockedToUs = tradeBotData.getTradeNativeAddress().equals(crossChainTradeData.partnerAddress);
+		boolean isAtLockedToUs = tradeBotData.getTradeLocalAddress().equals(crossChainTradeData.partnerAddress);
 
 		if (!atData.getIsFinished() && crossChainTradeData.mode == AcctMode.TRADING)
 			if (isAtLockedToUs) {

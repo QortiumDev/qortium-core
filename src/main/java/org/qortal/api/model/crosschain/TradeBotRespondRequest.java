@@ -15,7 +15,7 @@ public class TradeBotRespondRequest {
 			example = "xprv___________________________________________________________________________________________________________")
 	public String foreignKey;
 
-	@Schema(description = "local-chain address for receiving NATIVE from AT", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
+	@Schema(description = "local-chain address for receiving the offered local asset from AT", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
 	public String receivingAddress;
 
 	public TradeBotRespondRequest() {

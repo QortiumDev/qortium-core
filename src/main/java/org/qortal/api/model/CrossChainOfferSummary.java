@@ -23,8 +23,11 @@ public class CrossChainOfferSummary {
 	@Schema(description = "AT creator's ephemeral trading key-pair represented as local-chain address")
 	private String creatorTradeAddress;
 
+	@Schema(description = "Local-chain asset id paid by this offer")
+	private long localAssetId;
+
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	private long nativeAmount;
+	private long localAmount;
 
 	@Schema(description = "Foreign blockchain amount")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
@@ -53,7 +56,8 @@ public class CrossChainOfferSummary {
 		this.atAddress = crossChainTradeData.atAddress;
 		this.creatorAddress = crossChainTradeData.creatorAddress;
 		this.creatorTradeAddress = crossChainTradeData.creatorTradeAddress;
-		this.nativeAmount = crossChainTradeData.nativeAmount;
+		this.localAssetId = crossChainTradeData.localAssetId;
+		this.localAmount = crossChainTradeData.localAmount;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
 		this.tradeTimeout = crossChainTradeData.tradeTimeout;
 		this.mode = crossChainTradeData.mode;
@@ -75,8 +79,12 @@ public class CrossChainOfferSummary {
 		return this.creatorTradeAddress;
 	}
 
-	public long getNativeAmount() {
-		return this.nativeAmount;
+	public long getLocalAssetId() {
+		return this.localAssetId;
+	}
+
+	public long getLocalAmount() {
+		return this.localAmount;
 	}
 
 	public long getForeignAmount() {

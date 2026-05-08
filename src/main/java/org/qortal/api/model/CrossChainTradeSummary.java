@@ -12,8 +12,10 @@ public class CrossChainTradeSummary {
 
 	private long tradeTimestamp;
 
+	private long localAssetId;
+
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	private long nativeAmount;
+	private long localAmount;
 
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long foreignAmount;
@@ -30,7 +32,8 @@ public class CrossChainTradeSummary {
 
 	public CrossChainTradeSummary(CrossChainTradeData crossChainTradeData, long timestamp) {
 		this.tradeTimestamp = timestamp;
-		this.nativeAmount = crossChainTradeData.nativeAmount;
+		this.localAssetId = crossChainTradeData.localAssetId;
+		this.localAmount = crossChainTradeData.localAmount;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
 		this.sellerAddress = crossChainTradeData.creatorAddress;
 		this.buyerReceivingAddress = crossChainTradeData.partnerReceivingAddress;
@@ -41,8 +44,12 @@ public class CrossChainTradeSummary {
 		return this.tradeTimestamp;
 	}
 
-	public long getNativeAmount() {
-		return this.nativeAmount;
+	public long getLocalAssetId() {
+		return this.localAssetId;
+	}
+
+	public long getLocalAmount() {
+		return this.localAmount;
 	}
 
 	public long getForeignAmount() { return this.foreignAmount; }

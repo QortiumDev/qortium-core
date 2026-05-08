@@ -3,15 +3,12 @@ package org.qortal.repository.hsqldb;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.controller.Controller;
-import org.qortal.controller.tradebot.TradeStates;
 import org.qortal.utils.StartupStatus;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Arrays;
-import java.util.stream.Collectors;
 
 public class HSQLDBDatabaseUpdates {
 
@@ -634,14 +631,16 @@ public class HSQLDBDatabaseUpdates {
 
 				case 20:
 					// Trade bot
-					// See case 25 below for changes
-					stmt.execute("CREATE TABLE TradeBotStates (trade_private_key PrivateKeySeed NOT NULL, trade_state TINYINT NOT NULL, "
-							+ "creator_address AccountAddress NOT NULL, at_address AccountAddress, updated_when BIGINT NOT NULL, native_amount AssetAmount NOT NULL, "
-							+ "trade_native_public_key AccountPublicKey NOT NULL, trade_native_public_key_hash VARBINARY(32) NOT NULL, "
-							+ "trade_native_address AccountAddress NOT NULL, secret VARBINARY(32) NOT NULL, hash_of_secret VARBINARY(32) NOT NULL, "
+					stmt.execute("CREATE TABLE TradeBotStates (trade_private_key PrivateKeySeed NOT NULL, acct_name VARCHAR(40) NOT NULL, "
+							+ "trade_state VARCHAR(40) NOT NULL, trade_state_value TINYINT NOT NULL, "
+							+ "creator_address AccountAddress NOT NULL, at_address AccountAddress, updated_when BIGINT NOT NULL, "
+							+ "local_asset_id AssetID NOT NULL DEFAULT 0, local_amount AssetAmount NOT NULL, "
+							+ "trade_local_public_key AccountPublicKey NOT NULL, trade_local_public_key_hash VARBINARY(32) NOT NULL, "
+							+ "trade_local_address AccountAddress NOT NULL, secret VARBINARY(32), hash_of_secret VARBINARY(32), "
+							+ "foreign_blockchain VARCHAR(40), "
 							+ "trade_foreign_public_key VARBINARY(33) NOT NULL, trade_foreign_public_key_hash VARBINARY(32) NOT NULL, "
-							+ "bitcoin_amount BIGINT NOT NULL, xprv58 VARCHAR(200), last_transaction_signature Signature, locktime_a BIGINT, "
-							+ "receiving_account_info VARBINARY(32) NOT NULL, PRIMARY KEY (trade_private_key))");
+							+ "foreign_amount BIGINT NOT NULL, foreign_key VARCHAR(200), last_transaction_signature Signature, locktime_a BIGINT, "
+							+ "receiving_account_info VARBINARY(128) NOT NULL, PRIMARY KEY (trade_private_key))");
 					break;
 
 				case 21:
@@ -798,35 +797,7 @@ public class HSQLDBDatabaseUpdates {
 					break;
 
 				case 32:
-					// Multiple blockchains, ACCTs and trade-bots
-					stmt.execute("ALTER TABLE TradeBotStates ADD COLUMN acct_name VARCHAR(40) BEFORE trade_state");
-					stmt.execute("UPDATE TradeBotStates SET acct_name = 'BitcoinyACCTv3' WHERE acct_name IS NULL");
-					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN acct_name SET NOT NULL");
-
-					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN trade_state RENAME TO trade_state_value");
-
-					stmt.execute("ALTER TABLE TradeBotStates ADD COLUMN trade_state VARCHAR(40) BEFORE trade_state_value");
-					// Qortium's fresh baseline has no inherited trade-bot rows here.
-					StringBuilder updateTradeBotStatesSql = new StringBuilder(1024);
-					updateTradeBotStatesSql.append("UPDATE TradeBotStates SET (trade_state) = (")
-							.append("SELECT state_name FROM (VALUES ")
-							.append(
-									Arrays.stream(TradeStates.State.values())
-									.map(state -> String.format("(%d, '%s')", state.value, state.name()))
-									.collect(Collectors.joining(", ")))
-							.append(") AS TradeBotStates (state_value, state_name) ")
-							.append("WHERE state_value = trade_state_value)");
-					stmt.execute(updateTradeBotStatesSql.toString());
-					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN trade_state SET NOT NULL");
-
-					stmt.execute("ALTER TABLE TradeBotStates ADD COLUMN foreign_blockchain VARCHAR(40) BEFORE trade_foreign_public_key");
-
-					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN bitcoin_amount RENAME TO foreign_amount");
-
-					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN xprv58 RENAME TO foreign_key");
-
-					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN secret SET NULL");
-					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN hash_of_secret SET NULL");
+					// TradeBotStates starts with the current multi-chain/local-asset schema on this fresh baseline.
 					break;
 
 				case 33:
@@ -977,9 +948,7 @@ public class HSQLDBDatabaseUpdates {
 					break;
 
 				case 43:
-					// Pirate Chain requires storing addresses that are 78 bytes long (69 bytes when decoded), so increase
-					// from 32 to 128 to give some padding for potentially even larger addresses in the future
-					stmt.execute("ALTER TABLE TradeBotStates ALTER COLUMN receiving_account_info SET DATA TYPE VARBINARY(128)");
+					// TradeBotStates.receiving_account_info starts as VARBINARY(128) on this fresh baseline.
 					break;
 
 				case 44:
@@ -1114,7 +1083,6 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE TRIGGER Asset_ID_Trigger BEFORE INSERT ON Assets "
 							+ "REFERENCING NEW ROW AS new_row FOR EACH ROW WHEN (new_row.asset_id IS NULL) "
 							+ "SET new_row.asset_id = (SELECT IFNULL(MAX(asset_id) + 1, 1) FROM Assets WHERE asset_id >= 1)");
-					renameColumnIfExists(connection, "TradeBotStates", "qort_amount", "native_amount");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_penalty");
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");
 					stmt.execute("ALTER TABLE TransferPrivsTransactions DROP COLUMN previous_sender_blocks_minted_adjustment");

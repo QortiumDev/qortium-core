@@ -28,12 +28,14 @@ public class TradeBotData {
 
 	private long timestamp;
 
-	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	private long nativeAmount;
+	private long localAssetId;
 
-	private byte[] tradeNativePublicKey;
-	private byte[] tradeNativePublicKeyHash;
-	String tradeNativeAddress;
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long localAmount;
+
+	private byte[] tradeLocalPublicKey;
+	private byte[] tradeLocalPublicKeyHash;
+	private String tradeLocalAddress;
 
 	private byte[] secret;
 	private byte[] hashOfSecret;
@@ -54,7 +56,7 @@ public class TradeBotData {
 	private byte[] lastTransactionSignature;
 	private Integer lockTimeA;
 
-		// Could be a foreign-chain or local-chain account identifier.
+	// Could be a foreign-chain or local-chain account identifier.
 	private byte[] receivingAccountInfo;
 
 	protected TradeBotData() {
@@ -63,8 +65,8 @@ public class TradeBotData {
 
 	public TradeBotData(byte[] tradePrivateKey, String acctName, String tradeState, int tradeStateValue,
 			String creatorAddress, String atAddress,
-			long timestamp, long nativeAmount,
-			byte[] tradeNativePublicKey, byte[] tradeNativePublicKeyHash, String tradeNativeAddress,
+			long timestamp, long localAssetId, long localAmount,
+			byte[] tradeLocalPublicKey, byte[] tradeLocalPublicKeyHash, String tradeLocalAddress,
 			byte[] secret, byte[] hashOfSecret,
 			String foreignBlockchain, byte[] tradeForeignPublicKey, byte[] tradeForeignPublicKeyHash,
 			long foreignAmount, String foreignKey,
@@ -76,10 +78,11 @@ public class TradeBotData {
 		this.creatorAddress = creatorAddress;
 		this.atAddress = atAddress;
 		this.timestamp = timestamp;
-		this.nativeAmount = nativeAmount;
-		this.tradeNativePublicKey = tradeNativePublicKey;
-		this.tradeNativePublicKeyHash = tradeNativePublicKeyHash;
-		this.tradeNativeAddress = tradeNativeAddress;
+		this.localAssetId = localAssetId;
+		this.localAmount = localAmount;
+		this.tradeLocalPublicKey = tradeLocalPublicKey;
+		this.tradeLocalPublicKeyHash = tradeLocalPublicKeyHash;
+		this.tradeLocalAddress = tradeLocalAddress;
 		this.secret = secret;
 		this.hashOfSecret = hashOfSecret;
 		this.foreignBlockchain = foreignBlockchain;
@@ -136,20 +139,24 @@ public class TradeBotData {
 		this.timestamp = timestamp;
 	}
 
-	public long getNativeAmount() {
-		return this.nativeAmount;
+	public long getLocalAssetId() {
+		return this.localAssetId;
 	}
 
-	public byte[] getTradeNativePublicKey() {
-		return this.tradeNativePublicKey;
+	public long getLocalAmount() {
+		return this.localAmount;
 	}
 
-	public byte[] getTradeNativePublicKeyHash() {
-		return this.tradeNativePublicKeyHash;
+	public byte[] getTradeLocalPublicKey() {
+		return this.tradeLocalPublicKey;
 	}
 
-	public String getTradeNativeAddress() {
-		return this.tradeNativeAddress;
+	public byte[] getTradeLocalPublicKeyHash() {
+		return this.tradeLocalPublicKeyHash;
+	}
+
+	public String getTradeLocalAddress() {
+		return this.tradeLocalAddress;
 	}
 
 	public byte[] getSecret() {
@@ -209,19 +216,20 @@ public class TradeBotData {
 		jsonObject.put("creatorAddress", this.getCreatorAddress());
 		jsonObject.put("atAddress", this.getAtAddress());
 		jsonObject.put("timestamp", this.getTimestamp());
-		jsonObject.put("nativeAmount", this.getNativeAmount());
-		if (this.getTradeNativePublicKey() != null) jsonObject.put("tradeNativePublicKey", Base58.encode(this.getTradeNativePublicKey()));
-		if (this.getTradeNativePublicKeyHash() != null) jsonObject.put("tradeNativePublicKeyHash", Base58.encode(this.getTradeNativePublicKeyHash()));
-		jsonObject.put("tradeNativeAddress", this.getTradeNativeAddress());
+		jsonObject.put("localAssetId", this.getLocalAssetId());
+		jsonObject.put("localAmount", this.getLocalAmount());
+		if (this.getTradeLocalPublicKey() != null) jsonObject.put("tradeLocalPublicKey", Base58.encode(this.getTradeLocalPublicKey()));
+		if (this.getTradeLocalPublicKeyHash() != null) jsonObject.put("tradeLocalPublicKeyHash", Base58.encode(this.getTradeLocalPublicKeyHash()));
+		jsonObject.put("tradeLocalAddress", this.getTradeLocalAddress());
 		if (this.getSecret() != null) jsonObject.put("secret", Base58.encode(this.getSecret()));
 		if (this.getHashOfSecret() != null) jsonObject.put("hashOfSecret", Base58.encode(this.getHashOfSecret()));
 		jsonObject.put("foreignBlockchain", this.getForeignBlockchain());
 		if (this.getTradeForeignPublicKey() != null) jsonObject.put("tradeForeignPublicKey", Base58.encode(this.getTradeForeignPublicKey()));
 		if (this.getTradeForeignPublicKeyHash() != null) jsonObject.put("tradeForeignPublicKeyHash", Base58.encode(this.getTradeForeignPublicKeyHash()));
 		jsonObject.put("foreignKey", this.getForeignKey());
-        jsonObject.put("foreignAmount", this.getForeignAmount());
+		jsonObject.put("foreignAmount", this.getForeignAmount());
 		if (this.getLastTransactionSignature() != null) jsonObject.put("lastTransactionSignature", Base58.encode(this.getLastTransactionSignature()));
-        jsonObject.put("lockTimeA", this.getLockTimeA());
+		jsonObject.put("lockTimeA", this.getLockTimeA());
 		if (this.getReceivingAccountInfo() != null) jsonObject.put("receivingAccountInfo", Base58.encode(this.getReceivingAccountInfo()));
 		return jsonObject;
 	}
@@ -235,10 +243,11 @@ public class TradeBotData {
 				json.isNull("creatorAddress") ? null : json.getString("creatorAddress"),
 				json.isNull("atAddress") ? null : json.getString("atAddress"),
 				json.isNull("timestamp") ? null : json.getLong("timestamp"),
-				json.getLong("nativeAmount"),
-				json.isNull("tradeNativePublicKey") ? null : Base58.decode(json.getString("tradeNativePublicKey")),
-				json.isNull("tradeNativePublicKeyHash") ? null : Base58.decode(json.getString("tradeNativePublicKeyHash")),
-				json.isNull("tradeNativeAddress") ? null : json.getString("tradeNativeAddress"),
+				json.getLong("localAssetId"),
+				json.getLong("localAmount"),
+				json.isNull("tradeLocalPublicKey") ? null : Base58.decode(json.getString("tradeLocalPublicKey")),
+				json.isNull("tradeLocalPublicKeyHash") ? null : Base58.decode(json.getString("tradeLocalPublicKeyHash")),
+				json.isNull("tradeLocalAddress") ? null : json.getString("tradeLocalAddress"),
 				json.isNull("secret") ? null : Base58.decode(json.getString("secret")),
 				json.isNull("hashOfSecret") ? null : Base58.decode(json.getString("hashOfSecret")),
 				json.isNull("foreignBlockchain") ? null : json.getString("foreignBlockchain"),

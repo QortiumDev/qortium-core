@@ -22,6 +22,7 @@ import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.AssetUtils;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
@@ -455,6 +456,68 @@ public abstract class ACCTTests extends Common {
 		}
 	}
 
+	@Test
+	public void testCorrectSecretCorrectSenderWithNonNativeAsset() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = createTradeAccount(repository);
+			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
+
+			long localAssetId = AssetUtils.issueAsset(repository, "chloe", "ACCT-" + getSymbol() + "-LOCAL", 1_000_00000000L, true);
+			long nativeFeeReserve = 20L * Amounts.MULTIPLIER;
+			long deployersInitialLocalBalance = deployer.getConfirmedBalance(localAssetId);
+			long partnersInitialLocalBalance = partner.getConfirmedBalance(localAssetId);
+
+			DeployAtTransaction deployAtTransaction = doDeploy(repository, deployer, tradeAccount.getAddress(), localAssetId, nativeFeeReserve);
+			Account at = deployAtTransaction.getATAccount();
+			String atAddress = at.getAddress();
+
+			assertEquals("Deployer's post-deployment local asset balance incorrect",
+					deployersInitialLocalBalance - fundingAmount, deployer.getConfirmedBalance(localAssetId));
+			assertEquals("AT's post-deployment local asset balance incorrect",
+					fundingAmount, at.getConfirmedBalance(localAssetId));
+			assertEquals("Partner's post-deployment local asset balance incorrect",
+					partnersInitialLocalBalance, partner.getConfirmedBalance(localAssetId));
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = getInstance().populateTradeData(repository, atData);
+			assertEquals("AT local asset id incorrect", localAssetId, tradeData.localAssetId);
+			assertEquals("AT local asset amount incorrect", redeemAmount, tradeData.localAmount);
+			assertEquals("AT local asset balance incorrect", fundingAmount, tradeData.localBalance);
+
+			long partnersOfferMessageTransactionTimestamp = System.currentTimeMillis();
+			int lockTimeA = calcTestLockTimeA(partnersOfferMessageTransactionTimestamp);
+			int refundTimeout = calcRefundTimeout(partnersOfferMessageTransactionTimestamp, lockTimeA);
+
+			byte[] messageData = buildTradeMessage(partner.getAddress(), getPublicKey(), hashOfSecretA, lockTimeA, refundTimeout);
+			sendMessage(repository, tradeAccount, messageData, atAddress);
+
+			BlockUtils.mintBlock(repository);
+
+			messageData = buildRedeemMessage(secretA,  partner.getAddress());
+			sendMessage(repository, partner, messageData, atAddress);
+
+			ATStateData preRedeemAtStateData = repository.getATRepository().getLatestATState(atAddress);
+			BlockUtils.mintBlock(repository);
+
+			atData = repository.getATRepository().fromATAddress(atAddress);
+			assertTrue(atData.getIsFinished());
+
+			tradeData = getInstance().populateTradeData(repository, atData);
+			assertEquals(AcctMode.REDEEMED, tradeData.mode);
+			assertEquals("Partner's post-redeem local asset balance incorrect",
+					partnersInitialLocalBalance + redeemAmount, partner.getConfirmedBalance(localAssetId));
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assertEquals("Partner's post-orphan/pre-redeem local asset balance incorrect",
+					partnersInitialLocalBalance, partner.getConfirmedBalance(localAssetId));
+
+			ATStateData postOrphanAtStateData = repository.getATRepository().getLatestATState(atAddress);
+			assertTrue("AT states mismatch", Arrays.equals(preRedeemAtStateData.getStateData(), postOrphanAtStateData.getStateData()));
+		}
+	}
+
 	@SuppressWarnings("unused")
 	@Test
 	public void testCorrectSecretIncorrectSender() throws DataException {
@@ -662,17 +725,22 @@ public abstract class ACCTTests extends Common {
 	}
 
 	protected DeployAtTransaction doDeploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress) throws DataException {
+		return doDeploy(repository, deployer, tradeAddress, Asset.NATIVE, 0L);
+	}
+
+	protected DeployAtTransaction doDeploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress, long localAssetId, long nativeFeeReserve) throws DataException {
 		byte[] creationBytes = buildTradeAT(tradeAddress, getPublicKey(), redeemAmount, foreignAmount, tradeTimeout);
 
 		long txTimestamp = System.currentTimeMillis();
 		Long fee = null;
-		String name = "NATIVE-" + getSymbol() + " cross-chain trade";
+		String localAssetLabel = localAssetId == Asset.NATIVE ? "NATIVE" : "asset-" + localAssetId;
+		String name = localAssetLabel + "-" + getSymbol() + " cross-chain trade";
 		String description = String.format("Local-chain-" + getName() + " cross-chain trade");
 		String atType = "ACCT";
-		String tags = "NATIVE-" + getSymbol() + " ACCT";
+		String tags = localAssetLabel + "-" + getSymbol() + " ACCT";
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), fee, null);
-		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, Asset.NATIVE);
+		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, atType, tags, creationBytes, fundingAmount, localAssetId, nativeFeeReserve);
 
 		DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
 
@@ -734,18 +802,20 @@ public abstract class ACCTTests extends Common {
 				+ "\tmode: %s\n"
 				+ "\tcreator: %s,\n"
 				+ "\tcreation timestamp: %s,\n"
-				+ "\tcurrent balance: %s NATIVE,\n"
-				+ "\tis finished: %b,\n"
-				+ "\tredeem payout: %s NATIVE,\n"
+					+ "\tlocal asset id: %d,\n"
+					+ "\tcurrent local balance: %s,\n"
+					+ "\tis finished: %b,\n"
+					+ "\tredeem payout: %s,\n"
 				+ "\texpected " + getName() + ": %s " + getSymbol() + ",\n"
 				+ "\tcurrent block height: %d,\n",
 				tradeData.atAddress,
 				tradeData.mode,
-				tradeData.creatorAddress,
-				epochMilliFormatter.apply(tradeData.creationTimestamp),
-				Amounts.prettyAmount(tradeData.nativeBalance),
-				atData.getIsFinished(),
-				Amounts.prettyAmount(tradeData.nativeAmount),
+					tradeData.creatorAddress,
+					epochMilliFormatter.apply(tradeData.creationTimestamp),
+					tradeData.localAssetId,
+					Amounts.prettyAmount(tradeData.localBalance),
+					atData.getIsFinished(),
+					Amounts.prettyAmount(tradeData.localAmount),
 				Amounts.prettyAmount(tradeData.expectedForeignAmount),
 				currentBlockHeight));
 

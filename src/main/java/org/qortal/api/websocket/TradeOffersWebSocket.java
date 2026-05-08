@@ -53,6 +53,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 			|| offerSummary.getMode() == AcctMode.CANCELLED;
 
 	private static final Map<Session, String> sessionBlockchain = Collections.synchronizedMap(new HashMap<>());
+	private static final Map<Session, Long> sessionLocalAssetId = Collections.synchronizedMap(new HashMap<>());
 
 	/**
 	 * Updated for Jetty 10.
@@ -148,7 +149,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 					// Only send if this session has this/no preferred blockchain
 					String preferredBlockchain = sessionBlockchain.get(session);
 					if (preferredBlockchain == null || preferredBlockchain.equals(blockchain.name()))
-						sendOfferSummaries(session, crossChainOfferSummaries);
+						sendOfferSummaries(session, filterForSession(session, crossChainOfferSummaries));
 				}
 			}
 		} catch (DataException e) {
@@ -166,19 +167,29 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		List<String> foreignBlockchains = queryParams.get("foreignBlockchain");
 		final String foreignBlockchain = (foreignBlockchains == null || foreignBlockchains.isEmpty()) ? null : foreignBlockchains.get(0);
 
-		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = null;
-		if (foreignBlockchain != null) {
-			foreignBlockchainEntry = ForeignBlockchainRegistry.fromString(foreignBlockchain);
-			if (foreignBlockchainEntry == null) {
+			ForeignBlockchainRegistry.Entry foreignBlockchainEntry = null;
+			if (foreignBlockchain != null) {
+				foreignBlockchainEntry = ForeignBlockchainRegistry.fromString(foreignBlockchain);
+				if (foreignBlockchainEntry == null) {
 				session.close(4003, "unknown blockchain: " + foreignBlockchain);
 				return;
 			}
 		}
 
-		// Save session's preferred blockchain, if given
-		String normalizedForeignBlockchain = foreignBlockchainEntry == null ? null : foreignBlockchainEntry.name();
-		if (normalizedForeignBlockchain != null)
-			sessionBlockchain.put(session, normalizedForeignBlockchain);
+			// Save session's preferred blockchain, if given
+			String normalizedForeignBlockchain = foreignBlockchainEntry == null ? null : foreignBlockchainEntry.name();
+			if (normalizedForeignBlockchain != null)
+				sessionBlockchain.put(session, normalizedForeignBlockchain);
+
+			List<String> localAssetIds = queryParams.get("localAssetId");
+			if (localAssetIds != null && !localAssetIds.isEmpty()) {
+				try {
+					sessionLocalAssetId.put(session, Long.parseLong(localAssetIds.get(0)));
+				} catch (NumberFormatException e) {
+					session.close(4004, "invalid localAssetId: " + localAssetIds.get(0));
+					return;
+				}
+			}
 
 		List<CrossChainOfferSummary> crossChainOfferSummaries = new ArrayList<>();
 
@@ -200,7 +211,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 			}
 		}
 
-		if (!sendOfferSummaries(session, crossChainOfferSummaries)) {
+		if (!sendOfferSummaries(session, filterForSession(session, crossChainOfferSummaries))) {
 			session.close(4002, "websocket issue");
 			return;
 		}
@@ -213,6 +224,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 	public void onWebSocketClose(Session session, int statusCode, String reason) {
 		// clean up
 		sessionBlockchain.remove(session);
+		sessionLocalAssetId.remove(session);
 		super.onWebSocketClose(session, statusCode, reason);
 	}
 
@@ -243,6 +255,16 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 			}
 		}
 		return false;
+	}
+
+	private static List<CrossChainOfferSummary> filterForSession(Session session, List<CrossChainOfferSummary> crossChainOfferSummaries) {
+		Long localAssetId = sessionLocalAssetId.get(session);
+		if (localAssetId == null)
+			return crossChainOfferSummaries;
+
+		return crossChainOfferSummaries.stream()
+				.filter(offerSummary -> offerSummary.getLocalAssetId() == localAssetId)
+				.collect(Collectors.toList());
 	}
 
 	private static void populateCurrentSummaries(Repository repository) throws DataException {

@@ -7,10 +7,10 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.api.model.crosschain.TradeBotCreateRequest;
 import org.qortal.api.resource.CrossChainUtils;
-import org.qortal.asset.Asset;
 import org.qortal.controller.tradebot.TradeStates.State;
 import org.qortal.crosschain.*;
 import org.qortal.crypto.Crypto;
+import org.qortal.data.asset.AssetData;
 import org.qortal.data.at.ATData;
 import org.qortal.data.crosschain.CrossChainTradeData;
 import org.qortal.data.crosschain.TradeBotData;
@@ -72,7 +72,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 	}
 
 	/**
-	 * Creates a new trade-bot entry from the "Bob" viewpoint, i.e. OFFERing NATIVE in exchange for foreign-chain currency.
+	 * Creates a new trade-bot entry from the "Bob" viewpoint, i.e. offering a local-chain asset in exchange for foreign-chain currency.
 	 * <p>
 	 * Generates:
 	 * <ul>
@@ -80,14 +80,14 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 	 * </ul>
 	 * Derives:
 	 * <ul>
-	 * 	<li>'native' (local-chain) public key, public key hash, address (starting with Q)</li>
+	 * 	<li>local-chain public key, public key hash, address (starting with Q)</li>
 	 * 	<li>'foreign' public key, public key hash</li>
 	 * </ul>
 	 * A local-chain AT is then constructed including the following as constants in the 'data segment':
 	 * <ul>
-	 * 	<li>'native'/local-chain 'trade' address - used as a MESSAGE contact</li>
+	 * 	<li>local-chain 'trade' address - used as a MESSAGE contact</li>
 	 * 	<li>'foreign' public key hash - used by Alice's P2SH scripts to allow redeem</li>
-	 * 	<li>native asset amount on offer by Bob</li>
+	 * 	<li>local asset id and amount on offer by Bob</li>
 	 * 	<li>foreign-chain amount expected in return by Bob (from Alice)</li>
 	 * 	<li>trading timeout, in case things go wrong and everyone needs to refund</li>
 	 * </ul>
@@ -107,9 +107,9 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 
 		byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
 
-		byte[] tradeNativePublicKey = TradeBot.deriveTradeNativePublicKey(tradePrivateKey);
-		byte[] tradeNativePublicKeyHash = Crypto.hash160(tradeNativePublicKey);
-		String tradeNativeAddress = Crypto.toAddress(tradeNativePublicKey);
+		byte[] tradeLocalPublicKey = TradeBot.deriveTradeLocalPublicKey(tradePrivateKey);
+		byte[] tradeLocalPublicKeyHash = Crypto.hash160(tradeLocalPublicKey);
+		String tradeLocalAddress = Crypto.toAddress(tradeLocalPublicKey);
 
 		byte[] tradeForeignPublicKey = TradeBot.deriveTradeForeignPublicKey(tradePrivateKey);
 		byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
@@ -135,15 +135,21 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		byte[] signature = null;
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, creator.getPublicKey(), fee, signature);
 
-		String name = String.format("NATIVE/%s ACCT", foreignCurrencyCode);
-		String description = String.format("NATIVE/%s cross-chain trade", foreignCurrencyCode);
-		String aTType = "ACCT";
-		String tags = String.format("ACCT NATIVE %s", foreignCurrencyCode);
-		byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(foreignBlockchain, tradeNativeAddress, tradeForeignPublicKeyHash, tradeBotCreateRequest.nativeAmount,
-				tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
-		long amount = tradeBotCreateRequest.fundingNativeAmount;
+			AssetData localAssetData = repository.getAssetRepository().fromAssetId(tradeBotCreateRequest.localAssetId);
+			if (localAssetData == null)
+				throw new DataException("Local asset does not exist: " + tradeBotCreateRequest.localAssetId);
 
-		DeployAtTransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, aTType, tags, creationBytes, amount, Asset.NATIVE);
+			String localAssetLabel = localAssetData.getName() != null ? localAssetData.getName() : "asset-" + tradeBotCreateRequest.localAssetId;
+			String name = String.format("%s/%s ACCT", localAssetLabel, foreignCurrencyCode);
+			String description = String.format("%s/%s cross-chain trade", localAssetLabel, foreignCurrencyCode);
+			String aTType = "ACCT";
+			String tags = String.format("ACCT asset-%d %s", tradeBotCreateRequest.localAssetId, foreignCurrencyCode);
+			byte[] creationBytes = BitcoinyACCTv3.buildTradeAT(foreignBlockchain, tradeLocalAddress, tradeForeignPublicKeyHash, tradeBotCreateRequest.localAmount,
+					tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
+			long amount = tradeBotCreateRequest.fundingLocalAmount;
+
+			DeployAtTransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData, name, description, aTType, tags, creationBytes,
+					amount, tradeBotCreateRequest.localAssetId, tradeBotCreateRequest.nativeFeeReserve);
 
 		DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
 		fee = deployAtTransaction.calcRecommendedFee();
@@ -152,13 +158,13 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		DeployAtTransaction.ensureATAddress(deployAtTransactionData);
 		String atAddress = deployAtTransactionData.getAtAddress();
 
-		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinyACCTv3.NAME,
-				State.BOB_WAITING_FOR_AT_CONFIRM.name(), State.BOB_WAITING_FOR_AT_CONFIRM.value,
-				creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.nativeAmount,
-				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
-				null, null,
-				foreignBlockchain.name(),
-				tradeForeignPublicKey, tradeForeignPublicKeyHash,
+			TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinyACCTv3.NAME,
+					State.BOB_WAITING_FOR_AT_CONFIRM.name(), State.BOB_WAITING_FOR_AT_CONFIRM.value,
+					creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.localAssetId, tradeBotCreateRequest.localAmount,
+					tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
+					null, null,
+					foreignBlockchain.name(),
+					tradeForeignPublicKey, tradeForeignPublicKeyHash,
 				tradeBotCreateRequest.foreignAmount, null, null, null, foreignReceivingAccountInfo);
 
 		TradeBot.updateTradeBotState(repository, tradeBotData, () -> String.format("Built AT %s. Waiting for deployment", atAddress));
@@ -218,9 +224,9 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		byte[] secretA = TradeBot.generateSecret();
 		byte[] hashOfSecretA = Crypto.hash160(secretA);
 
-		byte[] tradeNativePublicKey = TradeBot.deriveTradeNativePublicKey(tradePrivateKey);
-		byte[] tradeNativePublicKeyHash = Crypto.hash160(tradeNativePublicKey);
-		String tradeNativeAddress = Crypto.toAddress(tradeNativePublicKey);
+		byte[] tradeLocalPublicKey = TradeBot.deriveTradeLocalPublicKey(tradePrivateKey);
+		byte[] tradeLocalPublicKeyHash = Crypto.hash160(tradeLocalPublicKey);
+		String tradeLocalAddress = Crypto.toAddress(tradeLocalPublicKey);
 
 		byte[] tradeForeignPublicKey = TradeBot.deriveTradeForeignPublicKey(tradePrivateKey);
 		byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
@@ -230,13 +236,13 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		long now = NTP.getTime();
 		int lockTimeA = crossChainTradeData.tradeTimeout * 60 + (int) (now / 1000L);
 
-		TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinyACCTv3.NAME,
-				State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
-				receivingAddress, crossChainTradeData.atAddress, now, crossChainTradeData.nativeAmount,
-				tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
-				secretA, hashOfSecretA,
-				crossChainTradeData.foreignBlockchain,
-				tradeForeignPublicKey, tradeForeignPublicKeyHash,
+			TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinyACCTv3.NAME,
+					State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
+					receivingAddress, crossChainTradeData.atAddress, now, crossChainTradeData.localAssetId, crossChainTradeData.localAmount,
+					tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
+					secretA, hashOfSecretA,
+					crossChainTradeData.foreignBlockchain,
+					tradeForeignPublicKey, tradeForeignPublicKeyHash,
 				crossChainTradeData.expectedForeignAmount, xprv58, null, lockTimeA, receivingPublicKeyHash);
 
 		// Attempt to backup the trade bot data
@@ -279,7 +285,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		byte[] messageData = CrossChainUtils.buildOfferMessage(tradeBotData.getTradeForeignPublicKeyHash(), tradeBotData.getHashOfSecret(), tradeBotData.getLockTimeA());
 		String messageRecipient = crossChainTradeData.creatorTradeAddress;
 
-		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, messageData);
+		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeLocalPublicKey(), messageRecipient, messageData);
 		if (!isMessageAlreadySent) {
 			// Do this in a new thread so caller doesn't have to wait for computeNonce()
 			// In the unlikely event that the transaction doesn't validate then the buy won't happen and eventually Alice's AT will be refunded
@@ -463,7 +469,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 
 		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 
-		String address = tradeBotData.getTradeNativeAddress();
+		String address = tradeBotData.getTradeLocalAddress();
 		List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(null, address, null, null, null);
 
 		for (MessageTransactionData messageTransactionData : messageTransactionsData) {
@@ -523,7 +529,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 			byte[] outgoingMessageData = BitcoinyACCTv3.buildTradeMessage(aliceNativeAddress, aliceForeignPublicKeyHash, hashOfSecretA, lockTimeA, refundTimeout);
 			String messageRecipient = tradeBotData.getAtAddress();
 
-			boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, outgoingMessageData);
+			boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeLocalPublicKey(), messageRecipient, outgoingMessageData);
 			if (!isMessageAlreadySent) {
 				PrivateKeyAccount sender = new PrivateKeyAccount(repository, tradeBotData.getTradePrivateKey());
 				MessageTransaction outgoingMessageTransaction = MessageTransaction.build(repository, sender, Group.NO_GROUP, messageRecipient, outgoingMessageData, false, false);
@@ -628,7 +634,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		// AT is in TRADE mode and locked to us as checked by aliceUnexpectedState() above
 
 		// Find our MESSAGE to AT from previous state
-		List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(tradeBotData.getTradeNativePublicKey(),
+		List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(tradeBotData.getTradeLocalPublicKey(),
 				crossChainTradeData.creatorTradeAddress, null, null, null);
 		if (messageTransactionsData == null || messageTransactionsData.isEmpty()) {
 			LOGGER.warn(() -> String.format("Unable to find our message to trade creator %s?", crossChainTradeData.creatorTradeAddress));
@@ -653,7 +659,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		byte[] messageData = BitcoinyACCTv3.buildRedeemMessage(secretA, receivingAddress);
 		String messageRecipient = tradeBotData.getAtAddress();
 
-		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, messageData);
+		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeLocalPublicKey(), messageRecipient, messageData);
 		if (!isMessageAlreadySent) {
 			PrivateKeyAccount sender = new PrivateKeyAccount(repository, tradeBotData.getTradePrivateKey());
 			MessageTransaction messageTransaction = MessageTransaction.build(repository, sender, Group.NO_GROUP, messageRecipient, messageData, false, false);
@@ -852,7 +858,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		if (!atData.getIsFinished() && crossChainTradeData.mode == AcctMode.OFFERING)
 			return false;
 
-		boolean isAtLockedToUs = tradeBotData.getTradeNativeAddress().equals(crossChainTradeData.partnerAddress);
+		boolean isAtLockedToUs = tradeBotData.getTradeLocalAddress().equals(crossChainTradeData.partnerAddress);
 
 		if (!atData.getIsFinished() && crossChainTradeData.mode == AcctMode.TRADING)
 			if (isAtLockedToUs) {

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-08 - crosschain: support local asset ACCT trades
+
+Updated the crosschain ACCT and trade-bot flow so offers can trade any spendable local-chain asset, not only the native asset. Trade creation, offer/trade summaries, price and websocket filters, trade-bot import/export data, AT payout bytecode, and repository storage now carry a `localAssetId` and `localAmount`; fresh Qortium chains use the new schema directly without keeping old Qortal trade-bot migration paths.
+
 ### 2026-05-08 - crosschain: add transparent Zcash Bitcoiny support
 
 Added Zcash as a registered transparent-only Bitcoiny crosschain coin with ZEC mainnet chain identity, SLIP-44 wallet metadata, two-byte `t1`/`t3` address prefixes, SSL Electrum server metadata, and deterministic transaction-builder coverage. ZEC spends and HTLC redeem/refund transactions use ZIP225/v5 transparent serialization while shielded, unified, Sapling, and Orchard wallet flows remain outside the generic BTC-like path.

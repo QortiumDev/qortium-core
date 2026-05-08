@@ -8,7 +8,6 @@ import org.bitcoinj.core.Coin;
 import org.bouncycastle.util.Strings;
 import org.json.simple.JSONObject;
 import org.qortal.api.model.CrossChainTradeLedgerEntry;
-import org.qortal.asset.Asset;
 import org.qortal.crosschain.*;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.at.ATData;
@@ -735,6 +734,7 @@ public class CrossChainUtils {
                 continue;
 
             String foreignBlockchainCurrencyCode = foreignBlockchain.getCurrencyCode();
+            String localAssetCode = getLocalAssetCode(crossChainTradeData.localAssetId);
 
             // We also need block timestamp for use as trade timestamp
             long localTimestamp = repository.getBlockRepository().getTimestampFromHeight(atState.getHeight());
@@ -746,12 +746,12 @@ public class CrossChainUtils {
 
             CrossChainTradeLedgerEntry ledgerEntry
                 = new CrossChainTradeLedgerEntry(
-                    isBuy ? NATIVE_CURRENCY_CODE : foreignBlockchainCurrencyCode,
-                    isBuy ? foreignBlockchainCurrencyCode : NATIVE_CURRENCY_CODE,
-                    isBuy ? crossChainTradeData.nativeAmount : crossChainTradeData.expectedForeignAmount,
+                    isBuy ? localAssetCode : foreignBlockchainCurrencyCode,
+                    isBuy ? foreignBlockchainCurrencyCode : localAssetCode,
+                    isBuy ? crossChainTradeData.localAmount : crossChainTradeData.expectedForeignAmount,
                     0,
                     foreignBlockchainCurrencyCode,
-                    isBuy ? crossChainTradeData.expectedForeignAmount : crossChainTradeData.nativeAmount,
+                    isBuy ? crossChainTradeData.expectedForeignAmount : crossChainTradeData.localAmount,
                     localTimestamp);
 
             entries.add(ledgerEntry);
@@ -776,11 +776,16 @@ public class CrossChainUtils {
         Map<String, ATData> atDataByAtAddress
                 = atDataList.stream().collect(Collectors.toMap(ATData::getATAddress, Function.identity()));
 
-        Map<String, Long> balanceByAtAddress
-            = repository
-                .getAccountRepository()
-                .getBalances(new ArrayList<>(atDataByAtAddress.keySet()), Asset.NATIVE)
-                .stream().collect(Collectors.toMap(AccountBalanceData::getAddress, AccountBalanceData::getBalance));
+        Map<String, Long> balanceByAtAddress = new HashMap<>();
+        Map<Long, List<String>> atAddressesByAssetId = atDataByAtAddress.values().stream()
+                .collect(Collectors.groupingBy(ATData::getAssetId, Collectors.mapping(ATData::getATAddress, Collectors.toList())));
+
+        for (Map.Entry<Long, List<String>> entry : atAddressesByAssetId.entrySet()) {
+            balanceByAtAddress.putAll(repository
+                    .getAccountRepository()
+                    .getBalances(entry.getValue(), entry.getKey())
+                    .stream().collect(Collectors.toMap(AccountBalanceData::getAddress, AccountBalanceData::getBalance)));
+        }
 
         List<CrossChainTradeData> crossChainTradeDataList = new ArrayList<>(latestATStates.size());
 
@@ -792,11 +797,15 @@ public class CrossChainUtils {
                     atData.getCreatorPublicKey(),
                     atData.getCreation(),
                     atStateData,
-                    OptionalLong.of(balanceByAtAddress.get(atStateData.getATAddress()))
+                    OptionalLong.of(balanceByAtAddress.getOrDefault(atStateData.getATAddress(), 0L))
                 )
             );
         }
 
         return crossChainTradeDataList;
+    }
+
+    public static String getLocalAssetCode(long localAssetId) {
+        return localAssetId == 0L ? NATIVE_CURRENCY_CODE : "asset-" + localAssetId;
     }
 }

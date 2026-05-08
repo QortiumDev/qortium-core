@@ -19,6 +19,7 @@ import org.qortal.api.model.crosschain.TradeBotCreateRequest;
 import org.qortal.api.model.crosschain.TradeBotRespondRequest;
 import org.qortal.api.model.crosschain.TradeBotRespondRequests;
 import org.qortal.asset.Asset;
+import org.qortal.data.asset.AssetData;
 import org.qortal.controller.Controller;
 import org.qortal.controller.tradebot.AcctTradeBot;
 import org.qortal.controller.tradebot.TradeBot;
@@ -38,6 +39,7 @@ import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.transaction.Transaction;
 import org.qortal.utils.Base58;
+import org.qortal.utils.Amounts;
 import org.qortal.utils.NTP;
 
 import javax.servlet.http.HttpServletRequest;
@@ -115,7 +117,7 @@ public class CrossChainTradeBotResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.INSUFFICIENT_BALANCE, ApiError.REPOSITORY_ISSUE, ApiError.ORDER_SIZE_TOO_SMALL})
+		@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_ASSET_ID, ApiError.INVALID_CRITERIA, ApiError.INSUFFICIENT_BALANCE, ApiError.REPOSITORY_ISSUE, ApiError.ORDER_SIZE_TOO_SMALL})
 	@SecurityRequirement(name = "apiKey")
 	public String tradeBotCreator(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotCreateRequest tradeBotCreateRequest) {
 		Security.checkApiCallAllowed(request);
@@ -138,7 +140,10 @@ public class CrossChainTradeBotResource {
 		if (tradeBotCreateRequest.foreignAmount < foreignBlockchain.getMinimumOrderAmount())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ORDER_SIZE_TOO_SMALL);
 
-		if (tradeBotCreateRequest.nativeAmount <= 0 || tradeBotCreateRequest.fundingNativeAmount <= 0)
+		if (tradeBotCreateRequest.localAmount <= 0 || tradeBotCreateRequest.fundingLocalAmount <= 0 || tradeBotCreateRequest.nativeFeeReserve < 0)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ORDER_SIZE_TOO_SMALL);
+
+		if (tradeBotCreateRequest.fundingLocalAmount < tradeBotCreateRequest.localAmount)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ORDER_SIZE_TOO_SMALL);
 
 		final Long minLatestBlockTimestamp = NTP.getTime() - (60 * 60 * 1000L);
@@ -148,8 +153,19 @@ public class CrossChainTradeBotResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			// Do some simple checking first
 			Account creator = new PublicKeyAccount(repository, tradeBotCreateRequest.creatorPublicKey);
+			AssetData localAssetData = repository.getAssetRepository().fromAssetId(tradeBotCreateRequest.localAssetId);
 
-			if (creator.getConfirmedBalance(Asset.NATIVE) < tradeBotCreateRequest.fundingNativeAmount)
+			if (localAssetData == null || localAssetData.isUnspendable())
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ASSET_ID);
+
+			if (!localAssetData.isDivisible()
+					&& (tradeBotCreateRequest.localAmount % Amounts.MULTIPLIER != 0 || tradeBotCreateRequest.fundingLocalAmount % Amounts.MULTIPLIER != 0))
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+			if (creator.getConfirmedBalance(tradeBotCreateRequest.localAssetId) < tradeBotCreateRequest.fundingLocalAmount)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INSUFFICIENT_BALANCE);
+
+			if (tradeBotCreateRequest.nativeFeeReserve > 0 && creator.getConfirmedBalance(Asset.NATIVE) < tradeBotCreateRequest.nativeFeeReserve)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INSUFFICIENT_BALANCE);
 
 			byte[] unsignedBytes = TradeBot.getInstance().createTrade(repository, tradeBotCreateRequest);
@@ -306,6 +322,7 @@ public class CrossChainTradeBotResource {
 			List<CrossChainTradeData> crossChainTradeDataList = new ArrayList<>(respondRequests.addresses.size());
 			Optional<ACCT> acct = Optional.empty();
 			Optional<ForeignBlockchainRegistry.Entry> foreignBlockchain = Optional.empty();
+			Optional<Long> localAssetId = Optional.empty();
 
 			for(String atAddress : respondRequests.addresses ) {
 
@@ -346,6 +363,11 @@ public class CrossChainTradeBotResource {
 				if (foreignBlockchain.isEmpty())
 					foreignBlockchain = Optional.of(blockchain);
 				else if (foreignBlockchain.get() != blockchain)
+					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+				if (localAssetId.isEmpty())
+					localAssetId = Optional.of(crossChainTradeData.localAssetId);
+				else if (localAssetId.get() != crossChainTradeData.localAssetId)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 				if (!bitcoiny.isValidWalletKey(respondRequests.foreignKey))

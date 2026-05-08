@@ -31,9 +31,12 @@ public class CrossChainTradeData {
 	@Schema(description = "Suggested trade timeout (minutes)", example = "10080")
 	public int tradeTimeout;
 
-	@Schema(description = "AT's current native asset balance")
+	@Schema(description = "Local-chain asset id paid by this AT")
+	public long localAssetId;
+
+	@Schema(description = "AT's current local asset balance")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long nativeBalance;
+	public long localBalance;
 
 	@Schema(description = "HASH160 of 32-byte secret-A")
 	public byte[] hashOfSecretA;
@@ -41,9 +44,9 @@ public class CrossChainTradeData {
 	@Schema(description = "HASH160 of 32-byte secret-B")
 	public byte[] hashOfSecretB;
 
-	@Schema(description = "Final native asset payment that will be sent to local-chain trade partner")
+	@Schema(description = "Final local asset payment that will be sent to local-chain trade partner")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long nativeAmount;
+	public long localAmount;
 
 	@Schema(description = "Trade partner's local-chain address (trade begins when this is set)")
 	public String partnerAddress;

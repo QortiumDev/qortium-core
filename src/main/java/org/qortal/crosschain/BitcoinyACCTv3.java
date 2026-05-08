@@ -5,7 +5,6 @@ import com.google.common.primitives.Bytes;
 import org.ciyam.at.*;
 import org.qortal.account.Account;
 import org.qortal.api.resource.CrossChainUtils;
-import org.qortal.asset.Asset;
 import org.qortal.at.ChainFunctionCode;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.at.ATData;
@@ -86,7 +85,7 @@ import static org.ciyam.at.OpCode.calcOffset;
 public class BitcoinyACCTv3 implements ACCT {
 
 	public static final String NAME = BitcoinyACCTv3.class.getSimpleName();
-	public static final byte[] CODE_BYTES_HASH = HashCode.fromString("676fb9350708dafa054eb0262d655039e393c1eb4918ec582f8d45524c9b4860").asBytes(); // SHA256 of AT code bytes
+	public static final byte[] CODE_BYTES_HASH = HashCode.fromString("7a0cd84e4382188a7cbbc3ffc50f1c4b148eb87cd3d3153ea7e332c140c43b57").asBytes(); // SHA256 of AT code bytes
 
 	public static final int SECRET_LENGTH = 32;
 
@@ -140,11 +139,11 @@ public class BitcoinyACCTv3 implements ACCT {
 	 * @param foreignBlockchain foreign blockchain for this trade
 	 * @param creatorTradeAddress AT creator's trade local-chain address
 	 * @param foreignPublicKeyHash 20-byte HASH160 of creator's trade foreign-chain public key
-	 * @param nativeAmount how much native asset to pay trade partner if they send correct 32-byte secrets to AT
+	 * @param localAmount how much local asset to pay trade partner if they send correct 32-byte secrets to AT
 	 * @param foreignAmount how much foreign-chain currency the AT creator is expecting to trade
 	 * @param tradeTimeout suggested timeout for entire trade
 	 */
-	public static byte[] buildTradeAT(ForeignBlockchainRegistry.Entry foreignBlockchain, String creatorTradeAddress, byte[] foreignPublicKeyHash, long nativeAmount, long foreignAmount, int tradeTimeout) {
+	public static byte[] buildTradeAT(ForeignBlockchainRegistry.Entry foreignBlockchain, String creatorTradeAddress, byte[] foreignPublicKeyHash, long localAmount, long foreignAmount, int tradeTimeout) {
 		if (foreignBlockchain == null || !foreignBlockchain.isBitcoiny())
 			throw new IllegalArgumentException("Unsupported Bitcoiny blockchain");
 
@@ -164,7 +163,7 @@ public class BitcoinyACCTv3 implements ACCT {
 		final int addrForeignPublicKeyHash = addrCounter;
 		addrCounter += 4;
 
-		final int addrNativeAmount = addrCounter++;
+		final int addrLocalAmount = addrCounter++;
 		final int addrForeignAmount = addrCounter++;
 		final int addrTradeTimeout = addrCounter++;
 
@@ -247,9 +246,9 @@ public class BitcoinyACCTv3 implements ACCT {
 		assert dataByteBuffer.position() == addrForeignPublicKeyHash * MachineState.VALUE_SIZE : "addrForeignPublicKeyHash incorrect";
 		dataByteBuffer.put(Bytes.ensureCapacity(foreignPublicKeyHash, 32, 0));
 
-		// Redeem native amount
-		assert dataByteBuffer.position() == addrNativeAmount * MachineState.VALUE_SIZE : "addrNativeAmount incorrect";
-		dataByteBuffer.putLong(nativeAmount);
+		// Redeem local asset amount
+		assert dataByteBuffer.position() == addrLocalAmount * MachineState.VALUE_SIZE : "addrLocalAmount incorrect";
+		dataByteBuffer.putLong(localAmount);
 
 		// Expected foreign amount
 		assert dataByteBuffer.position() == addrForeignAmount * MachineState.VALUE_SIZE : "addrForeignAmount incorrect";
@@ -525,8 +524,9 @@ public class BitcoinyACCTv3 implements ACCT {
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(ChainFunctionCode.PUT_PARTIAL_MESSAGE_FROM_TX_IN_A_INTO_B.value, addrRedeemMessageReceivingAddressOffset));
 				// Save B register into data segment starting at addrPartnerReceivingAddress (as pointed to by addrPartnerReceivingAddressPointer)
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrPartnerReceivingAddressPointer));
-				// Pay AT's balance to receiving address
-				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PAY_TO_ADDRESS_IN_B, addrNativeAmount));
+				// Pay AT's configured local asset to receiving address
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(ChainFunctionCode.GET_CONFIGURED_ASSET_ID.value, addrTxnType));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT_2.compile(ChainFunctionCode.PAY_ASSET_AMOUNT_TO_B.value, addrResult, addrTxnType, addrLocalAmount));
 				// Set redeemed mode
 				codeByteBuffer.put(OpCode.SET_VAL.compile(addrMode, AcctMode.REDEEMED.value));
 				// We're finished forever (finishing auto-refunds remaining balance to AT creator)
@@ -545,7 +545,7 @@ public class BitcoinyACCTv3 implements ACCT {
 				// We're finished forever (finishing auto-refunds remaining balance to AT creator)
 				codeByteBuffer.put(OpCode.FIN_IMD.compile());
 			} catch (CompilationException e) {
-				throw new IllegalStateException("Unable to compile Bitcoiny-NATIVE ACCT?", e);
+				throw new IllegalStateException("Unable to compile Bitcoiny local-asset ACCT?", e);
 			}
 		}
 
@@ -606,12 +606,17 @@ public class BitcoinyACCTv3 implements ACCT {
 		tradeData.creatorAddress = Crypto.toAddress(creatorPublicKey);
 		tradeData.creationTimestamp = creationTimestamp;
 
+		ATData atData = repository.getATRepository().fromATAddress(atAddress);
+		if (atData == null)
+			throw new DataException("Unable to fetch AT data for " + atAddress);
+
+		tradeData.localAssetId = atData.getAssetId();
 		if(optionalBalance.isPresent()) {
-			tradeData.nativeBalance = optionalBalance.getAsLong();
+			tradeData.localBalance = optionalBalance.getAsLong();
 		}
 		else {
 			Account atAccount = new Account(repository, atAddress);
-			tradeData.nativeBalance = atAccount.getConfirmedBalance(Asset.NATIVE);
+			tradeData.localBalance = atAccount.getConfirmedBalance(tradeData.localAssetId);
 		}
 
 		byte[] stateData = atStateData.getStateData();
@@ -634,7 +639,7 @@ public class BitcoinyACCTv3 implements ACCT {
 		tradeData.hashOfSecretB = null;
 
 		// Redeem payout
-		tradeData.nativeAmount = dataByteBuffer.getLong();
+		tradeData.localAmount = dataByteBuffer.getLong();
 
 		// Expected foreign amount
 		tradeData.expectedForeignAmount = dataByteBuffer.getLong();

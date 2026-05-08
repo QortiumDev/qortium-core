@@ -15,6 +15,7 @@ import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.BitcoinyACCTv3;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crypto.Crypto;
+import org.qortal.asset.Asset;
 import org.qortal.data.account.MintingAccountData;
 import org.qortal.data.crosschain.TradeBotData;
 import org.qortal.repository.DataException;
@@ -26,7 +27,6 @@ import org.qortal.test.common.Common;
 import org.qortal.utils.NTP;
 import org.qortal.utils.Triple;
 
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -230,42 +230,6 @@ public class ImportExportTests extends Common {
     }
 
     @Test
-    public void testExportAndImportLegacyTradeBotStates() throws DataException, IOException {
-        try (final Repository repository = RepositoryManager.getRepository()) {
-
-            // Create some trade bots, but don't save them in the repository
-            List<TradeBotData> tradeBots = new ArrayList<>();
-            for (int i=0; i<10; i++) {
-                TradeBotData tradeBotData = this.createTradeBotData(repository);
-                tradeBots.add(tradeBotData);
-            }
-
-            // Create a legacy format TradeBotStates.json backup file
-            this.exportLegacyTradeBotStatesJson(tradeBots);
-
-            // Ensure no trade bots exist in repository
-            assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
-
-            // Import the legacy format file
-            Path exportPath = HSQLDBImportExport.getExportDirectory(false);
-            Path filePath = Paths.get(exportPath.toString(), "TradeBotStates.json");
-            HSQLDBImportExport.importDataFromFile(filePath.toString(), repository);
-
-            // Ensure they have been imported
-            assertEquals(10, repository.getCrossChainRepository().getAllTradeBotData().size());
-
-            for (TradeBotData tradeBotData : tradeBots) {
-                byte[] tradePrivateKey = tradeBotData.getTradePrivateKey();
-                TradeBotData repositoryTradeBotData = repository.getCrossChainRepository().getTradeBotData(tradePrivateKey);
-                assertNotNull(repositoryTradeBotData);
-                assertEquals(tradeBotData.toJson().toString(), repositoryTradeBotData.toJson().toString());
-            }
-
-            repository.saveChanges();
-        }
-    }
-
-    @Test
     public void testArchiveTradeBotStateOnTradeFailure() throws DataException, IOException {
         try (final Repository repository = RepositoryManager.getRepository()) {
 
@@ -381,9 +345,9 @@ public class ImportExportTests extends Common {
     private TradeBotData createTradeBotData(Repository repository) throws DataException {
         byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
 
-        byte[] tradeNativePublicKey = TradeBot.deriveTradeNativePublicKey(tradePrivateKey);
-        byte[] tradeNativePublicKeyHash = Crypto.hash160(tradeNativePublicKey);
-        String tradeNativeAddress = Crypto.toAddress(tradeNativePublicKey);
+        byte[] tradeLocalPublicKey = TradeBot.deriveTradeLocalPublicKey(tradePrivateKey);
+        byte[] tradeLocalPublicKeyHash = Crypto.hash160(tradeLocalPublicKey);
+        String tradeLocalAddress = Crypto.toAddress(tradeLocalPublicKey);
 
         byte[] tradeForeignPublicKey = TradeBot.deriveTradeForeignPublicKey(tradePrivateKey);
         byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
@@ -408,12 +372,12 @@ public class ImportExportTests extends Common {
         long timestamp = NTP.getTime();
         String atAddress = "AT_ADDRESS";
         long foreignAmount = 1234;
-        long nativeAmount= 5678;
+        long localAmount = 5678;
 
         TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinyACCTv3.NAME,
                 TradeStates.State.BOB_WAITING_FOR_AT_CONFIRM.name(), TradeStates.State.BOB_WAITING_FOR_AT_CONFIRM.value,
-                creator.getAddress(), atAddress, timestamp, nativeAmount,
-                tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
+                creator.getAddress(), atAddress, timestamp, Asset.NATIVE, localAmount,
+                tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
                 null, null,
                 litecoin.name(),
                 tradeForeignPublicKey, tradeForeignPublicKeyHash,
@@ -428,20 +392,6 @@ public class ImportExportTests extends Common {
         byte[] publicKey = new ECKey().getPrivKeyBytes();
 
         return new MintingAccountData(privateKey, publicKey);
-    }
-
-    private void exportLegacyTradeBotStatesJson(List<TradeBotData> allTradeBotData) throws IOException, DataException {
-        JSONArray allTradeBotDataJson = new JSONArray();
-        for (TradeBotData tradeBotData : allTradeBotData) {
-            JSONObject tradeBotDataJson = tradeBotData.toJson();
-            allTradeBotDataJson.put(tradeBotDataJson);
-        }
-
-        Path backupDirectory = HSQLDBImportExport.getExportDirectory(true);
-        String fileName = Paths.get(backupDirectory.toString(), "TradeBotStates.json").toString();
-        FileWriter writer = new FileWriter(fileName);
-        writer.write(allTradeBotDataJson.toString());
-        writer.close();
     }
 
     private void deleteExportDirectory() {

@@ -8,6 +8,7 @@ import org.qortal.asset.Asset;
 import org.qortal.at.AT;
 import org.qortal.at.ChainATAPI;
 import org.qortal.at.ChainAtLoggerFactory;
+import org.qortal.block.BlockChain;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.asset.AssetData;
 import org.qortal.data.at.ATData;
@@ -120,9 +121,13 @@ public class DeployAtTransaction extends Transaction {
 		if (assetData == null)
 			return ValidationResult.ASSET_DOES_NOT_EXIST;
 
-		// AT execution fees are always paid in the native asset
-		if (assetId != Asset.NATIVE && this.repository.getAssetRepository().fromAssetId(Asset.NATIVE) == null)
-			return ValidationResult.ASSET_DOES_NOT_EXIST;
+			// Non-native ATs only require native asset if a transaction fee, native fee reserve or AT step fees need it.
+			boolean nativeFundingRequired = assetId != Asset.NATIVE
+					&& (this.deployAtTransactionData.getFee() > 0
+					|| nativeFeeReserve > 0
+					|| BlockChain.getInstance().getCiyamAtSettings().feePerStep > 0);
+			if (nativeFundingRequired && this.repository.getAssetRepository().fromAssetId(Asset.NATIVE) == null)
+				return ValidationResult.ASSET_DOES_NOT_EXIST;
 
 		// Unspendable assets are not valid
 		if (assetData.isUnspendable())

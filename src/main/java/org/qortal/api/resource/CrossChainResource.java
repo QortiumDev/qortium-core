@@ -20,6 +20,7 @@ import org.qortal.api.Security;
 import org.qortal.api.model.CrossChainCancelRequest;
 import org.qortal.api.model.CrossChainTradeLedgerEntry;
 import org.qortal.api.model.CrossChainTradeSummary;
+import org.qortal.asset.Asset;
 import org.qortal.controller.ForeignFeesManager;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.ACCT;
@@ -105,6 +106,10 @@ public class CrossChainResource {
 				example = "LITECOIN",
 				schema = @Schema(type = "string")
 			) @QueryParam("foreignBlockchain") String foreignBlockchain,
+			@Parameter(
+				description = "Limit to a specific local-chain asset id",
+				example = "1"
+			) @QueryParam("localAssetId") Long localAssetId,
 			@Parameter( ref = "limit") @QueryParam("limit") Integer limit,
 			@Parameter( ref = "offset" ) @QueryParam("offset") Integer offset,
 			@Parameter( ref = "reverse" ) @QueryParam("reverse") Boolean reverse) {
@@ -118,7 +123,7 @@ public class CrossChainResource {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
-			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchainEntry);
+			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchainEntry) || localAssetId != null;
 			Integer repositoryLimit = postFilterPaging ? null : limit;
 			Integer repositoryOffset = postFilterPaging ? null : offset;
 
@@ -130,7 +135,8 @@ public class CrossChainResource {
 
 				for (ATData atData : atsData) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
-					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) && crossChainTradeData.mode == AcctMode.OFFERING) {
+					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) && matchesLocalAsset(crossChainTradeData, localAssetId)
+							&& crossChainTradeData.mode == AcctMode.OFFERING) {
 						crossChainTrades.add(crossChainTradeData);
 					}
 				}
@@ -190,7 +196,11 @@ public class CrossChainResource {
 					description = "Limit to specific blockchain",
 					example = "LITECOIN",
 					schema = @Schema(type = "string")
-			) @QueryParam("foreignBlockchain") String foreignBlockchain) {
+			) @QueryParam("foreignBlockchain") String foreignBlockchain,
+			@Parameter(
+					description = "Limit to a specific local-chain asset id",
+					example = "1"
+			) @QueryParam("localAssetId") Long localAssetId) {
 
 		final boolean isExecutable = true;
 		List<CrossChainTradeData> crossChainTrades = new ArrayList<>();
@@ -207,7 +217,8 @@ public class CrossChainResource {
 
 				for (ATData atData : atsData) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
-					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) && crossChainTradeData.mode == AcctMode.OFFERING) {
+					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) && matchesLocalAsset(crossChainTradeData, localAssetId)
+							&& crossChainTradeData.mode == AcctMode.OFFERING) {
 						crossChainTrades.add(crossChainTradeData);
 					}
 				}
@@ -292,6 +303,10 @@ public class CrossChainResource {
 					schema = @Schema(type = "string")
 				) @QueryParam("foreignBlockchain") String foreignBlockchain,
 			@Parameter(
+					description = "Limit to a specific local-chain asset id",
+					example = "1"
+			) @QueryParam("localAssetId") Long localAssetId,
+			@Parameter(
 				description = "Only return trades that completed on/after this timestamp (milliseconds since epoch)",
 				example = "1597310000000"
 			) @QueryParam("minimumTimestamp") Long minimumTimestamp,
@@ -342,7 +357,7 @@ public class CrossChainResource {
 			List<CrossChainTradeSummary> crossChainTrades = new ArrayList<>();
 
 			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
-			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchainEntry);
+			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchainEntry) || localAssetId != null;
 			Integer repositoryLimit = postFilterPaging ? null : limit;
 			Integer repositoryOffset = postFilterPaging ? null : offset;
 
@@ -356,7 +371,7 @@ public class CrossChainResource {
 
 				for (ATStateData atState : atStates) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
-					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry))
+					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) || !matchesLocalAsset(crossChainTradeData, localAssetId))
 						continue;
 
 					// We also need block timestamp for use as trade timestamp
@@ -611,7 +626,7 @@ public class CrossChainResource {
 	@Path("/price/{blockchain}")
 	@Operation(
 		summary = "Request current estimated trading price",
-		description = "Returns price based on most recent completed trades. Price is expressed in terms of NATIVE per unit foreign currency.",
+		description = "Returns price based on most recent completed trades. Price is expressed in terms of local asset per unit foreign currency.",
 		responses = {
 			@ApiResponse(
 				content = @Content(
@@ -635,10 +650,14 @@ public class CrossChainResource {
 					schema = @Schema(type = "integer", defaultValue = "10")
 			) @QueryParam("maxtrades") Integer maxtrades,
 			@Parameter(
-					description = "Display price in terms of foreign currency per unit NATIVE",
+					description = "Display price in terms of foreign currency per unit local asset",
 					example = "false",
 					schema = @Schema(type = "boolean", defaultValue = "false")
-			) @QueryParam("inverse") Boolean inverse) {
+			) @QueryParam("inverse") Boolean inverse,
+			@Parameter(
+					description = "Limit to a specific local-chain asset id",
+					example = "1"
+			) @QueryParam("localAssetId") Long localAssetId) {
 		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = resolveRequiredForeignBlockchain(foreignBlockchain);
 
 		// We want both a minimum of 5 trades and enough trades to span at least 4 hours
@@ -647,15 +666,17 @@ public class CrossChainResource {
 		long minimumPeriod = 4 * 60 * 60 * 1000L; // ms
 		Boolean isFinished = Boolean.TRUE;
 		boolean useInversePrice = (inverse != null && inverse);
+		long priceLocalAssetId = localAssetId != null ? localAssetId : Asset.NATIVE;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
 
 			long totalForeign = 0;
-			long totalNative = 0;
+			long totalLocal = 0;
 
 			Map<Long, CrossChainTradeData> reverseSortedTradeData = new TreeMap<>(Collections.reverseOrder());
-			boolean postFilterSharedBitcoinyStates = needsPostFilterPaging(foreignBlockchainEntry);
+			// Price estimates must filter by foreign blockchain and local asset after decoding AT state data.
+			boolean postFilterSharedBitcoinyStates = true;
 
 			// Collect recent AT states for each ACCT version
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
@@ -683,7 +704,7 @@ public class CrossChainResource {
 					}
 
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
-					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry))
+					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) || !matchesLocalAsset(crossChainTradeData, priceLocalAssetId))
 						continue;
 
 					reverseSortedTradeData.put(timestamp, crossChainTradeData);
@@ -705,11 +726,11 @@ public class CrossChainResource {
 				}
 
 				totalForeign += crossChainTradeData.expectedForeignAmount;
-				totalNative += crossChainTradeData.nativeAmount;
+				totalLocal += crossChainTradeData.localAmount;
 				index++;
 			}
 
-			return useInversePrice ? Amounts.scaledDivide(totalForeign, totalNative) : Amounts.scaledDivide(totalNative, totalForeign);
+			return useInversePrice ? Amounts.scaledDivide(totalForeign, totalLocal) : Amounts.scaledDivide(totalLocal, totalForeign);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
@@ -957,6 +978,10 @@ public class CrossChainResource {
 
 	private static boolean matchesForeignBlockchain(CrossChainTradeData crossChainTradeData, ForeignBlockchainRegistry.Entry foreignBlockchain) {
 		return crossChainTradeData != null && (foreignBlockchain == null || foreignBlockchain.name().equals(crossChainTradeData.foreignBlockchain));
+	}
+
+	private static boolean matchesLocalAsset(CrossChainTradeData crossChainTradeData, Long localAssetId) {
+		return crossChainTradeData != null && (localAssetId == null || crossChainTradeData.localAssetId == localAssetId);
 	}
 
 	private static boolean needsPostFilterPaging(ForeignBlockchainRegistry.Entry foreignBlockchain) {

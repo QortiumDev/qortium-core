@@ -113,9 +113,9 @@ public class TradeBotUtils {
             byte[] secretA = TradeBot.generateSecret();
             byte[] hashOfSecretA = Crypto.hash160(secretA);
 
-            byte[] tradeNativePublicKey = TradeBot.deriveTradeNativePublicKey(tradePrivateKey);
-            byte[] tradeNativePublicKeyHash = Crypto.hash160(tradeNativePublicKey);
-            String tradeNativeAddress = Crypto.toAddress(tradeNativePublicKey);
+            byte[] tradeLocalPublicKey = TradeBot.deriveTradeLocalPublicKey(tradePrivateKey);
+            byte[] tradeLocalPublicKeyHash = Crypto.hash160(tradeLocalPublicKey);
+            String tradeLocalAddress = Crypto.toAddress(tradeLocalPublicKey);
 
             byte[] tradeForeignPublicKey = TradeBot.deriveTradeForeignPublicKey(tradePrivateKey);
             byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
@@ -123,13 +123,14 @@ public class TradeBotUtils {
             int lockTimeA = (crossChainTradeData.tradeTimeout * 60) + (int) (now / 1000L);
             byte[] receivingPublicKeyHash = Base58.decode(receiveAddress); // Actually the whole address, not just PKH
 
-            TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, acct.getClass().getSimpleName(),
-                    State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
-                    receiveAddress,
-                    crossChainTradeData.atAddress,
-                    now,
-                    crossChainTradeData.nativeAmount,
-                    tradeNativePublicKey, tradeNativePublicKeyHash, tradeNativeAddress,
+	            TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, acct.getClass().getSimpleName(),
+	                    State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
+	                    receiveAddress,
+	                    crossChainTradeData.atAddress,
+	                    now,
+	                    crossChainTradeData.localAssetId,
+	                    crossChainTradeData.localAmount,
+	                    tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
                     secretA, hashOfSecretA,
                     crossChainTradeData.foreignBlockchain,
                     tradeForeignPublicKey, tradeForeignPublicKeyHash,
@@ -176,7 +177,7 @@ public class TradeBotUtils {
             CrossChainTradeData crossChainTradeData = datumToProcess.crossChainTradeData;
             String messageRecipient = crossChainTradeData.creatorTradeAddress;
 
-            boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeNativePublicKey(), messageRecipient, messageData);
+            boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeLocalPublicKey(), messageRecipient, messageData);
             if (!isMessageAlreadySent) {
                 // Do this in a new thread so caller doesn't have to wait for computeNonce()
                 // In the unlikely event that the transaction doesn't validate then the buy won't happen and eventually Alice's AT will be refunded

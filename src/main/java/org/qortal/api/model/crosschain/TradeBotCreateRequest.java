@@ -13,13 +13,20 @@ public class TradeBotCreateRequest {
 	@Schema(description = "Trade creator's public key", example = "2zR1WFsbM7akHghqSCYKBPk6LDP8aKiQSRS1FrwoLvoB")
 	public byte[] creatorPublicKey;
 
-	@Schema(description = "Native asset amount paid out on successful trade", example = "80.40000000", type = "number")
-	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long nativeAmount;
+	@Schema(description = "Local-chain asset id paid out on successful trade", example = "1")
+	public long localAssetId;
 
-	@Schema(description = "Native asset amount funding AT, including covering AT execution fees", example = "80.50000000", type = "number")
+	@Schema(description = "Local-chain asset amount paid out on successful trade", example = "80.40000000", type = "number")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
-	public long fundingNativeAmount;
+	public long localAmount;
+
+	@Schema(description = "Local-chain asset amount funding AT", example = "80.50000000", type = "number")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public long fundingLocalAmount;
+
+	@Schema(description = "Native asset reserve for non-native AT execution fees", example = "0.00000000", type = "number")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public long nativeFeeReserve;
 
 	@Schema(description = "Foreign blockchain name or currency code", example = "BITCOIN")
 	public String foreignBlockchain;
