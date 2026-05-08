@@ -32,6 +32,7 @@ Useful options:
 ```bash
 tools/refresh-electrum-servers --coins BTC,LTC
 tools/refresh-electrum-servers --coins BTC --networks TEST4
+tools/refresh-electrum-servers --coins BCH --networks TEST4
 tools/refresh-electrum-servers --skip-peers
 tools/refresh-electrum-servers --skip-verify
 tools/refresh-electrum-servers --timeout-ms 8000 --threads 16

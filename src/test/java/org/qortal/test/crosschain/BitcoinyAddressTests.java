@@ -88,6 +88,21 @@ public class BitcoinyAddressTests {
 	}
 
 	@Test
+	public void testBitcoinCashTest4UsesBchTestCashAddrPrefix() {
+		NetworkParameters params = bitcoinCashTest4Params();
+
+		String p2pkhAddress = BitcoinyAddress.fromPubKeyHash(params, HASH160).toString();
+		String p2shAddress = BitcoinyAddress.fromScriptHash(params, HASH160).toString();
+
+		assertTrue(p2pkhAddress.startsWith("bchtest:q"));
+		assertTrue(p2shAddress.startsWith("bchtest:p"));
+		assertArrayEquals(HASH160, BitcoinyAddress.fromString(params, p2pkhAddress).getPayload());
+		assertArrayEquals(HASH160, BitcoinyAddress.fromString(params, p2shAddress).getPayload());
+		assertArrayEquals(BitcoinyScript.p2pkhScript(HASH160), BitcoinyScript.scriptPubKey(params, p2pkhAddress));
+		assertArrayEquals(BitcoinyScript.p2shScript(HASH160), BitcoinyScript.scriptPubKey(params, p2shAddress));
+	}
+
+	@Test
 	public void testBitcoinCashCashAddrRejectsMixedCase() {
 		try {
 			BitcoinyAddress.fromString(bitcoinCashParams(), "bitcoincash:Qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a");
@@ -161,5 +176,9 @@ public class BitcoinyAddressTests {
 
 	private static NetworkParameters bitcoinCashParams() {
 		return BitcoinyChainSpecs.BITCOIN_CASH.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
+	}
+
+	private static NetworkParameters bitcoinCashTest4Params() {
+		return BitcoinyChainSpecs.BITCOIN_CASH.getNetwork(BitcoinyChainSpecs.TEST4).getParams();
 	}
 }

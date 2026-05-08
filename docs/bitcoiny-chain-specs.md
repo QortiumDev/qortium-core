@@ -56,7 +56,7 @@ Use `bitcoinyNetworks` in `settings.json` to choose the active network for BTC-l
 }
 ```
 
-Missing entries default to `MAIN`. Supported network names are currently `MAIN`, `TEST3`, `TEST4`, and `REGTEST`, but each chain only advertises networks that have explicit params and usable server support. BTC keeps legacy `TEST3` available, but `TEST4` is the preferred Bitcoin test network for new test settings.
+Missing entries default to `MAIN`. Supported network names are currently `MAIN`, `TEST3`, `TEST4`, and `REGTEST`, but each chain only advertises networks that have explicit params and usable server support. BTC keeps legacy `TEST3` available, but `TEST4` is the preferred Bitcoin test network for new test settings. BCH supports `TEST4` via `tbch4` servers while keeping `MAIN` as the default when no setting is supplied.
 
 ## Adding A Coin
 
@@ -83,7 +83,7 @@ Before adding a coin, collect and verify:
 - address normalization hooks, output spendability filters, or default spend-fee hooks only when the chain needs them
 - manifest coverage in `BitcoinyChainSpecsTests` and common wallet/HTLC coverage in `RegisteredBitcoinyTests`
 
-Bitcoin Cash is registered for ordinary BCH wallet, HTLC, and ACCT trade support. BCH shares Bitcoin's genesis, so the shared Bitcoiny ACCT uses the first BCH-only fork block reference to distinguish BCH trades from BTC trades. The generic runtime accepts legacy Base58 addresses in BCH context, generates and normalizes `bitcoincash:` CashAddr addresses, and builds BCH spends and HTLC transactions with fork-ID signatures. CashTokens and P2SH32 are intentionally outside the generic path; CashToken-prefixed outputs are filtered out of wallet spend selection.
+Bitcoin Cash is registered for ordinary BCH wallet, HTLC, and ACCT trade support. BCH shares Bitcoin's genesis, so the shared Bitcoiny ACCT uses the first BCH-only fork block reference to distinguish BCH trades from BTC trades. The generic runtime accepts legacy Base58 addresses in BCH context, generates and normalizes `bitcoincash:` or `bchtest:` CashAddr addresses for the selected network, and builds BCH spends and HTLC transactions with fork-ID signatures. CashTokens and P2SH32 are intentionally outside the generic path; CashToken-prefixed outputs are filtered out of wallet spend selection.
 
 Peercoin is registered for ordinary transparent PPC wallet, HTLC, and ACCT trade support. PPC uses six decimal places instead of the usual eight, so shared Bitcoiny config carries per-chain decimal metadata for formatting and Electrum verbose transaction parsing. PPC also uses Peercoin's version-3 transaction format for newly built spends and HTLC transactions so they do not include the pre-version-3 transaction timestamp field.
 

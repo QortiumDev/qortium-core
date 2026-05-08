@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-08 - crosschain: add Bitcoin Cash testnet4 support
+
+Added Bitcoin Cash TEST4 as a supported BCH network using BCHN testnet4 parameters, `bchtest:` CashAddr metadata, and generated Electrum server metadata from the 1209k `tbch4` list. BCH mainnet remains the default when no network override is configured.
+
 ### 2026-05-08 - crosschain: add Bitcoin testnet4 support
 
 Added Bitcoin TEST4 as a supported BTC network using the BIP94 testnet4 genesis parameters, refreshed Electrum server metadata from the 1209k `tbtc4` list, and moved the default test settings from BTC TEST3 to BTC TEST4 while keeping TEST3 available for legacy fixtures. The Electrum server refresh tool can now restrict a refresh to selected networks, making it possible to update BTC TEST4 without rewriting existing BTC mainnet or TEST3 server entries.

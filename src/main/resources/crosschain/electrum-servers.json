@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-08T02:11:17.668951647Z",
+  "generatedAt": "2026-05-08T15:16:39.217010713Z",
   "servers": {
     "BTC": {
       "MAIN": [
@@ -389,6 +389,11 @@
         {"host": "fulcrum.greyh.at", "port": 50002, "protocol": "SSL", "source": "peer", "responseTimeMillis": 604},
         {"host": "fulcrum.kronbit.com", "port": 50002, "protocol": "SSL", "source": "peer", "responseTimeMillis": 874},
         {"host": "niblerino.com", "port": 50002, "protocol": "SSL", "source": "1209k,peer", "responseTimeMillis": 274}
+      ],
+      "TEST4": [
+        {"host": "blackie.c3-soft.com", "port": 62002, "protocol": "SSL", "source": "1209k,peer", "responseTimeMillis": 297},
+        {"host": "tbch4.loping.net", "port": 62002, "protocol": "SSL", "source": "1209k,peer", "responseTimeMillis": 1734},
+        {"host": "testnet4.imaginary.cash", "port": 50002, "protocol": "SSL", "source": "peer", "responseTimeMillis": 531}
       ]
     },
     "LTC": {

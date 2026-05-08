@@ -145,6 +145,20 @@ public final class BitcoinyChainSpecs {
 					"seed.bchd.cash", "seed.bch.loping.net", "dnsseed.electroncash.de", "bchseed.c3-soft.com",
 					"bch.bitjson.com")
 			.build();
+	private static final NetworkParameters BITCOIN_CASH_TEST4_NET_PARAMS = bitcoinCashParams("org.bitcoincash.test4", NetworkParameters.PAYMENT_PROTOCOL_ID_TESTNET)
+			.genesis(1597811185L, 114152193L, 0x1d00ffffL, "000000001dd410c49a788668ce26751718cc797474d3152a5fc073dd44fd9f7b")
+			.genesisHeader(1L, BITCOIN_GENESIS_MERKLE_ROOT)
+			.genesisTransaction(BITCOIN_GENESIS_COINBASE_SCRIPT, Coin.COIN.multiply(50L), BITCOIN_GENESIS_OUTPUT_SCRIPT)
+			.port(28333)
+			.packetMagic(0xe2b7daafL)
+			.addressHeaders(111, 196, 239)
+			.cashAddressPrefix("bchtest")
+			.coinbaseAndSubsidy(100, 210_000)
+			.bip32Headers(0x043587cf, 0x04358394)
+			.majorityWindow(750, 950, 1000)
+			.dnsSeeds("testnet4-seed-bch.toom.im", "seed.tbch4.loping.net", "testnet4-seed.flowee.cash",
+					"testnet4.bitjson.com")
+			.build();
 	private static final NetworkParameters LITECOIN_MAIN_NET_PARAMS = litecoinParams("org.litecoin.production", "org.litecoin.production", "ltc")
 			.genesis(1317972665L, 2084524493L, 0x1e0ffff0L, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2")
 			.genesisHeader(1L, LITECOIN_GENESIS_MERKLE_ROOT)
@@ -357,6 +371,7 @@ public final class BitcoinyChainSpecs {
 	public static final BitcoinyChainSpec BITCOIN_CASH = spec("BITCOINCASH", BITCOIN_CASH_SLIP44_COIN_TYPE, "Bitcoin Cash", BITCOIN_CASH_CURRENCY_CODE,
 			Coin.valueOf(1_000), 100_000)
 			.mainnet(() -> BITCOIN_CASH_MAIN_NET_PARAMS, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", BITCOIN_CASH_MAINNET_CHAIN_ID, 1_000L, "bch")
+			.test4(() -> BITCOIN_CASH_TEST4_NET_PARAMS, "000000001dd410c49a788668ce26751718cc797474d3152a5fc073dd44fd9f7b", 1_000L, 1_000L, "tbch4")
 			.addressNormalizer(BitcoinyChainSpecs::normalizeCashAddress)
 			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isBitcoinCashTokenOutput(scriptPubKey))
 			.transactionFormat(BitcoinyTransactionFormat.BITCOIN_CASH)
