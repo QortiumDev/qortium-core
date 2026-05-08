@@ -29,6 +29,7 @@ public final class BitcoinyScript {
 	private static final int OP_CLAIM_NAME = 0xb5;
 	private static final int OP_SUPPORT_CLAIM = 0xb6;
 	private static final int OP_UPDATE_CLAIM = 0xb7;
+	private static final int BCH_TOKEN_PREFIX = 0xef;
 
 	private BitcoinyScript() {
 	}
@@ -189,6 +190,10 @@ public final class BitcoinyScript {
 			default:
 				return false;
 		}
+	}
+
+	public static boolean isBitcoinCashTokenOutput(byte[] script) {
+		return script != null && script.length > 0 && (script[0] & 0xff) == BCH_TOKEN_PREFIX;
 	}
 
 	private static int readPushDataEnd(byte[] script, int offset) {

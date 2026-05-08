@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-08 - crosschain: add Bitcoin Cash Bitcoiny support
+
+Added Bitcoin Cash as a registered Bitcoiny crosschain coin with BCH wallet metadata, CashAddr address support, a fork-specific BIP122 trade reference, refreshed SSL Electrum servers, and common wallet/HTLC/ACCT coverage. Because BCH shares Bitcoin's genesis and uses fork-ID transaction signatures, the generic runtime now has a BCH signing path that keeps BCH trades distinct from BTC trades while filtering out CashToken-prefixed outputs so token UTXOs are not accidentally spent as plain BCH.
+
 ### 2026-05-07 - crosschain: add VerusCoin Bitcoiny support
 
 Added VerusCoin as a registered transparent Bitcoiny crosschain coin using the shared chain-spec model, including VRSC wallet metadata, address headers, SSL Electrum server refresh metadata, common wallet/HTLC/ACCT coverage, and chain-spec documentation. Because VRSC shares KMD's genesis block, the generic Bitcoiny ACCT uses a Verus checkpoint-based BIP122 chain reference so VRSC trades cannot collide with KMD, while VerusID, PBaaS, reserve/multicurrency transactions, and shielded wallet behavior remain outside the generic BTC-like path.

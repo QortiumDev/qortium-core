@@ -1,7 +1,6 @@
 package org.qortal.test.crosschain;
 
 import com.google.common.hash.HashCode;
-import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.ECKey;
 import org.bitcoinj.core.NetworkParameters;
@@ -61,6 +60,10 @@ public abstract class BitcoinyTests extends Common {
 	}
 
 	protected boolean supportsDeterministicHtlcTests() {
+		return true;
+	}
+
+	protected boolean supportsBitcoinjSpendTests() {
 		return true;
 	}
 
@@ -142,13 +145,14 @@ public abstract class BitcoinyTests extends Common {
 		assumeTrue(supportsDeterministicHtlcTests());
 		HtlcFixture fixture = createHtlcFixture(false);
 
-		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(fixture.bitcoiny.getBlockchainProvider(), fixture.p2shAddress, 1L);
+		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(fixture.bitcoiny, fixture.p2shAddress, 1L);
 
 		assertEquals(BitcoinyHTLC.Status.FUNDED, htlcStatus);
 	}
 
 	@Test
 	public void testBuildSpend() throws ForeignBlockchainException {
+		assumeTrue(supportsBitcoinjSpendTests());
 		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
 		String recipient = getSpendRecipient(mockBitcoiny);
 
@@ -167,6 +171,7 @@ public abstract class BitcoinyTests extends Common {
 
 	@Test
 	public void testBuildSpendMultiple() throws ForeignBlockchainException {
+		assumeTrue(supportsBitcoinjSpendTests());
 		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
 
 		Map<String, Long> amountByRecipient = new LinkedHashMap<>();
@@ -201,6 +206,7 @@ public abstract class BitcoinyTests extends Common {
 	@Test
 	public void testWalletBalanceAndSpendIgnoreFilteredOutputs() throws ForeignBlockchainException {
 		assumeTrue(supportsDeterministicWalletTests());
+		assumeTrue(supportsBitcoinjSpendTests());
 
 		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider(getCoinName() + "-mock-filtered-utxo");
 		TestBitcoiny mockBitcoiny = new TestBitcoiny(this.bitcoiny.getNetworkParameters(), blockchainProvider, getCoinSymbol(),
@@ -292,13 +298,11 @@ public abstract class BitcoinyTests extends Common {
 		byte[] redeemScriptBytes = BitcoinyHTLC.buildScript(refundKey.getPubKeyHash(), HTLC_LOCK_TIME, redeemKey.getPubKeyHash(), Crypto.hash160(EXPECTED_HTLC_SECRET));
 		String p2shAddress = mockBitcoiny.deriveP2shAddress(redeemScriptBytes);
 		byte[] p2shScriptPubKey = BitcoinyScript.scriptPubKey(params, p2shAddress);
-		Transaction fundingTransaction = new Transaction(params);
-		fundingTransaction.addOutput(Coin.valueOf(20_000L), Address.fromString(params, p2shAddress));
-		String fundingTxHash = fundingTransaction.getTxId().toString();
+		String fundingTxHash = "aa".repeat(32);
 
 		if (includeRedeemTransaction) {
 			UnspentOutput fundingOutput = new UnspentOutput(HashCode.fromString(fundingTxHash).asBytes(), 0, 10, 20_000L,
-					fundingTransaction.getOutput(0).getScriptPubKey().getProgram(), p2shAddress);
+					p2shScriptPubKey, p2shAddress);
 			Transaction redeemTransaction = BitcoinyHTLC.buildRedeemTransaction(params, Coin.valueOf(19_000L), redeemKey,
 					Collections.singletonList(fundingOutput), redeemScriptBytes, EXPECTED_HTLC_SECRET, redeemKey.getPubKeyHash());
 			String redeemTxHash = redeemTransaction.getTxId().toString();
@@ -306,9 +310,8 @@ public abstract class BitcoinyTests extends Common {
 			blockchainProvider.addRawTransaction(redeemTxHash, redeemTransaction.bitcoinSerialize());
 		} else {
 			blockchainProvider.addAddressTransaction(p2shScriptPubKey, new TransactionHash(10, fundingTxHash));
-			blockchainProvider.addTransaction(new BitcoinyTransaction(fundingTxHash, fundingTransaction.bitcoinSerialize().length, (int) fundingTransaction.getLockTime(),
-					1_700_000_000, Collections.emptyList(), Collections.singletonList(
-							new BitcoinyTransaction.Output(HashCode.fromBytes(p2shScriptPubKey).toString(), 20_000L))));
+			blockchainProvider.addTransaction(new BitcoinyTransaction(fundingTxHash, 100, 0, 1_700_000_000,
+					Collections.emptyList(), Collections.singletonList(new BitcoinyTransaction.Output(HashCode.fromBytes(p2shScriptPubKey).toString(), 20_000L))));
 		}
 
 		return new HtlcFixture(mockBitcoiny, p2shAddress);

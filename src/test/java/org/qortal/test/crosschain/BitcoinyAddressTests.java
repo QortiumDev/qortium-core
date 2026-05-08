@@ -59,6 +59,45 @@ public class BitcoinyAddressTests {
 	}
 
 	@Test
+	public void testBitcoinCashCashAddrRoundTripAndLegacyDecode() {
+		NetworkParameters params = bitcoinCashParams();
+		String legacyAddress = "1BpEi6DfDAUFd7GtittLSdBeYJvcoaVggu";
+		String cashAddress = "bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a";
+
+		BitcoinyAddress legacyDecoded = BitcoinyAddress.fromString(params, legacyAddress);
+		BitcoinyAddress cashDecoded = BitcoinyAddress.fromString(params, cashAddress);
+		BitcoinyAddress cashDecodedWithoutPrefix = BitcoinyAddress.fromString(params, cashAddress.substring("bitcoincash:".length()));
+
+		assertEquals(BitcoinyAddress.Type.P2PKH, cashDecoded.getType());
+		assertArrayEquals(legacyDecoded.getPayload(), cashDecoded.getPayload());
+		assertArrayEquals(cashDecoded.getPayload(), cashDecodedWithoutPrefix.getPayload());
+		assertEquals(cashAddress, BitcoinyAddress.fromPubKeyHash(params, cashDecoded.getPayload()).toString());
+	}
+
+	@Test
+	public void testBitcoinCashP2shCashAddrRoundTrip() {
+		NetworkParameters params = bitcoinCashParams();
+
+		String address = BitcoinyAddress.fromScriptHash(params, HASH160).toString();
+		BitcoinyAddress decoded = BitcoinyAddress.fromString(params, address);
+
+		assertTrue(address.startsWith("bitcoincash:p"));
+		assertEquals(BitcoinyAddress.Type.P2SH, decoded.getType());
+		assertArrayEquals(HASH160, decoded.getPayload());
+		assertArrayEquals(BitcoinyScript.p2shScript(HASH160), BitcoinyScript.scriptPubKey(params, address));
+	}
+
+	@Test
+	public void testBitcoinCashCashAddrRejectsMixedCase() {
+		try {
+			BitcoinyAddress.fromString(bitcoinCashParams(), "bitcoincash:Qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a");
+			fail("Expected mixed-case CashAddr to be rejected");
+		} catch (IllegalArgumentException e) {
+			// Expected
+		}
+	}
+
+	@Test
 	public void testBech32P2wpkhDecode() {
 		NetworkParameters params = bitcoinTest3Params();
 		ECKey key = ECKey.fromPrivate(HashCode.fromString("11".repeat(32)).asBytes());
@@ -118,5 +157,9 @@ public class BitcoinyAddressTests {
 
 	private static NetworkParameters bitcoinTest3Params() {
 		return BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3).getParams();
+	}
+
+	private static NetworkParameters bitcoinCashParams() {
+		return BitcoinyChainSpecs.BITCOIN_CASH.getNetwork(BitcoinyChainSpecs.MAIN).getParams();
 	}
 }

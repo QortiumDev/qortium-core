@@ -220,6 +220,11 @@ public class BitcoinyHTLC {
 	public static byte[] findHtlcSecret(Bitcoiny bitcoiny, String p2shAddress) throws ForeignBlockchainException {
 		NetworkParameters params = bitcoiny.getNetworkParameters();
 		String compoundKey = String.format("%s-%s-%d", params.getId(), p2shAddress, System.currentTimeMillis() / CACHE_TIMEOUT);
+		BitcoinyAddress htlcAddress = BitcoinyAddress.fromString(params, p2shAddress);
+		if (htlcAddress.getType() != BitcoinyAddress.Type.P2SH)
+			throw new IllegalArgumentException("HTLC address must be P2SH");
+
+		byte[] targetRedeemScriptHash = htlcAddress.getPayload();
 
 		byte[] secret = SECRET_CACHE.getOrDefault(compoundKey, NO_SECRET_CACHE_ENTRY);
 		if (secret != NO_SECRET_CACHE_ENTRY)
@@ -243,9 +248,8 @@ public class BitcoinyHTLC {
 				byte[] redeemScriptBytes = scriptChunks.get(scriptChunks.size() - 1);
 
 				byte[] redeemScriptHash = Crypto.hash160(redeemScriptBytes);
-				String inputAddress = BitcoinyAddress.fromScriptHash(params, redeemScriptHash).toString();
 
-				if (!inputAddress.equals(p2shAddress))
+				if (!Arrays.equals(redeemScriptHash, targetRedeemScriptHash))
 					// Input isn't spending our HTLC
 					continue;
 
@@ -271,14 +275,28 @@ public class BitcoinyHTLC {
 	 * <p>
 	 * @throws ForeignBlockchainException if error occurs
 	 */
+	public static Status determineHtlcStatus(Bitcoiny bitcoiny, String p2shAddress, long minimumAmount) throws ForeignBlockchainException {
+		NetworkParameters params = bitcoiny.getNetworkParameters();
+		BitcoinyAddress htlcAddress = BitcoinyAddress.fromString(params, p2shAddress);
+		if (htlcAddress.getType() != BitcoinyAddress.Type.P2SH)
+			throw new IllegalArgumentException("HTLC address must be P2SH");
+
+		return determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddress, BitcoinyScript.scriptPubKey(htlcAddress),
+				htlcAddress.getPayload(), minimumAmount);
+	}
+
 	public static Status determineHtlcStatus(BitcoinyBlockchainProvider blockchain, String p2shAddress, long minimumAmount) throws ForeignBlockchainException {
+		return determineHtlcStatus(blockchain, p2shAddress, addressToScriptPubKey(p2shAddress), addressToRedeemScriptHash(p2shAddress), minimumAmount);
+	}
+
+	private static Status determineHtlcStatus(BitcoinyBlockchainProvider blockchain, String p2shAddress, byte[] ourScriptPubKey,
+			byte[] ourRedeemScriptHash, long minimumAmount) throws ForeignBlockchainException {
 		String compoundKey = String.format("%s-%s-%d", blockchain.getNetId(), p2shAddress, System.currentTimeMillis() / CACHE_TIMEOUT);
 
 		Status cachedStatus = STATUS_CACHE.getOrDefault(compoundKey, null);
 		if (cachedStatus != null)
 			return cachedStatus;
 
-		byte[] ourScriptPubKey = addressToScriptPubKey(p2shAddress);
 		List<TransactionHash> transactionHashes = blockchain.getAddressTransactions(ourScriptPubKey, BitcoinyBlockchainProvider.INCLUDE_UNCONFIRMED);
 
 		// Sort by confirmed first, followed by ascending height
@@ -286,8 +304,6 @@ public class BitcoinyHTLC {
 
 		// Transaction cache
 		Map<String, BitcoinyTransaction> transactionsByHash = new HashMap<>();
-		// HASH160(redeem script) for this p2shAddress
-		byte[] ourRedeemScriptHash = addressToRedeemScriptHash(p2shAddress);
 
 		// Check for spends first, caching full transaction info as we progress just in case we don't return in this loop
 		for (TransactionHash transactionInfo : transactionHashes) {

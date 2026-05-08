@@ -490,7 +490,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 			long p2shFee = bitcoiny.getP2shFee(feeTimestamp);
 			final long minimumAmountA = tradeBotData.getForeignAmount() + p2shFee;
 
-			BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
+			BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddressA, minimumAmountA);
 
 			switch (htlcStatusA) {
 				case UNFUNDED:
@@ -590,7 +590,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 			long p2shFee = bitcoiny.getP2shFee(feeTimestamp);
 			long minimumAmountA = crossChainTradeData.expectedForeignAmount + p2shFee;
 
-			BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
+			BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddressA, minimumAmountA);
 
 			switch (htlcStatusA) {
 				case UNFUNDED:
@@ -735,7 +735,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		long feeTimestamp = calcFeeTimestamp(lockTimeA, crossChainTradeData.tradeTimeout);
 		long p2shFee = bitcoiny.getP2shFee(feeTimestamp);
 		long minimumAmountA = crossChainTradeData.expectedForeignAmount + p2shFee;
-		BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
+		BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddressA, minimumAmountA);
 
 		switch (htlcStatusA) {
 			case UNFUNDED:
@@ -798,7 +798,7 @@ public class BitcoinyACCTv3TradeBot implements AcctTradeBot {
 		long feeTimestamp = calcFeeTimestamp(lockTimeA, crossChainTradeData.tradeTimeout);
 		long p2shFee = bitcoiny.getP2shFee(feeTimestamp);
 		long minimumAmountA = crossChainTradeData.expectedForeignAmount + p2shFee;
-		BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
+		BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddressA, minimumAmountA);
 
 		switch (htlcStatusA) {
 			case UNFUNDED:

@@ -21,6 +21,7 @@ public final class BitcoinyChainSpecs {
 	public static final String TEST4 = "TEST4";
 	public static final String REGTEST = "REGTEST";
 	public static final String BITCOIN_CURRENCY_CODE = "BTC";
+	public static final String BITCOIN_CASH_CURRENCY_CODE = "BCH";
 	public static final String LITECOIN_CURRENCY_CODE = "LTC";
 	public static final String DOGECOIN_CURRENCY_CODE = "DOGE";
 	public static final String DIGIBYTE_CURRENCY_CODE = "DGB";
@@ -34,6 +35,7 @@ public final class BitcoinyChainSpecs {
 	public static final String LBRY_CREDITS_CURRENCY_CODE = "LBC";
 	public static final String VERGE_CURRENCY_CODE = "XVG";
 	public static final int BITCOIN_SLIP44_COIN_TYPE = 0;
+	public static final int BITCOIN_CASH_SLIP44_COIN_TYPE = 145;
 	public static final int LITECOIN_SLIP44_COIN_TYPE = 2;
 	public static final int DOGECOIN_SLIP44_COIN_TYPE = 3;
 	public static final int DASH_SLIP44_COIN_TYPE = 5;
@@ -58,6 +60,7 @@ public final class BitcoinyChainSpecs {
 	private static final String NAMECOIN_GENESIS_OUTPUT_SCRIPT = "04b620369050cd899ffbbc4e8ee51e8c4534a855bb463439d63d235d4779685d8b6f4870a238cf365ac94fa13ef9a2a22cd99d0d5ee86dcabcafce36c7acf43ce5";
 	private static final String FIRO_GENESIS_MERKLE_ROOT = "365d2aa75d061370c9aefdabac3985716b1e3b4bb7c4af4ed54f25e5aaa42783";
 	private static final String KOMODO_GENESIS_MERKLE_ROOT = "4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b";
+	private static final String BITCOIN_CASH_MAINNET_CHAIN_ID = "bip122:000000000000000000651ef99cb9fcbe";
 	private static final String VERUS_MAINNET_CHAIN_ID = "bip122:ac2cd7d37177140ea4991cf630c0b9c7";
 	private static final String LBRY_CREDITS_GENESIS_MERKLE_ROOT = "b8211c82c3d15bcd78bba57005b86fed515149a53a425eb592c07af99fe559cc";
 	private static final String PEERCOIN_GENESIS_MERKLE_ROOT = "3c2d8f85fab4d17aac558cc648a1a58acff0de6deb890c29985690052c5993c2";
@@ -109,6 +112,21 @@ public final class BitcoinyChainSpecs {
 			.bip32Headers(0x043587cf, 0x04358394)
 			.bip32SegwitHeaders(0x045f1cf6, 0x045f18bc)
 			.majorityWindow(750, 950, 1000)
+			.build();
+	private static final NetworkParameters BITCOIN_CASH_MAIN_NET_PARAMS = bitcoinCashParams("org.bitcoincash.production", NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET)
+			.genesis(1231006505L, 2083236893L, 0x1d00ffffL, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f")
+			.genesisHeader(1L, BITCOIN_GENESIS_MERKLE_ROOT)
+			.genesisTransaction(BITCOIN_GENESIS_COINBASE_SCRIPT, Coin.COIN.multiply(50L), BITCOIN_GENESIS_OUTPUT_SCRIPT)
+			.port(8333)
+			.packetMagic(0xe3e1f3e8L)
+			.addressHeaders(0, 5, 128)
+			.cashAddressPrefix("bitcoincash")
+			.coinbaseAndSubsidy(100, 210_000)
+			.bip32Headers(0x0488B21E, 0x0488ADE4)
+			.majorityWindow(750, 950, 1000)
+			.dnsSeeds("seed.flowee.cash", "seed-bch.bitcoinforks.org", "btccash-seeder.bitcoinunlimited.info",
+					"seed.bchd.cash", "seed.bch.loping.net", "dnsseed.electroncash.de", "bchseed.c3-soft.com",
+					"bch.bitjson.com")
 			.build();
 	private static final NetworkParameters LITECOIN_MAIN_NET_PARAMS = litecoinParams("org.litecoin.production", "org.litecoin.production", "ltc")
 			.genesis(1317972665L, 2084524493L, 0x1e0ffff0L, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2")
@@ -318,6 +336,14 @@ public final class BitcoinyChainSpecs {
 			.defaultSpendFeePerByte(20L)
 			.build();
 
+	public static final BitcoinyChainSpec BITCOIN_CASH = spec("BITCOINCASH", BITCOIN_CASH_SLIP44_COIN_TYPE, "Bitcoin Cash", BITCOIN_CASH_CURRENCY_CODE,
+			Coin.valueOf(1_000), 100_000)
+			.mainnet(() -> BITCOIN_CASH_MAIN_NET_PARAMS, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", BITCOIN_CASH_MAINNET_CHAIN_ID, 1_000L, "bch")
+			.addressNormalizer(BitcoinyChainSpecs::normalizeCashAddress)
+			.spendableOutputScriptFilter(scriptPubKey -> !BitcoinyScript.isBitcoinCashTokenOutput(scriptPubKey))
+			.transactionFormat(BitcoinyTransactionFormat.BITCOIN_CASH)
+			.build();
+
 	public static final BitcoinyChainSpec LITECOIN = spec("LITECOIN", LITECOIN_SLIP44_COIN_TYPE, "Litecoin", LITECOIN_CURRENCY_CODE, Coin.valueOf(10_000), 1_000_000)
 			.mainnet(() -> LITECOIN_MAIN_NET_PARAMS, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", 1_000L, "ltc")
 			.test4(() -> LITECOIN_TEST_NET_PARAMS, "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0", 1_000L, 1_000L, "tltc")
@@ -377,7 +403,7 @@ public final class BitcoinyChainSpecs {
 			.transactionFormat(BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			.build();
 
-	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, PEERCOIN, NAMECOIN, FIRO, KOMODO, VERUS, LBRY_CREDITS, VERGE);
+	private static final List<BitcoinyChainSpec> ALL = List.of(BITCOIN, BITCOIN_CASH, LITECOIN, DOGECOIN, DIGIBYTE, RAVENCOIN, DASH, PEERCOIN, NAMECOIN, FIRO, KOMODO, VERUS, LBRY_CREDITS, VERGE);
 
 	private static final List<String> CURRENCY_CODES = ALL.stream()
 			.map(BitcoinyChainSpec::getCurrencyCode)
@@ -406,6 +432,18 @@ public final class BitcoinyChainSpecs {
 				.minNonDustOutput(Coin.valueOf(546L))
 				.monetaryFormat(new MonetaryFormat())
 				.difficultyValidationFailure("Bitcoin difficulty verification is not implemented for Electrum-backed parameters");
+	}
+
+	private static StaticBitcoinyParams.Builder bitcoinCashParams(String id, String paymentProtocolId) {
+		return StaticBitcoinyParams.builder(id, paymentProtocolId, "bitcoincash")
+				.maxTarget(0x1d00ffffL)
+				.maxMoney(Coin.COIN.multiply(21_000_000L))
+				.minNonDustOutput(Coin.valueOf(546L))
+				.monetaryFormat(MonetaryFormat.BTC.noCode()
+						.code(0, BITCOIN_CASH_CURRENCY_CODE)
+						.code(3, "mBCH")
+						.code(7, "sat"))
+				.difficultyValidationFailure("Bitcoin Cash difficulty verification is not implemented for Electrum-backed parameters");
 	}
 
 	static NetworkParameters litecoinTestNetParams() {
@@ -620,6 +658,14 @@ public final class BitcoinyChainSpecs {
 		try {
 			BitcoinyAddress address = BitcoinyAddress.fromString(LITECOIN_CURRENT_P2SH_MAIN_NET_PARAMS, p2shAddress);
 			return BitcoinyAddress.fromScriptHash(targetParams, address.getPayload()).toString();
+		} catch (Exception e) {
+			return null;
+		}
+	}
+
+	private static String normalizeCashAddress(String address, NetworkParameters targetParams) {
+		try {
+			return BitcoinyAddress.fromString(targetParams, address).toString();
 		} catch (Exception e) {
 			return null;
 		}

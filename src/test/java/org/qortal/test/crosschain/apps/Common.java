@@ -146,7 +146,7 @@ public abstract class Common {
 		BitcoinyHTLC.Status htlcStatus = null;
 
 		try {
-			htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), address58, minimumAmount);
+			htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, address58, minimumAmount);
 
 			System.out.println(String.format("HTLC status: %s", htlcStatus.name()));
 		} catch (ForeignBlockchainException e) {

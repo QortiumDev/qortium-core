@@ -371,7 +371,7 @@ public class CrossChainHtlcResource {
 			long feeTimestamp = calcFeeTimestamp(lockTime, crossChainTradeData.tradeTimeout);
 			long p2shFee = bitcoiny.getP2shFee(feeTimestamp);
 			long minimumAmountA = crossChainTradeData.expectedForeignAmount + p2shFee;
-			BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
+			BitcoinyHTLC.Status htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddressA, minimumAmountA);
 
 			switch (htlcStatusA) {
 				case UNFUNDED:
@@ -611,7 +611,7 @@ public class CrossChainHtlcResource {
 				} else {
 					redeemScriptA = BitcoinyHTLC.buildScript(tradeBotData.getTradeForeignPublicKeyHash(), lockTime, crossChainTradeData.creatorForeignPKH, tradeBotData.getHashOfSecret());
 					p2shAddressA = bitcoiny.deriveP2shAddress(redeemScriptA);
-					htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
+					htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddressA, minimumAmountA);
 				}
 				LOGGER.info(String.format("Refunding P2SH address: %s", p2shAddressA));
 

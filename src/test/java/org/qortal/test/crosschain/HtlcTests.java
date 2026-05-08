@@ -95,7 +95,7 @@ public class HtlcTests extends Common {
 	public void testDetermineHtlcStatus() throws ForeignBlockchainException {
 		HtlcFixture fixture = createHtlcFixture(false);
 
-		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(fixture.bitcoiny.getBlockchainProvider(), fixture.p2shAddress, 1L);
+		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(fixture.bitcoiny, fixture.p2shAddress, 1L);
 
 		assertEquals(BitcoinyHTLC.Status.FUNDED, htlcStatus);
 	}
@@ -119,8 +119,8 @@ public class HtlcTests extends Common {
 		TestBitcoiny mockBitcoiny = new TestBitcoiny(bitcoin.getNetworkParameters(), blockchainProvider, "BTC");
 		String p2shAddress = mockBitcoiny.deriveP2shAddress(Crypto.hash160(Longs.toByteArray(12345L)));
 
-		BitcoinyHTLC.Status htlcStatus1 = BitcoinyHTLC.determineHtlcStatus(mockBitcoiny.getBlockchainProvider(), p2shAddress, 1L);
-		BitcoinyHTLC.Status htlcStatus2 = BitcoinyHTLC.determineHtlcStatus(mockBitcoiny.getBlockchainProvider(), p2shAddress, 1L);
+		BitcoinyHTLC.Status htlcStatus1 = BitcoinyHTLC.determineHtlcStatus(mockBitcoiny, p2shAddress, 1L);
+		BitcoinyHTLC.Status htlcStatus2 = BitcoinyHTLC.determineHtlcStatus(mockBitcoiny, p2shAddress, 1L);
 
 		assertEquals(BitcoinyHTLC.Status.UNFUNDED, htlcStatus1);
 		assertEquals(htlcStatus1, htlcStatus2);

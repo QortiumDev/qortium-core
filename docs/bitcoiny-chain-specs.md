@@ -13,6 +13,7 @@ Mainnet chain ids for the currently registered BTC-like chains are:
 | Chain ID | Name | Code |
 | --- | --- | --- |
 | `bip122:000000000019d6689c085ae165831e93` | `BITCOIN` | `BTC` |
+| `bip122:000000000000000000651ef99cb9fcbe` | `BITCOINCASH` | `BCH` |
 | `bip122:12a765e31ffd4059bada1e25190f6e98` | `LITECOIN` | `LTC` |
 | `bip122:1a91e3dace36e2be3bf030a65679fe82` | `DOGECOIN` | `DOGE` |
 | `bip122:00000ffd590b1485b3caadc19b22e637` | `DASH` | `DASH` |
@@ -26,9 +27,9 @@ Mainnet chain ids for the currently registered BTC-like chains are:
 | `bip122:7497ea1b465eb39f1c8f507bc877078f` | `DIGIBYTE` | `DGB` |
 | `bip122:0000006b444bc2f2ffe627be9d9e7e7a` | `RAVENCOIN` | `RVN` |
 
-VRSC shares KMD's genesis block, so its AT chain reference uses the first 16 bytes of Verus block 10000's checkpoint hash instead of the shared genesis hash.
+Bitcoin Cash shares Bitcoin's genesis block, so its AT chain reference uses the first 16 bytes of the first BCH-only fork block hash instead of the shared genesis hash. VRSC shares KMD's genesis block, so its AT chain reference uses the first 16 bytes of Verus block 10000's checkpoint hash instead of the shared genesis hash.
 
-SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, PPC `6`, NMC `7`, DGB `20`, XVG `77`, VRSC `133` (used by upstream Verus wallet metadata even though SLIP-44 labels 133 as Zcash), FIRO `136` (listed in SLIP-44 as XZC/ZCoin), LBC `140`, KMD `141`, and RVN `175`.
+SLIP-44 coin types are still kept as wallet derivation metadata: BTC `0`, LTC `2`, DOGE `3`, DASH `5`, PPC `6`, NMC `7`, DGB `20`, XVG `77`, VRSC `133` (used by upstream Verus wallet metadata even though SLIP-44 labels 133 as Zcash), FIRO `136` (listed in SLIP-44 as XZC/ZCoin), LBC `140`, KMD `141`, BCH `145`, and RVN `175`.
 
 ## Network Settings
 
@@ -38,6 +39,7 @@ Use `bitcoinyNetworks` in `settings.json` to choose the active network for BTC-l
 {
   "bitcoinyNetworks": {
     "BTC": "TEST3",
+    "BCH": "MAIN",
     "LTC": "TEST4",
     "DOGE": "MAIN",
     "DGB": "MAIN",
@@ -66,7 +68,7 @@ The shared Bitcoiny ACCT stores only the active network's BIP122 chain reference
 
 Before coding a new coin, do a compatibility precheck:
 
-- standard legacy transaction serialization and standard SIGHASH behavior, or an explicit `BitcoinyTransactionFormat`/signing hook
+- standard legacy transaction serialization and standard SIGHASH behavior, or an explicit `BitcoinyTransactionFormat`/signing hook for fork-ID, replay-protection, timestamp, or Sapling-transparent rules
 - standard P2PKH and P2SH script/address behavior, or an explicit address/script normalization hook
 - usable BIP32 headers and deterministic wallet derivation behavior
 - ElectrumX support for headers, balances, UTXOs, transaction fetches, and broadcasts
@@ -80,6 +82,8 @@ Before adding a coin, collect and verify:
 - Electrum refresh metadata for each public network, plus refreshed SSL-first hardcoded servers
 - address normalization hooks, output spendability filters, or default spend-fee hooks only when the chain needs them
 - manifest coverage in `BitcoinyChainSpecsTests` and common wallet/HTLC coverage in `RegisteredBitcoinyTests`
+
+Bitcoin Cash is registered for ordinary BCH wallet, HTLC, and ACCT trade support. BCH shares Bitcoin's genesis, so the shared Bitcoiny ACCT uses the first BCH-only fork block reference to distinguish BCH trades from BTC trades. The generic runtime accepts legacy Base58 addresses in BCH context, generates and normalizes `bitcoincash:` CashAddr addresses, and builds BCH spends and HTLC transactions with fork-ID signatures. CashTokens and P2SH32 are intentionally outside the generic path; CashToken-prefixed outputs are filtered out of wallet spend selection.
 
 Peercoin is registered for ordinary transparent PPC wallet, HTLC, and ACCT trade support. PPC uses six decimal places instead of the usual eight, so shared Bitcoiny config carries per-chain decimal metadata for formatting and Electrum verbose transaction parsing. PPC also uses Peercoin's version-3 transaction format for newly built spends and HTLC transactions so they do not include the pre-version-3 transaction timestamp field.
 

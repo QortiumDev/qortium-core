@@ -51,7 +51,8 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	@Override
 	public Transaction buildSpend(String xprv58, String recipient, long amount, Long feePerByte) {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
-				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
 			throw unsupportedBitcoinjTransactionFormat();
 
 		return super.buildSpend(xprv58, recipient, amount, feePerByte);
@@ -60,7 +61,8 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	@Override
 	public Transaction buildSpend(String xprv58, String recipient, long amount) {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
-				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
 			throw unsupportedBitcoinjTransactionFormat();
 
 		Long defaultSpendFeePerByte = this.spec.getDefaultSpendFeePerByte();
@@ -73,7 +75,8 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 	@Override
 	public Transaction buildSpendMultiple(String xprv58, Map<String, Long> amountByRecipient, Long feePerByte) {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.SAPLING_TRANSPARENT
-				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY
+				|| this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
 			throw unsupportedBitcoinjTransactionFormat();
 
 		return super.buildSpendMultiple(xprv58, amountByRecipient, feePerByte);
@@ -87,6 +90,9 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			return TimestampedLegacyTransactionBuilder.buildSpend(this, xprv58, recipient, amount, feePerByte);
 
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
+			return BitcoinCashTransactionBuilder.buildSpend(this, xprv58, recipient, amount, feePerByte);
+
 		return super.buildSpendTransaction(xprv58, recipient, amount, feePerByte);
 	}
 
@@ -97,6 +103,9 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			return TimestampedLegacyTransactionBuilder.buildSpend(this, xprv58, amountByRecipient, feePerByte);
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
+			return BitcoinCashTransactionBuilder.buildSpend(this, xprv58, amountByRecipient, feePerByte);
 
 		return super.buildSpendMultipleTransaction(xprv58, amountByRecipient, feePerByte);
 	}
@@ -112,6 +121,10 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 			return TimestampedLegacyTransactionBuilder.buildRedeem(this, redeemAmount, redeemKey, fundingOutputs,
 					redeemScriptBytes, secret, receivingAccountInfo);
 
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
+			return BitcoinCashTransactionBuilder.buildRedeem(this, redeemAmount, redeemKey, fundingOutputs,
+					redeemScriptBytes, secret, receivingAccountInfo);
+
 		return super.buildHtlcRedeemTransaction(redeemAmount, redeemKey, fundingOutputs, redeemScriptBytes, secret, receivingAccountInfo);
 	}
 
@@ -124,6 +137,10 @@ final class RegisteredBitcoiny extends ConfiguredBitcoiny {
 
 		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.TIMESTAMPED_LEGACY)
 			return TimestampedLegacyTransactionBuilder.buildRefund(this, refundAmount, refundKey, fundingOutputs,
+					redeemScriptBytes, lockTime, receivingAccountInfo);
+
+		if (this.spec.getTransactionFormat() == BitcoinyTransactionFormat.BITCOIN_CASH)
+			return BitcoinCashTransactionBuilder.buildRefund(this, refundAmount, refundKey, fundingOutputs,
 					redeemScriptBytes, lockTime, receivingAccountInfo);
 
 		return super.buildHtlcRefundTransaction(refundAmount, refundKey, fundingOutputs, redeemScriptBytes, lockTime, receivingAccountInfo);

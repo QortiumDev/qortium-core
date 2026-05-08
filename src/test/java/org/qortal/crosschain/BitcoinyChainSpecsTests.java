@@ -39,6 +39,7 @@ public class BitcoinyChainSpecsTests {
 	public void testRegisteredBitcoinyChainManifest() {
 		for (ChainManifest expected : List.of(
 				new ChainManifest("BITCOIN", "BTC", BitcoinyChainSpecs.BITCOIN_SLIP44_COIN_TYPE, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", Set.of(BitcoinyChainSpecs.MAIN, BitcoinyChainSpecs.TEST3, BitcoinyChainSpecs.REGTEST), 0, 5, 128, 0x0488B21E, 0x0488ADE4),
+				new ChainManifest("BITCOINCASH", "BCH", BitcoinyChainSpecs.BITCOIN_CASH_SLIP44_COIN_TYPE, "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", "bip122:000000000000000000651ef99cb9fcbe", Set.of(BitcoinyChainSpecs.MAIN), 0, 5, 128, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("LITECOIN", "LTC", BitcoinyChainSpecs.LITECOIN_SLIP44_COIN_TYPE, "12a765e31ffd4059bada1e25190f6e98c99d9714d334efa41a195a7e7e04bfe2", Set.of(BitcoinyChainSpecs.MAIN, BitcoinyChainSpecs.TEST4, BitcoinyChainSpecs.REGTEST), 48, 5, 176, 0x0488B21E, 0x0488ADE4),
 				new ChainManifest("DOGECOIN", "DOGE", BitcoinyChainSpecs.DOGECOIN_SLIP44_COIN_TYPE, "1a91e3dace36e2be3bf030a65679fe821aa1d6ef92e7c9902eb318182c355691", Set.of(BitcoinyChainSpecs.MAIN), 30, 22, 158, 0x02facafd, 0x02fac398),
 				new ChainManifest("DIGIBYTE", "DGB", BitcoinyChainSpecs.DIGIBYTE_SLIP44_COIN_TYPE, "7497ea1b465eb39f1c8f507bc877078fe016d6fcb6dfad3a64c98dcc6e1e8496", Set.of(BitcoinyChainSpecs.MAIN), 30, 63, 128, 0x0488B21E, 0x0488ADE4),
@@ -183,6 +184,7 @@ public class BitcoinyChainSpecsTests {
 		assertNull(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST3));
 
 		for (BitcoinyChainSpec spec : new BitcoinyChainSpec[] {
+				BitcoinyChainSpecs.BITCOIN_CASH,
 				BitcoinyChainSpecs.DOGECOIN,
 				BitcoinyChainSpecs.DIGIBYTE,
 				BitcoinyChainSpecs.RAVENCOIN,
@@ -217,6 +219,35 @@ public class BitcoinyChainSpecsTests {
 		assertTrue(bitcoinMainNetParams instanceof StaticBitcoinyParams);
 		assertNetworkParamParity(legacyParams, bitcoinMainNetParams);
 		assertEquals("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", bitcoinMainNetParams.getGenesisBlock().getHashAsString());
+	}
+
+	@Test
+	public void testBitcoinCashUsesSharedStaticMainNetParams() {
+		BitcoinyNetwork bitcoinCashMainNet = BitcoinyChainSpecs.BITCOIN_CASH.getNetwork(BitcoinyChainSpecs.MAIN);
+		NetworkParameters bitcoinCashMainNetParams = bitcoinCashMainNet.getParams();
+
+		assertTrue(bitcoinCashMainNetParams instanceof StaticBitcoinyParams);
+		assertEquals(BitcoinyTransactionFormat.BITCOIN_CASH, BitcoinyChainSpecs.BITCOIN_CASH.getTransactionFormat());
+		assertEquals("bip122:000000000000000000651ef99cb9fcbe", bitcoinCashMainNet.getChainId());
+		assertFalse(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.MAIN).getChainId().equals(bitcoinCashMainNet.getChainId()));
+		assertEquals("org.bitcoincash.production", bitcoinCashMainNetParams.getId());
+		assertEquals(NetworkParameters.PAYMENT_PROTOCOL_ID_MAINNET, bitcoinCashMainNetParams.getPaymentProtocolId());
+		assertEquals("bitcoincash", bitcoinCashMainNetParams.getUriScheme());
+		assertEquals("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f", bitcoinCashMainNetParams.getGenesisBlock().getHashAsString());
+		assertEquals(8333, bitcoinCashMainNetParams.getPort());
+		assertEquals(0xe3e1f3e8L, bitcoinCashMainNetParams.getPacketMagic() & 0xffffffffL);
+		assertEquals(0, bitcoinCashMainNetParams.getAddressHeader());
+		assertEquals(5, bitcoinCashMainNetParams.getP2SHHeader());
+		assertEquals(128, bitcoinCashMainNetParams.getDumpedPrivateKeyHeader());
+		assertNull(bitcoinCashMainNetParams.getSegwitAddressHrp());
+		assertEquals("bitcoincash", ((StaticBitcoinyParams) bitcoinCashMainNetParams).getCashAddressPrefix());
+		assertEquals(0x0488B21E, bitcoinCashMainNetParams.getBip32HeaderP2PKHpub());
+		assertEquals(0x0488ADE4, bitcoinCashMainNetParams.getBip32HeaderP2PKHpriv());
+		assertEquals(Coin.COIN.multiply(21_000_000L), bitcoinCashMainNetParams.getMaxMoney());
+		assertEquals(Coin.valueOf(546L), bitcoinCashMainNetParams.getMinNonDustOutput());
+		assertTrue(BitcoinyChainSpecs.BITCOIN_CASH.hasSpendableOutputScriptFilter());
+		assertTrue(BitcoinyChainSpecs.BITCOIN_CASH.isSpendableOutputScript(BitcoinyScript.p2pkhScript(new byte[20])));
+		assertFalse(BitcoinyChainSpecs.BITCOIN_CASH.isSpendableOutputScript(new byte[] { (byte) 0xef, 0x01 }));
 	}
 
 	@Test
@@ -706,6 +737,7 @@ public class BitcoinyChainSpecsTests {
 		Settings settings = Settings.getInstance();
 
 		assertSame(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.TEST3), settings.getBitcoinyNetwork(BitcoinyChainSpecs.BITCOIN_CURRENCY_CODE));
+		assertSame(BitcoinyChainSpecs.BITCOIN_CASH.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.BITCOIN_CASH_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST4), settings.getBitcoinyNetwork(BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE.toLowerCase()));
 		assertSame(BitcoinyChainSpecs.DOGECOIN.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DOGECOIN_CURRENCY_CODE));
 		assertSame(BitcoinyChainSpecs.DASH.getNetwork(BitcoinyChainSpecs.MAIN), settings.getBitcoinyNetwork(BitcoinyChainSpecs.DASH_CURRENCY_CODE));

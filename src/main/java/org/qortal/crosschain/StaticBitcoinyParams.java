@@ -26,6 +26,7 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 
 	private final String paymentProtocolId;
 	private final String uriScheme;
+	private final String cashAddressPrefix;
 	private final long genesisVersion;
 	private final long genesisTime;
 	private final long genesisNonce;
@@ -45,6 +46,7 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 		this.id = builder.id;
 		this.paymentProtocolId = builder.paymentProtocolId;
 		this.uriScheme = builder.uriScheme;
+		this.cashAddressPrefix = builder.cashAddressPrefix;
 		this.genesisVersion = builder.genesisVersion;
 		this.genesisTime = builder.genesisTime;
 		this.genesisNonce = builder.genesisNonce;
@@ -140,6 +142,10 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 		return this.uriScheme;
 	}
 
+	String getCashAddressPrefix() {
+		return this.cashAddressPrefix;
+	}
+
 	@Override
 	public Coin getMaxMoney() {
 		return this.maxMoney != null ? this.maxMoney : super.getMaxMoney();
@@ -169,6 +175,7 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 		private final String id;
 		private final String paymentProtocolId;
 		private final String uriScheme;
+		private String cashAddressPrefix;
 
 		private long genesisVersion = Block.BLOCK_VERSION_GENESIS;
 		private long genesisTime;
@@ -268,6 +275,11 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 			this.addressHeader = addressHeader;
 			this.p2shHeader = p2shHeader;
 			this.dumpedPrivateKeyHeader = dumpedPrivateKeyHeader;
+			return this;
+		}
+
+		Builder cashAddressPrefix(String cashAddressPrefix) {
+			this.cashAddressPrefix = cashAddressPrefix;
 			return this;
 		}
 
