@@ -10,6 +10,7 @@ import org.qortal.asset.Asset;
 import org.qortal.block.Block;
 import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.AcctMode;
+import org.qortal.crosschain.TradeDirection;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.at.ATData;
 import org.qortal.data.at.ATStateData;
@@ -481,6 +482,7 @@ public abstract class ACCTTests extends Common {
 
 			ATData atData = repository.getATRepository().fromATAddress(atAddress);
 			CrossChainTradeData tradeData = getInstance().populateTradeData(repository, atData);
+			assertEquals("Trade direction incorrect", TradeDirection.SELL_LOCAL, tradeData.tradeDirection);
 			assertEquals("AT local asset id incorrect", localAssetId, tradeData.localAssetId);
 			assertEquals("AT local asset amount incorrect", redeemAmount, tradeData.localAmount);
 			assertEquals("AT local asset balance incorrect", fundingAmount, tradeData.localBalance);

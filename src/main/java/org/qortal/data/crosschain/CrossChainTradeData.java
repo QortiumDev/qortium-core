@@ -2,6 +2,7 @@ package org.qortal.data.crosschain;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.qortal.crosschain.AcctMode;
+import org.qortal.crosschain.TradeDirection;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
@@ -32,6 +33,9 @@ public class CrossChainTradeData {
 
 	@Schema(description = "Suggested trade timeout (minutes)", example = "10080")
 	public int tradeTimeout;
+
+	@Schema(description = "Trade direction from the maker's viewpoint")
+	public TradeDirection tradeDirection;
 
 	@Schema(description = "Local-chain asset id paid by this AT")
 	public long localAssetId;

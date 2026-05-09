@@ -9,6 +9,7 @@ import org.qortal.asset.Asset;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.BitcoinyACCTv4;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
+import org.qortal.crosschain.TradeDirection;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.at.ATData;
 import org.qortal.data.crosschain.CrossChainTradeData;
@@ -221,6 +222,7 @@ public class BitcoinyACCTv4Tests extends Common {
 			assertArrayEquals(BitcoinyACCTv4.CODE_BYTES_HASH, atData.getCodeHash());
 			assertEquals(BitcoinyACCTv4.NAME, tradeData.acctName);
 			assertEquals("BITCOIN", tradeData.foreignBlockchain);
+			assertEquals(TradeDirection.SELL_LOCAL, tradeData.tradeDirection);
 			assertEquals(AcctMode.OFFERING, tradeData.mode);
 			assertTrue(tradeData.isFillableOffer());
 			assertEquals(Asset.NATIVE, tradeData.localAssetId);

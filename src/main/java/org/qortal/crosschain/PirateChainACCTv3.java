@@ -608,6 +608,7 @@ public class PirateChainACCTv3 implements ACCT {
 
 		tradeData.foreignBlockchain = ForeignBlockchainRegistry.PIRATECHAIN_NAME;
 		tradeData.acctName = NAME;
+		tradeData.tradeDirection = TradeDirection.SELL_LOCAL;
 
 		tradeData.atAddress = atAddress;
 		tradeData.creatorAddress = Crypto.toAddress(creatorPublicKey);

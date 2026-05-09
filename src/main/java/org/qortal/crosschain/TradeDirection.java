@@ -1,0 +1,9 @@
+package org.qortal.crosschain;
+
+public enum TradeDirection {
+	/** Maker escrows local-chain asset in the AT; taker pays foreign-chain funds. */
+	SELL_LOCAL,
+
+	/** Maker escrows foreign-chain funds; taker pays local-chain asset into the AT. */
+	SELL_FOREIGN
+}

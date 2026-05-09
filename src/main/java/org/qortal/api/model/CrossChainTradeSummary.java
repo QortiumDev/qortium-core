@@ -1,5 +1,6 @@
 package org.qortal.api.model;
 
+import org.qortal.crosschain.TradeDirection;
 import org.qortal.data.crosschain.CrossChainTradeData;
 
 import javax.xml.bind.annotation.XmlAccessType;
@@ -11,6 +12,8 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 public class CrossChainTradeSummary {
 
 	private long tradeTimestamp;
+
+	private TradeDirection tradeDirection;
 
 	private long localAssetId;
 
@@ -32,6 +35,7 @@ public class CrossChainTradeSummary {
 
 	public CrossChainTradeSummary(CrossChainTradeData crossChainTradeData, long timestamp) {
 		this.tradeTimestamp = timestamp;
+		this.tradeDirection = crossChainTradeData.tradeDirection;
 		this.localAssetId = crossChainTradeData.localAssetId;
 		this.localAmount = crossChainTradeData.localAmount;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
@@ -42,6 +46,10 @@ public class CrossChainTradeSummary {
 
 	public long getTradeTimestamp() {
 		return this.tradeTimestamp;
+	}
+
+	public TradeDirection getTradeDirection() {
+		return this.tradeDirection;
 	}
 
 	public long getLocalAssetId() {

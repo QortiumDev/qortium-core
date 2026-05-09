@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-09 - crosschain: expose ACCT trade direction
+
+Added an explicit ACCT trade direction field so current offers and trades report that they are `SELL_LOCAL`, meaning the maker escrows a local-chain asset in the AT and the taker pays foreign-chain funds through the HTLC flow. This prepares the API and trade model for future reverse trades without changing current trade behavior.
+
 ### 2026-05-09 - refactor: rename ACCT trade roles to maker and taker
 
 Renamed the crosschain ACCT trade-bot role terminology from Alice/Bob to maker/taker, including persisted trade-bot state names, HTLC API descriptions, comments, logs, and local helper names. The state numeric values are unchanged, keeping current behavior intact while making split-fill and future reverse-trade flows easier to reason about.

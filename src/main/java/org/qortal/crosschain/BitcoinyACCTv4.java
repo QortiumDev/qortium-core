@@ -424,6 +424,7 @@ public class BitcoinyACCTv4 implements ACCT {
 		CrossChainTradeData tradeData = new CrossChainTradeData();
 		tradeData.atAddress = atAddress;
 		tradeData.acctName = NAME;
+		tradeData.tradeDirection = TradeDirection.SELL_LOCAL;
 		tradeData.creatorAddress = Crypto.toAddress(creatorPublicKey);
 		tradeData.creationTimestamp = creationTimestamp;
 

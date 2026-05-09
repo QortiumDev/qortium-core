@@ -2,6 +2,7 @@ package org.qortal.api.model;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.qortal.crosschain.AcctMode;
+import org.qortal.crosschain.TradeDirection;
 import org.qortal.data.crosschain.CrossChainTradeData;
 
 import javax.xml.bind.annotation.XmlAccessType;
@@ -22,6 +23,9 @@ public class CrossChainOfferSummary {
 
 	@Schema(description = "AT creator's ephemeral trading key-pair represented as local-chain address")
 	private String creatorTradeAddress;
+
+	@Schema(description = "Trade direction from the maker's viewpoint")
+	private TradeDirection tradeDirection;
 
 	@Schema(description = "Local-chain asset id paid by this offer")
 	private long localAssetId;
@@ -77,6 +81,7 @@ public class CrossChainOfferSummary {
 		this.atAddress = crossChainTradeData.atAddress;
 		this.creatorAddress = crossChainTradeData.creatorAddress;
 		this.creatorTradeAddress = crossChainTradeData.creatorTradeAddress;
+		this.tradeDirection = crossChainTradeData.tradeDirection;
 		this.localAssetId = crossChainTradeData.localAssetId;
 		this.localAmount = crossChainTradeData.localAmount;
 		this.totalLocalAmount = crossChainTradeData.totalLocalAmount;
@@ -106,6 +111,10 @@ public class CrossChainOfferSummary {
 
 	public String getCreatorTradeAddress() {
 		return this.creatorTradeAddress;
+	}
+
+	public TradeDirection getTradeDirection() {
+		return this.tradeDirection;
 	}
 
 	public long getLocalAssetId() {
