@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-09 - crosschain: add reverse ACCT trades
+
+Added the first reverse cross-chain trade implementation with `BitcoinyACCTv5`, where the maker offers BTC-like foreign funds and the taker escrows a selected local-chain asset into the AT. Trade creation can now request `SELL_FOREIGN` offers, the local API checks the maker's foreign wallet balance against existing open reverse offers for the same wallet key and rejects unverifiable wallet balances, the response API builds unsigned local escrow message transactions for takers to sign, the maker trade bot funds the foreign HTLC after the local escrow locks, and deterministic tests cover v5 trade data, lock/redeem/refund/cancel behavior, registry wiring, API-facing bot routing, reverse HTLC key-role ordering, and local reservation math.
+
 ### 2026-05-09 - crosschain: document reverse ACCT trade design
 
 Added a reverse cross-chain trade design note for future `SELL_FOREIGN` ACCT flows where the maker offers foreign-chain funds and the taker escrows a chosen local-chain asset into an AT. The AT asset tests now include a deterministic feasibility check proving that a later local-asset payment can be detected by AT bytecode, bound to the payment sender, and refunded to that same sender, which confirms the core primitive needed before implementing the next ACCT version.

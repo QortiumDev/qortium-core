@@ -192,7 +192,9 @@ public class TradeBot implements Listener {
 		if (foreignBlockchain == null)
 			throw new DataException("Unsupported foreign blockchain");
 
-		ACCT acct = foreignBlockchain.getLatestAcct();
+		ACCT acct = tradeBotCreateRequest.getTradeDirection() == TradeDirection.SELL_FOREIGN
+				? BitcoinyACCTv5.getInstance()
+				: foreignBlockchain.getLatestAcct();
 
 		AcctTradeBot acctTradeBot = findTradeBotForAcct(acct);
 		if (acctTradeBot == null)

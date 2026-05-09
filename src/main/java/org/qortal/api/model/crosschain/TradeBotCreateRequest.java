@@ -2,6 +2,7 @@ package org.qortal.api.model.crosschain;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
+import org.qortal.crosschain.TradeDirection;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
@@ -12,6 +13,9 @@ public class TradeBotCreateRequest {
 
 	@Schema(description = "Trade creator's public key", example = "2zR1WFsbM7akHghqSCYKBPk6LDP8aKiQSRS1FrwoLvoB")
 	public byte[] creatorPublicKey;
+
+	@Schema(description = "Trade direction from the maker's viewpoint. Defaults to SELL_LOCAL.", example = "SELL_LOCAL")
+	public TradeDirection tradeDirection;
 
 	@Schema(description = "Local-chain asset id paid out on successful trade", example = "1")
 	public long localAssetId;
@@ -49,11 +53,18 @@ public class TradeBotCreateRequest {
 	@Schema(description = "Foreign blockchain address for receiving", example = "1BitcoinEaterAddressDontSendf59kuE")
 	public String receivingAddress;
 
+	@Schema(description = "Foreign blockchain private key, required when tradeDirection is SELL_FOREIGN")
+	public String foreignKey;
+
 	public TradeBotCreateRequest() {
 	}
 
 	public ForeignBlockchainRegistry.Entry resolveForeignBlockchain() {
 		return ForeignBlockchainRegistry.fromString(this.foreignBlockchain);
+	}
+
+	public TradeDirection getTradeDirection() {
+		return this.tradeDirection != null ? this.tradeDirection : TradeDirection.SELL_LOCAL;
 	}
 
 }

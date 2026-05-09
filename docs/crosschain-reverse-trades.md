@@ -1,7 +1,7 @@
 # Reverse ACCT Trade Design
 
-This note records the intended direction for reverse cross-chain trades before
-building the next ACCT version.
+This note records the direction for reverse cross-chain trades and the first
+single-fill implementation.
 
 ## Current direction
 
@@ -31,23 +31,26 @@ machine. The trade direction changes who escrows first, which chain confirms
 first, and which party is protected by each timeout. Keeping it separate makes
 the protocol easier to audit.
 
-## Proposed single-fill flow
+## Implemented single-fill flow
 
 1. Maker publishes a `SELL_FOREIGN` offer with foreign chain, foreign amount,
    requested local asset id, requested local amount, timeout policy, and the
    maker's foreign refund/claim details.
-2. Taker responds with their local trade address and foreign receiving details.
-3. A local-chain AT is deployed or assigned for that fill, configured with the
-   requested local asset id and expected local amount.
-4. Taker sends the requested local asset amount to the AT.
-5. The AT accepts only a payment-like transaction that pays the configured local
-   asset amount, records the payment sender as the taker, and exposes a locked
-   state.
-6. Maker sees the locked AT state and publishes the foreign-chain HTLC for the
-   taker.
-7. Taker redeems the foreign-chain HTLC, revealing the secret.
-8. Maker submits the secret to the AT and receives the locked local-chain asset.
-9. If the maker never publishes a usable foreign HTLC, the AT refunds the local
+2. The maker's trade bot deploys a `BitcoinyACCTv5` AT with zero initial local
+   asset funding and a native fee reserve for AT execution.
+3. Taker responds with their local-chain public key and foreign receiving
+   address.
+4. The response API creates taker trade-bot state and returns an unsigned
+   local-chain `MESSAGE` transaction that pays the requested local asset amount
+   to the AT with the v5 lock message attached.
+5. The taker signs and broadcasts that local escrow transaction.
+6. The AT accepts only a single payment in the configured local asset and exact
+   amount, records the payment sender as the taker, and exposes a locked state.
+7. Maker sees the locked AT state and publishes a foreign-chain HTLC funded by
+   the maker, refundable by the maker, and redeemable by the taker.
+8. Taker redeems the foreign-chain HTLC, revealing the secret.
+9. Maker submits the secret to the AT and receives the locked local-chain asset.
+10. If the maker never publishes a usable foreign HTLC, the AT refunds the local
    asset to the recorded taker after the timeout.
 
 The first implementation should be single-fill only. Reverse split fills should
@@ -66,6 +69,37 @@ HTLC and its own local AT state.
   funds become claimable by the maker.
 - Refund and redeem paths need separate tests for native asset and issued
   assets, because native balance also pays AT execution fees.
+
+## API shape
+
+- `/crosschain/tradebot/create` defaults to `SELL_LOCAL`. A reverse offer sets
+  `tradeDirection` to `SELL_FOREIGN`, passes a local-chain receiving address in
+  `receivingAddress`, passes the maker foreign wallet key in `foreignKey`, uses
+  `fundingLocalAmount = 0`, and provides a positive `nativeFeeReserve`. The
+  local API checks the maker's foreign wallet balance and subtracts this node's
+  active v5 maker-side reverse offers for the same wallet key before allowing a
+  new offer. If that balance cannot be determined, offer creation is rejected.
+- `/crosschain/tradebot/respond` uses the AT's parsed `tradeDirection` to choose
+  the response path. For `SELL_FOREIGN`, `responderPublicKey` is required,
+  `receivingAddress` is the taker's foreign-chain receiving address, and the
+  response is Base58-encoded unsigned local escrow transaction bytes rather than
+  the `"true"`/`"false"` result used by the existing `SELL_LOCAL` bot path.
+- `BitcoinyACCTv4` remains the latest default Bitcoiny ACCT for ordinary
+  `SELL_LOCAL` split-fill offers. `BitcoinyACCTv5` is selected explicitly for
+  reverse offers.
+
+## Current limits
+
+- v5 reverse trades are single-fill only.
+- The maker funds one foreign HTLC per accepted taker lock.
+- Split reverse fills should be a later ACCT version or an explicit extension,
+  because each partial fill still needs an independent foreign HTLC.
+- The initial taker response prepares the local escrow transaction locally; the
+  caller is responsible for signing and broadcasting it.
+- Maker foreign-balance reservation is a local API safeguard, not a consensus
+  rule. A modified client can still manually deploy overcommitted reverse ATs,
+  and other nodes should treat remote maker liquidity as externally verifiable
+  rather than guaranteed by the Qortium chain.
 
 ## Feasibility already covered
 

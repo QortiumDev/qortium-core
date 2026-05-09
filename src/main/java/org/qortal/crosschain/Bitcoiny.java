@@ -670,6 +670,7 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 			balance += getUnspentValueFromSuppliers(suppliers, EXECUTOR, RETRIES);
 		} catch (Exception e) {
 			LOGGER.error("Unexpected error in getWalletBalance: {}", e.getMessage(), e);
+			return null;
 		}
 
 		return balance;

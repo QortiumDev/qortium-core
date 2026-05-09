@@ -3,6 +3,7 @@ package org.qortal.crosschain;
 import org.qortal.controller.tradebot.AcctTradeBot;
 import org.qortal.controller.tradebot.BitcoinyACCTv3TradeBot;
 import org.qortal.controller.tradebot.BitcoinyACCTv4TradeBot;
+import org.qortal.controller.tradebot.BitcoinyACCTv5TradeBot;
 import org.qortal.controller.tradebot.PirateChainACCTv3TradeBot;
 import org.qortal.settings.Settings;
 import org.qortal.utils.ByteArray;
@@ -23,26 +24,32 @@ public final class ForeignBlockchainRegistry {
 
 	private static final Supplier<ACCT> BITCOINY_V3_ACCT_SUPPLIER = BitcoinyACCTv3::getInstance;
 	private static final Supplier<ACCT> BITCOINY_ACCT_SUPPLIER = BitcoinyACCTv4::getInstance;
+	private static final Supplier<ACCT> BITCOINY_V5_ACCT_SUPPLIER = BitcoinyACCTv5::getInstance;
 	private static final Supplier<ACCT> PIRATECHAIN_ACCT_SUPPLIER = PirateChainACCTv3::getInstance;
 	private static final Supplier<AcctTradeBot> BITCOINY_V3_TRADE_BOT_SUPPLIER = BitcoinyACCTv3TradeBot::getInstance;
 	private static final Supplier<AcctTradeBot> BITCOINY_TRADE_BOT_SUPPLIER = BitcoinyACCTv4TradeBot::getInstance;
+	private static final Supplier<AcctTradeBot> BITCOINY_V5_TRADE_BOT_SUPPLIER = BitcoinyACCTv5TradeBot::getInstance;
 	private static final Supplier<AcctTradeBot> PIRATECHAIN_TRADE_BOT_SUPPLIER = PirateChainACCTv3TradeBot::getInstance;
 
 	private static final ByteArray BITCOINY_V3_ACCT_CODE_HASH = ByteArray.wrap(BitcoinyACCTv3.CODE_BYTES_HASH);
 	private static final ByteArray BITCOINY_ACCT_CODE_HASH = ByteArray.wrap(BitcoinyACCTv4.CODE_BYTES_HASH);
+	private static final ByteArray BITCOINY_V5_ACCT_CODE_HASH = ByteArray.wrap(BitcoinyACCTv5.CODE_BYTES_HASH);
 	private static final ByteArray PIRATECHAIN_ACCT_CODE_HASH = ByteArray.wrap(PirateChainACCTv3.CODE_BYTES_HASH);
 
 	private static final Map<ByteArray, Supplier<ACCT>> SUPPORTED_ACCTS_BY_CODE_HASH = Map.of(
+			BITCOINY_V5_ACCT_CODE_HASH, BITCOINY_V5_ACCT_SUPPLIER,
 			BITCOINY_ACCT_CODE_HASH, BITCOINY_ACCT_SUPPLIER,
 			BITCOINY_V3_ACCT_CODE_HASH, BITCOINY_V3_ACCT_SUPPLIER,
 			PIRATECHAIN_ACCT_CODE_HASH, PIRATECHAIN_ACCT_SUPPLIER);
 
 	private static final Map<String, Supplier<ACCT>> SUPPORTED_ACCTS_BY_NAME = Map.of(
+			BitcoinyACCTv5.NAME, BITCOINY_V5_ACCT_SUPPLIER,
 			BitcoinyACCTv4.NAME, BITCOINY_ACCT_SUPPLIER,
 			BitcoinyACCTv3.NAME, BITCOINY_V3_ACCT_SUPPLIER,
 			PirateChainACCTv3.NAME, PIRATECHAIN_ACCT_SUPPLIER);
 
 	private static final Map<Class<? extends ACCT>, Supplier<AcctTradeBot>> TRADE_BOTS_BY_ACCT_CLASS = Map.of(
+			BitcoinyACCTv5.class, BITCOINY_V5_TRADE_BOT_SUPPLIER,
 			BitcoinyACCTv4.class, BITCOINY_TRADE_BOT_SUPPLIER,
 			BitcoinyACCTv3.class, BITCOINY_V3_TRADE_BOT_SUPPLIER,
 			PirateChainACCTv3.class, PIRATECHAIN_TRADE_BOT_SUPPLIER);
@@ -152,6 +159,12 @@ public final class ForeignBlockchainRegistry {
 	public static Map<ByteArray, Supplier<ACCT>> getFilteredAcctMap(Entry entry) {
 		if (entry == null)
 			return getAcctMap();
+
+		if (entry.isBitcoiny())
+			return Map.of(
+					BITCOINY_V5_ACCT_CODE_HASH, BITCOINY_V5_ACCT_SUPPLIER,
+					BITCOINY_ACCT_CODE_HASH, BITCOINY_ACCT_SUPPLIER,
+					BITCOINY_V3_ACCT_CODE_HASH, BITCOINY_V3_ACCT_SUPPLIER);
 
 		return Collections.singletonMap(entry.getAcctCodeHash(), entry.acctSupplier);
 	}

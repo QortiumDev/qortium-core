@@ -16,6 +16,9 @@ public class TradeBotRespondRequest {
 			example = "xprv___________________________________________________________________________________________________________")
 	public String foreignKey;
 
+	@Schema(description = "Responder's local-chain public key, required for SELL_FOREIGN offers")
+	public byte[] responderPublicKey;
+
 	@Schema(description = "local-chain address for receiving the offered local asset from AT", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
 	public String receivingAddress;
 
