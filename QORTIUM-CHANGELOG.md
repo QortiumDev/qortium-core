@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-09 - crosschain: document reverse ACCT trade design
+
+Added a reverse cross-chain trade design note for future `SELL_FOREIGN` ACCT flows where the maker offers foreign-chain funds and the taker escrows a chosen local-chain asset into an AT. The AT asset tests now include a deterministic feasibility check proving that a later local-asset payment can be detected by AT bytecode, bound to the payment sender, and refunded to that same sender, which confirms the core primitive needed before implementing the next ACCT version.
+
 ### 2026-05-09 - crosschain: expose ACCT trade direction
 
 Added an explicit ACCT trade direction field so current offers and trades report that they are `SELL_LOCAL`, meaning the maker escrows a local-chain asset in the AT and the taker pays foreign-chain funds through the HTLC flow. This prepares the API and trade model for future reverse trades without changing current trade behavior.

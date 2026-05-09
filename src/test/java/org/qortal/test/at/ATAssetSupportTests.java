@@ -203,6 +203,39 @@ public class ATAssetSupportTests extends Common {
 	}
 
 	@Test
+	public void testAtCanBindIncomingAssetEscrowToSenderAndRefund() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount issuer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "bob");
+			long configuredAssetId = AssetUtils.issueAsset(repository, "alice", "AT-REVERSE-ESCROW", 100L * Amounts.MULTIPLIER, true);
+
+			transferAsset(repository, issuer, taker.getAddress(), configuredAssetId, PAYOUT_AMOUNT);
+			long takerInitialBalance = taker.getConfirmedBalance(configuredAssetId);
+
+			byte[] creationBytes = buildSenderBoundAssetRefundAT(configuredAssetId, PAYOUT_AMOUNT);
+			DeployAtTransaction deployAtTransaction = AtUtils.doDeployAT(repository, issuer, creationBytes, 0L, configuredAssetId, NATIVE_FEE_RESERVE);
+			Account atAccount = deployAtTransaction.getATAccount();
+			String atAddress = atAccount.getAddress();
+
+			// First AT execution sees no taker payment and stops for the next block.
+			BlockUtils.mintBlock(repository);
+
+			transferAsset(repository, taker, atAddress, configuredAssetId, PAYOUT_AMOUNT);
+			assertEquals(takerInitialBalance - PAYOUT_AMOUNT, taker.getConfirmedBalance(configuredAssetId));
+
+			BlockUtils.mintBlock(repository);
+
+			ATStateData atStateData = repository.getATRepository().getLatestATState(atAddress);
+
+			assertEquals(configuredAssetId, extractLong(atStateData, 0));
+			assertEquals(PAYOUT_AMOUNT, extractLong(atStateData, 1));
+			assertEquals(PAYOUT_AMOUNT, extractLong(atStateData, 2));
+			assertEquals(takerInitialBalance, taker.getConfirmedBalance(configuredAssetId));
+			assertEquals(0L, atAccount.getConfirmedBalance(configuredAssetId));
+		}
+	}
+
+	@Test
 	public void testNonNativeAtCanPayNativeSurplusAfterFees() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount deployer = Common.getTestAccount(repository, "alice");
@@ -684,6 +717,66 @@ public class ATAssetSupportTests extends Common {
 				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT.compile(ChainFunctionCode.GET_AMOUNT_FROM_TX_IN_A_FOR_ASSET.value,
 						addrNativeAmount, addrNativeAssetId));
 				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(ChainFunctionCode.GET_PAYMENT_COUNT_FROM_TX_IN_A.value, addrPaymentCount));
+				codeByteBuffer.put(OpCode.FIN_IMD.compile());
+			} catch (CompilationException e) {
+				throw new IllegalStateException("Unable to compile AT?", e);
+			}
+		}
+
+		return toCreationBytes(codeByteBuffer, dataByteBuffer);
+	}
+
+	private static byte[] buildSenderBoundAssetRefundAT(long configuredAssetId, long expectedAmount) {
+		int addrCounter = 0;
+		final int addrAcceptedAssetId = addrCounter++;
+		final int addrAcceptedAmount = addrCounter++;
+		final int addrRefundedAmount = addrCounter++;
+		final int addrExpectedAssetId = addrCounter++;
+		final int addrExpectedAmount = addrCounter++;
+		final int addrLastTxTimestamp = addrCounter++;
+		final int addrNoTransaction = addrCounter++;
+		final int addrIncomingAmount = addrCounter++;
+		final int addrTakerAddress = addrCounter;
+		addrCounter += 4;
+		final int addrTakerAddressPointer = addrCounter++;
+
+		ByteBuffer dataByteBuffer = ByteBuffer.allocate(addrCounter * MachineState.VALUE_SIZE);
+		dataByteBuffer.putLong(addrExpectedAssetId * MachineState.VALUE_SIZE, configuredAssetId);
+		dataByteBuffer.putLong(addrExpectedAmount * MachineState.VALUE_SIZE, expectedAmount);
+		dataByteBuffer.putLong(addrTakerAddressPointer * MachineState.VALUE_SIZE, addrTakerAddress);
+
+		ByteBuffer codeByteBuffer = ByteBuffer.allocate(768);
+		Integer labelFindPayment = null;
+		Integer labelCheckPayment = null;
+
+		for (int pass = 0; pass < 2; ++pass) {
+			codeByteBuffer.clear();
+
+			try {
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_CREATION_TIMESTAMP, addrLastTxTimestamp));
+				codeByteBuffer.put(OpCode.SET_PCS.compile());
+
+				labelFindPayment = codeByteBuffer.position();
+
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PUT_TX_AFTER_TIMESTAMP_INTO_A, addrLastTxTimestamp));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.CHECK_A_IS_ZERO, addrNoTransaction));
+				codeByteBuffer.put(OpCode.BZR_DAT.compile(addrNoTransaction, OpCode.calcOffset(codeByteBuffer, labelCheckPayment)));
+				codeByteBuffer.put(OpCode.STP_IMD.compile());
+
+				labelCheckPayment = codeByteBuffer.position();
+
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_TIMESTAMP_FROM_TX_IN_A, addrLastTxTimestamp));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT.compile(ChainFunctionCode.GET_AMOUNT_FROM_TX_IN_A_FOR_ASSET.value,
+						addrIncomingAmount, addrExpectedAssetId));
+				codeByteBuffer.put(OpCode.BNE_DAT.compile(addrIncomingAmount, addrExpectedAmount, OpCode.calcOffset(codeByteBuffer, labelFindPayment)));
+
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(ChainFunctionCode.GET_ASSET_ID_FROM_TX_IN_A.value, addrAcceptedAssetId));
+				codeByteBuffer.put(OpCode.SET_DAT.compile(addrAcceptedAmount, addrIncomingAmount));
+				codeByteBuffer.put(OpCode.EXT_FUN.compile(FunctionCode.PUT_ADDRESS_FROM_TX_IN_A_INTO_B));
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.GET_B_IND, addrTakerAddressPointer));
+				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.SET_B_IND, addrTakerAddressPointer));
+				codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT_2.compile(ChainFunctionCode.PAY_ASSET_AMOUNT_TO_B.value,
+						addrRefundedAmount, addrExpectedAssetId, addrExpectedAmount));
 				codeByteBuffer.put(OpCode.FIN_IMD.compile());
 			} catch (CompilationException e) {
 				throw new IllegalStateException("Unable to compile AT?", e);
