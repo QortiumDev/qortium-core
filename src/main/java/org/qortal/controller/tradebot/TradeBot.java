@@ -215,6 +215,11 @@ public class TradeBot implements Listener {
 	 */
 	public ResponseResult startResponse(Repository repository, ATData atData, ACCT acct,
 			CrossChainTradeData crossChainTradeData, String foreignKey, String receivingAddress) throws DataException {
+		return startResponse(repository, atData, acct, crossChainTradeData, foreignKey, receivingAddress, null);
+	}
+
+	public ResponseResult startResponse(Repository repository, ATData atData, ACCT acct,
+			CrossChainTradeData crossChainTradeData, String foreignKey, String receivingAddress, Long fillLocalAmount) throws DataException {
 		AcctTradeBot acctTradeBot = findTradeBotForAcct(acct);
 		if (acctTradeBot == null) {
 			LOGGER.debug(() -> String.format("Couldn't find ACCT trade-bot for AT %s", atData.getATAddress()));
@@ -222,8 +227,11 @@ public class TradeBot implements Listener {
 		}
 
 		// Check Alice doesn't already have an existing, on-going trade-bot entry for this AT.
-		if (repository.getCrossChainRepository().existsTradeWithAtExcludingStates(atData.getATAddress(), acctTradeBot.getEndStates()))
+		if (!(acct instanceof BitcoinyACCTv4) && repository.getCrossChainRepository().existsTradeWithAtExcludingStates(atData.getATAddress(), acctTradeBot.getEndStates()))
 			return ResponseResult.TRADE_ALREADY_EXISTS;
+
+		if (acctTradeBot instanceof BitcoinyACCTv4TradeBot)
+			return ((BitcoinyACCTv4TradeBot) acctTradeBot).startResponse(repository, atData, acct, crossChainTradeData, foreignKey, receivingAddress, fillLocalAmount);
 
 		return acctTradeBot.startResponse(repository, atData, acct, crossChainTradeData, foreignKey, receivingAddress);
 	}

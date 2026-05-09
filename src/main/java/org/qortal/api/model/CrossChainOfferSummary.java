@@ -29,6 +29,27 @@ public class CrossChainOfferSummary {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long localAmount;
 
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long totalLocalAmount;
+
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long remainingLocalAmount;
+
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long activeLocalAmount;
+
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long completedLocalAmount;
+
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long minFillLocalAmount;
+
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long maxFillLocalAmount;
+
+	private int activeFillCount;
+	private int availableFillSlots;
+
 	@Schema(description = "Foreign blockchain amount")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long foreignAmount;
@@ -58,6 +79,14 @@ public class CrossChainOfferSummary {
 		this.creatorTradeAddress = crossChainTradeData.creatorTradeAddress;
 		this.localAssetId = crossChainTradeData.localAssetId;
 		this.localAmount = crossChainTradeData.localAmount;
+		this.totalLocalAmount = crossChainTradeData.totalLocalAmount;
+		this.remainingLocalAmount = crossChainTradeData.remainingLocalAmount;
+		this.activeLocalAmount = crossChainTradeData.activeLocalAmount;
+		this.completedLocalAmount = crossChainTradeData.completedLocalAmount;
+		this.minFillLocalAmount = crossChainTradeData.minFillLocalAmount;
+		this.maxFillLocalAmount = crossChainTradeData.maxFillLocalAmount;
+		this.activeFillCount = crossChainTradeData.activeFillCount;
+		this.availableFillSlots = crossChainTradeData.availableFillSlots;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
 		this.tradeTimeout = crossChainTradeData.tradeTimeout;
 		this.mode = crossChainTradeData.mode;
@@ -85,6 +114,38 @@ public class CrossChainOfferSummary {
 
 	public long getLocalAmount() {
 		return this.localAmount;
+	}
+
+	public long getTotalLocalAmount() {
+		return this.totalLocalAmount;
+	}
+
+	public long getRemainingLocalAmount() {
+		return this.remainingLocalAmount;
+	}
+
+	public long getActiveLocalAmount() {
+		return this.activeLocalAmount;
+	}
+
+	public long getCompletedLocalAmount() {
+		return this.completedLocalAmount;
+	}
+
+	public long getMinFillLocalAmount() {
+		return this.minFillLocalAmount;
+	}
+
+	public long getMaxFillLocalAmount() {
+		return this.maxFillLocalAmount;
+	}
+
+	public int getActiveFillCount() {
+		return this.activeFillCount;
+	}
+
+	public int getAvailableFillSlots() {
+		return this.availableFillSlots;
 	}
 
 	public long getForeignAmount() {

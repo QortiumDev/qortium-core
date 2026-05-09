@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-08 - crosschain: add split-fill ACCT offers
+
+Added a new Bitcoiny ACCT v4 and trade-bot flow that lets one local-asset offer be filled in separate slots instead of forcing a single buyer to take the whole amount. Trade creation can now set minimum and maximum local fill amounts, response calls can request a specific fill size, offer summaries expose total, remaining, active, completed, and slot counts, and maker-side fill records are saved and backed up so active split fills can be tracked across restarts. BTC-like chains now create v4 offers by default while existing v3 and Pirate ACCT parsers remain available for recognized code hashes.
+
 ### 2026-05-08 - crosschain: support local asset ACCT trades
 
 Updated the crosschain ACCT and trade-bot flow so offers can trade any spendable local-chain asset, not only the native asset. Trade creation, offer/trade summaries, price and websocket filters, trade-bot import/export data, AT payout bytecode, and repository storage now carry a `localAssetId` and `localAmount`; fresh Qortium chains use the new schema directly without keeping old Qortal trade-bot migration paths.

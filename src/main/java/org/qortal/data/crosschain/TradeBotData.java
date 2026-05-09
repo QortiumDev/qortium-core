@@ -55,6 +55,7 @@ public class TradeBotData {
 
 	private byte[] lastTransactionSignature;
 	private Integer lockTimeA;
+	private Integer fillSlotIndex;
 
 	// Could be a foreign-chain or local-chain account identifier.
 	private byte[] receivingAccountInfo;
@@ -71,6 +72,21 @@ public class TradeBotData {
 			String foreignBlockchain, byte[] tradeForeignPublicKey, byte[] tradeForeignPublicKeyHash,
 			long foreignAmount, String foreignKey,
 			byte[] lastTransactionSignature, Integer lockTimeA, byte[] receivingAccountInfo) {
+		this(tradePrivateKey, acctName, tradeState, tradeStateValue,
+				creatorAddress, atAddress, timestamp, localAssetId, localAmount,
+				tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
+				secret, hashOfSecret, foreignBlockchain, tradeForeignPublicKey, tradeForeignPublicKeyHash,
+				foreignAmount, foreignKey, lastTransactionSignature, lockTimeA, null, receivingAccountInfo);
+	}
+
+	public TradeBotData(byte[] tradePrivateKey, String acctName, String tradeState, int tradeStateValue,
+			String creatorAddress, String atAddress,
+			long timestamp, long localAssetId, long localAmount,
+			byte[] tradeLocalPublicKey, byte[] tradeLocalPublicKeyHash, String tradeLocalAddress,
+			byte[] secret, byte[] hashOfSecret,
+			String foreignBlockchain, byte[] tradeForeignPublicKey, byte[] tradeForeignPublicKeyHash,
+			long foreignAmount, String foreignKey,
+			byte[] lastTransactionSignature, Integer lockTimeA, Integer fillSlotIndex, byte[] receivingAccountInfo) {
 		this.tradePrivateKey = tradePrivateKey;
 		this.acctName = acctName;
 		this.tradeState = tradeState;
@@ -92,6 +108,7 @@ public class TradeBotData {
 		this.foreignKey = foreignKey;
 		this.lastTransactionSignature = lastTransactionSignature;
 		this.lockTimeA = lockTimeA;
+		this.fillSlotIndex = fillSlotIndex;
 		this.receivingAccountInfo = receivingAccountInfo;
 	}
 
@@ -203,6 +220,14 @@ public class TradeBotData {
 		this.lockTimeA = lockTimeA;
 	}
 
+	public Integer getFillSlotIndex() {
+		return this.fillSlotIndex;
+	}
+
+	public void setFillSlotIndex(Integer fillSlotIndex) {
+		this.fillSlotIndex = fillSlotIndex;
+	}
+
 	public byte[] getReceivingAccountInfo() {
 		return this.receivingAccountInfo;
 	}
@@ -230,6 +255,7 @@ public class TradeBotData {
 		jsonObject.put("foreignAmount", this.getForeignAmount());
 		if (this.getLastTransactionSignature() != null) jsonObject.put("lastTransactionSignature", Base58.encode(this.getLastTransactionSignature()));
 		jsonObject.put("lockTimeA", this.getLockTimeA());
+		jsonObject.put("fillSlotIndex", this.getFillSlotIndex());
 		if (this.getReceivingAccountInfo() != null) jsonObject.put("receivingAccountInfo", Base58.encode(this.getReceivingAccountInfo()));
 		return jsonObject;
 	}
@@ -257,6 +283,7 @@ public class TradeBotData {
 				json.isNull("foreignKey") ? null : json.getString("foreignKey"),
 				json.isNull("lastTransactionSignature") ? null : Base58.decode(json.getString("lastTransactionSignature")),
 				json.isNull("lockTimeA") ? null : json.getInt("lockTimeA"),
+				json.isNull("fillSlotIndex") ? null : json.getInt("fillSlotIndex"),
 				json.isNull("receivingAccountInfo") ? null : Base58.decode(json.getString("receivingAccountInfo"))
 		);
 	}

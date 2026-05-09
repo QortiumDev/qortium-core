@@ -640,7 +640,12 @@ public class HSQLDBDatabaseUpdates {
 							+ "foreign_blockchain VARCHAR(40), "
 							+ "trade_foreign_public_key VARBINARY(33) NOT NULL, trade_foreign_public_key_hash VARBINARY(32) NOT NULL, "
 							+ "foreign_amount BIGINT NOT NULL, foreign_key VARCHAR(200), last_transaction_signature Signature, locktime_a BIGINT, "
-							+ "receiving_account_info VARBINARY(128) NOT NULL, PRIMARY KEY (trade_private_key))");
+							+ "fill_slot_index INTEGER, receiving_account_info VARBINARY(128) NOT NULL, PRIMARY KEY (trade_private_key))");
+					stmt.execute("CREATE TABLE TradeBotFills (at_address AccountAddress NOT NULL, hash_of_secret VARBINARY(32) NOT NULL, "
+							+ "slot_index INTEGER NOT NULL, fill_state VARCHAR(40) NOT NULL, updated_when BIGINT NOT NULL, "
+							+ "partner_address AccountAddress NOT NULL, partner_foreign_public_key_hash VARBINARY(32) NOT NULL, "
+							+ "locktime_a INTEGER NOT NULL, local_amount AssetAmount NOT NULL, foreign_amount BIGINT NOT NULL, "
+							+ "p2sh_address VARCHAR(128) NOT NULL, PRIMARY KEY (at_address, hash_of_secret))");
 					break;
 
 				case 21:

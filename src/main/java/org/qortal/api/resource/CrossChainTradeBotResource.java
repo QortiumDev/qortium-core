@@ -24,8 +24,8 @@ import org.qortal.controller.Controller;
 import org.qortal.controller.tradebot.AcctTradeBot;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.ACCT;
-import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.Bitcoiny;
+import org.qortal.crosschain.BitcoinyACCTv4;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.ForeignBlockchain;
 import org.qortal.crypto.Crypto;
@@ -146,6 +146,11 @@ public class CrossChainTradeBotResource {
 		if (tradeBotCreateRequest.fundingLocalAmount < tradeBotCreateRequest.localAmount)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ORDER_SIZE_TOO_SMALL);
 
+		long minFillLocalAmount = tradeBotCreateRequest.minFillLocalAmount != null ? tradeBotCreateRequest.minFillLocalAmount : tradeBotCreateRequest.localAmount;
+		long maxFillLocalAmount = tradeBotCreateRequest.maxFillLocalAmount != null ? tradeBotCreateRequest.maxFillLocalAmount : tradeBotCreateRequest.localAmount;
+		if (minFillLocalAmount <= 0 || maxFillLocalAmount < minFillLocalAmount || maxFillLocalAmount > tradeBotCreateRequest.localAmount)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
 		final Long minLatestBlockTimestamp = NTP.getTime() - (60 * 60 * 1000L);
 		if (!Controller.getInstance().isUpToDate(minLatestBlockTimestamp))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.BLOCKCHAIN_NEEDS_SYNC);
@@ -159,7 +164,10 @@ public class CrossChainTradeBotResource {
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ASSET_ID);
 
 			if (!localAssetData.isDivisible()
-					&& (tradeBotCreateRequest.localAmount % Amounts.MULTIPLIER != 0 || tradeBotCreateRequest.fundingLocalAmount % Amounts.MULTIPLIER != 0))
+					&& (tradeBotCreateRequest.localAmount % Amounts.MULTIPLIER != 0
+					|| tradeBotCreateRequest.fundingLocalAmount % Amounts.MULTIPLIER != 0
+					|| minFillLocalAmount % Amounts.MULTIPLIER != 0
+					|| maxFillLocalAmount % Amounts.MULTIPLIER != 0))
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			if (creator.getConfirmedBalance(tradeBotCreateRequest.localAssetId) < tradeBotCreateRequest.fundingLocalAmount)
@@ -278,7 +286,7 @@ public class CrossChainTradeBotResource {
 			if (bitcoiny == null || !bitcoiny.isValidWalletKey(tradeBotRespondRequest.foreignKey))
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
-			if (crossChainTradeData.mode != AcctMode.OFFERING)
+			if (!crossChainTradeData.isFillableOffer())
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			// Check if there is a buy or a cancel request in progress for this trade
@@ -293,7 +301,7 @@ public class CrossChainTradeBotResource {
 			}
 
 			AcctTradeBot.ResponseResult result = TradeBot.getInstance().startResponse(repository, atData, acct, crossChainTradeData,
-					tradeBotRespondRequest.foreignKey, tradeBotRespondRequest.receivingAddress);
+					tradeBotRespondRequest.foreignKey, tradeBotRespondRequest.receivingAddress, tradeBotRespondRequest.fillLocalAmount);
 
 			switch (result) {
 				case OK:
@@ -304,6 +312,9 @@ public class CrossChainTradeBotResource {
 
 				case NETWORK_ISSUE:
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE);
+
+				case INVALID_CRITERIA:
+					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 				default:
 					return "false";
@@ -343,6 +354,8 @@ public class CrossChainTradeBotResource {
 				ACCT acctUsingAtData = TradeBot.getInstance().getAcctUsingAtData(atData);
 				if (acctUsingAtData == null)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+				if (acctUsingAtData instanceof BitcoinyACCTv4)
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Multiple response batching is not supported for split-fill offers.");
 				CrossChainTradeData crossChainTradeData = acctUsingAtData.populateTradeData(repository, atData);
 				if (crossChainTradeData == null)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
@@ -373,7 +386,7 @@ public class CrossChainTradeBotResource {
 				if (!bitcoiny.isValidWalletKey(respondRequests.foreignKey))
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
-				if (crossChainTradeData.mode != AcctMode.OFFERING)
+				if (!crossChainTradeData.isFillableOffer())
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 				// Check if there is a buy or a cancel request in progress for this trade
@@ -408,6 +421,9 @@ public class CrossChainTradeBotResource {
 
 				case NETWORK_ISSUE:
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE);
+
+				case INVALID_CRITERIA:
+					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 				default:
 					return "false";

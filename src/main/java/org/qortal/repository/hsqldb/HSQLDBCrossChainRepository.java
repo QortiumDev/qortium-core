@@ -1,6 +1,7 @@
 package org.qortal.repository.hsqldb;
 
 import org.qortal.data.crosschain.TradeBotData;
+import org.qortal.data.crosschain.TradeBotFillData;
 import org.qortal.repository.CrossChainRepository;
 import org.qortal.repository.DataException;
 
@@ -26,7 +27,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 				+ "trade_local_public_key, trade_local_public_key_hash, "
 				+ "trade_local_address, secret, hash_of_secret, "
 				+ "foreign_blockchain, trade_foreign_public_key, trade_foreign_public_key_hash, "
-				+ "foreign_amount, foreign_key, last_transaction_signature, locktime_a, receiving_account_info "
+				+ "foreign_amount, foreign_key, last_transaction_signature, locktime_a, fill_slot_index, receiving_account_info "
 				+ "FROM TradeBotStates "
 				+ "WHERE trade_private_key = ?";
 
@@ -56,7 +57,10 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 			Integer lockTimeA = resultSet.getInt(20);
 			if (lockTimeA == 0 && resultSet.wasNull())
 				lockTimeA = null;
-			byte[] receivingAccountInfo = resultSet.getBytes(21);
+			Integer fillSlotIndex = resultSet.getInt(21);
+			if (fillSlotIndex == 0 && resultSet.wasNull())
+				fillSlotIndex = null;
+			byte[] receivingAccountInfo = resultSet.getBytes(22);
 
 			return new TradeBotData(tradePrivateKey, acctName,
 					tradeState, tradeStateValue,
@@ -64,7 +68,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 					tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
 					secret, hashOfSecret,
 					foreignBlockchain, tradeForeignPublicKey, tradeForeignPublicKeyHash,
-					foreignAmount, foreignKey, lastTransactionSignature, lockTimeA, receivingAccountInfo);
+					foreignAmount, foreignKey, lastTransactionSignature, lockTimeA, fillSlotIndex, receivingAccountInfo);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch trade-bot trading state from repository", e);
 		}
@@ -108,7 +112,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 				+ "trade_local_public_key, trade_local_public_key_hash, "
 				+ "trade_local_address, secret, hash_of_secret, "
 				+ "foreign_blockchain, trade_foreign_public_key, trade_foreign_public_key_hash, "
-				+ "foreign_amount, foreign_key, last_transaction_signature, locktime_a, receiving_account_info "
+				+ "foreign_amount, foreign_key, last_transaction_signature, locktime_a, fill_slot_index, receiving_account_info "
 				+ "FROM TradeBotStates";
 
 		List<TradeBotData> allTradeBotData = new ArrayList<>();
@@ -141,7 +145,10 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 				Integer lockTimeA = resultSet.getInt(21);
 				if (lockTimeA == 0 && resultSet.wasNull())
 					lockTimeA = null;
-				byte[] receivingAccountInfo = resultSet.getBytes(22);
+				Integer fillSlotIndex = resultSet.getInt(22);
+				if (fillSlotIndex == 0 && resultSet.wasNull())
+					fillSlotIndex = null;
+				byte[] receivingAccountInfo = resultSet.getBytes(23);
 
 				TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, acctName,
 						tradeState, tradeStateValue,
@@ -149,7 +156,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 						tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
 						secret, hashOfSecret,
 						foreignBlockchain, tradeForeignPublicKey, tradeForeignPublicKeyHash,
-						foreignAmount, foreignKey, lastTransactionSignature, lockTimeA, receivingAccountInfo);
+						foreignAmount, foreignKey, lastTransactionSignature, lockTimeA, fillSlotIndex, receivingAccountInfo);
 				allTradeBotData.add(tradeBotData);
 			} while (resultSet.next());
 
@@ -184,12 +191,126 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 				.bind("foreign_key", tradeBotData.getForeignKey())
 				.bind("last_transaction_signature", tradeBotData.getLastTransactionSignature())
 				.bind("locktime_a", tradeBotData.getLockTimeA())
+				.bind("fill_slot_index", tradeBotData.getFillSlotIndex())
 				.bind("receiving_account_info", tradeBotData.getReceivingAccountInfo());
 
 		try {
 			saveHelper.execute(this.repository);
 		} catch (SQLException e) {
 			throw new DataException("Unable to save trade bot data into repository", e);
+		}
+	}
+
+	@Override
+	public List<TradeBotFillData> getTradeBotFillData(String atAddress) throws DataException {
+		String sql = "SELECT slot_index, fill_state, updated_when, partner_address, partner_foreign_public_key_hash, "
+				+ "hash_of_secret, locktime_a, local_amount, foreign_amount, p2sh_address "
+				+ "FROM TradeBotFills WHERE at_address = ?";
+
+		List<TradeBotFillData> fills = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, atAddress)) {
+			if (resultSet == null)
+				return fills;
+
+			do {
+				fills.add(new TradeBotFillData(atAddress,
+						resultSet.getInt(1),
+						resultSet.getString(2),
+						resultSet.getLong(3),
+						resultSet.getString(4),
+						resultSet.getBytes(5),
+						resultSet.getBytes(6),
+						resultSet.getInt(7),
+						resultSet.getLong(8),
+						resultSet.getLong(9),
+						resultSet.getString(10)));
+			} while (resultSet.next());
+
+			return fills;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch trade-bot fills from repository", e);
+		}
+	}
+
+	@Override
+	public List<TradeBotFillData> getAllTradeBotFillData() throws DataException {
+		String sql = "SELECT at_address, slot_index, fill_state, updated_when, partner_address, partner_foreign_public_key_hash, "
+				+ "hash_of_secret, locktime_a, local_amount, foreign_amount, p2sh_address "
+				+ "FROM TradeBotFills";
+
+		List<TradeBotFillData> fills = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
+			if (resultSet == null)
+				return fills;
+
+			do {
+				fills.add(new TradeBotFillData(resultSet.getString(1),
+						resultSet.getInt(2),
+						resultSet.getString(3),
+						resultSet.getLong(4),
+						resultSet.getString(5),
+						resultSet.getBytes(6),
+						resultSet.getBytes(7),
+						resultSet.getInt(8),
+						resultSet.getLong(9),
+						resultSet.getLong(10),
+						resultSet.getString(11)));
+			} while (resultSet.next());
+
+			return fills;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch all trade-bot fills from repository", e);
+		}
+	}
+
+	@Override
+	public TradeBotFillData getTradeBotFillData(String atAddress, byte[] hashOfSecret) throws DataException {
+		String sql = "SELECT slot_index, fill_state, updated_when, partner_address, partner_foreign_public_key_hash, "
+				+ "locktime_a, local_amount, foreign_amount, p2sh_address "
+				+ "FROM TradeBotFills WHERE at_address = ? AND hash_of_secret = ?";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, atAddress, hashOfSecret)) {
+			if (resultSet == null)
+				return null;
+
+			return new TradeBotFillData(atAddress,
+					resultSet.getInt(1),
+					resultSet.getString(2),
+					resultSet.getLong(3),
+					resultSet.getString(4),
+					resultSet.getBytes(5),
+					hashOfSecret,
+					resultSet.getInt(6),
+					resultSet.getLong(7),
+					resultSet.getLong(8),
+					resultSet.getString(9));
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch trade-bot fill from repository", e);
+		}
+	}
+
+	@Override
+	public void save(TradeBotFillData tradeBotFillData) throws DataException {
+		HSQLDBSaver saveHelper = new HSQLDBSaver("TradeBotFills");
+
+		saveHelper.bind("at_address", tradeBotFillData.getAtAddress())
+				.bind("hash_of_secret", tradeBotFillData.getHashOfSecret())
+				.bind("slot_index", tradeBotFillData.getSlotIndex())
+				.bind("fill_state", tradeBotFillData.getState())
+				.bind("updated_when", tradeBotFillData.getTimestamp())
+				.bind("partner_address", tradeBotFillData.getPartnerAddress())
+				.bind("partner_foreign_public_key_hash", tradeBotFillData.getPartnerForeignPublicKeyHash())
+				.bind("locktime_a", tradeBotFillData.getLockTimeA())
+				.bind("local_amount", tradeBotFillData.getLocalAmount())
+				.bind("foreign_amount", tradeBotFillData.getForeignAmount())
+				.bind("p2sh_address", tradeBotFillData.getP2shAddress());
+
+		try {
+			saveHelper.execute(this.repository);
+		} catch (SQLException e) {
+			throw new DataException("Unable to save trade-bot fill into repository", e);
 		}
 	}
 

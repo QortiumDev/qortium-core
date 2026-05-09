@@ -8,7 +8,6 @@ import org.json.JSONObject;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.controller.tradebot.TradeStates;
 import org.qortal.crosschain.ACCT;
-import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crypto.Crypto;
@@ -628,8 +627,8 @@ public class ForeignFeesManager implements Listener {
                 continue;
             }
 
-            // if the trade is in offering mode, then add it to return list
-            if (crossChainTrade.mode == AcctMode.OFFERING) {
+            // if the trade is in fillable offering mode, then add it to return list
+            if (crossChainTrade.isFillableOffer()) {
                 crossChainTradeOffers.add(crossChainTrade);
             }
         }
@@ -654,8 +653,8 @@ public class ForeignFeesManager implements Listener {
             return Optional.empty();
         }
 
-        // if the trade is in offering mode, then add it to return list
-        if (crossChainTrade.mode == AcctMode.OFFERING) {
+        // if the trade is in fillable offering mode, then add it to return list
+        if (crossChainTrade.isFillableOffer()) {
             return Optional.of(crossChainTrade);
         }
         else {

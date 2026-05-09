@@ -108,8 +108,10 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 						crossChainOfferSummaries.addAll(produceSummaries(repository, acct, atStates, blockData.getTimestamp(), blockchain));
 					}
 
-					// Remove any entries unchanged from last time
-					crossChainOfferSummaries.removeIf(offerSummary -> cachedInfo.previousAtModes.get(offerSummary.getAtAddress()) == offerSummary.getMode());
+					// OFFERING split-fill summaries can change amounts/slots without changing mode.
+					crossChainOfferSummaries.removeIf(offerSummary ->
+							offerSummary.getMode() != AcctMode.OFFERING
+									&& cachedInfo.previousAtModes.get(offerSummary.getAtAddress()) == offerSummary.getMode());
 
 					// Skip to next blockchain if nothing has changed (for this blockchain)
 					if (crossChainOfferSummaries.isEmpty())

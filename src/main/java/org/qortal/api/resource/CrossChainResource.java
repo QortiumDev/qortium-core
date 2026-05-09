@@ -136,7 +136,7 @@ public class CrossChainResource {
 				for (ATData atData : atsData) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
 					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) && matchesLocalAsset(crossChainTradeData, localAssetId)
-							&& crossChainTradeData.mode == AcctMode.OFFERING) {
+							&& crossChainTradeData.isFillableOffer()) {
 						crossChainTrades.add(crossChainTradeData);
 					}
 				}
@@ -218,7 +218,7 @@ public class CrossChainResource {
 				for (ATData atData : atsData) {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
 					if (matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) && matchesLocalAsset(crossChainTradeData, localAssetId)
-							&& crossChainTradeData.mode == AcctMode.OFFERING) {
+							&& crossChainTradeData.isFillableOffer()) {
 						crossChainTrades.add(crossChainTradeData);
 					}
 				}

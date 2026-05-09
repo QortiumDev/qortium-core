@@ -20,6 +20,14 @@ public class TradeBotCreateRequest {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public long localAmount;
 
+	@Schema(description = "Minimum local-chain asset amount accepted for one split fill. If omitted, the offer must be filled in one trade.", example = "1.00000000", type = "number")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public Long minFillLocalAmount;
+
+	@Schema(description = "Maximum local-chain asset amount accepted for one split fill. If omitted, the offer must be filled in one trade.", example = "10.00000000", type = "number")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public Long maxFillLocalAmount;
+
 	@Schema(description = "Local-chain asset amount funding AT", example = "80.50000000", type = "number")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public long fundingLocalAmount;

@@ -1,6 +1,7 @@
 package org.qortal.repository;
 
 import org.qortal.data.crosschain.TradeBotData;
+import org.qortal.data.crosschain.TradeBotFillData;
 
 import java.util.List;
 
@@ -13,7 +14,15 @@ public interface CrossChainRepository {
 
 	public List<TradeBotData> getAllTradeBotData() throws DataException;
 
+	public List<TradeBotFillData> getTradeBotFillData(String atAddress) throws DataException;
+
+	public List<TradeBotFillData> getAllTradeBotFillData() throws DataException;
+
+	public TradeBotFillData getTradeBotFillData(String atAddress, byte[] hashOfSecret) throws DataException;
+
 	public void save(TradeBotData tradeBotData) throws DataException;
+
+	public void save(TradeBotFillData tradeBotFillData) throws DataException;
 
 	/** Delete trade-bot states using passed private key. */
 	public int delete(byte[] tradePrivateKey) throws DataException;

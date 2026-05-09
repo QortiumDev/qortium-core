@@ -7,6 +7,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.qortal.data.account.MintingAccountData;
 import org.qortal.data.crosschain.TradeBotData;
+import org.qortal.data.crosschain.TradeBotFillData;
 import org.qortal.repository.Bootstrap;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -30,9 +31,33 @@ public class HSQLDBImportExport {
 
     public static void backupTradeBotStates(Repository repository, List<TradeBotData> additional) throws DataException {
         HSQLDBImportExport.backupCurrentTradeBotStates(repository, additional);
+        HSQLDBImportExport.backupCurrentTradeBotFills(repository);
         HSQLDBImportExport.backupArchivedTradeBotStates(repository, additional);
 
         LOGGER.info("Exported sensitive/node-local data: trade bot states");
+    }
+
+    private static void backupCurrentTradeBotFills(Repository repository) throws DataException {
+        try {
+            Path backupDirectory = HSQLDBImportExport.getExportDirectory(true);
+            List<TradeBotFillData> fills = repository.getCrossChainRepository().getAllTradeBotFillData();
+
+            JSONArray fillDataJson = new JSONArray();
+            for (TradeBotFillData fillData : fills)
+                fillDataJson.put(fillData.toJson());
+
+            JSONObject fillDataJsonWrapper = new JSONObject();
+            fillDataJsonWrapper.put("type", "tradeBotFills");
+            fillDataJsonWrapper.put("dataset", "current");
+            fillDataJsonWrapper.put("data", fillDataJson);
+
+            String fileName = Paths.get(backupDirectory.toString(), "TradeBotFills.json").toString();
+            try (FileWriter writer = new FileWriter(fileName)) {
+                writer.write(fillDataJsonWrapper.toString(2));
+            }
+        } catch (DataException | IOException e) {
+            throw new DataException("Unable to export trade bot fills from repository");
+        }
     }
 
     public static void backupMintingAccounts(Repository repository) throws DataException {
@@ -235,6 +260,9 @@ public class HSQLDBImportExport {
             if (type.equals("tradeBotStates")) {
                 HSQLDBImportExport.importTradeBotDataJSON(dataJsonObject, repository);
             }
+            else if (type.equals("tradeBotFills")) {
+                HSQLDBImportExport.importTradeBotFillDataJSON(dataJsonObject, repository);
+            }
             else if (type.equals("mintingAccounts")) {
                 HSQLDBImportExport.importMintingAccountDataJSON(dataJsonObject, repository);
             }
@@ -249,6 +277,11 @@ public class HSQLDBImportExport {
     private static void importTradeBotDataJSON(JSONObject tradeBotDataJson, Repository repository) throws DataException {
         TradeBotData tradeBotData = TradeBotData.fromJson(tradeBotDataJson);
         repository.getCrossChainRepository().save(tradeBotData);
+    }
+
+    private static void importTradeBotFillDataJSON(JSONObject tradeBotFillDataJson, Repository repository) throws DataException {
+        TradeBotFillData tradeBotFillData = TradeBotFillData.fromJson(tradeBotFillDataJson);
+        repository.getCrossChainRepository().save(tradeBotFillData);
     }
 
     private static void importMintingAccountDataJSON(JSONObject mintingAccountDataJson, Repository repository) throws DataException {

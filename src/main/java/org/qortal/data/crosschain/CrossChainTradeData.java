@@ -6,6 +6,8 @@ import org.qortal.crosschain.AcctMode;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+import java.util.ArrayList;
+import java.util.List;
 
 // All properties to be converted to JSON via JAXB
 @XmlAccessorType(XmlAccessType.FIELD)
@@ -47,6 +49,39 @@ public class CrossChainTradeData {
 	@Schema(description = "Final local asset payment that will be sent to local-chain trade partner")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public long localAmount;
+
+	@Schema(description = "Total local-chain asset amount originally offered")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public long totalLocalAmount;
+
+	@Schema(description = "Local-chain asset amount currently available for new fills")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public long remainingLocalAmount;
+
+	@Schema(description = "Local-chain asset amount currently locked in active fills")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public long activeLocalAmount;
+
+	@Schema(description = "Local-chain asset amount already completed by fills")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public long completedLocalAmount;
+
+	@Schema(description = "Minimum local-chain asset amount accepted for one fill")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public long minFillLocalAmount;
+
+	@Schema(description = "Maximum local-chain asset amount accepted for one fill")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public long maxFillLocalAmount;
+
+	@Schema(description = "Number of active split-fill slots")
+	public int activeFillCount;
+
+	@Schema(description = "Number of split-fill slots available for new fills")
+	public int availableFillSlots;
+
+	@Schema(description = "Active split-fill slot details")
+	public List<Fill> fills = new ArrayList<>();
 
 	@Schema(description = "Trade partner's local-chain address (trade begins when this is set)")
 	public String partnerAddress;
@@ -93,6 +128,79 @@ public class CrossChainTradeData {
 
 	// Necessary for JAXB
 	public CrossChainTradeData() {
+	}
+
+	public boolean isFillableOffer() {
+		if (this.mode != AcctMode.OFFERING)
+			return false;
+
+		if (!hasFillMetadata())
+			return true;
+
+		if (this.remainingLocalAmount <= 0 || this.availableFillSlots <= 0)
+			return false;
+
+		long maxFill = Math.min(this.maxFillLocalAmount, this.remainingLocalAmount);
+		if (maxFill < this.minFillLocalAmount)
+			return false;
+
+		return this.remainingLocalAmount <= maxFill
+				|| Math.min(maxFill, this.remainingLocalAmount - this.minFillLocalAmount) >= this.minFillLocalAmount;
+	}
+
+	public boolean isFillableAmount(long fillLocalAmount) {
+		if (!isFillableOffer())
+			return false;
+
+		if (!hasFillMetadata())
+			return fillLocalAmount > 0 && fillLocalAmount <= this.localAmount;
+
+		long maxFill = Math.min(this.maxFillLocalAmount, this.remainingLocalAmount);
+		if (fillLocalAmount < this.minFillLocalAmount || fillLocalAmount > maxFill)
+			return false;
+
+		long remainingAfterFill = this.remainingLocalAmount - fillLocalAmount;
+		return remainingAfterFill == 0 || remainingAfterFill >= this.minFillLocalAmount;
+	}
+
+	private boolean hasFillMetadata() {
+		return this.totalLocalAmount > 0
+				|| this.remainingLocalAmount > 0
+				|| this.minFillLocalAmount > 0
+				|| this.maxFillLocalAmount > 0
+				|| this.availableFillSlots > 0;
+	}
+
+	@XmlAccessorType(XmlAccessType.FIELD)
+	public static class Fill {
+		@Schema(description = "Split-fill slot index")
+		public int slotIndex;
+
+		@Schema(description = "Trade partner's local-chain trade address")
+		public String partnerAddress;
+
+		@Schema(description = "Trade partner's foreign blockchain public-key-hash")
+		public byte[] partnerForeignPKH;
+
+		@Schema(description = "HASH160 of 32-byte secret-A for this fill")
+		public byte[] hashOfSecretA;
+
+		@Schema(description = "Local-chain asset amount locked in this fill")
+		@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+		public long localAmount;
+
+		@Schema(description = "Foreign blockchain amount expected for this fill")
+		@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+		public long expectedForeignAmount;
+
+		@Schema(description = "Suggested P2SH-A nLockTime for this fill")
+		public int lockTimeA;
+
+		@Schema(description = "Actual local-chain block height when this fill will automatically refund")
+		public int tradeRefundHeight;
+
+		public Fill() {
+		}
 	}
 
 }

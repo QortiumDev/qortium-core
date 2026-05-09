@@ -640,6 +640,9 @@ public class BitcoinyACCTv3 implements ACCT {
 
 		// Redeem payout
 		tradeData.localAmount = dataByteBuffer.getLong();
+		tradeData.totalLocalAmount = tradeData.localAmount;
+		tradeData.minFillLocalAmount = tradeData.localAmount;
+		tradeData.maxFillLocalAmount = tradeData.localAmount;
 
 		// Expected foreign amount
 		tradeData.expectedForeignAmount = dataByteBuffer.getLong();
@@ -777,6 +780,8 @@ public class BitcoinyACCTv3 implements ACCT {
 				tradeData.partnerReceivingAddress = Base58.encode(partnerReceivingAddress);
 		} else {
 			tradeData.mode = AcctMode.OFFERING;
+			tradeData.remainingLocalAmount = tradeData.localAmount;
+			tradeData.availableFillSlots = 1;
 		}
 
 		return tradeData;

@@ -13,7 +13,7 @@ import java.util.List;
 
 public interface AcctTradeBot {
 
-	public enum ResponseResult { OK, BALANCE_ISSUE, NETWORK_ISSUE, TRADE_ALREADY_EXISTS }
+	public enum ResponseResult { OK, BALANCE_ISSUE, NETWORK_ISSUE, TRADE_ALREADY_EXISTS, INVALID_CRITERIA }
 
 	/** Returns list of state names for trade-bot entries that have ended, e.g. redeemed, refunded or cancelled. */
 	public List<String> getEndStates();

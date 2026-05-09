@@ -1,5 +1,6 @@
 package org.qortal.test;
 
+import com.google.common.hash.HashCode;
 import org.apache.commons.io.FileUtils;
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.AddressFormatException;
@@ -18,6 +19,7 @@ import org.qortal.crypto.Crypto;
 import org.qortal.asset.Asset;
 import org.qortal.data.account.MintingAccountData;
 import org.qortal.data.crosschain.TradeBotData;
+import org.qortal.data.crosschain.TradeBotFillData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -341,6 +343,35 @@ public class ImportExportTests extends Common {
         }
     }
 
+    @Test
+    public void testTradeBotFillsPersistAndExport() throws DataException, IOException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            TradeBotFillData fillData = this.createTradeBotFillData();
+            repository.getCrossChainRepository().save(fillData);
+
+            TradeBotFillData repositoryFillData = repository.getCrossChainRepository().getTradeBotFillData(fillData.getAtAddress(), fillData.getHashOfSecret());
+            assertNotNull(repositoryFillData);
+            assertEquals(fillData.toJson().toString(), repositoryFillData.toJson().toString());
+            assertEquals(1, repository.getCrossChainRepository().getAllTradeBotFillData().size());
+
+            HSQLDBImportExport.backupTradeBotStates(repository, null);
+
+            Path exportPath = HSQLDBImportExport.getExportDirectory(false);
+            Path filePath = Paths.get(exportPath.toString(), "TradeBotFills.json");
+            String jsonString = Files.readString(filePath);
+            Triple<String, String, JSONArray> parsedJSON = HSQLDBImportExport.parseJSONString(jsonString);
+
+            assertEquals("tradeBotFills", parsedJSON.getA());
+            assertEquals("current", parsedJSON.getB());
+            assertEquals(1, parsedJSON.getC().length());
+
+            HSQLDBImportExport.importDataFromFile(filePath.toString(), repository);
+            assertEquals(1, repository.getCrossChainRepository().getAllTradeBotFillData().size());
+
+            repository.saveChanges();
+        }
+    }
+
 
     private TradeBotData createTradeBotData(Repository repository) throws DataException {
         byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
@@ -384,6 +415,13 @@ public class ImportExportTests extends Common {
                 foreignAmount, null, null, null, litecoinReceivingAccountInfo);
 
         return tradeBotData;
+    }
+
+    private TradeBotFillData createTradeBotFillData() {
+        return new TradeBotFillData("AT_ADDRESS", 2, "ACTIVE", NTP.getTime(), "PARTNER_ADDRESS",
+                HashCode.fromString("0011223344556677889900112233445566778899").asBytes(),
+                HashCode.fromString("9988776655443322110099887766554433221100").asBytes(),
+                1234567890, 10_00000000L, 12345678L, "P2SH_ADDRESS");
     }
 
     private MintingAccountData createMintingAccountData() {
