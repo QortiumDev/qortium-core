@@ -38,9 +38,9 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 
 	private static final long MAX_AT_CONFIRMATION_PERIOD = 24 * 60 * 60 * 1000L;
 
-	private static final String FILL_ACTIVE = "ACTIVE";
+	static final String FILL_ACTIVE = "ACTIVE";
 	private static final String FILL_DONE = "DONE";
-	private static final String FILL_REFUNDED = "REFUNDED";
+	static final String FILL_REFUNDED = "REFUNDED";
 
 	private static BitcoinyACCTv4TradeBot instance;
 
@@ -340,10 +340,7 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 			byte[] secretA = BitcoinyACCTv4.findSecretA(repository, fillData.getAtAddress(), fillData.getSlotIndex(),
 					fillData.getPartnerAddress(), fillData.getHashOfSecret());
 			if (secretA == null) {
-				if (isPendingFill(tradeData, fillData) && NTP.getTime() > fillData.getTimestamp() + tradeData.tradeTimeout * 60_000L) {
-					fillData.setState(FILL_REFUNDED);
-					fillData.setTimestamp(NTP.getTime());
-					repository.getCrossChainRepository().save(fillData);
+				if (refundExpiredPendingFill(repository, tradeData, fillData, NTP.getTime())) {
 					repository.saveChanges();
 					TradeBot.backupTradeBotData(repository, null);
 				}
@@ -457,6 +454,21 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 		return messageTransaction.isSignatureValid() && messageTransaction.importAsUnconfirmed() == ValidationResult.OK;
 	}
 
+	static boolean refundExpiredPendingFill(Repository repository, CrossChainTradeData tradeData, TradeBotFillData fillData, long now)
+			throws DataException {
+		if (!isExpiredPendingFill(tradeData, fillData, now))
+			return false;
+
+		fillData.setState(FILL_REFUNDED);
+		fillData.setTimestamp(now);
+		repository.getCrossChainRepository().save(fillData);
+		return true;
+	}
+
+	static boolean isExpiredPendingFill(CrossChainTradeData tradeData, TradeBotFillData fillData, long now) {
+		return isPendingFill(tradeData, fillData) && now > fillData.getTimestamp() + tradeData.tradeTimeout * 60_000L;
+	}
+
 	private static long selectFillLocalAmount(CrossChainTradeData tradeData, Long requestedFillLocalAmount) {
 		long maxFill = Math.min(tradeData.maxFillLocalAmount, tradeData.remainingLocalAmount);
 		long fillLocalAmount = requestedFillLocalAmount != null ? requestedFillLocalAmount : maxFill;
@@ -510,12 +522,12 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 		return fillDataList.stream().anyMatch(fillData -> Arrays.equals(fillData.getHashOfSecret(), hashOfSecretA));
 	}
 
-	private static boolean isPendingFill(CrossChainTradeData tradeData, TradeBotFillData fillData) {
+	static boolean isPendingFill(CrossChainTradeData tradeData, TradeBotFillData fillData) {
 		return FILL_ACTIVE.equals(fillData.getState())
 				&& tradeData.fills.stream().noneMatch(fill -> Arrays.equals(fill.hashOfSecretA, fillData.getHashOfSecret()));
 	}
 
-	private static long pendingLocalAmount(CrossChainTradeData tradeData, List<TradeBotFillData> fillDataList) {
+	static long pendingLocalAmount(CrossChainTradeData tradeData, List<TradeBotFillData> fillDataList) {
 		return fillDataList.stream()
 				.filter(fillData -> isPendingFill(tradeData, fillData))
 				.mapToLong(TradeBotFillData::getLocalAmount)

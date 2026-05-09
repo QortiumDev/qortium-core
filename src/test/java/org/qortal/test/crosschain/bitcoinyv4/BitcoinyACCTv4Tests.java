@@ -39,6 +39,7 @@ public class BitcoinyACCTv4Tests extends Common {
 	private static final long MIN_FILL_LOCAL_AMOUNT = 10_00000000L;
 	private static final long MAX_FILL_LOCAL_AMOUNT = 40_00000000L;
 	private static final int TRADE_TIMEOUT = 10080;
+	private static final int SHORT_TRADE_TIMEOUT = 4;
 
 	@Before
 	public void beforeTest() throws DataException {
@@ -99,6 +100,108 @@ public class BitcoinyACCTv4Tests extends Common {
 			assertEquals(partnerInitialBalance - redeemMessageTransaction.getTransactionData().getFee() + MIN_FILL_LOCAL_AMOUNT,
 					partner.getConfirmedBalance(Asset.NATIVE));
 			assertTrue(tradeData.isFillableOffer());
+		}
+	}
+
+	@Test
+	public void testOfferCancelFinishesAndRefundsUnfilledOffer() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+
+			long deployerInitialBalance = deployer.getConfirmedBalance(Asset.NATIVE);
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress());
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			long deployerPostDeployBalance = deployerInitialBalance - FUNDING_AMOUNT - deployAtTransaction.getTransactionData().getFee();
+
+			byte[] cancelMessageData = BitcoinyACCTv4.getInstance().buildCancelMessage(deployer.getAddress());
+			MessageTransaction cancelMessageTransaction = sendMessage(repository, deployer, cancelMessageData, atAddress);
+			BlockUtils.mintBlock(repository);
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyACCTv4.getInstance().populateTradeData(repository, atData);
+
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.CANCELLED, tradeData.mode);
+			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(Asset.NATIVE));
+			assertTrue(deployer.getConfirmedBalance(Asset.NATIVE) > deployerPostDeployBalance - cancelMessageTransaction.getTransactionData().getFee());
+			assertFalse(tradeData.isFillableOffer());
+		}
+	}
+
+	@Test
+	public void testActiveFillRefundsBackToOffer() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(),
+					TOTAL_LOCAL_AMOUNT, TOTAL_FOREIGN_AMOUNT, MIN_FILL_LOCAL_AMOUNT, MAX_FILL_LOCAL_AMOUNT, SHORT_TRADE_TIMEOUT);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			int refundTimeout = lockFill(repository, tradeAccount, partner, atAddress, 0, MIN_FILL_LOCAL_AMOUNT, 123456L, SHORT_TRADE_TIMEOUT);
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyACCTv4.getInstance().populateTradeData(repository, atData);
+
+			assertFalse(atData.getIsFinished());
+			assertEquals(AcctMode.OFFERING, tradeData.mode);
+			assertEquals(1, tradeData.activeFillCount);
+			assertEquals(TOTAL_LOCAL_AMOUNT - MIN_FILL_LOCAL_AMOUNT, tradeData.remainingLocalAmount);
+			assertEquals(MIN_FILL_LOCAL_AMOUNT, tradeData.activeLocalAmount);
+
+			BlockUtils.mintBlocks(repository, refundTimeout + 2);
+
+			atData = repository.getATRepository().fromATAddress(atAddress);
+			tradeData = BitcoinyACCTv4.getInstance().populateTradeData(repository, atData);
+
+			assertFalse(atData.getIsFinished());
+			assertEquals(AcctMode.OFFERING, tradeData.mode);
+			assertEquals(0, tradeData.activeFillCount);
+			assertEquals(BitcoinyACCTv4.SLOT_COUNT, tradeData.availableFillSlots);
+			assertEquals(TOTAL_LOCAL_AMOUNT, tradeData.remainingLocalAmount);
+			assertEquals(0L, tradeData.activeLocalAmount);
+			assertEquals(0L, tradeData.completedLocalAmount);
+			assertEquals(0, tradeData.fills.size());
+			assertTrue(tradeData.isFillableOffer());
+		}
+	}
+
+	@Test
+	public void testCancelWaitsForActiveFillRefundBeforeFinishing() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(),
+					TOTAL_LOCAL_AMOUNT, TOTAL_FOREIGN_AMOUNT, MIN_FILL_LOCAL_AMOUNT, MAX_FILL_LOCAL_AMOUNT, SHORT_TRADE_TIMEOUT);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			int refundTimeout = lockFill(repository, tradeAccount, partner, atAddress, 0, MIN_FILL_LOCAL_AMOUNT, 123456L, SHORT_TRADE_TIMEOUT);
+
+			byte[] cancelMessageData = BitcoinyACCTv4.getInstance().buildCancelMessage(deployer.getAddress());
+			sendMessage(repository, deployer, cancelMessageData, atAddress);
+			BlockUtils.mintBlock(repository);
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyACCTv4.getInstance().populateTradeData(repository, atData);
+
+			assertFalse(atData.getIsFinished());
+			assertEquals(AcctMode.CANCELLED, tradeData.mode);
+			assertEquals(1, tradeData.activeFillCount);
+			assertEquals(TOTAL_LOCAL_AMOUNT - MIN_FILL_LOCAL_AMOUNT, tradeData.remainingLocalAmount);
+
+			BlockUtils.mintBlocks(repository, refundTimeout + 2);
+
+			atData = repository.getATRepository().fromATAddress(atAddress);
+			tradeData = BitcoinyACCTv4.getInstance().populateTradeData(repository, atData);
+
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.CANCELLED, tradeData.mode);
+			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(Asset.NATIVE));
+			assertFalse(tradeData.isFillableOffer());
 		}
 	}
 
@@ -169,40 +272,46 @@ public class BitcoinyACCTv4Tests extends Common {
 		tradeData.totalLocalAmount = TOTAL_LOCAL_AMOUNT;
 		tradeData.remainingLocalAmount = TOTAL_LOCAL_AMOUNT;
 		tradeData.minFillLocalAmount = MIN_FILL_LOCAL_AMOUNT;
-			tradeData.maxFillLocalAmount = MAX_FILL_LOCAL_AMOUNT;
-			tradeData.availableFillSlots = 1;
-			assertTrue(tradeData.isFillableOffer());
-			assertTrue(tradeData.isFillableAmount(MIN_FILL_LOCAL_AMOUNT));
-			assertTrue(tradeData.isFillableAmount(MAX_FILL_LOCAL_AMOUNT));
+		tradeData.maxFillLocalAmount = MAX_FILL_LOCAL_AMOUNT;
+		tradeData.availableFillSlots = 1;
+		assertTrue(tradeData.isFillableOffer());
+		assertTrue(tradeData.isFillableAmount(MIN_FILL_LOCAL_AMOUNT));
+		assertTrue(tradeData.isFillableAmount(MAX_FILL_LOCAL_AMOUNT));
 
-			tradeData.remainingLocalAmount = MIN_FILL_LOCAL_AMOUNT - 1;
-			assertFalse(tradeData.isFillableOffer());
+		tradeData.remainingLocalAmount = MIN_FILL_LOCAL_AMOUNT - 1;
+		assertFalse(tradeData.isFillableOffer());
 
-			tradeData.remainingLocalAmount = TOTAL_LOCAL_AMOUNT;
+		tradeData.remainingLocalAmount = TOTAL_LOCAL_AMOUNT;
 		tradeData.availableFillSlots = 0;
 		assertFalse(tradeData.isFillableOffer());
 
-			tradeData.mode = AcctMode.REDEEMED;
-			tradeData.availableFillSlots = 1;
-			assertFalse(tradeData.isFillableOffer());
+		tradeData.mode = AcctMode.REDEEMED;
+		tradeData.availableFillSlots = 1;
+		assertFalse(tradeData.isFillableOffer());
 
-			tradeData.mode = AcctMode.OFFERING;
-			tradeData.remainingLocalAmount = 35_00000000L;
-			tradeData.availableFillSlots = 1;
-			assertTrue(tradeData.isFillableAmount(35_00000000L));
-			assertTrue(tradeData.isFillableAmount(25_00000000L));
-			assertFalse(tradeData.isFillableAmount(30_00000000L));
+		tradeData.mode = AcctMode.OFFERING;
+		tradeData.remainingLocalAmount = 35_00000000L;
+		tradeData.availableFillSlots = 1;
+		assertTrue(tradeData.isFillableAmount(35_00000000L));
+		assertTrue(tradeData.isFillableAmount(25_00000000L));
+		assertFalse(tradeData.isFillableAmount(30_00000000L));
 
-			tradeData.remainingLocalAmount = 100_00000000L;
-			tradeData.minFillLocalAmount = 60_00000000L;
-			tradeData.maxFillLocalAmount = 70_00000000L;
-			assertFalse(tradeData.isFillableOffer());
-		}
+		tradeData.remainingLocalAmount = 100_00000000L;
+		tradeData.minFillLocalAmount = 60_00000000L;
+		tradeData.maxFillLocalAmount = 70_00000000L;
+		assertFalse(tradeData.isFillableOffer());
+	}
 
 	private DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress) throws DataException {
+		return deploy(repository, deployer, tradeAddress, TOTAL_LOCAL_AMOUNT, TOTAL_FOREIGN_AMOUNT,
+				MIN_FILL_LOCAL_AMOUNT, MAX_FILL_LOCAL_AMOUNT, TRADE_TIMEOUT);
+	}
+
+	private DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress,
+			long totalLocalAmount, long totalForeignAmount, long minFillLocalAmount, long maxFillLocalAmount, int tradeTimeout) throws DataException {
 		ForeignBlockchainRegistry.Entry bitcoin = ForeignBlockchainRegistry.fromString("BITCOIN");
 		byte[] creationBytes = BitcoinyACCTv4.buildTradeAT(bitcoin, tradeAddress, FOREIGN_PUBLIC_KEY_HASH,
-				TOTAL_LOCAL_AMOUNT, TOTAL_FOREIGN_AMOUNT, MIN_FILL_LOCAL_AMOUNT, MAX_FILL_LOCAL_AMOUNT, TRADE_TIMEOUT);
+				totalLocalAmount, totalForeignAmount, minFillLocalAmount, maxFillLocalAmount, tradeTimeout);
 
 		long txTimestamp = System.currentTimeMillis();
 		Long fee = null;
@@ -216,6 +325,20 @@ public class BitcoinyACCTv4Tests extends Common {
 		TransactionUtils.signAndMint(repository, deployAtTransactionData, deployer);
 
 		return deployAtTransaction;
+	}
+
+	private int lockFill(Repository repository, PrivateKeyAccount tradeAccount, PrivateKeyAccount partner, String atAddress,
+			int slotIndex, long fillLocalAmount, long fillForeignAmount, int tradeTimeout) throws DataException {
+		long offerMessageTimestamp = System.currentTimeMillis();
+		int lockTimeA = (int) (offerMessageTimestamp / 1000L + tradeTimeout * 60);
+		int refundTimeout = BitcoinyACCTv4.calcRefundTimeout(offerMessageTimestamp, lockTimeA);
+
+		byte[] lockMessageData = BitcoinyACCTv4.buildTradeMessage(slotIndex, partner.getAddress(), FOREIGN_PUBLIC_KEY_HASH,
+				HASH_OF_SECRET_A, lockTimeA, refundTimeout, fillLocalAmount, fillForeignAmount);
+		sendMessage(repository, tradeAccount, lockMessageData, atAddress);
+		BlockUtils.mintBlock(repository);
+
+		return refundTimeout;
 	}
 
 	private MessageTransaction sendMessage(Repository repository, PrivateKeyAccount sender, byte[] data, String recipient) throws DataException {
