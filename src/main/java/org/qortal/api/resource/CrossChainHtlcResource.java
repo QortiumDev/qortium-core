@@ -170,9 +170,9 @@ public class CrossChainHtlcResource {
 	@Path("/redeem/{ataddress}")
 	@Operation(
 			summary = "Redeems HTLC associated with supplied AT",
-			description = "To be used by a native-asset seller (Bob) who needs to redeem foreign-chain proceeds that are stuck in a P2SH.<br>" +
-					"This requires Bob's trade bot data to be present in the database for this AT.<br>" +
-					"It will fail if the buyer has yet to redeem the native asset held in the AT.",
+			description = "To be used by a local-asset maker who needs to redeem foreign-chain proceeds that are stuck in a P2SH.<br>" +
+					"This requires maker's trade bot data to be present in the database for this AT.<br>" +
+					"It will fail if the taker has yet to redeem the local asset held in the AT.",
 			responses = {
 					@ApiResponse(
 							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "boolean"))
@@ -197,7 +197,7 @@ public class CrossChainHtlcResource {
 			if (crossChainTradeData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-			// Attempt to find secret from the buyer's message to AT
+			// Attempt to find secret from the taker's message to AT
 			byte[] decodedSecret = acct.findSecretA(repository, crossChainTradeData);
 			if (decodedSecret == null) {
 				LOGGER.info(() -> String.format("Unable to find secret-A from redeem message to AT %s", atAddress));
@@ -229,8 +229,8 @@ public class CrossChainHtlcResource {
 	@Path("/redeemAll")
 	@Operation(
 			summary = "Redeems HTLC for all applicable ATs in tradebot data",
-			description = "To be used by a native-asset seller (Bob) who needs to redeem foreign-chain proceeds that are stuck in P2SH transactions.<br>" +
-					"This requires Bob's trade bot data to be present in the database for any ATs that need redeeming.<br>" +
+			description = "To be used by a local-asset maker who needs to redeem foreign-chain proceeds that are stuck in P2SH transactions.<br>" +
+					"This requires maker's trade bot data to be present in the database for any ATs that need redeeming.<br>" +
 					"Returns true if at least one trade is redeemed. More detail is available in the log.txt.* file.",
 			responses = {
 					@ApiResponse(
@@ -260,8 +260,8 @@ public class CrossChainHtlcResource {
 					continue;
 				}
 
-				if (tradeState.startsWith("ALICE")) {
-					LOGGER.info("AT {} isn't redeemable because it is a buy order", atAddress);
+				if (tradeState.startsWith("TAKER")) {
+					LOGGER.info("AT {} isn't redeemable because it is a taker-side trade", atAddress);
 					continue;
 				}
 
@@ -416,9 +416,9 @@ public class CrossChainHtlcResource {
 	@Path("/refund/{ataddress}")
 	@Operation(
 			summary = "Refunds HTLC associated with supplied AT",
-			description = "To be used by a native-asset buyer (Alice) who needs to refund foreign-chain funds that are stuck in a P2SH.<br>" +
-					"This requires Alice's trade bot data to be present in the database for this AT.<br>" +
-					"It will fail if it's already redeemed by the seller, or if the lockTime (60 minutes) hasn't passed yet.",
+			description = "To be used by a local-asset taker who needs to refund foreign-chain funds that are stuck in a P2SH.<br>" +
+					"This requires taker's trade bot data to be present in the database for this AT.<br>" +
+					"It will fail if it's already redeemed by the maker, or if the lockTime (60 minutes) hasn't passed yet.",
 			responses = {
 					@ApiResponse(
 							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "boolean"))
@@ -465,9 +465,9 @@ public class CrossChainHtlcResource {
 	@Path("/refundAll")
 	@Operation(
 			summary = "Refunds HTLC for all applicable ATs in tradebot data",
-			description = "To be used by a native-asset buyer (Alice) who needs to refund foreign-chain funds that are stuck in P2SH transactions.<br>" +
-					"This requires Alice's trade bot data to be present in the database for this AT.<br>" +
-					"It will fail if it's already redeemed by the seller, or if the lockTime (60 minutes) hasn't passed yet.",
+			description = "To be used by a local-asset taker who needs to refund foreign-chain funds that are stuck in P2SH transactions.<br>" +
+					"This requires taker's trade bot data to be present in the database for this AT.<br>" +
+					"It will fail if it's already redeemed by the maker, or if the lockTime (60 minutes) hasn't passed yet.",
 			responses = {
 					@ApiResponse(
 							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "boolean"))
@@ -496,8 +496,8 @@ public class CrossChainHtlcResource {
 					continue;
 				}
 
-				if (tradeState.startsWith("BOB")) {
-					LOGGER.info("AT {} isn't refundable because it is a sell order", atAddress);
+				if (tradeState.startsWith("MAKER")) {
+					LOGGER.info("AT {} isn't refundable because it is a maker-side trade", atAddress);
 					continue;
 				}
 
@@ -566,9 +566,9 @@ public class CrossChainHtlcResource {
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			// If the AT is "finished" then it will have a zero balance
-			// In these cases we should avoid HTLC refunds if the native asset has not been returned to the seller
+			// In these cases we should avoid HTLC refunds if the local asset has not been returned to the maker
 			if (atData.getIsFinished() && crossChainTradeData.mode != AcctMode.REFUNDED && crossChainTradeData.mode != AcctMode.CANCELLED) {
-				LOGGER.info(String.format("Skipping AT %s because the native asset has already been redeemed by the buyer", atAddress));
+				LOGGER.info(String.format("Skipping AT %s because the local asset has already been redeemed by the taker", atAddress));
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 			}
 

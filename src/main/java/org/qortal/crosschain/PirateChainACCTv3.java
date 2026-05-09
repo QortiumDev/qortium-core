@@ -28,55 +28,55 @@ import static org.ciyam.at.OpCode.calcOffset;
  * 
  * <p>
  * <ul>
- * <li>Bob generates PirateChain & local-chain 'trade' keys
+ * <li>maker generates PirateChain & local-chain 'trade' keys
  * 		<ul>
  * 			<li>private key required to sign P2SH redeem tx</li>
  * 			<li>private key could be used to create 'secret' (e.g. double-SHA256)</li>
- * 			<li>encrypted private key could be stored in local-chain AT for access by Bob from any node</li>
+ * 			<li>encrypted private key could be stored in local-chain AT for access by maker from any node</li>
  * 		</ul>
  * </li>
- * <li>Bob deploys local-chain AT
+ * <li>maker deploys local-chain AT
  * 		<ul>
  * 		</ul>
  * </li>
- * <li>Alice finds local-chain AT and wants to trade
+ * <li>taker finds local-chain AT and wants to trade
  * 		<ul>
- * 			<li>Alice generates PirateChain & local-chain 'trade' keys</li>
- * 			<li>Alice funds PirateChain P2SH-A</li>
- * 			<li>Alice sends 'offer' MESSAGE to Bob from her local-chain trade address, containing:
+ * 			<li>taker generates PirateChain & local-chain 'trade' keys</li>
+ * 			<li>taker funds PirateChain P2SH-A</li>
+	 * 			<li>taker sends 'offer' MESSAGE to maker from their local-chain trade address, containing:
  * 				<ul>
  * 					<li>hash-of-secret-A</li>
- * 					<li>her 'trade' Pirate Chain public key</li>
+	 * 					<li>their 'trade' Pirate Chain public key</li>
  * 				</ul>
  * 			</li>
  * 		</ul>
  * </li>
- * <li>Bob receives "offer" MESSAGE
+ * <li>maker receives "offer" MESSAGE
  * 		<ul>
- * 			<li>Checks Alice's P2SH-A</li>
- * 			<li>Sends 'trade' MESSAGE to local-chain AT from his trade address, containing:
+ * 			<li>Checks taker's P2SH-A</li>
+	 * 			<li>Sends 'trade' MESSAGE to local-chain AT from maker's trade address, containing:
  * 				<ul>
- * 					<li>Alice's trade local-chain address</li>
- * 					<li>Alice's trade Pirate Chain public key</li>
+ * 					<li>taker's trade local-chain address</li>
+ * 					<li>taker's trade Pirate Chain public key</li>
  * 					<li>hash-of-secret-A</li>
  * 				</ul>
  * 			</li>
  * 		</ul>
  * </li>
- * <li>Alice checks local-chain AT to confirm it's locked to her
+	 * <li>taker checks local-chain AT to confirm it's locked to them
  * 		<ul>
- * 			<li>Alice sends 'redeem' MESSAGE to local-chain AT from her trade address, containing:
+	 * 			<li>taker sends 'redeem' MESSAGE to local-chain AT from their trade address, containing:
  * 				<ul>
  * 					<li>secret-A</li>
- * 					<li>local-chain receiving address of her chosing</li>
+	 * 					<li>local-chain receiving address of their choosing</li>
  * 				</ul>
  * 			</li>
- * 			<li>AT's native asset funds are sent to local-chain receiving address</li>
+	 * 			<li>AT's local asset funds are sent to local-chain receiving address</li>
  * 		</ul>
  * </li>
- * <li>Bob checks AT, extracts secret-A
+ * <li>maker checks AT, extracts secret-A
  * 		<ul>
- * 			<li>Bob redeems P2SH-A using his PirateChain trade key and secret-A</li>
+	 * 			<li>maker redeems P2SH-A using their PirateChain trade key and secret-A</li>
  * 			<li>P2SH-A ARRR funds end up at PirateChain address determined by redeem transaction output(s)</li>
  * 		</ul>
  * </li>

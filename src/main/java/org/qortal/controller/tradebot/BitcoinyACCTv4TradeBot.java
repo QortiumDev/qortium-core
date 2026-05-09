@@ -44,7 +44,7 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 
 	private static BitcoinyACCTv4TradeBot instance;
 
-	private final List<String> endStates = Arrays.asList(State.BOB_DONE, State.BOB_REFUNDED, State.ALICE_DONE, State.ALICE_REFUNDING_A, State.ALICE_REFUNDED).stream()
+	private final List<String> endStates = Arrays.asList(State.MAKER_DONE, State.MAKER_REFUNDED, State.TAKER_DONE, State.TAKER_REFUNDING_FOREIGN, State.TAKER_REFUNDED).stream()
 			.map(State::name)
 			.collect(Collectors.toUnmodifiableList());
 
@@ -115,7 +115,7 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 		String atAddress = deployAtTransactionData.getAtAddress();
 
 		TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, BitcoinyACCTv4.NAME,
-				State.BOB_WAITING_FOR_AT_CONFIRM.name(), State.BOB_WAITING_FOR_AT_CONFIRM.value,
+				State.MAKER_WAITING_FOR_AT_CONFIRM.name(), State.MAKER_WAITING_FOR_AT_CONFIRM.value,
 				creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.localAssetId, tradeBotCreateRequest.localAmount,
 				tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress, null, null, foreignBlockchain.name(),
 				tradeForeignPublicKey, tradeForeignPublicKeyHash, tradeBotCreateRequest.foreignAmount, null, null, null,
@@ -163,7 +163,7 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 		int lockTimeA = crossChainTradeData.tradeTimeout * 60 + (int) (now / 1000L);
 
 		TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, BitcoinyACCTv4.NAME,
-				State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
+				State.TAKER_WAITING_FOR_AT_LOCK.name(), State.TAKER_WAITING_FOR_AT_LOCK.value,
 				receivingAddress, crossChainTradeData.atAddress, now, crossChainTradeData.localAssetId, fillLocalAmount,
 				tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress, secretA, hashOfSecretA,
 				crossChainTradeData.foreignBlockchain, tradeForeignPublicKey, tradeForeignPublicKeyHash,
@@ -196,7 +196,7 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 			return ResponseResult.NETWORK_ISSUE;
 
 		TradeBot.updateTradeBotState(repository, tradeBotData,
-				() -> String.format("Funding P2SH-A %s for split fill. Messaged Bob. Waiting for AT-lock", p2shAddress));
+				() -> String.format("Funding P2SH-A %s for split fill. Messaged maker. Waiting for AT-lock", p2shAddress));
 
 		return ResponseResult.OK;
 	}
@@ -220,23 +220,23 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 			tradeData = BitcoinyACCTv4.getInstance().populateTradeData(repository, atData);
 
 		switch (tradeBotState) {
-			case BOB_WAITING_FOR_AT_CONFIRM:
-				handleBobWaitingForAtConfirm(repository, tradeBotData);
+			case MAKER_WAITING_FOR_AT_CONFIRM:
+				handleMakerWaitingForAtConfirm(repository, tradeBotData);
 				break;
 
-			case BOB_WAITING_FOR_MESSAGE:
+			case MAKER_WAITING_FOR_TAKER_MESSAGE:
 				TradeBot.getInstance().updatePresence(repository, tradeBotData, tradeData);
-				handleBobWaitingForMessage(repository, tradeBotData, atData, tradeData);
+				handleMakerWaitingForTakerMessage(repository, tradeBotData, atData, tradeData);
 				break;
 
-			case ALICE_WAITING_FOR_AT_LOCK:
+			case TAKER_WAITING_FOR_AT_LOCK:
 				TradeBot.getInstance().updatePresence(repository, tradeBotData, tradeData);
-				handleAliceWaitingForAtLock(repository, tradeBotData, atData, tradeData);
+				handleTakerWaitingForAtLock(repository, tradeBotData, atData, tradeData);
 				break;
 
-			case ALICE_REFUNDING_A:
+			case TAKER_REFUNDING_FOREIGN:
 				TradeBot.getInstance().updatePresence(repository, tradeBotData, tradeData);
-				handleAliceRefundingP2shA(repository, tradeBotData, tradeData);
+				handleTakerRefundingP2shA(repository, tradeBotData, tradeData);
 				break;
 
 			default:
@@ -244,32 +244,32 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 		}
 	}
 
-	private void handleBobWaitingForAtConfirm(Repository repository, TradeBotData tradeBotData) throws DataException {
+	private void handleMakerWaitingForAtConfirm(Repository repository, TradeBotData tradeBotData) throws DataException {
 		if (!repository.getATRepository().exists(tradeBotData.getAtAddress())) {
 			if (NTP.getTime() - tradeBotData.getTimestamp() <= MAX_AT_CONFIRMATION_PERIOD)
 				return;
 
 			repository.getCrossChainRepository().delete(tradeBotData.getTradePrivateKey());
 			repository.saveChanges();
-			tradeBotData.setState(State.BOB_REFUNDED.name());
-			tradeBotData.setStateValue(State.BOB_REFUNDED.value);
+			tradeBotData.setState(State.MAKER_REFUNDED.name());
+			tradeBotData.setStateValue(State.MAKER_REFUNDED.value);
 			TradeBot.notifyStateChange(tradeBotData);
 			return;
 		}
 
-		TradeBot.updateTradeBotState(repository, tradeBotData, State.BOB_WAITING_FOR_MESSAGE,
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_WAITING_FOR_TAKER_MESSAGE,
 				() -> String.format("Split-fill AT %s confirmed ready. Waiting for fill messages", tradeBotData.getAtAddress()));
 	}
 
-	private void handleBobWaitingForMessage(Repository repository, TradeBotData tradeBotData, ATData atData,
+	private void handleMakerWaitingForTakerMessage(Repository repository, TradeBotData tradeBotData, ATData atData,
 			CrossChainTradeData tradeData) throws DataException, ForeignBlockchainException {
 		List<TradeBotFillData> fillDataList = repository.getCrossChainRepository().getTradeBotFillData(tradeBotData.getAtAddress());
-		processBobFills(repository, tradeBotData, tradeData, fillDataList);
+		processMakerFills(repository, tradeBotData, tradeData, fillDataList);
 		fillDataList = repository.getCrossChainRepository().getTradeBotFillData(tradeBotData.getAtAddress());
 
 		if (atData.getIsFinished()) {
 			TradeBot.updateTradeBotState(repository, tradeBotData,
-					tradeData.completedLocalAmount > 0 ? State.BOB_DONE : State.BOB_REFUNDED,
+					tradeData.completedLocalAmount > 0 ? State.MAKER_DONE : State.MAKER_REFUNDED,
 					() -> String.format("Split-fill AT %s finished", tradeBotData.getAtAddress()));
 			return;
 		}
@@ -311,9 +311,9 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 			if (htlcStatusA != BitcoinyHTLC.Status.FUNDED)
 				continue;
 
-			String aliceLocalAddress = Crypto.toAddress(messageTransactionData.getCreatorPublicKey());
+			String takerLocalAddress = Crypto.toAddress(messageTransactionData.getCreatorPublicKey());
 			int refundTimeout = BitcoinyACCTv4.calcRefundTimeout(messageTransactionData.getTimestamp(), (int) offerMessageData.lockTimeA);
-			byte[] outgoingMessageData = BitcoinyACCTv4.buildTradeMessage(slotIndex, aliceLocalAddress, offerMessageData.partnerForeignPKH,
+			byte[] outgoingMessageData = BitcoinyACCTv4.buildTradeMessage(slotIndex, takerLocalAddress, offerMessageData.partnerForeignPKH,
 					offerMessageData.hashOfSecretA, (int) offerMessageData.lockTimeA, refundTimeout,
 					offerMessageData.fillLocalAmount, offerMessageData.fillForeignAmount);
 
@@ -321,7 +321,7 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 				return;
 
 			TradeBotFillData fillData = new TradeBotFillData(tradeBotData.getAtAddress(), slotIndex, FILL_ACTIVE, NTP.getTime(),
-					aliceLocalAddress, offerMessageData.partnerForeignPKH, offerMessageData.hashOfSecretA,
+					takerLocalAddress, offerMessageData.partnerForeignPKH, offerMessageData.hashOfSecretA,
 					(int) offerMessageData.lockTimeA, offerMessageData.fillLocalAmount, offerMessageData.fillForeignAmount, p2shAddressA);
 			repository.getCrossChainRepository().save(fillData);
 			repository.saveChanges();
@@ -330,7 +330,7 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 		}
 	}
 
-	private void processBobFills(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData, List<TradeBotFillData> fillDataList)
+	private void processMakerFills(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData, List<TradeBotFillData> fillDataList)
 			throws DataException, ForeignBlockchainException {
 		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 		for (TradeBotFillData fillData : fillDataList) {
@@ -383,10 +383,10 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 		}
 	}
 
-	private void handleAliceWaitingForAtLock(Repository repository, TradeBotData tradeBotData, ATData atData,
+	private void handleTakerWaitingForAtLock(Repository repository, TradeBotData tradeBotData, ATData atData,
 			CrossChainTradeData tradeData) throws DataException {
 		if (NTP.getTime() >= tradeBotData.getLockTimeA() * 1000L || atData.getIsFinished()) {
-			TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_REFUNDING_A,
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_REFUNDING_FOREIGN,
 					() -> String.format("Split-fill AT %s did not lock in time. Refunding P2SH-A", tradeBotData.getAtAddress()));
 			return;
 		}
@@ -409,12 +409,12 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 		if (!sendMessage(repository, tradeBotData, tradeBotData.getAtAddress(), messageData))
 			return;
 
-		TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_DONE,
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_DONE,
 				() -> String.format("Redeeming split-fill slot %d at AT %s. Funds should arrive at %s",
 						fill.slotIndex, tradeBotData.getAtAddress(), receivingAddress));
 	}
 
-	private void handleAliceRefundingP2shA(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData)
+	private void handleTakerRefundingP2shA(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData)
 			throws DataException, ForeignBlockchainException {
 		int lockTimeA = tradeBotData.getLockTimeA();
 		if (NTP.getTime() <= lockTimeA * 1000L)
@@ -438,7 +438,7 @@ public class BitcoinyACCTv4TradeBot implements AcctTradeBot {
 			bitcoiny.broadcastTransaction(p2shRefundTransaction);
 		}
 
-		TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_REFUNDED,
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_REFUNDED,
 				() -> String.format("LockTime-A reached. Refunded split-fill P2SH-A %s. Trade aborted", p2shAddressA));
 	}
 

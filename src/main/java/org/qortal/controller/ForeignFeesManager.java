@@ -265,7 +265,7 @@ public class ForeignFeesManager implements Listener {
 
             // if offer is waiting and the time now is determined,
             // then process the trade data to be signed later
-            if( data.getStateValue() == TradeStates.State.BOB_WAITING_FOR_MESSAGE.value ) {
+            if( data.getStateValue() == TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE.value ) {
                 Optional<Long> nowDetermined = determineNow();
                 if (nowDetermined.isPresent()) {
 
@@ -769,7 +769,7 @@ public class ForeignFeesManager implements Listener {
             // collect all local trade offers waiting
             List<TradeBotData> tradeOffersWaiting
                     = allTradeBotData.stream()
-                    .filter(d -> d.getStateValue() == TradeStates.State.BOB_WAITING_FOR_MESSAGE.value)
+                    .filter(d -> d.getStateValue() == TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE.value)
                     .filter(d -> {
                         ForeignBlockchainRegistry.Entry tradeForeignBlockchain = ForeignBlockchainRegistry.fromString(d.getForeignBlockchain());
                         return tradeForeignBlockchain == foreignBlockchain;

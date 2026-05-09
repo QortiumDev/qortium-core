@@ -154,7 +154,7 @@ public class TradeBot implements Listener {
 	}
 
 	/**
-	 * Creates a new trade-bot entry from the "Bob" viewpoint,
+	 * Creates a new trade-bot entry from the "maker" viewpoint,
 	 * i.e. offering a local-chain asset in exchange for foreign blockchain currency.
 	 * <p>
 	 * Generates:
@@ -171,15 +171,15 @@ public class TradeBot implements Listener {
 	 * A local-chain AT is then constructed including the following as constants in the 'data segment':
 	 * <ul>
 	 * 	<li>local-chain 'trade' address - used to MESSAGE AT</li>
-	 * 	<li>'foreign' public key hash - used by Alice's to allow redeem of currency on foreign blockchain</li>
+	 * 	<li>'foreign' public key hash - used by taker's P2SH scripts to allow redeem of currency on foreign blockchain</li>
 	 * 	<li>hash(es) of secret(s) - used by AT (optional) and foreign blockchain as needed</li>
-	 * 	<li>local asset id and amount on offer by Bob</li>
-	 * 	<li>foreign currency amount expected in return by Bob (from Alice)</li>
+	 * 	<li>local asset id and amount on offer by maker</li>
+	 * 	<li>foreign currency amount expected in return by maker (from taker)</li>
 	 * 	<li>trading timeout, in case things go wrong and everyone needs to refund</li>
 	 * </ul>
 	 * Returns a DEPLOY_AT transaction that needs to be signed and broadcast to the local-chain network.
 	 * <p>
-	 * Trade-bot will wait for Bob's AT to be deployed before taking next step.
+	 * Trade-bot will wait for maker's AT to be deployed before taking next step.
 	 * <p>
 	 * @param repository
 	 * @param tradeBotCreateRequest
@@ -202,14 +202,14 @@ public class TradeBot implements Listener {
 	}
 
 	/**
-	 * Creates a trade-bot entry from the 'Alice' viewpoint,
+	 * Creates a trade-bot entry from the 'taker' viewpoint,
 	 * i.e. matching foreign blockchain currency to an existing local asset offer.
 	 * <p>
-	 * Requires a chosen trade offer from Bob, passed by <tt>crossChainTradeData</tt>
+	 * Requires a chosen trade offer from maker, passed by <tt>crossChainTradeData</tt>
 	 * and access to a foreign blockchain wallet via <tt>foreignKey</tt>.
 	 * <p>
 	 * @param repository
-	 * @param crossChainTradeData chosen trade OFFER that Alice wants to match
+	 * @param crossChainTradeData chosen trade OFFER that taker wants to match
 	 * @param foreignKey foreign blockchain wallet key
 	 * @throws DataException
 	 */
@@ -226,7 +226,7 @@ public class TradeBot implements Listener {
 			return ResponseResult.NETWORK_ISSUE;
 		}
 
-		// Check Alice doesn't already have an existing, on-going trade-bot entry for this AT.
+		// Check taker doesn't already have an existing, on-going trade-bot entry for this AT.
 		if (!(acct instanceof BitcoinyACCTv4) && repository.getCrossChainRepository().existsTradeWithAtExcludingStates(atData.getATAddress(), acctTradeBot.getEndStates()))
 			return ResponseResult.TRADE_ALREADY_EXISTS;
 
@@ -237,15 +237,15 @@ public class TradeBot implements Listener {
 	}
 
 	/**
-	 * Creates a trade-bot entries from the 'Alice' viewpoint,
+	 * Creates a trade-bot entries from the 'taker' viewpoint,
 	 * i.e. matching foreign blockchain currency to existing local asset offers.
 	 * <p>
-	 * Requires chosen trade offers from Bob, passed by <tt>crossChainTradeData</tt>
+	 * Requires chosen trade offers from maker, passed by <tt>crossChainTradeData</tt>
 	 * and access to a foreign blockchain wallet via <tt>foreignKey</tt>.
 	 * <p>
 	 * @param repository
-	 * @param crossChainTradeDataList chosen trade OFFERs that Alice wants to match
-	 * @param receiveAddress Alice's local-chain address to receive the offered local asset
+	 * @param crossChainTradeDataList chosen trade OFFERs that taker wants to match
+	 * @param receiveAddress taker's local-chain address to receive the offered local asset
 	 * @param foreignKey foreign blockchain wallet key
 	 * @param bitcoiny
 	 * @throws DataException
@@ -264,7 +264,7 @@ public class TradeBot implements Listener {
 		}
 
 		for( CrossChainTradeData tradeData : crossChainTradeDataList) {
-			// Check Alice doesn't already have an existing, on-going trade-bot entry for this AT.
+			// Check taker doesn't already have an existing, on-going trade-bot entry for this AT.
 			if (repository.getCrossChainRepository().existsTradeWithAtExcludingStates(tradeData.atAddress, acctTradeBot.getEndStates()))
 				return ResponseResult.TRADE_ALREADY_EXISTS;
 		}
@@ -449,12 +449,12 @@ public class TradeBot implements Listener {
 			String signerAddress = tradeLocalAccount.getAddress();
 
 		/*
-		* There's no point in Alice trying to broadcast presence for an AT that isn't locked to her,
+		* There's no point in taker trying to broadcast presence for an AT that isn't locked to them,
 		* as other peers won't be able to verify as signing public key isn't yet in the AT's data segment.
 		*/
 		if (!signerAddress.equals(tradeData.creatorTradeAddress) && !signerAddress.equals(tradeData.partnerAddress)) {
-			// Signer is neither Bob, nor trade locked to Alice
-			LOGGER.trace("Can't provide trade presence for our AT {} as it's not yet locked to Alice", atAddress);
+			// Signer is neither maker, nor trade locked to taker
+			LOGGER.trace("Can't provide trade presence for our AT {} as it's not yet locked to taker", atAddress);
 			return;
 		}
 
@@ -761,9 +761,9 @@ public class TradeBot implements Listener {
 					// Convert signer's public key to address form
 					String signerAddress = peersTradePresence.getTradeAddress();
 
-					// Signer's public key (in address form) must match Bob's / Alice's trade public key (in address form)
+					// Signer's public key (in address form) must match maker's / taker's trade public key (in address form)
 					if (!signerAddress.equals(tradeData.creatorTradeAddress) && !signerAddress.equals(tradeData.partnerAddress)) {
-						LOGGER.trace("Ignoring trade presence {} from peer {} as signer isn't Alice or Bob?",
+						LOGGER.trace("Ignoring trade presence {} from peer {} as signer isn't taker or maker?",
 								peersTradePresence.getAtAddress(), peer
 						);
 
@@ -812,15 +812,15 @@ public class TradeBot implements Listener {
 		}
 	}
 
-	/** Decorates a CrossChainTradeData object with Alice / Bob trade-bot presence timestamp, if available. */
+	/** Decorates a CrossChainTradeData object with taker / maker trade-bot presence timestamp, if available. */
 	public void decorateTradeDataWithPresence(CrossChainTradeData crossChainTradeData) {
-		// Match by AT address, then check for Bob vs Alice
+		// Match by AT address, then check for maker vs taker
 		this.safeAllTradePresencesByPubkey.values().stream()
 				.filter(tradePresenceData -> tradePresenceData.getAtAddress().equals(crossChainTradeData.atAddress))
 				.forEach(tradePresenceData -> {
 					String signerAddress = tradePresenceData.getTradeAddress();
 
-					// Signer's public key (in address form) must match Bob's / Alice's trade public key (in address form)
+					// Signer's public key (in address form) must match maker's / taker's trade public key (in address form)
 					if (signerAddress.equals(crossChainTradeData.creatorTradeAddress))
 						crossChainTradeData.creatorPresenceExpiry = tradePresenceData.getTimestamp();
 					else if (signerAddress.equals(crossChainTradeData.partnerAddress))

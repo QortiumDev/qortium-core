@@ -187,13 +187,13 @@ public class PresenceTransaction extends Transaction {
 
 			CrossChainTradeData crossChainTradeData = acctSupplier.get().populateTradeData(repository, atData);
 
-			// OK if signer's public key (in address form) matches Bob's trade public key (in address form)
+			// OK if signer's public key (in address form) matches maker's trade public key (in address form)
 			if (signerAddress.equals(crossChainTradeData.creatorTradeAddress)) {
 				TradeBot.getInstance().bridgePresence(this.presenceTransactionData.getTimestamp(), this.transactionData.getCreatorPublicKey(), timestampSignature, atData.getATAddress());
 				return ValidationResult.OK;
 			}
 
-			// OK if signer's public key (in address form) matches Alice's trade public key (in address form)
+			// OK if signer's public key (in address form) matches taker's trade public key (in address form)
 			if (signerAddress.equals(crossChainTradeData.partnerAddress)) {
 				TradeBot.getInstance().bridgePresence(this.presenceTransactionData.getTimestamp(), this.transactionData.getCreatorPublicKey(), timestampSignature, atData.getATAddress());
 				return ValidationResult.OK;

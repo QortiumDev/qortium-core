@@ -406,7 +406,7 @@ public class ImportExportTests extends Common {
         long localAmount = 5678;
 
         TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, BitcoinyACCTv3.NAME,
-                TradeStates.State.BOB_WAITING_FOR_AT_CONFIRM.name(), TradeStates.State.BOB_WAITING_FOR_AT_CONFIRM.value,
+                TradeStates.State.MAKER_WAITING_FOR_AT_CONFIRM.name(), TradeStates.State.MAKER_WAITING_FOR_AT_CONFIRM.value,
                 creator.getAddress(), atAddress, timestamp, Asset.NATIVE, localAmount,
                 tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
                 null, null,

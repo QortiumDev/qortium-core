@@ -34,9 +34,9 @@ public class TradeBotUtils {
 
     private static final Logger LOGGER = LogManager.getLogger(TradeBotUtils.class);
     /**
-     * Creates trade-bot entries from the 'Alice' viewpoint, i.e. matching Bitcoiny coin to existing offers.
+     * Creates trade-bot entries from the 'taker' viewpoint, i.e. matching Bitcoiny coin to existing offers.
      * <p>
-     * Requires chosen trade offers from Bob, passed by <tt>crossChainTradeData</tt>
+     * Requires chosen trade offers from maker, passed by <tt>crossChainTradeData</tt>
      * and access to a Blockchain wallet via <tt>foreignKey</tt>.
      * <p>
      * The <tt>crossChainTradeData</tt> contains the current trade offers state
@@ -58,17 +58,17 @@ public class TradeBotUtils {
      * It is envisaged that the value in <tt>foreignKey</tt> will actually come from a local-chain UI-managed wallet.
      * <p>
      * If sufficient funds are available, <b>this method will actually fund the P2SH-A</b>
-     * with the Blockchain amount expected by 'Bob'.
+     * with the Blockchain amount expected by 'maker'.
      * <p>
      * If the Blockchain transaction is successfully broadcast to the network then
-     * we also send a MESSAGE to Bob's trade-bot to let them know; one message for each trade.
+     * we also send a MESSAGE to maker's trade-bot to let them know; one message for each trade.
      * <p>
      * The trade-bot entries are saved to the repository and the cross-chain trading process commences.
      * <p>
      *
      * @param repository for backing up the trade bot data
-     * @param crossChainTradeDataList chosen trade OFFERs that Alice wants to match
-     * @param receiveAddress Alice's local-chain address
+     * @param crossChainTradeDataList chosen trade OFFERs that taker wants to match
+     * @param receiveAddress taker's local-chain address
      * @param foreignKey              funded wallet xprv in base58
      * @param bitcoiny the bitcoiny chain to match the sell offer with
      * @return true if P2SH-A funding transaction successfully broadcast to Blockchain network, false otherwise
@@ -124,7 +124,7 @@ public class TradeBotUtils {
             byte[] receivingPublicKeyHash = Base58.decode(receiveAddress); // Actually the whole address, not just PKH
 
 	            TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, acct.getClass().getSimpleName(),
-	                    State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
+	                    State.TAKER_WAITING_FOR_AT_LOCK.name(), State.TAKER_WAITING_FOR_AT_LOCK.value,
 	                    receiveAddress,
 	                    crossChainTradeData.atAddress,
 	                    now,
@@ -170,7 +170,7 @@ public class TradeBotUtils {
         }
 
         for(DataCombiner datumToProcess : dataToProcess ) {
-            // Attempt to send MESSAGE to Bob's local-chain trade address
+            // Attempt to send MESSAGE to maker's local-chain trade address
             TradeBotData tradeBotData = datumToProcess.tradeBotData;
 
             byte[] messageData = CrossChainUtils.buildOfferMessage(tradeBotData.getTradeForeignPublicKeyHash(), tradeBotData.getHashOfSecret(), tradeBotData.getLockTimeA());
@@ -180,7 +180,7 @@ public class TradeBotUtils {
             boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeLocalPublicKey(), messageRecipient, messageData);
             if (!isMessageAlreadySent) {
                 // Do this in a new thread so caller doesn't have to wait for computeNonce()
-                // In the unlikely event that the transaction doesn't validate then the buy won't happen and eventually Alice's AT will be refunded
+                // In the unlikely event that the transaction doesn't validate then the buy won't happen and eventually taker's AT will be refunded
                 new Thread(() -> {
                     try (final Repository threadsRepository = RepositoryManager.getRepository()) {
                         PrivateKeyAccount sender = new PrivateKeyAccount(threadsRepository, tradeBotData.getTradePrivateKey());
@@ -199,18 +199,18 @@ public class TradeBotUtils {
                             ValidationResult result = messageTransaction.importAsUnconfirmed();
 
                             if (result != ValidationResult.OK) {
-                                LOGGER.warn(() -> String.format("Unable to send MESSAGE to Bob's trade-bot %s: %s", messageRecipient, result.name()));
+                                LOGGER.warn(() -> String.format("Unable to send MESSAGE to maker's trade-bot %s: %s", messageRecipient, result.name()));
                             }
                         } else {
-                            LOGGER.warn(() -> String.format("Unable to send MESSAGE to Bob's trade-bot %s: signature invalid", messageRecipient));
+                            LOGGER.warn(() -> String.format("Unable to send MESSAGE to maker's trade-bot %s: signature invalid", messageRecipient));
                         }
                     } catch (DataException e) {
-                        LOGGER.warn(() -> String.format("Unable to send MESSAGE to Bob's trade-bot %s: %s", messageRecipient, e.getMessage()));
+                        LOGGER.warn(() -> String.format("Unable to send MESSAGE to maker's trade-bot %s: %s", messageRecipient, e.getMessage()));
                     }
                 }, "TradeBot response").start();
             }
 
-            TradeBot.updateTradeBotState(repository, tradeBotData, () -> String.format("Funding P2SH-A %s. Messaged Bob. Waiting for AT-lock", datumToProcess.p2shAddress));
+            TradeBot.updateTradeBotState(repository, tradeBotData, () -> String.format("Funding P2SH-A %s. Messaged maker. Waiting for AT-lock", datumToProcess.p2shAddress));
         }
 
         return AcctTradeBot.ResponseResult.OK;

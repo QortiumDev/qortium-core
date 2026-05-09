@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-09 - refactor: rename ACCT trade roles to maker and taker
+
+Renamed the crosschain ACCT trade-bot role terminology from Alice/Bob to maker/taker, including persisted trade-bot state names, HTLC API descriptions, comments, logs, and local helper names. The state numeric values are unchanged, keeping current behavior intact while making split-fill and future reverse-trade flows easier to reason about.
+
 ### 2026-05-09 - test: expand split-fill ACCT coverage
 
 Expanded deterministic ACCT v4 coverage for split-fill offers by testing unfilled offer cancellation, active fill refund back into an offer, cancellation that waits for active fills to refund, and maker-side pending fill cleanup. The trade-bot now exposes a small package-level helper for stale pending fill state transitions so the behavior can be tested without relying on live foreign-chain calls.

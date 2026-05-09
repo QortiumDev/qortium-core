@@ -51,12 +51,12 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 
 	private static final Logger LOGGER = LogManager.getLogger(PirateChainACCTv3TradeBot.class);
 
-	/** Maximum time Bob waits for his AT creation transaction to be confirmed into a block. (milliseconds) */
+	/** Maximum time maker waits for their AT creation transaction to be confirmed into a block. (milliseconds) */
 	private static final long MAX_AT_CONFIRMATION_PERIOD = 24 * 60 * 60 * 1000L; // ms
 
 	private static PirateChainACCTv3TradeBot instance;
 
-	private final List<String> endStates = Arrays.asList(State.BOB_DONE, State.BOB_REFUNDED, State.ALICE_DONE, State.ALICE_REFUNDING_A, State.ALICE_REFUNDED).stream()
+	private final List<String> endStates = Arrays.asList(State.MAKER_DONE, State.MAKER_REFUNDED, State.TAKER_DONE, State.TAKER_REFUNDING_FOREIGN, State.TAKER_REFUNDED).stream()
 			.map(State::name)
 			.collect(Collectors.toUnmodifiableList());
 
@@ -76,7 +76,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 	}
 
 	/**
-	 * Creates a new trade-bot entry from the "Bob" viewpoint, i.e. offering a local-chain asset in exchange for ARRR.
+	 * Creates a new trade-bot entry from the "maker" viewpoint, i.e. offering a local-chain asset in exchange for ARRR.
 	 * <p>
 	 * Generates:
 	 * <ul>
@@ -90,14 +90,14 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 	 * A local-chain AT is then constructed including the following as constants in the 'data segment':
 	 * <ul>
 	 * 	<li>local-chain 'trade' address - used as a MESSAGE contact</li>
-	 * 	<li>'foreign'/PirateChain public key hash - used by Alice's P2SH scripts to allow redeem</li>
-	 * 	<li>local asset id and amount on offer by Bob</li>
-	 * 	<li>ARRR amount expected in return by Bob (from Alice)</li>
+	 * 	<li>'foreign'/PirateChain public key hash - used by the taker's P2SH scripts to allow redeem</li>
+	 * 	<li>local asset id and amount on offer by maker</li>
+	 * 	<li>ARRR amount expected in return by maker (from taker)</li>
 	 * 	<li>trading timeout, in case things go wrong and everyone needs to refund</li>
 	 * </ul>
 	 * Returns a DEPLOY_AT transaction that needs to be signed and broadcast to the local-chain network.
 	 * <p>
-	 * Trade-bot will wait for Bob's AT to be deployed before taking next step.
+	 * Trade-bot will wait for maker's AT to be deployed before taking next step.
 	 * <p>
 	 * @param repository
 	 * @param tradeBotCreateRequest
@@ -164,7 +164,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		String atAddress = deployAtTransactionData.getAtAddress();
 
 			TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, PirateChainACCTv3.NAME,
-					State.BOB_WAITING_FOR_AT_CONFIRM.name(), State.BOB_WAITING_FOR_AT_CONFIRM.value,
+					State.MAKER_WAITING_FOR_AT_CONFIRM.name(), State.MAKER_WAITING_FOR_AT_CONFIRM.value,
 					creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.localAssetId, tradeBotCreateRequest.localAmount,
 					tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
 					null, null,
@@ -186,9 +186,9 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 	}
 
 	/**
-	 * Creates a trade-bot entry from the 'Alice' viewpoint, i.e. matching ARRR to an existing offer.
+	 * Creates a trade-bot entry from the 'taker' viewpoint, i.e. matching ARRR to an existing offer.
 	 * <p>
-	 * Requires a chosen trade offer from Bob, passed by <tt>crossChainTradeData</tt>
+	 * Requires a chosen trade offer from maker, passed by <tt>crossChainTradeData</tt>
 	 * and access to a PirateChain wallet via <tt>xprv58</tt>.
 	 * <p>
 	 * The <tt>crossChainTradeData</tt> contains the current trade offer state
@@ -210,15 +210,15 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 	 * It is envisaged that the value in <tt>xprv58</tt> will actually come from a local-chain UI-managed wallet.
 	 * <p>
 	 * If sufficient funds are available, <b>this method will actually fund the P2SH-A</b>
-	 * with the PirateChain amount expected by 'Bob'.
+	 * with the PirateChain amount expected by 'maker'.
 	 * <p>
 	 * If the PirateChain transaction is successfully broadcast to the network then
-	 * we also send a MESSAGE to Bob's trade-bot to let them know.
+	 * we also send a MESSAGE to maker's trade-bot to let them know.
 	 * <p>
 	 * The trade-bot entry is saved to the repository and the cross-chain trading process commences.
 	 * <p>
 	 * @param repository
-	 * @param crossChainTradeData chosen trade OFFER that Alice wants to match
+	 * @param crossChainTradeData chosen trade OFFER that taker wants to match
 	 * @param seed58 funded wallet xprv in base58
 	 * @return true if P2SH-A funding transaction successfully broadcast to PirateChain network, false otherwise
 	 * @throws DataException
@@ -245,7 +245,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		int lockTimeA = crossChainTradeData.tradeTimeout * 60 + (int) (now / 1000L);
 
 			TradeBotData tradeBotData =  new TradeBotData(tradePrivateKey, PirateChainACCTv3.NAME,
-					State.ALICE_WAITING_FOR_AT_LOCK.name(), State.ALICE_WAITING_FOR_AT_LOCK.value,
+					State.TAKER_WAITING_FOR_AT_LOCK.name(), State.TAKER_WAITING_FOR_AT_LOCK.value,
 					receivingAddress, crossChainTradeData.atAddress, now, crossChainTradeData.localAssetId, crossChainTradeData.localAmount,
 					tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
 					secretA, hashOfSecretA,
@@ -286,14 +286,14 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 			return ResponseResult.BALANCE_ISSUE;
 		}
 
-		// Attempt to send MESSAGE to Bob's local-chain trade address
+		// Attempt to send MESSAGE to maker's local-chain trade address
 		byte[] messageData = CrossChainUtils.buildOfferMessage(tradeBotData.getTradeForeignPublicKey(), tradeBotData.getHashOfSecret(), tradeBotData.getLockTimeA());
 		String messageRecipient = crossChainTradeData.creatorTradeAddress;
 
 		boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeLocalPublicKey(), messageRecipient, messageData);
 		if (!isMessageAlreadySent) {
 			// Do this in a new thread so caller doesn't have to wait for computeNonce()
-			// In the unlikely event that the transaction doesn't validate then the buy won't happen and eventually Alice's AT will be refunded
+			// In the unlikely event that the transaction doesn't validate then the buy won't happen and eventually taker's AT will be refunded
 			new Thread(() -> {
 				try (final Repository threadsRepository = RepositoryManager.getRepository()) {
 					PrivateKeyAccount sender = new PrivateKeyAccount(threadsRepository, tradeBotData.getTradePrivateKey());
@@ -312,19 +312,19 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 						ValidationResult result = messageTransaction.importAsUnconfirmed();
 
 						if (result != ValidationResult.OK) {
-							LOGGER.warn(() -> String.format("Unable to send MESSAGE to Bob's trade-bot %s: %s", messageRecipient, result.name()));
+							LOGGER.warn(() -> String.format("Unable to send MESSAGE to maker's trade-bot %s: %s", messageRecipient, result.name()));
 						}
 					}
 					else {
-						LOGGER.warn(() -> String.format("Unable to send MESSAGE to Bob's trade-bot %s: signature invalid", messageRecipient));
+						LOGGER.warn(() -> String.format("Unable to send MESSAGE to maker's trade-bot %s: signature invalid", messageRecipient));
 					}
 				} catch (DataException e) {
-					LOGGER.warn(() -> String.format("Unable to send MESSAGE to Bob's trade-bot %s: %s", messageRecipient, e.getMessage()));
+					LOGGER.warn(() -> String.format("Unable to send MESSAGE to maker's trade-bot %s: %s", messageRecipient, e.getMessage()));
 				}
 			}, "TradeBot response").start();
 		}
 
-		TradeBot.updateTradeBotState(repository, tradeBotData, () -> String.format("Funding P2SH-A %s. Messaged Bob. Waiting for AT-lock", p2shAddressT3));
+		TradeBot.updateTradeBotState(repository, tradeBotData, () -> String.format("Funding P2SH-A %s. Messaged maker. Waiting for AT-lock", p2shAddressT3));
 
 		return ResponseResult.OK;
 	}
@@ -350,12 +350,12 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 			return true;
 
 		switch (tradeBotState) {
-			case BOB_WAITING_FOR_AT_CONFIRM:
-			case ALICE_DONE:
-			case BOB_DONE:
-			case ALICE_REFUNDED:
-			case BOB_REFUNDED:
-			case ALICE_REFUNDING_A:
+			case MAKER_WAITING_FOR_AT_CONFIRM:
+			case TAKER_DONE:
+			case MAKER_DONE:
+			case TAKER_REFUNDED:
+			case MAKER_REFUNDED:
+			case TAKER_REFUNDING_FOREIGN:
 				return true;
 
 			default:
@@ -392,54 +392,54 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		}
 
 		switch (tradeBotState) {
-			case BOB_WAITING_FOR_AT_CONFIRM:
-				handleBobWaitingForAtConfirm(repository, tradeBotData);
+			case MAKER_WAITING_FOR_AT_CONFIRM:
+				handleMakerWaitingForAtConfirm(repository, tradeBotData);
 				break;
 
-			case BOB_WAITING_FOR_MESSAGE:
+			case MAKER_WAITING_FOR_TAKER_MESSAGE:
 				TradeBot.getInstance().updatePresence(repository, tradeBotData, tradeData);
-				handleBobWaitingForMessage(repository, tradeBotData, atData, tradeData);
+				handleMakerWaitingForTakerMessage(repository, tradeBotData, atData, tradeData);
 				break;
 
-			case ALICE_WAITING_FOR_AT_LOCK:
+			case TAKER_WAITING_FOR_AT_LOCK:
 				TradeBot.getInstance().updatePresence(repository, tradeBotData, tradeData);
-				handleAliceWaitingForAtLock(repository, tradeBotData, atData, tradeData);
+				handleTakerWaitingForAtLock(repository, tradeBotData, atData, tradeData);
 				break;
 
-			case BOB_WAITING_FOR_AT_REDEEM:
+			case MAKER_WAITING_FOR_AT_REDEEM:
 				TradeBot.getInstance().updatePresence(repository, tradeBotData, tradeData);
-				handleBobWaitingForAtRedeem(repository, tradeBotData, atData, tradeData);
+				handleMakerWaitingForAtRedeem(repository, tradeBotData, atData, tradeData);
 				break;
 
-			case ALICE_DONE:
-			case BOB_DONE:
+			case TAKER_DONE:
+			case MAKER_DONE:
 				break;
 
-			case ALICE_REFUNDING_A:
+			case TAKER_REFUNDING_FOREIGN:
 				TradeBot.getInstance().updatePresence(repository, tradeBotData, tradeData);
-				handleAliceRefundingP2shA(repository, tradeBotData, atData, tradeData);
+				handleTakerRefundingP2shA(repository, tradeBotData, atData, tradeData);
 				break;
 
-			case ALICE_REFUNDED:
-			case BOB_REFUNDED:
+			case TAKER_REFUNDED:
+			case MAKER_REFUNDED:
 				break;
 		}
 	}
 
 	/**
-	 * Trade-bot is waiting for Bob's AT to deploy.
+	 * Trade-bot is waiting for maker's AT to deploy.
 	 * <p>
-	 * If AT is deployed, then trade-bot's next step is to wait for MESSAGE from Alice.
+	 * If AT is deployed, then trade-bot's next step is to wait for MESSAGE from taker.
 	 */
-	private void handleBobWaitingForAtConfirm(Repository repository, TradeBotData tradeBotData) throws DataException {
+	private void handleMakerWaitingForAtConfirm(Repository repository, TradeBotData tradeBotData) throws DataException {
 		if (!repository.getATRepository().exists(tradeBotData.getAtAddress())) {
 			if (NTP.getTime() - tradeBotData.getTimestamp() <= MAX_AT_CONFIRMATION_PERIOD)
 				return;
 
 			// We've waited ages for AT to be confirmed into a block but something has gone awry.
 			// After this long we assume transaction loss so give up with trade-bot entry too.
-			tradeBotData.setState(State.BOB_REFUNDED.name());
-			tradeBotData.setStateValue(State.BOB_REFUNDED.value);
+			tradeBotData.setState(State.MAKER_REFUNDED.name());
+			tradeBotData.setStateValue(State.MAKER_REFUNDED.value);
 			tradeBotData.setTimestamp(NTP.getTime());
 			// We delete trade-bot entry here instead of saving, hence not using updateTradeBotState()
 			repository.getCrossChainRepository().delete(tradeBotData.getTradePrivateKey());
@@ -450,34 +450,34 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 			return;
 		}
 
-		TradeBot.updateTradeBotState(repository, tradeBotData, State.BOB_WAITING_FOR_MESSAGE,
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_WAITING_FOR_TAKER_MESSAGE,
 				() -> String.format("AT %s confirmed ready. Waiting for trade message", tradeBotData.getAtAddress()));
 	}
 
 	/**
-	 * Trade-bot is waiting for MESSAGE from Alice's trade-bot, containing Alice's trade info.
+	 * Trade-bot is waiting for MESSAGE from taker's trade-bot, containing taker's trade info.
 	 * <p>
-	 * It's possible Bob has cancelling his trade offer, receiving an automatic native asset refund,
+	 * It's possible the maker has cancelled their trade offer, receiving an automatic local asset refund,
 	 * in which case trade-bot is done with this specific trade and finalizes on refunded state.
 	 * <p>
-	 * Assuming trade is still on offer, trade-bot checks the contents of MESSAGE from Alice's trade-bot.
+	 * Assuming trade is still on offer, trade-bot checks the contents of MESSAGE from taker's trade-bot.
 	 * <p>
-	 * Details from Alice are used to derive P2SH-A address and this is checked for funding balance.
+	 * Details from taker are used to derive P2SH-A address and this is checked for funding balance.
 	 * <p>
 	 * Assuming P2SH-A has at least expected PirateChain balance,
-	 * Bob's trade-bot constructs a zero-fee, PoW MESSAGE to send to Bob's AT with more trade details.
+	 * maker's trade-bot constructs a zero-fee, PoW MESSAGE to send to maker's AT with more trade details.
 	 * <p>
-	 * On processing this MESSAGE, Bob's AT should switch into 'TRADE' mode and only trade with Alice.
+	 * On processing this MESSAGE, maker's AT should switch into 'TRADE' mode and only trade with taker.
 	 * <p>
-	 * Trade-bot's next step is to wait for Alice to redeem the AT, which will allow Bob to
-	 * extract secret-A needed to redeem Alice's P2SH.
+	 * Trade-bot's next step is to wait for taker to redeem the AT, which will allow maker to
+	 * extract secret-A needed to redeem taker's P2SH.
 	 * @throws ForeignBlockchainException
 	 */
-	private void handleBobWaitingForMessage(Repository repository, TradeBotData tradeBotData,
+	private void handleMakerWaitingForTakerMessage(Repository repository, TradeBotData tradeBotData,
 			ATData atData, CrossChainTradeData crossChainTradeData) throws DataException, ForeignBlockchainException {
-		// If AT has finished then Bob likely cancelled his trade offer
+		// If AT has finished then the maker likely cancelled their trade offer
 		if (atData.getIsFinished()) {
-			TradeBot.updateTradeBotState(repository, tradeBotData, State.BOB_REFUNDED,
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_REFUNDED,
 					() -> String.format("AT %s cancelled - trading aborted", tradeBotData.getAtAddress()));
 			return;
 		}
@@ -491,20 +491,20 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 			if (messageTransactionData.isText())
 				continue;
 
-			// We're expecting: HASH160(secret-A), Alice's PirateChain pubkeyhash and lockTime-A
+			// We're expecting: HASH160(secret-A), taker's PirateChain pubkeyhash and lockTime-A
 			byte[] messageData = messageTransactionData.getData();
 			PirateChainACCTv3.OfferMessageData offerMessageData = PirateChainACCTv3.extractOfferMessageData(messageData);
 			if (offerMessageData == null)
 				continue;
 
-			byte[] aliceForeignPublicKey = offerMessageData.partnerPirateChainPublicKey;
+			byte[] takerForeignPublicKey = offerMessageData.partnerPirateChainPublicKey;
 			byte[] hashOfSecretA = offerMessageData.hashOfSecretA;
 			int lockTimeA = (int) offerMessageData.lockTimeA;
 			long messageTimestamp = messageTransactionData.getTimestamp();
 			int refundTimeout = PirateChainACCTv3.calcRefundTimeout(messageTimestamp, lockTimeA);
 
 			// Determine P2SH-A address and confirm funded
-			byte[] redeemScriptA = PirateChainHTLC.buildScript(aliceForeignPublicKey, lockTimeA, tradeBotData.getTradeForeignPublicKey(), hashOfSecretA);
+			byte[] redeemScriptA = PirateChainHTLC.buildScript(takerForeignPublicKey, lockTimeA, tradeBotData.getTradeForeignPublicKey(), hashOfSecretA);
 			String p2shAddress = pirateChain.deriveP2shAddressBPrefix(redeemScriptA); // Use 'b' prefix when checking status
 
 			long feeTimestamp = calcFeeTimestamp(lockTimeA, crossChainTradeData.tradeTimeout);
@@ -522,7 +522,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 				case REDEEM_IN_PROGRESS:
 				case REDEEMED:
 					// We've already redeemed this?
-					TradeBot.updateTradeBotState(repository, tradeBotData, State.BOB_DONE,
+					TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_DONE,
 							() -> String.format("P2SH-A %s already spent? Assuming trade complete", p2shAddress));
 					return;
 
@@ -538,10 +538,10 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 
 			// Good to go - send MESSAGE to AT
 
-			String aliceNativeAddress = Crypto.toAddress(messageTransactionData.getCreatorPublicKey());
+			String takerLocalAddress = Crypto.toAddress(messageTransactionData.getCreatorPublicKey());
 
 			// Build outgoing message, padding each part to 32 bytes to make it easier for AT to consume
-			byte[] outgoingMessageData = PirateChainACCTv3.buildTradeMessage(aliceNativeAddress, aliceForeignPublicKey, hashOfSecretA, lockTimeA, refundTimeout);
+			byte[] outgoingMessageData = PirateChainACCTv3.buildTradeMessage(takerLocalAddress, takerForeignPublicKey, hashOfSecretA, lockTimeA, refundTimeout);
 			String messageRecipient = tradeBotData.getAtAddress();
 
 			boolean isMessageAlreadySent = repository.getMessageRepository().exists(tradeBotData.getTradeLocalPublicKey(), messageRecipient, outgoingMessageData);
@@ -572,31 +572,31 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 				}
 			}
 
-			TradeBot.updateTradeBotState(repository, tradeBotData, State.BOB_WAITING_FOR_AT_REDEEM,
-					() -> String.format("Locked AT %s to %s. Waiting for AT redeem", tradeBotData.getAtAddress(), aliceNativeAddress));
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_WAITING_FOR_AT_REDEEM,
+					() -> String.format("Locked AT %s to %s. Waiting for AT redeem", tradeBotData.getAtAddress(), takerLocalAddress));
 
 			return;
 		}
 	}
 
 	/**
-	 * Trade-bot is waiting for Bob's AT to switch to TRADE mode and lock trade to Alice only.
+	 * Trade-bot is waiting for maker's AT to switch to TRADE mode and lock trade to taker only.
 	 * <p>
-	 * It's possible that Bob has cancelled his trade offer in the mean time, or that somehow
+	 * It's possible that maker has cancelled their trade offer in the mean time, or that somehow
 	 * this process has taken so long that we've reached P2SH-A's locktime, or that someone else
-	 * has managed to trade with Bob. In any of these cases, trade-bot switches to begin the refunding process.
+	 * has managed to trade with maker. In any of these cases, trade-bot switches to begin the refunding process.
 	 * <p>
-	 * Assuming Bob's AT is locked to Alice, trade-bot checks AT's state data to make sure it is correct.
+	 * Assuming maker's AT is locked to taker, trade-bot checks AT's state data to make sure it is correct.
 	 * <p>
-	 * If all is well, trade-bot then redeems AT using Alice's secret-A, releasing Bob's NATIVE to Alice.
+	 * If all is well, trade-bot then redeems AT using taker's secret-A, releasing maker's local asset to taker.
 	 * <p>
-	 * In revealing a valid secret-A, Bob can then redeem the ARRR funds from P2SH-A.
+	 * In revealing a valid secret-A, maker can then redeem the ARRR funds from P2SH-A.
 	 * <p>
 	 * @throws ForeignBlockchainException
 	 */
-	private void handleAliceWaitingForAtLock(Repository repository, TradeBotData tradeBotData,
+	private void handleTakerWaitingForAtLock(Repository repository, TradeBotData tradeBotData,
 			ATData atData, CrossChainTradeData crossChainTradeData) throws DataException, ForeignBlockchainException {
-		if (aliceUnexpectedState(repository, tradeBotData, atData, crossChainTradeData))
+		if (takerUnexpectedState(repository, tradeBotData, atData, crossChainTradeData))
 			return;
 
 		PirateChain pirateChain = PirateChain.getInstance();
@@ -622,19 +622,19 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 				case REDEEM_IN_PROGRESS:
 				case REDEEMED:
 					// Already redeemed?
-					TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_DONE,
+					TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_DONE,
 							() -> String.format("P2SH-A %s already spent? Assuming trade completed", p2shAddress));
 					return;
 
 				case REFUND_IN_PROGRESS:
 				case REFUNDED:
-					TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_REFUNDED,
+					TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_REFUNDED,
 							() -> String.format("P2SH-A %s already refunded. Trade aborted", p2shAddress));
 					return;
 
 			}
 
-			TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_REFUNDING_A,
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_REFUNDING_FOREIGN,
 					() -> atData.getIsFinished()
 					? String.format("AT %s cancelled. Refunding P2SH-A %s - aborting trade", tradeBotData.getAtAddress(), p2shAddress)
 					: String.format("LockTime-A reached, refunding P2SH-A %s - aborting trade", p2shAddress));
@@ -646,7 +646,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		if (crossChainTradeData.mode != AcctMode.TRADING)
 			return;
 
-		// AT is in TRADE mode and locked to us as checked by aliceUnexpectedState() above
+		// AT is in TRADE mode and locked to us as checked by takerUnexpectedState() above
 
 		// Find our MESSAGE to AT from previous state
 		List<MessageTransactionData> messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(tradeBotData.getTradeLocalPublicKey(),
@@ -702,36 +702,36 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 			}
 		}
 
-		TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_DONE,
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_DONE,
 				() -> String.format("Redeeming AT %s. Funds should arrive at %s",
 						tradeBotData.getAtAddress(), receivingAddress));
 	}
 
 	/**
-	 * Trade-bot is waiting for Alice to redeem Bob's AT, thus revealing secret-A which is required to spend the ARRR funds from P2SH-A.
+	 * Trade-bot is waiting for taker to redeem maker's AT, thus revealing secret-A which is required to spend the ARRR funds from P2SH-A.
 	 * <p>
-	 * It's possible that Bob's AT has reached its trading timeout and automatically refunded NATIVE back to Bob. In which case,
+	 * It's possible that maker's AT has reached its trading timeout and automatically refunded the local asset back to maker. In which case,
 	 * trade-bot is done with this specific trade and finalizes in refunded state.
 	 * <p>
-	 * Assuming trade-bot can extract a valid secret-A from Alice's MESSAGE then trade-bot uses that to redeem the ARRR funds from P2SH-A
-	 * to Bob's 'foreign'/PirateChain trade legacy-format address, as derived from trade private key.
+	 * Assuming trade-bot can extract a valid secret-A from taker's MESSAGE then trade-bot uses that to redeem the ARRR funds from P2SH-A
+	 * to maker's 'foreign'/PirateChain trade legacy-format address, as derived from trade private key.
 	 * <p>
-	 * (This could potentially be 'improved' to send ARRR to any address of Bob's choosing by changing the transaction output).
+	 * (This could potentially be 'improved' to send ARRR to any address of maker's choosing by changing the transaction output).
 	 * <p>
 	 * If trade-bot successfully broadcasts the transaction, then this specific trade is done.
 	 * @throws ForeignBlockchainException
 	 */
-	private void handleBobWaitingForAtRedeem(Repository repository, TradeBotData tradeBotData,
+	private void handleMakerWaitingForAtRedeem(Repository repository, TradeBotData tradeBotData,
 			ATData atData, CrossChainTradeData crossChainTradeData) throws DataException, ForeignBlockchainException {
-		// AT should be 'finished' once Alice has redeemed native asset funds
+		// AT should be 'finished' once taker has redeemed the local asset funds
 		if (!atData.getIsFinished())
 			// Not finished yet
 			return;
 
 		// If AT is REFUNDED or CANCELLED then something has gone wrong
 		if (crossChainTradeData.mode == AcctMode.REFUNDED || crossChainTradeData.mode == AcctMode.CANCELLED) {
-			// Alice hasn't redeemed the native asset, so there is no point in trying to redeem the ARRR
-			TradeBot.updateTradeBotState(repository, tradeBotData, State.BOB_REFUNDED,
+			// Taker hasn't redeemed the local asset, so there is no point in trying to redeem the ARRR
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_REFUNDED,
 					() -> String.format("AT %s has auto-refunded - trade aborted", tradeBotData.getAtAddress()));
 
 			return;
@@ -799,7 +799,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 			}
 		}
 
-		TradeBot.updateTradeBotState(repository, tradeBotData, State.BOB_DONE,
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_DONE,
 				() -> String.format("P2SH-A %s redeemed. Funds should arrive at %s", tradeBotData.getAtAddress(), receivingAddress));
 	}
 
@@ -807,7 +807,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 	 * Trade-bot is attempting to refund P2SH-A.
 	 * @throws ForeignBlockchainException
 	 */
-	private void handleAliceRefundingP2shA(Repository repository, TradeBotData tradeBotData,
+	private void handleTakerRefundingP2shA(Repository repository, TradeBotData tradeBotData,
 			ATData atData, CrossChainTradeData crossChainTradeData) throws DataException, ForeignBlockchainException {
 		int lockTimeA = tradeBotData.getLockTimeA();
 
@@ -841,7 +841,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 			case REDEEM_IN_PROGRESS:
 			case REDEEMED:
 				// Too late!
-				TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_DONE,
+				TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_DONE,
 						() -> String.format("P2SH-A %s already spent!", p2shAddress));
 				return;
 
@@ -870,19 +870,19 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 			}
 		}
 
-		TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_REFUNDED,
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_REFUNDED,
 				() -> String.format("LockTime-A reached. Refunded P2SH-A %s. Trade aborted", p2shAddress));
 	}
 
 	/**
-	 * Returns true if Alice finds AT unexpectedly cancelled, refunded, redeemed or locked to someone else.
+	 * Returns true if taker finds AT unexpectedly cancelled, refunded, redeemed or locked to someone else.
 	 * <p>
-	 * Will automatically update trade-bot state to <tt>ALICE_REFUNDING_A</tt> or <tt>ALICE_DONE</tt> as necessary.
+	 * Will automatically update trade-bot state to <tt>TAKER_REFUNDING_FOREIGN</tt> or <tt>TAKER_DONE</tt> as necessary.
 	 * 
 	 * @throws DataException
 	 * @throws ForeignBlockchainException
 	 */
-	private boolean aliceUnexpectedState(Repository repository, TradeBotData tradeBotData,
+	private boolean takerUnexpectedState(Repository repository, TradeBotData tradeBotData,
 			ATData atData, CrossChainTradeData crossChainTradeData) throws DataException, ForeignBlockchainException {
 		// This is OK
 		if (!atData.getIsFinished() && crossChainTradeData.mode == AcctMode.OFFERING)
@@ -895,7 +895,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 				// AT is trading with us - OK
 				return false;
 			} else {
-				TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_REFUNDING_A,
+				TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_REFUNDING_FOREIGN,
 						() -> String.format("AT %s trading with someone else: %s. Refunding & aborting trade", tradeBotData.getAtAddress(), crossChainTradeData.partnerAddress));
 
 				return true;
@@ -903,11 +903,11 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 
 		if (atData.getIsFinished() && crossChainTradeData.mode == AcctMode.REDEEMED && isAtLockedToUs) {
 			// We've redeemed already?
-			TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_DONE,
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_DONE,
 					() -> String.format("AT %s already redeemed by us. Trade completed", tradeBotData.getAtAddress()));
 		} else {
 			// Any other state is not good, so start defensive refund
-			TradeBot.updateTradeBotState(repository, tradeBotData, State.ALICE_REFUNDING_A,
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_REFUNDING_FOREIGN,
 					() -> String.format("AT %s cancelled/refunded/redeemed by someone else/invalid state. Refunding & aborting trade", tradeBotData.getAtAddress()));
 		}
 
