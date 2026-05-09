@@ -50,10 +50,10 @@ public class TradeBotCreateRequest {
 	@Schema(description = "Suggested trade timeout (minutes)", example = "10080")
 	public int tradeTimeout;
 
-	@Schema(description = "Foreign blockchain address for receiving", example = "1BitcoinEaterAddressDontSendf59kuE")
+	@Schema(description = "Receiving address: foreign-chain address for SELL_LOCAL offers, local-chain address for SELL_FOREIGN offers", example = "1BitcoinEaterAddressDontSendf59kuE")
 	public String receivingAddress;
 
-	@Schema(description = "Foreign blockchain private key, required when tradeDirection is SELL_FOREIGN")
+	@Schema(description = "Maker's foreign blockchain private key, required when tradeDirection is SELL_FOREIGN")
 	public String foreignKey;
 
 	public TradeBotCreateRequest() {

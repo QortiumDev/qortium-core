@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-09 - crosschain: make reverse ACCT trades foreign-first
+
+Redesigned `BitcoinyACCTv5` reverse trades so the maker uses a maker-owned secret and funds a taker-specific foreign HTLC before the taker locks any local-chain asset. Reverse takers now reserve an offer with a zero-payment message, wait for the maker's funded foreign HTLC declaration, then use the new `/crosschain/tradebot/locklocal` API step to build the unsigned local asset lock transaction; the maker can only claim the local asset by revealing the secret on Qortium, which lets the taker redeem the foreign HTLC. The old local API balance-reservation safeguard was removed because public offers no longer require taker funds to be locked before the maker proves foreign liquidity, and the reverse trade flow now enforces a 30-minute foreign locktime safety margin, expires stale reservations, and lets the maker trade address cancel before local assets are locked. The reverse trade design docs and deterministic v5 tests cover the new reservation, foreign-lock, local-lock, redeem, refund, cancel, and premature-lock refund behavior.
+
 ### 2026-05-09 - crosschain: add reverse ACCT trades
 
 Added the first reverse cross-chain trade implementation with `BitcoinyACCTv5`, where the maker offers BTC-like foreign funds and the taker escrows a selected local-chain asset into the AT. Trade creation can now request `SELL_FOREIGN` offers, the local API checks the maker's foreign wallet balance against existing open reverse offers for the same wallet key and rejects unverifiable wallet balances, the response API builds unsigned local escrow message transactions for takers to sign, the maker trade bot funds the foreign HTLC after the local escrow locks, and deterministic tests cover v5 trade data, lock/redeem/refund/cancel behavior, registry wiring, API-facing bot routing, reverse HTLC key-role ordering, and local reservation math.

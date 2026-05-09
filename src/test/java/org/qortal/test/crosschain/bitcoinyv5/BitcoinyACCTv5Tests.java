@@ -44,7 +44,7 @@ public class BitcoinyACCTv5Tests extends Common {
 	private static final long FOREIGN_AMOUNT = 864200L;
 	private static final long NATIVE_FEE_RESERVE = 3L * Amounts.MULTIPLIER;
 	private static final int TRADE_TIMEOUT = 120;
-	private static final int SHORT_REFUND_TIMEOUT = 3;
+	private static final int SHORT_TRADE_TIMEOUT = 6;
 
 	@Before
 	public void beforeTest() throws DataException {
@@ -83,6 +83,7 @@ public class BitcoinyACCTv5Tests extends Common {
 			assertEquals(1, tradeData.availableFillSlots);
 			assertEquals(FOREIGN_AMOUNT, tradeData.expectedForeignAmount);
 			assertArrayEquals(MAKER_FOREIGN_PUBLIC_KEY_HASH, tradeData.creatorForeignPKH);
+			assertArrayEquals(HASH_OF_SECRET_A, tradeData.hashOfSecretA);
 		}
 	}
 
@@ -96,7 +97,7 @@ public class BitcoinyACCTv5Tests extends Common {
 	}
 
 	@Test
-	public void testReverseLockAndMakerRedeem() throws DataException {
+	public void testReservationForeignLockLocalLockAndMakerRedeem() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount issuer = Common.getTestAccount(repository, "alice");
 			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
@@ -111,18 +112,30 @@ public class BitcoinyACCTv5Tests extends Common {
 			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), localAssetId, TRADE_TIMEOUT);
 			String atAddress = deployAtTransaction.getATAccount().getAddress();
 
-			int lockTimeA = (int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L);
-			byte[] lockMessageData = BitcoinyACCTv5.buildLockMessage(TAKER_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET_A, lockTimeA, SHORT_REFUND_TIMEOUT);
-			sendPaymentMessage(repository, taker, lockMessageData, atAddress, LOCAL_AMOUNT, localAssetId);
-			BlockUtils.mintBlock(repository);
+			reserveTrade(repository, taker, atAddress);
 
 			ATData atData = repository.getATRepository().fromATAddress(atAddress);
 			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
-
-			assertEquals(AcctMode.TRADING, tradeData.mode);
+			assertEquals(AcctMode.RESERVED, tradeData.mode);
+			assertFalse(tradeData.isFillableOffer());
 			assertEquals(taker.getAddress(), tradeData.partnerAddress);
 			assertArrayEquals(TAKER_FOREIGN_PUBLIC_KEY_HASH, tradeData.partnerForeignPKH);
-			assertArrayEquals(HASH_OF_SECRET_A, tradeData.hashOfSecretA);
+			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
+
+			int lockTimeA = (int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L);
+			declareForeignLock(repository, tradeAccount, atAddress, lockTimeA);
+
+			atData = repository.getATRepository().fromATAddress(atAddress);
+			tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
+			assertEquals(AcctMode.FOREIGN_LOCKED, tradeData.mode);
+			assertEquals(Integer.valueOf(lockTimeA), tradeData.lockTimeA);
+			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
+
+			sendLocalLock(repository, taker, atAddress, LOCAL_AMOUNT, localAssetId);
+
+			atData = repository.getATRepository().fromATAddress(atAddress);
+			tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
+			assertEquals(AcctMode.TRADING, tradeData.mode);
 			assertEquals(LOCAL_AMOUNT, tradeData.activeLocalAmount);
 			assertEquals(LOCAL_AMOUNT, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
 
@@ -137,11 +150,12 @@ public class BitcoinyACCTv5Tests extends Common {
 			assertEquals(AcctMode.REDEEMED, tradeData.mode);
 			assertEquals(makerReceivingInitialBalance + LOCAL_AMOUNT, makerReceiving.getConfirmedBalance(localAssetId));
 			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
+			assertArrayEquals(SECRET_A, BitcoinyACCTv5.getInstance().findSecretA(repository, tradeData));
 		}
 	}
 
 	@Test
-	public void testInvalidLockAmountRefundsAndStaysOffering() throws DataException {
+	public void testInvalidLocalLockAmountRefundsAndStaysForeignLocked() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount issuer = Common.getTestAccount(repository, "alice");
 			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
@@ -155,17 +169,74 @@ public class BitcoinyACCTv5Tests extends Common {
 
 			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), localAssetId, TRADE_TIMEOUT);
 			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			reserveTrade(repository, taker, atAddress);
+			declareForeignLock(repository, tradeAccount, atAddress, (int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L));
 
-			byte[] lockMessageData = BitcoinyACCTv5.buildLockMessage(TAKER_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET_A,
-					(int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L), SHORT_REFUND_TIMEOUT);
-			sendPaymentMessage(repository, taker, lockMessageData, atAddress, wrongAmount, localAssetId);
-			BlockUtils.mintBlock(repository);
+			sendLocalLock(repository, taker, atAddress, wrongAmount, localAssetId);
 
 			ATData atData = repository.getATRepository().fromATAddress(atAddress);
 			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
 
 			assertFalse(atData.getIsFinished());
-			assertEquals(AcctMode.OFFERING, tradeData.mode);
+			assertEquals(AcctMode.FOREIGN_LOCKED, tradeData.mode);
+			assertEquals(takerInitialBalance, taker.getConfirmedBalance(localAssetId));
+			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
+		}
+	}
+
+	@Test
+	public void testWrongSenderLocalLockRefundsAndStaysForeignLocked() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount issuer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "dilbert");
+			PrivateKeyAccount otherSender = Common.getTestAccount(repository, "bob");
+			long localAssetId = AssetUtils.issueAsset(repository, "alice", "REVERSE-WRONG-SENDER", 100L * Amounts.MULTIPLIER, true);
+
+			transferAsset(repository, issuer, otherSender.getAddress(), localAssetId, LOCAL_AMOUNT);
+			long otherSenderInitialBalance = otherSender.getConfirmedBalance(localAssetId);
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), localAssetId, TRADE_TIMEOUT);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			reserveTrade(repository, taker, atAddress);
+			declareForeignLock(repository, tradeAccount, atAddress, (int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L));
+
+			sendLocalLock(repository, otherSender, atAddress, LOCAL_AMOUNT, localAssetId);
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
+
+			assertFalse(atData.getIsFinished());
+			assertEquals(AcctMode.FOREIGN_LOCKED, tradeData.mode);
+			assertEquals(otherSenderInitialBalance, otherSender.getConfirmedBalance(localAssetId));
+			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
+		}
+	}
+
+	@Test
+	public void testPrematureLocalLockRefundsAndStaysReserved() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount issuer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "dilbert");
+			long localAssetId = AssetUtils.issueAsset(repository, "alice", "REVERSE-EARLY-LOCK", 100L * Amounts.MULTIPLIER, true);
+
+			transferAsset(repository, issuer, taker.getAddress(), localAssetId, LOCAL_AMOUNT);
+			long takerInitialBalance = taker.getConfirmedBalance(localAssetId);
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), localAssetId, TRADE_TIMEOUT);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			reserveTrade(repository, taker, atAddress);
+
+			sendLocalLock(repository, taker, atAddress, LOCAL_AMOUNT, localAssetId);
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
+
+			assertFalse(atData.getIsFinished());
+			assertEquals(AcctMode.RESERVED, tradeData.mode);
 			assertEquals(takerInitialBalance, taker.getConfirmedBalance(localAssetId));
 			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
 		}
@@ -183,15 +254,13 @@ public class BitcoinyACCTv5Tests extends Common {
 			transferAsset(repository, issuer, taker.getAddress(), localAssetId, LOCAL_AMOUNT);
 			long takerInitialBalance = taker.getConfirmedBalance(localAssetId);
 
-			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), localAssetId, SHORT_REFUND_TIMEOUT);
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), localAssetId, SHORT_TRADE_TIMEOUT);
 			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			reserveTrade(repository, taker, atAddress);
+			declareForeignLock(repository, tradeAccount, atAddress, (int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L));
+			sendLocalLock(repository, taker, atAddress, LOCAL_AMOUNT, localAssetId);
 
-			byte[] lockMessageData = BitcoinyACCTv5.buildLockMessage(TAKER_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET_A,
-					(int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L), SHORT_REFUND_TIMEOUT);
-			sendPaymentMessage(repository, taker, lockMessageData, atAddress, LOCAL_AMOUNT, localAssetId);
-			BlockUtils.mintBlock(repository);
-
-			BlockUtils.mintBlocks(repository, SHORT_REFUND_TIMEOUT + 2);
+			BlockUtils.mintBlocks(repository, BitcoinyACCTv5.calcLocalRefundTimeout(SHORT_TRADE_TIMEOUT) + 2);
 
 			ATData atData = repository.getATRepository().fromATAddress(atAddress);
 			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
@@ -227,10 +296,109 @@ public class BitcoinyACCTv5Tests extends Common {
 		}
 	}
 
+	@Test
+	public void testMakerTradeAddressCanCancelEmptyReverseOffer() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			long localAssetId = AssetUtils.issueAsset(repository, "alice", "REVERSE-MAKER-CANCEL-OFFER", 100L * Amounts.MULTIPLIER, true);
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), localAssetId, TRADE_TIMEOUT);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			cancelTrade(repository, tradeAccount, atAddress);
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
+
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.CANCELLED, tradeData.mode);
+			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
+			assertFalse(tradeData.isFillableOffer());
+		}
+	}
+
+	@Test
+	public void testMakerTradeAddressCanCancelReservedReverseOffer() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "dilbert");
+			long localAssetId = AssetUtils.issueAsset(repository, "alice", "REVERSE-MAKER-CANCEL-RESERVED", 100L * Amounts.MULTIPLIER, true);
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), localAssetId, TRADE_TIMEOUT);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			reserveTrade(repository, taker, atAddress);
+
+			cancelTrade(repository, tradeAccount, atAddress);
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
+
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.CANCELLED, tradeData.mode);
+			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
+			assertFalse(tradeData.isFillableOffer());
+		}
+	}
+
+	@Test
+	public void testMakerTradeAddressCanCancelForeignLockedReverseOffer() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "dilbert");
+			long localAssetId = AssetUtils.issueAsset(repository, "alice", "REVERSE-MAKER-CANCEL-FOREIGN", 100L * Amounts.MULTIPLIER, true);
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), localAssetId, TRADE_TIMEOUT);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			reserveTrade(repository, taker, atAddress);
+			declareForeignLock(repository, tradeAccount, atAddress, (int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L));
+
+			cancelTrade(repository, tradeAccount, atAddress);
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
+
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.CANCELLED, tradeData.mode);
+			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
+			assertFalse(tradeData.isFillableOffer());
+		}
+	}
+
+	@Test
+	public void testMakerTradeAddressCannotCancelAfterTakerLocalLock() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount issuer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "dilbert");
+			long localAssetId = AssetUtils.issueAsset(repository, "alice", "REVERSE-MAKER-CANCEL-TRADING", 100L * Amounts.MULTIPLIER, true);
+
+			transferAsset(repository, issuer, taker.getAddress(), localAssetId, LOCAL_AMOUNT);
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), localAssetId, TRADE_TIMEOUT);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			reserveTrade(repository, taker, atAddress);
+			declareForeignLock(repository, tradeAccount, atAddress, (int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L));
+			sendLocalLock(repository, taker, atAddress, LOCAL_AMOUNT, localAssetId);
+
+			cancelTrade(repository, tradeAccount, atAddress);
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
+
+			assertFalse(atData.getIsFinished());
+			assertEquals(AcctMode.TRADING, tradeData.mode);
+			assertEquals(LOCAL_AMOUNT, deployAtTransaction.getATAccount().getConfirmedBalance(localAssetId));
+		}
+	}
+
 	private DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress, long localAssetId, int tradeTimeout) throws DataException {
 		ForeignBlockchainRegistry.Entry bitcoin = ForeignBlockchainRegistry.fromString("BITCOIN");
 		byte[] creationBytes = BitcoinyACCTv5.buildTradeAT(bitcoin, tradeAddress, MAKER_FOREIGN_PUBLIC_KEY_HASH,
-				LOCAL_AMOUNT, FOREIGN_AMOUNT, tradeTimeout);
+				HASH_OF_SECRET_A, LOCAL_AMOUNT, FOREIGN_AMOUNT, tradeTimeout);
 
 		long txTimestamp = System.currentTimeMillis();
 		Long fee = null;
@@ -244,6 +412,27 @@ public class BitcoinyACCTv5Tests extends Common {
 		TransactionUtils.signAndMint(repository, deployAtTransactionData, deployer);
 
 		return deployAtTransaction;
+	}
+
+	private static void reserveTrade(Repository repository, PrivateKeyAccount taker, String atAddress) throws DataException {
+		sendMessage(repository, taker, BitcoinyACCTv5.buildReserveMessage(TAKER_FOREIGN_PUBLIC_KEY_HASH), atAddress);
+		BlockUtils.mintBlock(repository);
+	}
+
+	private static void declareForeignLock(Repository repository, PrivateKeyAccount makerTradeAccount, String atAddress, int lockTimeA) throws DataException {
+		sendMessage(repository, makerTradeAccount, BitcoinyACCTv5.buildForeignLockMessage(lockTimeA), atAddress);
+		BlockUtils.mintBlock(repository);
+	}
+
+	private static void sendLocalLock(Repository repository, PrivateKeyAccount taker, String atAddress, long amount, long assetId) throws DataException {
+		sendPaymentMessage(repository, taker, BitcoinyACCTv5.buildLocalLockMessage(), atAddress, amount, assetId);
+		BlockUtils.mintBlock(repository);
+	}
+
+	private static void cancelTrade(Repository repository, PrivateKeyAccount sender, String atAddress) throws DataException {
+		byte[] cancelMessageData = BitcoinyACCTv5.getInstance().buildCancelMessage(sender.getAddress());
+		sendMessage(repository, sender, cancelMessageData, atAddress);
+		BlockUtils.mintBlock(repository);
 	}
 
 	private static MessageTransaction sendMessage(Repository repository, PrivateKeyAccount sender, byte[] data, String recipient) throws DataException {

@@ -16,10 +16,10 @@ public class TradeBotRespondRequest {
 			example = "xprv___________________________________________________________________________________________________________")
 	public String foreignKey;
 
-	@Schema(description = "Responder's local-chain public key, required for SELL_FOREIGN offers")
+	@Schema(description = "Responder's local-chain public key, required for SELL_FOREIGN reservation messages")
 	public byte[] responderPublicKey;
 
-	@Schema(description = "local-chain address for receiving the offered local asset from AT", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
+	@Schema(description = "Receiving address: local-chain address for SELL_LOCAL offers, foreign-chain address for SELL_FOREIGN offers", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
 	public String receivingAddress;
 
 	@Schema(description = "Optional local-chain asset amount to fill from a split offer. If omitted, the largest currently valid fill is used.", example = "1.00000000", type = "number")

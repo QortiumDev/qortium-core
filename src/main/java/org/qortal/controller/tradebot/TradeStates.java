@@ -9,11 +9,14 @@ public class TradeStates {
     public enum State implements TradeBot.StateNameAndValueSupplier {
         MAKER_WAITING_FOR_AT_CONFIRM(10, false, false),
         MAKER_WAITING_FOR_TAKER_MESSAGE(15, true, true),
+        MAKER_WAITING_FOR_LOCAL_LOCK(20, true, true),
         MAKER_WAITING_FOR_AT_REDEEM(25, true, true),
         MAKER_DONE(30, false, false),
         MAKER_REFUNDED(35, false, false),
 
+        TAKER_WAITING_FOR_FOREIGN_LOCK(80, true, true),
         TAKER_WAITING_FOR_AT_LOCK(85, true, true),
+        TAKER_WAITING_FOR_MAKER_REDEEM(90, true, true),
         TAKER_DONE(95, false, false),
         TAKER_REFUNDING_FOREIGN(105, true, true),
         TAKER_REFUNDED(110, false, false);

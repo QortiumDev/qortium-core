@@ -6,7 +6,6 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.model.crosschain.TradeBotCreateRequest;
 import org.qortal.asset.Asset;
-import org.qortal.crosschain.BitcoinyACCTv4;
 import org.qortal.crosschain.BitcoinyACCTv5;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
@@ -31,7 +30,6 @@ import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.Amounts;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 
@@ -40,9 +38,10 @@ import static org.junit.Assert.*;
 public class BitcoinyACCTv5TradeBotTests extends Common {
 
 	private static final String XPRV = "xprv9z8QpS7vxwMC2fCnG1oZc6c4aFRLgsqSF86yWrJBKEzMY3T3ySCo85x8Uv5FxTavAQwgEDy1g3iLRT5kdtFjoNNBKukLTMzKwCUn1Abwoxg";
-	private static final String OTHER_XPRV = "xprv9yYd7nZUWZgrnKBz6bJQmG7upUD5gn8J9HyUFztvyAoG1jJMzsp3eSE4z39dnuy3A8sacVtZfVxXVmYzKxq4gypkXVTLVWQDykU5uQx4AYr";
 	private static final String BTC_RECEIVING_ADDRESS = "1BitcoinEaterAddressDontSendf59kuE";
 	private static final byte[] MAKER_FOREIGN_PUBLIC_KEY_HASH = HashCode.fromString("aa00aa11aa22aa33aa44aa55aa66aa77aa88aa99").asBytes();
+	private static final byte[] SECRET_A = "This string is exactly 32 bytes!".getBytes();
+	private static final byte[] HASH_OF_SECRET_A = Crypto.hash160(SECRET_A);
 	private static final long LOCAL_AMOUNT = 25L * Amounts.MULTIPLIER;
 	private static final long FOREIGN_AMOUNT = 100_000L;
 	private static final long NATIVE_FEE_RESERVE = 3L * Amounts.MULTIPLIER;
@@ -51,37 +50,6 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
-	}
-
-	@Test
-	public void testReverseMakerReservationCountsOnlyOpenMakerOffers() {
-		long p2shFee = 1_000L;
-		List<TradeBotData> tradeBotDataList = Arrays.asList(
-				tradeBotData(BitcoinyACCTv5.NAME, TradeStates.State.MAKER_WAITING_FOR_AT_CONFIRM, "BITCOIN", XPRV, 100_000L),
-				tradeBotData(BitcoinyACCTv5.NAME, TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE, "BITCOIN", XPRV, 200_000L),
-				tradeBotData(BitcoinyACCTv5.NAME, TradeStates.State.MAKER_WAITING_FOR_AT_REDEEM, "BITCOIN", XPRV, 300_000L),
-				tradeBotData(BitcoinyACCTv5.NAME, TradeStates.State.MAKER_DONE, "BITCOIN", XPRV, 400_000L),
-				tradeBotData(BitcoinyACCTv5.NAME, TradeStates.State.TAKER_WAITING_FOR_AT_LOCK, "BITCOIN", XPRV, 500_000L),
-				tradeBotData(BitcoinyACCTv5.NAME, TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE, "BITCOIN", OTHER_XPRV, 600_000L),
-				tradeBotData(BitcoinyACCTv5.NAME, TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE, "LITECOIN", XPRV, 700_000L),
-				tradeBotData(BitcoinyACCTv4.NAME, TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE, "BITCOIN", XPRV, 800_000L));
-
-		long reservedAmount = BitcoinyACCTv5TradeBot.calculateReservedForeignAmount(tradeBotDataList, "BITCOIN", XPRV, p2shFee);
-
-		assertEquals(302_000L, reservedAmount);
-	}
-
-	@Test
-	public void testReverseMakerReservationBalanceCheck() {
-		long p2shFee = 1_000L;
-		long reservedAmount = BitcoinyACCTv5TradeBot.calculateReservedForeignAmount(Arrays.asList(
-				tradeBotData(BitcoinyACCTv5.NAME, TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE, "BITCOIN", XPRV, 100_000L),
-				tradeBotData(BitcoinyACCTv5.NAME, TradeStates.State.MAKER_WAITING_FOR_AT_CONFIRM, "BITCOIN", XPRV, 200_000L)),
-				"BITCOIN", XPRV, p2shFee);
-		long newOfferRequiredAmount = 300_000L + p2shFee;
-
-		assertTrue(BitcoinyACCTv5TradeBot.hasSufficientForeignBalance(604_000L, reservedAmount, newOfferRequiredAmount));
-		assertFalse(BitcoinyACCTv5TradeBot.hasSufficientForeignBalance(603_999L, reservedAmount, newOfferRequiredAmount));
 	}
 
 	@Test
@@ -109,16 +77,20 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 			assertNotNull(unsignedDeployBytes);
 			List<TradeBotData> allTradeBotData = repository.getCrossChainRepository().getAllTradeBotData();
 			assertEquals(1, allTradeBotData.size());
-			assertEquals(BitcoinyACCTv5.NAME, allTradeBotData.get(0).getAcctName());
-			assertEquals(TradeStates.State.MAKER_WAITING_FOR_AT_CONFIRM.name(), allTradeBotData.get(0).getState());
-			assertEquals(localAssetId, allTradeBotData.get(0).getLocalAssetId());
-			assertEquals(LOCAL_AMOUNT, allTradeBotData.get(0).getLocalAmount());
-			assertEquals(FOREIGN_AMOUNT, allTradeBotData.get(0).getForeignAmount());
+
+			TradeBotData tradeBotData = allTradeBotData.get(0);
+			assertEquals(BitcoinyACCTv5.NAME, tradeBotData.getAcctName());
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_AT_CONFIRM.name(), tradeBotData.getState());
+			assertEquals(localAssetId, tradeBotData.getLocalAssetId());
+			assertEquals(LOCAL_AMOUNT, tradeBotData.getLocalAmount());
+			assertEquals(FOREIGN_AMOUNT, tradeBotData.getForeignAmount());
+			assertNotNull(tradeBotData.getSecret());
+			assertArrayEquals(Crypto.hash160(tradeBotData.getSecret()), tradeBotData.getHashOfSecret());
 		}
 	}
 
 	@Test
-	public void testReverseResponseReturnsUnsignedLocalEscrowMessage() throws DataException, TransformationException {
+	public void testReverseResponseReturnsUnsignedReservationMessage() throws DataException, TransformationException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
 			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
@@ -138,33 +110,50 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 			MessageTransactionData messageData = (MessageTransactionData) transactionData;
 			assertArrayEquals(responder.getPublicKey(), messageData.getSenderPublicKey());
 			assertEquals(atAddress, messageData.getRecipient());
-			assertEquals(LOCAL_AMOUNT, messageData.getAmount());
-			assertEquals(Long.valueOf(localAssetId), messageData.getAssetId());
-			assertEquals(BitcoinyACCTv5.LOCK_MESSAGE_LENGTH, messageData.getData().length);
+			assertEquals(0L, messageData.getAmount());
+			assertNull(messageData.getAssetId());
+			assertEquals(BitcoinyACCTv5.RESERVE_MESSAGE_LENGTH, messageData.getData().length);
 
-			byte[] lockMessageData = messageData.getData();
-			byte[] takerForeignPublicKeyHash = Arrays.copyOfRange(lockMessageData, 0, 20);
-			byte[] hashOfSecretA = Arrays.copyOfRange(lockMessageData, 32, 52);
-			int lockTimeA = (int) ByteBuffer.wrap(lockMessageData, 64, 8).getLong();
+			byte[] reserveMessageData = messageData.getData();
+			byte[] takerForeignPublicKeyHash = Arrays.copyOfRange(reserveMessageData, 0, 20);
 			tradeData.partnerForeignPKH = takerForeignPublicKeyHash;
-			tradeData.hashOfSecretA = hashOfSecretA;
-			tradeData.lockTimeA = lockTimeA;
-			assertArrayEquals(BitcoinyHTLC.buildScript(MAKER_FOREIGN_PUBLIC_KEY_HASH, lockTimeA, takerForeignPublicKeyHash, hashOfSecretA),
+			tradeData.lockTimeA = (int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L);
+			assertArrayEquals(BitcoinyHTLC.buildScript(MAKER_FOREIGN_PUBLIC_KEY_HASH, tradeData.lockTimeA, takerForeignPublicKeyHash, HASH_OF_SECRET_A),
 					BitcoinyACCTv5TradeBot.buildRedeemScript(tradeData));
 
 			List<TradeBotData> allTradeBotData = repository.getCrossChainRepository().getAllTradeBotData();
 			assertEquals(1, allTradeBotData.size());
 			assertEquals(BitcoinyACCTv5.NAME, allTradeBotData.get(0).getAcctName());
-			assertEquals(TradeStates.State.TAKER_WAITING_FOR_AT_LOCK.name(), allTradeBotData.get(0).getState());
+			assertEquals(TradeStates.State.TAKER_WAITING_FOR_FOREIGN_LOCK.name(), allTradeBotData.get(0).getState());
 			assertEquals(atAddress, allTradeBotData.get(0).getAtAddress());
 			assertEquals(Crypto.toAddress(responder.getPublicKey()), allTradeBotData.get(0).getTradeLocalAddress());
+			assertArrayEquals(HASH_OF_SECRET_A, allTradeBotData.get(0).getHashOfSecret());
 		}
+	}
+
+	@Test
+	public void testLocalLockRequiresForeignLocktimeSafetyMargin() {
+		CrossChainTradeData tradeData = new CrossChainTradeData();
+		tradeData.tradeTimeout = TRADE_TIMEOUT;
+
+		long now = 1_765_000_000_000L;
+		long localRefundSeconds = BitcoinyACCTv5.calcLocalRefundTimeout(TRADE_TIMEOUT) * 60L;
+		long safetyMarginSeconds = BitcoinyACCTv5TradeBot.FOREIGN_LOCKTIME_SAFETY_MARGIN_MINUTES * 60L;
+
+		tradeData.lockTimeA = null;
+		assertFalse(BitcoinyACCTv5TradeBot.hasSufficientTimeForLocalLock(tradeData, now));
+
+		tradeData.lockTimeA = (int) (now / 1000L + localRefundSeconds + safetyMarginSeconds);
+		assertFalse(BitcoinyACCTv5TradeBot.hasSufficientTimeForLocalLock(tradeData, now));
+
+		tradeData.lockTimeA = (int) (now / 1000L + localRefundSeconds + safetyMarginSeconds + 1L);
+		assertTrue(BitcoinyACCTv5TradeBot.hasSufficientTimeForLocalLock(tradeData, now));
 	}
 
 	private DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress, long localAssetId) throws DataException {
 		ForeignBlockchainRegistry.Entry bitcoin = ForeignBlockchainRegistry.fromString("BITCOIN");
 		byte[] creationBytes = BitcoinyACCTv5.buildTradeAT(bitcoin, tradeAddress, MAKER_FOREIGN_PUBLIC_KEY_HASH,
-				LOCAL_AMOUNT, FOREIGN_AMOUNT, TRADE_TIMEOUT);
+				HASH_OF_SECRET_A, LOCAL_AMOUNT, FOREIGN_AMOUNT, TRADE_TIMEOUT);
 
 		long txTimestamp = System.currentTimeMillis();
 		Long fee = null;
@@ -178,15 +167,5 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 		TransactionUtils.signAndMint(repository, deployAtTransactionData, deployer);
 
 		return deployAtTransaction;
-	}
-
-	private TradeBotData tradeBotData(String acctName, TradeStates.State state, String foreignBlockchain, String foreignKey, long foreignAmount) {
-		return new TradeBotData(new byte[32], acctName,
-				state.name(), state.value,
-				"Qcreator", "ATaddress", System.currentTimeMillis(), Asset.NATIVE, 0L,
-				null, null, "Qtrade",
-				null, null,
-				foreignBlockchain, null, null,
-				foreignAmount, foreignKey, null, null, null);
 	}
 }

@@ -363,7 +363,7 @@ public class CrossChainHtlcResource {
 			Bitcoiny bitcoiny = getBitcoiny(crossChainTradeData);
 
 			int lockTime = crossChainTradeData.lockTimeA;
-			byte[] redeemScriptA = BitcoinyHTLC.buildScript(crossChainTradeData.partnerForeignPKH, lockTime, crossChainTradeData.creatorForeignPKH, crossChainTradeData.hashOfSecretA);
+			byte[] redeemScriptA = buildBitcoinyHtlcScript(crossChainTradeData, lockTime);
 			String p2shAddressA = bitcoiny.deriveP2shAddress(redeemScriptA);
 			LOGGER.info(String.format("Redeeming P2SH address: %s", p2shAddressA));
 
@@ -609,7 +609,7 @@ public class CrossChainHtlcResource {
 					p2shAddressA = PirateChain.getInstance().deriveP2shAddressBPrefix(redeemScriptA);
 					htlcStatusA = PirateChainHTLC.determineHtlcStatus(bitcoiny.getBlockchainProvider(), p2shAddressA, minimumAmountA);
 				} else {
-					redeemScriptA = BitcoinyHTLC.buildScript(tradeBotData.getTradeForeignPublicKeyHash(), lockTime, crossChainTradeData.creatorForeignPKH, tradeBotData.getHashOfSecret());
+					redeemScriptA = buildBitcoinyRefundHtlcScript(crossChainTradeData, tradeBotData, lockTime);
 					p2shAddressA = bitcoiny.deriveP2shAddress(redeemScriptA);
 					htlcStatusA = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddressA, minimumAmountA);
 				}
@@ -689,6 +689,24 @@ public class CrossChainHtlcResource {
 
 	private long calcFeeTimestamp(int lockTimeA, int tradeTimeout) {
 		return (lockTimeA - tradeTimeout * 60) * 1000L;
+	}
+
+	private byte[] buildBitcoinyHtlcScript(CrossChainTradeData crossChainTradeData, int lockTime) {
+		if (crossChainTradeData.tradeDirection == TradeDirection.SELL_FOREIGN)
+			return BitcoinyHTLC.buildScript(crossChainTradeData.creatorForeignPKH, lockTime,
+					crossChainTradeData.partnerForeignPKH, crossChainTradeData.hashOfSecretA);
+
+		return BitcoinyHTLC.buildScript(crossChainTradeData.partnerForeignPKH, lockTime,
+				crossChainTradeData.creatorForeignPKH, crossChainTradeData.hashOfSecretA);
+	}
+
+	private byte[] buildBitcoinyRefundHtlcScript(CrossChainTradeData crossChainTradeData, TradeBotData tradeBotData, int lockTime) {
+		if (crossChainTradeData.tradeDirection == TradeDirection.SELL_FOREIGN)
+			return BitcoinyHTLC.buildScript(crossChainTradeData.creatorForeignPKH, lockTime,
+					crossChainTradeData.partnerForeignPKH, crossChainTradeData.hashOfSecretA);
+
+		return BitcoinyHTLC.buildScript(tradeBotData.getTradeForeignPublicKeyHash(), lockTime,
+				crossChainTradeData.creatorForeignPKH, tradeBotData.getHashOfSecret());
 	}
 
 	private Bitcoiny getBitcoiny(CrossChainTradeData crossChainTradeData) {

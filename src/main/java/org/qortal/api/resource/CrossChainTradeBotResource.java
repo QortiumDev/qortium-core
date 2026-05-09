@@ -15,6 +15,7 @@ import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.Security;
+import org.qortal.api.model.crosschain.TradeBotLockLocalRequest;
 import org.qortal.api.model.crosschain.TradeBotCreateRequest;
 import org.qortal.api.model.crosschain.TradeBotRespondRequest;
 import org.qortal.api.model.crosschain.TradeBotRespondRequests;
@@ -122,7 +123,7 @@ public class CrossChainTradeBotResource {
 			)
 		}
 	)
-		@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_ASSET_ID, ApiError.INVALID_CRITERIA, ApiError.INSUFFICIENT_BALANCE, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, ApiError.REPOSITORY_ISSUE, ApiError.ORDER_SIZE_TOO_SMALL})
+	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_ASSET_ID, ApiError.INVALID_CRITERIA, ApiError.INSUFFICIENT_BALANCE, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, ApiError.BLOCKCHAIN_NEEDS_SYNC, ApiError.REPOSITORY_ISSUE, ApiError.ORDER_SIZE_TOO_SMALL})
 	@SecurityRequirement(name = "apiKey")
 	public String tradeBotCreator(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotCreateRequest tradeBotCreateRequest) {
 		Security.checkApiCallAllowed(request);
@@ -140,7 +141,10 @@ public class CrossChainTradeBotResource {
 		if (tradeDirection == TradeDirection.SELL_FOREIGN && !Crypto.isValidAddress(tradeBotCreateRequest.receivingAddress))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
-		if (tradeBotCreateRequest.tradeTimeout < 60)
+		if (tradeDirection == TradeDirection.SELL_FOREIGN && tradeBotCreateRequest.tradeTimeout < 120)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (tradeDirection != TradeDirection.SELL_FOREIGN && tradeBotCreateRequest.tradeTimeout < 60)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 		if (tradeBotCreateRequest.foreignAmount == null || tradeBotCreateRequest.foreignAmount <= 0)
@@ -198,21 +202,11 @@ public class CrossChainTradeBotResource {
 			if (tradeBotCreateRequest.nativeFeeReserve > 0 && creator.getConfirmedBalance(Asset.NATIVE) < tradeBotCreateRequest.nativeFeeReserve)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INSUFFICIENT_BALANCE);
 
-			if (tradeDirection == TradeDirection.SELL_FOREIGN) {
-				Bitcoiny bitcoiny = foreignBlockchainEntry.getBitcoinyInstance();
-				boolean hasSufficientForeignBalance = BitcoinyACCTv5TradeBot.getInstance().hasSufficientForeignBalanceForReverseOffer(repository,
-						bitcoiny, foreignBlockchainEntry.name(), tradeBotCreateRequest.foreignKey, tradeBotCreateRequest.foreignAmount);
-				if (!hasSufficientForeignBalance)
-					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE);
-			}
-
 			byte[] unsignedBytes = TradeBot.getInstance().createTrade(repository, tradeBotCreateRequest);
 			if (unsignedBytes == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			return Base58.encode(unsignedBytes);
-		} catch (ForeignBlockchainException e) {
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e.getMessage());
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, e.getMessage());
 		}
@@ -238,12 +232,71 @@ public class CrossChainTradeBotResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, ApiError.BLOCKCHAIN_NEEDS_SYNC, ApiError.REPOSITORY_ISSUE})
 	@SecurityRequirement(name = "apiKey")
 	public String tradeBotResponder(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotRespondRequest tradeBotRespondRequest) {
 		Security.checkApiCallAllowed(request);
 
 		return createTradeBotResponse(tradeBotRespondRequest);
+	}
+
+	@POST
+	@Path("/locklocal")
+	@Operation(
+		summary = "Build the local asset lock transaction for a reverse trade",
+		description = "For SELL_FOREIGN offers, this follows the reservation step after the maker's foreign HTLC has been funded.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = TradeBotLockLocalRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, ApiError.BLOCKCHAIN_NEEDS_SYNC, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public String tradeBotLockLocal(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotLockLocalRequest tradeBotLockLocalRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (tradeBotLockLocalRequest.atAddress == null || !Crypto.isValidAtAddress(tradeBotLockLocalRequest.atAddress))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+
+		if (tradeBotLockLocalRequest.responderPublicKey == null || tradeBotLockLocalRequest.responderPublicKey.length != Transformer.PUBLIC_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PUBLIC_KEY);
+
+		final Long minLatestBlockTimestamp = NTP.getTime() - (60 * 60 * 1000L);
+		if (!Controller.getInstance().isUpToDate(minLatestBlockTimestamp))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.BLOCKCHAIN_NEEDS_SYNC);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ATData atData = fetchAtDataWithChecking(repository, tradeBotLockLocalRequest.atAddress);
+
+			ACCT acct = TradeBot.getInstance().getAcctUsingAtData(atData);
+			if (!(acct instanceof BitcoinyACCTv5))
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+			CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
+			if (crossChainTradeData == null || crossChainTradeData.tradeDirection != TradeDirection.SELL_FOREIGN)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+			if (hasPendingMessageToAt(repository, tradeBotLockLocalRequest.atAddress))
+				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Trade has an existing request pending.");
+
+			byte[] unsignedBytes = BitcoinyACCTv5TradeBot.getInstance().buildLocalLockTransaction(repository, atData, crossChainTradeData,
+					tradeBotLockLocalRequest.responderPublicKey);
+			return Base58.encode(unsignedBytes);
+		} catch (ForeignBlockchainException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e.getMessage());
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		}
 	}
 
 	@POST
@@ -266,7 +319,7 @@ public class CrossChainTradeBotResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA, ApiError.FOREIGN_BLOCKCHAIN_BALANCE_ISSUE, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, ApiError.BLOCKCHAIN_NEEDS_SYNC, ApiError.REPOSITORY_ISSUE})
 	@SecurityRequirement(name = "apiKey")
 	public String tradeBotResponderMultiple(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotRespondRequests tradeBotRespondRequest) {
 		Security.checkApiCallAllowed(request);
@@ -283,6 +336,18 @@ public class CrossChainTradeBotResource {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 		return foreignBlockchainEntry;
+	}
+
+	private boolean hasPendingMessageToAt(Repository repository, String atAddress) throws DataException {
+		List<Transaction.TransactionType> txTypes = List.of(Transaction.TransactionType.MESSAGE);
+		List<TransactionData> unconfirmed = repository.getTransactionRepository().getUnconfirmedTransactions(txTypes, null, 0, 0, false);
+		for (TransactionData transactionData : unconfirmed) {
+			MessageTransactionData messageTransactionData = (MessageTransactionData) transactionData;
+			if (Objects.equals(messageTransactionData.getRecipient(), atAddress))
+				return true;
+		}
+
+		return false;
 	}
 
 	private String createTradeBotResponse(TradeBotRespondRequest tradeBotRespondRequest) {
@@ -335,15 +400,9 @@ public class CrossChainTradeBotResource {
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			// Check if there is a buy or a cancel request in progress for this trade
-			List<Transaction.TransactionType> txTypes = List.of(Transaction.TransactionType.MESSAGE);
-			List<TransactionData> unconfirmed = repository.getTransactionRepository().getUnconfirmedTransactions(txTypes, null, 0, 0, false);
-			for (TransactionData  transactionData : unconfirmed) {
-				MessageTransactionData messageTransactionData = (MessageTransactionData) transactionData;
-				if (Objects.equals(messageTransactionData.getRecipient(), atAddress)) {
-					// There is a pending request for this trade, so block this buy attempt to reduce the risk of refunds
-					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Trade has an existing buy request or is pending cancellation.");
-				}
-			}
+			if (hasPendingMessageToAt(repository, atAddress))
+				// There is a pending request for this trade, so block this buy attempt to reduce the risk of refunds
+				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Trade has an existing buy request or is pending cancellation.");
 
 			if (crossChainTradeData.tradeDirection == TradeDirection.SELL_FOREIGN) {
 				byte[] unsignedBytes = BitcoinyACCTv5TradeBot.getInstance().startResponse(repository, atData, crossChainTradeData,
@@ -410,6 +469,8 @@ public class CrossChainTradeBotResource {
 				CrossChainTradeData crossChainTradeData = acctUsingAtData.populateTradeData(repository, atData);
 				if (crossChainTradeData == null)
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+				if (crossChainTradeData.tradeDirection == TradeDirection.SELL_FOREIGN)
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Multiple response batching is not supported for reverse offers.");
 
 				ForeignBlockchainRegistry.Entry blockchain = ForeignBlockchainRegistry.fromRegisteredBitcoinyString(crossChainTradeData.foreignBlockchain);
 				if (blockchain == null)
@@ -441,15 +502,9 @@ public class CrossChainTradeBotResource {
 					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 				// Check if there is a buy or a cancel request in progress for this trade
-				List<Transaction.TransactionType> txTypes = List.of(Transaction.TransactionType.MESSAGE);
-				List<TransactionData> unconfirmed = repository.getTransactionRepository().getUnconfirmedTransactions(txTypes, null, 0, 0, false);
-				for (TransactionData transactionData : unconfirmed) {
-					MessageTransactionData messageTransactionData = (MessageTransactionData) transactionData;
-					if (Objects.equals(messageTransactionData.getRecipient(), atAddress)) {
-						// There is a pending request for this trade, so block this buy attempt to reduce the risk of refunds
-						throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Trade has an existing buy request or is pending cancellation.");
-					}
-				}
+				if (hasPendingMessageToAt(repository, atAddress))
+					// There is a pending request for this trade, so block this buy attempt to reduce the risk of refunds
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Trade has an existing buy request or is pending cancellation.");
 
 				crossChainTradeDataList.add(crossChainTradeData);
 			}

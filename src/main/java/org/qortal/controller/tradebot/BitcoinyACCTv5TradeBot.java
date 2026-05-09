@@ -39,16 +39,16 @@ import org.qortal.utils.NTP;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 
 	private static final long MAX_AT_CONFIRMATION_PERIOD = 24 * 60 * 60 * 1000L;
-	private static final Set<String> MAKER_RESERVATION_STATES = Set.of(
-			State.MAKER_WAITING_FOR_AT_CONFIRM.name(),
-			State.MAKER_WAITING_FOR_TAKER_MESSAGE.name());
+	static final int MIN_REVERSE_TRADE_TIMEOUT_MINUTES = 120;
+	static final int FOREIGN_LOCKTIME_SAFETY_MARGIN_MINUTES = 30;
+	static final int RESERVATION_TIMEOUT_MINUTES = 30;
+	private static final long RESERVATION_TIMEOUT = RESERVATION_TIMEOUT_MINUTES * 60L * 1000L;
 
 	private static BitcoinyACCTv5TradeBot instance;
 
@@ -71,53 +71,6 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 		return this.endStates;
 	}
 
-	public boolean hasSufficientForeignBalanceForReverseOffer(Repository repository, Bitcoiny bitcoiny,
-			String foreignBlockchain, String foreignKey, long foreignAmount) throws DataException, ForeignBlockchainException {
-		long p2shFee = bitcoiny.getP2shFee(NTP.getTime());
-		long reservedAmount = calculateReservedForeignAmount(repository.getCrossChainRepository().getAllTradeBotData(),
-				foreignBlockchain, foreignKey, p2shFee);
-		long newOfferRequiredAmount = foreignAmountWithFundingFee(foreignAmount, p2shFee);
-		Long walletBalance = bitcoiny.getWalletBalance(foreignKey);
-
-		if (walletBalance == null)
-			throw new ForeignBlockchainException("Unable to determine foreign wallet balance");
-
-		return hasSufficientForeignBalance(walletBalance, reservedAmount, newOfferRequiredAmount);
-	}
-
-	static long calculateReservedForeignAmount(List<TradeBotData> tradeBotDataList, String foreignBlockchain,
-			String foreignKey, long p2shFee) {
-		return tradeBotDataList.stream()
-				.filter(tradeBotData -> isReverseMakerReservation(tradeBotData, foreignBlockchain, foreignKey))
-				.mapToLong(tradeBotData -> foreignAmountWithFundingFee(tradeBotData.getForeignAmount(), p2shFee))
-				.reduce(0L, BitcoinyACCTv5TradeBot::cappedAdd);
-	}
-
-	static boolean hasSufficientForeignBalance(long walletBalance, long reservedAmount, long newOfferRequiredAmount) {
-		return walletBalance >= reservedAmount && walletBalance - reservedAmount >= newOfferRequiredAmount;
-	}
-
-	private static boolean isReverseMakerReservation(TradeBotData tradeBotData, String foreignBlockchain, String foreignKey) {
-		return BitcoinyACCTv5.NAME.equals(tradeBotData.getAcctName())
-				&& MAKER_RESERVATION_STATES.contains(tradeBotData.getState())
-				&& Objects.equals(foreignBlockchain, tradeBotData.getForeignBlockchain())
-				&& Objects.equals(foreignKey, tradeBotData.getForeignKey());
-	}
-
-	private static long foreignAmountWithFundingFee(long foreignAmount, long p2shFee) {
-		if (Long.MAX_VALUE - foreignAmount < p2shFee)
-			return Long.MAX_VALUE;
-
-		return foreignAmount + p2shFee;
-	}
-
-	private static long cappedAdd(long lhs, long rhs) {
-		if (Long.MAX_VALUE - lhs < rhs)
-			return Long.MAX_VALUE;
-
-		return lhs + rhs;
-	}
-
 	@Override
 	public byte[] createTrade(Repository repository, TradeBotCreateRequest tradeBotCreateRequest) throws DataException {
 		ForeignBlockchainRegistry.Entry foreignBlockchain = tradeBotCreateRequest.resolveForeignBlockchain();
@@ -127,12 +80,17 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 		if (!bitcoiny.isValidWalletKey(tradeBotCreateRequest.foreignKey))
 			throw new DataException("Invalid foreign wallet key");
 
+		if (tradeBotCreateRequest.tradeTimeout < MIN_REVERSE_TRADE_TIMEOUT_MINUTES)
+			throw new DataException(String.format("Reverse trade timeout must be at least %d minutes", MIN_REVERSE_TRADE_TIMEOUT_MINUTES));
+
 		byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
 		byte[] tradeLocalPublicKey = TradeBot.deriveTradeLocalPublicKey(tradePrivateKey);
 		byte[] tradeLocalPublicKeyHash = Crypto.hash160(tradeLocalPublicKey);
 		String tradeLocalAddress = Crypto.toAddress(tradeLocalPublicKey);
 		byte[] tradeForeignPublicKey = TradeBot.deriveTradeForeignPublicKey(tradePrivateKey);
 		byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
+		byte[] secretA = TradeBot.generateSecret();
+		byte[] hashOfSecretA = Crypto.hash160(secretA);
 
 		PublicKeyAccount creator = new PublicKeyAccount(repository, tradeBotCreateRequest.creatorPublicKey);
 		long timestamp = NTP.getTime();
@@ -144,7 +102,7 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 
 		String localAssetLabel = localAssetData.getName() != null ? localAssetData.getName() : "asset-" + tradeBotCreateRequest.localAssetId;
 		byte[] creationBytes = BitcoinyACCTv5.buildTradeAT(foreignBlockchain, tradeLocalAddress, tradeForeignPublicKeyHash,
-				tradeBotCreateRequest.localAmount, tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
+				hashOfSecretA, tradeBotCreateRequest.localAmount, tradeBotCreateRequest.foreignAmount, tradeBotCreateRequest.tradeTimeout);
 
 		DeployAtTransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData,
 				String.format("%s/%s reverse ACCT", foreignCurrencyCode, localAssetLabel),
@@ -161,7 +119,7 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 		TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, BitcoinyACCTv5.NAME,
 				State.MAKER_WAITING_FOR_AT_CONFIRM.name(), State.MAKER_WAITING_FOR_AT_CONFIRM.value,
 				creator.getAddress(), atAddress, timestamp, tradeBotCreateRequest.localAssetId, tradeBotCreateRequest.localAmount,
-				tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress, null, null, foreignBlockchain.name(),
+				tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress, secretA, hashOfSecretA, foreignBlockchain.name(),
 				tradeForeignPublicKey, tradeForeignPublicKeyHash, tradeBotCreateRequest.foreignAmount,
 				tradeBotCreateRequest.foreignKey, null, null, Base58.decode(tradeBotCreateRequest.receivingAddress));
 
@@ -195,40 +153,55 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 			throw new DataException(String.format("Unsupported %s receiving address: %s", bitcoiny.getCurrencyCode(), foreignReceivingAddress));
 
 		byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
-		byte[] secretA = TradeBot.generateSecret();
-		byte[] hashOfSecretA = Crypto.hash160(secretA);
 		byte[] tradeForeignPublicKey = TradeBot.deriveTradeForeignPublicKey(tradePrivateKey);
 		byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
 		String tradeLocalAddress = Crypto.toAddress(responderPublicKey);
 
 		long now = NTP.getTime();
-		int lockTimeA = (int) (now / 1000L + Math.max(1, tradeData.tradeTimeout / 2) * 60L);
-		int refundTimeout = tradeData.tradeTimeout;
-
 		TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, BitcoinyACCTv5.NAME,
-				State.TAKER_WAITING_FOR_AT_LOCK.name(), State.TAKER_WAITING_FOR_AT_LOCK.value,
+				State.TAKER_WAITING_FOR_FOREIGN_LOCK.name(), State.TAKER_WAITING_FOR_FOREIGN_LOCK.value,
 				tradeLocalAddress, tradeData.atAddress, now, tradeData.localAssetId, tradeData.localAmount,
-				responderPublicKey, Crypto.hash160(responderPublicKey), tradeLocalAddress, secretA, hashOfSecretA,
+				responderPublicKey, Crypto.hash160(responderPublicKey), tradeLocalAddress, null, tradeData.hashOfSecretA,
 				tradeData.foreignBlockchain, tradeForeignPublicKey, tradeForeignPublicKeyHash,
-				tradeData.expectedForeignAmount, null, null, lockTimeA, receivingAddress.getPayload());
+				tradeData.expectedForeignAmount, null, null, null, receivingAddress.getPayload());
 
 		TradeBot.updateTradeBotState(repository, tradeBotData,
-				() -> String.format("Built reverse response for AT %s. Waiting for local escrow transaction", tradeData.atAddress));
+				() -> String.format("Built reverse reservation for AT %s. Waiting for maker foreign HTLC", tradeData.atAddress));
 		TradeBot.backupTradeBotData(repository, Arrays.asList(tradeBotData));
 
-		byte[] messageData = BitcoinyACCTv5.buildLockMessage(tradeForeignPublicKeyHash, hashOfSecretA, lockTimeA, refundTimeout);
-		long timestamp = NTP.getTime();
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, responderPublicKey, 0L, null);
-		TransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, Transaction.getVersionByTimestamp(timestamp),
-				0, tradeData.atAddress, tradeData.localAmount, tradeData.localAssetId, messageData, false, false);
-		MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);
-		messageTransaction.computeNonce();
+		byte[] messageData = BitcoinyACCTv5.buildReserveMessage(tradeForeignPublicKeyHash);
+		return buildUnsignedMessageTransaction(repository, responderPublicKey, tradeData.atAddress, 0L, null, messageData);
+	}
 
-		try {
-			return MessageTransactionTransformer.toBytes(messageTransactionData);
-		} catch (TransformationException e) {
-			throw new DataException("Failed to transform MESSAGE transaction?", e);
-		}
+	public byte[] buildLocalLockTransaction(Repository repository, ATData atData, CrossChainTradeData tradeData,
+			byte[] responderPublicKey) throws DataException, ForeignBlockchainException {
+		if (tradeData.mode != AcctMode.FOREIGN_LOCKED)
+			throw new DataException("Reverse trade is not ready for local lock");
+
+		TradeBotData tradeBotData = findTakerTradeBotData(repository, tradeData, responderPublicKey)
+				.orElseThrow(() -> new DataException("No matching reverse taker trade-bot entry"));
+
+		if (!isReservedForUs(tradeBotData, tradeData))
+			throw new DataException("Reverse trade is reserved for a different taker");
+
+		if (!hasSufficientTimeForLocalLock(tradeData, NTP.getTime()))
+			throw new DataException("Reverse trade foreign HTLC timeout is too close");
+
+		Bitcoiny bitcoiny = getBitcoiny(tradeData.foreignBlockchain);
+		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
+		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
+		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
+		if (htlcStatus != BitcoinyHTLC.Status.FUNDED)
+			throw new DataException("Reverse trade foreign HTLC is not funded");
+
+		byte[] unsignedBytes = buildUnsignedMessageTransaction(repository, responderPublicKey, tradeData.atAddress, tradeData.localAmount,
+				tradeData.localAssetId, BitcoinyACCTv5.buildLocalLockMessage());
+
+		tradeBotData.setLockTimeA(tradeData.lockTimeA);
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_WAITING_FOR_AT_LOCK,
+				() -> String.format("Reverse P2SH %s funded. Built local lock transaction for AT %s", p2shAddress, tradeData.atAddress));
+
+		return unsignedBytes;
 	}
 
 	@Override
@@ -255,15 +228,27 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 				break;
 
 			case MAKER_WAITING_FOR_TAKER_MESSAGE:
-				handleMakerWaitingForLocalEscrow(repository, tradeBotData, atData, tradeData);
+				handleMakerWaitingForReservation(repository, tradeBotData, atData, tradeData);
+				break;
+
+			case MAKER_WAITING_FOR_LOCAL_LOCK:
+				handleMakerWaitingForLocalLock(repository, tradeBotData, atData, tradeData);
 				break;
 
 			case MAKER_WAITING_FOR_AT_REDEEM:
 				handleMakerWaitingForAtRedeem(repository, tradeBotData, atData, tradeData);
 				break;
 
+			case TAKER_WAITING_FOR_FOREIGN_LOCK:
+				handleTakerWaitingForForeignLock(repository, tradeBotData, atData, tradeData);
+				break;
+
 			case TAKER_WAITING_FOR_AT_LOCK:
 				handleTakerWaitingForAtLock(repository, tradeBotData, atData, tradeData);
+				break;
+
+			case TAKER_WAITING_FOR_MAKER_REDEEM:
+				handleTakerWaitingForMakerRedeem(repository, tradeBotData, atData, tradeData);
 				break;
 
 			default:
@@ -285,100 +270,315 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 		}
 
 		TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_WAITING_FOR_TAKER_MESSAGE,
-				() -> String.format("Reverse AT %s confirmed ready. Waiting for taker escrow", tradeBotData.getAtAddress()));
+				() -> String.format("Reverse AT %s confirmed ready. Waiting for taker reservation", tradeBotData.getAtAddress()));
 	}
 
-	private void handleMakerWaitingForLocalEscrow(Repository repository, TradeBotData tradeBotData, ATData atData,
+	private void handleMakerWaitingForReservation(Repository repository, TradeBotData tradeBotData, ATData atData,
 			CrossChainTradeData tradeData) throws DataException, ForeignBlockchainException {
 		if (atData.getIsFinished()) {
-			TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_REFUNDED,
-					() -> String.format("Reverse AT %s finished before taker escrow", tradeBotData.getAtAddress()));
+			updateMakerFinishedState(repository, tradeBotData, tradeData);
 			return;
 		}
 
-		if (tradeData.mode != AcctMode.TRADING)
+		if (tradeData.mode == AcctMode.FOREIGN_LOCKED) {
+			if (!hasSufficientTimeForLocalLock(tradeData, NTP.getTime())) {
+				sendCancelMessage(repository, tradeBotData);
+				return;
+			}
+
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_WAITING_FOR_LOCAL_LOCK,
+					() -> String.format("Reverse AT %s has foreign HTLC declaration. Waiting for taker local lock", tradeBotData.getAtAddress()));
 			return;
+		}
+
+		if (tradeData.mode == AcctMode.TRADING) {
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_WAITING_FOR_AT_REDEEM,
+					() -> String.format("Reverse AT %s has taker local lock. Waiting to redeem", tradeBotData.getAtAddress()));
+			return;
+		}
+
+		if (tradeData.mode != AcctMode.RESERVED)
+			return;
+
+		int lockTimeA = ensureLockTimeA(repository, tradeBotData, tradeData);
+		tradeData.lockTimeA = lockTimeA;
 
 		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
 		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
 		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
+
+		long now = NTP.getTime();
+		if (!hasSufficientTimeForLocalLock(tradeData, now)) {
+			sendCancelMessage(repository, tradeBotData);
+			return;
+		}
+
+		if (hasReservationTimedOut(tradeBotData, now) && htlcStatus != BitcoinyHTLC.Status.FUNDED) {
+			sendCancelMessage(repository, tradeBotData);
+			return;
+		}
+
 		if (htlcStatus == BitcoinyHTLC.Status.UNFUNDED) {
 			BitcoinySignedTransaction fundingTransaction = bitcoiny.buildSpendTransaction(tradeBotData.getForeignKey(), p2shAddress, minimumAmount);
 			if (fundingTransaction == null)
 				return;
 
 			bitcoiny.broadcastTransaction(fundingTransaction);
+			return;
 		}
 
+		if (htlcStatus != BitcoinyHTLC.Status.FUNDED)
+			return;
+
+		byte[] messageData = BitcoinyACCTv5.buildForeignLockMessage(lockTimeA);
+		if (!sendMessage(repository, tradeBotData, tradeBotData.getAtAddress(), messageData))
+			return;
+
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_WAITING_FOR_LOCAL_LOCK,
+				() -> String.format("Funded reverse P2SH %s. Waiting for taker local lock", p2shAddress));
+	}
+
+	private void handleMakerWaitingForLocalLock(Repository repository, TradeBotData tradeBotData, ATData atData,
+			CrossChainTradeData tradeData) throws DataException, ForeignBlockchainException {
+		if (atData.getIsFinished()) {
+			updateMakerFinishedState(repository, tradeBotData, tradeData);
+			return;
+		}
+
+		if (tradeData.mode == AcctMode.FOREIGN_LOCKED && !hasSufficientTimeForLocalLock(tradeData, NTP.getTime())) {
+			sendCancelMessage(repository, tradeBotData);
+			return;
+		}
+
+		if (tradeData.mode != AcctMode.TRADING)
+			return;
+
+		String receivingAddress = Base58.encode(tradeBotData.getReceivingAccountInfo());
+		byte[] messageData = BitcoinyACCTv5.buildRedeemMessage(tradeBotData.getSecret(), receivingAddress);
+		if (!sendMessage(repository, tradeBotData, tradeBotData.getAtAddress(), messageData))
+			return;
+
 		TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_WAITING_FOR_AT_REDEEM,
-				() -> String.format("Funded reverse P2SH %s. Waiting for taker redeem secret", p2shAddress));
+				() -> String.format("Redeeming reverse AT %s. Secret should unlock taker foreign claim", tradeBotData.getAtAddress()));
 	}
 
 	private void handleMakerWaitingForAtRedeem(Repository repository, TradeBotData tradeBotData, ATData atData,
 			CrossChainTradeData tradeData) throws DataException, ForeignBlockchainException {
 		if (atData.getIsFinished()) {
-			TradeBot.updateTradeBotState(repository, tradeBotData,
-					tradeData.mode == AcctMode.REDEEMED ? State.MAKER_DONE : State.MAKER_REFUNDED,
-					() -> String.format("Reverse AT %s finished", tradeBotData.getAtAddress()));
+			updateMakerFinishedState(repository, tradeBotData, tradeData);
 			return;
 		}
 
-		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
-		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
-		byte[] secretA = BitcoinyHTLC.findHtlcSecret(bitcoiny, p2shAddress);
-		if (secretA != null) {
-			String receivingAddress = Base58.encode(tradeBotData.getReceivingAccountInfo());
-			byte[] messageData = BitcoinyACCTv5.buildRedeemMessage(secretA, receivingAddress);
-			sendMessage(repository, tradeBotData, tradeBotData.getAtAddress(), messageData);
-			return;
-		}
-
-		if (NTP.getTime() <= tradeData.lockTimeA * 1000L || bitcoiny.getMedianBlockTime() <= tradeData.lockTimeA)
+		if (tradeData.mode != AcctMode.TRADING)
 			return;
 
-		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
-		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
-		if (htlcStatus == BitcoinyHTLC.Status.FUNDED) {
-			byte[] redeemScript = buildRedeemScript(tradeData);
-			String refundAddress = bitcoiny.getUnusedReceiveAddress(tradeBotData.getForeignKey());
-			BitcoinyAddress refund = BitcoinyAddress.fromString(bitcoiny.getNetworkParameters(), refundAddress);
-			BitcoinySignedTransaction refundTransaction = bitcoiny.buildHtlcRefundTransaction(Coin.valueOf(tradeData.expectedForeignAmount),
-					ECKey.fromPrivate(tradeBotData.getTradePrivateKey()), bitcoiny.getUnspentOutputs(p2shAddress, false),
-					redeemScript, tradeData.lockTimeA, refund.getPayload());
-			bitcoiny.broadcastTransaction(refundTransaction);
-		}
+		String receivingAddress = Base58.encode(tradeBotData.getReceivingAccountInfo());
+		byte[] messageData = BitcoinyACCTv5.buildRedeemMessage(tradeBotData.getSecret(), receivingAddress);
+		sendMessage(repository, tradeBotData, tradeBotData.getAtAddress(), messageData);
 	}
 
-	private void handleTakerWaitingForAtLock(Repository repository, TradeBotData tradeBotData, ATData atData,
-			CrossChainTradeData tradeData) throws DataException, ForeignBlockchainException {
-		if (atData.getIsFinished()) {
-			TradeBot.updateTradeBotState(repository, tradeBotData,
-					tradeData.mode == AcctMode.REFUNDED ? State.TAKER_REFUNDED : State.TAKER_DONE,
-					() -> String.format("Reverse AT %s finished", tradeBotData.getAtAddress()));
+	private void updateMakerFinishedState(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData)
+			throws DataException, ForeignBlockchainException {
+		if (tradeData.mode == AcctMode.REDEEMED) {
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_DONE,
+					() -> String.format("Reverse AT %s redeemed", tradeBotData.getAtAddress()));
 			return;
 		}
 
-		if (tradeData.mode != AcctMode.TRADING || !tradeBotData.getTradeLocalAddress().equals(tradeData.partnerAddress)
-				|| !Arrays.equals(tradeBotData.getHashOfSecret(), tradeData.hashOfSecretA))
+		if (!refundMakerForeignHtlcIfExpired(tradeBotData, tradeData))
+			return;
+
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.MAKER_REFUNDED,
+				() -> String.format("Reverse AT %s finished without redeem", tradeBotData.getAtAddress()));
+	}
+
+	private void handleTakerWaitingForForeignLock(Repository repository, TradeBotData tradeBotData, ATData atData,
+			CrossChainTradeData tradeData) throws DataException, ForeignBlockchainException {
+		if (atData.getIsFinished()) {
+			updateTakerFinishedState(repository, tradeBotData, tradeData);
+			return;
+		}
+
+		if (!isReservedForUs(tradeBotData, tradeData))
+			return;
+
+		if (tradeData.mode == AcctMode.TRADING) {
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_WAITING_FOR_MAKER_REDEEM,
+					() -> String.format("Reverse AT %s has local lock. Waiting for maker redeem secret", tradeBotData.getAtAddress()));
+			return;
+		}
+
+		if (tradeData.mode != AcctMode.FOREIGN_LOCKED)
+			return;
+
+		if (!hasSufficientTimeForLocalLock(tradeData, NTP.getTime()))
 			return;
 
 		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
 		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
 		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
-
 		if (htlcStatus != BitcoinyHTLC.Status.FUNDED)
 			return;
 
-		byte[] redeemScript = buildRedeemScript(tradeData);
-		BitcoinySignedTransaction redeemTransaction = bitcoiny.buildHtlcRedeemTransaction(Coin.valueOf(tradeData.expectedForeignAmount),
-				ECKey.fromPrivate(tradeBotData.getTradePrivateKey()), bitcoiny.getUnspentOutputs(p2shAddress, false),
-				redeemScript, tradeBotData.getSecret(), tradeBotData.getReceivingAccountInfo());
-		bitcoiny.broadcastTransaction(redeemTransaction);
+		tradeBotData.setLockTimeA(tradeData.lockTimeA);
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_WAITING_FOR_AT_LOCK,
+				() -> String.format("Reverse P2SH %s funded. Waiting for local lock transaction", p2shAddress));
+	}
 
-		TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_DONE,
-				() -> String.format("Redeemed reverse P2SH %s. Waiting for foreign funds", p2shAddress));
+	private void handleTakerWaitingForAtLock(Repository repository, TradeBotData tradeBotData, ATData atData,
+			CrossChainTradeData tradeData) throws DataException {
+		if (atData.getIsFinished()) {
+			updateTakerFinishedState(repository, tradeBotData, tradeData);
+			return;
+		}
+
+		if (tradeData.mode != AcctMode.TRADING || !isReservedForUs(tradeBotData, tradeData))
+			return;
+
+		TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_WAITING_FOR_MAKER_REDEEM,
+				() -> String.format("Reverse AT %s locked local asset. Waiting for maker redeem secret", tradeBotData.getAtAddress()));
+	}
+
+	private void handleTakerWaitingForMakerRedeem(Repository repository, TradeBotData tradeBotData, ATData atData,
+			CrossChainTradeData tradeData) throws DataException, ForeignBlockchainException {
+		byte[] secretA = BitcoinyACCTv5.getInstance().findSecretA(repository, tradeData);
+		if (secretA != null && redeemTakerForeignHtlc(tradeBotData, tradeData, secretA)) {
+			TradeBot.updateTradeBotState(repository, tradeBotData, State.TAKER_DONE,
+					() -> String.format("Redeemed reverse P2SH for AT %s", tradeBotData.getAtAddress()));
+			return;
+		}
+
+		if (atData.getIsFinished())
+			updateTakerFinishedState(repository, tradeBotData, tradeData);
+	}
+
+	private void updateTakerFinishedState(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData) throws DataException {
+		TradeBot.updateTradeBotState(repository, tradeBotData,
+				tradeData.mode == AcctMode.REDEEMED ? State.TAKER_DONE : State.TAKER_REFUNDED,
+				() -> String.format("Reverse AT %s finished", tradeBotData.getAtAddress()));
+	}
+
+	private boolean redeemTakerForeignHtlc(TradeBotData tradeBotData, CrossChainTradeData tradeData, byte[] secretA)
+			throws DataException, ForeignBlockchainException {
+		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
+		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
+		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
+		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
+
+		switch (htlcStatus) {
+			case REDEEM_IN_PROGRESS:
+			case REDEEMED:
+				return true;
+
+			case FUNDED:
+				byte[] redeemScript = buildRedeemScript(tradeData);
+				BitcoinySignedTransaction redeemTransaction = bitcoiny.buildHtlcRedeemTransaction(Coin.valueOf(tradeData.expectedForeignAmount),
+						ECKey.fromPrivate(tradeBotData.getTradePrivateKey()), bitcoiny.getUnspentOutputs(p2shAddress, false),
+						redeemScript, secretA, tradeBotData.getReceivingAccountInfo());
+				bitcoiny.broadcastTransaction(redeemTransaction);
+				return true;
+
+			default:
+				return false;
+		}
+	}
+
+	private boolean refundMakerForeignHtlcIfExpired(TradeBotData tradeBotData, CrossChainTradeData tradeData)
+			throws DataException, ForeignBlockchainException {
+		if (tradeBotData.getLockTimeA() == null || tradeData.partnerForeignPKH == null)
+			return true;
+
+		tradeData.lockTimeA = tradeBotData.getLockTimeA();
+
+		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
+		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
+		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
+		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
+
+		switch (htlcStatus) {
+			case UNFUNDED:
+			case REFUND_IN_PROGRESS:
+			case REFUNDED:
+				return true;
+
+			case FUNDED:
+				if (NTP.getTime() <= tradeData.lockTimeA * 1000L || bitcoiny.getMedianBlockTime() <= tradeData.lockTimeA)
+					return false;
+
+				byte[] redeemScript = buildRedeemScript(tradeData);
+				String refundAddress = bitcoiny.getUnusedReceiveAddress(tradeBotData.getForeignKey());
+				BitcoinyAddress refund = BitcoinyAddress.fromString(bitcoiny.getNetworkParameters(), refundAddress);
+				BitcoinySignedTransaction refundTransaction = bitcoiny.buildHtlcRefundTransaction(Coin.valueOf(tradeData.expectedForeignAmount),
+						ECKey.fromPrivate(tradeBotData.getTradePrivateKey()), bitcoiny.getUnspentOutputs(p2shAddress, false),
+						redeemScript, tradeData.lockTimeA, refund.getPayload());
+				bitcoiny.broadcastTransaction(refundTransaction);
+				return true;
+
+			default:
+				return false;
+		}
+	}
+
+	private int ensureLockTimeA(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData) throws DataException {
+		if (tradeBotData.getLockTimeA() != null)
+			return tradeBotData.getLockTimeA();
+
+		long now = NTP.getTime();
+		int lockTimeA = (int) (now / 1000L + tradeData.tradeTimeout * 60L);
+		tradeBotData.setLockTimeA(lockTimeA);
+		tradeBotData.setTimestamp(now);
+		repository.getCrossChainRepository().save(tradeBotData);
+		repository.saveChanges();
+		TradeBot.backupTradeBotData(repository, null);
+		return lockTimeA;
+	}
+
+	private Optional<TradeBotData> findTakerTradeBotData(Repository repository, CrossChainTradeData tradeData,
+			byte[] responderPublicKey) throws DataException {
+		return repository.getCrossChainRepository().getAllTradeBotData().stream()
+				.filter(tradeBotData -> BitcoinyACCTv5.NAME.equals(tradeBotData.getAcctName()))
+				.filter(tradeBotData -> tradeData.atAddress.equals(tradeBotData.getAtAddress()))
+				.filter(tradeBotData -> Arrays.equals(responderPublicKey, tradeBotData.getTradeLocalPublicKey()))
+				.filter(tradeBotData -> !this.endStates.contains(tradeBotData.getState()))
+				.filter(tradeBotData -> isReservedForUs(tradeBotData, tradeData))
+				.findFirst();
+	}
+
+	private static boolean isReservedForUs(TradeBotData tradeBotData, CrossChainTradeData tradeData) {
+		return tradeBotData.getTradeLocalAddress().equals(tradeData.partnerAddress)
+				&& Arrays.equals(tradeBotData.getTradeForeignPublicKeyHash(), tradeData.partnerForeignPKH)
+				&& Arrays.equals(tradeBotData.getHashOfSecret(), tradeData.hashOfSecretA);
+	}
+
+	private static boolean hasReservationTimedOut(TradeBotData tradeBotData, long now) {
+		return now - tradeBotData.getTimestamp() > RESERVATION_TIMEOUT;
+	}
+
+	static boolean hasSufficientTimeForLocalLock(CrossChainTradeData tradeData, long now) {
+		if (tradeData.lockTimeA == null)
+			return false;
+
+		long localRefundSeconds = BitcoinyACCTv5.calcLocalRefundTimeout(tradeData.tradeTimeout) * 60L;
+		long safetyMarginSeconds = FOREIGN_LOCKTIME_SAFETY_MARGIN_MINUTES * 60L;
+		return now / 1000L + localRefundSeconds + safetyMarginSeconds < tradeData.lockTimeA;
+	}
+
+	private byte[] buildUnsignedMessageTransaction(Repository repository, byte[] senderPublicKey, String recipient, long amount,
+			Long assetId, byte[] messageData) throws DataException {
+		long timestamp = NTP.getTime();
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, senderPublicKey, 0L, null);
+		TransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, Transaction.getVersionByTimestamp(timestamp),
+				0, recipient, amount, assetId, messageData, false, false);
+		MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);
+		messageTransaction.computeNonce();
+
+		try {
+			return MessageTransactionTransformer.toBytes(messageTransactionData);
+		} catch (TransformationException e) {
+			throw new DataException("Failed to transform MESSAGE transaction?", e);
+		}
 	}
 
 	private boolean sendMessage(Repository repository, TradeBotData tradeBotData, String recipient, byte[] messageData) throws DataException {
@@ -391,6 +591,11 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 		messageTransaction.sign(sender);
 		repository.discardChanges();
 		return messageTransaction.isSignatureValid() && messageTransaction.importAsUnconfirmed() == ValidationResult.OK;
+	}
+
+	private boolean sendCancelMessage(Repository repository, TradeBotData tradeBotData) throws DataException {
+		byte[] messageData = BitcoinyACCTv5.getInstance().buildCancelMessage(tradeBotData.getTradeLocalAddress());
+		return sendMessage(repository, tradeBotData, tradeBotData.getAtAddress(), messageData);
 	}
 
 	private static String deriveP2shAddress(Bitcoiny bitcoiny, CrossChainTradeData tradeData) {
