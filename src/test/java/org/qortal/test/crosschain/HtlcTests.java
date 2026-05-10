@@ -1,6 +1,7 @@
 package org.qortal.test.crosschain;
 
 import com.google.common.hash.HashCode;
+import com.google.common.primitives.Bytes;
 import com.google.common.primitives.Longs;
 import org.bitcoinj.core.Address;
 import org.bitcoinj.core.Coin;
@@ -68,6 +69,50 @@ public class HtlcTests extends Common {
 	}
 
 	@Test
+	public void testFindHtlcSecretIgnoresRefundTransaction() throws ForeignBlockchainException {
+		HtlcFixture fixture = createHtlcFixture("Bitcoin-mock-refund", false);
+		Transaction refundTransaction = BitcoinyHTLC.buildRefundTransaction(fixture.bitcoiny.getNetworkParameters(),
+				Coin.valueOf(19_000L), fixture.refundKey, Collections.singletonList(fixture.fundingOutput),
+				fixture.redeemScriptBytes, LOCK_TIME, fixture.refundKey.getPubKeyHash());
+		addSpendTransaction(fixture, refundTransaction, 11);
+
+		assertNull(BitcoinyHTLC.findHtlcSecret(fixture.bitcoiny, fixture.p2shAddress));
+	}
+
+	@Test
+	public void testFindHtlcSecretIgnoresWrongRedeemScript() throws ForeignBlockchainException {
+		HtlcFixture fixture = createHtlcFixture("Bitcoin-mock-wrong-redeem-script", false);
+		byte[] wrongRedeemScript = BitcoinyHTLC.buildScript(fixture.refundKey.getPubKeyHash(), LOCK_TIME + 1,
+				fixture.redeemKey.getPubKeyHash(), Crypto.hash160(EXPECTED_SECRET));
+		byte[] scriptSig = buildRedeemScriptSig(EXPECTED_SECRET, fixture.redeemKey, wrongRedeemScript);
+		addSpendTransaction(fixture, "22".repeat(32), scriptSig, 11);
+
+		assertNull(BitcoinyHTLC.findHtlcSecret(fixture.bitcoiny, fixture.p2shAddress));
+	}
+
+	@Test
+	public void testFindHtlcSecretIgnoresMalformedAndShortSecretScripts() throws ForeignBlockchainException {
+		HtlcFixture fixture = createHtlcFixture("Bitcoin-mock-malformed-secret", false);
+		addSpendTransaction(fixture, "33".repeat(32), HashCode.fromString("ff").asBytes(), 11);
+
+		byte[] shortSecretScriptSig = buildRedeemScriptSig(new byte[] {1, 2, 3}, fixture.redeemKey, fixture.redeemScriptBytes);
+		addSpendTransaction(fixture, "44".repeat(32), shortSecretScriptSig, 12);
+
+		assertNull(BitcoinyHTLC.findHtlcSecret(fixture.bitcoiny, fixture.p2shAddress));
+	}
+
+	@Test
+	public void testFindHtlcSecretIgnoresUnconfirmedRedeemTransaction() throws ForeignBlockchainException {
+		HtlcFixture fixture = createHtlcFixture("Bitcoin-mock-unconfirmed-redeem", false);
+		Transaction redeemTransaction = BitcoinyHTLC.buildRedeemTransaction(fixture.bitcoiny.getNetworkParameters(),
+				Coin.valueOf(19_000L), fixture.redeemKey, Collections.singletonList(fixture.fundingOutput),
+				fixture.redeemScriptBytes, EXPECTED_SECRET, fixture.redeemKey.getPubKeyHash());
+		addSpendTransaction(fixture, redeemTransaction, 0);
+
+		assertNull(BitcoinyHTLC.findHtlcSecret(fixture.bitcoiny, fixture.p2shAddress));
+	}
+
+	@Test
 	public void testFindHtlcSecretFromLiveProvider() throws ForeignBlockchainException {
 		assumeLiveCrosschainTestsEnabled();
 
@@ -127,8 +172,12 @@ public class HtlcTests extends Common {
 	}
 
 	private HtlcFixture createHtlcFixture(boolean includeRedeemTransaction) {
+		return createHtlcFixture("Bitcoin-mock-htlc-" + (includeRedeemTransaction ? "redeem" : "funding"), includeRedeemTransaction);
+	}
+
+	private HtlcFixture createHtlcFixture(String netId, boolean includeRedeemTransaction) {
 		NetworkParameters params = bitcoin.getNetworkParameters();
-		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider("Bitcoin-mock-htlc");
+		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider(netId);
 		TestBitcoiny mockBitcoiny = new TestBitcoiny(params, blockchainProvider, "BTC");
 		ECKey refundKey = ECKey.fromPrivate(HashCode.fromString("11".repeat(32)).asBytes());
 		ECKey redeemKey = ECKey.fromPrivate(HashCode.fromString("22".repeat(32)).asBytes());
@@ -138,15 +187,16 @@ public class HtlcTests extends Common {
 		Transaction fundingTransaction = new Transaction(params);
 		fundingTransaction.addOutput(Coin.valueOf(20_000L), Address.fromString(params, p2shAddress));
 		String fundingTxHash = fundingTransaction.getTxId().toString();
+		UnspentOutput fundingOutput = new UnspentOutput(HashCode.fromString(fundingTxHash).asBytes(), 0, 10, 20_000L,
+				fundingTransaction.getOutput(0).getScriptPubKey().getProgram(), p2shAddress);
+
+		HtlcFixture fixture = new HtlcFixture(mockBitcoiny, blockchainProvider, p2shAddress, p2shScriptPubKey,
+				refundKey, redeemKey, redeemScriptBytes, fundingOutput);
 
 		if (includeRedeemTransaction) {
-			UnspentOutput fundingOutput = new UnspentOutput(HashCode.fromString(fundingTxHash).asBytes(), 0, 10, 20_000L,
-					fundingTransaction.getOutput(0).getScriptPubKey().getProgram(), p2shAddress);
 			Transaction redeemTransaction = BitcoinyHTLC.buildRedeemTransaction(params, Coin.valueOf(19_000L), redeemKey,
 					Collections.singletonList(fundingOutput), redeemScriptBytes, EXPECTED_SECRET, redeemKey.getPubKeyHash());
-			String redeemTxHash = redeemTransaction.getTxId().toString();
-			blockchainProvider.addAddressTransaction(p2shScriptPubKey, new TransactionHash(11, redeemTxHash));
-			blockchainProvider.addRawTransaction(redeemTxHash, redeemTransaction.bitcoinSerialize());
+			addSpendTransaction(fixture, redeemTransaction, 11);
 		} else {
 			blockchainProvider.addAddressTransaction(p2shScriptPubKey, new TransactionHash(10, fundingTxHash));
 			blockchainProvider.addTransaction(new BitcoinyTransaction(fundingTxHash, fundingTransaction.bitcoinSerialize().length, (int) fundingTransaction.getLockTime(),
@@ -154,7 +204,27 @@ public class HtlcTests extends Common {
 							new BitcoinyTransaction.Output(HashCode.fromBytes(p2shScriptPubKey).toString(), 20_000L))));
 		}
 
-		return new HtlcFixture(mockBitcoiny, p2shAddress);
+		return fixture;
+	}
+
+	private static void addSpendTransaction(HtlcFixture fixture, Transaction transaction, int height) {
+		addSpendTransaction(fixture, transaction.getTxId().toString(), transaction.getInput(0).getScriptSig().getProgram(), height);
+	}
+
+	private static void addSpendTransaction(HtlcFixture fixture, String txHash, byte[] scriptSig, int height) {
+		fixture.blockchainProvider.addAddressTransaction(fixture.p2shScriptPubKey, new TransactionHash(height, txHash));
+		fixture.blockchainProvider.addTransaction(new BitcoinyTransaction(txHash, scriptSig.length, 0, height == 0 ? null : 1_700_000_000,
+				Collections.singletonList(new BitcoinyTransaction.Input(HashCode.fromBytes(scriptSig).toString(), 0xffffffff,
+						HashCode.fromBytes(fixture.fundingOutput.hash).toString(), fixture.fundingOutput.index)),
+				Collections.emptyList()));
+	}
+
+	private static byte[] buildRedeemScriptSig(byte[] secret, ECKey redeemKey, byte[] redeemScriptBytes) {
+		return Bytes.concat(
+				BitcoinyScript.pushData(secret),
+				BitcoinyScript.pushData(new byte[] {1}),
+				BitcoinyScript.pushData(redeemKey.getPubKey()),
+				BitcoinyScript.pushData(redeemScriptBytes));
 	}
 
 	private void assumeLiveCrosschainTestsEnabled() {
@@ -163,11 +233,25 @@ public class HtlcTests extends Common {
 
 	private static class HtlcFixture {
 		private final Bitcoiny bitcoiny;
+		private final MockBitcoinyBlockchainProvider blockchainProvider;
 		private final String p2shAddress;
+		private final byte[] p2shScriptPubKey;
+		private final ECKey refundKey;
+		private final ECKey redeemKey;
+		private final byte[] redeemScriptBytes;
+		private final UnspentOutput fundingOutput;
 
-		private HtlcFixture(Bitcoiny bitcoiny, String p2shAddress) {
+		private HtlcFixture(Bitcoiny bitcoiny, MockBitcoinyBlockchainProvider blockchainProvider, String p2shAddress,
+				byte[] p2shScriptPubKey, ECKey refundKey, ECKey redeemKey, byte[] redeemScriptBytes,
+				UnspentOutput fundingOutput) {
 			this.bitcoiny = bitcoiny;
+			this.blockchainProvider = blockchainProvider;
 			this.p2shAddress = p2shAddress;
+			this.p2shScriptPubKey = p2shScriptPubKey;
+			this.refundKey = refundKey;
+			this.redeemKey = redeemKey;
+			this.redeemScriptBytes = redeemScriptBytes;
+			this.fundingOutput = fundingOutput;
 		}
 	}
 

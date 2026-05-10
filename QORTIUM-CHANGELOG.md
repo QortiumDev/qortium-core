@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: harden foreign HTLC secret recovery
+
+Updated BTC-like HTLC secret recovery to use the current decoded transaction provider path instead of the older raw-transaction address scan, only accepting confirmed redeem transactions that spend the expected P2SH script and reveal a 32-byte secret. Added deterministic tests for valid redeem secrets, refunds, wrong scripts, malformed scripts, unconfirmed redeems, and trade-bot secret resolver hooks. This prepares the foreign/foreign trade-bot to recover safely if a secret is revealed on a foreign chain before it is posted back to Qortium.
+
 ### 2026-05-10 - crosschain: persist foreign-foreign trade-bot state
 
 Added the trade-bot persistence groundwork needed for future foreign/foreign swaps. Trade-bot state can now store separate offered and requested foreign-chain blockchains, public keys, wallet keys, amounts, locktimes, and receiving account info, JSON backup/import preserves those fields, and the shared Bitcoiny HTLC helper can build scripts from explicit refund/redeem roles. Foreign/foreign trade creation remains disabled until the trade-bot flow is implemented.

@@ -17,6 +17,7 @@ final class BitcoinyHtlcTradeSupport {
 	private static final int SECONDS_PER_MINUTE = 60;
 
 	private HtlcStatusResolver htlcStatusResolver = BitcoinyHTLC::determineHtlcStatus;
+	private HtlcSecretResolver htlcSecretResolver = BitcoinyHTLC::findHtlcSecret;
 
 	@FunctionalInterface
 	interface HtlcStatusResolver {
@@ -24,17 +25,31 @@ final class BitcoinyHtlcTradeSupport {
 				throws ForeignBlockchainException;
 	}
 
+	@FunctionalInterface
+	interface HtlcSecretResolver {
+		byte[] findHtlcSecret(Bitcoiny bitcoiny, String p2shAddress) throws ForeignBlockchainException;
+	}
+
 	void setHtlcStatusResolverForTesting(HtlcStatusResolver htlcStatusResolver) {
 		this.htlcStatusResolver = htlcStatusResolver != null ? htlcStatusResolver : BitcoinyHTLC::determineHtlcStatus;
 	}
 
+	void setHtlcSecretResolverForTesting(HtlcSecretResolver htlcSecretResolver) {
+		this.htlcSecretResolver = htlcSecretResolver != null ? htlcSecretResolver : BitcoinyHTLC::findHtlcSecret;
+	}
+
 	void resetTestHooks() {
 		this.htlcStatusResolver = BitcoinyHTLC::determineHtlcStatus;
+		this.htlcSecretResolver = BitcoinyHTLC::findHtlcSecret;
 	}
 
 	BitcoinyHTLC.Status determineHtlcStatus(Bitcoiny bitcoiny, String p2shAddress, long minimumAmount)
 			throws ForeignBlockchainException {
 		return this.htlcStatusResolver.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
+	}
+
+	byte[] findHtlcSecret(Bitcoiny bitcoiny, String p2shAddress) throws ForeignBlockchainException {
+		return this.htlcSecretResolver.findHtlcSecret(bitcoiny, p2shAddress);
 	}
 
 	boolean fundIfUnfunded(Bitcoiny bitcoiny, String fundingKey, String p2shAddress, long minimumAmount)

@@ -141,7 +141,11 @@ class MockBitcoinyBlockchainProvider extends BitcoinyBlockchainProvider {
 
 	@Override
 	public List<TransactionHash> getAddressTransactions(byte[] scriptPubKey, boolean includeUnconfirmed) {
-		return new ArrayList<>(this.transactionHashesByScript.getOrDefault(HashCode.fromBytes(scriptPubKey).toString(), Collections.emptyList()));
+		List<TransactionHash> transactionHashes = new ArrayList<>(this.transactionHashesByScript.getOrDefault(HashCode.fromBytes(scriptPubKey).toString(), Collections.emptyList()));
+		if (!includeUnconfirmed)
+			transactionHashes.removeIf(transactionHash -> transactionHash.height == 0);
+
+		return transactionHashes;
 	}
 
 	@Override

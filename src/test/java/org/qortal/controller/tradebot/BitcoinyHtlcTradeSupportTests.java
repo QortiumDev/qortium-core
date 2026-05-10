@@ -137,6 +137,20 @@ public class BitcoinyHtlcTradeSupportTests extends Common {
 	}
 
 	@Test
+	public void testSecretResolverHook() throws ForeignBlockchainException {
+		BitcoinyHtlcTradeSupport support = new BitcoinyHtlcTradeSupport();
+		MockBitcoiny bitcoiny = new MockBitcoiny(getBitcoinNetworkParameters());
+
+		support.setHtlcSecretResolverForTesting((resolvedBitcoiny, p2shAddress) -> {
+			assertSame(bitcoiny, resolvedBitcoiny);
+			assertEquals("p2sh-address", p2shAddress);
+			return SECRET;
+		});
+
+		assertArrayEquals(SECRET, support.findHtlcSecret(bitcoiny, "p2sh-address"));
+	}
+
+	@Test
 	public void testFundIfUnfundedBroadcastsSpendTransaction() throws ForeignBlockchainException {
 		BitcoinyHtlcTradeSupport support = new BitcoinyHtlcTradeSupport();
 		MockBitcoiny bitcoiny = new MockBitcoiny(getBitcoinNetworkParameters());

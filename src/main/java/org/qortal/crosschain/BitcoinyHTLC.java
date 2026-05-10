@@ -219,25 +219,38 @@ public class BitcoinyHTLC {
 	 */
 	public static byte[] findHtlcSecret(Bitcoiny bitcoiny, String p2shAddress) throws ForeignBlockchainException {
 		NetworkParameters params = bitcoiny.getNetworkParameters();
-		String compoundKey = String.format("%s-%s-%d", params.getId(), p2shAddress, System.currentTimeMillis() / CACHE_TIMEOUT);
 		BitcoinyAddress htlcAddress = BitcoinyAddress.fromString(params, p2shAddress);
 		if (htlcAddress.getType() != BitcoinyAddress.Type.P2SH)
 			throw new IllegalArgumentException("HTLC address must be P2SH");
 
-		byte[] targetRedeemScriptHash = htlcAddress.getPayload();
+		return findHtlcSecret(bitcoiny.getBlockchainProvider(), p2shAddress, BitcoinyScript.scriptPubKey(htlcAddress),
+				htlcAddress.getPayload());
+	}
+
+	private static byte[] findHtlcSecret(BitcoinyBlockchainProvider blockchain, String p2shAddress, byte[] ourScriptPubKey,
+			byte[] ourRedeemScriptHash) throws ForeignBlockchainException {
+		String compoundKey = String.format("%s-%s-%d", blockchain.getNetId(), p2shAddress, System.currentTimeMillis() / CACHE_TIMEOUT);
 
 		byte[] secret = SECRET_CACHE.getOrDefault(compoundKey, NO_SECRET_CACHE_ENTRY);
 		if (secret != NO_SECRET_CACHE_ENTRY)
 			return secret;
 
-		List<byte[]> rawTransactions = bitcoiny.getAddressTransactions(p2shAddress);
+		List<TransactionHash> transactionHashes = blockchain.getAddressTransactions(ourScriptPubKey, BitcoinyBlockchainProvider.EXCLUDE_UNCONFIRMED);
+		transactionHashes.sort(TransactionHash.CONFIRMED_FIRST.thenComparing(TransactionHash::getHeight));
 
-		for (byte[] rawTransaction : rawTransactions) {
-			BitcoinyTransaction transaction = bitcoiny.deserializeRawTransaction(rawTransaction);
-
+		for (TransactionHash transactionInfo : transactionHashes) {
+			BitcoinyTransaction transaction = blockchain.getTransaction(transactionInfo.txHash);
 			// Cycle through inputs, looking for one that spends our HTLC
 			for (BitcoinyTransaction.Input input : transaction.inputs) {
-				List<byte[]> scriptChunks = BitcoinyScript.extractScriptSigChunks(HashCode.fromString(input.scriptSig).asBytes());
+				if (input.scriptSig == null)
+					continue;
+
+				List<byte[]> scriptChunks;
+				try {
+					scriptChunks = BitcoinyScript.extractScriptSigChunks(HashCode.fromString(input.scriptSig).asBytes());
+				} catch (IllegalArgumentException e) {
+					continue;
+				}
 
 				// Expected number of script chunks for redeem. Refund might not have the same number.
 				int expectedChunkCount = 1 /*secret*/ + 1 /*sig*/ + 1 /*pubkey*/ + 1 /*redeemScript*/;
@@ -249,7 +262,7 @@ public class BitcoinyHTLC {
 
 				byte[] redeemScriptHash = Crypto.hash160(redeemScriptBytes);
 
-				if (!Arrays.equals(redeemScriptHash, targetRedeemScriptHash))
+				if (!Arrays.equals(redeemScriptHash, ourRedeemScriptHash))
 					// Input isn't spending our HTLC
 					continue;
 

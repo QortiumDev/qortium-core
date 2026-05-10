@@ -72,7 +72,10 @@ trade-bot creation until the trade-bot verifies and drives the foreign-chain
 HTLC flow. Trade-bot persistence can now store separate offered/requested
 foreign-chain wallet data, amounts, locktimes, and receiving account info, and
 the shared Bitcoiny HTLC helper can build scripts from explicit refund/redeem
-roles instead of only from local/foreign trade data.
+roles instead of only from local/foreign trade data. Confirmed BTC-like HTLC
+redeem transactions can now be scanned through the current provider transaction
+path to recover the 32-byte secret, which is needed if the maker reveals the
+secret on the requested foreign chain before posting it back to Qortium.
 
 ## Out of scope for the first pass
 
@@ -80,4 +83,4 @@ roles instead of only from local/foreign trade data.
 - ARRR/HUSH/Zcash-family native shielded swaps
 - Monero swaps
 - direct peer negotiation without Qortium offer coordination
-- trade-bot/API enablement and persistence changes
+- trade-bot/API enablement
