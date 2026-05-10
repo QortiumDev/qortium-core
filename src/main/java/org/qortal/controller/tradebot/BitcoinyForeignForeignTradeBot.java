@@ -380,6 +380,19 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 		if (!isMakerTradeForUs(tradeBotData, tradeData))
 			return;
 
+		if (tradeData.mode == AcctMode.FOREIGN_LOCKED) {
+			if (!refundMakerOfferedHtlcIfExpired(tradeBotData, tradeData))
+				return;
+
+			if (!sendCancelMessage(repository, tradeBotData))
+				return;
+
+			TradeBot.updateTradeBotState(repository, tradeBotData, TradeStates.State.MAKER_REFUNDED,
+					() -> String.format("Refunded foreign/foreign offered-chain P2SH for AT %s",
+							tradeBotData.getAtAddress()));
+			return;
+		}
+
 		if (tradeData.mode != AcctMode.TRADING)
 			return;
 
@@ -491,12 +504,15 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 	}
 
 	private void updateMakerFinishedState(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData)
-			throws DataException {
+			throws DataException, ForeignBlockchainException {
 		if (tradeData.mode == AcctMode.REDEEMED) {
 			TradeBot.updateTradeBotState(repository, tradeBotData, TradeStates.State.MAKER_DONE,
 					() -> String.format("Foreign/foreign AT %s redeemed", tradeBotData.getAtAddress()));
 			return;
 		}
+
+		if (!refundMakerOfferedHtlcIfExpired(tradeBotData, tradeData))
+			return;
 
 		TradeBot.updateTradeBotState(repository, tradeBotData, TradeStates.State.MAKER_REFUNDED,
 				() -> String.format("Foreign/foreign AT %s finished without redeem", tradeBotData.getAtAddress()));
@@ -608,6 +624,24 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 		return this.htlcTradeSupport.redeemIfFunded(offeredBitcoiny, offeredP2shAddress,
 				offeredMinimumAmount, tradeData.offeredForeignAmount, tradeBotData.getTradePrivateKey(),
 				buildMakerOfferedRedeemScript(tradeData), secret, tradeBotData.getOfferedForeignReceivingAccountInfo());
+	}
+
+	private boolean refundMakerOfferedHtlcIfExpired(TradeBotData tradeBotData, CrossChainTradeData tradeData)
+			throws DataException, ForeignBlockchainException {
+		Integer lockTimeA = tradeData.lockTimeA != null ? tradeData.lockTimeA : tradeBotData.getLockTimeA();
+		if (lockTimeA == null || tradeData.partnerOfferedForeignPKH == null)
+			return true;
+
+		tradeData.lockTimeA = lockTimeA;
+
+		Bitcoiny offeredBitcoiny = getBitcoiny(requireBitcoinyEntry(tradeData.offeredForeignBlockchain,
+				"offeredForeignBlockchain"));
+		String offeredP2shAddress = deriveMakerOfferedP2shAddress(offeredBitcoiny, tradeData);
+		long offeredMinimumAmount = BitcoinyHtlcTradeSupport.minimumHtlcAmount(offeredBitcoiny, tradeData.offeredForeignAmount);
+		return this.htlcTradeSupport.refundIfExpired(offeredBitcoiny, offeredP2shAddress,
+				offeredMinimumAmount, tradeData.offeredForeignAmount, tradeBotData.getTradePrivateKey(),
+				buildMakerOfferedRedeemScript(tradeData), lockTimeA,
+				tradeBotData.getOfferedForeignReceivingAccountInfo());
 	}
 
 	private int ensureMakerLockTime(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData)

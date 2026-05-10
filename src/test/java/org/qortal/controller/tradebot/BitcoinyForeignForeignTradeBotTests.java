@@ -404,6 +404,70 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	}
 
 	@Test
+	public void testMakerProgressWaitsBeforeRefundingOfferedForeignHtlc() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			MakerTradeSetup setup = setupMakerDeclaredTrade(repository);
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			String makerOfferedP2sh = deriveMakerOfferedP2shAddress(tradeData);
+			setMockHtlcStatuses(Map.of(makerOfferedP2sh, BitcoinyHTLC.Status.FUNDED), BitcoinyHTLC.Status.UNFUNDED);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			TradeBotData makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(0, this.bitcoin.refundTransactionCount);
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_TAKER_HTLC.name(), makerTradeBotData.getState());
+
+			ATData atData = repository.getATRepository().fromATAddress(setup.atAddress);
+			CrossChainTradeData updatedTradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+			assertFalse(atData.getIsFinished());
+			assertEquals(AcctMode.FOREIGN_LOCKED, updatedTradeData.mode);
+		}
+	}
+
+	@Test
+	public void testMakerProgressRefundsExpiredOfferedForeignHtlc() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int expiredLockTimeA = (int) (System.currentTimeMillis() / 1000L - 60L);
+			MakerTradeSetup setup = setupMakerDeclaredTradeWithLockTime(repository, expiredLockTimeA);
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			String makerOfferedP2sh = deriveMakerOfferedP2shAddress(tradeData);
+			setMockHtlcStatuses(Map.of(makerOfferedP2sh, BitcoinyHTLC.Status.FUNDED), BitcoinyHTLC.Status.UNFUNDED);
+			this.bitcoin.medianBlockTime = expiredLockTimeA + 1;
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			TradeBotData makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(1, this.bitcoin.refundTransactionCount);
+			assertEquals(1, this.bitcoin.broadcastTransactions.size());
+			assertEquals(TradeStates.State.MAKER_REFUNDED.name(), makerTradeBotData.getState());
+
+			ATData atData = repository.getATRepository().fromATAddress(setup.atAddress);
+			CrossChainTradeData updatedTradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.CANCELLED, updatedTradeData.mode);
+		}
+	}
+
+	@Test
+	public void testMakerProgressTreatsOfferedRefundInProgressAsRefunded() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int expiredLockTimeA = (int) (System.currentTimeMillis() / 1000L - 60L);
+			MakerTradeSetup setup = setupMakerDeclaredTradeWithLockTime(repository, expiredLockTimeA);
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			String makerOfferedP2sh = deriveMakerOfferedP2shAddress(tradeData);
+			setMockHtlcStatuses(Map.of(makerOfferedP2sh, BitcoinyHTLC.Status.REFUND_IN_PROGRESS),
+					BitcoinyHTLC.Status.UNFUNDED);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			TradeBotData makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(0, this.bitcoin.refundTransactionCount);
+			assertEquals(0, this.bitcoin.broadcastTransactions.size());
+			assertEquals(TradeStates.State.MAKER_REFUNDED.name(), makerTradeBotData.getState());
+		}
+	}
+
+	@Test
 	public void testTakerProgressFundsRequestedForeignHtlc() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			MakerTradeSetup setup = setupMakerDeclaredTrade(repository);
@@ -827,6 +891,18 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		return setup;
 	}
 
+	private MakerTradeSetup setupMakerDeclaredTradeWithLockTime(Repository repository, int lockTimeA)
+			throws DataException, TransformationException, ForeignBlockchainException {
+		MakerTradeSetup setup = setupReservedMakerTrade(repository);
+		sendMessage(repository, setup.makerTradeBotData.getTradePrivateKey(),
+				BitcoinyForeignForeignACCTv1.buildMakerHtlcMessage(lockTimeA), setup.atAddress);
+
+		BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+		setup.makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+		setup.takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
+		return setup;
+	}
+
 	private MakerTradeSetup setupTradingMakerTrade(Repository repository)
 			throws DataException, TransformationException, ForeignBlockchainException {
 		MakerTradeSetup setup = setupMakerDeclaredTrade(repository);
@@ -989,6 +1065,8 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		private int transactionCounter;
 		private int spendTransactionCount;
 		private int redeemTransactionCount;
+		private int refundTransactionCount;
+		private int medianBlockTime = Integer.MAX_VALUE;
 		private final List<BitcoinySignedTransaction> broadcastTransactions = new ArrayList<>();
 		private long feeRequired = 1_000L;
 
@@ -1025,6 +1103,11 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		}
 
 		@Override
+		public int getMedianBlockTime() {
+			return this.medianBlockTime;
+		}
+
+		@Override
 		public BitcoinySignedTransaction buildSpendTransaction(String xprv58, String recipient, long amount, Long feePerByte) {
 			++this.spendTransactionCount;
 			return fakeTransaction("fund");
@@ -1035,6 +1118,13 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 				List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, byte[] secret, byte[] receivingAccountInfo) {
 			++this.redeemTransactionCount;
 			return fakeTransaction("redeem");
+		}
+
+		@Override
+		public BitcoinySignedTransaction buildHtlcRefundTransaction(Coin refundAmount, ECKey refundKey,
+				List<UnspentOutput> fundingOutputs, byte[] redeemScriptBytes, long lockTime, byte[] receivingAccountInfo) {
+			++this.refundTransactionCount;
+			return fakeTransaction("refund");
 		}
 
 		@Override
