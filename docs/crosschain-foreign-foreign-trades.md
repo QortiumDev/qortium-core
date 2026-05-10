@@ -82,10 +82,14 @@ maker locktime to the coordination AT. The internal taker-side progress path can
 now verify the maker's offered-chain HTLC, derive a requested-chain locktime with
 the required safety margin before the maker refund, fund the requested-chain
 HTLC, avoid rebroadcasting while funding is already in progress, and declare the
-taker locktime to the coordination AT. Trade-bot persistence can store separate
-offered/requested foreign-chain wallet data, amounts, locktimes, and receiving
-account info, and the shared Bitcoiny HTLC helper can build scripts from explicit
-refund/redeem roles instead of only from local/foreign trade data. Confirmed
+taker locktime to the coordination AT. The internal maker completion path can now
+verify the taker requested-chain HTLC, redeem it with the maker secret, wait
+while redeem is still in progress, and reveal the secret to the coordination AT
+only after the requested-chain redeem is confirmed. Trade-bot persistence can
+store separate offered/requested foreign-chain wallet data, amounts, locktimes,
+and receiving account info, and the shared Bitcoiny HTLC helper can build
+scripts from explicit refund/redeem roles instead of only from local/foreign
+trade data. Confirmed
 BTC-like HTLC redeem transactions can now be scanned through the current provider
 transaction path to recover the 32-byte secret, which is needed if the maker
 reveals the secret on the requested foreign chain before posting it back to

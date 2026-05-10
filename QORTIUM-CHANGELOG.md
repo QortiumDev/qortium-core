@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: add foreign-foreign maker redeem secret reveal
+
+Added the internal maker completion path for future foreign/foreign swaps. After the taker has declared a funded requested-chain HTLC, the foreign/foreign trade-bot can now verify the requested-chain HTLC, redeem it with the maker secret, wait while redeem is in progress, reveal the secret to the coordination AT only after confirmed requested-chain redeem, and finish the maker entry once the AT records the redeem. Deterministic tests cover waiting for the taker HTLC, maker redeem broadcast, redeem-in-progress idempotency, delayed secret reveal, confirmed secret reveal, maker completion, and unsafe taker locktime handling while the public API route remains disabled.
+
 ### 2026-05-10 - crosschain: add foreign-foreign taker HTLC funding
 
 Added the internal taker-side progress path for future foreign/foreign swaps. After the maker has declared a funded offered-chain HTLC, the foreign/foreign trade-bot can now verify the maker HTLC, derive a safety-margined taker locktime, fund the requested-chain HTLC, avoid rebroadcasting while funding is already in progress, and declare the taker locktime to the coordination AT. Deterministic tests cover waiting for the maker HTLC, requested-chain funding, funding-in-progress idempotency, funded HTLC declaration, and unsafe taker locktime handling while the public API route remains disabled.
