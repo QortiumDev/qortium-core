@@ -25,7 +25,6 @@ public final class ForeignBlockchainRegistry {
 	private static final Supplier<ACCT> BITCOINY_V3_ACCT_SUPPLIER = BitcoinyACCTv3::getInstance;
 	private static final Supplier<ACCT> BITCOINY_ACCT_SUPPLIER = BitcoinyACCTv4::getInstance;
 	private static final Supplier<ACCT> BITCOINY_V5_ACCT_SUPPLIER = BitcoinyACCTv5::getInstance;
-	private static final Supplier<ACCT> BITCOINY_V6_ACCT_SUPPLIER = BitcoinyACCTv6::getInstance;
 	private static final Supplier<ACCT> PIRATECHAIN_ACCT_SUPPLIER = PirateChainACCTv3::getInstance;
 	private static final Supplier<AcctTradeBot> BITCOINY_V3_TRADE_BOT_SUPPLIER = BitcoinyACCTv3TradeBot::getInstance;
 	private static final Supplier<AcctTradeBot> BITCOINY_TRADE_BOT_SUPPLIER = BitcoinyACCTv4TradeBot::getInstance;
@@ -35,18 +34,15 @@ public final class ForeignBlockchainRegistry {
 	private static final ByteArray BITCOINY_V3_ACCT_CODE_HASH = ByteArray.wrap(BitcoinyACCTv3.CODE_BYTES_HASH);
 	private static final ByteArray BITCOINY_ACCT_CODE_HASH = ByteArray.wrap(BitcoinyACCTv4.CODE_BYTES_HASH);
 	private static final ByteArray BITCOINY_V5_ACCT_CODE_HASH = ByteArray.wrap(BitcoinyACCTv5.CODE_BYTES_HASH);
-	private static final ByteArray BITCOINY_V6_ACCT_CODE_HASH = ByteArray.wrap(BitcoinyACCTv6.CODE_BYTES_HASH);
 	private static final ByteArray PIRATECHAIN_ACCT_CODE_HASH = ByteArray.wrap(PirateChainACCTv3.CODE_BYTES_HASH);
 
 	private static final Map<ByteArray, Supplier<ACCT>> SUPPORTED_ACCTS_BY_CODE_HASH = Map.of(
-			BITCOINY_V6_ACCT_CODE_HASH, BITCOINY_V6_ACCT_SUPPLIER,
 			BITCOINY_V5_ACCT_CODE_HASH, BITCOINY_V5_ACCT_SUPPLIER,
 			BITCOINY_ACCT_CODE_HASH, BITCOINY_ACCT_SUPPLIER,
 			BITCOINY_V3_ACCT_CODE_HASH, BITCOINY_V3_ACCT_SUPPLIER,
 			PIRATECHAIN_ACCT_CODE_HASH, PIRATECHAIN_ACCT_SUPPLIER);
 
 	private static final Map<String, Supplier<ACCT>> SUPPORTED_ACCTS_BY_NAME = Map.of(
-			BitcoinyACCTv6.NAME, BITCOINY_V6_ACCT_SUPPLIER,
 			BitcoinyACCTv5.NAME, BITCOINY_V5_ACCT_SUPPLIER,
 			BitcoinyACCTv4.NAME, BITCOINY_ACCT_SUPPLIER,
 			BitcoinyACCTv3.NAME, BITCOINY_V3_ACCT_SUPPLIER,
@@ -166,7 +162,6 @@ public final class ForeignBlockchainRegistry {
 
 		if (entry.isBitcoiny())
 			return Map.of(
-					BITCOINY_V6_ACCT_CODE_HASH, BITCOINY_V6_ACCT_SUPPLIER,
 					BITCOINY_V5_ACCT_CODE_HASH, BITCOINY_V5_ACCT_SUPPLIER,
 					BITCOINY_ACCT_CODE_HASH, BITCOINY_ACCT_SUPPLIER,
 					BITCOINY_V3_ACCT_CODE_HASH, BITCOINY_V3_ACCT_SUPPLIER);

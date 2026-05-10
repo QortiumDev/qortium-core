@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: keep reverse split-fill ACCT v6 internal
+
+Kept the unfinished `BitcoinyACCTv6` reverse split-fill ACCT as an internal work-in-progress instead of a user-facing protocol. The v6 bytecode and deterministic tests remain available for development, but v6 is no longer registered for public ACCT name or code-hash lookup, so normal APIs continue to expose the completed v4/v5 trade flows until v6 has matching trade-bot and API support.
+
 ### 2026-05-10 - test: stabilize split-fill ACCT v4 cancellation tests
 
 Stabilized the deterministic `BitcoinyACCTv4` split-fill tests by using repository-sequenced transaction timestamps instead of wall-clock timestamps and by giving the cancellation-wait scenario enough test-chain time before the active fill expires. This keeps the test focused on the intended behavior: a cancelled split-fill offer should remain cancelled while active fills wait for refund, then finish cleanly after the refund window passes.

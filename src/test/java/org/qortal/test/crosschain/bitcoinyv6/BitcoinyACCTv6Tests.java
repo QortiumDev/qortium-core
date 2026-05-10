@@ -92,12 +92,12 @@ public class BitcoinyACCTv6Tests extends Common {
 	}
 
 	@Test
-	public void testLatestBitcoinyAcctStillV4AndV6IsRegistered() {
+	public void testLatestBitcoinyAcctStillV4AndV6IsInternalOnly() {
 		ForeignBlockchainRegistry.Entry bitcoin = ForeignBlockchainRegistry.fromString("BITCOIN");
 
 		assertSame(BitcoinyACCTv4.getInstance(), bitcoin.getLatestAcct());
-		assertSame(BitcoinyACCTv6.getInstance(), ForeignBlockchainRegistry.getAcctByName(BitcoinyACCTv6.NAME));
-		assertSame(BitcoinyACCTv6.getInstance(), ForeignBlockchainRegistry.getAcctByCodeHash(BitcoinyACCTv6.CODE_BYTES_HASH));
+		assertNull(ForeignBlockchainRegistry.getAcctByName(BitcoinyACCTv6.NAME));
+		assertNull(ForeignBlockchainRegistry.getAcctByCodeHash(BitcoinyACCTv6.CODE_BYTES_HASH));
 	}
 
 	@Test
