@@ -41,6 +41,7 @@ public class BitcoinyACCTv4Tests extends Common {
 	private static final long MAX_FILL_LOCAL_AMOUNT = 40_00000000L;
 	private static final int TRADE_TIMEOUT = 10080;
 	private static final int SHORT_TRADE_TIMEOUT = 4;
+	private static final int CANCEL_WAIT_TRADE_TIMEOUT = 10;
 
 	@Before
 	public void beforeTest() throws DataException {
@@ -58,14 +59,14 @@ public class BitcoinyACCTv4Tests extends Common {
 			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress());
 			String atAddress = deployAtTransaction.getATAccount().getAddress();
 
-			long offerMessageTimestamp = System.currentTimeMillis();
+			long offerMessageTimestamp = TransactionUtils.nextTimestamp(repository);
 			int lockTimeA = (int) (offerMessageTimestamp / 1000L + TRADE_TIMEOUT * 60);
 			int refundTimeout = BitcoinyACCTv4.calcRefundTimeout(offerMessageTimestamp, lockTimeA);
 			long fillForeignAmount = 123456L;
 
 			byte[] lockMessageData = BitcoinyACCTv4.buildTradeMessage(0, partner.getAddress(), FOREIGN_PUBLIC_KEY_HASH,
 					HASH_OF_SECRET_A, lockTimeA, refundTimeout, MIN_FILL_LOCAL_AMOUNT, fillForeignAmount);
-			sendMessage(repository, tradeAccount, lockMessageData, atAddress);
+			sendMessage(repository, tradeAccount, lockMessageData, atAddress, offerMessageTimestamp);
 			BlockUtils.mintBlock(repository);
 
 			ATData atData = repository.getATRepository().fromATAddress(atAddress);
@@ -177,10 +178,10 @@ public class BitcoinyACCTv4Tests extends Common {
 			PrivateKeyAccount partner = Common.getTestAccount(repository, "dilbert");
 
 			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(),
-					TOTAL_LOCAL_AMOUNT, TOTAL_FOREIGN_AMOUNT, MIN_FILL_LOCAL_AMOUNT, MAX_FILL_LOCAL_AMOUNT, SHORT_TRADE_TIMEOUT);
+					TOTAL_LOCAL_AMOUNT, TOTAL_FOREIGN_AMOUNT, MIN_FILL_LOCAL_AMOUNT, MAX_FILL_LOCAL_AMOUNT, CANCEL_WAIT_TRADE_TIMEOUT);
 			String atAddress = deployAtTransaction.getATAccount().getAddress();
 
-			int refundTimeout = lockFill(repository, tradeAccount, partner, atAddress, 0, MIN_FILL_LOCAL_AMOUNT, 123456L, SHORT_TRADE_TIMEOUT);
+			int refundTimeout = lockFill(repository, tradeAccount, partner, atAddress, 0, MIN_FILL_LOCAL_AMOUNT, 123456L, CANCEL_WAIT_TRADE_TIMEOUT);
 
 			byte[] cancelMessageData = BitcoinyACCTv4.getInstance().buildCancelMessage(deployer.getAddress());
 			sendMessage(repository, deployer, cancelMessageData, atAddress);
@@ -315,7 +316,7 @@ public class BitcoinyACCTv4Tests extends Common {
 		byte[] creationBytes = BitcoinyACCTv4.buildTradeAT(bitcoin, tradeAddress, FOREIGN_PUBLIC_KEY_HASH,
 				totalLocalAmount, totalForeignAmount, minFillLocalAmount, maxFillLocalAmount, tradeTimeout);
 
-		long txTimestamp = System.currentTimeMillis();
+		long txTimestamp = TransactionUtils.nextTimestamp(repository);
 		Long fee = null;
 		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), fee, null);
 		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData,
@@ -331,20 +332,24 @@ public class BitcoinyACCTv4Tests extends Common {
 
 	private int lockFill(Repository repository, PrivateKeyAccount tradeAccount, PrivateKeyAccount partner, String atAddress,
 			int slotIndex, long fillLocalAmount, long fillForeignAmount, int tradeTimeout) throws DataException {
-		long offerMessageTimestamp = System.currentTimeMillis();
+		long offerMessageTimestamp = TransactionUtils.nextTimestamp(repository);
 		int lockTimeA = (int) (offerMessageTimestamp / 1000L + tradeTimeout * 60);
 		int refundTimeout = BitcoinyACCTv4.calcRefundTimeout(offerMessageTimestamp, lockTimeA);
 
 		byte[] lockMessageData = BitcoinyACCTv4.buildTradeMessage(slotIndex, partner.getAddress(), FOREIGN_PUBLIC_KEY_HASH,
 				HASH_OF_SECRET_A, lockTimeA, refundTimeout, fillLocalAmount, fillForeignAmount);
-		sendMessage(repository, tradeAccount, lockMessageData, atAddress);
+		sendMessage(repository, tradeAccount, lockMessageData, atAddress, offerMessageTimestamp);
 		BlockUtils.mintBlock(repository);
 
 		return refundTimeout;
 	}
 
 	private MessageTransaction sendMessage(Repository repository, PrivateKeyAccount sender, byte[] data, String recipient) throws DataException {
-		long txTimestamp = System.currentTimeMillis();
+		return sendMessage(repository, sender, data, recipient, TransactionUtils.nextTimestamp(repository));
+	}
+
+	private MessageTransaction sendMessage(Repository repository, PrivateKeyAccount sender, byte[] data, String recipient, long txTimestamp)
+			throws DataException {
 		Long fee = null;
 		int version = org.qortal.transaction.Transaction.getVersionByTimestamp(txTimestamp);
 
