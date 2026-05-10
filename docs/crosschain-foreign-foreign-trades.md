@@ -63,19 +63,26 @@ trade logic already used by `BitcoinyACCTv5`.
 ## Current foundation
 
 Foreign/foreign trades are represented as `SELL_FOREIGN_FOR_FOREIGN` but remain
-inactive. The API/data model can carry separate offered and requested foreign
-blockchains, amounts, and public-key-hash roles. The inactive
+inactive for users. The API/data model can carry separate offered and requested
+foreign blockchains, amounts, and public-key-hash roles. The inactive
 `BitcoinyForeignForeignACCTv1` now implements the local coordination state
 machine for reservation, maker HTLC declaration, taker HTLC declaration, secret
-reveal, and cancellation. It is intentionally not registered for ACCT lookup or
-trade-bot creation until the trade-bot verifies and drives the foreign-chain
-HTLC flow. Trade-bot persistence can now store separate offered/requested
-foreign-chain wallet data, amounts, locktimes, and receiving account info, and
-the shared Bitcoiny HTLC helper can build scripts from explicit refund/redeem
-roles instead of only from local/foreign trade data. Confirmed BTC-like HTLC
-redeem transactions can now be scanned through the current provider transaction
-path to recover the 32-byte secret, which is needed if the maker reveals the
-secret on the requested foreign chain before posting it back to Qortium.
+reveal, and cancellation. It is intentionally not registered for ACCT lookup,
+and the public tradebot API still rejects this direction until the trade-bot can
+verify and drive the full foreign-chain HTLC flow.
+
+The direct internal `BitcoinyForeignForeignTradeBot` path can now build maker
+DEPLOY_AT transactions and taker reservation MESSAGE transactions for tests and
+later state-machine work. Those paths validate supported BTC-like chain pairs,
+positive amounts, minimum timeout, maker/taker wallet keys, and P2PKH receiving
+addresses, then persist trade-bot state with separate offered/requested chain
+fields. Trade-bot persistence can store separate offered/requested foreign-chain
+wallet data, amounts, locktimes, and receiving account info, and the shared
+Bitcoiny HTLC helper can build scripts from explicit refund/redeem roles instead
+of only from local/foreign trade data. Confirmed BTC-like HTLC redeem
+transactions can now be scanned through the current provider transaction path to
+recover the 32-byte secret, which is needed if the maker reveals the secret on
+the requested foreign chain before posting it back to Qortium.
 
 ## Out of scope for the first pass
 
@@ -83,4 +90,4 @@ secret on the requested foreign chain before posting it back to Qortium.
 - ARRR/HUSH/Zcash-family native shielded swaps
 - Monero swaps
 - direct peer negotiation without Qortium offer coordination
-- trade-bot/API enablement
+- public trade-bot/API enablement

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: add foreign-foreign tradebot create groundwork
+
+Added the internal foreign/foreign trade-bot create and reserve groundwork while keeping the public API route disabled. The direct `BitcoinyForeignForeignTradeBot` path can now build unsigned maker DEPLOY_AT transactions and taker reservation MESSAGE transactions, validate supported BTC-like chain pairs, wallet keys, P2PKH receiving addresses, positive amounts, and minimum timeout, and persist offered/requested foreign-chain trade-bot state for later HTLC-driving work. New deterministic tests cover valid maker/taker state, repository round-trips, invalid criteria, and continued public-route rejection.
+
 ### 2026-05-10 - crosschain: harden foreign HTLC secret recovery
 
 Updated BTC-like HTLC secret recovery to use the current decoded transaction provider path instead of the older raw-transaction address scan, only accepting confirmed redeem transactions that spend the expected P2SH script and reveal a 32-byte secret. Added deterministic tests for valid redeem secrets, refunds, wrong scripts, malformed scripts, unconfirmed redeems, and trade-bot secret resolver hooks. This prepares the foreign/foreign trade-bot to recover safely if a secret is revealed on a foreign chain before it is posted back to Qortium.

@@ -277,8 +277,8 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 		assertNull(ForeignBlockchainRegistry.getAcctByCodeHash(BitcoinyForeignForeignACCTv1.CODE_BYTES_HASH));
 
 		BitcoinyForeignForeignTradeBot tradeBot = BitcoinyForeignForeignTradeBot.getInstance();
-		assertNull(tradeBot.createTrade(null, new TradeBotCreateRequest()));
-		assertEquals(AcctTradeBot.ResponseResult.INVALID_CRITERIA, tradeBot.startResponse(null, null, null, null, null, null));
+		assertEquals(AcctTradeBot.ResponseResult.INVALID_CRITERIA,
+				((AcctTradeBot) tradeBot).startResponse(null, null, null, null, null, null));
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TradeBotCreateRequest request = new TradeBotCreateRequest();
