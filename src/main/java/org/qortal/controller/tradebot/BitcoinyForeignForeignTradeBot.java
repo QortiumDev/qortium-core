@@ -79,6 +79,10 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 		this.htlcTradeSupport.setHtlcStatusResolverForTesting(htlcStatusResolver);
 	}
 
+	void setHtlcSecretResolverForTesting(BitcoinyHtlcTradeSupport.HtlcSecretResolver htlcSecretResolver) {
+		this.htlcTradeSupport.setHtlcSecretResolverForTesting(htlcSecretResolver);
+	}
+
 	void setMessageFeeOverrideForTesting(Long messageFeeOverrideForTesting) {
 		this.messageFeeOverrideForTesting = messageFeeOverrideForTesting;
 	}
@@ -467,11 +471,22 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 	}
 
 	private void handleTakerWaitingForMakerRedeem(Repository repository, TradeBotData tradeBotData, ATData atData,
-			CrossChainTradeData tradeData) throws DataException {
+			CrossChainTradeData tradeData) throws DataException, ForeignBlockchainException {
 		if (atData == null || tradeData == null)
 			return;
 
-		if (atData.getIsFinished())
+		if (!isReservedForUs(tradeBotData, tradeData))
+			return;
+
+		byte[] secret = findMakerSecret(repository, tradeData);
+		if (secret != null && redeemTakerOfferedHtlcIfReady(tradeBotData, tradeData, secret)) {
+			TradeBot.updateTradeBotState(repository, tradeBotData, TradeStates.State.TAKER_DONE,
+					() -> String.format("Redeemed foreign/foreign offered-chain P2SH for AT %s",
+							tradeBotData.getAtAddress()));
+			return;
+		}
+
+		if (atData.getIsFinished() && tradeData.mode != AcctMode.REDEEMED)
 			updateTakerFinishedState(repository, tradeBotData, tradeData);
 	}
 
@@ -560,6 +575,39 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 	private boolean revealMakerSecret(Repository repository, TradeBotData tradeBotData) throws DataException {
 		byte[] messageData = BitcoinyForeignForeignACCTv1.buildSecretRevealMessage(tradeBotData.getSecret());
 		return sendMessage(repository, tradeBotData, tradeBotData.getAtAddress(), messageData);
+	}
+
+	private byte[] findMakerSecret(Repository repository, CrossChainTradeData tradeData)
+			throws DataException, ForeignBlockchainException {
+		byte[] secret = BitcoinyForeignForeignACCTv1.getInstance().findSecretA(repository, tradeData);
+		if (secret != null)
+			return secret;
+
+		if (tradeData.lockTimeB == null)
+			return null;
+
+		Bitcoiny requestedBitcoiny = getBitcoiny(requireBitcoinyEntry(tradeData.requestedForeignBlockchain,
+				"requestedForeignBlockchain"));
+		String requestedP2shAddress = deriveTakerRequestedP2shAddress(requestedBitcoiny, tradeData);
+		secret = this.htlcTradeSupport.findHtlcSecret(requestedBitcoiny, requestedP2shAddress);
+		if (secret == null || !Arrays.equals(Crypto.hash160(secret), tradeData.hashOfSecretA))
+			return null;
+
+		return secret;
+	}
+
+	private boolean redeemTakerOfferedHtlcIfReady(TradeBotData tradeBotData, CrossChainTradeData tradeData, byte[] secret)
+			throws DataException, ForeignBlockchainException {
+		if (tradeData.lockTimeA == null)
+			return false;
+
+		Bitcoiny offeredBitcoiny = getBitcoiny(requireBitcoinyEntry(tradeData.offeredForeignBlockchain,
+				"offeredForeignBlockchain"));
+		String offeredP2shAddress = deriveMakerOfferedP2shAddress(offeredBitcoiny, tradeData);
+		long offeredMinimumAmount = BitcoinyHtlcTradeSupport.minimumHtlcAmount(offeredBitcoiny, tradeData.offeredForeignAmount);
+		return this.htlcTradeSupport.redeemIfFunded(offeredBitcoiny, offeredP2shAddress,
+				offeredMinimumAmount, tradeData.offeredForeignAmount, tradeBotData.getTradePrivateKey(),
+				buildMakerOfferedRedeemScript(tradeData), secret, tradeBotData.getOfferedForeignReceivingAccountInfo());
 	}
 
 	private int ensureMakerLockTime(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData)
@@ -696,6 +744,11 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 
 	private static String deriveMakerOfferedP2shAddress(Bitcoiny bitcoiny, CrossChainTradeData tradeData) {
 		return BitcoinyHtlcTradeSupport.deriveP2shAddress(bitcoiny, tradeData.creatorOfferedForeignPKH,
+				tradeData.lockTimeA, tradeData.partnerOfferedForeignPKH, tradeData.hashOfSecretA);
+	}
+
+	private static byte[] buildMakerOfferedRedeemScript(CrossChainTradeData tradeData) {
+		return BitcoinyHtlcTradeSupport.buildRedeemScript(tradeData.creatorOfferedForeignPKH,
 				tradeData.lockTimeA, tradeData.partnerOfferedForeignPKH, tradeData.hashOfSecretA);
 	}
 

@@ -85,11 +85,14 @@ HTLC, avoid rebroadcasting while funding is already in progress, and declare the
 taker locktime to the coordination AT. The internal maker completion path can now
 verify the taker requested-chain HTLC, redeem it with the maker secret, wait
 while redeem is still in progress, and reveal the secret to the coordination AT
-only after the requested-chain redeem is confirmed. Trade-bot persistence can
-store separate offered/requested foreign-chain wallet data, amounts, locktimes,
-and receiving account info, and the shared Bitcoiny HTLC helper can build
-scripts from explicit refund/redeem roles instead of only from local/foreign
-trade data. Confirmed
+only after the requested-chain redeem is confirmed. The internal taker completion
+path can now recover the secret from either the Qortium coordination AT or the
+requested-chain HTLC redeem transaction, validate it, redeem the maker
+offered-chain HTLC, and finish the taker entry. Trade-bot persistence can store
+separate offered/requested foreign-chain wallet data, amounts, locktimes, and
+receiving account info, and the shared Bitcoiny HTLC helper can build scripts
+from explicit refund/redeem roles instead of only from local/foreign trade data.
+Confirmed
 BTC-like HTLC redeem transactions can now be scanned through the current provider
 transaction path to recover the 32-byte secret, which is needed if the maker
 reveals the secret on the requested foreign chain before posting it back to

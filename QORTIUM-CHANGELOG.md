@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: add foreign-foreign taker offered-chain redeem
+
+Added the internal taker completion path for future foreign/foreign swaps. After the maker reveals the swap secret, the foreign/foreign trade-bot can now recover the secret from either the Qortium coordination AT or the requested-chain HTLC redeem transaction, validate it against the committed hash, redeem the maker offered-chain HTLC, treat in-progress or already-redeemed offered-chain spends as complete, and finish the taker entry. Deterministic tests cover Qortium secret recovery, requested-chain secret recovery, invalid secret rejection, offered-chain redeem broadcast, redeem-in-progress idempotency, and waiting when no secret is available while the public API route remains disabled.
+
 ### 2026-05-10 - crosschain: add foreign-foreign maker redeem secret reveal
 
 Added the internal maker completion path for future foreign/foreign swaps. After the taker has declared a funded requested-chain HTLC, the foreign/foreign trade-bot can now verify the requested-chain HTLC, redeem it with the maker secret, wait while redeem is in progress, reveal the secret to the coordination AT only after confirmed requested-chain redeem, and finish the maker entry once the AT records the redeem. Deterministic tests cover waiting for the taker HTLC, maker redeem broadcast, redeem-in-progress idempotency, delayed secret reveal, confirmed secret reveal, maker completion, and unsafe taker locktime handling while the public API route remains disabled.
