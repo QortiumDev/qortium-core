@@ -14,6 +14,7 @@ import org.qortal.account.PublicKeyAccount;
 import org.qortal.controller.tradebot.TradeStates;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.BitcoinyACCTv3;
+import org.qortal.crosschain.BitcoinyForeignForeignACCTv1;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crypto.Crypto;
 import org.qortal.asset.Asset;
@@ -164,6 +165,32 @@ public class ImportExportTests extends Common {
                 TradeBotData repositoryTradeBotData = repository.getCrossChainRepository().getTradeBotData(tradePrivateKey);
                 assertNull(repositoryTradeBotData);
             }
+
+            repository.saveChanges();
+        }
+    }
+
+    @Test
+    public void testForeignForeignTradeBotStatePersistsAndExports() throws DataException, IOException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            TradeBotData tradeBotData = this.createForeignForeignTradeBotData(repository);
+            repository.getCrossChainRepository().save(tradeBotData);
+
+            TradeBotData repositoryTradeBotData = repository.getCrossChainRepository().getTradeBotData(tradeBotData.getTradePrivateKey());
+            assertNotNull(repositoryTradeBotData);
+            assertEquals(tradeBotData.toJson().toString(), repositoryTradeBotData.toJson().toString());
+
+            HSQLDBImportExport.backupTradeBotStates(repository, null);
+            repository.getCrossChainRepository().delete(tradeBotData.getTradePrivateKey());
+            assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
+
+            Path exportPath = HSQLDBImportExport.getExportDirectory(false);
+            Path filePath = Paths.get(exportPath.toString(), "TradeBotStates.json");
+            HSQLDBImportExport.importDataFromFile(filePath.toString(), repository);
+
+            repositoryTradeBotData = repository.getCrossChainRepository().getTradeBotData(tradeBotData.getTradePrivateKey());
+            assertNotNull(repositoryTradeBotData);
+            assertEquals(tradeBotData.toJson().toString(), repositoryTradeBotData.toJson().toString());
 
             repository.saveChanges();
         }
@@ -413,6 +440,45 @@ public class ImportExportTests extends Common {
                 litecoin.name(),
                 tradeForeignPublicKey, tradeForeignPublicKeyHash,
                 foreignAmount, null, null, null, litecoinReceivingAccountInfo);
+
+        return tradeBotData;
+    }
+
+    private TradeBotData createForeignForeignTradeBotData(Repository repository) throws DataException {
+        TradeBotData baseTradeBotData = this.createTradeBotData(repository);
+
+        ECKey offeredForeignKey = new ECKey();
+        byte[] offeredTradeForeignPublicKey = offeredForeignKey.getPubKey();
+        byte[] offeredTradeForeignPublicKeyHash = Crypto.hash160(offeredTradeForeignPublicKey);
+
+        ECKey requestedForeignKey = new ECKey();
+        byte[] requestedTradeForeignPublicKey = requestedForeignKey.getPubKey();
+        byte[] requestedTradeForeignPublicKeyHash = Crypto.hash160(requestedTradeForeignPublicKey);
+
+        TradeBotData tradeBotData = new TradeBotData(baseTradeBotData.getTradePrivateKey(), BitcoinyForeignForeignACCTv1.NAME,
+                baseTradeBotData.getState(), baseTradeBotData.getStateValue(), baseTradeBotData.getCreatorAddress(),
+                baseTradeBotData.getAtAddress(), baseTradeBotData.getTimestamp(), baseTradeBotData.getLocalAssetId(),
+                baseTradeBotData.getLocalAmount(), baseTradeBotData.getTradeLocalPublicKey(),
+                baseTradeBotData.getTradeLocalPublicKeyHash(), baseTradeBotData.getTradeLocalAddress(),
+                baseTradeBotData.getSecret(), baseTradeBotData.getHashOfSecret(), baseTradeBotData.getForeignBlockchain(),
+                baseTradeBotData.getTradeForeignPublicKey(), baseTradeBotData.getTradeForeignPublicKeyHash(),
+                baseTradeBotData.getForeignAmount(), baseTradeBotData.getForeignKey(),
+                baseTradeBotData.getLastTransactionSignature(), baseTradeBotData.getLockTimeA(),
+                baseTradeBotData.getFillSlotIndex(), baseTradeBotData.getReceivingAccountInfo());
+
+        tradeBotData.setOfferedForeignBlockchain("BITCOIN");
+        tradeBotData.setOfferedTradeForeignPublicKey(offeredTradeForeignPublicKey);
+        tradeBotData.setOfferedTradeForeignPublicKeyHash(offeredTradeForeignPublicKeyHash);
+        tradeBotData.setOfferedForeignAmount(12345678L);
+        tradeBotData.setOfferedForeignKey("offered-wallet-key");
+        tradeBotData.setRequestedForeignBlockchain("LITECOIN");
+        tradeBotData.setRequestedTradeForeignPublicKey(requestedTradeForeignPublicKey);
+        tradeBotData.setRequestedTradeForeignPublicKeyHash(requestedTradeForeignPublicKeyHash);
+        tradeBotData.setRequestedForeignAmount(87654321L);
+        tradeBotData.setRequestedForeignKey("requested-wallet-key");
+        tradeBotData.setLockTimeB(1234567890);
+        tradeBotData.setOfferedForeignReceivingAccountInfo(offeredTradeForeignPublicKeyHash);
+        tradeBotData.setRequestedForeignReceivingAccountInfo(requestedTradeForeignPublicKeyHash);
 
         return tradeBotData;
     }

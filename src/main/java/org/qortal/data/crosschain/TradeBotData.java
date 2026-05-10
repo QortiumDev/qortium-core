@@ -53,12 +53,42 @@ public class TradeBotData {
 	@Schema(hidden = true)
 	private String foreignKey;
 
+	private String offeredForeignBlockchain;
+	private byte[] offeredTradeForeignPublicKey;
+	private byte[] offeredTradeForeignPublicKeyHash;
+
+	@Schema(description = "amount in offered foreign blockchain currency", type = "number")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private Long offeredForeignAmount;
+
+	// Never expose this via API
+	@XmlTransient
+	@Schema(hidden = true)
+	private String offeredForeignKey;
+
+	private String requestedForeignBlockchain;
+	private byte[] requestedTradeForeignPublicKey;
+	private byte[] requestedTradeForeignPublicKeyHash;
+
+	@Schema(description = "amount in requested foreign blockchain currency", type = "number")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private Long requestedForeignAmount;
+
+	// Never expose this via API
+	@XmlTransient
+	@Schema(hidden = true)
+	private String requestedForeignKey;
+
 	private byte[] lastTransactionSignature;
 	private Integer lockTimeA;
+	private Integer lockTimeB;
 	private Integer fillSlotIndex;
 
 	// Could be a foreign-chain or local-chain account identifier.
 	private byte[] receivingAccountInfo;
+
+	private byte[] offeredForeignReceivingAccountInfo;
+	private byte[] requestedForeignReceivingAccountInfo;
 
 	protected TradeBotData() {
 		/* JAXB */
@@ -204,6 +234,86 @@ public class TradeBotData {
 		return this.foreignKey;
 	}
 
+	public String getOfferedForeignBlockchain() {
+		return this.offeredForeignBlockchain;
+	}
+
+	public void setOfferedForeignBlockchain(String offeredForeignBlockchain) {
+		this.offeredForeignBlockchain = offeredForeignBlockchain;
+	}
+
+	public byte[] getOfferedTradeForeignPublicKey() {
+		return this.offeredTradeForeignPublicKey;
+	}
+
+	public void setOfferedTradeForeignPublicKey(byte[] offeredTradeForeignPublicKey) {
+		this.offeredTradeForeignPublicKey = offeredTradeForeignPublicKey;
+	}
+
+	public byte[] getOfferedTradeForeignPublicKeyHash() {
+		return this.offeredTradeForeignPublicKeyHash;
+	}
+
+	public void setOfferedTradeForeignPublicKeyHash(byte[] offeredTradeForeignPublicKeyHash) {
+		this.offeredTradeForeignPublicKeyHash = offeredTradeForeignPublicKeyHash;
+	}
+
+	public Long getOfferedForeignAmount() {
+		return this.offeredForeignAmount;
+	}
+
+	public void setOfferedForeignAmount(Long offeredForeignAmount) {
+		this.offeredForeignAmount = offeredForeignAmount;
+	}
+
+	public String getOfferedForeignKey() {
+		return this.offeredForeignKey;
+	}
+
+	public void setOfferedForeignKey(String offeredForeignKey) {
+		this.offeredForeignKey = offeredForeignKey;
+	}
+
+	public String getRequestedForeignBlockchain() {
+		return this.requestedForeignBlockchain;
+	}
+
+	public void setRequestedForeignBlockchain(String requestedForeignBlockchain) {
+		this.requestedForeignBlockchain = requestedForeignBlockchain;
+	}
+
+	public byte[] getRequestedTradeForeignPublicKey() {
+		return this.requestedTradeForeignPublicKey;
+	}
+
+	public void setRequestedTradeForeignPublicKey(byte[] requestedTradeForeignPublicKey) {
+		this.requestedTradeForeignPublicKey = requestedTradeForeignPublicKey;
+	}
+
+	public byte[] getRequestedTradeForeignPublicKeyHash() {
+		return this.requestedTradeForeignPublicKeyHash;
+	}
+
+	public void setRequestedTradeForeignPublicKeyHash(byte[] requestedTradeForeignPublicKeyHash) {
+		this.requestedTradeForeignPublicKeyHash = requestedTradeForeignPublicKeyHash;
+	}
+
+	public Long getRequestedForeignAmount() {
+		return this.requestedForeignAmount;
+	}
+
+	public void setRequestedForeignAmount(Long requestedForeignAmount) {
+		this.requestedForeignAmount = requestedForeignAmount;
+	}
+
+	public String getRequestedForeignKey() {
+		return this.requestedForeignKey;
+	}
+
+	public void setRequestedForeignKey(String requestedForeignKey) {
+		this.requestedForeignKey = requestedForeignKey;
+	}
+
 	public byte[] getLastTransactionSignature() {
 		return this.lastTransactionSignature;
 	}
@@ -220,6 +330,14 @@ public class TradeBotData {
 		this.lockTimeA = lockTimeA;
 	}
 
+	public Integer getLockTimeB() {
+		return this.lockTimeB;
+	}
+
+	public void setLockTimeB(Integer lockTimeB) {
+		this.lockTimeB = lockTimeB;
+	}
+
 	public Integer getFillSlotIndex() {
 		return this.fillSlotIndex;
 	}
@@ -230,6 +348,22 @@ public class TradeBotData {
 
 	public byte[] getReceivingAccountInfo() {
 		return this.receivingAccountInfo;
+	}
+
+	public byte[] getOfferedForeignReceivingAccountInfo() {
+		return this.offeredForeignReceivingAccountInfo;
+	}
+
+	public void setOfferedForeignReceivingAccountInfo(byte[] offeredForeignReceivingAccountInfo) {
+		this.offeredForeignReceivingAccountInfo = offeredForeignReceivingAccountInfo;
+	}
+
+	public byte[] getRequestedForeignReceivingAccountInfo() {
+		return this.requestedForeignReceivingAccountInfo;
+	}
+
+	public void setRequestedForeignReceivingAccountInfo(byte[] requestedForeignReceivingAccountInfo) {
+		this.requestedForeignReceivingAccountInfo = requestedForeignReceivingAccountInfo;
 	}
 
 	public JSONObject toJson() {
@@ -253,15 +387,28 @@ public class TradeBotData {
 		if (this.getTradeForeignPublicKeyHash() != null) jsonObject.put("tradeForeignPublicKeyHash", Base58.encode(this.getTradeForeignPublicKeyHash()));
 		jsonObject.put("foreignKey", this.getForeignKey());
 		jsonObject.put("foreignAmount", this.getForeignAmount());
+		jsonObject.put("offeredForeignBlockchain", this.getOfferedForeignBlockchain());
+		if (this.getOfferedTradeForeignPublicKey() != null) jsonObject.put("offeredTradeForeignPublicKey", Base58.encode(this.getOfferedTradeForeignPublicKey()));
+		if (this.getOfferedTradeForeignPublicKeyHash() != null) jsonObject.put("offeredTradeForeignPublicKeyHash", Base58.encode(this.getOfferedTradeForeignPublicKeyHash()));
+		jsonObject.put("offeredForeignAmount", this.getOfferedForeignAmount());
+		jsonObject.put("offeredForeignKey", this.getOfferedForeignKey());
+		jsonObject.put("requestedForeignBlockchain", this.getRequestedForeignBlockchain());
+		if (this.getRequestedTradeForeignPublicKey() != null) jsonObject.put("requestedTradeForeignPublicKey", Base58.encode(this.getRequestedTradeForeignPublicKey()));
+		if (this.getRequestedTradeForeignPublicKeyHash() != null) jsonObject.put("requestedTradeForeignPublicKeyHash", Base58.encode(this.getRequestedTradeForeignPublicKeyHash()));
+		jsonObject.put("requestedForeignAmount", this.getRequestedForeignAmount());
+		jsonObject.put("requestedForeignKey", this.getRequestedForeignKey());
 		if (this.getLastTransactionSignature() != null) jsonObject.put("lastTransactionSignature", Base58.encode(this.getLastTransactionSignature()));
 		jsonObject.put("lockTimeA", this.getLockTimeA());
+		jsonObject.put("lockTimeB", this.getLockTimeB());
 		jsonObject.put("fillSlotIndex", this.getFillSlotIndex());
 		if (this.getReceivingAccountInfo() != null) jsonObject.put("receivingAccountInfo", Base58.encode(this.getReceivingAccountInfo()));
+		if (this.getOfferedForeignReceivingAccountInfo() != null) jsonObject.put("offeredForeignReceivingAccountInfo", Base58.encode(this.getOfferedForeignReceivingAccountInfo()));
+		if (this.getRequestedForeignReceivingAccountInfo() != null) jsonObject.put("requestedForeignReceivingAccountInfo", Base58.encode(this.getRequestedForeignReceivingAccountInfo()));
 		return jsonObject;
 	}
 
 	public static TradeBotData fromJson(JSONObject json) {
-		return new TradeBotData(
+		TradeBotData tradeBotData = new TradeBotData(
 				json.isNull("tradePrivateKey") ? null : Base58.decode(json.getString("tradePrivateKey")),
 				json.isNull("acctName") ? null : json.getString("acctName"),
 				json.isNull("tradeState") ? null : json.getString("tradeState"),
@@ -286,6 +433,22 @@ public class TradeBotData {
 				json.isNull("fillSlotIndex") ? null : json.getInt("fillSlotIndex"),
 				json.isNull("receivingAccountInfo") ? null : Base58.decode(json.getString("receivingAccountInfo"))
 		);
+
+		tradeBotData.setOfferedForeignBlockchain(json.isNull("offeredForeignBlockchain") ? null : json.getString("offeredForeignBlockchain"));
+		tradeBotData.setOfferedTradeForeignPublicKey(json.isNull("offeredTradeForeignPublicKey") ? null : Base58.decode(json.getString("offeredTradeForeignPublicKey")));
+		tradeBotData.setOfferedTradeForeignPublicKeyHash(json.isNull("offeredTradeForeignPublicKeyHash") ? null : Base58.decode(json.getString("offeredTradeForeignPublicKeyHash")));
+		tradeBotData.setOfferedForeignAmount(json.isNull("offeredForeignAmount") ? null : json.getLong("offeredForeignAmount"));
+		tradeBotData.setOfferedForeignKey(json.isNull("offeredForeignKey") ? null : json.getString("offeredForeignKey"));
+		tradeBotData.setRequestedForeignBlockchain(json.isNull("requestedForeignBlockchain") ? null : json.getString("requestedForeignBlockchain"));
+		tradeBotData.setRequestedTradeForeignPublicKey(json.isNull("requestedTradeForeignPublicKey") ? null : Base58.decode(json.getString("requestedTradeForeignPublicKey")));
+		tradeBotData.setRequestedTradeForeignPublicKeyHash(json.isNull("requestedTradeForeignPublicKeyHash") ? null : Base58.decode(json.getString("requestedTradeForeignPublicKeyHash")));
+		tradeBotData.setRequestedForeignAmount(json.isNull("requestedForeignAmount") ? null : json.getLong("requestedForeignAmount"));
+		tradeBotData.setRequestedForeignKey(json.isNull("requestedForeignKey") ? null : json.getString("requestedForeignKey"));
+		tradeBotData.setLockTimeB(json.isNull("lockTimeB") ? null : json.getInt("lockTimeB"));
+		tradeBotData.setOfferedForeignReceivingAccountInfo(json.isNull("offeredForeignReceivingAccountInfo") ? null : Base58.decode(json.getString("offeredForeignReceivingAccountInfo")));
+		tradeBotData.setRequestedForeignReceivingAccountInfo(json.isNull("requestedForeignReceivingAccountInfo") ? null : Base58.decode(json.getString("requestedForeignReceivingAccountInfo")));
+
+		return tradeBotData;
 	}
 
 	// Mostly for debugging

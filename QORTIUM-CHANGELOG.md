@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: persist foreign-foreign trade-bot state
+
+Added the trade-bot persistence groundwork needed for future foreign/foreign swaps. Trade-bot state can now store separate offered and requested foreign-chain blockchains, public keys, wallet keys, amounts, locktimes, and receiving account info, JSON backup/import preserves those fields, and the shared Bitcoiny HTLC helper can build scripts from explicit refund/redeem roles. Foreign/foreign trade creation remains disabled until the trade-bot flow is implemented.
+
 ### 2026-05-10 - crosschain: implement inactive foreign-foreign ACCT state machine
 
 Implemented the local coordination bytecode for inactive `BitcoinyForeignForeignACCTv1` offers, including reservation, maker/taker HTLC declarations, timeout-margin checks, secret reveal, cancellation, local-payment refund protection, trade data extraction, and deterministic tests. The new ACCT remains unregistered and unavailable through user-facing trade creation until the trade-bot/API wiring is implemented.

@@ -27,7 +27,12 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 				+ "trade_local_public_key, trade_local_public_key_hash, "
 				+ "trade_local_address, secret, hash_of_secret, "
 				+ "foreign_blockchain, trade_foreign_public_key, trade_foreign_public_key_hash, "
-				+ "foreign_amount, foreign_key, last_transaction_signature, locktime_a, fill_slot_index, receiving_account_info "
+				+ "foreign_amount, foreign_key, last_transaction_signature, locktime_a, fill_slot_index, receiving_account_info, "
+				+ "offered_foreign_blockchain, offered_trade_foreign_public_key, offered_trade_foreign_public_key_hash, "
+				+ "offered_foreign_amount, offered_foreign_key, "
+				+ "requested_foreign_blockchain, requested_trade_foreign_public_key, requested_trade_foreign_public_key_hash, "
+				+ "requested_foreign_amount, requested_foreign_key, locktime_b, "
+				+ "offered_foreign_receiving_account_info, requested_foreign_receiving_account_info "
 				+ "FROM TradeBotStates "
 				+ "WHERE trade_private_key = ?";
 
@@ -54,21 +59,20 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 			long foreignAmount = resultSet.getLong(17);
 			String foreignKey = resultSet.getString(18);
 			byte[] lastTransactionSignature = resultSet.getBytes(19);
-			Integer lockTimeA = resultSet.getInt(20);
-			if (lockTimeA == 0 && resultSet.wasNull())
-				lockTimeA = null;
-			Integer fillSlotIndex = resultSet.getInt(21);
-			if (fillSlotIndex == 0 && resultSet.wasNull())
-				fillSlotIndex = null;
+			Integer lockTimeA = getNullableInteger(resultSet, 20);
+			Integer fillSlotIndex = getNullableInteger(resultSet, 21);
 			byte[] receivingAccountInfo = resultSet.getBytes(22);
 
-			return new TradeBotData(tradePrivateKey, acctName,
+			TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, acctName,
 					tradeState, tradeStateValue,
 					creatorAddress, atAddress, timestamp, localAssetId, localAmount,
 					tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
 					secret, hashOfSecret,
 					foreignBlockchain, tradeForeignPublicKey, tradeForeignPublicKeyHash,
 					foreignAmount, foreignKey, lastTransactionSignature, lockTimeA, fillSlotIndex, receivingAccountInfo);
+			populateForeignForeignFields(tradeBotData, resultSet, 23);
+
+			return tradeBotData;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch trade-bot trading state from repository", e);
 		}
@@ -112,7 +116,12 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 				+ "trade_local_public_key, trade_local_public_key_hash, "
 				+ "trade_local_address, secret, hash_of_secret, "
 				+ "foreign_blockchain, trade_foreign_public_key, trade_foreign_public_key_hash, "
-				+ "foreign_amount, foreign_key, last_transaction_signature, locktime_a, fill_slot_index, receiving_account_info "
+				+ "foreign_amount, foreign_key, last_transaction_signature, locktime_a, fill_slot_index, receiving_account_info, "
+				+ "offered_foreign_blockchain, offered_trade_foreign_public_key, offered_trade_foreign_public_key_hash, "
+				+ "offered_foreign_amount, offered_foreign_key, "
+				+ "requested_foreign_blockchain, requested_trade_foreign_public_key, requested_trade_foreign_public_key_hash, "
+				+ "requested_foreign_amount, requested_foreign_key, locktime_b, "
+				+ "offered_foreign_receiving_account_info, requested_foreign_receiving_account_info "
 				+ "FROM TradeBotStates";
 
 		List<TradeBotData> allTradeBotData = new ArrayList<>();
@@ -142,12 +151,8 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 				long foreignAmount = resultSet.getLong(18);
 				String foreignKey = resultSet.getString(19);
 				byte[] lastTransactionSignature = resultSet.getBytes(20);
-				Integer lockTimeA = resultSet.getInt(21);
-				if (lockTimeA == 0 && resultSet.wasNull())
-					lockTimeA = null;
-				Integer fillSlotIndex = resultSet.getInt(22);
-				if (fillSlotIndex == 0 && resultSet.wasNull())
-					fillSlotIndex = null;
+				Integer lockTimeA = getNullableInteger(resultSet, 21);
+				Integer fillSlotIndex = getNullableInteger(resultSet, 22);
 				byte[] receivingAccountInfo = resultSet.getBytes(23);
 
 				TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, acctName,
@@ -157,6 +162,7 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 						secret, hashOfSecret,
 						foreignBlockchain, tradeForeignPublicKey, tradeForeignPublicKeyHash,
 						foreignAmount, foreignKey, lastTransactionSignature, lockTimeA, fillSlotIndex, receivingAccountInfo);
+				populateForeignForeignFields(tradeBotData, resultSet, 24);
 				allTradeBotData.add(tradeBotData);
 			} while (resultSet.next());
 
@@ -192,7 +198,20 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 				.bind("last_transaction_signature", tradeBotData.getLastTransactionSignature())
 				.bind("locktime_a", tradeBotData.getLockTimeA())
 				.bind("fill_slot_index", tradeBotData.getFillSlotIndex())
-				.bind("receiving_account_info", tradeBotData.getReceivingAccountInfo());
+				.bind("receiving_account_info", tradeBotData.getReceivingAccountInfo())
+				.bind("offered_foreign_blockchain", tradeBotData.getOfferedForeignBlockchain())
+				.bind("offered_trade_foreign_public_key", tradeBotData.getOfferedTradeForeignPublicKey())
+				.bind("offered_trade_foreign_public_key_hash", tradeBotData.getOfferedTradeForeignPublicKeyHash())
+				.bind("offered_foreign_amount", tradeBotData.getOfferedForeignAmount())
+				.bind("offered_foreign_key", tradeBotData.getOfferedForeignKey())
+				.bind("requested_foreign_blockchain", tradeBotData.getRequestedForeignBlockchain())
+				.bind("requested_trade_foreign_public_key", tradeBotData.getRequestedTradeForeignPublicKey())
+				.bind("requested_trade_foreign_public_key_hash", tradeBotData.getRequestedTradeForeignPublicKeyHash())
+				.bind("requested_foreign_amount", tradeBotData.getRequestedForeignAmount())
+				.bind("requested_foreign_key", tradeBotData.getRequestedForeignKey())
+				.bind("locktime_b", tradeBotData.getLockTimeB())
+				.bind("offered_foreign_receiving_account_info", tradeBotData.getOfferedForeignReceivingAccountInfo())
+				.bind("requested_foreign_receiving_account_info", tradeBotData.getRequestedForeignReceivingAccountInfo());
 
 		try {
 			saveHelper.execute(this.repository);
@@ -321,6 +340,33 @@ public class HSQLDBCrossChainRepository implements CrossChainRepository {
 		} catch (SQLException e) {
 			throw new DataException("Unable to delete trade-bot states from repository", e);
 		}
+	}
+
+	private static void populateForeignForeignFields(TradeBotData tradeBotData, ResultSet resultSet, int columnIndex)
+			throws SQLException {
+		tradeBotData.setOfferedForeignBlockchain(resultSet.getString(columnIndex++));
+		tradeBotData.setOfferedTradeForeignPublicKey(resultSet.getBytes(columnIndex++));
+		tradeBotData.setOfferedTradeForeignPublicKeyHash(resultSet.getBytes(columnIndex++));
+		tradeBotData.setOfferedForeignAmount(getNullableLong(resultSet, columnIndex++));
+		tradeBotData.setOfferedForeignKey(resultSet.getString(columnIndex++));
+		tradeBotData.setRequestedForeignBlockchain(resultSet.getString(columnIndex++));
+		tradeBotData.setRequestedTradeForeignPublicKey(resultSet.getBytes(columnIndex++));
+		tradeBotData.setRequestedTradeForeignPublicKeyHash(resultSet.getBytes(columnIndex++));
+		tradeBotData.setRequestedForeignAmount(getNullableLong(resultSet, columnIndex++));
+		tradeBotData.setRequestedForeignKey(resultSet.getString(columnIndex++));
+		tradeBotData.setLockTimeB(getNullableInteger(resultSet, columnIndex++));
+		tradeBotData.setOfferedForeignReceivingAccountInfo(resultSet.getBytes(columnIndex++));
+		tradeBotData.setRequestedForeignReceivingAccountInfo(resultSet.getBytes(columnIndex));
+	}
+
+	private static Integer getNullableInteger(ResultSet resultSet, int columnIndex) throws SQLException {
+		int value = resultSet.getInt(columnIndex);
+		return value == 0 && resultSet.wasNull() ? null : value;
+	}
+
+	private static Long getNullableLong(ResultSet resultSet, int columnIndex) throws SQLException {
+		long value = resultSet.getLong(columnIndex);
+		return value == 0 && resultSet.wasNull() ? null : value;
 	}
 
 }

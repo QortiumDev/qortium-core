@@ -640,7 +640,14 @@ public class HSQLDBDatabaseUpdates {
 							+ "foreign_blockchain VARCHAR(40), "
 							+ "trade_foreign_public_key VARBINARY(33) NOT NULL, trade_foreign_public_key_hash VARBINARY(32) NOT NULL, "
 							+ "foreign_amount BIGINT NOT NULL, foreign_key VARCHAR(200), last_transaction_signature Signature, locktime_a BIGINT, "
-							+ "fill_slot_index INTEGER, receiving_account_info VARBINARY(128) NOT NULL, PRIMARY KEY (trade_private_key))");
+							+ "fill_slot_index INTEGER, receiving_account_info VARBINARY(128) NOT NULL, "
+							+ "offered_foreign_blockchain VARCHAR(40), offered_trade_foreign_public_key VARBINARY(33), "
+							+ "offered_trade_foreign_public_key_hash VARBINARY(32), offered_foreign_amount BIGINT, "
+							+ "offered_foreign_key VARCHAR(200), requested_foreign_blockchain VARCHAR(40), "
+							+ "requested_trade_foreign_public_key VARBINARY(33), requested_trade_foreign_public_key_hash VARBINARY(32), "
+							+ "requested_foreign_amount BIGINT, requested_foreign_key VARCHAR(200), locktime_b BIGINT, "
+							+ "offered_foreign_receiving_account_info VARBINARY(128), requested_foreign_receiving_account_info VARBINARY(128), "
+							+ "PRIMARY KEY (trade_private_key))");
 					stmt.execute("CREATE TABLE TradeBotFills (at_address AccountAddress NOT NULL, hash_of_secret VARBINARY(32) NOT NULL, "
 							+ "slot_index INTEGER NOT NULL, fill_state VARCHAR(40) NOT NULL, updated_when BIGINT NOT NULL, "
 							+ "partner_address AccountAddress NOT NULL, partner_foreign_public_key_hash VARBINARY(32) NOT NULL, "
@@ -1109,6 +1116,23 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("ALTER TABLE DeployATTransactions ALTER COLUMN AT_type VARCHAR(200) COLLATE SQL_TEXT_UCC_NO_PAD");
 					stmt.execute("ALTER TABLE DeployATTransactions ALTER COLUMN AT_tags VARCHAR(200) COLLATE SQL_TEXT_UCC_NO_PAD");
 					stmt.execute("CHECKPOINT");
+					break;
+
+				case 54:
+					// Store both foreign-chain sides for future foreign/foreign trade-bot state.
+					addColumnIfMissing(connection, "TradeBotStates", "offered_foreign_blockchain", "VARCHAR(40)");
+					addColumnIfMissing(connection, "TradeBotStates", "offered_trade_foreign_public_key", "VARBINARY(33)");
+					addColumnIfMissing(connection, "TradeBotStates", "offered_trade_foreign_public_key_hash", "VARBINARY(32)");
+					addColumnIfMissing(connection, "TradeBotStates", "offered_foreign_amount", "BIGINT");
+					addColumnIfMissing(connection, "TradeBotStates", "offered_foreign_key", "VARCHAR(200)");
+					addColumnIfMissing(connection, "TradeBotStates", "requested_foreign_blockchain", "VARCHAR(40)");
+					addColumnIfMissing(connection, "TradeBotStates", "requested_trade_foreign_public_key", "VARBINARY(33)");
+					addColumnIfMissing(connection, "TradeBotStates", "requested_trade_foreign_public_key_hash", "VARBINARY(32)");
+					addColumnIfMissing(connection, "TradeBotStates", "requested_foreign_amount", "BIGINT");
+					addColumnIfMissing(connection, "TradeBotStates", "requested_foreign_key", "VARCHAR(200)");
+					addColumnIfMissing(connection, "TradeBotStates", "locktime_b", "BIGINT");
+					addColumnIfMissing(connection, "TradeBotStates", "offered_foreign_receiving_account_info", "VARBINARY(128)");
+					addColumnIfMissing(connection, "TradeBotStates", "requested_foreign_receiving_account_info", "VARBINARY(128)");
 					break;
 
 				default:

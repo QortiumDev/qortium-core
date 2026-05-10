@@ -69,7 +69,10 @@ blockchains, amounts, and public-key-hash roles. The inactive
 machine for reservation, maker HTLC declaration, taker HTLC declaration, secret
 reveal, and cancellation. It is intentionally not registered for ACCT lookup or
 trade-bot creation until the trade-bot verifies and drives the foreign-chain
-HTLC flow.
+HTLC flow. Trade-bot persistence can now store separate offered/requested
+foreign-chain wallet data, amounts, locktimes, and receiving account info, and
+the shared Bitcoiny HTLC helper can build scripts from explicit refund/redeem
+roles instead of only from local/foreign trade data.
 
 ## Out of scope for the first pass
 

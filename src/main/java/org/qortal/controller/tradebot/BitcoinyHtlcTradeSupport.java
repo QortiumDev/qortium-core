@@ -96,12 +96,23 @@ final class BitcoinyHtlcTradeSupport {
 	}
 
 	static byte[] buildRedeemScript(CrossChainTradeData tradeData) {
-		return BitcoinyHTLC.buildScript(tradeData.creatorForeignPKH, tradeData.lockTimeA,
+		return buildRedeemScript(tradeData.creatorForeignPKH, tradeData.lockTimeA,
 				tradeData.partnerForeignPKH, tradeData.hashOfSecretA);
+	}
+
+	static byte[] buildRedeemScript(byte[] refundPublicKeyHash, int lockTime,
+			byte[] redeemPublicKeyHash, byte[] hashOfSecret) {
+		return BitcoinyHTLC.buildScript(refundPublicKeyHash, lockTime, redeemPublicKeyHash, hashOfSecret);
 	}
 
 	static String deriveP2shAddress(Bitcoiny bitcoiny, CrossChainTradeData tradeData) {
 		return bitcoiny.deriveP2shAddress(buildRedeemScript(tradeData));
+	}
+
+	static String deriveP2shAddress(Bitcoiny bitcoiny, byte[] refundPublicKeyHash, int lockTime,
+			byte[] redeemPublicKeyHash, byte[] hashOfSecret) {
+		return bitcoiny.deriveP2shAddress(buildRedeemScript(refundPublicKeyHash, lockTime,
+				redeemPublicKeyHash, hashOfSecret));
 	}
 
 	static long minimumHtlcAmount(Bitcoiny bitcoiny, long foreignAmount) throws ForeignBlockchainException {

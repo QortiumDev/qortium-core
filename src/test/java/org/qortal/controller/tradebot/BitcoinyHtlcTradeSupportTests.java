@@ -37,11 +37,14 @@ public class BitcoinyHtlcTradeSupportTests extends Common {
 
 	private static final byte[] MAKER_FOREIGN_PUBLIC_KEY_HASH = HashCode.fromString("aa00aa11aa22aa33aa44aa55aa66aa77aa88aa99").asBytes();
 	private static final byte[] TAKER_FOREIGN_PUBLIC_KEY_HASH = HashCode.fromString("bb00bb11bb22bb33bb44bb55bb66bb77bb88bb99").asBytes();
+	private static final byte[] MAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH = HashCode.fromString("cc00cc11cc22cc33cc44cc55cc66cc77cc88cc99").asBytes();
+	private static final byte[] TAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH = HashCode.fromString("dd00dd11dd22dd33dd44dd55dd66dd77dd88dd99").asBytes();
 	private static final byte[] SECRET = "This string is exactly 32 bytes!".getBytes();
 	private static final byte[] HASH_OF_SECRET = Crypto.hash160(SECRET);
 	private static final long FOREIGN_AMOUNT = 100_000L;
 	private static final long P2SH_FEE = 1_000L;
 	private static final int LOCK_TIME = 1_765_000_000;
+	private static final int LOCK_TIME_B = LOCK_TIME - 1_801;
 	private static final int SAFETY_MARGIN_MINUTES = 30;
 
 	@Before
@@ -59,6 +62,32 @@ public class BitcoinyHtlcTradeSupportTests extends Common {
 
 		assertArrayEquals(expectedScript, BitcoinyHtlcTradeSupport.buildRedeemScript(tradeData));
 		assertEquals(bitcoiny.deriveP2shAddress(expectedScript), BitcoinyHtlcTradeSupport.deriveP2shAddress(bitcoiny, tradeData));
+	}
+
+	@Test
+	public void testGenericRedeemScriptAndP2shAddressMatchExplicitHtlcScript() {
+		MockBitcoiny bitcoiny = new MockBitcoiny(getBitcoinNetworkParameters());
+
+		byte[] expectedScript = BitcoinyHTLC.buildScript(MAKER_FOREIGN_PUBLIC_KEY_HASH, LOCK_TIME,
+				TAKER_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET);
+
+		assertArrayEquals(expectedScript, BitcoinyHtlcTradeSupport.buildRedeemScript(MAKER_FOREIGN_PUBLIC_KEY_HASH,
+				LOCK_TIME, TAKER_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET));
+		assertEquals(bitcoiny.deriveP2shAddress(expectedScript), BitcoinyHtlcTradeSupport.deriveP2shAddress(bitcoiny,
+				MAKER_FOREIGN_PUBLIC_KEY_HASH, LOCK_TIME, TAKER_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET));
+	}
+
+	@Test
+	public void testForeignForeignRoleOrderingUsesFundingPartyAsRefundKey() {
+		byte[] makerOfferedHtlcScript = BitcoinyHtlcTradeSupport.buildRedeemScript(MAKER_FOREIGN_PUBLIC_KEY_HASH,
+				LOCK_TIME, TAKER_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET);
+		assertArrayEquals(BitcoinyHTLC.buildScript(MAKER_FOREIGN_PUBLIC_KEY_HASH, LOCK_TIME,
+				TAKER_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET), makerOfferedHtlcScript);
+
+		byte[] takerRequestedHtlcScript = BitcoinyHtlcTradeSupport.buildRedeemScript(TAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH,
+				LOCK_TIME_B, MAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET);
+		assertArrayEquals(BitcoinyHTLC.buildScript(TAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH, LOCK_TIME_B,
+				MAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET), takerRequestedHtlcScript);
 	}
 
 	@Test
