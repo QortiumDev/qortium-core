@@ -2,6 +2,7 @@ package org.qortal.controller.tradebot;
 
 import cash.z.wallet.sdk.rpc.CompactFormats.CompactBlock;
 import com.google.common.hash.HashCode;
+import com.google.common.primitives.Bytes;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.Context;
 import org.bitcoinj.core.ECKey;
@@ -64,13 +65,14 @@ import static org.junit.Assert.*;
 public class BitcoinyACCTv5TradeBotTests extends Common {
 
 	private static final String XPRV = "xprv9z8QpS7vxwMC2fCnG1oZc6c4aFRLgsqSF86yWrJBKEzMY3T3ySCo85x8Uv5FxTavAQwgEDy1g3iLRT5kdtFjoNNBKukLTMzKwCUn1Abwoxg";
-	private static final String BTC_RECEIVING_ADDRESS = "1BitcoinEaterAddressDontSendf59kuE";
 	private static final byte[] MAKER_FOREIGN_PUBLIC_KEY_HASH = HashCode.fromString("aa00aa11aa22aa33aa44aa55aa66aa77aa88aa99").asBytes();
+	private static final byte[] BTC_RECEIVING_PUBLIC_KEY_HASH = HashCode.fromString("cc00cc11cc22cc33cc44cc55cc66cc77cc88cc99").asBytes();
 	private static final byte[] SECRET_A = "This string is exactly 32 bytes!".getBytes();
 	private static final byte[] HASH_OF_SECRET_A = Crypto.hash160(SECRET_A);
 	private static final long LOCAL_AMOUNT = 25L * Amounts.MULTIPLIER;
 	private static final long FOREIGN_AMOUNT = 100_000L;
 	private static final long NATIVE_FEE_RESERVE = 3L * Amounts.MULTIPLIER;
+	private static final long TEST_MESSAGE_FEE = Amounts.MULTIPLIER / 100L;
 	private static final int TRADE_TIMEOUT = 120;
 	private static final int SHORT_TRADE_TIMEOUT = 6;
 
@@ -78,6 +80,12 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
 		BitcoinyACCTv5TradeBot.getInstance().resetTestHooks();
+		BitcoinyACCTv5TradeBot.getInstance().setMessageFeeOverrideForTesting(TEST_MESSAGE_FEE);
+		BitcoinyACCTv5TradeBot.getInstance().setMessageSubmitterForTesting((repository, messageTransaction, sender) -> {
+			messageTransaction.getTransactionData().setFee(TEST_MESSAGE_FEE);
+			TransactionUtils.signAndMint(repository, messageTransaction.getTransactionData(), sender);
+			return Transaction.ValidationResult.OK;
+		});
 	}
 
 	@After
@@ -88,6 +96,8 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 	@Test
 	public void testCreateTradeRoutesSellForeignToV5() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			installMockBitcoiny(BitcoinyHTLC.Status.UNFUNDED);
+
 			PrivateKeyAccount creator = Common.getTestAccount(repository, "chloe");
 			PrivateKeyAccount localReceiving = Common.getTestAccount(repository, "bob");
 			long localAssetId = AssetUtils.issueAsset(repository, "alice", "V5-BOT-CREATE", 100L * Amounts.MULTIPLIER, true);
@@ -125,6 +135,8 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 	@Test
 	public void testReverseResponseReturnsUnsignedReservationMessage() throws DataException, TransformationException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			installMockBitcoiny(BitcoinyHTLC.Status.UNFUNDED);
+
 			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
 			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
 			PrivateKeyAccount responder = Common.getTestAccount(repository, "dilbert");
@@ -136,8 +148,8 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
 
 			byte[] unsignedMessageBytes = BitcoinyACCTv5TradeBot.getInstance().startResponse(repository, atData, tradeData,
-					responder.getPublicKey(), BTC_RECEIVING_ADDRESS);
-			TransactionData transactionData = TransactionTransformer.fromBytes(unsignedMessageBytes);
+					responder.getPublicKey(), btcReceivingAddress());
+			TransactionData transactionData = fromUnsignedBytes(unsignedMessageBytes);
 
 			assertTrue(transactionData instanceof MessageTransactionData);
 			MessageTransactionData messageData = (MessageTransactionData) transactionData;
@@ -272,7 +284,7 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 			CrossChainTradeData tradeData = BitcoinyACCTv5.getInstance().populateTradeData(repository, atData);
 			byte[] unsignedMessageBytes = BitcoinyACCTv5TradeBot.getInstance().buildLocalLockTransaction(repository, atData, tradeData,
 					setup.taker.getPublicKey());
-			TransactionData transactionData = TransactionTransformer.fromBytes(unsignedMessageBytes);
+			TransactionData transactionData = fromUnsignedBytes(unsignedMessageBytes);
 
 			assertTrue(transactionData instanceof MessageTransactionData);
 			MessageTransactionData messageData = (MessageTransactionData) transactionData;
@@ -280,6 +292,8 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 			assertEquals(LOCAL_AMOUNT, messageData.getAmount());
 			assertEquals(Long.valueOf(setup.localAssetId), messageData.getAssetId());
 			assertArrayEquals(BitcoinyACCTv5.buildLocalLockMessage(), messageData.getData());
+
+			takerTradeBotData = repository.getCrossChainRepository().getTradeBotData(takerTradeBotData.getTradePrivateKey());
 			assertEquals(TradeStates.State.TAKER_WAITING_FOR_AT_LOCK.name(), takerTradeBotData.getState());
 			assertEquals(Integer.valueOf(lockTimeA), takerTradeBotData.getLockTimeA());
 		}
@@ -478,7 +492,7 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 				setup.taker.getAddress(), setup.atAddress, System.currentTimeMillis(), setup.localAssetId, LOCAL_AMOUNT,
 				setup.taker.getPublicKey(), Crypto.hash160(setup.taker.getPublicKey()), setup.taker.getAddress(),
 				null, HASH_OF_SECRET_A, "BITCOIN", setup.takerForeignPublicKey, setup.takerForeignPublicKeyHash,
-				FOREIGN_AMOUNT, null, null, null, BitcoinyAddress.fromString(getBitcoinNetworkParameters(), BTC_RECEIVING_ADDRESS).getPayload());
+				FOREIGN_AMOUNT, null, null, null, BitcoinyAddress.fromString(getBitcoinNetworkParameters(), btcReceivingAddress()).getPayload());
 
 		repository.getCrossChainRepository().save(tradeBotData);
 		repository.saveChanges();
@@ -498,6 +512,14 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 
 	private static NetworkParameters getBitcoinNetworkParameters() {
 		return ForeignBlockchainRegistry.fromString("BITCOIN").getBitcoinyInstance().getNetworkParameters();
+	}
+
+	private static String btcReceivingAddress() {
+		return BitcoinyAddress.fromPubKeyHash(getBitcoinNetworkParameters(), BTC_RECEIVING_PUBLIC_KEY_HASH).toString();
+	}
+
+	private static TransactionData fromUnsignedBytes(byte[] unsignedBytes) throws TransformationException {
+		return TransactionTransformer.fromBytes(Bytes.concat(unsignedBytes, new byte[TransactionTransformer.SIGNATURE_LENGTH]));
 	}
 
 	private static void reserveTrade(Repository repository, PrivateKeyAccount taker, String atAddress, byte[] takerForeignPublicKeyHash)
@@ -577,6 +599,11 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 		}
 
 		@Override
+		public boolean isValidWalletKey(String walletKey) {
+			return true;
+		}
+
+		@Override
 		public void setFeeRequired(long fee) {
 			this.feeRequired = fee;
 		}
@@ -613,7 +640,7 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 
 		@Override
 		public String getUnusedReceiveAddress(String key58) {
-			return BTC_RECEIVING_ADDRESS;
+			return btcReceivingAddress();
 		}
 
 		@Override

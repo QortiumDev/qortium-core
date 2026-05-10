@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: prepare foreign-foreign trade groundwork
+
+Prepared for future BTC-like foreign/foreign atomic swaps without enabling a new trade type yet. Added a design note for Qortium-coordinated foreign/foreign trades, extracted shared Bitcoiny HTLC trade-bot support for script derivation, funded amount checks, status handling, funding, redeem, refund, and timeout safety, and kept the existing reverse `BitcoinyACCTv5` behavior wired through that shared helper.
+
 ### 2026-05-10 - crosschain: keep reverse split-fill ACCT v6 internal
 
 Kept the unfinished `BitcoinyACCTv6` reverse split-fill ACCT as an internal work-in-progress instead of a user-facing protocol. The v6 bytecode and deterministic tests remain available for development, but v6 is no longer registered for public ACCT name or code-hash lookup, so normal APIs continue to expose the completed v4/v5 trade flows until v6 has matching trade-bot and API support.
