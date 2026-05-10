@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - test: expand reverse ACCT trade-bot coverage
+
+Added deterministic `BitcoinyACCTv5` trade-bot tests for the foreign-first reverse trade flow. The tests now mock foreign-chain HTLC status and transaction broadcasts so the default suite can cover maker funding and foreign-lock declaration, stale reservation cancellation, unsafe locktime cancellation, taker local-lock transaction building, maker local-asset redemption and secret reveal, taker foreign HTLC redemption, and maker foreign HTLC refund handling without depending on live Electrum servers.
+
 ### 2026-05-09 - crosschain: make reverse ACCT trades foreign-first
 
 Redesigned `BitcoinyACCTv5` reverse trades so the maker uses a maker-owned secret and funds a taker-specific foreign HTLC before the taker locks any local-chain asset. Reverse takers now reserve an offer with a zero-payment message, wait for the maker's funded foreign HTLC declaration, then use the new `/crosschain/tradebot/locklocal` API step to build the unsigned local asset lock transaction; the maker can only claim the local asset by revealing the secret on Qortium, which lets the taker redeem the foreign HTLC. The old local API balance-reservation safeguard was removed because public offers no longer require taker funds to be locked before the maker proves foreign liquidity, and the reverse trade flow now enforces a 30-minute foreign locktime safety margin, expires stale reservations, and lets the maker trade address cancel before local assets are locked. The reverse trade design docs and deterministic v5 tests cover the new reservation, foreign-lock, local-lock, redeem, refund, cancel, and premature-lock refund behavior.

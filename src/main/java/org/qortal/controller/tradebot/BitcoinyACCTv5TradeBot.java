@@ -40,6 +40,7 @@ import org.qortal.utils.NTP;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
@@ -51,6 +52,8 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 	private static final long RESERVATION_TIMEOUT = RESERVATION_TIMEOUT_MINUTES * 60L * 1000L;
 
 	private static BitcoinyACCTv5TradeBot instance;
+	private Function<String, Bitcoiny> bitcoinyResolver = ForeignBlockchainRegistry::getRegisteredBitcoinyInstance;
+	private HtlcStatusResolver htlcStatusResolver = BitcoinyHTLC::determineHtlcStatus;
 
 	private final List<String> endStates = Arrays.asList(State.MAKER_DONE, State.MAKER_REFUNDED, State.TAKER_DONE, State.TAKER_REFUNDED).stream()
 			.map(State::name)
@@ -69,6 +72,24 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 	@Override
 	public List<String> getEndStates() {
 		return this.endStates;
+	}
+
+	@FunctionalInterface
+	interface HtlcStatusResolver {
+		BitcoinyHTLC.Status determineHtlcStatus(Bitcoiny bitcoiny, String p2shAddress, long minimumAmount) throws ForeignBlockchainException;
+	}
+
+	void setBitcoinyResolverForTesting(Function<String, Bitcoiny> bitcoinyResolver) {
+		this.bitcoinyResolver = bitcoinyResolver != null ? bitcoinyResolver : ForeignBlockchainRegistry::getRegisteredBitcoinyInstance;
+	}
+
+	void setHtlcStatusResolverForTesting(HtlcStatusResolver htlcStatusResolver) {
+		this.htlcStatusResolver = htlcStatusResolver != null ? htlcStatusResolver : BitcoinyHTLC::determineHtlcStatus;
+	}
+
+	void resetTestHooks() {
+		this.bitcoinyResolver = ForeignBlockchainRegistry::getRegisteredBitcoinyInstance;
+		this.htlcStatusResolver = BitcoinyHTLC::determineHtlcStatus;
 	}
 
 	@Override
@@ -190,7 +211,7 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 		Bitcoiny bitcoiny = getBitcoiny(tradeData.foreignBlockchain);
 		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
 		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
-		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
+		BitcoinyHTLC.Status htlcStatus = determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
 		if (htlcStatus != BitcoinyHTLC.Status.FUNDED)
 			throw new DataException("Reverse trade foreign HTLC is not funded");
 
@@ -306,7 +327,7 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
 		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
-		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
+		BitcoinyHTLC.Status htlcStatus = determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
 
 		long now = NTP.getTime();
 		if (!hasSufficientTimeForLocalLock(tradeData, now)) {
@@ -418,7 +439,7 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
 		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
-		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
+		BitcoinyHTLC.Status htlcStatus = determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
 		if (htlcStatus != BitcoinyHTLC.Status.FUNDED)
 			return;
 
@@ -465,7 +486,7 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
 		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
-		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
+		BitcoinyHTLC.Status htlcStatus = determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
 
 		switch (htlcStatus) {
 			case REDEEM_IN_PROGRESS:
@@ -495,7 +516,7 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 		Bitcoiny bitcoiny = getBitcoiny(tradeBotData.getForeignBlockchain());
 		String p2shAddress = deriveP2shAddress(bitcoiny, tradeData);
 		long minimumAmount = tradeData.expectedForeignAmount + bitcoiny.getP2shFee(NTP.getTime());
-		BitcoinyHTLC.Status htlcStatus = BitcoinyHTLC.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
+		BitcoinyHTLC.Status htlcStatus = determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
 
 		switch (htlcStatus) {
 			case UNFUNDED:
@@ -608,10 +629,14 @@ public class BitcoinyACCTv5TradeBot implements AcctTradeBot {
 	}
 
 	private Bitcoiny getBitcoiny(String foreignBlockchain) throws DataException {
-		Bitcoiny bitcoiny = ForeignBlockchainRegistry.getRegisteredBitcoinyInstance(foreignBlockchain);
+		Bitcoiny bitcoiny = this.bitcoinyResolver.apply(foreignBlockchain);
 		if (bitcoiny == null)
 			throw new DataException("Unsupported Bitcoiny blockchain");
 		return bitcoiny;
+	}
+
+	private BitcoinyHTLC.Status determineHtlcStatus(Bitcoiny bitcoiny, String p2shAddress, long minimumAmount) throws ForeignBlockchainException {
+		return this.htlcStatusResolver.determineHtlcStatus(bitcoiny, p2shAddress, minimumAmount);
 	}
 
 	private Bitcoiny getBitcoiny(ForeignBlockchainRegistry.Entry foreignBlockchain) throws DataException {
