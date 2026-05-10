@@ -116,13 +116,13 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE TYPE AssetID AS BIGINT");
 					stmt.execute("CREATE TYPE AssetName AS VARCHAR(34) COLLATE SQL_TEXT_NO_PAD");
 					stmt.execute("CREATE TYPE AssetOrderID AS VARBINARY(64)");
-					stmt.execute("CREATE TYPE ATCode AS VARBINARY(1024)"); // was: 16bit * 1
-					stmt.execute("CREATE TYPE ATCreationBytes AS VARBINARY(4096)"); // was: 16bit * 1 + 16bit * 8
+					stmt.execute("CREATE TYPE ATCode AS VARBINARY(8192)"); // was: 16bit * 1
+					stmt.execute("CREATE TYPE ATCreationBytes AS VARBINARY(8192)"); // was: 16bit * 1 + 16bit * 8
 					stmt.execute("CREATE TYPE ATMessage AS VARBINARY(32)");
-					stmt.execute("CREATE TYPE ATName AS VARCHAR(32) COLLATE SQL_TEXT_UCC_NO_PAD");
-					stmt.execute("CREATE TYPE ATState AS VARBINARY(1024)"); // was: 16bit * 8 + 16bit * 4 + 16bit * 4
-					stmt.execute("CREATE TYPE ATTags AS VARCHAR(80) COLLATE SQL_TEXT_UCC_NO_PAD");
-					stmt.execute("CREATE TYPE ATType AS VARCHAR(32) COLLATE SQL_TEXT_UCC_NO_PAD");
+					stmt.execute("CREATE TYPE ATName AS VARCHAR(200) COLLATE SQL_TEXT_UCC_NO_PAD");
+					stmt.execute("CREATE TYPE ATState AS VARBINARY(2048)"); // was: 16bit * 8 + 16bit * 4 + 16bit * 4
+					stmt.execute("CREATE TYPE ATTags AS VARCHAR(200) COLLATE SQL_TEXT_UCC_NO_PAD");
+					stmt.execute("CREATE TYPE ATType AS VARCHAR(200) COLLATE SQL_TEXT_UCC_NO_PAD");
 					stmt.execute("CREATE TYPE ATStateHash as VARBINARY(32)");
 					stmt.execute("CREATE TYPE BlockSignature AS VARBINARY(128)");
 					stmt.execute("CREATE TYPE DataHash AS VARBINARY(32)");
@@ -660,13 +660,13 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("ALTER TABLE Blocks ALTER COLUMN online_accounts_signatures VARBINARY(1048576)");
 					stmt.execute("CHECKPOINT");
 
-					stmt.execute("ALTER TABLE DeployATTransactions ALTER COLUMN creation_bytes VARBINARY(4096)");
+					stmt.execute("ALTER TABLE DeployATTransactions ALTER COLUMN creation_bytes VARBINARY(8192)");
 					stmt.execute("CHECKPOINT");
 
-					stmt.execute("ALTER TABLE ATs ALTER COLUMN code_bytes VARBINARY(1024)");
+					stmt.execute("ALTER TABLE ATs ALTER COLUMN code_bytes VARBINARY(8192)");
 					stmt.execute("CHECKPOINT");
 
-					stmt.execute("ALTER TABLE ATStates ALTER COLUMN state_data VARBINARY(1024)");
+					stmt.execute("ALTER TABLE ATStates ALTER COLUMN state_data VARBINARY(2048)");
 					stmt.execute("CHECKPOINT");
 					break;
 
@@ -1092,6 +1092,23 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("ALTER TABLE Accounts DROP COLUMN blocks_minted_adjustment");
 					stmt.execute("ALTER TABLE TransferPrivsTransactions DROP COLUMN previous_sender_blocks_minted_adjustment");
 					dropColumnIfExists(connection, "TransferPrivsTransactions", "previous_recipient_existed");
+					break;
+
+				case 53:
+					// Larger ACCTs need more creation/code/state storage than early AT limits allowed.
+					stmt.execute("ALTER TABLE DeployATTransactions ALTER COLUMN creation_bytes VARBINARY(8192)");
+					stmt.execute("CHECKPOINT");
+
+					stmt.execute("ALTER TABLE ATs ALTER COLUMN code_bytes VARBINARY(8192)");
+					stmt.execute("CHECKPOINT");
+
+					stmt.execute("ALTER TABLE ATStatesData ALTER COLUMN state_data VARBINARY(2048)");
+					stmt.execute("CHECKPOINT");
+
+					stmt.execute("ALTER TABLE DeployATTransactions ALTER COLUMN AT_name VARCHAR(200) COLLATE SQL_TEXT_UCC_NO_PAD");
+					stmt.execute("ALTER TABLE DeployATTransactions ALTER COLUMN AT_type VARCHAR(200) COLLATE SQL_TEXT_UCC_NO_PAD");
+					stmt.execute("ALTER TABLE DeployATTransactions ALTER COLUMN AT_tags VARCHAR(200) COLLATE SQL_TEXT_UCC_NO_PAD");
+					stmt.execute("CHECKPOINT");
 					break;
 
 				default:

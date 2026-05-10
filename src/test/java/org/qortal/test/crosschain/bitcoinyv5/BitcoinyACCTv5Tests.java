@@ -400,7 +400,7 @@ public class BitcoinyACCTv5Tests extends Common {
 		byte[] creationBytes = BitcoinyACCTv5.buildTradeAT(bitcoin, tradeAddress, MAKER_FOREIGN_PUBLIC_KEY_HASH,
 				HASH_OF_SECRET_A, LOCAL_AMOUNT, FOREIGN_AMOUNT, tradeTimeout);
 
-		long txTimestamp = System.currentTimeMillis();
+		long txTimestamp = TransactionUtils.nextTimestamp(repository);
 		Long fee = null;
 		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), fee, null);
 		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData,
@@ -441,7 +441,7 @@ public class BitcoinyACCTv5Tests extends Common {
 
 	private static MessageTransaction sendPaymentMessage(Repository repository, PrivateKeyAccount sender, byte[] data, String recipient,
 			long amount, Long assetId) throws DataException {
-		long txTimestamp = System.currentTimeMillis();
+		long txTimestamp = TransactionUtils.nextTimestamp(repository);
 		Long fee = null;
 		int version = Transaction.getVersionByTimestamp(txTimestamp);
 

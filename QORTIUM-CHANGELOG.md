@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: add reverse split-fill ACCT foundation
+
+Added `BitcoinyACCTv6` as the first reverse split-fill ACCT foundation, where one maker foreign-coin offer can be reserved in separate fill slots and each fill moves through taker reservation, maker foreign-lock declaration, taker local-asset lock, maker redeem, refund, or cancellation independently. The new parser is registered for recognized v6 ATs while the active trade-bot flow remains on v5 until the API and bot paths are wired in a later step. Deploy AT validation and repository storage limits now allow the larger ACCT bytecode/state sizes already needed by recent ACCT versions, and deterministic v5/v6 tests cover the deployed reverse flows without relying on live foreign-chain services.
+
 ### 2026-05-10 - test: expand reverse ACCT trade-bot coverage
 
 Added deterministic `BitcoinyACCTv5` trade-bot tests for the foreign-first reverse trade flow. The tests now mock foreign-chain HTLC status and transaction broadcasts so the default suite can cover maker funding and foreign-lock declaration, stale reservation cancellation, unsafe locktime cancellation, taker local-lock transaction building, maker local-asset redemption and secret reveal, taker foreign HTLC redemption, and maker foreign HTLC refund handling without depending on live Electrum servers.

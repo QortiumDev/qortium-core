@@ -33,9 +33,9 @@ public class DeployAtTransaction extends Transaction {
 	public static final int MAX_DESCRIPTION_SIZE = 2000;
 	public static final int MAX_AT_TYPE_SIZE = 200;
 	public static final int MAX_TAGS_SIZE = 200;
-	public static final int MAX_CREATION_BYTES_SIZE = 4096;
-	public static final int MAX_CODE_BYTES_LENGTH = 1024;
-	public static final int MAX_AT_STATE_LENGTH = 1024;
+	public static final int MAX_CREATION_BYTES_SIZE = 8192;
+	public static final int MAX_CODE_BYTES_LENGTH = 8192;
+	public static final int MAX_AT_STATE_LENGTH = 2048;
 
 	// Constructors
 
