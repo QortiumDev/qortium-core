@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: implement inactive foreign-foreign ACCT state machine
+
+Implemented the local coordination bytecode for inactive `BitcoinyForeignForeignACCTv1` offers, including reservation, maker/taker HTLC declarations, timeout-margin checks, secret reveal, cancellation, local-payment refund protection, trade data extraction, and deterministic tests. The new ACCT remains unregistered and unavailable through user-facing trade creation until the trade-bot/API wiring is implemented.
+
 ### 2026-05-10 - crosschain: add inactive foreign-foreign trade foundation
 
 Prepared the API/data shape for future BTC-like foreign/foreign swaps by adding a `SELL_FOREIGN_FOR_FOREIGN` direction, dual offered/requested foreign-chain fields, and an inactive `BitcoinyForeignForeignACCTv1`/trade-bot skeleton. The new direction is recognized but deliberately rejected by user-facing trade creation until the real single-fill protocol is implemented.

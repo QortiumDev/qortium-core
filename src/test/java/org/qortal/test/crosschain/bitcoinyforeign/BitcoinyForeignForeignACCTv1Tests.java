@@ -3,21 +3,38 @@ package org.qortal.test.crosschain.bitcoinyforeign;
 import com.google.common.hash.HashCode;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.model.CrossChainOfferSummary;
 import org.qortal.api.model.CrossChainTradeSummary;
 import org.qortal.api.model.crosschain.TradeBotCreateRequest;
+import org.qortal.asset.Asset;
 import org.qortal.controller.tradebot.AcctTradeBot;
 import org.qortal.controller.tradebot.BitcoinyForeignForeignTradeBot;
 import org.qortal.controller.tradebot.TradeBot;
+import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.BitcoinyForeignForeignACCTv1;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.TradeDirection;
 import org.qortal.crypto.Crypto;
+import org.qortal.data.at.ATData;
 import org.qortal.data.crosschain.CrossChainTradeData;
+import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.DeployAtTransactionData;
+import org.qortal.data.transaction.MessageTransactionData;
+import org.qortal.data.transaction.TransactionData;
+import org.qortal.data.transaction.TransferAssetTransactionData;
+import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.AssetUtils;
+import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.TransactionUtils;
+import org.qortal.transaction.DeployAtTransaction;
+import org.qortal.transaction.MessageTransaction;
+import org.qortal.transaction.Transaction;
+import org.qortal.utils.Amounts;
 import org.qortal.utils.BitTwiddling;
 
 import java.nio.charset.StandardCharsets;
@@ -32,11 +49,14 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 	private static final byte[] TAKER_OFFERED_FOREIGN_PUBLIC_KEY_HASH = HashCode.fromString("cc00cc11cc22cc33cc44cc55cc66cc77cc88cc99").asBytes();
 	private static final byte[] TAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH = HashCode.fromString("dd00dd11dd22dd33dd44dd55dd66dd77dd88dd99").asBytes();
 	private static final byte[] SECRET_A = "This string is exactly 32 bytes!".getBytes(StandardCharsets.UTF_8);
+	private static final byte[] WRONG_SECRET_A = "This string is exactly 32 byt3s!".getBytes(StandardCharsets.UTF_8);
 	private static final byte[] HASH_OF_SECRET_A = Crypto.hash160(SECRET_A);
 	private static final long OFFERED_FOREIGN_AMOUNT = 100_000L;
 	private static final long REQUESTED_FOREIGN_AMOUNT = 250_000L;
+	private static final long NATIVE_FEE_RESERVE = 3L * Amounts.MULTIPLIER;
 	private static final int MAKER_LOCK_TIME = 1_765_010_000;
-	private static final int TAKER_LOCK_TIME = 1_765_000_000;
+	private static final int TAKER_LOCK_TIME = MAKER_LOCK_TIME - BitcoinyForeignForeignACCTv1.REFUND_LOCKTIME_SAFETY_MARGIN_MINUTES * 60 - 1;
+	private static final int UNSAFE_TAKER_LOCK_TIME = MAKER_LOCK_TIME - BitcoinyForeignForeignACCTv1.REFUND_LOCKTIME_SAFETY_MARGIN_MINUTES * 60;
 	private static final int TRADE_TIMEOUT = 120;
 
 	@Before
@@ -68,39 +88,169 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 	}
 
 	@Test
-	public void testBuildsDualForeignTradeDataAndSummaries() {
-		ForeignBlockchainRegistry.Entry bitcoin = ForeignBlockchainRegistry.fromString("BITCOIN");
-		ForeignBlockchainRegistry.Entry litecoin = ForeignBlockchainRegistry.fromString("LITECOIN");
+	public void testBuildsForeignForeignAtWithExpectedInitialTradeData() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
 
-		CrossChainTradeData tradeData = BitcoinyForeignForeignACCTv1.buildSkeletonTradeData(bitcoin, litecoin,
-				MAKER_OFFERED_FOREIGN_PUBLIC_KEY_HASH, MAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET_A,
-				OFFERED_FOREIGN_AMOUNT, REQUESTED_FOREIGN_AMOUNT, TRADE_TIMEOUT);
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress());
+			ATData atData = repository.getATRepository().fromATAddress(deployAtTransaction.getATAccount().getAddress());
+			CrossChainTradeData tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
 
-		assertEquals(BitcoinyForeignForeignACCTv1.NAME, tradeData.acctName);
-		assertEquals(TradeDirection.SELL_FOREIGN_FOR_FOREIGN, tradeData.tradeDirection);
-		assertEquals("BITCOIN", tradeData.offeredForeignBlockchain);
-		assertEquals(OFFERED_FOREIGN_AMOUNT, tradeData.offeredForeignAmount);
-		assertEquals("LITECOIN", tradeData.requestedForeignBlockchain);
-		assertEquals(REQUESTED_FOREIGN_AMOUNT, tradeData.requestedForeignAmount);
-		assertArrayEquals(MAKER_OFFERED_FOREIGN_PUBLIC_KEY_HASH, tradeData.creatorOfferedForeignPKH);
-		assertArrayEquals(MAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH, tradeData.creatorRequestedForeignPKH);
-		assertArrayEquals(HASH_OF_SECRET_A, tradeData.hashOfSecretA);
-		assertNull(tradeData.foreignBlockchain);
-		assertEquals(0L, tradeData.expectedForeignAmount);
+			assertNotNull(tradeData);
+			assertArrayEquals(BitcoinyForeignForeignACCTv1.CODE_BYTES_HASH, atData.getCodeHash());
+			assertEquals(BitcoinyForeignForeignACCTv1.NAME, tradeData.acctName);
+			assertEquals(TradeDirection.SELL_FOREIGN_FOR_FOREIGN, tradeData.tradeDirection);
+			assertEquals(AcctMode.OFFERING, tradeData.mode);
+			assertTrue(tradeData.isFillableOffer());
+			assertEquals("BITCOIN", tradeData.offeredForeignBlockchain);
+			assertEquals(OFFERED_FOREIGN_AMOUNT, tradeData.offeredForeignAmount);
+			assertEquals("LITECOIN", tradeData.requestedForeignBlockchain);
+			assertEquals(REQUESTED_FOREIGN_AMOUNT, tradeData.requestedForeignAmount);
+			assertEquals(tradeAccount.getAddress(), tradeData.creatorTradeAddress);
+			assertArrayEquals(MAKER_OFFERED_FOREIGN_PUBLIC_KEY_HASH, tradeData.creatorOfferedForeignPKH);
+			assertArrayEquals(MAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH, tradeData.creatorRequestedForeignPKH);
+			assertArrayEquals(HASH_OF_SECRET_A, tradeData.hashOfSecretA);
+			assertEquals(0L, tradeData.localAmount);
+			assertEquals(0, tradeData.availableFillSlots);
+			assertNull(tradeData.foreignBlockchain);
+			assertEquals(0L, tradeData.expectedForeignAmount);
 
-		CrossChainOfferSummary offerSummary = new CrossChainOfferSummary(tradeData, 123L);
-		assertEquals(TradeDirection.SELL_FOREIGN_FOR_FOREIGN, offerSummary.getTradeDirection());
-		assertEquals("BITCOIN", offerSummary.getOfferedForeignBlockchain());
-		assertEquals(OFFERED_FOREIGN_AMOUNT, offerSummary.getOfferedForeignAmount());
-		assertEquals("LITECOIN", offerSummary.getRequestedForeignBlockchain());
-		assertEquals(REQUESTED_FOREIGN_AMOUNT, offerSummary.getRequestedForeignAmount());
+			CrossChainOfferSummary offerSummary = new CrossChainOfferSummary(tradeData, 123L);
+			assertEquals(TradeDirection.SELL_FOREIGN_FOR_FOREIGN, offerSummary.getTradeDirection());
+			assertEquals("BITCOIN", offerSummary.getOfferedForeignBlockchain());
+			assertEquals(OFFERED_FOREIGN_AMOUNT, offerSummary.getOfferedForeignAmount());
+			assertEquals("LITECOIN", offerSummary.getRequestedForeignBlockchain());
+			assertEquals(REQUESTED_FOREIGN_AMOUNT, offerSummary.getRequestedForeignAmount());
 
-		CrossChainTradeSummary tradeSummary = new CrossChainTradeSummary(tradeData, 456L);
-		assertEquals(TradeDirection.SELL_FOREIGN_FOR_FOREIGN, tradeSummary.getTradeDirection());
-		assertEquals("BITCOIN", tradeSummary.getOfferedForeignBlockchain());
-		assertEquals(OFFERED_FOREIGN_AMOUNT, tradeSummary.getOfferedForeignAmount());
-		assertEquals("LITECOIN", tradeSummary.getRequestedForeignBlockchain());
-		assertEquals(REQUESTED_FOREIGN_AMOUNT, tradeSummary.getRequestedForeignAmount());
+			CrossChainTradeSummary tradeSummary = new CrossChainTradeSummary(tradeData, 456L);
+			assertEquals(TradeDirection.SELL_FOREIGN_FOR_FOREIGN, tradeSummary.getTradeDirection());
+			assertEquals("BITCOIN", tradeSummary.getOfferedForeignBlockchain());
+			assertEquals(OFFERED_FOREIGN_AMOUNT, tradeSummary.getOfferedForeignAmount());
+			assertEquals("LITECOIN", tradeSummary.getRequestedForeignBlockchain());
+			assertEquals(REQUESTED_FOREIGN_AMOUNT, tradeSummary.getRequestedForeignAmount());
+		}
+	}
+
+	@Test
+	public void testReserveMakerLockTakerLockAndSecretReveal() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "dilbert");
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress());
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			reserveTrade(repository, taker, atAddress);
+			CrossChainTradeData tradeData = getTradeData(repository, atAddress);
+			assertEquals(AcctMode.RESERVED, tradeData.mode);
+			assertFalse(tradeData.isFillableOffer());
+			assertEquals(taker.getAddress(), tradeData.partnerAddress);
+			assertArrayEquals(TAKER_OFFERED_FOREIGN_PUBLIC_KEY_HASH, tradeData.partnerOfferedForeignPKH);
+			assertArrayEquals(TAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH, tradeData.partnerRequestedForeignPKH);
+
+			declareMakerHtlc(repository, tradeAccount, atAddress, MAKER_LOCK_TIME);
+			tradeData = getTradeData(repository, atAddress);
+			assertEquals(AcctMode.FOREIGN_LOCKED, tradeData.mode);
+			assertEquals(Integer.valueOf(MAKER_LOCK_TIME), tradeData.lockTimeA);
+
+			declareTakerHtlc(repository, taker, atAddress, UNSAFE_TAKER_LOCK_TIME);
+			tradeData = getTradeData(repository, atAddress);
+			assertEquals(AcctMode.FOREIGN_LOCKED, tradeData.mode);
+			assertNull(tradeData.lockTimeB);
+
+			declareTakerHtlc(repository, taker, atAddress, TAKER_LOCK_TIME);
+			tradeData = getTradeData(repository, atAddress);
+			assertEquals(AcctMode.TRADING, tradeData.mode);
+			assertEquals(Integer.valueOf(TAKER_LOCK_TIME), tradeData.lockTimeB);
+
+			revealSecret(repository, tradeAccount, atAddress, WRONG_SECRET_A);
+			tradeData = getTradeData(repository, atAddress);
+			assertEquals(AcctMode.TRADING, tradeData.mode);
+			assertNull(BitcoinyForeignForeignACCTv1.getInstance().findSecretA(repository, tradeData));
+
+			cancelTrade(repository, tradeAccount, atAddress);
+			tradeData = getTradeData(repository, atAddress);
+			assertEquals(AcctMode.TRADING, tradeData.mode);
+
+			revealSecret(repository, tradeAccount, atAddress, SECRET_A);
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.REDEEMED, tradeData.mode);
+			assertArrayEquals(SECRET_A, BitcoinyForeignForeignACCTv1.getInstance().findSecretA(repository, tradeData));
+		}
+	}
+
+	@Test
+	public void testCancelBeforeTrading() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "dilbert");
+
+			assertCancelledAfter(repository, deployer, tradeAccount, null, false);
+			assertCancelledAfter(repository, deployer, tradeAccount, taker, false);
+			assertCancelledAfter(repository, deployer, tradeAccount, taker, true);
+		}
+	}
+
+	@Test
+	public void testWrongSenderAndUnexpectedMessagesAreIgnored() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "dilbert");
+			PrivateKeyAccount bystander = Common.getTestAccount(repository, "bob");
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress());
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			sendMessage(repository, bystander, new byte[] { 1, 2, 3 }, atAddress);
+			BlockUtils.mintBlock(repository);
+			assertEquals(AcctMode.OFFERING, getTradeData(repository, atAddress).mode);
+
+			reserveTrade(repository, taker, atAddress);
+			declareMakerHtlc(repository, bystander, atAddress, MAKER_LOCK_TIME);
+			CrossChainTradeData tradeData = getTradeData(repository, atAddress);
+			assertEquals(AcctMode.RESERVED, tradeData.mode);
+			assertNull(tradeData.lockTimeA);
+
+			declareMakerHtlc(repository, tradeAccount, atAddress, MAKER_LOCK_TIME);
+			declareTakerHtlc(repository, bystander, atAddress, TAKER_LOCK_TIME);
+			tradeData = getTradeData(repository, atAddress);
+			assertEquals(AcctMode.FOREIGN_LOCKED, tradeData.mode);
+			assertNull(tradeData.lockTimeB);
+		}
+	}
+
+	@Test
+	public void testLocalPaymentAttachedToCoordinationMessageIsRefundedAndIgnored() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount issuer = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "dilbert");
+			long assetId = AssetUtils.issueAsset(repository, "alice", "FOREIGN-FOREIGN-REFUND", 100L * Amounts.MULTIPLIER, true);
+			long amount = 5L * Amounts.MULTIPLIER;
+
+			transferAsset(repository, issuer, taker.getAddress(), assetId, amount);
+			long takerInitialBalance = taker.getConfirmedBalance(assetId);
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress());
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			sendPaymentMessage(repository, taker, BitcoinyForeignForeignACCTv1.buildReserveMessage(
+					TAKER_OFFERED_FOREIGN_PUBLIC_KEY_HASH, TAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH), atAddress, amount, assetId);
+			BlockUtils.mintBlock(repository);
+
+			CrossChainTradeData tradeData = getTradeData(repository, atAddress);
+			assertEquals(AcctMode.OFFERING, tradeData.mode);
+			assertEquals(takerInitialBalance, taker.getConfirmedBalance(assetId));
+			assertEquals(0L, deployAtTransaction.getATAccount().getConfirmedBalance(assetId));
+		}
 	}
 
 	@Test
@@ -122,7 +272,7 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 	}
 
 	@Test
-	public void testSkeletonIsNotRegisteredOrUserRoutable() throws DataException {
+	public void testAcctIsNotRegisteredOrUserRoutable() throws DataException {
 		assertNull(ForeignBlockchainRegistry.getAcctByName(BitcoinyForeignForeignACCTv1.NAME));
 		assertNull(ForeignBlockchainRegistry.getAcctByCodeHash(BitcoinyForeignForeignACCTv1.CODE_BYTES_HASH));
 
@@ -143,6 +293,111 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 			assertNull(TradeBot.getInstance().createTrade(repository, request));
 			assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
 		}
+	}
+
+	private void assertCancelledAfter(Repository repository, PrivateKeyAccount deployer, PrivateKeyAccount tradeAccount,
+			PrivateKeyAccount taker, boolean makerHtlcDeclared) throws DataException {
+		DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress());
+		String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+		if (taker != null)
+			reserveTrade(repository, taker, atAddress);
+
+		if (makerHtlcDeclared)
+			declareMakerHtlc(repository, tradeAccount, atAddress, MAKER_LOCK_TIME);
+
+		cancelTrade(repository, tradeAccount, atAddress);
+
+		ATData atData = repository.getATRepository().fromATAddress(atAddress);
+		CrossChainTradeData tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+
+		assertTrue(atData.getIsFinished());
+		assertEquals(AcctMode.CANCELLED, tradeData.mode);
+		assertFalse(tradeData.isFillableOffer());
+	}
+
+	private static DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress) throws DataException {
+		ForeignBlockchainRegistry.Entry bitcoin = ForeignBlockchainRegistry.fromString("BITCOIN");
+		ForeignBlockchainRegistry.Entry litecoin = ForeignBlockchainRegistry.fromString("LITECOIN");
+		byte[] creationBytes = BitcoinyForeignForeignACCTv1.buildTradeAT(bitcoin, litecoin, tradeAddress,
+				MAKER_OFFERED_FOREIGN_PUBLIC_KEY_HASH, MAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET_A,
+				OFFERED_FOREIGN_AMOUNT, REQUESTED_FOREIGN_AMOUNT, TRADE_TIMEOUT);
+
+		long txTimestamp = TransactionUtils.nextTimestamp(repository);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), null, null);
+		TransactionData deployAtTransactionData = new DeployAtTransactionData(baseTransactionData,
+				"BTC-LTC foreign/foreign trade", "Bitcoin-Litecoin foreign/foreign cross-chain trade", "ACCT",
+				"BTC-LTC foreign/foreign ACCT", creationBytes, 0L, Asset.NATIVE, NATIVE_FEE_RESERVE);
+
+		DeployAtTransaction deployAtTransaction = new DeployAtTransaction(repository, deployAtTransactionData);
+		deployAtTransactionData.setFee(deployAtTransaction.calcRecommendedFee());
+		TransactionUtils.signAndMint(repository, deployAtTransactionData, deployer);
+
+		return deployAtTransaction;
+	}
+
+	private static CrossChainTradeData getTradeData(Repository repository, String atAddress) throws DataException {
+		ATData atData = repository.getATRepository().fromATAddress(atAddress);
+		return BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+	}
+
+	private static void reserveTrade(Repository repository, PrivateKeyAccount taker, String atAddress) throws DataException {
+		sendMessage(repository, taker, BitcoinyForeignForeignACCTv1.buildReserveMessage(TAKER_OFFERED_FOREIGN_PUBLIC_KEY_HASH,
+				TAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH), atAddress);
+		BlockUtils.mintBlock(repository);
+	}
+
+	private static void declareMakerHtlc(Repository repository, PrivateKeyAccount makerTradeAccount, String atAddress, int lockTimeA)
+			throws DataException {
+		sendMessage(repository, makerTradeAccount, BitcoinyForeignForeignACCTv1.buildMakerHtlcMessage(lockTimeA), atAddress);
+		BlockUtils.mintBlock(repository);
+	}
+
+	private static void declareTakerHtlc(Repository repository, PrivateKeyAccount taker, String atAddress, int lockTimeB)
+			throws DataException {
+		sendMessage(repository, taker, BitcoinyForeignForeignACCTv1.buildTakerHtlcMessage(lockTimeB), atAddress);
+		BlockUtils.mintBlock(repository);
+	}
+
+	private static void revealSecret(Repository repository, PrivateKeyAccount makerTradeAccount, String atAddress, byte[] secret)
+			throws DataException {
+		sendMessage(repository, makerTradeAccount, BitcoinyForeignForeignACCTv1.buildSecretRevealMessage(secret), atAddress);
+		BlockUtils.mintBlock(repository);
+	}
+
+	private static void cancelTrade(Repository repository, PrivateKeyAccount sender, String atAddress) throws DataException {
+		byte[] cancelMessageData = BitcoinyForeignForeignACCTv1.getInstance().buildCancelMessage(sender.getAddress());
+		sendMessage(repository, sender, cancelMessageData, atAddress);
+		BlockUtils.mintBlock(repository);
+	}
+
+	private static MessageTransaction sendMessage(Repository repository, PrivateKeyAccount sender, byte[] data, String recipient)
+			throws DataException {
+		return sendPaymentMessage(repository, sender, data, recipient, 0L, null);
+	}
+
+	private static MessageTransaction sendPaymentMessage(Repository repository, PrivateKeyAccount sender, byte[] data, String recipient,
+			long amount, Long assetId) throws DataException {
+		long txTimestamp = TransactionUtils.nextTimestamp(repository);
+		int version = Transaction.getVersionByTimestamp(txTimestamp);
+
+		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, sender.getPublicKey(), null, null);
+		MessageTransactionData messageTransactionData = new MessageTransactionData(baseTransactionData, version, 0, recipient,
+				amount, assetId, data, false, false);
+		MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);
+
+		messageTransactionData.setFee(messageTransaction.calcRecommendedFee());
+		TransactionUtils.signAndMint(repository, messageTransactionData, sender);
+
+		return messageTransaction;
+	}
+
+	private static void transferAsset(Repository repository, PrivateKeyAccount sender, String recipient, long assetId, long amount)
+			throws DataException {
+		long timestamp = TransactionUtils.nextTimestamp(repository);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, sender.getPublicKey(), AssetUtils.fee, null);
+		TransactionData transactionData = new TransferAssetTransactionData(baseTransactionData, recipient, amount, assetId);
+		TransactionUtils.signAndMint(repository, transactionData, sender);
 	}
 
 }

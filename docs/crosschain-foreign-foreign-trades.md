@@ -63,12 +63,13 @@ trade logic already used by `BitcoinyACCTv5`.
 ## Current foundation
 
 Foreign/foreign trades are represented as `SELL_FOREIGN_FOR_FOREIGN` but remain
-inactive. The API/data model can now carry separate offered and requested
-foreign blockchains, amounts, and public-key-hash roles, and the inactive
-`BitcoinyForeignForeignACCTv1` skeleton defines fixed message payload shapes for
-reservation, maker HTLC declaration, taker HTLC declaration, secret reveal, and
-cancellation. The skeleton is intentionally not registered for ACCT lookup or
-trade-bot creation.
+inactive. The API/data model can carry separate offered and requested foreign
+blockchains, amounts, and public-key-hash roles. The inactive
+`BitcoinyForeignForeignACCTv1` now implements the local coordination state
+machine for reservation, maker HTLC declaration, taker HTLC declaration, secret
+reveal, and cancellation. It is intentionally not registered for ACCT lookup or
+trade-bot creation until the trade-bot verifies and drives the foreign-chain
+HTLC flow.
 
 ## Out of scope for the first pass
 
@@ -76,5 +77,4 @@ trade-bot creation.
 - ARRR/HUSH/Zcash-family native shielded swaps
 - Monero swaps
 - direct peer negotiation without Qortium offer coordination
-- database or public API fields before the actual foreign/foreign protocol is
-  implemented
+- trade-bot/API enablement and persistence changes
