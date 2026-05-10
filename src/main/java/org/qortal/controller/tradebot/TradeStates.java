@@ -10,6 +10,7 @@ public class TradeStates {
         MAKER_WAITING_FOR_AT_CONFIRM(10, false, false),
         MAKER_WAITING_FOR_TAKER_MESSAGE(15, true, true),
         MAKER_WAITING_FOR_LOCAL_LOCK(20, true, true),
+        MAKER_WAITING_FOR_TAKER_HTLC(22, true, true),
         MAKER_WAITING_FOR_AT_REDEEM(25, true, true),
         MAKER_DONE(30, false, false),
         MAKER_REFUNDED(35, false, false),

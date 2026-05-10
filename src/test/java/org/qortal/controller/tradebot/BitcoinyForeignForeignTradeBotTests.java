@@ -17,6 +17,8 @@ import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyAddress;
 import org.qortal.crosschain.BitcoinyBlockchainProvider;
 import org.qortal.crosschain.BitcoinyForeignForeignACCTv1;
+import org.qortal.crosschain.BitcoinyHTLC;
+import org.qortal.crosschain.BitcoinySignedTransaction;
 import org.qortal.crosschain.BitcoinyTransaction;
 import org.qortal.crosschain.ChainableServer;
 import org.qortal.crosschain.ChainableServerConnection;
@@ -40,10 +42,12 @@ import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.transaction.DeployAtTransaction;
+import org.qortal.transaction.Transaction;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.Amounts;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -72,12 +76,21 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	private static final long TEST_MESSAGE_FEE = Amounts.MULTIPLIER / 100L;
 	private static final int TRADE_TIMEOUT = 120;
 
+	private MockBitcoiny bitcoin;
+	private MockBitcoiny litecoin;
+
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
 		BitcoinyForeignForeignTradeBot.getInstance().resetTestHooks();
 		BitcoinyForeignForeignTradeBot.getInstance().setMessageFeeOverrideForTesting(TEST_MESSAGE_FEE);
+		BitcoinyForeignForeignTradeBot.getInstance().setMessageSubmitterForTesting((repository, messageTransaction, sender) -> {
+			messageTransaction.getTransactionData().setFee(TEST_MESSAGE_FEE);
+			TransactionUtils.signAndMint(repository, messageTransaction.getTransactionData(), sender);
+			return Transaction.ValidationResult.OK;
+		});
 		installMockBitcoinys();
+		setMockHtlcStatus(BitcoinyHTLC.Status.UNFUNDED);
 	}
 
 	@After
@@ -247,6 +260,145 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		}
 	}
 
+	@Test
+	public void testMakerProgressConfirmsAt() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			MakerTradeSetup setup = createAndDeployMakerTrade(repository);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			TradeBotData makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE.name(), makerTradeBotData.getState());
+		}
+	}
+
+	@Test
+	public void testMakerProgressExpiresUndeployedAt() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount creator = Common.getTestAccount(repository, "chloe");
+			BitcoinyForeignForeignTradeBot.getInstance().createTrade(repository, createRequest(creator));
+			TradeBotData makerTradeBotData = repository.getCrossChainRepository().getAllTradeBotData().get(0);
+			makerTradeBotData.setTimestamp(System.currentTimeMillis() - 25L * 60L * 60L * 1000L);
+			repository.getCrossChainRepository().save(makerTradeBotData);
+			repository.saveChanges();
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, makerTradeBotData);
+
+			assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
+			assertEquals(TradeStates.State.MAKER_REFUNDED.name(), makerTradeBotData.getState());
+		}
+	}
+
+	@Test
+	public void testMakerProgressFundsOfferedForeignHtlc() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			MakerTradeSetup setup = setupReservedMakerTrade(repository);
+			setMockHtlcStatus(BitcoinyHTLC.Status.UNFUNDED);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			TradeBotData makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(1, this.bitcoin.spendTransactionCount);
+			assertEquals(1, this.bitcoin.broadcastTransactions.size());
+			assertNotNull(makerTradeBotData.getLockTimeA());
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE.name(), makerTradeBotData.getState());
+		}
+	}
+
+	@Test
+	public void testMakerProgressDoesNotRebroadcastWhileFundingInProgress() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			MakerTradeSetup setup = setupReservedMakerTrade(repository);
+			setMockHtlcStatus(BitcoinyHTLC.Status.FUNDING_IN_PROGRESS);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			TradeBotData makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(0, this.bitcoin.spendTransactionCount);
+			assertEquals(0, this.bitcoin.broadcastTransactions.size());
+			assertNotNull(makerTradeBotData.getLockTimeA());
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE.name(), makerTradeBotData.getState());
+		}
+	}
+
+	@Test
+	public void testMakerProgressDeclaresFundedOfferedForeignHtlc() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			MakerTradeSetup setup = setupReservedMakerTrade(repository);
+			setMockHtlcStatus(BitcoinyHTLC.Status.FUNDED);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			TradeBotData makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(0, this.bitcoin.spendTransactionCount);
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_TAKER_HTLC.name(), makerTradeBotData.getState());
+
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			assertEquals(AcctMode.FOREIGN_LOCKED, tradeData.mode);
+			assertEquals(makerTradeBotData.getLockTimeA(), tradeData.lockTimeA);
+		}
+	}
+
+	@Test
+	public void testMakerProgressCancelsStaleUnfundedReservation() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			MakerTradeSetup setup = setupReservedMakerTrade(repository);
+			int lockTimeA = (int) (System.currentTimeMillis() / 1000L + TRADE_TIMEOUT * 60L);
+			setup.makerTradeBotData.setLockTimeA(lockTimeA);
+			setup.makerTradeBotData.setTimestamp(System.currentTimeMillis()
+					- (BitcoinyForeignForeignTradeBot.RESERVATION_TIMEOUT_MINUTES + 1L) * 60L * 1000L);
+			repository.getCrossChainRepository().save(setup.makerTradeBotData);
+			repository.saveChanges();
+			setMockHtlcStatus(BitcoinyHTLC.Status.UNFUNDED);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			ATData atData = repository.getATRepository().fromATAddress(setup.atAddress);
+			CrossChainTradeData tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.CANCELLED, tradeData.mode);
+			assertEquals(0, this.bitcoin.spendTransactionCount);
+		}
+	}
+
+	@Test
+	public void testMakerProgressCancelsUnsafeMakerLocktime() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			MakerTradeSetup setup = setupReservedMakerTrade(repository);
+			int unsafeLockTimeA = (int) (System.currentTimeMillis() / 1000L
+					+ BitcoinyForeignForeignTradeBot.FOREIGN_LOCKTIME_SAFETY_MARGIN_MINUTES * 60L);
+			setup.makerTradeBotData.setLockTimeA(unsafeLockTimeA);
+			repository.getCrossChainRepository().save(setup.makerTradeBotData);
+			repository.saveChanges();
+			setMockHtlcStatus(BitcoinyHTLC.Status.FUNDED);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			ATData atData = repository.getATRepository().fromATAddress(setup.atAddress);
+			CrossChainTradeData tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.CANCELLED, tradeData.mode);
+		}
+	}
+
+	@Test
+	public void testCanDeleteOnlyInactiveForeignForeignStates() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			MakerTradeSetup setup = createAndDeployMakerTrade(repository);
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+			TradeBotData makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+
+			assertFalse(BitcoinyForeignForeignTradeBot.getInstance().canDelete(repository, makerTradeBotData));
+
+			makerTradeBotData.setState(TradeStates.State.MAKER_DONE.name());
+			makerTradeBotData.setStateValue(TradeStates.State.MAKER_DONE.value);
+			repository.getCrossChainRepository().save(makerTradeBotData);
+			repository.saveChanges();
+
+			assertTrue(BitcoinyForeignForeignTradeBot.getInstance().canDelete(repository, makerTradeBotData));
+		}
+	}
+
 	private static TradeBotCreateRequest createRequest(PrivateKeyAccount creator) {
 		TradeBotCreateRequest request = new TradeBotCreateRequest();
 		request.creatorPublicKey = creator.getPublicKey();
@@ -287,9 +439,50 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		return deployAtTransaction;
 	}
 
-	private static void installMockBitcoinys() {
-		MockBitcoiny bitcoin = new MockBitcoiny(bitcoinyParams("BITCOIN"), "BTC", MAKER_OFFERED_RECEIVE_HASH, MAKER_OFFERED_KEY);
-		MockBitcoiny litecoin = new MockBitcoiny(bitcoinyParams("LITECOIN"), "LTC", TAKER_REQUESTED_RECEIVE_HASH, TAKER_REQUESTED_KEY);
+	private MakerTradeSetup createAndDeployMakerTrade(Repository repository) throws DataException, TransformationException {
+		PrivateKeyAccount creator = Common.getTestAccount(repository, "chloe");
+		byte[] unsignedDeployBytes = BitcoinyForeignForeignTradeBot.getInstance().createTrade(repository, createRequest(creator));
+		DeployAtTransactionData deployData = (DeployAtTransactionData) fromUnsignedBytes(unsignedDeployBytes);
+		TransactionUtils.signAndMint(repository, deployData, creator);
+
+		TradeBotData makerTradeBotData = repository.getCrossChainRepository().getAllTradeBotData().get(0);
+		MakerTradeSetup setup = new MakerTradeSetup();
+		setup.creator = creator;
+		setup.atAddress = deployData.getAtAddress();
+		setup.makerTradeBotData = makerTradeBotData;
+		return setup;
+	}
+
+	private MakerTradeSetup setupReservedMakerTrade(Repository repository)
+			throws DataException, TransformationException, ForeignBlockchainException {
+		MakerTradeSetup setup = createAndDeployMakerTrade(repository);
+		BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+		setup.makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+
+		PrivateKeyAccount responder = Common.getTestAccount(repository, "dilbert");
+		ATData atData = repository.getATRepository().fromATAddress(setup.atAddress);
+		CrossChainTradeData tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+		byte[] unsignedReserveBytes = BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository, atData, tradeData,
+				responder.getPublicKey(), TAKER_REQUESTED_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH));
+		TransactionData transactionData = fromUnsignedBytes(unsignedReserveBytes);
+		TransactionUtils.signAndMint(repository, transactionData, responder);
+
+		setup.taker = responder;
+		return setup;
+	}
+
+	private static TradeBotData getTradeBotData(Repository repository, TradeBotData tradeBotData) throws DataException {
+		return repository.getCrossChainRepository().getTradeBotData(tradeBotData.getTradePrivateKey());
+	}
+
+	private static CrossChainTradeData getTradeData(Repository repository, String atAddress) throws DataException {
+		ATData atData = repository.getATRepository().fromATAddress(atAddress);
+		return BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+	}
+
+	private void installMockBitcoinys() {
+		this.bitcoin = new MockBitcoiny(bitcoinyParams("BITCOIN"), "BTC", MAKER_OFFERED_RECEIVE_HASH, MAKER_OFFERED_KEY);
+		this.litecoin = new MockBitcoiny(bitcoinyParams("LITECOIN"), "LTC", TAKER_REQUESTED_RECEIVE_HASH, TAKER_REQUESTED_KEY);
 
 		BitcoinyForeignForeignTradeBot.getInstance().setBitcoinyResolverForTesting(blockchain -> {
 			ForeignBlockchainRegistry.Entry entry = ForeignBlockchainRegistry.fromString(blockchain);
@@ -297,13 +490,17 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 				return null;
 
 			if ("BITCOIN".equals(entry.name()))
-				return bitcoin;
+				return this.bitcoin;
 
 			if ("LITECOIN".equals(entry.name()))
-				return litecoin;
+				return this.litecoin;
 
 			return null;
 		});
+	}
+
+	private void setMockHtlcStatus(BitcoinyHTLC.Status status) {
+		BitcoinyForeignForeignTradeBot.getInstance().setHtlcStatusResolverForTesting((bitcoiny, p2shAddress, minimumAmount) -> status);
 	}
 
 	private static NetworkParameters bitcoinyParams(String blockchain) {
@@ -336,9 +533,21 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		void run() throws DataException;
 	}
 
+	private static class MakerTradeSetup {
+		PrivateKeyAccount creator;
+		PrivateKeyAccount taker;
+		String atAddress;
+		TradeBotData makerTradeBotData;
+	}
+
 	private static class MockBitcoiny extends Bitcoiny {
+		private static final byte[] DUMMY_RAW_TRANSACTION = new byte[] { 1, 2, 3, 4 };
+
 		private final byte[] receivePublicKeyHash;
 		private final Set<String> validWalletKeys;
+		private int transactionCounter;
+		private int spendTransactionCount;
+		private final List<BitcoinySignedTransaction> broadcastTransactions = new ArrayList<>();
 		private long feeRequired = 1_000L;
 
 		private MockBitcoiny(NetworkParameters params, String currencyCode, byte[] receivePublicKeyHash, String... validWalletKeys) {
@@ -374,8 +583,23 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		}
 
 		@Override
+		public BitcoinySignedTransaction buildSpendTransaction(String xprv58, String recipient, long amount, Long feePerByte) {
+			++this.spendTransactionCount;
+			return fakeTransaction("fund");
+		}
+
+		@Override
 		public String getUnusedReceiveAddress(String key58) {
 			return BitcoinyAddress.fromPubKeyHash(this.getNetworkParameters(), this.receivePublicKeyHash).toString();
+		}
+
+		@Override
+		public void broadcastTransaction(BitcoinySignedTransaction transaction) {
+			this.broadcastTransactions.add(transaction);
+		}
+
+		private BitcoinySignedTransaction fakeTransaction(String type) {
+			return BitcoinySignedTransaction.fromRawWithTxHash(DUMMY_RAW_TRANSACTION, type + "-" + ++this.transactionCounter);
 		}
 	}
 

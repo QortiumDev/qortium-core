@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: add foreign-foreign maker HTLC funding
+
+Added the internal maker-side progress path for future foreign/foreign swaps. The foreign/foreign trade-bot can now advance a maker entry after AT confirmation, wait for a taker reservation, derive and fund the maker offered-chain HTLC, declare the maker locktime to the coordination AT, cancel stale or unsafe reservations, and keep active entries protected from deletion. Deterministic tests cover AT confirmation, undeployed expiry, funding, funding-in-progress idempotency, funded HTLC declaration, stale cancellation, unsafe locktime cancellation, and delete rules while the public API route remains disabled.
+
 ### 2026-05-10 - crosschain: add foreign-foreign tradebot create groundwork
 
 Added the internal foreign/foreign trade-bot create and reserve groundwork while keeping the public API route disabled. The direct `BitcoinyForeignForeignTradeBot` path can now build unsigned maker DEPLOY_AT transactions and taker reservation MESSAGE transactions, validate supported BTC-like chain pairs, wallet keys, P2PKH receiving addresses, positive amounts, and minimum timeout, and persist offered/requested foreign-chain trade-bot state for later HTLC-driving work. New deterministic tests cover valid maker/taker state, repository round-trips, invalid criteria, and continued public-route rejection.
