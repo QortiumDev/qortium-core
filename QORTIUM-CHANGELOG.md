@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: add foreign-foreign taker HTLC funding
+
+Added the internal taker-side progress path for future foreign/foreign swaps. After the maker has declared a funded offered-chain HTLC, the foreign/foreign trade-bot can now verify the maker HTLC, derive a safety-margined taker locktime, fund the requested-chain HTLC, avoid rebroadcasting while funding is already in progress, and declare the taker locktime to the coordination AT. Deterministic tests cover waiting for the maker HTLC, requested-chain funding, funding-in-progress idempotency, funded HTLC declaration, and unsafe taker locktime handling while the public API route remains disabled.
+
 ### 2026-05-10 - crosschain: add foreign-foreign maker HTLC funding
 
 Added the internal maker-side progress path for future foreign/foreign swaps. The foreign/foreign trade-bot can now advance a maker entry after AT confirmation, wait for a taker reservation, derive and fund the maker offered-chain HTLC, declare the maker locktime to the coordination AT, cancel stale or unsafe reservations, and keep active entries protected from deletion. Deterministic tests cover AT confirmation, undeployed expiry, funding, funding-in-progress idempotency, funded HTLC declaration, stale cancellation, unsafe locktime cancellation, and delete rules while the public API route remains disabled.
