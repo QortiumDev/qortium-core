@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: add inactive foreign-foreign trade foundation
+
+Prepared the API/data shape for future BTC-like foreign/foreign swaps by adding a `SELL_FOREIGN_FOR_FOREIGN` direction, dual offered/requested foreign-chain fields, and an inactive `BitcoinyForeignForeignACCTv1`/trade-bot skeleton. The new direction is recognized but deliberately rejected by user-facing trade creation until the real single-fill protocol is implemented.
+
 ### 2026-05-10 - crosschain: prepare foreign-foreign trade groundwork
 
 Prepared for future BTC-like foreign/foreign atomic swaps without enabling a new trade type yet. Added a design note for Qortium-coordinated foreign/foreign trades, extracted shared Bitcoiny HTLC trade-bot support for script derivation, funded amount checks, status handling, funding, redeem, refund, and timeout safety, and kept the existing reverse `BitcoinyACCTv5` behavior wired through that shared helper.

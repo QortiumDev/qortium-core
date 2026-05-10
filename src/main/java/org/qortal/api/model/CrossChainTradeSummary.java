@@ -23,6 +23,16 @@ public class CrossChainTradeSummary {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long foreignAmount;
 
+	private String offeredForeignBlockchain;
+
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long offeredForeignAmount;
+
+	private String requestedForeignBlockchain;
+
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long requestedForeignAmount;
+
 	private String atAddress;
 
 	private String sellerAddress;
@@ -39,6 +49,10 @@ public class CrossChainTradeSummary {
 		this.localAssetId = crossChainTradeData.localAssetId;
 		this.localAmount = crossChainTradeData.localAmount;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
+		this.offeredForeignBlockchain = crossChainTradeData.offeredForeignBlockchain;
+		this.offeredForeignAmount = crossChainTradeData.offeredForeignAmount;
+		this.requestedForeignBlockchain = crossChainTradeData.requestedForeignBlockchain;
+		this.requestedForeignAmount = crossChainTradeData.requestedForeignAmount;
 		this.sellerAddress = crossChainTradeData.creatorAddress;
 		this.buyerReceivingAddress = crossChainTradeData.partnerReceivingAddress;
 		this.atAddress = crossChainTradeData.atAddress;
@@ -61,6 +75,14 @@ public class CrossChainTradeSummary {
 	}
 
 	public long getForeignAmount() { return this.foreignAmount; }
+
+	public String getOfferedForeignBlockchain() { return this.offeredForeignBlockchain; }
+
+	public long getOfferedForeignAmount() { return this.offeredForeignAmount; }
+
+	public String getRequestedForeignBlockchain() { return this.requestedForeignBlockchain; }
+
+	public long getRequestedForeignAmount() { return this.requestedForeignAmount; }
 
 	public String getAtAddress() { return this.atAddress; }
 

@@ -47,20 +47,48 @@ public class TradeBotCreateRequest {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public Long foreignAmount;
 
+	@Schema(description = "Foreign blockchain being sold by maker for SELL_FOREIGN_FOR_FOREIGN offers", example = "BITCOIN")
+	public String offeredForeignBlockchain;
+
+	@Schema(description = "Foreign blockchain amount being sold by maker for SELL_FOREIGN_FOR_FOREIGN offers", example = "0.01000000", type = "number")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public Long offeredForeignAmount;
+
+	@Schema(description = "Foreign blockchain requested by maker for SELL_FOREIGN_FOR_FOREIGN offers", example = "DOGECOIN")
+	public String requestedForeignBlockchain;
+
+	@Schema(description = "Foreign blockchain amount requested by maker for SELL_FOREIGN_FOR_FOREIGN offers", example = "100.00000000", type = "number")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public Long requestedForeignAmount;
+
 	@Schema(description = "Suggested trade timeout (minutes)", example = "10080")
 	public int tradeTimeout;
 
-	@Schema(description = "Receiving address: foreign-chain address for SELL_LOCAL offers, local-chain address for SELL_FOREIGN offers", example = "1BitcoinEaterAddressDontSendf59kuE")
+	@Schema(description = "Receiving address: foreign-chain address for SELL_LOCAL offers, local-chain address for SELL_FOREIGN offers. SELL_FOREIGN_FOR_FOREIGN uses requestedForeignReceivingAddress.", example = "1BitcoinEaterAddressDontSendf59kuE")
 	public String receivingAddress;
 
 	@Schema(description = "Maker's foreign blockchain private key, required when tradeDirection is SELL_FOREIGN")
 	public String foreignKey;
+
+	@Schema(description = "Maker's offered foreign blockchain private key, required later for SELL_FOREIGN_FOR_FOREIGN offers")
+	public String offeredForeignKey;
+
+	@Schema(description = "Maker's requested foreign blockchain receiving address, required later for SELL_FOREIGN_FOR_FOREIGN offers")
+	public String requestedForeignReceivingAddress;
 
 	public TradeBotCreateRequest() {
 	}
 
 	public ForeignBlockchainRegistry.Entry resolveForeignBlockchain() {
 		return ForeignBlockchainRegistry.fromString(this.foreignBlockchain);
+	}
+
+	public ForeignBlockchainRegistry.Entry resolveOfferedForeignBlockchain() {
+		return ForeignBlockchainRegistry.fromString(this.offeredForeignBlockchain);
+	}
+
+	public ForeignBlockchainRegistry.Entry resolveRequestedForeignBlockchain() {
+		return ForeignBlockchainRegistry.fromString(this.requestedForeignBlockchain);
 	}
 
 	public TradeDirection getTradeDirection() {

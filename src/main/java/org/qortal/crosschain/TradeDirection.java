@@ -5,5 +5,8 @@ public enum TradeDirection {
 	SELL_LOCAL,
 
 	/** Maker escrows foreign-chain funds; taker pays local-chain asset into the AT. */
-	SELL_FOREIGN
+	SELL_FOREIGN,
+
+	/** Maker escrows one foreign-chain currency; taker pays another foreign-chain currency. */
+	SELL_FOREIGN_FOR_FOREIGN
 }

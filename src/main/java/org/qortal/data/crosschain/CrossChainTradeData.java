@@ -103,6 +103,20 @@ public class CrossChainTradeData {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public long expectedForeignAmount;
 
+	@Schema(description = "Foreign blockchain being sold by maker for foreign/foreign offers")
+	public String offeredForeignBlockchain;
+
+	@Schema(description = "Foreign blockchain amount being sold by maker for foreign/foreign offers")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public long offeredForeignAmount;
+
+	@Schema(description = "Foreign blockchain requested by maker for foreign/foreign offers")
+	public String requestedForeignBlockchain;
+
+	@Schema(description = "Foreign blockchain amount requested by maker for foreign/foreign offers")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	public long requestedForeignAmount;
+
 	@Schema(description = "Current AT execution mode")
 	public AcctMode mode;
 
@@ -114,6 +128,18 @@ public class CrossChainTradeData {
 
 	@Schema(description = "Trade partner's foreign blockchain public-key-hash (PKH)")
 	public byte[] partnerForeignPKH;
+
+	@Schema(description = "Maker's offered-chain foreign blockchain public-key-hash (PKH)")
+	public byte[] creatorOfferedForeignPKH;
+
+	@Schema(description = "Maker's requested-chain foreign blockchain public-key-hash (PKH)")
+	public byte[] creatorRequestedForeignPKH;
+
+	@Schema(description = "Trade partner's offered-chain foreign blockchain public-key-hash (PKH)")
+	public byte[] partnerOfferedForeignPKH;
+
+	@Schema(description = "Trade partner's requested-chain foreign blockchain public-key-hash (PKH)")
+	public byte[] partnerRequestedForeignPKH;
 
 	@Schema(description = "Trade partner's local-chain receiving address")
 	public String partnerReceivingAddress;

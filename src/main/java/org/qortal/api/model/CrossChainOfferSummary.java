@@ -58,6 +58,20 @@ public class CrossChainOfferSummary {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	private long foreignAmount;
 
+	@Schema(description = "Foreign blockchain being sold by maker for foreign/foreign offers")
+	private String offeredForeignBlockchain;
+
+	@Schema(description = "Foreign blockchain amount being sold by maker for foreign/foreign offers")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long offeredForeignAmount;
+
+	@Schema(description = "Foreign blockchain requested by maker for foreign/foreign offers")
+	private String requestedForeignBlockchain;
+
+	@Schema(description = "Foreign blockchain amount requested by maker for foreign/foreign offers")
+	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
+	private long requestedForeignAmount;
+
 	@Schema(description = "Suggested trade timeout (minutes)", example = "10080")
 	private int tradeTimeout;
 
@@ -93,6 +107,10 @@ public class CrossChainOfferSummary {
 		this.activeFillCount = crossChainTradeData.activeFillCount;
 		this.availableFillSlots = crossChainTradeData.availableFillSlots;
 		this.foreignAmount = crossChainTradeData.expectedForeignAmount;
+		this.offeredForeignBlockchain = crossChainTradeData.offeredForeignBlockchain;
+		this.offeredForeignAmount = crossChainTradeData.offeredForeignAmount;
+		this.requestedForeignBlockchain = crossChainTradeData.requestedForeignBlockchain;
+		this.requestedForeignAmount = crossChainTradeData.requestedForeignAmount;
 		this.tradeTimeout = crossChainTradeData.tradeTimeout;
 		this.mode = crossChainTradeData.mode;
 		this.timestamp = timestamp;
@@ -159,6 +177,22 @@ public class CrossChainOfferSummary {
 
 	public long getForeignAmount() {
 		return this.foreignAmount;
+	}
+
+	public String getOfferedForeignBlockchain() {
+		return this.offeredForeignBlockchain;
+	}
+
+	public long getOfferedForeignAmount() {
+		return this.offeredForeignAmount;
+	}
+
+	public String getRequestedForeignBlockchain() {
+		return this.requestedForeignBlockchain;
+	}
+
+	public long getRequestedForeignAmount() {
+		return this.requestedForeignAmount;
 	}
 
 	public int getTradeTimeout() {

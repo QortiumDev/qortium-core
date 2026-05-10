@@ -60,6 +60,16 @@ The BTC-like implementation should reuse one helper for the common HTLC work:
 This keeps the future foreign/foreign trade bot from duplicating the reverse
 trade logic already used by `BitcoinyACCTv5`.
 
+## Current foundation
+
+Foreign/foreign trades are represented as `SELL_FOREIGN_FOR_FOREIGN` but remain
+inactive. The API/data model can now carry separate offered and requested
+foreign blockchains, amounts, and public-key-hash roles, and the inactive
+`BitcoinyForeignForeignACCTv1` skeleton defines fixed message payload shapes for
+reservation, maker HTLC declaration, taker HTLC declaration, secret reveal, and
+cancellation. The skeleton is intentionally not registered for ACCT lookup or
+trade-bot creation.
+
 ## Out of scope for the first pass
 
 - split fills

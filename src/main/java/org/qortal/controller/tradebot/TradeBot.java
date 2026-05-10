@@ -187,6 +187,9 @@ public class TradeBot implements Listener {
 	 * @throws DataException
 	 */
 	public byte[] createTrade(Repository repository, TradeBotCreateRequest tradeBotCreateRequest) throws DataException {
+		if (tradeBotCreateRequest.getTradeDirection() == TradeDirection.SELL_FOREIGN_FOR_FOREIGN)
+			return null;
+
 		// Fetch latest ACCT version for requested foreign blockchain
 		ForeignBlockchainRegistry.Entry foreignBlockchain = tradeBotCreateRequest.resolveForeignBlockchain();
 		if (foreignBlockchain == null)

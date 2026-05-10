@@ -29,6 +29,7 @@ import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyACCTv4;
 import org.qortal.crosschain.BitcoinyACCTv5;
+import org.qortal.crosschain.BitcoinyForeignForeignACCTv1;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.ForeignBlockchain;
 import org.qortal.crosschain.ForeignBlockchainException;
@@ -128,12 +129,17 @@ public class CrossChainTradeBotResource {
 	public String tradeBotCreator(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotCreateRequest tradeBotCreateRequest) {
 		Security.checkApiCallAllowed(request);
 
+		TradeDirection tradeDirection = tradeBotCreateRequest.getTradeDirection();
+		if (tradeDirection == TradeDirection.SELL_FOREIGN_FOR_FOREIGN) {
+			validateForeignForeignCreateRequest(tradeBotCreateRequest);
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		}
+
 		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = tradeBotCreateRequest.resolveForeignBlockchain();
 		if (foreignBlockchainEntry == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 		ForeignBlockchain foreignBlockchain = foreignBlockchainEntry.getInstance();
-		TradeDirection tradeDirection = tradeBotCreateRequest.getTradeDirection();
 
 		if (tradeDirection == TradeDirection.SELL_LOCAL && !foreignBlockchain.isValidAddress(tradeBotCreateRequest.receivingAddress))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
@@ -350,6 +356,17 @@ public class CrossChainTradeBotResource {
 		return false;
 	}
 
+	private void validateForeignForeignCreateRequest(TradeBotCreateRequest tradeBotCreateRequest) {
+		ForeignBlockchainRegistry.Entry offeredForeignBlockchain = tradeBotCreateRequest.resolveOfferedForeignBlockchain();
+		ForeignBlockchainRegistry.Entry requestedForeignBlockchain = tradeBotCreateRequest.resolveRequestedForeignBlockchain();
+		if (!BitcoinyForeignForeignACCTv1.isSupportedBitcoinyPair(offeredForeignBlockchain, requestedForeignBlockchain))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (tradeBotCreateRequest.offeredForeignAmount == null || tradeBotCreateRequest.offeredForeignAmount <= 0
+				|| tradeBotCreateRequest.requestedForeignAmount == null || tradeBotCreateRequest.requestedForeignAmount <= 0)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ORDER_SIZE_TOO_SMALL);
+	}
+
 	private String createTradeBotResponse(TradeBotRespondRequest tradeBotRespondRequest) {
 		final String atAddress = tradeBotRespondRequest.atAddress;
 
@@ -372,6 +389,9 @@ public class CrossChainTradeBotResource {
 			CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atData);
 			if (crossChainTradeData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+
+			if (crossChainTradeData.tradeDirection == TradeDirection.SELL_FOREIGN_FOR_FOREIGN)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 			Bitcoiny bitcoiny = ForeignBlockchainRegistry.getBitcoinyInstance(crossChainTradeData.foreignBlockchain);
 			if (bitcoiny == null)
