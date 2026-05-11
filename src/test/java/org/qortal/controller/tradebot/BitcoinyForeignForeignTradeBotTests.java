@@ -223,6 +223,14 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		TradeBotCreateRequest fundedLocal = createApiRequest(creator);
 		fundedLocal.fundingLocalAmount = Amounts.MULTIPLIER;
 		ApiCommon.assertApiError(ApiError.ORDER_SIZE_TOO_SMALL, () -> resource.tradeBotCreator(null, fundedLocal));
+
+		TradeBotCreateRequest belowMinimumAmount = createApiRequest(creator);
+		belowMinimumAmount.requestedForeignAmount = this.litecoin.getMinimumOrderAmount() - 1L;
+		ApiCommon.assertApiError(ApiError.ORDER_SIZE_TOO_SMALL, () -> resource.tradeBotCreator(null, belowMinimumAmount));
+
+		TradeBotCreateRequest oversizedHtlcAmount = createApiRequest(creator);
+		oversizedHtlcAmount.offeredForeignAmount = Long.MAX_VALUE;
+		ApiCommon.assertApiError(ApiError.ORDER_SIZE_TOO_SMALL, () -> resource.tradeBotCreator(null, oversizedHtlcAmount));
 	}
 
 	@Test
@@ -242,6 +250,10 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			invalidAmount.offeredForeignAmount = 0L;
 			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().createTrade(repository, invalidAmount));
 
+			TradeBotCreateRequest belowMinimumAmount = createRequest(creator);
+			belowMinimumAmount.requestedForeignAmount = this.litecoin.getMinimumOrderAmount() - 1L;
+			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().createTrade(repository, belowMinimumAmount));
+
 			TradeBotCreateRequest shortTimeout = createRequest(creator);
 			shortTimeout.tradeTimeout = BitcoinyForeignForeignTradeBot.MIN_FOREIGN_FOREIGN_TRADE_TIMEOUT_MINUTES - 1;
 			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().createTrade(repository, shortTimeout));
@@ -249,6 +261,10 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			TradeBotCreateRequest invalidReceivingAddress = createRequest(creator);
 			invalidReceivingAddress.requestedForeignReceivingAddress = "not-a-valid-address";
 			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().createTrade(repository, invalidReceivingAddress));
+
+			TradeBotCreateRequest oversizedHtlcAmount = createRequest(creator);
+			oversizedHtlcAmount.offeredForeignAmount = Long.MAX_VALUE;
+			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().createTrade(repository, oversizedHtlcAmount));
 
 			assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
 		}
@@ -439,6 +455,27 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			setup.takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
 			assertEquals(1, this.bitcoin.redeemTransactionCount);
 			assertEquals(TradeStates.State.TAKER_DONE.name(), setup.takerTradeBotData.getState());
+		}
+	}
+
+	@Test
+	public void testMakerRecoversFromReservedStateAfterRestart() throws Exception {
+		MakerTradeSetup setup;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			setup = setupReservedMakerTrade(repository);
+		}
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TradeBotData makerTradeBotData = getMakerTradeBotData(repository, setup.atAddress);
+			setMockHtlcStatus(BitcoinyHTLC.Status.UNFUNDED);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, makerTradeBotData);
+
+			makerTradeBotData = getTradeBotData(repository, makerTradeBotData);
+			assertEquals(1, this.bitcoin.spendTransactionCount);
+			assertEquals(OFFERED_FOREIGN_AMOUNT + this.bitcoin.getP2shFee(null), this.bitcoin.lastSpendAmount.longValue());
+			assertNotNull(makerTradeBotData.getLockTimeA());
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE.name(), makerTradeBotData.getState());
 		}
 	}
 
@@ -720,6 +757,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			TradeBotData makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
 			assertEquals(1, this.bitcoin.spendTransactionCount);
 			assertEquals(1, this.bitcoin.broadcastTransactions.size());
+			assertEquals(OFFERED_FOREIGN_AMOUNT + this.bitcoin.getP2shFee(null), this.bitcoin.lastSpendAmount.longValue());
 			assertNotNull(makerTradeBotData.getLockTimeA());
 			assertEquals(TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE.name(), makerTradeBotData.getState());
 		}
@@ -899,6 +937,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			TradeBotData takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
 			assertEquals(1, this.litecoin.spendTransactionCount);
 			assertEquals(1, this.litecoin.broadcastTransactions.size());
+			assertEquals(REQUESTED_FOREIGN_AMOUNT + this.litecoin.getP2shFee(null), this.litecoin.lastSpendAmount.longValue());
 			assertEquals(Integer.valueOf(tradeData.lockTimeA), takerTradeBotData.getLockTimeA());
 			assertEquals(Integer.valueOf(lockTimeB), takerTradeBotData.getLockTimeB());
 			assertEquals(TradeStates.State.TAKER_WAITING_FOR_FOREIGN_LOCK.name(), takerTradeBotData.getState());
@@ -1579,9 +1618,9 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	}
 
 	private void installMockBitcoinys() {
-		this.bitcoin = new MockBitcoiny(bitcoinyParams("BITCOIN"), "BTC", MAKER_OFFERED_RECEIVE_HASH,
+		this.bitcoin = new MockBitcoiny(bitcoinyParams("BITCOIN"), "BTC", MAKER_OFFERED_RECEIVE_HASH, OFFERED_FOREIGN_AMOUNT,
 				MAKER_OFFERED_KEY, VALID_TEST_XPRV);
-		this.litecoin = new MockBitcoiny(bitcoinyParams("LITECOIN"), "LTC", TAKER_REQUESTED_RECEIVE_HASH,
+		this.litecoin = new MockBitcoiny(bitcoinyParams("LITECOIN"), "LTC", TAKER_REQUESTED_RECEIVE_HASH, REQUESTED_FOREIGN_AMOUNT,
 				TAKER_REQUESTED_KEY, VALID_TEST_XPRV);
 
 		BitcoinyForeignForeignTradeBot.getInstance().setBitcoinyResolverForTesting(blockchain -> {
@@ -1666,6 +1705,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		private static final byte[] DUMMY_RAW_TRANSACTION = new byte[] { 1, 2, 3, 4 };
 
 		private final byte[] receivePublicKeyHash;
+		private final long minimumOrderAmount;
 		private final Set<String> validWalletKeys;
 		private int transactionCounter;
 		private int spendTransactionCount;
@@ -1674,17 +1714,25 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		private int medianBlockTime = Integer.MAX_VALUE;
 		private final List<BitcoinySignedTransaction> broadcastTransactions = new ArrayList<>();
 		private long feeRequired = 1_000L;
+		private Long lastSpendAmount;
 
-		private MockBitcoiny(NetworkParameters params, String currencyCode, byte[] receivePublicKeyHash, String... validWalletKeys) {
-			this(params, currencyCode, receivePublicKeyHash, new MockProvider(), validWalletKeys);
+		private MockBitcoiny(NetworkParameters params, String currencyCode, byte[] receivePublicKeyHash, long minimumOrderAmount,
+				String... validWalletKeys) {
+			this(params, currencyCode, receivePublicKeyHash, minimumOrderAmount, new MockProvider(), validWalletKeys);
 		}
 
-		private MockBitcoiny(NetworkParameters params, String currencyCode, byte[] receivePublicKeyHash, MockProvider provider,
-				String... validWalletKeys) {
+		private MockBitcoiny(NetworkParameters params, String currencyCode, byte[] receivePublicKeyHash, long minimumOrderAmount,
+				MockProvider provider, String... validWalletKeys) {
 			super(provider, new Context(params), currencyCode, Coin.valueOf(1_000L));
 			this.receivePublicKeyHash = receivePublicKeyHash;
+			this.minimumOrderAmount = minimumOrderAmount;
 			this.validWalletKeys = new HashSet<>(Arrays.asList(validWalletKeys));
 			provider.setBlockchain(this);
+		}
+
+		@Override
+		public long getMinimumOrderAmount() {
+			return this.minimumOrderAmount;
 		}
 
 		@Override
@@ -1715,6 +1763,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		@Override
 		public BitcoinySignedTransaction buildSpendTransaction(String xprv58, String recipient, long amount, Long feePerByte) {
 			++this.spendTransactionCount;
+			this.lastSpendAmount = amount;
 			return fakeTransaction("fund");
 		}
 

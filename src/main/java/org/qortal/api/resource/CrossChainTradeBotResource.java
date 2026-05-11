@@ -404,18 +404,19 @@ public class CrossChainTradeBotResource {
 		if (offeredForeignBlockchain.name().equals(requestedForeignBlockchain.name()))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-		if (tradeBotCreateRequest.offeredForeignAmount == null || tradeBotCreateRequest.offeredForeignAmount <= 0
-				|| tradeBotCreateRequest.requestedForeignAmount == null || tradeBotCreateRequest.requestedForeignAmount <= 0)
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ORDER_SIZE_TOO_SMALL);
-
 		Bitcoiny offeredBitcoiny = offeredForeignBlockchain.getBitcoinyInstance();
 		Bitcoiny requestedBitcoiny = requestedForeignBlockchain.getBitcoinyInstance();
 		if (offeredBitcoiny == null || requestedBitcoiny == null)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
-		if (tradeBotCreateRequest.offeredForeignAmount < offeredBitcoiny.getMinimumOrderAmount()
-				|| tradeBotCreateRequest.requestedForeignAmount < requestedBitcoiny.getMinimumOrderAmount())
+		try {
+			BitcoinyForeignForeignTradeBot.validateForeignForeignHtlcAmounts(offeredBitcoiny,
+					tradeBotCreateRequest.offeredForeignAmount, requestedBitcoiny, tradeBotCreateRequest.requestedForeignAmount);
+		} catch (ForeignBlockchainException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.FOREIGN_BLOCKCHAIN_NETWORK_ISSUE, e);
+		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ORDER_SIZE_TOO_SMALL);
+		}
 
 		if (tradeBotCreateRequest.localAmount != 0 || tradeBotCreateRequest.fundingLocalAmount != 0
 				|| tradeBotCreateRequest.nativeFeeReserve < 0)

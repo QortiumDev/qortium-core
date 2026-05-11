@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - crosschain: harden foreign-foreign trade validation
+
+Added shared foreign/foreign HTLC amount validation so maker create checks positive amounts, chain minimums, and P2SH-fee overflow consistently through direct and public API paths. Added filter helper coverage, reserved-state restart recovery coverage, and funding-amount assertions for both offered/requested HTLC funding paths.
+
 ### 2026-05-11 - crosschain: add foreign-foreign pair filters
 
 Added exact offered/requested blockchain filters for foreign/foreign trade discovery. APIs and websockets can now distinguish directional pairs such as BTC-for-LTC from LTC-for-BTC while keeping the existing broad blockchain filter that matches either side of a foreign/foreign trade. Trade-bot state listing uses the same matching rules, the public tradebot response path now allows the maker and taker entries needed for a same-node foreign/foreign lifecycle, and tests cover broad, one-sided, exact, swapped, and local-asset-filtered offer results.

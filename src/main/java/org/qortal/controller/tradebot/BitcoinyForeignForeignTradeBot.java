@@ -65,6 +65,34 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 		return instance;
 	}
 
+	public static void validateForeignForeignHtlcAmounts(Bitcoiny offeredBitcoiny, Long offeredForeignAmount,
+			Bitcoiny requestedBitcoiny, Long requestedForeignAmount) throws DataException, ForeignBlockchainException {
+		validateForeignForeignHtlcAmount(offeredBitcoiny, offeredForeignAmount, "offered");
+		validateForeignForeignHtlcAmount(requestedBitcoiny, requestedForeignAmount, "requested");
+	}
+
+	private static void validateForeignForeignHtlcAmount(Bitcoiny bitcoiny, Long foreignAmount, String label)
+			throws DataException, ForeignBlockchainException {
+		if (bitcoiny == null)
+			throw new DataException("Missing " + label + " foreign blockchain");
+
+		if (foreignAmount == null || foreignAmount <= 0)
+			throw new DataException("Foreign/foreign " + label + " amount must be positive");
+
+		if (foreignAmount < bitcoiny.getMinimumOrderAmount())
+			throw new DataException("Foreign/foreign " + label + " amount is below minimum order size");
+
+		long p2shFee = bitcoiny.getP2shFee(NTP.getTime());
+		if (p2shFee < 0)
+			throw new DataException("Foreign/foreign " + label + " P2SH fee cannot be negative");
+
+		try {
+			Math.addExact(foreignAmount, p2shFee);
+		} catch (ArithmeticException e) {
+			throw new DataException("Foreign/foreign " + label + " HTLC amount is too large after fees", e);
+		}
+	}
+
 	@Override
 	public List<String> getEndStates() {
 		return this.endStates;
@@ -112,10 +140,6 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 		if (offeredForeignBlockchain.name().equals(requestedForeignBlockchain.name()))
 			throw new DataException("Foreign/foreign trades require two different blockchains");
 
-		if (tradeBotCreateRequest.offeredForeignAmount == null || tradeBotCreateRequest.offeredForeignAmount <= 0
-				|| tradeBotCreateRequest.requestedForeignAmount == null || tradeBotCreateRequest.requestedForeignAmount <= 0)
-			throw new DataException("Foreign/foreign trade amounts must be positive");
-
 		if (tradeBotCreateRequest.tradeTimeout < MIN_FOREIGN_FOREIGN_TRADE_TIMEOUT_MINUTES)
 			throw new DataException(String.format("Foreign/foreign trade timeout must be at least %d minutes",
 					MIN_FOREIGN_FOREIGN_TRADE_TIMEOUT_MINUTES));
@@ -129,9 +153,12 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 		Bitcoiny offeredBitcoiny = getBitcoiny(offeredForeignBlockchain);
 		Bitcoiny requestedBitcoiny = getBitcoiny(requestedForeignBlockchain);
 
-		if (tradeBotCreateRequest.offeredForeignAmount < offeredBitcoiny.getMinimumOrderAmount()
-				|| tradeBotCreateRequest.requestedForeignAmount < requestedBitcoiny.getMinimumOrderAmount())
-			throw new DataException("Foreign/foreign trade amounts are below minimum order size");
+		try {
+			validateForeignForeignHtlcAmounts(offeredBitcoiny, tradeBotCreateRequest.offeredForeignAmount,
+					requestedBitcoiny, tradeBotCreateRequest.requestedForeignAmount);
+		} catch (ForeignBlockchainException e) {
+			throw new DataException("Unable to validate foreign/foreign HTLC amounts", e);
+		}
 
 		if (!offeredBitcoiny.isValidWalletKey(tradeBotCreateRequest.offeredForeignKey))
 			throw new DataException("Invalid offered foreign wallet key");

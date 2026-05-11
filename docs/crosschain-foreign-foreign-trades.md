@@ -70,12 +70,14 @@ discovery, and trade-bot dispatch.
 The public trade-bot API can now build single-fill maker DEPLOY_AT transactions
 and submit taker reservation MESSAGE transactions for supported BTC-like chain
 pairs. Those paths validate distinct supported chains, positive amounts, minimum
-timeout, maker/taker wallet keys, no local-asset funding, and P2PKH receiving
-addresses, then persist trade-bot state with separate offered/requested chain
-fields only after the maker create or taker reservation succeeds.
+order sizes, P2SH fee overflow, minimum timeout, maker/taker wallet keys, no
+local-asset funding, and P2PKH receiving addresses, then persist trade-bot state
+with separate offered/requested chain fields only after the maker create or
+taker reservation succeeds.
 Foreign/foreign offers appear in all-offer views and match either the offered
-or requested blockchain filter, but they are excluded from local-asset filters
-and local/foreign price estimates.
+or requested blockchain filter. They also support exact pair filtering with
+separate offered/requested foreign blockchain fields, but they are excluded from
+local-asset filters and local/foreign price estimates.
 
 The internal maker-side progress path now waits for AT confirmation,
 accepts a taker reservation, funds the maker offered-chain HTLC, and declares the
