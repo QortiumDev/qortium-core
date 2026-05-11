@@ -1,12 +1,21 @@
 package org.qortal.settings;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -23,6 +32,7 @@ import javax.xml.bind.UnmarshalException;
 import javax.xml.bind.Unmarshaller;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlTransient;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import javax.xml.transform.stream.StreamSource;
 
@@ -68,9 +78,14 @@ public class Settings {
 
 	private static final Logger LOGGER = LogManager.getLogger(Settings.class);
 	private static final String SETTINGS_FILENAME = "settings.json";
+	private static final ObjectMapper SETTINGS_JSON_MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+	private static final TypeReference<LinkedHashMap<String, Object>> SETTINGS_MAP_TYPE = new TypeReference<LinkedHashMap<String, Object>>() {};
+	private static final Map<String, WritableSetting> WRITABLE_SETTINGS = buildWritableSettings();
 
 	// Properties
 	private static Settings instance;
+	@XmlTransient
+	private static Path activeSettingsPath;
 
 	// Settings, and other config files
 	private String userPath;
@@ -648,6 +663,59 @@ public class Settings {
 
 	// Other methods
 
+	private enum WritableSettingType {
+		BOOLEAN,
+		STRING_ARRAY,
+		STRING_MAP,
+		BOOLEAN_MAP,
+		PIRATE_CHAIN_NET,
+		STORAGE_POLICY
+	}
+
+	private static class WritableSetting {
+		private final WritableSettingType type;
+		private final boolean restartRequired;
+
+		private WritableSetting(WritableSettingType type, boolean restartRequired) {
+			this.type = type;
+			this.restartRequired = restartRequired;
+		}
+	}
+
+	@XmlAccessorType(XmlAccessType.FIELD)
+	public static class SettingsUpdateResult {
+		public boolean saved;
+		public String settingsPath;
+		public List<String> updated = new ArrayList<>();
+		public List<String> removed = new ArrayList<>();
+		public List<String> applied = new ArrayList<>();
+		public List<String> restartRequired = new ArrayList<>();
+
+		public SettingsUpdateResult() {
+		}
+	}
+
+	private static Map<String, WritableSetting> buildWritableSettings() {
+		Map<String, WritableSetting> settings = new LinkedHashMap<>();
+
+		settings.put("wallets", new WritableSetting(WritableSettingType.BOOLEAN_MAP, true));
+		settings.put("bitcoinyNetworks", new WritableSetting(WritableSettingType.STRING_MAP, true));
+		settings.put("pirateChainNet", new WritableSetting(WritableSettingType.PIRATE_CHAIN_NET, true));
+		settings.put("autoUpdateEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
+		settings.put("autoRestartEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+		settings.put("bootstrapHosts", new WritableSetting(WritableSettingType.STRING_ARRAY, false));
+		settings.put("qdnEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
+		settings.put("storagePolicy", new WritableSetting(WritableSettingType.STORAGE_POLICY, false));
+		settings.put("relayModeEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+		settings.put("publicDataEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+		settings.put("privateDataEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+		settings.put("apiDocumentationEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
+		settings.put("apiLoggingEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+		settings.put("tradebotSystrayEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+
+		return Collections.unmodifiableMap(settings);
+	}
+
 	public static synchronized Settings getInstance() {
 		if (instance == null)
 			fileInstance(SETTINGS_FILENAME);
@@ -670,66 +738,16 @@ public class Settings {
 	 * @throws RuntimeException with JAXBException as cause if some unexpected JAXB-related error occurred
 	 * @throws RuntimeException with IOException as cause if some unexpected I/O-related error occurred
 	 */
-	public static void fileInstance(String filename) {
-		JAXBContext jc;
-		Unmarshaller unmarshaller;
-
-		try {
-			// Create JAXB context aware of Settings
-			jc = JAXBContextFactory.createContext(new Class[] {
-				Settings.class
-			}, null);
-
-			// Create unmarshaller
-			unmarshaller = jc.createUnmarshaller();
-
-			// Set the unmarshaller media type to JSON
-			unmarshaller.setProperty(UnmarshallerProperties.MEDIA_TYPE, "application/json");
-
-			// Tell unmarshaller that there's no JSON root element in the JSON input
-			unmarshaller.setProperty(UnmarshallerProperties.JSON_INCLUDE_ROOT, false);
-		} catch (JAXBException e) {
-			String message = "Failed to setup unmarshaller to process settings file";
-			LOGGER.error(message, e);
-			throw new RuntimeException(message, e);
-		}
-
+	public static synchronized void fileInstance(String filename) {
 		Settings settings = null;
 		String path = "";
+		Path settingsPath = null;
 
 		do {
-			LOGGER.info(String.format("Using settings file: %s%s", path, filename));
+			settingsPath = resolveSettingsPath(path, filename);
+			LOGGER.info(String.format("Using settings file: %s", settingsPath));
 
-			// Create the StreamSource by creating Reader to the JSON input
-			try (Reader settingsReader = new FileReader(path + filename)) {
-				StreamSource json = new StreamSource(settingsReader);
-
-				// Attempt to unmarshal JSON stream to Settings
-				settings = unmarshaller.unmarshal(json, Settings.class).getValue();
-			} catch (FileNotFoundException e) {
-				String message = "Settings file not found: " + path + filename;
-				LOGGER.error(message, e);
-				throw new RuntimeException(message, e);
-			} catch (UnmarshalException e) {
-				Throwable linkedException = e.getLinkedException();
-				if (linkedException instanceof XMLMarshalException) {
-					String message = ((XMLMarshalException) linkedException).getInternalException().getLocalizedMessage();
-					LOGGER.error(message);
-					throw new RuntimeException(message, e);
-				}
-
-				String message = "Failed to parse settings file";
-				LOGGER.error(message, e);
-				throw new RuntimeException(message, e);
-			} catch (JAXBException e) {
-				String message = "Unexpected JAXB issue while processing settings file";
-				LOGGER.error(message, e);
-				throw new RuntimeException(message, e);
-			} catch (IOException e) {
-				String message = "Unexpected I/O issue while processing settings file";
-				LOGGER.error(message, e);
-				throw new RuntimeException(message, e);
-			}
+			settings = unmarshalSettings(settingsPath);
 
 			if (settings.userPath != null) {
 				// Adjust filename and go round again
@@ -741,6 +759,84 @@ public class Settings {
 			}
 		} while (settings.userPath != null);
 
+		settings = prepareLoadedSettings(settings, path);
+
+		// Successfully read settings now in effect
+		instance = settings;
+		activeSettingsPath = settingsPath.toAbsolutePath().normalize();
+
+		// Now read blockchain config
+		BlockChain.fileInstance(settings.getUserPath(), settings.getBlockchainConfig());
+	}
+
+	private static Unmarshaller createUnmarshaller() {
+		try {
+			// Create JAXB context aware of Settings
+			JAXBContext jc = JAXBContextFactory.createContext(new Class[] {
+				Settings.class
+			}, null);
+
+			// Create unmarshaller
+			Unmarshaller unmarshaller = jc.createUnmarshaller();
+
+			// Set the unmarshaller media type to JSON
+			unmarshaller.setProperty(UnmarshallerProperties.MEDIA_TYPE, "application/json");
+
+			// Tell unmarshaller that there's no JSON root element in the JSON input
+			unmarshaller.setProperty(UnmarshallerProperties.JSON_INCLUDE_ROOT, false);
+
+			return unmarshaller;
+		} catch (JAXBException e) {
+			String message = "Failed to setup unmarshaller to process settings file";
+			LOGGER.error(message, e);
+			throw new RuntimeException(message, e);
+		}
+	}
+
+	private static Path resolveSettingsPath(String path, String filename) {
+		Path filenamePath = Paths.get(filename);
+		if (path == null || path.isEmpty())
+			return filenamePath;
+
+		return Paths.get(path).resolve(filenamePath.getFileName());
+	}
+
+	private static Settings unmarshalSettings(Path settingsPath) {
+		Unmarshaller unmarshaller = createUnmarshaller();
+
+		// Create the StreamSource by creating Reader to the JSON input
+		try (Reader settingsReader = new FileReader(settingsPath.toFile())) {
+			StreamSource json = new StreamSource(settingsReader);
+
+			// Attempt to unmarshal JSON stream to Settings
+			return unmarshaller.unmarshal(json, Settings.class).getValue();
+		} catch (FileNotFoundException e) {
+			String message = "Settings file not found: " + settingsPath;
+			LOGGER.error(message, e);
+			throw new RuntimeException(message, e);
+		} catch (UnmarshalException e) {
+			Throwable linkedException = e.getLinkedException();
+			if (linkedException instanceof XMLMarshalException) {
+				String message = ((XMLMarshalException) linkedException).getInternalException().getLocalizedMessage();
+				LOGGER.error(message);
+				throw new RuntimeException(message, e);
+			}
+
+			String message = "Failed to parse settings file";
+			LOGGER.error(message, e);
+			throw new RuntimeException(message, e);
+		} catch (JAXBException e) {
+			String message = "Unexpected JAXB issue while processing settings file";
+			LOGGER.error(message, e);
+			throw new RuntimeException(message, e);
+		} catch (IOException e) {
+			String message = "Unexpected I/O issue while processing settings file";
+			LOGGER.error(message, e);
+			throw new RuntimeException(message, e);
+		}
+	}
+
+	private static Settings prepareLoadedSettings(Settings settings, String userPath) {
 		// Set some additional defaults if needed
 		settings.setAdditionalDefaults();
 
@@ -748,13 +844,178 @@ public class Settings {
 		settings.validate();
 
 		// Minor fix-up
-		settings.userPath = path;
+		settings.userPath = userPath;
 
-		// Successfully read settings now in effect
-		instance = settings;
+		return settings;
+	}
 
-		// Now read blockchain config
-		BlockChain.fileInstance(settings.getUserPath(), settings.getBlockchainConfig());
+	public static synchronized SettingsUpdateResult updateAndSave(String patchJson) throws IOException {
+		Settings settings = getInstance();
+		if (activeSettingsPath == null)
+			throw new IllegalStateException("Active settings file is unknown");
+
+		LinkedHashMap<String, Object> patch = parseSettingsPatch(patchJson);
+		SettingsUpdateResult result = new SettingsUpdateResult();
+		result.settingsPath = activeSettingsPath.toString();
+
+		if (patch.isEmpty())
+			return result;
+
+		LinkedHashMap<String, Object> mergedSettings = readSettingsMap(activeSettingsPath);
+		LinkedHashSet<String> updated = new LinkedHashSet<>();
+		LinkedHashSet<String> removed = new LinkedHashSet<>();
+		LinkedHashSet<String> restartRequired = new LinkedHashSet<>();
+
+		for (Map.Entry<String, Object> entry : patch.entrySet()) {
+			String settingName = entry.getKey();
+			WritableSetting writableSetting = WRITABLE_SETTINGS.get(settingName);
+			if (writableSetting == null)
+				throw new IllegalArgumentException("Setting is not writable: " + settingName);
+
+			Object value = entry.getValue();
+			if (value == null) {
+				mergedSettings.remove(settingName);
+				removed.add(settingName);
+			} else {
+				validateWritableSettingValue(settingName, writableSetting, value);
+				mergedSettings.put(settingName, value);
+				updated.add(settingName);
+			}
+
+			if (writableSetting.restartRequired)
+				restartRequired.add(settingName);
+		}
+
+		Path tempSettingsPath = writeTempSettings(activeSettingsPath, mergedSettings);
+		try {
+			Settings validatedSettings;
+			try {
+				validatedSettings = prepareLoadedSettings(unmarshalSettings(tempSettingsPath), settings.userPath);
+			} catch (RuntimeException e) {
+				throw new IllegalArgumentException("Invalid settings patch: " + e.getMessage(), e);
+			}
+
+			replaceSettingsFile(tempSettingsPath, activeSettingsPath);
+			tempSettingsPath = null;
+
+			instance = validatedSettings;
+
+			result.saved = true;
+			result.updated = new ArrayList<>(updated);
+			result.removed = new ArrayList<>(removed);
+			result.restartRequired = new ArrayList<>(restartRequired);
+
+			LinkedHashSet<String> applied = new LinkedHashSet<>();
+			applied.addAll(updated);
+			applied.addAll(removed);
+			applied.removeAll(restartRequired);
+			result.applied = new ArrayList<>(applied);
+
+			return result;
+		} finally {
+			if (tempSettingsPath != null)
+				Files.deleteIfExists(tempSettingsPath);
+		}
+	}
+
+	public static Path getActiveSettingsPath() {
+		return activeSettingsPath;
+	}
+
+	private static LinkedHashMap<String, Object> parseSettingsPatch(String patchJson) {
+		if (patchJson == null || patchJson.trim().isEmpty())
+			throw new IllegalArgumentException("Settings patch is empty");
+
+		try {
+			return SETTINGS_JSON_MAPPER.readValue(patchJson, SETTINGS_MAP_TYPE);
+		} catch (IOException e) {
+			throw new IllegalArgumentException("Settings patch must be a JSON object", e);
+		}
+	}
+
+	private static LinkedHashMap<String, Object> readSettingsMap(Path settingsPath) throws IOException {
+		byte[] settingsBytes = Files.readAllBytes(settingsPath);
+		if (settingsBytes.length == 0)
+			return new LinkedHashMap<>();
+
+		return SETTINGS_JSON_MAPPER.readValue(settingsBytes, SETTINGS_MAP_TYPE);
+	}
+
+	private static void validateWritableSettingValue(String settingName, WritableSetting writableSetting, Object value) {
+		switch (writableSetting.type) {
+			case BOOLEAN:
+				if (!(value instanceof Boolean))
+					throw new IllegalArgumentException("Setting must be a boolean: " + settingName);
+				return;
+
+			case STRING_ARRAY:
+				validateStringArraySetting(settingName, value);
+				return;
+
+			case STRING_MAP:
+				validateMapSetting(settingName, value, String.class);
+				return;
+
+			case BOOLEAN_MAP:
+				validateMapSetting(settingName, value, Boolean.class);
+				return;
+
+			case PIRATE_CHAIN_NET:
+				if (!(value instanceof String))
+					throw new IllegalArgumentException("Setting must be a PirateChain network name: " + settingName);
+				PirateChainNet.valueOf((String) value);
+				return;
+
+			case STORAGE_POLICY:
+				if (!(value instanceof String))
+					throw new IllegalArgumentException("Setting must be a storage policy name: " + settingName);
+				StoragePolicy.valueOf((String) value);
+				return;
+
+			default:
+				throw new IllegalArgumentException("Unsupported writable setting type: " + writableSetting.type);
+		}
+	}
+
+	private static void validateStringArraySetting(String settingName, Object value) {
+		if (!(value instanceof List<?>))
+			throw new IllegalArgumentException("Setting must be a string array: " + settingName);
+
+		for (Object entry : (List<?>) value) {
+			if (!(entry instanceof String))
+				throw new IllegalArgumentException("Setting array must contain strings only: " + settingName);
+		}
+	}
+
+	private static void validateMapSetting(String settingName, Object value, Class<?> valueClass) {
+		if (!(value instanceof Map<?, ?>))
+			throw new IllegalArgumentException("Setting must be an object: " + settingName);
+
+		for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+			if (!(entry.getKey() instanceof String) || !valueClass.isInstance(entry.getValue()))
+				throw new IllegalArgumentException(String.format("Setting object must contain string keys and %s values only: %s",
+						valueClass.getSimpleName(), settingName));
+		}
+	}
+
+	private static Path writeTempSettings(Path settingsPath, LinkedHashMap<String, Object> settings) throws IOException {
+		Path absoluteSettingsPath = settingsPath.toAbsolutePath().normalize();
+		Path settingsDirectory = absoluteSettingsPath.getParent();
+		if (settingsDirectory == null)
+			settingsDirectory = Paths.get("").toAbsolutePath();
+
+		Path tempSettingsPath = Files.createTempFile(settingsDirectory, "settings-", ".tmp");
+		String json = SETTINGS_JSON_MAPPER.writeValueAsString(settings) + System.lineSeparator();
+		Files.write(tempSettingsPath, json.getBytes(StandardCharsets.UTF_8));
+		return tempSettingsPath;
+	}
+
+	private static void replaceSettingsFile(Path source, Path target) throws IOException {
+		try {
+			Files.move(source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+		} catch (AtomicMoveNotSupportedException e) {
+			Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+		}
 	}
 
 	public static void throwValidationError(String message) {

@@ -353,6 +353,37 @@ public class AdminResource {
 		return nodeSettings;
 	}
 
+	@PATCH
+	@Path("/settings")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "Update writable node settings",
+		description = "Merges an allowlisted settings patch into the active settings file, validates it, and saves it atomically.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(type = "object"))
+		),
+		responses = {
+			@ApiResponse(
+				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = Settings.SettingsUpdateResult.class))
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public Settings.SettingsUpdateResult updateSettings(@HeaderParam(Security.API_KEY_HEADER) String apiKey, String settingsPatchJson) {
+		Security.checkApiCallAllowed(request, apiKey);
+
+		try {
+			return Settings.updateAndSave(settingsPatchJson);
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (IOException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
 	@GET
 	@Path("/settings/{setting}")
 	@Operation(

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - api: add guarded settings save endpoint
+
+Added a restricted settings update path that can merge allowlisted changes into the active settings file, validate the result, and save it atomically. The new API rejects unknown, disallowed, or wrongly typed setting changes, reports which saved settings need a restart to fully take effect, and keeps broad settings persistence separate from later Electrum-specific server configuration work.
+
 ### 2026-05-11 - crosschain: harden foreign-foreign trade validation
 
 Added shared foreign/foreign HTLC amount validation so maker create checks positive amounts, chain minimums, and P2SH-fee overflow consistently through direct and public API paths. Added filter helper coverage, reserved-state restart recovery coverage, and funding-amount assertions for both offered/requested HTLC funding paths.
