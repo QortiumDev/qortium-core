@@ -355,6 +355,93 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	}
 
 	@Test
+	public void testPublicApiLifecycleCompletesForeignForeignTrade() throws Exception {
+		MakerTradeSetup setup = createAndReserveMakerTradeViaApi();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			setup.makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			setup.takerTradeBotData = getTakerTradeBotData(repository, setup.atAddress);
+
+			setMockHtlcStatus(BitcoinyHTLC.Status.UNFUNDED);
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			setup.makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(1, this.bitcoin.spendTransactionCount);
+			assertNotNull(setup.makerTradeBotData.getLockTimeA());
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE.name(), setup.makerTradeBotData.getState());
+
+			setMockHtlcStatus(BitcoinyHTLC.Status.FUNDED);
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			setup.makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(1, this.bitcoin.spendTransactionCount);
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_TAKER_HTLC.name(), setup.makerTradeBotData.getState());
+
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			assertEquals(AcctMode.FOREIGN_LOCKED, tradeData.mode);
+			assertEquals(setup.makerTradeBotData.getLockTimeA(), tradeData.lockTimeA);
+
+			int lockTimeB = BitcoinyForeignForeignTradeBot.calcTakerLockTime(tradeData.lockTimeA);
+			String makerOfferedP2sh = deriveMakerOfferedP2shAddress(tradeData);
+			String takerRequestedP2sh = deriveTakerRequestedP2shAddress(tradeData, lockTimeB);
+			setMockHtlcStatuses(Map.of(
+					makerOfferedP2sh, BitcoinyHTLC.Status.FUNDED,
+					takerRequestedP2sh, BitcoinyHTLC.Status.UNFUNDED), BitcoinyHTLC.Status.UNFUNDED);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.takerTradeBotData);
+
+			setup.takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
+			assertEquals(1, this.litecoin.spendTransactionCount);
+			assertEquals(Integer.valueOf(lockTimeB), setup.takerTradeBotData.getLockTimeB());
+			assertEquals(TradeStates.State.TAKER_WAITING_FOR_FOREIGN_LOCK.name(), setup.takerTradeBotData.getState());
+
+			setMockHtlcStatuses(Map.of(
+					makerOfferedP2sh, BitcoinyHTLC.Status.FUNDED,
+					takerRequestedP2sh, BitcoinyHTLC.Status.FUNDED), BitcoinyHTLC.Status.UNFUNDED);
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.takerTradeBotData);
+
+			setup.takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
+			assertEquals(1, this.litecoin.spendTransactionCount);
+			assertEquals(TradeStates.State.TAKER_WAITING_FOR_MAKER_REDEEM.name(), setup.takerTradeBotData.getState());
+
+			tradeData = getTradeData(repository, setup.atAddress);
+			assertEquals(AcctMode.TRADING, tradeData.mode);
+			assertEquals(Integer.valueOf(lockTimeB), tradeData.lockTimeB);
+
+			setMockHtlcStatuses(Map.of(takerRequestedP2sh, BitcoinyHTLC.Status.FUNDED), BitcoinyHTLC.Status.UNFUNDED);
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			setup.makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(1, this.litecoin.redeemTransactionCount);
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_AT_REDEEM.name(), setup.makerTradeBotData.getState());
+
+			setMockHtlcStatuses(Map.of(takerRequestedP2sh, BitcoinyHTLC.Status.REDEEMED), BitcoinyHTLC.Status.UNFUNDED);
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			setup.makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			ATData atData = repository.getATRepository().fromATAddress(setup.atAddress);
+			tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.REDEEMED, tradeData.mode);
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_AT_REDEEM.name(), setup.makerTradeBotData.getState());
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
+
+			setup.makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
+			assertEquals(TradeStates.State.MAKER_DONE.name(), setup.makerTradeBotData.getState());
+
+			setMockHtlcStatuses(Map.of(
+					makerOfferedP2sh, BitcoinyHTLC.Status.FUNDED,
+					takerRequestedP2sh, BitcoinyHTLC.Status.REDEEMED), BitcoinyHTLC.Status.UNFUNDED);
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.takerTradeBotData);
+
+			setup.takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
+			assertEquals(1, this.bitcoin.redeemTransactionCount);
+			assertEquals(TradeStates.State.TAKER_DONE.name(), setup.takerTradeBotData.getState());
+		}
+	}
+
+	@Test
 	public void testDirectTakerReserveRejectsInvalidCriteria() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
@@ -1133,6 +1220,43 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		return setup;
 	}
 
+	private MakerTradeSetup createAndReserveMakerTradeViaApi() throws Exception {
+		prepareApiNodeState();
+		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
+		PrivateKeyAccount apiCreator = Common.getTestAccount(null, "chloe");
+
+		String encodedUnsignedDeploy = resource.tradeBotCreator(null, createApiRequest(apiCreator));
+		DeployAtTransactionData deployData = (DeployAtTransactionData) fromUnsignedBytes(Base58.decode(encodedUnsignedDeploy));
+		DeployAtTransaction.ensureATAddress(deployData);
+
+		MakerTradeSetup setup = new MakerTradeSetup();
+		setup.atAddress = deployData.getAtAddress();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount creator = Common.getTestAccount(repository, "chloe");
+			TransactionUtils.signAndMint(repository, deployData, creator);
+
+			TradeBotData makerTradeBotData = getMakerTradeBotData(repository, setup.atAddress);
+			AccountUtils.pay(repository, Common.getTestAccount(repository, "alice"), makerTradeBotData.getTradeLocalAddress(),
+					10L * Amounts.MULTIPLIER);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, makerTradeBotData);
+			makerTradeBotData = getTradeBotData(repository, makerTradeBotData);
+			assertEquals(TradeStates.State.MAKER_WAITING_FOR_TAKER_MESSAGE.name(), makerTradeBotData.getState());
+
+			setup.makerTradeBotData = makerTradeBotData;
+		}
+
+		assertEquals("true", resource.tradeBotResponder(null, createApiRespondRequest(setup.atAddress)));
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			setup.takerTradeBotData = getTakerTradeBotData(repository, setup.atAddress);
+			assertEquals(TradeStates.State.TAKER_WAITING_FOR_FOREIGN_LOCK.name(), setup.takerTradeBotData.getState());
+		}
+
+		return setup;
+	}
+
 	private MakerTradeSetup setupReservedMakerTrade(Repository repository)
 			throws DataException, TransformationException, ForeignBlockchainException {
 		MakerTradeSetup setup = createAndDeployMakerTrade(repository);
@@ -1239,6 +1363,15 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 
 	private static TradeBotData getTradeBotData(Repository repository, TradeBotData tradeBotData) throws DataException {
 		return repository.getCrossChainRepository().getTradeBotData(tradeBotData.getTradePrivateKey());
+	}
+
+	private static TradeBotData getMakerTradeBotData(Repository repository, String atAddress) throws DataException {
+		return repository.getCrossChainRepository().getAllTradeBotData().stream()
+				.filter(tradeBotData -> BitcoinyForeignForeignACCTv1.NAME.equals(tradeBotData.getAcctName()))
+				.filter(tradeBotData -> atAddress.equals(tradeBotData.getAtAddress()))
+				.filter(tradeBotData -> tradeBotData.getState().startsWith("MAKER_"))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing maker trade-bot data"));
 	}
 
 	private static TradeBotData getTakerTradeBotData(Repository repository, String atAddress) throws DataException {

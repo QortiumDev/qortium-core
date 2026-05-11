@@ -1,8 +1,7 @@
 # Foreign/Foreign Trade Design
 
-This note records the intended direction for BTC-like foreign/foreign atomic
-swaps. It is groundwork only; no user-facing foreign/foreign trade type is
-enabled yet.
+This note records the intended direction and current implementation status for
+BTC-like foreign/foreign atomic swaps.
 
 ## Target flow
 
@@ -114,4 +113,3 @@ back to Qortium.
 - ARRR/HUSH/Zcash-family native shielded swaps
 - Monero swaps
 - direct peer negotiation without Qortium offer coordination
-- public trade-bot/API enablement

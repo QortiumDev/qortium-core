@@ -12,23 +12,23 @@ public class TradeBotRespondRequest {
 	@Schema(description = "local-chain AT address", example = "Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 	public String atAddress;
 
-	@Schema(description = "Foreign blockchain private key, e.g. BIP32 'm' key for supported Bitcoiny chains",
+	@Schema(description = "Responder's foreign blockchain private key for local/foreign offers. SELL_FOREIGN_FOR_FOREIGN uses requestedForeignKey.",
 			example = "xprv___________________________________________________________________________________________________________")
 	public String foreignKey;
 
-	@Schema(description = "Responder's requested-chain private key for SELL_FOREIGN_FOR_FOREIGN offers")
+	@Schema(description = "Responder's requested-chain private key for funding/refunding SELL_FOREIGN_FOR_FOREIGN offers")
 	public String requestedForeignKey;
 
 	@Schema(description = "Responder's local-chain public key for SELL_FOREIGN reverse trade transactions; not used for SELL_FOREIGN_FOR_FOREIGN offers")
 	public byte[] responderPublicKey;
 
-	@Schema(description = "Receiving address: local-chain address for SELL_LOCAL offers, foreign-chain address for SELL_FOREIGN offers. SELL_FOREIGN_FOR_FOREIGN uses offeredForeignReceivingAddress.", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
+	@Schema(description = "Receiving address for local/foreign offers: local-chain address for SELL_LOCAL, foreign-chain address for SELL_FOREIGN. SELL_FOREIGN_FOR_FOREIGN uses offeredForeignReceivingAddress.", example = "Qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq")
 	public String receivingAddress;
 
-	@Schema(description = "Responder's offered-chain receiving address for SELL_FOREIGN_FOR_FOREIGN offers")
+	@Schema(description = "Responder's offered-chain receiving address for redeeming SELL_FOREIGN_FOR_FOREIGN offers")
 	public String offeredForeignReceivingAddress;
 
-	@Schema(description = "Optional local-chain asset amount to fill from a split offer. If omitted, the largest currently valid fill is used.", example = "1.00000000", type = "number")
+	@Schema(description = "Optional local-chain asset amount to fill from a split offer. Not supported for SELL_FOREIGN_FOR_FOREIGN offers.", example = "1.00000000", type = "number")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public Long fillLocalAmount;
 

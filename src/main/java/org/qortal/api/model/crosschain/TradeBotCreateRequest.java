@@ -64,16 +64,16 @@ public class TradeBotCreateRequest {
 	@Schema(description = "Suggested trade timeout (minutes)", example = "10080")
 	public int tradeTimeout;
 
-	@Schema(description = "Receiving address: foreign-chain address for SELL_LOCAL offers, local-chain address for SELL_FOREIGN offers. SELL_FOREIGN_FOR_FOREIGN uses requestedForeignReceivingAddress.", example = "1BitcoinEaterAddressDontSendf59kuE")
+	@Schema(description = "Receiving address for local/foreign offers: foreign-chain address for SELL_LOCAL, local-chain address for SELL_FOREIGN. SELL_FOREIGN_FOR_FOREIGN uses requestedForeignReceivingAddress.", example = "1BitcoinEaterAddressDontSendf59kuE")
 	public String receivingAddress;
 
-	@Schema(description = "Maker's foreign blockchain private key, required when tradeDirection is SELL_FOREIGN")
+	@Schema(description = "Maker's foreign blockchain private key for SELL_FOREIGN offers. SELL_FOREIGN_FOR_FOREIGN uses offeredForeignKey.")
 	public String foreignKey;
 
-	@Schema(description = "Maker's offered foreign blockchain private key, required for SELL_FOREIGN_FOR_FOREIGN offers")
+	@Schema(description = "Maker's offered-chain private key for SELL_FOREIGN_FOR_FOREIGN offers")
 	public String offeredForeignKey;
 
-	@Schema(description = "Maker's requested foreign blockchain receiving address, required for SELL_FOREIGN_FOR_FOREIGN offers")
+	@Schema(description = "Maker's requested-chain receiving address for SELL_FOREIGN_FOR_FOREIGN offers")
 	public String requestedForeignReceivingAddress;
 
 	public TradeBotCreateRequest() {

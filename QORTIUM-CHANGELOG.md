@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - crosschain: test foreign-foreign public lifecycle
+
+Added deterministic end-to-end coverage for the public foreign/foreign trade-bot path. The new test creates a BTC/LTC-style offer through the API, deploys the coordination AT, reserves it through the API, and then drives the mocked maker and taker HTLC lifecycle through funding, declarations, maker redeem, secret reveal, taker redeem, and final completion. The foreign/foreign design note and API schema wording now match the enabled single-fill public API surface.
+
 ### 2026-05-11 - crosschain: enable foreign-foreign tradebot API
 
 Registered the foreign/foreign ACCT and trade-bot path so single-fill BTC-like foreign/foreign offers can be created and reserved through the public trade-bot API. Maker create now builds the unsigned coordination AT deployment without local-asset funding, taker respond now submits the reservation message from the generated trade key, and offer discovery can show foreign/foreign offers under either participating blockchain while keeping them out of local-asset filters and price estimates. Tests cover registry lookup, dispatcher routing, API create/respond validation, and offer filtering.
