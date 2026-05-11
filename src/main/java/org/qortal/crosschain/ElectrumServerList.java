@@ -8,6 +8,7 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.crosschain.ElectrumX.Server;
+import org.qortal.settings.Settings;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,11 +35,36 @@ public final class ElectrumServerList {
 	}
 
 	public static Collection<Server> getServers(String coinCode, String networkName, Collection<Server> fallbackServers) {
-		List<Server> generatedServers = loadGeneratedServers(coinCode, networkName);
-		if (generatedServers.isEmpty())
-			return preferSslServers(fallbackServers);
+		List<Server> defaultServers = loadDefaultServers(coinCode, networkName, fallbackServers);
+		List<Server> configuredServers = applyConfiguredServers(coinCode, networkName, defaultServers);
+		return preferSslServers(configuredServers);
+	}
 
-		return preferSslServers(generatedServers);
+	public static boolean isDefaultServer(String coinCode, String networkName, ChainableServer server, Collection<Server> fallbackServers) {
+		if (server == null)
+			return false;
+
+		Server normalisedServer = new Server(
+				normaliseHost(server.getHostName()),
+				server.getConnectionType(),
+				server.getPort());
+
+		return loadDefaultServers(coinCode, networkName, fallbackServers).contains(normalisedServer);
+	}
+
+	static List<Server> loadDefaultServers(String coinCode, String networkName, Collection<Server> fallbackServers) {
+		List<Server> generatedServers = loadGeneratedServers(coinCode, networkName);
+		if (!generatedServers.isEmpty())
+			return generatedServers;
+
+		if (fallbackServers == null)
+			return Collections.emptyList();
+
+		LinkedHashSet<Server> normalisedFallbackServers = new LinkedHashSet<>();
+		for (Server fallbackServer : fallbackServers)
+			normalisedFallbackServers.add(new Server(normaliseHost(fallbackServer.getHostName()), fallbackServer.getConnectionType(), fallbackServer.getPort()));
+
+		return new ArrayList<>(normalisedFallbackServers);
 	}
 
 	static List<Server> loadGeneratedServers(String coinCode, String networkName) {
@@ -127,6 +153,32 @@ public final class ElectrumServerList {
 		return new ArrayList<>(servers);
 	}
 
+	static List<Server> applyConfiguredServers(String coinCode, String networkName, Collection<Server> defaultServers) {
+		Settings settings = Settings.getLoadedInstance();
+		Settings.BitcoinyServerSettings serverSettings = settings == null ? null : settings.getBitcoinyServerSettings(coinCode, networkName);
+		if (serverSettings == null)
+			return defaultServers == null ? Collections.emptyList() : new ArrayList<>(new LinkedHashSet<>(defaultServers));
+
+		LinkedHashSet<Server> servers = new LinkedHashSet<>();
+		if (!serverSettings.isReplaceDefaults() && defaultServers != null)
+			servers.addAll(defaultServers);
+
+		for (Settings.BitcoinyServer disabledServer : serverSettings.getDisabledServers())
+			servers.remove(toServer(disabledServer));
+
+		for (Settings.BitcoinyServer configuredServer : serverSettings.getServers())
+			servers.add(toServer(configuredServer));
+
+		return new ArrayList<>(servers);
+	}
+
+	private static Server toServer(Settings.BitcoinyServer server) {
+		return new Server(
+				normaliseHost(server.getHostName()),
+				ConnectionType.valueOf(server.getConnectionType()),
+				server.getPort());
+	}
+
 	private static Server parseServer(JSONObject serverJson) {
 		String hostName = parseString(serverJson.get("host"));
 		if (hostName == null)
@@ -146,7 +198,7 @@ public final class ElectrumServerList {
 		if (connectionType == null)
 			return null;
 
-		return new Server(hostName, connectionType, port);
+		return new Server(normaliseHost(hostName), connectionType, port);
 	}
 
 	private static String parseString(Object value) {
@@ -169,5 +221,9 @@ public final class ElectrumServerList {
 
 	private static String normalizeKey(String value) {
 		return value == null ? "" : value.trim().toUpperCase(Locale.ROOT);
+	}
+
+	private static String normaliseHost(String value) {
+		return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
 	}
 }

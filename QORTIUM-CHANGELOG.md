@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - crosschain: persist Bitcoiny Electrum server settings
+
+Added persistent per-coin Electrum server settings for BTC-like chains. Runtime add/remove server API calls now update the active settings file before changing the live ElectrumX provider, generated server lists remain the default source, users can add custom servers, disable built-in servers, or replace defaults for a specific coin/network, and tests cover settings validation, server-list merging, and persisted add/remove behavior.
+
 ### 2026-05-11 - api: add guarded settings save endpoint
 
 Added a restricted settings update path that can merge allowlisted changes into the active settings file, validate the result, and save it atomically. The new API rejects unknown, disallowed, or wrongly typed setting changes, reports which saved settings need a restart to fully take effect, and keeps broad settings persistence separate from later Electrum-specific server configuration work.

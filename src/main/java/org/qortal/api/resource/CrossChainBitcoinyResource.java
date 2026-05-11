@@ -300,7 +300,7 @@ public class CrossChainBitcoinyResource {
 	@POST
 	@Path("/addserver")
 	@Operation(
-			summary = "Add server to list of servers",
+			summary = "Add server to list of servers and persist it in settings",
 			requestBody = @RequestBody(
 					required = true,
 					content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ServerInfo.class))
@@ -333,7 +333,7 @@ public class CrossChainBitcoinyResource {
 	@POST
 	@Path("/removeserver")
 	@Operation(
-			summary = "Remove server from list of servers",
+			summary = "Remove server from list of servers and persist the override in settings",
 			requestBody = @RequestBody(
 					required = true,
 					content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ServerInfo.class))

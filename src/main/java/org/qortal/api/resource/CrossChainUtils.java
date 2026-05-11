@@ -18,6 +18,7 @@ import org.qortal.event.LockingFeeUpdateEvent;
 import org.qortal.event.RequiredFeeUpdateEvent;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
+import org.qortal.settings.Settings;
 import org.qortal.utils.Amounts;
 import org.qortal.utils.BitTwiddling;
 
@@ -213,8 +214,19 @@ public class CrossChainUtils {
      * @return true if the add was successful, otherwise false
      */
     public static boolean addServer(Bitcoiny bitcoiny, ChainableServer server) {
+        BitcoinyBlockchainProvider blockchainProvider = bitcoiny.getBlockchainProvider();
+        if (blockchainProvider instanceof ElectrumX) {
+            try {
+                boolean settingsChanged = persistBitcoinyServerAdd(bitcoiny, server);
+                boolean providerChanged = blockchainProvider.addServer(server);
+                return settingsChanged || providerChanged;
+            } catch (IOException | RuntimeException e) {
+                LOGGER.warn("Unable to persist {} Electrum server add: {}", bitcoiny.getCurrencyCode(), e.getMessage());
+                return false;
+            }
+        }
 
-        return bitcoiny.getBlockchainProvider().addServer(server);
+        return blockchainProvider.addServer(server);
     }
 
     /**
@@ -228,8 +240,69 @@ public class CrossChainUtils {
      * @return true if the removal was successful, otherwise false
      */
     public static boolean removeServer(Bitcoiny bitcoiny, ChainableServer server){
+        BitcoinyBlockchainProvider blockchainProvider = bitcoiny.getBlockchainProvider();
+        if (blockchainProvider instanceof ElectrumX) {
+            try {
+                boolean settingsChanged = persistBitcoinyServerRemove(bitcoiny, server);
+                boolean providerChanged = blockchainProvider.removeServer(server);
+                return settingsChanged || providerChanged;
+            } catch (IOException | RuntimeException e) {
+                LOGGER.warn("Unable to persist {} Electrum server remove: {}", bitcoiny.getCurrencyCode(), e.getMessage());
+                return false;
+            }
+        }
 
-        return bitcoiny.getBlockchainProvider().removeServer(server);
+        return blockchainProvider.removeServer(server);
+    }
+
+    private static boolean persistBitcoinyServerAdd(Bitcoiny bitcoiny, ChainableServer server) throws IOException {
+        Settings settings = Settings.getInstance();
+        String currencyCode = bitcoiny.getCurrencyCode();
+        String networkName = settings.getBitcoinyNetworkName(currencyCode);
+        Map<String, Map<String, Settings.BitcoinyServerSettings>> bitcoinyServers = settings.getBitcoinyServers();
+        Settings.BitcoinyServerSettings serverSettings = getOrCreateBitcoinyServerSettings(bitcoinyServers, currencyCode, networkName);
+        Settings.BitcoinyServer configuredServer = Settings.BitcoinyServer.from(server);
+
+        boolean changed = serverSettings.removeDisabledServer(configuredServer);
+        boolean defaultServer = ElectrumServerList.isDefaultServer(currencyCode, networkName, server, settings.getBitcoinyNetwork(currencyCode).getServers());
+        if (serverSettings.isReplaceDefaults() || !defaultServer)
+            changed |= serverSettings.addServer(configuredServer);
+
+        if (changed)
+            Settings.updateBitcoinyServersAndSave(bitcoinyServers);
+
+        return changed;
+    }
+
+    private static boolean persistBitcoinyServerRemove(Bitcoiny bitcoiny, ChainableServer server) throws IOException {
+        Settings settings = Settings.getInstance();
+        String currencyCode = bitcoiny.getCurrencyCode();
+        String networkName = settings.getBitcoinyNetworkName(currencyCode);
+        Map<String, Map<String, Settings.BitcoinyServerSettings>> bitcoinyServers = settings.getBitcoinyServers();
+        Settings.BitcoinyServerSettings serverSettings = getOrCreateBitcoinyServerSettings(bitcoinyServers, currencyCode, networkName);
+        Settings.BitcoinyServer configuredServer = Settings.BitcoinyServer.from(server);
+
+        boolean removedCustomServer = serverSettings.removeServer(configuredServer);
+        boolean defaultServer = ElectrumServerList.isDefaultServer(currencyCode, networkName, server, settings.getBitcoinyNetwork(currencyCode).getServers());
+        boolean changed = removedCustomServer;
+        if (!serverSettings.isReplaceDefaults() && (defaultServer || !removedCustomServer))
+            changed |= serverSettings.addDisabledServer(configuredServer);
+
+        if (changed)
+            Settings.updateBitcoinyServersAndSave(bitcoinyServers);
+
+        return changed;
+    }
+
+    private static Settings.BitcoinyServerSettings getOrCreateBitcoinyServerSettings(
+            Map<String, Map<String, Settings.BitcoinyServerSettings>> bitcoinyServers,
+            String currencyCode,
+            String networkName) {
+        String normalisedCurrencyCode = currencyCode.toUpperCase(Locale.ROOT);
+        String normalisedNetworkName = networkName.toUpperCase(Locale.ROOT);
+
+        Map<String, Settings.BitcoinyServerSettings> networkSettings = bitcoinyServers.computeIfAbsent(normalisedCurrencyCode, key -> new LinkedHashMap<>());
+        return networkSettings.computeIfAbsent(normalisedNetworkName, key -> new Settings.BitcoinyServerSettings());
     }
 
     public static ChainableServer getCurrentServer( Bitcoiny bitcoiny ) {

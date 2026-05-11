@@ -47,6 +47,7 @@ import org.qortal.controller.arbitrary.ArbitraryDataStorageManager.StoragePolicy
 import org.qortal.crosschain.BitcoinyChainSpec;
 import org.qortal.crosschain.BitcoinyChainSpecs;
 import org.qortal.crosschain.BitcoinyNetwork;
+import org.qortal.crosschain.ChainableServer;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.PirateChain.PirateChainNet;
 import org.qortal.network.message.MessageType;
@@ -80,6 +81,7 @@ public class Settings {
 	private static final String SETTINGS_FILENAME = "settings.json";
 	private static final ObjectMapper SETTINGS_JSON_MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 	private static final TypeReference<LinkedHashMap<String, Object>> SETTINGS_MAP_TYPE = new TypeReference<LinkedHashMap<String, Object>>() {};
+	private static final TypeReference<LinkedHashMap<String, LinkedHashMap<String, BitcoinyServerSettings>>> BITCOINY_SERVERS_MAP_TYPE = new TypeReference<LinkedHashMap<String, LinkedHashMap<String, BitcoinyServerSettings>>>() {};
 	private static final Map<String, WritableSetting> WRITABLE_SETTINGS = buildWritableSettings();
 
 	// Properties
@@ -279,6 +281,8 @@ public class Settings {
 	private String blockchainConfig = null; // use default from resources
 	@XmlJavaTypeAdapter(StringMapXmlAdapter.class)
 	private Map<String, String> bitcoinyNetworks = defaultBitcoinyNetworks();
+	@XmlJavaTypeAdapter(BitcoinyServersMapXmlAdapter.class)
+	private Map<String, Map<String, BitcoinyServerSettings>> bitcoinyServers = new LinkedHashMap<>();
 	private PirateChainNet pirateChainNet = PirateChainNet.MAIN;
 	// Also crosschain-related:
 	/** Whether to show SysTray pop-up notifications when trade-bot entries change state */
@@ -656,6 +660,157 @@ public class Settings {
 		}
 	}
 
+	@XmlAccessorType(XmlAccessType.FIELD)
+	public static class BitcoinyServerSettings {
+		private boolean replaceDefaults;
+		private List<BitcoinyServer> servers = new ArrayList<>();
+		private List<BitcoinyServer> disabledServers = new ArrayList<>();
+
+		public BitcoinyServerSettings() {
+		}
+
+		public BitcoinyServerSettings(BitcoinyServerSettings other) {
+			if (other == null)
+				return;
+
+			this.replaceDefaults = other.replaceDefaults;
+			this.servers = copyServers(other.servers);
+			this.disabledServers = copyServers(other.disabledServers);
+		}
+
+		public boolean isReplaceDefaults() {
+			return this.replaceDefaults;
+		}
+
+		public void setReplaceDefaults(boolean replaceDefaults) {
+			this.replaceDefaults = replaceDefaults;
+		}
+
+		public List<BitcoinyServer> getServers() {
+			return copyServers(this.servers);
+		}
+
+		public void setServers(List<BitcoinyServer> servers) {
+			this.servers = copyServers(servers);
+		}
+
+		public List<BitcoinyServer> getDisabledServers() {
+			return copyServers(this.disabledServers);
+		}
+
+		public void setDisabledServers(List<BitcoinyServer> disabledServers) {
+			this.disabledServers = copyServers(disabledServers);
+		}
+
+		public boolean addServer(BitcoinyServer server) {
+			if (this.servers.contains(server))
+				return false;
+
+			return this.servers.add(server);
+		}
+
+		public boolean removeServer(BitcoinyServer server) {
+			return this.servers.remove(server);
+		}
+
+		public boolean addDisabledServer(BitcoinyServer server) {
+			if (this.disabledServers.contains(server))
+				return false;
+
+			return this.disabledServers.add(server);
+		}
+
+		public boolean removeDisabledServer(BitcoinyServer server) {
+			return this.disabledServers.remove(server);
+		}
+
+		private static List<BitcoinyServer> copyServers(List<BitcoinyServer> servers) {
+			List<BitcoinyServer> copy = new ArrayList<>();
+			if (servers == null)
+				return copy;
+
+			for (BitcoinyServer server : servers)
+				copy.add(new BitcoinyServer(server));
+
+			return copy;
+		}
+	}
+
+	@XmlAccessorType(XmlAccessType.FIELD)
+	public static class BitcoinyServer {
+		private String hostName;
+		private int port;
+		private String connectionType;
+
+		public BitcoinyServer() {
+		}
+
+		public BitcoinyServer(String hostName, int port, String connectionType) {
+			this.hostName = hostName;
+			this.port = port;
+			this.connectionType = connectionType;
+		}
+
+		public BitcoinyServer(BitcoinyServer other) {
+			if (other == null)
+				return;
+
+			this.hostName = other.hostName;
+			this.port = other.port;
+			this.connectionType = other.connectionType;
+		}
+
+		public static BitcoinyServer from(ChainableServer server) {
+			return normaliseBitcoinyServer(new BitcoinyServer(
+					server.getHostName(),
+					server.getPort(),
+					server.getConnectionType().name()));
+		}
+
+		public String getHostName() {
+			return this.hostName;
+		}
+
+		public void setHostName(String hostName) {
+			this.hostName = hostName;
+		}
+
+		public int getPort() {
+			return this.port;
+		}
+
+		public void setPort(int port) {
+			this.port = port;
+		}
+
+		public String getConnectionType() {
+			return this.connectionType;
+		}
+
+		public void setConnectionType(String connectionType) {
+			this.connectionType = connectionType;
+		}
+
+		@Override
+		public boolean equals(Object other) {
+			if (this == other)
+				return true;
+
+			if (!(other instanceof BitcoinyServer))
+				return false;
+
+			BitcoinyServer otherServer = (BitcoinyServer) other;
+			return this.port == otherServer.port
+					&& Objects.equals(this.hostName, otherServer.hostName)
+					&& Objects.equals(this.connectionType, otherServer.connectionType);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(this.hostName, this.port, this.connectionType);
+		}
+	}
+
 	// Constructors
 
 	private Settings() {
@@ -668,6 +823,7 @@ public class Settings {
 		STRING_ARRAY,
 		STRING_MAP,
 		BOOLEAN_MAP,
+		BITCOINY_SERVERS,
 		PIRATE_CHAIN_NET,
 		STORAGE_POLICY
 	}
@@ -700,6 +856,7 @@ public class Settings {
 
 		settings.put("wallets", new WritableSetting(WritableSettingType.BOOLEAN_MAP, true));
 		settings.put("bitcoinyNetworks", new WritableSetting(WritableSettingType.STRING_MAP, true));
+		settings.put("bitcoinyServers", new WritableSetting(WritableSettingType.BITCOINY_SERVERS, true));
 		settings.put("pirateChainNet", new WritableSetting(WritableSettingType.PIRATE_CHAIN_NET, true));
 		settings.put("autoUpdateEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("autoRestartEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
@@ -720,6 +877,10 @@ public class Settings {
 		if (instance == null)
 			fileInstance(SETTINGS_FILENAME);
 
+		return instance;
+	}
+
+	public static synchronized Settings getLoadedInstance() {
 		return instance;
 	}
 
@@ -877,7 +1038,7 @@ public class Settings {
 				mergedSettings.remove(settingName);
 				removed.add(settingName);
 			} else {
-				validateWritableSettingValue(settingName, writableSetting, value);
+				value = validateWritableSettingValue(settingName, writableSetting, value);
 				mergedSettings.put(settingName, value);
 				updated.add(settingName);
 			}
@@ -918,6 +1079,12 @@ public class Settings {
 		}
 	}
 
+	public static synchronized SettingsUpdateResult updateBitcoinyServersAndSave(Map<String, Map<String, BitcoinyServerSettings>> bitcoinyServers) throws IOException {
+		LinkedHashMap<String, Object> patch = new LinkedHashMap<>();
+		patch.put("bitcoinyServers", normaliseBitcoinyServersMap(bitcoinyServers));
+		return updateAndSave(SETTINGS_JSON_MAPPER.writeValueAsString(patch));
+	}
+
 	public static Path getActiveSettingsPath() {
 		return activeSettingsPath;
 	}
@@ -941,36 +1108,39 @@ public class Settings {
 		return SETTINGS_JSON_MAPPER.readValue(settingsBytes, SETTINGS_MAP_TYPE);
 	}
 
-	private static void validateWritableSettingValue(String settingName, WritableSetting writableSetting, Object value) {
+	private static Object validateWritableSettingValue(String settingName, WritableSetting writableSetting, Object value) {
 		switch (writableSetting.type) {
 			case BOOLEAN:
 				if (!(value instanceof Boolean))
 					throw new IllegalArgumentException("Setting must be a boolean: " + settingName);
-				return;
+				return value;
 
 			case STRING_ARRAY:
 				validateStringArraySetting(settingName, value);
-				return;
+				return value;
 
 			case STRING_MAP:
 				validateMapSetting(settingName, value, String.class);
-				return;
+				return value;
 
 			case BOOLEAN_MAP:
 				validateMapSetting(settingName, value, Boolean.class);
-				return;
+				return value;
+
+			case BITCOINY_SERVERS:
+				return validateBitcoinyServersSetting(settingName, value);
 
 			case PIRATE_CHAIN_NET:
 				if (!(value instanceof String))
 					throw new IllegalArgumentException("Setting must be a PirateChain network name: " + settingName);
 				PirateChainNet.valueOf((String) value);
-				return;
+				return value;
 
 			case STORAGE_POLICY:
 				if (!(value instanceof String))
 					throw new IllegalArgumentException("Setting must be a storage policy name: " + settingName);
 				StoragePolicy.valueOf((String) value);
-				return;
+				return value;
 
 			default:
 				throw new IllegalArgumentException("Unsupported writable setting type: " + writableSetting.type);
@@ -995,6 +1165,19 @@ public class Settings {
 			if (!(entry.getKey() instanceof String) || !valueClass.isInstance(entry.getValue()))
 				throw new IllegalArgumentException(String.format("Setting object must contain string keys and %s values only: %s",
 						valueClass.getSimpleName(), settingName));
+		}
+	}
+
+	private static Object validateBitcoinyServersSetting(String settingName, Object value) {
+		if (!(value instanceof Map<?, ?>))
+			throw new IllegalArgumentException("Setting must be an object: " + settingName);
+
+		try {
+			LinkedHashMap<String, LinkedHashMap<String, BitcoinyServerSettings>> parsed = SETTINGS_JSON_MAPPER.convertValue(value, BITCOINY_SERVERS_MAP_TYPE);
+			Map<String, Map<String, BitcoinyServerSettings>> normalised = normaliseBitcoinyServersMap(parsed);
+			return SETTINGS_JSON_MAPPER.convertValue(normalised, Object.class);
+		} catch (RuntimeException e) {
+			throw new IllegalArgumentException("Invalid bitcoinyServers setting: " + e.getMessage(), e);
 		}
 	}
 
@@ -1024,6 +1207,7 @@ public class Settings {
 
 	private void validate() {
 		normaliseBitcoinyNetworks();
+		normaliseBitcoinyServers();
 
 		// Validation goes here
 		if (this.minBlockchainPeers < 1 && !singleNodeTestnet)
@@ -1073,6 +1257,88 @@ public class Settings {
 		}
 
 		this.bitcoinyNetworks = normalisedNetworks;
+	}
+
+	private void normaliseBitcoinyServers() {
+		this.bitcoinyServers = normaliseBitcoinyServersMap(this.bitcoinyServers);
+	}
+
+	private static Map<String, Map<String, BitcoinyServerSettings>> normaliseBitcoinyServersMap(Map<String, ? extends Map<String, BitcoinyServerSettings>> serverSettings) {
+		Map<String, Map<String, BitcoinyServerSettings>> normalisedServers = new LinkedHashMap<>();
+		if (serverSettings == null)
+			return normalisedServers;
+
+		for (Map.Entry<String, ? extends Map<String, BitcoinyServerSettings>> coinEntry : serverSettings.entrySet()) {
+			if (coinEntry.getKey() == null)
+				continue;
+
+			String currencyCode = coinEntry.getKey().trim().toUpperCase(Locale.ROOT);
+			BitcoinyChainSpec spec = BitcoinyChainSpecs.fromCurrencyCode(currencyCode);
+			if (spec == null)
+				throwValidationError("Unsupported Bitcoiny server coin: " + coinEntry.getKey());
+
+			Map<String, BitcoinyServerSettings> normalisedNetworkServers = new LinkedHashMap<>();
+			Map<String, BitcoinyServerSettings> networkSettings = coinEntry.getValue();
+			if (networkSettings != null) {
+				for (Map.Entry<String, BitcoinyServerSettings> networkEntry : networkSettings.entrySet()) {
+					if (networkEntry.getKey() == null)
+						continue;
+
+					String networkName = networkEntry.getKey().trim().toUpperCase(Locale.ROOT);
+					if (spec.getNetwork(networkName) == null)
+						throwValidationError(String.format("Unsupported %s Bitcoiny server network: %s", currencyCode, networkEntry.getKey()));
+
+					normalisedNetworkServers.put(networkName, normaliseBitcoinyServerSettings(networkEntry.getValue()));
+				}
+			}
+
+			if (!normalisedNetworkServers.isEmpty())
+				normalisedServers.put(currencyCode, normalisedNetworkServers);
+		}
+
+		return normalisedServers;
+	}
+
+	private static BitcoinyServerSettings normaliseBitcoinyServerSettings(BitcoinyServerSettings settings) {
+		BitcoinyServerSettings normalisedSettings = new BitcoinyServerSettings();
+		if (settings == null)
+			return normalisedSettings;
+
+		normalisedSettings.setReplaceDefaults(settings.isReplaceDefaults());
+		normalisedSettings.setServers(normaliseBitcoinyServerList(settings.getServers()));
+		normalisedSettings.setDisabledServers(normaliseBitcoinyServerList(settings.getDisabledServers()));
+		return normalisedSettings;
+	}
+
+	private static List<BitcoinyServer> normaliseBitcoinyServerList(List<BitcoinyServer> servers) {
+		LinkedHashSet<BitcoinyServer> normalisedServers = new LinkedHashSet<>();
+		if (servers != null) {
+			for (BitcoinyServer server : servers)
+				normalisedServers.add(normaliseBitcoinyServer(server));
+		}
+
+		return new ArrayList<>(normalisedServers);
+	}
+
+	private static BitcoinyServer normaliseBitcoinyServer(BitcoinyServer server) {
+		if (server == null)
+			throwValidationError("Bitcoiny server entry must not be null");
+
+		String hostName = server.getHostName() == null ? null : server.getHostName().trim().toLowerCase(Locale.ROOT);
+		if (hostName == null || hostName.isEmpty())
+			throwValidationError("Bitcoiny server hostName is required");
+		if (hostName.endsWith(".onion"))
+			throwValidationError("Bitcoiny server hostName must not be an onion address: " + hostName);
+
+		int port = server.getPort();
+		if (port <= 0 || port > 65535)
+			throwValidationError("Bitcoiny server port must be between 1 and 65535: " + port);
+
+		String connectionType = server.getConnectionType() == null ? null : server.getConnectionType().trim().toUpperCase(Locale.ROOT);
+		if (!"SSL".equals(connectionType) && !"TCP".equals(connectionType))
+			throwValidationError("Bitcoiny server connectionType must be SSL or TCP");
+
+		return new BitcoinyServer(hostName, port, connectionType);
 	}
 
 	private void setAdditionalDefaults() {
@@ -1397,6 +1663,40 @@ public class Settings {
 			return BitcoinyChainSpecs.MAIN;
 
 		return this.bitcoinyNetworks.getOrDefault(normalisedCurrencyCode, BitcoinyChainSpecs.MAIN);
+	}
+
+	public Map<String, Map<String, BitcoinyServerSettings>> getBitcoinyServers() {
+		return copyBitcoinyServers(this.bitcoinyServers);
+	}
+
+	public BitcoinyServerSettings getBitcoinyServerSettings(String currencyCode, String networkName) {
+		if (currencyCode == null || networkName == null || this.bitcoinyServers == null)
+			return null;
+
+		Map<String, BitcoinyServerSettings> networkSettings = this.bitcoinyServers.get(currencyCode.trim().toUpperCase(Locale.ROOT));
+		if (networkSettings == null)
+			return null;
+
+		BitcoinyServerSettings settings = networkSettings.get(networkName.trim().toUpperCase(Locale.ROOT));
+		return settings == null ? null : new BitcoinyServerSettings(settings);
+	}
+
+	private static Map<String, Map<String, BitcoinyServerSettings>> copyBitcoinyServers(Map<String, Map<String, BitcoinyServerSettings>> bitcoinyServers) {
+		Map<String, Map<String, BitcoinyServerSettings>> copy = new LinkedHashMap<>();
+		if (bitcoinyServers == null)
+			return copy;
+
+		for (Map.Entry<String, Map<String, BitcoinyServerSettings>> coinEntry : bitcoinyServers.entrySet()) {
+			Map<String, BitcoinyServerSettings> networkCopy = new LinkedHashMap<>();
+			if (coinEntry.getValue() != null) {
+				for (Map.Entry<String, BitcoinyServerSettings> networkEntry : coinEntry.getValue().entrySet())
+					networkCopy.put(networkEntry.getKey(), new BitcoinyServerSettings(networkEntry.getValue()));
+			}
+
+			copy.put(coinEntry.getKey(), networkCopy);
+		}
+
+		return copy;
 	}
 
 	public PirateChainNet getPirateChainNet() {

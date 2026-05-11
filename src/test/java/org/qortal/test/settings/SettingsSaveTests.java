@@ -116,6 +116,97 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testBitcoinyServersAreSavedAndNormalised() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave("{\"bitcoinyServers\":{\"btc\":{\"main\":{\"servers\":["
+				+ "{\"hostName\":\" Custom.EXAMPLE.com \",\"port\":50002,\"connectionType\":\"ssl\"},"
+				+ "{\"hostName\":\"custom.example.com\",\"port\":50002,\"connectionType\":\"SSL\"}],"
+				+ "\"disabledServers\":[{\"hostName\":\"Disabled.EXAMPLE.com\",\"port\":50001,\"connectionType\":\"tcp\"}]}}}}");
+
+		assertTrue(result.saved);
+		assertTrue(result.updated.contains("bitcoinyServers"));
+		assertTrue(result.restartRequired.contains("bitcoinyServers"));
+
+		Settings.BitcoinyServerSettings serverSettings = Settings.getInstance().getBitcoinyServerSettings("BTC", "MAIN");
+		assertEquals(1, serverSettings.getServers().size());
+		assertEquals(new Settings.BitcoinyServer("custom.example.com", 50002, "SSL"), serverSettings.getServers().get(0));
+		assertEquals(1, serverSettings.getDisabledServers().size());
+		assertEquals(new Settings.BitcoinyServer("disabled.example.com", 50001, "TCP"), serverSettings.getDisabledServers().get(0));
+
+		Map<String, Object> savedSettings = readSettings(settingsPath);
+		Map<String, Object> savedBitcoinyServers = (Map<String, Object>) savedSettings.get("bitcoinyServers");
+		assertTrue(savedBitcoinyServers.containsKey("BTC"));
+	}
+
+	@Test
+	public void testInvalidBitcoinyServerCoinIsRejectedWithoutChangingFile() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
+
+		try {
+			Settings.updateAndSave("{\"bitcoinyServers\":{\"NOPE\":{\"MAIN\":{\"servers\":[]}}}}");
+			fail("Expected unsupported Bitcoiny server coin to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("Invalid bitcoinyServers setting"));
+		}
+
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+	}
+
+	@Test
+	public void testInvalidBitcoinyServerNetworkIsRejectedWithoutChangingFile() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
+
+		try {
+			Settings.updateAndSave("{\"bitcoinyServers\":{\"BTC\":{\"UNKNOWN\":{\"servers\":[]}}}}");
+			fail("Expected unsupported Bitcoiny server network to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("Invalid bitcoinyServers setting"));
+		}
+
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+	}
+
+	@Test
+	public void testInvalidBitcoinyServerFieldsAreRejectedWithoutChangingFile() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
+
+		try {
+			Settings.updateAndSave("{\"bitcoinyServers\":{\"BTC\":{\"MAIN\":{\"servers\":[{\"hostName\":\"bad.example.com\",\"port\":0,\"connectionType\":\"SSL\"}]}}}}");
+			fail("Expected invalid Bitcoiny server port to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("Invalid bitcoinyServers setting"));
+		}
+
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+
+		try {
+			Settings.updateAndSave("{\"bitcoinyServers\":{\"BTC\":{\"MAIN\":{\"servers\":[{\"hostName\":\"bad.example.com\",\"port\":50002,\"connectionType\":\"WS\"}]}}}}");
+			fail("Expected invalid Bitcoiny server connection type to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("Invalid bitcoinyServers setting"));
+		}
+
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+
+		try {
+			Settings.updateAndSave("{\"bitcoinyServers\":{\"BTC\":{\"MAIN\":{\"servers\":[{\"port\":50002,\"connectionType\":\"SSL\"}]}}}}");
+			fail("Expected missing Bitcoiny server host to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("Invalid bitcoinyServers setting"));
+		}
+
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+	}
+
+	@Test
 	public void testUserPathRedirectSavesFinalSettingsFile() throws Exception {
 		Path directory = Files.createTempDirectory("settings-save-test");
 		Path redirectDirectory = Files.createDirectory(directory.resolve("redirected"));

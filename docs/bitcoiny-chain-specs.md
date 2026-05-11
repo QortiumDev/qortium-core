@@ -60,6 +60,28 @@ Use `bitcoinyNetworks` in `settings.json` to choose the active network for BTC-l
 
 Missing entries default to `MAIN`. Supported network names are currently `MAIN`, `TEST3`, `TEST4`, and `REGTEST`, but each chain only advertises networks that have explicit params and usable server support. BTC keeps legacy `TEST3` available, but `TEST4` is the preferred Bitcoin test network for new test settings. BCH supports `TEST4` via `tbch4` servers while keeping `MAIN` as the default when no setting is supplied.
 
+Use `bitcoinyServers` to persist Electrum server overrides for a specific BTC-like coin and network:
+
+```json
+{
+  "bitcoinyServers": {
+    "BTC": {
+      "MAIN": {
+        "replaceDefaults": false,
+        "servers": [
+          {"hostName": "electrum.example.org", "port": 50002, "connectionType": "SSL"}
+        ],
+        "disabledServers": [
+          {"hostName": "bad.example.org", "port": 50002, "connectionType": "SSL"}
+        ]
+      }
+    }
+  }
+}
+```
+
+Generated Electrum server lists remain the default source. `servers` appends user-provided servers, `disabledServers` suppresses generated/default servers, and `replaceDefaults` makes the node use only the configured `servers` for that coin/network. SSL servers are still preferred whenever at least one SSL server is available after merging; TCP servers are only used when no SSL server remains.
+
 ## Adding A Coin
 
 Adding another BTC-like coin should start with a new `BitcoinyChainSpec` builder entry. The builder keeps the common mainnet, testnet, regtest, Electrum refresh, fee, and minimum-order wiring in one place, so a new coin entry should mostly supply chain metadata and any needed explicit hooks. New chains, and existing chains migrated away from inherited params classes, should use `StaticBitcoinyParams` instead of adding another coin-specific params class. The registry then feeds network resolution, runtime startup, supported-chain lookup, and the Electrum server refresh tool. Coin-specific behavior should be added to the spec as an explicit hook, as with Bitcoin's default spend fee override and Litecoin's P2SH address normalization.
