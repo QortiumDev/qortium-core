@@ -3,6 +3,7 @@ package org.qortal.controller.tradebot;
 import cash.z.wallet.sdk.rpc.CompactFormats.CompactBlock;
 import com.google.common.hash.HashCode;
 import com.google.common.primitives.Bytes;
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.bitcoinj.core.Coin;
 import org.bitcoinj.core.Context;
 import org.bitcoinj.core.ECKey;
@@ -11,8 +12,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.api.ApiError;
 import org.qortal.api.model.crosschain.TradeBotCreateRequest;
+import org.qortal.api.model.crosschain.TradeBotRespondRequest;
+import org.qortal.api.resource.CrossChainTradeBotResource;
 import org.qortal.asset.Asset;
+import org.qortal.controller.Controller;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyAddress;
@@ -40,15 +45,18 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.AccountUtils;
+import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
+import org.qortal.settings.Settings;
 import org.qortal.transaction.DeployAtTransaction;
 import org.qortal.transaction.MessageTransaction;
 import org.qortal.transaction.Transaction;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.Amounts;
+import org.qortal.utils.Base58;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,6 +75,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	private static final String MAKER_OFFERED_KEY = "maker-offered-xprv";
 	private static final String TAKER_REQUESTED_KEY = "taker-requested-xprv";
 	private static final String INVALID_KEY = "invalid-xprv";
+	private static final String VALID_TEST_XPRV = "tprv8ZgxMBicQKsPdahhFSrCdvC1bsWyzHHZfTneTVqUXN6s1wEtZLwAkZXzFP6TYLg2aQMecZLXLre5bTVGajEB55L1HYJcawpdFG66STVAWPJ";
 
 	private static final byte[] MAKER_OFFERED_RECEIVE_HASH = HashCode.fromString("aa00aa11aa22aa33aa44aa55aa66aa77aa88aa99").asBytes();
 	private static final byte[] MAKER_REQUESTED_RECEIVE_HASH = HashCode.fromString("bb00bb11bb22bb33bb44bb55bb66bb77bb88bb99").asBytes();
@@ -163,6 +172,59 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	}
 
 	@Test
+	public void testTradeBotDispatcherCreatesForeignForeignTrade() throws DataException, TransformationException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount creator = Common.getTestAccount(repository, "chloe");
+
+			byte[] unsignedDeployBytes = TradeBot.getInstance().createTrade(repository, createRequest(creator));
+			assertTrue(fromUnsignedBytes(unsignedDeployBytes) instanceof DeployAtTransactionData);
+
+			List<TradeBotData> allTradeBotData = repository.getCrossChainRepository().getAllTradeBotData();
+			assertEquals(1, allTradeBotData.size());
+			assertEquals(BitcoinyForeignForeignACCTv1.NAME, allTradeBotData.get(0).getAcctName());
+		}
+	}
+
+	@Test
+	public void testApiMakerCreateAcceptsForeignForeignRequest() throws Exception {
+		prepareApiNodeState();
+		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
+		PrivateKeyAccount creator = Common.getTestAccount(null, "chloe");
+
+		String encodedUnsignedDeploy = resource.tradeBotCreator(null, createApiRequest(creator));
+		assertTrue(fromUnsignedBytes(Base58.decode(encodedUnsignedDeploy)) instanceof DeployAtTransactionData);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			List<TradeBotData> allTradeBotData = repository.getCrossChainRepository().getAllTradeBotData();
+			assertEquals(1, allTradeBotData.size());
+
+			TradeBotData tradeBotData = allTradeBotData.get(0);
+			assertEquals(BitcoinyForeignForeignACCTv1.NAME, tradeBotData.getAcctName());
+			assertEquals(VALID_TEST_XPRV, tradeBotData.getOfferedForeignKey());
+			assertEquals("BITCOIN", tradeBotData.getOfferedForeignBlockchain());
+			assertEquals("LITECOIN", tradeBotData.getRequestedForeignBlockchain());
+		}
+	}
+
+	@Test
+	public void testApiMakerCreateRejectsInvalidForeignForeignCriteria() {
+		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
+		PrivateKeyAccount creator = Common.getTestAccount(null, "chloe");
+
+		TradeBotCreateRequest sameChain = createApiRequest(creator);
+		sameChain.requestedForeignBlockchain = "BITCOIN";
+		ApiCommon.assertApiError(ApiError.INVALID_CRITERIA, () -> resource.tradeBotCreator(null, sameChain));
+
+		TradeBotCreateRequest invalidKey = createApiRequest(creator);
+		invalidKey.offeredForeignKey = INVALID_KEY;
+		ApiCommon.assertApiError(ApiError.INVALID_PRIVATE_KEY, () -> resource.tradeBotCreator(null, invalidKey));
+
+		TradeBotCreateRequest fundedLocal = createApiRequest(creator);
+		fundedLocal.fundingLocalAmount = Amounts.MULTIPLIER;
+		ApiCommon.assertApiError(ApiError.ORDER_SIZE_TOO_SMALL, () -> resource.tradeBotCreator(null, fundedLocal));
+	}
+
+	@Test
 	public void testDirectMakerCreateRejectsInvalidCriteria() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount creator = Common.getTestAccount(repository, "chloe");
@@ -239,6 +301,57 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			assertEquals("LITECOIN", roundTripped.getRequestedForeignBlockchain());
 			assertArrayEquals(TAKER_REQUESTED_RECEIVE_HASH, roundTripped.getRequestedForeignReceivingAccountInfo());
 		}
+	}
+
+	@Test
+	public void testApiResponderAcceptsForeignForeignRequest() throws Exception {
+		String atAddress;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount makerTradeAccount = Common.getTestAccount(repository, "alice");
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, makerTradeAccount);
+			atAddress = deployAtTransaction.getATAccount().getAddress();
+		}
+
+		prepareApiNodeState();
+		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
+
+		TradeBotRespondRequest request = createApiRespondRequest(atAddress);
+		assertEquals("true", resource.tradeBotResponder(null, request));
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TradeBotData tradeBotData = getTakerTradeBotData(repository, atAddress);
+			assertEquals(BitcoinyForeignForeignACCTv1.NAME, tradeBotData.getAcctName());
+			assertEquals(TradeStates.State.TAKER_WAITING_FOR_FOREIGN_LOCK.name(), tradeBotData.getState());
+			assertEquals(VALID_TEST_XPRV, tradeBotData.getRequestedForeignKey());
+			assertArrayEquals(TAKER_OFFERED_RECEIVE_HASH, tradeBotData.getOfferedForeignReceivingAccountInfo());
+		}
+	}
+
+	@Test
+	public void testApiResponderRejectsInvalidForeignForeignCriteria() throws Exception {
+		String atAddress;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount makerTradeAccount = Common.getTestAccount(repository, "alice");
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, makerTradeAccount);
+			atAddress = deployAtTransaction.getATAccount().getAddress();
+		}
+
+		prepareApiNodeState();
+		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
+
+		TradeBotRespondRequest missingKey = createApiRespondRequest(atAddress);
+		missingKey.requestedForeignKey = null;
+		ApiCommon.assertApiError(ApiError.INVALID_PRIVATE_KEY, () -> resource.tradeBotResponder(null, missingKey));
+
+		TradeBotRespondRequest invalidAddress = createApiRespondRequest(atAddress);
+		invalidAddress.offeredForeignReceivingAddress = "not-a-valid-address";
+		ApiCommon.assertApiError(ApiError.INVALID_ADDRESS, () -> resource.tradeBotResponder(null, invalidAddress));
+
+		TradeBotRespondRequest splitFill = createApiRespondRequest(atAddress);
+		splitFill.fillLocalAmount = Amounts.MULTIPLIER;
+		ApiCommon.assertApiError(ApiError.INVALID_CRITERIA, () -> resource.tradeBotResponder(null, splitFill));
 	}
 
 	@Test
@@ -956,6 +1069,30 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		return request;
 	}
 
+	private static TradeBotCreateRequest createApiRequest(PrivateKeyAccount creator) {
+		TradeBotCreateRequest request = createRequest(creator);
+		request.offeredForeignKey = VALID_TEST_XPRV;
+		return request;
+	}
+
+	private static TradeBotRespondRequest createApiRespondRequest(String atAddress) {
+		TradeBotRespondRequest request = new TradeBotRespondRequest();
+		request.atAddress = atAddress;
+		request.requestedForeignKey = VALID_TEST_XPRV;
+		request.offeredForeignReceivingAddress = bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH);
+		return request;
+	}
+
+	private static void prepareApiNodeState() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "singleNodeTestnet", true, true);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			BlockUtils.mintBlock(repository);
+		}
+
+		Controller.getInstance().refillLatestBlocksCache();
+	}
+
 	private static DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, PrivateKeyAccount tradeAccount)
 			throws DataException {
 		ForeignBlockchainRegistry.Entry bitcoin = ForeignBlockchainRegistry.fromString("BITCOIN");
@@ -1119,8 +1256,10 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	}
 
 	private void installMockBitcoinys() {
-		this.bitcoin = new MockBitcoiny(bitcoinyParams("BITCOIN"), "BTC", MAKER_OFFERED_RECEIVE_HASH, MAKER_OFFERED_KEY);
-		this.litecoin = new MockBitcoiny(bitcoinyParams("LITECOIN"), "LTC", TAKER_REQUESTED_RECEIVE_HASH, TAKER_REQUESTED_KEY);
+		this.bitcoin = new MockBitcoiny(bitcoinyParams("BITCOIN"), "BTC", MAKER_OFFERED_RECEIVE_HASH,
+				MAKER_OFFERED_KEY, VALID_TEST_XPRV);
+		this.litecoin = new MockBitcoiny(bitcoinyParams("LITECOIN"), "LTC", TAKER_REQUESTED_RECEIVE_HASH,
+				TAKER_REQUESTED_KEY, VALID_TEST_XPRV);
 
 		BitcoinyForeignForeignTradeBot.getInstance().setBitcoinyResolverForTesting(blockchain -> {
 			ForeignBlockchainRegistry.Entry entry = ForeignBlockchainRegistry.fromString(blockchain);

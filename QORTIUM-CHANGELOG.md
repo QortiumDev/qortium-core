@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - crosschain: enable foreign-foreign tradebot API
+
+Registered the foreign/foreign ACCT and trade-bot path so single-fill BTC-like foreign/foreign offers can be created and reserved through the public trade-bot API. Maker create now builds the unsigned coordination AT deployment without local-asset funding, taker respond now submits the reservation message from the generated trade key, and offer discovery can show foreign/foreign offers under either participating blockchain while keeping them out of local-asset filters and price estimates. Tests cover registry lookup, dispatcher routing, API create/respond validation, and offer filtering.
+
 ### 2026-05-10 - crosschain: submit foreign-foreign taker reservations from tradebot
 
 Changed the internal foreign/foreign taker reservation path so the trade-bot submits the reservation MESSAGE using its generated taker trade key instead of returning an unsigned transaction for an external signer. Taker trade-bot state is now persisted only after the reservation message is accepted, matching the later autonomous AT messages that must use the same generated key. Tests cover successful reservation submission, rejected-message cleanup, and unchanged invalid-criteria handling while the public API route remains disabled.

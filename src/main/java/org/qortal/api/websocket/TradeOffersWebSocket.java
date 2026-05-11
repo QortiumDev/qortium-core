@@ -12,6 +12,7 @@ import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
+import org.qortal.crosschain.TradeDirection;
 import org.qortal.data.at.ATStateData;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.crosschain.CrossChainTradeData;
@@ -265,7 +266,8 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 			return crossChainOfferSummaries;
 
 		return crossChainOfferSummaries.stream()
-				.filter(offerSummary -> offerSummary.getLocalAssetId() == localAssetId)
+				.filter(offerSummary -> offerSummary.getTradeDirection() != TradeDirection.SELL_FOREIGN_FOR_FOREIGN
+						&& offerSummary.getLocalAssetId() == localAssetId)
 				.collect(Collectors.toList());
 	}
 
@@ -327,7 +329,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 					CrossChainOfferSummary historicOfferSummary = produceSummary(repository, acct, historicAtState, null, null);
 					if (historicOfferSummary == null)
 						continue;
-					if (!blockchain.name().equals(historicOfferSummary.getForeignBlockchain()))
+					if (!matchesBlockchain(historicOfferSummary, blockchain))
 						continue;
 					if (!isHistoric.test(historicOfferSummary))
 						continue;
@@ -368,7 +370,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 			CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
 			if (crossChainTradeData == null)
 				continue;
-			if (blockchain != null && !blockchain.name().equals(crossChainTradeData.foreignBlockchain))
+			if (!matchesBlockchain(crossChainTradeData, blockchain))
 				continue;
 
 			crossChainTrades.add(crossChainTradeData);
@@ -389,5 +391,31 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		}
 
 		return offerSummaries;
+	}
+
+	private static boolean matchesBlockchain(CrossChainTradeData crossChainTradeData, ForeignBlockchainRegistry.Entry blockchain) {
+		if (crossChainTradeData == null)
+			return false;
+
+		if (blockchain == null)
+			return true;
+
+		String blockchainName = blockchain.name();
+		return blockchainName.equals(crossChainTradeData.foreignBlockchain)
+				|| blockchainName.equals(crossChainTradeData.offeredForeignBlockchain)
+				|| blockchainName.equals(crossChainTradeData.requestedForeignBlockchain);
+	}
+
+	private static boolean matchesBlockchain(CrossChainOfferSummary offerSummary, ForeignBlockchainRegistry.Entry blockchain) {
+		if (offerSummary == null)
+			return false;
+
+		if (blockchain == null)
+			return true;
+
+		String blockchainName = blockchain.name();
+		return blockchainName.equals(offerSummary.getForeignBlockchain())
+				|| blockchainName.equals(offerSummary.getOfferedForeignBlockchain())
+				|| blockchainName.equals(offerSummary.getRequestedForeignBlockchain());
 	}
 }

@@ -62,21 +62,22 @@ trade logic already used by `BitcoinyACCTv5`.
 
 ## Current foundation
 
-Foreign/foreign trades are represented as `SELL_FOREIGN_FOR_FOREIGN` but remain
-inactive for users. The API/data model can carry separate offered and requested
-foreign blockchains, amounts, and public-key-hash roles. The inactive
-`BitcoinyForeignForeignACCTv1` now implements the local coordination state
-machine for reservation, maker HTLC declaration, taker HTLC declaration, secret
-reveal, and cancellation. It is intentionally not registered for ACCT lookup,
-and the public tradebot API still rejects this direction until the trade-bot can
-verify and drive the full foreign-chain HTLC flow.
+Foreign/foreign trades are represented as `SELL_FOREIGN_FOR_FOREIGN`. The
+API/data model carries separate offered and requested foreign blockchains,
+amounts, wallet keys, receiving addresses, and public-key-hash roles.
+`BitcoinyForeignForeignACCTv1` is now registered for ACCT lookup, offer
+discovery, and trade-bot dispatch.
 
-The direct internal `BitcoinyForeignForeignTradeBot` path can now build maker
-DEPLOY_AT transactions and submit taker reservation MESSAGE transactions from
-the generated taker trade key. Those paths validate supported BTC-like chain
-pairs, positive amounts, minimum timeout, maker/taker wallet keys, and P2PKH
-receiving addresses, then persist trade-bot state with separate
-offered/requested chain fields only after the reservation message is accepted.
+The public trade-bot API can now build single-fill maker DEPLOY_AT transactions
+and submit taker reservation MESSAGE transactions for supported BTC-like chain
+pairs. Those paths validate distinct supported chains, positive amounts, minimum
+timeout, maker/taker wallet keys, no local-asset funding, and P2PKH receiving
+addresses, then persist trade-bot state with separate offered/requested chain
+fields only after the maker create or taker reservation succeeds.
+Foreign/foreign offers appear in all-offer views and match either the offered
+or requested blockchain filter, but they are excluded from local-asset filters
+and local/foreign price estimates.
+
 The internal maker-side progress path now waits for AT confirmation,
 accepts a taker reservation, funds the maker offered-chain HTLC, and declares the
 maker locktime to the coordination AT. The internal taker-side progress path can
@@ -109,7 +110,7 @@ back to Qortium.
 
 ## Out of scope for the first pass
 
-- split fills
+- split fills and multiple-response batching for foreign/foreign offers
 - ARRR/HUSH/Zcash-family native shielded swaps
 - Monero swaps
 - direct peer negotiation without Qortium offer coordination

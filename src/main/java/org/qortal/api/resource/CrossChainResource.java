@@ -28,6 +28,7 @@ import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
+import org.qortal.crosschain.TradeDirection;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.at.ATData;
 import org.qortal.data.at.ATStateData;
@@ -706,6 +707,8 @@ public class CrossChainResource {
 					CrossChainTradeData crossChainTradeData = acct.populateTradeData(repository, atState);
 					if (!matchesForeignBlockchain(crossChainTradeData, foreignBlockchainEntry) || !matchesLocalAsset(crossChainTradeData, priceLocalAssetId))
 						continue;
+					if (crossChainTradeData.tradeDirection == TradeDirection.SELL_FOREIGN_FOR_FOREIGN)
+						continue;
 
 					reverseSortedTradeData.put(timestamp, crossChainTradeData);
 				}
@@ -977,11 +980,27 @@ public class CrossChainResource {
 	}
 
 	private static boolean matchesForeignBlockchain(CrossChainTradeData crossChainTradeData, ForeignBlockchainRegistry.Entry foreignBlockchain) {
-		return crossChainTradeData != null && (foreignBlockchain == null || foreignBlockchain.name().equals(crossChainTradeData.foreignBlockchain));
+		if (crossChainTradeData == null)
+			return false;
+
+		if (foreignBlockchain == null)
+			return true;
+
+		String blockchainName = foreignBlockchain.name();
+		return blockchainName.equals(crossChainTradeData.foreignBlockchain)
+				|| blockchainName.equals(crossChainTradeData.offeredForeignBlockchain)
+				|| blockchainName.equals(crossChainTradeData.requestedForeignBlockchain);
 	}
 
 	private static boolean matchesLocalAsset(CrossChainTradeData crossChainTradeData, Long localAssetId) {
-		return crossChainTradeData != null && (localAssetId == null || crossChainTradeData.localAssetId == localAssetId);
+		if (crossChainTradeData == null)
+			return false;
+
+		if (localAssetId == null)
+			return true;
+
+		return crossChainTradeData.tradeDirection != TradeDirection.SELL_FOREIGN_FOR_FOREIGN
+				&& crossChainTradeData.localAssetId == localAssetId;
 	}
 
 	private static boolean needsPostFilterPaging(ForeignBlockchainRegistry.Entry foreignBlockchain) {

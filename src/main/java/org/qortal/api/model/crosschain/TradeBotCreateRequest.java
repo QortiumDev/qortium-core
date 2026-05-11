@@ -70,10 +70,10 @@ public class TradeBotCreateRequest {
 	@Schema(description = "Maker's foreign blockchain private key, required when tradeDirection is SELL_FOREIGN")
 	public String foreignKey;
 
-	@Schema(description = "Maker's offered foreign blockchain private key, required later for SELL_FOREIGN_FOR_FOREIGN offers")
+	@Schema(description = "Maker's offered foreign blockchain private key, required for SELL_FOREIGN_FOR_FOREIGN offers")
 	public String offeredForeignKey;
 
-	@Schema(description = "Maker's requested foreign blockchain receiving address, required later for SELL_FOREIGN_FOR_FOREIGN offers")
+	@Schema(description = "Maker's requested foreign blockchain receiving address, required for SELL_FOREIGN_FOR_FOREIGN offers")
 	public String requestedForeignReceivingAddress;
 
 	public TradeBotCreateRequest() {

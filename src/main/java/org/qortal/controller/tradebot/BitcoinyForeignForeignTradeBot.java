@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 
 public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 
-	static final int MIN_FOREIGN_FOREIGN_TRADE_TIMEOUT_MINUTES = 120;
+	public static final int MIN_FOREIGN_FOREIGN_TRADE_TIMEOUT_MINUTES = 120;
 	static final int FOREIGN_LOCKTIME_SAFETY_MARGIN_MINUTES = BitcoinyForeignForeignACCTv1.REFUND_LOCKTIME_SAFETY_MARGIN_MINUTES;
 	static final int RESERVATION_TIMEOUT_MINUTES = 30;
 	private static final long RESERVATION_TIMEOUT = RESERVATION_TIMEOUT_MINUTES * 60L * 1000L;
@@ -120,11 +120,18 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 			throw new DataException(String.format("Foreign/foreign trade timeout must be at least %d minutes",
 					MIN_FOREIGN_FOREIGN_TRADE_TIMEOUT_MINUTES));
 
+		if (tradeBotCreateRequest.localAmount != 0 || tradeBotCreateRequest.fundingLocalAmount != 0)
+			throw new DataException("Foreign/foreign trades cannot include local asset amounts");
+
 		if (tradeBotCreateRequest.nativeFeeReserve < 0)
 			throw new DataException("Native fee reserve cannot be negative");
 
 		Bitcoiny offeredBitcoiny = getBitcoiny(offeredForeignBlockchain);
 		Bitcoiny requestedBitcoiny = getBitcoiny(requestedForeignBlockchain);
+
+		if (tradeBotCreateRequest.offeredForeignAmount < offeredBitcoiny.getMinimumOrderAmount()
+				|| tradeBotCreateRequest.requestedForeignAmount < requestedBitcoiny.getMinimumOrderAmount())
+			throw new DataException("Foreign/foreign trade amounts are below minimum order size");
 
 		if (!offeredBitcoiny.isValidWalletKey(tradeBotCreateRequest.offeredForeignKey))
 			throw new DataException("Invalid offered foreign wallet key");

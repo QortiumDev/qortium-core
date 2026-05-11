@@ -6,11 +6,9 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.model.CrossChainOfferSummary;
 import org.qortal.api.model.CrossChainTradeSummary;
-import org.qortal.api.model.crosschain.TradeBotCreateRequest;
+import org.qortal.api.resource.CrossChainResource;
 import org.qortal.asset.Asset;
-import org.qortal.controller.tradebot.AcctTradeBot;
 import org.qortal.controller.tradebot.BitcoinyForeignForeignTradeBot;
-import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.BitcoinyForeignForeignACCTv1;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
@@ -28,6 +26,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.AssetUtils;
+import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
@@ -39,6 +38,7 @@ import org.qortal.utils.BitTwiddling;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.Assert.*;
 
@@ -131,6 +131,27 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 			assertEquals("LITECOIN", tradeSummary.getRequestedForeignBlockchain());
 			assertEquals(REQUESTED_FOREIGN_AMOUNT, tradeSummary.getRequestedForeignAmount());
 		}
+	}
+
+	@Test
+	public void testTradeOfferFilteringMatchesEitherForeignChain() throws DataException {
+		String atAddress;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress());
+			atAddress = deployAtTransaction.getATAccount().getAddress();
+		}
+
+		CrossChainResource resource = (CrossChainResource) ApiCommon.buildResource(CrossChainResource.class);
+		List<CrossChainTradeData> bitcoinOffers = resource.getTradeOffers("BITCOIN", null, null, null, null);
+		List<CrossChainTradeData> litecoinOffers = resource.getTradeOffers("LITECOIN", null, null, null, null);
+		List<CrossChainTradeData> nativeFilteredOffers = resource.getTradeOffers("BITCOIN", Asset.NATIVE, null, null, null);
+
+		assertTrue(bitcoinOffers.stream().anyMatch(tradeData -> atAddress.equals(tradeData.atAddress)));
+		assertTrue(litecoinOffers.stream().anyMatch(tradeData -> atAddress.equals(tradeData.atAddress)));
+		assertFalse(nativeFilteredOffers.stream().anyMatch(tradeData -> atAddress.equals(tradeData.atAddress)));
 	}
 
 	@Test
@@ -310,27 +331,13 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 	}
 
 	@Test
-	public void testAcctIsNotRegisteredOrUserRoutable() throws DataException {
-		assertNull(ForeignBlockchainRegistry.getAcctByName(BitcoinyForeignForeignACCTv1.NAME));
-		assertNull(ForeignBlockchainRegistry.getAcctByCodeHash(BitcoinyForeignForeignACCTv1.CODE_BYTES_HASH));
-
-		BitcoinyForeignForeignTradeBot tradeBot = BitcoinyForeignForeignTradeBot.getInstance();
-		assertEquals(AcctTradeBot.ResponseResult.INVALID_CRITERIA,
-				((AcctTradeBot) tradeBot).startResponse(null, null, null, null, null, null));
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			TradeBotCreateRequest request = new TradeBotCreateRequest();
-			request.creatorPublicKey = Common.getTestAccount(repository, "alice").getPublicKey();
-			request.tradeDirection = TradeDirection.SELL_FOREIGN_FOR_FOREIGN;
-			request.offeredForeignBlockchain = "BITCOIN";
-			request.offeredForeignAmount = OFFERED_FOREIGN_AMOUNT;
-			request.requestedForeignBlockchain = "LITECOIN";
-			request.requestedForeignAmount = REQUESTED_FOREIGN_AMOUNT;
-			request.tradeTimeout = TRADE_TIMEOUT;
-
-			assertNull(TradeBot.getInstance().createTrade(repository, request));
-			assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
-		}
+	public void testAcctIsRegisteredAndUserRoutable() {
+		assertSame(BitcoinyForeignForeignACCTv1.getInstance(),
+				ForeignBlockchainRegistry.getAcctByName(BitcoinyForeignForeignACCTv1.NAME));
+		assertSame(BitcoinyForeignForeignACCTv1.getInstance(),
+				ForeignBlockchainRegistry.getAcctByCodeHash(BitcoinyForeignForeignACCTv1.CODE_BYTES_HASH));
+		assertSame(BitcoinyForeignForeignTradeBot.getInstance(),
+				ForeignBlockchainRegistry.getTradeBotForAcct(BitcoinyForeignForeignACCTv1.getInstance()));
 	}
 
 	private void assertCancelledAfter(Repository repository, PrivateKeyAccount deployer, PrivateKeyAccount tradeAccount,

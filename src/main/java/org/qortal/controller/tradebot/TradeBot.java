@@ -187,17 +187,19 @@ public class TradeBot implements Listener {
 	 * @throws DataException
 	 */
 	public byte[] createTrade(Repository repository, TradeBotCreateRequest tradeBotCreateRequest) throws DataException {
-		if (tradeBotCreateRequest.getTradeDirection() == TradeDirection.SELL_FOREIGN_FOR_FOREIGN)
-			return null;
+		// Fetch ACCT version for requested trade direction
+		ACCT acct;
+		if (tradeBotCreateRequest.getTradeDirection() == TradeDirection.SELL_FOREIGN_FOR_FOREIGN) {
+			acct = BitcoinyForeignForeignACCTv1.getInstance();
+		} else {
+			ForeignBlockchainRegistry.Entry foreignBlockchain = tradeBotCreateRequest.resolveForeignBlockchain();
+			if (foreignBlockchain == null)
+				throw new DataException("Unsupported foreign blockchain");
 
-		// Fetch latest ACCT version for requested foreign blockchain
-		ForeignBlockchainRegistry.Entry foreignBlockchain = tradeBotCreateRequest.resolveForeignBlockchain();
-		if (foreignBlockchain == null)
-			throw new DataException("Unsupported foreign blockchain");
-
-		ACCT acct = tradeBotCreateRequest.getTradeDirection() == TradeDirection.SELL_FOREIGN
-				? BitcoinyACCTv5.getInstance()
-				: foreignBlockchain.getLatestAcct();
+			acct = tradeBotCreateRequest.getTradeDirection() == TradeDirection.SELL_FOREIGN
+					? BitcoinyACCTv5.getInstance()
+					: foreignBlockchain.getLatestAcct();
+		}
 
 		AcctTradeBot acctTradeBot = findTradeBotForAcct(acct);
 		if (acctTradeBot == null)
