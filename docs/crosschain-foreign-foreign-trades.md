@@ -92,7 +92,12 @@ offered-chain HTLC, and finish the taker entry. If the maker has declared an
 offered-chain HTLC but the taker never reaches the requested-chain HTLC stage,
 the maker bot now waits until the offered-chain refund locktime is usable,
 submits or recognizes the offered-chain refund, cancels the coordination AT, and
-only then marks the maker entry refunded. Trade-bot persistence can store
+only then marks the maker entry refunded. If the taker declares a requested-chain
+HTLC but the maker never redeems it or reveals the secret, the coordination AT
+now times out of `TRADING` as refunded, and the taker bot waits until the
+requested-chain refund locktime is usable before submitting or recognizing the
+requested-chain refund and marking the taker entry refunded. Trade-bot
+persistence can store
 separate offered/requested foreign-chain wallet data, amounts, locktimes, and
 receiving account info, and the shared Bitcoiny HTLC helper can build scripts
 from explicit refund/redeem roles instead of only from local/foreign trade data.

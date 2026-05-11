@@ -58,6 +58,7 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 	private static final int TAKER_LOCK_TIME = MAKER_LOCK_TIME - BitcoinyForeignForeignACCTv1.REFUND_LOCKTIME_SAFETY_MARGIN_MINUTES * 60 - 1;
 	private static final int UNSAFE_TAKER_LOCK_TIME = MAKER_LOCK_TIME - BitcoinyForeignForeignACCTv1.REFUND_LOCKTIME_SAFETY_MARGIN_MINUTES * 60;
 	private static final int TRADE_TIMEOUT = 120;
+	private static final int SHORT_TRADE_TIMEOUT = BitcoinyForeignForeignACCTv1.REFUND_LOCKTIME_SAFETY_MARGIN_MINUTES + 5;
 
 	@Before
 	public void beforeTest() throws DataException {
@@ -164,6 +165,7 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 			tradeData = getTradeData(repository, atAddress);
 			assertEquals(AcctMode.TRADING, tradeData.mode);
 			assertEquals(Integer.valueOf(TAKER_LOCK_TIME), tradeData.lockTimeB);
+			assertNotNull(tradeData.tradeRefundHeight);
 
 			revealSecret(repository, tradeAccount, atAddress, WRONG_SECRET_A);
 			tradeData = getTradeData(repository, atAddress);
@@ -181,6 +183,42 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 			assertTrue(atData.getIsFinished());
 			assertEquals(AcctMode.REDEEMED, tradeData.mode);
 			assertArrayEquals(SECRET_A, BitcoinyForeignForeignACCTv1.getInstance().findSecretA(repository, tradeData));
+		}
+	}
+
+	@Test
+	public void testTradingTimeoutFinishesAsRefundedWithoutSecret() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount tradeAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount taker = Common.getTestAccount(repository, "dilbert");
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, tradeAccount.getAddress(), SHORT_TRADE_TIMEOUT);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+
+			reserveTrade(repository, taker, atAddress);
+			declareMakerHtlc(repository, tradeAccount, atAddress, MAKER_LOCK_TIME);
+			declareTakerHtlc(repository, taker, atAddress, TAKER_LOCK_TIME);
+
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+			assertFalse(atData.getIsFinished());
+			assertEquals(AcctMode.TRADING, tradeData.mode);
+			assertNotNull(tradeData.tradeRefundHeight);
+
+			BlockUtils.mintBlock(repository);
+			atData = repository.getATRepository().fromATAddress(atAddress);
+			tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+			assertFalse(atData.getIsFinished());
+			assertEquals(AcctMode.TRADING, tradeData.mode);
+
+			BlockUtils.mintBlocks(repository, SHORT_TRADE_TIMEOUT - BitcoinyForeignForeignACCTv1.REFUND_LOCKTIME_SAFETY_MARGIN_MINUTES + 2);
+
+			atData = repository.getATRepository().fromATAddress(atAddress);
+			tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+			assertTrue(atData.getIsFinished());
+			assertEquals(AcctMode.REFUNDED, tradeData.mode);
+			assertNull(BitcoinyForeignForeignACCTv1.getInstance().findSecretA(repository, tradeData));
 		}
 	}
 
@@ -317,11 +355,16 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 	}
 
 	private static DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress) throws DataException {
+		return deploy(repository, deployer, tradeAddress, TRADE_TIMEOUT);
+	}
+
+	private static DeployAtTransaction deploy(Repository repository, PrivateKeyAccount deployer, String tradeAddress, int tradeTimeout)
+			throws DataException {
 		ForeignBlockchainRegistry.Entry bitcoin = ForeignBlockchainRegistry.fromString("BITCOIN");
 		ForeignBlockchainRegistry.Entry litecoin = ForeignBlockchainRegistry.fromString("LITECOIN");
 		byte[] creationBytes = BitcoinyForeignForeignACCTv1.buildTradeAT(bitcoin, litecoin, tradeAddress,
 				MAKER_OFFERED_FOREIGN_PUBLIC_KEY_HASH, MAKER_REQUESTED_FOREIGN_PUBLIC_KEY_HASH, HASH_OF_SECRET_A,
-				OFFERED_FOREIGN_AMOUNT, REQUESTED_FOREIGN_AMOUNT, TRADE_TIMEOUT);
+				OFFERED_FOREIGN_AMOUNT, REQUESTED_FOREIGN_AMOUNT, tradeTimeout);
 
 		long txTimestamp = TransactionUtils.nextTimestamp(repository);
 		BaseTransactionData baseTransactionData = new BaseTransactionData(txTimestamp, Group.NO_GROUP, deployer.getPublicKey(), null, null);

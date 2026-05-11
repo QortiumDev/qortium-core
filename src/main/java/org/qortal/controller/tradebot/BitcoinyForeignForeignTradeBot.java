@@ -220,15 +220,17 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 				"requested refund");
 
 		byte[] tradePrivateKey = TradeBot.generateTradePrivateKey();
+		byte[] tradeLocalPublicKey = TradeBot.deriveTradeLocalPublicKey(tradePrivateKey);
+		byte[] tradeLocalPublicKeyHash = Crypto.hash160(tradeLocalPublicKey);
+		String tradeLocalAddress = Crypto.toAddress(tradeLocalPublicKey);
 		byte[] tradeForeignPublicKey = TradeBot.deriveTradeForeignPublicKey(tradePrivateKey);
 		byte[] tradeForeignPublicKeyHash = Crypto.hash160(tradeForeignPublicKey);
-		String tradeLocalAddress = Crypto.toAddress(responderPublicKey);
 
 		long now = NTP.getTime();
 		TradeBotData tradeBotData = new TradeBotData(tradePrivateKey, BitcoinyForeignForeignACCTv1.NAME,
 				TradeStates.State.TAKER_WAITING_FOR_FOREIGN_LOCK.name(), TradeStates.State.TAKER_WAITING_FOR_FOREIGN_LOCK.value,
 				tradeLocalAddress, tradeData.atAddress, now, Asset.NATIVE, 0L,
-				responderPublicKey, Crypto.hash160(responderPublicKey), tradeLocalAddress,
+				tradeLocalPublicKey, tradeLocalPublicKeyHash, tradeLocalAddress,
 				null, tradeData.hashOfSecretA, requestedForeignBlockchain.name(), tradeForeignPublicKey, tradeForeignPublicKeyHash,
 				tradeData.requestedForeignAmount, requestedForeignKey, null, null, offeredReceivingAddress.getPayload());
 		populateForeignForeignFields(tradeBotData, offeredForeignBlockchain, requestedForeignBlockchain,
@@ -242,7 +244,7 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 		TradeBot.backupTradeBotData(repository, Arrays.asList(tradeBotData));
 
 		byte[] messageData = BitcoinyForeignForeignACCTv1.buildReserveMessage(tradeForeignPublicKeyHash, tradeForeignPublicKeyHash);
-		return buildUnsignedMessageTransaction(repository, responderPublicKey, tradeData.atAddress, messageData);
+		return buildUnsignedMessageTransaction(repository, tradeLocalPublicKey, tradeData.atAddress, messageData);
 	}
 
 	@Override
@@ -499,6 +501,13 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 			return;
 		}
 
+		if (refundTakerRequestedHtlcIfExpired(tradeBotData, tradeData)) {
+			TradeBot.updateTradeBotState(repository, tradeBotData, TradeStates.State.TAKER_REFUNDED,
+					() -> String.format("Refunded foreign/foreign requested-chain P2SH for AT %s",
+							tradeBotData.getAtAddress()));
+			return;
+		}
+
 		if (atData.getIsFinished() && tradeData.mode != AcctMode.REDEEMED)
 			updateTakerFinishedState(repository, tradeBotData, tradeData);
 	}
@@ -519,9 +528,17 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 	}
 
 	private void updateTakerFinishedState(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData)
-			throws DataException {
-		TradeBot.updateTradeBotState(repository, tradeBotData,
-				tradeData.mode == AcctMode.REDEEMED ? TradeStates.State.TAKER_DONE : TradeStates.State.TAKER_REFUNDED,
+			throws DataException, ForeignBlockchainException {
+		if (tradeData.mode == AcctMode.REDEEMED) {
+			TradeBot.updateTradeBotState(repository, tradeBotData, TradeStates.State.TAKER_DONE,
+					() -> String.format("Foreign/foreign AT %s finished", tradeBotData.getAtAddress()));
+			return;
+		}
+
+		if (!refundTakerRequestedHtlcIfExpired(tradeBotData, tradeData))
+			return;
+
+		TradeBot.updateTradeBotState(repository, tradeBotData, TradeStates.State.TAKER_REFUNDED,
 				() -> String.format("Foreign/foreign AT %s finished", tradeBotData.getAtAddress()));
 	}
 
@@ -642,6 +659,24 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 				offeredMinimumAmount, tradeData.offeredForeignAmount, tradeBotData.getTradePrivateKey(),
 				buildMakerOfferedRedeemScript(tradeData), lockTimeA,
 				tradeBotData.getOfferedForeignReceivingAccountInfo());
+	}
+
+	private boolean refundTakerRequestedHtlcIfExpired(TradeBotData tradeBotData, CrossChainTradeData tradeData)
+			throws DataException, ForeignBlockchainException {
+		Integer lockTimeB = tradeData.lockTimeB != null ? tradeData.lockTimeB : tradeBotData.getLockTimeB();
+		if (lockTimeB == null || tradeData.partnerRequestedForeignPKH == null)
+			return true;
+
+		tradeData.lockTimeB = lockTimeB;
+
+		Bitcoiny requestedBitcoiny = getBitcoiny(requireBitcoinyEntry(tradeData.requestedForeignBlockchain,
+				"requestedForeignBlockchain"));
+		String requestedP2shAddress = deriveTakerRequestedP2shAddress(requestedBitcoiny, tradeData);
+		long requestedMinimumAmount = BitcoinyHtlcTradeSupport.minimumHtlcAmount(requestedBitcoiny, tradeData.requestedForeignAmount);
+		return this.htlcTradeSupport.refundIfExpired(requestedBitcoiny, requestedP2shAddress,
+				requestedMinimumAmount, tradeData.requestedForeignAmount, tradeBotData.getTradePrivateKey(),
+				buildTakerRequestedRedeemScript(tradeData), lockTimeB,
+				tradeBotData.getRequestedForeignReceivingAccountInfo());
 	}
 
 	private int ensureMakerLockTime(Repository repository, TradeBotData tradeBotData, CrossChainTradeData tradeData)

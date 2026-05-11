@@ -7,6 +7,7 @@ import org.ciyam.at.CompilationException;
 import org.ciyam.at.FunctionCode;
 import org.ciyam.at.MachineState;
 import org.ciyam.at.OpCode;
+import org.ciyam.at.Timestamp;
 import org.qortal.account.Account;
 import org.qortal.api.resource.CrossChainUtils;
 import org.qortal.at.ChainFunctionCode;
@@ -30,7 +31,7 @@ import static org.ciyam.at.OpCode.calcOffset;
 public class BitcoinyForeignForeignACCTv1 implements ACCT {
 
 	public static final String NAME = BitcoinyForeignForeignACCTv1.class.getSimpleName();
-	public static final byte[] CODE_BYTES_HASH = HashCode.fromString("2562939f1a1fb41f4d30a13b11b3ff1893ac7360d2528fe037836ca6d168ad8b").asBytes();
+	public static final byte[] CODE_BYTES_HASH = HashCode.fromString("6dc141b66fc86093b46179748769c5b5fbc53840083088870d04fef204ace3d6").asBytes();
 
 	public static final int SECRET_LENGTH = 32;
 	public static final int PUBLIC_KEY_HASH_LENGTH = 20;
@@ -85,6 +86,8 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 		requirePositive(offeredForeignAmount, "offered foreign amount");
 		requirePositive(requestedForeignAmount, "requested foreign amount");
 		requirePositive(tradeTimeout, "trade timeout");
+		if (tradeTimeout <= REFUND_LOCKTIME_SAFETY_MARGIN_MINUTES)
+			throw new IllegalArgumentException("trade timeout must be greater than refund locktime safety margin");
 
 		ByteBuffer dataByteBuffer = ByteBuffer.allocate(LAYOUT.valueCount * MachineState.VALUE_SIZE);
 
@@ -96,6 +99,7 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 		putLong(dataByteBuffer, LAYOUT.addrRequestedForeignAmount, requestedForeignAmount);
 		putLong(dataByteBuffer, LAYOUT.addrTradeTimeout, tradeTimeout);
 		putLong(dataByteBuffer, LAYOUT.addrLocktimeSafetyMarginSeconds, REFUND_LOCKTIME_SAFETY_MARGIN_MINUTES * 60L);
+		putLong(dataByteBuffer, LAYOUT.addrTakerRefundTimeoutMinutes, tradeTimeout - REFUND_LOCKTIME_SAFETY_MARGIN_MINUTES);
 		putLong(dataByteBuffer, LAYOUT.addrMessageTxnType, API.ATTransactionType.MESSAGE.value);
 		putLong(dataByteBuffer, LAYOUT.addrExpectedReserveMessageLength, RESERVE_MESSAGE_LENGTH);
 		putLong(dataByteBuffer, LAYOUT.addrExpectedMakerHtlcMessageLength, MAKER_HTLC_MESSAGE_LENGTH);
@@ -130,6 +134,8 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 		Integer labelCheckTakerHtlc = null;
 		Integer labelCheckSecretReveal = null;
 		Integer labelCheckCancel = null;
+		Integer labelNotRefund = null;
+		Integer labelRefund = null;
 
 		for (int pass = 0; pass < 2; ++pass) {
 			codeByteBuffer.clear();
@@ -141,6 +147,13 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 				codeByteBuffer.put(OpCode.SET_PCS.compile());
 
 				labelLoop = codeByteBuffer.position();
+				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.GET_BLOCK_TIMESTAMP, LAYOUT.addrBlockTimestamp));
+				emitFarJumpIfNotEqual(codeByteBuffer, LAYOUT.addrMode, LAYOUT.addrTradingModeValue, labelNotRefund);
+				codeByteBuffer.put(OpCode.BLT_DAT.compile(LAYOUT.addrBlockTimestamp, LAYOUT.addrRefundTimestamp,
+						calcOffset(codeByteBuffer, labelNotRefund)));
+				codeByteBuffer.put(OpCode.JMP_ADR.compile(labelRefund == null ? 0 : labelRefund));
+
+				labelNotRefund = codeByteBuffer.position();
 				codeByteBuffer.put(OpCode.EXT_FUN_DAT.compile(FunctionCode.PUT_TX_AFTER_TIMESTAMP_INTO_A, LAYOUT.addrLastTxnTimestamp));
 				codeByteBuffer.put(OpCode.EXT_FUN_RET.compile(FunctionCode.CHECK_A_IS_ZERO, LAYOUT.addrResult));
 				emitFarJumpIfNonZero(codeByteBuffer, LAYOUT.addrResult, labelStop);
@@ -198,6 +211,9 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 				codeByteBuffer.put(OpCode.SET_VAL.compile(LAYOUT.addrMode, AcctMode.CANCELLED.value));
 				codeByteBuffer.put(OpCode.FIN_IMD.compile());
 
+				labelRefund = codeByteBuffer.position();
+				emitProcessRefund(codeByteBuffer);
+
 				labelStop = codeByteBuffer.position();
 				codeByteBuffer.put(OpCode.STP_IMD.compile());
 			} catch (CompilationException e) {
@@ -251,6 +267,8 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 		emitFarJumpIfGreaterOrEqual(codeByteBuffer, LAYOUT.addrTempLocktimeWithMargin, LAYOUT.addrLockTimeA, rejectLabel);
 
 		codeByteBuffer.put(OpCode.SET_DAT.compile(LAYOUT.addrLockTimeB, LAYOUT.addrTempLocktime));
+		codeByteBuffer.put(OpCode.EXT_FUN_RET_DAT_2.compile(FunctionCode.ADD_MINUTES_TO_TIMESTAMP, LAYOUT.addrRefundTimestamp,
+				LAYOUT.addrLastTxnTimestamp, LAYOUT.addrTakerRefundTimeoutMinutes));
 		codeByteBuffer.put(OpCode.SET_VAL.compile(LAYOUT.addrMode, AcctMode.TRADING.value));
 		codeByteBuffer.put(OpCode.JMP_ADR.compile(rejectLabel == null ? 0 : rejectLabel));
 	}
@@ -265,6 +283,11 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 		emitFarJumpIfZero(codeByteBuffer, LAYOUT.addrResult, rejectLabel);
 
 		codeByteBuffer.put(OpCode.SET_VAL.compile(LAYOUT.addrMode, AcctMode.REDEEMED.value));
+		codeByteBuffer.put(OpCode.FIN_IMD.compile());
+	}
+
+	private static void emitProcessRefund(ByteBuffer codeByteBuffer) throws CompilationException {
+		codeByteBuffer.put(OpCode.SET_VAL.compile(LAYOUT.addrMode, AcctMode.REFUNDED.value));
 		codeByteBuffer.put(OpCode.FIN_IMD.compile());
 	}
 
@@ -348,6 +371,10 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 			long lockTimeB = getLong(dataByteBuffer, LAYOUT.addrLockTimeB);
 			if (lockTimeB > 0)
 				tradeData.lockTimeB = (int) lockTimeB;
+
+			long refundTimestamp = getLong(dataByteBuffer, LAYOUT.addrRefundTimestamp);
+			if (refundTimestamp > 0)
+				tradeData.tradeRefundHeight = new Timestamp(refundTimestamp).blockHeight;
 		}
 
 		byte[] offeredChainIdReference = readBytes(dataByteBuffer, LAYOUT.addrOfferedForeignBlockchainChainId, CHAIN_ID_REFERENCE_LENGTH);
@@ -557,6 +584,7 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 		final int addrRequestedForeignAmount;
 		final int addrTradeTimeout;
 		final int addrLocktimeSafetyMarginSeconds;
+		final int addrTakerRefundTimeoutMinutes;
 		final int addrMessageTxnType;
 		final int addrExpectedReserveMessageLength;
 		final int addrExpectedMakerHtlcMessageLength;
@@ -578,6 +606,7 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 		final int addrCreatorAddress1;
 		final int addrTakerAddress1;
 		final int addrLastTxnTimestamp;
+		final int addrBlockTimestamp;
 		final int addrTxnType;
 		final int addrResult;
 		final int addrTempPaymentCount;
@@ -593,6 +622,7 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 		final int addrLockTimeB;
 		final int addrTempLocktime;
 		final int addrTempLocktimeWithMargin;
+		final int addrRefundTimestamp;
 		final int addrMode;
 		final int addrOfferedForeignBlockchainChainId;
 		final int addrRequestedForeignBlockchainChainId;
@@ -612,6 +642,7 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 			this.addrRequestedForeignAmount = c++;
 			this.addrTradeTimeout = c++;
 			this.addrLocktimeSafetyMarginSeconds = c++;
+			this.addrTakerRefundTimeoutMinutes = c++;
 			this.addrMessageTxnType = c++;
 			this.addrExpectedReserveMessageLength = c++;
 			this.addrExpectedMakerHtlcMessageLength = c++;
@@ -635,6 +666,7 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 			this.addrTakerAddress1 = c;
 			c += 4;
 			this.addrLastTxnTimestamp = c++;
+			this.addrBlockTimestamp = c++;
 			this.addrTxnType = c++;
 			this.addrResult = c++;
 			this.addrTempPaymentCount = c++;
@@ -655,6 +687,7 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 			this.addrLockTimeB = c++;
 			this.addrTempLocktime = c++;
 			this.addrTempLocktimeWithMargin = c++;
+			this.addrRefundTimestamp = c++;
 			this.addrMode = c++;
 			this.addrOfferedForeignBlockchainChainId = c;
 			c += CHAIN_ID_REFERENCE_LENGTH / MachineState.VALUE_SIZE;

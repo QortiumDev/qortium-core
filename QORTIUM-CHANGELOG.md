@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: add foreign-foreign taker refund path
+
+Added the taker-side failure-path handling for future foreign/foreign swaps. If the taker has funded and declared the requested-chain HTLC but the maker never redeems it or reveals the secret, the coordination AT now times out of trading as refunded, and the foreign/foreign trade-bot waits for the taker refund locktime before submitting or recognizing the requested-chain refund and marking the taker entry refunded. Deterministic tests cover AT timeout cleanup, waiting before refund, median-locktime safety, expired refund submission, refund-in-progress handling, and preferring a revealed secret over refund while the public API route remains disabled.
+
 ### 2026-05-10 - crosschain: add foreign-foreign maker refund path
 
 Added the first internal failure-path handling for future foreign/foreign swaps. If the maker has funded and declared the offered-chain HTLC but the taker never declares a requested-chain HTLC, the foreign/foreign trade-bot now waits for the maker refund locktime, submits or recognizes the offered-chain refund, cancels the coordination AT, and only then marks the maker entry refunded. Deterministic tests cover waiting before refund, submitting an expired refund, and treating refund-in-progress as complete while the public API route remains disabled.

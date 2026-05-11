@@ -40,6 +40,8 @@ import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.AccountUtils;
+import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.transaction.DeployAtTransaction;
@@ -92,6 +94,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		BitcoinyForeignForeignTradeBot.getInstance().setMessageSubmitterForTesting((repository, messageTransaction, sender) -> {
 			messageTransaction.getTransactionData().setFee(TEST_MESSAGE_FEE);
 			TransactionUtils.signAndMint(repository, messageTransaction.getTransactionData(), sender);
+			BlockUtils.mintBlock(repository);
 			return Transaction.ValidationResult.OK;
 		});
 		installMockBitcoinys();
@@ -114,6 +117,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 
 			assertTrue(transactionData instanceof DeployAtTransactionData);
 			DeployAtTransactionData deployData = (DeployAtTransactionData) transactionData;
+			DeployAtTransaction.ensureATAddress(deployData);
 			assertEquals(0L, deployData.getAmount());
 			assertEquals(Asset.NATIVE, deployData.getAssetId());
 			assertEquals(NATIVE_FEE_RESERVE, deployData.getNativeFeeReserve());
@@ -177,7 +181,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().createTrade(repository, shortTimeout));
 
 			TradeBotCreateRequest invalidReceivingAddress = createRequest(creator);
-			invalidReceivingAddress.requestedForeignReceivingAddress = bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH);
+			invalidReceivingAddress.requestedForeignReceivingAddress = "not-a-valid-address";
 			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().createTrade(repository, invalidReceivingAddress));
 
 			assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
@@ -202,7 +206,6 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 
 			assertTrue(transactionData instanceof MessageTransactionData);
 			MessageTransactionData messageData = (MessageTransactionData) transactionData;
-			assertArrayEquals(responder.getPublicKey(), messageData.getSenderPublicKey());
 			assertEquals(atAddress, messageData.getRecipient());
 			assertEquals(0L, messageData.getAmount());
 			assertNull(messageData.getAssetId());
@@ -215,7 +218,8 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			assertEquals(BitcoinyForeignForeignACCTv1.NAME, tradeBotData.getAcctName());
 			assertEquals(TradeStates.State.TAKER_WAITING_FOR_FOREIGN_LOCK.name(), tradeBotData.getState());
 			assertEquals(atAddress, tradeBotData.getAtAddress());
-			assertEquals(Crypto.toAddress(responder.getPublicKey()), tradeBotData.getTradeLocalAddress());
+			assertArrayEquals(tradeBotData.getTradeLocalPublicKey(), messageData.getSenderPublicKey());
+			assertEquals(Crypto.toAddress(tradeBotData.getTradeLocalPublicKey()), tradeBotData.getTradeLocalAddress());
 			assertEquals("LITECOIN", tradeBotData.getForeignBlockchain());
 			assertEquals(REQUESTED_FOREIGN_AMOUNT, tradeBotData.getForeignAmount());
 			assertEquals(TAKER_REQUESTED_KEY, tradeBotData.getForeignKey());
@@ -259,7 +263,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 					responder.getPublicKey(), INVALID_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH)));
 
 			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository, atData, tradeData,
-					responder.getPublicKey(), TAKER_REQUESTED_KEY, litecoinAddress(TAKER_REQUESTED_RECEIVE_HASH)));
+					responder.getPublicKey(), TAKER_REQUESTED_KEY, "not-a-valid-address"));
 
 			assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
 		}
@@ -551,6 +555,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 					setup.atAddress, messageData, false, false);
 			messageTransaction.getTransactionData().setFee(TEST_MESSAGE_FEE);
 			TransactionUtils.signAndMint(repository, messageTransaction.getTransactionData(), makerTradeAccount);
+			BlockUtils.mintBlock(repository);
 
 			setup.takerTradeBotData = getTakerTradeBotData(repository, setup.atAddress);
 			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
@@ -764,7 +769,12 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	public void testTakerProgressDoesNotCompleteRedeemedAtWithoutOfferedRedeem() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			MakerTradeSetup setup = setupMakerSecretRevealedTrade(repository);
-			setMockHtlcStatus(BitcoinyHTLC.Status.UNFUNDED);
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			String makerOfferedP2sh = deriveMakerOfferedP2shAddress(tradeData);
+			String takerRequestedP2sh = deriveTakerRequestedP2shAddress(tradeData, tradeData.lockTimeB);
+			setMockHtlcStatuses(Map.of(
+					makerOfferedP2sh, BitcoinyHTLC.Status.UNFUNDED,
+					takerRequestedP2sh, BitcoinyHTLC.Status.REDEEMED), BitcoinyHTLC.Status.UNFUNDED);
 
 			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.takerTradeBotData);
 
@@ -787,6 +797,104 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			assertEquals(0, this.bitcoin.redeemTransactionCount);
 			assertEquals(0, this.bitcoin.broadcastTransactions.size());
 			assertEquals(TradeStates.State.TAKER_WAITING_FOR_MAKER_REDEEM.name(), takerTradeBotData.getState());
+		}
+	}
+
+	@Test
+	public void testTakerProgressWaitsBeforeRefundingRequestedForeignHtlc() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			MakerTradeSetup setup = setupTradingMakerTrade(repository);
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			String takerRequestedP2sh = deriveTakerRequestedP2shAddress(tradeData, tradeData.lockTimeB);
+			setMockHtlcStatuses(Map.of(takerRequestedP2sh, BitcoinyHTLC.Status.FUNDED), BitcoinyHTLC.Status.UNFUNDED);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.takerTradeBotData);
+
+			TradeBotData takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
+			assertEquals(0, this.litecoin.refundTransactionCount);
+			assertEquals(0, this.litecoin.broadcastTransactions.size());
+			assertEquals(TradeStates.State.TAKER_WAITING_FOR_MAKER_REDEEM.name(), takerTradeBotData.getState());
+		}
+	}
+
+	@Test
+	public void testTakerProgressRefundsExpiredRequestedForeignHtlc() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int expiredLockTimeB = (int) (System.currentTimeMillis() / 1000L - 60L);
+			int lockTimeA = expiredLockTimeB + BitcoinyForeignForeignTradeBot.FOREIGN_LOCKTIME_SAFETY_MARGIN_MINUTES * 60 + 600;
+			MakerTradeSetup setup = setupTradingTakerTradeWithLockTimes(repository, lockTimeA, expiredLockTimeB);
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			String takerRequestedP2sh = deriveTakerRequestedP2shAddress(tradeData, tradeData.lockTimeB);
+			setMockHtlcStatuses(Map.of(takerRequestedP2sh, BitcoinyHTLC.Status.FUNDED), BitcoinyHTLC.Status.UNFUNDED);
+			this.litecoin.medianBlockTime = expiredLockTimeB + 1;
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.takerTradeBotData);
+
+			TradeBotData takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
+			assertEquals(1, this.litecoin.refundTransactionCount);
+			assertEquals(1, this.litecoin.broadcastTransactions.size());
+			assertEquals(TradeStates.State.TAKER_REFUNDED.name(), takerTradeBotData.getState());
+		}
+	}
+
+	@Test
+	public void testTakerProgressWaitsBeforeRequestedRefundMedianLocktime() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int expiredLockTimeB = (int) (System.currentTimeMillis() / 1000L - 60L);
+			int lockTimeA = expiredLockTimeB + BitcoinyForeignForeignTradeBot.FOREIGN_LOCKTIME_SAFETY_MARGIN_MINUTES * 60 + 600;
+			MakerTradeSetup setup = setupTradingTakerTradeWithLockTimes(repository, lockTimeA, expiredLockTimeB);
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			String takerRequestedP2sh = deriveTakerRequestedP2shAddress(tradeData, tradeData.lockTimeB);
+			setMockHtlcStatuses(Map.of(takerRequestedP2sh, BitcoinyHTLC.Status.FUNDED), BitcoinyHTLC.Status.UNFUNDED);
+			this.litecoin.medianBlockTime = expiredLockTimeB;
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.takerTradeBotData);
+
+			TradeBotData takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
+			assertEquals(0, this.litecoin.refundTransactionCount);
+			assertEquals(0, this.litecoin.broadcastTransactions.size());
+			assertEquals(TradeStates.State.TAKER_WAITING_FOR_MAKER_REDEEM.name(), takerTradeBotData.getState());
+		}
+	}
+
+	@Test
+	public void testTakerProgressTreatsRequestedRefundInProgressAsRefunded() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int expiredLockTimeB = (int) (System.currentTimeMillis() / 1000L - 60L);
+			int lockTimeA = expiredLockTimeB + BitcoinyForeignForeignTradeBot.FOREIGN_LOCKTIME_SAFETY_MARGIN_MINUTES * 60 + 600;
+			MakerTradeSetup setup = setupTradingTakerTradeWithLockTimes(repository, lockTimeA, expiredLockTimeB);
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			String takerRequestedP2sh = deriveTakerRequestedP2shAddress(tradeData, tradeData.lockTimeB);
+			setMockHtlcStatuses(Map.of(takerRequestedP2sh, BitcoinyHTLC.Status.REFUND_IN_PROGRESS),
+					BitcoinyHTLC.Status.UNFUNDED);
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.takerTradeBotData);
+
+			TradeBotData takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
+			assertEquals(0, this.litecoin.refundTransactionCount);
+			assertEquals(0, this.litecoin.broadcastTransactions.size());
+			assertEquals(TradeStates.State.TAKER_REFUNDED.name(), takerTradeBotData.getState());
+		}
+	}
+
+	@Test
+	public void testTakerProgressUsesSecretBeforeRequestedRefund() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int expiredLockTimeB = (int) (System.currentTimeMillis() / 1000L - 60L);
+			int lockTimeA = expiredLockTimeB + BitcoinyForeignForeignTradeBot.FOREIGN_LOCKTIME_SAFETY_MARGIN_MINUTES * 60 + 600;
+			MakerTradeSetup setup = setupTradingTakerTradeWithLockTimes(repository, lockTimeA, expiredLockTimeB);
+			CrossChainTradeData tradeData = getTradeData(repository, setup.atAddress);
+			String takerRequestedP2sh = deriveTakerRequestedP2shAddress(tradeData, tradeData.lockTimeB);
+			setMockHtlcStatus(BitcoinyHTLC.Status.FUNDED);
+			setMockHtlcSecret(takerRequestedP2sh, setup.makerTradeBotData.getSecret());
+			this.litecoin.medianBlockTime = expiredLockTimeB + 1;
+
+			BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.takerTradeBotData);
+
+			TradeBotData takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
+			assertEquals(1, this.bitcoin.redeemTransactionCount);
+			assertEquals(0, this.litecoin.refundTransactionCount);
+			assertEquals(TradeStates.State.TAKER_DONE.name(), takerTradeBotData.getState());
 		}
 	}
 
@@ -852,9 +960,13 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		PrivateKeyAccount creator = Common.getTestAccount(repository, "chloe");
 		byte[] unsignedDeployBytes = BitcoinyForeignForeignTradeBot.getInstance().createTrade(repository, createRequest(creator));
 		DeployAtTransactionData deployData = (DeployAtTransactionData) fromUnsignedBytes(unsignedDeployBytes);
+		DeployAtTransaction.ensureATAddress(deployData);
 		TransactionUtils.signAndMint(repository, deployData, creator);
 
 		TradeBotData makerTradeBotData = repository.getCrossChainRepository().getAllTradeBotData().get(0);
+		AccountUtils.pay(repository, Common.getTestAccount(repository, "alice"), makerTradeBotData.getTradeLocalAddress(),
+				10L * Amounts.MULTIPLIER);
+
 		MakerTradeSetup setup = new MakerTradeSetup();
 		setup.creator = creator;
 		setup.atAddress = deployData.getAtAddress();
@@ -874,7 +986,13 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		byte[] unsignedReserveBytes = BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository, atData, tradeData,
 				responder.getPublicKey(), TAKER_REQUESTED_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH));
 		TransactionData transactionData = fromUnsignedBytes(unsignedReserveBytes);
-		TransactionUtils.signAndMint(repository, transactionData, responder);
+
+		setup.takerTradeBotData = getTakerTradeBotData(repository, setup.atAddress);
+		PrivateKeyAccount takerTradeAccount = new PrivateKeyAccount(repository, setup.takerTradeBotData.getTradePrivateKey());
+		AccountUtils.pay(repository, Common.getTestAccount(repository, "alice"), takerTradeAccount.getAddress(),
+				10L * Amounts.MULTIPLIER);
+		TransactionUtils.signAndMint(repository, transactionData, takerTradeAccount);
+		BlockUtils.mintBlock(repository);
 
 		setup.taker = responder;
 		setup.takerTradeBotData = getTakerTradeBotData(repository, setup.atAddress);
@@ -942,8 +1060,17 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.makerTradeBotData);
 		setup.makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
 
-		sendMessage(repository, setup.taker.getPrivateKey(),
+		sendMessage(repository, setup.takerTradeBotData.getTradePrivateKey(),
 				BitcoinyForeignForeignACCTv1.buildTakerHtlcMessage(lockTimeB), setup.atAddress);
+		setup.takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
+		return setup;
+	}
+
+	private MakerTradeSetup setupTradingTakerTradeWithLockTimes(Repository repository, int lockTimeA, int lockTimeB)
+			throws DataException, TransformationException, ForeignBlockchainException {
+		MakerTradeSetup setup = setupTradingMakerTradeWithLockTimes(repository, lockTimeA, lockTimeB);
+		BitcoinyForeignForeignTradeBot.getInstance().progress(repository, setup.takerTradeBotData);
+		setup.makerTradeBotData = getTradeBotData(repository, setup.makerTradeBotData);
 		setup.takerTradeBotData = getTradeBotData(repository, setup.takerTradeBotData);
 		return setup;
 	}
@@ -955,6 +1082,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 				atAddress, messageData, false, false);
 		messageTransaction.getTransactionData().setFee(TEST_MESSAGE_FEE);
 		TransactionUtils.signAndMint(repository, messageTransaction.getTransactionData(), sender);
+		BlockUtils.mintBlock(repository);
 	}
 
 	private static TradeBotData getTradeBotData(Repository repository, TradeBotData tradeBotData) throws DataException {
