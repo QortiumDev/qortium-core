@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - crosschain: guard foreign-foreign chain support
+
+Added an explicit per-chain capability for BTC-like foreign/foreign trades so newly registered Bitcoiny chains are not automatically available for public foreign/foreign offers before their HTLC behavior is validated. Bitcoin and Litecoin are currently opted in because the deterministic foreign/foreign lifecycle and recovery coverage uses that pair, while other BTC-like chains now fail the existing invalid-criteria path until they are deliberately enabled.
+
 ### 2026-05-11 - crosschain: test foreign-foreign restart recovery
 
 Added deterministic restart-style recovery coverage for BTC-like foreign/foreign trades. The new tests close and reopen repository scopes around persisted maker and taker trade-bot states, then verify that funding, HTLC declarations, maker redeem/secret reveal, taker redeem, and both refund paths continue without duplicate foreign-chain spends after the simulated restart boundary.

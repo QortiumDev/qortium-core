@@ -20,6 +20,7 @@ public final class BitcoinyChainSpec {
 	private final AddressNormalizer addressNormalizer;
 	private final SpendableOutputScriptFilter spendableOutputScriptFilter;
 	private final BitcoinyTransactionFormat transactionFormat;
+	private final boolean supportsForeignForeignTrades;
 
 	public BitcoinyChainSpec(int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs) {
@@ -46,6 +47,14 @@ public final class BitcoinyChainSpec {
 	public BitcoinyChainSpec(String canonicalName, int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
 			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer,
 			SpendableOutputScriptFilter spendableOutputScriptFilter, BitcoinyTransactionFormat transactionFormat) {
+		this(canonicalName, slip44CoinType, config, networks, electrumServerRefreshConfigs, defaultSpendFeePerByte, addressNormalizer,
+				spendableOutputScriptFilter, transactionFormat, false);
+	}
+
+	public BitcoinyChainSpec(String canonicalName, int slip44CoinType, BitcoinyChainConfig config, Collection<? extends BitcoinyNetwork> networks,
+			Collection<ElectrumServerRefreshConfig> electrumServerRefreshConfigs, Long defaultSpendFeePerByte, AddressNormalizer addressNormalizer,
+			SpendableOutputScriptFilter spendableOutputScriptFilter, BitcoinyTransactionFormat transactionFormat,
+			boolean supportsForeignForeignTrades) {
 		this.canonicalName = canonicalName;
 		this.slip44CoinType = slip44CoinType;
 		this.config = config;
@@ -55,6 +64,7 @@ public final class BitcoinyChainSpec {
 		this.addressNormalizer = addressNormalizer;
 		this.spendableOutputScriptFilter = spendableOutputScriptFilter;
 		this.transactionFormat = transactionFormat;
+		this.supportsForeignForeignTrades = supportsForeignForeignTrades;
 	}
 
 	private static Map<String, BitcoinyNetwork> toNetworksByName(Collection<? extends BitcoinyNetwork> networks) {
@@ -116,6 +126,10 @@ public final class BitcoinyChainSpec {
 
 	public BitcoinyTransactionFormat getTransactionFormat() {
 		return this.transactionFormat;
+	}
+
+	public boolean supportsForeignForeignTrades() {
+		return this.supportsForeignForeignTrades;
 	}
 
 	@FunctionalInterface

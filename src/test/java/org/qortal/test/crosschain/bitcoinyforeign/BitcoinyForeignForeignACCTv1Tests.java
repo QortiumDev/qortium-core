@@ -316,11 +316,14 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 	public void testRequiresSupportedBitcoinyPair() {
 		ForeignBlockchainRegistry.Entry bitcoin = BitcoinyForeignForeignACCTv1.requireBitcoinyEntry("BTC", "offeredForeignBlockchain");
 		ForeignBlockchainRegistry.Entry litecoin = BitcoinyForeignForeignACCTv1.requireBitcoinyEntry("LITECOIN", "requestedForeignBlockchain");
+		ForeignBlockchainRegistry.Entry zcash = BitcoinyForeignForeignACCTv1.requireBitcoinyEntry("ZEC", "requestedForeignBlockchain");
 		ForeignBlockchainRegistry.Entry pirateChain = ForeignBlockchainRegistry.fromString("PIRATECHAIN");
 
 		assertTrue(BitcoinyForeignForeignACCTv1.isSupportedBitcoinyPair(bitcoin, litecoin));
 		assertFalse(BitcoinyForeignForeignACCTv1.isSupportedBitcoinyPair(bitcoin, null));
 		assertFalse(BitcoinyForeignForeignACCTv1.isSupportedBitcoinyPair(pirateChain, litecoin));
+		assertFalse(BitcoinyForeignForeignACCTv1.isSupportedBitcoinyPair(bitcoin, zcash));
+		assertFalse(BitcoinyForeignForeignACCTv1.isSupportedBitcoinyPair(zcash, litecoin));
 
 		try {
 			BitcoinyForeignForeignACCTv1.requireBitcoinyEntry("PIRATECHAIN", "offeredForeignBlockchain");

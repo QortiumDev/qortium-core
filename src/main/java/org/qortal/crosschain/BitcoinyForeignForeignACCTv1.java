@@ -397,7 +397,9 @@ public class BitcoinyForeignForeignACCTv1 implements ACCT {
 	public static boolean isSupportedBitcoinyPair(ForeignBlockchainRegistry.Entry offeredForeignBlockchain,
 			ForeignBlockchainRegistry.Entry requestedForeignBlockchain) {
 		return offeredForeignBlockchain != null && offeredForeignBlockchain.isBitcoiny()
-				&& requestedForeignBlockchain != null && requestedForeignBlockchain.isBitcoiny();
+				&& offeredForeignBlockchain.getBitcoinySpec().supportsForeignForeignTrades()
+				&& requestedForeignBlockchain != null && requestedForeignBlockchain.isBitcoiny()
+				&& requestedForeignBlockchain.getBitcoinySpec().supportsForeignForeignTrades();
 	}
 
 	public static ForeignBlockchainRegistry.Entry requireBitcoinyEntry(String blockchainName, String fieldName) {

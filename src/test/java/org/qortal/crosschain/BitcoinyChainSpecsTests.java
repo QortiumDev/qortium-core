@@ -126,6 +126,23 @@ public class BitcoinyChainSpecsTests {
 	}
 
 	@Test
+	public void testForeignForeignTradeSupportIsExplicitlyOptIn() {
+		Set<String> supportedForeignForeignCurrencyCodes = Set.of(
+				BitcoinyChainSpecs.BITCOIN_CURRENCY_CODE,
+				BitcoinyChainSpecs.LITECOIN_CURRENCY_CODE);
+
+		for (BitcoinyChainSpec spec : BitcoinyChainSpecs.all()) {
+			boolean expectedSupport = supportedForeignForeignCurrencyCodes.contains(spec.getCurrencyCode());
+			assertEquals(spec.getCurrencyCode(), expectedSupport, spec.supportsForeignForeignTrades());
+		}
+
+		assertTrue(BitcoinyChainSpecs.BITCOIN.supportsForeignForeignTrades());
+		assertTrue(BitcoinyChainSpecs.LITECOIN.supportsForeignForeignTrades());
+		assertFalse(BitcoinyChainSpecs.BITCOIN_CASH.supportsForeignForeignTrades());
+		assertFalse(BitcoinyChainSpecs.ZCASH.supportsForeignForeignTrades());
+	}
+
+	@Test
 	public void testForeignBlockchainRegistryResolvesNamesCurrencyCodesAndBitcoinyChainIds() {
 		for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
 			ForeignBlockchainRegistry.Entry byName = ForeignBlockchainRegistry.fromString(blockchain.name().toLowerCase());

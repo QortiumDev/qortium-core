@@ -383,6 +383,7 @@ public final class BitcoinyChainSpecs {
 			.test4(() -> BITCOIN_TEST4_NET_PARAMS, "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043", 1_500L, 1_000L, "tbtc4")
 			.regtest(() -> BITCOIN_REG_TEST_PARAMS, 1_500L, 1_000L)
 			.defaultSpendFeePerByte(20L)
+			.supportsForeignForeignTrades()
 			.build();
 
 	public static final BitcoinyChainSpec BITCOIN_CASH = spec("BITCOINCASH", BITCOIN_CASH_SLIP44_COIN_TYPE, "Bitcoin Cash", BITCOIN_CASH_CURRENCY_CODE,
@@ -399,6 +400,7 @@ public final class BitcoinyChainSpecs {
 			.test4(() -> LITECOIN_TEST_NET_PARAMS, "4966625a4b2851d9fdee139e56211a0d88575f59ed816ff5e6a63deb4e3e29a0", 1_000L, 1_000L, "tltc")
 			.regtest(() -> LITECOIN_REG_TEST_PARAMS, 1_000L, 1_000L)
 			.addressNormalizer(BitcoinyChainSpecs::normalizeLitecoinAddress)
+			.supportsForeignForeignTrades()
 			.build();
 
 	public static final BitcoinyChainSpec DOGECOIN = spec("DOGECOIN", DOGECOIN_SLIP44_COIN_TYPE, "Dogecoin", DOGECOIN_CURRENCY_CODE, Coin.valueOf(1_000_000), 100_000_000L)
@@ -750,6 +752,7 @@ public final class BitcoinyChainSpecs {
 		private BitcoinyChainSpec.AddressNormalizer addressNormalizer;
 		private BitcoinyChainSpec.SpendableOutputScriptFilter spendableOutputScriptFilter;
 		private BitcoinyTransactionFormat transactionFormat = BitcoinyTransactionFormat.LEGACY;
+		private boolean supportsForeignForeignTrades;
 
 		private SpecBuilder(String canonicalName, int slip44CoinType, String displayName, String currencyCode, Coin defaultFeePerKb,
 				long minimumOrderAmount, int decimalPlaces) {
@@ -820,9 +823,15 @@ public final class BitcoinyChainSpecs {
 			return this;
 		}
 
+		private SpecBuilder supportsForeignForeignTrades() {
+			this.supportsForeignForeignTrades = true;
+			return this;
+		}
+
 		private BitcoinyChainSpec build() {
 			return new BitcoinyChainSpec(this.canonicalName, this.slip44CoinType, this.config, this.networks, this.refreshConfigs,
-					this.defaultSpendFeePerByte, this.addressNormalizer, this.spendableOutputScriptFilter, this.transactionFormat);
+					this.defaultSpendFeePerByte, this.addressNormalizer, this.spendableOutputScriptFilter, this.transactionFormat,
+					this.supportsForeignForeignTrades);
 		}
 
 		private void addRefresh(String networkName, String chain1209k) {
