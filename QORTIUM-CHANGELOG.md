@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - crosschain: test foreign-foreign restart recovery
+
+Added deterministic restart-style recovery coverage for BTC-like foreign/foreign trades. The new tests close and reopen repository scopes around persisted maker and taker trade-bot states, then verify that funding, HTLC declarations, maker redeem/secret reveal, taker redeem, and both refund paths continue without duplicate foreign-chain spends after the simulated restart boundary.
+
 ### 2026-05-11 - crosschain: test foreign-foreign public lifecycle
 
 Added deterministic end-to-end coverage for the public foreign/foreign trade-bot path. The new test creates a BTC/LTC-style offer through the API, deploys the coordination AT, reserves it through the API, and then drives the mocked maker and taker HTLC lifecycle through funding, declarations, maker redeem, secret reveal, taker redeem, and final completion. The foreign/foreign design note and API schema wording now match the enabled single-fill public API surface.
