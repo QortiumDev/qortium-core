@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-10 - crosschain: submit foreign-foreign taker reservations from tradebot
+
+Changed the internal foreign/foreign taker reservation path so the trade-bot submits the reservation MESSAGE using its generated taker trade key instead of returning an unsigned transaction for an external signer. Taker trade-bot state is now persisted only after the reservation message is accepted, matching the later autonomous AT messages that must use the same generated key. Tests cover successful reservation submission, rejected-message cleanup, and unchanged invalid-criteria handling while the public API route remains disabled.
+
 ### 2026-05-10 - crosschain: add foreign-foreign taker refund path
 
 Added the taker-side failure-path handling for future foreign/foreign swaps. If the taker has funded and declared the requested-chain HTLC but the maker never redeems it or reveals the secret, the coordination AT now times out of trading as refunded, and the foreign/foreign trade-bot waits for the taker refund locktime before submitting or recognizing the requested-chain refund and marking the taker entry refunded. Deterministic tests cover AT timeout cleanup, waiting before refund, median-locktime safety, expired refund submission, refund-in-progress handling, and preferring a revealed secret over refund while the public API route remains disabled.

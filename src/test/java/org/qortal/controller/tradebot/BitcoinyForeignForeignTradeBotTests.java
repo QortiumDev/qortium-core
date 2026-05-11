@@ -34,7 +34,6 @@ import org.qortal.data.crosschain.CrossChainTradeData;
 import org.qortal.data.crosschain.TradeBotData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.DeployAtTransactionData;
-import org.qortal.data.transaction.MessageTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
@@ -92,6 +91,10 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		BitcoinyForeignForeignTradeBot.getInstance().resetTestHooks();
 		BitcoinyForeignForeignTradeBot.getInstance().setMessageFeeOverrideForTesting(TEST_MESSAGE_FEE);
 		BitcoinyForeignForeignTradeBot.getInstance().setMessageSubmitterForTesting((repository, messageTransaction, sender) -> {
+			if (sender.getConfirmedBalance(Asset.NATIVE) < TEST_MESSAGE_FEE)
+				AccountUtils.pay(repository, Common.getTestAccount(repository, "alice"), sender.getAddress(),
+						10L * Amounts.MULTIPLIER);
+
 			messageTransaction.getTransactionData().setFee(TEST_MESSAGE_FEE);
 			TransactionUtils.signAndMint(repository, messageTransaction.getTransactionData(), sender);
 			BlockUtils.mintBlock(repository);
@@ -200,16 +203,9 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			ATData atData = repository.getATRepository().fromATAddress(atAddress);
 			CrossChainTradeData tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
 
-			byte[] unsignedMessageBytes = BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository, atData, tradeData,
-					responder.getPublicKey(), TAKER_REQUESTED_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH));
-			TransactionData transactionData = fromUnsignedBytes(unsignedMessageBytes);
-
-			assertTrue(transactionData instanceof MessageTransactionData);
-			MessageTransactionData messageData = (MessageTransactionData) transactionData;
-			assertEquals(atAddress, messageData.getRecipient());
-			assertEquals(0L, messageData.getAmount());
-			assertNull(messageData.getAssetId());
-			assertEquals(BitcoinyForeignForeignACCTv1.RESERVE_MESSAGE_LENGTH, messageData.getData().length);
+			AcctTradeBot.ResponseResult responseResult = BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository,
+					atData, tradeData, TAKER_REQUESTED_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH));
+			assertEquals(AcctTradeBot.ResponseResult.OK, responseResult);
 
 			List<TradeBotData> allTradeBotData = repository.getCrossChainRepository().getAllTradeBotData();
 			assertEquals(1, allTradeBotData.size());
@@ -218,7 +214,6 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			assertEquals(BitcoinyForeignForeignACCTv1.NAME, tradeBotData.getAcctName());
 			assertEquals(TradeStates.State.TAKER_WAITING_FOR_FOREIGN_LOCK.name(), tradeBotData.getState());
 			assertEquals(atAddress, tradeBotData.getAtAddress());
-			assertArrayEquals(tradeBotData.getTradeLocalPublicKey(), messageData.getSenderPublicKey());
 			assertEquals(Crypto.toAddress(tradeBotData.getTradeLocalPublicKey()), tradeBotData.getTradeLocalAddress());
 			assertEquals("LITECOIN", tradeBotData.getForeignBlockchain());
 			assertEquals(REQUESTED_FOREIGN_AMOUNT, tradeBotData.getForeignAmount());
@@ -229,11 +224,15 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			assertEquals(TAKER_REQUESTED_KEY, tradeBotData.getRequestedForeignKey());
 			assertArrayEquals(tradeBotData.getTradeForeignPublicKey(), tradeBotData.getOfferedTradeForeignPublicKey());
 			assertArrayEquals(tradeBotData.getTradeForeignPublicKey(), tradeBotData.getRequestedTradeForeignPublicKey());
-			assertArrayEquals(tradeBotData.getTradeForeignPublicKeyHash(), Arrays.copyOfRange(messageData.getData(), 0, 20));
-			assertArrayEquals(tradeBotData.getTradeForeignPublicKeyHash(), Arrays.copyOfRange(messageData.getData(), 32, 52));
 			assertArrayEquals(TAKER_OFFERED_RECEIVE_HASH, tradeBotData.getOfferedForeignReceivingAccountInfo());
 			assertArrayEquals(TAKER_REQUESTED_RECEIVE_HASH, tradeBotData.getRequestedForeignReceivingAccountInfo());
 			assertArrayEquals(TAKER_OFFERED_RECEIVE_HASH, tradeBotData.getReceivingAccountInfo());
+
+			CrossChainTradeData reservedTradeData = getTradeData(repository, atAddress);
+			assertEquals(AcctMode.RESERVED, reservedTradeData.mode);
+			assertEquals(tradeBotData.getTradeLocalAddress(), reservedTradeData.partnerAddress);
+			assertArrayEquals(tradeBotData.getTradeForeignPublicKeyHash(), reservedTradeData.partnerOfferedForeignPKH);
+			assertArrayEquals(tradeBotData.getTradeForeignPublicKeyHash(), reservedTradeData.partnerRequestedForeignPKH);
 
 			TradeBotData roundTripped = repository.getCrossChainRepository().getTradeBotData(tradeBotData.getTradePrivateKey());
 			assertEquals("BITCOIN", roundTripped.getOfferedForeignBlockchain());
@@ -257,15 +256,38 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 			CrossChainTradeData reservedTradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
 			reservedTradeData.mode = AcctMode.RESERVED;
 			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository, atData, reservedTradeData,
-					responder.getPublicKey(), TAKER_REQUESTED_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH)));
+					TAKER_REQUESTED_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH)));
 
 			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository, atData, tradeData,
-					responder.getPublicKey(), INVALID_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH)));
+					INVALID_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH)));
 
 			assertDataException(() -> BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository, atData, tradeData,
-					responder.getPublicKey(), TAKER_REQUESTED_KEY, "not-a-valid-address"));
+					TAKER_REQUESTED_KEY, "not-a-valid-address"));
 
 			assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
+		}
+	}
+
+	@Test
+	public void testDirectTakerReserveDoesNotPersistIfMessageRejected() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount deployer = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount makerTradeAccount = Common.getTestAccount(repository, "alice");
+
+			DeployAtTransaction deployAtTransaction = deploy(repository, deployer, makerTradeAccount);
+			String atAddress = deployAtTransaction.getATAccount().getAddress();
+			ATData atData = repository.getATRepository().fromATAddress(atAddress);
+			CrossChainTradeData tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
+
+			BitcoinyForeignForeignTradeBot.getInstance().setMessageSubmitterForTesting((repo, messageTransaction, sender) ->
+					Transaction.ValidationResult.NO_BALANCE);
+
+			AcctTradeBot.ResponseResult responseResult = BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository,
+					atData, tradeData, TAKER_REQUESTED_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH));
+
+			assertEquals(AcctTradeBot.ResponseResult.NETWORK_ISSUE, responseResult);
+			assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
+			assertEquals(AcctMode.OFFERING, getTradeData(repository, atAddress).mode);
 		}
 	}
 
@@ -983,16 +1005,9 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		PrivateKeyAccount responder = Common.getTestAccount(repository, "dilbert");
 		ATData atData = repository.getATRepository().fromATAddress(setup.atAddress);
 		CrossChainTradeData tradeData = BitcoinyForeignForeignACCTv1.getInstance().populateTradeData(repository, atData);
-		byte[] unsignedReserveBytes = BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository, atData, tradeData,
-				responder.getPublicKey(), TAKER_REQUESTED_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH));
-		TransactionData transactionData = fromUnsignedBytes(unsignedReserveBytes);
-
-		setup.takerTradeBotData = getTakerTradeBotData(repository, setup.atAddress);
-		PrivateKeyAccount takerTradeAccount = new PrivateKeyAccount(repository, setup.takerTradeBotData.getTradePrivateKey());
-		AccountUtils.pay(repository, Common.getTestAccount(repository, "alice"), takerTradeAccount.getAddress(),
-				10L * Amounts.MULTIPLIER);
-		TransactionUtils.signAndMint(repository, transactionData, takerTradeAccount);
-		BlockUtils.mintBlock(repository);
+		AcctTradeBot.ResponseResult responseResult = BitcoinyForeignForeignTradeBot.getInstance().startResponse(repository,
+				atData, tradeData, TAKER_REQUESTED_KEY, bitcoinAddress(TAKER_OFFERED_RECEIVE_HASH));
+		assertEquals(AcctTradeBot.ResponseResult.OK, responseResult);
 
 		setup.taker = responder;
 		setup.takerTradeBotData = getTakerTradeBotData(repository, setup.atAddress);

@@ -12,13 +12,13 @@ import org.qortal.crosschain.BitcoinyForeignForeignACCTv1;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
+import org.qortal.crosschain.TradeDirection;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.at.ATData;
 import org.qortal.data.crosschain.CrossChainTradeData;
 import org.qortal.data.crosschain.TradeBotData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.DeployAtTransactionData;
-import org.qortal.data.transaction.MessageTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
@@ -29,7 +29,6 @@ import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.DeployAtTransactionTransformer;
-import org.qortal.transform.transaction.MessageTransactionTransformer;
 import org.qortal.utils.NTP;
 
 import java.util.Arrays;
@@ -192,12 +191,20 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 
 	@Override
 	public ResponseResult startResponse(Repository repository, ATData atData, ACCT acct,
-			CrossChainTradeData crossChainTradeData, String foreignKey, String receivingAddress) {
-		return ResponseResult.INVALID_CRITERIA;
+			CrossChainTradeData crossChainTradeData, String foreignKey, String receivingAddress) throws DataException {
+		if (!(acct instanceof BitcoinyForeignForeignACCTv1)
+				|| crossChainTradeData == null
+				|| crossChainTradeData.tradeDirection != TradeDirection.SELL_FOREIGN_FOR_FOREIGN)
+			return ResponseResult.INVALID_CRITERIA;
+
+		return startResponse(repository, atData, crossChainTradeData, foreignKey, receivingAddress);
 	}
 
-	public byte[] startResponse(Repository repository, ATData atData, CrossChainTradeData tradeData, byte[] responderPublicKey,
+	public ResponseResult startResponse(Repository repository, ATData atData, CrossChainTradeData tradeData,
 			String requestedForeignKey, String offeredForeignReceivingAddress) throws DataException {
+		if (atData == null || tradeData == null || !atData.getATAddress().equals(tradeData.atAddress))
+			return ResponseResult.INVALID_CRITERIA;
+
 		if (tradeData.mode != AcctMode.OFFERING)
 			throw new DataException("Foreign/foreign trade is not open for reservation");
 
@@ -238,13 +245,16 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 				tradeData.offeredForeignAmount, null, offeredReceivingAddress.getPayload(),
 				tradeData.requestedForeignAmount, requestedForeignKey, requestedRefundAddress.getPayload());
 
+		byte[] messageData = BitcoinyForeignForeignACCTv1.buildReserveMessage(tradeForeignPublicKeyHash, tradeForeignPublicKeyHash);
+		if (!sendMessage(repository, tradeBotData, tradeData.atAddress, messageData))
+			return ResponseResult.NETWORK_ISSUE;
+
 		TradeBot.updateTradeBotState(repository, tradeBotData,
 				() -> String.format("Built foreign/foreign reservation for AT %s. Waiting for maker foreign HTLC",
 						tradeData.atAddress));
-		TradeBot.backupTradeBotData(repository, Arrays.asList(tradeBotData));
+		TradeBot.backupTradeBotData(repository, null);
 
-		byte[] messageData = BitcoinyForeignForeignACCTv1.buildReserveMessage(tradeForeignPublicKeyHash, tradeForeignPublicKeyHash);
-		return buildUnsignedMessageTransaction(repository, tradeLocalPublicKey, tradeData.atAddress, messageData);
+		return ResponseResult.OK;
 	}
 
 	@Override
@@ -710,22 +720,6 @@ public class BitcoinyForeignForeignTradeBot implements AcctTradeBot {
 		repository.saveChanges();
 		TradeBot.backupTradeBotData(repository, null);
 		return lockTimeB;
-	}
-
-	private byte[] buildUnsignedMessageTransaction(Repository repository, byte[] senderPublicKey, String recipient, byte[] messageData)
-			throws DataException {
-		long timestamp = NTP.getTime();
-		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, senderPublicKey, 0L, null);
-		TransactionData messageTransactionData = new MessageTransactionData(baseTransactionData,
-				Transaction.getVersionByTimestamp(timestamp), 0, recipient, 0L, null, messageData, false, false);
-		MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);
-		prepareMessageForSigning(messageTransaction);
-
-		try {
-			return MessageTransactionTransformer.toBytes(messageTransactionData);
-		} catch (TransformationException e) {
-			throw new DataException("Failed to transform MESSAGE transaction?", e);
-		}
 	}
 
 	private void prepareMessageForSigning(MessageTransaction messageTransaction) throws DataException {

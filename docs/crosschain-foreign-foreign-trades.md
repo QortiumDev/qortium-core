@@ -72,11 +72,12 @@ and the public tradebot API still rejects this direction until the trade-bot can
 verify and drive the full foreign-chain HTLC flow.
 
 The direct internal `BitcoinyForeignForeignTradeBot` path can now build maker
-DEPLOY_AT transactions and taker reservation MESSAGE transactions for tests and
-later state-machine work. Those paths validate supported BTC-like chain pairs,
-positive amounts, minimum timeout, maker/taker wallet keys, and P2PKH receiving
-addresses, then persist trade-bot state with separate offered/requested chain
-fields. The internal maker-side progress path now waits for AT confirmation,
+DEPLOY_AT transactions and submit taker reservation MESSAGE transactions from
+the generated taker trade key. Those paths validate supported BTC-like chain
+pairs, positive amounts, minimum timeout, maker/taker wallet keys, and P2PKH
+receiving addresses, then persist trade-bot state with separate
+offered/requested chain fields only after the reservation message is accepted.
+The internal maker-side progress path now waits for AT confirmation,
 accepts a taker reservation, funds the maker offered-chain HTLC, and declares the
 maker locktime to the coordination AT. The internal taker-side progress path can
 now verify the maker's offered-chain HTLC, derive a requested-chain locktime with
