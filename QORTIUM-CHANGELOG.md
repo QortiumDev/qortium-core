@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - crosschain: add foreign-foreign pair filters
+
+Added exact offered/requested blockchain filters for foreign/foreign trade discovery. APIs and websockets can now distinguish directional pairs such as BTC-for-LTC from LTC-for-BTC while keeping the existing broad blockchain filter that matches either side of a foreign/foreign trade. Trade-bot state listing uses the same matching rules, the public tradebot response path now allows the maker and taker entries needed for a same-node foreign/foreign lifecycle, and tests cover broad, one-sided, exact, swapped, and local-asset-filtered offer results.
+
 ### 2026-05-11 - crosschain: guard foreign-foreign chain support
 
 Added an explicit per-chain capability for BTC-like foreign/foreign trades so newly registered Bitcoiny chains are not automatically available for public foreign/foreign offers before their HTLC behavior is validated. Bitcoin and Litecoin are currently opted in because the deterministic foreign/foreign lifecycle and recovery coverage uses that pair, while other BTC-like chains now fail the existing invalid-criteria path until they are deliberately enabled.

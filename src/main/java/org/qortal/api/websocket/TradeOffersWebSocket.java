@@ -6,6 +6,7 @@ import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.WriteCallback;
 import org.eclipse.jetty.websocket.api.annotations.*;
 import org.eclipse.jetty.websocket.server.JettyWebSocketServletFactory;
+import org.qortal.api.CrossChainTradeFilters;
 import org.qortal.api.model.CrossChainOfferSummary;
 import org.qortal.controller.Synchronizer;
 import org.qortal.controller.tradebot.TradeBot;
@@ -53,7 +54,9 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 			|| offerSummary.getMode() == AcctMode.REFUNDED
 			|| offerSummary.getMode() == AcctMode.CANCELLED;
 
-	private static final Map<Session, String> sessionBlockchain = Collections.synchronizedMap(new HashMap<>());
+	private static final Map<Session, ForeignBlockchainRegistry.Entry> sessionBlockchain = Collections.synchronizedMap(new HashMap<>());
+	private static final Map<Session, ForeignBlockchainRegistry.Entry> sessionOfferedForeignBlockchain = Collections.synchronizedMap(new HashMap<>());
+	private static final Map<Session, ForeignBlockchainRegistry.Entry> sessionRequestedForeignBlockchain = Collections.synchronizedMap(new HashMap<>());
 	private static final Map<Session, Long> sessionLocalAssetId = Collections.synchronizedMap(new HashMap<>());
 
 	/**
@@ -150,9 +153,14 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 				// Notify sessions
 				for (Session session : getSessions()) {
 					// Only send if this session has this/no preferred blockchain
-					String preferredBlockchain = sessionBlockchain.get(session);
-					if (preferredBlockchain == null || preferredBlockchain.equals(blockchain.name()))
-						sendOfferSummaries(session, filterForSession(session, crossChainOfferSummaries));
+					ForeignBlockchainRegistry.Entry preferredBlockchain = sessionBlockchain.get(session);
+					if (preferredBlockchain == null || preferredBlockchain.name().equals(blockchain.name())) {
+						List<CrossChainOfferSummary> filteredSummaries = filterForSession(session, crossChainOfferSummaries);
+						if (preferredBlockchain == null)
+							filteredSummaries.removeIf(offerSummary -> isDuplicateForeignForeignCacheSummary(offerSummary, blockchain));
+						if (!filteredSummaries.isEmpty())
+							sendOfferSummaries(session, filteredSummaries);
+					}
 				}
 			}
 		} catch (DataException e) {
@@ -170,29 +178,42 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		List<String> foreignBlockchains = queryParams.get("foreignBlockchain");
 		final String foreignBlockchain = (foreignBlockchains == null || foreignBlockchains.isEmpty()) ? null : foreignBlockchains.get(0);
 
-			ForeignBlockchainRegistry.Entry foreignBlockchainEntry = null;
-			if (foreignBlockchain != null) {
-				foreignBlockchainEntry = ForeignBlockchainRegistry.fromString(foreignBlockchain);
-				if (foreignBlockchainEntry == null) {
+		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = null;
+		if (foreignBlockchain != null) {
+			foreignBlockchainEntry = ForeignBlockchainRegistry.fromString(foreignBlockchain);
+			if (foreignBlockchainEntry == null) {
 				session.close(4003, "unknown blockchain: " + foreignBlockchain);
 				return;
 			}
 		}
 
-			// Save session's preferred blockchain, if given
-			String normalizedForeignBlockchain = foreignBlockchainEntry == null ? null : foreignBlockchainEntry.name();
-			if (normalizedForeignBlockchain != null)
-				sessionBlockchain.put(session, normalizedForeignBlockchain);
+		ForeignBlockchainRegistry.Entry offeredForeignBlockchainEntry = resolveOptionalBlockchain(queryParams,
+				"offeredForeignBlockchain", session, 4005);
+		if (isSupplied(queryParams, "offeredForeignBlockchain") && offeredForeignBlockchainEntry == null)
+			return;
 
-			List<String> localAssetIds = queryParams.get("localAssetId");
-			if (localAssetIds != null && !localAssetIds.isEmpty()) {
-				try {
-					sessionLocalAssetId.put(session, Long.parseLong(localAssetIds.get(0)));
-				} catch (NumberFormatException e) {
-					session.close(4004, "invalid localAssetId: " + localAssetIds.get(0));
-					return;
-				}
+		ForeignBlockchainRegistry.Entry requestedForeignBlockchainEntry = resolveOptionalBlockchain(queryParams,
+				"requestedForeignBlockchain", session, 4006);
+		if (isSupplied(queryParams, "requestedForeignBlockchain") && requestedForeignBlockchainEntry == null)
+			return;
+
+		// Save session's preferred blockchain filters, if given
+		if (foreignBlockchainEntry != null)
+			sessionBlockchain.put(session, foreignBlockchainEntry);
+		if (offeredForeignBlockchainEntry != null)
+			sessionOfferedForeignBlockchain.put(session, offeredForeignBlockchainEntry);
+		if (requestedForeignBlockchainEntry != null)
+			sessionRequestedForeignBlockchain.put(session, requestedForeignBlockchainEntry);
+
+		List<String> localAssetIds = queryParams.get("localAssetId");
+		if (localAssetIds != null && !localAssetIds.isEmpty()) {
+			try {
+				sessionLocalAssetId.put(session, Long.parseLong(localAssetIds.get(0)));
+			} catch (NumberFormatException e) {
+				session.close(4004, "invalid localAssetId: " + localAssetIds.get(0));
+				return;
 			}
+		}
 
 		List<CrossChainOfferSummary> crossChainOfferSummaries = new ArrayList<>();
 
@@ -200,11 +221,11 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		if (!excludeInitialData) {
 			synchronized (cachedInfoByBlockchain) {
 				Collection<CachedOfferInfo> cachedInfos;
-				if (normalizedForeignBlockchain == null)
+				if (foreignBlockchainEntry == null)
 					// No preferred blockchain, so iterate through all of them
 					cachedInfos = cachedInfoByBlockchain.values();
 				else
-					cachedInfos = Collections.singleton(cachedInfoByBlockchain.computeIfAbsent(normalizedForeignBlockchain, k -> new CachedOfferInfo()));
+					cachedInfos = Collections.singleton(cachedInfoByBlockchain.computeIfAbsent(foreignBlockchainEntry.name(), k -> new CachedOfferInfo()));
 
 				for (CachedOfferInfo cachedInfo : cachedInfos) {
 					crossChainOfferSummaries.addAll(cachedInfo.currentSummaries.values());
@@ -227,6 +248,8 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 	public void onWebSocketClose(Session session, int statusCode, String reason) {
 		// clean up
 		sessionBlockchain.remove(session);
+		sessionOfferedForeignBlockchain.remove(session);
+		sessionRequestedForeignBlockchain.remove(session);
 		sessionLocalAssetId.remove(session);
 		super.onWebSocketClose(session, statusCode, reason);
 	}
@@ -261,14 +284,20 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 	}
 
 	private static List<CrossChainOfferSummary> filterForSession(Session session, List<CrossChainOfferSummary> crossChainOfferSummaries) {
+		ForeignBlockchainRegistry.Entry foreignBlockchain = sessionBlockchain.get(session);
+		ForeignBlockchainRegistry.Entry offeredForeignBlockchain = sessionOfferedForeignBlockchain.get(session);
+		ForeignBlockchainRegistry.Entry requestedForeignBlockchain = sessionRequestedForeignBlockchain.get(session);
 		Long localAssetId = sessionLocalAssetId.get(session);
-		if (localAssetId == null)
-			return crossChainOfferSummaries;
 
-		return crossChainOfferSummaries.stream()
-				.filter(offerSummary -> offerSummary.getTradeDirection() != TradeDirection.SELL_FOREIGN_FOR_FOREIGN
-						&& offerSummary.getLocalAssetId() == localAssetId)
-				.collect(Collectors.toList());
+		Map<String, CrossChainOfferSummary> filteredSummariesByAtAddress = new LinkedHashMap<>();
+		for (CrossChainOfferSummary offerSummary : crossChainOfferSummaries) {
+			if (CrossChainTradeFilters.matchesOfferSummary(offerSummary, foreignBlockchain,
+					offeredForeignBlockchain, requestedForeignBlockchain, localAssetId)) {
+				filteredSummariesByAtAddress.putIfAbsent(offerSummary.getAtAddress(), offerSummary);
+			}
+		}
+
+		return new ArrayList<>(filteredSummariesByAtAddress.values());
 	}
 
 	private static void populateCurrentSummaries(Repository repository) throws DataException {
@@ -394,28 +423,38 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 	}
 
 	private static boolean matchesBlockchain(CrossChainTradeData crossChainTradeData, ForeignBlockchainRegistry.Entry blockchain) {
-		if (crossChainTradeData == null)
-			return false;
-
-		if (blockchain == null)
-			return true;
-
-		String blockchainName = blockchain.name();
-		return blockchainName.equals(crossChainTradeData.foreignBlockchain)
-				|| blockchainName.equals(crossChainTradeData.offeredForeignBlockchain)
-				|| blockchainName.equals(crossChainTradeData.requestedForeignBlockchain);
+		return CrossChainTradeFilters.matchesForeignBlockchain(crossChainTradeData, blockchain);
 	}
 
 	private static boolean matchesBlockchain(CrossChainOfferSummary offerSummary, ForeignBlockchainRegistry.Entry blockchain) {
-		if (offerSummary == null)
-			return false;
+		return CrossChainTradeFilters.matchesForeignBlockchain(offerSummary, blockchain);
+	}
 
+	private static boolean isDuplicateForeignForeignCacheSummary(CrossChainOfferSummary offerSummary,
+			ForeignBlockchainRegistry.Entry blockchain) {
+		return offerSummary.getTradeDirection() == TradeDirection.SELL_FOREIGN_FOR_FOREIGN
+				&& offerSummary.getOfferedForeignBlockchain() != null
+				&& !blockchain.name().equals(offerSummary.getOfferedForeignBlockchain());
+	}
+
+	private static ForeignBlockchainRegistry.Entry resolveOptionalBlockchain(Map<String, List<String>> queryParams, String parameterName,
+			Session session, int closeStatusCode) {
+		List<String> blockchains = queryParams.get(parameterName);
+		String blockchain = blockchains == null || blockchains.isEmpty() ? null : blockchains.get(0);
 		if (blockchain == null)
-			return true;
+			return null;
 
-		String blockchainName = blockchain.name();
-		return blockchainName.equals(offerSummary.getForeignBlockchain())
-				|| blockchainName.equals(offerSummary.getOfferedForeignBlockchain())
-				|| blockchainName.equals(offerSummary.getRequestedForeignBlockchain());
+		ForeignBlockchainRegistry.Entry blockchainEntry = ForeignBlockchainRegistry.fromString(blockchain);
+		if (blockchainEntry == null) {
+			session.close(closeStatusCode, "unknown blockchain: " + blockchain);
+			return null;
+		}
+
+		return blockchainEntry;
+	}
+
+	private static boolean isSupplied(Map<String, List<String>> queryParams, String parameterName) {
+		List<String> values = queryParams.get(parameterName);
+		return values != null && !values.isEmpty();
 	}
 }

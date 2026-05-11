@@ -145,12 +145,20 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 		}
 
 		CrossChainResource resource = (CrossChainResource) ApiCommon.buildResource(CrossChainResource.class);
-		List<CrossChainTradeData> bitcoinOffers = resource.getTradeOffers("BITCOIN", null, null, null, null);
-		List<CrossChainTradeData> litecoinOffers = resource.getTradeOffers("LITECOIN", null, null, null, null);
-		List<CrossChainTradeData> nativeFilteredOffers = resource.getTradeOffers("BITCOIN", Asset.NATIVE, null, null, null);
+		List<CrossChainTradeData> bitcoinOffers = resource.getTradeOffers("BITCOIN", null, null, null, null, null, null);
+		List<CrossChainTradeData> litecoinOffers = resource.getTradeOffers("LITECOIN", null, null, null, null, null, null);
+		List<CrossChainTradeData> offeredBitcoinOffers = resource.getTradeOffers(null, "BITCOIN", null, null, null, null, null);
+		List<CrossChainTradeData> requestedLitecoinOffers = resource.getTradeOffers(null, null, "LITECOIN", null, null, null, null);
+		List<CrossChainTradeData> exactBitcoinLitecoinOffers = resource.getTradeOffers(null, "BITCOIN", "LITECOIN", null, null, null, null);
+		List<CrossChainTradeData> swappedLitecoinBitcoinOffers = resource.getTradeOffers(null, "LITECOIN", "BITCOIN", null, null, null, null);
+		List<CrossChainTradeData> nativeFilteredOffers = resource.getTradeOffers("BITCOIN", null, null, Asset.NATIVE, null, null, null);
 
 		assertTrue(bitcoinOffers.stream().anyMatch(tradeData -> atAddress.equals(tradeData.atAddress)));
 		assertTrue(litecoinOffers.stream().anyMatch(tradeData -> atAddress.equals(tradeData.atAddress)));
+		assertTrue(offeredBitcoinOffers.stream().anyMatch(tradeData -> atAddress.equals(tradeData.atAddress)));
+		assertTrue(requestedLitecoinOffers.stream().anyMatch(tradeData -> atAddress.equals(tradeData.atAddress)));
+		assertTrue(exactBitcoinLitecoinOffers.stream().anyMatch(tradeData -> atAddress.equals(tradeData.atAddress)));
+		assertFalse(swappedLitecoinBitcoinOffers.stream().anyMatch(tradeData -> atAddress.equals(tradeData.atAddress)));
 		assertFalse(nativeFilteredOffers.stream().anyMatch(tradeData -> atAddress.equals(tradeData.atAddress)));
 	}
 

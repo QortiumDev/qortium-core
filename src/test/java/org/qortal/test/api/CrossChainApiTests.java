@@ -21,15 +21,17 @@ public class CrossChainApiTests extends ApiCommon {
 
 	@Test
 	public void testGetTradeOffers() {
-		assertNoApiError((limit, offset, reverse) -> this.crossChainResource.getTradeOffers(SPECIFIC_BLOCKCHAIN, null, limit, offset, reverse));
-		assertNoApiError((limit, offset, reverse) -> this.crossChainResource.getTradeOffers(SPECIFIC_BLOCKCHAIN_ALIAS, null, limit, offset, reverse));
+		assertNoApiError((limit, offset, reverse) -> this.crossChainResource.getTradeOffers(SPECIFIC_BLOCKCHAIN, null, null, null, limit, offset, reverse));
+		assertNoApiError((limit, offset, reverse) -> this.crossChainResource.getTradeOffers(SPECIFIC_BLOCKCHAIN_ALIAS, null, null, null, limit, offset, reverse));
+		assertNoApiError((limit, offset, reverse) -> this.crossChainResource.getTradeOffers(null, "BTC", "LTC", null, limit, offset, reverse));
 	}
 
 	@Test
 	public void testGetCompletedTrades() {
 		long minimumTimestamp = System.currentTimeMillis();
-		assertNoApiError((limit, offset, reverse) -> this.crossChainResource.getCompletedTrades(SPECIFIC_BLOCKCHAIN, null, minimumTimestamp, null, null, limit, offset, reverse));
-		assertNoApiError((limit, offset, reverse) -> this.crossChainResource.getCompletedTrades(SPECIFIC_BLOCKCHAIN_ALIAS, null, minimumTimestamp, null, null, limit, offset, reverse));
+		assertNoApiError((limit, offset, reverse) -> this.crossChainResource.getCompletedTrades(SPECIFIC_BLOCKCHAIN, null, null, null, minimumTimestamp, null, null, limit, offset, reverse));
+		assertNoApiError((limit, offset, reverse) -> this.crossChainResource.getCompletedTrades(SPECIFIC_BLOCKCHAIN_ALIAS, null, null, null, minimumTimestamp, null, null, limit, offset, reverse));
+		assertNoApiError((limit, offset, reverse) -> this.crossChainResource.getCompletedTrades(null, "BTC", "LTC", null, minimumTimestamp, null, null, limit, offset, reverse));
 	}
 
 	@Test
@@ -38,10 +40,14 @@ public class CrossChainApiTests extends ApiCommon {
 		Integer offset = null;
 		Boolean reverse = null;
 
-		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(SPECIFIC_BLOCKCHAIN, null, -1L /*minimumTimestamp*/, null, null, limit, offset, reverse));
-		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(SPECIFIC_BLOCKCHAIN, null, 0L /*minimumTimestamp*/, null, null, limit, offset, reverse));
-		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getTradeOffers(UNKNOWN_BLOCKCHAIN, null, limit, offset, reverse));
-		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(UNKNOWN_BLOCKCHAIN, null, null, null, null, limit, offset, reverse));
+		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(SPECIFIC_BLOCKCHAIN, null, null, null, -1L /*minimumTimestamp*/, null, null, limit, offset, reverse));
+		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(SPECIFIC_BLOCKCHAIN, null, null, null, 0L /*minimumTimestamp*/, null, null, limit, offset, reverse));
+		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getTradeOffers(UNKNOWN_BLOCKCHAIN, null, null, null, limit, offset, reverse));
+		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getTradeOffers(null, UNKNOWN_BLOCKCHAIN, null, null, limit, offset, reverse));
+		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getTradeOffers(null, null, UNKNOWN_BLOCKCHAIN, null, limit, offset, reverse));
+		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(UNKNOWN_BLOCKCHAIN, null, null, null, null, null, null, limit, offset, reverse));
+		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(null, UNKNOWN_BLOCKCHAIN, null, null, null, null, null, limit, offset, reverse));
+		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(null, null, UNKNOWN_BLOCKCHAIN, null, null, null, null, limit, offset, reverse));
 	}
 
 }

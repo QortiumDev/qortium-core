@@ -234,13 +234,35 @@ public class TradeBot implements Listener {
 		}
 
 		// Check taker doesn't already have an existing, on-going trade-bot entry for this AT.
-		if (!(acct instanceof BitcoinyACCTv4) && repository.getCrossChainRepository().existsTradeWithAtExcludingStates(atData.getATAddress(), acctTradeBot.getEndStates()))
+		if (!(acct instanceof BitcoinyACCTv4) && tradeResponseAlreadyExists(repository, atData.getATAddress(), acct, acctTradeBot))
 			return ResponseResult.TRADE_ALREADY_EXISTS;
 
 		if (acctTradeBot instanceof BitcoinyACCTv4TradeBot)
 			return ((BitcoinyACCTv4TradeBot) acctTradeBot).startResponse(repository, atData, acct, crossChainTradeData, foreignKey, receivingAddress, fillLocalAmount);
 
 		return acctTradeBot.startResponse(repository, atData, acct, crossChainTradeData, foreignKey, receivingAddress);
+	}
+
+	private boolean tradeResponseAlreadyExists(Repository repository, String atAddress, ACCT acct, AcctTradeBot acctTradeBot)
+			throws DataException {
+		if (!(acct instanceof BitcoinyForeignForeignACCTv1))
+			return repository.getCrossChainRepository().existsTradeWithAtExcludingStates(atAddress, acctTradeBot.getEndStates());
+
+		for (TradeBotData tradeBotData : repository.getCrossChainRepository().getAllTradeBotData()) {
+			if (!Objects.equals(atAddress, tradeBotData.getAtAddress()))
+				continue;
+
+			if (acctTradeBot.getEndStates().contains(tradeBotData.getState()))
+				continue;
+
+			if (!BitcoinyForeignForeignACCTv1.NAME.equals(tradeBotData.getAcctName()))
+				return true;
+
+			if (tradeBotData.getState() != null && tradeBotData.getState().startsWith("TAKER_"))
+				return true;
+		}
+
+		return false;
 	}
 
 	/**

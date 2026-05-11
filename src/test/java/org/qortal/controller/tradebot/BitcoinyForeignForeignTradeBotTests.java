@@ -86,7 +86,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	private static final byte[] INVALID_SECRET = HashCode.fromString("11223344556677889900aabbccddeeff00112233445566778899aabbccddeeff").asBytes();
 
 	private static final long OFFERED_FOREIGN_AMOUNT = 100_000L;
-	private static final long REQUESTED_FOREIGN_AMOUNT = 250_000L;
+	private static final long REQUESTED_FOREIGN_AMOUNT = 1_000_000L;
 	private static final long NATIVE_FEE_RESERVE = 3L * Amounts.MULTIPLIER;
 	private static final long TEST_MESSAGE_FEE = Amounts.MULTIPLIER / 100L;
 	private static final int TRADE_TIMEOUT = 120;
@@ -207,7 +207,8 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	}
 
 	@Test
-	public void testApiMakerCreateRejectsInvalidForeignForeignCriteria() {
+	public void testApiMakerCreateRejectsInvalidForeignForeignCriteria() throws Exception {
+		prepareApiNodeState();
 		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
 		PrivateKeyAccount creator = Common.getTestAccount(null, "chloe");
 
@@ -1360,6 +1361,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 
 	private static void prepareApiNodeState() throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "singleNodeTestnet", true, true);
+		FieldUtils.writeField(Settings.getInstance(), "localAuthBypassEnabled", true, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			BlockUtils.mintBlock(repository);

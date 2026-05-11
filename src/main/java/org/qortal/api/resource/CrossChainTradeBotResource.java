@@ -14,6 +14,7 @@ import org.qortal.account.PublicKeyAccount;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
+import org.qortal.api.CrossChainTradeFilters;
 import org.qortal.api.Security;
 import org.qortal.api.model.crosschain.TradeBotLockLocalRequest;
 import org.qortal.api.model.crosschain.TradeBotCreateRequest;
@@ -91,17 +92,32 @@ public class CrossChainTradeBotResource {
 					description = "Limit to specific blockchain",
 					example = "LITECOIN",
 					schema = @Schema(type = "string")
-				) @QueryParam("foreignBlockchain") String foreignBlockchain) {
+				) @QueryParam("foreignBlockchain") String foreignBlockchain,
+			@Parameter(
+					description = "Limit to foreign/foreign trade-bot entries where this blockchain is being offered",
+					example = "BITCOIN",
+					schema = @Schema(type = "string")
+			) @QueryParam("offeredForeignBlockchain") String offeredForeignBlockchain,
+			@Parameter(
+					description = "Limit to foreign/foreign trade-bot entries where this blockchain is being requested",
+					example = "LITECOIN",
+					schema = @Schema(type = "string")
+			) @QueryParam("requestedForeignBlockchain") String requestedForeignBlockchain) {
 		Security.checkApiCallAllowed(request);
 		ForeignBlockchainRegistry.Entry foreignBlockchainEntry = resolveForeignBlockchainFilter(foreignBlockchain);
+		ForeignBlockchainRegistry.Entry offeredForeignBlockchainEntry = resolveForeignBlockchainFilter(offeredForeignBlockchain);
+		ForeignBlockchainRegistry.Entry requestedForeignBlockchainEntry = resolveForeignBlockchainFilter(requestedForeignBlockchain);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			List<TradeBotData> allTradeBotData = repository.getCrossChainRepository().getAllTradeBotData();
 
-			if (foreignBlockchainEntry == null)
+			if (foreignBlockchainEntry == null && offeredForeignBlockchainEntry == null && requestedForeignBlockchainEntry == null)
 				return allTradeBotData;
 
-			return allTradeBotData.stream().filter(tradeBotData -> foreignBlockchainEntry.name().equals(tradeBotData.getForeignBlockchain())).collect(Collectors.toList());
+			return allTradeBotData.stream()
+					.filter(tradeBotData -> CrossChainTradeFilters.matchesTradeBotData(tradeBotData,
+							foreignBlockchainEntry, offeredForeignBlockchainEntry, requestedForeignBlockchainEntry))
+					.collect(Collectors.toList());
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
