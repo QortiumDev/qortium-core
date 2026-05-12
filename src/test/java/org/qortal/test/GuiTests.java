@@ -32,6 +32,20 @@ public class GuiTests {
 	}
 
 	@Test
+	public void testSysTrayHeadlessNoOp() {
+		Assume.assumeTrue(GraphicsEnvironment.isHeadless());
+
+		SysTray sysTray = SysTray.getInstance();
+		sysTray.showMessage("Testing...", "Headless tray notifications should be no-op", MessageType.INFO);
+		sysTray.setToolTipText("Testing headless tray tooltip");
+		sysTray.setTrayIcon(1);
+		sysTray.setTrayIcon(2);
+		sysTray.setTrayIcon(3);
+		sysTray.setTrayIcon(4);
+		sysTray.dispose();
+	}
+
+	@Test
 	public void testSplashFrame() throws InterruptedException {
 		assumeDisplayAvailable();
 

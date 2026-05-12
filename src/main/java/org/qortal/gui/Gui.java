@@ -18,7 +18,7 @@ public class Gui {
 
 	private boolean isHeadless;
 	private SplashFrame splashFrame = null;
-	private SysTray sysTray = null;
+	private NodeTray nodeTray = null;
 
 	private Gui() {
 		try {
@@ -67,7 +67,7 @@ public class Gui {
 		this.splashFrame.dispose();
 		this.splashFrame = null;
 
-		this.sysTray = SysTray.getInstance();
+		this.nodeTray = NodeTrayFactory.getInstance();
 	}
 
 	public void shutdown() {
@@ -77,8 +77,8 @@ public class Gui {
 		if (this.splashFrame != null)
 			this.splashFrame.dispose();
 
-		if (this.sysTray != null)
-			this.sysTray.dispose();
+		if (this.nodeTray != null)
+			this.nodeTray.dispose();
 	}
 
 	public void fatalError(String title, String message) {

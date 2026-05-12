@@ -20,7 +20,8 @@ import org.qortal.data.transaction.TransactionData;
 import org.qortal.event.Event;
 import org.qortal.event.EventBus;
 import org.qortal.event.Listener;
-import org.qortal.gui.SysTray;
+import org.qortal.gui.NodeTrayFactory;
+import org.qortal.gui.TrayMessageType;
 import org.qortal.network.Network;
 import org.qortal.network.Peer;
 import org.qortal.network.message.GetTradePresencesMessage;
@@ -35,7 +36,6 @@ import org.qortal.transaction.Transaction;
 import org.qortal.utils.ByteArray;
 import org.qortal.utils.NTP;
 
-import java.awt.TrayIcon.MessageType;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.Executors;
@@ -413,7 +413,7 @@ public class TradeBot implements Listener {
 		repository.saveChanges();
 
 		if (Settings.getInstance().isTradebotSystrayEnabled())
-			SysTray.getInstance().showMessage("Trade-Bot", String.format("%s: %s", tradeBotData.getAtAddress(), newState), MessageType.INFO);
+			NodeTrayFactory.getInstance().showMessage("Trade-Bot", String.format("%s: %s", tradeBotData.getAtAddress(), newState), TrayMessageType.INFO);
 
 		if (logMessageSupplier != null)
 			LOGGER.info(logMessageSupplier.get());

@@ -4,13 +4,13 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.crypto.Crypto;
 import org.qortal.globalization.Translator;
-import org.qortal.gui.SysTray;
+import org.qortal.gui.NodeTrayFactory;
+import org.qortal.gui.TrayMessageType;
 import org.qortal.controller.Controller;
 import org.qortal.repository.*;
 import org.qortal.repository.hsqldb.transaction.HSQLDBTransactionRepository;
 import org.qortal.settings.Settings;
 
-import java.awt.TrayIcon.MessageType;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -523,9 +523,9 @@ public class HSQLDBRepository implements Repository {
 					LOGGER.info("Performing repository CHECKPOINT on attempt {}...", attemptNumber);
 
 					if (Settings.getInstance().getShowCheckpointNotification())
-						SysTray.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "DB_CHECKPOINT"),
+						NodeTrayFactory.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "DB_CHECKPOINT"),
 								Translator.INSTANCE.translate("SysTray", "PERFORMING_DB_CHECKPOINT"),
-								MessageType.INFO);
+								TrayMessageType.INFO);
 
 					try (Statement stmt = this.connection.createStatement()) {
 						stmt.execute(Boolean.TRUE.equals(quickCheckpointRequest) ? "CHECKPOINT" : "CHECKPOINT DEFRAG");

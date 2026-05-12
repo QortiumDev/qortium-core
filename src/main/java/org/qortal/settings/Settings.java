@@ -82,6 +82,7 @@ public class Settings {
 	private static final ObjectMapper SETTINGS_JSON_MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 	private static final TypeReference<LinkedHashMap<String, Object>> SETTINGS_MAP_TYPE = new TypeReference<LinkedHashMap<String, Object>>() {};
 	private static final TypeReference<LinkedHashMap<String, LinkedHashMap<String, BitcoinyServerSettings>>> BITCOINY_SERVERS_MAP_TYPE = new TypeReference<LinkedHashMap<String, LinkedHashMap<String, BitcoinyServerSettings>>>() {};
+	@XmlTransient
 	private static final Map<String, WritableSetting> WRITABLE_SETTINGS = buildWritableSettings();
 
 	// Properties
@@ -828,6 +829,7 @@ public class Settings {
 		STORAGE_POLICY
 	}
 
+	@XmlTransient
 	private static class WritableSetting {
 		private final WritableSettingType type;
 		private final boolean restartRequired;

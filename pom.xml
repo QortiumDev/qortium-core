@@ -21,6 +21,7 @@
 		<commons-compress.version>1.27.1</commons-compress.version>
 		<commons-lang3.version>3.17.0</commons-lang3.version>
 		<dagger.version>1.2.2</dagger.version>
+		<dbus-java.version>4.3.2</dbus-java.version>
 		<extendedset.version>0.12.3</extendedset.version>
 		<git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
 		<grpc.version>1.68.3</grpc.version>
@@ -514,6 +515,17 @@
 			<groupId>org.jupnp</groupId>
 			<artifactId>org.jupnp</artifactId>
 			<version>${jupnp.version}</version>
+		</dependency>
+		<!-- Linux StatusNotifierItem/AppIndicator tray support -->
+		<dependency>
+			<groupId>com.github.hypfvieh</groupId>
+			<artifactId>dbus-java-core</artifactId>
+			<version>${dbus-java.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.github.hypfvieh</groupId>
+			<artifactId>dbus-java-transport-junixsocket</artifactId>
+			<version>${dbus-java.version}</version>
 		</dependency>
 		<!-- Bitcoin support -->
 		<dependency>

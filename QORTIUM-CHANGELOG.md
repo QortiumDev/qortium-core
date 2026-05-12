@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - gui: add native tray abstraction
+
+Reworked system tray handling behind a safe node-tray abstraction with Linux StatusNotifierItem support, AWT fallback, and no-op behavior when the desktop tray is unavailable or tests run headless. Core notification paths no longer depend directly on AWT tray types, GUI tests now cover headless tray safety and factory fallback behavior, and settings metadata is marked internal so settings loading stays stable under MOXy.
+
 ### 2026-05-11 - api: add group search endpoint
 
 Added a group search API backed by repository and HSQLDB search support. Clients can now search group names and descriptions, page through results, reverse sort order, and filter by all, open, or closed groups while receiving the same member count and owner primary-name enrichment as the existing group list APIs.

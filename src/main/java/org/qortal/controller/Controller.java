@@ -35,7 +35,10 @@ import org.qortal.notification.NotificationEvent;
 import org.qortal.notification.NotificationManager;
 import org.qortal.globalization.Translator;
 import org.qortal.gui.Gui;
-import org.qortal.gui.SysTray;
+import org.qortal.gui.NodeTray;
+import org.qortal.gui.NodeTrayFactory;
+import org.qortal.gui.TrayIconState;
+import org.qortal.gui.TrayMessageType;
 import org.qortal.network.Network;
 import org.qortal.network.NetworkData;
 import org.qortal.network.Peer;
@@ -55,7 +58,6 @@ import org.qortal.utils.*;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 
-import java.awt.TrayIcon.MessageType;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -849,9 +851,9 @@ public class Controller extends Thread {
 					repositoryBackupTimestamp = now + repositoryBackupInterval;
 
 					if (Settings.getInstance().getShowBackupNotification())
-						SysTray.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "DB_BACKUP"),
+						NodeTrayFactory.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "DB_BACKUP"),
 								Translator.INSTANCE.translate("SysTray", "CREATING_BACKUP_OF_DB_FILES"),
-								MessageType.INFO);
+								TrayMessageType.INFO);
 
 					try {
 						// Timeout if the database isn't ready for backing up after 60 seconds
@@ -868,9 +870,9 @@ public class Controller extends Thread {
 					repositoryMaintenanceTimestamp = now + repositoryMaintenanceInterval;
 
 					if (Settings.getInstance().getShowMaintenanceNotification())
-						SysTray.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "DB_MAINTENANCE"),
+						NodeTrayFactory.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "DB_MAINTENANCE"),
 								Translator.INSTANCE.translate("SysTray", "PERFORMING_DB_MAINTENANCE"),
-								MessageType.INFO);
+								TrayMessageType.INFO);
 
 					LOGGER.info("Starting scheduled repository maintenance. This can take a while...");
 					int attempts = 0;
@@ -1064,9 +1066,11 @@ public class Controller extends Thread {
 	}
 
 	public void updateSysTray() {
+		NodeTray nodeTray = NodeTrayFactory.getInstance();
+
 		if (NTP.getTime() == null) {
-			SysTray.getInstance().setToolTipText(Translator.INSTANCE.translate("SysTray", "SYNCHRONIZING_CLOCK"));
-			SysTray.getInstance().setTrayIcon(1);
+			nodeTray.setToolTipText(Translator.INSTANCE.translate("SysTray", "SYNCHRONIZING_CLOCK"));
+			nodeTray.setTrayIcon(TrayIconState.SYNCHRONIZING_CLOCK);
 			return;
 		}
 
@@ -1091,27 +1095,27 @@ public class Controller extends Thread {
 		synchronized (Synchronizer.getInstance().syncLock) {
 			if (Settings.getInstance().isLite()) {
 				actionText = Translator.INSTANCE.translate("SysTray", "LITE_NODE");
-				SysTray.getInstance().setTrayIcon(4);
+				nodeTray.setTrayIcon(TrayIconState.SYNCED);
 			}
 			else if (numberOfPeers < Settings.getInstance().getMinBlockchainPeers()) {
 				actionText = Translator.INSTANCE.translate("SysTray", "CONNECTING");
-				SysTray.getInstance().setTrayIcon(3);
+				nodeTray.setTrayIcon(TrayIconState.SYNCHRONIZING);
 			}
 			else if (!this.isUpToDate(minLatestBlockTimestamp) && isSyncing) {
 				actionText = String.format("%s - %d%%", Translator.INSTANCE.translate("SysTray", "SYNCHRONIZING_BLOCKCHAIN"), Synchronizer.getInstance().getSyncPercent());
-				SysTray.getInstance().setTrayIcon(3);
+				nodeTray.setTrayIcon(TrayIconState.SYNCHRONIZING);
 			}
 			else if (!this.isUpToDate(minLatestBlockTimestamp)) {
 				actionText = String.format("%s", Translator.INSTANCE.translate("SysTray", "SYNCHRONIZING_BLOCKCHAIN"));
-				SysTray.getInstance().setTrayIcon(3);
+				nodeTray.setTrayIcon(TrayIconState.SYNCHRONIZING);
 			}
 			else if (OnlineAccountsManager.getInstance().hasActiveOnlineAccountSignatures()) {
 				actionText = Translator.INSTANCE.translate("SysTray", "MINTING_ENABLED");
-				SysTray.getInstance().setTrayIcon(2);
+				nodeTray.setTrayIcon(TrayIconState.MINTING);
 			}
 			else {
 				actionText = Translator.INSTANCE.translate("SysTray", "MINTING_DISABLED");
-				SysTray.getInstance().setTrayIcon(4);
+				nodeTray.setTrayIcon(TrayIconState.SYNCED);
 			}
 		}
 
@@ -1126,7 +1130,7 @@ public class Controller extends Thread {
 			}
 		}
 		tooltip = tooltip.concat(String.format("\n%s: %s", Translator.INSTANCE.translate("SysTray", "BUILD_VERSION"), this.buildVersion));
-		SysTray.getInstance().setToolTipText(tooltip);
+		nodeTray.setToolTipText(tooltip);
 
 		this.callbackExecutor.execute(() -> {
 			EventBus.INSTANCE.notify(new StatusChangeEvent());

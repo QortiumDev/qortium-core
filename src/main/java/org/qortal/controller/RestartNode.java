@@ -4,11 +4,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.ApplyRestart;
 import org.qortal.globalization.Translator;
-import org.qortal.gui.SysTray;
+import org.qortal.gui.NodeTrayFactory;
+import org.qortal.gui.TrayMessageType;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.settings.Settings;
 
-import java.awt.TrayIcon.MessageType;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -77,9 +77,9 @@ public class RestartNode {
 
 			LOGGER.debug(String.format("Restarting node with: %s", String.join(" ", javaCmd)));
 
-			SysTray.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "RESTARTING_NODE"),
+			NodeTrayFactory.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "RESTARTING_NODE"),
 					Translator.INSTANCE.translate("SysTray", "APPLYING_RESTARTING_NODE"),
-					MessageType.INFO);
+					TrayMessageType.INFO);
 
 			ProcessBuilder processBuilder = new ProcessBuilder(javaCmd);
 

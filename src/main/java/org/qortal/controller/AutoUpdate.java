@@ -11,7 +11,8 @@ import org.qortal.block.BlockChain;
 import org.qortal.data.transaction.ArbitraryTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.globalization.Translator;
-import org.qortal.gui.SysTray;
+import org.qortal.gui.NodeTrayFactory;
+import org.qortal.gui.TrayMessageType;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -21,7 +22,6 @@ import org.qortal.transaction.Transaction.TransactionType;
 import org.qortal.utils.Base58;
 import org.qortal.utils.Groups;
 
-import java.awt.TrayIcon.MessageType;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -472,9 +472,9 @@ public class AutoUpdate extends Thread {
 		Path newJarAbsolute = newJar.toAbsolutePath();
 		String[] savedArgs = Controller.getInstance().getSavedArgs();
 
-		SysTray.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "AUTO_UPDATE"),
+		NodeTrayFactory.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "AUTO_UPDATE"),
 				Translator.INSTANCE.translate("SysTray", "APPLYING_UPDATE_AND_RESTARTING"),
-				MessageType.INFO);
+				TrayMessageType.INFO);
 
 		List<String> javaCandidates = buildJavaCandidates(javaBinary);
 		List<String> runtimeInputArgs = ManagementFactory.getRuntimeMXBean().getInputArguments();
