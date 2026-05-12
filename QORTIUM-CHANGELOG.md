@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - qdn: add service capability registry
+
+Moved QDN app-library rating service policy into a dedicated capability registry instead of keeping accepted services hidden inside the ratings API. App, website, plugin, extension, and game ratings are now handled through the same registry-backed path, unsupported service filters fail clearly, and tests cover the registry rules and app-rating API filtering.
+
 ### 2026-05-11 - core: harden QDN update authority
 
 Made QDN auto-update authority stricter and more operator-visible. Approved update manifests must now pin the exact QDN binary transaction, mutable name/identifier fallback lookup is rejected, and `/admin/update` reports manifest approval metadata, pinned binary metadata, active development-group details, and the configured auto-update mode. Operators can choose `OFF`, `CHECK_ONLY`, `NOTIFY`, or `INSTALL`, with legacy `autoUpdateEnabled` settings still mapped for compatibility.

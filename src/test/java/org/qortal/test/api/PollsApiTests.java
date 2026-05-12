@@ -2,6 +2,7 @@ package org.qortal.test.api;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.api.ApiError;
 import org.qortal.api.model.AppRatingsResponse;
 import org.qortal.api.model.PollVotes;
 import org.qortal.api.resource.PollsResource;
@@ -39,22 +40,25 @@ public class PollsApiTests extends ApiCommon {
 			// Create test app rating polls
 			createTestAppRatingPoll(repository, "app-library-APP-rating-Q-Tube");
 			createTestAppRatingPoll(repository, "app-library-WEBSITE-rating-Q-Blog");
+			createTestAppRatingPoll(repository, "app-library-PLUGIN-rating-Q-Plugin");
 			createTestAppRatingPoll(repository, "app-library-APP-rating-Q-Chat");
 
 			// Test getting all app ratings
 			AppRatingsResponse response = this.pollsResource.getAppRatings(null, null, null, null, null);
 			assertNotNull(response);
 			assertNotNull(response.ratings);
-			assertTrue(response.count >= 3);
+			assertTrue(response.count >= 4);
 
 			// Verify response contains our test polls
 			assertTrue(response.ratings.containsKey("app-library-APP-rating-Q-Tube"));
 			assertTrue(response.ratings.containsKey("app-library-WEBSITE-rating-Q-Blog"));
+			assertTrue(response.ratings.containsKey("app-library-PLUGIN-rating-Q-Plugin"));
 			assertTrue(response.ratings.containsKey("app-library-APP-rating-Q-Chat"));
 
 			// Clean up
 			deleteTestPoll(repository, "app-library-APP-rating-Q-Tube");
 			deleteTestPoll(repository, "app-library-WEBSITE-rating-Q-Blog");
+			deleteTestPoll(repository, "app-library-PLUGIN-rating-Q-Plugin");
 			deleteTestPoll(repository, "app-library-APP-rating-Q-Chat");
 		}
 	}
@@ -65,22 +69,36 @@ public class PollsApiTests extends ApiCommon {
 			// Create test polls
 			createTestAppRatingPoll(repository, "app-library-APP-rating-Test1");
 			createTestAppRatingPoll(repository, "app-library-WEBSITE-rating-Test2");
+			createTestAppRatingPoll(repository, "app-library-PLUGIN-rating-Test3");
 
 			// Test filtering by APP service
 			AppRatingsResponse appResponse = this.pollsResource.getAppRatings("APP", null, null, null, null);
 			assertNotNull(appResponse);
 			assertTrue(appResponse.ratings.containsKey("app-library-APP-rating-Test1"));
 			assertFalse(appResponse.ratings.containsKey("app-library-WEBSITE-rating-Test2"));
+			assertFalse(appResponse.ratings.containsKey("app-library-PLUGIN-rating-Test3"));
 
 			// Test filtering by WEBSITE service
 			AppRatingsResponse websiteResponse = this.pollsResource.getAppRatings("WEBSITE", null, null, null, null);
 			assertNotNull(websiteResponse);
 			assertFalse(websiteResponse.ratings.containsKey("app-library-APP-rating-Test1"));
 			assertTrue(websiteResponse.ratings.containsKey("app-library-WEBSITE-rating-Test2"));
+			assertFalse(websiteResponse.ratings.containsKey("app-library-PLUGIN-rating-Test3"));
+
+			// Test filtering by PLUGIN service using case-insensitive input
+			AppRatingsResponse pluginResponse = this.pollsResource.getAppRatings("plugin", null, null, null, null);
+			assertNotNull(pluginResponse);
+			assertFalse(pluginResponse.ratings.containsKey("app-library-APP-rating-Test1"));
+			assertFalse(pluginResponse.ratings.containsKey("app-library-WEBSITE-rating-Test2"));
+			assertTrue(pluginResponse.ratings.containsKey("app-library-PLUGIN-rating-Test3"));
+
+			assertApiError(ApiError.INVALID_CRITERIA,
+					() -> this.pollsResource.getAppRatings("DOCUMENT", null, null, null, null));
 
 			// Clean up
 			deleteTestPoll(repository, "app-library-APP-rating-Test1");
 			deleteTestPoll(repository, "app-library-WEBSITE-rating-Test2");
+			deleteTestPoll(repository, "app-library-PLUGIN-rating-Test3");
 		}
 	}
 

@@ -36,7 +36,7 @@ public class AppRatingsResponse {
 		@Schema(description = "Poll name")
 		public String pollName;
 
-		@Schema(description = "Service type (APP or WEBSITE)")
+		@Schema(description = "QDN service type")
 		public String service;
 
 		@Schema(description = "App name")

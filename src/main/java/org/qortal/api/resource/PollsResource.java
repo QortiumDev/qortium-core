@@ -14,6 +14,8 @@ import org.qortal.api.ApiException;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.model.AppRatingsResponse;
 import org.qortal.api.model.PollVotes;
+import org.qortal.arbitrary.misc.QdnServiceCapabilityRegistry;
+import org.qortal.arbitrary.misc.Service;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.transaction.CreatePollTransactionData;
@@ -194,7 +196,7 @@ public class PollsResource {
     )
     @ApiErrors({ApiError.REPOSITORY_ISSUE, ApiError.INVALID_CRITERIA})
     public AppRatingsResponse getAppRatings(
-            @Parameter(description = "Filter by service type (APP or WEBSITE)")
+            @Parameter(description = "Filter by app-library rating service type")
             @QueryParam("service") String service,
 
             @Parameter(ref = "limit")
@@ -211,12 +213,15 @@ public class PollsResource {
     ) {
             try (final Repository repository = RepositoryManager.getRepository()) {
                     // Build prefix based on service filter
-                    String prefix = "app-library-";
+                    String prefix = QdnServiceCapabilityRegistry.appLibraryRatingPrefix();
                     if (service != null) {
-                            if (!service.equals("APP") && !service.equals("WEBSITE")) {
+                            Service ratingService;
+                            try {
+                                    ratingService = QdnServiceCapabilityRegistry.requireAppLibraryRatingService(service);
+                            } catch (IllegalArgumentException e) {
                                     throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
                             }
-                            prefix = "app-library-" + service + "-rating-";
+                            prefix = QdnServiceCapabilityRegistry.appLibraryRatingPrefix(ratingService);
                     }
 
                     // Fetch polls with votes
@@ -245,10 +250,11 @@ public class PollsResource {
                             // Parse poll name: app-library-{SERVICE}-rating-{APP_NAME}
                             String extractedService = null;
                             String appName = null;
-                            String[] parts = pollName.split("-", 5);
-                            if (parts.length >= 5) {
-                                    extractedService = parts[2];  // APP or WEBSITE
-                                    appName = parts[4];            // Q-Tube, etc.
+                            QdnServiceCapabilityRegistry.AppLibraryRatingPollName parsedPollName =
+                                            QdnServiceCapabilityRegistry.parseAppLibraryRatingPollName(pollName);
+                            if (parsedPollName != null) {
+                                    extractedService = parsedPollName.service;
+                                    appName = parsedPollName.appName;
                             }
 
                             // Convert vote maps to lists
