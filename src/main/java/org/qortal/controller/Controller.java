@@ -612,7 +612,7 @@ public class Controller extends Thread {
 		TransactionImporter.getInstance().start();
 
 		// Auto-update service?
-		if (Settings.getInstance().isAutoUpdateEnabled()) {
+		if (AutoUpdate.shouldStartBackgroundService()) {
 			LOGGER.info("Starting auto-update");
 			AutoUpdate.getInstance().start();
 		}
@@ -1213,9 +1213,10 @@ public class Controller extends Thread {
 					pirateWalletController.shutdown();
 				}
 
-				if (Settings.getInstance().isAutoUpdateEnabled()) {
+				AutoUpdate autoUpdate = AutoUpdate.getLoadedInstance();
+				if (autoUpdate != null) {
 					LOGGER.info("Shutting down auto-update");
-					AutoUpdate.getInstance().shutdown();
+					autoUpdate.shutdown();
 				}
 
 			// Arbitrary data controllers

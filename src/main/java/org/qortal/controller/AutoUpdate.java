@@ -8,8 +8,10 @@ import org.qortal.arbitrary.ArbitraryDataFile.ResourceIdType;
 import org.qortal.arbitrary.ArbitraryDataReader;
 import org.qortal.arbitrary.exception.MissingDataException;
 import org.qortal.block.BlockChain;
+import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.ArbitraryTransactionData;
 import org.qortal.data.transaction.TransactionData;
+import org.qortal.crypto.Crypto;
 import org.qortal.globalization.Translator;
 import org.qortal.gui.NodeTrayFactory;
 import org.qortal.gui.TrayMessageType;
@@ -17,6 +19,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.settings.Settings;
+import org.qortal.settings.Settings.AutoUpdateMode;
 import org.qortal.transaction.ArbitraryTransaction;
 import org.qortal.transaction.Transaction.TransactionType;
 import org.qortal.utils.Base58;
@@ -61,6 +64,8 @@ public class AutoUpdate extends Thread {
 	public static final String STATUS_MANIFEST_NOT_LOCAL = "MANIFEST_NOT_LOCAL";
 	public static final String STATUS_INVALID_MANIFEST = "INVALID_MANIFEST";
 	public static final String STATUS_LEGACY_MANIFEST = "LEGACY_MANIFEST";
+	public static final String STATUS_UNPINNED_MANIFEST = "UNPINNED_MANIFEST";
+	public static final String STATUS_INVALID_BINARY_TRANSACTION = "INVALID_BINARY_TRANSACTION";
 	public static final String STATUS_NOT_NEWER = "NOT_NEWER";
 	public static final String STATUS_UPDATE_AVAILABLE = "UPDATE_AVAILABLE";
 	public static final String STATUS_INSTALL_IN_PROGRESS = "INSTALL_IN_PROGRESS";
@@ -73,6 +78,7 @@ public class AutoUpdate extends Thread {
 	private static final AtomicBoolean updateInstallInProgress = new AtomicBoolean(false);
 
 	private volatile boolean isStopping = false;
+	private String lastNotifiedManifestSignature = null;
 
 	private AutoUpdate() {
 	}
@@ -84,12 +90,21 @@ public class AutoUpdate extends Thread {
 		return instance;
 	}
 
+	public static AutoUpdate getLoadedInstance() {
+		return instance;
+	}
+
+	public static boolean shouldStartBackgroundService() {
+		return Settings.getInstance().getAutoUpdateMode() != AutoUpdateMode.OFF;
+	}
+
 	@Override
 	public void run() {
 		Thread.currentThread().setName("Auto-update");
 
 		if (!Settings.getInstance().isQdnEnabled()) {
-			LOGGER.warn("Auto-update is enabled but QDN is disabled. Skipping auto-update service.");
+			LOGGER.warn("Auto-update mode is {} but QDN is disabled. Skipping auto-update service.",
+					Settings.getInstance().getAutoUpdateMode());
 			return;
 		}
 
@@ -120,10 +135,22 @@ public class AutoUpdate extends Thread {
 
 				LOGGER.info("Update's git commit hash: {}", lookup.status.commitHash);
 
-				if (attemptUpdate(lookup.manifest)) {
-					// Consider ourselves updated so don't re-re-re-download
-					buildTimestamp = System.currentTimeMillis();
-					attemptedUpdate = true;
+				AutoUpdateMode mode = Settings.getInstance().getAutoUpdateMode();
+				if (mode == AutoUpdateMode.OFF) {
+					LOGGER.info("Auto-update mode changed to OFF. Stopping auto-update service.");
+					return;
+				}
+
+				if (mode == AutoUpdateMode.CHECK_ONLY) {
+					LOGGER.info("Approved update {} is available but auto-update mode is CHECK_ONLY", lookup.status.manifestSignature);
+				} else if (mode == AutoUpdateMode.NOTIFY) {
+					notifyUpdateAvailable(lookup.status);
+				} else if (mode == AutoUpdateMode.INSTALL) {
+					if (attemptUpdate(lookup.manifest)) {
+						// Consider ourselves updated so don't re-re-re-download
+						buildTimestamp = System.currentTimeMillis();
+						attemptedUpdate = true;
+					}
 				}
 			} catch (DataException e) {
 				LOGGER.warn("Repository issue to find updates", e);
@@ -137,6 +164,19 @@ public class AutoUpdate extends Thread {
 	public void shutdown() {
 		isStopping = true;
 		this.interrupt();
+	}
+
+	private void notifyUpdateAvailable(UpdateCheckResult status) {
+		if (status.manifestSignature == null)
+			return;
+
+		if (status.manifestSignature.equals(this.lastNotifiedManifestSignature))
+			return;
+
+		this.lastNotifiedManifestSignature = status.manifestSignature;
+		NodeTrayFactory.getInstance().showMessage(Translator.INSTANCE.translate("SysTray", "AUTO_UPDATE"),
+				String.format("Approved update available: %s", status.commitHash),
+				TrayMessageType.INFO);
 	}
 
 	public static UpdateCheckResult checkLatestUpdate() throws DataException {
@@ -182,8 +222,10 @@ public class AutoUpdate extends Thread {
 
 	private static UpdateLookup lookupLatestUpdate(long buildTimestamp) throws DataException {
 		UpdateCheckResult status = new UpdateCheckResult();
+		AutoUpdateMode autoUpdateMode = Settings.getInstance().getAutoUpdateMode();
 		status.currentBuildTimestamp = buildTimestamp;
-		status.autoUpdateEnabled = Settings.getInstance().isAutoUpdateEnabled();
+		status.autoUpdateMode = autoUpdateMode.name();
+		status.autoUpdateEnabled = autoUpdateMode == AutoUpdateMode.INSTALL;
 		status.qdnEnabled = Settings.getInstance().isQdnEnabled();
 		status.installing = updateInstallInProgress.get();
 
@@ -196,6 +238,7 @@ public class AutoUpdate extends Thread {
 			status.blockchainHeight = blockchainHeight;
 			List<Integer> devGroupIds = Groups.getGroupIdsAtHeight(BlockChain.getInstance().getDevGroupIds(), blockchainHeight);
 			status.devGroupIds = devGroupIds;
+			populateDevGroupSummaries(status, repository, devGroupIds);
 			if (devGroupIds.isEmpty())
 				return UpdateLookup.withoutManifest(status, STATUS_NO_DEV_GROUPS,
 						String.format("No development group IDs are configured at height %d", blockchainHeight));
@@ -207,6 +250,7 @@ public class AutoUpdate extends Thread {
 
 			status.manifestSignature = Base58.encode(signature);
 			TransactionData transactionData = repository.getTransactionRepository().fromSignature(signature);
+			populateManifestTransactionStatus(status, transactionData);
 			if (!(transactionData instanceof ArbitraryTransactionData))
 				return UpdateLookup.withoutManifest(status, STATUS_UNSUPPORTED_TRANSACTION,
 						"Latest auto-update transaction is not an ARBITRARY transaction");
@@ -231,6 +275,16 @@ public class AutoUpdate extends Thread {
 				return UpdateLookup.withoutManifest(status, STATUS_LEGACY_MANIFEST,
 						"Legacy HTTP auto-update manifests are not supported by this build");
 
+			if (manifest.getBinarySignature() == null)
+				return UpdateLookup.withoutManifest(status, STATUS_UNPINNED_MANIFEST,
+						"Approved auto-update manifest does not pin a QDN binary transaction");
+
+			try {
+				populateBinaryTransactionStatus(status, getPinnedQdnBinaryTransaction(repository, manifest, manifest.getBinarySignature()));
+			} catch (DataException e) {
+				return UpdateLookup.withoutManifest(status, STATUS_INVALID_BINARY_TRANSACTION, e.getMessage());
+			}
+
 			if (manifest.getTimestamp() <= buildTimestamp)
 				return UpdateLookup.withoutManifest(status, STATUS_NOT_NEWER,
 						"Latest approved auto-update manifest is not newer than this build");
@@ -252,6 +306,57 @@ public class AutoUpdate extends Thread {
 		status.qdnPath = manifest.getQdnPath();
 	}
 
+	private static void populateManifestTransactionStatus(UpdateCheckResult status, TransactionData transactionData) {
+		if (transactionData == null)
+			return;
+
+		status.manifestCreatorAddress = addressFromPublicKey(transactionData.getCreatorPublicKey());
+		status.manifestTxGroupId = transactionData.getTxGroupId();
+		status.manifestApprovalStatus = transactionData.getApprovalStatus() == null ? null : transactionData.getApprovalStatus().name();
+		status.manifestBlockHeight = transactionData.getBlockHeight();
+		status.manifestApprovalHeight = transactionData.getApprovalHeight();
+	}
+
+	private static void populateBinaryTransactionStatus(UpdateCheckResult status, ArbitraryTransactionData transactionData) {
+		if (transactionData == null)
+			return;
+
+		status.binaryCreatorAddress = addressFromPublicKey(transactionData.getCreatorPublicKey());
+		status.binaryService = transactionData.getService().name();
+		status.binaryName = transactionData.getName();
+		status.binaryIdentifier = transactionData.getIdentifier();
+		status.binaryMethod = transactionData.getMethod() == null ? null : transactionData.getMethod().name();
+		status.binaryBlockHeight = transactionData.getBlockHeight();
+	}
+
+	private static void populateDevGroupSummaries(UpdateCheckResult status, Repository repository, List<Integer> devGroupIds) throws DataException {
+		List<DevGroupSummary> devGroups = new ArrayList<>();
+		for (Integer groupId : devGroupIds) {
+			if (groupId == null)
+				continue;
+
+			GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+			if (groupData == null)
+				continue;
+
+			DevGroupSummary summary = new DevGroupSummary();
+			summary.groupId = groupId;
+			summary.groupName = groupData.getGroupName();
+			summary.owner = groupData.getOwner();
+			summary.approvalThreshold = groupData.getApprovalThreshold() == null ? null : groupData.getApprovalThreshold().name();
+			summary.adminCount = repository.getGroupRepository().countGroupAdmins(groupId);
+			summary.usableAdminCount = repository.getGroupRepository().countUsableGroupAdmins(groupId);
+			summary.memberCount = repository.getGroupRepository().countGroupMembers(groupId);
+			devGroups.add(summary);
+		}
+
+		status.devGroups = devGroups;
+	}
+
+	private static String addressFromPublicKey(byte[] publicKey) {
+		return publicKey == null ? null : Crypto.toAddress(publicKey);
+	}
+
 	private static void logSkippedLookup(UpdateCheckResult status) {
 		if (STATUS_NO_DEV_GROUPS.equals(status.status)) {
 			LOGGER.warn("Auto-update is enabled but {}. Skipping update lookup.", status.message);
@@ -260,6 +365,8 @@ public class AutoUpdate extends Thread {
 		} else if (STATUS_LEGACY_MANIFEST.equals(status.status)) {
 			LOGGER.warn("Ignoring legacy HTTP auto-update manifest {} because this build only supports QDN auto-update transport",
 					status.manifestSignature);
+		} else if (STATUS_UNPINNED_MANIFEST.equals(status.status) || STATUS_INVALID_BINARY_TRANSACTION.equals(status.status)) {
+			LOGGER.warn("Ignoring approved auto-update manifest {}: {}", status.manifestSignature, status.message);
 		}
 	}
 
@@ -281,13 +388,8 @@ public class AutoUpdate extends Thread {
 	}
 
 	private static boolean attemptUpdateInternal(AutoUpdateManifest manifest) {
-		if (manifest.getBinarySignature() != null) {
-			LOGGER.info("Fetching update from pinned QDN {} transaction {} path {}",
-					manifest.getQdnService(), manifest.getBinarySignature58(), manifest.getQdnPath());
-		} else {
-			LOGGER.info("Fetching update from QDN {}/{}/{} path {}",
-					manifest.getQdnService(), manifest.getQdnName(), manifest.getQdnIdentifier(), manifest.getQdnPath());
-		}
+		LOGGER.info("Fetching update from pinned QDN {} transaction {} path {}",
+				manifest.getQdnService(), manifest.getBinarySignature58(), manifest.getQdnPath());
 
 		Path newJar = Paths.get(NEW_JAR_FILENAME);
 
@@ -324,6 +426,7 @@ public class AutoUpdate extends Thread {
 
 	public static class UpdateCheckResult {
 		public boolean autoUpdateEnabled;
+		public String autoUpdateMode;
 		public boolean qdnEnabled;
 		public boolean updateAvailable;
 		public boolean installing;
@@ -333,24 +436,44 @@ public class AutoUpdate extends Thread {
 		public long currentBuildTimestamp;
 		public Integer blockchainHeight;
 		public List<Integer> devGroupIds;
+		public List<DevGroupSummary> devGroups;
 		public Long updateTimestamp;
 		public String commitHash;
 		public String manifestSignature;
+		public String manifestCreatorAddress;
+		public Integer manifestTxGroupId;
+		public String manifestApprovalStatus;
+		public Integer manifestBlockHeight;
+		public Integer manifestApprovalHeight;
 		public String binarySignature;
+		public String binaryCreatorAddress;
+		public String binaryService;
+		public String binaryName;
+		public String binaryIdentifier;
+		public String binaryMethod;
+		public Integer binaryBlockHeight;
 		public String qdnService;
 		public String qdnName;
 		public String qdnIdentifier;
 		public String qdnPath;
 	}
 
+	public static class DevGroupSummary {
+		public Integer groupId;
+		public String groupName;
+		public String owner;
+		public String approvalThreshold;
+		public Integer adminCount;
+		public Integer usableAdminCount;
+		public Integer memberCount;
+	}
+
 	static Path resolveQdnUpdatePath(AutoUpdateManifest manifest) throws DataException, IOException, MissingDataException {
 		byte[] expectedSignature = manifest.getBinarySignature();
-		if (expectedSignature != null)
-			return resolvePinnedQdnUpdatePath(manifest, expectedSignature);
+		if (expectedSignature == null)
+			throw new DataException("Auto-update manifest does not pin a QDN binary transaction");
 
-		ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(
-				manifest.getQdnName(), ResourceIdType.NAME, manifest.getQdnService(), manifest.getQdnIdentifier());
-		return loadQdnUpdatePath(arbitraryDataReader, manifest);
+		return resolvePinnedQdnUpdatePath(manifest, expectedSignature);
 	}
 
 	private static Path resolvePinnedQdnUpdatePath(AutoUpdateManifest manifest, byte[] binarySignature)
@@ -363,16 +486,23 @@ public class AutoUpdate extends Thread {
 
 	private static ArbitraryTransactionData getPinnedQdnBinaryTransaction(AutoUpdateManifest manifest, byte[] binarySignature) throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			TransactionData transactionData = repository.getTransactionRepository().fromSignature(binarySignature);
-			if (!(transactionData instanceof ArbitraryTransactionData))
-				throw new DataException("Pinned QDN update transaction signature does not identify an ARBITRARY transaction");
-
-			ArbitraryTransactionData arbitraryTransactionData = (ArbitraryTransactionData) transactionData;
-			if (arbitraryTransactionData.getService() != manifest.getQdnService())
-				throw new DataException("Pinned QDN update transaction service does not match manifest");
-
-			return arbitraryTransactionData;
+			return getPinnedQdnBinaryTransaction(repository, manifest, binarySignature);
 		}
+	}
+
+	private static ArbitraryTransactionData getPinnedQdnBinaryTransaction(Repository repository, AutoUpdateManifest manifest, byte[] binarySignature) throws DataException {
+		if (binarySignature == null)
+			throw new DataException("Pinned QDN update transaction signature is missing");
+
+		TransactionData transactionData = repository.getTransactionRepository().fromSignature(binarySignature);
+		if (!(transactionData instanceof ArbitraryTransactionData))
+			throw new DataException("Pinned QDN update transaction signature does not identify an ARBITRARY transaction");
+
+		ArbitraryTransactionData arbitraryTransactionData = (ArbitraryTransactionData) transactionData;
+		if (arbitraryTransactionData.getService() != manifest.getQdnService())
+			throw new DataException("Pinned QDN update transaction service does not match manifest");
+
+		return arbitraryTransactionData;
 	}
 
 	private static Path loadQdnUpdatePath(ArbitraryDataReader arbitraryDataReader, AutoUpdateManifest manifest)

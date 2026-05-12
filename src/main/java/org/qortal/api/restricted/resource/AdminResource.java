@@ -480,7 +480,7 @@ public class AdminResource {
 	@Path("/update")
 	@Operation(
 		summary = "Check for a newer approved auto-update",
-		description = "Checks the latest approved development-group auto-update manifest without installing it.",
+		description = "Checks the latest approved development-group auto-update manifest without installing it, returning approval and pinned QDN binary metadata when available.",
 		responses = {
 			@ApiResponse(
 				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = AutoUpdate.UpdateCheckResult.class))
@@ -503,7 +503,7 @@ public class AdminResource {
 	@Path("/update")
 	@Operation(
 		summary = "Install the latest approved auto-update",
-		description = "Checks the latest approved development-group auto-update manifest and schedules install if it is newer than this build.",
+		description = "Checks the latest approved development-group auto-update manifest and schedules install if it is newer than this build and pins a valid QDN binary transaction.",
 		responses = {
 			@ApiResponse(
 				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = AutoUpdate.UpdateCheckResult.class))

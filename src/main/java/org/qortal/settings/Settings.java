@@ -58,6 +58,13 @@ import org.qortal.utils.EnumUtils;
 @SuppressWarnings("FieldCanBeLocal")
 public class Settings {
 
+	public enum AutoUpdateMode {
+		OFF,
+		CHECK_ONLY,
+		NOTIFY,
+		INSTALL
+	}
+
 	// New in v5.1.0 - Dedicated Ports for Data Flows; NetworkData Class
 	private static final int MAINNET_QDN_LISTEN_PORT = 12394;
 	private static final int TESTNET_QDN_LISTEN_PORT = 62394;
@@ -151,8 +158,10 @@ public class Settings {
 	/** Maximum age of a CHAT transaction to be considered 'recent' */
 	private long recentChatMessagesMaxAge = 60 * 60 * 1000L; // milliseconds
 
-	/** Whether we check, fetch and install auto-updates */
-	private boolean autoUpdateEnabled = false;
+	/** Legacy auto-update boolean. Use autoUpdateMode for new settings. */
+	private Boolean autoUpdateEnabled = null;
+	/** Whether and how this node checks, reports, or installs approved auto-updates. */
+	private AutoUpdateMode autoUpdateMode = null;
 	/** Whether we check, restart node without connected peers */
 	private boolean autoRestartEnabled = false;
 	/** How long between repository backups (ms), or 0 if disabled. */
@@ -821,6 +830,7 @@ public class Settings {
 
 	private enum WritableSettingType {
 		BOOLEAN,
+		AUTO_UPDATE_MODE,
 		STRING_ARRAY,
 		STRING_MAP,
 		BOOLEAN_MAP,
@@ -861,6 +871,7 @@ public class Settings {
 		settings.put("bitcoinyServers", new WritableSetting(WritableSettingType.BITCOINY_SERVERS, true));
 		settings.put("pirateChainNet", new WritableSetting(WritableSettingType.PIRATE_CHAIN_NET, true));
 		settings.put("autoUpdateEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
+		settings.put("autoUpdateMode", new WritableSetting(WritableSettingType.AUTO_UPDATE_MODE, true));
 		settings.put("autoRestartEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("bootstrapHosts", new WritableSetting(WritableSettingType.STRING_ARRAY, false));
 		settings.put("qdnEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
@@ -1049,6 +1060,17 @@ public class Settings {
 				restartRequired.add(settingName);
 		}
 
+		if (patch.containsKey("autoUpdateMode") && mergedSettings.get("autoUpdateMode") != null) {
+			mergedSettings.put("autoUpdateEnabled", AutoUpdateMode.INSTALL.name().equals(mergedSettings.get("autoUpdateMode")));
+			updated.add("autoUpdateEnabled");
+			restartRequired.add("autoUpdateEnabled");
+		} else if (patch.containsKey("autoUpdateEnabled") && mergedSettings.get("autoUpdateEnabled") != null) {
+			mergedSettings.put("autoUpdateMode", Boolean.TRUE.equals(mergedSettings.get("autoUpdateEnabled"))
+					? AutoUpdateMode.INSTALL.name() : AutoUpdateMode.OFF.name());
+			updated.add("autoUpdateMode");
+			restartRequired.add("autoUpdateMode");
+		}
+
 		Path tempSettingsPath = writeTempSettings(activeSettingsPath, mergedSettings);
 		try {
 			Settings validatedSettings;
@@ -1116,6 +1138,11 @@ public class Settings {
 				if (!(value instanceof Boolean))
 					throw new IllegalArgumentException("Setting must be a boolean: " + settingName);
 				return value;
+
+			case AUTO_UPDATE_MODE:
+				if (!(value instanceof String))
+					throw new IllegalArgumentException("Setting must be an auto-update mode name: " + settingName);
+				return AutoUpdateMode.valueOf(((String) value).trim().toUpperCase(Locale.ROOT)).name();
 
 			case STRING_ARRAY:
 				validateStringArraySetting(settingName, value);
@@ -1210,6 +1237,7 @@ public class Settings {
 	private void validate() {
 		normaliseBitcoinyNetworks();
 		normaliseBitcoinyServers();
+		normaliseAutoUpdateMode();
 
 		// Validation goes here
 		if (this.minBlockchainPeers < 1 && !singleNodeTestnet)
@@ -1227,6 +1255,11 @@ public class Settings {
 			String possibleValues = EnumUtils.getNames(StoragePolicy.class, ", ");
 			throwValidationError(String.format("storagePolicy must be one of: %s", possibleValues));
 		}
+	}
+
+	private void normaliseAutoUpdateMode() {
+		this.autoUpdateMode = getAutoUpdateMode();
+		this.autoUpdateEnabled = this.autoUpdateMode == AutoUpdateMode.INSTALL;
 	}
 
 	private static Map<String, String> defaultBitcoinyNetworks() {
@@ -1754,7 +1787,14 @@ public class Settings {
 	public int getMaxBlocksPerResponse() { return this.maxBlocksPerResponse; }
 
 	public boolean isAutoUpdateEnabled() {
-		return this.autoUpdateEnabled;
+		return this.getAutoUpdateMode() == AutoUpdateMode.INSTALL;
+	}
+
+	public AutoUpdateMode getAutoUpdateMode() {
+		if (this.autoUpdateMode != null)
+			return this.autoUpdateMode;
+
+		return Boolean.TRUE.equals(this.autoUpdateEnabled) ? AutoUpdateMode.INSTALL : AutoUpdateMode.OFF;
 	}
 
 	public boolean isAutoRestartEnabled() {

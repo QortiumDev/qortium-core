@@ -140,13 +140,29 @@ public class AutoUpdateQdnTests extends Common {
 	}
 
 	@Test
+	public void testResolveQdnUpdatePathRejectsUnpinnedManifest() throws Exception {
+		byte[] commitHash = sequentialBytes(20, 1);
+		byte[] updateBytes = xor("qortium qdn update".getBytes());
+		AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(1_700_000_000_000L, commitHash, sha256(updateBytes), null);
+
+		try {
+			AutoUpdate.resolveQdnUpdatePath(manifest);
+			fail("Expected unpinned QDN update manifest to be rejected");
+		} catch (DataException e) {
+			assertTrue(e.getMessage().contains("pin"));
+		}
+	}
+
+	@Test
 	public void testCheckLatestUpdateFindsApprovedQdnManifestWhenAutoUpdateDisabled() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			long updateTimestamp = Controller.getInstance().getBuildTimestamp() * 1000L + 1_000L;
 			byte[] commitHash = sequentialBytes(20, 1);
-			byte[] updateHash = sequentialBytes(32, 21);
-			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, updateHash, null);
+			byte[] updateBytes = xor("qortium qdn update".getBytes());
+			String updateName = "approvedupdates";
+			byte[] binarySignature = createAutoUpdateBinary(repository, alice, updateName, commitHash, updateBytes);
+			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, sha256(updateBytes), binarySignature);
 
 			TransactionData transactionData = createAndApproveAutoUpdateManifest(repository, alice, manifest.toBytes());
 
@@ -160,7 +176,21 @@ public class AutoUpdateQdnTests extends Common {
 			assertEquals(updateTimestamp, status.updateTimestamp.longValue());
 			assertEquals(hex(commitHash), status.commitHash);
 			assertEquals(Base58.encode(transactionData.getSignature()), status.manifestSignature);
-			assertNull(status.binarySignature);
+			assertEquals(alice.getAddress(), status.manifestCreatorAddress);
+			assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, status.manifestTxGroupId.intValue());
+			assertEquals(Transaction.ApprovalStatus.APPROVED.name(), status.manifestApprovalStatus);
+			assertNotNull(status.manifestBlockHeight);
+			assertNotNull(status.manifestApprovalHeight);
+			assertNotNull(status.devGroups);
+			assertFalse(status.devGroups.isEmpty());
+			assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, status.devGroups.get(0).groupId.intValue());
+			assertEquals(Base58.encode(binarySignature), status.binarySignature);
+			assertEquals(alice.getAddress(), status.binaryCreatorAddress);
+			assertEquals(Service.AUTO_UPDATE_BINARY.name(), status.binaryService);
+			assertEquals(updateName, status.binaryName);
+			assertEquals(hex(commitHash), status.binaryIdentifier);
+			assertEquals(ArbitraryTransactionData.Method.PUT.name(), status.binaryMethod);
+			assertNotNull(status.binaryBlockHeight);
 			assertEquals(Service.AUTO_UPDATE_BINARY.name(), status.qdnService);
 			assertEquals(AutoUpdateManifest.QDN_UPDATE_NAME, status.qdnName);
 			assertEquals(hex(commitHash), status.qdnIdentifier);
@@ -174,8 +204,9 @@ public class AutoUpdateQdnTests extends Common {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			long updateTimestamp = Controller.getInstance().getBuildTimestamp() * 1000L;
 			byte[] commitHash = sequentialBytes(20, 1);
-			byte[] updateHash = sequentialBytes(32, 21);
-			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, updateHash, null);
+			byte[] updateBytes = xor("qortium qdn update".getBytes());
+			byte[] binarySignature = createAutoUpdateBinary(repository, alice, "notnewerupdates", commitHash, updateBytes);
+			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, sha256(updateBytes), binarySignature);
 
 			createAndApproveAutoUpdateManifest(repository, alice, manifest.toBytes());
 
@@ -186,6 +217,62 @@ public class AutoUpdateQdnTests extends Common {
 			assertEquals(updateTimestamp, status.updateTimestamp.longValue());
 			assertEquals(hex(commitHash), status.commitHash);
 		}
+	}
+
+	@Test
+	public void testCheckLatestUpdateRejectsApprovedUnpinnedManifest() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			long updateTimestamp = Controller.getInstance().getBuildTimestamp() * 1000L + 1_000L;
+			byte[] commitHash = sequentialBytes(20, 1);
+			byte[] updateHash = sequentialBytes(32, 21);
+			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, updateHash, null);
+
+			createAndApproveAutoUpdateManifest(repository, alice, manifest.toBytes());
+
+			AutoUpdate.UpdateCheckResult status = AutoUpdate.checkLatestUpdate();
+
+			assertFalse(status.updateAvailable);
+			assertEquals(AutoUpdate.STATUS_UNPINNED_MANIFEST, status.status);
+			assertTrue(status.message.contains("pin"));
+			assertNull(status.binarySignature);
+		}
+	}
+
+	@Test
+	public void testCheckLatestUpdateRejectsMissingPinnedBinaryTransaction() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			long updateTimestamp = Controller.getInstance().getBuildTimestamp() * 1000L + 1_000L;
+			byte[] commitHash = sequentialBytes(20, 1);
+			byte[] updateHash = sequentialBytes(32, 21);
+			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, updateHash, sequentialBytes(64, 53));
+
+			createAndApproveAutoUpdateManifest(repository, alice, manifest.toBytes());
+
+			AutoUpdate.UpdateCheckResult status = AutoUpdate.checkLatestUpdate();
+
+			assertFalse(status.updateAvailable);
+			assertEquals(AutoUpdate.STATUS_INVALID_BINARY_TRANSACTION, status.status);
+			assertTrue(status.message.contains("ARBITRARY"));
+		}
+	}
+
+	private static byte[] createAutoUpdateBinary(Repository repository, PrivateKeyAccount creator, String updateName,
+			byte[] commitHash, byte[] updateBytes) throws Exception {
+		registerName(repository, creator, updateName);
+
+		Path updateFile = Files.createTempDirectory("qdn-update").resolve(AutoUpdateManifest.QDN_UPDATE_PATH);
+		Files.write(updateFile, updateBytes);
+
+		ArbitraryUtils.createAndMintTxn(repository, Base58.encode(creator.getPublicKey()), updateFile,
+				updateName, hex(commitHash), ArbitraryTransactionData.Method.PUT,
+				Service.AUTO_UPDATE_BINARY, creator);
+
+		return repository.getArbitraryRepository()
+				.getLatestTransaction(updateName, Service.AUTO_UPDATE_BINARY,
+						ArbitraryTransactionData.Method.PUT, hex(commitHash))
+				.getSignature();
 	}
 
 	private static TransactionData createAndApproveAutoUpdateManifest(Repository repository, PrivateKeyAccount creator, byte[] manifestData) throws DataException {

@@ -4,6 +4,7 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Test;
 import org.qortal.ApplyUpdate;
 import org.qortal.settings.Settings;
+import org.qortal.settings.Settings.AutoUpdateMode;
 
 import java.lang.reflect.Constructor;
 import java.util.ArrayList;
@@ -29,9 +30,29 @@ public class AutoUpdateTests {
 	public void testDefaultAutoUpdateSettingsAreDisabledAndEmpty() throws ReflectiveOperationException {
 		Settings settings = newSettingsInstance();
 
+		assertEquals(AutoUpdateMode.OFF, settings.getAutoUpdateMode());
 		assertFalse(settings.isAutoUpdateEnabled());
 		assertFalse(settings.hasAutoUpdateReposConfigured());
 		assertArrayEquals(new String[0], settings.getAutoUpdateRepos());
+	}
+
+	@Test
+	public void testLegacyAutoUpdateEnabledMapsToInstallMode() throws ReflectiveOperationException {
+		Settings settings = newSettingsInstance();
+		FieldUtils.writeField(settings, "autoUpdateEnabled", Boolean.TRUE, true);
+
+		assertEquals(AutoUpdateMode.INSTALL, settings.getAutoUpdateMode());
+		assertTrue(settings.isAutoUpdateEnabled());
+	}
+
+	@Test
+	public void testAutoUpdateModeOverridesLegacyBoolean() throws ReflectiveOperationException {
+		Settings settings = newSettingsInstance();
+		FieldUtils.writeField(settings, "autoUpdateEnabled", Boolean.TRUE, true);
+		FieldUtils.writeField(settings, "autoUpdateMode", AutoUpdateMode.NOTIFY, true);
+
+		assertEquals(AutoUpdateMode.NOTIFY, settings.getAutoUpdateMode());
+		assertFalse(settings.isAutoUpdateEnabled());
 	}
 
 	@Test

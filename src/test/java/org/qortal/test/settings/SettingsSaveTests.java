@@ -6,6 +6,7 @@ import org.junit.After;
 import org.junit.Test;
 import org.qortal.controller.arbitrary.ArbitraryDataStorageManager.StoragePolicy;
 import org.qortal.settings.Settings;
+import org.qortal.settings.Settings.AutoUpdateMode;
 import org.qortal.test.common.Common;
 
 import java.nio.charset.StandardCharsets;
@@ -49,6 +50,58 @@ public class SettingsSaveTests extends Common {
 		Map<String, Object> savedSettings = readSettings(settingsPath);
 		assertEquals(Boolean.FALSE, savedSettings.get("qdnEnabled"));
 		assertTrue(savedSettings.containsKey("bootstrapHosts"));
+	}
+
+	@Test
+	public void testAutoUpdateModeIsSavedAndApplied() throws Exception {
+		Path settingsPath = createSettingsFile("{\"autoUpdateEnabled\":true}");
+		Settings.fileInstance(settingsPath.toString());
+
+		assertEquals(AutoUpdateMode.INSTALL, Settings.getInstance().getAutoUpdateMode());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave("{\"autoUpdateMode\":\"notify\"}");
+
+		assertTrue(result.saved);
+		assertTrue(result.updated.contains("autoUpdateMode"));
+		assertTrue(result.restartRequired.contains("autoUpdateMode"));
+		assertEquals(AutoUpdateMode.NOTIFY, Settings.getInstance().getAutoUpdateMode());
+		assertFalse(Settings.getInstance().isAutoUpdateEnabled());
+		Map<String, Object> savedSettings = readSettings(settingsPath);
+		assertEquals("NOTIFY", savedSettings.get("autoUpdateMode"));
+		assertEquals(Boolean.FALSE, savedSettings.get("autoUpdateEnabled"));
+	}
+
+	@Test
+	public void testLegacyAutoUpdateEnabledWriteUpdatesMode() throws Exception {
+		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"CHECK_ONLY\",\"autoUpdateEnabled\":false}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave("{\"autoUpdateEnabled\":true}");
+
+		assertTrue(result.saved);
+		assertTrue(result.updated.contains("autoUpdateEnabled"));
+		assertTrue(result.updated.contains("autoUpdateMode"));
+		assertEquals(AutoUpdateMode.INSTALL, Settings.getInstance().getAutoUpdateMode());
+		Map<String, Object> savedSettings = readSettings(settingsPath);
+		assertEquals(Boolean.TRUE, savedSettings.get("autoUpdateEnabled"));
+		assertEquals("INSTALL", savedSettings.get("autoUpdateMode"));
+	}
+
+	@Test
+	public void testInvalidAutoUpdateModeIsRejectedWithoutChangingFile() throws Exception {
+		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"OFF\"}");
+		Settings.fileInstance(settingsPath.toString());
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
+
+		try {
+			Settings.updateAndSave("{\"autoUpdateMode\":\"AUTOMATIC\"}");
+			fail("Expected invalid auto-update mode to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("AUTOMATIC"));
+		}
+
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+		assertEquals(AutoUpdateMode.OFF, Settings.getInstance().getAutoUpdateMode());
 	}
 
 	@Test

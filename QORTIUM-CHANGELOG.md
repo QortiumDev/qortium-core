@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - core: harden QDN update authority
+
+Made QDN auto-update authority stricter and more operator-visible. Approved update manifests must now pin the exact QDN binary transaction, mutable name/identifier fallback lookup is rejected, and `/admin/update` reports manifest approval metadata, pinned binary metadata, active development-group details, and the configured auto-update mode. Operators can choose `OFF`, `CHECK_ONLY`, `NOTIFY`, or `INSTALL`, with legacy `autoUpdateEnabled` settings still mapped for compatibility.
+
 ### 2026-05-11 - crosschain: extract ACCT registry
 
 Separated ACCT code-hash, ACCT name, filtered ACCT map, and ACCT trade-bot lookup into a dedicated registry while keeping trade-presence and crosschain validation just as strict as before. Foreign-chain registration now stays focused on chain/network lookup, inactive ACCT versions remain unregistered, and new tests lock down the allowed ACCT mappings before later ACCT work continues.

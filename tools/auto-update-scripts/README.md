@@ -1,16 +1,27 @@
 # Qortium QDN Auto-Update Scripts
 
-Qortium auto-update is disabled by default. To receive updates, a node must set
-`"autoUpdateEnabled": true` and leave QDN enabled. The old `autoUpdateRepos`
-GitHub mirror setting is no longer required by the updater.
+Qortium auto-update is disabled by default. To receive automatic update
+installs, a node must set `"autoUpdateMode": "INSTALL"` and leave QDN enabled.
+The old `autoUpdateRepos` GitHub mirror setting is no longer required by the
+updater, and legacy `"autoUpdateEnabled": true` settings are treated as
+`"autoUpdateMode": "INSTALL"` for compatibility.
+
+Supported `autoUpdateMode` values are:
+
+- `OFF`: do not run the background update checker.
+- `CHECK_ONLY`: check for approved updates and log availability.
+- `NOTIFY`: check for approved updates and show one notification per manifest.
+- `INSTALL`: check for approved updates, download them, verify them, and restart
+  through the normal apply-update path.
 
 The update flow now uses two ARBITRARY transactions:
 
 - `AUTO_UPDATE_BINARY`: a QDN resource containing the XORed `qortium.update`
   file.
 - `AUTO_UPDATE`: a compact on-chain manifest submitted in the configured
-  development group. The manifest pins the exact binary transaction signature,
-  Git commit hash, build timestamp, and SHA-256 of the XORed update bytes.
+  development group. The manifest must pin the exact binary transaction
+  signature, Git commit hash, build timestamp, and SHA-256 of the XORed update
+  bytes.
 
 The network only accepts the manifest after normal development-group approval.
 For the null-owned development group, admin-submitted update manifests still
@@ -91,15 +102,16 @@ normal group-approval tools. For example:
 ./tools/approve-auto-update.sh
 ```
 
-The updater ignores unapproved update manifests. Once approved and confirmed,
-auto-update-enabled nodes fetch the pinned QDN binary, verify the SHA-256 hash
-over the XORed bytes, decode it to `new-qortium.jar`, and restart through the
-standard apply-update path.
+The updater ignores unapproved update manifests and rejects approved manifests
+that do not pin a QDN binary transaction signature. Once approved and confirmed,
+nodes in `INSTALL` mode fetch the pinned QDN binary, verify the SHA-256 hash over
+the XORed bytes, decode it to `new-qortium.jar`, and restart through the standard
+apply-update path.
 
 ## Manual Checks
 
-Nodes with `"autoUpdateEnabled": false` can still use the restricted admin API
-to check or install an approved update manually:
+Nodes with `"autoUpdateMode": "OFF"` can still use the restricted admin API to
+check or install an approved update manually:
 
 ```bash
 curl -H "X-API-KEY: $(cat apikey.txt)" \
@@ -114,6 +126,9 @@ curl -X POST -H "X-API-KEY: $(cat apikey.txt)" \
   http://localhost:12391/admin/update
 ```
 
-Both endpoints use the same approved development-group manifest lookup and QDN
-hash verification as automatic background updates. The `POST` endpoint returns a
-status response before the node begins the apply-update restart flow.
+Both endpoints use the same approved development-group manifest lookup, pinned
+QDN binary lookup, and hash verification as automatic background updates. The
+`GET` response includes the active development groups, manifest approval
+metadata, and pinned binary metadata so operators can inspect update authority
+before installing. The `POST` endpoint returns a status response before the node
+begins the apply-update restart flow.
