@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - api: add group search endpoint
+
+Added a group search API backed by repository and HSQLDB search support. Clients can now search group names and descriptions, page through results, reverse sort order, and filter by all, open, or closed groups while receiving the same member count and owner primary-name enrichment as the existing group list APIs.
+
 ### 2026-05-11 - crosschain: persist Bitcoiny Electrum server settings
 
 Added persistent per-coin Electrum server settings for BTC-like chains. Runtime add/remove server API calls now update the active settings file before changing the live ElectrumX provider, generated server lists remain the default source, users can add custom servers, disable built-in servers, or replace defaults for a specific coin/network, and tests cover settings validation, server-list merging, and persisted add/remove behavior.

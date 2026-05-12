@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
+import org.qortal.api.ApiException;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.model.GroupKickInfo;
 import org.qortal.api.model.GroupMembers;
@@ -35,6 +36,7 @@ import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -46,6 +48,22 @@ public class GroupsResource {
 
 	@Context
 	HttpServletRequest request;
+
+	private enum GroupSearchVisibility {
+		ALL(null),
+		OPEN(true),
+		CLOSED(false);
+
+		private final Boolean isOpen;
+
+		GroupSearchVisibility(Boolean isOpen) {
+			this.isOpen = isOpen;
+		}
+
+		private Boolean isOpen() {
+			return this.isOpen;
+		}
+	}
 
 	@GET
 	@Operation(
@@ -87,6 +105,72 @@ public class GroupsResource {
 			return allGroupData;
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/search")
+	@Operation(
+		summary = "Search groups",
+		responses = {
+			@ApiResponse(
+				description = "group info",
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					array = @ArraySchema(schema = @Schema(implementation = GroupData.class))
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public List<GroupData> searchGroups(
+			@Parameter(description = "Search query for group name or description") @QueryParam("query") String query,
+			@Parameter(description = "Prefix only (if true, only the beginning of fields are matched)") @QueryParam("prefixOnly") Boolean prefixOnly,
+			@Parameter(description = "Visibility filter: ALL, OPEN, or CLOSED") @QueryParam("visibility") String visibility,
+			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
+			@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
+			@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
+		GroupSearchVisibility searchVisibility = parseGroupSearchVisibility(visibility);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			List<GroupData> groups = repository.getGroupRepository().searchGroups(query, Boolean.TRUE.equals(prefixOnly),
+					searchVisibility.isOpen(), limit, offset, reverse);
+			populateGroupApiFields(repository, groups);
+			return groups;
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	private GroupSearchVisibility parseGroupSearchVisibility(String visibility) {
+		if (visibility == null || visibility.trim().isEmpty())
+			return GroupSearchVisibility.ALL;
+
+		try {
+			return GroupSearchVisibility.valueOf(visibility.trim().toUpperCase(Locale.ROOT));
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+					"Visibility must be ALL, OPEN or CLOSED");
+		}
+	}
+
+	private void populateGroupApiFields(Repository repository, List<GroupData> groups) {
+		groups.forEach(groupData -> {
+			try {
+				groupData.memberCount = repository.getGroupRepository().countGroupMembers(groupData.getGroupId());
+			} catch (DataException e) {
+				// Exclude memberCount for this group
+			}
+		});
+
+		try {
+			List<String> owners = groups.stream().map(GroupData::getOwner).distinct().collect(Collectors.toList());
+			Map<String, String> primaryNamesByOwner = repository.getNameRepository().getPrimaryNamesByOwners(owners);
+			groups.forEach(groupData -> groupData.setOwnerPrimaryName(primaryNamesByOwner.get(groupData.getOwner())));
+		} catch (DataException e) {
+			// Leave ownerPrimaryName null
 		}
 	}
 

@@ -26,6 +26,8 @@ public interface GroupRepository {
 		return getAllGroups(null, null, null);
 	}
 
+	public List<GroupData> searchGroups(String query, boolean prefixOnly, Boolean isOpen, Integer limit, Integer offset, Boolean reverse) throws DataException;
+
 	public List<GroupData> getGroupsByOwner(String address, Integer limit, Integer offset, Boolean reverse) throws DataException;
 
 	public default List<GroupData> getGroupsByOwner(String address) throws DataException {
