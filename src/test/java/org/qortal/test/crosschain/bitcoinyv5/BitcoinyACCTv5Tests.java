@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
+import org.qortal.crosschain.AcctRegistry;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.BitcoinyACCTv4;
 import org.qortal.crosschain.BitcoinyACCTv5;
@@ -92,8 +93,8 @@ public class BitcoinyACCTv5Tests extends Common {
 		ForeignBlockchainRegistry.Entry bitcoin = ForeignBlockchainRegistry.fromString("BITCOIN");
 
 		assertSame(BitcoinyACCTv4.getInstance(), bitcoin.getLatestAcct());
-		assertSame(BitcoinyACCTv5.getInstance(), ForeignBlockchainRegistry.getAcctByName(BitcoinyACCTv5.NAME));
-		assertSame(BitcoinyACCTv5.getInstance(), ForeignBlockchainRegistry.getAcctByCodeHash(BitcoinyACCTv5.CODE_BYTES_HASH));
+		assertSame(BitcoinyACCTv5.getInstance(), AcctRegistry.getAcctByName(BitcoinyACCTv5.NAME));
+		assertSame(BitcoinyACCTv5.getInstance(), AcctRegistry.getAcctByCodeHash(BitcoinyACCTv5.CODE_BYTES_HASH));
 	}
 
 	@Test

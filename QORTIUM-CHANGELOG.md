@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-11 - crosschain: extract ACCT registry
+
+Separated ACCT code-hash, ACCT name, filtered ACCT map, and ACCT trade-bot lookup into a dedicated registry while keeping trade-presence and crosschain validation just as strict as before. Foreign-chain registration now stays focused on chain/network lookup, inactive ACCT versions remain unregistered, and new tests lock down the allowed ACCT mappings before later ACCT work continues.
+
 ### 2026-05-11 - gui: add native tray abstraction
 
 Reworked system tray handling behind a safe node-tray abstraction with Linux StatusNotifierItem support, AWT fallback, and no-op behavior when the desktop tray is unavailable or tests run headless. Core notification paths no longer depend directly on AWT tray types, GUI tests now cover headless tray safety and factory fallback behavior, and settings metadata is marked internal so settings loading stays stable under MOXy.

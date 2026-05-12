@@ -25,6 +25,7 @@ import org.qortal.asset.Asset;
 import org.qortal.controller.ForeignFeesManager;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.ACCT;
+import org.qortal.crosschain.AcctRegistry;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.ForeignBlockchainException;
@@ -136,7 +137,7 @@ public class CrossChainResource {
 		ForeignBlockchainRegistry.Entry requestedForeignBlockchainEntry = resolveForeignBlockchainFilter(requestedForeignBlockchain);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = AcctRegistry.getFilteredAcctMap(foreignBlockchainEntry);
 			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchainEntry) || localAssetId != null
 					|| CrossChainTradeFilters.hasForeignForeignPairFilter(offeredForeignBlockchainEntry, requestedForeignBlockchainEntry);
 			Integer repositoryLimit = postFilterPaging ? null : limit;
@@ -235,7 +236,7 @@ public class CrossChainResource {
 		ForeignBlockchainRegistry.Entry requestedForeignBlockchainEntry = resolveForeignBlockchainFilter(requestedForeignBlockchain);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = AcctRegistry.getFilteredAcctMap(foreignBlockchainEntry);
 
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
 				byte[] codeHash = acctInfo.getKey().value;
@@ -291,7 +292,7 @@ public class CrossChainResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = AcctRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -397,7 +398,7 @@ public class CrossChainResource {
 
 			List<CrossChainTradeSummary> crossChainTrades = new ArrayList<>();
 
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = AcctRegistry.getFilteredAcctMap(foreignBlockchainEntry);
 			boolean postFilterPaging = needsPostFilterPaging(foreignBlockchainEntry) || localAssetId != null
 					|| CrossChainTradeFilters.hasForeignForeignPairFilter(offeredForeignBlockchainEntry, requestedForeignBlockchainEntry);
 			Integer repositoryLimit = postFilterPaging ? null : limit;
@@ -629,7 +630,7 @@ public class CrossChainResource {
 
 			List<CrossChainTradeLedgerEntry> crossChainTradeLedgerEntries = new ArrayList<>();
 
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getAcctMap();
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = AcctRegistry.getAcctMap();
 
 			// collect ledger entries for each ACCT
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
@@ -712,7 +713,7 @@ public class CrossChainResource {
 		long priceLocalAssetId = localAssetId != null ? localAssetId : Asset.NATIVE;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(foreignBlockchainEntry);
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = AcctRegistry.getFilteredAcctMap(foreignBlockchainEntry);
 
 			long totalForeign = 0;
 			long totalLocal = 0;
@@ -824,7 +825,7 @@ public class CrossChainResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ATData atData = fetchAtDataWithChecking(repository, cancelRequest.atAddress);
 
-			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = AcctRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
@@ -884,7 +885,7 @@ public class CrossChainResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = AcctRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 

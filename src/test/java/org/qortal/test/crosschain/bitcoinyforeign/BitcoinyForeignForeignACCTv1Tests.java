@@ -9,6 +9,7 @@ import org.qortal.api.model.CrossChainTradeSummary;
 import org.qortal.api.resource.CrossChainResource;
 import org.qortal.asset.Asset;
 import org.qortal.controller.tradebot.BitcoinyForeignForeignTradeBot;
+import org.qortal.crosschain.AcctRegistry;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.BitcoinyForeignForeignACCTv1;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
@@ -344,11 +345,11 @@ public class BitcoinyForeignForeignACCTv1Tests extends Common {
 	@Test
 	public void testAcctIsRegisteredAndUserRoutable() {
 		assertSame(BitcoinyForeignForeignACCTv1.getInstance(),
-				ForeignBlockchainRegistry.getAcctByName(BitcoinyForeignForeignACCTv1.NAME));
+				AcctRegistry.getAcctByName(BitcoinyForeignForeignACCTv1.NAME));
 		assertSame(BitcoinyForeignForeignACCTv1.getInstance(),
-				ForeignBlockchainRegistry.getAcctByCodeHash(BitcoinyForeignForeignACCTv1.CODE_BYTES_HASH));
+				AcctRegistry.getAcctByCodeHash(BitcoinyForeignForeignACCTv1.CODE_BYTES_HASH));
 		assertSame(BitcoinyForeignForeignTradeBot.getInstance(),
-				ForeignBlockchainRegistry.getTradeBotForAcct(BitcoinyForeignForeignACCTv1.getInstance()));
+				AcctRegistry.getTradeBotForAcct(BitcoinyForeignForeignACCTv1.getInstance()));
 	}
 
 	private void assertCancelledAfter(Repository repository, PrivateKeyAccount deployer, PrivateKeyAccount tradeAccount,

@@ -189,7 +189,7 @@ public class CrossChainHtlcResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = AcctRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -271,7 +271,7 @@ public class CrossChainHtlcResource {
 					continue;
 				}
 
-				ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
+				ACCT acct = AcctRegistry.getAcctByCodeHash(atData.getCodeHash());
 				if (acct == null) {
 					continue;
 				}
@@ -331,7 +331,7 @@ public class CrossChainHtlcResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = AcctRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -443,7 +443,7 @@ public class CrossChainHtlcResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = AcctRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
@@ -507,7 +507,7 @@ public class CrossChainHtlcResource {
 					continue;
 				}
 
-				ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
+				ACCT acct = AcctRegistry.getAcctByCodeHash(atData.getCodeHash());
 				if (acct == null) {
 					continue;
 				}
@@ -557,7 +557,7 @@ public class CrossChainHtlcResource {
 			if (atData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
 
-			ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
+			ACCT acct = AcctRegistry.getAcctByCodeHash(atData.getCodeHash());
 			if (acct == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 

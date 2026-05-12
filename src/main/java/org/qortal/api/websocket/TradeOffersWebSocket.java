@@ -11,6 +11,7 @@ import org.qortal.api.model.CrossChainOfferSummary;
 import org.qortal.controller.Synchronizer;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.crosschain.ACCT;
+import org.qortal.crosschain.AcctRegistry;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crosschain.TradeDirection;
@@ -95,7 +96,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 			final Integer minimumFinalHeight = blockData.getHeight();
 
 			for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
-				Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(blockchain);
+				Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = AcctRegistry.getFilteredAcctMap(blockchain);
 				List<CrossChainOfferSummary> crossChainOfferSummaries = new ArrayList<>();
 
 				synchronized (cachedInfoByBlockchain) {
@@ -305,7 +306,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		Long expectedValue = (long) AcctMode.OFFERING.value;
 
 		for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(blockchain);
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = AcctRegistry.getFilteredAcctMap(blockchain);
 			CachedOfferInfo cachedInfo = cachedInfoByBlockchain.computeIfAbsent(blockchain.name(), k -> new CachedOfferInfo());
 
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {
@@ -341,7 +342,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 		++minimumFinalHeight; // because height is just *before* timestamp
 
 		for (ForeignBlockchainRegistry.Entry blockchain : ForeignBlockchainRegistry.entries()) {
-			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = ForeignBlockchainRegistry.getFilteredAcctMap(blockchain);
+			Map<ByteArray, Supplier<ACCT>> acctsByCodeHash = AcctRegistry.getFilteredAcctMap(blockchain);
 			CachedOfferInfo cachedInfo = cachedInfoByBlockchain.computeIfAbsent(blockchain.name(), k -> new CachedOfferInfo());
 
 			for (Map.Entry<ByteArray, Supplier<ACCT>> acctInfo : acctsByCodeHash.entrySet()) {

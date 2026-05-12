@@ -8,6 +8,7 @@ import org.json.JSONObject;
 import org.qortal.controller.tradebot.TradeBot;
 import org.qortal.controller.tradebot.TradeStates;
 import org.qortal.crosschain.ACCT;
+import org.qortal.crosschain.AcctRegistry;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
 import org.qortal.crypto.Crypto;
@@ -643,7 +644,7 @@ public class ForeignFeesManager implements Listener {
             return Optional.empty();
         }
 
-        ACCT acct = ForeignBlockchainRegistry.getAcctByCodeHash(atData.getCodeHash());
+        ACCT acct = AcctRegistry.getAcctByCodeHash(atData.getCodeHash());
         if (acct == null) {
             return Optional.empty();
         }
