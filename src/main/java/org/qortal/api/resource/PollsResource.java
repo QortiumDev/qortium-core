@@ -39,6 +39,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -138,23 +139,43 @@ public class PollsResource {
                     }
                     // Initialize map for counting vote weights
                     Map<String, Integer> voteWeightMap = new HashMap<>();
+                    Map<String, Integer> rawVoteWeightMap = new HashMap<>();
                     for (PollOptionData optionData : pollData.getPollOptions()) {
                             voteWeightMap.put(optionData.getOptionName(), 0);
+                            rawVoteWeightMap.put(optionData.getOptionName(), 0);
                     }
 
+                    boolean countsOnly = onlyCounts != null && onlyCounts;
+                    List<PollVotes.VoteDetail> voteDetails = countsOnly ? null : new ArrayList<>();
                     int totalVotes = 0;
                     int totalWeight = 0;
+                    int rawTotalWeight = 0;
                     for (VoteOnPollData vote : votes) {
                             String voter = Crypto.toAddress(vote.getVoterPublicKey());
                             AccountData voterData = repository.getAccountRepository().getAccount(voter);
+                            AccountTrustStatus trustStatus = voterData == null ? AccountTrustStatus.UNVERIFIED : voterData.getTrustStatus();
+                            int rawVoteWeight = voterData == null ? 0 : voterData.getBlocksMinted();
                             int voteWeight = AccountTrustStatus.calculateEffectiveVoteWeight(voterData);
-                            totalWeight += voteWeight;
 
                             String selectedOption = pollData.getPollOptions().get(vote.getOptionIndex()).getOptionName();
                             if (voteCountMap.containsKey(selectedOption)) {
                                     voteCountMap.put(selectedOption, voteCountMap.get(selectedOption) + 1);
                                     voteWeightMap.put(selectedOption, voteWeightMap.get(selectedOption) + voteWeight);
+                                    rawVoteWeightMap.put(selectedOption, rawVoteWeightMap.get(selectedOption) + rawVoteWeight);
                                     totalVotes++;
+                                    totalWeight += voteWeight;
+                                    rawTotalWeight += rawVoteWeight;
+
+                                    if (voteDetails != null) {
+                                            voteDetails.add(new PollVotes.VoteDetail(
+                                                    voter,
+                                                    vote.getOptionIndex(),
+                                                    rawVoteWeight,
+                                                    trustStatus.name(),
+                                                    trustStatus.getValue(),
+                                                    trustStatus.getVoteWeightPercent(),
+                                                    voteWeight));
+                                    }
                             }
                     }
 
@@ -164,13 +185,13 @@ public class PollsResource {
                         .collect(Collectors.toList());
                     // Convert map to list of WeightInfo
                     List<PollVotes.OptionWeight> voteWeights = voteWeightMap.entrySet().stream()
-                        .map(entry -> new PollVotes.OptionWeight(entry.getKey(), entry.getValue()))
+                        .map(entry -> new PollVotes.OptionWeight(entry.getKey(), entry.getValue(), rawVoteWeightMap.get(entry.getKey())))
                         .collect(Collectors.toList());
     
-                    if (onlyCounts != null && onlyCounts) {
-                        return new PollVotes(null, totalVotes, totalWeight, voteCounts, voteWeights);
+                    if (countsOnly) {
+                        return new PollVotes(null, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights, null);
                     } else {
-                        return new PollVotes(votes, totalVotes, totalWeight, voteCounts, voteWeights);
+                        return new PollVotes(votes, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights, voteDetails);
                     }
             } catch (ApiException e) {
                     throw e;
@@ -264,7 +285,10 @@ public class PollsResource {
                                     .collect(Collectors.toList());
 
                             List<PollVotes.OptionWeight> voteWeights = pollWithVotes.getVoteWeightMap().entrySet().stream()
-                                    .map(e -> new PollVotes.OptionWeight(e.getKey(), e.getValue()))
+                                    .map(e -> new PollVotes.OptionWeight(
+                                            e.getKey(),
+                                            e.getValue(),
+                                            pollWithVotes.getRawVoteWeightMap().getOrDefault(e.getKey(), 0)))
                                     .collect(Collectors.toList());
 
                             AppRatingsResponse.AppRating rating = new AppRatingsResponse.AppRating(
@@ -276,6 +300,7 @@ public class PollsResource {
                                     pollData.getDescription(),
                                     pollWithVotes.getTotalVotes(),
                                     pollWithVotes.getTotalWeight(),
+                                    pollWithVotes.getRawTotalWeight(),
                                     voteCounts,
                                     voteWeights
                             );

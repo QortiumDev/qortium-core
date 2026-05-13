@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - api: expose trust-tier vote audit fields
+
+Added read-only trust-tier audit fields to account, poll-vote, and app-rating responses so users can see how raw `blocksMinted` becomes effective voting weight. Existing `totalWeight` and `voteWeight` fields continue to report trust-weighted values, while new raw totals and per-option raw weights show the original `blocksMinted` totals, and full poll-vote responses now include each voter's trust status, multiplier, raw weight, and effective weight for easier review.
+
 ### 2026-05-13 - core: add account trust-tier vote weights
 
 Added the first account trust-tier foundation for Qortium minting and governance, along with the Aura trust-tier planning note that records the local BrightID reference repos and the practical difference between BrightID, Bitu, and Aura for this design. Accounts now have a stored trust status that defaults to Unverified, Suspicious accounts are blocked from minting even if they remain in the minting group, and poll vote weight now uses the account's current trust-tier multiplier instead of raw `blocksMinted` alone. The planning note also records the repository-only first slice, the need for deterministic accepted trust-status updates instead of live external lookups, and the later idea of poll end times that can lock vote weights when a poll closes.

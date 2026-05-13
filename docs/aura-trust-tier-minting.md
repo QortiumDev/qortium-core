@@ -120,8 +120,10 @@ foundation only:
 - accounts default to Unverified
 - Suspicious accounts cannot mint, even if they remain in the minting group
 - vote tallies use the account's current trust status at tally time
-- no public API, admin API, config loader, or BrightID/Aura importer sets trust
-  status yet
+- account, poll-vote, and app-rating responses expose read-only audit fields
+  so raw `blocksMinted`, trust status, multiplier, and effective vote weight
+  can be compared
+- no admin API, config loader, or BrightID/Aura importer sets trust status yet
 
 This means a trust-status change affects existing poll tallies immediately. A
 later poll end-time feature should allow polls to lock effective vote weights at
@@ -178,7 +180,10 @@ long-term import and governance path is finalized.
    weight using the current trust multiplier.
 5. Update poll vote aggregation to use effective vote weight instead of raw
    `blocksMinted`.
-6. Add tests for mint eligibility, vote weighting, and trust-status changes.
+6. Expose read-only audit fields on account and voting responses so users can
+   see the raw and effective weights.
+7. Add tests for mint eligibility, vote weighting, audit fields, and
+   trust-status changes.
 
 Later implementation steps should add the trust-status acceptance path,
 operator/user-facing audit fields, and optional poll end times that can lock
@@ -197,6 +202,8 @@ The first implementation should cover at least these cases:
 - an Unverified account's vote is recorded but contributes zero weight.
 - a Suspicious account's existing raw `blocksMinted` does not create effective
   vote weight while the account remains Suspicious.
+- account and vote APIs expose the raw `blocksMinted`, trust status,
+  multiplier, and effective vote weight used by the current tally.
 - trust-status changes affect existing poll tallies immediately while Qortium
   uses current-status weighting.
 

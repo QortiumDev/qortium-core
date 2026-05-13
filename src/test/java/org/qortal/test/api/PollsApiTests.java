@@ -223,18 +223,46 @@ public class PollsApiTests extends ApiCommon {
 			PollVotes pollVotes = this.pollsResource.getPollVotes(pollName, true);
 			assertEquals(Integer.valueOf(5), pollVotes.totalVotes);
 			assertEquals(Integer.valueOf(175), pollVotes.totalWeight);
+			assertEquals(Integer.valueOf(502), pollVotes.rawTotalWeight);
+			assertNull(pollVotes.voteDetails);
 			assertEquals(100, findOptionWeight(pollVotes.voteWeights, "1"));
 			assertEquals(75, findOptionWeight(pollVotes.voteWeights, "2"));
 			assertEquals(0, findOptionWeight(pollVotes.voteWeights, "3"));
+			assertEquals(100, findOptionRawWeight(pollVotes.voteWeights, "1"));
+			assertEquals(202, findOptionRawWeight(pollVotes.voteWeights, "2"));
+			assertEquals(200, findOptionRawWeight(pollVotes.voteWeights, "3"));
+
+			PollVotes fullPollVotes = this.pollsResource.getPollVotes(pollName, false);
+			assertNotNull(fullPollVotes.voteDetails);
+			assertEquals(5, fullPollVotes.voteDetails.size());
+			assertEquals(Integer.valueOf(502), fullPollVotes.rawTotalWeight);
+
+			PollVotes.VoteDetail bobVoteDetail = findVoteDetail(fullPollVotes.voteDetails, bob.getAddress());
+			assertEquals(Integer.valueOf(1), bobVoteDetail.optionIndex);
+			assertEquals(Integer.valueOf(101), bobVoteDetail.rawVoteWeight);
+			assertEquals(AccountTrustStatus.SILVER.name(), bobVoteDetail.trustStatus);
+			assertEquals(Integer.valueOf(AccountTrustStatus.SILVER.getValue()), bobVoteDetail.trustStatusValue);
+			assertEquals(Integer.valueOf(50), bobVoteDetail.trustWeightPercent);
+			assertEquals(Integer.valueOf(50), bobVoteDetail.effectiveVoteWeight);
+
+			PollVotes.VoteDetail unverifiedVoteDetail = findVoteDetail(fullPollVotes.voteDetails, unverified.getAddress());
+			assertEquals(Integer.valueOf(2), unverifiedVoteDetail.optionIndex);
+			assertEquals(Integer.valueOf(100), unverifiedVoteDetail.rawVoteWeight);
+			assertEquals(AccountTrustStatus.UNVERIFIED.name(), unverifiedVoteDetail.trustStatus);
+			assertEquals(Integer.valueOf(0), unverifiedVoteDetail.effectiveVoteWeight);
 
 			AppRatingsResponse appRatings = this.pollsResource.getAppRatings("APP", null, null, null, null);
 			AppRatingsResponse.AppRating rating = appRatings.ratings.get(pollName);
 			assertNotNull(rating);
 			assertEquals(Integer.valueOf(5), rating.totalVotes);
 			assertEquals(Integer.valueOf(175), rating.totalWeight);
+			assertEquals(Integer.valueOf(502), rating.rawTotalWeight);
 			assertEquals(100, findOptionWeight(rating.voteWeights, "1"));
 			assertEquals(75, findOptionWeight(rating.voteWeights, "2"));
 			assertEquals(0, findOptionWeight(rating.voteWeights, "3"));
+			assertEquals(100, findOptionRawWeight(rating.voteWeights, "1"));
+			assertEquals(202, findOptionRawWeight(rating.voteWeights, "2"));
+			assertEquals(200, findOptionRawWeight(rating.voteWeights, "3"));
 
 			repository.getAccountRepository().setTrustStatus(bob.getAddress(), AccountTrustStatus.GOLD);
 			repository.saveChanges();
@@ -242,8 +270,10 @@ public class PollsApiTests extends ApiCommon {
 			PollVotes updatedPollVotes = this.pollsResource.getPollVotes(pollName, true);
 			assertEquals(Integer.valueOf(5), updatedPollVotes.totalVotes);
 			assertEquals(Integer.valueOf(226), updatedPollVotes.totalWeight);
+			assertEquals(Integer.valueOf(502), updatedPollVotes.rawTotalWeight);
 			assertEquals(100, findOptionWeight(updatedPollVotes.voteWeights, "1"));
 			assertEquals(126, findOptionWeight(updatedPollVotes.voteWeights, "2"));
+			assertEquals(202, findOptionRawWeight(updatedPollVotes.voteWeights, "2"));
 
 			deleteTestPoll(repository, pollName);
 		}
@@ -284,6 +314,21 @@ public class PollsApiTests extends ApiCommon {
 				.findFirst()
 				.map(optionWeight -> optionWeight.voteWeight)
 				.orElseThrow(() -> new AssertionError("Missing vote weight for option " + optionName));
+	}
+
+	private int findOptionRawWeight(List<PollVotes.OptionWeight> voteWeights, String optionName) {
+		return voteWeights.stream()
+				.filter(optionWeight -> optionWeight.optionName.equals(optionName))
+				.findFirst()
+				.map(optionWeight -> optionWeight.rawVoteWeight)
+				.orElseThrow(() -> new AssertionError("Missing raw vote weight for option " + optionName));
+	}
+
+	private PollVotes.VoteDetail findVoteDetail(List<PollVotes.VoteDetail> voteDetails, String voterAddress) {
+		return voteDetails.stream()
+				.filter(voteDetail -> voteDetail.voterAddress.equals(voterAddress))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing vote detail for " + voterAddress));
 	}
 
 	private void createTestAppRatingPoll(Repository repository, String pollName) throws DataException {

@@ -12,8 +12,10 @@ public class PollDataWithVotes {
 	private PollData pollData;
 	private Integer totalVotes;
 	private Integer totalWeight;
+	private Integer rawTotalWeight;
 	private Map<String, Integer> voteCountMap;
 	private Map<String, Integer> voteWeightMap;
+	private Map<String, Integer> rawVoteWeightMap;
 
 	// Constructors
 
@@ -23,11 +25,18 @@ public class PollDataWithVotes {
 
 	public PollDataWithVotes(PollData pollData, Integer totalVotes, Integer totalWeight,
 			Map<String, Integer> voteCountMap, Map<String, Integer> voteWeightMap) {
+		this(pollData, totalVotes, totalWeight, totalWeight, voteCountMap, voteWeightMap, voteWeightMap);
+	}
+
+	public PollDataWithVotes(PollData pollData, Integer totalVotes, Integer totalWeight, Integer rawTotalWeight,
+			Map<String, Integer> voteCountMap, Map<String, Integer> voteWeightMap, Map<String, Integer> rawVoteWeightMap) {
 		this.pollData = pollData;
 		this.totalVotes = totalVotes;
 		this.totalWeight = totalWeight;
+		this.rawTotalWeight = rawTotalWeight;
 		this.voteCountMap = voteCountMap;
 		this.voteWeightMap = voteWeightMap;
+		this.rawVoteWeightMap = rawVoteWeightMap;
 	}
 
 	// Getters/setters
@@ -56,6 +65,14 @@ public class PollDataWithVotes {
 		this.totalWeight = totalWeight;
 	}
 
+	public Integer getRawTotalWeight() {
+		return this.rawTotalWeight;
+	}
+
+	public void setRawTotalWeight(Integer rawTotalWeight) {
+		this.rawTotalWeight = rawTotalWeight;
+	}
+
 	public Map<String, Integer> getVoteCountMap() {
 		return this.voteCountMap;
 	}
@@ -70,6 +87,14 @@ public class PollDataWithVotes {
 
 	public void setVoteWeightMap(Map<String, Integer> voteWeightMap) {
 		this.voteWeightMap = voteWeightMap;
+	}
+
+	public Map<String, Integer> getRawVoteWeightMap() {
+		return this.rawVoteWeightMap;
+	}
+
+	public void setRawVoteWeightMap(Map<String, Integer> rawVoteWeightMap) {
+		this.rawVoteWeightMap = rawVoteWeightMap;
 	}
 
 }

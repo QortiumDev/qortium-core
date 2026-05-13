@@ -57,6 +57,9 @@ public class AppRatingsResponse {
 		@Schema(description = "Total weight of votes")
 		public Integer totalWeight;
 
+		@Schema(description = "Total raw blocksMinted weight before trust-tier multipliers")
+		public Integer rawTotalWeight;
+
 		@Schema(description = "List of vote counts for each option")
 		public List<PollVotes.OptionCount> voteCounts;
 
@@ -70,6 +73,12 @@ public class AppRatingsResponse {
 		public AppRating(String pollName, String service, String appName, String owner, Long published,
 				String description, Integer totalVotes, Integer totalWeight,
 				List<PollVotes.OptionCount> voteCounts, List<PollVotes.OptionWeight> voteWeights) {
+			this(pollName, service, appName, owner, published, description, totalVotes, totalWeight, totalWeight, voteCounts, voteWeights);
+		}
+
+		public AppRating(String pollName, String service, String appName, String owner, Long published,
+				String description, Integer totalVotes, Integer totalWeight, Integer rawTotalWeight,
+				List<PollVotes.OptionCount> voteCounts, List<PollVotes.OptionWeight> voteWeights) {
 			this.pollName = pollName;
 			this.service = service;
 			this.appName = appName;
@@ -78,6 +87,7 @@ public class AppRatingsResponse {
 			this.description = description;
 			this.totalVotes = totalVotes;
 			this.totalWeight = totalWeight;
+			this.rawTotalWeight = rawTotalWeight;
 			this.voteCounts = voteCounts;
 			this.voteWeights = voteWeights;
 		}

@@ -7,6 +7,8 @@ import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.resource.AddressesResource;
 import org.qortal.controller.OnlineAccountsManager;
+import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.network.OnlineAccountLevel;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.PublicizeTransactionData;
@@ -31,6 +33,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -55,7 +58,42 @@ public class AddressesApiTests extends ApiCommon {
 			Account unknownAccount = Common.generateRandomSeedAccount(repository);
 			assertNull(repository.getAccountRepository().getAccount(unknownAccount.getAddress()));
 
-			assertEquals(unknownAccount.getAddress(), this.addressesResource.getAccountInfo(unknownAccount.getAddress()).getAddress());
+			AccountData accountInfo = this.addressesResource.getAccountInfo(unknownAccount.getAddress());
+			assertEquals(unknownAccount.getAddress(), accountInfo.getAddress());
+			assertEquals(AccountTrustStatus.UNVERIFIED, accountInfo.getTrustStatus());
+			assertEquals(AccountTrustStatus.UNVERIFIED.getValue(), accountInfo.getTrustStatusValue());
+			assertEquals(0, accountInfo.getTrustWeightPercent());
+			assertTrue(accountInfo.isTrustAllowsMinting());
+			assertEquals(0, accountInfo.getEffectiveVoteWeight());
+		}
+	}
+
+	@Test
+	public void testGetAccountInfoIncludesTrustAuditFields() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			AccountData accountData = repository.getAccountRepository().getAccount(aliceAddress);
+			accountData.setBlocksMinted(101);
+
+			repository.getAccountRepository().setMintedBlockCount(accountData);
+			repository.getAccountRepository().setTrustStatus(aliceAddress, AccountTrustStatus.SILVER);
+			repository.saveChanges();
+
+			AccountData accountInfo = this.addressesResource.getAccountInfo(aliceAddress);
+			assertEquals(AccountTrustStatus.SILVER, accountInfo.getTrustStatus());
+			assertEquals(AccountTrustStatus.SILVER.getValue(), accountInfo.getTrustStatusValue());
+			assertEquals(50, accountInfo.getTrustWeightPercent());
+			assertTrue(accountInfo.isTrustAllowsMinting());
+			assertEquals(50, accountInfo.getEffectiveVoteWeight());
+
+			repository.getAccountRepository().setTrustStatus(aliceAddress, AccountTrustStatus.SUSPICIOUS);
+			repository.saveChanges();
+
+			AccountData suspiciousAccountInfo = this.addressesResource.getAccountInfo(aliceAddress);
+			assertEquals(AccountTrustStatus.SUSPICIOUS, suspiciousAccountInfo.getTrustStatus());
+			assertEquals(AccountTrustStatus.SUSPICIOUS.getValue(), suspiciousAccountInfo.getTrustStatusValue());
+			assertEquals(0, suspiciousAccountInfo.getTrustWeightPercent());
+			assertFalse(suspiciousAccountInfo.isTrustAllowsMinting());
+			assertEquals(0, suspiciousAccountInfo.getEffectiveVoteWeight());
 		}
 	}
 

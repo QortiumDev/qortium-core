@@ -23,22 +23,35 @@ public class PollVotes {
     @Schema(description = "Total weight of votes")
     public Integer totalWeight;
 
+    @Schema(description = "Total raw blocksMinted weight before trust-tier multipliers")
+    public Integer rawTotalWeight;
+
     @Schema(description = "List of vote counts for each option")
     public List<OptionCount> voteCounts;
 
     @Schema(description = "List of vote weights for each option")
     public List<OptionWeight> voteWeights;
 
+    @Schema(description = "Trust-tier audit details for individual votes")
+    public List<VoteDetail> voteDetails;
+
     // For JAX-RS
     protected PollVotes() {
     }
 
     public PollVotes(List<VoteOnPollData> votes, Integer totalVotes, Integer totalWeight, List<OptionCount> voteCounts, List<OptionWeight> voteWeights) {
+        this(votes, totalVotes, totalWeight, totalWeight, voteCounts, voteWeights, null);
+    }
+
+    public PollVotes(List<VoteOnPollData> votes, Integer totalVotes, Integer totalWeight, Integer rawTotalWeight,
+                     List<OptionCount> voteCounts, List<OptionWeight> voteWeights, List<VoteDetail> voteDetails) {
         this.votes = votes;
         this.totalVotes = totalVotes;
         this.totalWeight = totalWeight;
+        this.rawTotalWeight = rawTotalWeight;
         this.voteCounts = voteCounts;
         this.voteWeights = voteWeights;
+        this.voteDetails = voteDetails;
     }
 
     @Schema(description = "Vote info")
@@ -71,13 +84,61 @@ public class PollVotes {
         @Schema(description = "Vote weight")
         public Integer voteWeight;
 
+        @Schema(description = "Raw blocksMinted vote weight before trust-tier multipliers")
+        public Integer rawVoteWeight;
+
         // For JAX-RS
         protected OptionWeight() {
         }
 
         public OptionWeight(String optionName, Integer voteWeight) {
+            this(optionName, voteWeight, voteWeight);
+        }
+
+        public OptionWeight(String optionName, Integer voteWeight, Integer rawVoteWeight) {
             this.optionName = optionName;
             this.voteWeight = voteWeight;
+            this.rawVoteWeight = rawVoteWeight;
+        }
+    }
+
+    @Schema(description = "Per-vote trust-tier audit details")
+    @XmlAccessorType(XmlAccessType.FIELD)
+    public static class VoteDetail {
+        @Schema(description = "Voter address")
+        public String voterAddress;
+
+        @Schema(description = "Selected option index")
+        public Integer optionIndex;
+
+        @Schema(description = "Raw blocksMinted vote weight before trust-tier multipliers")
+        public Integer rawVoteWeight;
+
+        @Schema(description = "Trust status name")
+        public String trustStatus;
+
+        @Schema(description = "Trust status storage value")
+        public Integer trustStatusValue;
+
+        @Schema(description = "Trust-tier vote multiplier percent")
+        public Integer trustWeightPercent;
+
+        @Schema(description = "Effective vote weight after trust-tier multiplier")
+        public Integer effectiveVoteWeight;
+
+        // For JAX-RS
+        protected VoteDetail() {
+        }
+
+        public VoteDetail(String voterAddress, Integer optionIndex, Integer rawVoteWeight, String trustStatus,
+                          Integer trustStatusValue, Integer trustWeightPercent, Integer effectiveVoteWeight) {
+            this.voterAddress = voterAddress;
+            this.optionIndex = optionIndex;
+            this.rawVoteWeight = rawVoteWeight;
+            this.trustStatus = trustStatus;
+            this.trustStatusValue = trustStatusValue;
+            this.trustWeightPercent = trustWeightPercent;
+            this.effectiveVoteWeight = effectiveVoteWeight;
         }
     }
 }

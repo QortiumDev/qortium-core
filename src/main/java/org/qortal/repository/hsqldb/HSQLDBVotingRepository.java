@@ -126,7 +126,8 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		sql.append("  p.poll_name, p.description, p.creator, p.owner, p.published_when, ");
 		sql.append("  po.option_index, po.option_name, ");
 		sql.append("  COUNT(pv.voter) AS vote_count, ");
-		sql.append("  COALESCE(SUM(").append(EFFECTIVE_VOTE_WEIGHT_SQL).append("), 0) AS vote_weight ");
+		sql.append("  COALESCE(SUM(").append(EFFECTIVE_VOTE_WEIGHT_SQL).append("), 0) AS vote_weight, ");
+		sql.append("  COALESCE(SUM(a.blocks_minted), 0) AS raw_vote_weight ");
 		sql.append("FROM (");
 		sql.append(pollNamesSql);
 		sql.append(") matching_polls ");
@@ -155,6 +156,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 				String optionName = resultSet.getString(7);
 				int voteCount = resultSet.getInt(8);
 				int voteWeight = resultSet.getInt(9);
+				int rawVoteWeight = resultSet.getInt(10);
 
 				// Get or create PollDataWithVotes for this poll
 				PollDataWithVotes pollWithVotes = pollMap.get(pollName);
@@ -163,7 +165,8 @@ public class HSQLDBVotingRepository implements VotingRepository {
 					PollData pollData = new PollData(creatorPublicKey, owner, pollName, description, new ArrayList<>(), published);
 					Map<String, Integer> voteCountMap = new HashMap<>();
 					Map<String, Integer> voteWeightMap = new HashMap<>();
-					pollWithVotes = new PollDataWithVotes(pollData, 0, 0, voteCountMap, voteWeightMap);
+					Map<String, Integer> rawVoteWeightMap = new HashMap<>();
+					pollWithVotes = new PollDataWithVotes(pollData, 0, 0, 0, voteCountMap, voteWeightMap, rawVoteWeightMap);
 					pollMap.put(pollName, pollWithVotes);
 				}
 
@@ -174,10 +177,12 @@ public class HSQLDBVotingRepository implements VotingRepository {
 					// Add vote counts and weights
 					pollWithVotes.getVoteCountMap().put(optionName, voteCount);
 					pollWithVotes.getVoteWeightMap().put(optionName, voteWeight);
+					pollWithVotes.getRawVoteWeightMap().put(optionName, rawVoteWeight);
 
 					// Update totals
 					pollWithVotes.setTotalVotes(pollWithVotes.getTotalVotes() + voteCount);
 					pollWithVotes.setTotalWeight(pollWithVotes.getTotalWeight() + voteWeight);
+					pollWithVotes.setRawTotalWeight(pollWithVotes.getRawTotalWeight() + rawVoteWeight);
 				}
 
 			} while (resultSet.next());
