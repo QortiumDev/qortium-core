@@ -1213,11 +1213,20 @@ public class HSQLDBDatabaseUpdates {
 					backfillCreatePollTransactionPollIds(connection);
 					break;
 
+				case 62:
+					// Use poll IDs as the internal key for poll state tables.
+					backfillPollIds(connection);
+					stmt.execute("ALTER TABLE Polls ALTER COLUMN poll_id SET NOT NULL");
+					stmt.execute("ALTER TABLE Polls ADD CONSTRAINT PollIdUnique UNIQUE (poll_id)");
+					dropIndexIfExists(connection, "Polls", "PollIdIndex");
+					migratePollChildTablesToPollIds(connection);
+					break;
+
 				default:
 					// nothing to do
 					return false;
+				}
 			}
-		}
 
 		// database was updated
 		LOGGER.info(() -> String.format("HSQLDB repository updated to version %d", databaseVersion + 1));
@@ -1243,6 +1252,20 @@ public class HSQLDBDatabaseUpdates {
 
 		try (Statement stmt = connection.createStatement()) {
 			stmt.execute(String.format("ALTER TABLE %s ADD COLUMN %s %s", tableName, columnName, columnDefinition));
+		}
+	}
+
+	private static void dropIndexIfExists(Connection connection, String tableName, String indexName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getIndexInfo(null, null, tableName.toUpperCase(), false, false)) {
+			while (resultSet.next()) {
+				String existingIndexName = resultSet.getString("INDEX_NAME");
+				if (existingIndexName != null && existingIndexName.equalsIgnoreCase(indexName)) {
+					try (Statement stmt = connection.createStatement()) {
+						stmt.execute(String.format("DROP INDEX %s", indexName));
+					}
+					return;
+				}
+			}
 		}
 	}
 
@@ -1302,6 +1325,52 @@ public class HSQLDBDatabaseUpdates {
 			}
 
 			updateStatement.executeBatch();
+		}
+	}
+
+	private static void migratePollChildTablesToPollIds(Connection connection) throws SQLException {
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute("CREATE TABLE PollOptionsNew (poll_id INTEGER NOT NULL, option_index PollOptionIndex NOT NULL, option_name PollOption, "
+					+ "PRIMARY KEY (poll_id, option_index), FOREIGN KEY (poll_id) REFERENCES Polls (poll_id) ON DELETE CASCADE)");
+			stmt.execute("INSERT INTO PollOptionsNew (poll_id, option_index, option_name) "
+					+ "SELECT Polls.poll_id, PollOptions.option_index, PollOptions.option_name "
+					+ "FROM PollOptions JOIN Polls ON Polls.poll_name = PollOptions.poll_name");
+			stmt.execute("DROP TABLE PollOptions");
+			stmt.execute("ALTER TABLE PollOptionsNew RENAME TO PollOptions");
+
+			stmt.execute("CREATE TABLE PollVotesNew (poll_id INTEGER NOT NULL, voter AccountPublicKey, option_index PollOptionIndex NOT NULL, "
+					+ "PRIMARY KEY (poll_id, voter), FOREIGN KEY (poll_id) REFERENCES Polls (poll_id) ON DELETE CASCADE)");
+			stmt.execute("INSERT INTO PollVotesNew (poll_id, voter, option_index) "
+					+ "SELECT Polls.poll_id, PollVotes.voter, PollVotes.option_index "
+					+ "FROM PollVotes JOIN Polls ON Polls.poll_name = PollVotes.poll_name");
+			stmt.execute("DROP TABLE PollVotes");
+			stmt.execute("ALTER TABLE PollVotesNew RENAME TO PollVotes");
+
+			stmt.execute("CREATE TABLE PollFrozenResultsNew (poll_id INTEGER NOT NULL, option_index PollOptionIndex NOT NULL, "
+					+ "vote_count INT NOT NULL, vote_weight INT NOT NULL, raw_vote_weight INT NOT NULL, "
+					+ "freeze_height INT NOT NULL, freeze_timestamp EpochMillis NOT NULL, "
+					+ "PRIMARY KEY (poll_id, option_index), FOREIGN KEY (poll_id) REFERENCES Polls (poll_id) ON DELETE CASCADE)");
+			stmt.execute("INSERT INTO PollFrozenResultsNew (poll_id, option_index, vote_count, vote_weight, raw_vote_weight, freeze_height, freeze_timestamp) "
+					+ "SELECT Polls.poll_id, PollFrozenResults.option_index, PollFrozenResults.vote_count, PollFrozenResults.vote_weight, "
+					+ "PollFrozenResults.raw_vote_weight, PollFrozenResults.freeze_height, PollFrozenResults.freeze_timestamp "
+					+ "FROM PollFrozenResults JOIN Polls ON Polls.poll_name = PollFrozenResults.poll_name");
+			stmt.execute("DROP TABLE PollFrozenResults");
+			stmt.execute("ALTER TABLE PollFrozenResultsNew RENAME TO PollFrozenResults");
+			stmt.execute("CREATE INDEX PollFrozenResultsHeightIndex ON PollFrozenResults (freeze_height)");
+
+			stmt.execute("CREATE TABLE PollFrozenVoteDetailsNew (poll_id INTEGER NOT NULL, voter AccountPublicKey NOT NULL, option_index PollOptionIndex NOT NULL, "
+					+ "raw_vote_weight INT NOT NULL, trust_status INT NOT NULL, trust_weight_percent INT NOT NULL, effective_vote_weight INT NOT NULL, "
+					+ "freeze_height INT NOT NULL, freeze_timestamp EpochMillis NOT NULL, "
+					+ "PRIMARY KEY (poll_id, voter), FOREIGN KEY (poll_id) REFERENCES Polls (poll_id) ON DELETE CASCADE)");
+			stmt.execute("INSERT INTO PollFrozenVoteDetailsNew (poll_id, voter, option_index, raw_vote_weight, trust_status, trust_weight_percent, "
+					+ "effective_vote_weight, freeze_height, freeze_timestamp) "
+					+ "SELECT Polls.poll_id, PollFrozenVoteDetails.voter, PollFrozenVoteDetails.option_index, "
+					+ "PollFrozenVoteDetails.raw_vote_weight, PollFrozenVoteDetails.trust_status, PollFrozenVoteDetails.trust_weight_percent, "
+					+ "PollFrozenVoteDetails.effective_vote_weight, PollFrozenVoteDetails.freeze_height, PollFrozenVoteDetails.freeze_timestamp "
+					+ "FROM PollFrozenVoteDetails JOIN Polls ON Polls.poll_name = PollFrozenVoteDetails.poll_name");
+			stmt.execute("DROP TABLE PollFrozenVoteDetails");
+			stmt.execute("ALTER TABLE PollFrozenVoteDetailsNew RENAME TO PollFrozenVoteDetails");
+			stmt.execute("CREATE INDEX PollFrozenVoteDetailsHeightIndex ON PollFrozenVoteDetails (freeze_height)");
 		}
 	}
 

@@ -209,7 +209,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 			HSQLDBSaver optionSaveHelper = new HSQLDBSaver("PollOptions");
 
-			optionSaveHelper.bind("poll_name", pollData.getPollName()).bind("option_index", optionIndex).bind("option_name", pollOptionData.getOptionName());
+			optionSaveHelper.bind("poll_id", pollData.getPollId()).bind("option_index", optionIndex).bind("option_name", pollOptionData.getOptionName());
 
 			try {
 				optionSaveHelper.execute(this.repository);
@@ -221,8 +221,8 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public void delete(String pollName) throws DataException {
-		// NOTE: The corresponding rows in PollOptions are deleted automatically by the database
-		// thanks to "ON DELETE CASCADE" in the PollOptions' FOREIGN KEY definition.
+		// NOTE: The corresponding poll state rows are deleted automatically by the database
+		// thanks to "ON DELETE CASCADE" in the child tables' FOREIGN KEY definitions.
 		try {
 			this.repository.delete("Polls", "poll_name = ?", pollName);
 		} catch (SQLException e) {
@@ -235,27 +235,27 @@ public class HSQLDBVotingRepository implements VotingRepository {
 	@Override
 	public void freezeClosedPolls(int blockHeight, long blockTimestamp) throws DataException {
 		String frozenResultsSql = "INSERT INTO PollFrozenResults "
-				+ "(poll_name, option_index, vote_count, vote_weight, raw_vote_weight, freeze_height, freeze_timestamp) "
-				+ "SELECT p.poll_name, po.option_index, COUNT(pv.voter), "
+				+ "(poll_id, option_index, vote_count, vote_weight, raw_vote_weight, freeze_height, freeze_timestamp) "
+				+ "SELECT p.poll_id, po.option_index, COUNT(pv.voter), "
 				+ "COALESCE(SUM(" + EFFECTIVE_VOTE_WEIGHT_SQL + "), 0), "
 				+ "COALESCE(SUM(a.blocks_minted), 0), ?, ? "
 				+ "FROM Polls p "
-				+ "JOIN PollOptions po ON po.poll_name = p.poll_name "
-				+ "LEFT JOIN PollVotes pv ON pv.poll_name = p.poll_name AND pv.option_index = po.option_index + 1 "
+				+ "JOIN PollOptions po ON po.poll_id = p.poll_id "
+				+ "LEFT JOIN PollVotes pv ON pv.poll_id = p.poll_id AND pv.option_index = po.option_index + 1 "
 				+ "LEFT JOIN Accounts a ON pv.voter = a.public_key "
 				+ "WHERE p.end_when IS NOT NULL AND p.end_when <= ? "
-				+ "AND NOT EXISTS (SELECT TRUE FROM PollFrozenResults pfr WHERE pfr.poll_name = p.poll_name) "
-				+ "GROUP BY p.poll_name, po.option_index";
+				+ "AND NOT EXISTS (SELECT TRUE FROM PollFrozenResults pfr WHERE pfr.poll_id = p.poll_id) "
+				+ "GROUP BY p.poll_id, po.option_index";
 
 		String frozenVoteDetailsSql = "INSERT INTO PollFrozenVoteDetails "
-				+ "(poll_name, voter, option_index, raw_vote_weight, trust_status, trust_weight_percent, effective_vote_weight, freeze_height, freeze_timestamp) "
-				+ "SELECT p.poll_name, pv.voter, pv.option_index, COALESCE(a.blocks_minted, 0), COALESCE(a.trust_status, 0), "
+				+ "(poll_id, voter, option_index, raw_vote_weight, trust_status, trust_weight_percent, effective_vote_weight, freeze_height, freeze_timestamp) "
+				+ "SELECT p.poll_id, pv.voter, pv.option_index, COALESCE(a.blocks_minted, 0), COALESCE(a.trust_status, 0), "
 				+ TRUST_WEIGHT_PERCENT_SQL + ", " + EFFECTIVE_VOTE_WEIGHT_SQL + ", ?, ? "
 				+ "FROM Polls p "
-				+ "JOIN PollVotes pv ON pv.poll_name = p.poll_name "
+				+ "JOIN PollVotes pv ON pv.poll_id = p.poll_id "
 				+ "LEFT JOIN Accounts a ON pv.voter = a.public_key "
-				+ "WHERE EXISTS (SELECT TRUE FROM PollFrozenResults pfr WHERE pfr.poll_name = p.poll_name AND pfr.freeze_height = ?) "
-				+ "AND NOT EXISTS (SELECT TRUE FROM PollFrozenVoteDetails pfv WHERE pfv.poll_name = p.poll_name)";
+				+ "WHERE EXISTS (SELECT TRUE FROM PollFrozenResults pfr WHERE pfr.poll_id = p.poll_id AND pfr.freeze_height = ?) "
+				+ "AND NOT EXISTS (SELECT TRUE FROM PollFrozenVoteDetails pfv WHERE pfv.poll_id = p.poll_id)";
 
 		try {
 			this.repository.executeCheckedUpdate(frozenResultsSql, blockHeight, blockTimestamp, blockTimestamp);
@@ -283,8 +283,8 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 		String sql = "SELECT po.option_name, pfr.vote_count, pfr.vote_weight, pfr.raw_vote_weight, pfr.freeze_height "
 				+ "FROM PollOptions po "
-				+ "LEFT JOIN PollFrozenResults pfr ON pfr.poll_name = po.poll_name AND pfr.option_index = po.option_index "
-				+ "WHERE po.poll_name = ? "
+				+ "LEFT JOIN PollFrozenResults pfr ON pfr.poll_id = po.poll_id AND pfr.option_index = po.option_index "
+				+ "WHERE po.poll_id = ? "
 				+ "ORDER BY po.option_index ASC";
 
 		Map<String, Integer> voteCountMap = new HashMap<>();
@@ -294,7 +294,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		int totalWeight = 0;
 		int rawTotalWeight = 0;
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollName)) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollData.getPollId())) {
 			if (resultSet == null)
 				return null;
 
@@ -325,13 +325,17 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public List<PollVoteWeightData> getFrozenPollVoteWeights(String pollName) throws DataException {
+		Integer pollId = fetchPollIdIfExists(pollName);
+		if (pollId == null)
+			return new ArrayList<>();
+
 		String sql = "SELECT voter, option_index, raw_vote_weight, trust_status, trust_weight_percent, effective_vote_weight, freeze_height, freeze_timestamp "
 				+ "FROM PollFrozenVoteDetails "
-				+ "WHERE poll_name = ? "
+				+ "WHERE poll_id = ? "
 				+ "ORDER BY option_index ASC, voter ASC";
 		List<PollVoteWeightData> voteWeights = new ArrayList<>();
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollName)) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollId)) {
 			if (resultSet == null)
 				return voteWeights;
 
@@ -359,10 +363,14 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public List<VoteOnPollData> getVotes(String pollName) throws DataException {
-		String sql = "SELECT voter, option_index FROM PollVotes WHERE poll_name = ?";
+		Integer pollId = fetchPollIdIfExists(pollName);
+		if (pollId == null)
+			return new ArrayList<>();
+
+		String sql = "SELECT voter, option_index FROM PollVotes WHERE poll_id = ?";
 		List<VoteOnPollData> votes = new ArrayList<>();
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollName)) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollId)) {
 			if (resultSet == null)
 				return votes;
 
@@ -382,9 +390,13 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public VoteOnPollData getVote(String pollName, byte[] voterPublicKey) throws DataException {
-		String sql = "SELECT option_index FROM PollVotes WHERE poll_name = ? AND voter = ?";
+		Integer pollId = fetchPollIdIfExists(pollName);
+		if (pollId == null)
+			return null;
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollName, voterPublicKey)) {
+		String sql = "SELECT option_index FROM PollVotes WHERE poll_id = ? AND voter = ?";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollId, voterPublicKey)) {
 			if (resultSet == null)
 				return null;
 
@@ -398,9 +410,10 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public void save(VoteOnPollData voteOnPollData) throws DataException {
+		int pollId = requirePollId(voteOnPollData.getPollName());
 		HSQLDBSaver saveHelper = new HSQLDBSaver("PollVotes");
 
-		saveHelper.bind("poll_name", voteOnPollData.getPollName()).bind("voter", voteOnPollData.getVoterPublicKey())
+		saveHelper.bind("poll_id", pollId).bind("voter", voteOnPollData.getVoterPublicKey())
 				.bind("option_index", voteOnPollData.getOptionIndex());
 
 		try {
@@ -412,8 +425,12 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public void delete(String pollName, byte[] voterPublicKey) throws DataException {
+		Integer pollId = fetchPollIdIfExists(pollName);
+		if (pollId == null)
+			return;
+
 		try {
-			this.repository.delete("PollVotes", "poll_name = ? AND voter = ?", pollName, voterPublicKey);
+			this.repository.delete("PollVotes", "poll_id = ? AND voter = ?", pollId, voterPublicKey);
 		} catch (SQLException e) {
 			throw new DataException("Unable to delete poll vote from repository", e);
 		}
@@ -428,25 +445,44 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		long published = resultSet.getLong(6);
 		Long endTime = getNullableLong(resultSet, 7);
 
-		return new PollData(pollId, creatorPublicKey, owner, pollName, description, getPollOptions(pollName), published, endTime);
+		return new PollData(pollId, creatorPublicKey, owner, pollName, description, getPollOptions(pollId), published, endTime);
 	}
 
 	private Integer fetchPollId(String pollName) throws DataException {
+		Integer pollId = fetchPollIdIfExists(pollName);
+		if (pollId == null)
+			throw new DataException("Unable to fetch new poll ID from repository");
+
+		return pollId;
+	}
+
+	private Integer fetchPollIdIfExists(String pollName) throws DataException {
 		try (ResultSet resultSet = this.repository.checkedExecute("SELECT poll_id FROM Polls WHERE poll_name = ?", pollName)) {
 			if (resultSet == null)
-				throw new DataException("Unable to fetch new poll ID from repository");
+				return null;
 
 			return getNullableInteger(resultSet, 1);
 		} catch (SQLException e) {
-			throw new DataException("Unable to fetch new poll ID from repository", e);
+			throw new DataException("Unable to fetch poll ID from repository", e);
 		}
 	}
 
-	private List<PollOptionData> getPollOptions(String pollName) throws DataException {
-		String optionsSql = "SELECT option_name FROM PollOptions WHERE poll_name = ? ORDER BY option_index ASC";
+	private int requirePollId(String pollName) throws DataException {
+		Integer pollId = fetchPollIdIfExists(pollName);
+		if (pollId == null)
+			throw new DataException("Unable to resolve poll ID in repository");
+
+		return pollId;
+	}
+
+	private List<PollOptionData> getPollOptions(Integer pollId) throws DataException {
+		if (pollId == null)
+			return new ArrayList<>();
+
+		String optionsSql = "SELECT option_name FROM PollOptions WHERE poll_id = ? ORDER BY option_index ASC";
 		List<PollOptionData> pollOptions = new ArrayList<>();
 
-		try (ResultSet optionsResultSet = this.repository.checkedExecute(optionsSql, pollName)) {
+		try (ResultSet optionsResultSet = this.repository.checkedExecute(optionsSql, pollId)) {
 			if (optionsResultSet == null)
 				return pollOptions;
 

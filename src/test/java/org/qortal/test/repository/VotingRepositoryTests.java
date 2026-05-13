@@ -4,15 +4,24 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollOptionData;
+import org.qortal.data.voting.VoteOnPollData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.TestAccount;
 
+import java.sql.DatabaseMetaData;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class VotingRepositoryTests extends Common {
 
@@ -31,6 +40,7 @@ public class VotingRepositoryTests extends Common {
 			PollData fetchedPollData = repository.getVotingRepository().fromPollName(pollName);
 			assertNotNull(fetchedPollData.getPollId());
 			assertEquals(endTime, fetchedPollData.getEndTime());
+			assertEquals(List.of("Yes", "No"), pollOptionNames(fetchedPollData));
 			assertEquals(pollName, repository.getVotingRepository().fromPollId(fetchedPollData.getPollId()).getPollName());
 
 			PollData listedPollData = repository.getVotingRepository().getAllPolls(null, null, null).stream()
@@ -39,6 +49,45 @@ public class VotingRepositoryTests extends Common {
 					.orElseThrow(() -> new AssertionError("Missing poll " + pollName));
 			assertEquals(fetchedPollData.getPollId(), listedPollData.getPollId());
 			assertEquals(endTime, listedPollData.getEndTime());
+		}
+	}
+
+	@Test
+	public void testPollStateTablesUsePollIdForeignKeys() throws DataException, SQLException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			for (String tableName : List.of("PollOptions", "PollVotes", "PollFrozenResults", "PollFrozenVoteDetails")) {
+				assertTrue(tableName + " should use poll_id", tableHasColumn(repository, tableName, "poll_id"));
+				assertFalse(tableName + " should not keep poll_name", tableHasColumn(repository, tableName, "poll_name"));
+				assertTrue(tableName + " should reference Polls.poll_id", tableHasImportedKey(repository, tableName, "poll_id", "Polls", "poll_id"));
+			}
+		}
+	}
+
+	@Test
+	public void testPollVotesRoundTripThroughIdBackedTables() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "poll-id-backed-votes";
+			createTestPoll(repository, pollName, null);
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			PollData pollData = repository.getVotingRepository().fromPollName(pollName);
+			assertNotNull(pollData.getPollId());
+			assertEquals(List.of("Yes", "No"), pollOptionNames(pollData));
+
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 1));
+			repository.saveChanges();
+
+			VoteOnPollData fetchedVote = repository.getVotingRepository().getVote(pollName, bob.getPublicKey());
+			assertNotNull(fetchedVote);
+			assertEquals(pollName, fetchedVote.getPollName());
+			assertEquals(1, fetchedVote.getOptionIndex());
+			assertEquals(1, repository.getVotingRepository().getVotes(pollName).size());
+
+			repository.getVotingRepository().delete(pollName, bob.getPublicKey());
+			repository.saveChanges();
+
+			assertNull(repository.getVotingRepository().getVote(pollName, bob.getPublicKey()));
+			assertEquals(0, repository.getVotingRepository().getVotes(pollName).size());
 		}
 	}
 
@@ -58,6 +107,36 @@ public class VotingRepositoryTests extends Common {
 
 		repository.getVotingRepository().save(pollData);
 		repository.saveChanges();
+	}
+
+	private List<String> pollOptionNames(PollData pollData) {
+		return pollData.getPollOptions().stream()
+				.map(PollOptionData::getOptionName)
+				.collect(Collectors.toList());
+	}
+
+	private boolean tableHasColumn(Repository repository, String tableName, String columnName) throws SQLException {
+		try (ResultSet resultSet = repository.getConnection().getMetaData().getColumns(null, null, tableName.toUpperCase(), columnName.toUpperCase())) {
+			return resultSet.next();
+		}
+	}
+
+	private boolean tableHasImportedKey(Repository repository, String tableName, String columnName, String referencedTableName, String referencedColumnName) throws SQLException {
+		DatabaseMetaData metaData = repository.getConnection().getMetaData();
+		try (ResultSet resultSet = metaData.getImportedKeys(null, null, tableName.toUpperCase())) {
+			while (resultSet.next()) {
+				String foreignKeyColumnName = resultSet.getString("FKCOLUMN_NAME");
+				String primaryKeyTableName = resultSet.getString("PKTABLE_NAME");
+				String primaryKeyColumnName = resultSet.getString("PKCOLUMN_NAME");
+
+				if (columnName.equalsIgnoreCase(foreignKeyColumnName)
+						&& referencedTableName.equalsIgnoreCase(primaryKeyTableName)
+						&& referencedColumnName.equalsIgnoreCase(primaryKeyColumnName))
+					return true;
+			}
+		}
+
+		return false;
 	}
 
 }

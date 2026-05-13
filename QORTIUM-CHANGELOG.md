@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: use poll IDs for poll child tables
+
+Moved the internal poll option, active vote, frozen result, and frozen voter-detail tables from poll-name links to numeric poll IDs. Existing poll-name transactions and API routes continue to work, while the stored poll state now uses the stable ID foundation added in the previous change, making poll data closer to the cleaner group-style structure planned for Qortium.
+
 ### 2026-05-13 - core: add poll identifiers
 
 Added numeric poll IDs as a stable lookup field alongside existing poll names. Poll list, search, and detail responses now include the assigned ID, create-poll transactions remember the ID after processing and clear it when orphaned, and new ID-based poll detail and vote-result API routes let clients fetch a poll without relying only on the human-readable poll name.
