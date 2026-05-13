@@ -21,11 +21,13 @@ public class UpdatePollTransactionData extends TransactionData {
 
 	@Schema(description = "Poll owner's public key", example = "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP")
 	private byte[] ownerPublicKey;
+	@Schema(description = "Stable numeric poll ID for the poll being updated")
 	private int pollId;
 	private String newPollName;
 	private String newDescription;
 	@Schema(description = "Replacement poll options as separate array entries; do not submit one comma-separated string")
 	private List<PollOptionData> newPollOptions;
+	@Schema(description = "Replacement poll end time. Full edits are allowed only while there are no active votes; after active votes exist, only extending an existing future end time is allowed")
 	private Long newEndTime;
 
 	@XmlTransient

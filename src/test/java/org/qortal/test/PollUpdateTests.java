@@ -77,6 +77,27 @@ public class PollUpdateTests extends Common {
 	}
 
 	@Test
+	public void testUpdatingToFewerOptionsRemovesStaleOptionsAndOrphanRestoresThem() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			PollData pollData = createTestPoll(repository, alice, "shorter-options-update-poll",
+					"Original description", buildThreeOptions(), null);
+
+			UpdatePollTransactionData transactionData = buildUpdatePollTransactionData(repository, alice, pollData.getPollId(),
+					pollData.getPollName(), "Updated description", buildYesNoOptions(), null);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			PollData updatedPollData = repository.getVotingRepository().fromPollId(pollData.getPollId());
+			assertEquals(List.of("Yes", "No"), pollOptionNames(updatedPollData));
+
+			BlockUtils.orphanLastBlock(repository);
+
+			PollData revertedPollData = repository.getVotingRepository().fromPollId(pollData.getPollId());
+			assertEquals(List.of("Yes", "No", "Abstain"), pollOptionNames(revertedPollData));
+		}
+	}
+
+	@Test
 	public void testOnlyOwnerCanUpdatePoll() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");

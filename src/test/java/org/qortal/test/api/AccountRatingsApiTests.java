@@ -161,6 +161,12 @@ public class AccountRatingsApiTests extends ApiCommon {
 
 			assertNotNull(rawTransaction);
 			assertFalse(rawTransaction.isEmpty());
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingLevel.TRUSTED), alice);
+			String removalTransaction = this.accountRatingsResource.rateAccount(ratingData(alice, bob, AccountRatingLevel.UNKNOWN));
+
+			assertNotNull(removalTransaction);
+			assertFalse(removalTransaction.isEmpty());
 		}
 	}
 

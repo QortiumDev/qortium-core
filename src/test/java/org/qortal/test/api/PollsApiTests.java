@@ -8,6 +8,8 @@ import org.qortal.api.model.PollVotes;
 import org.qortal.api.resource.PollsResource;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.transaction.UpdatePollTransactionData;
+import org.qortal.data.transaction.VoteOnPollTransactionData;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollOptionData;
 import org.qortal.data.voting.VoteOnPollData;
@@ -19,12 +21,15 @@ import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
+import org.qortal.test.common.transaction.TestTransaction;
+import org.qortal.voting.Poll;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
@@ -156,6 +161,47 @@ public class PollsApiTests extends ApiCommon {
 		assertEquals(byName.totalWeight, byId.totalWeight);
 		assertEquals(byName.rawTotalWeight, byId.rawTotalWeight);
 		assertEquals(findOptionWeight(byName.voteWeights, "1"), findOptionWeight(byId.voteWeights, "1"));
+	}
+
+	@Test
+	public void testVoteOnPollEndpointBuildsUnsignedVoteRemovalTransaction() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "poll-vote-removal-api-test";
+			createTestPoll(repository, pollName);
+			PollData pollData = repository.getVotingRepository().fromPollName(pollName);
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+
+			repository.getVotingRepository().save(new VoteOnPollData(pollData.getPollId(), alice.getPublicKey(), 1));
+			repository.saveChanges();
+
+			VoteOnPollTransactionData transactionData = new VoteOnPollTransactionData(
+					TestTransaction.generateBase(alice), pollData.getPollId(), Poll.NO_VOTE_OPTION_INDEX);
+			String rawTransaction = this.pollsResource.VoteOnPoll(transactionData);
+
+			assertNotNull(rawTransaction);
+			assertFalse(rawTransaction.isEmpty());
+		}
+	}
+
+	@Test
+	public void testUpdatePollEndpointBuildsUnsignedTransaction() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "poll-update-api-test";
+			createTestPoll(repository, pollName);
+			PollData pollData = repository.getVotingRepository().fromPollName(pollName);
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+
+			List<PollOptionData> updatedOptions = List.of(
+					new PollOptionData("Approve"),
+					new PollOptionData("Reject"));
+			UpdatePollTransactionData transactionData = new UpdatePollTransactionData(
+					TestTransaction.generateBase(alice), pollData.getPollId(), "poll-update-api-renamed",
+					"Updated by API test", updatedOptions, null);
+			String rawTransaction = this.pollsResource.UpdatePoll(transactionData);
+
+			assertNotNull(rawTransaction);
+			assertFalse(rawTransaction.isEmpty());
+		}
 	}
 
 	@Test

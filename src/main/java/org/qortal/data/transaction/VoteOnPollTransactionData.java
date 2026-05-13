@@ -20,6 +20,7 @@ public class VoteOnPollTransactionData extends TransactionData {
 	// Properties
 	@Schema(description = "Vote creator's public key", example = "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP")
 	private byte[] voterPublicKey;
+	@Schema(description = "Stable numeric poll ID; vote transactions do not use the editable poll name")
 	private int pollId;
 	@Schema(description = "Poll option index: 0 removes an existing vote, 1 selects the first poll option, 2 selects the second, and so on")
 	private int optionIndex;

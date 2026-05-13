@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - api: clarify poll and rating transaction inputs
+
+Clarified the API documentation for poll voting, poll updates, resource ratings, and account ratings so client builders can see the intended stable poll ID inputs and neutral removal values directly from the transaction builder endpoints. Added focused regression coverage for raw poll vote-removal and poll-update transaction builders, account-rating removal through `UNKNOWN`, and poll option updates that shrink the option list without leaving stale choices behind.
+
 ### 2026-05-13 - core: add poll update transactions
 
 Added owner-signed poll update transactions so poll owners can correct poll names, descriptions, options, and end times before voting starts, while polls with active votes can only have an existing future end time extended. Poll updates use stable poll IDs instead of names, remember the previous poll details for clean orphan handling, reject changes after a poll closes, and include translated validation text for invalid poll owners.

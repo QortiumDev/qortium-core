@@ -123,6 +123,7 @@ public class ResourceRatingsResource {
 			summary = "Build raw, unsigned, RATE_RESOURCE transaction",
 			requestBody = @RequestBody(
 					required = true,
+					description = "Rate an existing public QDN resource. rating 0 removes the active rating; ratings 1 through 10 record an active rating.",
 					content = @Content(
 							mediaType = MediaType.APPLICATION_JSON,
 							schema = @Schema(implementation = RateResourceTransactionData.class)

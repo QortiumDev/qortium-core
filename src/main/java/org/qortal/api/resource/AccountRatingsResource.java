@@ -153,6 +153,7 @@ public class AccountRatingsResource {
 			summary = "Build raw, unsigned, RATE_ACCOUNT transaction",
 			requestBody = @RequestBody(
 					required = true,
+					description = "Rate another known account. UNKNOWN removes the active account rating; UNTRUSTED, KNOWN, and TRUSTED record active relationships.",
 					content = @Content(
 							mediaType = MediaType.APPLICATION_JSON,
 							schema = @Schema(implementation = RateAccountTransactionData.class)

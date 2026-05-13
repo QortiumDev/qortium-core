@@ -334,6 +334,7 @@ public class PollsResource {
             summary = "Build raw, unsigned, VOTE_ON_POLL transaction",
             requestBody = @RequestBody(
                     required = true,
+                    description = "Vote on a poll by stable pollId. optionIndex 0 removes the active vote; real poll options start at 1.",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_JSON,
                             schema = @Schema(
@@ -380,6 +381,7 @@ public class PollsResource {
             summary = "Build raw, unsigned, UPDATE_POLL transaction",
             requestBody = @RequestBody(
                     required = true,
+                    description = "Update a poll by stable pollId. Full edits are allowed before active votes exist; polls with active votes can only extend an existing future end time, and closed polls cannot be updated.",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_JSON,
                             schema = @Schema(
