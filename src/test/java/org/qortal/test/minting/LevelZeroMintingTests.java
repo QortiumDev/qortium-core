@@ -7,6 +7,7 @@ import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.Block;
 import org.qortal.controller.BlockMinter;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.account.RewardShareData;
 import org.qortal.data.block.BlockData;
 import org.qortal.repository.DataException;
@@ -60,6 +61,42 @@ public class LevelZeroMintingTests extends Common {
 			assertEquals("Level-zero minter timestamp should use the minimum minting weight", expectedTimestamp, mintedBlock.getBlockData().getTimestamp());
 			assertEquals("Bob should receive minted-block credit", bobBlocksMinted + 1, (int) bob.getBlocksMinted());
 			assertEquals("Bob should remain level 0 after one minted block", 0, (int) bob.getLevel());
+		}
+	}
+
+	@Test
+	public void testTrustStatusControlsMintingEligibility() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+
+			for (AccountTrustStatus trustStatus : new AccountTrustStatus[] {
+					AccountTrustStatus.UNVERIFIED,
+					AccountTrustStatus.BRONZE,
+					AccountTrustStatus.SILVER,
+					AccountTrustStatus.GOLD
+			}) {
+				repository.getAccountRepository().setTrustStatus(bob.getAddress(), trustStatus);
+				repository.saveChanges();
+
+				assertTrue("Minting-group member should mint with trust status " + trustStatus, bob.canMint(false));
+				assertTrue("Prevalidated minting-group member should mint with trust status " + trustStatus, bob.canMint(true));
+			}
+
+			repository.getAccountRepository().setTrustStatus(chloe.getAddress(), AccountTrustStatus.GOLD);
+			repository.saveChanges();
+			assertFalse("Non-member should not mint even with Gold trust status", chloe.canMint(false));
+
+			byte[] bobRewardSharePrivateKey = AccountUtils.rewardShare(repository, "bob", "bob", 0);
+			PrivateKeyAccount bobRewardShareAccount = new PrivateKeyAccount(repository, bobRewardSharePrivateKey);
+
+			repository.getAccountRepository().setTrustStatus(bob.getAddress(), AccountTrustStatus.SUSPICIOUS);
+			repository.saveChanges();
+
+			assertFalse("Suspicious minting-group member should not mint", bob.canMint(false));
+			assertFalse("Suspicious prevalidated minting-group member should not mint", bob.canMint(true));
+			assertNull("Suspicious account's reward-share should not be treated as minting",
+					Account.getRewardShareEffectiveMintingLevelIfMinting(repository, bobRewardShareAccount.getPublicKey()));
 		}
 	}
 

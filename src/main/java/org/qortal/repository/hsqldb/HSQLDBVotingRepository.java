@@ -18,6 +18,11 @@ import java.util.Map;
 public class HSQLDBVotingRepository implements VotingRepository {
 
 	protected HSQLDBRepository repository;
+	private static final String EFFECTIVE_VOTE_WEIGHT_SQL = "CASE COALESCE(a.trust_status, 0) "
+			+ "WHEN 3 THEN a.blocks_minted "
+			+ "WHEN 2 THEN a.blocks_minted / 2 "
+			+ "WHEN 1 THEN a.blocks_minted / 4 "
+			+ "ELSE 0 END";
 
 	public HSQLDBVotingRepository(HSQLDBRepository repository) {
 		this.repository = repository;
@@ -121,7 +126,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		sql.append("  p.poll_name, p.description, p.creator, p.owner, p.published_when, ");
 		sql.append("  po.option_index, po.option_name, ");
 		sql.append("  COUNT(pv.voter) AS vote_count, ");
-		sql.append("  COALESCE(SUM(a.blocks_minted), 0) AS vote_weight ");
+		sql.append("  COALESCE(SUM(").append(EFFECTIVE_VOTE_WEIGHT_SQL).append("), 0) AS vote_weight ");
 		sql.append("FROM (");
 		sql.append(pollNamesSql);
 		sql.append(") matching_polls ");

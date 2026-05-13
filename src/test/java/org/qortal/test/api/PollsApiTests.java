@@ -6,16 +6,22 @@ import org.qortal.api.ApiError;
 import org.qortal.api.model.AppRatingsResponse;
 import org.qortal.api.model.PollVotes;
 import org.qortal.api.resource.PollsResource;
+import org.qortal.account.PrivateKeyAccount;
+import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollOptionData;
 import org.qortal.data.voting.VoteOnPollData;
+import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.TestAccount;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.*;
@@ -190,7 +196,95 @@ public class PollsApiTests extends ApiCommon {
 		}
 	}
 
+	@Test
+	public void testVoteWeightsUseCurrentTrustStatus() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "app-library-APP-rating-TrustWeightTest";
+			createTestAppRatingPoll(repository, pollName);
+
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+			PrivateKeyAccount unverified = createUnverifiedVoteAccount(repository, 100);
+
+			setVoteAccount(repository, "alice", 100, AccountTrustStatus.GOLD);
+			setVoteAccount(repository, "bob", 101, AccountTrustStatus.SILVER);
+			setVoteAccount(repository, "chloe", 101, AccountTrustStatus.BRONZE);
+			setVoteAccount(repository, "dilbert", 100, AccountTrustStatus.SUSPICIOUS);
+
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, alice.getPublicKey(), 0));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, dilbert.getPublicKey(), 2));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, unverified.getPublicKey(), 2));
+			repository.saveChanges();
+
+			PollVotes pollVotes = this.pollsResource.getPollVotes(pollName, true);
+			assertEquals(Integer.valueOf(5), pollVotes.totalVotes);
+			assertEquals(Integer.valueOf(175), pollVotes.totalWeight);
+			assertEquals(100, findOptionWeight(pollVotes.voteWeights, "1"));
+			assertEquals(75, findOptionWeight(pollVotes.voteWeights, "2"));
+			assertEquals(0, findOptionWeight(pollVotes.voteWeights, "3"));
+
+			AppRatingsResponse appRatings = this.pollsResource.getAppRatings("APP", null, null, null, null);
+			AppRatingsResponse.AppRating rating = appRatings.ratings.get(pollName);
+			assertNotNull(rating);
+			assertEquals(Integer.valueOf(5), rating.totalVotes);
+			assertEquals(Integer.valueOf(175), rating.totalWeight);
+			assertEquals(100, findOptionWeight(rating.voteWeights, "1"));
+			assertEquals(75, findOptionWeight(rating.voteWeights, "2"));
+			assertEquals(0, findOptionWeight(rating.voteWeights, "3"));
+
+			repository.getAccountRepository().setTrustStatus(bob.getAddress(), AccountTrustStatus.GOLD);
+			repository.saveChanges();
+
+			PollVotes updatedPollVotes = this.pollsResource.getPollVotes(pollName, true);
+			assertEquals(Integer.valueOf(5), updatedPollVotes.totalVotes);
+			assertEquals(Integer.valueOf(226), updatedPollVotes.totalWeight);
+			assertEquals(100, findOptionWeight(updatedPollVotes.voteWeights, "1"));
+			assertEquals(126, findOptionWeight(updatedPollVotes.voteWeights, "2"));
+
+			deleteTestPoll(repository, pollName);
+		}
+	}
+
 	// Helper methods
+
+	private void setVoteAccount(Repository repository, String accountName, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {
+		TestAccount account = Common.getTestAccount(repository, accountName);
+		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
+		if (accountData == null)
+			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
+
+		accountData.setPublicKey(account.getPublicKey());
+		accountData.setBlocksMinted(blocksMinted);
+
+		repository.getAccountRepository().setMintedBlockCount(accountData);
+		repository.getAccountRepository().setTrustStatus(account.getAddress(), trustStatus);
+		repository.saveChanges();
+	}
+
+	private PrivateKeyAccount createUnverifiedVoteAccount(Repository repository, int blocksMinted) throws DataException {
+		byte[] privateKey = new byte[32];
+		Arrays.fill(privateKey, (byte) 7);
+		PrivateKeyAccount account = new PrivateKeyAccount(repository, privateKey);
+		AccountData accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
+
+		repository.getAccountRepository().ensureAccount(accountData);
+		repository.getAccountRepository().setMintedBlockCount(accountData);
+		repository.saveChanges();
+
+		return account;
+	}
+
+	private int findOptionWeight(List<PollVotes.OptionWeight> voteWeights, String optionName) {
+		return voteWeights.stream()
+				.filter(optionWeight -> optionWeight.optionName.equals(optionName))
+				.findFirst()
+				.map(optionWeight -> optionWeight.voteWeight)
+				.orElseThrow(() -> new AssertionError("Missing vote weight for option " + optionName));
+	}
 
 	private void createTestAppRatingPoll(Repository repository, String pollName) throws DataException {
 		// Create poll options (1-5 star rating)

@@ -34,7 +34,7 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 	@Override
 	public AccountData getAccount(String address) throws DataException {
-		String sql = "SELECT public_key, default_group_id, level, blocks_minted FROM Accounts WHERE account = ?";
+		String sql = "SELECT public_key, default_group_id, level, blocks_minted, trust_status FROM Accounts WHERE account = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, address)) {
 			if (resultSet == null)
@@ -44,8 +44,9 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			int defaultGroupId = resultSet.getInt(2);
 			int level = resultSet.getInt(3);
 			int blocksMinted = resultSet.getInt(4);
+			AccountTrustStatus trustStatus = AccountTrustStatus.valueOf(resultSet.getInt(5));
 
-			return new AccountData(address, publicKey, defaultGroupId, level, blocksMinted);
+			return new AccountData(address, publicKey, defaultGroupId, level, blocksMinted, trustStatus);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch account info from repository", e);
 		}
@@ -145,6 +146,34 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			return resultSet.getInt(1);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch account's minted block count from repository", e);
+		}
+	}
+
+	@Override
+	public AccountTrustStatus getTrustStatus(String address) throws DataException {
+		String sql = "SELECT trust_status FROM Accounts WHERE account = ?";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, address)) {
+			if (resultSet == null)
+				return null;
+
+			return AccountTrustStatus.valueOf(resultSet.getInt(1));
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch account's trust status from repository", e);
+		}
+	}
+
+	@Override
+	public void setTrustStatus(String address, AccountTrustStatus trustStatus) throws DataException {
+		HSQLDBSaver saveHelper = new HSQLDBSaver("Accounts");
+		AccountTrustStatus savedTrustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
+
+		saveHelper.bind("account", address).bind("trust_status", savedTrustStatus.getValue());
+
+		try {
+			saveHelper.execute(this.repository);
+		} catch (SQLException e) {
+			throw new DataException("Unable to save account's trust status into repository", e);
 		}
 	}
 

@@ -7,6 +7,7 @@ import org.qortal.block.BlockChain;
 import org.qortal.controller.LiteNode;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.account.RewardShareData;
 import org.qortal.data.transaction.BuyNameTransactionData;
@@ -168,11 +169,24 @@ public class Account {
 		if (accountData == null)
 			return false;
 
+		if (!accountData.getTrustStatus().canMint())
+			return false;
+
 		int blockchainHeight = this.repository.getBlockRepository().getBlockchainHeight();
 		List<Integer> groupIdsToMint = Groups.getGroupIdsToMint(BlockChain.getInstance(), blockchainHeight);
 		String myAddress = accountData.getAddress();
 
 		return isGroupValidated || Groups.memberExistsInAnyGroup(groupRepository, groupIdsToMint, myAddress);
+	}
+
+	public AccountTrustStatus getTrustStatus() throws DataException {
+		AccountData accountData = this.repository.getAccountRepository().getAccount(this.address);
+		return accountData == null ? null : accountData.getTrustStatus();
+	}
+
+	public int getEffectiveVoteWeight() throws DataException {
+		AccountData accountData = this.repository.getAccountRepository().getAccount(this.address);
+		return AccountTrustStatus.calculateEffectiveVoteWeight(accountData);
 	}
 
 	/** Returns account's blockMinted (0+) or null if account not found in repository. */

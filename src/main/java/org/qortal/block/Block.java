@@ -156,12 +156,12 @@ public class Block {
 			this.mintingAccountData = repository.getAccountRepository().getAccount(this.mintingAccount.getAddress());
 
 			this.isRecipientAlsoMinter = this.rewardShareData.getRecipient().equals(this.mintingAccount.getAddress());
-			this.isMinterMember
-				= Groups.memberExistsInAnyGroup(
+			boolean isMinterGroupMember = Groups.memberExistsInAnyGroup(
 					repository.getGroupRepository(),
 					Groups.getGroupIdsToMint(BlockChain.getInstance(), blockHeight),
 					this.mintingAccount.getAddress()
 			);
+			this.isMinterMember = isMinterGroupMember && this.mintingAccount.canMint(true);
 
 			if (this.isRecipientAlsoMinter) {
 				// Self-share: minter is also recipient
@@ -208,7 +208,7 @@ public class Block {
 				return null; // level 0 isn't included in any share bins
 
 			if (!this.isMinterMember)
-				return null; // not member of configured minting groups isn't included in any share bins
+				return null; // not allowed to mint, so not included in any share bins
 
 			final AccountLevelShareBin[] shareBinsByLevel = blockChain.getShareBinsByAccountLevel();
 
@@ -408,13 +408,13 @@ public class Block {
 			List<OnlineAccountData> onlineAccounts = OnlineAccountsManager.getInstance().getOnlineAccounts(onlineAccountsTimestamp);
 			onlineAccounts.removeIf(a -> a.getNonce() == null || a.getNonce() < 0);
 
-			// Remove any online accounts that are not backed by a minting-group member.
+			// Remove any online accounts that are not backed by an eligible minting account.
 			onlineAccounts.removeIf(a -> {
 				try {
 					List<Integer> groupIdsToMint = Groups.getGroupIdsToMint(BlockChain.getInstance(), height);
 					String address = Account.getRewardShareMintingAddress(repository, a.getPublicKey());
 					boolean isMinterGroupMember = Groups.memberExistsInAnyGroup(repository.getGroupRepository(), groupIdsToMint, address);
-					return !isMinterGroupMember;
+					return !isMinterGroupMember || !new Account(repository, address).canMint(true);
 				} catch (DataException e) {
 					// Something went wrong, so remove the account
 					return true;

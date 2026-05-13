@@ -15,6 +15,7 @@ public class AccountData {
 	protected int defaultGroupId;
 	protected int level;
 	protected int blocksMinted;
+	protected AccountTrustStatus trustStatus;
 
 	// Constructors
 
@@ -23,11 +24,16 @@ public class AccountData {
 	}
 
 	public AccountData(String address, byte[] publicKey, int defaultGroupId, int level, int blocksMinted) {
+		this(address, publicKey, defaultGroupId, level, blocksMinted, AccountTrustStatus.UNVERIFIED);
+	}
+
+	public AccountData(String address, byte[] publicKey, int defaultGroupId, int level, int blocksMinted, AccountTrustStatus trustStatus) {
 		this.address = address;
 		this.publicKey = publicKey;
 		this.defaultGroupId = defaultGroupId;
 		this.level = level;
 		this.blocksMinted = blocksMinted;
+		this.trustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
 	}
 
 	public AccountData(String address) {
@@ -70,6 +76,14 @@ public class AccountData {
 
 	public void setBlocksMinted(int blocksMinted) {
 		this.blocksMinted = blocksMinted;
+	}
+
+	public AccountTrustStatus getTrustStatus() {
+		return this.trustStatus == null ? AccountTrustStatus.UNVERIFIED : this.trustStatus;
+	}
+
+	public void setTrustStatus(AccountTrustStatus trustStatus) {
+		this.trustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
 	}
 
 	// Comparison

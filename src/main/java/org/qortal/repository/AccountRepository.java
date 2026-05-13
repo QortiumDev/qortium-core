@@ -46,6 +46,12 @@ public interface AccountRepository {
 	/** Returns account's minted block count or null if account not found. */
 	public Integer getMintedBlockCount(String address) throws DataException;
 
+	/** Returns account's trust status, or null if account not found. */
+	public AccountTrustStatus getTrustStatus(String address) throws DataException;
+
+	/** Saves account's trust status. */
+	public void setTrustStatus(String address, AccountTrustStatus trustStatus) throws DataException;
+
 	/**
 	 * Saves account's minted block count and public key if present, in repository.
 	 * <p>

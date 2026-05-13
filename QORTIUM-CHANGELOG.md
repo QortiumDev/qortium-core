@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: add account trust-tier vote weights
+
+Added the first account trust-tier foundation for Qortium minting and governance, along with the Aura trust-tier planning note that records the local BrightID reference repos and the practical difference between BrightID, Bitu, and Aura for this design. Accounts now have a stored trust status that defaults to Unverified, Suspicious accounts are blocked from minting even if they remain in the minting group, and poll vote weight now uses the account's current trust-tier multiplier instead of raw `blocksMinted` alone. The planning note also records the repository-only first slice, the need for deterministic accepted trust-status updates instead of live external lookups, and the later idea of poll end times that can lock vote weights when a poll closes.
+
 ### 2026-05-11 - qdn: add service capability registry
 
 Moved QDN app-library rating service policy into a dedicated capability registry instead of keeping accepted services hidden inside the ratings API. App, website, plugin, extension, and game ratings are now handled through the same registry-backed path, unsupported service filters fail clearly, and tests cover the registry rules and app-rating API filtering.

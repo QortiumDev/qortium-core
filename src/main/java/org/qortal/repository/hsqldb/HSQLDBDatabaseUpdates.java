@@ -217,6 +217,7 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE TABLE Accounts (account AccountAddress, reference Signature, public_key AccountPublicKey, "
 							+ "default_group_id GroupID NOT NULL DEFAULT 0, level INT NOT NULL DEFAULT 0, "
 							+ "blocks_minted INTEGER NOT NULL DEFAULT 0, blocks_minted_adjustment INTEGER NOT NULL DEFAULT 0, "
+							+ "trust_status INT NOT NULL DEFAULT 0, "
 							+ "PRIMARY KEY (account))");
 					// For looking up an account by public key
 					stmt.execute("CREATE INDEX AccountPublicKeyIndex on Accounts (public_key)");
@@ -1133,6 +1134,11 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "TradeBotStates", "locktime_b", "BIGINT");
 					addColumnIfMissing(connection, "TradeBotStates", "offered_foreign_receiving_account_info", "VARBINARY(128)");
 					addColumnIfMissing(connection, "TradeBotStates", "requested_foreign_receiving_account_info", "VARBINARY(128)");
+					break;
+
+				case 55:
+					// Store current trust-tier status for minting and vote-weight rules.
+					addColumnIfMissing(connection, "Accounts", "trust_status", "INT NOT NULL DEFAULT 0");
 					break;
 
 				default:

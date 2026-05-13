@@ -18,6 +18,7 @@ import org.qortal.arbitrary.misc.QdnServiceCapabilityRegistry;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.CreatePollTransactionData;
 import org.qortal.data.transaction.VoteOnPollTransactionData;
 import org.qortal.data.voting.PollData;
@@ -146,7 +147,7 @@ public class PollsResource {
                     for (VoteOnPollData vote : votes) {
                             String voter = Crypto.toAddress(vote.getVoterPublicKey());
                             AccountData voterData = repository.getAccountRepository().getAccount(voter);
-                            int voteWeight = voterData.getBlocksMinted();
+                            int voteWeight = AccountTrustStatus.calculateEffectiveVoteWeight(voterData);
                             totalWeight += voteWeight;
 
                             String selectedOption = pollData.getPollOptions().get(vote.getOptionIndex()).getOptionName();
