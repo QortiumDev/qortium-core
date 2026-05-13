@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: use aura-style account rating confidence
+
+Changed account ratings to use Aura-style signed confidence values instead of the earlier Trusted, Known, and Untrusted labels. Accounts can now record positive or negative confidence from 1 through 4, use 0 to remove an active rating, and the trust preview now shows confidence distributions plus evaluator impact based on each rater's current trust status and effective vote weight, without changing stored trust status, minting eligibility, or governance weight.
+
 ### 2026-05-13 - api: clarify poll and rating transaction inputs
 
 Clarified the API documentation for poll voting, poll updates, resource ratings, and account ratings so client builders can see the intended stable poll ID inputs and neutral removal values directly from the transaction builder endpoints. Added focused regression coverage for raw poll vote-removal and poll-update transaction builders, account-rating removal through `UNKNOWN`, and poll option updates that shrink the option list without leaving stale choices behind.

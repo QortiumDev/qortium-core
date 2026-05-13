@@ -20,7 +20,7 @@ public class RateAccountTransactionData extends TransactionData {
 	private byte[] raterPublicKey;
 	@Schema(description = "Target account public key", example = "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP")
 	private byte[] targetPublicKey;
-	@Schema(description = "Relationship rating: UNTRUSTED = -1, UNKNOWN = 0 removes an existing rating, KNOWN = 1, TRUSTED = 2")
+	@Schema(description = "Aura-style account rating: -4 through -1 for negative confidence, 0 to remove an existing rating, 1 through 4 for positive confidence")
 	private int rating;
 
 	@XmlTransient

@@ -1,7 +1,6 @@
 package org.qortal.repository.hsqldb;
 
 import org.qortal.data.account.AccountRatingData;
-import org.qortal.data.account.AccountRatingLevel;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.repository.AccountRatingRepository;
 import org.qortal.repository.DataException;
@@ -29,9 +28,9 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 
 			String targetAddress = resultSet.getString(1);
 			String raterAddress = resultSet.getString(2);
-			AccountRatingLevel ratingLevel = AccountRatingLevel.valueOf(resultSet.getInt(3));
+			int rating = resultSet.getInt(3);
 
-			return new AccountRatingData(targetPublicKey, targetAddress, raterPublicKey, raterAddress, ratingLevel);
+			return new AccountRatingData(targetPublicKey, targetAddress, raterPublicKey, raterAddress, rating);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch account rating from repository", e);
 		}
@@ -67,26 +66,18 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 	public AccountRatingSummaryData getRatingSummary(byte[] targetPublicKey, String targetAddress) throws DataException {
 		String sql = "SELECT rating, COUNT(*) FROM AccountRatings WHERE target = ? GROUP BY rating";
 
-		int trustedCount = 0;
-		int knownCount = 0;
-		int untrustedCount = 0;
+		AccountRatingSummaryData summary = new AccountRatingSummaryData(targetPublicKey, targetAddress);
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, targetPublicKey)) {
 			if (resultSet != null) {
 				do {
-					AccountRatingLevel ratingLevel = AccountRatingLevel.valueOf(resultSet.getInt(1));
+					int rating = resultSet.getInt(1);
 					int count = resultSet.getInt(2);
-
-					if (ratingLevel == AccountRatingLevel.TRUSTED)
-						trustedCount = count;
-					else if (ratingLevel == AccountRatingLevel.KNOWN)
-						knownCount = count;
-					else if (ratingLevel == AccountRatingLevel.UNTRUSTED)
-						untrustedCount = count;
+					summary.addRating(rating, count);
 				} while (resultSet.next());
 			}
 
-			return new AccountRatingSummaryData(targetPublicKey, targetAddress, trustedCount, knownCount, untrustedCount);
+			return summary;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch account rating summary from repository", e);
 		}
@@ -130,10 +121,10 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 				String rowTargetAddress = resultSet.getString(2);
 				byte[] rowRaterPublicKey = resultSet.getBytes(3);
 				String rowRaterAddress = resultSet.getString(4);
-				AccountRatingLevel rowRatingLevel = AccountRatingLevel.valueOf(resultSet.getInt(5));
+				int rating = resultSet.getInt(5);
 
 				accountRatings.add(new AccountRatingData(rowTargetPublicKey, rowTargetAddress, rowRaterPublicKey, rowRaterAddress,
-						rowRatingLevel));
+						rating));
 			} while (resultSet.next());
 
 			return accountRatings;

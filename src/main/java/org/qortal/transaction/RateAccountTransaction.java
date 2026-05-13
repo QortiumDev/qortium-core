@@ -4,8 +4,8 @@ import org.qortal.account.Account;
 import org.qortal.asset.Asset;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingData;
-import org.qortal.data.account.AccountRatingLevel;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.repository.AccountRatingRepository;
@@ -42,8 +42,8 @@ public class RateAccountTransaction extends Transaction {
 
 	@Override
 	public ValidationResult isValid() throws DataException {
-		AccountRatingLevel ratingLevel = AccountRatingLevel.valueOf(this.rateAccountTransactionData.getRating());
-		if (ratingLevel == null)
+		int rating = this.rateAccountTransactionData.getRating();
+		if (!AccountRating.isValid(rating))
 			return ValidationResult.INVALID_ACCOUNT_RATING;
 
 		byte[] targetPublicKey = this.rateAccountTransactionData.getTargetPublicKey();
@@ -61,10 +61,10 @@ public class RateAccountTransaction extends Transaction {
 			return ValidationResult.PUBLIC_KEY_UNKNOWN;
 
 		AccountRatingData existingRating = this.repository.getAccountRatingRepository().getRating(targetPublicKey, raterPublicKey);
-		if (existingRating == null && ratingLevel == AccountRatingLevel.UNKNOWN)
+		if (existingRating == null && rating == AccountRating.NO_RATING)
 			return ValidationResult.ACCOUNT_RATING_UNCHANGED;
 
-		if (existingRating != null && existingRating.getRatingLevel() == ratingLevel)
+		if (existingRating != null && existingRating.getRating() == rating)
 			return ValidationResult.ACCOUNT_RATING_UNCHANGED;
 
 		Account rater = getRater();
@@ -78,21 +78,21 @@ public class RateAccountTransaction extends Transaction {
 	public void process() throws DataException {
 		byte[] targetPublicKey = this.rateAccountTransactionData.getTargetPublicKey();
 		byte[] raterPublicKey = this.rateAccountTransactionData.getRaterPublicKey();
-		AccountRatingLevel ratingLevel = AccountRatingLevel.valueOf(this.rateAccountTransactionData.getRating());
+		int rating = this.rateAccountTransactionData.getRating();
 
 		AccountRatingRepository accountRatingRepository = this.repository.getAccountRatingRepository();
 		AccountRatingData previousRatingData = accountRatingRepository.getRating(targetPublicKey, raterPublicKey);
 		if (previousRatingData != null)
-			this.rateAccountTransactionData.setPreviousRating(previousRatingData.getRatingValue());
+			this.rateAccountTransactionData.setPreviousRating(previousRatingData.getRating());
 
 		this.repository.getTransactionRepository().save(this.rateAccountTransactionData);
 
-		if (ratingLevel == AccountRatingLevel.UNKNOWN) {
+		if (rating == AccountRating.NO_RATING) {
 			accountRatingRepository.delete(targetPublicKey, raterPublicKey);
 			return;
 		}
 
-		accountRatingRepository.save(new AccountRatingData(targetPublicKey, raterPublicKey, ratingLevel));
+		accountRatingRepository.save(new AccountRatingData(targetPublicKey, raterPublicKey, rating));
 	}
 
 	@Override
@@ -103,9 +103,8 @@ public class RateAccountTransaction extends Transaction {
 
 		Integer previousRating = this.rateAccountTransactionData.getPreviousRating();
 		if (previousRating != null) {
-			AccountRatingLevel previousRatingLevel = AccountRatingLevel.valueOf(previousRating);
-			if (previousRatingLevel != null && previousRatingLevel.isActive())
-				accountRatingRepository.save(new AccountRatingData(targetPublicKey, raterPublicKey, previousRatingLevel));
+			if (AccountRating.isActive(previousRating))
+				accountRatingRepository.save(new AccountRatingData(targetPublicKey, raterPublicKey, previousRating));
 			else
 				accountRatingRepository.delete(targetPublicKey, raterPublicKey);
 		} else {

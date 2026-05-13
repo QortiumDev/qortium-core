@@ -12,24 +12,26 @@ public class AccountRatingData {
 	private String targetAddress;
 	private byte[] raterPublicKey;
 	private String raterAddress;
-	private AccountRatingLevel ratingLevel;
-	private int ratingValue;
+	private int rating;
+	private String ratingDirection;
+	private int ratingConfidence;
 
 	protected AccountRatingData() {
 	}
 
-	public AccountRatingData(byte[] targetPublicKey, byte[] raterPublicKey, AccountRatingLevel ratingLevel) {
-		this(targetPublicKey, Crypto.toAddress(targetPublicKey), raterPublicKey, Crypto.toAddress(raterPublicKey), ratingLevel);
+	public AccountRatingData(byte[] targetPublicKey, byte[] raterPublicKey, int rating) {
+		this(targetPublicKey, Crypto.toAddress(targetPublicKey), raterPublicKey, Crypto.toAddress(raterPublicKey), rating);
 	}
 
 	public AccountRatingData(byte[] targetPublicKey, String targetAddress, byte[] raterPublicKey, String raterAddress,
-			AccountRatingLevel ratingLevel) {
+			int rating) {
 		this.targetPublicKey = targetPublicKey;
 		this.targetAddress = targetAddress;
 		this.raterPublicKey = raterPublicKey;
 		this.raterAddress = raterAddress;
-		this.ratingLevel = ratingLevel;
-		this.ratingValue = ratingLevel == null ? AccountRatingLevel.UNKNOWN.getValue() : ratingLevel.getValue();
+		this.rating = rating;
+		this.ratingDirection = AccountRating.getDirection(rating);
+		this.ratingConfidence = AccountRating.getConfidence(rating);
 	}
 
 	public byte[] getTargetPublicKey() {
@@ -48,11 +50,19 @@ public class AccountRatingData {
 		return this.raterAddress;
 	}
 
-	public AccountRatingLevel getRatingLevel() {
-		return this.ratingLevel;
+	public int getRating() {
+		return this.rating;
 	}
 
 	public int getRatingValue() {
-		return this.ratingValue;
+		return this.rating;
+	}
+
+	public String getRatingDirection() {
+		return this.ratingDirection;
+	}
+
+	public int getRatingConfidence() {
+		return this.ratingConfidence;
 	}
 }

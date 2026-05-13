@@ -6,8 +6,8 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
 import org.qortal.api.resource.AccountRatingsResource;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingData;
-import org.qortal.data.account.AccountRatingLevel;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustStatus;
@@ -64,17 +64,17 @@ public class AccountRatingsApiTests extends ApiCommon {
 			assertEquals(0, emptyPreview.getOutboundTotalRatingCount());
 			assertEquals(0, emptyPreview.getNetScore());
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingLevel.TRUSTED), alice);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, AccountRatingLevel.KNOWN), chloe);
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, 4), alice);
+			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, 2), chloe);
 		}
 
 		String targetPublicKey58 = Base58.encode(bob.getPublicKey());
 		String raterPublicKey58 = Base58.encode(alice.getPublicKey());
 
 		AccountRatingSummaryData summary = this.accountRatingsResource.getAccountRatingSummary(targetPublicKey58);
-		assertEquals(1, summary.getTrustedCount());
-		assertEquals(1, summary.getKnownCount());
-		assertEquals(0, summary.getUntrustedCount());
+		assertEquals(1, summary.getPositiveVeryHighCount());
+		assertEquals(1, summary.getPositiveMediumCount());
+		assertEquals(0, summary.getNegativeRatingCount());
 		assertEquals(2, summary.getTotalRatingCount());
 
 		List<AccountRatingData> ratings = this.accountRatingsResource.getAccountRatings(targetPublicKey58, null, null, null, null);
@@ -83,41 +83,66 @@ public class AccountRatingsApiTests extends ApiCommon {
 		List<AccountRatingData> filteredRatings = this.accountRatingsResource.getAccountRatings(targetPublicKey58, raterPublicKey58,
 				null, null, null);
 		assertEquals(1, filteredRatings.size());
-		assertEquals(AccountRatingLevel.TRUSTED, filteredRatings.get(0).getRatingLevel());
+		assertEquals(4, filteredRatings.get(0).getRating());
+		assertEquals("POSITIVE", filteredRatings.get(0).getRatingDirection());
+		assertEquals(4, filteredRatings.get(0).getRatingConfidence());
 	}
 
 	@Test
 	public void testTrustPreviewCountsScoresAndMutualPositiveRatings() throws DataException {
 		TestAccount bob;
+		String aliceAddress;
+		String dilbertAddress;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
+			aliceAddress = alice.getAddress();
 			bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
 			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+			dilbertAddress = dilbert.getAddress();
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingLevel.TRUSTED), alice);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, AccountRatingLevel.KNOWN), chloe);
-			TransactionUtils.signAndMint(repository, ratingData(dilbert, bob, AccountRatingLevel.UNTRUSTED), dilbert);
-			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingLevel.KNOWN), bob);
-			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingLevel.TRUSTED), bob);
-			TransactionUtils.signAndMint(repository, ratingData(bob, dilbert, AccountRatingLevel.UNTRUSTED), bob);
+			setVoteAccount(repository, alice, 100, AccountTrustStatus.GOLD);
+			setVoteAccount(repository, chloe, 101, AccountTrustStatus.SILVER);
+			setVoteAccount(repository, dilbert, 101, AccountTrustStatus.BRONZE);
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, 4), alice);
+			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, 2), chloe);
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, bob, -3), dilbert);
+			TransactionUtils.signAndMint(repository, ratingData(bob, alice, 1), bob);
+			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, 4), bob);
+			TransactionUtils.signAndMint(repository, ratingData(bob, dilbert, -2), bob);
 		}
 
 		AccountTrustPreviewData preview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
 
-		assertEquals(1, preview.getInboundTrustedCount());
-		assertEquals(1, preview.getInboundKnownCount());
-		assertEquals(1, preview.getInboundUntrustedCount());
+		assertEquals(1, preview.getInboundRatings().getPositiveVeryHighCount());
+		assertEquals(1, preview.getInboundRatings().getPositiveMediumCount());
+		assertEquals(1, preview.getInboundRatings().getNegativeHighCount());
 		assertEquals(3, preview.getInboundTotalRatingCount());
-		assertEquals(1, preview.getOutboundTrustedCount());
-		assertEquals(1, preview.getOutboundKnownCount());
-		assertEquals(1, preview.getOutboundUntrustedCount());
+		assertEquals(1, preview.getOutboundRatings().getPositiveLowCount());
+		assertEquals(1, preview.getOutboundRatings().getPositiveVeryHighCount());
+		assertEquals(1, preview.getOutboundRatings().getNegativeMediumCount());
 		assertEquals(3, preview.getOutboundTotalRatingCount());
 		assertEquals(2, preview.getMutualPositiveCount());
-		assertEquals(7, preview.getPositiveScore());
-		assertEquals(4, preview.getNegativeScore());
-		assertEquals(3, preview.getNetScore());
+		assertEquals(500, preview.getPositiveScore());
+		assertEquals(300, preview.getNegativeScore());
+		assertEquals(200, preview.getNetScore());
+
+		assertEquals(3, preview.getEvaluatorImpacts().size());
+		AccountTrustPreviewData.EvaluatorImpact aliceImpact = findEvaluatorImpact(preview, aliceAddress);
+		assertEquals(4, aliceImpact.getRating());
+		assertEquals(4, aliceImpact.getRatingConfidence());
+		assertEquals(AccountTrustStatus.GOLD, aliceImpact.getTrustStatus());
+		assertEquals(100, aliceImpact.getRawVoteWeight());
+		assertEquals(100, aliceImpact.getEffectiveVoteWeight());
+		assertEquals(400, aliceImpact.getImpact());
+
+		AccountTrustPreviewData.EvaluatorImpact dilbertImpact = findEvaluatorImpact(preview, dilbertAddress);
+		assertEquals(-3, dilbertImpact.getRating());
+		assertEquals("NEGATIVE", dilbertImpact.getRatingDirection());
+		assertEquals(25, dilbertImpact.getEffectiveVoteWeight());
+		assertEquals(-300, dilbertImpact.getImpact());
 	}
 
 	@Test
@@ -129,10 +154,12 @@ public class AccountRatingsApiTests extends ApiCommon {
 			bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingLevel.TRUSTED), alice);
-			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingLevel.TRUSTED), bob);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, AccountRatingLevel.TRUSTED), chloe);
-			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingLevel.TRUSTED), bob);
+			setVoteAccount(repository, alice, 100, AccountTrustStatus.GOLD);
+			setVoteAccount(repository, chloe, 100, AccountTrustStatus.GOLD);
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, 4), alice);
+			TransactionUtils.signAndMint(repository, ratingData(bob, alice, 4), bob);
+			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, 4), chloe);
+			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, 4), bob);
 
 			setVoteAccount(repository, bob, 100, AccountTrustStatus.UNVERIFIED);
 		}
@@ -157,13 +184,13 @@ public class AccountRatingsApiTests extends ApiCommon {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 
-			String rawTransaction = this.accountRatingsResource.rateAccount(ratingData(alice, bob, AccountRatingLevel.UNTRUSTED));
+			String rawTransaction = this.accountRatingsResource.rateAccount(ratingData(alice, bob, -1));
 
 			assertNotNull(rawTransaction);
 			assertFalse(rawTransaction.isEmpty());
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingLevel.TRUSTED), alice);
-			String removalTransaction = this.accountRatingsResource.rateAccount(ratingData(alice, bob, AccountRatingLevel.UNKNOWN));
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, 4), alice);
+			String removalTransaction = this.accountRatingsResource.rateAccount(ratingData(alice, bob, AccountRating.NO_RATING));
 
 			assertNotNull(removalTransaction);
 			assertFalse(removalTransaction.isEmpty());
@@ -188,9 +215,16 @@ public class AccountRatingsApiTests extends ApiCommon {
 				() -> this.accountRatingsResource.getAccountTrustPreview("not-a-public-key"));
 	}
 
-	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target, AccountRatingLevel ratingLevel)
+	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target, int rating)
 			throws DataException {
-		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), ratingLevel.getValue());
+		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), rating);
+	}
+
+	private AccountTrustPreviewData.EvaluatorImpact findEvaluatorImpact(AccountTrustPreviewData preview, String raterAddress) {
+		return preview.getEvaluatorImpacts().stream()
+				.filter(impact -> impact.getRaterAddress().equals(raterAddress))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing evaluator impact for " + raterAddress));
 	}
 
 	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {

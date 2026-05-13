@@ -85,12 +85,13 @@ workflow to evaluate this idea. The useful part for Qortium is the graph-derived
 account status.
 
 BrightID-style connection data also separates active relationships from the
-absence of a relationship. Qortium treats Unknown as no active edge, rather
-than a stored trust signal. The first native account-rating transaction records
-Trusted, Known, and Untrusted active edges, while an Unknown rating clears the
-rater's current active edge for that target. This mirrors the useful trust-graph
-shape without yet deriving Gold, Silver, Bronze, Suspicious, or Unverified
-account status from those edges.
+absence of a relationship. Qortium treats rating `0` as no active edge, rather
+than a stored trust signal. The native account-rating transaction records signed
+confidence from `-4` through `4`: positive values are positive confidence,
+negative values are negative confidence, and `0` clears the rater's current
+active edge for that target. This mirrors the useful trust-graph shape without
+yet deriving Gold, Silver, Bronze, Suspicious, or Unverified account status from
+those edges.
 
 ## Proposed Rule
 
@@ -135,9 +136,10 @@ foundation only:
 
 The next implementation layer adds directed account ratings as chain data:
 
-- accounts can rate known public-key accounts as Trusted, Known, or Untrusted
-- Unknown clears the rater's active edge for that target
-- account-rating summaries expose inbound Trusted, Known, and Untrusted counts
+- accounts can rate known public-key accounts with Aura-style signed confidence
+  values from `-4` through `4`
+- rating `0` clears the rater's active edge for that target
+- account-rating summaries expose positive and negative confidence counts
 - these edges do not change trust status, minting eligibility, or vote weight
   until a later deterministic trust-tier derivation rule is added
 
@@ -147,11 +149,11 @@ The current implementation layer adds a decentralized trust preview:
 - the preview is exposed through `GET /account-ratings/trust-preview`
 - no account, admin group, imported snapshot, or external credential receives a
   privileged starting position
-- the preview exposes inbound evidence, outbound evidence, mutual positive
-  relationships, and simple diagnostic scores
-- the diagnostic score uses inbound Trusted and Known ratings as positive
-  evidence, inbound Untrusted ratings as stronger negative evidence, and mutual
-  positive relationships as extra support
+- the preview exposes inbound confidence counts, outbound confidence counts,
+  mutual positive relationships, evaluator impacts, and simple diagnostic scores
+- the diagnostic score uses inbound positive ratings as positive evidence,
+  inbound negative ratings as stronger negative evidence, and each evaluator's
+  current trust-tier effective vote weight as the input weight
 - the preview does not change stored trust status, minting eligibility, poll
   vote weight, or resource-rating weight
 
@@ -234,8 +236,9 @@ The first implementation should cover at least these cases:
   current-status weighting.
 - polls can optionally close at a defined end time, after which new votes and
   vote changes are rejected and final weights are frozen.
-- account trust previews expose inbound, outbound, mutual positive, positive,
-  negative, and net evidence without changing stored trust status or effective
+- account trust previews expose inbound and outbound confidence distributions,
+  mutual positive relationships, evaluator impacts, positive scores, negative
+  scores, and net evidence without changing stored trust status or effective
   vote weight.
 
 ## Open Decisions

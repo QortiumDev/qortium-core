@@ -14,8 +14,8 @@ import org.qortal.api.ApiException;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingData;
-import org.qortal.data.account.AccountRatingLevel;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustStatus;
@@ -37,7 +37,9 @@ import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -139,7 +141,7 @@ public class AccountRatingsResource {
 			List<AccountRatingData> outboundRatings = repository.getAccountRatingRepository()
 					.getRatings(null, targetPublicKey, null, null, null);
 
-			return buildTrustPreview(targetPublicKey, targetAddress, trustStatus, inboundRatings, outboundRatings);
+			return buildTrustPreview(repository, targetPublicKey, targetAddress, trustStatus, inboundRatings, outboundRatings);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -153,7 +155,7 @@ public class AccountRatingsResource {
 			summary = "Build raw, unsigned, RATE_ACCOUNT transaction",
 			requestBody = @RequestBody(
 					required = true,
-					description = "Rate another known account. UNKNOWN removes the active account rating; UNTRUSTED, KNOWN, and TRUSTED record active relationships.",
+					description = "Rate another known account. rating 0 removes the active rating; ratings -4 through -1 record negative confidence and ratings 1 through 4 record positive confidence.",
 					content = @Content(
 							mediaType = MediaType.APPLICATION_JSON,
 							schema = @Schema(implementation = RateAccountTransactionData.class)
@@ -190,51 +192,60 @@ public class AccountRatingsResource {
 		}
 	}
 
-	private AccountTrustPreviewData buildTrustPreview(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
-			List<AccountRatingData> inboundRatings, List<AccountRatingData> outboundRatings) {
-		int inboundTrustedCount = 0;
-		int inboundKnownCount = 0;
-		int inboundUntrustedCount = 0;
-		int outboundTrustedCount = 0;
-		int outboundKnownCount = 0;
-		int outboundUntrustedCount = 0;
+	private AccountTrustPreviewData buildTrustPreview(Repository repository, byte[] targetPublicKey, String targetAddress,
+			AccountTrustStatus trustStatus, List<AccountRatingData> inboundRatings, List<AccountRatingData> outboundRatings)
+			throws DataException {
+		AccountTrustPreviewData.RatingCounts inboundCounts = new AccountTrustPreviewData.RatingCounts();
+		AccountTrustPreviewData.RatingCounts outboundCounts = new AccountTrustPreviewData.RatingCounts();
+		List<AccountTrustPreviewData.EvaluatorImpact> evaluatorImpacts = new ArrayList<>();
 
 		Set<String> outboundPositiveTargets = new HashSet<>();
 		for (AccountRatingData outboundRating : outboundRatings) {
-			AccountRatingLevel ratingLevel = outboundRating.getRatingLevel();
+			int rating = outboundRating.getRating();
 
-			if (ratingLevel == AccountRatingLevel.TRUSTED) {
-				++outboundTrustedCount;
+			outboundCounts.addRating(rating);
+			if (AccountRating.isPositive(rating))
 				outboundPositiveTargets.add(outboundRating.getTargetAddress());
-			} else if (ratingLevel == AccountRatingLevel.KNOWN) {
-				++outboundKnownCount;
-				outboundPositiveTargets.add(outboundRating.getTargetAddress());
-			} else if (ratingLevel == AccountRatingLevel.UNTRUSTED) {
-				++outboundUntrustedCount;
-			}
 		}
 
 		int mutualPositiveCount = 0;
 		for (AccountRatingData inboundRating : inboundRatings) {
-			AccountRatingLevel ratingLevel = inboundRating.getRatingLevel();
+			int rating = inboundRating.getRating();
 
-			if (ratingLevel == AccountRatingLevel.TRUSTED) {
-				++inboundTrustedCount;
-				if (outboundPositiveTargets.contains(inboundRating.getRaterAddress()))
-					++mutualPositiveCount;
-			} else if (ratingLevel == AccountRatingLevel.KNOWN) {
-				++inboundKnownCount;
-				if (outboundPositiveTargets.contains(inboundRating.getRaterAddress()))
-					++mutualPositiveCount;
-			} else if (ratingLevel == AccountRatingLevel.UNTRUSTED) {
-				++inboundUntrustedCount;
-			}
+			inboundCounts.addRating(rating);
+			if (AccountRating.isPositive(rating) && outboundPositiveTargets.contains(inboundRating.getRaterAddress()))
+				++mutualPositiveCount;
+
+			evaluatorImpacts.add(buildEvaluatorImpact(repository, inboundRating));
 		}
 
-		return new AccountTrustPreviewData(targetPublicKey, targetAddress, trustStatus,
-				inboundTrustedCount, inboundKnownCount, inboundUntrustedCount,
-				outboundTrustedCount, outboundKnownCount, outboundUntrustedCount,
-				mutualPositiveCount);
+		evaluatorImpacts.sort(Comparator
+				.comparingInt(AccountRatingsResource::getImpactMagnitude)
+				.reversed()
+				.thenComparing(AccountTrustPreviewData.EvaluatorImpact::getRaterAddress));
+
+		return new AccountTrustPreviewData(targetPublicKey, targetAddress, trustStatus, inboundCounts, outboundCounts,
+				mutualPositiveCount, evaluatorImpacts);
+	}
+
+	private AccountTrustPreviewData.EvaluatorImpact buildEvaluatorImpact(Repository repository, AccountRatingData ratingData)
+			throws DataException {
+		AccountData raterAccountData = repository.getAccountRepository().getAccount(ratingData.getRaterAddress());
+		AccountTrustStatus raterTrustStatus = raterAccountData == null ? AccountTrustStatus.UNVERIFIED : raterAccountData.getTrustStatus();
+		int rawVoteWeight = raterAccountData == null ? 0 : raterAccountData.getBlocksMinted();
+		int effectiveVoteWeight = AccountTrustStatus.calculateEffectiveVoteWeight(raterAccountData);
+		int impact = AccountRating.calculateImpact(ratingData.getRating(), effectiveVoteWeight);
+
+		return new AccountTrustPreviewData.EvaluatorImpact(ratingData.getRaterPublicKey(), ratingData.getRaterAddress(),
+				raterTrustStatus, rawVoteWeight, effectiveVoteWeight, ratingData.getRating(), impact);
+	}
+
+	private static int getImpactMagnitude(AccountTrustPreviewData.EvaluatorImpact evaluatorImpact) {
+		long magnitude = Math.abs((long) evaluatorImpact.getImpact());
+		if (magnitude > Integer.MAX_VALUE)
+			return Integer.MAX_VALUE;
+
+		return (int) magnitude;
 	}
 
 	private byte[] parseOptionalPublicKey(String publicKey58) {

@@ -1,7 +1,6 @@
 package org.qortal.test.common.transaction;
 
 import org.qortal.account.PrivateKeyAccount;
-import org.qortal.data.account.AccountRatingLevel;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.repository.DataException;
@@ -13,6 +12,6 @@ public class RateAccountTestTransaction extends TestTransaction {
 	public static TransactionData randomTransaction(Repository repository, PrivateKeyAccount account, boolean wantValid) throws DataException {
 		PrivateKeyAccount target = Common.getTestAccount(repository, "bob");
 
-		return new RateAccountTransactionData(generateBase(account), target.getPublicKey(), AccountRatingLevel.KNOWN.getValue());
+		return new RateAccountTransactionData(generateBase(account), target.getPublicKey(), 1);
 	}
 }
