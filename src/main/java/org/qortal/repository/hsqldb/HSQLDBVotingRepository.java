@@ -34,7 +34,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 	public List<PollData> getAllPolls(Integer limit, Integer offset, Boolean reverse) throws DataException {
 		StringBuilder sql = new StringBuilder(512);
 
-		sql.append("SELECT poll_name, description, creator, owner, published_when FROM Polls ORDER BY poll_name");
+		sql.append("SELECT poll_name, description, creator, owner, published_when, end_when FROM Polls ORDER BY poll_name");
 
 		if (reverse != null && reverse)
 			sql.append(" DESC");
@@ -53,6 +53,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 				byte[] creatorPublicKey = resultSet.getBytes(3);
 				String owner = resultSet.getString(4);
 				long published = resultSet.getLong(5);
+				Long endTime = getNullableLong(resultSet, 6);
 
 				String optionsSql = "SELECT option_name FROM PollOptions WHERE poll_name = ? ORDER BY option_index ASC";
 				try (ResultSet optionsResultSet = this.repository.checkedExecute(optionsSql, pollName)) {
@@ -68,7 +69,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 						pollOptions.add(new PollOptionData(optionName));
 					} while (optionsResultSet.next());
 
-					polls.add(new PollData(creatorPublicKey, owner, pollName, description, pollOptions, published));
+					polls.add(new PollData(creatorPublicKey, owner, pollName, description, pollOptions, published, endTime));
 				}
 				
 			} while (resultSet.next());
@@ -81,7 +82,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public PollData fromPollName(String pollName) throws DataException {
-		String sql = "SELECT description, creator, owner, published_when FROM Polls WHERE poll_name = ?";
+		String sql = "SELECT description, creator, owner, published_when, end_when FROM Polls WHERE poll_name = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollName)) {
 			if (resultSet == null)
@@ -91,6 +92,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 			byte[] creatorPublicKey = resultSet.getBytes(2);
 			String owner = resultSet.getString(3);
 			long published = resultSet.getLong(4);
+			Long endTime = getNullableLong(resultSet, 5);
 
 			String optionsSql = "SELECT option_name FROM PollOptions WHERE poll_name = ? ORDER BY option_index ASC";
 			try (ResultSet optionsResultSet = this.repository.checkedExecute(optionsSql, pollName)) {
@@ -106,7 +108,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 					pollOptions.add(new PollOptionData(optionName));
 				} while (optionsResultSet.next());
 
-				return new PollData(creatorPublicKey, owner, pollName, description, pollOptions, published);
+				return new PollData(creatorPublicKey, owner, pollName, description, pollOptions, published, endTime);
 			}
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch poll from repository", e);
@@ -123,7 +125,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 		// Query to get all polls matching prefix with their options and aggregated vote data
 		sql.append("SELECT ");
-		sql.append("  p.poll_name, p.description, p.creator, p.owner, p.published_when, ");
+		sql.append("  p.poll_name, p.description, p.creator, p.owner, p.published_when, p.end_when, ");
 		sql.append("  po.option_index, po.option_name, ");
 		sql.append("  COUNT(pv.voter) AS vote_count, ");
 		sql.append("  COALESCE(SUM(").append(EFFECTIVE_VOTE_WEIGHT_SQL).append("), 0) AS vote_weight, ");
@@ -135,7 +137,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		sql.append("LEFT JOIN PollOptions po ON p.poll_name = po.poll_name ");
 		sql.append("LEFT JOIN PollVotes pv ON p.poll_name = pv.poll_name AND po.option_index = pv.option_index ");
 		sql.append("LEFT JOIN Accounts a ON pv.voter = a.public_key ");
-		sql.append("GROUP BY p.poll_name, p.description, p.creator, p.owner, p.published_when, po.option_index, po.option_name ");
+		sql.append("GROUP BY p.poll_name, p.description, p.creator, p.owner, p.published_when, p.end_when, po.option_index, po.option_name ");
 		sql.append("ORDER BY p.poll_name, po.option_index");
 
 		List<PollDataWithVotes> results = new ArrayList<>();
@@ -152,17 +154,18 @@ public class HSQLDBVotingRepository implements VotingRepository {
 				byte[] creatorPublicKey = resultSet.getBytes(3);
 				String owner = resultSet.getString(4);
 				long published = resultSet.getLong(5);
-				Integer optionIndex = resultSet.getInt(6);
-				String optionName = resultSet.getString(7);
-				int voteCount = resultSet.getInt(8);
-				int voteWeight = resultSet.getInt(9);
-				int rawVoteWeight = resultSet.getInt(10);
+				Long endTime = getNullableLong(resultSet, 6);
+				Integer optionIndex = resultSet.getInt(7);
+				String optionName = resultSet.getString(8);
+				int voteCount = resultSet.getInt(9);
+				int voteWeight = resultSet.getInt(10);
+				int rawVoteWeight = resultSet.getInt(11);
 
 				// Get or create PollDataWithVotes for this poll
 				PollDataWithVotes pollWithVotes = pollMap.get(pollName);
 				if (pollWithVotes == null) {
 					// Create new poll data
-					PollData pollData = new PollData(creatorPublicKey, owner, pollName, description, new ArrayList<>(), published);
+					PollData pollData = new PollData(creatorPublicKey, owner, pollName, description, new ArrayList<>(), published, endTime);
 					Map<String, Integer> voteCountMap = new HashMap<>();
 					Map<String, Integer> voteWeightMap = new HashMap<>();
 					Map<String, Integer> rawVoteWeightMap = new HashMap<>();
@@ -210,7 +213,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		HSQLDBSaver saveHelper = new HSQLDBSaver("Polls");
 
 		saveHelper.bind("poll_name", pollData.getPollName()).bind("description", pollData.getDescription()).bind("creator", pollData.getCreatorPublicKey())
-				.bind("owner", pollData.getOwner()).bind("published_when", pollData.getPublished());
+				.bind("owner", pollData.getOwner()).bind("published_when", pollData.getPublished()).bind("end_when", pollData.getEndTime());
 
 		try {
 			saveHelper.execute(this.repository);
@@ -308,6 +311,11 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		} catch (SQLException e) {
 			throw new DataException("Unable to delete poll vote from repository", e);
 		}
+	}
+
+	private static Long getNullableLong(ResultSet resultSet, int columnIndex) throws SQLException {
+		long value = resultSet.getLong(columnIndex);
+		return resultSet.wasNull() ? null : value;
 	}
 
 }

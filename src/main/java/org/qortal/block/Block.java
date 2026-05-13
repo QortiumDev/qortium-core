@@ -1357,6 +1357,12 @@ public class Block {
 					return ValidationResult.TRANSACTION_INVALID;
 				}
 
+				validationResult = transaction.isValidAtTimestamp(this.blockData.getTimestamp());
+				if (validationResult != Transaction.ValidationResult.OK) {
+					LOGGER.debug(String.format("Error during transaction timestamp validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
+					return ValidationResult.TRANSACTION_INVALID;
+				}
+
 				// Check transaction can even be processed
 				validationResult = transaction.isProcessable();
 				if (validationResult != Transaction.ValidationResult.OK) {

@@ -150,12 +150,29 @@ public class PollsApiTests extends ApiCommon {
 			assertEquals("StructureTest", rating.appName);
 			assertNotNull(rating.owner);
 			assertNotNull(rating.published);
+			assertNull(rating.endTime);
 			assertNotNull(rating.totalVotes);
 			assertNotNull(rating.totalWeight);
 			assertNotNull(rating.voteCounts);
 			assertNotNull(rating.voteWeights);
 
 			// Clean up
+			deleteTestPoll(repository, pollName);
+		}
+	}
+
+	@Test
+	public void testGetAppRatingsIncludesEndTime() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "app-library-APP-rating-EndTimeTest";
+			Long endTime = System.currentTimeMillis() + 60_000L;
+			createTestAppRatingPoll(repository, pollName, endTime);
+
+			AppRatingsResponse response = this.pollsResource.getAppRatings("APP", null, null, null, null);
+			assertNotNull(response);
+			assertTrue(response.ratings.containsKey(pollName));
+			assertEquals(endTime, response.ratings.get(pollName).endTime);
+
 			deleteTestPoll(repository, pollName);
 		}
 	}
@@ -332,6 +349,10 @@ public class PollsApiTests extends ApiCommon {
 	}
 
 	private void createTestAppRatingPoll(Repository repository, String pollName) throws DataException {
+		createTestAppRatingPoll(repository, pollName, null);
+	}
+
+	private void createTestAppRatingPoll(Repository repository, String pollName, Long endTime) throws DataException {
 		// Create poll options (1-5 star rating)
 		List<PollOptionData> options = new ArrayList<>();
 		options.add(new PollOptionData("1"));
@@ -347,7 +368,8 @@ public class PollsApiTests extends ApiCommon {
 				pollName,
 				"Test app rating poll",
 				options,
-				System.currentTimeMillis()
+				System.currentTimeMillis(),
+				endTime
 		);
 
 		// Save to repository

@@ -65,6 +65,10 @@ public class CreatePollTransaction extends Transaction {
 		if (!pollName.equals(Unicode.normalize(pollName)))
 			return ValidationResult.NAME_NOT_NORMALIZED;
 
+		Long endTime = this.createPollTransactionData.getEndTime();
+		if (endTime != null && endTime <= this.createPollTransactionData.getTimestamp())
+			return ValidationResult.INVALID_LIFETIME;
+
 		// Check number of options
 		List<PollOptionData> pollOptions = this.createPollTransactionData.getPollOptions();
 		int pollOptionsCount = pollOptions.size();

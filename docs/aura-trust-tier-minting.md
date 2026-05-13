@@ -126,8 +126,9 @@ foundation only:
 - no admin API, config loader, or BrightID/Aura importer sets trust status yet
 
 This means a trust-status change affects existing poll tallies immediately. A
-later poll end-time feature should allow polls to lock effective vote weights at
-the poll's ending height or timestamp, but that is separate future work.
+poll end-time feature now lets polls stop accepting votes at a defined time.
+Closed polls still need a later frozen-tally step before their effective vote
+weights are locked permanently.
 
 ## Why This Fits Qortium
 
@@ -186,8 +187,8 @@ long-term import and governance path is finalized.
    trust-status changes.
 
 Later implementation steps should add the trust-status acceptance path,
-operator/user-facing audit fields, and optional poll end times that can lock
-vote weights at poll close.
+operator/user-facing audit fields, and frozen poll tallies that lock vote
+weights at poll close.
 
 ## Test Scenarios
 
@@ -206,6 +207,8 @@ The first implementation should cover at least these cases:
   multiplier, and effective vote weight used by the current tally.
 - trust-status changes affect existing poll tallies immediately while Qortium
   uses current-status weighting.
+- polls can optionally close at a defined end time, after which new votes and
+  vote changes are rejected.
 
 ## Open Decisions
 

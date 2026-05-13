@@ -27,6 +27,7 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 	private static final int OPTIONS_SIZE_LENGTH = INT_LENGTH;
 
 	private static final int EXTRAS_LENGTH = OWNER_LENGTH + NAME_SIZE_LENGTH + DESCRIPTION_SIZE_LENGTH + OPTIONS_SIZE_LENGTH;
+	private static final int OLD_TRAILING_LENGTH = FEE_LENGTH + SIGNATURE_LENGTH;
 
 	protected static final TransactionLayout layout;
 
@@ -45,6 +46,7 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 		layout.add("number of options", TransformationType.INT);
 		layout.add("* poll option length", TransformationType.INT);
 		layout.add("* poll option", TransformationType.STRING);
+		layout.add("poll end time (optional)", TransformationType.LONG);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
 	}
@@ -74,6 +76,10 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 			pollOptions.add(new PollOptionData(optionName));
 		}
 
+		Long endTime = null;
+		if (byteBuffer.remaining() > OLD_TRAILING_LENGTH)
+			endTime = byteBuffer.getLong();
+
 		long fee = byteBuffer.getLong();
 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
@@ -81,7 +87,7 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, creatorPublicKey, fee, nonce, signature);
 
-		return new CreatePollTransactionData(baseTransactionData, owner, pollName, description, pollOptions);
+		return new CreatePollTransactionData(baseTransactionData, owner, pollName, description, pollOptions, endTime);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
@@ -94,6 +100,9 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 		for (PollOptionData pollOptionData : createPollTransactionData.getPollOptions())
 			// option-string-length, option-string
 			dataLength += INT_LENGTH + Utf8.encodedLength(pollOptionData.getOptionName());
+
+		if (createPollTransactionData.getEndTime() != null)
+			dataLength += LONG_LENGTH;
 
 		return dataLength;
 	}
@@ -117,6 +126,10 @@ public class CreatePollTransactionTransformer extends TransactionTransformer {
 
 			for (PollOptionData pollOptionData : pollOptions)
 				Serialization.serializeSizedString(bytes, pollOptionData.getOptionName());
+
+			Long endTime = createPollTransactionData.getEndTime();
+			if (endTime != null)
+				bytes.write(Longs.toByteArray(endTime));
 
 			bytes.write(Longs.toByteArray(createPollTransactionData.getFee()));
 

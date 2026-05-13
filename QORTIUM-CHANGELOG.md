@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: add poll end times
+
+Added optional end times for polls so new polls can close at a defined timestamp while older and open-ended polls keep their existing behavior. Poll creation now stores the close time on chain, poll and app-rating APIs expose it, and vote transactions are rejected once the containing block reaches the poll's end time, including attempts to change an existing vote. This only stops further voting; freezing the final trust-weighted results remains the next planned step.
+
 ### 2026-05-13 - api: expose trust-tier vote audit fields
 
 Added read-only trust-tier audit fields to account, poll-vote, and app-rating responses so users can see how raw `blocksMinted` becomes effective voting weight. Existing `totalWeight` and `voteWeight` fields continue to report trust-weighted values, while new raw totals and per-option raw weights show the original `blocksMinted` totals, and full poll-vote responses now include each voter's trust status, multiplier, raw weight, and effective weight for easier review.

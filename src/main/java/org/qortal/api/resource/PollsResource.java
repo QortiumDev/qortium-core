@@ -297,6 +297,7 @@ public class PollsResource {
                                     appName,
                                     pollData.getOwner(),
                                     pollData.getPublished(),
+                                    pollData.getEndTime(),
                                     pollData.getDescription(),
                                     pollWithVotes.getTotalVotes(),
                                     pollWithVotes.getTotalWeight(),

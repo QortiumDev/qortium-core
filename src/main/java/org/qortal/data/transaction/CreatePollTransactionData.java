@@ -26,6 +26,7 @@ public class CreatePollTransactionData extends TransactionData {
 	private String pollName;
 	private String description;
 	private List<PollOptionData> pollOptions;
+	private Long endTime;
 
 	// Constructors
 
@@ -40,6 +41,11 @@ public class CreatePollTransactionData extends TransactionData {
 	
 	public CreatePollTransactionData(BaseTransactionData baseTransactionData,
 			String owner, String pollName, String description, List<PollOptionData> pollOptions) {
+		this(baseTransactionData, owner, pollName, description, pollOptions, null);
+	}
+
+	public CreatePollTransactionData(BaseTransactionData baseTransactionData,
+			String owner, String pollName, String description, List<PollOptionData> pollOptions, Long endTime) {
 		super(Transaction.TransactionType.CREATE_POLL, baseTransactionData);
 
 		this.creatorPublicKey = baseTransactionData.creatorPublicKey;
@@ -47,6 +53,7 @@ public class CreatePollTransactionData extends TransactionData {
 		this.pollName = pollName;
 		this.description = description;
 		this.pollOptions = pollOptions;
+		this.endTime = endTime;
 	}
 
 	// Getters/setters
@@ -66,6 +73,10 @@ public class CreatePollTransactionData extends TransactionData {
 
 	public List<PollOptionData> getPollOptions() {
 		return this.pollOptions;
+	}
+
+	public Long getEndTime() {
+		return this.endTime;
 	}
 
 }

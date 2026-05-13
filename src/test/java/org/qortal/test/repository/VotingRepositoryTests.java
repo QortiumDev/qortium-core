@@ -102,6 +102,28 @@ public class VotingRepositoryTests extends Common {
 	}
 
 	@Test
+	public void testPollEndTimePersistsInRepositoryViews() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "app-library-APP-rating-EndTimeTest";
+			Long endTime = System.currentTimeMillis() + 60_000L;
+			createTestPoll(repository, pollName, endTime);
+
+			PollData fetchedPollData = repository.getVotingRepository().fromPollName(pollName);
+			assertEquals(endTime, fetchedPollData.getEndTime());
+
+			PollData listedPollData = repository.getVotingRepository().getAllPolls(null, null, null).stream()
+					.filter(pollData -> pollData.getPollName().equals(pollName))
+					.findFirst()
+					.orElseThrow(() -> new AssertionError("Missing poll " + pollName));
+			assertEquals(endTime, listedPollData.getEndTime());
+
+			List<PollDataWithVotes> pollsWithVotes = repository.getVotingRepository().getPollsByPrefix(pollName, null, null);
+			assertEquals(1, pollsWithVotes.size());
+			assertEquals(endTime, pollsWithVotes.get(0).getPollData().getEndTime());
+		}
+	}
+
+	@Test
 	public void testGetPollsByPrefixWithLimit() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			// Create multiple test polls
@@ -226,6 +248,10 @@ public class VotingRepositoryTests extends Common {
 	// Helper methods
 
 	private void createTestPoll(Repository repository, String pollName) throws DataException {
+		createTestPoll(repository, pollName, null);
+	}
+
+	private void createTestPoll(Repository repository, String pollName, Long endTime) throws DataException {
 		// Create poll options (1-5 star rating)
 		List<PollOptionData> options = new ArrayList<>();
 		options.add(new PollOptionData("1"));
@@ -241,7 +267,8 @@ public class VotingRepositoryTests extends Common {
 				pollName,
 				"Test poll",
 				options,
-				System.currentTimeMillis()
+				System.currentTimeMillis(),
+				endTime
 		);
 
 		// Save to repository
@@ -257,6 +284,7 @@ public class VotingRepositoryTests extends Common {
 				"app-library-APP-rating-OffsetTest",
 				"app-library-APP-rating-OptionsTest",
 				"app-library-APP-rating-MapTest",
+				"app-library-APP-rating-EndTimeTest",
 				"other-poll-name"
 		};
 

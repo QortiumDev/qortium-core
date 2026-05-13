@@ -275,6 +275,7 @@ public abstract class Transaction {
 		INVALID_BUYER(103),
 		ASSET_ALREADY_FOR_SALE(104),
 		ASSET_NOT_FOR_SALE(105),
+		POLL_CLOSED(106),
 		INVALID_BUT_OK(999),
 		NOT_YET_RELEASED(1000),
 		NOT_SUPPORTED(1001);
@@ -634,6 +635,10 @@ public abstract class Transaction {
 		if (result != ValidationResult.OK)
 			return result;
 
+		result = this.isValidAtTimestamp(now);
+		if (result != ValidationResult.OK)
+			return result;
+
 		// Check transaction is processable
 		result = this.isProcessable();
 
@@ -778,6 +783,10 @@ public abstract class Transaction {
 
 		// Check transaction is valid
 		ValidationResult result = this.isValid();
+		if (result != ValidationResult.OK)
+			return result;
+
+		result = this.isValidAtTimestamp(now);
 		if (result != ValidationResult.OK)
 			return result;
 
@@ -991,6 +1000,10 @@ public abstract class Transaction {
 	 * @throws DataException
 	 */
 	public abstract ValidationResult isValid() throws DataException;
+
+	public ValidationResult isValidAtTimestamp(long timestamp) throws DataException {
+		return ValidationResult.OK;
+	}
 
 	/**
 	 * Returns whether transaction can be processed.

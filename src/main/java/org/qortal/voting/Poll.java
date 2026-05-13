@@ -40,7 +40,7 @@ public class Poll {
 		this.repository = repository;
 		this.pollData = new PollData(createPollTransactionData.getCreatorPublicKey(), createPollTransactionData.getOwner(),
 				createPollTransactionData.getPollName(), createPollTransactionData.getDescription(), createPollTransactionData.getPollOptions(),
-				createPollTransactionData.getTimestamp());
+				createPollTransactionData.getTimestamp(), createPollTransactionData.getEndTime());
 	}
 
 	/**

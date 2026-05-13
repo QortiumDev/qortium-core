@@ -1141,6 +1141,12 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "Accounts", "trust_status", "INT NOT NULL DEFAULT 0");
 					break;
 
+				case 56:
+					// Allow polls to carry an optional close time.
+					addColumnIfMissing(connection, "Polls", "end_when", "EpochMillis");
+					addColumnIfMissing(connection, "CreatePollTransactions", "end_when", "EpochMillis");
+					break;
+
 				default:
 					// nothing to do
 					return false;

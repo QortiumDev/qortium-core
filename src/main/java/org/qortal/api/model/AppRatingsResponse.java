@@ -48,6 +48,9 @@ public class AppRatingsResponse {
 		@Schema(description = "Publication timestamp")
 		public Long published;
 
+		@Schema(description = "Optional poll end timestamp")
+		public Long endTime;
+
 		@Schema(description = "Poll description")
 		public String description;
 
@@ -73,10 +76,22 @@ public class AppRatingsResponse {
 		public AppRating(String pollName, String service, String appName, String owner, Long published,
 				String description, Integer totalVotes, Integer totalWeight,
 				List<PollVotes.OptionCount> voteCounts, List<PollVotes.OptionWeight> voteWeights) {
-			this(pollName, service, appName, owner, published, description, totalVotes, totalWeight, totalWeight, voteCounts, voteWeights);
+			this(pollName, service, appName, owner, published, null, description, totalVotes, totalWeight, totalWeight, voteCounts, voteWeights);
+		}
+
+		public AppRating(String pollName, String service, String appName, String owner, Long published, Long endTime,
+				String description, Integer totalVotes, Integer totalWeight,
+				List<PollVotes.OptionCount> voteCounts, List<PollVotes.OptionWeight> voteWeights) {
+			this(pollName, service, appName, owner, published, endTime, description, totalVotes, totalWeight, totalWeight, voteCounts, voteWeights);
 		}
 
 		public AppRating(String pollName, String service, String appName, String owner, Long published,
+				String description, Integer totalVotes, Integer totalWeight, Integer rawTotalWeight,
+				List<PollVotes.OptionCount> voteCounts, List<PollVotes.OptionWeight> voteWeights) {
+			this(pollName, service, appName, owner, published, null, description, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights);
+		}
+
+		public AppRating(String pollName, String service, String appName, String owner, Long published, Long endTime,
 				String description, Integer totalVotes, Integer totalWeight, Integer rawTotalWeight,
 				List<PollVotes.OptionCount> voteCounts, List<PollVotes.OptionWeight> voteWeights) {
 			this.pollName = pollName;
@@ -84,6 +99,7 @@ public class AppRatingsResponse {
 			this.appName = appName;
 			this.owner = owner;
 			this.published = published;
+			this.endTime = endTime;
 			this.description = description;
 			this.totalVotes = totalVotes;
 			this.totalWeight = totalWeight;

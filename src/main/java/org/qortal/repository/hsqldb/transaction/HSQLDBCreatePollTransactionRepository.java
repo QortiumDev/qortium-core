@@ -20,7 +20,7 @@ public class HSQLDBCreatePollTransactionRepository extends HSQLDBTransactionRepo
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT owner, poll_name, description FROM CreatePollTransactions WHERE signature = ?";
+		String sql = "SELECT owner, poll_name, description, end_when FROM CreatePollTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
@@ -29,6 +29,9 @@ public class HSQLDBCreatePollTransactionRepository extends HSQLDBTransactionRepo
 			String owner = resultSet.getString(1);
 			String pollName = resultSet.getString(2);
 			String description = resultSet.getString(3);
+			Long endTime = resultSet.getLong(4);
+			if (endTime == 0 && resultSet.wasNull())
+				endTime = null;
 
 			String optionsSql = "SELECT option_name FROM CreatePollTransactionOptions WHERE signature = ? ORDER BY option_index ASC";
 
@@ -45,7 +48,7 @@ public class HSQLDBCreatePollTransactionRepository extends HSQLDBTransactionRepo
 					pollOptions.add(new PollOptionData(optionName));
 				} while (optionsResultSet.next());
 
-				return new CreatePollTransactionData(baseTransactionData, owner, pollName, description, pollOptions);
+				return new CreatePollTransactionData(baseTransactionData, owner, pollName, description, pollOptions, endTime);
 			}
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch create poll transaction from repository", e);
@@ -60,7 +63,7 @@ public class HSQLDBCreatePollTransactionRepository extends HSQLDBTransactionRepo
 
 		saveHelper.bind("signature", createPollTransactionData.getSignature()).bind("creator", createPollTransactionData.getCreatorPublicKey())
 				.bind("owner", createPollTransactionData.getOwner()).bind("poll_name", createPollTransactionData.getPollName())
-				.bind("description", createPollTransactionData.getDescription());
+				.bind("description", createPollTransactionData.getDescription()).bind("end_when", createPollTransactionData.getEndTime());
 
 		try {
 			saveHelper.execute(this.repository);

@@ -11,6 +11,7 @@ public class PollData {
 	private String description;
 	private List<PollOptionData> pollOptions;
 	private long published;
+	private Long endTime;
 
 	// Constructors
 
@@ -20,12 +21,17 @@ public class PollData {
 	}
 
 	public PollData(byte[] creatorPublicKey, String owner, String pollName, String description, List<PollOptionData> pollOptions, long published) {
+		this(creatorPublicKey, owner, pollName, description, pollOptions, published, null);
+	}
+
+	public PollData(byte[] creatorPublicKey, String owner, String pollName, String description, List<PollOptionData> pollOptions, long published, Long endTime) {
 		this.creatorPublicKey = creatorPublicKey;
 		this.owner = owner;
 		this.pollName = pollName;
 		this.description = description;
 		this.pollOptions = pollOptions;
 		this.published = published;
+		this.endTime = endTime;
 	}
 
 	// Getters/setters
@@ -76,6 +82,18 @@ public class PollData {
 
 	public void setPublished(long published) {
 		this.published = published;
+	}
+
+	public Long getEndTime() {
+		return this.endTime;
+	}
+
+	public void setEndTime(Long endTime) {
+		this.endTime = endTime;
+	}
+
+	public boolean isClosedAt(long timestamp) {
+		return this.endTime != null && timestamp >= this.endTime;
 	}
 
 }

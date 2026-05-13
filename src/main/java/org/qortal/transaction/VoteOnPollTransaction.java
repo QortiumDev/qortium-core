@@ -91,6 +91,18 @@ public class VoteOnPollTransaction extends Transaction {
 		return ValidationResult.OK;
 	}
 
+	@Override
+	public ValidationResult isValidAtTimestamp(long timestamp) throws DataException {
+		PollData pollData = this.repository.getVotingRepository().fromPollName(this.voteOnPollTransactionData.getPollName());
+		if (pollData == null)
+			return ValidationResult.POLL_DOES_NOT_EXIST;
+
+		if (pollData.isClosedAt(timestamp))
+			return ValidationResult.POLL_CLOSED;
+
+		return ValidationResult.OK;
+	}
+
 
 	@Override
 	public void process() throws DataException {
