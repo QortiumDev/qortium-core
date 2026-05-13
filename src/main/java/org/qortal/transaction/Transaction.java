@@ -82,7 +82,8 @@ public abstract class Transaction {
 		SELL_ASSET_OWNERSHIP(42, false),
 		CANCEL_SELL_ASSET_OWNERSHIP(43, false),
 		BUY_ASSET_OWNERSHIP(44, false),
-		RATE_RESOURCE(45, false);
+		RATE_RESOURCE(45, false),
+		RATE_ACCOUNT(46, false);
 
 		public final int value;
 		public final boolean needsApproval;
@@ -281,6 +282,9 @@ public abstract class Transaction {
 		INVALID_RESOURCE(108),
 		RESOURCE_DOES_NOT_EXIST(109),
 		ALREADY_RATED_RESOURCE(110),
+		INVALID_ACCOUNT_RATING(111),
+		ACCOUNT_RATING_UNCHANGED(112),
+		CANNOT_RATE_SELF(113),
 		INVALID_BUT_OK(999),
 		NOT_YET_RELEASED(1000),
 		NOT_SUPPORTED(1001);

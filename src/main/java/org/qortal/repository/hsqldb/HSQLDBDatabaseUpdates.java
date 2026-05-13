@@ -1174,6 +1174,19 @@ public class HSQLDBDatabaseUpdates {
 							+ "rating TINYINT NOT NULL, previous_rating TINYINT, " + TRANSACTION_KEYS + ")");
 					break;
 
+				case 59:
+					// Store directed account-to-account trust graph ratings.
+					stmt.execute("CREATE TABLE AccountRatings (target AccountPublicKey NOT NULL, target_account AccountAddress NOT NULL, "
+							+ "rater AccountPublicKey NOT NULL, rater_account AccountAddress NOT NULL, rating TINYINT NOT NULL, "
+							+ "PRIMARY KEY (target, rater))");
+					stmt.execute("CREATE INDEX AccountRatingsTargetIndex ON AccountRatings (target)");
+					stmt.execute("CREATE INDEX AccountRatingsRaterIndex ON AccountRatings (rater)");
+
+					stmt.execute("CREATE TABLE RateAccountTransactions (signature Signature, rater AccountPublicKey NOT NULL, "
+							+ "target AccountPublicKey NOT NULL, rating TINYINT NOT NULL, previous_rating TINYINT, "
+							+ TRANSACTION_KEYS + ")");
+					break;
+
 				default:
 					// nothing to do
 					return false;

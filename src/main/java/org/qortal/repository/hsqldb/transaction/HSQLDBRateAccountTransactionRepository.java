@@ -1,0 +1,57 @@
+package org.qortal.repository.hsqldb.transaction;
+
+import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.RateAccountTransactionData;
+import org.qortal.data.transaction.TransactionData;
+import org.qortal.repository.DataException;
+import org.qortal.repository.hsqldb.HSQLDBRepository;
+import org.qortal.repository.hsqldb.HSQLDBSaver;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+public class HSQLDBRateAccountTransactionRepository extends HSQLDBTransactionRepository {
+
+	public HSQLDBRateAccountTransactionRepository(HSQLDBRepository repository) {
+		this.repository = repository;
+	}
+
+	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
+		String sql = "SELECT target, rating, previous_rating FROM RateAccountTransactions WHERE signature = ?";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
+			if (resultSet == null)
+				return null;
+
+			byte[] targetPublicKey = resultSet.getBytes(1);
+			int rating = resultSet.getInt(2);
+
+			Integer previousRating = resultSet.getInt(3);
+			if (previousRating == 0 && resultSet.wasNull())
+				previousRating = null;
+
+			return new RateAccountTransactionData(baseTransactionData, targetPublicKey, rating, previousRating);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch rate account transaction from repository", e);
+		}
+	}
+
+	@Override
+	public void save(TransactionData transactionData) throws DataException {
+		RateAccountTransactionData rateAccountTransactionData = (RateAccountTransactionData) transactionData;
+
+		HSQLDBSaver saveHelper = new HSQLDBSaver("RateAccountTransactions");
+
+		saveHelper.bind("signature", rateAccountTransactionData.getSignature())
+				.bind("rater", rateAccountTransactionData.getRaterPublicKey())
+				.bind("target", rateAccountTransactionData.getTargetPublicKey())
+				.bind("rating", rateAccountTransactionData.getRating())
+				.bind("previous_rating", rateAccountTransactionData.getPreviousRating());
+
+		try {
+			saveHelper.execute(this.repository);
+		} catch (SQLException e) {
+			throw new DataException("Unable to save rate account transaction into repository", e);
+		}
+	}
+}

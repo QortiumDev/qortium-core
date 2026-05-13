@@ -84,6 +84,14 @@ energy, and comments. Qortium does not need to copy BrightID's video-meeting
 workflow to evaluate this idea. The useful part for Qortium is the graph-derived
 account status.
 
+BrightID-style connection data also separates active relationships from the
+absence of a relationship. Qortium treats Unknown as no active edge, rather
+than a stored trust signal. The first native account-rating transaction records
+Trusted, Known, and Untrusted active edges, while an Unknown rating clears the
+rater's current active edge for that target. This mirrors the useful trust-graph
+shape without yet deriving Gold, Silver, Bronze, Suspicious, or Unverified
+account status from those edges.
+
 ## Proposed Rule
 
 Minting-group membership remains the base permission. Aura-style status then
@@ -124,6 +132,14 @@ foundation only:
   so raw `blocksMinted`, trust status, multiplier, and effective vote weight
   can be compared
 - no admin API, config loader, or BrightID/Aura importer sets trust status yet
+
+The next implementation layer adds directed account ratings as chain data:
+
+- accounts can rate known public-key accounts as Trusted, Known, or Untrusted
+- Unknown clears the rater's active edge for that target
+- account-rating summaries expose inbound Trusted, Known, and Untrusted counts
+- these edges do not change trust status, minting eligibility, or vote weight
+  until a later deterministic trust-tier derivation rule is added
 
 This means a trust-status change affects open poll tallies immediately. Polls
 with an end time stop accepting votes at the closing block, and Qortium stores

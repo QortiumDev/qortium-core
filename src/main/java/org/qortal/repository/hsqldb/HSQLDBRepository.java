@@ -61,6 +61,7 @@ public class HSQLDBRepository implements Repository {
 
 	private final ATRepository atRepository = new HSQLDBATRepository(this);
 	private final AccountRepository accountRepository = new HSQLDBAccountRepository(this);
+	private final AccountRatingRepository accountRatingRepository = new HSQLDBAccountRatingRepository(this);
 	private final ArbitraryRepository arbitraryRepository = new HSQLDBArbitraryRepository(this);
 	private final AssetRepository assetRepository = new HSQLDBAssetRepository(this);
 	private final BlockRepository blockRepository = new HSQLDBBlockRepository(this);
@@ -119,6 +120,11 @@ public class HSQLDBRepository implements Repository {
 	@Override
 	public AccountRepository getAccountRepository() {
 		return this.accountRepository;
+	}
+
+	@Override
+	public AccountRatingRepository getAccountRatingRepository() {
+		return this.accountRatingRepository;
 	}
 
 	@Override

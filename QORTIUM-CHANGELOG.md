@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: add account rating transactions
+
+Added the first native account-to-account trust graph transaction for Qortium. Accounts can now record directed Trusted, Known, or Untrusted relationships with other known public-key accounts, clear their own active relationship back to Unknown, and query active relationship summaries without changing minting permission or vote weight yet. This creates deterministic on-chain graph evidence for later trust-tier derivation while keeping the current Gold, Silver, Bronze, Unverified, and Suspicious account status rules unchanged.
+
 ### 2026-05-13 - core: add resource rating transactions
 
 Replaced poll-based app ratings with a standalone resource rating transaction for the new Qortium baseline. Accounts can now rate existing public QDN resources from 1 to 10, update their own rating without creating duplicate active votes, and expose summaries that include unweighted totals plus raw `blocksMinted` and trust-tier weighted averages. This keeps general polls separate from resource ratings and gives derived chains a cleaner foundation for app, website, document, and other public QDN reputation features.
