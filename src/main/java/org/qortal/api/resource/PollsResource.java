@@ -373,14 +373,13 @@ public class PollsResource {
     }
 
     private PollVotes getPollVotes(Repository repository, PollData pollData, Boolean onlyCounts) throws DataException {
-            String pollName = pollData.getPollName();
             boolean countsOnly = onlyCounts != null && onlyCounts;
             long latestBlockTimestamp = repository.getBlockRepository().getLastBlock().getTimestamp();
             PollDataWithVotes frozenPollResults = getFrozenPollResultsForClosedPoll(repository, pollData, latestBlockTimestamp);
             if (frozenPollResults != null)
-                    return buildFrozenPollVotesResponse(repository, pollName, countsOnly, frozenPollResults);
+                    return buildFrozenPollVotesResponse(repository, pollData, countsOnly, frozenPollResults);
 
-            List<VoteOnPollData> votes = repository.getVotingRepository().getVotes(pollName);
+            List<VoteOnPollData> votes = repository.getVotingRepository().getVotes(pollData.getPollId());
 
             // Initialize map for counting votes
             Map<String, Integer> voteCountMap = new HashMap<>();
@@ -451,11 +450,11 @@ public class PollsResource {
             return repository.getVotingRepository().getFrozenPollResults(pollData.getPollName());
     }
 
-    private PollVotes buildFrozenPollVotesResponse(Repository repository, String pollName, boolean countsOnly, PollDataWithVotes frozenPollResults) throws DataException {
+    private PollVotes buildFrozenPollVotesResponse(Repository repository, PollData pollData, boolean countsOnly, PollDataWithVotes frozenPollResults) throws DataException {
             List<PollVotes.OptionCount> voteCounts = buildOptionCounts(frozenPollResults.getVoteCountMap());
             List<PollVotes.OptionWeight> voteWeights = buildOptionWeights(frozenPollResults.getVoteWeightMap(), frozenPollResults.getRawVoteWeightMap());
-            List<VoteOnPollData> votes = countsOnly ? null : repository.getVotingRepository().getVotes(pollName);
-            List<PollVotes.VoteDetail> voteDetails = countsOnly ? null : buildVoteDetails(repository.getVotingRepository().getFrozenPollVoteWeights(pollName));
+            List<VoteOnPollData> votes = countsOnly ? null : repository.getVotingRepository().getVotes(pollData.getPollId());
+            List<PollVotes.VoteDetail> voteDetails = countsOnly ? null : buildVoteDetails(repository.getVotingRepository().getFrozenPollVoteWeights(pollData.getPollName()));
 
             return new PollVotes(votes, frozenPollResults.getTotalVotes(), frozenPollResults.getTotalWeight(),
                     frozenPollResults.getRawTotalWeight(), voteCounts, voteWeights, voteDetails);

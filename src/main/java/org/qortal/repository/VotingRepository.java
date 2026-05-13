@@ -40,10 +40,16 @@ public interface VotingRepository {
 
 	public List<VoteOnPollData> getVotes(String pollName) throws DataException;
 
+	public List<VoteOnPollData> getVotes(int pollId) throws DataException;
+
 	public VoteOnPollData getVote(String pollName, byte[] voterPublicKey) throws DataException;
+
+	public VoteOnPollData getVote(int pollId, byte[] voterPublicKey) throws DataException;
 
 	public void save(VoteOnPollData voteOnPollData) throws DataException;
 
 	public void delete(String pollName, byte[] voterPublicKey) throws DataException;
+
+	public void delete(int pollId, byte[] voterPublicKey) throws DataException;
 
 }

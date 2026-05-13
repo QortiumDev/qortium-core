@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: make poll IDs the voting key
+
+Changed poll voting so `VOTE_ON_POLL` transactions now reference the stable numeric poll ID instead of the editable poll name. The poll table now uses that ID as its primary key while keeping poll names unique for lookup and display, active vote storage and vote APIs can work directly by ID, and regression tests cover voting, vote removal, schema constraints, JSON output, and orphaning a vote after a poll name changes.
+
 ### 2026-05-13 - core: use poll IDs for poll child tables
 
 Moved the internal poll option, active vote, frozen result, and frozen voter-detail tables from poll-name links to numeric poll IDs. Existing poll-name transactions and API routes continue to work, while the stored poll state now uses the stable ID foundation added in the previous change, making poll data closer to the cleaner group-style structure planned for Qortium.

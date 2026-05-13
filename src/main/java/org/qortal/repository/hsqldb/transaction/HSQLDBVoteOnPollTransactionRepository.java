@@ -17,13 +17,13 @@ public class HSQLDBVoteOnPollTransactionRepository extends HSQLDBTransactionRepo
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT poll_name, option_index, previous_option_index FROM VoteOnPollTransactions WHERE signature = ?";
+		String sql = "SELECT poll_id, option_index, previous_option_index FROM VoteOnPollTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
 				return null;
 
-			String pollName = resultSet.getString(1);
+			int pollId = resultSet.getInt(1);
 			int optionIndex = resultSet.getInt(2);
 
 			// Special null-checking for previous option index
@@ -31,7 +31,7 @@ public class HSQLDBVoteOnPollTransactionRepository extends HSQLDBTransactionRepo
 			if (previousOptionIndex == 0 && resultSet.wasNull())
 				previousOptionIndex = null;
 
-			return new VoteOnPollTransactionData(baseTransactionData, pollName, optionIndex, previousOptionIndex);
+			return new VoteOnPollTransactionData(baseTransactionData, pollId, optionIndex, previousOptionIndex);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch vote on poll transaction from repository", e);
 		}
@@ -43,7 +43,7 @@ public class HSQLDBVoteOnPollTransactionRepository extends HSQLDBTransactionRepo
 
 		HSQLDBSaver saveHelper = new HSQLDBSaver("VoteOnPollTransactions");
 
-		saveHelper.bind("signature", voteOnPollTransactionData.getSignature()).bind("poll_name", voteOnPollTransactionData.getPollName())
+		saveHelper.bind("signature", voteOnPollTransactionData.getSignature()).bind("poll_id", voteOnPollTransactionData.getPollId())
 				.bind("voter", voteOnPollTransactionData.getVoterPublicKey()).bind("option_index", voteOnPollTransactionData.getOptionIndex())
 				.bind("previous_option_index", voteOnPollTransactionData.getPreviousOptionIndex());
 

@@ -1,6 +1,5 @@
 package org.qortal.transaction;
 
-import com.google.common.base.Utf8;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.account.Account;
@@ -13,7 +12,6 @@ import org.qortal.data.voting.VoteOnPollData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.VotingRepository;
-import org.qortal.utils.Unicode;
 import org.qortal.voting.Poll;
 
 import java.util.Collections;
@@ -51,21 +49,14 @@ public class VoteOnPollTransaction extends Transaction {
 
 	@Override
 	public ValidationResult isValid() throws DataException {
-		String pollName = this.voteOnPollTransactionData.getPollName();
-
-		// Check name size bounds
-		int pollNameLength = Utf8.encodedLength(pollName);
-		if (pollNameLength < 1 || pollNameLength > Poll.MAX_NAME_SIZE)
-			return ValidationResult.INVALID_NAME_LENGTH;
-
-		// Check name is in normalized form (no leading/trailing whitespace, etc.)
-		if (!pollName.equals(Unicode.normalize(pollName)))
-			return ValidationResult.NAME_NOT_NORMALIZED;
+		int pollId = this.voteOnPollTransactionData.getPollId();
+		if (pollId <= 0)
+			return ValidationResult.POLL_DOES_NOT_EXIST;
 
 		VotingRepository votingRepository = this.repository.getVotingRepository();
 
 		// Check poll exists
-		PollData pollData = votingRepository.fromPollName(pollName);
+		PollData pollData = votingRepository.fromPollId(pollId);
 		if (pollData == null)
 			return ValidationResult.POLL_DOES_NOT_EXIST;
 
@@ -77,7 +68,7 @@ public class VoteOnPollTransaction extends Transaction {
 			return ValidationResult.POLL_OPTION_DOES_NOT_EXIST;
 
 		// Check if vote already exists
-		VoteOnPollData voteOnPollData = votingRepository.getVote(pollName, this.voteOnPollTransactionData.getVoterPublicKey());
+		VoteOnPollData voteOnPollData = votingRepository.getVote(pollId, this.voteOnPollTransactionData.getVoterPublicKey());
 		if (voteOnPollData == null && optionIndex == Poll.NO_VOTE_OPTION_INDEX)
 			return ValidationResult.ALREADY_VOTED_FOR_THAT_OPTION;
 
@@ -96,7 +87,7 @@ public class VoteOnPollTransaction extends Transaction {
 
 	@Override
 	public ValidationResult isValidAtTimestamp(long timestamp) throws DataException {
-		PollData pollData = this.repository.getVotingRepository().fromPollName(this.voteOnPollTransactionData.getPollName());
+		PollData pollData = this.repository.getVotingRepository().fromPollId(this.voteOnPollTransactionData.getPollId());
 		if (pollData == null)
 			return ValidationResult.POLL_DOES_NOT_EXIST;
 
@@ -109,33 +100,33 @@ public class VoteOnPollTransaction extends Transaction {
 
 	@Override
 	public void process() throws DataException {
-		String pollName = this.voteOnPollTransactionData.getPollName();
+		int pollId = this.voteOnPollTransactionData.getPollId();
 
 		Account voter = getVoter();
 
 		VotingRepository votingRepository = this.repository.getVotingRepository();
 
 		// Check for previous vote so we can save option in case of orphaning
-		VoteOnPollData previousVoteOnPollData = votingRepository.getVote(pollName, this.voteOnPollTransactionData.getVoterPublicKey());
+		VoteOnPollData previousVoteOnPollData = votingRepository.getVote(pollId, this.voteOnPollTransactionData.getVoterPublicKey());
 		if (previousVoteOnPollData != null) {
 			voteOnPollTransactionData.setPreviousOptionIndex(previousVoteOnPollData.getOptionIndex());
-			LOGGER.trace(() -> String.format("Previous vote by %s on poll \"%s\" was option index %d",
-					voter.getAddress(), pollName, previousVoteOnPollData.getOptionIndex()));
+			LOGGER.trace(() -> String.format("Previous vote by %s on poll ID %d was option index %d",
+					voter.getAddress(), pollId, previousVoteOnPollData.getOptionIndex()));
 		}
 
 		// Save this transaction, now with possible previous vote
 		this.repository.getTransactionRepository().save(voteOnPollTransactionData);
 
 		if (this.voteOnPollTransactionData.getOptionIndex() == Poll.NO_VOTE_OPTION_INDEX) {
-			LOGGER.trace(() -> String.format("Deleting vote by %s on poll \"%s\"", voter.getAddress(), pollName));
-			votingRepository.delete(pollName, this.voteOnPollTransactionData.getVoterPublicKey());
+			LOGGER.trace(() -> String.format("Deleting vote by %s on poll ID %d", voter.getAddress(), pollId));
+			votingRepository.delete(pollId, this.voteOnPollTransactionData.getVoterPublicKey());
 			return;
 		}
 
 		// Apply vote to poll
-		LOGGER.trace(() -> String.format("Vote by %s on poll \"%s\" with option index %d",
-				voter.getAddress(), pollName, this.voteOnPollTransactionData.getOptionIndex()));
-		VoteOnPollData newVoteOnPollData = new VoteOnPollData(pollName, this.voteOnPollTransactionData.getVoterPublicKey(),
+		LOGGER.trace(() -> String.format("Vote by %s on poll ID %d with option index %d",
+				voter.getAddress(), pollId, this.voteOnPollTransactionData.getOptionIndex()));
+		VoteOnPollData newVoteOnPollData = new VoteOnPollData(pollId, this.voteOnPollTransactionData.getVoterPublicKey(),
 				this.voteOnPollTransactionData.getOptionIndex());
 		votingRepository.save(newVoteOnPollData);
 	}
@@ -147,18 +138,19 @@ public class VoteOnPollTransaction extends Transaction {
 		// Does this transaction have previous vote info?
 		VotingRepository votingRepository = this.repository.getVotingRepository();
 		Integer previousOptionIndex = this.voteOnPollTransactionData.getPreviousOptionIndex();
+		int pollId = this.voteOnPollTransactionData.getPollId();
 		if (previousOptionIndex != null) {
 			// Reinstate previous vote
-			LOGGER.trace(() -> String.format("Reinstating previous vote by %s on poll \"%s\" with option index %d",
-					voter.getAddress(), this.voteOnPollTransactionData.getPollName(), previousOptionIndex));
-			VoteOnPollData previousVoteOnPollData = new VoteOnPollData(this.voteOnPollTransactionData.getPollName(), this.voteOnPollTransactionData.getVoterPublicKey(),
+			LOGGER.trace(() -> String.format("Reinstating previous vote by %s on poll ID %d with option index %d",
+					voter.getAddress(), pollId, previousOptionIndex));
+			VoteOnPollData previousVoteOnPollData = new VoteOnPollData(pollId, this.voteOnPollTransactionData.getVoterPublicKey(),
 					previousOptionIndex);
 			votingRepository.save(previousVoteOnPollData);
 		} else {
 			// Delete vote
-			LOGGER.trace(() -> String.format("Deleting vote by %s on poll \"%s\" with option index %d",
-					voter.getAddress(), this.voteOnPollTransactionData.getPollName(), this.voteOnPollTransactionData.getOptionIndex()));
-			votingRepository.delete(this.voteOnPollTransactionData.getPollName(), this.voteOnPollTransactionData.getVoterPublicKey());
+			LOGGER.trace(() -> String.format("Deleting vote by %s on poll ID %d with option index %d",
+					voter.getAddress(), pollId, this.voteOnPollTransactionData.getOptionIndex()));
+			votingRepository.delete(pollId, this.voteOnPollTransactionData.getVoterPublicKey());
 		}
 
 		// Save this transaction, with removed previous vote info

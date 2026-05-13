@@ -1,6 +1,5 @@
 package org.qortal.transform.transaction;
 
-import com.google.common.base.Utf8;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
 import org.qortal.data.transaction.BaseTransactionData;
@@ -18,10 +17,10 @@ import java.nio.ByteBuffer;
 public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 
 	// Property lengths
-	private static final int NAME_SIZE_LENGTH = INT_LENGTH;
+	private static final int POLL_ID_LENGTH = INT_LENGTH;
 	private static final int POLL_OPTION_LENGTH = INT_LENGTH;
 
-	private static final int EXTRAS_LENGTH = NAME_SIZE_LENGTH + POLL_OPTION_LENGTH;
+	private static final int EXTRAS_LENGTH = POLL_ID_LENGTH + POLL_OPTION_LENGTH;
 
 	protected static final TransactionLayout layout;
 
@@ -32,8 +31,7 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("voter's public key", TransformationType.PUBLIC_KEY);
 		addMempowFeeNonceToLayout(layout, TransactionType.VOTE_ON_POLL);
-		layout.add("poll name length", TransformationType.INT);
-		layout.add("poll name", TransformationType.STRING);
+		layout.add("poll ID", TransformationType.INT);
 		layout.add("poll option index (0 removes vote, 1+ selects option)", TransformationType.INT);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
@@ -47,7 +45,7 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 
 		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.VOTE_ON_POLL);
 
-		String pollName = Serialization.deserializeSizedString(byteBuffer, Poll.MAX_NAME_SIZE);
+		int pollId = byteBuffer.getInt();
 
 		int optionIndex = byteBuffer.getInt();
 		if (optionIndex < Poll.NO_VOTE_OPTION_INDEX || optionIndex > Poll.MAX_OPTIONS)
@@ -60,13 +58,11 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, voterPublicKey, fee, nonce, signature);
 
-		return new VoteOnPollTransactionData(baseTransactionData, pollName, optionIndex);
+		return new VoteOnPollTransactionData(baseTransactionData, pollId, optionIndex);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
-		VoteOnPollTransactionData voteOnPollTransactionData = (VoteOnPollTransactionData) transactionData;
-
-		return getBaseLength(transactionData) + EXTRAS_LENGTH + Utf8.encodedLength(voteOnPollTransactionData.getPollName());
+		return getBaseLength(transactionData) + EXTRAS_LENGTH;
 	}
 
 	public static byte[] toBytes(TransactionData transactionData) throws TransformationException {
@@ -77,7 +73,7 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 
 			transformCommonBytes(transactionData, bytes);
 
-			Serialization.serializeSizedString(bytes, voteOnPollTransactionData.getPollName());
+			bytes.write(Ints.toByteArray(voteOnPollTransactionData.getPollId()));
 
 			bytes.write(Ints.toByteArray(voteOnPollTransactionData.getOptionIndex()));
 

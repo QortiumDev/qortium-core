@@ -7,6 +7,7 @@ import org.qortal.block.BlockChain;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.CreatePollTransactionData;
 import org.qortal.data.transaction.TransactionData;
+import org.qortal.data.transaction.VoteOnPollTransactionData;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollOptionData;
 import org.qortal.group.Group;
@@ -16,7 +17,10 @@ import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
+import org.qortal.utils.Unicode;
 
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -57,6 +61,31 @@ public class PollIdentifierTests extends Common {
 		}
 	}
 
+	@Test
+	public void testVoteTransactionSurvivesPollRenameById() throws DataException, SQLException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			CreatePollTransactionData createPollData = buildCreatePollTransactionData(repository, alice, "identified-vote-poll");
+
+			TransactionUtils.signAndMint(repository, createPollData, alice);
+			int pollId = createPollData.getPollId();
+
+			VoteOnPollTransactionData voteData = buildVoteOnPollTransactionData(repository, bob, pollId, 1);
+			TransactionUtils.signAndMint(repository, voteData, bob);
+			assertEquals(1, repository.getVotingRepository().getVote(pollId, bob.getPublicKey()).getOptionIndex());
+
+			renamePoll(repository, pollId, "renamed-identified-vote-poll");
+			assertNull(repository.getVotingRepository().fromPollName("identified-vote-poll"));
+			assertEquals("renamed-identified-vote-poll", repository.getVotingRepository().fromPollId(pollId).getPollName());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assertNull(repository.getVotingRepository().getVote(pollId, bob.getPublicKey()));
+			assertEquals("renamed-identified-vote-poll", repository.getVotingRepository().fromPollId(pollId).getPollName());
+		}
+	}
+
 	private CreatePollTransactionData buildCreatePollTransactionData(Repository repository, PrivateKeyAccount creator, String pollName) throws DataException {
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
@@ -67,6 +96,30 @@ public class PollIdentifierTests extends Common {
 				null);
 
 		return new CreatePollTransactionData(baseTransactionData, creator.getAddress(), pollName, "Test poll", buildPollOptions(), null);
+	}
+
+	private VoteOnPollTransactionData buildVoteOnPollTransactionData(Repository repository, PrivateKeyAccount voter, int pollId, int optionIndex) throws DataException {
+		long timestamp = TransactionUtils.nextTimestamp(repository);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(
+				timestamp,
+				Group.NO_GROUP,
+				voter.getPublicKey(),
+				BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp),
+				null);
+
+		return new VoteOnPollTransactionData(baseTransactionData, pollId, optionIndex);
+	}
+
+	private void renamePoll(Repository repository, int pollId, String pollName) throws DataException, SQLException {
+		String sql = "UPDATE Polls SET poll_name = ?, reduced_poll_name = ? WHERE poll_id = ?";
+		try (PreparedStatement preparedStatement = repository.getConnection().prepareStatement(sql)) {
+			preparedStatement.setString(1, pollName);
+			preparedStatement.setString(2, Unicode.sanitize(pollName));
+			preparedStatement.setInt(3, pollId);
+			preparedStatement.executeUpdate();
+		}
+
+		repository.saveChanges();
 	}
 
 	private List<PollOptionData> buildPollOptions() {

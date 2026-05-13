@@ -78,13 +78,13 @@ public class PollEndTimeTests extends Common {
 			repository.getVotingRepository().save(new PollData(alice.getPublicKey(), alice.getAddress(), pollName, "Test poll", buildPollOptions(), published, endTime));
 			repository.saveChanges();
 
-			VoteOnPollTransaction voteTransaction = new VoteOnPollTransaction(repository, buildVoteOnPollTransactionData(bob, pollName, 1));
+			VoteOnPollTransaction voteTransaction = new VoteOnPollTransaction(repository, buildVoteOnPollTransactionData(repository, bob, pollName, 1));
 			assertEquals(Transaction.ValidationResult.OK, voteTransaction.isValid());
 			assertEquals(Transaction.ValidationResult.OK, voteTransaction.isValidAtTimestamp(endTime - 1));
 			assertEquals(Transaction.ValidationResult.POLL_CLOSED, voteTransaction.isValidAtTimestamp(endTime));
 			assertEquals(Transaction.ValidationResult.POLL_CLOSED, voteTransaction.isValidAtTimestamp(endTime + 1));
 
-			VoteOnPollTransaction changedVoteTransaction = new VoteOnPollTransaction(repository, buildVoteOnPollTransactionData(bob, pollName, 2));
+			VoteOnPollTransaction changedVoteTransaction = new VoteOnPollTransaction(repository, buildVoteOnPollTransactionData(repository, bob, pollName, 2));
 			assertEquals(Transaction.ValidationResult.POLL_CLOSED, changedVoteTransaction.isValidAtTimestamp(endTime));
 		}
 	}
@@ -187,7 +187,7 @@ public class PollEndTimeTests extends Common {
 		return new CreatePollTransactionData(baseTransactionData, creator.getAddress(), pollName, "Test poll", buildPollOptions(), endTime);
 	}
 
-	private VoteOnPollTransactionData buildVoteOnPollTransactionData(PrivateKeyAccount voter, String pollName, int optionIndex) throws DataException {
+	private VoteOnPollTransactionData buildVoteOnPollTransactionData(Repository repository, PrivateKeyAccount voter, String pollName, int optionIndex) throws DataException {
 		long timestamp = System.currentTimeMillis();
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				timestamp,
@@ -196,7 +196,8 @@ public class PollEndTimeTests extends Common {
 				BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp),
 				null);
 
-		return new VoteOnPollTransactionData(baseTransactionData, pollName, optionIndex);
+		int pollId = repository.getVotingRepository().fromPollName(pollName).getPollId();
+		return new VoteOnPollTransactionData(baseTransactionData, pollId, optionIndex);
 	}
 
 	private void setVoteAccount(Repository repository, String accountName, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {

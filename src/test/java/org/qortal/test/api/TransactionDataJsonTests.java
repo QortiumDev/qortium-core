@@ -44,7 +44,7 @@ public class TransactionDataJsonTests extends ApiCommon {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(System.currentTimeMillis(), Group.NO_GROUP,
 				alice.getPublicKey(), Amounts.MULTIPLIER, null);
-		VoteOnPollTransactionData transactionData = new VoteOnPollTransactionData(baseTransactionData, "test-poll", 1);
+		VoteOnPollTransactionData transactionData = new VoteOnPollTransactionData(baseTransactionData, 123, 1);
 
 		String json = marshal(transactionData);
 
@@ -52,7 +52,7 @@ public class TransactionDataJsonTests extends ApiCommon {
 		assertTrue(json.contains("\"creatorAddress\":\"" + alice.getAddress() + "\""));
 		assertTrue(json.contains("\"voterAddress\":\"" + alice.getAddress() + "\""));
 		assertTrue(json.contains("\"voterPublicKey\""));
-		assertTrue(json.contains("\"pollName\":\"test-poll\""));
+		assertTrue(json.contains("\"pollId\":123"));
 		assertTrue(json.contains("\"optionIndex\":1"));
 	}
 

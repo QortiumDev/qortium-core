@@ -55,6 +55,12 @@ public class VotingRepositoryTests extends Common {
 	@Test
 	public void testPollStateTablesUsePollIdForeignKeys() throws DataException, SQLException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertTrue("Polls should use poll_id as primary key", tableHasPrimaryKey(repository, "Polls", "poll_id"));
+			assertFalse("Polls should not use poll_name as primary key", tableHasPrimaryKey(repository, "Polls", "poll_name"));
+			assertTrue("Polls should keep poll_name unique", tableHasUniqueIndex(repository, "Polls", "poll_name"));
+			assertTrue("VoteOnPollTransactions should use poll_id", tableHasColumn(repository, "VoteOnPollTransactions", "poll_id"));
+			assertFalse("VoteOnPollTransactions should not keep poll_name", tableHasColumn(repository, "VoteOnPollTransactions", "poll_name"));
+
 			for (String tableName : List.of("PollOptions", "PollVotes", "PollFrozenResults", "PollFrozenVoteDetails")) {
 				assertTrue(tableName + " should use poll_id", tableHasColumn(repository, tableName, "poll_id"));
 				assertFalse(tableName + " should not keep poll_name", tableHasColumn(repository, tableName, "poll_name"));
@@ -74,20 +80,25 @@ public class VotingRepositoryTests extends Common {
 			assertNotNull(pollData.getPollId());
 			assertEquals(List.of("Yes", "No"), pollOptionNames(pollData));
 
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollData.getPollId(), bob.getPublicKey(), 1));
 			repository.saveChanges();
 
 			VoteOnPollData fetchedVote = repository.getVotingRepository().getVote(pollName, bob.getPublicKey());
 			assertNotNull(fetchedVote);
+			assertEquals(pollData.getPollId(), fetchedVote.getPollId());
 			assertEquals(pollName, fetchedVote.getPollName());
 			assertEquals(1, fetchedVote.getOptionIndex());
+			assertEquals(1, repository.getVotingRepository().getVote(pollData.getPollId(), bob.getPublicKey()).getOptionIndex());
 			assertEquals(1, repository.getVotingRepository().getVotes(pollName).size());
+			assertEquals(1, repository.getVotingRepository().getVotes(pollData.getPollId()).size());
 
-			repository.getVotingRepository().delete(pollName, bob.getPublicKey());
+			repository.getVotingRepository().delete(pollData.getPollId(), bob.getPublicKey());
 			repository.saveChanges();
 
 			assertNull(repository.getVotingRepository().getVote(pollName, bob.getPublicKey()));
+			assertNull(repository.getVotingRepository().getVote(pollData.getPollId(), bob.getPublicKey()));
 			assertEquals(0, repository.getVotingRepository().getVotes(pollName).size());
+			assertEquals(0, repository.getVotingRepository().getVotes(pollData.getPollId()).size());
 		}
 	}
 
@@ -132,6 +143,32 @@ public class VotingRepositoryTests extends Common {
 				if (columnName.equalsIgnoreCase(foreignKeyColumnName)
 						&& referencedTableName.equalsIgnoreCase(primaryKeyTableName)
 						&& referencedColumnName.equalsIgnoreCase(primaryKeyColumnName))
+					return true;
+			}
+		}
+
+		return false;
+	}
+
+	private boolean tableHasPrimaryKey(Repository repository, String tableName, String columnName) throws SQLException {
+		DatabaseMetaData metaData = repository.getConnection().getMetaData();
+		try (ResultSet resultSet = metaData.getPrimaryKeys(null, null, tableName.toUpperCase())) {
+			while (resultSet.next()) {
+				String primaryKeyColumnName = resultSet.getString("COLUMN_NAME");
+				if (columnName.equalsIgnoreCase(primaryKeyColumnName))
+					return true;
+			}
+		}
+
+		return false;
+	}
+
+	private boolean tableHasUniqueIndex(Repository repository, String tableName, String columnName) throws SQLException {
+		DatabaseMetaData metaData = repository.getConnection().getMetaData();
+		try (ResultSet resultSet = metaData.getIndexInfo(null, null, tableName.toUpperCase(), true, false)) {
+			while (resultSet.next()) {
+				String indexColumnName = resultSet.getString("COLUMN_NAME");
+				if (columnName.equalsIgnoreCase(indexColumnName))
 					return true;
 			}
 		}

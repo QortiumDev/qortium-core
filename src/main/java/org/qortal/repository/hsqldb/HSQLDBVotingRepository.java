@@ -363,10 +363,23 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public List<VoteOnPollData> getVotes(String pollName) throws DataException {
-		Integer pollId = fetchPollIdIfExists(pollName);
-		if (pollId == null)
+		PollData pollData = fromPollName(pollName);
+		if (pollData == null)
 			return new ArrayList<>();
 
+		return getVotes(pollData.getPollId(), pollData.getPollName());
+	}
+
+	@Override
+	public List<VoteOnPollData> getVotes(int pollId) throws DataException {
+		PollData pollData = fromPollId(pollId);
+		if (pollData == null)
+			return new ArrayList<>();
+
+		return getVotes(pollData.getPollId(), pollData.getPollName());
+	}
+
+	private List<VoteOnPollData> getVotes(int pollId, String pollName) throws DataException {
 		String sql = "SELECT voter, option_index FROM PollVotes WHERE poll_id = ?";
 		List<VoteOnPollData> votes = new ArrayList<>();
 
@@ -379,7 +392,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 				byte[] voterPublicKey = resultSet.getBytes(1);
 				int optionIndex = resultSet.getInt(2);
 
-				votes.add(new VoteOnPollData(pollName, voterPublicKey, optionIndex));
+				votes.add(new VoteOnPollData(pollId, pollName, voterPublicKey, optionIndex));
 			} while (resultSet.next());
 
 			return votes;
@@ -390,10 +403,23 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public VoteOnPollData getVote(String pollName, byte[] voterPublicKey) throws DataException {
-		Integer pollId = fetchPollIdIfExists(pollName);
-		if (pollId == null)
+		PollData pollData = fromPollName(pollName);
+		if (pollData == null)
 			return null;
 
+		return getVote(pollData.getPollId(), pollData.getPollName(), voterPublicKey);
+	}
+
+	@Override
+	public VoteOnPollData getVote(int pollId, byte[] voterPublicKey) throws DataException {
+		PollData pollData = fromPollId(pollId);
+		if (pollData == null)
+			return null;
+
+		return getVote(pollData.getPollId(), pollData.getPollName(), voterPublicKey);
+	}
+
+	private VoteOnPollData getVote(int pollId, String pollName, byte[] voterPublicKey) throws DataException {
 		String sql = "SELECT option_index FROM PollVotes WHERE poll_id = ? AND voter = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollId, voterPublicKey)) {
@@ -402,7 +428,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 			int optionIndex = resultSet.getInt(1);
 
-			return new VoteOnPollData(pollName, voterPublicKey, optionIndex);
+			return new VoteOnPollData(pollId, pollName, voterPublicKey, optionIndex);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch poll vote from repository", e);
 		}
@@ -410,7 +436,10 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public void save(VoteOnPollData voteOnPollData) throws DataException {
-		int pollId = requirePollId(voteOnPollData.getPollName());
+		Integer pollId = voteOnPollData.getPollId();
+		if (pollId == null)
+			pollId = requirePollId(voteOnPollData.getPollName());
+
 		HSQLDBSaver saveHelper = new HSQLDBSaver("PollVotes");
 
 		saveHelper.bind("poll_id", pollId).bind("voter", voteOnPollData.getVoterPublicKey())
@@ -429,6 +458,11 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		if (pollId == null)
 			return;
 
+		delete(pollId, voterPublicKey);
+	}
+
+	@Override
+	public void delete(int pollId, byte[] voterPublicKey) throws DataException {
 		try {
 			this.repository.delete("PollVotes", "poll_id = ? AND voter = ?", pollId, voterPublicKey);
 		} catch (SQLException e) {

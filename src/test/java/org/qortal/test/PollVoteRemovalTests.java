@@ -54,24 +54,24 @@ public class PollVoteRemovalTests extends ApiCommon {
 			createTestPoll(repository, alice, pollName, null);
 
 			assertEquals(Transaction.ValidationResult.ALREADY_VOTED_FOR_THAT_OPTION,
-					new VoteOnPollTransaction(repository, voteData(bob, pollName, Poll.NO_VOTE_OPTION_INDEX)).isValid());
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, Poll.NO_VOTE_OPTION_INDEX)).isValid());
 			assertEquals(Transaction.ValidationResult.POLL_OPTION_DOES_NOT_EXIST,
-					new VoteOnPollTransaction(repository, voteData(bob, pollName, -1)).isValid());
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, -1)).isValid());
 			assertEquals(Transaction.ValidationResult.OK,
-					new VoteOnPollTransaction(repository, voteData(bob, pollName, 1)).isValid());
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, 1)).isValid());
 			assertEquals(Transaction.ValidationResult.OK,
-					new VoteOnPollTransaction(repository, voteData(bob, pollName, 2)).isValid());
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, 2)).isValid());
 			assertEquals(Transaction.ValidationResult.POLL_OPTION_DOES_NOT_EXIST,
-					new VoteOnPollTransaction(repository, voteData(bob, pollName, 3)).isValid());
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, 3)).isValid());
 
-			TransactionUtils.signAndMint(repository, voteData(bob, pollName, 1), bob);
+			TransactionUtils.signAndMint(repository, voteData(repository, bob, pollName, 1), bob);
 			assertEquals(1, repository.getVotingRepository().getVote(pollName, bob.getPublicKey()).getOptionIndex());
 			assertEquals(Transaction.ValidationResult.ALREADY_VOTED_FOR_THAT_OPTION,
-					new VoteOnPollTransaction(repository, voteData(bob, pollName, 1)).isValid());
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, 1)).isValid());
 			assertEquals(Transaction.ValidationResult.OK,
-					new VoteOnPollTransaction(repository, voteData(bob, pollName, Poll.NO_VOTE_OPTION_INDEX)).isValid());
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, Poll.NO_VOTE_OPTION_INDEX)).isValid());
 
-			TransactionUtils.signAndMint(repository, voteData(bob, pollName, Poll.NO_VOTE_OPTION_INDEX), bob);
+			TransactionUtils.signAndMint(repository, voteData(repository, bob, pollName, Poll.NO_VOTE_OPTION_INDEX), bob);
 			assertNull(repository.getVotingRepository().getVote(pollName, bob.getPublicKey()));
 
 			BlockUtils.orphanLastBlock(repository);
@@ -90,8 +90,8 @@ public class PollVoteRemovalTests extends ApiCommon {
 			setVoteAccount(repository, bob, 100, AccountTrustStatus.GOLD);
 			setVoteAccount(repository, chloe, 101, AccountTrustStatus.SILVER);
 
-			TransactionUtils.signAndMint(repository, voteData(bob, pollName, 1), bob);
-			TransactionUtils.signAndMint(repository, voteData(chloe, pollName, 2), chloe);
+			TransactionUtils.signAndMint(repository, voteData(repository, bob, pollName, 1), bob);
+			TransactionUtils.signAndMint(repository, voteData(repository, chloe, pollName, 2), chloe);
 
 			PollVotes beforeRemoval = this.pollsResource.getPollVotes(pollName, true);
 			assertEquals(Integer.valueOf(2), beforeRemoval.totalVotes);
@@ -100,7 +100,7 @@ public class PollVoteRemovalTests extends ApiCommon {
 			assertEquals(100, findOptionWeight(beforeRemoval.voteWeights, "Yes"));
 			assertEquals(50, findOptionWeight(beforeRemoval.voteWeights, "No"));
 
-			TransactionUtils.signAndMint(repository, voteData(bob, pollName, Poll.NO_VOTE_OPTION_INDEX), bob);
+			TransactionUtils.signAndMint(repository, voteData(repository, bob, pollName, Poll.NO_VOTE_OPTION_INDEX), bob);
 
 			PollVotes afterRemoval = this.pollsResource.getPollVotes(pollName, true);
 			assertEquals(Integer.valueOf(1), afterRemoval.totalVotes);
@@ -126,7 +126,7 @@ public class PollVoteRemovalTests extends ApiCommon {
 			BlockUtils.mintBlock(repository);
 
 			VoteOnPollTransaction removalTransaction = new VoteOnPollTransaction(repository,
-					voteData(bob, pollName, Poll.NO_VOTE_OPTION_INDEX));
+					voteData(repository, bob, pollName, Poll.NO_VOTE_OPTION_INDEX));
 			assertEquals(Transaction.ValidationResult.OK, removalTransaction.isValid());
 			assertEquals(Transaction.ValidationResult.POLL_CLOSED,
 					removalTransaction.isValidAtTimestamp(repository.getBlockRepository().getLastBlock().getTimestamp()));
@@ -159,7 +159,7 @@ public class PollVoteRemovalTests extends ApiCommon {
 		}
 	}
 
-	private VoteOnPollTransactionData voteData(PrivateKeyAccount voter, String pollName, int optionIndex) throws DataException {
+	private VoteOnPollTransactionData voteData(Repository repository, PrivateKeyAccount voter, String pollName, int optionIndex) throws DataException {
 		long timestamp = System.currentTimeMillis();
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				timestamp,
@@ -168,7 +168,11 @@ public class PollVoteRemovalTests extends ApiCommon {
 				BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp),
 				null);
 
-		return new VoteOnPollTransactionData(baseTransactionData, pollName, optionIndex);
+		return new VoteOnPollTransactionData(baseTransactionData, pollId(repository, pollName), optionIndex);
+	}
+
+	private int pollId(Repository repository, String pollName) throws DataException {
+		return repository.getVotingRepository().fromPollName(pollName).getPollId();
 	}
 
 	private CreatePollTransactionData createPollData(PrivateKeyAccount creator, String pollName, long timestamp,

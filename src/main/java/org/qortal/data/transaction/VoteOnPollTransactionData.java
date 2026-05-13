@@ -20,7 +20,7 @@ public class VoteOnPollTransactionData extends TransactionData {
 	// Properties
 	@Schema(description = "Vote creator's public key", example = "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP")
 	private byte[] voterPublicKey;
-	private String pollName;
+	private int pollId;
 	@Schema(description = "Poll option index: 0 removes an existing vote, 1 selects the first poll option, 2 selects the second, and so on")
 	private int optionIndex;
 	// For internal use when orphaning
@@ -40,18 +40,18 @@ public class VoteOnPollTransactionData extends TransactionData {
 	}
 
 	/** From repository */
-	public VoteOnPollTransactionData(BaseTransactionData baseTransactionData, String pollName, int optionIndex, Integer previousOptionIndex) {
+	public VoteOnPollTransactionData(BaseTransactionData baseTransactionData, int pollId, int optionIndex, Integer previousOptionIndex) {
 		super(TransactionType.VOTE_ON_POLL, baseTransactionData);
 
 		this.voterPublicKey = baseTransactionData.creatorPublicKey;
-		this.pollName = pollName;
+		this.pollId = pollId;
 		this.optionIndex = optionIndex;
 		this.previousOptionIndex = previousOptionIndex;
 	}
 
 	/** From network/API */
-	public VoteOnPollTransactionData(BaseTransactionData baseTransactionData, String pollName, int optionIndex) {
-		this(baseTransactionData, pollName, optionIndex, null);
+	public VoteOnPollTransactionData(BaseTransactionData baseTransactionData, int pollId, int optionIndex) {
+		this(baseTransactionData, pollId, optionIndex, null);
 	}
 
 	// Getters / setters
@@ -66,8 +66,8 @@ public class VoteOnPollTransactionData extends TransactionData {
 		return this.voterPublicKey == null ? null : Crypto.toAddress(this.voterPublicKey);
 	}
 
-	public String getPollName() {
-		return this.pollName;
+	public int getPollId() {
+		return this.pollId;
 	}
 
 	public int getOptionIndex() {

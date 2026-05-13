@@ -6,6 +6,7 @@ import org.qortal.crypto.Crypto;
 public class VoteOnPollData {
 
 	// Properties
+	private Integer pollId;
 	private String pollName;
 	private byte[] voterPublicKey;
 	private int optionIndex;
@@ -18,12 +19,29 @@ public class VoteOnPollData {
 	}
 
 	public VoteOnPollData(String pollName, byte[] voterPublicKey, int optionIndex) {
+		this(null, pollName, voterPublicKey, optionIndex);
+	}
+
+	public VoteOnPollData(int pollId, byte[] voterPublicKey, int optionIndex) {
+		this(pollId, null, voterPublicKey, optionIndex);
+	}
+
+	public VoteOnPollData(Integer pollId, String pollName, byte[] voterPublicKey, int optionIndex) {
+		this.pollId = pollId;
 		this.pollName = pollName;
 		this.voterPublicKey = voterPublicKey;
 		this.optionIndex = optionIndex;
 	}
 
 	// Getters/setters
+
+	public Integer getPollId() {
+		return this.pollId;
+	}
+
+	public void setPollId(Integer pollId) {
+		this.pollId = pollId;
+	}
 
 	public String getPollName() {
 		return this.pollName;
