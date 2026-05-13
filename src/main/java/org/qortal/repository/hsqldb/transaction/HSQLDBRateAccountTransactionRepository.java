@@ -3,6 +3,7 @@ package org.qortal.repository.hsqldb.transaction;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.data.transaction.TransactionData;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.repository.DataException;
 import org.qortal.repository.hsqldb.HSQLDBRepository;
 import org.qortal.repository.hsqldb.HSQLDBSaver;
@@ -17,20 +18,21 @@ public class HSQLDBRateAccountTransactionRepository extends HSQLDBTransactionRep
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT target, rating, previous_rating FROM RateAccountTransactions WHERE signature = ?";
+		String sql = "SELECT target, category, rating, previous_rating FROM RateAccountTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
 				return null;
 
 			byte[] targetPublicKey = resultSet.getBytes(1);
-			int rating = resultSet.getInt(2);
+			AccountRatingCategory category = AccountRatingCategory.valueOf(resultSet.getInt(2));
+			int rating = resultSet.getInt(3);
 
-			Integer previousRating = resultSet.getInt(3);
+			Integer previousRating = resultSet.getInt(4);
 			if (previousRating == 0 && resultSet.wasNull())
 				previousRating = null;
 
-			return new RateAccountTransactionData(baseTransactionData, targetPublicKey, rating, previousRating);
+			return new RateAccountTransactionData(baseTransactionData, targetPublicKey, category, rating, previousRating);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch rate account transaction from repository", e);
 		}
@@ -45,6 +47,7 @@ public class HSQLDBRateAccountTransactionRepository extends HSQLDBTransactionRep
 		saveHelper.bind("signature", rateAccountTransactionData.getSignature())
 				.bind("rater", rateAccountTransactionData.getRaterPublicKey())
 				.bind("target", rateAccountTransactionData.getTargetPublicKey())
+				.bind("category", rateAccountTransactionData.getCategoryValue())
 				.bind("rating", rateAccountTransactionData.getRating())
 				.bind("previous_rating", rateAccountTransactionData.getPreviousRating());
 

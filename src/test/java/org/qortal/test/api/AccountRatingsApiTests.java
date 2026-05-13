@@ -7,6 +7,7 @@ import org.qortal.api.ApiError;
 import org.qortal.api.resource.AccountRatingsResource;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRating;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustPreviewData;
@@ -179,6 +180,129 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testCategoryAwareListAndSummaryEndpoints() throws DataException {
+		TestAccount bob;
+		TestAccount alice;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.SUBJECT, 4), alice);
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.PLAYER, -2), alice);
+		}
+
+		String targetPublicKey58 = Base58.encode(bob.getPublicKey());
+		String raterPublicKey58 = Base58.encode(alice.getPublicKey());
+
+		List<AccountRatingData> allRatings = this.accountRatingsResource.getAccountRatings(targetPublicKey58, raterPublicKey58,
+				null, null, null, null);
+		assertEquals(2, allRatings.size());
+
+		List<AccountRatingData> playerRatings = this.accountRatingsResource.getAccountRatings(targetPublicKey58, raterPublicKey58,
+				AccountRatingCategory.PLAYER.name(), null, null, null);
+		assertEquals(1, playerRatings.size());
+		assertEquals(AccountRatingCategory.PLAYER, playerRatings.get(0).getCategory());
+		assertEquals(-2, playerRatings.get(0).getRating());
+
+		AccountRatingSummaryData subjectSummary = this.accountRatingsResource.getAccountRatingSummary(targetPublicKey58,
+				AccountRatingCategory.SUBJECT.name());
+		AccountRatingSummaryData playerSummary = this.accountRatingsResource.getAccountRatingSummary(targetPublicKey58,
+				AccountRatingCategory.PLAYER.name());
+		assertEquals(1, subjectSummary.getPositiveRatingCount());
+		assertEquals(0, subjectSummary.getNegativeRatingCount());
+		assertEquals(0, playerSummary.getPositiveRatingCount());
+		assertEquals(1, playerSummary.getNegativeRatingCount());
+	}
+
+	@Test
+	public void testAuraStyleTrustPreviewUsesMintingGroupSeed() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
+			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
+			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
+		}
+
+		AccountTrustPreviewData bobPreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
+		AccountTrustPreviewData chloePreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(chloe.getPublicKey()));
+		AccountTrustPreviewData dilbertPreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(dilbert.getPublicKey()));
+		AccountTrustPreviewData alicePreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(alice.getPublicKey()));
+
+		AccountTrustPreviewData.CategoryTrust bobManager = findCategory(bobPreview, AccountRatingCategory.MANAGER);
+		assertEquals(1_000_000L, bobManager.getScore());
+		assertEquals(2, bobManager.getLevel());
+
+		AccountTrustPreviewData.CategoryTrust chloeTrainer = findCategory(chloePreview, AccountRatingCategory.TRAINER);
+		assertEquals(4_000_000L, chloeTrainer.getScore());
+		assertEquals(2, chloeTrainer.getLevel());
+
+		AccountTrustPreviewData.CategoryTrust dilbertPlayer = findCategory(dilbertPreview, AccountRatingCategory.PLAYER);
+		assertEquals(16_000_000L, dilbertPlayer.getScore());
+		assertEquals(3, dilbertPlayer.getLevel());
+
+		AccountTrustPreviewData.CategoryTrust aliceSubject = findCategory(alicePreview, AccountRatingCategory.SUBJECT);
+		assertTrue(alicePreview.isMintingSeedMember());
+		assertEquals(64_000_000L, aliceSubject.getScore());
+		assertEquals(2, aliceSubject.getLevel());
+		assertEquals(AccountTrustStatus.SILVER, alicePreview.getDerivedTrustStatus());
+		assertEquals(AccountTrustStatus.UNVERIFIED, alicePreview.getTrustStatus());
+
+		AccountTrustPreviewData.CategoryImpact subjectImpact = aliceSubject.getImpacts().get(0);
+		assertEquals(dilbert.getAddress(), subjectImpact.getRaterAddress());
+		assertEquals(3, subjectImpact.getEvaluatorLevel());
+		assertEquals(16_000_000L, subjectImpact.getEvaluatorScore());
+		assertEquals(64_000_000L, subjectImpact.getImpact());
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, -1), dilbert);
+		}
+
+		AccountTrustPreviewData negativePreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(alice.getPublicKey()));
+		AccountTrustPreviewData.CategoryTrust negativeSubject = findCategory(negativePreview, AccountRatingCategory.SUBJECT);
+		assertEquals(-64_000_000L, negativeSubject.getScore());
+		assertEquals(-1, negativeSubject.getLevel());
+		assertEquals(AccountTrustStatus.SUSPICIOUS, negativePreview.getDerivedTrustStatus());
+		assertEquals(-64_000_000L, negativeSubject.getImpacts().get(0).getImpact());
+	}
+
+	@Test
+	public void testManagerSeedEnergySplitsAcrossPositiveManagerRatings() throws DataException {
+		TestAccount bob;
+		TestAccount chloe;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
+			TransactionUtils.signAndMint(repository, ratingData(alice, chloe, AccountRatingCategory.MANAGER, 4), alice);
+		}
+
+		AccountTrustPreviewData bobPreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
+		AccountTrustPreviewData chloePreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(chloe.getPublicKey()));
+
+		AccountTrustPreviewData.CategoryTrust bobManager = findCategory(bobPreview, AccountRatingCategory.MANAGER);
+		AccountTrustPreviewData.CategoryTrust chloeManager = findCategory(chloePreview, AccountRatingCategory.MANAGER);
+
+		assertEquals(500_000L, bobManager.getScore());
+		assertEquals(500_000L, bobManager.getImpacts().get(0).getImpact());
+		assertEquals(500_000L, chloeManager.getScore());
+		assertEquals(500_000L, chloeManager.getImpacts().get(0).getImpact());
+	}
+
+	@Test
 	public void testRateAccountEndpointBuildsUnsignedTransaction() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
@@ -215,9 +339,20 @@ public class AccountRatingsApiTests extends ApiCommon {
 				() -> this.accountRatingsResource.getAccountTrustPreview("not-a-public-key"));
 	}
 
+	@Test
+	public void testInvalidCategoryFailsList() {
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountRatings(null, null, "not-a-category", null, null, null));
+	}
+
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target, int rating)
 			throws DataException {
 		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), rating);
+	}
+
+	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target,
+			AccountRatingCategory category, int rating) throws DataException {
+		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), category, rating);
 	}
 
 	private AccountTrustPreviewData.EvaluatorImpact findEvaluatorImpact(AccountTrustPreviewData preview, String raterAddress) {
@@ -225,6 +360,13 @@ public class AccountRatingsApiTests extends ApiCommon {
 				.filter(impact -> impact.getRaterAddress().equals(raterAddress))
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("Missing evaluator impact for " + raterAddress));
+	}
+
+	private AccountTrustPreviewData.CategoryTrust findCategory(AccountTrustPreviewData preview, AccountRatingCategory category) {
+		return preview.getCategories().stream()
+				.filter(categoryTrust -> categoryTrust.getCategory() == category)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing category " + category));
 	}
 
 	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {

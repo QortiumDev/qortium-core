@@ -1240,10 +1240,16 @@ public class HSQLDBDatabaseUpdates {
 							+ "PRIMARY KEY (signature, option_index), FOREIGN KEY (signature) REFERENCES UpdatePollTransactions (signature) ON DELETE CASCADE)");
 					break;
 
+				case 65:
+					// Make account trust ratings category-aware for Aura-style scoring.
+					migrateAccountRatingsToCategories(connection);
+					addColumnIfMissing(connection, "RateAccountTransactions", "category", "TINYINT DEFAULT 0 NOT NULL");
+					break;
+
 				default:
 					// nothing to do
 					return false;
-				}
+			}
 			}
 
 		// database was updated
@@ -1284,6 +1290,30 @@ public class HSQLDBDatabaseUpdates {
 					return;
 				}
 			}
+		}
+	}
+
+	private static void migrateAccountRatingsToCategories(Connection connection) throws SQLException {
+		if (columnExists(connection, "AccountRatings", "category"))
+			return;
+
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute("CREATE TABLE AccountRatingsNew (target AccountPublicKey NOT NULL, target_account AccountAddress NOT NULL, "
+					+ "rater AccountPublicKey NOT NULL, rater_account AccountAddress NOT NULL, category TINYINT NOT NULL, rating TINYINT NOT NULL, "
+					+ "PRIMARY KEY (target, rater, category))");
+			stmt.execute("INSERT INTO AccountRatingsNew (target, target_account, rater, rater_account, category, rating) "
+					+ "SELECT target, target_account, rater, rater_account, 0, rating FROM AccountRatings");
+			stmt.execute("DROP TABLE AccountRatings");
+			stmt.execute("ALTER TABLE AccountRatingsNew RENAME TO AccountRatings");
+			stmt.execute("CREATE INDEX AccountRatingsTargetIndex ON AccountRatings (target)");
+			stmt.execute("CREATE INDEX AccountRatingsRaterIndex ON AccountRatings (rater)");
+			stmt.execute("CREATE INDEX AccountRatingsCategoryIndex ON AccountRatings (category)");
+		}
+	}
+
+	private static boolean columnExists(Connection connection, String tableName, String columnName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getColumns(null, null, tableName.toUpperCase(), columnName.toUpperCase())) {
+			return resultSet.next();
 		}
 	}
 

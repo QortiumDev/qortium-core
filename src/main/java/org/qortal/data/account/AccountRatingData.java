@@ -12,6 +12,7 @@ public class AccountRatingData {
 	private String targetAddress;
 	private byte[] raterPublicKey;
 	private String raterAddress;
+	private AccountRatingCategory category;
 	private int rating;
 	private String ratingDirection;
 	private int ratingConfidence;
@@ -20,15 +21,27 @@ public class AccountRatingData {
 	}
 
 	public AccountRatingData(byte[] targetPublicKey, byte[] raterPublicKey, int rating) {
-		this(targetPublicKey, Crypto.toAddress(targetPublicKey), raterPublicKey, Crypto.toAddress(raterPublicKey), rating);
+		this(targetPublicKey, Crypto.toAddress(targetPublicKey), raterPublicKey, Crypto.toAddress(raterPublicKey),
+				AccountRatingCategory.SUBJECT, rating);
+	}
+
+	public AccountRatingData(byte[] targetPublicKey, byte[] raterPublicKey, AccountRatingCategory category, int rating) {
+		this(targetPublicKey, Crypto.toAddress(targetPublicKey), raterPublicKey, Crypto.toAddress(raterPublicKey),
+				category, rating);
 	}
 
 	public AccountRatingData(byte[] targetPublicKey, String targetAddress, byte[] raterPublicKey, String raterAddress,
 			int rating) {
+		this(targetPublicKey, targetAddress, raterPublicKey, raterAddress, AccountRatingCategory.SUBJECT, rating);
+	}
+
+	public AccountRatingData(byte[] targetPublicKey, String targetAddress, byte[] raterPublicKey, String raterAddress,
+			AccountRatingCategory category, int rating) {
 		this.targetPublicKey = targetPublicKey;
 		this.targetAddress = targetAddress;
 		this.raterPublicKey = raterPublicKey;
 		this.raterAddress = raterAddress;
+		this.category = category == null ? AccountRatingCategory.SUBJECT : category;
 		this.rating = rating;
 		this.ratingDirection = AccountRating.getDirection(rating);
 		this.ratingConfidence = AccountRating.getConfidence(rating);
@@ -48,6 +61,14 @@ public class AccountRatingData {
 
 	public String getRaterAddress() {
 		return this.raterAddress;
+	}
+
+	public AccountRatingCategory getCategory() {
+		return this.category == null ? AccountRatingCategory.SUBJECT : this.category;
+	}
+
+	public int getCategoryValue() {
+		return getCategory().value;
 	}
 
 	public int getRating() {

@@ -5,6 +5,7 @@ import org.qortal.asset.Asset;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRating;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -46,6 +47,10 @@ public class RateAccountTransaction extends Transaction {
 		if (!AccountRating.isValid(rating))
 			return ValidationResult.INVALID_ACCOUNT_RATING;
 
+		AccountRatingCategory category = this.rateAccountTransactionData.getCategory();
+		if (category == null)
+			return ValidationResult.INVALID_ACCOUNT_RATING;
+
 		byte[] targetPublicKey = this.rateAccountTransactionData.getTargetPublicKey();
 		if (!isPublicKeyLengthValid(targetPublicKey))
 			return ValidationResult.INVALID_PUBLIC_KEY;
@@ -60,7 +65,7 @@ public class RateAccountTransaction extends Transaction {
 				|| !Arrays.equals(targetPublicKey, targetAccountData.getPublicKey()))
 			return ValidationResult.PUBLIC_KEY_UNKNOWN;
 
-		AccountRatingData existingRating = this.repository.getAccountRatingRepository().getRating(targetPublicKey, raterPublicKey);
+		AccountRatingData existingRating = this.repository.getAccountRatingRepository().getRating(targetPublicKey, raterPublicKey, category);
 		if (existingRating == null && rating == AccountRating.NO_RATING)
 			return ValidationResult.ACCOUNT_RATING_UNCHANGED;
 
@@ -78,37 +83,39 @@ public class RateAccountTransaction extends Transaction {
 	public void process() throws DataException {
 		byte[] targetPublicKey = this.rateAccountTransactionData.getTargetPublicKey();
 		byte[] raterPublicKey = this.rateAccountTransactionData.getRaterPublicKey();
+		AccountRatingCategory category = this.rateAccountTransactionData.getCategory();
 		int rating = this.rateAccountTransactionData.getRating();
 
 		AccountRatingRepository accountRatingRepository = this.repository.getAccountRatingRepository();
-		AccountRatingData previousRatingData = accountRatingRepository.getRating(targetPublicKey, raterPublicKey);
+		AccountRatingData previousRatingData = accountRatingRepository.getRating(targetPublicKey, raterPublicKey, category);
 		if (previousRatingData != null)
 			this.rateAccountTransactionData.setPreviousRating(previousRatingData.getRating());
 
 		this.repository.getTransactionRepository().save(this.rateAccountTransactionData);
 
 		if (rating == AccountRating.NO_RATING) {
-			accountRatingRepository.delete(targetPublicKey, raterPublicKey);
+			accountRatingRepository.delete(targetPublicKey, raterPublicKey, category);
 			return;
 		}
 
-		accountRatingRepository.save(new AccountRatingData(targetPublicKey, raterPublicKey, rating));
+		accountRatingRepository.save(new AccountRatingData(targetPublicKey, raterPublicKey, category, rating));
 	}
 
 	@Override
 	public void orphan() throws DataException {
 		byte[] targetPublicKey = this.rateAccountTransactionData.getTargetPublicKey();
 		byte[] raterPublicKey = this.rateAccountTransactionData.getRaterPublicKey();
+		AccountRatingCategory category = this.rateAccountTransactionData.getCategory();
 		AccountRatingRepository accountRatingRepository = this.repository.getAccountRatingRepository();
 
 		Integer previousRating = this.rateAccountTransactionData.getPreviousRating();
 		if (previousRating != null) {
 			if (AccountRating.isActive(previousRating))
-				accountRatingRepository.save(new AccountRatingData(targetPublicKey, raterPublicKey, previousRating));
+				accountRatingRepository.save(new AccountRatingData(targetPublicKey, raterPublicKey, category, previousRating));
 			else
-				accountRatingRepository.delete(targetPublicKey, raterPublicKey);
+				accountRatingRepository.delete(targetPublicKey, raterPublicKey, category);
 		} else {
-			accountRatingRepository.delete(targetPublicKey, raterPublicKey);
+			accountRatingRepository.delete(targetPublicKey, raterPublicKey, category);
 		}
 
 		this.rateAccountTransactionData.setPreviousRating(null);

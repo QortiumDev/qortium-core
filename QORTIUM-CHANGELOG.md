@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: add aura-style trust derivation preview
+
+Added category-aware account ratings and a read-only Aura-style trust derivation preview. Account ratings can now be recorded separately for Subject, Player, Trainer, and Manager trust, while the preview uses current minting-group members as the starting seed, splits a seed account's positive Manager influence across its outgoing Manager ratings, and derives manager, trainer, player, and subject scores without changing stored trust status, minting eligibility, poll voting weight, or resource-rating weight. This lets Qortium inspect the graph-based trust model before deciding whether derived trust should affect consensus behavior.
+
 ### 2026-05-13 - core: use aura-style account rating confidence
 
 Changed account ratings to use Aura-style signed confidence values instead of the earlier Trusted, Known, and Untrusted labels. Accounts can now record positive or negative confidence from 1 through 4, use 0 to remove an active rating, and the trust preview now shows confidence distributions plus evaluator impact based on each rater's current trust status and effective vote weight, without changing stored trust status, minting eligibility, or governance weight.

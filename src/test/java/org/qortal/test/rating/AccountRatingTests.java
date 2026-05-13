@@ -4,6 +4,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.data.account.AccountRatingData;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountRating;
 import org.qortal.data.transaction.RateAccountTransactionData;
@@ -60,6 +61,8 @@ public class AccountRatingTests extends Common {
 					Transaction.fromData(repository, ratingData(alice, bob, -2)).isValid());
 			assertEquals(Transaction.ValidationResult.OK,
 					Transaction.fromData(repository, ratingData(alice, bob, AccountRating.NO_RATING)).isValid());
+			assertEquals(Transaction.ValidationResult.OK,
+					Transaction.fromData(repository, ratingData(alice, bob, AccountRatingCategory.PLAYER, 4)).isValid());
 		}
 	}
 
@@ -136,9 +139,46 @@ public class AccountRatingTests extends Common {
 		}
 	}
 
+	@Test
+	public void testCategoryRatingsAreIndependent() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.SUBJECT, 4), alice);
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.PLAYER, -2), alice);
+
+			assertActiveRating(repository, bob, alice, AccountRatingCategory.SUBJECT, 4);
+			assertActiveRating(repository, bob, alice, AccountRatingCategory.PLAYER, -2);
+			assertEquals(2, repository.getAccountRatingRepository()
+					.getRatings(bob.getPublicKey(), alice.getPublicKey(), null, null, null, null).size());
+			assertEquals(1, repository.getAccountRatingRepository()
+					.getRatings(bob.getPublicKey(), alice.getPublicKey(), AccountRatingCategory.PLAYER, null, null, null).size());
+
+			AccountRatingSummaryData subjectSummary = repository.getAccountRatingRepository()
+					.getRatingSummary(bob.getPublicKey(), bob.getAddress(), AccountRatingCategory.SUBJECT);
+			AccountRatingSummaryData playerSummary = repository.getAccountRatingRepository()
+					.getRatingSummary(bob.getPublicKey(), bob.getAddress(), AccountRatingCategory.PLAYER);
+			assertEquals(1, subjectSummary.getPositiveRatingCount());
+			assertEquals(0, subjectSummary.getNegativeRatingCount());
+			assertEquals(0, playerSummary.getPositiveRatingCount());
+			assertEquals(1, playerSummary.getNegativeRatingCount());
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.PLAYER, AccountRating.NO_RATING), alice);
+			assertActiveRating(repository, bob, alice, AccountRatingCategory.SUBJECT, 4);
+			assertNull(repository.getAccountRatingRepository().getRating(bob.getPublicKey(), alice.getPublicKey(),
+					AccountRatingCategory.PLAYER));
+		}
+	}
+
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target, int rating)
 			throws DataException {
 		return ratingData(rater, target.getPublicKey(), rating);
+	}
+
+	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target,
+			AccountRatingCategory category, int rating) throws DataException {
+		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), category, rating);
 	}
 
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, byte[] targetPublicKey, int rating) throws DataException {
@@ -147,9 +187,16 @@ public class AccountRatingTests extends Common {
 
 	private void assertActiveRating(Repository repository, PrivateKeyAccount target, PrivateKeyAccount rater,
 			int expectedRating) throws DataException {
-		AccountRatingData activeRating = repository.getAccountRatingRepository().getRating(target.getPublicKey(), rater.getPublicKey());
+		assertActiveRating(repository, target, rater, AccountRatingCategory.SUBJECT, expectedRating);
+	}
+
+	private void assertActiveRating(Repository repository, PrivateKeyAccount target, PrivateKeyAccount rater,
+			AccountRatingCategory category, int expectedRating) throws DataException {
+		AccountRatingData activeRating = repository.getAccountRatingRepository().getRating(target.getPublicKey(), rater.getPublicKey(),
+				category);
 
 		assertEquals(expectedRating, activeRating.getRating());
+		assertEquals(category, activeRating.getCategory());
 		assertEquals(AccountRating.getDirection(expectedRating), activeRating.getRatingDirection());
 		assertEquals(AccountRating.getConfidence(expectedRating), activeRating.getRatingConfidence());
 	}

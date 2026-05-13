@@ -1,6 +1,7 @@
 package org.qortal.repository;
 
 import org.qortal.data.account.AccountRatingData;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingSummaryData;
 
 import java.util.List;
@@ -9,13 +10,22 @@ public interface AccountRatingRepository {
 
 	public AccountRatingData getRating(byte[] targetPublicKey, byte[] raterPublicKey) throws DataException;
 
+	public AccountRatingData getRating(byte[] targetPublicKey, byte[] raterPublicKey, AccountRatingCategory category) throws DataException;
+
 	public void save(AccountRatingData accountRatingData) throws DataException;
 
 	public void delete(byte[] targetPublicKey, byte[] raterPublicKey) throws DataException;
 
+	public void delete(byte[] targetPublicKey, byte[] raterPublicKey, AccountRatingCategory category) throws DataException;
+
 	public AccountRatingSummaryData getRatingSummary(byte[] targetPublicKey, String targetAddress) throws DataException;
 
+	public AccountRatingSummaryData getRatingSummary(byte[] targetPublicKey, String targetAddress, AccountRatingCategory category) throws DataException;
+
 	public List<AccountRatingData> getRatings(byte[] targetPublicKey, byte[] raterPublicKey,
+			Integer limit, Integer offset, Boolean reverse) throws DataException;
+
+	public List<AccountRatingData> getRatings(byte[] targetPublicKey, byte[] raterPublicKey, AccountRatingCategory category,
 			Integer limit, Integer offset, Boolean reverse) throws DataException;
 
 }

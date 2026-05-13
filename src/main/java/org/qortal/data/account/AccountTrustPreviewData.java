@@ -22,6 +22,11 @@ public class AccountTrustPreviewData {
 	private int negativeScore;
 	private int netScore;
 	private List<EvaluatorImpact> evaluatorImpacts;
+	private AccountTrustStatus derivedTrustStatus;
+	private int derivedTrustStatusValue;
+	private int derivedTrustWeightPercent;
+	private boolean mintingSeedMember;
+	private List<CategoryTrust> categories;
 
 	protected AccountTrustPreviewData() {
 	}
@@ -35,13 +40,27 @@ public class AccountTrustPreviewData {
 	public AccountTrustPreviewData(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
 			RatingCounts inboundRatings, RatingCounts outboundRatings, int mutualPositiveCount,
 			List<EvaluatorImpact> evaluatorImpacts) {
+		this(targetPublicKey, targetAddress, trustStatus, inboundRatings, outboundRatings, mutualPositiveCount,
+				evaluatorImpacts, null, false, null);
+	}
+
+	public AccountTrustPreviewData(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
+			RatingCounts inboundRatings, RatingCounts outboundRatings, int mutualPositiveCount,
+			List<EvaluatorImpact> evaluatorImpacts, AccountTrustStatus derivedTrustStatus, boolean mintingSeedMember,
+			List<CategoryTrust> categories) {
 		AccountTrustStatus storedTrustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
+		AccountTrustStatus effectiveDerivedTrustStatus = derivedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : derivedTrustStatus;
 
 		this.targetPublicKey = targetPublicKey;
 		this.targetAddress = targetAddress;
 		this.trustStatus = storedTrustStatus;
 		this.trustStatusValue = storedTrustStatus.getValue();
 		this.trustWeightPercent = storedTrustStatus.getVoteWeightPercent();
+		this.derivedTrustStatus = effectiveDerivedTrustStatus;
+		this.derivedTrustStatusValue = effectiveDerivedTrustStatus.getValue();
+		this.derivedTrustWeightPercent = effectiveDerivedTrustStatus.getVoteWeightPercent();
+		this.mintingSeedMember = mintingSeedMember;
+		this.categories = categories == null ? new ArrayList<>() : categories;
 		this.inboundRatings = inboundRatings == null ? new RatingCounts() : inboundRatings;
 		this.outboundRatings = outboundRatings == null ? new RatingCounts() : outboundRatings;
 		this.mutualPositiveCount = mutualPositiveCount;
@@ -127,6 +146,26 @@ public class AccountTrustPreviewData {
 
 	public List<EvaluatorImpact> getEvaluatorImpacts() {
 		return this.evaluatorImpacts;
+	}
+
+	public AccountTrustStatus getDerivedTrustStatus() {
+		return this.derivedTrustStatus;
+	}
+
+	public int getDerivedTrustStatusValue() {
+		return this.derivedTrustStatusValue;
+	}
+
+	public int getDerivedTrustWeightPercent() {
+		return this.derivedTrustWeightPercent;
+	}
+
+	public boolean isMintingSeedMember() {
+		return this.mintingSeedMember;
+	}
+
+	public List<CategoryTrust> getCategories() {
+		return this.categories;
 	}
 
 	@XmlAccessorType(XmlAccessType.FIELD)
@@ -305,6 +344,120 @@ public class AccountTrustPreviewData {
 		}
 
 		public int getImpact() {
+			return this.impact;
+		}
+	}
+
+	@XmlAccessorType(XmlAccessType.FIELD)
+	public static class CategoryTrust {
+		private AccountRatingCategory category;
+		private long score;
+		private int level;
+		private AccountTrustStatus mappedTrustStatus;
+		private int mappedTrustStatusValue;
+		private RatingCounts inboundRatings;
+		private List<CategoryImpact> impacts;
+
+		protected CategoryTrust() {
+		}
+
+		public CategoryTrust(AccountRatingCategory category, long score, int level, AccountTrustStatus mappedTrustStatus,
+				RatingCounts inboundRatings, List<CategoryImpact> impacts) {
+			AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
+
+			this.category = category == null ? AccountRatingCategory.SUBJECT : category;
+			this.score = score;
+			this.level = level;
+			this.mappedTrustStatus = effectiveMappedStatus;
+			this.mappedTrustStatusValue = effectiveMappedStatus.getValue();
+			this.inboundRatings = inboundRatings == null ? new RatingCounts() : inboundRatings;
+			this.impacts = impacts == null ? new ArrayList<>() : impacts;
+		}
+
+		public AccountRatingCategory getCategory() {
+			return this.category;
+		}
+
+		public long getScore() {
+			return this.score;
+		}
+
+		public int getLevel() {
+			return this.level;
+		}
+
+		public AccountTrustStatus getMappedTrustStatus() {
+			return this.mappedTrustStatus;
+		}
+
+		public int getMappedTrustStatusValue() {
+			return this.mappedTrustStatusValue;
+		}
+
+		public RatingCounts getInboundRatings() {
+			return this.inboundRatings;
+		}
+
+		public List<CategoryImpact> getImpacts() {
+			return this.impacts;
+		}
+	}
+
+	@XmlAccessorType(XmlAccessType.FIELD)
+	public static class CategoryImpact {
+		private byte[] raterPublicKey;
+		private String raterAddress;
+		private int evaluatorLevel;
+		private long evaluatorScore;
+		private int rating;
+		private String ratingDirection;
+		private int ratingConfidence;
+		private long impact;
+
+		protected CategoryImpact() {
+		}
+
+		public CategoryImpact(byte[] raterPublicKey, String raterAddress, int evaluatorLevel, long evaluatorScore,
+				int rating, long impact) {
+			this.raterPublicKey = raterPublicKey;
+			this.raterAddress = raterAddress;
+			this.evaluatorLevel = evaluatorLevel;
+			this.evaluatorScore = evaluatorScore;
+			this.rating = rating;
+			this.ratingDirection = AccountRating.getDirection(rating);
+			this.ratingConfidence = AccountRating.getConfidence(rating);
+			this.impact = impact;
+		}
+
+		public byte[] getRaterPublicKey() {
+			return this.raterPublicKey;
+		}
+
+		public String getRaterAddress() {
+			return this.raterAddress;
+		}
+
+		public int getEvaluatorLevel() {
+			return this.evaluatorLevel;
+		}
+
+		public long getEvaluatorScore() {
+			return this.evaluatorScore;
+		}
+
+		public int getRating() {
+			return this.rating;
+		}
+
+		public String getRatingDirection() {
+			return this.ratingDirection;
+		}
+
+		public int getRatingConfidence() {
+			return this.ratingConfidence;
+		}
+
+		public long getImpact() {
 			return this.impact;
 		}
 	}

@@ -147,13 +147,21 @@ The current implementation layer adds a decentralized trust preview:
 
 - the preview uses only active on-chain `RATE_ACCOUNT` edges
 - the preview is exposed through `GET /account-ratings/trust-preview`
-- no account, admin group, imported snapshot, or external credential receives a
-  privileged starting position
-- the preview exposes inbound confidence counts, outbound confidence counts,
-  mutual positive relationships, evaluator impacts, and simple diagnostic scores
-- the diagnostic score uses inbound positive ratings as positive evidence,
-  inbound negative ratings as stronger negative evidence, and each evaluator's
-  current trust-tier effective vote weight as the input weight
+- account ratings are category-aware, using Aura-style Subject, Player,
+  Trainer, and Manager categories
+- current minting-group members are the decentralized seed set for the preview
+  instead of Aura's hardcoded team-owner seed
+- a seed account's positive Manager influence is divided across that account's
+  outgoing positive Manager ratings by confidence, preserving the budget-like
+  behavior that limits unlimited positive boosting in Aura's manager layer
+- the preview derives Manager, Trainer, Player, and Subject scores in sequence:
+  minting seed weight feeds Manager ratings, Manager score feeds Trainer
+  ratings, Trainer score feeds Player ratings, and Player score feeds Subject
+  ratings
+- the Subject level is mapped back to Qortium's simple Gold, Silver, Bronze,
+  Unverified, and Suspicious statuses as a preview-only derived status
+- the older inbound/outbound confidence counts, mutual positive relationships,
+  and stored-status evaluator impacts are still exposed for audit context
 - the preview does not change stored trust status, minting eligibility, poll
   vote weight, or resource-rating weight
 

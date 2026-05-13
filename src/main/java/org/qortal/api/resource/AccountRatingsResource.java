@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.qortal.account.AccountTrustDerivation;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiException;
@@ -15,6 +16,7 @@ import org.qortal.api.ApiExceptionFactory;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRating;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustPreviewData;
@@ -68,19 +70,26 @@ public class AccountRatingsResource {
 	public List<AccountRatingData> getAccountRatings(
 			@Parameter(description = "Optional target account public key in Base58") @QueryParam("target") String targetPublicKey58,
 			@Parameter(description = "Optional rater account public key in Base58") @QueryParam("rater") String raterPublicKey58,
+			@Parameter(description = "Optional account rating category: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName,
 			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
 			@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
 			@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			byte[] targetPublicKey = parseOptionalPublicKey(targetPublicKey58);
 			byte[] raterPublicKey = parseOptionalPublicKey(raterPublicKey58);
+			AccountRatingCategory category = parseOptionalCategory(categoryName);
 
-			return repository.getAccountRatingRepository().getRatings(targetPublicKey, raterPublicKey, limit, offset, reverse);
+			return repository.getAccountRatingRepository().getRatings(targetPublicKey, raterPublicKey, category, limit, offset, reverse);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
+	}
+
+	public List<AccountRatingData> getAccountRatings(String targetPublicKey58, String raterPublicKey58,
+			Integer limit, Integer offset, Boolean reverse) {
+		return getAccountRatings(targetPublicKey58, raterPublicKey58, null, limit, offset, reverse);
 	}
 
 	@GET
@@ -99,17 +108,23 @@ public class AccountRatingsResource {
 	)
 	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
 	public AccountRatingSummaryData getAccountRatingSummary(
-			@Parameter(description = "Target account public key in Base58") @QueryParam("target") String targetPublicKey58) {
+			@Parameter(description = "Target account public key in Base58") @QueryParam("target") String targetPublicKey58,
+			@Parameter(description = "Optional account rating category: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			byte[] targetPublicKey = requireKnownPublicKey(repository, targetPublicKey58);
 			String targetAddress = Crypto.toAddress(targetPublicKey);
+			AccountRatingCategory category = parseOptionalCategory(categoryName);
 
-			return repository.getAccountRatingRepository().getRatingSummary(targetPublicKey, targetAddress);
+			return repository.getAccountRatingRepository().getRatingSummary(targetPublicKey, targetAddress, category);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
+	}
+
+	public AccountRatingSummaryData getAccountRatingSummary(String targetPublicKey58) {
+		return getAccountRatingSummary(targetPublicKey58, null);
 	}
 
 	@GET
@@ -137,11 +152,12 @@ public class AccountRatingsResource {
 			AccountTrustStatus trustStatus = targetAccountData == null ? AccountTrustStatus.UNVERIFIED : targetAccountData.getTrustStatus();
 
 			List<AccountRatingData> inboundRatings = repository.getAccountRatingRepository()
-					.getRatings(targetPublicKey, null, null, null, null);
+					.getRatings(targetPublicKey, null, AccountRatingCategory.SUBJECT, null, null, null);
 			List<AccountRatingData> outboundRatings = repository.getAccountRatingRepository()
-					.getRatings(null, targetPublicKey, null, null, null);
+					.getRatings(null, targetPublicKey, AccountRatingCategory.SUBJECT, null, null, null);
+			AccountTrustDerivation.Result derivation = AccountTrustDerivation.derive(repository, targetAddress);
 
-			return buildTrustPreview(repository, targetPublicKey, targetAddress, trustStatus, inboundRatings, outboundRatings);
+			return buildTrustPreview(repository, targetPublicKey, targetAddress, trustStatus, inboundRatings, outboundRatings, derivation);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -193,7 +209,8 @@ public class AccountRatingsResource {
 	}
 
 	private AccountTrustPreviewData buildTrustPreview(Repository repository, byte[] targetPublicKey, String targetAddress,
-			AccountTrustStatus trustStatus, List<AccountRatingData> inboundRatings, List<AccountRatingData> outboundRatings)
+			AccountTrustStatus trustStatus, List<AccountRatingData> inboundRatings, List<AccountRatingData> outboundRatings,
+			AccountTrustDerivation.Result derivation)
 			throws DataException {
 		AccountTrustPreviewData.RatingCounts inboundCounts = new AccountTrustPreviewData.RatingCounts();
 		AccountTrustPreviewData.RatingCounts outboundCounts = new AccountTrustPreviewData.RatingCounts();
@@ -225,7 +242,8 @@ public class AccountRatingsResource {
 				.thenComparing(AccountTrustPreviewData.EvaluatorImpact::getRaterAddress));
 
 		return new AccountTrustPreviewData(targetPublicKey, targetAddress, trustStatus, inboundCounts, outboundCounts,
-				mutualPositiveCount, evaluatorImpacts);
+				mutualPositiveCount, evaluatorImpacts, derivation.getDerivedTrustStatus(), derivation.isMintingSeedMember(),
+				derivation.getCategories());
 	}
 
 	private AccountTrustPreviewData.EvaluatorImpact buildEvaluatorImpact(Repository repository, AccountRatingData ratingData)
@@ -267,6 +285,14 @@ public class AccountRatingsResource {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PUBLIC_KEY);
 
 		return publicKey;
+	}
+
+	private AccountRatingCategory parseOptionalCategory(String categoryName) {
+		AccountRatingCategory category = AccountRatingCategory.parse(categoryName);
+		if (categoryName != null && !categoryName.trim().isEmpty() && category == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		return category;
 	}
 
 	private byte[] requireKnownPublicKey(Repository repository, String publicKey58) throws DataException {

@@ -40,19 +40,38 @@ public final class AccountRating {
 	}
 
 	public static int calculateImpact(int rating, int evaluatorWeight) {
+		return saturatedInt(calculateImpactLong(rating, evaluatorWeight));
+	}
+
+	public static long calculateImpactLong(int rating, long evaluatorWeight) {
 		if (!isActive(rating) || evaluatorWeight <= 0)
 			return 0;
 
-		long impact = (long) evaluatorWeight * rating;
+		long multiplier = rating;
 		if (isNegative(rating))
-			impact *= 4L;
+			multiplier *= 4L;
 
-		if (impact > Integer.MAX_VALUE)
+		return saturatedMultiply(evaluatorWeight, multiplier);
+	}
+
+	public static long saturatedMultiply(long left, long right) {
+		if (left == 0L || right == 0L)
+			return 0L;
+
+		long result = left * right;
+		if (result / right == left)
+			return result;
+
+		return (left > 0L) == (right > 0L) ? Long.MAX_VALUE : Long.MIN_VALUE;
+	}
+
+	private static int saturatedInt(long value) {
+		if (value > Integer.MAX_VALUE)
 			return Integer.MAX_VALUE;
 
-		if (impact < Integer.MIN_VALUE)
+		if (value < Integer.MIN_VALUE)
 			return Integer.MIN_VALUE;
 
-		return (int) impact;
+		return (int) value;
 	}
 }

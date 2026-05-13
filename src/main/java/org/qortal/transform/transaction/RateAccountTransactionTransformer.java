@@ -2,6 +2,7 @@ package org.qortal.transform.transaction;
 
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -16,9 +17,10 @@ import java.nio.ByteBuffer;
 public class RateAccountTransactionTransformer extends TransactionTransformer {
 
 	private static final int TARGET_PUBLIC_KEY_LENGTH = PUBLIC_KEY_LENGTH;
+	private static final int CATEGORY_LENGTH = INT_LENGTH;
 	private static final int RATING_LENGTH = INT_LENGTH;
 
-	private static final int EXTRAS_LENGTH = TARGET_PUBLIC_KEY_LENGTH + RATING_LENGTH;
+	private static final int EXTRAS_LENGTH = TARGET_PUBLIC_KEY_LENGTH + CATEGORY_LENGTH + RATING_LENGTH;
 
 	protected static final TransactionLayout layout;
 
@@ -30,6 +32,7 @@ public class RateAccountTransactionTransformer extends TransactionTransformer {
 		layout.add("rater's public key", TransformationType.PUBLIC_KEY);
 		addMempowFeeNonceToLayout(layout, TransactionType.RATE_ACCOUNT);
 		layout.add("target account public key", TransformationType.PUBLIC_KEY);
+		layout.add("account rating category", TransformationType.INT);
 		layout.add("rating", TransformationType.INT);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
@@ -44,6 +47,10 @@ public class RateAccountTransactionTransformer extends TransactionTransformer {
 		Integer nonce = deserializeMempowFeeNonce(byteBuffer, TransactionType.RATE_ACCOUNT);
 
 		byte[] targetPublicKey = Serialization.deserializePublicKey(byteBuffer);
+		AccountRatingCategory category = AccountRatingCategory.valueOf(byteBuffer.getInt());
+		if (category == null)
+			throw new TransformationException("Invalid account rating category");
+
 		int rating = byteBuffer.getInt();
 
 		long fee = byteBuffer.getLong();
@@ -53,7 +60,7 @@ public class RateAccountTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, raterPublicKey, fee, nonce, signature);
 
-		return new RateAccountTransactionData(baseTransactionData, targetPublicKey, rating);
+		return new RateAccountTransactionData(baseTransactionData, targetPublicKey, category, rating);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
@@ -69,6 +76,7 @@ public class RateAccountTransactionTransformer extends TransactionTransformer {
 			transformCommonBytes(transactionData, bytes);
 
 			bytes.write(rateAccountTransactionData.getTargetPublicKey());
+			bytes.write(Ints.toByteArray(rateAccountTransactionData.getCategoryValue()));
 			bytes.write(Ints.toByteArray(rateAccountTransactionData.getRating()));
 
 			bytes.write(Longs.toByteArray(rateAccountTransactionData.getFee()));
