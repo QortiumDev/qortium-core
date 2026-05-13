@@ -92,6 +92,26 @@ public class PollsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testGetPollById() throws DataException {
+		PollData pollData;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "poll-id-api-test";
+			createTestPoll(repository, pollName);
+			pollData = repository.getVotingRepository().fromPollName(pollName);
+		}
+
+		PollData response = this.pollsResource.getPollDataById(pollData.getPollId());
+
+		assertEquals(pollData.getPollId(), response.getPollId());
+		assertEquals(pollData.getPollName(), response.getPollName());
+	}
+
+	@Test
+	public void testGetPollByIdRejectsMissingPoll() {
+		assertApiError(ApiError.POLL_NO_EXISTS, () -> this.pollsResource.getPollDataById(Integer.MAX_VALUE));
+	}
+
+	@Test
 	public void testGetPollVotesIncludesVoterAddress() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			String pollName = "poll-voter-address-test";
@@ -114,6 +134,28 @@ public class PollsApiTests extends ApiCommon {
 			assertNull(countsOnlyResponse.votes);
 			assertEquals(Integer.valueOf(1), countsOnlyResponse.totalVotes);
 		}
+	}
+
+	@Test
+	public void testGetPollVotesByIdMatchesNameLookup() throws DataException {
+		PollData pollData;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "poll-votes-by-id-test";
+			createTestPoll(repository, pollName);
+			pollData = repository.getVotingRepository().fromPollName(pollName);
+
+			VoteOnPollData vote = new VoteOnPollData(pollName, Common.getTestAccount(repository, "alice").getPublicKey(), 1);
+			repository.getVotingRepository().save(vote);
+			repository.saveChanges();
+		}
+
+		PollVotes byName = this.pollsResource.getPollVotes(pollData.getPollName(), true);
+		PollVotes byId = this.pollsResource.getPollVotesById(pollData.getPollId(), true);
+
+		assertEquals(byName.totalVotes, byId.totalVotes);
+		assertEquals(byName.totalWeight, byId.totalWeight);
+		assertEquals(byName.rawTotalWeight, byId.rawTotalWeight);
+		assertEquals(findOptionWeight(byName.voteWeights, "1"), findOptionWeight(byId.voteWeights, "1"));
 	}
 
 	@Test

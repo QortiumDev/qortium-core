@@ -314,7 +314,7 @@ public class HSQLDBDatabaseUpdates {
 
 				case 9:
 					// Polls/voting
-					stmt.execute("CREATE TABLE Polls (poll_name PollName, creator AccountPublicKey NOT NULL, "
+					stmt.execute("CREATE TABLE Polls (poll_id INTEGER, poll_name PollName, creator AccountPublicKey NOT NULL, "
 							+ "owner AccountAddress NOT NULL, published_when EpochMillis NOT NULL, "
 							+ "description GenericDescription NOT NULL, "
 							+ "reduced_poll_name PollName NOT NULL, "
@@ -332,7 +332,7 @@ public class HSQLDBDatabaseUpdates {
 
 					// Create Poll Transactions
 					stmt.execute("CREATE TABLE CreatePollTransactions (signature Signature, creator AccountPublicKey NOT NULL, owner AccountAddress NOT NULL, "
-							+ "poll_name PollName NOT NULL, description GenericDescription NOT NULL, " + TRANSACTION_KEYS + ")");
+							+ "poll_name PollName NOT NULL, description GenericDescription NOT NULL, poll_id INTEGER, " + TRANSACTION_KEYS + ")");
 
 					// Poll options. NB: option is implicitly NON NULL and UNIQUE due to being part of compound primary key
 					stmt.execute("CREATE TABLE CreatePollTransactionOptions (signature Signature, option_index PollOptionIndex NOT NULL, option_name PollOption, "
@@ -1200,6 +1200,19 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE INDEX PollEndTimeIndex ON Polls (end_when, poll_name)");
 					break;
 
+				case 61:
+					// Add numeric poll IDs for stable, efficient poll lookup.
+					addColumnIfMissing(connection, "Polls", "poll_id", "INTEGER");
+					backfillPollIds(connection);
+					stmt.execute("CREATE UNIQUE INDEX PollIdIndex ON Polls (poll_id)");
+					stmt.execute("CREATE TRIGGER Poll_ID_Trigger BEFORE INSERT ON Polls "
+							+ "REFERENCING NEW ROW AS new_row FOR EACH ROW WHEN (new_row.poll_id IS NULL) "
+							+ "SET new_row.poll_id = (SELECT IFNULL(MAX(poll_id) + 1, 1) FROM Polls)");
+
+					addColumnIfMissing(connection, "CreatePollTransactions", "poll_id", "INTEGER");
+					backfillCreatePollTransactionPollIds(connection);
+					break;
+
 				default:
 					// nothing to do
 					return false;
@@ -1242,6 +1255,49 @@ public class HSQLDBDatabaseUpdates {
 
 				updateStatement.setString(1, Unicode.sanitize(pollName));
 				updateStatement.setString(2, pollName);
+				updateStatement.addBatch();
+			}
+
+			updateStatement.executeBatch();
+		}
+	}
+
+	private static void backfillPollIds(Connection connection) throws SQLException {
+		int nextPollId = fetchNextPollId(connection);
+
+		try (Statement selectStatement = connection.createStatement();
+				ResultSet resultSet = selectStatement.executeQuery("SELECT poll_name FROM Polls WHERE poll_id IS NULL ORDER BY published_when, poll_name");
+				PreparedStatement updateStatement = connection.prepareStatement("UPDATE Polls SET poll_id = ? WHERE poll_name = ?")) {
+			while (resultSet.next()) {
+				updateStatement.setInt(1, nextPollId++);
+				updateStatement.setString(2, resultSet.getString(1));
+				updateStatement.addBatch();
+			}
+
+			updateStatement.executeBatch();
+		}
+	}
+
+	private static int fetchNextPollId(Connection connection) throws SQLException {
+		try (Statement statement = connection.createStatement();
+				ResultSet resultSet = statement.executeQuery("SELECT IFNULL(MAX(poll_id), 0) + 1 FROM Polls")) {
+			resultSet.next();
+			return resultSet.getInt(1);
+		}
+	}
+
+	private static void backfillCreatePollTransactionPollIds(Connection connection) throws SQLException {
+		try (Statement selectStatement = connection.createStatement();
+				ResultSet resultSet = selectStatement.executeQuery("SELECT CreatePollTransactions.signature, Polls.poll_id "
+						+ "FROM CreatePollTransactions JOIN Polls ON Polls.poll_name = CreatePollTransactions.poll_name "
+						+ "WHERE CreatePollTransactions.poll_id IS NULL");
+				PreparedStatement updateStatement = connection.prepareStatement("UPDATE CreatePollTransactions SET poll_id = ? WHERE signature = ?")) {
+			while (resultSet.next()) {
+				byte[] signature = resultSet.getBytes(1);
+				int pollId = resultSet.getInt(2);
+
+				updateStatement.setInt(1, pollId);
+				updateStatement.setBytes(2, signature);
 				updateStatement.addBatch();
 			}
 

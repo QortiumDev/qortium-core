@@ -56,6 +56,10 @@ public class Poll {
 		this.pollData = this.repository.getVotingRepository().fromPollName(pollName);
 	}
 
+	public PollData getPollData() {
+		return this.pollData;
+	}
+
 	// Processing
 
 	/**

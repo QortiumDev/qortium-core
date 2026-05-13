@@ -5,6 +5,7 @@ import java.util.List;
 public class PollData {
 
 	// Properties
+	private Integer pollId;
 	private byte[] creatorPublicKey;
 	private String owner;
 	private String pollName;
@@ -25,6 +26,11 @@ public class PollData {
 	}
 
 	public PollData(byte[] creatorPublicKey, String owner, String pollName, String description, List<PollOptionData> pollOptions, long published, Long endTime) {
+		this(null, creatorPublicKey, owner, pollName, description, pollOptions, published, endTime);
+	}
+
+	public PollData(Integer pollId, byte[] creatorPublicKey, String owner, String pollName, String description, List<PollOptionData> pollOptions, long published, Long endTime) {
+		this.pollId = pollId;
 		this.creatorPublicKey = creatorPublicKey;
 		this.owner = owner;
 		this.pollName = pollName;
@@ -35,6 +41,14 @@ public class PollData {
 	}
 
 	// Getters/setters
+
+	public Integer getPollId() {
+		return this.pollId;
+	}
+
+	public void setPollId(Integer pollId) {
+		this.pollId = pollId;
+	}
 
 	public byte[] getCreatorPublicKey() {
 		return this.creatorPublicKey;

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: add poll identifiers
+
+Added numeric poll IDs as a stable lookup field alongside existing poll names. Poll list, search, and detail responses now include the assigned ID, create-poll transactions remember the ID after processing and clear it when orphaned, and new ID-based poll detail and vote-result API routes let clients fetch a poll without relying only on the human-readable poll name.
+
 ### 2026-05-13 - api: add searchable poll listing
 
 Added a searchable poll listing API so clients can find polls by name, description, owner, open or closed status, end-time presence, and published-time range without fetching every poll and filtering locally. Poll names are now stored with a normalized search key and indexed alongside published and end-time fields, giving poll discovery a scalable path before the later poll ID work.

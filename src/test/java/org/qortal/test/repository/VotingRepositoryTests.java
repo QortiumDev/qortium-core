@@ -12,6 +12,7 @@ import org.qortal.test.common.Common;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 public class VotingRepositoryTests extends Common {
 
@@ -28,12 +29,15 @@ public class VotingRepositoryTests extends Common {
 			createTestPoll(repository, pollName, endTime);
 
 			PollData fetchedPollData = repository.getVotingRepository().fromPollName(pollName);
+			assertNotNull(fetchedPollData.getPollId());
 			assertEquals(endTime, fetchedPollData.getEndTime());
+			assertEquals(pollName, repository.getVotingRepository().fromPollId(fetchedPollData.getPollId()).getPollName());
 
 			PollData listedPollData = repository.getVotingRepository().getAllPolls(null, null, null).stream()
 					.filter(pollData -> pollData.getPollName().equals(pollName))
 					.findFirst()
 					.orElseThrow(() -> new AssertionError("Missing poll " + pollName));
+			assertEquals(fetchedPollData.getPollId(), listedPollData.getPollId());
 			assertEquals(endTime, listedPollData.getEndTime());
 		}
 	}

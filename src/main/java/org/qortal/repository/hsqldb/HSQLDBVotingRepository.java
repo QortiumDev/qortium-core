@@ -42,7 +42,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 	public List<PollData> getAllPolls(Integer limit, Integer offset, Boolean reverse) throws DataException {
 		StringBuilder sql = new StringBuilder(512);
 
-		sql.append("SELECT poll_name, description, creator, owner, published_when, end_when FROM Polls ORDER BY poll_name");
+		sql.append("SELECT poll_id, poll_name, description, creator, owner, published_when, end_when FROM Polls ORDER BY poll_name");
 
 		if (reverse != null && reverse)
 			sql.append(" DESC");
@@ -71,7 +71,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		StringBuilder sql = new StringBuilder(512);
 		List<Object> bindParams = new ArrayList<>();
 
-		sql.append("SELECT poll_name, description, creator, owner, published_when, end_when FROM Polls");
+		sql.append("SELECT poll_id, poll_name, description, creator, owner, published_when, end_when FROM Polls");
 
 		List<String> conditions = new ArrayList<>();
 		String trimmedQuery = query == null ? null : query.trim();
@@ -146,8 +146,22 @@ public class HSQLDBVotingRepository implements VotingRepository {
 	}
 
 	@Override
+	public PollData fromPollId(int pollId) throws DataException {
+		String sql = "SELECT poll_id, poll_name, description, creator, owner, published_when, end_when FROM Polls WHERE poll_id = ?";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollId)) {
+			if (resultSet == null)
+				return null;
+
+			return buildPollData(resultSet);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch poll by ID from repository", e);
+		}
+	}
+
+	@Override
 	public PollData fromPollName(String pollName) throws DataException {
-		String sql = "SELECT poll_name, description, creator, owner, published_when, end_when FROM Polls WHERE poll_name = ?";
+		String sql = "SELECT poll_id, poll_name, description, creator, owner, published_when, end_when FROM Polls WHERE poll_name = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollName)) {
 			if (resultSet == null)
@@ -172,6 +186,9 @@ public class HSQLDBVotingRepository implements VotingRepository {
 	public void save(PollData pollData) throws DataException {
 		HSQLDBSaver saveHelper = new HSQLDBSaver("Polls");
 
+		if (pollData.getPollId() != null)
+			saveHelper.bind("poll_id", pollData.getPollId());
+
 		saveHelper.bind("poll_name", pollData.getPollName()).bind("description", pollData.getDescription()).bind("creator", pollData.getCreatorPublicKey())
 				.bind("owner", pollData.getOwner()).bind("published_when", pollData.getPublished()).bind("end_when", pollData.getEndTime())
 				.bind("reduced_poll_name", Unicode.sanitize(pollData.getPollName()));
@@ -181,6 +198,9 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		} catch (SQLException e) {
 			throw new DataException("Unable to save poll into repository", e);
 		}
+
+		if (pollData.getPollId() == null)
+			pollData.setPollId(fetchPollId(pollData.getPollName()));
 
 		// Now attempt to save poll options
 		List<PollOptionData> pollOptions = pollData.getPollOptions();
@@ -400,14 +420,26 @@ public class HSQLDBVotingRepository implements VotingRepository {
 	}
 
 	private PollData buildPollData(ResultSet resultSet) throws SQLException, DataException {
-		String pollName = resultSet.getString(1);
-		String description = resultSet.getString(2);
-		byte[] creatorPublicKey = resultSet.getBytes(3);
-		String owner = resultSet.getString(4);
-		long published = resultSet.getLong(5);
-		Long endTime = getNullableLong(resultSet, 6);
+		Integer pollId = getNullableInteger(resultSet, 1);
+		String pollName = resultSet.getString(2);
+		String description = resultSet.getString(3);
+		byte[] creatorPublicKey = resultSet.getBytes(4);
+		String owner = resultSet.getString(5);
+		long published = resultSet.getLong(6);
+		Long endTime = getNullableLong(resultSet, 7);
 
-		return new PollData(creatorPublicKey, owner, pollName, description, getPollOptions(pollName), published, endTime);
+		return new PollData(pollId, creatorPublicKey, owner, pollName, description, getPollOptions(pollName), published, endTime);
+	}
+
+	private Integer fetchPollId(String pollName) throws DataException {
+		try (ResultSet resultSet = this.repository.checkedExecute("SELECT poll_id FROM Polls WHERE poll_name = ?", pollName)) {
+			if (resultSet == null)
+				throw new DataException("Unable to fetch new poll ID from repository");
+
+			return getNullableInteger(resultSet, 1);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch new poll ID from repository", e);
+		}
 	}
 
 	private List<PollOptionData> getPollOptions(String pollName) throws DataException {

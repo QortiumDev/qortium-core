@@ -115,6 +115,9 @@ public class CreatePollTransaction extends Transaction {
 		// Publish poll to allow voting
 		Poll poll = new Poll(this.repository, this.createPollTransactionData);
 		poll.publish();
+
+		this.createPollTransactionData.setPollId(poll.getPollData().getPollId());
+		this.repository.getTransactionRepository().save(this.createPollTransactionData);
 	}
 
 	@Override
@@ -122,6 +125,9 @@ public class CreatePollTransaction extends Transaction {
 		// Unpublish poll
 		Poll poll = new Poll(this.repository, this.createPollTransactionData.getPollName());
 		poll.unpublish();
+
+		this.createPollTransactionData.setPollId(null);
+		this.repository.getTransactionRepository().save(this.createPollTransactionData);
 	}
 
 }

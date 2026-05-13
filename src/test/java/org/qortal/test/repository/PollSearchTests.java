@@ -34,6 +34,7 @@ public class PollSearchTests extends Common {
 					null, null, null, now, null, null, null);
 
 			assertEquals(List.of("atlas-poll-search-one", "atlas-poll-search-two"), pollNames(polls));
+			assertTrue(polls.stream().allMatch(poll -> poll.getPollId() != null));
 		}
 	}
 

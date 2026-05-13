@@ -1,6 +1,7 @@
 package org.qortal.data.transaction;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.AccessMode;
 import org.eclipse.persistence.oxm.annotations.XmlDiscriminatorValue;
 import org.qortal.data.voting.PollOptionData;
 import org.qortal.transaction.Transaction;
@@ -22,6 +23,8 @@ public class CreatePollTransactionData extends TransactionData {
 	private byte[] pollCreatorPublicKey;
 	
 	// Properties
+	@Schema(accessMode = AccessMode.READ_ONLY, description = "assigned poll ID")
+	private Integer pollId = null;
 	private String owner;
 	private String pollName;
 	private String description;
@@ -47,9 +50,15 @@ public class CreatePollTransactionData extends TransactionData {
 
 	public CreatePollTransactionData(BaseTransactionData baseTransactionData,
 			String owner, String pollName, String description, List<PollOptionData> pollOptions, Long endTime) {
+		this(baseTransactionData, owner, pollName, description, pollOptions, endTime, null);
+	}
+
+	public CreatePollTransactionData(BaseTransactionData baseTransactionData,
+			String owner, String pollName, String description, List<PollOptionData> pollOptions, Long endTime, Integer pollId) {
 		super(Transaction.TransactionType.CREATE_POLL, baseTransactionData);
 
 		this.creatorPublicKey = baseTransactionData.creatorPublicKey;
+		this.pollId = pollId;
 		this.owner = owner;
 		this.pollName = pollName;
 		this.description = description;
@@ -60,6 +69,14 @@ public class CreatePollTransactionData extends TransactionData {
 	// Getters/setters
 
 	public byte[] getPollCreatorPublicKey() { return this.creatorPublicKey; }
+	public Integer getPollId() {
+		return this.pollId;
+	}
+
+	public void setPollId(Integer pollId) {
+		this.pollId = pollId;
+	}
+
 	public String getOwner() {
 		return this.owner;
 	}

@@ -165,6 +165,35 @@ public class PollsResource {
     }
 
     @GET
+    @Path("/id/{pollId}")
+    @Operation(
+            summary = "Info on poll by ID",
+            responses = {
+                    @ApiResponse(
+                            description = "poll info",
+                            content = @Content(
+                                    mediaType = MediaType.APPLICATION_JSON,
+                                    schema = @Schema(implementation = PollData.class)
+                            )
+                    )
+            }
+    )
+    @ApiErrors({ApiError.REPOSITORY_ISSUE})
+    public PollData getPollDataById(@PathParam("pollId") int pollId) {
+            try (final Repository repository = RepositoryManager.getRepository()) {
+                    PollData pollData = repository.getVotingRepository().fromPollId(pollId);
+                    if (pollData == null)
+                            throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.POLL_NO_EXISTS);
+
+                    return pollData;
+            } catch (ApiException e) {
+                    throw e;
+            } catch (DataException e) {
+                    throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+            }
+    }
+
+    @GET
     @Path("/{pollName}")
     @Operation(
             summary = "Info on poll",
@@ -194,6 +223,35 @@ public class PollsResource {
     }
 
     @GET
+    @Path("/votes/id/{pollId}")
+    @Operation(
+            summary = "Votes on poll by ID",
+            responses = {
+                    @ApiResponse(
+                            description = "poll votes",
+                            content = @Content(
+                                    mediaType = MediaType.APPLICATION_JSON,
+                                    schema = @Schema(implementation = PollVotes.class)
+                            )
+                    )
+            }
+    )
+    @ApiErrors({ApiError.REPOSITORY_ISSUE})
+    public PollVotes getPollVotesById(@PathParam("pollId") int pollId, @QueryParam("onlyCounts") Boolean onlyCounts) {
+            try (final Repository repository = RepositoryManager.getRepository()) {
+                    PollData pollData = repository.getVotingRepository().fromPollId(pollId);
+                    if (pollData == null)
+                            throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.POLL_NO_EXISTS);
+
+                    return getPollVotes(repository, pollData, onlyCounts);
+            } catch (ApiException e) {
+                    throw e;
+            } catch (DataException e) {
+                    throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+            }
+    }
+
+    @GET
     @Path("/votes/{pollName}")
     @Operation(
             summary = "Votes on poll",
@@ -214,74 +272,7 @@ public class PollsResource {
                     if (pollData == null)
                             throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.POLL_NO_EXISTS);
 
-                    boolean countsOnly = onlyCounts != null && onlyCounts;
-                    long latestBlockTimestamp = repository.getBlockRepository().getLastBlock().getTimestamp();
-                    PollDataWithVotes frozenPollResults = getFrozenPollResultsForClosedPoll(repository, pollData, latestBlockTimestamp);
-                    if (frozenPollResults != null)
-                            return buildFrozenPollVotesResponse(repository, pollName, countsOnly, frozenPollResults);
-
-                    List<VoteOnPollData> votes = repository.getVotingRepository().getVotes(pollName);
-
-                    // Initialize map for counting votes
-                    Map<String, Integer> voteCountMap = new HashMap<>();
-                    for (PollOptionData optionData : pollData.getPollOptions()) {
-                            voteCountMap.put(optionData.getOptionName(), 0);
-                    }
-                    // Initialize map for counting vote weights
-                    Map<String, Integer> voteWeightMap = new HashMap<>();
-                    Map<String, Integer> rawVoteWeightMap = new HashMap<>();
-                    for (PollOptionData optionData : pollData.getPollOptions()) {
-                            voteWeightMap.put(optionData.getOptionName(), 0);
-                            rawVoteWeightMap.put(optionData.getOptionName(), 0);
-                    }
-
-                    List<PollVotes.VoteDetail> voteDetails = countsOnly ? null : new ArrayList<>();
-                    int totalVotes = 0;
-                    int totalWeight = 0;
-                    int rawTotalWeight = 0;
-                    for (VoteOnPollData vote : votes) {
-                            String voter = Crypto.toAddress(vote.getVoterPublicKey());
-                            AccountData voterData = repository.getAccountRepository().getAccount(voter);
-                            AccountTrustStatus trustStatus = voterData == null ? AccountTrustStatus.UNVERIFIED : voterData.getTrustStatus();
-                            int rawVoteWeight = voterData == null ? 0 : voterData.getBlocksMinted();
-                            int voteWeight = AccountTrustStatus.calculateEffectiveVoteWeight(voterData);
-
-                            int optionIndex = vote.getOptionIndex();
-                            if (optionIndex <= Poll.NO_VOTE_OPTION_INDEX || optionIndex > pollData.getPollOptions().size())
-                                    continue;
-
-                            String selectedOption = pollData.getPollOptions().get(optionIndex - 1).getOptionName();
-                            if (voteCountMap.containsKey(selectedOption)) {
-                                    voteCountMap.put(selectedOption, voteCountMap.get(selectedOption) + 1);
-                                    voteWeightMap.put(selectedOption, voteWeightMap.get(selectedOption) + voteWeight);
-                                    rawVoteWeightMap.put(selectedOption, rawVoteWeightMap.get(selectedOption) + rawVoteWeight);
-                                    totalVotes++;
-                                    totalWeight += voteWeight;
-                                    rawTotalWeight += rawVoteWeight;
-
-                                    if (voteDetails != null) {
-                                            voteDetails.add(new PollVotes.VoteDetail(
-                                                    voter,
-                                                    vote.getOptionIndex(),
-                                                    rawVoteWeight,
-                                                    trustStatus.name(),
-                                                    trustStatus.getValue(),
-                                                    trustStatus.getVoteWeightPercent(),
-                                                    voteWeight));
-                                    }
-                            }
-                    }
-
-                    // Convert map to list of VoteInfo
-                    List<PollVotes.OptionCount> voteCounts = buildOptionCounts(voteCountMap);
-                    // Convert map to list of WeightInfo
-                    List<PollVotes.OptionWeight> voteWeights = buildOptionWeights(voteWeightMap, rawVoteWeightMap);
-    
-                    if (countsOnly) {
-                        return new PollVotes(null, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights, null);
-                    } else {
-                        return new PollVotes(votes, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights, voteDetails);
-                    }
+                    return getPollVotes(repository, pollData, onlyCounts);
             } catch (ApiException e) {
                     throw e;
             } catch (DataException e) {
@@ -379,6 +370,78 @@ public class PollsResource {
         } catch (DataException e) {
             throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
         }
+    }
+
+    private PollVotes getPollVotes(Repository repository, PollData pollData, Boolean onlyCounts) throws DataException {
+            String pollName = pollData.getPollName();
+            boolean countsOnly = onlyCounts != null && onlyCounts;
+            long latestBlockTimestamp = repository.getBlockRepository().getLastBlock().getTimestamp();
+            PollDataWithVotes frozenPollResults = getFrozenPollResultsForClosedPoll(repository, pollData, latestBlockTimestamp);
+            if (frozenPollResults != null)
+                    return buildFrozenPollVotesResponse(repository, pollName, countsOnly, frozenPollResults);
+
+            List<VoteOnPollData> votes = repository.getVotingRepository().getVotes(pollName);
+
+            // Initialize map for counting votes
+            Map<String, Integer> voteCountMap = new HashMap<>();
+            for (PollOptionData optionData : pollData.getPollOptions()) {
+                    voteCountMap.put(optionData.getOptionName(), 0);
+            }
+            // Initialize map for counting vote weights
+            Map<String, Integer> voteWeightMap = new HashMap<>();
+            Map<String, Integer> rawVoteWeightMap = new HashMap<>();
+            for (PollOptionData optionData : pollData.getPollOptions()) {
+                    voteWeightMap.put(optionData.getOptionName(), 0);
+                    rawVoteWeightMap.put(optionData.getOptionName(), 0);
+            }
+
+            List<PollVotes.VoteDetail> voteDetails = countsOnly ? null : new ArrayList<>();
+            int totalVotes = 0;
+            int totalWeight = 0;
+            int rawTotalWeight = 0;
+            for (VoteOnPollData vote : votes) {
+                    String voter = Crypto.toAddress(vote.getVoterPublicKey());
+                    AccountData voterData = repository.getAccountRepository().getAccount(voter);
+                    AccountTrustStatus trustStatus = voterData == null ? AccountTrustStatus.UNVERIFIED : voterData.getTrustStatus();
+                    int rawVoteWeight = voterData == null ? 0 : voterData.getBlocksMinted();
+                    int voteWeight = AccountTrustStatus.calculateEffectiveVoteWeight(voterData);
+
+                    int optionIndex = vote.getOptionIndex();
+                    if (optionIndex <= Poll.NO_VOTE_OPTION_INDEX || optionIndex > pollData.getPollOptions().size())
+                            continue;
+
+                    String selectedOption = pollData.getPollOptions().get(optionIndex - 1).getOptionName();
+                    if (voteCountMap.containsKey(selectedOption)) {
+                            voteCountMap.put(selectedOption, voteCountMap.get(selectedOption) + 1);
+                            voteWeightMap.put(selectedOption, voteWeightMap.get(selectedOption) + voteWeight);
+                            rawVoteWeightMap.put(selectedOption, rawVoteWeightMap.get(selectedOption) + rawVoteWeight);
+                            totalVotes++;
+                            totalWeight += voteWeight;
+                            rawTotalWeight += rawVoteWeight;
+
+                            if (voteDetails != null) {
+                                    voteDetails.add(new PollVotes.VoteDetail(
+                                            voter,
+                                            vote.getOptionIndex(),
+                                            rawVoteWeight,
+                                            trustStatus.name(),
+                                            trustStatus.getValue(),
+                                            trustStatus.getVoteWeightPercent(),
+                                            voteWeight));
+                            }
+                    }
+            }
+
+            // Convert map to list of VoteInfo
+            List<PollVotes.OptionCount> voteCounts = buildOptionCounts(voteCountMap);
+            // Convert map to list of WeightInfo
+            List<PollVotes.OptionWeight> voteWeights = buildOptionWeights(voteWeightMap, rawVoteWeightMap);
+
+            if (countsOnly) {
+                    return new PollVotes(null, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights, null);
+            } else {
+                    return new PollVotes(votes, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights, voteDetails);
+            }
     }
     
     private PollDataWithVotes getFrozenPollResultsForClosedPoll(Repository repository, PollData pollData, long latestBlockTimestamp) throws DataException {
