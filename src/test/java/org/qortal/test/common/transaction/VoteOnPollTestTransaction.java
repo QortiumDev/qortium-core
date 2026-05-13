@@ -14,7 +14,7 @@ public class VoteOnPollTestTransaction extends TestTransaction {
 		Random random = new Random();
 
 		String pollName = "test poll " + random.nextInt(1_000_000);
-		final int optionIndex = random.nextInt(3);
+		final int optionIndex = random.nextInt(3) + 1;
 
 		return new VoteOnPollTransactionData(generateBase(account), pollName, optionIndex);
 	}

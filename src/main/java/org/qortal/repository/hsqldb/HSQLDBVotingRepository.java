@@ -182,7 +182,7 @@ public class HSQLDBVotingRepository implements VotingRepository {
 				+ "COALESCE(SUM(a.blocks_minted), 0), ?, ? "
 				+ "FROM Polls p "
 				+ "JOIN PollOptions po ON po.poll_name = p.poll_name "
-				+ "LEFT JOIN PollVotes pv ON pv.poll_name = p.poll_name AND pv.option_index = po.option_index "
+				+ "LEFT JOIN PollVotes pv ON pv.poll_name = p.poll_name AND pv.option_index = po.option_index + 1 "
 				+ "LEFT JOIN Accounts a ON pv.voter = a.public_key "
 				+ "WHERE p.end_when IS NOT NULL AND p.end_when <= ? "
 				+ "AND NOT EXISTS (SELECT TRUE FROM PollFrozenResults pfr WHERE pfr.poll_name = p.poll_name) "

@@ -72,7 +72,7 @@ public class CreatePollTransaction extends Transaction {
 		// Check number of options
 		List<PollOptionData> pollOptions = this.createPollTransactionData.getPollOptions();
 		int pollOptionsCount = pollOptions.size();
-		if (pollOptionsCount < 1 || pollOptionsCount > Poll.MAX_OPTIONS)
+		if (pollOptionsCount < 2 || pollOptionsCount > Poll.MAX_OPTIONS)
 			return ValidationResult.INVALID_OPTIONS_COUNT;
 
 		// Check each option

@@ -21,6 +21,7 @@ public class VoteOnPollTransactionData extends TransactionData {
 	@Schema(description = "Vote creator's public key", example = "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP")
 	private byte[] voterPublicKey;
 	private String pollName;
+	@Schema(description = "Poll option index: 0 removes an existing vote, 1 selects the first poll option, 2 selects the second, and so on")
 	private int optionIndex;
 	// For internal use when orphaning
 	@XmlTransient

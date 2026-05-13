@@ -82,11 +82,11 @@ public class PollsApiTests extends ApiCommon {
 			setVoteAccount(repository, "chloe", 101, AccountTrustStatus.BRONZE);
 			setVoteAccount(repository, "dilbert", 100, AccountTrustStatus.SUSPICIOUS);
 
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, alice.getPublicKey(), 0));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 1));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 1));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, dilbert.getPublicKey(), 2));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, unverified.getPublicKey(), 2));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, alice.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 2));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 2));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, dilbert.getPublicKey(), 3));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, unverified.getPublicKey(), 3));
 			repository.saveChanges();
 
 			PollVotes pollVotes = this.pollsResource.getPollVotes(pollName, true);
@@ -107,7 +107,7 @@ public class PollsApiTests extends ApiCommon {
 			assertEquals(Integer.valueOf(502), fullPollVotes.rawTotalWeight);
 
 			PollVotes.VoteDetail bobVoteDetail = findVoteDetail(fullPollVotes.voteDetails, bob.getAddress());
-			assertEquals(Integer.valueOf(1), bobVoteDetail.optionIndex);
+			assertEquals(Integer.valueOf(2), bobVoteDetail.optionIndex);
 			assertEquals(Integer.valueOf(101), bobVoteDetail.rawVoteWeight);
 			assertEquals(AccountTrustStatus.SILVER.name(), bobVoteDetail.trustStatus);
 			assertEquals(Integer.valueOf(AccountTrustStatus.SILVER.getValue()), bobVoteDetail.trustStatusValue);
@@ -115,7 +115,7 @@ public class PollsApiTests extends ApiCommon {
 			assertEquals(Integer.valueOf(50), bobVoteDetail.effectiveVoteWeight);
 
 			PollVotes.VoteDetail unverifiedVoteDetail = findVoteDetail(fullPollVotes.voteDetails, unverified.getAddress());
-			assertEquals(Integer.valueOf(2), unverifiedVoteDetail.optionIndex);
+			assertEquals(Integer.valueOf(3), unverifiedVoteDetail.optionIndex);
 			assertEquals(Integer.valueOf(100), unverifiedVoteDetail.rawVoteWeight);
 			assertEquals(AccountTrustStatus.UNVERIFIED.name(), unverifiedVoteDetail.trustStatus);
 			assertEquals(Integer.valueOf(0), unverifiedVoteDetail.effectiveVoteWeight);
@@ -145,8 +145,8 @@ public class PollsApiTests extends ApiCommon {
 			setVoteAccount(repository, "bob", 101, AccountTrustStatus.SILVER);
 			setVoteAccount(repository, "chloe", 101, AccountTrustStatus.BRONZE);
 
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 0));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 2));
 			repository.saveChanges();
 
 			BlockUtils.mintBlock(repository);

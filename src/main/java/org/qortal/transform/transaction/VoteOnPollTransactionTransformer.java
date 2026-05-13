@@ -34,7 +34,7 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 		addMempowFeeNonceToLayout(layout, TransactionType.VOTE_ON_POLL);
 		layout.add("poll name length", TransformationType.INT);
 		layout.add("poll name", TransformationType.STRING);
-		layout.add("poll option index (0+)", TransformationType.INT);
+		layout.add("poll option index (0 removes vote, 1+ selects option)", TransformationType.INT);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
 	}
@@ -50,7 +50,7 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 		String pollName = Serialization.deserializeSizedString(byteBuffer, Poll.MAX_NAME_SIZE);
 
 		int optionIndex = byteBuffer.getInt();
-		if (optionIndex < 0 || optionIndex >= Poll.MAX_OPTIONS)
+		if (optionIndex < Poll.NO_VOTE_OPTION_INDEX || optionIndex > Poll.MAX_OPTIONS)
 			throw new TransformationException("Invalid option number for VoteOnPollTransaction");
 
 		long fee = byteBuffer.getLong();

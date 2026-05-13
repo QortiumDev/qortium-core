@@ -16,6 +16,7 @@ public class Poll {
 	public static final int MAX_NAME_SIZE = 400;
 	public static final int MAX_DESCRIPTION_SIZE = 4000;
 	public static final int MAX_OPTIONS = 100;
+	public static final int NO_VOTE_OPTION_INDEX = 0;
 
 	// Constructors
 

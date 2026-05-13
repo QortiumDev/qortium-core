@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: allow poll vote removal
+
+Allowed poll voters to remove their active vote by submitting a `VOTE_ON_POLL` transaction with option index `0`. Real poll choices now use option indexes 1 through the number of poll options, removed votes are deleted instead of counted, closed polls still reject any vote change or removal, and poll creation now requires at least two separate option entries so comma-packed option strings are rejected.
+
 ### 2026-05-13 - core: allow rating removal
 
 Allowed users to remove their own active resource rating by submitting a `RATE_RESOURCE` transaction with rating `0`, matching the existing account-rating behavior where `UNKNOWN` clears an active account relationship. Real resource ratings remain limited to 1 through 10, repeated no-op rating changes are still rejected, and removed ratings no longer count toward resource summaries, averages, or trust-weighted rating totals.

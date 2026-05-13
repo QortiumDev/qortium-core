@@ -32,6 +32,7 @@ import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.CreatePollTransactionTransformer;
 import org.qortal.transform.transaction.VoteOnPollTransactionTransformer;
 import org.qortal.utils.Base58;
+import org.qortal.voting.Poll;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.*;
@@ -160,7 +161,11 @@ public class PollsResource {
                             int rawVoteWeight = voterData == null ? 0 : voterData.getBlocksMinted();
                             int voteWeight = AccountTrustStatus.calculateEffectiveVoteWeight(voterData);
 
-                            String selectedOption = pollData.getPollOptions().get(vote.getOptionIndex()).getOptionName();
+                            int optionIndex = vote.getOptionIndex();
+                            if (optionIndex <= Poll.NO_VOTE_OPTION_INDEX || optionIndex > pollData.getPollOptions().size())
+                                    continue;
+
+                            String selectedOption = pollData.getPollOptions().get(optionIndex - 1).getOptionName();
                             if (voteCountMap.containsKey(selectedOption)) {
                                     voteCountMap.put(selectedOption, voteCountMap.get(selectedOption) + 1);
                                     voteWeightMap.put(selectedOption, voteWeightMap.get(selectedOption) + voteWeight);

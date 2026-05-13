@@ -25,6 +25,7 @@ public class CreatePollTransactionData extends TransactionData {
 	private String owner;
 	private String pollName;
 	private String description;
+	@Schema(description = "Poll options as separate array entries; do not submit one comma-separated string")
 	private List<PollOptionData> pollOptions;
 	private Long endTime;
 

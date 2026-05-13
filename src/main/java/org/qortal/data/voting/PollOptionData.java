@@ -1,5 +1,7 @@
 package org.qortal.data.voting;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 
@@ -8,6 +10,7 @@ import javax.xml.bind.annotation.XmlAccessorType;
 public class PollOptionData {
 
 	// Properties
+	@Schema(description = "One poll option name. Submit each option as its own array entry, not as a comma-separated list.")
 	private String optionName;
 
 	// Constructors

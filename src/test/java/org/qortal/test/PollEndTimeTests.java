@@ -78,13 +78,13 @@ public class PollEndTimeTests extends Common {
 			repository.getVotingRepository().save(new PollData(alice.getPublicKey(), alice.getAddress(), pollName, "Test poll", buildPollOptions(), published, endTime));
 			repository.saveChanges();
 
-			VoteOnPollTransaction voteTransaction = new VoteOnPollTransaction(repository, buildVoteOnPollTransactionData(bob, pollName, 0));
+			VoteOnPollTransaction voteTransaction = new VoteOnPollTransaction(repository, buildVoteOnPollTransactionData(bob, pollName, 1));
 			assertEquals(Transaction.ValidationResult.OK, voteTransaction.isValid());
 			assertEquals(Transaction.ValidationResult.OK, voteTransaction.isValidAtTimestamp(endTime - 1));
 			assertEquals(Transaction.ValidationResult.POLL_CLOSED, voteTransaction.isValidAtTimestamp(endTime));
 			assertEquals(Transaction.ValidationResult.POLL_CLOSED, voteTransaction.isValidAtTimestamp(endTime + 1));
 
-			VoteOnPollTransaction changedVoteTransaction = new VoteOnPollTransaction(repository, buildVoteOnPollTransactionData(bob, pollName, 1));
+			VoteOnPollTransaction changedVoteTransaction = new VoteOnPollTransaction(repository, buildVoteOnPollTransactionData(bob, pollName, 2));
 			assertEquals(Transaction.ValidationResult.POLL_CLOSED, changedVoteTransaction.isValidAtTimestamp(endTime));
 		}
 	}
@@ -144,8 +144,8 @@ public class PollEndTimeTests extends Common {
 			repository.getVotingRepository().save(new PollData(alice.getPublicKey(), alice.getAddress(), pollName, "Test poll", buildPollOptions(), published, endTime));
 			setVoteAccount(repository, "bob", 101, AccountTrustStatus.SILVER);
 			setVoteAccount(repository, "chloe", 101, AccountTrustStatus.BRONZE);
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 0));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 2));
 			repository.saveChanges();
 
 			assertNull(repository.getVotingRepository().getFrozenPollResults(pollName));

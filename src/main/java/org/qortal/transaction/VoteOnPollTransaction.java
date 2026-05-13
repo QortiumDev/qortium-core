@@ -73,11 +73,14 @@ public class VoteOnPollTransaction extends Transaction {
 		List<PollOptionData> pollOptions = pollData.getPollOptions();
 		int optionIndex = this.voteOnPollTransactionData.getOptionIndex();
 
-		if (optionIndex < 0 || optionIndex > pollOptions.size() - 1)
+		if (optionIndex < Poll.NO_VOTE_OPTION_INDEX || optionIndex > pollOptions.size())
 			return ValidationResult.POLL_OPTION_DOES_NOT_EXIST;
 
 		// Check if vote already exists
 		VoteOnPollData voteOnPollData = votingRepository.getVote(pollName, this.voteOnPollTransactionData.getVoterPublicKey());
+		if (voteOnPollData == null && optionIndex == Poll.NO_VOTE_OPTION_INDEX)
+			return ValidationResult.ALREADY_VOTED_FOR_THAT_OPTION;
+
 		if (voteOnPollData != null && voteOnPollData.getOptionIndex() == optionIndex)
 			return ValidationResult.ALREADY_VOTED_FOR_THAT_OPTION;
 
@@ -122,6 +125,12 @@ public class VoteOnPollTransaction extends Transaction {
 
 		// Save this transaction, now with possible previous vote
 		this.repository.getTransactionRepository().save(voteOnPollTransactionData);
+
+		if (this.voteOnPollTransactionData.getOptionIndex() == Poll.NO_VOTE_OPTION_INDEX) {
+			LOGGER.trace(() -> String.format("Deleting vote by %s on poll \"%s\"", voter.getAddress(), pollName));
+			votingRepository.delete(pollName, this.voteOnPollTransactionData.getVoterPublicKey());
+			return;
+		}
 
 		// Apply vote to poll
 		LOGGER.trace(() -> String.format("Vote by %s on poll \"%s\" with option index %d",
