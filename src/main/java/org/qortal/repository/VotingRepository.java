@@ -26,6 +26,8 @@ public interface VotingRepository {
 
 	public void delete(String pollName) throws DataException;
 
+	public boolean hasVotes(int pollId) throws DataException;
+
 	// Frozen poll results
 
 	public void freezeClosedPolls(int blockHeight, long blockTimestamp) throws DataException;

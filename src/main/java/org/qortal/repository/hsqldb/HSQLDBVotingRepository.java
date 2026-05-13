@@ -202,6 +202,12 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		if (pollData.getPollId() == null)
 			pollData.setPollId(fetchPollId(pollData.getPollName()));
 
+		try {
+			this.repository.delete("PollOptions", "poll_id = ?", pollData.getPollId());
+		} catch (SQLException e) {
+			throw new DataException("Unable to replace poll options in repository", e);
+		}
+
 		// Now attempt to save poll options
 		List<PollOptionData> pollOptions = pollData.getPollOptions();
 		for (int optionIndex = 0; optionIndex < pollOptions.size(); ++optionIndex) {
@@ -216,6 +222,15 @@ public class HSQLDBVotingRepository implements VotingRepository {
 			} catch (SQLException e) {
 				throw new DataException("Unable to save poll option into repository", e);
 			}
+		}
+	}
+
+	@Override
+	public boolean hasVotes(int pollId) throws DataException {
+		try {
+			return this.repository.exists("PollVotes", "poll_id = ?", pollId);
+		} catch (SQLException e) {
+			throw new DataException("Unable to check poll votes in repository", e);
 		}
 	}
 

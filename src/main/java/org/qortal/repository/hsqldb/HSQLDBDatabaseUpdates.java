@@ -1228,6 +1228,18 @@ public class HSQLDBDatabaseUpdates {
 					migratePollsToPollIdPrimaryKey(connection);
 					break;
 
+				case 64:
+					// Allow poll owners to update editable poll details while preserving orphan state.
+					stmt.execute("CREATE TABLE UpdatePollTransactions (signature Signature, owner AccountPublicKey NOT NULL, poll_id INTEGER NOT NULL, "
+							+ "new_poll_name PollName NOT NULL, new_description GenericDescription NOT NULL, new_end_when EpochMillis, "
+							+ "previous_poll_name PollName, previous_description GenericDescription, previous_end_when EpochMillis, "
+							+ TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE TABLE UpdatePollTransactionOptions (signature Signature, option_index PollOptionIndex NOT NULL, option_name PollOption, "
+							+ "PRIMARY KEY (signature, option_index), FOREIGN KEY (signature) REFERENCES UpdatePollTransactions (signature) ON DELETE CASCADE)");
+					stmt.execute("CREATE TABLE UpdatePollTransactionPreviousOptions (signature Signature, option_index PollOptionIndex NOT NULL, option_name PollOption, "
+							+ "PRIMARY KEY (signature, option_index), FOREIGN KEY (signature) REFERENCES UpdatePollTransactions (signature) ON DELETE CASCADE)");
+					break;
+
 				default:
 					// nothing to do
 					return false;

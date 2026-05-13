@@ -1,9 +1,14 @@
 package org.qortal.voting;
 
 import org.qortal.data.transaction.CreatePollTransactionData;
+import org.qortal.data.transaction.UpdatePollTransactionData;
 import org.qortal.data.voting.PollData;
+import org.qortal.data.voting.PollOptionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class Poll {
 
@@ -56,6 +61,18 @@ public class Poll {
 		this.pollData = this.repository.getVotingRepository().fromPollName(pollName);
 	}
 
+	/**
+	 * Construct Poll business object using existing poll from repository, identified by pollId.
+	 *
+	 * @param repository
+	 * @param pollId
+	 * @throws DataException
+	 */
+	public Poll(Repository repository, int pollId) throws DataException {
+		this.repository = repository;
+		this.pollData = this.repository.getVotingRepository().fromPollId(pollId);
+	}
+
 	public PollData getPollData() {
 		return this.pollData;
 	}
@@ -80,6 +97,42 @@ public class Poll {
 	 */
 	public void unpublish() throws DataException {
 		this.repository.getVotingRepository().delete(this.pollData.getPollName());
+	}
+
+	public void update(UpdatePollTransactionData updatePollTransactionData) throws DataException {
+		updatePollTransactionData.setPreviousPollData(copyPollData(this.pollData));
+
+		this.pollData.setPollName(updatePollTransactionData.getNewPollName());
+		this.pollData.setDescription(updatePollTransactionData.getNewDescription());
+		this.pollData.setPollOptions(copyPollOptions(updatePollTransactionData.getNewPollOptions()));
+		this.pollData.setEndTime(updatePollTransactionData.getNewEndTime());
+
+		this.repository.getVotingRepository().save(this.pollData);
+	}
+
+	public void unupdate(UpdatePollTransactionData updatePollTransactionData) throws DataException {
+		if (updatePollTransactionData.getPreviousPollName() == null)
+			throw new DataException("Unable to revert poll update without previous poll data");
+
+		this.pollData.setPollName(updatePollTransactionData.getPreviousPollName());
+		this.pollData.setDescription(updatePollTransactionData.getPreviousDescription());
+		this.pollData.setPollOptions(copyPollOptions(updatePollTransactionData.getPreviousPollOptions()));
+		this.pollData.setEndTime(updatePollTransactionData.getPreviousEndTime());
+
+		this.repository.getVotingRepository().save(this.pollData);
+
+		updatePollTransactionData.clearPreviousPollData();
+	}
+
+	private static PollData copyPollData(PollData pollData) {
+		return new PollData(pollData.getPollId(), pollData.getCreatorPublicKey(), pollData.getOwner(), pollData.getPollName(),
+				pollData.getDescription(), copyPollOptions(pollData.getPollOptions()), pollData.getPublished(), pollData.getEndTime());
+	}
+
+	private static List<PollOptionData> copyPollOptions(List<PollOptionData> pollOptions) {
+		return pollOptions.stream()
+				.map(pollOptionData -> new PollOptionData(pollOptionData.getOptionName()))
+				.collect(Collectors.toList());
 	}
 
 }

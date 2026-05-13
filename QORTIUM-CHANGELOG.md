@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: add poll update transactions
+
+Added owner-signed poll update transactions so poll owners can correct poll names, descriptions, options, and end times before voting starts, while polls with active votes can only have an existing future end time extended. Poll updates use stable poll IDs instead of names, remember the previous poll details for clean orphan handling, reject changes after a poll closes, and include translated validation text for invalid poll owners.
+
 ### 2026-05-13 - core: make poll IDs the voting key
 
 Changed poll voting so `VOTE_ON_POLL` transactions now reference the stable numeric poll ID instead of the editable poll name. The poll table now uses that ID as its primary key while keeping poll names unique for lookup and display, active vote storage and vote APIs can work directly by ID, and regression tests cover voting, vote removal, schema constraints, JSON output, and orphaning a vote after a poll name changes.

@@ -825,6 +825,7 @@ function getDefaultTimeout(action) {
       case "CANCEL_TRADE_SELL_ORDER":
       case "VOTE_ON_POLL":
       case "CREATE_POLL":
+      case "UPDATE_POLL":
       case "JOIN_GROUP":
       case "DEPLOY_AT":
       case "SEND_COIN":

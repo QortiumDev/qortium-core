@@ -17,6 +17,7 @@ import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.CreatePollTransactionData;
+import org.qortal.data.transaction.UpdatePollTransactionData;
 import org.qortal.data.transaction.VoteOnPollTransactionData;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollDataWithVotes;
@@ -30,6 +31,7 @@ import org.qortal.settings.Settings;
 import org.qortal.transaction.Transaction;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.CreatePollTransactionTransformer;
+import org.qortal.transform.transaction.UpdatePollTransactionTransformer;
 import org.qortal.transform.transaction.VoteOnPollTransactionTransformer;
 import org.qortal.utils.Base58;
 import org.qortal.voting.Poll;
@@ -364,6 +366,52 @@ public class PollsResource {
                 throw TransactionsResource.createTransactionInvalidException(request, result);
 
             byte[] bytes = VoteOnPollTransactionTransformer.toBytes(transactionData);
+            return Base58.encode(bytes);
+        } catch (TransformationException e) {
+            throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+        } catch (DataException e) {
+            throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+        }
+    }
+
+    @POST
+    @Path("/update")
+    @Operation(
+            summary = "Build raw, unsigned, UPDATE_POLL transaction",
+            requestBody = @RequestBody(
+                    required = true,
+                    content = @Content(
+                            mediaType = MediaType.APPLICATION_JSON,
+                            schema = @Schema(
+                                    implementation = UpdatePollTransactionData.class
+                            )
+                    )
+            ),
+            responses = {
+                    @ApiResponse(
+                            description = "raw, unsigned, UPDATE_POLL transaction encoded in Base58",
+                            content = @Content(
+                                    mediaType = MediaType.TEXT_PLAIN,
+                                    schema = @Schema(
+                                            type = "string"
+                                    )
+                            )
+                    )
+            }
+    )
+    @ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+    public String UpdatePoll(UpdatePollTransactionData transactionData) {
+        if (Settings.getInstance().isApiRestricted())
+            throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            Transaction transaction = Transaction.fromData(repository, transactionData);
+
+            Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+            if (result != Transaction.ValidationResult.OK)
+                throw TransactionsResource.createTransactionInvalidException(request, result);
+
+            byte[] bytes = UpdatePollTransactionTransformer.toBytes(transactionData);
             return Base58.encode(bytes);
         } catch (TransformationException e) {
             throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);

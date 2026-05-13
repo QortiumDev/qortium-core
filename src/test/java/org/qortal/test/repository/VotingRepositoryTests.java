@@ -60,6 +60,10 @@ public class VotingRepositoryTests extends Common {
 			assertTrue("Polls should keep poll_name unique", tableHasUniqueIndex(repository, "Polls", "poll_name"));
 			assertTrue("VoteOnPollTransactions should use poll_id", tableHasColumn(repository, "VoteOnPollTransactions", "poll_id"));
 			assertFalse("VoteOnPollTransactions should not keep poll_name", tableHasColumn(repository, "VoteOnPollTransactions", "poll_name"));
+			assertTrue("UpdatePollTransactions should use poll_id", tableHasColumn(repository, "UpdatePollTransactions", "poll_id"));
+			assertTrue("UpdatePollTransactionOptions should store option rows", tableHasColumn(repository, "UpdatePollTransactionOptions", "option_name"));
+			assertTrue("UpdatePollTransactionPreviousOptions should store previous option rows",
+					tableHasColumn(repository, "UpdatePollTransactionPreviousOptions", "option_name"));
 
 			for (String tableName : List.of("PollOptions", "PollVotes", "PollFrozenResults", "PollFrozenVoteDetails")) {
 				assertTrue(tableName + " should use poll_id", tableHasColumn(repository, tableName, "poll_id"));

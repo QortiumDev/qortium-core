@@ -7,7 +7,9 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.TransferPrivsTransactionData;
+import org.qortal.data.transaction.UpdatePollTransactionData;
 import org.qortal.data.transaction.VoteOnPollTransactionData;
+import org.qortal.data.voting.PollOptionData;
 import org.qortal.group.Group;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
@@ -17,6 +19,7 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import java.io.StringWriter;
+import java.util.List;
 
 import static org.junit.Assert.assertTrue;
 
@@ -54,6 +57,26 @@ public class TransactionDataJsonTests extends ApiCommon {
 		assertTrue(json.contains("\"voterPublicKey\""));
 		assertTrue(json.contains("\"pollId\":123"));
 		assertTrue(json.contains("\"optionIndex\":1"));
+	}
+
+	@Test
+	public void testUpdatePollJsonIncludesOwnerAddress() throws JAXBException {
+		PrivateKeyAccount alice = Common.getTestAccount(null, "alice");
+
+		BaseTransactionData baseTransactionData = new BaseTransactionData(System.currentTimeMillis(), Group.NO_GROUP,
+				alice.getPublicKey(), Amounts.MULTIPLIER, null);
+		UpdatePollTransactionData transactionData = new UpdatePollTransactionData(baseTransactionData, 123, "test-poll",
+				"Updated description", List.of(new PollOptionData("Yes"), new PollOptionData("No")), null);
+
+		String json = marshal(transactionData);
+
+		assertTrue(json.contains("\"type\":\"UPDATE_POLL\""));
+		assertTrue(json.contains("\"creatorAddress\":\"" + alice.getAddress() + "\""));
+		assertTrue(json.contains("\"ownerAddress\":\"" + alice.getAddress() + "\""));
+		assertTrue(json.contains("\"ownerPublicKey\""));
+		assertTrue(json.contains("\"pollId\":123"));
+		assertTrue(json.contains("\"newPollName\":\"test-poll\""));
+		assertTrue(json.contains("\"newDescription\":\"Updated description\""));
 	}
 
 	private static String marshal(TransactionData transactionData) throws JAXBException {
