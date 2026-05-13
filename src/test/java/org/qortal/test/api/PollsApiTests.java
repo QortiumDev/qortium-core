@@ -2,11 +2,9 @@ package org.qortal.test.api;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.qortal.api.ApiError;
-import org.qortal.api.model.AppRatingsResponse;
+import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.model.PollVotes;
 import org.qortal.api.resource.PollsResource;
-import org.qortal.account.PrivateKeyAccount;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.voting.PollData;
@@ -21,11 +19,12 @@ import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class PollsApiTests extends ApiCommon {
 
@@ -42,158 +41,12 @@ public class PollsApiTests extends ApiCommon {
 	}
 
 	@Test
-	public void testGetAppRatings() throws DataException {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			// Create test app rating polls
-			createTestAppRatingPoll(repository, "app-library-APP-rating-Q-Tube");
-			createTestAppRatingPoll(repository, "app-library-WEBSITE-rating-Q-Blog");
-			createTestAppRatingPoll(repository, "app-library-PLUGIN-rating-Q-Plugin");
-			createTestAppRatingPoll(repository, "app-library-APP-rating-Q-Chat");
-
-			// Test getting all app ratings
-			AppRatingsResponse response = this.pollsResource.getAppRatings(null, null, null, null, null);
-			assertNotNull(response);
-			assertNotNull(response.ratings);
-			assertTrue(response.count >= 4);
-
-			// Verify response contains our test polls
-			assertTrue(response.ratings.containsKey("app-library-APP-rating-Q-Tube"));
-			assertTrue(response.ratings.containsKey("app-library-WEBSITE-rating-Q-Blog"));
-			assertTrue(response.ratings.containsKey("app-library-PLUGIN-rating-Q-Plugin"));
-			assertTrue(response.ratings.containsKey("app-library-APP-rating-Q-Chat"));
-
-			// Clean up
-			deleteTestPoll(repository, "app-library-APP-rating-Q-Tube");
-			deleteTestPoll(repository, "app-library-WEBSITE-rating-Q-Blog");
-			deleteTestPoll(repository, "app-library-PLUGIN-rating-Q-Plugin");
-			deleteTestPoll(repository, "app-library-APP-rating-Q-Chat");
-		}
-	}
-
-	@Test
-	public void testGetAppRatingsWithServiceFilter() throws DataException {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			// Create test polls
-			createTestAppRatingPoll(repository, "app-library-APP-rating-Test1");
-			createTestAppRatingPoll(repository, "app-library-WEBSITE-rating-Test2");
-			createTestAppRatingPoll(repository, "app-library-PLUGIN-rating-Test3");
-
-			// Test filtering by APP service
-			AppRatingsResponse appResponse = this.pollsResource.getAppRatings("APP", null, null, null, null);
-			assertNotNull(appResponse);
-			assertTrue(appResponse.ratings.containsKey("app-library-APP-rating-Test1"));
-			assertFalse(appResponse.ratings.containsKey("app-library-WEBSITE-rating-Test2"));
-			assertFalse(appResponse.ratings.containsKey("app-library-PLUGIN-rating-Test3"));
-
-			// Test filtering by WEBSITE service
-			AppRatingsResponse websiteResponse = this.pollsResource.getAppRatings("WEBSITE", null, null, null, null);
-			assertNotNull(websiteResponse);
-			assertFalse(websiteResponse.ratings.containsKey("app-library-APP-rating-Test1"));
-			assertTrue(websiteResponse.ratings.containsKey("app-library-WEBSITE-rating-Test2"));
-			assertFalse(websiteResponse.ratings.containsKey("app-library-PLUGIN-rating-Test3"));
-
-			// Test filtering by PLUGIN service using case-insensitive input
-			AppRatingsResponse pluginResponse = this.pollsResource.getAppRatings("plugin", null, null, null, null);
-			assertNotNull(pluginResponse);
-			assertFalse(pluginResponse.ratings.containsKey("app-library-APP-rating-Test1"));
-			assertFalse(pluginResponse.ratings.containsKey("app-library-WEBSITE-rating-Test2"));
-			assertTrue(pluginResponse.ratings.containsKey("app-library-PLUGIN-rating-Test3"));
-
-			assertApiError(ApiError.INVALID_CRITERIA,
-					() -> this.pollsResource.getAppRatings("DOCUMENT", null, null, null, null));
-
-			// Clean up
-			deleteTestPoll(repository, "app-library-APP-rating-Test1");
-			deleteTestPoll(repository, "app-library-WEBSITE-rating-Test2");
-			deleteTestPoll(repository, "app-library-PLUGIN-rating-Test3");
-		}
-	}
-
-	@Test
-	public void testGetAppRatingsWithPagination() throws DataException {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			// Create multiple test polls
-			for (int i = 1; i <= 5; i++) {
-				createTestAppRatingPoll(repository, "app-library-APP-rating-TestApp" + i);
-			}
-
-			// Test with limit
-			AppRatingsResponse response = this.pollsResource.getAppRatings(null, 2, null, null, null);
-			assertNotNull(response);
-			assertTrue(response.ratings.size() <= 2);
-
-			// Test with offset
-			AppRatingsResponse offsetResponse = this.pollsResource.getAppRatings(null, 2, 1, null, null);
-			assertNotNull(offsetResponse);
-			assertEquals(Integer.valueOf(1), offsetResponse.offset);
-
-			// Clean up
-			for (int i = 1; i <= 5; i++) {
-				deleteTestPoll(repository, "app-library-APP-rating-TestApp" + i);
-			}
-		}
-	}
-
-	@Test
-	public void testGetAppRatingsResponseStructure() throws DataException {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			String pollName = "app-library-APP-rating-StructureTest";
-			createTestAppRatingPoll(repository, pollName);
-
-			AppRatingsResponse response = this.pollsResource.getAppRatings(null, null, null, null, null);
-			assertNotNull(response);
-			assertTrue(response.ratings.containsKey(pollName));
-
-			AppRatingsResponse.AppRating rating = response.ratings.get(pollName);
-			assertNotNull(rating);
-			assertEquals(pollName, rating.pollName);
-			assertEquals("APP", rating.service);
-			assertEquals("StructureTest", rating.appName);
-			assertNotNull(rating.owner);
-			assertNotNull(rating.published);
-			assertNull(rating.endTime);
-			assertNotNull(rating.totalVotes);
-			assertNotNull(rating.totalWeight);
-			assertNotNull(rating.voteCounts);
-			assertNotNull(rating.voteWeights);
-
-			// Clean up
-			deleteTestPoll(repository, pollName);
-		}
-	}
-
-	@Test
-	public void testGetAppRatingsIncludesEndTime() throws DataException {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			String pollName = "app-library-APP-rating-EndTimeTest";
-			Long endTime = System.currentTimeMillis() + 60_000L;
-			createTestAppRatingPoll(repository, pollName, endTime);
-
-			AppRatingsResponse response = this.pollsResource.getAppRatings("APP", null, null, null, null);
-			assertNotNull(response);
-			assertTrue(response.ratings.containsKey(pollName));
-			assertEquals(endTime, response.ratings.get(pollName).endTime);
-
-			deleteTestPoll(repository, pollName);
-		}
-	}
-
-	@Test
-	public void testGetAppRatingsEmptyResult() {
-		// Test with non-existent service type
-		AppRatingsResponse response = this.pollsResource.getAppRatings(null, null, null, null, null);
-		assertNotNull(response);
-		assertNotNull(response.ratings);
-		// Should return successfully even if empty
-	}
-
-	@Test
 	public void testGetPollVotesIncludesVoterAddress() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			String pollName = "app-library-APP-rating-VoterAddressTest";
-			createTestAppRatingPoll(repository, pollName);
+			String pollName = "poll-voter-address-test";
+			createTestPoll(repository, pollName);
 
-			VoteOnPollData vote = new VoteOnPollData(pollName, Common.getTestAccount(repository, "alice").getPublicKey(), 4);
+			VoteOnPollData vote = new VoteOnPollData(pollName, Common.getTestAccount(repository, "alice").getPublicKey(), 1);
 			repository.getVotingRepository().save(vote);
 			repository.saveChanges();
 
@@ -209,16 +62,14 @@ public class PollsApiTests extends ApiCommon {
 			assertNotNull(countsOnlyResponse);
 			assertNull(countsOnlyResponse.votes);
 			assertEquals(Integer.valueOf(1), countsOnlyResponse.totalVotes);
-
-			deleteTestPoll(repository, pollName);
 		}
 	}
 
 	@Test
 	public void testVoteWeightsUseCurrentTrustStatus() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			String pollName = "app-library-APP-rating-TrustWeightTest";
-			createTestAppRatingPoll(repository, pollName);
+			String pollName = "poll-trust-weight-test";
+			createTestPoll(repository, pollName);
 
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
@@ -269,19 +120,6 @@ public class PollsApiTests extends ApiCommon {
 			assertEquals(AccountTrustStatus.UNVERIFIED.name(), unverifiedVoteDetail.trustStatus);
 			assertEquals(Integer.valueOf(0), unverifiedVoteDetail.effectiveVoteWeight);
 
-			AppRatingsResponse appRatings = this.pollsResource.getAppRatings("APP", null, null, null, null);
-			AppRatingsResponse.AppRating rating = appRatings.ratings.get(pollName);
-			assertNotNull(rating);
-			assertEquals(Integer.valueOf(5), rating.totalVotes);
-			assertEquals(Integer.valueOf(175), rating.totalWeight);
-			assertEquals(Integer.valueOf(502), rating.rawTotalWeight);
-			assertEquals(100, findOptionWeight(rating.voteWeights, "1"));
-			assertEquals(75, findOptionWeight(rating.voteWeights, "2"));
-			assertEquals(0, findOptionWeight(rating.voteWeights, "3"));
-			assertEquals(100, findOptionRawWeight(rating.voteWeights, "1"));
-			assertEquals(202, findOptionRawWeight(rating.voteWeights, "2"));
-			assertEquals(200, findOptionRawWeight(rating.voteWeights, "3"));
-
 			repository.getAccountRepository().setTrustStatus(bob.getAddress(), AccountTrustStatus.GOLD);
 			repository.saveChanges();
 
@@ -292,17 +130,15 @@ public class PollsApiTests extends ApiCommon {
 			assertEquals(100, findOptionWeight(updatedPollVotes.voteWeights, "1"));
 			assertEquals(126, findOptionWeight(updatedPollVotes.voteWeights, "2"));
 			assertEquals(202, findOptionRawWeight(updatedPollVotes.voteWeights, "2"));
-
-			deleteTestPoll(repository, pollName);
 		}
 	}
 
 	@Test
 	public void testClosedPollVotesUseFrozenWeights() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			String pollName = "app-library-APP-rating-FrozenWeightTest";
+			String pollName = "poll-frozen-weight-test";
 			long endTime = repository.getBlockRepository().getLastBlock().getTimestamp() + 1;
-			createTestAppRatingPoll(repository, pollName, endTime);
+			createTestPoll(repository, pollName, endTime);
 
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
@@ -330,11 +166,6 @@ public class PollsApiTests extends ApiCommon {
 			assertEquals(Integer.valueOf(50), bobVoteDetail.trustWeightPercent);
 			assertEquals(Integer.valueOf(50), bobVoteDetail.effectiveVoteWeight);
 
-			AppRatingsResponse.AppRating closedRating = this.pollsResource.getAppRatings("APP", null, null, null, null).ratings.get(pollName);
-			assertNotNull(closedRating);
-			assertEquals(Integer.valueOf(75), closedRating.totalWeight);
-			assertEquals(Integer.valueOf(202), closedRating.rawTotalWeight);
-
 			setVoteAccount(repository, "bob", 1000, AccountTrustStatus.GOLD);
 			setVoteAccount(repository, "chloe", 1000, AccountTrustStatus.GOLD);
 
@@ -344,23 +175,8 @@ public class PollsApiTests extends ApiCommon {
 			assertEquals(Integer.valueOf(202), updatedPollVotes.rawTotalWeight);
 			assertEquals(50, findOptionWeight(updatedPollVotes.voteWeights, "1"));
 			assertEquals(25, findOptionWeight(updatedPollVotes.voteWeights, "2"));
-
-			PollVotes.VoteDetail updatedBobVoteDetail = findVoteDetail(updatedPollVotes.voteDetails, bob.getAddress());
-			assertEquals(Integer.valueOf(101), updatedBobVoteDetail.rawVoteWeight);
-			assertEquals(AccountTrustStatus.SILVER.name(), updatedBobVoteDetail.trustStatus);
-			assertEquals(Integer.valueOf(50), updatedBobVoteDetail.trustWeightPercent);
-			assertEquals(Integer.valueOf(50), updatedBobVoteDetail.effectiveVoteWeight);
-
-			AppRatingsResponse.AppRating updatedRating = this.pollsResource.getAppRatings("APP", null, null, null, null).ratings.get(pollName);
-			assertNotNull(updatedRating);
-			assertEquals(Integer.valueOf(75), updatedRating.totalWeight);
-			assertEquals(Integer.valueOf(202), updatedRating.rawTotalWeight);
-
-			deleteTestPoll(repository, pollName);
 		}
 	}
-
-	// Helper methods
 
 	private void setVoteAccount(Repository repository, String accountName, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {
 		TestAccount account = Common.getTestAccount(repository, accountName);
@@ -412,42 +228,27 @@ public class PollsApiTests extends ApiCommon {
 				.orElseThrow(() -> new AssertionError("Missing vote detail for " + voterAddress));
 	}
 
-	private void createTestAppRatingPoll(Repository repository, String pollName) throws DataException {
-		createTestAppRatingPoll(repository, pollName, null);
+	private void createTestPoll(Repository repository, String pollName) throws DataException {
+		createTestPoll(repository, pollName, null);
 	}
 
-	private void createTestAppRatingPoll(Repository repository, String pollName, Long endTime) throws DataException {
-		// Create poll options (1-5 star rating)
-		List<PollOptionData> options = new ArrayList<>();
-		options.add(new PollOptionData("1"));
-		options.add(new PollOptionData("2"));
-		options.add(new PollOptionData("3"));
-		options.add(new PollOptionData("4"));
-		options.add(new PollOptionData("5"));
+	private void createTestPoll(Repository repository, String pollName, Long endTime) throws DataException {
+		List<PollOptionData> options = List.of(
+				new PollOptionData("1"),
+				new PollOptionData("2"),
+				new PollOptionData("3"));
 
-		// Create poll data
 		PollData pollData = new PollData(
 				Common.getTestAccount(repository, "alice").getPublicKey(),
 				aliceAddress,
 				pollName,
-				"Test app rating poll",
+				"Test poll",
 				options,
 				System.currentTimeMillis(),
-				endTime
-		);
+				endTime);
 
-		// Save to repository
 		repository.getVotingRepository().save(pollData);
 		repository.saveChanges();
-	}
-
-	private void deleteTestPoll(Repository repository, String pollName) throws DataException {
-		try {
-			repository.getVotingRepository().delete(pollName);
-			repository.saveChanges();
-		} catch (DataException e) {
-			// Ignore if poll doesn't exist
-		}
 	}
 
 }

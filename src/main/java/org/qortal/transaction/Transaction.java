@@ -81,7 +81,8 @@ public abstract class Transaction {
 		PRESENCE(41, false),
 		SELL_ASSET_OWNERSHIP(42, false),
 		CANCEL_SELL_ASSET_OWNERSHIP(43, false),
-		BUY_ASSET_OWNERSHIP(44, false);
+		BUY_ASSET_OWNERSHIP(44, false),
+		RATE_RESOURCE(45, false);
 
 		public final int value;
 		public final boolean needsApproval;
@@ -276,6 +277,10 @@ public abstract class Transaction {
 		ASSET_ALREADY_FOR_SALE(104),
 		ASSET_NOT_FOR_SALE(105),
 		POLL_CLOSED(106),
+		INVALID_RATING(107),
+		INVALID_RESOURCE(108),
+		RESOURCE_DOES_NOT_EXIST(109),
+		ALREADY_RATED_RESOURCE(110),
 		INVALID_BUT_OK(999),
 		NOT_YET_RELEASED(1000),
 		NOT_SUPPORTED(1001);

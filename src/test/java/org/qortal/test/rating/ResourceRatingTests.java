@@ -1,0 +1,170 @@
+package org.qortal.test.rating;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.qortal.account.PrivateKeyAccount;
+import org.qortal.arbitrary.misc.Service;
+import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.rating.ResourceRatingData;
+import org.qortal.data.rating.ResourceRatingDistributionData;
+import org.qortal.data.rating.ResourceRatingSummaryData;
+import org.qortal.data.transaction.ArbitraryTransactionData;
+import org.qortal.data.transaction.RateResourceTransactionData;
+import org.qortal.data.transaction.RegisterNameTransactionData;
+import org.qortal.group.Group;
+import org.qortal.rating.ResourceRating;
+import org.qortal.repository.DataException;
+import org.qortal.repository.Repository;
+import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.ArbitraryUtils;
+import org.qortal.test.common.BlockUtils;
+import org.qortal.test.common.Common;
+import org.qortal.test.common.TestAccount;
+import org.qortal.test.common.TransactionUtils;
+import org.qortal.test.common.transaction.TestTransaction;
+import org.qortal.transaction.Transaction;
+import org.qortal.utils.Base58;
+
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+
+public class ResourceRatingTests extends Common {
+
+	private static final String RESOURCE_NAME = "rating-test-resource";
+	private static final String IDENTIFIER = "main";
+
+	@Before
+	public void beforeTest() throws DataException {
+		Common.useDefaultSettings();
+	}
+
+	@Test
+	public void testRatingValidation() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			publishResource(repository, RESOURCE_NAME, Service.APP, IDENTIFIER);
+
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			assertEquals(Transaction.ValidationResult.OK,
+					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 1)).isValid());
+			assertEquals(Transaction.ValidationResult.OK,
+					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 10)).isValid());
+			assertEquals(Transaction.ValidationResult.INVALID_RATING,
+					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 0)).isValid());
+			assertEquals(Transaction.ValidationResult.INVALID_RATING,
+					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 11)).isValid());
+			assertEquals(Transaction.ValidationResult.INVALID_RESOURCE,
+					Transaction.fromData(repository, ratingData(alice, Service.ARBITRARY_DATA, RESOURCE_NAME, IDENTIFIER, 5)).isValid());
+			assertEquals(Transaction.ValidationResult.RESOURCE_DOES_NOT_EXIST,
+					Transaction.fromData(repository, ratingData(alice, Service.APP, "missing-resource", IDENTIFIER, 5)).isValid());
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 7), alice);
+			assertEquals(Transaction.ValidationResult.ALREADY_RATED_RESOURCE,
+					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 7)).isValid());
+			assertEquals(Transaction.ValidationResult.OK,
+					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 8)).isValid());
+		}
+	}
+
+	@Test
+	public void testProcessReplaceAndOrphan() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			publishResource(repository, RESOURCE_NAME, Service.APP, IDENTIFIER);
+
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 4), alice);
+			assertActiveRating(repository, alice, 4);
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 8), alice);
+			assertActiveRating(repository, alice, 8);
+
+			BlockUtils.orphanLastBlock(repository);
+			assertActiveRating(repository, alice, 4);
+
+			BlockUtils.orphanLastBlock(repository);
+			assertNull(repository.getResourceRatingRepository().getRating(Service.APP, ResourceRating.toNameKey(RESOURCE_NAME),
+					ResourceRating.toIdentifierKey(IDENTIFIER), alice.getPublicKey()));
+		}
+	}
+
+	@Test
+	public void testSummaryUsesTrustWeightedBlocksMinted() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			publishResource(repository, RESOURCE_NAME, Service.APP, IDENTIFIER);
+
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			setVoteAccount(repository, alice, 100, AccountTrustStatus.GOLD);
+			setVoteAccount(repository, bob, 101, AccountTrustStatus.SILVER);
+			setVoteAccount(repository, chloe, 101, AccountTrustStatus.BRONZE);
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 10), alice);
+			TransactionUtils.signAndMint(repository, ratingData(bob, Service.APP, RESOURCE_NAME, IDENTIFIER, 6), bob);
+			TransactionUtils.signAndMint(repository, ratingData(chloe, Service.APP, RESOURCE_NAME, IDENTIFIER, 1), chloe);
+
+			ResourceRatingSummaryData summary = repository.getResourceRatingRepository()
+					.getRatingSummary(Service.APP, ResourceRating.toNameKey(RESOURCE_NAME), RESOURCE_NAME, ResourceRating.toIdentifierKey(IDENTIFIER));
+
+			assertEquals(3, summary.getRatingCount());
+			assertEquals(17L, summary.getRatingTotal());
+			assertEquals(Long.valueOf(302L), summary.getRawTotalWeight());
+			assertEquals(Long.valueOf(175L), summary.getTotalWeight());
+			assertEquals(17.0d / 3.0d, summary.getAverageRating(), 0.0000001d);
+			assertEquals(1707.0d / 302.0d, summary.getRawWeightedAverageRating(), 0.0000001d);
+			assertEquals(1325.0d / 175.0d, summary.getWeightedAverageRating(), 0.0000001d);
+			assertEquals(1, distributionFor(summary, 1).getRatingCount());
+			assertEquals(101L, distributionFor(summary, 1).getRawRatingWeight());
+			assertEquals(25L, distributionFor(summary, 1).getRatingWeight());
+			assertEquals(1, distributionFor(summary, 6).getRatingCount());
+			assertEquals(1, distributionFor(summary, 10).getRatingCount());
+		}
+	}
+
+	private RateResourceTransactionData ratingData(PrivateKeyAccount rater, Service service, String name, String identifier,
+			int rating) throws DataException {
+		return new RateResourceTransactionData(TestTransaction.generateBase(rater), service.value, name, identifier, rating);
+	}
+
+	private void assertActiveRating(Repository repository, PrivateKeyAccount rater, int expectedRating) throws DataException {
+		ResourceRatingData activeRating = repository.getResourceRatingRepository().getRating(Service.APP,
+				ResourceRating.toNameKey(RESOURCE_NAME), ResourceRating.toIdentifierKey(IDENTIFIER), rater.getPublicKey());
+
+		assertEquals(expectedRating, activeRating.getRating());
+	}
+
+	private ResourceRatingDistributionData distributionFor(ResourceRatingSummaryData summary, int rating) {
+		return summary.getRatingDistribution().stream()
+				.filter(distribution -> distribution.getRating() == rating)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing distribution for rating " + rating));
+	}
+
+	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {
+		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
+		if (accountData == null)
+			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
+
+		accountData.setPublicKey(account.getPublicKey());
+		accountData.setBlocksMinted(blocksMinted);
+
+		repository.getAccountRepository().setMintedBlockCount(accountData);
+		repository.getAccountRepository().setTrustStatus(account.getAddress(), trustStatus);
+		repository.saveChanges();
+	}
+
+	private void publishResource(Repository repository, String name, Service service, String identifier) throws DataException {
+		TestAccount publisher = Common.getTestAccount(repository, "alice");
+		RegisterNameTransactionData registerNameTransactionData =
+				new RegisterNameTransactionData(TestTransaction.generateBase(publisher), name, "");
+		TransactionUtils.signAndMint(repository, registerNameTransactionData, publisher);
+
+		Path path = Paths.get("src/test/resources/arbitrary/demo1");
+		ArbitraryUtils.createAndMintTxn(repository, Base58.encode(publisher.getPublicKey()), path, name, identifier,
+				ArbitraryTransactionData.Method.PUT, service, publisher);
+	}
+
+}

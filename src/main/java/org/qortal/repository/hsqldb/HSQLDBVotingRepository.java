@@ -13,7 +13,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -119,90 +118,6 @@ public class HSQLDBVotingRepository implements VotingRepository {
 			}
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch poll from repository", e);
-		}
-	}
-
-	@Override
-	public List<PollDataWithVotes> getPollsByPrefix(String prefix, Integer limit, Integer offset) throws DataException {
-		StringBuilder sql = new StringBuilder(1024);
-		StringBuilder pollNamesSql = new StringBuilder(256);
-
-		pollNamesSql.append("SELECT poll_name FROM Polls WHERE poll_name LIKE ? ORDER BY poll_name");
-		HSQLDBRepository.limitOffsetSql(pollNamesSql, limit, offset);
-
-		// Query to get all polls matching prefix with their options and aggregated vote data
-		sql.append("SELECT ");
-		sql.append("  p.poll_name, p.description, p.creator, p.owner, p.published_when, p.end_when, ");
-		sql.append("  po.option_index, po.option_name, ");
-		sql.append("  COUNT(pv.voter) AS vote_count, ");
-		sql.append("  COALESCE(SUM(").append(EFFECTIVE_VOTE_WEIGHT_SQL).append("), 0) AS vote_weight, ");
-		sql.append("  COALESCE(SUM(a.blocks_minted), 0) AS raw_vote_weight ");
-		sql.append("FROM (");
-		sql.append(pollNamesSql);
-		sql.append(") matching_polls ");
-		sql.append("JOIN Polls p ON p.poll_name = matching_polls.poll_name ");
-		sql.append("LEFT JOIN PollOptions po ON p.poll_name = po.poll_name ");
-		sql.append("LEFT JOIN PollVotes pv ON p.poll_name = pv.poll_name AND po.option_index = pv.option_index ");
-		sql.append("LEFT JOIN Accounts a ON pv.voter = a.public_key ");
-		sql.append("GROUP BY p.poll_name, p.description, p.creator, p.owner, p.published_when, p.end_when, po.option_index, po.option_name ");
-		sql.append("ORDER BY p.poll_name, po.option_index");
-
-		List<PollDataWithVotes> results = new ArrayList<>();
-		Map<String, PollDataWithVotes> pollMap = new LinkedHashMap<>();
-
-		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), prefix + "%")) {
-			if (resultSet == null)
-				return results;
-
-			// Process results - multiple rows per poll (one per option)
-			do {
-				String pollName = resultSet.getString(1);
-				String description = resultSet.getString(2);
-				byte[] creatorPublicKey = resultSet.getBytes(3);
-				String owner = resultSet.getString(4);
-				long published = resultSet.getLong(5);
-				Long endTime = getNullableLong(resultSet, 6);
-				Integer optionIndex = resultSet.getInt(7);
-				String optionName = resultSet.getString(8);
-				int voteCount = resultSet.getInt(9);
-				int voteWeight = resultSet.getInt(10);
-				int rawVoteWeight = resultSet.getInt(11);
-
-				// Get or create PollDataWithVotes for this poll
-				PollDataWithVotes pollWithVotes = pollMap.get(pollName);
-				if (pollWithVotes == null) {
-					// Create new poll data
-					PollData pollData = new PollData(creatorPublicKey, owner, pollName, description, new ArrayList<>(), published, endTime);
-					Map<String, Integer> voteCountMap = new HashMap<>();
-					Map<String, Integer> voteWeightMap = new HashMap<>();
-					Map<String, Integer> rawVoteWeightMap = new HashMap<>();
-					pollWithVotes = new PollDataWithVotes(pollData, 0, 0, 0, voteCountMap, voteWeightMap, rawVoteWeightMap);
-					pollMap.put(pollName, pollWithVotes);
-				}
-
-				// Add option to poll if not null
-				if (optionName != null) {
-					pollWithVotes.getPollData().getPollOptions().add(new PollOptionData(optionName));
-
-					// Add vote counts and weights
-					pollWithVotes.getVoteCountMap().put(optionName, voteCount);
-					pollWithVotes.getVoteWeightMap().put(optionName, voteWeight);
-					pollWithVotes.getRawVoteWeightMap().put(optionName, rawVoteWeight);
-
-					// Update totals
-					pollWithVotes.setTotalVotes(pollWithVotes.getTotalVotes() + voteCount);
-					pollWithVotes.setTotalWeight(pollWithVotes.getTotalWeight() + voteWeight);
-					pollWithVotes.setRawTotalWeight(pollWithVotes.getRawTotalWeight() + rawVoteWeight);
-				}
-
-			} while (resultSet.next());
-
-			// Convert map to list
-			results.addAll(pollMap.values());
-
-			return results;
-		} catch (SQLException e) {
-			throw new DataException("Unable to fetch polls by prefix from repository", e);
 		}
 	}
 

@@ -1162,6 +1162,18 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE INDEX PollFrozenVoteDetailsHeightIndex ON PollFrozenVoteDetails (freeze_height)");
 					break;
 
+				case 58:
+					// Store active resource ratings separately from poll votes.
+					stmt.execute("CREATE TABLE ResourceRatings (service SMALLINT NOT NULL, name_key RegisteredName NOT NULL, "
+							+ "name RegisteredName NOT NULL, identifier VARCHAR(64) NOT NULL, rater AccountPublicKey NOT NULL, "
+							+ "rating TINYINT NOT NULL, PRIMARY KEY (service, name_key, identifier, rater))");
+					stmt.execute("CREATE INDEX ResourceRatingsTargetIndex ON ResourceRatings (service, name_key, identifier)");
+
+					stmt.execute("CREATE TABLE RateResourceTransactions (signature Signature, rater AccountPublicKey NOT NULL, "
+							+ "service SMALLINT NOT NULL, name RegisteredName NOT NULL, identifier VARCHAR(64), "
+							+ "rating TINYINT NOT NULL, previous_rating TINYINT, " + TRANSACTION_KEYS + ")");
+					break;
+
 				default:
 					// nothing to do
 					return false;

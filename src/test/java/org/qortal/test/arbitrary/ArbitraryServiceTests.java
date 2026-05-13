@@ -7,12 +7,12 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.arbitrary.ArbitraryDataFile;
 import org.qortal.arbitrary.ArbitraryDataReader;
 import org.qortal.arbitrary.exception.MissingDataException;
-import org.qortal.arbitrary.misc.QdnServiceCapabilityRegistry;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.arbitrary.misc.Service.ValidationResult;
 import org.qortal.controller.arbitrary.ArbitraryDataManager;
 import org.qortal.data.transaction.ArbitraryTransactionData;
 import org.qortal.data.transaction.RegisterNameTransactionData;
+import org.qortal.rating.ResourceRating;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -581,53 +581,18 @@ public class ArbitraryServiceTests extends Common {
     }
 
     @Test
-    public void testQdnAppLibraryRatingServices() {
-        assertTrue(QdnServiceCapabilityRegistry.supportsAppLibraryRatings(Service.APP));
-        assertTrue(QdnServiceCapabilityRegistry.supportsAppLibraryRatings(Service.WEBSITE));
-        assertTrue(QdnServiceCapabilityRegistry.supportsAppLibraryRatings(Service.PLUGIN));
-        assertTrue(QdnServiceCapabilityRegistry.supportsAppLibraryRatings(Service.EXTENSION));
-        assertTrue(QdnServiceCapabilityRegistry.supportsAppLibraryRatings(Service.GAME));
-        assertFalse(QdnServiceCapabilityRegistry.supportsAppLibraryRatings(Service.DOCUMENT));
+    public void testResourceRatingServices() {
+        assertTrue(ResourceRating.isRateableService(Service.APP));
+        assertTrue(ResourceRating.isRateableService(Service.WEBSITE));
+        assertTrue(ResourceRating.isRateableService(Service.PLUGIN));
+        assertTrue(ResourceRating.isRateableService(Service.EXTENSION));
+        assertTrue(ResourceRating.isRateableService(Service.GAME));
+        assertTrue(ResourceRating.isRateableService(Service.DOCUMENT));
 
-        assertEquals(Service.PLUGIN, QdnServiceCapabilityRegistry.requireAppLibraryRatingService(" plugin "));
-
-        try {
-            QdnServiceCapabilityRegistry.requireAppLibraryRatingService("DOCUMENT");
-            fail("Expected DOCUMENT to be rejected as an app-library rating service");
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("DOCUMENT"));
-        }
-
-        try {
-            QdnServiceCapabilityRegistry.requireAppLibraryRatingService("UNKNOWN");
-            fail("Expected UNKNOWN to be rejected as an app-library rating service");
-        } catch (IllegalArgumentException e) {
-            assertTrue(e.getMessage().contains("UNKNOWN"));
-        }
-    }
-
-    @Test
-    public void testQdnAppLibraryRatingPollNameParsing() {
-        QdnServiceCapabilityRegistry.AppLibraryRatingPollName pluginPoll =
-                QdnServiceCapabilityRegistry.parseAppLibraryRatingPollName("app-library-plugin-rating-MyPlugin");
-
-        assertNotNull(pluginPoll);
-        assertEquals("PLUGIN", pluginPoll.service);
-        assertEquals("MyPlugin", pluginPoll.appName);
-        assertEquals(Service.PLUGIN, pluginPoll.knownService);
-        assertTrue(pluginPoll.ratingCapable);
-
-        QdnServiceCapabilityRegistry.AppLibraryRatingPollName unknownPoll =
-                QdnServiceCapabilityRegistry.parseAppLibraryRatingPollName("app-library-CUSTOM-rating-MyApp");
-
-        assertNotNull(unknownPoll);
-        assertEquals("CUSTOM", unknownPoll.service);
-        assertEquals("MyApp", unknownPoll.appName);
-        assertNull(unknownPoll.knownService);
-        assertFalse(unknownPoll.ratingCapable);
-
-        assertNull(QdnServiceCapabilityRegistry.parseAppLibraryRatingPollName("other-prefix-APP-rating-MyApp"));
-        assertNull(QdnServiceCapabilityRegistry.parseAppLibraryRatingPollName("app-library-APP-MyApp"));
+        assertFalse(ResourceRating.isRateableService(Service.FILE_PRIVATE));
+        assertFalse(ResourceRating.isRateableService(Service.AUTO_UPDATE));
+        assertFalse(ResourceRating.isRateableService(Service.AUTO_UPDATE_BINARY));
+        assertFalse(ResourceRating.isRateableService(Service.ARBITRARY_DATA));
     }
 
     @Test

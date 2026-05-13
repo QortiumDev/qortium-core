@@ -30,6 +30,8 @@ public interface Repository extends AutoCloseable {
 
 	public NetworkRepository getNetworkRepository();
 
+	public ResourceRatingRepository getResourceRatingRepository();
+
 	public TransactionRepository getTransactionRepository();
 
 	public VotingRepository getVotingRepository();

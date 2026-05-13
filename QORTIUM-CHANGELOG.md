@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: add resource rating transactions
+
+Replaced poll-based app ratings with a standalone resource rating transaction for the new Qortium baseline. Accounts can now rate existing public QDN resources from 1 to 10, update their own rating without creating duplicate active votes, and expose summaries that include unweighted totals plus raw `blocksMinted` and trust-tier weighted averages. This keeps general polls separate from resource ratings and gives derived chains a cleaner foundation for app, website, document, and other public QDN reputation features.
+
 ### 2026-05-13 - core: freeze closed poll results
 
 Stored a close-time snapshot for polls with an end time so their final vote counts, trust-weighted totals, raw `blocksMinted` totals, and per-voter audit weights stop changing after the closing block. Poll and app-rating APIs now use the frozen snapshot for closed polls, while open polls still show live trust-weighted results, and orphaning the closing block removes the snapshot so chain reorgs can recalculate it correctly.

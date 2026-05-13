@@ -71,6 +71,7 @@ public class HSQLDBRepository implements Repository {
 	private final MessageRepository messageRepository = new HSQLDBMessageRepository(this);
 	private final NameRepository nameRepository = new HSQLDBNameRepository(this);
 	private final NetworkRepository networkRepository = new HSQLDBNetworkRepository(this);
+	private final ResourceRatingRepository resourceRatingRepository = new HSQLDBResourceRatingRepository(this);
 	private final TransactionRepository transactionRepository = new HSQLDBTransactionRepository(this);
 	private final VotingRepository votingRepository = new HSQLDBVotingRepository(this);
 
@@ -168,6 +169,11 @@ public class HSQLDBRepository implements Repository {
 	@Override
 	public NetworkRepository getNetworkRepository() {
 		return this.networkRepository;
+	}
+
+	@Override
+	public ResourceRatingRepository getResourceRatingRepository() {
+		return this.resourceRatingRepository;
 	}
 
 	@Override
