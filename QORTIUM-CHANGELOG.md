@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - i18n: translate remaining validation messages
+
+Translated the remaining validation messages that were still written in English inside non-English language files. This keeps user-facing transaction error text more consistent across supported languages without changing validation behavior or consensus rules.
+
 ### 2026-05-13 - core: add poll end times
 
 Added optional end times for polls so new polls can close at a defined timestamp while older and open-ended polls keep their existing behavior. Poll creation now stores the close time on chain, poll and app-rating APIs expose it, and vote transactions are rejected once the containing block reaches the poll's end time, including attempts to change an existing vote. This only stops further voting; freezing the final trust-weighted results remains the next planned step.
