@@ -125,10 +125,10 @@ foundation only:
   can be compared
 - no admin API, config loader, or BrightID/Aura importer sets trust status yet
 
-This means a trust-status change affects existing poll tallies immediately. A
-poll end-time feature now lets polls stop accepting votes at a defined time.
-Closed polls still need a later frozen-tally step before their effective vote
-weights are locked permanently.
+This means a trust-status change affects open poll tallies immediately. Polls
+with an end time stop accepting votes at the closing block, and Qortium stores
+a frozen tally snapshot at that block so later trust-status or `blocksMinted`
+changes do not move the closed result.
 
 ## Why This Fits Qortium
 
@@ -186,9 +186,8 @@ long-term import and governance path is finalized.
 7. Add tests for mint eligibility, vote weighting, audit fields, and
    trust-status changes.
 
-Later implementation steps should add the trust-status acceptance path,
-operator/user-facing audit fields, and frozen poll tallies that lock vote
-weights at poll close.
+Later implementation steps should add the trust-status acceptance path and
+operator/user-facing trust-status controls.
 
 ## Test Scenarios
 
@@ -205,10 +204,10 @@ The first implementation should cover at least these cases:
   vote weight while the account remains Suspicious.
 - account and vote APIs expose the raw `blocksMinted`, trust status,
   multiplier, and effective vote weight used by the current tally.
-- trust-status changes affect existing poll tallies immediately while Qortium
-  uses current-status weighting.
+- trust-status changes affect open poll tallies immediately while Qortium uses
+  current-status weighting.
 - polls can optionally close at a defined end time, after which new votes and
-  vote changes are rejected.
+  vote changes are rejected and final weights are frozen.
 
 ## Open Decisions
 
@@ -217,5 +216,3 @@ The first implementation should cover at least these cases:
   online-account validation and block minting?
 - Should the 100%, 50%, and 25% multipliers be fixed consensus constants or
   configurable chain parameters?
-- How should optional poll end times lock effective vote weights once that poll
-  feature exists?

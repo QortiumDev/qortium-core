@@ -1589,6 +1589,9 @@ public class Block {
 		// Group-approval transactions
 		processGroupApprovalTransactions();
 
+		// Snapshot polls that close at this block timestamp before later account changes can move their weights.
+		freezeClosedPolls();
+
 		// Process AT fees and save AT states into repository
 		processAtFeesAndStates();
 
@@ -1789,6 +1792,10 @@ public class Block {
 		}
 	}
 
+	protected void freezeClosedPolls() throws DataException {
+		this.repository.getVotingRepository().freezeClosedPolls(this.blockData.getHeight(), this.blockData.getTimestamp());
+	}
+
 	protected void processAtFeesAndStates() throws DataException {
 		ATRepository atRepository = this.repository.getATRepository();
 
@@ -1852,6 +1859,9 @@ public class Block {
 
 		// Return AT fees and delete AT states from repository
 		orphanAtFeesAndStates();
+
+		// Remove poll result snapshots created by this block before vote transactions are orphaned.
+		this.repository.getVotingRepository().deleteFrozenPollResultsAtHeight(this.blockData.getHeight());
 
 		// Orphan, and unlink, transactions from this block
 		orphanTransactionsFromBlock();

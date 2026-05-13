@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: freeze closed poll results
+
+Stored a close-time snapshot for polls with an end time so their final vote counts, trust-weighted totals, raw `blocksMinted` totals, and per-voter audit weights stop changing after the closing block. Poll and app-rating APIs now use the frozen snapshot for closed polls, while open polls still show live trust-weighted results, and orphaning the closing block removes the snapshot so chain reorgs can recalculate it correctly.
+
 ### 2026-05-13 - i18n: translate remaining validation messages
 
 Translated the remaining validation messages that were still written in English inside non-English language files. This keeps user-facing transaction error text more consistent across supported languages without changing validation behavior or consensus rules.

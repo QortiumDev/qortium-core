@@ -1147,6 +1147,21 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "CreatePollTransactions", "end_when", "EpochMillis");
 					break;
 
+				case 57:
+					// Store close-time poll result snapshots so ended polls do not keep moving with later account changes.
+					stmt.execute("CREATE TABLE PollFrozenResults (poll_name PollName, option_index PollOptionIndex NOT NULL, "
+							+ "vote_count INT NOT NULL, vote_weight INT NOT NULL, raw_vote_weight INT NOT NULL, "
+							+ "freeze_height INT NOT NULL, freeze_timestamp EpochMillis NOT NULL, "
+							+ "PRIMARY KEY (poll_name, option_index), FOREIGN KEY (poll_name) REFERENCES Polls (poll_name) ON DELETE CASCADE)");
+					stmt.execute("CREATE INDEX PollFrozenResultsHeightIndex ON PollFrozenResults (freeze_height)");
+
+					stmt.execute("CREATE TABLE PollFrozenVoteDetails (poll_name PollName, voter AccountPublicKey NOT NULL, option_index PollOptionIndex NOT NULL, "
+							+ "raw_vote_weight INT NOT NULL, trust_status INT NOT NULL, trust_weight_percent INT NOT NULL, effective_vote_weight INT NOT NULL, "
+							+ "freeze_height INT NOT NULL, freeze_timestamp EpochMillis NOT NULL, "
+							+ "PRIMARY KEY (poll_name, voter), FOREIGN KEY (poll_name) REFERENCES Polls (poll_name) ON DELETE CASCADE)");
+					stmt.execute("CREATE INDEX PollFrozenVoteDetailsHeightIndex ON PollFrozenVoteDetails (freeze_height)");
+					break;
+
 				default:
 					// nothing to do
 					return false;

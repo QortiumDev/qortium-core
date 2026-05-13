@@ -3,7 +3,9 @@ package org.qortal.repository.hsqldb;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollDataWithVotes;
 import org.qortal.data.voting.PollOptionData;
+import org.qortal.data.voting.PollVoteWeightData;
 import org.qortal.data.voting.VoteOnPollData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.repository.DataException;
 import org.qortal.repository.VotingRepository;
 
@@ -22,6 +24,11 @@ public class HSQLDBVotingRepository implements VotingRepository {
 			+ "WHEN 3 THEN a.blocks_minted "
 			+ "WHEN 2 THEN a.blocks_minted / 2 "
 			+ "WHEN 1 THEN a.blocks_minted / 4 "
+			+ "ELSE 0 END";
+	private static final String TRUST_WEIGHT_PERCENT_SQL = "CASE COALESCE(a.trust_status, 0) "
+			+ "WHEN 3 THEN 100 "
+			+ "WHEN 2 THEN 50 "
+			+ "WHEN 1 THEN 25 "
 			+ "ELSE 0 END";
 
 	public HSQLDBVotingRepository(HSQLDBRepository repository) {
@@ -249,6 +256,131 @@ public class HSQLDBVotingRepository implements VotingRepository {
 		}
 	}
 
+	// Frozen poll results
+
+	@Override
+	public void freezeClosedPolls(int blockHeight, long blockTimestamp) throws DataException {
+		String frozenResultsSql = "INSERT INTO PollFrozenResults "
+				+ "(poll_name, option_index, vote_count, vote_weight, raw_vote_weight, freeze_height, freeze_timestamp) "
+				+ "SELECT p.poll_name, po.option_index, COUNT(pv.voter), "
+				+ "COALESCE(SUM(" + EFFECTIVE_VOTE_WEIGHT_SQL + "), 0), "
+				+ "COALESCE(SUM(a.blocks_minted), 0), ?, ? "
+				+ "FROM Polls p "
+				+ "JOIN PollOptions po ON po.poll_name = p.poll_name "
+				+ "LEFT JOIN PollVotes pv ON pv.poll_name = p.poll_name AND pv.option_index = po.option_index "
+				+ "LEFT JOIN Accounts a ON pv.voter = a.public_key "
+				+ "WHERE p.end_when IS NOT NULL AND p.end_when <= ? "
+				+ "AND NOT EXISTS (SELECT TRUE FROM PollFrozenResults pfr WHERE pfr.poll_name = p.poll_name) "
+				+ "GROUP BY p.poll_name, po.option_index";
+
+		String frozenVoteDetailsSql = "INSERT INTO PollFrozenVoteDetails "
+				+ "(poll_name, voter, option_index, raw_vote_weight, trust_status, trust_weight_percent, effective_vote_weight, freeze_height, freeze_timestamp) "
+				+ "SELECT p.poll_name, pv.voter, pv.option_index, COALESCE(a.blocks_minted, 0), COALESCE(a.trust_status, 0), "
+				+ TRUST_WEIGHT_PERCENT_SQL + ", " + EFFECTIVE_VOTE_WEIGHT_SQL + ", ?, ? "
+				+ "FROM Polls p "
+				+ "JOIN PollVotes pv ON pv.poll_name = p.poll_name "
+				+ "LEFT JOIN Accounts a ON pv.voter = a.public_key "
+				+ "WHERE EXISTS (SELECT TRUE FROM PollFrozenResults pfr WHERE pfr.poll_name = p.poll_name AND pfr.freeze_height = ?) "
+				+ "AND NOT EXISTS (SELECT TRUE FROM PollFrozenVoteDetails pfv WHERE pfv.poll_name = p.poll_name)";
+
+		try {
+			this.repository.executeCheckedUpdate(frozenResultsSql, blockHeight, blockTimestamp, blockTimestamp);
+			this.repository.executeCheckedUpdate(frozenVoteDetailsSql, blockHeight, blockTimestamp, blockHeight);
+		} catch (SQLException e) {
+			throw new DataException("Unable to freeze closed poll results in repository", e);
+		}
+	}
+
+	@Override
+	public void deleteFrozenPollResultsAtHeight(int blockHeight) throws DataException {
+		try {
+			this.repository.delete("PollFrozenVoteDetails", "freeze_height = ?", blockHeight);
+			this.repository.delete("PollFrozenResults", "freeze_height = ?", blockHeight);
+		} catch (SQLException e) {
+			throw new DataException("Unable to delete frozen poll results from repository", e);
+		}
+	}
+
+	@Override
+	public PollDataWithVotes getFrozenPollResults(String pollName) throws DataException {
+		PollData pollData = this.fromPollName(pollName);
+		if (pollData == null)
+			return null;
+
+		String sql = "SELECT po.option_name, pfr.vote_count, pfr.vote_weight, pfr.raw_vote_weight, pfr.freeze_height "
+				+ "FROM PollOptions po "
+				+ "LEFT JOIN PollFrozenResults pfr ON pfr.poll_name = po.poll_name AND pfr.option_index = po.option_index "
+				+ "WHERE po.poll_name = ? "
+				+ "ORDER BY po.option_index ASC";
+
+		Map<String, Integer> voteCountMap = new HashMap<>();
+		Map<String, Integer> voteWeightMap = new HashMap<>();
+		Map<String, Integer> rawVoteWeightMap = new HashMap<>();
+		int totalVotes = 0;
+		int totalWeight = 0;
+		int rawTotalWeight = 0;
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollName)) {
+			if (resultSet == null)
+				return null;
+
+			do {
+				String optionName = resultSet.getString(1);
+				int voteCount = resultSet.getInt(2);
+				int voteWeight = resultSet.getInt(3);
+				int rawVoteWeight = resultSet.getInt(4);
+				Integer freezeHeight = getNullableInteger(resultSet, 5);
+
+				if (freezeHeight == null)
+					return null;
+
+				voteCountMap.put(optionName, voteCount);
+				voteWeightMap.put(optionName, voteWeight);
+				rawVoteWeightMap.put(optionName, rawVoteWeight);
+
+				totalVotes += voteCount;
+				totalWeight += voteWeight;
+				rawTotalWeight += rawVoteWeight;
+			} while (resultSet.next());
+
+			return new PollDataWithVotes(pollData, totalVotes, totalWeight, rawTotalWeight, voteCountMap, voteWeightMap, rawVoteWeightMap);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch frozen poll results from repository", e);
+		}
+	}
+
+	@Override
+	public List<PollVoteWeightData> getFrozenPollVoteWeights(String pollName) throws DataException {
+		String sql = "SELECT voter, option_index, raw_vote_weight, trust_status, trust_weight_percent, effective_vote_weight, freeze_height, freeze_timestamp "
+				+ "FROM PollFrozenVoteDetails "
+				+ "WHERE poll_name = ? "
+				+ "ORDER BY option_index ASC, voter ASC";
+		List<PollVoteWeightData> voteWeights = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, pollName)) {
+			if (resultSet == null)
+				return voteWeights;
+
+			do {
+				byte[] voterPublicKey = resultSet.getBytes(1);
+				int optionIndex = resultSet.getInt(2);
+				int rawVoteWeight = resultSet.getInt(3);
+				AccountTrustStatus trustStatus = AccountTrustStatus.valueOf(resultSet.getInt(4));
+				int trustWeightPercent = resultSet.getInt(5);
+				int effectiveVoteWeight = resultSet.getInt(6);
+				int freezeHeight = resultSet.getInt(7);
+				long freezeTimestamp = resultSet.getLong(8);
+
+				voteWeights.add(new PollVoteWeightData(pollName, voterPublicKey, optionIndex, rawVoteWeight,
+						trustStatus, trustWeightPercent, effectiveVoteWeight, freezeHeight, freezeTimestamp));
+			} while (resultSet.next());
+
+			return voteWeights;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch frozen poll vote weights from repository", e);
+		}
+	}
+
 	// Votes
 
 	@Override
@@ -315,6 +447,11 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	private static Long getNullableLong(ResultSet resultSet, int columnIndex) throws SQLException {
 		long value = resultSet.getLong(columnIndex);
+		return resultSet.wasNull() ? null : value;
+	}
+
+	private static Integer getNullableInteger(ResultSet resultSet, int columnIndex) throws SQLException {
+		int value = resultSet.getInt(columnIndex);
 		return resultSet.wasNull() ? null : value;
 	}
 

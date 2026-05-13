@@ -24,6 +24,7 @@ import org.qortal.data.transaction.VoteOnPollTransactionData;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollDataWithVotes;
 import org.qortal.data.voting.PollOptionData;
+import org.qortal.data.voting.PollVoteWeightData;
 import org.qortal.data.voting.VoteOnPollData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -130,6 +131,12 @@ public class PollsResource {
                     if (pollData == null)
                             throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.POLL_NO_EXISTS);
 
+                    boolean countsOnly = onlyCounts != null && onlyCounts;
+                    long latestBlockTimestamp = repository.getBlockRepository().getLastBlock().getTimestamp();
+                    PollDataWithVotes frozenPollResults = getFrozenPollResultsForClosedPoll(repository, pollData, latestBlockTimestamp);
+                    if (frozenPollResults != null)
+                            return buildFrozenPollVotesResponse(repository, pollName, countsOnly, frozenPollResults);
+
                     List<VoteOnPollData> votes = repository.getVotingRepository().getVotes(pollName);
 
                     // Initialize map for counting votes
@@ -145,7 +152,6 @@ public class PollsResource {
                             rawVoteWeightMap.put(optionData.getOptionName(), 0);
                     }
 
-                    boolean countsOnly = onlyCounts != null && onlyCounts;
                     List<PollVotes.VoteDetail> voteDetails = countsOnly ? null : new ArrayList<>();
                     int totalVotes = 0;
                     int totalWeight = 0;
@@ -180,13 +186,9 @@ public class PollsResource {
                     }
 
                     // Convert map to list of VoteInfo
-                    List<PollVotes.OptionCount> voteCounts = voteCountMap.entrySet().stream()
-                        .map(entry -> new PollVotes.OptionCount(entry.getKey(), entry.getValue()))
-                        .collect(Collectors.toList());
+                    List<PollVotes.OptionCount> voteCounts = buildOptionCounts(voteCountMap);
                     // Convert map to list of WeightInfo
-                    List<PollVotes.OptionWeight> voteWeights = voteWeightMap.entrySet().stream()
-                        .map(entry -> new PollVotes.OptionWeight(entry.getKey(), entry.getValue(), rawVoteWeightMap.get(entry.getKey())))
-                        .collect(Collectors.toList());
+                    List<PollVotes.OptionWeight> voteWeights = buildOptionWeights(voteWeightMap, rawVoteWeightMap);
     
                     if (countsOnly) {
                         return new PollVotes(null, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights, null);
@@ -264,10 +266,16 @@ public class PollsResource {
 
                     // Build response
                     Map<String, AppRatingsResponse.AppRating> ratingsMap = new HashMap<>();
+                    long latestBlockTimestamp = repository.getBlockRepository().getLastBlock().getTimestamp();
 
                     for (PollDataWithVotes pollWithVotes : pollsWithVotes) {
                             PollData pollData = pollWithVotes.getPollData();
                             String pollName = pollData.getPollName();
+                            PollDataWithVotes frozenPollResults = getFrozenPollResultsForClosedPoll(repository, pollData, latestBlockTimestamp);
+                            if (frozenPollResults != null) {
+                                    pollWithVotes = frozenPollResults;
+                                    pollData = pollWithVotes.getPollData();
+                            }
 
                             // Parse poll name: app-library-{SERVICE}-rating-{APP_NAME}
                             String extractedService = null;
@@ -280,16 +288,8 @@ public class PollsResource {
                             }
 
                             // Convert vote maps to lists
-                            List<PollVotes.OptionCount> voteCounts = pollWithVotes.getVoteCountMap().entrySet().stream()
-                                    .map(e -> new PollVotes.OptionCount(e.getKey(), e.getValue()))
-                                    .collect(Collectors.toList());
-
-                            List<PollVotes.OptionWeight> voteWeights = pollWithVotes.getVoteWeightMap().entrySet().stream()
-                                    .map(e -> new PollVotes.OptionWeight(
-                                            e.getKey(),
-                                            e.getValue(),
-                                            pollWithVotes.getRawVoteWeightMap().getOrDefault(e.getKey(), 0)))
-                                    .collect(Collectors.toList());
+                            List<PollVotes.OptionCount> voteCounts = buildOptionCounts(pollWithVotes.getVoteCountMap());
+                            List<PollVotes.OptionWeight> voteWeights = buildOptionWeights(pollWithVotes.getVoteWeightMap(), pollWithVotes.getRawVoteWeightMap());
 
                             AppRatingsResponse.AppRating rating = new AppRatingsResponse.AppRating(
                                     pollName,
@@ -410,4 +410,46 @@ public class PollsResource {
         }
     }
     
+    private PollDataWithVotes getFrozenPollResultsForClosedPoll(Repository repository, PollData pollData, long latestBlockTimestamp) throws DataException {
+            if (!pollData.isClosedAt(latestBlockTimestamp))
+                    return null;
+
+            return repository.getVotingRepository().getFrozenPollResults(pollData.getPollName());
+    }
+
+    private PollVotes buildFrozenPollVotesResponse(Repository repository, String pollName, boolean countsOnly, PollDataWithVotes frozenPollResults) throws DataException {
+            List<PollVotes.OptionCount> voteCounts = buildOptionCounts(frozenPollResults.getVoteCountMap());
+            List<PollVotes.OptionWeight> voteWeights = buildOptionWeights(frozenPollResults.getVoteWeightMap(), frozenPollResults.getRawVoteWeightMap());
+            List<VoteOnPollData> votes = countsOnly ? null : repository.getVotingRepository().getVotes(pollName);
+            List<PollVotes.VoteDetail> voteDetails = countsOnly ? null : buildVoteDetails(repository.getVotingRepository().getFrozenPollVoteWeights(pollName));
+
+            return new PollVotes(votes, frozenPollResults.getTotalVotes(), frozenPollResults.getTotalWeight(),
+                    frozenPollResults.getRawTotalWeight(), voteCounts, voteWeights, voteDetails);
+    }
+
+    private List<PollVotes.OptionCount> buildOptionCounts(Map<String, Integer> voteCountMap) {
+            return voteCountMap.entrySet().stream()
+                    .map(entry -> new PollVotes.OptionCount(entry.getKey(), entry.getValue()))
+                    .collect(Collectors.toList());
+    }
+
+    private List<PollVotes.OptionWeight> buildOptionWeights(Map<String, Integer> voteWeightMap, Map<String, Integer> rawVoteWeightMap) {
+            return voteWeightMap.entrySet().stream()
+                    .map(entry -> new PollVotes.OptionWeight(entry.getKey(), entry.getValue(), rawVoteWeightMap.getOrDefault(entry.getKey(), 0)))
+                    .collect(Collectors.toList());
+    }
+
+    private List<PollVotes.VoteDetail> buildVoteDetails(List<PollVoteWeightData> voteWeights) {
+            return voteWeights.stream()
+                    .map(voteWeight -> new PollVotes.VoteDetail(
+                            Crypto.toAddress(voteWeight.getVoterPublicKey()),
+                            voteWeight.getOptionIndex(),
+                            voteWeight.getRawVoteWeight(),
+                            voteWeight.getTrustStatus().name(),
+                            voteWeight.getTrustStatus().getValue(),
+                            voteWeight.getTrustWeightPercent(),
+                            voteWeight.getEffectiveVoteWeight()))
+                    .collect(Collectors.toList());
+    }
+
 }

@@ -17,6 +17,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.ApiCommon;
+import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 
@@ -291,6 +292,69 @@ public class PollsApiTests extends ApiCommon {
 			assertEquals(100, findOptionWeight(updatedPollVotes.voteWeights, "1"));
 			assertEquals(126, findOptionWeight(updatedPollVotes.voteWeights, "2"));
 			assertEquals(202, findOptionRawWeight(updatedPollVotes.voteWeights, "2"));
+
+			deleteTestPoll(repository, pollName);
+		}
+	}
+
+	@Test
+	public void testClosedPollVotesUseFrozenWeights() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "app-library-APP-rating-FrozenWeightTest";
+			long endTime = repository.getBlockRepository().getLastBlock().getTimestamp() + 1;
+			createTestAppRatingPoll(repository, pollName, endTime);
+
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			setVoteAccount(repository, "bob", 101, AccountTrustStatus.SILVER);
+			setVoteAccount(repository, "chloe", 101, AccountTrustStatus.BRONZE);
+
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 0));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 1));
+			repository.saveChanges();
+
+			BlockUtils.mintBlock(repository);
+			assertNotNull(repository.getVotingRepository().getFrozenPollResults(pollName));
+
+			PollVotes closedPollVotes = this.pollsResource.getPollVotes(pollName, false);
+			assertEquals(Integer.valueOf(2), closedPollVotes.totalVotes);
+			assertEquals(Integer.valueOf(75), closedPollVotes.totalWeight);
+			assertEquals(Integer.valueOf(202), closedPollVotes.rawTotalWeight);
+			assertEquals(50, findOptionWeight(closedPollVotes.voteWeights, "1"));
+			assertEquals(25, findOptionWeight(closedPollVotes.voteWeights, "2"));
+			assertEquals(101, findOptionRawWeight(closedPollVotes.voteWeights, "1"));
+			assertEquals(101, findOptionRawWeight(closedPollVotes.voteWeights, "2"));
+
+			PollVotes.VoteDetail bobVoteDetail = findVoteDetail(closedPollVotes.voteDetails, bob.getAddress());
+			assertEquals(AccountTrustStatus.SILVER.name(), bobVoteDetail.trustStatus);
+			assertEquals(Integer.valueOf(50), bobVoteDetail.trustWeightPercent);
+			assertEquals(Integer.valueOf(50), bobVoteDetail.effectiveVoteWeight);
+
+			AppRatingsResponse.AppRating closedRating = this.pollsResource.getAppRatings("APP", null, null, null, null).ratings.get(pollName);
+			assertNotNull(closedRating);
+			assertEquals(Integer.valueOf(75), closedRating.totalWeight);
+			assertEquals(Integer.valueOf(202), closedRating.rawTotalWeight);
+
+			setVoteAccount(repository, "bob", 1000, AccountTrustStatus.GOLD);
+			setVoteAccount(repository, "chloe", 1000, AccountTrustStatus.GOLD);
+
+			PollVotes updatedPollVotes = this.pollsResource.getPollVotes(pollName, false);
+			assertEquals(Integer.valueOf(2), updatedPollVotes.totalVotes);
+			assertEquals(Integer.valueOf(75), updatedPollVotes.totalWeight);
+			assertEquals(Integer.valueOf(202), updatedPollVotes.rawTotalWeight);
+			assertEquals(50, findOptionWeight(updatedPollVotes.voteWeights, "1"));
+			assertEquals(25, findOptionWeight(updatedPollVotes.voteWeights, "2"));
+
+			PollVotes.VoteDetail updatedBobVoteDetail = findVoteDetail(updatedPollVotes.voteDetails, bob.getAddress());
+			assertEquals(Integer.valueOf(101), updatedBobVoteDetail.rawVoteWeight);
+			assertEquals(AccountTrustStatus.SILVER.name(), updatedBobVoteDetail.trustStatus);
+			assertEquals(Integer.valueOf(50), updatedBobVoteDetail.trustWeightPercent);
+			assertEquals(Integer.valueOf(50), updatedBobVoteDetail.effectiveVoteWeight);
+
+			AppRatingsResponse.AppRating updatedRating = this.pollsResource.getAppRatings("APP", null, null, null, null).ratings.get(pollName);
+			assertNotNull(updatedRating);
+			assertEquals(Integer.valueOf(75), updatedRating.totalWeight);
+			assertEquals(Integer.valueOf(202), updatedRating.rawTotalWeight);
 
 			deleteTestPoll(repository, pollName);
 		}

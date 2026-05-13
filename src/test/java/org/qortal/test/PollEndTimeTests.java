@@ -4,17 +4,25 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
+import org.qortal.crypto.Crypto;
+import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.CreatePollTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.VoteOnPollTransactionData;
 import org.qortal.data.voting.PollData;
+import org.qortal.data.voting.PollDataWithVotes;
 import org.qortal.data.voting.PollOptionData;
+import org.qortal.data.voting.PollVoteWeightData;
+import org.qortal.data.voting.VoteOnPollData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.transaction.CreatePollTransaction;
 import org.qortal.transaction.Transaction;
@@ -28,6 +36,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 public class PollEndTimeTests extends Common {
@@ -122,6 +131,51 @@ public class PollEndTimeTests extends Common {
 		}
 	}
 
+	@Test
+	public void testBlockProcessingFreezesAndOrphanDeletesClosedPollResults() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			String pollName = "block-frozen-results-poll";
+			long published = repository.getBlockRepository().getLastBlock().getTimestamp();
+			long endTime = published + 1;
+
+			repository.getVotingRepository().save(new PollData(alice.getPublicKey(), alice.getAddress(), pollName, "Test poll", buildPollOptions(), published, endTime));
+			setVoteAccount(repository, "bob", 101, AccountTrustStatus.SILVER);
+			setVoteAccount(repository, "chloe", 101, AccountTrustStatus.BRONZE);
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 0));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 1));
+			repository.saveChanges();
+
+			assertNull(repository.getVotingRepository().getFrozenPollResults(pollName));
+
+			BlockUtils.mintBlock(repository);
+
+			PollDataWithVotes frozenResults = repository.getVotingRepository().getFrozenPollResults(pollName);
+			assertNotNull(frozenResults);
+			assertEquals(Integer.valueOf(2), frozenResults.getTotalVotes());
+			assertEquals(Integer.valueOf(75), frozenResults.getTotalWeight());
+			assertEquals(Integer.valueOf(202), frozenResults.getRawTotalWeight());
+			assertEquals(Integer.valueOf(1), frozenResults.getVoteCountMap().get("Yes"));
+			assertEquals(Integer.valueOf(1), frozenResults.getVoteCountMap().get("No"));
+			assertEquals(Integer.valueOf(50), frozenResults.getVoteWeightMap().get("Yes"));
+			assertEquals(Integer.valueOf(25), frozenResults.getVoteWeightMap().get("No"));
+
+			List<PollVoteWeightData> frozenVoteWeights = repository.getVotingRepository().getFrozenPollVoteWeights(pollName);
+			assertEquals(2, frozenVoteWeights.size());
+			PollVoteWeightData bobVoteWeight = findVoteWeight(frozenVoteWeights, bob.getAddress());
+			assertEquals(AccountTrustStatus.SILVER, bobVoteWeight.getTrustStatus());
+			assertEquals(101, bobVoteWeight.getRawVoteWeight());
+			assertEquals(50, bobVoteWeight.getEffectiveVoteWeight());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assertNull(repository.getVotingRepository().getFrozenPollResults(pollName));
+			assertEquals(0, repository.getVotingRepository().getFrozenPollVoteWeights(pollName).size());
+		}
+	}
+
 	private CreatePollTransactionData buildCreatePollTransactionData(PrivateKeyAccount creator, String pollName, long timestamp, Long endTime) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				timestamp,
@@ -143,6 +197,26 @@ public class PollEndTimeTests extends Common {
 				null);
 
 		return new VoteOnPollTransactionData(baseTransactionData, pollName, optionIndex);
+	}
+
+	private void setVoteAccount(Repository repository, String accountName, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {
+		TestAccount account = Common.getTestAccount(repository, accountName);
+		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
+		if (accountData == null)
+			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
+
+		accountData.setPublicKey(account.getPublicKey());
+		accountData.setBlocksMinted(blocksMinted);
+
+		repository.getAccountRepository().setMintedBlockCount(accountData);
+		repository.getAccountRepository().setTrustStatus(account.getAddress(), trustStatus);
+	}
+
+	private PollVoteWeightData findVoteWeight(List<PollVoteWeightData> voteWeights, String voterAddress) {
+		return voteWeights.stream()
+				.filter(voteWeight -> Crypto.toAddress(voteWeight.getVoterPublicKey()).equals(voterAddress))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing frozen vote weight for " + voterAddress));
 	}
 
 	private List<PollOptionData> buildPollOptions() {
