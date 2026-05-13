@@ -2,6 +2,7 @@ package org.qortal.test.api;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.api.ApiError;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.model.PollVotes;
 import org.qortal.api.resource.PollsResource;
@@ -21,6 +22,7 @@ import org.qortal.test.common.TestAccount;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -38,6 +40,55 @@ public class PollsApiTests extends ApiCommon {
 	@Test
 	public void testResource() {
 		assertNotNull(this.pollsResource);
+	}
+
+	@Test
+	public void testSearchPollsByQuery() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			long now = repository.getBlockRepository().getLastBlock().getTimestamp();
+			createTestPoll(repository, "api-poll-search-open", "plain description", now - 2_000L, null, "alice");
+			createTestPoll(repository, "api-poll-search-closed", "plain description", now - 1_000L, now, "alice");
+		}
+
+		List<PollData> polls = this.pollsResource.searchPolls("api-poll-search", null, null, null,
+				null, null, null, null, null, null);
+
+		assertEquals(List.of("api-poll-search-open", "api-poll-search-closed"), pollNames(polls));
+	}
+
+	@Test
+	public void testSearchPollsByOpenStatus() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			long now = repository.getBlockRepository().getLastBlock().getTimestamp();
+			createTestPoll(repository, "api-poll-status-open", "status search", now - 2_000L, null, "alice");
+			createTestPoll(repository, "api-poll-status-closed", "status search", now - 1_000L, now, "alice");
+		}
+
+		List<PollData> polls = this.pollsResource.searchPolls("api-poll-status", null, null, "OPEN",
+				null, null, null, null, null, null);
+
+		assertEquals(List.of("api-poll-status-open"), pollNames(polls));
+	}
+
+	@Test
+	public void testSearchPollsRejectsInvalidStatus() {
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.pollsResource.searchPolls(null, null, null, "ENDED",
+						null, null, null, null, null, null));
+	}
+
+	@Test
+	public void testSearchPollsRejectsInvalidOwner() {
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.pollsResource.searchPolls(null, null, "not-an-address", null,
+						null, null, null, null, null, null));
+	}
+
+	@Test
+	public void testSearchPollsRejectsInvalidTimestampRange() {
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.pollsResource.searchPolls(null, null, null, null,
+						null, 2_000L, 1_000L, null, null, null));
 	}
 
 	@Test
@@ -233,22 +284,33 @@ public class PollsApiTests extends ApiCommon {
 	}
 
 	private void createTestPoll(Repository repository, String pollName, Long endTime) throws DataException {
+		createTestPoll(repository, pollName, "Test poll", System.currentTimeMillis(), endTime, "alice");
+	}
+
+	private void createTestPoll(Repository repository, String pollName, String description, long published,
+			Long endTime, String ownerAccountName) throws DataException {
 		List<PollOptionData> options = List.of(
 				new PollOptionData("1"),
 				new PollOptionData("2"),
 				new PollOptionData("3"));
 
+		TestAccount owner = Common.getTestAccount(repository, ownerAccountName);
+
 		PollData pollData = new PollData(
 				Common.getTestAccount(repository, "alice").getPublicKey(),
-				aliceAddress,
+				owner.getAddress(),
 				pollName,
-				"Test poll",
+				description,
 				options,
-				System.currentTimeMillis(),
+				published,
 				endTime);
 
 		repository.getVotingRepository().save(pollData);
 		repository.saveChanges();
+	}
+
+	private static List<String> pollNames(List<PollData> polls) {
+		return polls.stream().map(PollData::getPollName).collect(Collectors.toList());
 	}
 
 }

@@ -4,8 +4,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.controller.Controller;
 import org.qortal.utils.StartupStatus;
+import org.qortal.utils.Unicode;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -315,6 +317,7 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE TABLE Polls (poll_name PollName, creator AccountPublicKey NOT NULL, "
 							+ "owner AccountAddress NOT NULL, published_when EpochMillis NOT NULL, "
 							+ "description GenericDescription NOT NULL, "
+							+ "reduced_poll_name PollName NOT NULL, "
 							+ "PRIMARY KEY (poll_name))");
 					// For when a user wants to lookup poll they own
 					stmt.execute("CREATE INDEX PollOwnerIndex on Polls (owner)");
@@ -1187,6 +1190,16 @@ public class HSQLDBDatabaseUpdates {
 							+ TRANSACTION_KEYS + ")");
 					break;
 
+				case 60:
+					// Add normalized poll names and indexes for server-side poll search.
+					addColumnIfMissing(connection, "Polls", "reduced_poll_name", "PollName DEFAULT '' NOT NULL");
+					backfillReducedPollNames(connection);
+
+					stmt.execute("CREATE INDEX PollReducedNameIndex ON Polls (reduced_poll_name)");
+					stmt.execute("CREATE INDEX PollPublishedIndex ON Polls (published_when, poll_name)");
+					stmt.execute("CREATE INDEX PollEndTimeIndex ON Polls (end_when, poll_name)");
+					break;
+
 				default:
 					// nothing to do
 					return false;
@@ -1217,6 +1230,22 @@ public class HSQLDBDatabaseUpdates {
 
 		try (Statement stmt = connection.createStatement()) {
 			stmt.execute(String.format("ALTER TABLE %s ADD COLUMN %s %s", tableName, columnName, columnDefinition));
+		}
+	}
+
+	private static void backfillReducedPollNames(Connection connection) throws SQLException {
+		try (Statement selectStatement = connection.createStatement();
+				ResultSet resultSet = selectStatement.executeQuery("SELECT poll_name FROM Polls");
+				PreparedStatement updateStatement = connection.prepareStatement("UPDATE Polls SET reduced_poll_name = ? WHERE poll_name = ?")) {
+			while (resultSet.next()) {
+				String pollName = resultSet.getString(1);
+
+				updateStatement.setString(1, Unicode.sanitize(pollName));
+				updateStatement.setString(2, pollName);
+				updateStatement.addBatch();
+			}
+
+			updateStatement.executeBatch();
 		}
 	}
 

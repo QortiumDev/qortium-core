@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - api: add searchable poll listing
+
+Added a searchable poll listing API so clients can find polls by name, description, owner, open or closed status, end-time presence, and published-time range without fetching every poll and filtering locally. Poll names are now stored with a normalized search key and indexed alongside published and end-time fields, giving poll discovery a scalable path before the later poll ID work.
+
 ### 2026-05-13 - core: allow poll vote removal
 
 Allowed poll voters to remove their active vote by submitting a `VOTE_ON_POLL` transaction with option index `0`. Real poll choices now use option indexes 1 through the number of poll options, removed votes are deleted instead of counted, closed polls still reject any vote change or removal, and poll creation now requires at least two separate option entries so comma-packed option strings are rejected.

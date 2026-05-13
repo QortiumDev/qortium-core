@@ -13,6 +13,9 @@ public interface VotingRepository {
 
 	public List<PollData> getAllPolls(Integer limit, Integer offset, Boolean reverse) throws DataException;
 
+	public List<PollData> searchPolls(String query, boolean prefixOnly, String owner, Boolean isClosed, Boolean hasEndTime,
+			Long fromTimestamp, Long toTimestamp, long currentTimestamp, Integer limit, Integer offset, Boolean reverse) throws DataException;
+
 	public PollData fromPollName(String pollName) throws DataException;
 
 	public boolean pollExists(String pollName) throws DataException;

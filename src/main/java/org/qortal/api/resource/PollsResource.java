@@ -41,6 +41,7 @@ import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -49,6 +50,22 @@ import java.util.stream.Collectors;
 public class PollsResource {
     @Context
     HttpServletRequest request;
+
+    private enum PollSearchStatus {
+            ALL(null),
+            OPEN(false),
+            CLOSED(true);
+
+            private final Boolean isClosed;
+
+            PollSearchStatus(Boolean isClosed) {
+                    this.isClosed = isClosed;
+            }
+
+            private Boolean isClosed() {
+                    return this.isClosed;
+            }
+    }
 
     @GET
     @Operation(
@@ -77,6 +94,74 @@ public class PollsResource {
             } catch (DataException e) {
 		    throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
             }
+    }
+
+    @GET
+    @Path("/search")
+    @Operation(
+            summary = "Search polls",
+            responses = {
+                    @ApiResponse(
+                            description = "poll info",
+                            content = @Content(
+                                    mediaType = MediaType.APPLICATION_JSON,
+                                    array = @ArraySchema(schema = @Schema(implementation = PollData.class))
+                            )
+                    )
+            }
+    )
+    @ApiErrors({ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+    public List<PollData> searchPolls(
+            @Parameter(description = "Search query for poll name or description") @QueryParam("query") String query,
+            @Parameter(description = "Prefix only (if true, only the beginning of fields are matched)") @QueryParam("prefixOnly") Boolean prefixOnly,
+            @Parameter(description = "Owner address filter") @QueryParam("owner") String owner,
+            @Parameter(description = "Poll status filter: ALL, OPEN, or CLOSED") @QueryParam("status") String status,
+            @Parameter(description = "Filter for polls with or without an end time") @QueryParam("hasEndTime") Boolean hasEndTime,
+            @Parameter(description = "Minimum published timestamp") @QueryParam("fromTimestamp") Long fromTimestamp,
+            @Parameter(description = "Maximum published timestamp") @QueryParam("toTimestamp") Long toTimestamp,
+            @Parameter(ref = "limit") @QueryParam("limit") Integer limit,
+            @Parameter(ref = "offset") @QueryParam("offset") Integer offset,
+            @Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
+            PollSearchStatus searchStatus = parsePollSearchStatus(status);
+            String ownerFilter = parsePollOwnerFilter(owner);
+
+            if (fromTimestamp != null && toTimestamp != null && fromTimestamp > toTimestamp)
+                    throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+                            "fromTimestamp must not be greater than toTimestamp");
+
+            try (final Repository repository = RepositoryManager.getRepository()) {
+                    long latestBlockTimestamp = repository.getBlockRepository().getLastBlock().getTimestamp();
+                    return repository.getVotingRepository().searchPolls(query, Boolean.TRUE.equals(prefixOnly), ownerFilter,
+                            searchStatus.isClosed(), hasEndTime, fromTimestamp, toTimestamp, latestBlockTimestamp,
+                            limit, offset, reverse);
+            } catch (ApiException e) {
+                    throw e;
+            } catch (DataException e) {
+                    throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+            }
+    }
+
+    private PollSearchStatus parsePollSearchStatus(String status) {
+            if (status == null || status.trim().isEmpty())
+                    return PollSearchStatus.ALL;
+
+            try {
+                    return PollSearchStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                    throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+                            "Status must be ALL, OPEN or CLOSED");
+            }
+    }
+
+    private String parsePollOwnerFilter(String owner) {
+            if (owner == null || owner.trim().isEmpty())
+                    return null;
+
+            String trimmedOwner = owner.trim();
+            if (!Crypto.isValidAddress(trimmedOwner))
+                    throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+            return trimmedOwner;
     }
 
     @GET
