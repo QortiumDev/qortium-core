@@ -15,6 +15,7 @@ import java.util.Set;
 
 public final class ResourceRating {
 
+	public static final int NO_RATING = 0;
 	public static final int MIN_RATING = 1;
 	public static final int MAX_RATING = 10;
 	public static final String DEFAULT_IDENTIFIER = "default";
@@ -53,6 +54,10 @@ public final class ResourceRating {
 
 	public static boolean isRatingInRange(int rating) {
 		return rating >= MIN_RATING && rating <= MAX_RATING;
+	}
+
+	public static boolean isNoRating(int rating) {
+		return rating == NO_RATING;
 	}
 
 	public static boolean isNameValid(String name) {

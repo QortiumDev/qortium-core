@@ -13,6 +13,7 @@ import org.qortal.data.transaction.ArbitraryTransactionData;
 import org.qortal.data.transaction.RateResourceTransactionData;
 import org.qortal.data.transaction.RegisterNameTransactionData;
 import org.qortal.group.Group;
+import org.qortal.rating.ResourceRating;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -91,6 +92,12 @@ public class ResourceRatingsApiTests extends ApiCommon {
 
 			assertNotNull(rawTransaction);
 			assertFalse(rawTransaction.isEmpty());
+
+			TransactionUtils.signAndMint(repository, ratingData(chloe, 7), chloe);
+			String removalTransaction = this.resourceRatingsResource.rateResource(ratingData(chloe, ResourceRating.NO_RATING));
+
+			assertNotNull(removalTransaction);
+			assertFalse(removalTransaction.isEmpty());
 		}
 	}
 

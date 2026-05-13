@@ -34,7 +34,8 @@ public class RateResourceTransaction extends Transaction {
 
 	@Override
 	public ValidationResult isValid() throws DataException {
-		if (!ResourceRating.isRatingInRange(this.rateResourceTransactionData.getRating()))
+		int rating = this.rateResourceTransactionData.getRating();
+		if (!ResourceRating.isRatingInRange(rating) && !ResourceRating.isNoRating(rating))
 			return ValidationResult.INVALID_RATING;
 
 		if (!ResourceRating.isRateableService(this.rateResourceTransactionData.getService()))
@@ -61,7 +62,10 @@ public class RateResourceTransaction extends Transaction {
 
 		ResourceRatingData existingRating = this.repository.getResourceRatingRepository()
 				.getRating(target.service, target.nameKey, target.identifierKey, this.rateResourceTransactionData.getRaterPublicKey());
-		if (existingRating != null && existingRating.getRating() == this.rateResourceTransactionData.getRating())
+		if (existingRating == null && ResourceRating.isNoRating(rating))
+			return ValidationResult.ALREADY_RATED_RESOURCE;
+
+		if (existingRating != null && existingRating.getRating() == rating)
 			return ValidationResult.ALREADY_RATED_RESOURCE;
 
 		Account rater = getRater();
@@ -83,6 +87,12 @@ public class RateResourceTransaction extends Transaction {
 			this.rateResourceTransactionData.setPreviousRating(previousRatingData.getRating());
 
 		this.repository.getTransactionRepository().save(this.rateResourceTransactionData);
+
+		if (ResourceRating.isNoRating(this.rateResourceTransactionData.getRating())) {
+			resourceRatingRepository.delete(target.service, target.nameKey, target.identifierKey,
+					this.rateResourceTransactionData.getRaterPublicKey());
+			return;
+		}
 
 		resourceRatingRepository.save(new ResourceRatingData(target.service, target.nameKey, target.displayName,
 				target.identifierKey, this.rateResourceTransactionData.getRaterPublicKey(), this.rateResourceTransactionData.getRating()));

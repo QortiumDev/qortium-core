@@ -23,6 +23,7 @@ public class RateResourceTransactionData extends TransactionData {
 	private int service;
 	private String name;
 	private String identifier;
+	@Schema(description = "Resource rating: 1 through 10, or 0 to remove an existing rating")
 	private int rating;
 
 	@XmlTransient

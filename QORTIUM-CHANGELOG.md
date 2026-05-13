@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - core: allow rating removal
+
+Allowed users to remove their own active resource rating by submitting a `RATE_RESOURCE` transaction with rating `0`, matching the existing account-rating behavior where `UNKNOWN` clears an active account relationship. Real resource ratings remain limited to 1 through 10, repeated no-op rating changes are still rejected, and removed ratings no longer count toward resource summaries, averages, or trust-weighted rating totals.
+
 ### 2026-05-13 - api: add decentralized account trust preview
 
 Added a read-only account trust preview that summarizes active on-chain `RATE_ACCOUNT` relationships without changing consensus state. Users can now inspect a target account's stored trust status, current vote multiplier, inbound and outbound rating evidence, mutual positive relationships, and simple positive, negative, and net preview scores. This keeps the next trust-network step decentralized and testable while leaving minting eligibility, poll vote weight, resource-rating weight, and stored account trust status unchanged.

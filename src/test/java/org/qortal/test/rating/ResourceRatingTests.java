@@ -53,9 +53,11 @@ public class ResourceRatingTests extends Common {
 			assertEquals(Transaction.ValidationResult.OK,
 					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 10)).isValid());
 			assertEquals(Transaction.ValidationResult.INVALID_RATING,
-					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 0)).isValid());
+					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, -1)).isValid());
 			assertEquals(Transaction.ValidationResult.INVALID_RATING,
 					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 11)).isValid());
+			assertEquals(Transaction.ValidationResult.ALREADY_RATED_RESOURCE,
+					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, ResourceRating.NO_RATING)).isValid());
 			assertEquals(Transaction.ValidationResult.INVALID_RESOURCE,
 					Transaction.fromData(repository, ratingData(alice, Service.ARBITRARY_DATA, RESOURCE_NAME, IDENTIFIER, 5)).isValid());
 			assertEquals(Transaction.ValidationResult.RESOURCE_DOES_NOT_EXIST,
@@ -66,6 +68,8 @@ public class ResourceRatingTests extends Common {
 					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 7)).isValid());
 			assertEquals(Transaction.ValidationResult.OK,
 					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 8)).isValid());
+			assertEquals(Transaction.ValidationResult.OK,
+					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, ResourceRating.NO_RATING)).isValid());
 		}
 	}
 
@@ -81,12 +85,45 @@ public class ResourceRatingTests extends Common {
 			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 8), alice);
 			assertActiveRating(repository, alice, 8);
 
+			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, ResourceRating.NO_RATING), alice);
+			assertNull(repository.getResourceRatingRepository().getRating(Service.APP, ResourceRating.toNameKey(RESOURCE_NAME),
+					ResourceRating.toIdentifierKey(IDENTIFIER), alice.getPublicKey()));
+			assertEmptySummary(repository);
+
+			BlockUtils.orphanLastBlock(repository);
+			assertActiveRating(repository, alice, 8);
+
 			BlockUtils.orphanLastBlock(repository);
 			assertActiveRating(repository, alice, 4);
 
 			BlockUtils.orphanLastBlock(repository);
 			assertNull(repository.getResourceRatingRepository().getRating(Service.APP, ResourceRating.toNameKey(RESOURCE_NAME),
 					ResourceRating.toIdentifierKey(IDENTIFIER), alice.getPublicKey()));
+		}
+	}
+
+	@Test
+	public void testRemoveRatingUpdatesSummaryAndCanBeRepeatedAfterNewRating() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			publishResource(repository, RESOURCE_NAME, Service.APP, IDENTIFIER);
+
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			setVoteAccount(repository, alice, 100, AccountTrustStatus.GOLD);
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 9), alice);
+			ResourceRatingSummaryData summary = repository.getResourceRatingRepository()
+					.getRatingSummary(Service.APP, ResourceRating.toNameKey(RESOURCE_NAME), RESOURCE_NAME, ResourceRating.toIdentifierKey(IDENTIFIER));
+			assertEquals(1, summary.getRatingCount());
+			assertEquals(9L, summary.getRatingTotal());
+			assertEquals(1, distributionFor(summary, 9).getRatingCount());
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, ResourceRating.NO_RATING), alice);
+			assertEmptySummary(repository);
+			assertEquals(Transaction.ValidationResult.ALREADY_RATED_RESOURCE,
+					Transaction.fromData(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, ResourceRating.NO_RATING)).isValid());
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 6), alice);
+			assertActiveRating(repository, alice, 6);
 		}
 	}
 
@@ -134,6 +171,19 @@ public class ResourceRatingTests extends Common {
 				ResourceRating.toNameKey(RESOURCE_NAME), ResourceRating.toIdentifierKey(IDENTIFIER), rater.getPublicKey());
 
 		assertEquals(expectedRating, activeRating.getRating());
+	}
+
+	private void assertEmptySummary(Repository repository) throws DataException {
+		ResourceRatingSummaryData summary = repository.getResourceRatingRepository()
+				.getRatingSummary(Service.APP, ResourceRating.toNameKey(RESOURCE_NAME), RESOURCE_NAME, ResourceRating.toIdentifierKey(IDENTIFIER));
+
+		assertEquals(0, summary.getRatingCount());
+		assertEquals(0L, summary.getRatingTotal());
+		assertEquals(Long.valueOf(0L), summary.getRawTotalWeight());
+		assertEquals(Long.valueOf(0L), summary.getTotalWeight());
+		assertNull(summary.getAverageRating());
+		assertNull(summary.getRawWeightedAverageRating());
+		assertNull(summary.getWeightedAverageRating());
 	}
 
 	private ResourceRatingDistributionData distributionFor(ResourceRatingSummaryData summary, int rating) {
