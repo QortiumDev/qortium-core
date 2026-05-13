@@ -15,7 +15,10 @@ import org.qortal.api.ApiExceptionFactory;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRatingData;
+import org.qortal.data.account.AccountRatingLevel;
 import org.qortal.data.account.AccountRatingSummaryData;
+import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -35,7 +38,9 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Path("/account-ratings")
 @Tag(name = "Account Ratings")
@@ -105,6 +110,43 @@ public class AccountRatingsResource {
 		}
 	}
 
+	@GET
+	@Path("/trust-preview")
+	@Operation(
+			summary = "Preview decentralized account trust evidence without changing consensus state",
+			responses = {
+					@ApiResponse(
+							description = "account trust preview",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = AccountTrustPreviewData.class)
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public AccountTrustPreviewData getAccountTrustPreview(
+			@Parameter(description = "Target account public key in Base58") @QueryParam("target") String targetPublicKey58) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			byte[] targetPublicKey = requireKnownPublicKey(repository, targetPublicKey58);
+			String targetAddress = Crypto.toAddress(targetPublicKey);
+
+			AccountData targetAccountData = repository.getAccountRepository().getAccount(targetAddress);
+			AccountTrustStatus trustStatus = targetAccountData == null ? AccountTrustStatus.UNVERIFIED : targetAccountData.getTrustStatus();
+
+			List<AccountRatingData> inboundRatings = repository.getAccountRatingRepository()
+					.getRatings(targetPublicKey, null, null, null, null);
+			List<AccountRatingData> outboundRatings = repository.getAccountRatingRepository()
+					.getRatings(null, targetPublicKey, null, null, null);
+
+			return buildTrustPreview(targetPublicKey, targetAddress, trustStatus, inboundRatings, outboundRatings);
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
 	@POST
 	@Path("/rate")
 	@Operation(
@@ -145,6 +187,53 @@ public class AccountRatingsResource {
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
+	}
+
+	private AccountTrustPreviewData buildTrustPreview(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
+			List<AccountRatingData> inboundRatings, List<AccountRatingData> outboundRatings) {
+		int inboundTrustedCount = 0;
+		int inboundKnownCount = 0;
+		int inboundUntrustedCount = 0;
+		int outboundTrustedCount = 0;
+		int outboundKnownCount = 0;
+		int outboundUntrustedCount = 0;
+
+		Set<String> outboundPositiveTargets = new HashSet<>();
+		for (AccountRatingData outboundRating : outboundRatings) {
+			AccountRatingLevel ratingLevel = outboundRating.getRatingLevel();
+
+			if (ratingLevel == AccountRatingLevel.TRUSTED) {
+				++outboundTrustedCount;
+				outboundPositiveTargets.add(outboundRating.getTargetAddress());
+			} else if (ratingLevel == AccountRatingLevel.KNOWN) {
+				++outboundKnownCount;
+				outboundPositiveTargets.add(outboundRating.getTargetAddress());
+			} else if (ratingLevel == AccountRatingLevel.UNTRUSTED) {
+				++outboundUntrustedCount;
+			}
+		}
+
+		int mutualPositiveCount = 0;
+		for (AccountRatingData inboundRating : inboundRatings) {
+			AccountRatingLevel ratingLevel = inboundRating.getRatingLevel();
+
+			if (ratingLevel == AccountRatingLevel.TRUSTED) {
+				++inboundTrustedCount;
+				if (outboundPositiveTargets.contains(inboundRating.getRaterAddress()))
+					++mutualPositiveCount;
+			} else if (ratingLevel == AccountRatingLevel.KNOWN) {
+				++inboundKnownCount;
+				if (outboundPositiveTargets.contains(inboundRating.getRaterAddress()))
+					++mutualPositiveCount;
+			} else if (ratingLevel == AccountRatingLevel.UNTRUSTED) {
+				++inboundUntrustedCount;
+			}
+		}
+
+		return new AccountTrustPreviewData(targetPublicKey, targetAddress, trustStatus,
+				inboundTrustedCount, inboundKnownCount, inboundUntrustedCount,
+				outboundTrustedCount, outboundKnownCount, outboundUntrustedCount,
+				mutualPositiveCount);
 	}
 
 	private byte[] parseOptionalPublicKey(String publicKey58) {

@@ -141,6 +141,20 @@ The next implementation layer adds directed account ratings as chain data:
 - these edges do not change trust status, minting eligibility, or vote weight
   until a later deterministic trust-tier derivation rule is added
 
+The current implementation layer adds a decentralized trust preview:
+
+- the preview uses only active on-chain `RATE_ACCOUNT` edges
+- the preview is exposed through `GET /account-ratings/trust-preview`
+- no account, admin group, imported snapshot, or external credential receives a
+  privileged starting position
+- the preview exposes inbound evidence, outbound evidence, mutual positive
+  relationships, and simple diagnostic scores
+- the diagnostic score uses inbound Trusted and Known ratings as positive
+  evidence, inbound Untrusted ratings as stronger negative evidence, and mutual
+  positive relationships as extra support
+- the preview does not change stored trust status, minting eligibility, poll
+  vote weight, or resource-rating weight
+
 This means a trust-status change affects open poll tallies immediately. Polls
 with an end time stop accepting votes at the closing block, and Qortium stores
 a frozen tally snapshot at that block so later trust-status or `blocksMinted`
@@ -173,18 +187,11 @@ Consensus code must not depend on live BrightID, Aura, or other external
 services during block validation. Every node must be able to reach the same
 answer from deterministic chain data and local state derived from chain data.
 
-For that reason, Qortium should treat Aura-style status as imported evidence
-that becomes accepted by Qortium, not as a live external lookup.
-
-Possible acceptance models include:
-
-- periodic signed trust-status snapshots accepted by a Qortium governance path
-- on-chain trust-status transactions from a defined authority or group
-- a later native Qortium trust graph that computes the same tiers inside the
-  chain's own rules
-
-The design can start with a simple local/test trust-status table before the
-long-term import and governance path is finalized.
+For that reason, the preferred Qortium direction is a native on-chain trust
+graph, not live external lookups, trusted imports, or authority-controlled
+status updates. The preview API is intentionally non-consensus so the community
+can inspect graph behavior, including farm-ring behavior, before any derived
+status rule affects minting or governance.
 
 ## Implementation Sketch
 
@@ -201,9 +208,12 @@ long-term import and governance path is finalized.
    see the raw and effective weights.
 7. Add tests for mint eligibility, vote weighting, audit fields, and
    trust-status changes.
+8. Add a read-only decentralized trust preview that summarizes active
+   account-rating evidence without changing consensus state.
 
-Later implementation steps should add the trust-status acceptance path and
-operator/user-facing trust-status controls.
+Later implementation steps should evaluate the preview results against real and
+simulated graph behavior before planning any consensus derivation from ratings
+to Gold, Silver, Bronze, Unverified, or Suspicious account status.
 
 ## Test Scenarios
 
@@ -224,10 +234,14 @@ The first implementation should cover at least these cases:
   current-status weighting.
 - polls can optionally close at a defined end time, after which new votes and
   vote changes are rejected and final weights are frozen.
+- account trust previews expose inbound, outbound, mutual positive, positive,
+  negative, and net evidence without changing stored trust status or effective
+  vote weight.
 
 ## Open Decisions
 
-- Which acceptance path should Qortium use for trust-status updates?
+- Which fully decentralized scoring rule should turn on-chain rating evidence
+  into trust status, if preview behavior looks acceptable?
 - At what height should a newly accepted Suspicious status begin blocking
   online-account validation and block minting?
 - Should the 100%, 50%, and 25% multipliers be fixed consensus constants or

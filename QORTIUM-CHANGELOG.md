@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - api: add decentralized account trust preview
+
+Added a read-only account trust preview that summarizes active on-chain `RATE_ACCOUNT` relationships without changing consensus state. Users can now inspect a target account's stored trust status, current vote multiplier, inbound and outbound rating evidence, mutual positive relationships, and simple positive, negative, and net preview scores. This keeps the next trust-network step decentralized and testable while leaving minting eligibility, poll vote weight, resource-rating weight, and stored account trust status unchanged.
+
 ### 2026-05-13 - core: add account rating transactions
 
 Added the first native account-to-account trust graph transaction for Qortium. Accounts can now record directed Trusted, Known, or Untrusted relationships with other known public-key accounts, clear their own active relationship back to Unknown, and query active relationship summaries without changing minting permission or vote weight yet. This creates deterministic on-chain graph evidence for later trust-tier derivation while keeping the current Gold, Silver, Bronze, Unverified, and Suspicious account status rules unchanged.
