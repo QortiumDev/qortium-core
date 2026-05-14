@@ -185,6 +185,21 @@ public class AccountTrustPreviewData {
 		public RatingCounts() {
 		}
 
+		public RatingCounts(int positiveLowCount, int positiveMediumCount, int positiveHighCount, int positiveVeryHighCount,
+				int negativeLowCount, int negativeMediumCount, int negativeHighCount, int negativeVeryHighCount) {
+			this.positiveLowCount = positiveLowCount;
+			this.positiveMediumCount = positiveMediumCount;
+			this.positiveHighCount = positiveHighCount;
+			this.positiveVeryHighCount = positiveVeryHighCount;
+			this.negativeLowCount = negativeLowCount;
+			this.negativeMediumCount = negativeMediumCount;
+			this.negativeHighCount = negativeHighCount;
+			this.negativeVeryHighCount = negativeVeryHighCount;
+			this.positiveRatingCount = positiveLowCount + positiveMediumCount + positiveHighCount + positiveVeryHighCount;
+			this.negativeRatingCount = negativeLowCount + negativeMediumCount + negativeHighCount + negativeVeryHighCount;
+			this.totalRatingCount = this.positiveRatingCount + this.negativeRatingCount;
+		}
+
 		public void addRating(int rating) {
 			if (!AccountRating.isActive(rating))
 				return;

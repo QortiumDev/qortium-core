@@ -169,6 +169,17 @@ The current implementation layer adds a decentralized trust preview:
 - the preview does not change stored trust status, minting eligibility, poll
   vote weight, or resource-rating weight
 
+The latest implementation layer stores the current derived trust graph as
+repository state after each processed block:
+
+- Qortium stores one current snapshot row for each account and category
+- snapshot rows include the derived score, level, mapped trust status, minting
+  seed membership, inbound rating counts, and the block height and timestamp
+  that produced the snapshot
+- orphaning a block refreshes the snapshot back to the previous chain state
+- the stored snapshot is still not used for minting, voting, or resource-rating
+  enforcement yet
+
 This means a trust-status change affects open poll tallies immediately. Polls
 with an end time stop accepting votes at the closing block, and Qortium stores
 a frozen tally snapshot at that block so later trust-status or `blocksMinted`

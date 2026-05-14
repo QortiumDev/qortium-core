@@ -7,6 +7,7 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.account.Account;
+import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.asset.Asset;
@@ -1589,6 +1590,9 @@ public class Block {
 		// Group-approval transactions
 		processGroupApprovalTransactions();
 
+		// Store current account trust derivation after rating and group state changes in this block.
+		refreshTrustDerivationSnapshots(this.blockData.getHeight(), this.blockData.getTimestamp());
+
 		// Snapshot polls that close at this block timestamp before later account changes can move their weights.
 		freezeClosedPolls();
 
@@ -1796,6 +1800,10 @@ public class Block {
 		this.repository.getVotingRepository().freezeClosedPolls(this.blockData.getHeight(), this.blockData.getTimestamp());
 	}
 
+	protected void refreshTrustDerivationSnapshots(int snapshotHeight, long snapshotTimestamp) throws DataException {
+		AccountTrustDerivation.refreshSnapshots(this.repository, snapshotHeight, snapshotTimestamp);
+	}
+
 	protected void processAtFeesAndStates() throws DataException {
 		ATRepository atRepository = this.repository.getATRepository();
 
@@ -1883,11 +1891,27 @@ public class Block {
 			}
 		}
 
+		refreshTrustDerivationSnapshotsAfterOrphan();
+
 		// Delete block from blockchain
 		this.repository.getBlockRepository().delete(this.blockData);
 		this.blockData.setHeight(null);
 
 		postBlockTidy();
+	}
+
+	protected void refreshTrustDerivationSnapshotsAfterOrphan() throws DataException {
+		int previousHeight = this.blockData.getHeight() - 1;
+		if (previousHeight <= 0) {
+			refreshTrustDerivationSnapshots(0, 0L);
+			return;
+		}
+
+		BlockData previousBlockData = this.repository.getBlockRepository().fromHeight(previousHeight);
+		if (previousBlockData == null)
+			throw new DataException(String.format("Unable to find previous block %d while orphaning trust snapshots", previousHeight));
+
+		refreshTrustDerivationSnapshots(previousHeight, previousBlockData.getTimestamp());
 	}
 
 	protected void orphanTransactionsFromBlock() throws DataException {

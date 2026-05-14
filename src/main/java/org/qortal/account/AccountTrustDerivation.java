@@ -29,12 +29,16 @@ public class AccountTrustDerivation {
 	private static final int LIST_IMPACT_LIMIT = 5;
 
 	public static Result derive(Repository repository, String targetAddress) throws DataException {
-		DerivedGraph graph = deriveGraph(repository);
+		DerivedGraph graph = deriveGraph(repository, getLiveMintingSeedHeight(repository));
 		return graph.buildResult(targetAddress, null);
 	}
 
 	public static List<AccountTrustDerivationData> deriveAll(Repository repository) throws DataException {
-		DerivedGraph graph = deriveGraph(repository);
+		return deriveAll(repository, getLiveMintingSeedHeight(repository));
+	}
+
+	public static List<AccountTrustDerivationData> deriveAll(Repository repository, int mintingSeedHeight) throws DataException {
+		DerivedGraph graph = deriveGraph(repository, mintingSeedHeight);
 		List<AccountTrustDerivationData> derivedAccounts = new ArrayList<>();
 
 		for (String accountAddress : graph.accountAddresses) {
@@ -46,11 +50,20 @@ public class AccountTrustDerivation {
 		return derivedAccounts;
 	}
 
-	private static DerivedGraph deriveGraph(Repository repository) throws DataException {
+	public static void refreshSnapshots(Repository repository, int snapshotHeight, long snapshotTimestamp) throws DataException {
+		repository.getAccountRatingRepository().replaceTrustDerivationSnapshots(deriveAll(repository, snapshotHeight),
+				snapshotHeight, snapshotTimestamp);
+	}
+
+	private static int getLiveMintingSeedHeight(Repository repository) throws DataException {
+		return repository.getBlockRepository().getBlockchainHeight() + 1;
+	}
+
+	private static DerivedGraph deriveGraph(Repository repository, int mintingSeedHeight) throws DataException {
 		List<AccountRatingData> allRatings = repository.getAccountRatingRepository()
 				.getRatings(null, null, null, null, null, null);
 		Map<AccountRatingCategory, List<AccountRatingData>> ratingsByCategory = groupRatingsByCategory(allRatings);
-		Set<String> seedAddresses = getMintingSeedAddresses(repository);
+		Set<String> seedAddresses = getMintingSeedAddresses(repository, mintingSeedHeight);
 		Map<String, Long> seedScores = buildSeedScores(seedAddresses);
 
 		Map<String, CategoryScore> managerScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.MANAGER),
@@ -140,9 +153,8 @@ public class AccountTrustDerivation {
 		return inboundCountsByCategory;
 	}
 
-	private static Set<String> getMintingSeedAddresses(Repository repository) throws DataException {
-		int blockchainHeight = repository.getBlockRepository().getBlockchainHeight();
-		List<Integer> mintingGroupIds = Groups.getGroupIdsToMint(BlockChain.getInstance(), blockchainHeight + 1);
+	private static Set<String> getMintingSeedAddresses(Repository repository, int mintingSeedHeight) throws DataException {
+		List<Integer> mintingGroupIds = Groups.getGroupIdsToMint(BlockChain.getInstance(), mintingSeedHeight);
 		Set<String> seedAddresses = new HashSet<>(Groups.getAllMembers(repository.getGroupRepository(), mintingGroupIds));
 		seedAddresses.remove(Group.NULL_OWNER_ADDRESS);
 		return seedAddresses;

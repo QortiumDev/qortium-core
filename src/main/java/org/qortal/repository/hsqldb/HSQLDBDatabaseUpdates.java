@@ -1246,6 +1246,23 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "RateAccountTransactions", "category", "TINYINT DEFAULT 0 NOT NULL");
 					break;
 
+				case 66:
+					// Store the current Aura-style account trust derivation snapshot.
+					stmt.execute("CREATE TABLE AccountTrustDerivationSnapshots (account AccountAddress NOT NULL, "
+							+ "account_public_key AccountPublicKey, category TINYINT NOT NULL, score BIGINT NOT NULL, "
+							+ "level INT NOT NULL, mapped_trust_status INT NOT NULL, minting_seed_member BOOLEAN NOT NULL, "
+							+ "positive_low_count INT NOT NULL, positive_medium_count INT NOT NULL, "
+							+ "positive_high_count INT NOT NULL, positive_very_high_count INT NOT NULL, "
+							+ "negative_low_count INT NOT NULL, negative_medium_count INT NOT NULL, "
+							+ "negative_high_count INT NOT NULL, negative_very_high_count INT NOT NULL, "
+							+ "snapshot_height INT NOT NULL, snapshot_timestamp EpochMillis NOT NULL, "
+							+ "PRIMARY KEY (account, category))");
+					stmt.execute("CREATE INDEX AccountTrustDerivationSnapshotStatusIndex "
+							+ "ON AccountTrustDerivationSnapshots (mapped_trust_status, category, level)");
+					stmt.execute("CREATE INDEX AccountTrustDerivationSnapshotHeightIndex "
+							+ "ON AccountTrustDerivationSnapshots (snapshot_height)");
+					break;
+
 				default:
 					// nothing to do
 					return false;

@@ -3,6 +3,10 @@ package org.qortal.repository.hsqldb;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingSummaryData;
+import org.qortal.data.account.AccountTrustDerivationData;
+import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustSnapshotData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.repository.AccountRatingRepository;
 import org.qortal.repository.DataException;
 
@@ -162,6 +166,113 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 			return accountRatings;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch account ratings from repository", e);
+		}
+	}
+
+	@Override
+	public void replaceTrustDerivationSnapshots(List<AccountTrustDerivationData> derivedAccounts, int snapshotHeight,
+			long snapshotTimestamp) throws DataException {
+		try {
+			this.repository.delete("AccountTrustDerivationSnapshots");
+		} catch (SQLException e) {
+			throw new DataException("Unable to delete account trust derivation snapshots from repository", e);
+		}
+
+		if (derivedAccounts == null || derivedAccounts.isEmpty())
+			return;
+
+		try {
+			for (AccountTrustDerivationData derivedAccount : derivedAccounts) {
+				for (AccountTrustPreviewData.CategoryTrust categoryTrust : derivedAccount.getCategories())
+					saveTrustDerivationSnapshot(derivedAccount, categoryTrust, snapshotHeight, snapshotTimestamp);
+			}
+		} catch (SQLException e) {
+			throw new DataException("Unable to save account trust derivation snapshot into repository", e);
+		}
+	}
+
+	private void saveTrustDerivationSnapshot(AccountTrustDerivationData derivedAccount,
+			AccountTrustPreviewData.CategoryTrust categoryTrust, int snapshotHeight, long snapshotTimestamp)
+			throws SQLException {
+		AccountTrustPreviewData.RatingCounts inboundRatings = categoryTrust.getInboundRatings();
+		HSQLDBSaver saveHelper = new HSQLDBSaver("AccountTrustDerivationSnapshots");
+
+		saveHelper.bind("account", derivedAccount.getAccountAddress())
+				.bind("account_public_key", derivedAccount.getAccountPublicKey())
+				.bind("category", categoryTrust.getCategory().value)
+				.bind("score", categoryTrust.getScore())
+				.bind("level", categoryTrust.getLevel())
+				.bind("mapped_trust_status", categoryTrust.getMappedTrustStatusValue())
+				.bind("minting_seed_member", derivedAccount.isMintingSeedMember())
+				.bind("positive_low_count", inboundRatings.getPositiveLowCount())
+				.bind("positive_medium_count", inboundRatings.getPositiveMediumCount())
+				.bind("positive_high_count", inboundRatings.getPositiveHighCount())
+				.bind("positive_very_high_count", inboundRatings.getPositiveVeryHighCount())
+				.bind("negative_low_count", inboundRatings.getNegativeLowCount())
+				.bind("negative_medium_count", inboundRatings.getNegativeMediumCount())
+				.bind("negative_high_count", inboundRatings.getNegativeHighCount())
+				.bind("negative_very_high_count", inboundRatings.getNegativeVeryHighCount())
+				.bind("snapshot_height", snapshotHeight)
+				.bind("snapshot_timestamp", snapshotTimestamp);
+
+		saveHelper.execute(this.repository);
+	}
+
+	@Override
+	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(Integer limit, Integer offset, Boolean reverse)
+			throws DataException {
+		StringBuilder sql = new StringBuilder(512);
+		sql.append("SELECT account_public_key, account, category, score, level, mapped_trust_status, minting_seed_member, ")
+				.append("positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, ")
+				.append("negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, ")
+				.append("snapshot_height, snapshot_timestamp FROM AccountTrustDerivationSnapshots");
+
+		String sortDirection = Boolean.TRUE.equals(reverse) ? " DESC" : "";
+		sql.append(" ORDER BY account").append(sortDirection).append(", category").append(sortDirection);
+		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+
+		return getTrustDerivationSnapshots(sql.toString());
+	}
+
+	@Override
+	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(String accountAddress) throws DataException {
+		String sql = "SELECT account_public_key, account, category, score, level, mapped_trust_status, minting_seed_member, "
+				+ "positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, "
+				+ "negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, "
+				+ "snapshot_height, snapshot_timestamp FROM AccountTrustDerivationSnapshots "
+				+ "WHERE account = ? ORDER BY category";
+
+		return getTrustDerivationSnapshots(sql, accountAddress);
+	}
+
+	private List<AccountTrustSnapshotData> getTrustDerivationSnapshots(String sql, Object... bindParams) throws DataException {
+		List<AccountTrustSnapshotData> snapshots = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, bindParams)) {
+			if (resultSet == null)
+				return snapshots;
+
+			do {
+				byte[] accountPublicKey = resultSet.getBytes(1);
+				String accountAddress = resultSet.getString(2);
+				AccountRatingCategory category = AccountRatingCategory.valueOf(resultSet.getInt(3));
+				long score = resultSet.getLong(4);
+				int level = resultSet.getInt(5);
+				AccountTrustStatus mappedTrustStatus = AccountTrustStatus.valueOf(resultSet.getInt(6));
+				boolean mintingSeedMember = resultSet.getBoolean(7);
+				AccountTrustPreviewData.RatingCounts inboundRatings = new AccountTrustPreviewData.RatingCounts(
+						resultSet.getInt(8), resultSet.getInt(9), resultSet.getInt(10), resultSet.getInt(11),
+						resultSet.getInt(12), resultSet.getInt(13), resultSet.getInt(14), resultSet.getInt(15));
+				int snapshotHeight = resultSet.getInt(16);
+				long snapshotTimestamp = resultSet.getLong(17);
+
+				snapshots.add(new AccountTrustSnapshotData(accountPublicKey, accountAddress, defaultCategory(category),
+						score, level, mappedTrustStatus, mintingSeedMember, inboundRatings, snapshotHeight, snapshotTimestamp));
+			} while (resultSet.next());
+
+			return snapshots;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch account trust derivation snapshots from repository", e);
 		}
 	}
 
