@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-14 - api: align trust preview with derived trust
+
+Changed the account trust preview API so its main trust status, evaluator weights, and evaluator impacts use the active stored Aura-style Subject trust snapshot instead of the older manual account trust status. The preview still includes stored/manual trust status and stored-impact fields as audit context, and the derived status fields now mirror the active Subject status used by voting, resource ratings, and mint eligibility.
+
 ### 2026-05-14 - core: use derived trust for mint eligibility
 
 Changed mint eligibility to use the stored Aura-style Subject trust snapshot instead of the older manual account trust status. Minting-group membership remains the base permission, missing Subject snapshots are treated as Unverified, and only a derived Suspicious Subject status blocks a minting-group member from minting or being counted through a reward-share. Stored account trust status remains visible as audit context but no longer controls active minting eligibility.

@@ -188,6 +188,9 @@ voting, resource-rating weights, and Suspicious mint blocking:
 
 - account info includes both stored trust status and derived Subject trust
   status, including each status's vote multiplier and effective vote weight
+- account-rating trust previews show active derived Subject status and
+  evaluator impacts as the main trust fields, with stored/manual status kept as
+  audit context
 - open poll vote totals and vote details use the derived Subject status as the
   active Gold, Silver, Bronze, Unverified, or Suspicious multiplier
 - open poll vote details still expose the older stored/manual trust status as
@@ -296,9 +299,10 @@ The first implementation should cover at least these cases:
 - polls can optionally close at a defined end time, after which new votes and
   vote changes are rejected and final weights are frozen.
 - account trust previews and snapshots expose inbound and outbound confidence
-  distributions, category scores, mapped trust status, seed membership, and
+  distributions, active derived trust status, stored/manual audit status,
+  evaluator impacts, category scores, mapped trust status, seed membership, and
   block anchoring; the stored Subject snapshot now supplies active poll and
-  resource-rating weight.
+  resource-rating weight plus minting eligibility status.
 
 ## Open Decisions
 

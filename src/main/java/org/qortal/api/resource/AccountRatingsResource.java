@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortal.account.AccountTrustDerivation;
+import org.qortal.account.AccountTrustWeight;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiException;
@@ -137,7 +138,7 @@ public class AccountRatingsResource {
 	@GET
 	@Path("/trust-preview")
 	@Operation(
-			summary = "Preview decentralized account trust evidence without changing consensus state",
+			summary = "Preview active account trust evidence from the decentralized trust graph",
 			responses = {
 					@ApiResponse(
 							description = "account trust preview",
@@ -156,7 +157,10 @@ public class AccountRatingsResource {
 			String targetAddress = Crypto.toAddress(targetPublicKey);
 
 			AccountData targetAccountData = repository.getAccountRepository().getAccount(targetAddress);
-			AccountTrustStatus trustStatus = targetAccountData == null ? AccountTrustStatus.UNVERIFIED : targetAccountData.getTrustStatus();
+			AccountTrustStatus storedTrustStatus = targetAccountData == null ? AccountTrustStatus.UNVERIFIED : targetAccountData.getTrustStatus();
+			AccountTrustSnapshotData activeTrustSnapshot = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshot(targetAddress, AccountTrustWeight.ACTIVE_WEIGHT_CATEGORY);
+			AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
 
 			List<AccountRatingData> inboundRatings = repository.getAccountRatingRepository()
 					.getRatings(targetPublicKey, null, AccountRatingCategory.SUBJECT, null, null, null);
@@ -164,7 +168,8 @@ public class AccountRatingsResource {
 					.getRatings(null, targetPublicKey, AccountRatingCategory.SUBJECT, null, null, null);
 			AccountTrustDerivation.Result derivation = AccountTrustDerivation.derive(repository, targetAddress);
 
-			return buildTrustPreview(repository, targetPublicKey, targetAddress, trustStatus, inboundRatings, outboundRatings, derivation);
+			return buildTrustPreview(repository, targetPublicKey, targetAddress, activeTrustStatus, storedTrustStatus,
+					inboundRatings, outboundRatings, derivation);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -175,7 +180,7 @@ public class AccountRatingsResource {
 	@GET
 	@Path("/trust-derivation")
 	@Operation(
-			summary = "List preview-only Aura-style account trust derivation rows",
+			summary = "List stored or live Aura-style account trust derivation rows",
 			responses = {
 					@ApiResponse(
 							description = "account trust derivation rows",
@@ -307,8 +312,8 @@ public class AccountRatingsResource {
 	}
 
 	private AccountTrustPreviewData buildTrustPreview(Repository repository, byte[] targetPublicKey, String targetAddress,
-			AccountTrustStatus trustStatus, List<AccountRatingData> inboundRatings, List<AccountRatingData> outboundRatings,
-			AccountTrustDerivation.Result derivation)
+			AccountTrustStatus activeTrustStatus, AccountTrustStatus storedTrustStatus, List<AccountRatingData> inboundRatings,
+			List<AccountRatingData> outboundRatings, AccountTrustDerivation.Result derivation)
 			throws DataException {
 		AccountTrustPreviewData.RatingCounts inboundCounts = new AccountTrustPreviewData.RatingCounts();
 		AccountTrustPreviewData.RatingCounts outboundCounts = new AccountTrustPreviewData.RatingCounts();
@@ -339,21 +344,27 @@ public class AccountRatingsResource {
 				.reversed()
 				.thenComparing(AccountTrustPreviewData.EvaluatorImpact::getRaterAddress));
 
-		return new AccountTrustPreviewData(targetPublicKey, targetAddress, trustStatus, inboundCounts, outboundCounts,
-				mutualPositiveCount, evaluatorImpacts, derivation.getDerivedTrustStatus(), derivation.isMintingSeedMember(),
+		return new AccountTrustPreviewData(targetPublicKey, targetAddress, activeTrustStatus, storedTrustStatus,
+				inboundCounts, outboundCounts, mutualPositiveCount, evaluatorImpacts, activeTrustStatus, derivation.isMintingSeedMember(),
 				derivation.getCategories());
 	}
 
 	private AccountTrustPreviewData.EvaluatorImpact buildEvaluatorImpact(Repository repository, AccountRatingData ratingData)
 			throws DataException {
 		AccountData raterAccountData = repository.getAccountRepository().getAccount(ratingData.getRaterAddress());
-		AccountTrustStatus raterTrustStatus = raterAccountData == null ? AccountTrustStatus.UNVERIFIED : raterAccountData.getTrustStatus();
+		AccountTrustStatus storedTrustStatus = raterAccountData == null ? AccountTrustStatus.UNVERIFIED : raterAccountData.getTrustStatus();
 		int rawVoteWeight = raterAccountData == null ? 0 : raterAccountData.getBlocksMinted();
-		int effectiveVoteWeight = AccountTrustStatus.calculateEffectiveVoteWeight(raterAccountData);
+		int storedEffectiveVoteWeight = storedTrustStatus.calculateEffectiveVoteWeight(rawVoteWeight);
+		AccountTrustSnapshotData activeTrustSnapshot = repository.getAccountRatingRepository()
+				.getTrustDerivationSnapshot(ratingData.getRaterAddress(), AccountTrustWeight.ACTIVE_WEIGHT_CATEGORY);
+		AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
+		int effectiveVoteWeight = AccountTrustWeight.calculateEffectiveVoteWeight(rawVoteWeight, activeTrustSnapshot);
 		int impact = AccountRating.calculateImpact(ratingData.getRating(), effectiveVoteWeight);
+		int storedImpact = AccountRating.calculateImpact(ratingData.getRating(), storedEffectiveVoteWeight);
 
 		return new AccountTrustPreviewData.EvaluatorImpact(ratingData.getRaterPublicKey(), ratingData.getRaterAddress(),
-				raterTrustStatus, rawVoteWeight, effectiveVoteWeight, ratingData.getRating(), impact);
+				activeTrustStatus, rawVoteWeight, effectiveVoteWeight, storedTrustStatus, storedEffectiveVoteWeight,
+				ratingData.getRating(), impact, storedImpact);
 	}
 
 	private static int getImpactMagnitude(AccountTrustPreviewData.EvaluatorImpact evaluatorImpact) {
