@@ -19,4 +19,8 @@ public class AccountTrustWeight {
 		return statusFromSnapshot(snapshotData).calculateEffectiveVoteWeight(blocksMinted);
 	}
 
+	public static boolean canMint(AccountTrustSnapshotData snapshotData) {
+		return statusFromSnapshot(snapshotData).canMint();
+	}
+
 }

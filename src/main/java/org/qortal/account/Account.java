@@ -7,6 +7,7 @@ import org.qortal.block.BlockChain;
 import org.qortal.controller.LiteNode;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.account.RewardShareData;
@@ -157,7 +158,8 @@ public class Account {
 
 	/** Returns whether account can be considered a "minting account".
 	 * <p>
-	 * Mint eligibility is governed by membership in one of the configured minting groups.
+	 * Mint eligibility is governed by membership in one of the configured minting groups
+	 * plus the active Subject trust snapshot.
 	 *
 	 * @param isGroupValidated true if this account has already been validated for configured minting-group membership
 	 * @return true if account can be considered "minting account"
@@ -169,7 +171,9 @@ public class Account {
 		if (accountData == null)
 			return false;
 
-		if (!accountData.getTrustStatus().canMint())
+		AccountTrustSnapshotData activeTrustSnapshot = this.repository.getAccountRatingRepository()
+				.getTrustDerivationSnapshot(this.address, AccountTrustWeight.ACTIVE_WEIGHT_CATEGORY);
+		if (!AccountTrustWeight.canMint(activeTrustSnapshot))
 			return false;
 
 		int blockchainHeight = this.repository.getBlockRepository().getBlockchainHeight();

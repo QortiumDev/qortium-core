@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-14 - core: use derived trust for mint eligibility
+
+Changed mint eligibility to use the stored Aura-style Subject trust snapshot instead of the older manual account trust status. Minting-group membership remains the base permission, missing Subject snapshots are treated as Unverified, and only a derived Suspicious Subject status blocks a minting-group member from minting or being counted through a reward-share. Stored account trust status remains visible as audit context but no longer controls active minting eligibility.
+
 ### 2026-05-14 - core: use derived trust for voting weights
 
 Changed active poll vote weights, frozen poll close-time weights, and resource-rating weighted summaries to use the stored Aura-style Subject trust snapshot instead of the older manual account trust status. Stored account trust status remains visible as audit context and still controls the current Suspicious minting block, while the derived Subject snapshot now provides the active Gold, Silver, Bronze, Unverified, or Suspicious multiplier for voting and resource-rating weight. This moves Qortium from previewing the decentralized trust graph to using it for the first governance-weight surfaces, while closed polls still freeze their final result at the closing block.

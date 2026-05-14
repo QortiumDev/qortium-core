@@ -180,11 +180,11 @@ repository state after each processed block:
 - `GET /account-ratings/trust-derivation` reads the stored snapshot by default,
   while `live=true` recalculates the graph from active ratings for comparison
 - `GET /account-ratings/trust-snapshots` exposes the raw stored rows directly
-- missing Subject snapshots are treated as Unverified for active weight
-  calculations
+- missing Subject snapshots are treated as Unverified for active weight and
+  mint-eligibility calculations
 
-The current weighting layer uses the stored Subject snapshot for active voting
-and resource-rating weights:
+The current enforcement layer uses the stored Subject snapshot for active
+voting, resource-rating weights, and Suspicious mint blocking:
 
 - account info includes both stored trust status and derived Subject trust
   status, including each status's vote multiplier and effective vote weight
@@ -198,12 +198,15 @@ and resource-rating weights:
 - resource-rating summaries and rating distributions use derived Subject
   weights for active weighted totals and averages, while also exposing
   stored/manual trust-weighted values for audit
-- minting eligibility still uses the stored/manual Suspicious status for now;
-  switching the minting block to derived Suspicious status remains a separate
-  implementation step
+- minting eligibility uses derived Subject status alongside minting-group
+  membership, so derived Suspicious blocks minting and all other derived
+  statuses allow minting if the account is in the minting group
+- stored/manual trust status remains audit context and no longer controls active
+  minting eligibility
 
 This means a stored Subject snapshot change affects open poll tallies and
-resource-rating weighted summaries immediately. Polls with an end time stop
+resource-rating weighted summaries immediately, and a derived Suspicious
+Subject snapshot prevents the account from minting. Polls with an end time stop
 accepting votes at the closing block, and Qortium stores a frozen tally snapshot
 at that block so later derived-trust or `blocksMinted` changes do not move the
 closed result.
@@ -261,19 +264,24 @@ rule affects minting or broader consensus behavior.
 9. Store the derived trust graph as block-anchored repository state.
 10. Use the stored Subject snapshot for active poll vote weights, frozen poll
     close-time weights, and resource-rating weighted summaries.
+11. Use the stored Subject snapshot for Suspicious mint blocking while keeping
+    minting-group membership as the base permission.
 
-Later implementation steps should evaluate whether derived Suspicious status
-should replace stored/manual Suspicious status for minting eligibility, and
-whether the Subject, Player, Trainer, and Manager derivation thresholds should
-remain fixed constants or become chain configuration.
+Later implementation steps should evaluate whether the Subject, Player,
+Trainer, and Manager derivation thresholds should remain fixed constants or
+become chain configuration.
 
 ## Test Scenarios
 
 The first implementation should cover at least these cases:
 
-- Gold, Silver, Bronze, and Unverified accounts can mint only when they are in
-  the minting group.
-- Suspicious accounts cannot mint even when they are in the minting group.
+- Gold, Silver, Bronze, and Unverified Subject snapshots can mint only when
+  the account is in the minting group.
+- Suspicious Subject snapshots cannot mint even when the account is in the
+  minting group.
+- missing Subject snapshots are treated as Unverified for minting eligibility.
+- stored/manual Suspicious status remains audit-only and does not block minting
+  unless the Subject snapshot is also Suspicious.
 - raw `blocksMinted` still increases for eligible minting accounts according to
   the existing block or batch reward rules.
 - vote tallies apply 100%, 50%, 25%, and 0% derived Subject multipliers
@@ -294,7 +302,5 @@ The first implementation should cover at least these cases:
 
 ## Open Decisions
 
-- Should derived Suspicious status replace stored/manual Suspicious status for
-  online-account validation and block minting?
 - Should the 100%, 50%, and 25% multipliers be fixed consensus constants or
   configurable chain parameters?

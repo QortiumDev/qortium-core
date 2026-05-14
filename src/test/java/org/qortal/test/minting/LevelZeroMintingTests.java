@@ -7,9 +7,14 @@ import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.Block;
 import org.qortal.controller.BlockMinter;
+import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountTrustDerivationData;
+import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.account.RewardShareData;
 import org.qortal.data.block.BlockData;
+import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -17,6 +22,8 @@ import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TestAccount;
+
+import java.util.Collections;
 
 import static org.junit.Assert.*;
 
@@ -65,10 +72,16 @@ public class LevelZeroMintingTests extends Common {
 	}
 
 	@Test
-	public void testTrustStatusControlsMintingEligibility() throws DataException {
+	public void testDerivedTrustStatusControlsMintingEligibility() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+
+			repository.getAccountRepository().setTrustStatus(bob.getAddress(), AccountTrustStatus.SUSPICIOUS);
+			clearTrustSnapshots(repository);
+
+			assertTrue("Stored/manual Suspicious should not block minting without derived Suspicious", bob.canMint(false));
+			assertTrue("Stored/manual Suspicious should not block prevalidated minting without derived Suspicious", bob.canMint(true));
 
 			for (AccountTrustStatus trustStatus : new AccountTrustStatus[] {
 					AccountTrustStatus.UNVERIFIED,
@@ -76,26 +89,25 @@ public class LevelZeroMintingTests extends Common {
 					AccountTrustStatus.SILVER,
 					AccountTrustStatus.GOLD
 			}) {
-				repository.getAccountRepository().setTrustStatus(bob.getAddress(), trustStatus);
-				repository.saveChanges();
+				saveSubjectSnapshot(repository, bob, trustStatus);
 
-				assertTrue("Minting-group member should mint with trust status " + trustStatus, bob.canMint(false));
-				assertTrue("Prevalidated minting-group member should mint with trust status " + trustStatus, bob.canMint(true));
+				assertTrue("Minting-group member should mint with derived trust status " + trustStatus, bob.canMint(false));
+				assertTrue("Prevalidated minting-group member should mint with derived trust status " + trustStatus, bob.canMint(true));
 			}
 
-			repository.getAccountRepository().setTrustStatus(chloe.getAddress(), AccountTrustStatus.GOLD);
-			repository.saveChanges();
-			assertFalse("Non-member should not mint even with Gold trust status", chloe.canMint(false));
+			saveSubjectSnapshot(repository, chloe, AccountTrustStatus.GOLD);
+			assertFalse("Non-member should not mint even with derived Gold trust status", chloe.canMint(false));
 
 			byte[] bobRewardSharePrivateKey = AccountUtils.rewardShare(repository, "bob", "bob", 0);
 			PrivateKeyAccount bobRewardShareAccount = new PrivateKeyAccount(repository, bobRewardSharePrivateKey);
 
-			repository.getAccountRepository().setTrustStatus(bob.getAddress(), AccountTrustStatus.SUSPICIOUS);
+			repository.getAccountRepository().setTrustStatus(bob.getAddress(), AccountTrustStatus.GOLD);
 			repository.saveChanges();
+			saveSubjectSnapshot(repository, bob, AccountTrustStatus.SUSPICIOUS);
 
-			assertFalse("Suspicious minting-group member should not mint", bob.canMint(false));
-			assertFalse("Suspicious prevalidated minting-group member should not mint", bob.canMint(true));
-			assertNull("Suspicious account's reward-share should not be treated as minting",
+			assertFalse("Derived Suspicious minting-group member should not mint", bob.canMint(false));
+			assertFalse("Derived Suspicious prevalidated minting-group member should not mint", bob.canMint(true));
+			assertNull("Derived Suspicious account's reward-share should not be treated as minting",
 					Account.getRewardShareEffectiveMintingLevelIfMinting(repository, bobRewardShareAccount.getPublicKey()));
 		}
 	}
@@ -110,5 +122,59 @@ public class LevelZeroMintingTests extends Common {
 				Block.calcKeyDistance(1, parentSignature, minterPublicKey, 1),
 				Block.calcKeyDistance(1, parentSignature, minterPublicKey, 0)
 		);
+	}
+
+	private void clearTrustSnapshots(Repository repository) throws DataException {
+		repository.getAccountRatingRepository().replaceTrustDerivationSnapshots(Collections.emptyList(),
+				repository.getBlockRepository().getBlockchainHeight(), repository.getBlockRepository().getLastBlock().getTimestamp());
+		repository.saveChanges();
+	}
+
+	private void saveSubjectSnapshot(Repository repository, TestAccount account, AccountTrustStatus trustStatus)
+			throws DataException {
+		repository.getAccountRepository().ensureAccount(new AccountData(account.getAddress(), account.getPublicKey(),
+				Group.NO_GROUP, 0, 0));
+
+		AccountTrustPreviewData.CategoryTrust subjectTrust = new AccountTrustPreviewData.CategoryTrust(
+				AccountRatingCategory.SUBJECT, scoreForStatus(trustStatus), levelForStatus(trustStatus), trustStatus,
+				new AccountTrustPreviewData.RatingCounts(), Collections.emptyList());
+		AccountTrustDerivationData derivationData = new AccountTrustDerivationData(account.getPublicKey(),
+				account.getAddress(), trustStatus, true, Collections.singletonList(subjectTrust));
+
+		repository.getAccountRatingRepository().replaceTrustDerivationSnapshots(Collections.singletonList(derivationData),
+				repository.getBlockRepository().getBlockchainHeight(), repository.getBlockRepository().getLastBlock().getTimestamp());
+		repository.saveChanges();
+	}
+
+	private long scoreForStatus(AccountTrustStatus trustStatus) {
+		switch (trustStatus) {
+			case GOLD:
+				return 100_000_000L;
+			case SILVER:
+				return 50_000_000L;
+			case BRONZE:
+				return 10_000_000L;
+			case SUSPICIOUS:
+				return -1L;
+			case UNVERIFIED:
+			default:
+				return 0L;
+		}
+	}
+
+	private int levelForStatus(AccountTrustStatus trustStatus) {
+		switch (trustStatus) {
+			case GOLD:
+				return 3;
+			case SILVER:
+				return 2;
+			case BRONZE:
+				return 1;
+			case SUSPICIOUS:
+				return -1;
+			case UNVERIFIED:
+			default:
+				return 0;
+		}
 	}
 }
