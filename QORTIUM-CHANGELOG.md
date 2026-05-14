@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-14 - core: use derived trust for voting weights
+
+Changed active poll vote weights, frozen poll close-time weights, and resource-rating weighted summaries to use the stored Aura-style Subject trust snapshot instead of the older manual account trust status. Stored account trust status remains visible as audit context and still controls the current Suspicious minting block, while the derived Subject snapshot now provides the active Gold, Silver, Bronze, Unverified, or Suspicious multiplier for voting and resource-rating weight. This moves Qortium from previewing the decentralized trust graph to using it for the first governance-weight surfaces, while closed polls still freeze their final result at the closing block.
+
 ### 2026-05-14 - api: add derived trust audit fields
 
 Added read-only derived trust audit fields beside the current stored trust fields on account info, open poll vote details, and resource-rating summaries. These fields show how the stored Aura-style Subject snapshot would affect vote or rating weight, while the existing stored trust status remains the active source for minting, poll totals, frozen poll results, and resource-rating weights. This also corrects stored trust snapshot list lookup so the full snapshot can be audited reliably. Together these changes give clients a practical way to compare current behavior with the derived trust model before Qortium decides whether to use derived trust for enforcement.

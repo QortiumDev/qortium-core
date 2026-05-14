@@ -143,7 +143,7 @@ The next implementation layer adds directed account ratings as chain data:
 - these edges do not change trust status, minting eligibility, or vote weight
   until a later deterministic trust-tier derivation rule is added
 
-The current implementation layer adds a decentralized trust preview:
+A later implementation layer added a decentralized trust preview:
 
 - the preview uses only active on-chain `RATE_ACCOUNT` edges
 - the preview is exposed through `GET /account-ratings/trust-preview`
@@ -163,11 +163,11 @@ The current implementation layer adds a decentralized trust preview:
   ratings, Trainer score feeds Player ratings, and Player score feeds Subject
   ratings
 - the Subject level is mapped back to Qortium's simple Gold, Silver, Bronze,
-  Unverified, and Suspicious statuses as a preview-only derived status
+  Unverified, and Suspicious statuses as a derived status
 - the older inbound/outbound confidence counts, mutual positive relationships,
   and stored-status evaluator impacts are still exposed for audit context
-- the preview does not change stored trust status, minting eligibility, poll
-  vote weight, or resource-rating weight
+- this layer originally exposed the graph for audit only, before the stored
+  Subject snapshot was used for active voting and resource-rating weights
 
 The latest implementation layer stores the current derived trust graph as
 repository state after each processed block:
@@ -180,27 +180,33 @@ repository state after each processed block:
 - `GET /account-ratings/trust-derivation` reads the stored snapshot by default,
   while `live=true` recalculates the graph from active ratings for comparison
 - `GET /account-ratings/trust-snapshots` exposes the raw stored rows directly
-- the stored snapshot is still not used for minting, voting, or resource-rating
-  enforcement yet
+- missing Subject snapshots are treated as Unverified for active weight
+  calculations
 
-The current audit layer exposes the stored Subject snapshot beside the current
-stored trust fields:
+The current weighting layer uses the stored Subject snapshot for active voting
+and resource-rating weights:
 
 - account info includes both stored trust status and derived Subject trust
   status, including each status's vote multiplier and effective vote weight
-- open poll vote details include the current stored vote weight plus the
-  derived Subject vote weight that would apply if derived trust were enforced
-- frozen poll results continue to report only the frozen stored trust fields so
-  closed results stay anchored to the exact close-time data that was frozen
-- resource-rating summaries include derived Subject weighted totals and
-  averages beside the existing stored-trust weighted totals and averages
-- this audit layer is read-only and does not change minting eligibility, poll
-  vote totals, frozen poll storage, or resource-rating enforcement
+- open poll vote totals and vote details use the derived Subject status as the
+  active Gold, Silver, Bronze, Unverified, or Suspicious multiplier
+- open poll vote details still expose the older stored/manual trust status as
+  audit context so clients can compare manual status with derived status
+- frozen poll results store the active derived Subject status and vote weight
+  at the closing block, so closed results stay anchored to the exact close-time
+  data that was frozen
+- resource-rating summaries and rating distributions use derived Subject
+  weights for active weighted totals and averages, while also exposing
+  stored/manual trust-weighted values for audit
+- minting eligibility still uses the stored/manual Suspicious status for now;
+  switching the minting block to derived Suspicious status remains a separate
+  implementation step
 
-This means a trust-status change affects open poll tallies immediately. Polls
-with an end time stop accepting votes at the closing block, and Qortium stores
-a frozen tally snapshot at that block so later trust-status or `blocksMinted`
-changes do not move the closed result.
+This means a stored Subject snapshot change affects open poll tallies and
+resource-rating weighted summaries immediately. Polls with an end time stop
+accepting votes at the closing block, and Qortium stores a frozen tally snapshot
+at that block so later derived-trust or `blocksMinted` changes do not move the
+closed result.
 
 ## Why This Fits Qortium
 
@@ -231,11 +237,11 @@ answer from deterministic chain data and local state derived from chain data.
 
 For that reason, the preferred Qortium direction is a native on-chain trust
 graph, not live external lookups, trusted imports, or authority-controlled
-status updates. The preview API is intentionally non-consensus so the community
-can inspect graph behavior, including farm-ring behavior, before any derived
-status rule affects minting or governance.
+status updates. The preview API remains useful so the community can inspect
+graph behavior, including farm-ring behavior, before any further derived-status
+rule affects minting or broader consensus behavior.
 
-## Implementation Sketch
+## Implementation Path
 
 1. Add a Qortium account trust status model with values for Gold, Silver,
    Bronze, Unverified, and Suspicious.
@@ -251,11 +257,15 @@ status rule affects minting or governance.
 7. Add tests for mint eligibility, vote weighting, audit fields, and
    trust-status changes.
 8. Add a read-only decentralized trust preview that summarizes active
-   account-rating evidence without changing consensus state.
+   account-rating evidence.
+9. Store the derived trust graph as block-anchored repository state.
+10. Use the stored Subject snapshot for active poll vote weights, frozen poll
+    close-time weights, and resource-rating weighted summaries.
 
-Later implementation steps should evaluate the preview results against real and
-simulated graph behavior before planning any consensus derivation from ratings
-to Gold, Silver, Bronze, Unverified, or Suspicious account status.
+Later implementation steps should evaluate whether derived Suspicious status
+should replace stored/manual Suspicious status for minting eligibility, and
+whether the Subject, Player, Trainer, and Manager derivation thresholds should
+remain fixed constants or become chain configuration.
 
 ## Test Scenarios
 
@@ -266,26 +276,25 @@ The first implementation should cover at least these cases:
 - Suspicious accounts cannot mint even when they are in the minting group.
 - raw `blocksMinted` still increases for eligible minting accounts according to
   the existing block or batch reward rules.
-- vote tallies apply 100%, 50%, 25%, and 0% multipliers correctly.
+- vote tallies apply 100%, 50%, 25%, and 0% derived Subject multipliers
+  correctly.
 - an Unverified account's vote is recorded but contributes zero weight.
 - a Suspicious account's existing raw `blocksMinted` does not create effective
   vote weight while the account remains Suspicious.
 - account and vote APIs expose the raw `blocksMinted`, trust status,
   multiplier, and effective vote weight used by the current tally.
-- trust-status changes affect open poll tallies immediately while Qortium uses
-  current-status weighting.
+- stored Subject snapshot changes affect open poll tallies and resource-rating
+  weighted summaries immediately.
 - polls can optionally close at a defined end time, after which new votes and
   vote changes are rejected and final weights are frozen.
-- account trust previews expose inbound and outbound confidence distributions,
-  mutual positive relationships, evaluator impacts, positive scores, negative
-  scores, and net evidence without changing stored trust status or effective
-  vote weight.
+- account trust previews and snapshots expose inbound and outbound confidence
+  distributions, category scores, mapped trust status, seed membership, and
+  block anchoring; the stored Subject snapshot now supplies active poll and
+  resource-rating weight.
 
 ## Open Decisions
 
-- Which fully decentralized scoring rule should turn on-chain rating evidence
-  into trust status, if preview behavior looks acceptable?
-- At what height should a newly accepted Suspicious status begin blocking
+- Should derived Suspicious status replace stored/manual Suspicious status for
   online-account validation and block minting?
 - Should the 100%, 50%, and 25% multipliers be fixed consensus constants or
   configurable chain parameters?

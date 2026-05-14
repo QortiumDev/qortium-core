@@ -82,16 +82,20 @@ public class ResourceRatingsApiTests extends ApiCommon {
 		assertEquals(IDENTIFIER, summary.getIdentifier());
 		assertEquals(2, summary.getRatingCount());
 		assertEquals(Long.valueOf(203L), summary.getRawTotalWeight());
-		assertEquals(Long.valueOf(152L), summary.getTotalWeight());
+		assertEquals(Long.valueOf(51L), summary.getTotalWeight());
 		assertEquals(Long.valueOf(51L), summary.getDerivedTotalWeight());
+		assertEquals(Long.valueOf(152L), summary.getStoredTotalWeight());
 		assertEquals(1626.0d / 203.0d, summary.getRawWeightedAverageRating(), 0.0000001d);
-		assertEquals(1320.0d / 152.0d, summary.getWeightedAverageRating(), 0.0000001d);
+		assertEquals(10.0d, summary.getWeightedAverageRating(), 0.0000001d);
 		assertEquals(10.0d, summary.getDerivedWeightedAverageRating(), 0.0000001d);
+		assertEquals(1320.0d / 152.0d, summary.getStoredWeightedAverageRating(), 0.0000001d);
 
 		List<ResourceRatingSummaryData> summaries = this.resourceRatingsResource.getResourceRatings("APP", RESOURCE_NAME, null, null, null, null);
 		assertEquals(1, summaries.size());
 		assertEquals(RESOURCE_NAME, summaries.get(0).getName());
+		assertEquals(Long.valueOf(51L), summaries.get(0).getTotalWeight());
 		assertEquals(Long.valueOf(51L), summaries.get(0).getDerivedTotalWeight());
+		assertEquals(Long.valueOf(152L), summaries.get(0).getStoredTotalWeight());
 	}
 
 	@Test

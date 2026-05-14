@@ -157,24 +157,29 @@ public class ResourceRatingTests extends Common {
 			assertEquals(3, summary.getRatingCount());
 			assertEquals(17L, summary.getRatingTotal());
 			assertEquals(Long.valueOf(305L), summary.getRawTotalWeight());
-			assertEquals(Long.valueOf(178L), summary.getTotalWeight());
+			assertEquals(Long.valueOf(51L), summary.getTotalWeight());
 			assertEquals(Long.valueOf(51L), summary.getDerivedTotalWeight());
+			assertEquals(Long.valueOf(178L), summary.getStoredTotalWeight());
 			assertEquals(17.0d / 3.0d, summary.getAverageRating(), 0.0000001d);
 			assertEquals(1737.0d / 305.0d, summary.getRawWeightedAverageRating(), 0.0000001d);
-			assertEquals(1355.0d / 178.0d, summary.getWeightedAverageRating(), 0.0000001d);
+			assertEquals(10.0d, summary.getWeightedAverageRating(), 0.0000001d);
 			assertEquals(10.0d, summary.getDerivedWeightedAverageRating(), 0.0000001d);
+			assertEquals(1355.0d / 178.0d, summary.getStoredWeightedAverageRating(), 0.0000001d);
 			assertEquals(1, distributionFor(summary, 1).getRatingCount());
 			assertEquals(101L, distributionFor(summary, 1).getRawRatingWeight());
-			assertEquals(25L, distributionFor(summary, 1).getRatingWeight());
+			assertEquals(0L, distributionFor(summary, 1).getRatingWeight());
 			assertEquals(0L, distributionFor(summary, 1).getDerivedRatingWeight());
+			assertEquals(25L, distributionFor(summary, 1).getStoredRatingWeight());
 			assertEquals(1, distributionFor(summary, 6).getRatingCount());
 			assertEquals(101L, distributionFor(summary, 6).getRawRatingWeight());
-			assertEquals(50L, distributionFor(summary, 6).getRatingWeight());
+			assertEquals(0L, distributionFor(summary, 6).getRatingWeight());
 			assertEquals(0L, distributionFor(summary, 6).getDerivedRatingWeight());
+			assertEquals(50L, distributionFor(summary, 6).getStoredRatingWeight());
 			assertEquals(1, distributionFor(summary, 10).getRatingCount());
 			assertEquals(103L, distributionFor(summary, 10).getRawRatingWeight());
-			assertEquals(103L, distributionFor(summary, 10).getRatingWeight());
+			assertEquals(51L, distributionFor(summary, 10).getRatingWeight());
 			assertEquals(51L, distributionFor(summary, 10).getDerivedRatingWeight());
+			assertEquals(103L, distributionFor(summary, 10).getStoredRatingWeight());
 		}
 	}
 
@@ -199,10 +204,12 @@ public class ResourceRatingTests extends Common {
 		assertEquals(Long.valueOf(0L), summary.getRawTotalWeight());
 		assertEquals(Long.valueOf(0L), summary.getTotalWeight());
 		assertEquals(Long.valueOf(0L), summary.getDerivedTotalWeight());
+		assertEquals(Long.valueOf(0L), summary.getStoredTotalWeight());
 		assertNull(summary.getAverageRating());
 		assertNull(summary.getRawWeightedAverageRating());
 		assertNull(summary.getWeightedAverageRating());
 		assertNull(summary.getDerivedWeightedAverageRating());
+		assertNull(summary.getStoredWeightedAverageRating());
 	}
 
 	private ResourceRatingDistributionData distributionFor(ResourceRatingSummaryData summary, int rating) {

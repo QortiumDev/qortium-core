@@ -11,21 +11,28 @@ public class ResourceRatingDistributionData {
 	private long rawRatingWeight;
 	private long ratingWeight;
 	private long derivedRatingWeight;
+	private long storedRatingWeight;
 
 	protected ResourceRatingDistributionData() {
 	}
 
 	public ResourceRatingDistributionData(int rating, int ratingCount, long rawRatingWeight, long ratingWeight) {
-		this(rating, ratingCount, rawRatingWeight, ratingWeight, 0L);
+		this(rating, ratingCount, rawRatingWeight, ratingWeight, ratingWeight, ratingWeight);
 	}
 
 	public ResourceRatingDistributionData(int rating, int ratingCount, long rawRatingWeight, long ratingWeight,
 			long derivedRatingWeight) {
+		this(rating, ratingCount, rawRatingWeight, ratingWeight, derivedRatingWeight, ratingWeight);
+	}
+
+	public ResourceRatingDistributionData(int rating, int ratingCount, long rawRatingWeight, long ratingWeight,
+			long derivedRatingWeight, long storedRatingWeight) {
 		this.rating = rating;
 		this.ratingCount = ratingCount;
 		this.rawRatingWeight = rawRatingWeight;
 		this.ratingWeight = ratingWeight;
 		this.derivedRatingWeight = derivedRatingWeight;
+		this.storedRatingWeight = storedRatingWeight;
 	}
 
 	public int getRating() {
@@ -46,6 +53,10 @@ public class ResourceRatingDistributionData {
 
 	public long getDerivedRatingWeight() {
 		return this.derivedRatingWeight;
+	}
+
+	public long getStoredRatingWeight() {
+		return this.storedRatingWeight;
 	}
 
 }

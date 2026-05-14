@@ -95,19 +95,19 @@ public class PollVoteRemovalTests extends ApiCommon {
 
 			PollVotes beforeRemoval = this.pollsResource.getPollVotes(pollName, true);
 			assertEquals(Integer.valueOf(2), beforeRemoval.totalVotes);
-			assertEquals(Integer.valueOf(150), beforeRemoval.totalWeight);
+			assertEquals(Integer.valueOf(0), beforeRemoval.totalWeight);
 			assertEquals(Integer.valueOf(201), beforeRemoval.rawTotalWeight);
-			assertEquals(100, findOptionWeight(beforeRemoval.voteWeights, "Yes"));
-			assertEquals(50, findOptionWeight(beforeRemoval.voteWeights, "No"));
+			assertEquals(0, findOptionWeight(beforeRemoval.voteWeights, "Yes"));
+			assertEquals(0, findOptionWeight(beforeRemoval.voteWeights, "No"));
 
 			TransactionUtils.signAndMint(repository, voteData(repository, bob, pollName, Poll.NO_VOTE_OPTION_INDEX), bob);
 
 			PollVotes afterRemoval = this.pollsResource.getPollVotes(pollName, true);
 			assertEquals(Integer.valueOf(1), afterRemoval.totalVotes);
-			assertEquals(Integer.valueOf(50), afterRemoval.totalWeight);
+			assertEquals(Integer.valueOf(0), afterRemoval.totalWeight);
 			assertEquals(Integer.valueOf(101), afterRemoval.rawTotalWeight);
 			assertEquals(0, findOptionWeight(afterRemoval.voteWeights, "Yes"));
-			assertEquals(50, findOptionWeight(afterRemoval.voteWeights, "No"));
+			assertEquals(0, findOptionWeight(afterRemoval.voteWeights, "No"));
 			assertNull(repository.getVotingRepository().getVote(pollName, bob.getPublicKey()));
 		}
 	}

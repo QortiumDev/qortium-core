@@ -155,19 +155,19 @@ public class PollEndTimeTests extends Common {
 			PollDataWithVotes frozenResults = repository.getVotingRepository().getFrozenPollResults(pollName);
 			assertNotNull(frozenResults);
 			assertEquals(Integer.valueOf(2), frozenResults.getTotalVotes());
-			assertEquals(Integer.valueOf(75), frozenResults.getTotalWeight());
+			assertEquals(Integer.valueOf(0), frozenResults.getTotalWeight());
 			assertEquals(Integer.valueOf(202), frozenResults.getRawTotalWeight());
 			assertEquals(Integer.valueOf(1), frozenResults.getVoteCountMap().get("Yes"));
 			assertEquals(Integer.valueOf(1), frozenResults.getVoteCountMap().get("No"));
-			assertEquals(Integer.valueOf(50), frozenResults.getVoteWeightMap().get("Yes"));
-			assertEquals(Integer.valueOf(25), frozenResults.getVoteWeightMap().get("No"));
+			assertEquals(Integer.valueOf(0), frozenResults.getVoteWeightMap().get("Yes"));
+			assertEquals(Integer.valueOf(0), frozenResults.getVoteWeightMap().get("No"));
 
 			List<PollVoteWeightData> frozenVoteWeights = repository.getVotingRepository().getFrozenPollVoteWeights(pollName);
 			assertEquals(2, frozenVoteWeights.size());
 			PollVoteWeightData bobVoteWeight = findVoteWeight(frozenVoteWeights, bob.getAddress());
-			assertEquals(AccountTrustStatus.SILVER, bobVoteWeight.getTrustStatus());
+			assertEquals(AccountTrustStatus.UNVERIFIED, bobVoteWeight.getTrustStatus());
 			assertEquals(101, bobVoteWeight.getRawVoteWeight());
-			assertEquals(50, bobVoteWeight.getEffectiveVoteWeight());
+			assertEquals(0, bobVoteWeight.getEffectiveVoteWeight());
 
 			BlockUtils.orphanLastBlock(repository);
 

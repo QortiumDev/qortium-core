@@ -5,6 +5,7 @@ import org.qortal.data.voting.PollDataWithVotes;
 import org.qortal.data.voting.PollOptionData;
 import org.qortal.data.voting.PollVoteWeightData;
 import org.qortal.data.voting.VoteOnPollData;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.repository.DataException;
 import org.qortal.repository.VotingRepository;
@@ -21,12 +22,13 @@ import java.util.Map;
 public class HSQLDBVotingRepository implements VotingRepository {
 
 	protected HSQLDBRepository repository;
-	private static final String EFFECTIVE_VOTE_WEIGHT_SQL = "CASE COALESCE(a.trust_status, 0) "
+	private static final String ACTIVE_TRUST_STATUS_SQL = "COALESCE(ats.mapped_trust_status, 0)";
+	private static final String EFFECTIVE_VOTE_WEIGHT_SQL = "CASE " + ACTIVE_TRUST_STATUS_SQL + " "
 			+ "WHEN 3 THEN a.blocks_minted "
 			+ "WHEN 2 THEN a.blocks_minted / 2 "
 			+ "WHEN 1 THEN a.blocks_minted / 4 "
 			+ "ELSE 0 END";
-	private static final String TRUST_WEIGHT_PERCENT_SQL = "CASE COALESCE(a.trust_status, 0) "
+	private static final String TRUST_WEIGHT_PERCENT_SQL = "CASE " + ACTIVE_TRUST_STATUS_SQL + " "
 			+ "WHEN 3 THEN 100 "
 			+ "WHEN 2 THEN 50 "
 			+ "WHEN 1 THEN 25 "
@@ -258,17 +260,21 @@ public class HSQLDBVotingRepository implements VotingRepository {
 				+ "JOIN PollOptions po ON po.poll_id = p.poll_id "
 				+ "LEFT JOIN PollVotes pv ON pv.poll_id = p.poll_id AND pv.option_index = po.option_index + 1 "
 				+ "LEFT JOIN Accounts a ON pv.voter = a.public_key "
+				+ "LEFT JOIN AccountTrustDerivationSnapshots ats ON ats.account = a.account "
+				+ "AND ats.category = " + AccountRatingCategory.SUBJECT.value + " "
 				+ "WHERE p.end_when IS NOT NULL AND p.end_when <= ? "
 				+ "AND NOT EXISTS (SELECT TRUE FROM PollFrozenResults pfr WHERE pfr.poll_id = p.poll_id) "
 				+ "GROUP BY p.poll_id, po.option_index";
 
 		String frozenVoteDetailsSql = "INSERT INTO PollFrozenVoteDetails "
 				+ "(poll_id, voter, option_index, raw_vote_weight, trust_status, trust_weight_percent, effective_vote_weight, freeze_height, freeze_timestamp) "
-				+ "SELECT p.poll_id, pv.voter, pv.option_index, COALESCE(a.blocks_minted, 0), COALESCE(a.trust_status, 0), "
+				+ "SELECT p.poll_id, pv.voter, pv.option_index, COALESCE(a.blocks_minted, 0), " + ACTIVE_TRUST_STATUS_SQL + ", "
 				+ TRUST_WEIGHT_PERCENT_SQL + ", " + EFFECTIVE_VOTE_WEIGHT_SQL + ", ?, ? "
 				+ "FROM Polls p "
 				+ "JOIN PollVotes pv ON pv.poll_id = p.poll_id "
 				+ "LEFT JOIN Accounts a ON pv.voter = a.public_key "
+				+ "LEFT JOIN AccountTrustDerivationSnapshots ats ON ats.account = a.account "
+				+ "AND ats.category = " + AccountRatingCategory.SUBJECT.value + " "
 				+ "WHERE EXISTS (SELECT TRUE FROM PollFrozenResults pfr WHERE pfr.poll_id = p.poll_id AND pfr.freeze_height = ?) "
 				+ "AND NOT EXISTS (SELECT TRUE FROM PollFrozenVoteDetails pfv WHERE pfv.poll_id = p.poll_id)";
 
