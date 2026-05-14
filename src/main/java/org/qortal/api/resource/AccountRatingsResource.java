@@ -21,6 +21,7 @@ import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.repository.DataException;
@@ -44,9 +45,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 
 @Path("/account-ratings")
@@ -190,7 +194,8 @@ public class AccountRatingsResource {
 			@Parameter(description = "Optional minimum level in the selected category") @QueryParam("minLevel") Integer minLevel,
 			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
 			@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
-			@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
+			@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse,
+			@Parameter(description = "If true, recalculate from active account ratings instead of reading stored block snapshots") @QueryParam("live") Boolean live) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			AccountTrustStatus status = parseOptionalTrustStatus(statusName);
 			AccountRatingCategory sortCategory = parseOptionalCategory(categoryName);
@@ -199,8 +204,58 @@ public class AccountRatingsResource {
 
 			validateTrustDerivationCriteria(minLevel, limit, offset);
 
-			List<AccountTrustDerivationData> derivedAccounts = AccountTrustDerivation.deriveAll(repository);
+			List<AccountTrustDerivationData> derivedAccounts = Boolean.TRUE.equals(live)
+					? AccountTrustDerivation.deriveAll(repository)
+					: buildTrustDerivationFromSnapshots(repository.getAccountRatingRepository()
+							.getTrustDerivationSnapshots(null, null, null));
 			return filterTrustDerivation(derivedAccounts, status, sortCategory, seedMember, minLevel, limit, offset, reverse);
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	public List<AccountTrustDerivationData> getAccountTrustDerivation(String statusName, String categoryName, Boolean seedMember,
+			Integer minLevel, Integer limit, Integer offset, Boolean reverse) {
+		return getAccountTrustDerivation(statusName, categoryName, seedMember, minLevel, limit, offset, reverse, null);
+	}
+
+	@GET
+	@Path("/trust-snapshots")
+	@Operation(
+			summary = "List stored Aura-style account trust snapshot rows",
+			responses = {
+					@ApiResponse(
+							description = "account trust snapshot rows",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									array = @ArraySchema(schema = @Schema(implementation = AccountTrustSnapshotData.class))
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public List<AccountTrustSnapshotData> getAccountTrustSnapshots(
+			@Parameter(description = "Optional account address") @QueryParam("account") String account,
+			@Parameter(description = "Optional category: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName,
+			@Parameter(description = "Optional mapped trust status: GOLD, SILVER, BRONZE, UNVERIFIED, or SUSPICIOUS") @QueryParam("status") String statusName,
+			@Parameter(description = "Optional filter for current minting seed membership") @QueryParam("seedMember") Boolean seedMember,
+			@Parameter(description = "Optional minimum level") @QueryParam("minLevel") Integer minLevel,
+			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
+			@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
+			@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String accountAddress = parseOptionalAddress(account);
+			AccountRatingCategory category = parseOptionalCategory(categoryName);
+			AccountTrustStatus status = parseOptionalTrustStatus(statusName);
+
+			validateTrustDerivationCriteria(minLevel, limit, offset);
+
+			List<AccountTrustSnapshotData> snapshots = accountAddress == null
+					? repository.getAccountRatingRepository().getTrustDerivationSnapshots(null, null, null)
+					: repository.getAccountRatingRepository().getTrustDerivationSnapshots(accountAddress);
+			return filterTrustSnapshots(snapshots, category, status, seedMember, minLevel, limit, offset, reverse);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -309,6 +364,42 @@ public class AccountRatingsResource {
 		return (int) magnitude;
 	}
 
+	private List<AccountTrustDerivationData> buildTrustDerivationFromSnapshots(List<AccountTrustSnapshotData> snapshots) {
+		Map<String, List<AccountTrustSnapshotData>> snapshotsByAccount = new LinkedHashMap<>();
+		for (AccountTrustSnapshotData snapshot : snapshots)
+			snapshotsByAccount.computeIfAbsent(snapshot.getAccountAddress(), ignored -> new ArrayList<>()).add(snapshot);
+
+		List<AccountTrustDerivationData> derivedAccounts = new ArrayList<>();
+		for (List<AccountTrustSnapshotData> accountSnapshots : snapshotsByAccount.values()) {
+			Map<AccountRatingCategory, AccountTrustSnapshotData> snapshotsByCategory = new EnumMap<>(AccountRatingCategory.class);
+			for (AccountTrustSnapshotData snapshot : accountSnapshots)
+				snapshotsByCategory.put(snapshot.getCategory(), snapshot);
+
+			AccountTrustSnapshotData subjectSnapshot = snapshotsByCategory.get(AccountRatingCategory.SUBJECT);
+			AccountTrustSnapshotData firstSnapshot = accountSnapshots.get(0);
+			AccountTrustStatus derivedTrustStatus = subjectSnapshot == null
+					? AccountTrustStatus.UNVERIFIED
+					: subjectSnapshot.getMappedTrustStatus();
+			List<AccountTrustPreviewData.CategoryTrust> categories = new ArrayList<>();
+
+			for (AccountRatingCategory category : AccountRatingCategory.values()) {
+				AccountTrustSnapshotData snapshot = snapshotsByCategory.get(category);
+				if (snapshot == null)
+					categories.add(new AccountTrustPreviewData.CategoryTrust(category, 0L, 0,
+							AccountTrustStatus.UNVERIFIED, new AccountTrustPreviewData.RatingCounts(), new ArrayList<>()));
+				else
+					categories.add(new AccountTrustPreviewData.CategoryTrust(snapshot.getCategory(), snapshot.getScore(),
+							snapshot.getLevel(), snapshot.getMappedTrustStatus(), snapshot.getInboundRatings(), new ArrayList<>()));
+			}
+
+			derivedAccounts.add(new AccountTrustDerivationData(firstSnapshot.getAccountPublicKey(),
+					firstSnapshot.getAccountAddress(), derivedTrustStatus, firstSnapshot.isMintingSeedMember(),
+					firstSnapshot.getSnapshotHeight(), firstSnapshot.getSnapshotTimestamp(), false, categories));
+		}
+
+		return derivedAccounts;
+	}
+
 	private List<AccountTrustDerivationData> filterTrustDerivation(List<AccountTrustDerivationData> derivedAccounts,
 			AccountTrustStatus status, AccountRatingCategory sortCategory, Boolean seedMember, Integer minLevel,
 			Integer limit, Integer offset, Boolean reverse) {
@@ -332,6 +423,35 @@ public class AccountRatingsResource {
 			Collections.reverse(filteredAccounts);
 
 		return pageTrustDerivation(filteredAccounts, limit, offset);
+	}
+
+	private List<AccountTrustSnapshotData> filterTrustSnapshots(List<AccountTrustSnapshotData> snapshots,
+			AccountRatingCategory category, AccountTrustStatus status, Boolean seedMember, Integer minLevel,
+			Integer limit, Integer offset, Boolean reverse) {
+		List<AccountTrustSnapshotData> filteredSnapshots = new ArrayList<>();
+
+		for (AccountTrustSnapshotData snapshot : snapshots) {
+			if (category != null && snapshot.getCategory() != category)
+				continue;
+
+			if (status != null && snapshot.getMappedTrustStatus() != status)
+				continue;
+
+			if (seedMember != null && snapshot.isMintingSeedMember() != seedMember)
+				continue;
+
+			if (minLevel != null && snapshot.getLevel() < minLevel)
+				continue;
+
+			filteredSnapshots.add(snapshot);
+		}
+
+		filteredSnapshots.sort(Comparator.comparing(AccountTrustSnapshotData::getAccountAddress)
+				.thenComparing(AccountTrustSnapshotData::getCategory));
+		if (Boolean.TRUE.equals(reverse))
+			Collections.reverse(filteredSnapshots);
+
+		return pageTrustSnapshots(filteredSnapshots, limit, offset);
 	}
 
 	private static int compareTrustDerivationRows(AccountTrustDerivationData left, AccountTrustDerivationData right,
@@ -379,6 +499,19 @@ public class AccountRatingsResource {
 		return new ArrayList<>(derivedAccounts.subList(fromIndex, toIndex));
 	}
 
+	private List<AccountTrustSnapshotData> pageTrustSnapshots(List<AccountTrustSnapshotData> snapshots,
+			Integer limit, Integer offset) {
+		int fromIndex = offset == null ? 0 : offset;
+		if (fromIndex >= snapshots.size())
+			return new ArrayList<>();
+
+		int toIndex = snapshots.size();
+		if (limit != null)
+			toIndex = (int) Math.min((long) snapshots.size(), (long) fromIndex + limit);
+
+		return new ArrayList<>(snapshots.subList(fromIndex, toIndex));
+	}
+
 	private void validateTrustDerivationCriteria(Integer minLevel, Integer limit, Integer offset) {
 		if (minLevel != null && minLevel < -1)
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
@@ -417,6 +550,17 @@ public class AccountRatingsResource {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 		return category;
+	}
+
+	private String parseOptionalAddress(String address) {
+		if (address == null || address.trim().isEmpty())
+			return null;
+
+		String trimmedAddress = address.trim();
+		if (!Crypto.isValidAddress(trimmedAddress))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		return trimmedAddress;
 	}
 
 	private AccountTrustStatus parseOptionalTrustStatus(String statusName) {

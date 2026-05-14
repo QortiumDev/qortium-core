@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-14 - api: expose account trust snapshots
+
+Exposed the stored Aura-style account trust snapshot through read-only account-rating APIs. The trust derivation list now reads the block-anchored snapshot by default while still allowing a live recalculation for comparison, and a raw snapshot endpoint lets clients inspect the stored per-account, per-category rows directly with filters for account, category, mapped trust status, seed membership, and level. This makes the trust graph easier to audit without changing minting, voting, resource-rating weights, or stored account trust status.
+
 ### 2026-05-14 - core: store derived account trust snapshots
 
 Stored the current Aura-style account trust derivation as deterministic repository state after each processed block and restored it when blocks are orphaned. The snapshot records each account's Subject, Player, Trainer, and Manager score, level, mapped trust status, minting-seed membership, inbound rating counts, and snapshot block height, giving Qortium a consensus-ready trust-state foundation without yet changing stored account trust status, minting eligibility, poll voting weight, resource-rating weight, or API enforcement behavior.

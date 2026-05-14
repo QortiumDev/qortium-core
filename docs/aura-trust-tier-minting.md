@@ -177,6 +177,9 @@ repository state after each processed block:
   seed membership, inbound rating counts, and the block height and timestamp
   that produced the snapshot
 - orphaning a block refreshes the snapshot back to the previous chain state
+- `GET /account-ratings/trust-derivation` reads the stored snapshot by default,
+  while `live=true` recalculates the graph from active ratings for comparison
+- `GET /account-ratings/trust-snapshots` exposes the raw stored rows directly
 - the stored snapshot is still not used for minting, voting, or resource-rating
   enforcement yet
 

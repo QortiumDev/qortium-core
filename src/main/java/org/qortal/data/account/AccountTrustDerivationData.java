@@ -14,6 +14,9 @@ public class AccountTrustDerivationData {
 	private int derivedTrustStatusValue;
 	private int derivedTrustWeightPercent;
 	private boolean mintingSeedMember;
+	private Integer snapshotHeight;
+	private Long snapshotTimestamp;
+	private boolean live;
 	private List<AccountTrustPreviewData.CategoryTrust> categories;
 
 	protected AccountTrustDerivationData() {
@@ -21,6 +24,12 @@ public class AccountTrustDerivationData {
 
 	public AccountTrustDerivationData(byte[] accountPublicKey, String accountAddress, AccountTrustStatus derivedTrustStatus,
 			boolean mintingSeedMember, List<AccountTrustPreviewData.CategoryTrust> categories) {
+		this(accountPublicKey, accountAddress, derivedTrustStatus, mintingSeedMember, null, null, true, categories);
+	}
+
+	public AccountTrustDerivationData(byte[] accountPublicKey, String accountAddress, AccountTrustStatus derivedTrustStatus,
+			boolean mintingSeedMember, Integer snapshotHeight, Long snapshotTimestamp, boolean live,
+			List<AccountTrustPreviewData.CategoryTrust> categories) {
 		AccountTrustStatus effectiveDerivedTrustStatus = derivedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : derivedTrustStatus;
 
 		this.accountPublicKey = accountPublicKey;
@@ -29,6 +38,9 @@ public class AccountTrustDerivationData {
 		this.derivedTrustStatusValue = effectiveDerivedTrustStatus.getValue();
 		this.derivedTrustWeightPercent = effectiveDerivedTrustStatus.getVoteWeightPercent();
 		this.mintingSeedMember = mintingSeedMember;
+		this.snapshotHeight = snapshotHeight;
+		this.snapshotTimestamp = snapshotTimestamp;
+		this.live = live;
 		this.categories = categories == null ? new ArrayList<>() : categories;
 	}
 
@@ -54,6 +66,18 @@ public class AccountTrustDerivationData {
 
 	public boolean isMintingSeedMember() {
 		return this.mintingSeedMember;
+	}
+
+	public Integer getSnapshotHeight() {
+		return this.snapshotHeight;
+	}
+
+	public Long getSnapshotTimestamp() {
+		return this.snapshotTimestamp;
+	}
+
+	public boolean isLive() {
+		return this.live;
 	}
 
 	public List<AccountTrustPreviewData.CategoryTrust> getCategories() {

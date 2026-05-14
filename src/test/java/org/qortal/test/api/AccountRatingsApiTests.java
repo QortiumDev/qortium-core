@@ -12,6 +12,7 @@ import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.group.Group;
@@ -30,6 +31,7 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class AccountRatingsApiTests extends ApiCommon {
@@ -332,12 +334,25 @@ public class AccountRatingsApiTests extends ApiCommon {
 		AccountTrustDerivationData dilbertDerivation = findDerivation(derivedAccounts, dilbert.getAddress());
 
 		assertTrue(aliceDerivation.isMintingSeedMember());
+		assertFalse(aliceDerivation.isLive());
+		assertNotNull(aliceDerivation.getSnapshotHeight());
+		assertNotNull(aliceDerivation.getSnapshotTimestamp());
 		assertEquals(AccountTrustStatus.SILVER, aliceDerivation.getDerivedTrustStatus());
 		assertEquals(50, aliceDerivation.getDerivedTrustWeightPercent());
-		assertEquals(64_000_000L, findCategory(aliceDerivation, AccountRatingCategory.SUBJECT).getScore());
+		AccountTrustPreviewData.CategoryTrust storedSubject = findCategory(aliceDerivation, AccountRatingCategory.SUBJECT);
+		assertEquals(64_000_000L, storedSubject.getScore());
+		assertTrue(storedSubject.getImpacts().isEmpty());
 		assertEquals(1_000_000L, findCategory(bobDerivation, AccountRatingCategory.MANAGER).getScore());
 		assertEquals(4_000_000L, findCategory(chloeDerivation, AccountRatingCategory.TRAINER).getScore());
 		assertEquals(16_000_000L, findCategory(dilbertDerivation, AccountRatingCategory.PLAYER).getScore());
+
+		List<AccountTrustDerivationData> liveAccounts = this.accountRatingsResource.getAccountTrustDerivation(
+				null, null, null, null, null, null, null, true);
+		AccountTrustDerivationData liveAliceDerivation = findDerivation(liveAccounts, alice.getAddress());
+		assertTrue(liveAliceDerivation.isLive());
+		assertNull(liveAliceDerivation.getSnapshotHeight());
+		assertNull(liveAliceDerivation.getSnapshotTimestamp());
+		assertFalse(findCategory(liveAliceDerivation, AccountRatingCategory.SUBJECT).getImpacts().isEmpty());
 	}
 
 	@Test
@@ -398,6 +413,65 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testTrustSnapshotEndpointReturnsAndFiltersStoredRows() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
+			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
+			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
+		}
+
+		List<AccountTrustSnapshotData> allSnapshots = this.accountRatingsResource.getAccountTrustSnapshots(
+				null, null, null, null, null, null, null, null);
+		assertEquals(16, allSnapshots.size());
+
+		List<AccountTrustSnapshotData> aliceSnapshots = this.accountRatingsResource.getAccountTrustSnapshots(
+				alice.getAddress(), null, null, null, null, null, null, null);
+		assertEquals(4, aliceSnapshots.size());
+
+		List<AccountTrustSnapshotData> silverSubjectSnapshots = this.accountRatingsResource.getAccountTrustSnapshots(
+				null, AccountRatingCategory.SUBJECT.name(), AccountTrustStatus.SILVER.name(), null, null, null, null, null);
+		assertEquals(1, silverSubjectSnapshots.size());
+		AccountTrustSnapshotData aliceSubject = silverSubjectSnapshots.get(0);
+		assertEquals(alice.getAddress(), aliceSubject.getAccountAddress());
+		assertEquals(AccountRatingCategory.SUBJECT, aliceSubject.getCategory());
+		assertEquals(64_000_000L, aliceSubject.getScore());
+		assertEquals(2, aliceSubject.getLevel());
+		assertEquals(1, aliceSubject.getInboundRatings().getPositiveVeryHighCount());
+		assertTrue(aliceSubject.isMintingSeedMember());
+		assertNotNull(aliceSubject.getSnapshotHeight());
+
+		List<AccountTrustSnapshotData> managerSnapshots = this.accountRatingsResource.getAccountTrustSnapshots(
+				null, AccountRatingCategory.MANAGER.name(), null, null, 2, null, null, null);
+		assertEquals(1, managerSnapshots.size());
+		assertEquals(bob.getAddress(), managerSnapshots.get(0).getAccountAddress());
+
+		List<AccountTrustSnapshotData> seedSnapshots = this.accountRatingsResource.getAccountTrustSnapshots(
+				null, null, null, true, null, null, null, null);
+		assertEquals(4, seedSnapshots.size());
+
+		List<AccountTrustSnapshotData> pagedSnapshots = this.accountRatingsResource.getAccountTrustSnapshots(
+				null, null, null, null, null, 2, 1, null);
+		assertEquals(2, pagedSnapshots.size());
+		assertEquals(allSnapshots.get(1).getAccountAddress(), pagedSnapshots.get(0).getAccountAddress());
+
+		List<AccountTrustSnapshotData> reversedSnapshots = this.accountRatingsResource.getAccountTrustSnapshots(
+				null, null, null, null, null, 1, null, true);
+		assertEquals(1, reversedSnapshots.size());
+		assertEquals(allSnapshots.get(allSnapshots.size() - 1).getAccountAddress(), reversedSnapshots.get(0).getAccountAddress());
+	}
+
+	@Test
 	public void testRateAccountEndpointBuildsUnsignedTransaction() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
@@ -440,12 +514,22 @@ public class AccountRatingsApiTests extends ApiCommon {
 				() -> this.accountRatingsResource.getAccountRatings(null, null, "not-a-category", null, null, null));
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountTrustDerivation(null, "not-a-category", null, null, null, null, null));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustSnapshots(null, "not-a-category", null, null, null, null, null, null));
 	}
 
 	@Test
 	public void testInvalidTrustStatusFailsDerivationList() {
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountTrustDerivation("not-a-status", null, null, null, null, null, null));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustSnapshots(null, null, "not-a-status", null, null, null, null, null));
+	}
+
+	@Test
+	public void testInvalidTrustSnapshotAddressFailsList() {
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustSnapshots("not-an-address", null, null, null, null, null, null, null));
 	}
 
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target, int rating)
