@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-14 - core: skip empty poll migration batches
+
+Skipped empty poll migration batches when a repository has no rows to backfill. This keeps fresh or minimal databases from failing during startup migrations while preserving the same poll-name and poll-id backfill behavior whenever there is data to update.
+
 ### 2026-05-14 - api: expose account trust snapshots
 
 Exposed the stored Aura-style account trust snapshot through read-only account-rating APIs. The trust derivation list now reads the block-anchored snapshot by default while still allowing a live recalculation for comparison, and a raw snapshot endpoint lets clients inspect the stored per-account, per-category rows directly with filters for account, category, mapped trust status, seed membership, and level. This makes the trust graph easier to audit without changing minting, voting, resource-rating weights, or stored account trust status.

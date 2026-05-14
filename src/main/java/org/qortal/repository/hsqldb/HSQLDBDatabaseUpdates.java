@@ -1338,15 +1338,18 @@ public class HSQLDBDatabaseUpdates {
 		try (Statement selectStatement = connection.createStatement();
 				ResultSet resultSet = selectStatement.executeQuery("SELECT poll_name FROM Polls");
 				PreparedStatement updateStatement = connection.prepareStatement("UPDATE Polls SET reduced_poll_name = ? WHERE poll_name = ?")) {
+			boolean hasBatch = false;
 			while (resultSet.next()) {
 				String pollName = resultSet.getString(1);
 
 				updateStatement.setString(1, Unicode.sanitize(pollName));
 				updateStatement.setString(2, pollName);
 				updateStatement.addBatch();
+				hasBatch = true;
 			}
 
-			updateStatement.executeBatch();
+			if (hasBatch)
+				updateStatement.executeBatch();
 		}
 	}
 
@@ -1356,13 +1359,16 @@ public class HSQLDBDatabaseUpdates {
 		try (Statement selectStatement = connection.createStatement();
 				ResultSet resultSet = selectStatement.executeQuery("SELECT poll_name FROM Polls WHERE poll_id IS NULL ORDER BY published_when, poll_name");
 				PreparedStatement updateStatement = connection.prepareStatement("UPDATE Polls SET poll_id = ? WHERE poll_name = ?")) {
+			boolean hasBatch = false;
 			while (resultSet.next()) {
 				updateStatement.setInt(1, nextPollId++);
 				updateStatement.setString(2, resultSet.getString(1));
 				updateStatement.addBatch();
+				hasBatch = true;
 			}
 
-			updateStatement.executeBatch();
+			if (hasBatch)
+				updateStatement.executeBatch();
 		}
 	}
 
@@ -1380,6 +1386,7 @@ public class HSQLDBDatabaseUpdates {
 						+ "FROM CreatePollTransactions JOIN Polls ON Polls.poll_name = CreatePollTransactions.poll_name "
 						+ "WHERE CreatePollTransactions.poll_id IS NULL");
 				PreparedStatement updateStatement = connection.prepareStatement("UPDATE CreatePollTransactions SET poll_id = ? WHERE signature = ?")) {
+			boolean hasBatch = false;
 			while (resultSet.next()) {
 				byte[] signature = resultSet.getBytes(1);
 				int pollId = resultSet.getInt(2);
@@ -1387,9 +1394,11 @@ public class HSQLDBDatabaseUpdates {
 				updateStatement.setInt(1, pollId);
 				updateStatement.setBytes(2, signature);
 				updateStatement.addBatch();
+				hasBatch = true;
 			}
 
-			updateStatement.executeBatch();
+			if (hasBatch)
+				updateStatement.executeBatch();
 		}
 	}
 
