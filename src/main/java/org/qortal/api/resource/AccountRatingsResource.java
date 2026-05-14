@@ -19,6 +19,7 @@ import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
+import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.RateAccountTransactionData;
@@ -41,9 +42,11 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 @Path("/account-ratings")
@@ -165,6 +168,46 @@ public class AccountRatingsResource {
 		}
 	}
 
+	@GET
+	@Path("/trust-derivation")
+	@Operation(
+			summary = "List preview-only Aura-style account trust derivation rows",
+			responses = {
+					@ApiResponse(
+							description = "account trust derivation rows",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									array = @ArraySchema(schema = @Schema(implementation = AccountTrustDerivationData.class))
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public List<AccountTrustDerivationData> getAccountTrustDerivation(
+			@Parameter(description = "Optional final Subject-derived trust status: GOLD, SILVER, BRONZE, UNVERIFIED, or SUSPICIOUS") @QueryParam("status") String statusName,
+			@Parameter(description = "Optional category used for level filtering and sorting: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName,
+			@Parameter(description = "Optional filter for current minting seed membership") @QueryParam("seedMember") Boolean seedMember,
+			@Parameter(description = "Optional minimum level in the selected category") @QueryParam("minLevel") Integer minLevel,
+			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
+			@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
+			@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			AccountTrustStatus status = parseOptionalTrustStatus(statusName);
+			AccountRatingCategory sortCategory = parseOptionalCategory(categoryName);
+			if (sortCategory == null)
+				sortCategory = AccountRatingCategory.SUBJECT;
+
+			validateTrustDerivationCriteria(minLevel, limit, offset);
+
+			List<AccountTrustDerivationData> derivedAccounts = AccountTrustDerivation.deriveAll(repository);
+			return filterTrustDerivation(derivedAccounts, status, sortCategory, seedMember, minLevel, limit, offset, reverse);
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
 	@POST
 	@Path("/rate")
 	@Operation(
@@ -266,6 +309,87 @@ public class AccountRatingsResource {
 		return (int) magnitude;
 	}
 
+	private List<AccountTrustDerivationData> filterTrustDerivation(List<AccountTrustDerivationData> derivedAccounts,
+			AccountTrustStatus status, AccountRatingCategory sortCategory, Boolean seedMember, Integer minLevel,
+			Integer limit, Integer offset, Boolean reverse) {
+		List<AccountTrustDerivationData> filteredAccounts = new ArrayList<>();
+
+		for (AccountTrustDerivationData derivedAccount : derivedAccounts) {
+			if (status != null && derivedAccount.getDerivedTrustStatus() != status)
+				continue;
+
+			if (seedMember != null && derivedAccount.isMintingSeedMember() != seedMember)
+				continue;
+
+			if (minLevel != null && getCategoryLevel(derivedAccount, sortCategory) < minLevel)
+				continue;
+
+			filteredAccounts.add(derivedAccount);
+		}
+
+		filteredAccounts.sort((left, right) -> compareTrustDerivationRows(left, right, sortCategory));
+		if (Boolean.TRUE.equals(reverse))
+			Collections.reverse(filteredAccounts);
+
+		return pageTrustDerivation(filteredAccounts, limit, offset);
+	}
+
+	private static int compareTrustDerivationRows(AccountTrustDerivationData left, AccountTrustDerivationData right,
+			AccountRatingCategory sortCategory) {
+		int compare = Integer.compare(getCategoryLevel(right, sortCategory), getCategoryLevel(left, sortCategory));
+		if (compare != 0)
+			return compare;
+
+		compare = Long.compare(getCategoryScore(right, sortCategory), getCategoryScore(left, sortCategory));
+		if (compare != 0)
+			return compare;
+
+		return left.getAccountAddress().compareTo(right.getAccountAddress());
+	}
+
+	private static int getCategoryLevel(AccountTrustDerivationData derivedAccount, AccountRatingCategory category) {
+		AccountTrustPreviewData.CategoryTrust categoryTrust = getCategoryTrust(derivedAccount, category);
+		return categoryTrust == null ? 0 : categoryTrust.getLevel();
+	}
+
+	private static long getCategoryScore(AccountTrustDerivationData derivedAccount, AccountRatingCategory category) {
+		AccountTrustPreviewData.CategoryTrust categoryTrust = getCategoryTrust(derivedAccount, category);
+		return categoryTrust == null ? 0L : categoryTrust.getScore();
+	}
+
+	private static AccountTrustPreviewData.CategoryTrust getCategoryTrust(AccountTrustDerivationData derivedAccount,
+			AccountRatingCategory category) {
+		for (AccountTrustPreviewData.CategoryTrust categoryTrust : derivedAccount.getCategories())
+			if (categoryTrust.getCategory() == category)
+				return categoryTrust;
+
+		return null;
+	}
+
+	private List<AccountTrustDerivationData> pageTrustDerivation(List<AccountTrustDerivationData> derivedAccounts,
+			Integer limit, Integer offset) {
+		int fromIndex = offset == null ? 0 : offset;
+		if (fromIndex >= derivedAccounts.size())
+			return new ArrayList<>();
+
+		int toIndex = derivedAccounts.size();
+		if (limit != null)
+			toIndex = (int) Math.min((long) derivedAccounts.size(), (long) fromIndex + limit);
+
+		return new ArrayList<>(derivedAccounts.subList(fromIndex, toIndex));
+	}
+
+	private void validateTrustDerivationCriteria(Integer minLevel, Integer limit, Integer offset) {
+		if (minLevel != null && minLevel < -1)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (limit != null && limit < 0)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (offset != null && offset < 0)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+	}
+
 	private byte[] parseOptionalPublicKey(String publicKey58) {
 		if (publicKey58 == null || publicKey58.trim().isEmpty())
 			return null;
@@ -293,6 +417,17 @@ public class AccountRatingsResource {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 
 		return category;
+	}
+
+	private AccountTrustStatus parseOptionalTrustStatus(String statusName) {
+		if (statusName == null || statusName.trim().isEmpty())
+			return null;
+
+		try {
+			return AccountTrustStatus.valueOf(statusName.trim().toUpperCase(Locale.ROOT));
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		}
 	}
 
 	private byte[] requireKnownPublicKey(Repository repository, String publicKey58) throws DataException {

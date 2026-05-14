@@ -10,6 +10,7 @@ import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
+import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.RateAccountTransactionData;
@@ -303,6 +304,100 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testTrustDerivationListingReturnsGraphAndSeedMembers() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
+			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
+			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
+		}
+
+		List<AccountTrustDerivationData> derivedAccounts = this.accountRatingsResource.getAccountTrustDerivation(
+				null, null, null, null, null, null, null);
+		assertEquals(alice.getAddress(), derivedAccounts.get(0).getAccountAddress());
+
+		AccountTrustDerivationData aliceDerivation = findDerivation(derivedAccounts, alice.getAddress());
+		AccountTrustDerivationData bobDerivation = findDerivation(derivedAccounts, bob.getAddress());
+		AccountTrustDerivationData chloeDerivation = findDerivation(derivedAccounts, chloe.getAddress());
+		AccountTrustDerivationData dilbertDerivation = findDerivation(derivedAccounts, dilbert.getAddress());
+
+		assertTrue(aliceDerivation.isMintingSeedMember());
+		assertEquals(AccountTrustStatus.SILVER, aliceDerivation.getDerivedTrustStatus());
+		assertEquals(50, aliceDerivation.getDerivedTrustWeightPercent());
+		assertEquals(64_000_000L, findCategory(aliceDerivation, AccountRatingCategory.SUBJECT).getScore());
+		assertEquals(1_000_000L, findCategory(bobDerivation, AccountRatingCategory.MANAGER).getScore());
+		assertEquals(4_000_000L, findCategory(chloeDerivation, AccountRatingCategory.TRAINER).getScore());
+		assertEquals(16_000_000L, findCategory(dilbertDerivation, AccountRatingCategory.PLAYER).getScore());
+	}
+
+	@Test
+	public void testTrustDerivationListingFiltersAndPages() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
+			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
+			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
+		}
+
+		List<AccountTrustDerivationData> silverAccounts = this.accountRatingsResource.getAccountTrustDerivation(
+				AccountTrustStatus.SILVER.name(), null, null, null, null, null, null);
+		assertEquals(1, silverAccounts.size());
+		assertEquals(alice.getAddress(), silverAccounts.get(0).getAccountAddress());
+
+		List<AccountTrustDerivationData> seedAccounts = this.accountRatingsResource.getAccountTrustDerivation(
+				null, null, true, null, null, null, null);
+		assertEquals(1, seedAccounts.size());
+		assertEquals(alice.getAddress(), seedAccounts.get(0).getAccountAddress());
+
+		List<AccountTrustDerivationData> managerAccounts = this.accountRatingsResource.getAccountTrustDerivation(
+				null, AccountRatingCategory.MANAGER.name(), null, 2, null, null, null);
+		assertEquals(1, managerAccounts.size());
+		assertEquals(bob.getAddress(), managerAccounts.get(0).getAccountAddress());
+
+		List<AccountTrustDerivationData> trainerAccounts = this.accountRatingsResource.getAccountTrustDerivation(
+				null, AccountRatingCategory.TRAINER.name(), null, 2, null, null, null);
+		assertEquals(1, trainerAccounts.size());
+		assertEquals(chloe.getAddress(), trainerAccounts.get(0).getAccountAddress());
+
+		List<AccountTrustDerivationData> playerAccounts = this.accountRatingsResource.getAccountTrustDerivation(
+				null, AccountRatingCategory.PLAYER.name(), null, 3, null, null, null);
+		assertEquals(1, playerAccounts.size());
+		assertEquals(dilbert.getAddress(), playerAccounts.get(0).getAccountAddress());
+
+		List<AccountTrustDerivationData> fullList = this.accountRatingsResource.getAccountTrustDerivation(
+				null, null, null, null, null, null, null);
+		List<AccountTrustDerivationData> pagedList = this.accountRatingsResource.getAccountTrustDerivation(
+				null, null, null, null, 2, 1, null);
+		assertEquals(2, pagedList.size());
+		assertEquals(fullList.get(1).getAccountAddress(), pagedList.get(0).getAccountAddress());
+
+		List<AccountTrustDerivationData> reversedList = this.accountRatingsResource.getAccountTrustDerivation(
+				null, null, null, null, 1, null, true);
+		assertEquals(1, reversedList.size());
+		assertEquals(fullList.get(fullList.size() - 1).getAccountAddress(), reversedList.get(0).getAccountAddress());
+	}
+
+	@Test
 	public void testRateAccountEndpointBuildsUnsignedTransaction() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
@@ -343,6 +438,14 @@ public class AccountRatingsApiTests extends ApiCommon {
 	public void testInvalidCategoryFailsList() {
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountRatings(null, null, "not-a-category", null, null, null));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustDerivation(null, "not-a-category", null, null, null, null, null));
+	}
+
+	@Test
+	public void testInvalidTrustStatusFailsDerivationList() {
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustDerivation("not-a-status", null, null, null, null, null, null));
 	}
 
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target, int rating)
@@ -367,6 +470,21 @@ public class AccountRatingsApiTests extends ApiCommon {
 				.filter(categoryTrust -> categoryTrust.getCategory() == category)
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("Missing category " + category));
+	}
+
+	private AccountTrustPreviewData.CategoryTrust findCategory(AccountTrustDerivationData derivation,
+			AccountRatingCategory category) {
+		return derivation.getCategories().stream()
+				.filter(categoryTrust -> categoryTrust.getCategory() == category)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing category " + category));
+	}
+
+	private AccountTrustDerivationData findDerivation(List<AccountTrustDerivationData> derivations, String accountAddress) {
+		return derivations.stream()
+				.filter(derivation -> derivation.getAccountAddress().equals(accountAddress))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing derivation for " + accountAddress));
 	}
 
 	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {

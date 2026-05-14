@@ -147,6 +147,10 @@ The current implementation layer adds a decentralized trust preview:
 
 - the preview uses only active on-chain `RATE_ACCOUNT` edges
 - the preview is exposed through `GET /account-ratings/trust-preview`
+- the current derived graph can also be listed through
+  `GET /account-ratings/trust-derivation`, which lets clients filter by final
+  derived status, minting seed membership, and category level without fetching
+  one account at a time
 - account ratings are category-aware, using Aura-style Subject, Player,
   Trainer, and Manager categories
 - current minting-group members are the decentralized seed set for the preview

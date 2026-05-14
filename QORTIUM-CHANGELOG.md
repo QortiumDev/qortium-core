@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-13 - api: add account trust derivation listing
+
+Added a read-only listing API for the Aura-style account trust derivation preview. Clients can now inspect the current derived trust graph across all minting seed members and accounts involved in active account ratings, filter by final derived status, seed membership, or category level, and page through the result without asking for one account at a time. This remains preview-only and does not change stored trust status, minting eligibility, poll voting weight, resource-rating weight, or consensus rules.
+
 ### 2026-05-13 - core: add aura-style trust derivation preview
 
 Added category-aware account ratings and a read-only Aura-style trust derivation preview. Account ratings can now be recorded separately for Subject, Player, Trainer, and Manager trust, while the preview uses current minting-group members as the starting seed, splits a seed account's positive Manager influence across its outgoing Manager ratings, and derives manager, trainer, player, and subject scores without changing stored trust status, minting eligibility, poll voting weight, or resource-rating weight. This lets Qortium inspect the graph-based trust model before deciding whether derived trust should affect consensus behavior.

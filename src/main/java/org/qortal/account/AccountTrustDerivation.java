@@ -1,9 +1,11 @@
 package org.qortal.account;
 
 import org.qortal.block.BlockChain;
+import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
+import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.group.Group;
@@ -19,12 +21,32 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 public class AccountTrustDerivation {
 
 	private static final long STARTING_ENERGY = 1_000_000L;
+	private static final int LIST_IMPACT_LIMIT = 5;
 
 	public static Result derive(Repository repository, String targetAddress) throws DataException {
+		DerivedGraph graph = deriveGraph(repository);
+		return graph.buildResult(targetAddress, null);
+	}
+
+	public static List<AccountTrustDerivationData> deriveAll(Repository repository) throws DataException {
+		DerivedGraph graph = deriveGraph(repository);
+		List<AccountTrustDerivationData> derivedAccounts = new ArrayList<>();
+
+		for (String accountAddress : graph.accountAddresses) {
+			Result result = graph.buildResult(accountAddress, LIST_IMPACT_LIMIT);
+			derivedAccounts.add(new AccountTrustDerivationData(graph.publicKeysByAddress.get(accountAddress), accountAddress,
+					result.getDerivedTrustStatus(), result.isMintingSeedMember(), result.getCategories()));
+		}
+
+		return derivedAccounts;
+	}
+
+	private static DerivedGraph deriveGraph(Repository repository) throws DataException {
 		List<AccountRatingData> allRatings = repository.getAccountRatingRepository()
 				.getRatings(null, null, null, null, null, null);
 		Map<AccountRatingCategory, List<AccountRatingData>> ratingsByCategory = groupRatingsByCategory(allRatings);
@@ -40,18 +62,15 @@ public class AccountTrustDerivation {
 		Map<String, CategoryScore> subjectScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.SUBJECT),
 				playerScores, AccountRatingCategory.SUBJECT);
 
-		List<AccountTrustPreviewData.CategoryTrust> categories = new ArrayList<>();
-		categories.add(buildCategoryTrust(AccountRatingCategory.SUBJECT, targetAddress, subjectScores,
-				ratingsByCategory.get(AccountRatingCategory.SUBJECT)));
-		categories.add(buildCategoryTrust(AccountRatingCategory.PLAYER, targetAddress, playerScores,
-				ratingsByCategory.get(AccountRatingCategory.PLAYER)));
-		categories.add(buildCategoryTrust(AccountRatingCategory.TRAINER, targetAddress, trainerScores,
-				ratingsByCategory.get(AccountRatingCategory.TRAINER)));
-		categories.add(buildCategoryTrust(AccountRatingCategory.MANAGER, targetAddress, managerScores,
-				ratingsByCategory.get(AccountRatingCategory.MANAGER)));
+		Map<AccountRatingCategory, Map<String, CategoryScore>> scoresByCategory = new EnumMap<>(AccountRatingCategory.class);
+		scoresByCategory.put(AccountRatingCategory.SUBJECT, subjectScores);
+		scoresByCategory.put(AccountRatingCategory.PLAYER, playerScores);
+		scoresByCategory.put(AccountRatingCategory.TRAINER, trainerScores);
+		scoresByCategory.put(AccountRatingCategory.MANAGER, managerScores);
 
-		AccountTrustStatus derivedTrustStatus = categories.get(0).getMappedTrustStatus();
-		return new Result(derivedTrustStatus, seedAddresses.contains(targetAddress), categories);
+		return new DerivedGraph(seedAddresses, collectAccountAddresses(seedAddresses, allRatings, scoresByCategory),
+				buildKnownPublicKeysByAddress(repository, seedAddresses, allRatings),
+				buildInboundCountsByCategory(ratingsByCategory), scoresByCategory);
 	}
 
 	private static Map<AccountRatingCategory, List<AccountRatingData>> groupRatingsByCategory(List<AccountRatingData> ratings) {
@@ -63,6 +82,62 @@ public class AccountTrustDerivation {
 			ratingsByCategory.get(rating.getCategory()).add(rating);
 
 		return ratingsByCategory;
+	}
+
+	private static Set<String> collectAccountAddresses(Set<String> seedAddresses, List<AccountRatingData> allRatings,
+			Map<AccountRatingCategory, Map<String, CategoryScore>> scoresByCategory) {
+		Set<String> accountAddresses = new TreeSet<>();
+		accountAddresses.addAll(seedAddresses);
+
+		for (AccountRatingData rating : allRatings) {
+			accountAddresses.add(rating.getTargetAddress());
+			accountAddresses.add(rating.getRaterAddress());
+		}
+
+		for (Map<String, CategoryScore> scores : scoresByCategory.values())
+			accountAddresses.addAll(scores.keySet());
+
+		return accountAddresses;
+	}
+
+	private static Map<String, byte[]> buildKnownPublicKeysByAddress(Repository repository, Set<String> seedAddresses,
+			List<AccountRatingData> allRatings) throws DataException {
+		Map<String, byte[]> publicKeysByAddress = new HashMap<>();
+
+		for (AccountRatingData rating : allRatings) {
+			publicKeysByAddress.putIfAbsent(rating.getTargetAddress(), rating.getTargetPublicKey());
+			publicKeysByAddress.putIfAbsent(rating.getRaterAddress(), rating.getRaterPublicKey());
+		}
+
+		for (String seedAddress : seedAddresses) {
+			if (publicKeysByAddress.containsKey(seedAddress))
+				continue;
+
+			AccountData accountData = repository.getAccountRepository().getAccount(seedAddress);
+			if (accountData != null && accountData.getPublicKey() != null)
+				publicKeysByAddress.put(seedAddress, accountData.getPublicKey());
+		}
+
+		return publicKeysByAddress;
+	}
+
+	private static Map<AccountRatingCategory, Map<String, AccountTrustPreviewData.RatingCounts>> buildInboundCountsByCategory(
+			Map<AccountRatingCategory, List<AccountRatingData>> ratingsByCategory) {
+		Map<AccountRatingCategory, Map<String, AccountTrustPreviewData.RatingCounts>> inboundCountsByCategory = new EnumMap<>(
+				AccountRatingCategory.class);
+
+		for (AccountRatingCategory category : AccountRatingCategory.values()) {
+			Map<String, AccountTrustPreviewData.RatingCounts> inboundCounts = new HashMap<>();
+			for (AccountRatingData rating : ratingsByCategory.get(category)) {
+				AccountTrustPreviewData.RatingCounts ratingCounts = inboundCounts.computeIfAbsent(rating.getTargetAddress(),
+						ignored -> new AccountTrustPreviewData.RatingCounts());
+				ratingCounts.addRating(rating.getRating());
+			}
+
+			inboundCountsByCategory.put(category, inboundCounts);
+		}
+
+		return inboundCountsByCategory;
 	}
 
 	private static Set<String> getMintingSeedAddresses(Repository repository) throws DataException {
@@ -148,24 +223,27 @@ public class AccountTrustDerivation {
 	}
 
 	private static AccountTrustPreviewData.CategoryTrust buildCategoryTrust(AccountRatingCategory category, String targetAddress,
-			Map<String, CategoryScore> scores, List<AccountRatingData> ratings) {
+			Map<String, CategoryScore> scores, Map<String, AccountTrustPreviewData.RatingCounts> inboundCountsByAddress,
+			Integer maxImpacts) {
 		CategoryScore score = scores.get(targetAddress);
 		if (score == null)
 			score = new CategoryScore();
 
-		AccountTrustPreviewData.RatingCounts inboundCounts = new AccountTrustPreviewData.RatingCounts();
-		for (AccountRatingData rating : ratings) {
-			if (targetAddress.equals(rating.getTargetAddress()))
-				inboundCounts.addRating(rating.getRating());
-		}
+		AccountTrustPreviewData.RatingCounts inboundCounts = inboundCountsByAddress.get(targetAddress);
+		if (inboundCounts == null)
+			inboundCounts = new AccountTrustPreviewData.RatingCounts();
 
 		score.impacts.sort(Comparator
 				.comparingLong((AccountTrustPreviewData.CategoryImpact impact) -> Math.abs(impact.getImpact()))
 				.reversed()
 				.thenComparing(AccountTrustPreviewData.CategoryImpact::getRaterAddress));
 
+		List<AccountTrustPreviewData.CategoryImpact> impacts = new ArrayList<>(score.impacts);
+		if (maxImpacts != null && maxImpacts >= 0 && impacts.size() > maxImpacts)
+			impacts = new ArrayList<>(impacts.subList(0, maxImpacts));
+
 		return new AccountTrustPreviewData.CategoryTrust(category, score.score, score.level, mapLevelToStatus(score.score,
-				score.level), inboundCounts, score.impacts);
+				score.level), inboundCounts, impacts);
 	}
 
 	private static int calculateLevel(AccountRatingCategory category, long score,
@@ -254,6 +332,43 @@ public class AccountTrustDerivation {
 		private EvaluatorScore(long score, int level) {
 			this.score = score;
 			this.level = level;
+		}
+	}
+
+	private static class DerivedGraph {
+		private final Set<String> seedAddresses;
+		private final Set<String> accountAddresses;
+		private final Map<String, byte[]> publicKeysByAddress;
+		private final Map<AccountRatingCategory, Map<String, AccountTrustPreviewData.RatingCounts>> inboundCountsByCategory;
+		private final Map<AccountRatingCategory, Map<String, CategoryScore>> scoresByCategory;
+
+		private DerivedGraph(Set<String> seedAddresses, Set<String> accountAddresses, Map<String, byte[]> publicKeysByAddress,
+				Map<AccountRatingCategory, Map<String, AccountTrustPreviewData.RatingCounts>> inboundCountsByCategory,
+				Map<AccountRatingCategory, Map<String, CategoryScore>> scoresByCategory) {
+			this.seedAddresses = seedAddresses;
+			this.accountAddresses = accountAddresses;
+			this.publicKeysByAddress = publicKeysByAddress;
+			this.inboundCountsByCategory = inboundCountsByCategory;
+			this.scoresByCategory = scoresByCategory;
+		}
+
+		private Result buildResult(String accountAddress, Integer maxImpactsPerCategory) {
+			List<AccountTrustPreviewData.CategoryTrust> categories = new ArrayList<>();
+			categories.add(buildCategoryTrust(AccountRatingCategory.SUBJECT, accountAddress,
+					this.scoresByCategory.get(AccountRatingCategory.SUBJECT),
+					this.inboundCountsByCategory.get(AccountRatingCategory.SUBJECT), maxImpactsPerCategory));
+			categories.add(buildCategoryTrust(AccountRatingCategory.PLAYER, accountAddress,
+					this.scoresByCategory.get(AccountRatingCategory.PLAYER),
+					this.inboundCountsByCategory.get(AccountRatingCategory.PLAYER), maxImpactsPerCategory));
+			categories.add(buildCategoryTrust(AccountRatingCategory.TRAINER, accountAddress,
+					this.scoresByCategory.get(AccountRatingCategory.TRAINER),
+					this.inboundCountsByCategory.get(AccountRatingCategory.TRAINER), maxImpactsPerCategory));
+			categories.add(buildCategoryTrust(AccountRatingCategory.MANAGER, accountAddress,
+					this.scoresByCategory.get(AccountRatingCategory.MANAGER),
+					this.inboundCountsByCategory.get(AccountRatingCategory.MANAGER), maxImpactsPerCategory));
+
+			AccountTrustStatus derivedTrustStatus = categories.get(0).getMappedTrustStatus();
+			return new Result(derivedTrustStatus, this.seedAddresses.contains(accountAddress), categories);
 		}
 	}
 
