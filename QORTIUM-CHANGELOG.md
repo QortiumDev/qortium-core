@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-14 - core: add trust graph behavior tests
+
+Added adversarial regression tests for the active Aura-style trust graph. The tests confirm that isolated positive farm rings do not gain trust without a minting-seed path, weak negative ratings cannot make a target Suspicious, trusted Player-level negative ratings can block minting through derived Suspicious status, orphaning restores the prior trust snapshot and mint eligibility, and one seed account's Manager energy is split across positive Manager ratings instead of being multiplied.
+
 ### 2026-05-14 - api: align trust preview with derived trust
 
 Changed the account trust preview API so its main trust status, evaluator weights, and evaluator impacts use the active stored Aura-style Subject trust snapshot instead of the older manual account trust status. The preview still includes stored/manual trust status and stored-impact fields as audit context, and the derived status fields now mirror the active Subject status used by voting, resource ratings, and mint eligibility.

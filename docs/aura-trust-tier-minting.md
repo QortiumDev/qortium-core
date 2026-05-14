@@ -303,6 +303,16 @@ The first implementation should cover at least these cases:
   evaluator impacts, category scores, mapped trust status, seed membership, and
   block anchoring; the stored Subject snapshot now supplies active poll and
   resource-rating weight plus minting eligibility status.
+- isolated positive-rating rings with no path from the minting seed set remain
+  Unverified with zero category scores.
+- negative Subject ratings from Unverified or zero-Player accounts do not make
+  the target Suspicious or block minting.
+- negative Subject ratings from trusted Player-level accounts can derive
+  Suspicious status and block minting, and orphaning that rating restores the
+  prior snapshot and mint eligibility.
+- one seed member's positive Manager energy is budgeted across its outgoing
+  Manager ratings, so several positive Manager ratings split the seed budget
+  instead of multiplying it.
 
 ## Open Decisions
 
