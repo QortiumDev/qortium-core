@@ -231,7 +231,7 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 		sql.append(" ORDER BY account").append(sortDirection).append(", category").append(sortDirection);
 		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
 
-		return getTrustDerivationSnapshots(sql.toString());
+		return getTrustDerivationSnapshotsFromSql(sql.toString());
 	}
 
 	@Override
@@ -242,10 +242,25 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 				+ "snapshot_height, snapshot_timestamp FROM AccountTrustDerivationSnapshots "
 				+ "WHERE account = ? ORDER BY category";
 
-		return getTrustDerivationSnapshots(sql, accountAddress);
+		return getTrustDerivationSnapshotsFromSql(sql, accountAddress);
 	}
 
-	private List<AccountTrustSnapshotData> getTrustDerivationSnapshots(String sql, Object... bindParams) throws DataException {
+	@Override
+	public AccountTrustSnapshotData getTrustDerivationSnapshot(String accountAddress, AccountRatingCategory category)
+			throws DataException {
+		String sql = "SELECT account_public_key, account, category, score, level, mapped_trust_status, minting_seed_member, "
+				+ "positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, "
+				+ "negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, "
+				+ "snapshot_height, snapshot_timestamp FROM AccountTrustDerivationSnapshots "
+				+ "WHERE account = ? AND category = ?";
+
+		List<AccountTrustSnapshotData> snapshots = getTrustDerivationSnapshotsFromSql(sql, accountAddress,
+				defaultCategory(category).value);
+		return snapshots.isEmpty() ? null : snapshots.get(0);
+	}
+
+	private List<AccountTrustSnapshotData> getTrustDerivationSnapshotsFromSql(String sql, Object... bindParams)
+			throws DataException {
 		List<AccountTrustSnapshotData> snapshots = new ArrayList<>();
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, bindParams)) {

@@ -38,4 +38,7 @@ public interface AccountRatingRepository {
 
 	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(String accountAddress) throws DataException;
 
+	public AccountTrustSnapshotData getTrustDerivationSnapshot(String accountAddress, AccountRatingCategory category)
+			throws DataException;
+
 }

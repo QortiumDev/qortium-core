@@ -4,9 +4,12 @@ import com.google.common.primitives.Bytes;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.Account;
+import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.resource.AddressesResource;
 import org.qortal.controller.OnlineAccountsManager;
+import org.qortal.data.account.AccountRatingData;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.network.OnlineAccountLevel;
@@ -20,6 +23,7 @@ import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.TransactionTransformer;
@@ -65,25 +69,46 @@ public class AddressesApiTests extends ApiCommon {
 			assertEquals(0, accountInfo.getTrustWeightPercent());
 			assertTrue(accountInfo.isTrustAllowsMinting());
 			assertEquals(0, accountInfo.getEffectiveVoteWeight());
+			assertEquals(AccountTrustStatus.UNVERIFIED, accountInfo.getDerivedTrustStatus());
+			assertEquals(AccountTrustStatus.UNVERIFIED.getValue(), accountInfo.getDerivedTrustStatusValue());
+			assertEquals(0, accountInfo.getDerivedTrustWeightPercent());
+			assertTrue(accountInfo.isDerivedTrustAllowsMinting());
+			assertEquals(0, accountInfo.getDerivedEffectiveVoteWeight());
+			assertNull(accountInfo.getDerivedSnapshotHeight());
+			assertNull(accountInfo.getDerivedSnapshotTimestamp());
 		}
 	}
 
 	@Test
 	public void testGetAccountInfoIncludesTrustAuditFields() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
+
 			AccountData accountData = repository.getAccountRepository().getAccount(aliceAddress);
 			accountData.setBlocksMinted(101);
 
 			repository.getAccountRepository().setMintedBlockCount(accountData);
-			repository.getAccountRepository().setTrustStatus(aliceAddress, AccountTrustStatus.SILVER);
+			repository.getAccountRepository().setTrustStatus(aliceAddress, AccountTrustStatus.GOLD);
 			repository.saveChanges();
 
 			AccountData accountInfo = this.addressesResource.getAccountInfo(aliceAddress);
-			assertEquals(AccountTrustStatus.SILVER, accountInfo.getTrustStatus());
-			assertEquals(AccountTrustStatus.SILVER.getValue(), accountInfo.getTrustStatusValue());
-			assertEquals(50, accountInfo.getTrustWeightPercent());
+			assertEquals(AccountTrustStatus.GOLD, accountInfo.getTrustStatus());
+			assertEquals(AccountTrustStatus.GOLD.getValue(), accountInfo.getTrustStatusValue());
+			assertEquals(100, accountInfo.getTrustWeightPercent());
 			assertTrue(accountInfo.isTrustAllowsMinting());
-			assertEquals(50, accountInfo.getEffectiveVoteWeight());
+			assertEquals(101, accountInfo.getEffectiveVoteWeight());
+			assertEquals(AccountTrustStatus.SILVER, accountInfo.getDerivedTrustStatus());
+			assertEquals(AccountTrustStatus.SILVER.getValue(), accountInfo.getDerivedTrustStatusValue());
+			assertEquals(50, accountInfo.getDerivedTrustWeightPercent());
+			assertTrue(accountInfo.isDerivedTrustAllowsMinting());
+			assertEquals(50, accountInfo.getDerivedEffectiveVoteWeight());
+			assertNotNull(accountInfo.getDerivedSnapshotHeight());
+			assertNotNull(accountInfo.getDerivedSnapshotTimestamp());
 
 			repository.getAccountRepository().setTrustStatus(aliceAddress, AccountTrustStatus.SUSPICIOUS);
 			repository.saveChanges();
@@ -94,6 +119,9 @@ public class AddressesApiTests extends ApiCommon {
 			assertEquals(0, suspiciousAccountInfo.getTrustWeightPercent());
 			assertFalse(suspiciousAccountInfo.isTrustAllowsMinting());
 			assertEquals(0, suspiciousAccountInfo.getEffectiveVoteWeight());
+			assertEquals(AccountTrustStatus.SILVER, suspiciousAccountInfo.getDerivedTrustStatus());
+			assertEquals(50, suspiciousAccountInfo.getDerivedTrustWeightPercent());
+			assertEquals(50, suspiciousAccountInfo.getDerivedEffectiveVoteWeight());
 		}
 	}
 
@@ -186,6 +214,23 @@ public class AddressesApiTests extends ApiCommon {
 			assertArrayEquals(sender.getPublicKey(), decodedPublicizeTransactionData.getSenderPublicKey());
 			assertEquals(0L, decodedPublicizeTransactionData.getFee().longValue());
 		}
+	}
+
+	private void createDerivedSilverSubjectSnapshot(Repository repository, TestAccount alice, TestAccount bob,
+			TestAccount chloe, TestAccount dilbert) throws DataException {
+		saveAccountRating(repository, alice, bob, AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, bob, chloe, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.PLAYER, 4);
+		saveAccountRating(repository, dilbert, alice, AccountRatingCategory.SUBJECT, 4);
+		AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
+				repository.getBlockRepository().getLastBlock().getTimestamp());
+		repository.saveChanges();
+	}
+
+	private void saveAccountRating(Repository repository, PrivateKeyAccount rater, PrivateKeyAccount target,
+			AccountRatingCategory category, int rating) throws DataException {
+		repository.getAccountRatingRepository()
+				.save(new AccountRatingData(target.getPublicKey(), rater.getPublicKey(), category, rating));
 	}
 
 }

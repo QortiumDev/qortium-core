@@ -2,6 +2,7 @@ package org.qortal.test.api;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
 import org.qortal.api.resource.AccountRatingsResource;
@@ -110,12 +111,13 @@ public class AccountRatingsApiTests extends ApiCommon {
 			setVoteAccount(repository, chloe, 101, AccountTrustStatus.SILVER);
 			setVoteAccount(repository, dilbert, 101, AccountTrustStatus.BRONZE);
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, 4), alice);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, 2), chloe);
-			TransactionUtils.signAndMint(repository, ratingData(dilbert, bob, -3), dilbert);
-			TransactionUtils.signAndMint(repository, ratingData(bob, alice, 1), bob);
-			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, 4), bob);
-			TransactionUtils.signAndMint(repository, ratingData(bob, dilbert, -2), bob);
+			saveAccountRating(repository, alice, bob, AccountRatingCategory.SUBJECT, 4);
+			saveAccountRating(repository, chloe, bob, AccountRatingCategory.SUBJECT, 2);
+			saveAccountRating(repository, dilbert, bob, AccountRatingCategory.SUBJECT, -3);
+			saveAccountRating(repository, bob, alice, AccountRatingCategory.SUBJECT, 1);
+			saveAccountRating(repository, bob, chloe, AccountRatingCategory.SUBJECT, 4);
+			saveAccountRating(repository, bob, dilbert, AccountRatingCategory.SUBJECT, -2);
+			refreshTrustSnapshots(repository);
 		}
 
 		AccountTrustPreviewData preview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
@@ -231,10 +233,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 			chloe = Common.getTestAccount(repository, "chloe");
 			dilbert = Common.getTestAccount(repository, "dilbert");
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
-			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
-			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
+			createAuraTrustGraph(repository, alice, bob, chloe, dilbert);
 		}
 
 		AccountTrustPreviewData bobPreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
@@ -268,7 +267,8 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(64_000_000L, subjectImpact.getImpact());
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, -1), dilbert);
+			saveAccountRating(repository, dilbert, alice, AccountRatingCategory.SUBJECT, -1);
+			refreshTrustSnapshots(repository);
 		}
 
 		AccountTrustPreviewData negativePreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(alice.getPublicKey()));
@@ -289,8 +289,9 @@ public class AccountRatingsApiTests extends ApiCommon {
 			bob = Common.getTestAccount(repository, "bob");
 			chloe = Common.getTestAccount(repository, "chloe");
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
-			TransactionUtils.signAndMint(repository, ratingData(alice, chloe, AccountRatingCategory.MANAGER, 4), alice);
+			saveAccountRating(repository, alice, bob, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, alice, chloe, AccountRatingCategory.MANAGER, 4);
+			refreshTrustSnapshots(repository);
 		}
 
 		AccountTrustPreviewData bobPreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
@@ -318,10 +319,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 			chloe = Common.getTestAccount(repository, "chloe");
 			dilbert = Common.getTestAccount(repository, "dilbert");
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
-			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
-			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
+			createAuraTrustGraph(repository, alice, bob, chloe, dilbert);
 		}
 
 		List<AccountTrustDerivationData> derivedAccounts = this.accountRatingsResource.getAccountTrustDerivation(
@@ -368,10 +366,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 			chloe = Common.getTestAccount(repository, "chloe");
 			dilbert = Common.getTestAccount(repository, "dilbert");
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
-			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
-			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
+			createAuraTrustGraph(repository, alice, bob, chloe, dilbert);
 		}
 
 		List<AccountTrustDerivationData> silverAccounts = this.accountRatingsResource.getAccountTrustDerivation(
@@ -425,10 +420,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 			chloe = Common.getTestAccount(repository, "chloe");
 			dilbert = Common.getTestAccount(repository, "dilbert");
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
-			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
-			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
+			processAuraTrustGraph(repository, alice, bob, chloe, dilbert);
 		}
 
 		List<AccountTrustSnapshotData> allSnapshots = this.accountRatingsResource.getAccountTrustSnapshots(
@@ -571,12 +563,57 @@ public class AccountRatingsApiTests extends ApiCommon {
 				.orElseThrow(() -> new AssertionError("Missing derivation for " + accountAddress));
 	}
 
+	private void createAuraTrustGraph(Repository repository, TestAccount alice, TestAccount bob, TestAccount chloe,
+			TestAccount dilbert) throws DataException {
+		saveAccountRating(repository, alice, bob, AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, bob, chloe, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.PLAYER, 4);
+		saveAccountRating(repository, dilbert, alice, AccountRatingCategory.SUBJECT, 4);
+		refreshTrustSnapshots(repository);
+	}
+
+	private void processAuraTrustGraph(Repository repository, TestAccount alice, TestAccount bob, TestAccount chloe,
+			TestAccount dilbert) throws DataException {
+		ensureKnownAccount(repository, alice);
+		ensureKnownAccount(repository, bob);
+		ensureKnownAccount(repository, chloe);
+		ensureKnownAccount(repository, dilbert);
+		repository.saveChanges();
+
+		TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
+		TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
+		TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
+		TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
+		refreshTrustSnapshots(repository);
+	}
+
+	private void saveAccountRating(Repository repository, PrivateKeyAccount rater, PrivateKeyAccount target,
+			AccountRatingCategory category, int rating) throws DataException {
+		ensureKnownAccount(repository, rater);
+		ensureKnownAccount(repository, target);
+		repository.getAccountRatingRepository()
+				.save(new AccountRatingData(target.getPublicKey(), rater.getPublicKey(), category, rating));
+	}
+
+	private void ensureKnownAccount(Repository repository, PrivateKeyAccount account) throws DataException {
+		repository.getAccountRepository()
+				.ensureAccount(new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, 0));
+	}
+
+	private void refreshTrustSnapshots(Repository repository) throws DataException {
+		AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
+				repository.getBlockRepository().getLastBlock().getTimestamp());
+		repository.saveChanges();
+	}
+
 	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {
 		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
 		if (accountData == null)
 			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
-		else
+		else {
+			accountData.setPublicKey(account.getPublicKey());
 			accountData.setBlocksMinted(blocksMinted);
+		}
 
 		repository.getAccountRepository().setMintedBlockCount(accountData);
 		repository.getAccountRepository().setTrustStatus(account.getAddress(), trustStatus);

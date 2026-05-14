@@ -2,14 +2,19 @@ package org.qortal.test.rating;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.arbitrary.misc.Service;
+import org.qortal.block.BlockChain;
+import org.qortal.data.account.AccountRatingData;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.rating.ResourceRatingData;
 import org.qortal.data.rating.ResourceRatingDistributionData;
 import org.qortal.data.rating.ResourceRatingSummaryData;
 import org.qortal.data.transaction.ArbitraryTransactionData;
+import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.RateResourceTransactionData;
 import org.qortal.data.transaction.RegisterNameTransactionData;
 import org.qortal.group.Group;
@@ -135,6 +140,9 @@ public class ResourceRatingTests extends Common {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+			createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
+
 			setVoteAccount(repository, alice, 100, AccountTrustStatus.GOLD);
 			setVoteAccount(repository, bob, 101, AccountTrustStatus.SILVER);
 			setVoteAccount(repository, chloe, 101, AccountTrustStatus.BRONZE);
@@ -148,16 +156,25 @@ public class ResourceRatingTests extends Common {
 
 			assertEquals(3, summary.getRatingCount());
 			assertEquals(17L, summary.getRatingTotal());
-			assertEquals(Long.valueOf(302L), summary.getRawTotalWeight());
-			assertEquals(Long.valueOf(175L), summary.getTotalWeight());
+			assertEquals(Long.valueOf(305L), summary.getRawTotalWeight());
+			assertEquals(Long.valueOf(178L), summary.getTotalWeight());
+			assertEquals(Long.valueOf(51L), summary.getDerivedTotalWeight());
 			assertEquals(17.0d / 3.0d, summary.getAverageRating(), 0.0000001d);
-			assertEquals(1707.0d / 302.0d, summary.getRawWeightedAverageRating(), 0.0000001d);
-			assertEquals(1325.0d / 175.0d, summary.getWeightedAverageRating(), 0.0000001d);
+			assertEquals(1737.0d / 305.0d, summary.getRawWeightedAverageRating(), 0.0000001d);
+			assertEquals(1355.0d / 178.0d, summary.getWeightedAverageRating(), 0.0000001d);
+			assertEquals(10.0d, summary.getDerivedWeightedAverageRating(), 0.0000001d);
 			assertEquals(1, distributionFor(summary, 1).getRatingCount());
 			assertEquals(101L, distributionFor(summary, 1).getRawRatingWeight());
 			assertEquals(25L, distributionFor(summary, 1).getRatingWeight());
+			assertEquals(0L, distributionFor(summary, 1).getDerivedRatingWeight());
 			assertEquals(1, distributionFor(summary, 6).getRatingCount());
+			assertEquals(101L, distributionFor(summary, 6).getRawRatingWeight());
+			assertEquals(50L, distributionFor(summary, 6).getRatingWeight());
+			assertEquals(0L, distributionFor(summary, 6).getDerivedRatingWeight());
 			assertEquals(1, distributionFor(summary, 10).getRatingCount());
+			assertEquals(103L, distributionFor(summary, 10).getRawRatingWeight());
+			assertEquals(103L, distributionFor(summary, 10).getRatingWeight());
+			assertEquals(51L, distributionFor(summary, 10).getDerivedRatingWeight());
 		}
 	}
 
@@ -181,9 +198,11 @@ public class ResourceRatingTests extends Common {
 		assertEquals(0L, summary.getRatingTotal());
 		assertEquals(Long.valueOf(0L), summary.getRawTotalWeight());
 		assertEquals(Long.valueOf(0L), summary.getTotalWeight());
+		assertEquals(Long.valueOf(0L), summary.getDerivedTotalWeight());
 		assertNull(summary.getAverageRating());
 		assertNull(summary.getRawWeightedAverageRating());
 		assertNull(summary.getWeightedAverageRating());
+		assertNull(summary.getDerivedWeightedAverageRating());
 	}
 
 	private ResourceRatingDistributionData distributionFor(ResourceRatingSummaryData summary, int rating) {
@@ -191,6 +210,23 @@ public class ResourceRatingTests extends Common {
 				.filter(distribution -> distribution.getRating() == rating)
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("Missing distribution for rating " + rating));
+	}
+
+	private void createDerivedSilverSubjectSnapshot(Repository repository, TestAccount alice, TestAccount bob,
+			TestAccount chloe, TestAccount dilbert) throws DataException {
+		saveAccountRating(repository, alice, bob, AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, bob, chloe, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.PLAYER, 4);
+		saveAccountRating(repository, dilbert, alice, AccountRatingCategory.SUBJECT, 4);
+		AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
+				repository.getBlockRepository().getLastBlock().getTimestamp());
+		repository.saveChanges();
+	}
+
+	private void saveAccountRating(Repository repository, PrivateKeyAccount rater, PrivateKeyAccount target,
+			AccountRatingCategory category, int rating) throws DataException {
+		repository.getAccountRatingRepository()
+				.save(new AccountRatingData(target.getPublicKey(), rater.getPublicKey(), category, rating));
 	}
 
 	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {
@@ -208,8 +244,10 @@ public class ResourceRatingTests extends Common {
 
 	private void publishResource(Repository repository, String name, Service service, String identifier) throws DataException {
 		TestAccount publisher = Common.getTestAccount(repository, "alice");
-		RegisterNameTransactionData registerNameTransactionData =
-				new RegisterNameTransactionData(TestTransaction.generateBase(publisher), name, "");
+		long timestamp = System.currentTimeMillis();
+		long fee = BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(timestamp);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP, publisher.getPublicKey(), fee, null);
+		RegisterNameTransactionData registerNameTransactionData = new RegisterNameTransactionData(baseTransactionData, name, "");
 		TransactionUtils.signAndMint(repository, registerNameTransactionData, publisher);
 
 		Path path = Paths.get("src/test/resources/arbitrary/demo1");

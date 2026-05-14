@@ -4,6 +4,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
+import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustSnapshotData;
@@ -14,6 +15,7 @@ import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.group.Group;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
@@ -73,6 +75,12 @@ public class AccountTrustSnapshotTests extends Common {
 			chloe = Common.getTestAccount(repository, "chloe");
 			dilbert = Common.getTestAccount(repository, "dilbert");
 
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, chloe);
+			ensureKnownAccount(repository, dilbert);
+			repository.saveChanges();
+
 			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
 			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
 			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
@@ -115,6 +123,10 @@ public class AccountTrustSnapshotTests extends Common {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			repository.saveChanges();
+
 			BlockUtils.mintBlock(repository);
 			int baselineHeight = repository.getBlockRepository().getBlockchainHeight();
 			assertTrue(repository.getAccountRatingRepository().getTrustDerivationSnapshots(bob.getAddress()).isEmpty());
@@ -135,6 +147,10 @@ public class AccountTrustSnapshotTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			repository.saveChanges();
 
 			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
 			assertFalse(repository.getAccountRatingRepository().getTrustDerivationSnapshots(bob.getAddress()).isEmpty());
@@ -175,6 +191,11 @@ public class AccountTrustSnapshotTests extends Common {
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target,
 			AccountRatingCategory category, int rating) throws DataException {
 		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), category, rating);
+	}
+
+	private void ensureKnownAccount(Repository repository, PrivateKeyAccount account) throws DataException {
+		repository.getAccountRepository()
+				.ensureAccount(new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, 0));
 	}
 
 	private AccountTrustSnapshotData findSnapshot(Repository repository, String accountAddress, AccountRatingCategory category)

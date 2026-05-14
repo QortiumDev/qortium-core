@@ -129,7 +129,7 @@ foundation only:
 - accounts default to Unverified
 - Suspicious accounts cannot mint, even if they remain in the minting group
 - vote tallies use the account's current trust status at tally time
-- account, poll-vote, and app-rating responses expose read-only audit fields
+- account, poll-vote, and resource-rating responses expose read-only audit fields
   so raw `blocksMinted`, trust status, multiplier, and effective vote weight
   can be compared
 - no admin API, config loader, or BrightID/Aura importer sets trust status yet
@@ -182,6 +182,20 @@ repository state after each processed block:
 - `GET /account-ratings/trust-snapshots` exposes the raw stored rows directly
 - the stored snapshot is still not used for minting, voting, or resource-rating
   enforcement yet
+
+The current audit layer exposes the stored Subject snapshot beside the current
+stored trust fields:
+
+- account info includes both stored trust status and derived Subject trust
+  status, including each status's vote multiplier and effective vote weight
+- open poll vote details include the current stored vote weight plus the
+  derived Subject vote weight that would apply if derived trust were enforced
+- frozen poll results continue to report only the frozen stored trust fields so
+  closed results stay anchored to the exact close-time data that was frozen
+- resource-rating summaries include derived Subject weighted totals and
+  averages beside the existing stored-trust weighted totals and averages
+- this audit layer is read-only and does not change minting eligibility, poll
+  vote totals, frozen poll storage, or resource-rating enforcement
 
 This means a trust-status change affects open poll tallies immediately. Polls
 with an end time stop accepting votes at the closing block, and Qortium stores

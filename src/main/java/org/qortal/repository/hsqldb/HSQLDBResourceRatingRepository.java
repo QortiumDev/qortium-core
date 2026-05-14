@@ -1,6 +1,7 @@
 package org.qortal.repository.hsqldb;
 
 import org.qortal.arbitrary.misc.Service;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.rating.ResourceRatingData;
 import org.qortal.data.rating.ResourceRatingDistributionData;
 import org.qortal.data.rating.ResourceRatingSummaryData;
@@ -16,6 +17,11 @@ import java.util.List;
 public class HSQLDBResourceRatingRepository implements ResourceRatingRepository {
 
 	private static final String EFFECTIVE_RATING_WEIGHT_SQL = "CASE COALESCE(a.trust_status, 0) "
+			+ "WHEN 3 THEN a.blocks_minted "
+			+ "WHEN 2 THEN a.blocks_minted / 2 "
+			+ "WHEN 1 THEN a.blocks_minted / 4 "
+			+ "ELSE 0 END";
+	private static final String DERIVED_EFFECTIVE_RATING_WEIGHT_SQL = "CASE COALESCE(ats.mapped_trust_status, 0) "
 			+ "WHEN 3 THEN a.blocks_minted "
 			+ "WHEN 2 THEN a.blocks_minted / 2 "
 			+ "WHEN 1 THEN a.blocks_minted / 4 "
@@ -77,9 +83,12 @@ public class HSQLDBResourceRatingRepository implements ResourceRatingRepository 
 	public ResourceRatingSummaryData getRatingSummary(Service service, String nameKey, String displayName, String identifier) throws DataException {
 		String sql = "SELECT rr.rating, COUNT(rr.rater), "
 				+ "COALESCE(SUM(a.blocks_minted), 0), "
-				+ "COALESCE(SUM(" + EFFECTIVE_RATING_WEIGHT_SQL + "), 0) "
+				+ "COALESCE(SUM(" + EFFECTIVE_RATING_WEIGHT_SQL + "), 0), "
+				+ "COALESCE(SUM(" + DERIVED_EFFECTIVE_RATING_WEIGHT_SQL + "), 0) "
 				+ "FROM ResourceRatings rr "
 				+ "LEFT JOIN Accounts a ON rr.rater = a.public_key "
+				+ "LEFT JOIN AccountTrustDerivationSnapshots ats ON ats.account = a.account "
+				+ "AND ats.category = " + AccountRatingCategory.SUBJECT.value + " "
 				+ "WHERE rr.service = ? AND rr.name_key = ? AND rr.identifier = ? "
 				+ "GROUP BY rr.rating "
 				+ "ORDER BY rr.rating";
@@ -93,9 +102,11 @@ public class HSQLDBResourceRatingRepository implements ResourceRatingRepository 
 					int ratingCount = resultSet.getInt(2);
 					long rawRatingWeight = resultSet.getLong(3);
 					long ratingWeight = resultSet.getLong(4);
+					long derivedRatingWeight = resultSet.getLong(5);
 
 					distribution.set(rating - ResourceRating.MIN_RATING,
-							new ResourceRatingDistributionData(rating, ratingCount, rawRatingWeight, ratingWeight));
+							new ResourceRatingDistributionData(rating, ratingCount, rawRatingWeight, ratingWeight,
+									derivedRatingWeight));
 				} while (resultSet.next());
 			}
 

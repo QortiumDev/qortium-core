@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-14 - api: add derived trust audit fields
+
+Added read-only derived trust audit fields beside the current stored trust fields on account info, open poll vote details, and resource-rating summaries. These fields show how the stored Aura-style Subject snapshot would affect vote or rating weight, while the existing stored trust status remains the active source for minting, poll totals, frozen poll results, and resource-rating weights. This also corrects stored trust snapshot list lookup so the full snapshot can be audited reliably. Together these changes give clients a practical way to compare current behavior with the derived trust model before Qortium decides whether to use derived trust for enforcement.
+
 ### 2026-05-14 - core: skip empty poll migration batches
 
 Skipped empty poll migration batches when a repository has no rows to backfill. This keeps fresh or minimal databases from failing during startup migrations while preserving the same poll-name and poll-id backfill behavior whenever there is data to update.

@@ -82,6 +82,9 @@ public class AddressesResource {
 			if (accountData == null)
 				accountData = new AccountData(address);
 
+			accountData.setDerivedTrustSnapshot(repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshot(address, AccountRatingCategory.SUBJECT));
+
 			return accountData;
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);

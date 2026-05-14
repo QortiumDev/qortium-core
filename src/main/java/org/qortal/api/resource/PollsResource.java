@@ -15,6 +15,8 @@ import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.model.PollVotes;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.CreatePollTransactionData;
 import org.qortal.data.transaction.UpdatePollTransactionData;
@@ -469,6 +471,11 @@ public class PollsResource {
                             rawTotalWeight += rawVoteWeight;
 
                             if (voteDetails != null) {
+                                    AccountTrustSnapshotData derivedSnapshot = repository.getAccountRatingRepository()
+                                            .getTrustDerivationSnapshot(voter, AccountRatingCategory.SUBJECT);
+                                    AccountTrustStatus derivedTrustStatus = derivedSnapshot == null
+                                            ? AccountTrustStatus.UNVERIFIED
+                                            : derivedSnapshot.getMappedTrustStatus();
                                     voteDetails.add(new PollVotes.VoteDetail(
                                             voter,
                                             vote.getOptionIndex(),
@@ -476,7 +483,13 @@ public class PollsResource {
                                             trustStatus.name(),
                                             trustStatus.getValue(),
                                             trustStatus.getVoteWeightPercent(),
-                                            voteWeight));
+                                            voteWeight,
+                                            derivedTrustStatus.name(),
+                                            derivedTrustStatus.getValue(),
+                                            derivedTrustStatus.getVoteWeightPercent(),
+                                            derivedTrustStatus.calculateEffectiveVoteWeight(rawVoteWeight),
+                                            derivedSnapshot == null ? null : derivedSnapshot.getSnapshotHeight(),
+                                            derivedSnapshot == null ? null : derivedSnapshot.getSnapshotTimestamp()));
                             }
                     }
             }

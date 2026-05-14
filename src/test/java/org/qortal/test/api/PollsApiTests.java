@@ -2,10 +2,13 @@ package org.qortal.test.api;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.account.AccountTrustDerivation;
 import org.qortal.api.ApiError;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.model.PollVotes;
 import org.qortal.api.resource.PollsResource;
+import org.qortal.data.account.AccountRatingData;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.UpdatePollTransactionData;
@@ -216,6 +219,8 @@ public class PollsApiTests extends ApiCommon {
 			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
 			PrivateKeyAccount unverified = createUnverifiedVoteAccount(repository, 100);
 
+			createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
+
 			setVoteAccount(repository, "alice", 100, AccountTrustStatus.GOLD);
 			setVoteAccount(repository, "bob", 101, AccountTrustStatus.SILVER);
 			setVoteAccount(repository, "chloe", 101, AccountTrustStatus.BRONZE);
@@ -252,12 +257,26 @@ public class PollsApiTests extends ApiCommon {
 			assertEquals(Integer.valueOf(AccountTrustStatus.SILVER.getValue()), bobVoteDetail.trustStatusValue);
 			assertEquals(Integer.valueOf(50), bobVoteDetail.trustWeightPercent);
 			assertEquals(Integer.valueOf(50), bobVoteDetail.effectiveVoteWeight);
+			assertEquals(AccountTrustStatus.UNVERIFIED.name(), bobVoteDetail.derivedTrustStatus);
+			assertEquals(Integer.valueOf(0), bobVoteDetail.derivedEffectiveVoteWeight);
+
+			PollVotes.VoteDetail aliceVoteDetail = findVoteDetail(fullPollVotes.voteDetails, alice.getAddress());
+			assertEquals(AccountTrustStatus.GOLD.name(), aliceVoteDetail.trustStatus);
+			assertEquals(Integer.valueOf(100), aliceVoteDetail.effectiveVoteWeight);
+			assertEquals(AccountTrustStatus.SILVER.name(), aliceVoteDetail.derivedTrustStatus);
+			assertEquals(Integer.valueOf(AccountTrustStatus.SILVER.getValue()), aliceVoteDetail.derivedTrustStatusValue);
+			assertEquals(Integer.valueOf(50), aliceVoteDetail.derivedTrustWeightPercent);
+			assertEquals(Integer.valueOf(50), aliceVoteDetail.derivedEffectiveVoteWeight);
+			assertNotNull(aliceVoteDetail.derivedSnapshotHeight);
+			assertNotNull(aliceVoteDetail.derivedSnapshotTimestamp);
 
 			PollVotes.VoteDetail unverifiedVoteDetail = findVoteDetail(fullPollVotes.voteDetails, unverified.getAddress());
 			assertEquals(Integer.valueOf(3), unverifiedVoteDetail.optionIndex);
 			assertEquals(Integer.valueOf(100), unverifiedVoteDetail.rawVoteWeight);
 			assertEquals(AccountTrustStatus.UNVERIFIED.name(), unverifiedVoteDetail.trustStatus);
 			assertEquals(Integer.valueOf(0), unverifiedVoteDetail.effectiveVoteWeight);
+			assertEquals(AccountTrustStatus.UNVERIFIED.name(), unverifiedVoteDetail.derivedTrustStatus);
+			assertEquals(Integer.valueOf(0), unverifiedVoteDetail.derivedEffectiveVoteWeight);
 
 			repository.getAccountRepository().setTrustStatus(bob.getAddress(), AccountTrustStatus.GOLD);
 			repository.saveChanges();
@@ -304,6 +323,8 @@ public class PollsApiTests extends ApiCommon {
 			assertEquals(AccountTrustStatus.SILVER.name(), bobVoteDetail.trustStatus);
 			assertEquals(Integer.valueOf(50), bobVoteDetail.trustWeightPercent);
 			assertEquals(Integer.valueOf(50), bobVoteDetail.effectiveVoteWeight);
+			assertNull(bobVoteDetail.derivedTrustStatus);
+			assertNull(bobVoteDetail.derivedEffectiveVoteWeight);
 
 			setVoteAccount(repository, "bob", 1000, AccountTrustStatus.GOLD);
 			setVoteAccount(repository, "chloe", 1000, AccountTrustStatus.GOLD);
@@ -365,6 +386,23 @@ public class PollsApiTests extends ApiCommon {
 				.filter(voteDetail -> voteDetail.voterAddress.equals(voterAddress))
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("Missing vote detail for " + voterAddress));
+	}
+
+	private void createDerivedSilverSubjectSnapshot(Repository repository, TestAccount alice, TestAccount bob,
+			TestAccount chloe, TestAccount dilbert) throws DataException {
+		saveAccountRating(repository, alice, bob, AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, bob, chloe, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.PLAYER, 4);
+		saveAccountRating(repository, dilbert, alice, AccountRatingCategory.SUBJECT, 4);
+		AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
+				repository.getBlockRepository().getLastBlock().getTimestamp());
+		repository.saveChanges();
+	}
+
+	private void saveAccountRating(Repository repository, PrivateKeyAccount rater, PrivateKeyAccount target,
+			AccountRatingCategory category, int rating) throws DataException {
+		repository.getAccountRatingRepository()
+				.save(new AccountRatingData(target.getPublicKey(), rater.getPublicKey(), category, rating));
 	}
 
 	private void createTestPoll(Repository repository, String pollName) throws DataException {
