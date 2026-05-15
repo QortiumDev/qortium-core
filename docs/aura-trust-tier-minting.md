@@ -175,6 +175,9 @@ A later implementation layer added a decentralized trust preview:
 - negative/Suspicious decisions use the same signed capped decision score, with
   Suspicious requiring at least two independent medium-confidence negative
   raters before raw negative evidence can block minting
+- the implemented thresholds, per-rating caps, Suspicious requirements, seed
+  energy, manager hop count, and active Subject weighting category are kept in
+  one trust policy class so consensus-facing values can be reviewed together
 - the Subject level is mapped back to Qortium's simple Gold, Silver, Bronze,
   Unverified, and Suspicious statuses as a derived status
 - the older inbound/outbound confidence counts, mutual positive relationships,
@@ -343,6 +346,9 @@ The first implementation should cover at least these cases:
 - Suspicious category decisions also require enough independent capped negative
   impact to reach their thresholds, preventing a single high-score evaluator
   from assigning Suspicious status by itself.
+- trust policy tests pin the threshold, cap, seed-energy, manager-hop,
+  Suspicious requirement, active weighting category, and level-to-status values
+  separately from full graph behavior tests.
 
 ## Open Decisions
 

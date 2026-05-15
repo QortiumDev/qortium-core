@@ -6,7 +6,7 @@ import org.qortal.data.account.AccountTrustStatus;
 
 public class AccountTrustWeight {
 
-	public static final AccountRatingCategory ACTIVE_WEIGHT_CATEGORY = AccountRatingCategory.SUBJECT;
+	public static final AccountRatingCategory ACTIVE_WEIGHT_CATEGORY = AccountTrustPolicy.ACTIVE_WEIGHT_CATEGORY;
 
 	private AccountTrustWeight() {
 	}

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - core: extract trust policy rules
+
+Moved Qortium's Aura-style trust graph thresholds, per-rating caps, seed-energy constants, active weighting category, Suspicious requirements, and level-to-status mapping into a dedicated trust policy class. This keeps the graph derivation focused on building scores while leaving the consensus-facing policy values in one reviewable place, without changing trust scores, snapshots, vote weights, resource-rating weights, mint eligibility, or API output.
+
 ### 2026-05-15 - core: cap suspicious trust rating impact
 
 Added capped Suspicious decision scoring to the Aura-style trust graph so one trusted negative rating can no longer block an account from minting by itself. Qortium still stores and exposes raw negative score and raw evaluator impacts for audit, but derived Suspicious status now requires the signed capped decision score to cross the category's negative threshold with at least two independent medium-confidence negative raters. Accounts with raw negative evidence that does not meet that stricter Suspicious rule now remain Unverified instead of being treated as Suspicious.

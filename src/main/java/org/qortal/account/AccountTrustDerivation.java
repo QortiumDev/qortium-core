@@ -25,11 +25,7 @@ import java.util.TreeSet;
 
 public class AccountTrustDerivation {
 
-	private static final long STARTING_ENERGY = 1_000_000L;
-	private static final int MANAGER_ENERGY_HOPS = 4;
 	private static final int LIST_IMPACT_LIMIT = 5;
-	private static final int SUSPICIOUS_MIN_RATER_COUNT = 2;
-	private static final int SUSPICIOUS_MIN_RATING_CONFIDENCE = 2;
 
 	public static Result derive(Repository repository, String targetAddress) throws DataException {
 		DerivedGraph graph = deriveGraph(repository, getLiveMintingSeedHeight(repository));
@@ -169,7 +165,7 @@ public class AccountTrustDerivation {
 		if (seedAddresses.isEmpty())
 			return seedScores;
 
-		long scorePerSeed = STARTING_ENERGY / seedAddresses.size();
+		long scorePerSeed = AccountTrustPolicy.STARTING_ENERGY / seedAddresses.size();
 		for (String seedAddress : seedAddresses)
 			seedScores.put(seedAddress, scorePerSeed);
 
@@ -180,7 +176,7 @@ public class AccountTrustDerivation {
 		Map<String, Long> energy = new HashMap<>(seedScores);
 		Map<String, Integer> positiveRatingScales = calculatePositiveRatingScales(managerRatings);
 
-		for (int hop = 0; hop < MANAGER_ENERGY_HOPS; ++hop) {
+		for (int hop = 0; hop < AccountTrustPolicy.MANAGER_ENERGY_HOPS; ++hop) {
 			Map<String, Long> nextEnergy = new HashMap<>();
 
 			for (AccountRatingData rating : managerRatings) {
@@ -226,7 +222,7 @@ public class AccountTrustDerivation {
 		}
 
 		for (CategoryScore score : scores.values())
-			score.apply(calculateLevelDecision(targetCategory, score.score, score.impacts));
+			score.apply(AccountTrustPolicy.decideLevel(targetCategory, score.score, score.impacts));
 
 		return scores;
 	}
@@ -260,7 +256,7 @@ public class AccountTrustDerivation {
 		CategoryScore score = scores.get(targetAddress);
 		if (score == null) {
 			score = new CategoryScore();
-			score.apply(calculateLevelDecision(category, score.score, score.impacts));
+			score.apply(AccountTrustPolicy.decideLevel(category, score.score, score.impacts));
 		}
 
 		AccountTrustPreviewData.RatingCounts inboundCounts = inboundCountsByAddress.get(targetAddress);
@@ -277,200 +273,7 @@ public class AccountTrustDerivation {
 			impacts = new ArrayList<>(impacts.subList(0, maxImpacts));
 
 		return new AccountTrustPreviewData.CategoryTrust(category, score.score, score.levelScore, score.levelScoreCap,
-				score.level, mapLevelToStatus(score.level), inboundCounts, impacts);
-	}
-
-	private static LevelDecision calculateLevelDecision(AccountRatingCategory category, long score,
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
-		LevelDecision suspiciousDecision = suspiciousDecisionForCategory(category, impacts);
-		if (meetsSuspiciousRequirements(category, suspiciousDecision, impacts))
-			return suspiciousDecision;
-
-		if (score < 0)
-			return zeroLevelDecision(category, impacts);
-
-		switch (category) {
-			case MANAGER:
-				return calculateManagerLevel(impacts);
-
-			case TRAINER:
-				return calculateTrainerLevel(impacts);
-
-			case PLAYER:
-				return calculatePlayerLevel(impacts);
-
-			case SUBJECT:
-			default:
-				return calculateSubjectLevel(impacts);
-		}
-	}
-
-	private static LevelDecision calculateManagerLevel(List<AccountTrustPreviewData.CategoryImpact> impacts) {
-		LevelDecision level2 = decisionForLevel(AccountRatingCategory.MANAGER, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.MANAGER, 2))
-			return level2;
-
-		LevelDecision level1 = decisionForLevel(AccountRatingCategory.MANAGER, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.MANAGER, 1))
-			return level1;
-
-		return zeroLevelDecision(AccountRatingCategory.MANAGER, impacts);
-	}
-
-	private static LevelDecision calculateTrainerLevel(List<AccountTrustPreviewData.CategoryImpact> impacts) {
-		LevelDecision level2 = decisionForLevel(AccountRatingCategory.TRAINER, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.TRAINER, 2))
-			return level2;
-
-		LevelDecision level1 = decisionForLevel(AccountRatingCategory.TRAINER, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.TRAINER, 1))
-			return level1;
-
-		return zeroLevelDecision(AccountRatingCategory.TRAINER, impacts);
-	}
-
-	private static LevelDecision calculatePlayerLevel(List<AccountTrustPreviewData.CategoryImpact> impacts) {
-		LevelDecision level3 = decisionForLevel(AccountRatingCategory.PLAYER, 3, impacts);
-		if (level3.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 3)
-				&& (hasImpact(impacts, 2, 3) || countImpacts(impacts, 2, 2) >= 2))
-			return level3;
-
-		LevelDecision level2 = decisionForLevel(AccountRatingCategory.PLAYER, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 2) && hasImpact(impacts, 1, 2))
-			return level2;
-
-		LevelDecision level1 = decisionForLevel(AccountRatingCategory.PLAYER, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 1))
-			return level1;
-
-		return zeroLevelDecision(AccountRatingCategory.PLAYER, impacts);
-	}
-
-	private static LevelDecision calculateSubjectLevel(List<AccountTrustPreviewData.CategoryImpact> impacts) {
-		LevelDecision level4 = decisionForLevel(AccountRatingCategory.SUBJECT, 4, impacts);
-		if (level4.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 4)
-				&& (hasImpact(impacts, 3, 3) || countImpacts(impacts, 3, 2) >= 2))
-			return level4;
-
-		LevelDecision level3 = decisionForLevel(AccountRatingCategory.SUBJECT, 3, impacts);
-		if (level3.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 3)
-				&& (hasImpact(impacts, 2, 3) || countImpacts(impacts, 2, 2) >= 2))
-			return level3;
-
-		LevelDecision level2 = decisionForLevel(AccountRatingCategory.SUBJECT, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 2) && hasImpact(impacts, 1, 2))
-			return level2;
-
-		LevelDecision level1 = decisionForLevel(AccountRatingCategory.SUBJECT, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 1) && hasImpact(impacts, 1, 1))
-			return level1;
-
-		return zeroLevelDecision(AccountRatingCategory.SUBJECT, impacts);
-	}
-
-	private static LevelDecision zeroLevelDecision(AccountRatingCategory category,
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
-		long levelScoreCap = getLevelScoreCap(category, 1);
-		return new LevelDecision(0, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
-	}
-
-	private static LevelDecision decisionForLevel(AccountRatingCategory category, int level,
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
-		long levelScoreCap = getLevelScoreCap(category, level);
-		return new LevelDecision(level, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
-	}
-
-	private static LevelDecision suspiciousDecisionForCategory(AccountRatingCategory category,
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
-		long levelScoreCap = getSuspiciousLevelScoreCap(category);
-		return new LevelDecision(-1, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
-	}
-
-	private static boolean meetsSuspiciousRequirements(AccountRatingCategory category, LevelDecision suspiciousDecision,
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
-		return suspiciousDecision.levelScore <= getSuspiciousThreshold(category)
-				&& countNegativeImpacts(impacts, SUSPICIOUS_MIN_RATING_CONFIDENCE) >= SUSPICIOUS_MIN_RATER_COUNT;
-	}
-
-	private static long calculateCappedLevelScore(List<AccountTrustPreviewData.CategoryImpact> impacts, long impactCap) {
-		long levelScore = 0L;
-
-		for (AccountTrustPreviewData.CategoryImpact impact : impacts) {
-			long impactValue = impact.getImpact();
-			if (impactValue > impactCap)
-				impactValue = impactCap;
-			else if (impactValue < -impactCap)
-				impactValue = -impactCap;
-
-			levelScore = saturatedAdd(levelScore, impactValue);
-		}
-
-		return levelScore;
-	}
-
-	private static long getLevelScoreCap(AccountRatingCategory category, int level) {
-		return getLevelThreshold(category, level) / 2L;
-	}
-
-	private static long getSuspiciousLevelScoreCap(AccountRatingCategory category) {
-		return getLevelScoreCap(category, 1);
-	}
-
-	private static long getSuspiciousThreshold(AccountRatingCategory category) {
-		return -getLevelThreshold(category, 1);
-	}
-
-	private static long getLevelThreshold(AccountRatingCategory category, int level) {
-		switch (category) {
-			case MANAGER:
-				return level == 2 ? 200_000L : 1_000L;
-
-			case TRAINER:
-				return level == 2 ? 1_000_000L : 500_000L;
-
-			case PLAYER:
-				if (level == 3)
-					return 3_000_000L;
-				return level == 2 ? 2_000_000L : 1_000_000L;
-
-			case SUBJECT:
-			default:
-				if (level == 4)
-					return 150_000_000L;
-				if (level == 3)
-					return 100_000_000L;
-				return level == 2 ? 50_000_000L : 10_000_000L;
-		}
-	}
-
-	private static boolean hasImpact(List<AccountTrustPreviewData.CategoryImpact> impacts, int minLevel, int minConfidence) {
-		return impacts.stream().anyMatch(impact -> impact.getEvaluatorLevel() >= minLevel
-				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0);
-	}
-
-	private static long countImpacts(List<AccountTrustPreviewData.CategoryImpact> impacts, int minLevel, int minConfidence) {
-		return impacts.stream().filter(impact -> impact.getEvaluatorLevel() >= minLevel
-				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0).count();
-	}
-
-	private static long countNegativeImpacts(List<AccountTrustPreviewData.CategoryImpact> impacts, int minConfidence) {
-		return impacts.stream()
-				.filter(impact -> impact.getRatingConfidence() >= minConfidence && impact.getImpact() < 0)
-				.map(AccountTrustPreviewData.CategoryImpact::getRaterAddress)
-				.distinct()
-				.count();
-	}
-
-	private static AccountTrustStatus mapLevelToStatus(int level) {
-		if (level < 0)
-			return AccountTrustStatus.SUSPICIOUS;
-		if (level >= 3)
-			return AccountTrustStatus.GOLD;
-		if (level == 2)
-			return AccountTrustStatus.SILVER;
-		if (level == 1)
-			return AccountTrustStatus.BRONZE;
-		return AccountTrustStatus.UNVERIFIED;
+				score.level, AccountTrustPolicy.mapLevelToStatus(score.level), inboundCounts, impacts);
 	}
 
 	private static long saturatedAdd(long left, long right) {
@@ -488,22 +291,10 @@ public class AccountTrustDerivation {
 		private int level;
 		private final List<AccountTrustPreviewData.CategoryImpact> impacts = new ArrayList<>();
 
-		private void apply(LevelDecision decision) {
-			this.level = decision.level;
-			this.levelScore = decision.levelScore;
-			this.levelScoreCap = decision.levelScoreCap;
-		}
-	}
-
-	private static class LevelDecision {
-		private final int level;
-		private final long levelScore;
-		private final long levelScoreCap;
-
-		private LevelDecision(int level, long levelScore, long levelScoreCap) {
-			this.level = level;
-			this.levelScore = levelScore;
-			this.levelScoreCap = levelScoreCap;
+		private void apply(AccountTrustPolicy.LevelDecision decision) {
+			this.level = decision.getLevel();
+			this.levelScore = decision.getLevelScore();
+			this.levelScoreCap = decision.getLevelScoreCap();
 		}
 	}
 
