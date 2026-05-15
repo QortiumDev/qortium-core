@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - docs: add trust network guide
+
+Added a public-facing account trust network guide that explains why Qortium uses on-chain trust ratings, how signed confidence ratings and the Manager, Trainer, Player, and Subject categories work, how the Minting group seeds the graph, how Gold/Silver/Bronze/Unverified/Suspicious status affects minting and vote weight, and which APIs clients should use to display or audit trust state. The existing Aura trust-tier note remains the detailed implementation-history document, while the new guide gives users and chain builders a clearer current-system overview.
+
 ### 2026-05-15 - api: add trust policy endpoint
 
 Added a read-only trust policy API that exposes the active chain-configured trust settings clients need to explain account trust results. The endpoint returns the active weighting category, Manager seed-energy flow settings, Suspicious requirements, Gold/Silver/Bronze/Unverified/Suspicious vote multipliers, and each category's thresholds and caps without changing trust scoring, snapshots, ratings, minting, voting, or resource-rating behavior.

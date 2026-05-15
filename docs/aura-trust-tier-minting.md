@@ -7,6 +7,9 @@ manual policing of minters.
 This document tracks the first implementation and the remaining design work for
 Aura-style trust tiers in Qortium.
 
+For a reader-facing explanation of the current system, see
+`docs/account-trust-network.md`.
+
 ## Goal
 
 Qortium already has a simple foundation for minting and vote weight:
