@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - api: add trust explanation endpoint
+
+Added a read-only account trust explanation API so clients can show why an account currently maps to Gold, Silver, Bronze, Unverified, or Suspicious. The endpoint combines the stored snapshot status used for active enforcement with configured thresholds, caps, requirement checks, and top rating impacts, and it can optionally recalculate live graph evidence for comparison without changing ratings, snapshots, minting, voting, or resource-rating behavior.
+
 ### 2026-05-15 - core: make trust policy chain-configurable
 
 Moved Qortium's trust-network policy values into the blockchain config while keeping the current default behavior unchanged. Derived trust thresholds, per-rating caps, Suspicious requirements, Manager seed-energy flow settings, the active Subject weighting category, and Gold/Silver/Bronze vote multipliers are now chain parameters, so new Qortium-derived chains can tune the trust network without editing Java code.

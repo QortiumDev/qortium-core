@@ -197,6 +197,10 @@ repository state after each processed block:
 - `GET /account-ratings/trust-derivation` reads the stored snapshot by default,
   while `live=true` recalculates the graph from active ratings for comparison
 - `GET /account-ratings/trust-snapshots` exposes the raw stored rows directly
+- `GET /account-ratings/trust-explanation` explains one known account's active
+  trust status with the stored snapshot, configured thresholds and caps,
+  Suspicious requirements, level checks, and top positive or negative rating
+  impacts; `live=true` recalculates the current graph for comparison
 - missing Subject snapshots are treated as Unverified for active weight and
   mint-eligibility calculations
 
@@ -290,6 +294,9 @@ rule affects minting or broader consensus behavior.
     Manager energy-flow settings, active weighting category, and vote
     multipliers into chain configuration so derived chains can tune the policy
     without code changes.
+13. Add a read-only trust explanation endpoint that shows the stored active
+    status, policy requirements, threshold/cap checks, and top rating impacts
+    for one account, with optional live recalculation for comparison.
 
 ## Test Scenarios
 
@@ -351,6 +358,9 @@ The first implementation should cover at least these cases:
   separately from full graph behavior tests.
 - chain-config tests prove trust policy values are required, validated, and
   actually drive both vote multipliers and level decisions.
+- account trust explanation tests prove empty known accounts remain
+  Unverified, stored and live explanations are distinguishable, and single
+  versus independent negative ratings report the Suspicious checks clearly.
 
 ## Open Decisions
 

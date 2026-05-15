@@ -12,6 +12,7 @@ import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
+import org.qortal.data.account.AccountTrustExplanationData;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
@@ -71,6 +72,20 @@ public class AccountRatingsApiTests extends ApiCommon {
 			assertEquals(0, emptyPreview.getInboundTotalRatingCount());
 			assertEquals(0, emptyPreview.getOutboundTotalRatingCount());
 			assertEquals(0, emptyPreview.getNetScore());
+
+			AccountTrustExplanationData emptyExplanation = this.accountRatingsResource
+					.getAccountTrustExplanation(Base58.encode(bob.getPublicKey()), null);
+			assertFalse(emptyExplanation.isLive());
+			assertEquals(AccountTrustStatus.UNVERIFIED, emptyExplanation.getTrustStatus());
+			assertEquals(0, emptyExplanation.getTrustWeightPercent());
+			assertEquals(AccountRatingCategory.values().length, emptyExplanation.getCategories().size());
+
+			for (AccountTrustExplanationData.CategoryExplanation category : emptyExplanation.getCategories()) {
+				assertEquals(0L, category.getScore());
+				assertEquals(0, category.getLevel());
+				assertEquals(AccountTrustStatus.UNVERIFIED, category.getMappedTrustStatus());
+				assertFalse(category.getConfiguredLevels().isEmpty());
+			}
 
 			TransactionUtils.signAndMint(repository, ratingData(alice, bob, 4), alice);
 			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, 2), chloe);
@@ -329,6 +344,149 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testTrustExplanationEndpointExplainsStoredAndLiveDerivation() throws DataException {
+		TestAccount alice;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			createAuraTrustGraph(repository, alice, bob, chloe, dilbert);
+		}
+
+		String alicePublicKey58 = Base58.encode(alice.getPublicKey());
+		AccountTrustExplanationData storedExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(alicePublicKey58, null);
+
+		assertFalse(storedExplanation.isLive());
+		assertEquals(alice.getAddress(), storedExplanation.getTargetAddress());
+		assertEquals(AccountTrustStatus.SILVER, storedExplanation.getTrustStatus());
+		assertEquals(50, storedExplanation.getTrustWeightPercent());
+		assertEquals(AccountRatingCategory.SUBJECT, storedExplanation.getActiveWeightCategory());
+		assertTrue(storedExplanation.isMintingSeedMember());
+		assertNotNull(storedExplanation.getSnapshotHeight());
+		assertNotNull(storedExplanation.getSnapshotTimestamp());
+
+		AccountTrustExplanationData.CategoryExplanation storedSubject = findCategory(storedExplanation,
+				AccountRatingCategory.SUBJECT);
+		assertEquals(96_000_000L, storedSubject.getScore());
+		assertEquals(50_000_000L, storedSubject.getLevelScore());
+		assertEquals(25_000_000L, storedSubject.getLevelScoreCap());
+		assertEquals(2, storedSubject.getLevel());
+		assertEquals(AccountTrustStatus.SILVER, storedSubject.getMappedTrustStatus());
+		assertEquals(4, storedSubject.getConfiguredLevels().size());
+		assertEquals(50_000_000L, findConfiguredLevel(storedSubject, 2).getThreshold());
+		assertEquals(25_000_000L, findConfiguredLevel(storedSubject, 2).getLevelScoreCap());
+		assertTrue(findRequirement(storedSubject, "level.2.threshold").isPassed());
+		assertTrue(findRequirement(storedSubject, "level.2.positive-support").isPassed());
+		assertFalse(findRequirement(storedSubject, "level.3.threshold").isPassed());
+		assertFalse(storedSubject.getTopPositiveImpacts().isEmpty());
+		assertTrue(storedSubject.getTopNegativeImpacts().isEmpty());
+
+		AccountTrustExplanationData liveExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(alicePublicKey58, true);
+		AccountTrustExplanationData.CategoryExplanation liveSubject = findCategory(liveExplanation,
+				AccountRatingCategory.SUBJECT);
+
+		assertTrue(liveExplanation.isLive());
+		assertNull(liveExplanation.getSnapshotHeight());
+		assertNull(liveExplanation.getSnapshotTimestamp());
+		assertEquals(AccountTrustStatus.SILVER, liveExplanation.getTrustStatus());
+		assertEquals(96_000_000L, liveSubject.getScore());
+		assertFalse(liveSubject.getTopPositiveImpacts().isEmpty());
+	}
+
+	@Test
+	public void testTrustExplanationShowsSingleNegativeButNotSuspicious() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, bob);
+			refreshTrustSnapshots(repository);
+
+			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingCategory.SUBJECT, -4), bob);
+		}
+
+		AccountTrustExplanationData explanation = this.accountRatingsResource
+				.getAccountTrustExplanation(Base58.encode(alice.getPublicKey()), null);
+		AccountTrustExplanationData.CategoryExplanation subject = findCategory(explanation, AccountRatingCategory.SUBJECT);
+
+		assertEquals(AccountTrustStatus.UNVERIFIED, explanation.getTrustStatus());
+		assertEquals(-512_000_000L, subject.getScore());
+		assertEquals(-5_000_000L, subject.getLevelScore());
+		assertEquals(5_000_000L, subject.getLevelScoreCap());
+		assertEquals(0, subject.getLevel());
+		assertEquals(AccountTrustStatus.UNVERIFIED, subject.getMappedTrustStatus());
+		assertEquals(1, subject.getTopNegativeImpacts().size());
+		assertEquals(bob.getAddress(), subject.getTopNegativeImpacts().get(0).getRaterAddress());
+		assertEquals(-512_000_000L, subject.getTopNegativeImpacts().get(0).getImpact());
+
+		AccountTrustExplanationData.Requirement suspiciousThreshold = findRequirement(subject, "suspicious.threshold");
+		assertFalse(suspiciousThreshold.isPassed());
+		assertEquals("-5000000", suspiciousThreshold.getActual());
+		assertEquals("-10000000", suspiciousThreshold.getRequired());
+
+		AccountTrustExplanationData.Requirement suspiciousRaters = findRequirement(subject, "suspicious.independent-raters");
+		assertFalse(suspiciousRaters.isPassed());
+		assertEquals("1", suspiciousRaters.getActual());
+		assertEquals("2", suspiciousRaters.getRequired());
+	}
+
+	@Test
+	public void testTrustExplanationShowsIndependentNegativeRatingsMakeSuspicious() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount dilbert;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, dilbert);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, bob);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, dilbert);
+			refreshTrustSnapshots(repository);
+
+			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingCategory.SUBJECT, -2), bob);
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, -2),
+					dilbert);
+		}
+
+		AccountTrustExplanationData explanation = this.accountRatingsResource
+				.getAccountTrustExplanation(Base58.encode(alice.getPublicKey()), null);
+		AccountTrustExplanationData.CategoryExplanation subject = findCategory(explanation, AccountRatingCategory.SUBJECT);
+
+		assertEquals(AccountTrustStatus.SUSPICIOUS, explanation.getTrustStatus());
+		assertEquals(-256_000_000L, subject.getScore());
+		assertEquals(-10_000_000L, subject.getLevelScore());
+		assertEquals(5_000_000L, subject.getLevelScoreCap());
+		assertEquals(-1, subject.getLevel());
+		assertEquals(AccountTrustStatus.SUSPICIOUS, subject.getMappedTrustStatus());
+		assertEquals(2, subject.getTopNegativeImpacts().size());
+
+		AccountTrustExplanationData.Requirement suspiciousThreshold = findRequirement(subject, "suspicious.threshold");
+		assertTrue(suspiciousThreshold.isPassed());
+		assertEquals("-10000000", suspiciousThreshold.getActual());
+		assertEquals("-10000000", suspiciousThreshold.getRequired());
+
+		AccountTrustExplanationData.Requirement suspiciousRaters = findRequirement(subject, "suspicious.independent-raters");
+		assertTrue(suspiciousRaters.isPassed());
+		assertEquals("2", suspiciousRaters.getActual());
+		assertEquals("2", suspiciousRaters.getRequired());
+	}
+
+	@Test
 	public void testManagerEnergySplitsAcrossPositiveManagerPaths() throws DataException {
 		TestAccount bob;
 		TestAccount chloe;
@@ -565,6 +723,8 @@ public class AccountRatingsApiTests extends ApiCommon {
 				() -> this.accountRatingsResource.getAccountRatingSummary(Base58.encode(unknown.getPublicKey())));
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountTrustPreview(Base58.encode(unknown.getPublicKey())));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustExplanation(Base58.encode(unknown.getPublicKey()), null));
 	}
 
 	@Test
@@ -573,6 +733,8 @@ public class AccountRatingsApiTests extends ApiCommon {
 				() -> this.accountRatingsResource.getAccountRatings("not-a-public-key", null, null, null, null));
 		assertApiError(ApiError.INVALID_PUBLIC_KEY,
 				() -> this.accountRatingsResource.getAccountTrustPreview("not-a-public-key"));
+		assertApiError(ApiError.INVALID_PUBLIC_KEY,
+				() -> this.accountRatingsResource.getAccountTrustExplanation("not-a-public-key", null));
 	}
 
 	@Test
@@ -629,6 +791,30 @@ public class AccountRatingsApiTests extends ApiCommon {
 				.filter(categoryTrust -> categoryTrust.getCategory() == category)
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("Missing category " + category));
+	}
+
+	private AccountTrustExplanationData.CategoryExplanation findCategory(AccountTrustExplanationData explanation,
+			AccountRatingCategory category) {
+		return explanation.getCategories().stream()
+				.filter(categoryExplanation -> categoryExplanation.getCategory() == category)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing category " + category));
+	}
+
+	private AccountTrustExplanationData.ConfiguredLevel findConfiguredLevel(
+			AccountTrustExplanationData.CategoryExplanation category, int level) {
+		return category.getConfiguredLevels().stream()
+				.filter(configuredLevel -> configuredLevel.getLevel() == level)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing configured level " + level));
+	}
+
+	private AccountTrustExplanationData.Requirement findRequirement(
+			AccountTrustExplanationData.CategoryExplanation category, String name) {
+		return category.getRequirements().stream()
+				.filter(requirement -> requirement.getName().equals(name))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing requirement " + name));
 	}
 
 	private AccountTrustDerivationData findDerivation(List<AccountTrustDerivationData> derivations, String accountAddress) {

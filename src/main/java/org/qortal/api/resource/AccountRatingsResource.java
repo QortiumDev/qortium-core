@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortal.account.AccountTrustDerivation;
+import org.qortal.account.AccountTrustPolicy;
 import org.qortal.account.AccountTrustWeight;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
@@ -21,6 +22,7 @@ import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
+import org.qortal.data.account.AccountTrustExplanationData;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
@@ -57,6 +59,8 @@ import java.util.Set;
 @Path("/account-ratings")
 @Tag(name = "Account Ratings")
 public class AccountRatingsResource {
+
+	private static final int TRUST_EXPLANATION_IMPACT_LIMIT = 5;
 
 	@Context
 	HttpServletRequest request;
@@ -170,6 +174,39 @@ public class AccountRatingsResource {
 
 			return buildTrustPreview(repository, targetPublicKey, targetAddress, activeTrustStatus, storedTrustStatus,
 					inboundRatings, outboundRatings, derivation);
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/trust-explanation")
+	@Operation(
+			summary = "Explain one account's active Aura-style trust status",
+			responses = {
+					@ApiResponse(
+							description = "account trust explanation",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = AccountTrustExplanationData.class)
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public AccountTrustExplanationData getAccountTrustExplanation(
+			@Parameter(description = "Target account public key in Base58") @QueryParam("target") String targetPublicKey58,
+			@Parameter(description = "If true, recalculate from active account ratings instead of explaining stored block snapshots") @QueryParam("live") Boolean live) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			byte[] targetPublicKey = requireKnownPublicKey(repository, targetPublicKey58);
+			String targetAddress = Crypto.toAddress(targetPublicKey);
+			AccountTrustDerivation.Result liveDerivation = AccountTrustDerivation.derive(repository, targetAddress);
+
+			return Boolean.TRUE.equals(live)
+					? buildLiveTrustExplanation(targetPublicKey, targetAddress, liveDerivation)
+					: buildStoredTrustExplanation(repository, targetPublicKey, targetAddress, liveDerivation);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -375,6 +412,270 @@ public class AccountRatingsResource {
 		return (int) magnitude;
 	}
 
+	private AccountTrustExplanationData buildLiveTrustExplanation(byte[] targetPublicKey, String targetAddress,
+			AccountTrustDerivation.Result liveDerivation) {
+		AccountRatingCategory activeCategory = AccountTrustWeight.getActiveWeightCategory();
+		AccountTrustPreviewData.CategoryTrust activeCategoryTrust = getCategoryTrust(liveDerivation.getCategories(), activeCategory);
+		AccountTrustStatus activeTrustStatus = activeCategoryTrust == null
+				? AccountTrustStatus.UNVERIFIED
+				: activeCategoryTrust.getMappedTrustStatus();
+
+		return new AccountTrustExplanationData(targetPublicKey, targetAddress, activeTrustStatus, activeCategory,
+				liveDerivation.isMintingSeedMember(), null, null, true,
+				buildCategoryExplanations(liveDerivation.getCategories(), liveDerivation.getCategories()));
+	}
+
+	private AccountTrustExplanationData buildStoredTrustExplanation(Repository repository, byte[] targetPublicKey,
+			String targetAddress, AccountTrustDerivation.Result liveDerivation) throws DataException {
+		AccountRatingCategory activeCategory = AccountTrustWeight.getActiveWeightCategory();
+		List<AccountTrustSnapshotData> snapshots = repository.getAccountRatingRepository()
+				.getTrustDerivationSnapshots(targetAddress);
+		Map<AccountRatingCategory, AccountTrustSnapshotData> snapshotsByCategory = new EnumMap<>(AccountRatingCategory.class);
+
+		for (AccountTrustSnapshotData snapshot : snapshots)
+			snapshotsByCategory.put(snapshot.getCategory(), snapshot);
+
+		AccountTrustSnapshotData activeSnapshot = snapshotsByCategory.get(activeCategory);
+		AccountTrustStatus activeTrustStatus = activeSnapshot == null
+				? AccountTrustStatus.UNVERIFIED
+				: activeSnapshot.getMappedTrustStatus();
+		AccountTrustSnapshotData referenceSnapshot = activeSnapshot == null && !snapshots.isEmpty()
+				? snapshots.get(0)
+				: activeSnapshot;
+		boolean mintingSeedMember = referenceSnapshot == null ? liveDerivation.isMintingSeedMember() : referenceSnapshot.isMintingSeedMember();
+		Integer snapshotHeight = referenceSnapshot == null ? null : referenceSnapshot.getSnapshotHeight();
+		Long snapshotTimestamp = referenceSnapshot == null ? null : referenceSnapshot.getSnapshotTimestamp();
+
+		return new AccountTrustExplanationData(targetPublicKey, targetAddress, activeTrustStatus, activeCategory,
+				mintingSeedMember, snapshotHeight, snapshotTimestamp, false,
+				buildCategoryExplanations(buildCategoryTrustsFromSnapshots(snapshotsByCategory), liveDerivation.getCategories()));
+	}
+
+	private List<AccountTrustPreviewData.CategoryTrust> buildCategoryTrustsFromSnapshots(
+			Map<AccountRatingCategory, AccountTrustSnapshotData> snapshotsByCategory) {
+		List<AccountTrustPreviewData.CategoryTrust> categories = new ArrayList<>();
+
+		for (AccountRatingCategory category : AccountRatingCategory.values()) {
+			AccountTrustSnapshotData snapshot = snapshotsByCategory.get(category);
+			if (snapshot == null) {
+				categories.add(new AccountTrustPreviewData.CategoryTrust(category, 0L, 0,
+						AccountTrustStatus.UNVERIFIED, new AccountTrustPreviewData.RatingCounts(), new ArrayList<>()));
+				continue;
+			}
+
+			categories.add(new AccountTrustPreviewData.CategoryTrust(snapshot.getCategory(), snapshot.getScore(),
+					snapshot.getLevelScore(), snapshot.getLevelScoreCap(), snapshot.getLevel(), snapshot.getMappedTrustStatus(),
+					snapshot.getInboundRatings(), new ArrayList<>()));
+		}
+
+		return categories;
+	}
+
+	private List<AccountTrustExplanationData.CategoryExplanation> buildCategoryExplanations(
+			List<AccountTrustPreviewData.CategoryTrust> statusCategories,
+			List<AccountTrustPreviewData.CategoryTrust> impactCategories) {
+		List<AccountTrustExplanationData.CategoryExplanation> explanations = new ArrayList<>();
+
+		for (AccountRatingCategory category : AccountRatingCategory.values()) {
+			AccountTrustPreviewData.CategoryTrust statusCategory = getCategoryTrust(statusCategories, category);
+			AccountTrustPreviewData.CategoryTrust impactCategory = getCategoryTrust(impactCategories, category);
+			List<AccountTrustPreviewData.CategoryImpact> impacts = impactCategory == null
+					? new ArrayList<>()
+					: impactCategory.getImpacts();
+
+			if (statusCategory == null)
+				statusCategory = new AccountTrustPreviewData.CategoryTrust(category, 0L, 0,
+						AccountTrustStatus.UNVERIFIED, new AccountTrustPreviewData.RatingCounts(), new ArrayList<>());
+
+			explanations.add(buildCategoryExplanation(statusCategory, impacts));
+		}
+
+		return explanations;
+	}
+
+	private AccountTrustExplanationData.CategoryExplanation buildCategoryExplanation(
+			AccountTrustPreviewData.CategoryTrust categoryTrust, List<AccountTrustPreviewData.CategoryImpact> impacts) {
+		AccountRatingCategory category = categoryTrust.getCategory();
+		List<AccountTrustExplanationData.ConfiguredLevel> configuredLevels = buildConfiguredLevels(category);
+		List<AccountTrustExplanationData.Requirement> requirements = buildTrustRequirements(category, categoryTrust.getScore(), impacts);
+
+		return new AccountTrustExplanationData.CategoryExplanation(category, categoryTrust.getScore(),
+				categoryTrust.getLevelScore(), categoryTrust.getLevelScoreCap(), categoryTrust.getLevel(),
+				categoryTrust.getMappedTrustStatus(), categoryTrust.getInboundRatings(), configuredLevels,
+				AccountTrustPolicy.getSuspiciousThreshold(category), AccountTrustPolicy.getSuspiciousLevelScoreCap(category),
+				AccountTrustPolicy.getSuspiciousMinRaterCount(), AccountTrustPolicy.getSuspiciousMinRatingConfidence(),
+				requirements, getTopImpacts(impacts, true), getTopImpacts(impacts, false));
+	}
+
+	private List<AccountTrustExplanationData.ConfiguredLevel> buildConfiguredLevels(AccountRatingCategory category) {
+		List<AccountTrustExplanationData.ConfiguredLevel> levels = new ArrayList<>();
+
+		for (int level = 1; level <= getMaximumConfiguredLevel(category); ++level)
+			levels.add(new AccountTrustExplanationData.ConfiguredLevel(level,
+					AccountTrustPolicy.getLevelThreshold(category, level), AccountTrustPolicy.getLevelScoreCap(category, level)));
+
+		return levels;
+	}
+
+	private List<AccountTrustExplanationData.Requirement> buildTrustRequirements(AccountRatingCategory category,
+			long rawScore, List<AccountTrustPreviewData.CategoryImpact> impacts) {
+		List<AccountTrustExplanationData.Requirement> requirements = new ArrayList<>();
+		long suspiciousScore = calculateCappedScore(impacts, AccountTrustPolicy.getSuspiciousLevelScoreCap(category));
+		long suspiciousThreshold = AccountTrustPolicy.getSuspiciousThreshold(category);
+		long negativeRaterCount = countNegativeImpacts(impacts, AccountTrustPolicy.getSuspiciousMinRatingConfidence());
+
+		requirements.add(new AccountTrustExplanationData.Requirement("suspicious.threshold",
+				suspiciousScore <= suspiciousThreshold, Long.toString(suspiciousScore), Long.toString(suspiciousThreshold),
+				"Capped signed score must be at or below the Suspicious threshold."));
+		requirements.add(new AccountTrustExplanationData.Requirement("suspicious.independent-raters",
+				negativeRaterCount >= AccountTrustPolicy.getSuspiciousMinRaterCount(), Long.toString(negativeRaterCount),
+				Long.toString(AccountTrustPolicy.getSuspiciousMinRaterCount()),
+				"Distinct negative raters must meet the configured minimum confidence."));
+		requirements.add(new AccountTrustExplanationData.Requirement("positive.raw-score",
+				rawScore >= 0L, Long.toString(rawScore), ">= 0",
+				"Positive trust levels are only considered when raw score is non-negative."));
+
+		for (int level = 1; level <= getMaximumConfiguredLevel(category); ++level) {
+			long cap = AccountTrustPolicy.getLevelScoreCap(category, level);
+			long levelScore = calculateCappedScore(impacts, cap);
+			long threshold = AccountTrustPolicy.getLevelThreshold(category, level);
+
+			requirements.add(new AccountTrustExplanationData.Requirement("level." + level + ".threshold",
+					levelScore >= threshold, Long.toString(levelScore), Long.toString(threshold),
+					"Capped score must reach this level's threshold."));
+
+			AccountTrustExplanationData.Requirement supportRequirement = buildPositiveSupportRequirement(category, level, impacts);
+			if (supportRequirement != null)
+				requirements.add(supportRequirement);
+		}
+
+		return requirements;
+	}
+
+	private AccountTrustExplanationData.Requirement buildPositiveSupportRequirement(AccountRatingCategory category,
+			int level, List<AccountTrustPreviewData.CategoryImpact> impacts) {
+		switch (category) {
+			case PLAYER:
+				if (level == 2)
+					return positiveSupportRequirement("level.2.positive-support", hasPositiveImpact(impacts, 1, 2),
+							countPositiveImpacts(impacts, 1, 2), ">= 1", "At least one level-1 evaluator with medium positive confidence is required.");
+				if (level == 3)
+					return positiveSupportRequirement("level.3.positive-support", hasPositiveImpact(impacts, 2, 3)
+									|| countPositiveImpacts(impacts, 2, 2) >= 2,
+							countPositiveImpacts(impacts, 2, 2), ">= 1 high-confidence or >= 2 medium-confidence",
+							"Level 3 needs stronger positive support from level-2 evaluators.");
+				return null;
+
+			case SUBJECT:
+				if (level == 1)
+					return positiveSupportRequirement("level.1.positive-support", hasPositiveImpact(impacts, 1, 1),
+							countPositiveImpacts(impacts, 1, 1), ">= 1",
+							"Subject Bronze needs at least one positive evaluator at level 1.");
+				if (level == 2)
+					return positiveSupportRequirement("level.2.positive-support", hasPositiveImpact(impacts, 1, 2),
+							countPositiveImpacts(impacts, 1, 2), ">= 1",
+							"Subject Silver needs at least one medium-confidence positive evaluator at level 1.");
+				if (level == 3)
+					return positiveSupportRequirement("level.3.positive-support", hasPositiveImpact(impacts, 2, 3)
+									|| countPositiveImpacts(impacts, 2, 2) >= 2,
+							countPositiveImpacts(impacts, 2, 2), ">= 1 high-confidence or >= 2 medium-confidence",
+							"Subject Gold threshold level 3 needs stronger support from level-2 evaluators.");
+				if (level == 4)
+					return positiveSupportRequirement("level.4.positive-support", hasPositiveImpact(impacts, 3, 3)
+									|| countPositiveImpacts(impacts, 3, 2) >= 2,
+							countPositiveImpacts(impacts, 3, 2), ">= 1 high-confidence or >= 2 medium-confidence",
+							"Subject level 4 needs stronger support from level-3 evaluators.");
+				return null;
+
+			case MANAGER:
+			case TRAINER:
+			default:
+				return null;
+		}
+	}
+
+	private AccountTrustExplanationData.Requirement positiveSupportRequirement(String name, boolean passed, long actual,
+			String required, String description) {
+		return new AccountTrustExplanationData.Requirement(name, passed, Long.toString(actual), required, description);
+	}
+
+	private int getMaximumConfiguredLevel(AccountRatingCategory category) {
+		switch (category) {
+			case MANAGER:
+			case TRAINER:
+				return 2;
+
+			case PLAYER:
+				return 3;
+
+			case SUBJECT:
+			default:
+				return 4;
+		}
+	}
+
+	private long calculateCappedScore(List<AccountTrustPreviewData.CategoryImpact> impacts, long cap) {
+		long score = 0L;
+		for (AccountTrustPreviewData.CategoryImpact impact : impacts) {
+			long impactValue = impact.getImpact();
+			if (impactValue > cap)
+				impactValue = cap;
+			else if (impactValue < -cap)
+				impactValue = -cap;
+
+			score = saturatedAdd(score, impactValue);
+		}
+
+		return score;
+	}
+
+	private long saturatedAdd(long left, long right) {
+		long result = left + right;
+		if (((left ^ result) & (right ^ result)) < 0)
+			return right < 0 ? Long.MIN_VALUE : Long.MAX_VALUE;
+
+		return result;
+	}
+
+	private long countNegativeImpacts(List<AccountTrustPreviewData.CategoryImpact> impacts, int minConfidence) {
+		return impacts.stream()
+				.filter(impact -> impact.getRatingConfidence() >= minConfidence && impact.getImpact() < 0)
+				.map(AccountTrustPreviewData.CategoryImpact::getRaterAddress)
+				.distinct()
+				.count();
+	}
+
+	private boolean hasPositiveImpact(List<AccountTrustPreviewData.CategoryImpact> impacts, int minLevel, int minConfidence) {
+		return impacts.stream().anyMatch(impact -> impact.getEvaluatorLevel() >= minLevel
+				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0);
+	}
+
+	private long countPositiveImpacts(List<AccountTrustPreviewData.CategoryImpact> impacts, int minLevel, int minConfidence) {
+		return impacts.stream().filter(impact -> impact.getEvaluatorLevel() >= minLevel
+				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0).count();
+	}
+
+	private List<AccountTrustPreviewData.CategoryImpact> getTopImpacts(
+			List<AccountTrustPreviewData.CategoryImpact> impacts, boolean positive) {
+		List<AccountTrustPreviewData.CategoryImpact> filteredImpacts = new ArrayList<>();
+		for (AccountTrustPreviewData.CategoryImpact impact : impacts) {
+			if (positive && impact.getImpact() > 0)
+				filteredImpacts.add(impact);
+			else if (!positive && impact.getImpact() < 0)
+				filteredImpacts.add(impact);
+		}
+
+		filteredImpacts.sort(Comparator
+				.comparingLong((AccountTrustPreviewData.CategoryImpact impact) -> Math.abs(impact.getImpact()))
+				.reversed()
+				.thenComparing(AccountTrustPreviewData.CategoryImpact::getRaterAddress));
+
+		if (filteredImpacts.size() > TRUST_EXPLANATION_IMPACT_LIMIT)
+			return new ArrayList<>(filteredImpacts.subList(0, TRUST_EXPLANATION_IMPACT_LIMIT));
+
+		return filteredImpacts;
+	}
+
 	private List<AccountTrustDerivationData> buildTrustDerivationFromSnapshots(List<AccountTrustSnapshotData> snapshots) {
 		Map<String, List<AccountTrustSnapshotData>> snapshotsByAccount = new LinkedHashMap<>();
 		for (AccountTrustSnapshotData snapshot : snapshots)
@@ -492,6 +793,15 @@ public class AccountRatingsResource {
 	private static AccountTrustPreviewData.CategoryTrust getCategoryTrust(AccountTrustDerivationData derivedAccount,
 			AccountRatingCategory category) {
 		for (AccountTrustPreviewData.CategoryTrust categoryTrust : derivedAccount.getCategories())
+			if (categoryTrust.getCategory() == category)
+				return categoryTrust;
+
+		return null;
+	}
+
+	private static AccountTrustPreviewData.CategoryTrust getCategoryTrust(List<AccountTrustPreviewData.CategoryTrust> categories,
+			AccountRatingCategory category) {
+		for (AccountTrustPreviewData.CategoryTrust categoryTrust : categories)
 			if (categoryTrust.getCategory() == category)
 				return categoryTrust;
 
