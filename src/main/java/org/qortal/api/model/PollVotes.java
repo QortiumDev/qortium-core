@@ -126,35 +126,11 @@ public class PollVotes {
         @Schema(description = "Effective vote weight after trust-tier multiplier")
         public Integer effectiveVoteWeight;
 
-        @Schema(description = "Stored account trust status name, retained for audit comparison")
-        public String storedTrustStatus;
+        @Schema(description = "Block height of the active trust snapshot used for open-poll weighting")
+        public Integer trustSnapshotHeight;
 
-        @Schema(description = "Stored account trust status storage value, retained for audit comparison")
-        public Integer storedTrustStatusValue;
-
-        @Schema(description = "Stored account trust-tier vote multiplier percent, retained for audit comparison")
-        public Integer storedTrustWeightPercent;
-
-        @Schema(description = "Effective vote weight if stored account trust were used")
-        public Integer storedEffectiveVoteWeight;
-
-        @Schema(description = "Derived Subject trust status name from the stored trust snapshot")
-        public String derivedTrustStatus;
-
-        @Schema(description = "Derived Subject trust status storage value from the stored trust snapshot")
-        public Integer derivedTrustStatusValue;
-
-        @Schema(description = "Derived Subject trust-tier vote multiplier percent")
-        public Integer derivedTrustWeightPercent;
-
-        @Schema(description = "Effective vote weight if derived Subject trust were used")
-        public Integer derivedEffectiveVoteWeight;
-
-        @Schema(description = "Block height of the derived trust snapshot used for audit")
-        public Integer derivedSnapshotHeight;
-
-        @Schema(description = "Block timestamp of the derived trust snapshot used for audit")
-        public Long derivedSnapshotTimestamp;
+        @Schema(description = "Block timestamp of the active trust snapshot used for open-poll weighting")
+        public Long trustSnapshotTimestamp;
 
         // For JAX-RS
         protected VoteDetail() {
@@ -163,25 +139,12 @@ public class PollVotes {
         public VoteDetail(String voterAddress, Integer optionIndex, Integer rawVoteWeight, String trustStatus,
                           Integer trustStatusValue, Integer trustWeightPercent, Integer effectiveVoteWeight) {
             this(voterAddress, optionIndex, rawVoteWeight, trustStatus, trustStatusValue, trustWeightPercent,
-                    effectiveVoteWeight, null, null, null, null, null, null, null, null, null, null);
+                    effectiveVoteWeight, null, null);
         }
 
         public VoteDetail(String voterAddress, Integer optionIndex, Integer rawVoteWeight, String trustStatus,
                           Integer trustStatusValue, Integer trustWeightPercent, Integer effectiveVoteWeight,
-                          String derivedTrustStatus, Integer derivedTrustStatusValue, Integer derivedTrustWeightPercent,
-                          Integer derivedEffectiveVoteWeight, Integer derivedSnapshotHeight,
-                          Long derivedSnapshotTimestamp) {
-            this(voterAddress, optionIndex, rawVoteWeight, trustStatus, trustStatusValue, trustWeightPercent,
-                    effectiveVoteWeight, null, null, null, null, derivedTrustStatus, derivedTrustStatusValue,
-                    derivedTrustWeightPercent, derivedEffectiveVoteWeight, derivedSnapshotHeight, derivedSnapshotTimestamp);
-        }
-
-        public VoteDetail(String voterAddress, Integer optionIndex, Integer rawVoteWeight, String trustStatus,
-                          Integer trustStatusValue, Integer trustWeightPercent, Integer effectiveVoteWeight,
-                          String storedTrustStatus, Integer storedTrustStatusValue, Integer storedTrustWeightPercent,
-                          Integer storedEffectiveVoteWeight, String derivedTrustStatus, Integer derivedTrustStatusValue,
-                          Integer derivedTrustWeightPercent, Integer derivedEffectiveVoteWeight, Integer derivedSnapshotHeight,
-                          Long derivedSnapshotTimestamp) {
+                          Integer trustSnapshotHeight, Long trustSnapshotTimestamp) {
             this.voterAddress = voterAddress;
             this.optionIndex = optionIndex;
             this.rawVoteWeight = rawVoteWeight;
@@ -189,16 +152,8 @@ public class PollVotes {
             this.trustStatusValue = trustStatusValue;
             this.trustWeightPercent = trustWeightPercent;
             this.effectiveVoteWeight = effectiveVoteWeight;
-            this.storedTrustStatus = storedTrustStatus;
-            this.storedTrustStatusValue = storedTrustStatusValue;
-            this.storedTrustWeightPercent = storedTrustWeightPercent;
-            this.storedEffectiveVoteWeight = storedEffectiveVoteWeight;
-            this.derivedTrustStatus = derivedTrustStatus;
-            this.derivedTrustStatusValue = derivedTrustStatusValue;
-            this.derivedTrustWeightPercent = derivedTrustWeightPercent;
-            this.derivedEffectiveVoteWeight = derivedEffectiveVoteWeight;
-            this.derivedSnapshotHeight = derivedSnapshotHeight;
-            this.derivedSnapshotTimestamp = derivedSnapshotTimestamp;
+            this.trustSnapshotHeight = trustSnapshotHeight;
+            this.trustSnapshotTimestamp = trustSnapshotTimestamp;
         }
     }
 }

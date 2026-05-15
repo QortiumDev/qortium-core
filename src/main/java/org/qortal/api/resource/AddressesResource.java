@@ -82,7 +82,7 @@ public class AddressesResource {
 			if (accountData == null)
 				accountData = new AccountData(address);
 
-			accountData.setDerivedTrustSnapshot(repository.getAccountRatingRepository()
+			accountData.setTrustSnapshot(repository.getAccountRatingRepository()
 					.getTrustDerivationSnapshot(address, AccountRatingCategory.SUBJECT));
 
 			return accountData;

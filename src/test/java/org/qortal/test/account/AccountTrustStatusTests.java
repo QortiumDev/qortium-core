@@ -2,14 +2,13 @@ package org.qortal.test.account;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.repository.DataException;
-import org.qortal.repository.Repository;
-import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.Common;
-import org.qortal.test.common.TestAccount;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class AccountTrustStatusTests extends Common {
 
@@ -19,21 +18,14 @@ public class AccountTrustStatusTests extends Common {
 	}
 
 	@Test
-	public void testTrustStatusDefaultsAndPersists() throws DataException {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			TestAccount alice = Common.getTestAccount(repository, "alice");
+	public void testAccountDataDefaultsToUnverifiedSnapshotTrust() {
+		AccountData accountData = new AccountData("Qaddress");
 
-			assertEquals(AccountTrustStatus.UNVERIFIED, repository.getAccountRepository().getAccount(alice.getAddress()).getTrustStatus());
-			assertEquals(AccountTrustStatus.UNVERIFIED, repository.getAccountRepository().getTrustStatus(alice.getAddress()));
-
-			for (AccountTrustStatus trustStatus : AccountTrustStatus.values()) {
-				repository.getAccountRepository().setTrustStatus(alice.getAddress(), trustStatus);
-				repository.saveChanges();
-
-				assertEquals(trustStatus, repository.getAccountRepository().getTrustStatus(alice.getAddress()));
-				assertEquals(trustStatus, repository.getAccountRepository().getAccount(alice.getAddress()).getTrustStatus());
-			}
-		}
+		assertEquals(AccountTrustStatus.UNVERIFIED, accountData.getTrustStatus());
+		assertEquals(AccountTrustStatus.UNVERIFIED.getValue(), accountData.getTrustStatusValue());
+		assertEquals(0, accountData.getTrustWeightPercent());
+		assertTrue(accountData.isTrustAllowsMinting());
+		assertEquals(0, accountData.getEffectiveVoteWeight());
 	}
 
 	@Test

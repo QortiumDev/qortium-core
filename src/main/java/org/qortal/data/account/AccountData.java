@@ -20,13 +20,8 @@ public class AccountData {
 	protected int trustWeightPercent;
 	protected boolean trustAllowsMinting;
 	protected int effectiveVoteWeight;
-	protected AccountTrustStatus derivedTrustStatus;
-	protected int derivedTrustStatusValue;
-	protected int derivedTrustWeightPercent;
-	protected boolean derivedTrustAllowsMinting;
-	protected int derivedEffectiveVoteWeight;
-	protected Integer derivedSnapshotHeight;
-	protected Long derivedSnapshotTimestamp;
+	protected Integer trustSnapshotHeight;
+	protected Long trustSnapshotTimestamp;
 
 	// Constructors
 
@@ -35,18 +30,12 @@ public class AccountData {
 	}
 
 	public AccountData(String address, byte[] publicKey, int defaultGroupId, int level, int blocksMinted) {
-		this(address, publicKey, defaultGroupId, level, blocksMinted, AccountTrustStatus.UNVERIFIED);
-	}
-
-	public AccountData(String address, byte[] publicKey, int defaultGroupId, int level, int blocksMinted, AccountTrustStatus trustStatus) {
 		this.address = address;
 		this.publicKey = publicKey;
 		this.defaultGroupId = defaultGroupId;
 		this.level = level;
 		this.blocksMinted = blocksMinted;
-		this.trustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
-		this.updateTrustAuditFields();
-		this.setDerivedTrustSnapshot(null);
+		this.setTrustSnapshot(null);
 	}
 
 	public AccountData(String address) {
@@ -89,17 +78,11 @@ public class AccountData {
 
 	public void setBlocksMinted(int blocksMinted) {
 		this.blocksMinted = blocksMinted;
-		this.updateTrustAuditFields();
-		this.updateDerivedTrustAuditFields();
+		this.updateTrustFields();
 	}
 
 	public AccountTrustStatus getTrustStatus() {
 		return this.trustStatus == null ? AccountTrustStatus.UNVERIFIED : this.trustStatus;
-	}
-
-	public void setTrustStatus(AccountTrustStatus trustStatus) {
-		this.trustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
-		this.updateTrustAuditFields();
 	}
 
 	public int getTrustStatusValue() {
@@ -118,57 +101,28 @@ public class AccountData {
 		return this.effectiveVoteWeight;
 	}
 
-	public AccountTrustStatus getDerivedTrustStatus() {
-		return this.derivedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : this.derivedTrustStatus;
+	public Integer getTrustSnapshotHeight() {
+		return this.trustSnapshotHeight;
 	}
 
-	public int getDerivedTrustStatusValue() {
-		return this.derivedTrustStatusValue;
+	public Long getTrustSnapshotTimestamp() {
+		return this.trustSnapshotTimestamp;
 	}
 
-	public int getDerivedTrustWeightPercent() {
-		return this.derivedTrustWeightPercent;
+	public void setTrustSnapshot(AccountTrustSnapshotData snapshotData) {
+		this.trustStatus = snapshotData == null ? AccountTrustStatus.UNVERIFIED : snapshotData.getMappedTrustStatus();
+		this.trustSnapshotHeight = snapshotData == null ? null : snapshotData.getSnapshotHeight();
+		this.trustSnapshotTimestamp = snapshotData == null ? null : snapshotData.getSnapshotTimestamp();
+		this.updateTrustFields();
 	}
 
-	public boolean isDerivedTrustAllowsMinting() {
-		return this.derivedTrustAllowsMinting;
-	}
-
-	public int getDerivedEffectiveVoteWeight() {
-		return this.derivedEffectiveVoteWeight;
-	}
-
-	public Integer getDerivedSnapshotHeight() {
-		return this.derivedSnapshotHeight;
-	}
-
-	public Long getDerivedSnapshotTimestamp() {
-		return this.derivedSnapshotTimestamp;
-	}
-
-	public void setDerivedTrustSnapshot(AccountTrustSnapshotData snapshotData) {
-		this.derivedTrustStatus = snapshotData == null ? AccountTrustStatus.UNVERIFIED : snapshotData.getMappedTrustStatus();
-		this.derivedSnapshotHeight = snapshotData == null ? null : snapshotData.getSnapshotHeight();
-		this.derivedSnapshotTimestamp = snapshotData == null ? null : snapshotData.getSnapshotTimestamp();
-		this.updateDerivedTrustAuditFields();
-	}
-
-	private void updateTrustAuditFields() {
+	private void updateTrustFields() {
 		AccountTrustStatus trustStatus = this.getTrustStatus();
 
 		this.trustStatusValue = trustStatus.getValue();
 		this.trustWeightPercent = trustStatus.getVoteWeightPercent();
 		this.trustAllowsMinting = trustStatus.canMint();
 		this.effectiveVoteWeight = trustStatus.calculateEffectiveVoteWeight(this.blocksMinted);
-	}
-
-	private void updateDerivedTrustAuditFields() {
-		AccountTrustStatus derivedTrustStatus = this.getDerivedTrustStatus();
-
-		this.derivedTrustStatusValue = derivedTrustStatus.getValue();
-		this.derivedTrustWeightPercent = derivedTrustStatus.getVoteWeightPercent();
-		this.derivedTrustAllowsMinting = derivedTrustStatus.canMint();
-		this.derivedEffectiveVoteWeight = derivedTrustStatus.calculateEffectiveVoteWeight(this.blocksMinted);
 	}
 
 	// Comparison

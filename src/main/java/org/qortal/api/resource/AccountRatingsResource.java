@@ -160,8 +160,6 @@ public class AccountRatingsResource {
 			byte[] targetPublicKey = requireKnownPublicKey(repository, targetPublicKey58);
 			String targetAddress = Crypto.toAddress(targetPublicKey);
 
-			AccountData targetAccountData = repository.getAccountRepository().getAccount(targetAddress);
-			AccountTrustStatus storedTrustStatus = targetAccountData == null ? AccountTrustStatus.UNVERIFIED : targetAccountData.getTrustStatus();
 			AccountTrustSnapshotData activeTrustSnapshot = repository.getAccountRatingRepository()
 					.getTrustDerivationSnapshot(targetAddress, AccountTrustWeight.getActiveWeightCategory());
 			AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
@@ -172,8 +170,8 @@ public class AccountRatingsResource {
 					.getRatings(null, targetPublicKey, AccountRatingCategory.SUBJECT, null, null, null);
 			AccountTrustDerivation.Result derivation = AccountTrustDerivation.derive(repository, targetAddress);
 
-			return buildTrustPreview(repository, targetPublicKey, targetAddress, activeTrustStatus, storedTrustStatus,
-					inboundRatings, outboundRatings, derivation);
+			return buildTrustPreview(repository, targetPublicKey, targetAddress, activeTrustStatus, inboundRatings,
+					outboundRatings, derivation);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -349,8 +347,8 @@ public class AccountRatingsResource {
 	}
 
 	private AccountTrustPreviewData buildTrustPreview(Repository repository, byte[] targetPublicKey, String targetAddress,
-			AccountTrustStatus activeTrustStatus, AccountTrustStatus storedTrustStatus, List<AccountRatingData> inboundRatings,
-			List<AccountRatingData> outboundRatings, AccountTrustDerivation.Result derivation)
+			AccountTrustStatus activeTrustStatus, List<AccountRatingData> inboundRatings, List<AccountRatingData> outboundRatings,
+			AccountTrustDerivation.Result derivation)
 			throws DataException {
 		AccountTrustPreviewData.RatingCounts inboundCounts = new AccountTrustPreviewData.RatingCounts();
 		AccountTrustPreviewData.RatingCounts outboundCounts = new AccountTrustPreviewData.RatingCounts();
@@ -381,27 +379,23 @@ public class AccountRatingsResource {
 				.reversed()
 				.thenComparing(AccountTrustPreviewData.EvaluatorImpact::getRaterAddress));
 
-		return new AccountTrustPreviewData(targetPublicKey, targetAddress, activeTrustStatus, storedTrustStatus,
-				inboundCounts, outboundCounts, mutualPositiveCount, evaluatorImpacts, activeTrustStatus, derivation.isMintingSeedMember(),
+		return new AccountTrustPreviewData(targetPublicKey, targetAddress, activeTrustStatus,
+				inboundCounts, outboundCounts, mutualPositiveCount, evaluatorImpacts, derivation.isMintingSeedMember(),
 				derivation.getCategories());
 	}
 
 	private AccountTrustPreviewData.EvaluatorImpact buildEvaluatorImpact(Repository repository, AccountRatingData ratingData)
 			throws DataException {
 		AccountData raterAccountData = repository.getAccountRepository().getAccount(ratingData.getRaterAddress());
-		AccountTrustStatus storedTrustStatus = raterAccountData == null ? AccountTrustStatus.UNVERIFIED : raterAccountData.getTrustStatus();
 		int rawVoteWeight = raterAccountData == null ? 0 : raterAccountData.getBlocksMinted();
-		int storedEffectiveVoteWeight = storedTrustStatus.calculateEffectiveVoteWeight(rawVoteWeight);
 		AccountTrustSnapshotData activeTrustSnapshot = repository.getAccountRatingRepository()
 				.getTrustDerivationSnapshot(ratingData.getRaterAddress(), AccountTrustWeight.getActiveWeightCategory());
 		AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
 		int effectiveVoteWeight = AccountTrustWeight.calculateEffectiveVoteWeight(rawVoteWeight, activeTrustSnapshot);
 		int impact = AccountRating.calculateImpact(ratingData.getRating(), effectiveVoteWeight);
-		int storedImpact = AccountRating.calculateImpact(ratingData.getRating(), storedEffectiveVoteWeight);
 
 		return new AccountTrustPreviewData.EvaluatorImpact(ratingData.getRaterPublicKey(), ratingData.getRaterAddress(),
-				activeTrustStatus, rawVoteWeight, effectiveVoteWeight, storedTrustStatus, storedEffectiveVoteWeight,
-				ratingData.getRating(), impact, storedImpact);
+				activeTrustStatus, rawVoteWeight, effectiveVoteWeight, ratingData.getRating(), impact);
 	}
 
 	private static int getImpactMagnitude(AccountTrustPreviewData.EvaluatorImpact evaluatorImpact) {

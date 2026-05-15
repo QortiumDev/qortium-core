@@ -18,13 +18,9 @@ public class ResourceRatingSummaryData {
 	private long ratingTotal;
 	private Long rawTotalWeight;
 	private Long totalWeight;
-	private Long derivedTotalWeight;
-	private Long storedTotalWeight;
 	private Double averageRating;
 	private Double rawWeightedAverageRating;
 	private Double weightedAverageRating;
-	private Double derivedWeightedAverageRating;
-	private Double storedWeightedAverageRating;
 	private List<ResourceRatingDistributionData> ratingDistribution;
 
 	protected ResourceRatingSummaryData() {
@@ -49,12 +45,8 @@ public class ResourceRatingSummaryData {
 	private void recalculate() {
 		long rawWeightedRatingTotal = 0L;
 		long weightedRatingTotal = 0L;
-		long derivedWeightedRatingTotal = 0L;
-		long storedWeightedRatingTotal = 0L;
 		long rawWeight = 0L;
 		long effectiveWeight = 0L;
-		long derivedWeight = 0L;
-		long storedWeight = 0L;
 		int count = 0;
 		long total = 0L;
 
@@ -63,32 +55,22 @@ public class ResourceRatingSummaryData {
 			int ratingCount = ratingData.getRatingCount();
 			long rawRatingWeight = ratingData.getRawRatingWeight();
 			long ratingWeight = ratingData.getRatingWeight();
-			long derivedRatingWeight = ratingData.getDerivedRatingWeight();
-			long storedRatingWeight = ratingData.getStoredRatingWeight();
 
 			count += ratingCount;
 			total += (long) rating * ratingCount;
 			rawWeight += rawRatingWeight;
 			effectiveWeight += ratingWeight;
-			derivedWeight += derivedRatingWeight;
-			storedWeight += storedRatingWeight;
 			rawWeightedRatingTotal += (long) rating * rawRatingWeight;
 			weightedRatingTotal += (long) rating * ratingWeight;
-			derivedWeightedRatingTotal += (long) rating * derivedRatingWeight;
-			storedWeightedRatingTotal += (long) rating * storedRatingWeight;
 		}
 
 		this.ratingCount = count;
 		this.ratingTotal = total;
 		this.rawTotalWeight = rawWeight;
 		this.totalWeight = effectiveWeight;
-		this.derivedTotalWeight = derivedWeight;
-		this.storedTotalWeight = storedWeight;
 		this.averageRating = count == 0 ? null : (double) total / count;
 		this.rawWeightedAverageRating = rawWeight == 0 ? null : (double) rawWeightedRatingTotal / rawWeight;
 		this.weightedAverageRating = effectiveWeight == 0 ? null : (double) weightedRatingTotal / effectiveWeight;
-		this.derivedWeightedAverageRating = derivedWeight == 0 ? null : (double) derivedWeightedRatingTotal / derivedWeight;
-		this.storedWeightedAverageRating = storedWeight == 0 ? null : (double) storedWeightedRatingTotal / storedWeight;
 	}
 
 	public Service getService() {
@@ -119,14 +101,6 @@ public class ResourceRatingSummaryData {
 		return this.totalWeight;
 	}
 
-	public Long getDerivedTotalWeight() {
-		return this.derivedTotalWeight;
-	}
-
-	public Long getStoredTotalWeight() {
-		return this.storedTotalWeight;
-	}
-
 	public Double getAverageRating() {
 		return this.averageRating;
 	}
@@ -137,14 +111,6 @@ public class ResourceRatingSummaryData {
 
 	public Double getWeightedAverageRating() {
 		return this.weightedAverageRating;
-	}
-
-	public Double getDerivedWeightedAverageRating() {
-		return this.derivedWeightedAverageRating;
-	}
-
-	public Double getStoredWeightedAverageRating() {
-		return this.storedWeightedAverageRating;
 	}
 
 	public List<ResourceRatingDistributionData> getRatingDistribution() {

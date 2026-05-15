@@ -15,9 +15,6 @@ public class AccountTrustPreviewData {
 	private AccountTrustStatus trustStatus;
 	private int trustStatusValue;
 	private int trustWeightPercent;
-	private AccountTrustStatus storedTrustStatus;
-	private int storedTrustStatusValue;
-	private int storedTrustWeightPercent;
 	private RatingCounts inboundRatings;
 	private RatingCounts outboundRatings;
 	private int mutualPositiveCount;
@@ -25,9 +22,6 @@ public class AccountTrustPreviewData {
 	private int negativeScore;
 	private int netScore;
 	private List<EvaluatorImpact> evaluatorImpacts;
-	private AccountTrustStatus derivedTrustStatus;
-	private int derivedTrustStatusValue;
-	private int derivedTrustWeightPercent;
 	private boolean mintingSeedMember;
 	private List<CategoryTrust> categories;
 
@@ -44,36 +38,19 @@ public class AccountTrustPreviewData {
 			RatingCounts inboundRatings, RatingCounts outboundRatings, int mutualPositiveCount,
 			List<EvaluatorImpact> evaluatorImpacts) {
 		this(targetPublicKey, targetAddress, trustStatus, inboundRatings, outboundRatings, mutualPositiveCount,
-				evaluatorImpacts, null, false, null);
+				evaluatorImpacts, false, null);
 	}
 
 	public AccountTrustPreviewData(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
 			RatingCounts inboundRatings, RatingCounts outboundRatings, int mutualPositiveCount,
-			List<EvaluatorImpact> evaluatorImpacts, AccountTrustStatus derivedTrustStatus, boolean mintingSeedMember,
-			List<CategoryTrust> categories) {
-		this(targetPublicKey, targetAddress, trustStatus, null, inboundRatings, outboundRatings, mutualPositiveCount,
-				evaluatorImpacts, derivedTrustStatus, mintingSeedMember, categories);
-	}
-
-	public AccountTrustPreviewData(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
-			AccountTrustStatus storedTrustStatus, RatingCounts inboundRatings, RatingCounts outboundRatings,
-			int mutualPositiveCount, List<EvaluatorImpact> evaluatorImpacts, AccountTrustStatus derivedTrustStatus,
-			boolean mintingSeedMember, List<CategoryTrust> categories) {
+			List<EvaluatorImpact> evaluatorImpacts, boolean mintingSeedMember, List<CategoryTrust> categories) {
 		AccountTrustStatus activeTrustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
-		AccountTrustStatus effectiveStoredTrustStatus = storedTrustStatus == null ? activeTrustStatus : storedTrustStatus;
-		AccountTrustStatus effectiveDerivedTrustStatus = derivedTrustStatus == null ? activeTrustStatus : derivedTrustStatus;
 
 		this.targetPublicKey = targetPublicKey;
 		this.targetAddress = targetAddress;
 		this.trustStatus = activeTrustStatus;
 		this.trustStatusValue = activeTrustStatus.getValue();
 		this.trustWeightPercent = activeTrustStatus.getVoteWeightPercent();
-		this.storedTrustStatus = effectiveStoredTrustStatus;
-		this.storedTrustStatusValue = effectiveStoredTrustStatus.getValue();
-		this.storedTrustWeightPercent = effectiveStoredTrustStatus.getVoteWeightPercent();
-		this.derivedTrustStatus = effectiveDerivedTrustStatus;
-		this.derivedTrustStatusValue = effectiveDerivedTrustStatus.getValue();
-		this.derivedTrustWeightPercent = effectiveDerivedTrustStatus.getVoteWeightPercent();
 		this.mintingSeedMember = mintingSeedMember;
 		this.categories = categories == null ? new ArrayList<>() : categories;
 		this.inboundRatings = inboundRatings == null ? new RatingCounts() : inboundRatings;
@@ -127,18 +104,6 @@ public class AccountTrustPreviewData {
 		return this.trustWeightPercent;
 	}
 
-	public AccountTrustStatus getStoredTrustStatus() {
-		return this.storedTrustStatus;
-	}
-
-	public int getStoredTrustStatusValue() {
-		return this.storedTrustStatusValue;
-	}
-
-	public int getStoredTrustWeightPercent() {
-		return this.storedTrustWeightPercent;
-	}
-
 	public RatingCounts getInboundRatings() {
 		return this.inboundRatings;
 	}
@@ -173,18 +138,6 @@ public class AccountTrustPreviewData {
 
 	public List<EvaluatorImpact> getEvaluatorImpacts() {
 		return this.evaluatorImpacts;
-	}
-
-	public AccountTrustStatus getDerivedTrustStatus() {
-		return this.derivedTrustStatus;
-	}
-
-	public int getDerivedTrustStatusValue() {
-		return this.derivedTrustStatusValue;
-	}
-
-	public int getDerivedTrustWeightPercent() {
-		return this.derivedTrustWeightPercent;
 	}
 
 	public boolean isMintingSeedMember() {
@@ -320,30 +273,17 @@ public class AccountTrustPreviewData {
 		private int trustWeightPercent;
 		private int rawVoteWeight;
 		private int effectiveVoteWeight;
-		private AccountTrustStatus storedTrustStatus;
-		private int storedTrustStatusValue;
-		private int storedTrustWeightPercent;
-		private int storedEffectiveVoteWeight;
 		private int rating;
 		private String ratingDirection;
 		private int ratingConfidence;
 		private int impact;
-		private int storedImpact;
 
 		protected EvaluatorImpact() {
 		}
 
 		public EvaluatorImpact(byte[] raterPublicKey, String raterAddress, AccountTrustStatus trustStatus,
 				int rawVoteWeight, int effectiveVoteWeight, int rating, int impact) {
-			this(raterPublicKey, raterAddress, trustStatus, rawVoteWeight, effectiveVoteWeight, trustStatus,
-					effectiveVoteWeight, rating, impact, impact);
-		}
-
-		public EvaluatorImpact(byte[] raterPublicKey, String raterAddress, AccountTrustStatus trustStatus,
-				int rawVoteWeight, int effectiveVoteWeight, AccountTrustStatus storedTrustStatus,
-				int storedEffectiveVoteWeight, int rating, int impact, int storedImpact) {
 			AccountTrustStatus activeTrustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
-			AccountTrustStatus effectiveStoredTrustStatus = storedTrustStatus == null ? activeTrustStatus : storedTrustStatus;
 
 			this.raterPublicKey = raterPublicKey;
 			this.raterAddress = raterAddress;
@@ -352,15 +292,10 @@ public class AccountTrustPreviewData {
 			this.trustWeightPercent = activeTrustStatus.getVoteWeightPercent();
 			this.rawVoteWeight = rawVoteWeight;
 			this.effectiveVoteWeight = effectiveVoteWeight;
-			this.storedTrustStatus = effectiveStoredTrustStatus;
-			this.storedTrustStatusValue = effectiveStoredTrustStatus.getValue();
-			this.storedTrustWeightPercent = effectiveStoredTrustStatus.getVoteWeightPercent();
-			this.storedEffectiveVoteWeight = storedEffectiveVoteWeight;
 			this.rating = rating;
 			this.ratingDirection = AccountRating.getDirection(rating);
 			this.ratingConfidence = AccountRating.getConfidence(rating);
 			this.impact = impact;
-			this.storedImpact = storedImpact;
 		}
 
 		public byte[] getRaterPublicKey() {
@@ -391,22 +326,6 @@ public class AccountTrustPreviewData {
 			return this.effectiveVoteWeight;
 		}
 
-		public AccountTrustStatus getStoredTrustStatus() {
-			return this.storedTrustStatus;
-		}
-
-		public int getStoredTrustStatusValue() {
-			return this.storedTrustStatusValue;
-		}
-
-		public int getStoredTrustWeightPercent() {
-			return this.storedTrustWeightPercent;
-		}
-
-		public int getStoredEffectiveVoteWeight() {
-			return this.storedEffectiveVoteWeight;
-		}
-
 		public int getRating() {
 			return this.rating;
 		}
@@ -421,10 +340,6 @@ public class AccountTrustPreviewData {
 
 		public int getImpact() {
 			return this.impact;
-		}
-
-		public int getStoredImpact() {
-			return this.storedImpact;
 		}
 	}
 

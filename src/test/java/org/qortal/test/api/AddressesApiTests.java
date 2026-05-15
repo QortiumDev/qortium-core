@@ -35,7 +35,6 @@ import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -67,13 +66,8 @@ public class AddressesApiTests extends ApiCommon {
 			assertEquals(0, accountInfo.getTrustWeightPercent());
 			assertTrue(accountInfo.isTrustAllowsMinting());
 			assertEquals(0, accountInfo.getEffectiveVoteWeight());
-			assertEquals(AccountTrustStatus.UNVERIFIED, accountInfo.getDerivedTrustStatus());
-			assertEquals(AccountTrustStatus.UNVERIFIED.getValue(), accountInfo.getDerivedTrustStatusValue());
-			assertEquals(0, accountInfo.getDerivedTrustWeightPercent());
-			assertTrue(accountInfo.isDerivedTrustAllowsMinting());
-			assertEquals(0, accountInfo.getDerivedEffectiveVoteWeight());
-			assertNull(accountInfo.getDerivedSnapshotHeight());
-			assertNull(accountInfo.getDerivedSnapshotTimestamp());
+			assertNull(accountInfo.getTrustSnapshotHeight());
+			assertNull(accountInfo.getTrustSnapshotTimestamp());
 		}
 	}
 
@@ -91,35 +85,16 @@ public class AddressesApiTests extends ApiCommon {
 			accountData.setBlocksMinted(101);
 
 			repository.getAccountRepository().setMintedBlockCount(accountData);
-			repository.getAccountRepository().setTrustStatus(aliceAddress, AccountTrustStatus.GOLD);
 			repository.saveChanges();
 
 			AccountData accountInfo = this.addressesResource.getAccountInfo(aliceAddress);
-			assertEquals(AccountTrustStatus.GOLD, accountInfo.getTrustStatus());
-			assertEquals(AccountTrustStatus.GOLD.getValue(), accountInfo.getTrustStatusValue());
-			assertEquals(100, accountInfo.getTrustWeightPercent());
+			assertEquals(AccountTrustStatus.SILVER, accountInfo.getTrustStatus());
+			assertEquals(AccountTrustStatus.SILVER.getValue(), accountInfo.getTrustStatusValue());
+			assertEquals(50, accountInfo.getTrustWeightPercent());
 			assertTrue(accountInfo.isTrustAllowsMinting());
-			assertEquals(101, accountInfo.getEffectiveVoteWeight());
-			assertEquals(AccountTrustStatus.SILVER, accountInfo.getDerivedTrustStatus());
-			assertEquals(AccountTrustStatus.SILVER.getValue(), accountInfo.getDerivedTrustStatusValue());
-			assertEquals(50, accountInfo.getDerivedTrustWeightPercent());
-			assertTrue(accountInfo.isDerivedTrustAllowsMinting());
-			assertEquals(50, accountInfo.getDerivedEffectiveVoteWeight());
-			assertNotNull(accountInfo.getDerivedSnapshotHeight());
-			assertNotNull(accountInfo.getDerivedSnapshotTimestamp());
-
-			repository.getAccountRepository().setTrustStatus(aliceAddress, AccountTrustStatus.SUSPICIOUS);
-			repository.saveChanges();
-
-			AccountData suspiciousAccountInfo = this.addressesResource.getAccountInfo(aliceAddress);
-			assertEquals(AccountTrustStatus.SUSPICIOUS, suspiciousAccountInfo.getTrustStatus());
-			assertEquals(AccountTrustStatus.SUSPICIOUS.getValue(), suspiciousAccountInfo.getTrustStatusValue());
-			assertEquals(0, suspiciousAccountInfo.getTrustWeightPercent());
-			assertFalse(suspiciousAccountInfo.isTrustAllowsMinting());
-			assertEquals(0, suspiciousAccountInfo.getEffectiveVoteWeight());
-			assertEquals(AccountTrustStatus.SILVER, suspiciousAccountInfo.getDerivedTrustStatus());
-			assertEquals(50, suspiciousAccountInfo.getDerivedTrustWeightPercent());
-			assertEquals(50, suspiciousAccountInfo.getDerivedEffectiveVoteWeight());
+			assertEquals(50, accountInfo.getEffectiveVoteWeight());
+			assertNotNull(accountInfo.getTrustSnapshotHeight());
+			assertNotNull(accountInfo.getTrustSnapshotTimestamp());
 		}
 	}
 

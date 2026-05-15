@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - core: remove manual account trust status
+
+Removed the older manual account trust-status storage and comparison fields now that Qortium uses stored Aura-style Subject snapshots as the active trust source. Account info, poll vote details, resource-rating summaries, and trust previews now show one snapshot-derived trust status instead of comparing manual and derived values, reducing ambiguity for new Qortium-derived chains.
+
 ### 2026-05-15 - core: lock Aura trust scoring parity
 
 Added trust-graph regression coverage and documentation that lock Qortium's current Aura matching boundary. Manager energy is budgeted while it flows through four positive Manager-rating hops, but final Manager, Trainer, Player, and Subject category scores continue to use Aura's direct rating impact formula instead of a second outbound budget split. Qortium's capped level decisions and independent-rater Suspicious checks remain deliberate consensus hardening around the Aura-style raw scores.

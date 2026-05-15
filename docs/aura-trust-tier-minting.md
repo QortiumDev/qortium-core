@@ -120,19 +120,19 @@ The important distinction is that raw `blocksMinted` remains an account-history
 counter. Qortium can then expose both raw `blocksMinted` and effective vote
 weight so users can understand why a vote has the weight it has.
 
-## First Implementation Choices
+## Current Implementation Choices
 
-The first implementation adds the deterministic account-status and vote-weight
-foundation only:
+The current implementation keeps the deterministic trust-status and vote-weight
+foundation entirely inside Qortium consensus state:
 
-- trust status is stored on Qortium accounts in repository state
-- accounts default to Unverified
-- Suspicious accounts cannot mint, even if they remain in the minting group
-- vote tallies use the account's current trust status at tally time
-- account, poll-vote, and resource-rating responses expose read-only audit fields
+- active trust status comes from the stored Subject trust snapshot
+- accounts without a Subject snapshot are treated as Unverified
+- accounts with a Suspicious Subject snapshot cannot mint, even if they remain
+  in the minting group
+- vote tallies use the active Subject snapshot at tally time
+- account, poll-vote, and resource-rating responses expose read-only fields
   so raw `blocksMinted`, trust status, multiplier, and effective vote weight
-  can be compared
-- no admin API, config loader, or BrightID/Aura importer sets trust status yet
+  are visible without a separate manual account status
 
 The next implementation layer adds directed account ratings as chain data:
 
@@ -187,7 +187,7 @@ A later implementation layer added a decentralized trust preview:
 - the Subject level is mapped back to Qortium's simple Gold, Silver, Bronze,
   Unverified, and Suspicious statuses as a derived status
 - the older inbound/outbound confidence counts, mutual positive relationships,
-  and stored-status evaluator impacts are still exposed for audit context
+  and evaluator impacts are still exposed for audit context
 - this layer originally exposed the graph for audit only, before the stored
   Subject snapshot was used for active voting and resource-rating weights
 
@@ -213,26 +213,20 @@ repository state after each processed block:
 The current enforcement layer uses the stored Subject snapshot for active
 voting, resource-rating weights, and Suspicious mint blocking:
 
-- account info includes both stored trust status and derived Subject trust
-  status, including each status's vote multiplier and effective vote weight
-- account-rating trust previews show active derived Subject status and
-  evaluator impacts as the main trust fields, with stored/manual status kept as
-  audit context
+- account info includes one active Subject trust status, snapshot height and
+  timestamp, vote multiplier, and effective vote weight
+- account-rating trust previews show the active Subject status and evaluator
+  impacts without a separate manual-status comparison
 - open poll vote totals and vote details use the derived Subject status as the
   active Gold, Silver, Bronze, Unverified, or Suspicious multiplier
-- open poll vote details still expose the older stored/manual trust status as
-  audit context so clients can compare manual status with derived status
 - frozen poll results store the active derived Subject status and vote weight
   at the closing block, so closed results stay anchored to the exact close-time
   data that was frozen
 - resource-rating summaries and rating distributions use derived Subject
-  weights for active weighted totals and averages, while also exposing
-  stored/manual trust-weighted values for audit
+  weights for active weighted totals and averages
 - minting eligibility uses derived Subject status alongside minting-group
   membership, so derived Suspicious blocks minting and all other derived
   statuses allow minting if the account is in the minting group
-- stored/manual trust status remains audit context and no longer controls active
-  minting eligibility
 
 This means a stored Subject snapshot change affects open poll tallies and
 resource-rating weighted summaries immediately, and a derived Suspicious
@@ -252,12 +246,13 @@ This approach reuses the parts of Qortal/Qortium that already exist:
 - poll vote APIs and repository queries already aggregate vote weight from
   `blocksMinted`.
 
-The first implementation is intentionally small in concept:
+The active enforcement model is intentionally small in concept:
 
 - keep the minting group as the community's explicit admission control
-- add a trust status for each account
+- derive one active Subject trust status for each account from on-chain ratings
 - block Suspicious accounts from minting
-- multiply raw `blocksMinted` by trust status when votes are tallied
+- multiply raw `blocksMinted` by active Subject trust status when votes are
+  tallied
 
 That gives Qortium a way to reduce farm-account governance influence without
 turning every duplicate-account question into a public investigation.
@@ -278,31 +273,30 @@ rule affects minting or broader consensus behavior.
 
 1. Add a Qortium account trust status model with values for Gold, Silver,
    Bronze, Unverified, and Suspicious.
-2. Persist current trust status in repository state.
-3. Extend mint eligibility so Suspicious accounts fail the minting check even
-   when they are still in a configured minting group.
-4. Add a vote-weight helper that converts raw `blocksMinted` to effective vote
+2. Add a vote-weight helper that converts raw `blocksMinted` to effective vote
    weight using the current trust multiplier.
-5. Update poll vote aggregation to use effective vote weight instead of raw
+3. Update poll vote aggregation to use effective vote weight instead of raw
    `blocksMinted`.
-6. Expose read-only audit fields on account and voting responses so users can
+4. Expose read-only audit fields on account and voting responses so users can
    see the raw and effective weights.
-7. Add tests for mint eligibility, vote weighting, audit fields, and
+5. Add tests for mint eligibility, vote weighting, audit fields, and
    trust-status changes.
-8. Add a read-only decentralized trust preview that summarizes active
+6. Add a read-only decentralized trust preview that summarizes active
    account-rating evidence.
-9. Store the derived trust graph as block-anchored repository state.
-10. Use the stored Subject snapshot for active poll vote weights, frozen poll
+7. Store the derived trust graph as block-anchored repository state.
+8. Use the stored Subject snapshot for active poll vote weights, frozen poll
     close-time weights, and resource-rating weighted summaries.
-11. Use the stored Subject snapshot for Suspicious mint blocking while keeping
+9. Use the stored Subject snapshot for Suspicious mint blocking while keeping
     minting-group membership as the base permission.
-12. Move trust derivation thresholds, per-rating caps, Suspicious requirements,
+10. Move trust derivation thresholds, per-rating caps, Suspicious requirements,
     Manager energy-flow settings, active weighting category, and vote
     multipliers into chain configuration so derived chains can tune the policy
     without code changes.
-13. Add a read-only trust explanation endpoint that shows the stored active
+11. Add a read-only trust explanation endpoint that shows the stored active
     status, policy requirements, threshold/cap checks, and top rating impacts
     for one account, with optional live recalculation for comparison.
+12. Remove the older manual account trust-status column and comparison fields
+    so stored Subject snapshots are the single active trust source.
 
 ## Test Scenarios
 
@@ -313,8 +307,6 @@ The first implementation should cover at least these cases:
 - Suspicious Subject snapshots cannot mint even when the account is in the
   minting group.
 - missing Subject snapshots are treated as Unverified for minting eligibility.
-- stored/manual Suspicious status remains audit-only and does not block minting
-  unless the Subject snapshot is also Suspicious.
 - raw `blocksMinted` still increases for eligible minting accounts according to
   the existing block or batch reward rules.
 - vote tallies apply 100%, 50%, 25%, and 0% derived Subject multipliers
@@ -329,10 +321,10 @@ The first implementation should cover at least these cases:
 - polls can optionally close at a defined end time, after which new votes and
   vote changes are rejected and final weights are frozen.
 - account trust previews and snapshots expose inbound and outbound confidence
-  distributions, active derived trust status, stored/manual audit status,
-  evaluator impacts, raw category scores, capped level-decision scores, mapped
-  trust status, seed membership, and block anchoring; the stored Subject
-  snapshot now supplies active poll and resource-rating weight plus minting
+  distributions, active derived trust status, evaluator impacts, raw category
+  scores, capped level-decision scores, mapped trust status, seed membership,
+  and block anchoring; the stored Subject snapshot now supplies active poll and
+  resource-rating weight plus minting
   eligibility status.
 - isolated positive-rating rings with no path from the minting seed set remain
   Unverified with zero category scores.

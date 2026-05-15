@@ -142,8 +142,8 @@ public class PollEndTimeTests extends Common {
 			long endTime = published + 1;
 
 			repository.getVotingRepository().save(new PollData(alice.getPublicKey(), alice.getAddress(), pollName, "Test poll", buildPollOptions(), published, endTime));
-			setVoteAccount(repository, "bob", 101, AccountTrustStatus.SILVER);
-			setVoteAccount(repository, "chloe", 101, AccountTrustStatus.BRONZE);
+			setVoteAccount(repository, "bob", 101);
+			setVoteAccount(repository, "chloe", 101);
 			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 1));
 			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 2));
 			repository.saveChanges();
@@ -200,7 +200,7 @@ public class PollEndTimeTests extends Common {
 		return new VoteOnPollTransactionData(baseTransactionData, pollId, optionIndex);
 	}
 
-	private void setVoteAccount(Repository repository, String accountName, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {
+	private void setVoteAccount(Repository repository, String accountName, int blocksMinted) throws DataException {
 		TestAccount account = Common.getTestAccount(repository, accountName);
 		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
 		if (accountData == null)
@@ -210,7 +210,6 @@ public class PollEndTimeTests extends Common {
 		accountData.setBlocksMinted(blocksMinted);
 
 		repository.getAccountRepository().setMintedBlockCount(accountData);
-		repository.getAccountRepository().setTrustStatus(account.getAddress(), trustStatus);
 	}
 
 	private PollVoteWeightData findVoteWeight(List<PollVoteWeightData> voteWeights, String voterAddress) {

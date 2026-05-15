@@ -453,13 +453,11 @@ public class PollsResource {
             for (VoteOnPollData vote : votes) {
                     String voter = Crypto.toAddress(vote.getVoterPublicKey());
                     AccountData voterData = repository.getAccountRepository().getAccount(voter);
-                    AccountTrustStatus storedTrustStatus = voterData == null ? AccountTrustStatus.UNVERIFIED : voterData.getTrustStatus();
                     int rawVoteWeight = voterData == null ? 0 : voterData.getBlocksMinted();
-                    int storedVoteWeight = storedTrustStatus.calculateEffectiveVoteWeight(rawVoteWeight);
-                    AccountTrustSnapshotData derivedSnapshot = repository.getAccountRatingRepository()
+                    AccountTrustSnapshotData activeTrustSnapshot = repository.getAccountRatingRepository()
                             .getTrustDerivationSnapshot(voter, AccountTrustWeight.getActiveWeightCategory());
-                    AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(derivedSnapshot);
-                    int voteWeight = AccountTrustWeight.calculateEffectiveVoteWeight(rawVoteWeight, derivedSnapshot);
+                    AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
+                    int voteWeight = AccountTrustWeight.calculateEffectiveVoteWeight(rawVoteWeight, activeTrustSnapshot);
 
                     int optionIndex = vote.getOptionIndex();
                     if (optionIndex <= Poll.NO_VOTE_OPTION_INDEX || optionIndex > pollData.getPollOptions().size())
@@ -483,16 +481,8 @@ public class PollsResource {
                                             activeTrustStatus.getValue(),
                                             activeTrustStatus.getVoteWeightPercent(),
                                             voteWeight,
-                                            storedTrustStatus.name(),
-                                            storedTrustStatus.getValue(),
-                                            storedTrustStatus.getVoteWeightPercent(),
-                                            storedVoteWeight,
-                                            activeTrustStatus.name(),
-                                            activeTrustStatus.getValue(),
-                                            activeTrustStatus.getVoteWeightPercent(),
-                                            voteWeight,
-                                            derivedSnapshot == null ? null : derivedSnapshot.getSnapshotHeight(),
-                                            derivedSnapshot == null ? null : derivedSnapshot.getSnapshotTimestamp()));
+                                            activeTrustSnapshot == null ? null : activeTrustSnapshot.getSnapshotHeight(),
+                                            activeTrustSnapshot == null ? null : activeTrustSnapshot.getSnapshotTimestamp()));
                             }
                     }
             }

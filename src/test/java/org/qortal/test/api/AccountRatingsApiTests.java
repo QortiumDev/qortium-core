@@ -127,10 +127,10 @@ public class AccountRatingsApiTests extends ApiCommon {
 			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
 			dilbertAddress = dilbert.getAddress();
 
-			setVoteAccount(repository, alice, 100, AccountTrustStatus.GOLD);
-			setVoteAccount(repository, bob, 100, AccountTrustStatus.SUSPICIOUS);
-			setVoteAccount(repository, chloe, 101, AccountTrustStatus.SILVER);
-			setVoteAccount(repository, dilbert, 101, AccountTrustStatus.BRONZE);
+			setVoteAccount(repository, alice, 100);
+			setVoteAccount(repository, bob, 100);
+			setVoteAccount(repository, chloe, 101);
+			setVoteAccount(repository, dilbert, 101);
 
 			saveAccountRating(repository, alice, bob, AccountRatingCategory.SUBJECT, 4);
 			saveAccountRating(repository, chloe, bob, AccountRatingCategory.SUBJECT, 2);
@@ -150,11 +150,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(AccountTrustStatus.BRONZE, preview.getTrustStatus());
 		assertEquals(AccountTrustStatus.BRONZE.getValue(), preview.getTrustStatusValue());
 		assertEquals(25, preview.getTrustWeightPercent());
-		assertEquals(AccountTrustStatus.SUSPICIOUS, preview.getStoredTrustStatus());
-		assertEquals(AccountTrustStatus.SUSPICIOUS.getValue(), preview.getStoredTrustStatusValue());
-		assertEquals(0, preview.getStoredTrustWeightPercent());
-		assertEquals(AccountTrustStatus.BRONZE, preview.getDerivedTrustStatus());
-		assertEquals(25, preview.getDerivedTrustWeightPercent());
 		assertEquals(1, preview.getInboundRatings().getPositiveVeryHighCount());
 		assertEquals(1, preview.getInboundRatings().getPositiveMediumCount());
 		assertEquals(1, preview.getInboundRatings().getNegativeHighCount());
@@ -176,17 +171,11 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(100, aliceImpact.getRawVoteWeight());
 		assertEquals(50, aliceImpact.getEffectiveVoteWeight());
 		assertEquals(200, aliceImpact.getImpact());
-		assertEquals(AccountTrustStatus.GOLD, aliceImpact.getStoredTrustStatus());
-		assertEquals(100, aliceImpact.getStoredEffectiveVoteWeight());
-		assertEquals(400, aliceImpact.getStoredImpact());
 
 		AccountTrustPreviewData.EvaluatorImpact chloeImpact = findEvaluatorImpact(preview, chloeAddress);
 		assertEquals(AccountTrustStatus.UNVERIFIED, chloeImpact.getTrustStatus());
 		assertEquals(0, chloeImpact.getEffectiveVoteWeight());
 		assertEquals(0, chloeImpact.getImpact());
-		assertEquals(AccountTrustStatus.SILVER, chloeImpact.getStoredTrustStatus());
-		assertEquals(50, chloeImpact.getStoredEffectiveVoteWeight());
-		assertEquals(100, chloeImpact.getStoredImpact());
 
 		AccountTrustPreviewData.EvaluatorImpact dilbertImpact = findEvaluatorImpact(preview, dilbertAddress);
 		assertEquals(-3, dilbertImpact.getRating());
@@ -194,9 +183,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(AccountTrustStatus.GOLD, dilbertImpact.getTrustStatus());
 		assertEquals(101, dilbertImpact.getEffectiveVoteWeight());
 		assertEquals(-1212, dilbertImpact.getImpact());
-		assertEquals(AccountTrustStatus.BRONZE, dilbertImpact.getStoredTrustStatus());
-		assertEquals(25, dilbertImpact.getStoredEffectiveVoteWeight());
-		assertEquals(-300, dilbertImpact.getStoredImpact());
 	}
 
 	@Test
@@ -208,14 +194,14 @@ public class AccountRatingsApiTests extends ApiCommon {
 			bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
 
-			setVoteAccount(repository, alice, 100, AccountTrustStatus.GOLD);
-			setVoteAccount(repository, chloe, 100, AccountTrustStatus.GOLD);
+			setVoteAccount(repository, alice, 100);
+			setVoteAccount(repository, chloe, 100);
 			TransactionUtils.signAndMint(repository, ratingData(alice, bob, 4), alice);
 			TransactionUtils.signAndMint(repository, ratingData(bob, alice, 4), bob);
 			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, 4), chloe);
 			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, 4), bob);
 
-			setVoteAccount(repository, bob, 100, AccountTrustStatus.UNVERIFIED);
+			setVoteAccount(repository, bob, 100);
 		}
 
 		AccountTrustPreviewData preview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
@@ -223,8 +209,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(2, preview.getMutualPositiveCount());
 		assertEquals(AccountTrustStatus.UNVERIFIED, preview.getTrustStatus());
 		assertEquals(0, preview.getTrustWeightPercent());
-		assertEquals(AccountTrustStatus.UNVERIFIED, preview.getStoredTrustStatus());
-		assertEquals(0, preview.getStoredTrustWeightPercent());
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			AccountData bobAccountData = repository.getAccountRepository().getAccount(bob.getAddress());
@@ -315,9 +299,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(50_000_000L, aliceSubject.getLevelScore());
 		assertEquals(25_000_000L, aliceSubject.getLevelScoreCap());
 		assertEquals(2, aliceSubject.getLevel());
-		assertEquals(AccountTrustStatus.SILVER, alicePreview.getDerivedTrustStatus());
 		assertEquals(AccountTrustStatus.SILVER, alicePreview.getTrustStatus());
-		assertEquals(AccountTrustStatus.UNVERIFIED, alicePreview.getStoredTrustStatus());
 
 		AccountTrustPreviewData.CategoryImpact subjectImpact = aliceSubject.getImpacts().get(0);
 		assertEquals(dilbert.getAddress(), subjectImpact.getRaterAddress());
@@ -337,9 +319,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(0L, negativeSubject.getLevelScore());
 		assertEquals(5_000_000L, negativeSubject.getLevelScoreCap());
 		assertEquals(0, negativeSubject.getLevel());
-		assertEquals(AccountTrustStatus.UNVERIFIED, negativePreview.getDerivedTrustStatus());
 		assertEquals(AccountTrustStatus.UNVERIFIED, negativePreview.getTrustStatus());
-		assertEquals(AccountTrustStatus.UNVERIFIED, negativePreview.getStoredTrustStatus());
 		assertEquals(-128_000_000L, negativeSubject.getImpacts().get(0).getImpact());
 	}
 
@@ -907,7 +887,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		}
 	}
 
-	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {
+	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted) throws DataException {
 		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
 		if (accountData == null)
 			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
@@ -917,7 +897,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 		}
 
 		repository.getAccountRepository().setMintedBlockCount(accountData);
-		repository.getAccountRepository().setTrustStatus(account.getAddress(), trustStatus);
 		repository.saveChanges();
 	}
 }

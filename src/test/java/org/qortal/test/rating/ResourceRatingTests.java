@@ -6,7 +6,6 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountData;
-import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.rating.ResourceRatingData;
 import org.qortal.data.rating.ResourceRatingDistributionData;
 import org.qortal.data.rating.ResourceRatingSummaryData;
@@ -111,7 +110,7 @@ public class ResourceRatingTests extends Common {
 			publishResource(repository, RESOURCE_NAME, Service.APP, IDENTIFIER);
 
 			TestAccount alice = Common.getTestAccount(repository, "alice");
-			setVoteAccount(repository, alice, 100, AccountTrustStatus.GOLD);
+			setVoteAccount(repository, alice, 100);
 
 			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 9), alice);
 			ResourceRatingSummaryData summary = repository.getResourceRatingRepository()
@@ -141,9 +140,9 @@ public class ResourceRatingTests extends Common {
 			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
 			createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
 
-			setVoteAccount(repository, alice, 100, AccountTrustStatus.GOLD);
-			setVoteAccount(repository, bob, 101, AccountTrustStatus.SILVER);
-			setVoteAccount(repository, chloe, 101, AccountTrustStatus.BRONZE);
+			setVoteAccount(repository, alice, 100);
+			setVoteAccount(repository, bob, 101);
+			setVoteAccount(repository, chloe, 101);
 
 			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 10), alice);
 			TransactionUtils.signAndMint(repository, ratingData(bob, Service.APP, RESOURCE_NAME, IDENTIFIER, 6), bob);
@@ -156,28 +155,18 @@ public class ResourceRatingTests extends Common {
 			assertEquals(17L, summary.getRatingTotal());
 			assertEquals(Long.valueOf(305L), summary.getRawTotalWeight());
 			assertEquals(Long.valueOf(51L), summary.getTotalWeight());
-			assertEquals(Long.valueOf(51L), summary.getDerivedTotalWeight());
-			assertEquals(Long.valueOf(178L), summary.getStoredTotalWeight());
 			assertEquals(17.0d / 3.0d, summary.getAverageRating(), 0.0000001d);
 			assertEquals(1737.0d / 305.0d, summary.getRawWeightedAverageRating(), 0.0000001d);
 			assertEquals(10.0d, summary.getWeightedAverageRating(), 0.0000001d);
-			assertEquals(10.0d, summary.getDerivedWeightedAverageRating(), 0.0000001d);
-			assertEquals(1355.0d / 178.0d, summary.getStoredWeightedAverageRating(), 0.0000001d);
 			assertEquals(1, distributionFor(summary, 1).getRatingCount());
 			assertEquals(101L, distributionFor(summary, 1).getRawRatingWeight());
 			assertEquals(0L, distributionFor(summary, 1).getRatingWeight());
-			assertEquals(0L, distributionFor(summary, 1).getDerivedRatingWeight());
-			assertEquals(25L, distributionFor(summary, 1).getStoredRatingWeight());
 			assertEquals(1, distributionFor(summary, 6).getRatingCount());
 			assertEquals(101L, distributionFor(summary, 6).getRawRatingWeight());
 			assertEquals(0L, distributionFor(summary, 6).getRatingWeight());
-			assertEquals(0L, distributionFor(summary, 6).getDerivedRatingWeight());
-			assertEquals(50L, distributionFor(summary, 6).getStoredRatingWeight());
 			assertEquals(1, distributionFor(summary, 10).getRatingCount());
 			assertEquals(103L, distributionFor(summary, 10).getRawRatingWeight());
 			assertEquals(51L, distributionFor(summary, 10).getRatingWeight());
-			assertEquals(51L, distributionFor(summary, 10).getDerivedRatingWeight());
-			assertEquals(103L, distributionFor(summary, 10).getStoredRatingWeight());
 		}
 	}
 
@@ -201,13 +190,9 @@ public class ResourceRatingTests extends Common {
 		assertEquals(0L, summary.getRatingTotal());
 		assertEquals(Long.valueOf(0L), summary.getRawTotalWeight());
 		assertEquals(Long.valueOf(0L), summary.getTotalWeight());
-		assertEquals(Long.valueOf(0L), summary.getDerivedTotalWeight());
-		assertEquals(Long.valueOf(0L), summary.getStoredTotalWeight());
 		assertNull(summary.getAverageRating());
 		assertNull(summary.getRawWeightedAverageRating());
 		assertNull(summary.getWeightedAverageRating());
-		assertNull(summary.getDerivedWeightedAverageRating());
-		assertNull(summary.getStoredWeightedAverageRating());
 	}
 
 	private ResourceRatingDistributionData distributionFor(ResourceRatingSummaryData summary, int rating) {
@@ -222,7 +207,7 @@ public class ResourceRatingTests extends Common {
 		AccountTrustTestUtils.createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
 	}
 
-	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {
+	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted) throws DataException {
 		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
 		if (accountData == null)
 			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
@@ -231,7 +216,6 @@ public class ResourceRatingTests extends Common {
 		accountData.setBlocksMinted(blocksMinted);
 
 		repository.getAccountRepository().setMintedBlockCount(accountData);
-		repository.getAccountRepository().setTrustStatus(account.getAddress(), trustStatus);
 		repository.saveChanges();
 	}
 

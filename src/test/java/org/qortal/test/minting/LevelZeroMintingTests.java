@@ -77,11 +77,10 @@ public class LevelZeroMintingTests extends Common {
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
 
-			repository.getAccountRepository().setTrustStatus(bob.getAddress(), AccountTrustStatus.SUSPICIOUS);
 			clearTrustSnapshots(repository);
 
-			assertTrue("Stored/manual Suspicious should not block minting without derived Suspicious", bob.canMint(false));
-			assertTrue("Stored/manual Suspicious should not block prevalidated minting without derived Suspicious", bob.canMint(true));
+			assertTrue("Missing Subject snapshot should not block minting-group members", bob.canMint(false));
+			assertTrue("Missing Subject snapshot should not block prevalidated minting-group members", bob.canMint(true));
 
 			for (AccountTrustStatus trustStatus : new AccountTrustStatus[] {
 					AccountTrustStatus.UNVERIFIED,
@@ -101,8 +100,6 @@ public class LevelZeroMintingTests extends Common {
 			byte[] bobRewardSharePrivateKey = AccountUtils.rewardShare(repository, "bob", "bob", 0);
 			PrivateKeyAccount bobRewardShareAccount = new PrivateKeyAccount(repository, bobRewardSharePrivateKey);
 
-			repository.getAccountRepository().setTrustStatus(bob.getAddress(), AccountTrustStatus.GOLD);
-			repository.saveChanges();
 			saveSubjectSnapshot(repository, bob, AccountTrustStatus.SUSPICIOUS);
 
 			assertFalse("Derived Suspicious minting-group member should not mint", bob.canMint(false));

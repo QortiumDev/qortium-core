@@ -184,13 +184,19 @@ public class Account {
 	}
 
 	public AccountTrustStatus getTrustStatus() throws DataException {
-		AccountData accountData = this.repository.getAccountRepository().getAccount(this.address);
-		return accountData == null ? null : accountData.getTrustStatus();
+		AccountTrustSnapshotData activeTrustSnapshot = this.repository.getAccountRatingRepository()
+				.getTrustDerivationSnapshot(this.address, AccountTrustWeight.getActiveWeightCategory());
+		return AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
 	}
 
 	public int getEffectiveVoteWeight() throws DataException {
 		AccountData accountData = this.repository.getAccountRepository().getAccount(this.address);
-		return AccountTrustStatus.calculateEffectiveVoteWeight(accountData);
+		if (accountData == null)
+			return 0;
+
+		AccountTrustSnapshotData activeTrustSnapshot = this.repository.getAccountRatingRepository()
+				.getTrustDerivationSnapshot(this.address, AccountTrustWeight.getActiveWeightCategory());
+		return AccountTrustWeight.calculateEffectiveVoteWeight(accountData.getBlocksMinted(), activeTrustSnapshot);
 	}
 
 	/** Returns account's blockMinted (0+) or null if account not found in repository. */

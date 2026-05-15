@@ -7,7 +7,6 @@ import org.qortal.api.model.PollVotes;
 import org.qortal.api.resource.PollsResource;
 import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountData;
-import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.CreatePollTransactionData;
 import org.qortal.data.transaction.VoteOnPollTransactionData;
@@ -87,8 +86,8 @@ public class PollVoteRemovalTests extends ApiCommon {
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
 			String pollName = "vote-removal-results";
 			createTestPoll(repository, alice, pollName, null);
-			setVoteAccount(repository, bob, 100, AccountTrustStatus.GOLD);
-			setVoteAccount(repository, chloe, 101, AccountTrustStatus.SILVER);
+			setVoteAccount(repository, bob, 100);
+			setVoteAccount(repository, chloe, 101);
 
 			TransactionUtils.signAndMint(repository, voteData(repository, bob, pollName, 1), bob);
 			TransactionUtils.signAndMint(repository, voteData(repository, chloe, pollName, 2), chloe);
@@ -207,7 +206,7 @@ public class PollVoteRemovalTests extends ApiCommon {
 				new PollOptionData("No"));
 	}
 
-	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {
+	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted) throws DataException {
 		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
 		if (accountData == null)
 			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
@@ -216,7 +215,6 @@ public class PollVoteRemovalTests extends ApiCommon {
 		accountData.setBlocksMinted(blocksMinted);
 
 		repository.getAccountRepository().setMintedBlockCount(accountData);
-		repository.getAccountRepository().setTrustStatus(account.getAddress(), trustStatus);
 		repository.saveChanges();
 	}
 
