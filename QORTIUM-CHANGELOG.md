@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - core: cap trust rating level impact
+
+Added per-rating caps to positive Aura-style trust level decisions so one evaluator can no longer assign a positive trust level by itself. Qortium still stores and exposes each category's raw score and raw evaluator impacts, but level and mapped status now use an additional capped level-decision score, with snapshots and APIs returning the cap details for audit. Negative/Suspicious scoring is intentionally unchanged in this step and remains the next trust-network policy area to review.
+
 ### 2026-05-14 - core: use Aura manager energy flow
 
 Changed Qortium's derived trust graph to follow the recovered Aura node scorer more closely for Manager trust. Manager energy now starts from the minting group, flows through four positive Manager-rating hops, splits by confidence along the way, and only then scores Manager ratings with the same positive and negative impact formula used by Aura. This replaces the earlier one-hop seed split, keeps Qortium's decentralized minting group as the seed set, documents that the recovered Aura scorer does not implement separate cap constants, and adds tests for four-hop scoring, confidence splitting, negative Manager flagging, snapshots, and API previews.

@@ -16,6 +16,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.group.Group;
+import org.qortal.test.common.AccountTrustTestUtils;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
@@ -49,6 +50,8 @@ public class AccountTrustSnapshotTests extends Common {
 			assertTrue(tableHasColumn(repository, "AccountTrustDerivationSnapshots", "account_public_key"));
 			assertTrue(tableHasColumn(repository, "AccountTrustDerivationSnapshots", "category"));
 			assertTrue(tableHasColumn(repository, "AccountTrustDerivationSnapshots", "score"));
+			assertTrue(tableHasColumn(repository, "AccountTrustDerivationSnapshots", "level_score"));
+			assertTrue(tableHasColumn(repository, "AccountTrustDerivationSnapshots", "level_score_cap"));
 			assertTrue(tableHasColumn(repository, "AccountTrustDerivationSnapshots", "level"));
 			assertTrue(tableHasColumn(repository, "AccountTrustDerivationSnapshots", "mapped_trust_status"));
 			assertTrue(tableHasColumn(repository, "AccountTrustDerivationSnapshots", "minting_seed_member"));
@@ -82,39 +85,45 @@ public class AccountTrustSnapshotTests extends Common {
 			ensureKnownAccount(repository, dilbert);
 			repository.saveChanges();
 
-			saveManagerTrust(repository, alice, bob, 1);
+			AccountTrustTestUtils.saveDerivedSilverSubjectRatings(repository, alice, bob, chloe, dilbert);
 			repository.saveChanges();
-			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
-			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
+			BlockUtils.mintBlock(repository);
 
 			BlockData lastBlockData = repository.getBlockRepository().getLastBlock();
 			List<AccountTrustSnapshotData> snapshots = repository.getAccountRatingRepository()
 					.getTrustDerivationSnapshots(null, null, null);
-			assertEquals(32, snapshots.size());
+			assertEquals(60, snapshots.size());
 
 			AccountTrustSnapshotData aliceSubject = findSnapshot(repository, alice.getAddress(), AccountRatingCategory.SUBJECT);
 			assertArrayEquals(alice.getPublicKey(), aliceSubject.getAccountPublicKey());
 			assertTrue(aliceSubject.isMintingSeedMember());
-			assertEquals(64_000_000L, aliceSubject.getScore());
+			assertEquals(96_000_000L, aliceSubject.getScore());
+			assertEquals(50_000_000L, aliceSubject.getLevelScore());
+			assertEquals(25_000_000L, aliceSubject.getLevelScoreCap());
 			assertEquals(2, aliceSubject.getLevel());
 			assertEquals(AccountTrustStatus.SILVER, aliceSubject.getMappedTrustStatus());
 			assertEquals(50, aliceSubject.getMappedTrustWeightPercent());
-			assertEquals(1, aliceSubject.getInboundRatings().getPositiveVeryHighCount());
+			assertEquals(2, aliceSubject.getInboundRatings().getPositiveMediumCount());
 			assertEquals(lastBlockData.getHeight().intValue(), aliceSubject.getSnapshotHeight());
 			assertEquals(lastBlockData.getTimestamp(), aliceSubject.getSnapshotTimestamp());
 
 			AccountTrustSnapshotData bobManager = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.MANAGER);
 			assertEquals(1_000_000L, bobManager.getScore());
+			assertEquals(200_000L, bobManager.getLevelScore());
+			assertEquals(100_000L, bobManager.getLevelScoreCap());
 			assertEquals(2, bobManager.getLevel());
-			assertEquals(1, bobManager.getInboundRatings().getPositiveLowCount());
+			assertEquals(2, bobManager.getInboundRatings().getPositiveLowCount());
 
 			AccountTrustSnapshotData chloeTrainer = findSnapshot(repository, chloe.getAddress(), AccountRatingCategory.TRAINER);
-			assertEquals(4_000_000L, chloeTrainer.getScore());
+			assertEquals(8_000_000L, chloeTrainer.getScore());
+			assertEquals(1_000_000L, chloeTrainer.getLevelScore());
+			assertEquals(500_000L, chloeTrainer.getLevelScoreCap());
 			assertEquals(2, chloeTrainer.getLevel());
 
 			AccountTrustSnapshotData dilbertPlayer = findSnapshot(repository, dilbert.getAddress(), AccountRatingCategory.PLAYER);
-			assertEquals(16_000_000L, dilbertPlayer.getScore());
+			assertEquals(32_000_000L, dilbertPlayer.getScore());
+			assertEquals(3_000_000L, dilbertPlayer.getLevelScore());
+			assertEquals(1_500_000L, dilbertPlayer.getLevelScoreCap());
 			assertEquals(3, dilbertPlayer.getLevel());
 		}
 	}

@@ -201,6 +201,8 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 				.bind("account_public_key", derivedAccount.getAccountPublicKey())
 				.bind("category", categoryTrust.getCategory().value)
 				.bind("score", categoryTrust.getScore())
+				.bind("level_score", categoryTrust.getLevelScore())
+				.bind("level_score_cap", categoryTrust.getLevelScoreCap())
 				.bind("level", categoryTrust.getLevel())
 				.bind("mapped_trust_status", categoryTrust.getMappedTrustStatusValue())
 				.bind("minting_seed_member", derivedAccount.isMintingSeedMember())
@@ -222,7 +224,8 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(Integer limit, Integer offset, Boolean reverse)
 			throws DataException {
 		StringBuilder sql = new StringBuilder(512);
-		sql.append("SELECT account_public_key, account, category, score, level, mapped_trust_status, minting_seed_member, ")
+		sql.append("SELECT account_public_key, account, category, score, level_score, level_score_cap, ")
+				.append("level, mapped_trust_status, minting_seed_member, ")
 				.append("positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, ")
 				.append("negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, ")
 				.append("snapshot_height, snapshot_timestamp FROM AccountTrustDerivationSnapshots");
@@ -236,7 +239,8 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 
 	@Override
 	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(String accountAddress) throws DataException {
-		String sql = "SELECT account_public_key, account, category, score, level, mapped_trust_status, minting_seed_member, "
+		String sql = "SELECT account_public_key, account, category, score, level_score, level_score_cap, "
+				+ "level, mapped_trust_status, minting_seed_member, "
 				+ "positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, "
 				+ "negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, "
 				+ "snapshot_height, snapshot_timestamp FROM AccountTrustDerivationSnapshots "
@@ -248,7 +252,8 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 	@Override
 	public AccountTrustSnapshotData getTrustDerivationSnapshot(String accountAddress, AccountRatingCategory category)
 			throws DataException {
-		String sql = "SELECT account_public_key, account, category, score, level, mapped_trust_status, minting_seed_member, "
+		String sql = "SELECT account_public_key, account, category, score, level_score, level_score_cap, "
+				+ "level, mapped_trust_status, minting_seed_member, "
 				+ "positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, "
 				+ "negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, "
 				+ "snapshot_height, snapshot_timestamp FROM AccountTrustDerivationSnapshots "
@@ -272,17 +277,20 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 				String accountAddress = resultSet.getString(2);
 				AccountRatingCategory category = AccountRatingCategory.valueOf(resultSet.getInt(3));
 				long score = resultSet.getLong(4);
-				int level = resultSet.getInt(5);
-				AccountTrustStatus mappedTrustStatus = AccountTrustStatus.valueOf(resultSet.getInt(6));
-				boolean mintingSeedMember = resultSet.getBoolean(7);
+				long levelScore = resultSet.getLong(5);
+				long levelScoreCap = resultSet.getLong(6);
+				int level = resultSet.getInt(7);
+				AccountTrustStatus mappedTrustStatus = AccountTrustStatus.valueOf(resultSet.getInt(8));
+				boolean mintingSeedMember = resultSet.getBoolean(9);
 				AccountTrustPreviewData.RatingCounts inboundRatings = new AccountTrustPreviewData.RatingCounts(
-						resultSet.getInt(8), resultSet.getInt(9), resultSet.getInt(10), resultSet.getInt(11),
-						resultSet.getInt(12), resultSet.getInt(13), resultSet.getInt(14), resultSet.getInt(15));
-				int snapshotHeight = resultSet.getInt(16);
-				long snapshotTimestamp = resultSet.getLong(17);
+						resultSet.getInt(10), resultSet.getInt(11), resultSet.getInt(12), resultSet.getInt(13),
+						resultSet.getInt(14), resultSet.getInt(15), resultSet.getInt(16), resultSet.getInt(17));
+				int snapshotHeight = resultSet.getInt(18);
+				long snapshotTimestamp = resultSet.getLong(19);
 
 				snapshots.add(new AccountTrustSnapshotData(accountPublicKey, accountAddress, defaultCategory(category),
-						score, level, mappedTrustStatus, mintingSeedMember, inboundRatings, snapshotHeight, snapshotTimestamp));
+						score, levelScore, levelScoreCap, level, mappedTrustStatus, mintingSeedMember, inboundRatings,
+						snapshotHeight, snapshotTimestamp));
 			} while (resultSet.next());
 
 			return snapshots;

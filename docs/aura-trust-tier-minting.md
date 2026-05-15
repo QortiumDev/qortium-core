@@ -167,7 +167,13 @@ A later implementation layer added a decentralized trust preview:
   ratings, Trainer score feeds Player ratings, and Player score feeds Subject
   ratings
 - the recovered Aura scorer does not apply a separate per-evaluator cap, so
-  Qortium does not add one in the active derivation yet
+  Qortium keeps raw category scores visible while adding its own positive
+  level-decision cap based on the Aura documentation's planned cap concept
+- positive level decisions cap each evaluator's impact at half of the target
+  level threshold; this means one evaluator cannot satisfy a positive level by
+  itself, while raw score and raw impact remain available for audit
+- negative/Suspicious scoring still uses raw negative impact for now so the
+  first cap layer stays limited to positive trust qualification
 - the Subject level is mapped back to Qortium's simple Gold, Silver, Bronze,
   Unverified, and Suspicious statuses as a derived status
 - the older inbound/outbound confidence counts, mutual positive relationships,
@@ -179,8 +185,9 @@ The latest implementation layer stores the current derived trust graph as
 repository state after each processed block:
 
 - Qortium stores one current snapshot row for each account and category
-- snapshot rows include the derived score, level, mapped trust status, minting
-  seed membership, inbound rating counts, and the block height and timestamp
+- snapshot rows include the derived raw score, capped level-decision score,
+  level-decision cap, level, mapped trust status, minting seed membership,
+  inbound rating counts, and the block height and timestamp
   that produced the snapshot
 - orphaning a block refreshes the snapshot back to the previous chain state
 - `GET /account-ratings/trust-derivation` reads the stored snapshot by default,
@@ -306,9 +313,10 @@ The first implementation should cover at least these cases:
   vote changes are rejected and final weights are frozen.
 - account trust previews and snapshots expose inbound and outbound confidence
   distributions, active derived trust status, stored/manual audit status,
-  evaluator impacts, category scores, mapped trust status, seed membership, and
-  block anchoring; the stored Subject snapshot now supplies active poll and
-  resource-rating weight plus minting eligibility status.
+  evaluator impacts, raw category scores, capped level-decision scores, mapped
+  trust status, seed membership, and block anchoring; the stored Subject
+  snapshot now supplies active poll and resource-rating weight plus minting
+  eligibility status.
 - isolated positive-rating rings with no path from the minting seed set remain
   Unverified with zero category scores.
 - direct one-hop Manager ratings from seed accounts do not create Manager score
@@ -325,10 +333,13 @@ The first implementation should cover at least these cases:
 - one seed member's Manager energy is budgeted across its outgoing Manager
   paths, so several positive Manager paths split the seed budget instead of
   multiplying it.
+- positive category levels require enough independent capped impact to reach
+  their thresholds, preventing a single high-score evaluator from assigning a
+  positive level by itself.
 
 ## Open Decisions
 
 - Should the 100%, 50%, and 25% multipliers be fixed consensus constants or
   configurable chain parameters?
-- Should Qortium add its own explicit per-evaluator caps later, even though the
-  recovered Aura scorer does not implement a cap rule?
+- Should negative/Suspicious scoring also receive impact caps or multi-rater
+  requirements, now that positive level qualification is capped?

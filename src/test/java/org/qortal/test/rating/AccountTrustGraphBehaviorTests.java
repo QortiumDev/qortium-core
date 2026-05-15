@@ -15,6 +15,7 @@ import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.AccountTrustTestUtils;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
@@ -103,13 +104,13 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			ensureKnownAccount(repository, chloe);
 			ensureKnownAccount(repository, dilbert);
 
-			saveManagerTrust(repository, alice, chloe, 1);
-			saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.TRAINER, 4);
-			saveAccountRating(repository, dilbert, bob, AccountRatingCategory.PLAYER, 4);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, bob);
 			refreshTrustSnapshots(repository);
 
 			AccountTrustSnapshotData bobPlayer = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.PLAYER);
-			assertEquals(16_000_000L, bobPlayer.getScore());
+			assertEquals(32_000_000L, bobPlayer.getScore());
+			assertEquals(3_000_000L, bobPlayer.getLevelScore());
+			assertEquals(1_500_000L, bobPlayer.getLevelScoreCap());
 			assertEquals(3, bobPlayer.getLevel());
 			assertEquals(AccountTrustStatus.GOLD, bobPlayer.getMappedTrustStatus());
 
@@ -123,7 +124,9 @@ public class AccountTrustGraphBehaviorTests extends Common {
 
 			AccountTrustSnapshotData aliceSubjectAfter = findSnapshot(repository, alice.getAddress(),
 					AccountRatingCategory.SUBJECT);
-			assertEquals(-256_000_000L, aliceSubjectAfter.getScore());
+			assertEquals(-512_000_000L, aliceSubjectAfter.getScore());
+			assertEquals(-512_000_000L, aliceSubjectAfter.getLevelScore());
+			assertEquals(0L, aliceSubjectAfter.getLevelScoreCap());
 			assertEquals(-1, aliceSubjectAfter.getLevel());
 			assertEquals(AccountTrustStatus.SUSPICIOUS, aliceSubjectAfter.getMappedTrustStatus());
 			assertFalse("Derived Suspicious should block mint eligibility",
@@ -138,6 +141,51 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			assertEquals(AccountTrustStatus.UNVERIFIED, aliceSubjectRestored.getMappedTrustStatus());
 			assertTrue("Orphaning the trusted negative rating should restore mint eligibility",
 					new Account(repository, alice.getAddress()).canMint(false));
+		}
+	}
+
+	@Test
+	public void testSinglePositiveManagerImpactDoesNotQualifyThroughCap() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			saveManagerTrust(repository, alice, bob, 4);
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData bobManager = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.MANAGER);
+
+			assertEquals(4_000_000L, bobManager.getScore());
+			assertEquals(500L, bobManager.getLevelScore());
+			assertEquals(500L, bobManager.getLevelScoreCap());
+			assertEquals(0, bobManager.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, bobManager.getMappedTrustStatus());
+		}
+	}
+
+	@Test
+	public void testTwoPositiveManagerImpactsQualifyThroughCap() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			List<PrivateKeyAccount> evaluators;
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			evaluators = AccountTrustTestUtils.saveManagerEnergyPaths(repository, alice, 2);
+			for (PrivateKeyAccount evaluator : evaluators)
+				saveAccountRating(repository, evaluator, bob, AccountRatingCategory.MANAGER, 1);
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData bobManager = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.MANAGER);
+
+			assertEquals(1_000_000L, bobManager.getScore());
+			assertEquals(200_000L, bobManager.getLevelScore());
+			assertEquals(100_000L, bobManager.getLevelScoreCap());
+			assertEquals(2, bobManager.getLevel());
+			assertEquals(AccountTrustStatus.SILVER, bobManager.getMappedTrustStatus());
 		}
 	}
 

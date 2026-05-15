@@ -9,6 +9,7 @@ import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -19,11 +20,58 @@ public final class AccountTrustTestUtils {
 
 	public static void createDerivedSilverSubjectSnapshot(Repository repository, PrivateKeyAccount subject,
 			PrivateKeyAccount manager, PrivateKeyAccount trainer, PrivateKeyAccount player) throws DataException {
-		saveManagerTrust(repository, subject, manager, 1);
-		saveAccountRating(repository, manager, trainer, AccountRatingCategory.TRAINER, 4);
-		saveAccountRating(repository, trainer, player, AccountRatingCategory.PLAYER, 4);
-		saveAccountRating(repository, player, subject, AccountRatingCategory.SUBJECT, 4);
+		saveDerivedSilverSubjectRatings(repository, subject, manager, trainer, player);
 		refreshTrustSnapshots(repository);
+	}
+
+	public static void saveDerivedSilverSubjectRatings(Repository repository, PrivateKeyAccount seedAccount,
+			PrivateKeyAccount manager, PrivateKeyAccount trainer, PrivateKeyAccount player) throws DataException {
+		PrivateKeyAccount managerPeer = Common.generateRandomSeedAccount(repository);
+		PrivateKeyAccount trainerPeer = Common.generateRandomSeedAccount(repository);
+		PrivateKeyAccount playerPeer = Common.generateRandomSeedAccount(repository);
+
+		saveDerivedManagerLevelTwoRatings(repository, seedAccount, Arrays.asList(manager, managerPeer));
+
+		saveAccountRating(repository, manager, trainer, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, managerPeer, trainer, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, manager, trainerPeer, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, managerPeer, trainerPeer, AccountRatingCategory.TRAINER, 4);
+
+		saveAccountRating(repository, trainer, player, AccountRatingCategory.PLAYER, 2);
+		saveAccountRating(repository, trainerPeer, player, AccountRatingCategory.PLAYER, 2);
+		saveAccountRating(repository, trainer, playerPeer, AccountRatingCategory.PLAYER, 1);
+		saveAccountRating(repository, trainerPeer, playerPeer, AccountRatingCategory.PLAYER, 1);
+
+		saveAccountRating(repository, player, seedAccount, AccountRatingCategory.SUBJECT, 2);
+		saveAccountRating(repository, playerPeer, seedAccount, AccountRatingCategory.SUBJECT, 2);
+	}
+
+	public static void saveDerivedPlayerLevelThreeRatings(Repository repository, PrivateKeyAccount seedAccount,
+			PrivateKeyAccount playerTarget) throws DataException {
+		PrivateKeyAccount manager = Common.generateRandomSeedAccount(repository);
+		PrivateKeyAccount managerPeer = Common.generateRandomSeedAccount(repository);
+		PrivateKeyAccount trainer = Common.generateRandomSeedAccount(repository);
+		PrivateKeyAccount trainerPeer = Common.generateRandomSeedAccount(repository);
+
+		saveDerivedManagerLevelTwoRatings(repository, seedAccount, Arrays.asList(manager, managerPeer));
+
+		saveAccountRating(repository, manager, trainer, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, managerPeer, trainer, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, manager, trainerPeer, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, managerPeer, trainerPeer, AccountRatingCategory.TRAINER, 4);
+
+		saveAccountRating(repository, trainer, playerTarget, AccountRatingCategory.PLAYER, 2);
+		saveAccountRating(repository, trainerPeer, playerTarget, AccountRatingCategory.PLAYER, 2);
+	}
+
+	public static void saveDerivedManagerLevelTwoRatings(Repository repository, PrivateKeyAccount seedAccount,
+			List<? extends PrivateKeyAccount> managerTargets) throws DataException {
+		List<PrivateKeyAccount> evaluators = saveManagerEnergyPaths(repository, seedAccount, 2);
+
+		for (PrivateKeyAccount evaluator : evaluators) {
+			for (PrivateKeyAccount managerTarget : managerTargets)
+				saveAccountRating(repository, evaluator, managerTarget, AccountRatingCategory.MANAGER, 1);
+		}
 	}
 
 	public static void saveManagerTrust(Repository repository, PrivateKeyAccount seedAccount,
@@ -36,6 +84,23 @@ public final class AccountTrustTestUtils {
 	}
 
 	public static void saveManagerEnergyPath(Repository repository, PrivateKeyAccount seedAccount,
+			PrivateKeyAccount evaluator) throws DataException {
+		saveManagerEnergyPathRatings(repository, seedAccount, evaluator);
+	}
+
+	public static List<PrivateKeyAccount> saveManagerEnergyPaths(Repository repository, PrivateKeyAccount seedAccount,
+			int pathCount) throws DataException {
+		List<PrivateKeyAccount> evaluators = new ArrayList<>();
+		for (int i = 0; i < pathCount; ++i) {
+			PrivateKeyAccount evaluator = Common.generateRandomSeedAccount(repository);
+			evaluators.add(evaluator);
+			saveManagerEnergyPathRatings(repository, seedAccount, evaluator);
+		}
+
+		return evaluators;
+	}
+
+	private static void saveManagerEnergyPathRatings(Repository repository, PrivateKeyAccount seedAccount,
 			PrivateKeyAccount evaluator) throws DataException {
 		List<PrivateKeyAccount> pathAccounts = Arrays.asList(
 				Common.generateRandomSeedAccount(repository),

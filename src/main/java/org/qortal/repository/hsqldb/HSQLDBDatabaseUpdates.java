@@ -1250,7 +1250,8 @@ public class HSQLDBDatabaseUpdates {
 					// Store the current Aura-style account trust derivation snapshot.
 					stmt.execute("CREATE TABLE AccountTrustDerivationSnapshots (account AccountAddress NOT NULL, "
 							+ "account_public_key AccountPublicKey, category TINYINT NOT NULL, score BIGINT NOT NULL, "
-							+ "level INT NOT NULL, mapped_trust_status INT NOT NULL, minting_seed_member BOOLEAN NOT NULL, "
+							+ "level_score BIGINT NOT NULL, level_score_cap BIGINT NOT NULL, level INT NOT NULL, "
+							+ "mapped_trust_status INT NOT NULL, minting_seed_member BOOLEAN NOT NULL, "
 							+ "positive_low_count INT NOT NULL, positive_medium_count INT NOT NULL, "
 							+ "positive_high_count INT NOT NULL, positive_very_high_count INT NOT NULL, "
 							+ "negative_low_count INT NOT NULL, negative_medium_count INT NOT NULL, "

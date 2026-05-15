@@ -432,6 +432,8 @@ public class AccountTrustPreviewData {
 	public static class CategoryTrust {
 		private AccountRatingCategory category;
 		private long score;
+		private long levelScore;
+		private long levelScoreCap;
 		private int level;
 		private AccountTrustStatus mappedTrustStatus;
 		private int mappedTrustStatusValue;
@@ -443,10 +445,17 @@ public class AccountTrustPreviewData {
 
 		public CategoryTrust(AccountRatingCategory category, long score, int level, AccountTrustStatus mappedTrustStatus,
 				RatingCounts inboundRatings, List<CategoryImpact> impacts) {
+			this(category, score, score, 0L, level, mappedTrustStatus, inboundRatings, impacts);
+		}
+
+		public CategoryTrust(AccountRatingCategory category, long score, long levelScore, long levelScoreCap, int level,
+				AccountTrustStatus mappedTrustStatus, RatingCounts inboundRatings, List<CategoryImpact> impacts) {
 			AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
 
 			this.category = category == null ? AccountRatingCategory.SUBJECT : category;
 			this.score = score;
+			this.levelScore = levelScore;
+			this.levelScoreCap = levelScoreCap;
 			this.level = level;
 			this.mappedTrustStatus = effectiveMappedStatus;
 			this.mappedTrustStatusValue = effectiveMappedStatus.getValue();
@@ -460,6 +469,14 @@ public class AccountTrustPreviewData {
 
 		public long getScore() {
 			return this.score;
+		}
+
+		public long getLevelScore() {
+			return this.levelScore;
+		}
+
+		public long getLevelScoreCap() {
+			return this.levelScoreCap;
 		}
 
 		public int getLevel() {

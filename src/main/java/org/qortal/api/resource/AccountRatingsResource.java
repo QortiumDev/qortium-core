@@ -400,7 +400,8 @@ public class AccountRatingsResource {
 							AccountTrustStatus.UNVERIFIED, new AccountTrustPreviewData.RatingCounts(), new ArrayList<>()));
 				else
 					categories.add(new AccountTrustPreviewData.CategoryTrust(snapshot.getCategory(), snapshot.getScore(),
-							snapshot.getLevel(), snapshot.getMappedTrustStatus(), snapshot.getInboundRatings(), new ArrayList<>()));
+							snapshot.getLevelScore(), snapshot.getLevelScoreCap(), snapshot.getLevel(),
+							snapshot.getMappedTrustStatus(), snapshot.getInboundRatings(), new ArrayList<>()));
 			}
 
 			derivedAccounts.add(new AccountTrustDerivationData(firstSnapshot.getAccountPublicKey(),
