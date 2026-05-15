@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - core: lock Aura trust scoring parity
+
+Added trust-graph regression coverage and documentation that lock Qortium's current Aura matching boundary. Manager energy is budgeted while it flows through four positive Manager-rating hops, but final Manager, Trainer, Player, and Subject category scores continue to use Aura's direct rating impact formula instead of a second outbound budget split. Qortium's capped level decisions and independent-rater Suspicious checks remain deliberate consensus hardening around the Aura-style raw scores.
+
 ### 2026-05-15 - api: add trust explanation endpoint
 
 Added a read-only account trust explanation API so clients can show why an account currently maps to Gold, Silver, Bronze, Unverified, or Suspicious. The endpoint combines the stored snapshot status used for active enforcement with configured thresholds, caps, requirement checks, and top rating impacts, and it can optionally recalculate live graph evidence for comparison without changing ratings, snapshots, minting, voting, or resource-rating behavior.

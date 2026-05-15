@@ -312,6 +312,71 @@ public class AccountTrustGraphBehaviorTests extends Common {
 	}
 
 	@Test
+	public void testManagerCategoryScoringDoesNotSplitFinalEvaluatorEnergyAcrossTargets() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount evaluator = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount targetA = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount targetB = Common.generateRandomSeedAccount(repository);
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, evaluator);
+			ensureKnownAccount(repository, targetA);
+			ensureKnownAccount(repository, targetB);
+			saveManagerEnergyPath(repository, alice, evaluator);
+			saveAccountRating(repository, evaluator, targetA, AccountRatingCategory.MANAGER, 1);
+			saveAccountRating(repository, evaluator, targetB, AccountRatingCategory.MANAGER, 1);
+
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData targetASnapshot = findSnapshot(repository, targetA.getAddress(),
+					AccountRatingCategory.MANAGER);
+			AccountTrustSnapshotData targetBSnapshot = findSnapshot(repository, targetB.getAddress(),
+					AccountRatingCategory.MANAGER);
+
+			assertEquals("Aura scores each Manager rating from the final evaluator energy without a second outbound split",
+					1_000_000L, targetASnapshot.getScore());
+			assertEquals("Aura scores each Manager rating from the final evaluator energy without a second outbound split",
+					1_000_000L, targetBSnapshot.getScore());
+			assertEquals("The raw Manager score should show direct Aura scoring, not a conserved post-flow budget",
+					2_000_000L, targetASnapshot.getScore() + targetBSnapshot.getScore());
+		}
+	}
+
+	@Test
+	public void testSubjectCategoryScoringDoesNotSplitPlayerEvaluatorScoreAcrossTargets() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, chloe);
+			ensureKnownAccount(repository, dilbert);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, bob);
+			saveAccountRating(repository, bob, chloe, AccountRatingCategory.SUBJECT, 2);
+			saveAccountRating(repository, bob, dilbert, AccountRatingCategory.SUBJECT, 2);
+
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData bobPlayer = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.PLAYER);
+			AccountTrustSnapshotData chloeSubject = findSnapshot(repository, chloe.getAddress(), AccountRatingCategory.SUBJECT);
+			AccountTrustSnapshotData dilbertSubject = findSnapshot(repository, dilbert.getAddress(),
+					AccountRatingCategory.SUBJECT);
+
+			assertEquals(32_000_000L, bobPlayer.getScore());
+			assertEquals("Aura scores each Subject rating as confidence times evaluator score without an outbound split",
+					64_000_000L, chloeSubject.getScore());
+			assertEquals("Aura scores each Subject rating as confidence times evaluator score without an outbound split",
+					64_000_000L, dilbertSubject.getScore());
+			assertEquals("The raw Subject score should show direct Aura scoring, not a conserved evaluator budget",
+					128_000_000L, chloeSubject.getScore() + dilbertSubject.getScore());
+		}
+	}
+
+	@Test
 	public void testSingleNegativeManagerRatingUsesFinalEnergyAndFlaggingMultiplierWithoutSuspicious() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");

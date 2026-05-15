@@ -162,6 +162,9 @@ A later implementation layer added a decentralized trust preview:
 - after those four hops, the final Manager energy is used to score Manager
   ratings; positive ratings add `confidence * energy`, and negative ratings
   subtract `confidence * energy * 4`
+- this means Aura budgets Manager energy while it is flowing through the graph,
+  but it does not split a rater's final category score again across every
+  Manager, Trainer, Player, or Subject target they evaluate
 - the preview derives Manager, Trainer, Player, and Subject scores in sequence:
   minting seed weight feeds Manager ratings, Manager score feeds Trainer
   ratings, Trainer score feeds Player ratings, and Player score feeds Subject
@@ -175,6 +178,9 @@ A later implementation layer added a decentralized trust preview:
 - negative/Suspicious decisions use the same signed capped decision score, with
   Suspicious requiring at least two independent medium-confidence negative
   raters before raw negative evidence can block minting
+- broad outbound positive-rating budgeting beyond Aura's Manager energy flow
+  remains a possible future Qortium-specific policy decision, but it is not
+  part of the current Aura-parity scoring model
 - the implemented thresholds, per-rating caps, Suspicious requirements, seed
   energy, manager hop count, active Subject weighting category, and vote
   multipliers are chain-configurable through `accountTrustSettings`
