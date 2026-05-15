@@ -146,17 +146,17 @@ The next implementation layer adds directed account ratings as chain data:
 - these edges do not change trust status, minting eligibility, or vote weight
   until a later deterministic trust-tier derivation rule is added
 
-A later implementation layer added a decentralized trust preview:
+A later implementation layer added deterministic decentralized trust
+derivation APIs:
 
-- the preview uses only active on-chain `RATE_ACCOUNT` edges
-- the preview is exposed through `GET /account-ratings/trust-preview`
-- the current derived graph can also be listed through
+- the derived graph uses only active on-chain `RATE_ACCOUNT` edges
+- the current derived graph can be listed through
   `GET /account-ratings/trust-derivation`, which lets clients filter by final
   derived status, minting seed membership, and category level without fetching
   one account at a time
 - account ratings are category-aware, using Aura-style Subject, Player,
   Trainer, and Manager categories
-- current minting-group members are the decentralized seed set for the preview
+- current minting-group members are the decentralized seed set for derivation
   instead of Aura's hardcoded team-owner seed
 - the active Manager derivation is based on the recovered Aura node scorer at
   `https://github.com/Meta-Node/BrightID-Aura-Node`
@@ -168,7 +168,7 @@ A later implementation layer added a decentralized trust preview:
 - this means Aura budgets Manager energy while it is flowing through the graph,
   but it does not split a rater's final category score again across every
   Manager, Trainer, Player, or Subject target they evaluate
-- the preview derives Manager, Trainer, Player, and Subject scores in sequence:
+- the derivation computes Manager, Trainer, Player, and Subject scores in sequence:
   minting seed weight feeds Manager ratings, Manager score feeds Trainer
   ratings, Trainer score feeds Player ratings, and Player score feeds Subject
   ratings
@@ -225,8 +225,8 @@ voting, resource-rating weights, and Suspicious mint blocking:
 
 - account info includes one active Subject trust status, snapshot height and
   timestamp, vote multiplier, and effective vote weight
-- account-rating trust previews show the active Subject status and evaluator
-  impacts without a separate manual-status comparison
+- account-rating trust profile and explanation APIs show the active Subject
+  status and evaluator impacts without a separate manual-status comparison
 - open poll vote totals and vote details use the derived Subject status as the
   active Gold, Silver, Bronze, Unverified, or Suspicious multiplier
 - frozen poll results store the active derived Subject status and vote weight
@@ -275,9 +275,10 @@ answer from deterministic chain data and local state derived from chain data.
 
 For that reason, the preferred Qortium direction is a native on-chain trust
 graph, not live external lookups, trusted imports, or authority-controlled
-status updates. The preview API remains useful so the community can inspect
-graph behavior, including farm-ring behavior, before any further derived-status
-rule affects minting or broader consensus behavior.
+status updates. The trust profile, explanation, and derivation APIs remain
+useful so the community can inspect graph behavior, including farm-ring
+behavior, before any further derived-status rule affects minting or broader
+consensus behavior.
 
 ## Implementation Path
 
@@ -291,8 +292,8 @@ rule affects minting or broader consensus behavior.
    see the raw and effective weights.
 5. Add tests for mint eligibility, vote weighting, audit fields, and
    trust-status changes.
-6. Add a read-only decentralized trust preview that summarizes active
-   account-rating evidence.
+6. Add read-only decentralized trust APIs that summarize active account-rating
+   evidence and explain the derived graph.
 7. Store the derived trust graph as block-anchored repository state.
 8. Use the stored Subject snapshot for active poll vote weights, frozen poll
     close-time weights, and resource-rating weighted summaries.
@@ -330,11 +331,11 @@ The first implementation should cover at least these cases:
   weighted summaries immediately.
 - polls can optionally close at a defined end time, after which new votes and
   vote changes are rejected and final weights are frozen.
-- account trust previews and snapshots expose inbound and outbound confidence
-  distributions, active derived trust status, evaluator impacts, raw category
-  scores, capped level-decision scores, mapped trust status, seed membership,
-  and block anchoring; the stored Subject snapshot now supplies active poll and
-  resource-rating weight plus minting
+- account trust profile, explanation, derivation, and snapshot APIs expose
+  inbound and outbound confidence distributions, active derived trust status,
+  evaluator impacts, raw category scores, capped level-decision scores, mapped
+  trust status, seed membership, and block anchoring; the stored Subject
+  snapshot now supplies active poll and resource-rating weight plus minting
   eligibility status.
 - isolated positive-rating rings with no path from the minting seed set remain
   Unverified with zero category scores.

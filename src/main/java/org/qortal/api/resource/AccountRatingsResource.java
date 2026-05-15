@@ -17,7 +17,6 @@ import org.qortal.api.ApiException;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
-import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
@@ -51,12 +50,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 
 @Path("/account-ratings")
 @Tag(name = "Account Ratings")
@@ -181,46 +178,6 @@ public class AccountRatingsResource {
 			String targetAddress = Crypto.toAddress(targetPublicKey);
 
 			return buildTrustProfile(repository, targetPublicKey, targetAddress);
-		} catch (ApiException e) {
-			throw e;
-		} catch (DataException e) {
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
-		}
-	}
-
-	@GET
-	@Path("/trust-preview")
-	@Operation(
-			summary = "Preview active account trust evidence from the decentralized trust graph",
-			responses = {
-					@ApiResponse(
-							description = "account trust preview",
-							content = @Content(
-									mediaType = MediaType.APPLICATION_JSON,
-									schema = @Schema(implementation = AccountTrustPreviewData.class)
-							)
-					)
-			}
-	)
-	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
-	public AccountTrustPreviewData getAccountTrustPreview(
-			@Parameter(description = "Target account public key in Base58") @QueryParam("target") String targetPublicKey58) {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			byte[] targetPublicKey = requireKnownPublicKey(repository, targetPublicKey58);
-			String targetAddress = Crypto.toAddress(targetPublicKey);
-
-			AccountTrustSnapshotData activeTrustSnapshot = repository.getAccountRatingRepository()
-					.getTrustDerivationSnapshot(targetAddress, AccountTrustWeight.getActiveWeightCategory());
-			AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
-
-			List<AccountRatingData> inboundRatings = repository.getAccountRatingRepository()
-					.getRatings(targetPublicKey, null, AccountRatingCategory.SUBJECT, null, null, null);
-			List<AccountRatingData> outboundRatings = repository.getAccountRatingRepository()
-					.getRatings(null, targetPublicKey, AccountRatingCategory.SUBJECT, null, null, null);
-			AccountTrustDerivation.Result derivation = AccountTrustDerivation.derive(repository, targetAddress);
-
-			return buildTrustPreview(repository, targetPublicKey, targetAddress, activeTrustStatus, inboundRatings,
-					outboundRatings, derivation);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -486,66 +443,6 @@ public class AccountRatingsResource {
 			countsByCategory.get(rating.getCategory()).addRating(rating.getRating());
 
 		return countsByCategory;
-	}
-
-	private AccountTrustPreviewData buildTrustPreview(Repository repository, byte[] targetPublicKey, String targetAddress,
-			AccountTrustStatus activeTrustStatus, List<AccountRatingData> inboundRatings, List<AccountRatingData> outboundRatings,
-			AccountTrustDerivation.Result derivation)
-			throws DataException {
-		AccountTrustPreviewData.RatingCounts inboundCounts = new AccountTrustPreviewData.RatingCounts();
-		AccountTrustPreviewData.RatingCounts outboundCounts = new AccountTrustPreviewData.RatingCounts();
-		List<AccountTrustPreviewData.EvaluatorImpact> evaluatorImpacts = new ArrayList<>();
-
-		Set<String> outboundPositiveTargets = new HashSet<>();
-		for (AccountRatingData outboundRating : outboundRatings) {
-			int rating = outboundRating.getRating();
-
-			outboundCounts.addRating(rating);
-			if (AccountRating.isPositive(rating))
-				outboundPositiveTargets.add(outboundRating.getTargetAddress());
-		}
-
-		int mutualPositiveCount = 0;
-		for (AccountRatingData inboundRating : inboundRatings) {
-			int rating = inboundRating.getRating();
-
-			inboundCounts.addRating(rating);
-			if (AccountRating.isPositive(rating) && outboundPositiveTargets.contains(inboundRating.getRaterAddress()))
-				++mutualPositiveCount;
-
-			evaluatorImpacts.add(buildEvaluatorImpact(repository, inboundRating));
-		}
-
-		evaluatorImpacts.sort(Comparator
-				.comparingInt(AccountRatingsResource::getImpactMagnitude)
-				.reversed()
-				.thenComparing(AccountTrustPreviewData.EvaluatorImpact::getRaterAddress));
-
-		return new AccountTrustPreviewData(targetPublicKey, targetAddress, activeTrustStatus,
-				inboundCounts, outboundCounts, mutualPositiveCount, evaluatorImpacts, derivation.isMintingSeedMember(),
-				derivation.getCategories());
-	}
-
-	private AccountTrustPreviewData.EvaluatorImpact buildEvaluatorImpact(Repository repository, AccountRatingData ratingData)
-			throws DataException {
-		AccountData raterAccountData = repository.getAccountRepository().getAccount(ratingData.getRaterAddress());
-		int rawVoteWeight = raterAccountData == null ? 0 : raterAccountData.getBlocksMinted();
-		AccountTrustSnapshotData activeTrustSnapshot = repository.getAccountRatingRepository()
-				.getTrustDerivationSnapshot(ratingData.getRaterAddress(), AccountTrustWeight.getActiveWeightCategory());
-		AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
-		int effectiveVoteWeight = AccountTrustWeight.calculateEffectiveVoteWeight(rawVoteWeight, activeTrustSnapshot);
-		int impact = AccountRating.calculateImpact(ratingData.getRating(), effectiveVoteWeight);
-
-		return new AccountTrustPreviewData.EvaluatorImpact(ratingData.getRaterPublicKey(), ratingData.getRaterAddress(),
-				activeTrustStatus, rawVoteWeight, effectiveVoteWeight, ratingData.getRating(), impact);
-	}
-
-	private static int getImpactMagnitude(AccountTrustPreviewData.EvaluatorImpact evaluatorImpact) {
-		long magnitude = Math.abs((long) evaluatorImpact.getImpact());
-		if (magnitude > Integer.MAX_VALUE)
-			return Integer.MAX_VALUE;
-
-		return (int) magnitude;
 	}
 
 	private AccountTrustExplanationData buildLiveTrustExplanation(byte[] targetPublicKey, String targetAddress,

@@ -110,13 +110,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 			AccountRatingSummaryData emptySummary = this.accountRatingsResource.getAccountRatingSummary(Base58.encode(bob.getPublicKey()));
 			assertEquals(0, emptySummary.getTotalRatingCount());
 
-			AccountTrustPreviewData emptyPreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
-			assertEquals(AccountTrustStatus.UNVERIFIED, emptyPreview.getTrustStatus());
-			assertEquals(0, emptyPreview.getTrustWeightPercent());
-			assertEquals(0, emptyPreview.getInboundTotalRatingCount());
-			assertEquals(0, emptyPreview.getOutboundTotalRatingCount());
-			assertEquals(0, emptyPreview.getNetScore());
-
 			AccountTrustExplanationData emptyExplanation = this.accountRatingsResource
 					.getAccountTrustExplanation(Base58.encode(bob.getPublicKey()), null);
 			assertFalse(emptyExplanation.isLive());
@@ -259,113 +252,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
-	public void testTrustPreviewCountsScoresAndMutualPositiveRatings() throws DataException {
-		TestAccount bob;
-		String aliceAddress;
-		String chloeAddress;
-		String dilbertAddress;
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			TestAccount alice = Common.getTestAccount(repository, "alice");
-			aliceAddress = alice.getAddress();
-			bob = Common.getTestAccount(repository, "bob");
-			TestAccount chloe = Common.getTestAccount(repository, "chloe");
-			chloeAddress = chloe.getAddress();
-			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
-			dilbertAddress = dilbert.getAddress();
-
-			setVoteAccount(repository, alice, 100);
-			setVoteAccount(repository, bob, 100);
-			setVoteAccount(repository, chloe, 101);
-			setVoteAccount(repository, dilbert, 101);
-
-			saveAccountRating(repository, alice, bob, AccountRatingCategory.SUBJECT, 4);
-			saveAccountRating(repository, chloe, bob, AccountRatingCategory.SUBJECT, 2);
-			saveAccountRating(repository, dilbert, bob, AccountRatingCategory.SUBJECT, -3);
-			saveAccountRating(repository, bob, alice, AccountRatingCategory.SUBJECT, 1);
-			saveAccountRating(repository, bob, chloe, AccountRatingCategory.SUBJECT, 4);
-			saveAccountRating(repository, bob, dilbert, AccountRatingCategory.SUBJECT, -2);
-			saveSubjectSnapshots(repository,
-					subjectDerivation(bob, AccountTrustStatus.BRONZE),
-					subjectDerivation(alice, AccountTrustStatus.SILVER),
-					subjectDerivation(chloe, AccountTrustStatus.UNVERIFIED),
-					subjectDerivation(dilbert, AccountTrustStatus.GOLD));
-		}
-
-		AccountTrustPreviewData preview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
-
-		assertEquals(AccountTrustStatus.BRONZE, preview.getTrustStatus());
-		assertEquals(AccountTrustStatus.BRONZE.getValue(), preview.getTrustStatusValue());
-		assertEquals(25, preview.getTrustWeightPercent());
-		assertEquals(1, preview.getInboundRatings().getPositiveVeryHighCount());
-		assertEquals(1, preview.getInboundRatings().getPositiveMediumCount());
-		assertEquals(1, preview.getInboundRatings().getNegativeHighCount());
-		assertEquals(3, preview.getInboundTotalRatingCount());
-		assertEquals(1, preview.getOutboundRatings().getPositiveLowCount());
-		assertEquals(1, preview.getOutboundRatings().getPositiveVeryHighCount());
-		assertEquals(1, preview.getOutboundRatings().getNegativeMediumCount());
-		assertEquals(3, preview.getOutboundTotalRatingCount());
-		assertEquals(2, preview.getMutualPositiveCount());
-		assertEquals(200, preview.getPositiveScore());
-		assertEquals(1212, preview.getNegativeScore());
-		assertEquals(-1012, preview.getNetScore());
-
-		assertEquals(3, preview.getEvaluatorImpacts().size());
-		AccountTrustPreviewData.EvaluatorImpact aliceImpact = findEvaluatorImpact(preview, aliceAddress);
-		assertEquals(4, aliceImpact.getRating());
-		assertEquals(4, aliceImpact.getRatingConfidence());
-		assertEquals(AccountTrustStatus.SILVER, aliceImpact.getTrustStatus());
-		assertEquals(100, aliceImpact.getRawVoteWeight());
-		assertEquals(50, aliceImpact.getEffectiveVoteWeight());
-		assertEquals(200, aliceImpact.getImpact());
-
-		AccountTrustPreviewData.EvaluatorImpact chloeImpact = findEvaluatorImpact(preview, chloeAddress);
-		assertEquals(AccountTrustStatus.UNVERIFIED, chloeImpact.getTrustStatus());
-		assertEquals(0, chloeImpact.getEffectiveVoteWeight());
-		assertEquals(0, chloeImpact.getImpact());
-
-		AccountTrustPreviewData.EvaluatorImpact dilbertImpact = findEvaluatorImpact(preview, dilbertAddress);
-		assertEquals(-3, dilbertImpact.getRating());
-		assertEquals("NEGATIVE", dilbertImpact.getRatingDirection());
-		assertEquals(AccountTrustStatus.GOLD, dilbertImpact.getTrustStatus());
-		assertEquals(101, dilbertImpact.getEffectiveVoteWeight());
-		assertEquals(-1212, dilbertImpact.getImpact());
-	}
-
-	@Test
-	public void testTrustPreviewDoesNotChangeTrustStatusOrVoteWeight() throws DataException {
-		TestAccount bob;
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			TestAccount alice = Common.getTestAccount(repository, "alice");
-			bob = Common.getTestAccount(repository, "bob");
-			TestAccount chloe = Common.getTestAccount(repository, "chloe");
-
-			setVoteAccount(repository, alice, 100);
-			setVoteAccount(repository, chloe, 100);
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, 4), alice);
-			TransactionUtils.signAndMint(repository, ratingData(bob, alice, 4), bob);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, 4), chloe);
-			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, 4), bob);
-
-			setVoteAccount(repository, bob, 100);
-		}
-
-		AccountTrustPreviewData preview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
-		assertEquals(0, preview.getPositiveScore());
-		assertEquals(2, preview.getMutualPositiveCount());
-		assertEquals(AccountTrustStatus.UNVERIFIED, preview.getTrustStatus());
-		assertEquals(0, preview.getTrustWeightPercent());
-
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			AccountData bobAccountData = repository.getAccountRepository().getAccount(bob.getAddress());
-
-			assertEquals(AccountTrustStatus.UNVERIFIED, bobAccountData.getTrustStatus());
-			assertEquals(0, bobAccountData.getEffectiveVoteWeight());
-		}
-	}
-
-	@Test
 	public void testCategoryAwareListAndSummaryEndpoints() throws DataException {
 		TestAccount bob;
 		TestAccount alice;
@@ -428,7 +314,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
-	public void testAuraStyleTrustPreviewUsesMintingGroupSeed() throws DataException {
+	public void testTrustExplanationUsesMintingGroupSeed() throws DataException {
 		TestAccount alice;
 		TestAccount bob;
 		TestAccount chloe;
@@ -443,38 +329,45 @@ public class AccountRatingsApiTests extends ApiCommon {
 			createAuraTrustGraph(repository, alice, bob, chloe, dilbert);
 		}
 
-		AccountTrustPreviewData bobPreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
-		AccountTrustPreviewData chloePreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(chloe.getPublicKey()));
-		AccountTrustPreviewData dilbertPreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(dilbert.getPublicKey()));
-		AccountTrustPreviewData alicePreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(alice.getPublicKey()));
+		AccountTrustExplanationData bobExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(Base58.encode(bob.getPublicKey()), true);
+		AccountTrustExplanationData chloeExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(Base58.encode(chloe.getPublicKey()), true);
+		AccountTrustExplanationData dilbertExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(Base58.encode(dilbert.getPublicKey()), true);
+		AccountTrustExplanationData aliceExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(Base58.encode(alice.getPublicKey()), true);
 
-		AccountTrustPreviewData.CategoryTrust bobManager = findCategory(bobPreview, AccountRatingCategory.MANAGER);
+		AccountTrustExplanationData.CategoryExplanation bobManager = findCategory(bobExplanation, AccountRatingCategory.MANAGER);
 		assertEquals(1_000_000L, bobManager.getScore());
 		assertEquals(200_000L, bobManager.getLevelScore());
 		assertEquals(100_000L, bobManager.getLevelScoreCap());
 		assertEquals(2, bobManager.getLevel());
 
-		AccountTrustPreviewData.CategoryTrust chloeTrainer = findCategory(chloePreview, AccountRatingCategory.TRAINER);
+		AccountTrustExplanationData.CategoryExplanation chloeTrainer = findCategory(chloeExplanation,
+				AccountRatingCategory.TRAINER);
 		assertEquals(8_000_000L, chloeTrainer.getScore());
 		assertEquals(1_000_000L, chloeTrainer.getLevelScore());
 		assertEquals(500_000L, chloeTrainer.getLevelScoreCap());
 		assertEquals(2, chloeTrainer.getLevel());
 
-		AccountTrustPreviewData.CategoryTrust dilbertPlayer = findCategory(dilbertPreview, AccountRatingCategory.PLAYER);
+		AccountTrustExplanationData.CategoryExplanation dilbertPlayer = findCategory(dilbertExplanation,
+				AccountRatingCategory.PLAYER);
 		assertEquals(32_000_000L, dilbertPlayer.getScore());
 		assertEquals(3_000_000L, dilbertPlayer.getLevelScore());
 		assertEquals(1_500_000L, dilbertPlayer.getLevelScoreCap());
 		assertEquals(3, dilbertPlayer.getLevel());
 
-		AccountTrustPreviewData.CategoryTrust aliceSubject = findCategory(alicePreview, AccountRatingCategory.SUBJECT);
-		assertTrue(alicePreview.isMintingSeedMember());
+		AccountTrustExplanationData.CategoryExplanation aliceSubject = findCategory(aliceExplanation,
+				AccountRatingCategory.SUBJECT);
+		assertTrue(aliceExplanation.isMintingSeedMember());
 		assertEquals(96_000_000L, aliceSubject.getScore());
 		assertEquals(50_000_000L, aliceSubject.getLevelScore());
 		assertEquals(25_000_000L, aliceSubject.getLevelScoreCap());
 		assertEquals(2, aliceSubject.getLevel());
-		assertEquals(AccountTrustStatus.SILVER, alicePreview.getTrustStatus());
+		assertEquals(AccountTrustStatus.SILVER, aliceExplanation.getTrustStatus());
 
-		AccountTrustPreviewData.CategoryImpact subjectImpact = aliceSubject.getImpacts().get(0);
+		AccountTrustPreviewData.CategoryImpact subjectImpact = aliceSubject.getTopPositiveImpacts().get(0);
 		assertEquals(dilbert.getAddress(), subjectImpact.getRaterAddress());
 		assertEquals(3, subjectImpact.getEvaluatorLevel());
 		assertEquals(32_000_000L, subjectImpact.getEvaluatorScore());
@@ -486,14 +379,16 @@ public class AccountRatingsApiTests extends ApiCommon {
 			refreshTrustSnapshots(repository);
 		}
 
-		AccountTrustPreviewData negativePreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(alice.getPublicKey()));
-		AccountTrustPreviewData.CategoryTrust negativeSubject = findCategory(negativePreview, AccountRatingCategory.SUBJECT);
+		AccountTrustExplanationData negativeExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(Base58.encode(alice.getPublicKey()), true);
+		AccountTrustExplanationData.CategoryExplanation negativeSubject = findCategory(negativeExplanation,
+				AccountRatingCategory.SUBJECT);
 		assertEquals(-96_000_000L, negativeSubject.getScore());
 		assertEquals(0L, negativeSubject.getLevelScore());
 		assertEquals(5_000_000L, negativeSubject.getLevelScoreCap());
 		assertEquals(0, negativeSubject.getLevel());
-		assertEquals(AccountTrustStatus.UNVERIFIED, negativePreview.getTrustStatus());
-		assertEquals(-128_000_000L, negativeSubject.getImpacts().get(0).getImpact());
+		assertEquals(AccountTrustStatus.UNVERIFIED, negativeExplanation.getTrustStatus());
+		assertEquals(-128_000_000L, negativeSubject.getTopNegativeImpacts().get(0).getImpact());
 	}
 
 	@Test
@@ -679,16 +574,20 @@ public class AccountRatingsApiTests extends ApiCommon {
 			refreshTrustSnapshots(repository);
 		}
 
-		AccountTrustPreviewData bobPreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(bob.getPublicKey()));
-		AccountTrustPreviewData chloePreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(chloe.getPublicKey()));
+		AccountTrustExplanationData bobExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(Base58.encode(bob.getPublicKey()), true);
+		AccountTrustExplanationData chloeExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(Base58.encode(chloe.getPublicKey()), true);
 
-		AccountTrustPreviewData.CategoryTrust bobManager = findCategory(bobPreview, AccountRatingCategory.MANAGER);
-		AccountTrustPreviewData.CategoryTrust chloeManager = findCategory(chloePreview, AccountRatingCategory.MANAGER);
+		AccountTrustExplanationData.CategoryExplanation bobManager = findCategory(bobExplanation,
+				AccountRatingCategory.MANAGER);
+		AccountTrustExplanationData.CategoryExplanation chloeManager = findCategory(chloeExplanation,
+				AccountRatingCategory.MANAGER);
 
 		assertEquals(250_000L, bobManager.getScore());
-		assertEquals(250_000L, bobManager.getImpacts().get(0).getImpact());
+		assertEquals(250_000L, bobManager.getTopPositiveImpacts().get(0).getImpact());
 		assertEquals(750_000L, chloeManager.getScore());
-		assertEquals(750_000L, chloeManager.getImpacts().get(0).getImpact());
+		assertEquals(750_000L, chloeManager.getTopPositiveImpacts().get(0).getImpact());
 	}
 
 	@Test
@@ -880,8 +779,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountRatingSummary(Base58.encode(unknown.getPublicKey())));
 		assertApiError(ApiError.INVALID_CRITERIA,
-				() -> this.accountRatingsResource.getAccountTrustPreview(Base58.encode(unknown.getPublicKey())));
-		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountTrustExplanation(Base58.encode(unknown.getPublicKey()), null));
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountTrustProfile(Base58.encode(unknown.getPublicKey())));
@@ -893,8 +790,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 	public void testInvalidPublicKeyFailsList() {
 		assertApiError(ApiError.INVALID_PUBLIC_KEY,
 				() -> this.accountRatingsResource.getAccountRatings("not-a-public-key", null, null, null, null));
-		assertApiError(ApiError.INVALID_PUBLIC_KEY,
-				() -> this.accountRatingsResource.getAccountTrustPreview("not-a-public-key"));
 		assertApiError(ApiError.INVALID_PUBLIC_KEY,
 				() -> this.accountRatingsResource.getAccountTrustExplanation("not-a-public-key", null));
 		assertApiError(ApiError.INVALID_PUBLIC_KEY,
@@ -935,13 +830,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), category, rating);
 	}
 
-	private AccountTrustPreviewData.EvaluatorImpact findEvaluatorImpact(AccountTrustPreviewData preview, String raterAddress) {
-		return preview.getEvaluatorImpacts().stream()
-				.filter(impact -> impact.getRaterAddress().equals(raterAddress))
-				.findFirst()
-				.orElseThrow(() -> new AssertionError("Missing evaluator impact for " + raterAddress));
-	}
-
 	private AccountRatingData findRatingByRater(List<AccountRatingData> ratings, String raterAddress) {
 		return ratings.stream()
 				.filter(rating -> rating.getRaterAddress().equals(raterAddress))
@@ -961,13 +849,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(expected.getRaterAddress(), actual.getRaterAddress());
 		assertEquals(expected.getCategory(), actual.getCategory());
 		assertEquals(expected.getRating(), actual.getRating());
-	}
-
-	private AccountTrustPreviewData.CategoryTrust findCategory(AccountTrustPreviewData preview, AccountRatingCategory category) {
-		return preview.getCategories().stream()
-				.filter(categoryTrust -> categoryTrust.getCategory() == category)
-				.findFirst()
-				.orElseThrow(() -> new AssertionError("Missing category " + category));
 	}
 
 	private AccountTrustPreviewData.CategoryTrust findCategory(AccountTrustDerivationData derivation,

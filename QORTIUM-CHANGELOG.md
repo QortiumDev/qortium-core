@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - api: remove trust preview endpoint
+
+Removed the old trust-preview endpoint now that Qortium has stable trust profile, explanation, policy, snapshot, and derivation APIs for account trust screens and audit tools. The shared trust rating-count and category DTO helpers remain because the current trust APIs still use them, but preview-only evaluator-impact, mutual-positive, and score-summary response fields were removed to keep the baseline API surface focused before launch.
+
 ### 2026-05-15 - api: scale trust snapshot queries
 
 Moved stored trust snapshot filtering, paging, and stored trust-derivation account selection into repository queries so clients can page and filter the trust network without forcing the API to load broad snapshot sets first. This keeps the public trust API behavior and response shapes unchanged while giving larger Qortium-derived communities a better path for account trust browsing and audit screens.
