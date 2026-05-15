@@ -13,9 +13,19 @@ import org.qortal.repository.DataException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
+
+	private static final String TRUST_SNAPSHOT_SELECT_COLUMNS = "account_public_key, account, category, score, "
+			+ "level_score, level_score_cap, level, mapped_trust_status, minting_seed_member, "
+			+ "positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, "
+			+ "negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, "
+			+ "snapshot_height, snapshot_timestamp";
 
 	protected HSQLDBRepository repository;
 
@@ -223,40 +233,155 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 	@Override
 	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(Integer limit, Integer offset, Boolean reverse)
 			throws DataException {
+		return getTrustDerivationSnapshots(null, null, null, null, null, limit, offset, reverse);
+	}
+
+	@Override
+	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(String accountAddress) throws DataException {
+		return getTrustDerivationSnapshots(accountAddress, null, null, null, null, null, null, null);
+	}
+
+	@Override
+	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(String accountAddress, AccountRatingCategory category,
+			AccountTrustStatus status, Boolean seedMember, Integer minLevel, Integer limit, Integer offset, Boolean reverse)
+			throws DataException {
+		if (limit != null && limit == 0)
+			return new ArrayList<>();
+
 		StringBuilder sql = new StringBuilder(512);
-		sql.append("SELECT account_public_key, account, category, score, level_score, level_score_cap, ")
-				.append("level, mapped_trust_status, minting_seed_member, ")
-				.append("positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, ")
-				.append("negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, ")
-				.append("snapshot_height, snapshot_timestamp FROM AccountTrustDerivationSnapshots");
+		List<Object> bindParams = new ArrayList<>();
+		List<String> whereClauses = new ArrayList<>();
+
+		sql.append("SELECT ").append(TRUST_SNAPSHOT_SELECT_COLUMNS)
+				.append(" FROM AccountTrustDerivationSnapshots");
+
+		if (accountAddress != null) {
+			whereClauses.add("account = ?");
+			bindParams.add(accountAddress);
+		}
+
+		if (category != null) {
+			whereClauses.add("category = ?");
+			bindParams.add(category.value);
+		}
+
+		if (status != null) {
+			whereClauses.add("mapped_trust_status = ?");
+			bindParams.add(status.getValue());
+		}
+
+		if (seedMember != null) {
+			whereClauses.add("minting_seed_member = ?");
+			bindParams.add(seedMember);
+		}
+
+		if (minLevel != null) {
+			whereClauses.add("level >= ?");
+			bindParams.add(minLevel);
+		}
+
+		if (!whereClauses.isEmpty())
+			sql.append(" WHERE ").append(String.join(" AND ", whereClauses));
 
 		String sortDirection = Boolean.TRUE.equals(reverse) ? " DESC" : "";
 		sql.append(" ORDER BY account").append(sortDirection).append(", category").append(sortDirection);
 		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
 
-		return getTrustDerivationSnapshotsFromSql(sql.toString());
+		return getTrustDerivationSnapshotsFromSql(sql.toString(), bindParams.toArray());
 	}
 
 	@Override
-	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(String accountAddress) throws DataException {
-		String sql = "SELECT account_public_key, account, category, score, level_score, level_score_cap, "
-				+ "level, mapped_trust_status, minting_seed_member, "
-				+ "positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, "
-				+ "negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, "
-				+ "snapshot_height, snapshot_timestamp FROM AccountTrustDerivationSnapshots "
-				+ "WHERE account = ? ORDER BY category";
+	public List<AccountTrustSnapshotData> getTrustDerivationSnapshotsForDerivation(AccountTrustStatus status,
+			AccountRatingCategory sortCategory, Boolean seedMember, Integer minLevel, Integer limit, Integer offset,
+			Boolean reverse) throws DataException {
+		if (limit != null && limit == 0)
+			return new ArrayList<>();
 
-		return getTrustDerivationSnapshotsFromSql(sql, accountAddress);
+		List<String> accountAddresses = getTrustDerivationSnapshotAccountPage(status, defaultCategory(sortCategory),
+				seedMember, minLevel, limit, offset, reverse);
+		if (accountAddresses.isEmpty())
+			return new ArrayList<>();
+
+		return getTrustDerivationSnapshotsForAccounts(accountAddresses);
+	}
+
+	private List<String> getTrustDerivationSnapshotAccountPage(AccountTrustStatus status, AccountRatingCategory sortCategory,
+			Boolean seedMember, Integer minLevel, Integer limit, Integer offset, Boolean reverse) throws DataException {
+		StringBuilder sql = new StringBuilder(512);
+		List<Object> bindParams = new ArrayList<>();
+		List<String> whereClauses = new ArrayList<>();
+
+		sql.append("SELECT subject_snapshot.account FROM AccountTrustDerivationSnapshots subject_snapshot ")
+				.append("JOIN AccountTrustDerivationSnapshots sort_snapshot ")
+				.append("ON sort_snapshot.account = subject_snapshot.account AND sort_snapshot.category = ?");
+		bindParams.add(sortCategory.value);
+
+		whereClauses.add("subject_snapshot.category = ?");
+		bindParams.add(AccountRatingCategory.SUBJECT.value);
+
+		if (status != null) {
+			whereClauses.add("subject_snapshot.mapped_trust_status = ?");
+			bindParams.add(status.getValue());
+		}
+
+		if (seedMember != null) {
+			whereClauses.add("subject_snapshot.minting_seed_member = ?");
+			bindParams.add(seedMember);
+		}
+
+		if (minLevel != null) {
+			whereClauses.add("sort_snapshot.level >= ?");
+			bindParams.add(minLevel);
+		}
+
+		sql.append(" WHERE ").append(String.join(" AND ", whereClauses));
+
+		String scoreSortDirection = Boolean.TRUE.equals(reverse) ? " ASC" : " DESC";
+		String accountSortDirection = Boolean.TRUE.equals(reverse) ? " DESC" : " ASC";
+		sql.append(" ORDER BY sort_snapshot.level").append(scoreSortDirection)
+				.append(", sort_snapshot.score").append(scoreSortDirection)
+				.append(", subject_snapshot.account").append(accountSortDirection);
+		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+
+		List<String> accountAddresses = new ArrayList<>();
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {
+			if (resultSet == null)
+				return accountAddresses;
+
+			do {
+				accountAddresses.add(resultSet.getString(1));
+			} while (resultSet.next());
+
+			return accountAddresses;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch account trust derivation snapshot account page from repository", e);
+		}
+	}
+
+	private List<AccountTrustSnapshotData> getTrustDerivationSnapshotsForAccounts(List<String> accountAddresses)
+			throws DataException {
+		StringBuilder sql = new StringBuilder(512);
+		sql.append("SELECT ").append(TRUST_SNAPSHOT_SELECT_COLUMNS)
+				.append(" FROM AccountTrustDerivationSnapshots WHERE account IN (")
+				.append(String.join(", ", Collections.nCopies(accountAddresses.size(), "?")))
+				.append(")");
+
+		List<AccountTrustSnapshotData> snapshots = getTrustDerivationSnapshotsFromSql(sql.toString(),
+				accountAddresses.toArray());
+		Map<String, Integer> accountOrder = new HashMap<>();
+		for (int i = 0; i < accountAddresses.size(); ++i)
+			accountOrder.put(accountAddresses.get(i), i);
+
+		snapshots.sort(Comparator
+				.comparingInt((AccountTrustSnapshotData snapshot) -> accountOrder.get(snapshot.getAccountAddress()))
+				.thenComparing(AccountTrustSnapshotData::getCategory));
+		return snapshots;
 	}
 
 	@Override
 	public AccountTrustSnapshotData getTrustDerivationSnapshot(String accountAddress, AccountRatingCategory category)
 			throws DataException {
-		String sql = "SELECT account_public_key, account, category, score, level_score, level_score_cap, "
-				+ "level, mapped_trust_status, minting_seed_member, "
-				+ "positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, "
-				+ "negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, "
-				+ "snapshot_height, snapshot_timestamp FROM AccountTrustDerivationSnapshots "
+		String sql = "SELECT " + TRUST_SNAPSHOT_SELECT_COLUMNS + " FROM AccountTrustDerivationSnapshots "
 				+ "WHERE account = ? AND category = ?";
 
 		List<AccountTrustSnapshotData> snapshots = getTrustDerivationSnapshotsFromSql(sql, accountAddress,

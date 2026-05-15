@@ -1267,6 +1267,16 @@ public class HSQLDBDatabaseUpdates {
 					createAccountRatingQueryIndexes(connection);
 					break;
 
+				case 68:
+					// Add composite indexes for stored account trust snapshot query paths.
+					stmt.execute("CREATE INDEX AccountTrustDerivationSnapshotSeedIndex "
+							+ "ON AccountTrustDerivationSnapshots (minting_seed_member, account, category)");
+					stmt.execute("CREATE INDEX AccountTrustDerivationSnapshotCategoryLevelIndex "
+							+ "ON AccountTrustDerivationSnapshots (category, level, score, account)");
+					stmt.execute("CREATE INDEX AccountTrustDerivationSnapshotSubjectStatusIndex "
+							+ "ON AccountTrustDerivationSnapshots (category, mapped_trust_status, account)");
+					break;
+
 				default:
 					// nothing to do
 					return false;

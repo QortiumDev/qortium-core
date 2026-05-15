@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - api: scale trust snapshot queries
+
+Moved stored trust snapshot filtering, paging, and stored trust-derivation account selection into repository queries so clients can page and filter the trust network without forcing the API to load broad snapshot sets first. This keeps the public trust API behavior and response shapes unchanged while giving larger Qortium-derived communities a better path for account trust browsing and audit screens.
+
 ### 2026-05-15 - test: cover account rating removals
 
 Added regression coverage for account-rating removals so rating `0` is proven to remove only the intended active account-rating edge, refresh stored trust snapshots, clear derived Suspicious mint blocking when enough negative evidence is removed, and restore the prior rating and trust result when the removal block is orphaned. This strengthens the trust-network safety model without changing rating transactions, trust scoring, minting, voting, or API behavior.

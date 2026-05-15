@@ -785,6 +785,11 @@ public class AccountRatingsApiTests extends ApiCommon {
 				null, null, null, null, 2, 1, null);
 		assertEquals(2, pagedList.size());
 		assertEquals(fullList.get(1).getAccountAddress(), pagedList.get(0).getAccountAddress());
+		assertEquals(4, pagedList.get(0).getCategories().size());
+		findCategory(pagedList.get(0), AccountRatingCategory.SUBJECT);
+		findCategory(pagedList.get(0), AccountRatingCategory.PLAYER);
+		findCategory(pagedList.get(0), AccountRatingCategory.TRAINER);
+		findCategory(pagedList.get(0), AccountRatingCategory.MANAGER);
 
 		List<AccountTrustDerivationData> reversedList = this.accountRatingsResource.getAccountTrustDerivation(
 				null, null, null, null, 1, null, true);

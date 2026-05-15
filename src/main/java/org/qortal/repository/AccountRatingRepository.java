@@ -5,6 +5,7 @@ import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustSnapshotData;
+import org.qortal.data.account.AccountTrustStatus;
 
 import java.util.List;
 
@@ -37,6 +38,14 @@ public interface AccountRatingRepository {
 			throws DataException;
 
 	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(String accountAddress) throws DataException;
+
+	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(String accountAddress, AccountRatingCategory category,
+			AccountTrustStatus status, Boolean seedMember, Integer minLevel, Integer limit, Integer offset, Boolean reverse)
+			throws DataException;
+
+	public List<AccountTrustSnapshotData> getTrustDerivationSnapshotsForDerivation(AccountTrustStatus status,
+			AccountRatingCategory sortCategory, Boolean seedMember, Integer minLevel, Integer limit, Integer offset,
+			Boolean reverse) throws DataException;
 
 	public AccountTrustSnapshotData getTrustDerivationSnapshot(String accountAddress, AccountRatingCategory category)
 			throws DataException;

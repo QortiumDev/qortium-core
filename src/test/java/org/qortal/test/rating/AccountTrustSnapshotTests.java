@@ -63,6 +63,12 @@ public class AccountTrustSnapshotTests extends Common {
 			assertTrue(tableHasPrimaryKey(repository, "AccountTrustDerivationSnapshots", "category"));
 			assertTrue(tableHasIndex(repository, "AccountTrustDerivationSnapshots", "mapped_trust_status"));
 			assertTrue(tableHasIndex(repository, "AccountTrustDerivationSnapshots", "snapshot_height"));
+			assertTrue(indexHasColumns(repository, "AccountTrustDerivationSnapshots",
+					"AccountTrustDerivationSnapshotSeedIndex", "minting_seed_member", "account", "category"));
+			assertTrue(indexHasColumns(repository, "AccountTrustDerivationSnapshots",
+					"AccountTrustDerivationSnapshotCategoryLevelIndex", "category", "level", "score", "account"));
+			assertTrue(indexHasColumns(repository, "AccountTrustDerivationSnapshots",
+					"AccountTrustDerivationSnapshotSubjectStatusIndex", "category", "mapped_trust_status", "account"));
 		}
 	}
 
@@ -139,6 +145,112 @@ public class AccountTrustSnapshotTests extends Common {
 			assertEquals(3_000_000L, dilbertPlayer.getLevelScore());
 			assertEquals(1_500_000L, dilbertPlayer.getLevelScoreCap());
 			assertEquals(3, dilbertPlayer.getLevel());
+		}
+	}
+
+	@Test
+	public void testFilteredTrustSnapshotRepositoryQueries() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, chloe);
+			ensureKnownAccount(repository, dilbert);
+			repository.saveChanges();
+
+			AccountTrustTestUtils.createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
+
+			List<AccountTrustSnapshotData> allSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, null, null, null, null, null, null, null);
+			assertEquals(60, allSnapshots.size());
+
+			List<AccountTrustSnapshotData> aliceSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(alice.getAddress(), null, null, null, null, null, null, null);
+			assertEquals(4, aliceSnapshots.size());
+
+			List<AccountTrustSnapshotData> silverSubjectSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, AccountRatingCategory.SUBJECT, AccountTrustStatus.SILVER, null,
+							null, null, null, null);
+			assertEquals(1, silverSubjectSnapshots.size());
+			assertEquals(alice.getAddress(), silverSubjectSnapshots.get(0).getAccountAddress());
+			assertEquals(AccountRatingCategory.SUBJECT, silverSubjectSnapshots.get(0).getCategory());
+
+			List<AccountTrustSnapshotData> managerSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, AccountRatingCategory.MANAGER, null, null, 2, null, null, null);
+			assertEquals(2, managerSnapshots.size());
+			for (AccountTrustSnapshotData snapshot : managerSnapshots) {
+				assertEquals(AccountRatingCategory.MANAGER, snapshot.getCategory());
+				assertTrue(snapshot.getLevel() >= 2);
+			}
+
+			List<AccountTrustSnapshotData> seedSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, null, null, true, null, null, null, null);
+			assertEquals(4, seedSnapshots.size());
+			for (AccountTrustSnapshotData snapshot : seedSnapshots)
+				assertEquals(alice.getAddress(), snapshot.getAccountAddress());
+
+			List<AccountTrustSnapshotData> pagedSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, null, null, null, null, 2, 1, null);
+			assertEquals(2, pagedSnapshots.size());
+			assertEquals(allSnapshots.get(1).getAccountAddress(), pagedSnapshots.get(0).getAccountAddress());
+			assertEquals(allSnapshots.get(1).getCategory(), pagedSnapshots.get(0).getCategory());
+
+			List<AccountTrustSnapshotData> reversedSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, null, null, null, null, 1, null, true);
+			assertEquals(1, reversedSnapshots.size());
+			assertEquals(allSnapshots.get(allSnapshots.size() - 1).getAccountAddress(),
+					reversedSnapshots.get(0).getAccountAddress());
+			assertEquals(allSnapshots.get(allSnapshots.size() - 1).getCategory(), reversedSnapshots.get(0).getCategory());
+
+			assertTrue(repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, null, null, null, null, 0, null, null).isEmpty());
+		}
+	}
+
+	@Test
+	public void testTrustDerivationRepositoryQueryPagesAccountsBeforeLoadingSnapshots() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, chloe);
+			ensureKnownAccount(repository, dilbert);
+			repository.saveChanges();
+
+			AccountTrustTestUtils.createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
+
+			List<AccountTrustSnapshotData> silverAccountSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshotsForDerivation(AccountTrustStatus.SILVER, AccountRatingCategory.SUBJECT,
+							null, null, null, null, null);
+			assertSingleAccountSnapshotPage(silverAccountSnapshots, alice.getAddress());
+
+			List<AccountTrustSnapshotData> playerLevelThreeSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.PLAYER, null, 3, null, null,
+							null);
+			assertSingleAccountSnapshotPage(playerLevelThreeSnapshots, dilbert.getAddress());
+
+			List<AccountTrustSnapshotData> firstAccountSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.SUBJECT, null, null, 1, null,
+							null);
+			assertSingleAccountSnapshotPage(firstAccountSnapshots, alice.getAddress());
+
+			List<AccountTrustSnapshotData> reversedFirstAccountSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.SUBJECT, null, null, 1, null,
+							true);
+			assertEquals(4, reversedFirstAccountSnapshots.size());
+			assertFalse(alice.getAddress().equals(reversedFirstAccountSnapshots.get(0).getAccountAddress()));
+
+			assertTrue(repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.SUBJECT, null, null, 0, null,
+							null).isEmpty());
 		}
 	}
 
@@ -279,6 +391,17 @@ public class AccountTrustSnapshotTests extends Common {
 				.filter(snapshot -> snapshot.getCategory() == category)
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("Missing snapshot for " + accountAddress + " in category " + category));
+	}
+
+	private void assertSingleAccountSnapshotPage(List<AccountTrustSnapshotData> snapshots, String accountAddress) {
+		assertEquals(4, snapshots.size());
+		for (AccountTrustSnapshotData snapshot : snapshots)
+			assertEquals(accountAddress, snapshot.getAccountAddress());
+
+		assertEquals(AccountRatingCategory.SUBJECT, snapshots.get(0).getCategory());
+		assertEquals(AccountRatingCategory.PLAYER, snapshots.get(1).getCategory());
+		assertEquals(AccountRatingCategory.TRAINER, snapshots.get(2).getCategory());
+		assertEquals(AccountRatingCategory.MANAGER, snapshots.get(3).getCategory());
 	}
 
 	private boolean tableHasColumn(Repository repository, String tableName, String columnName) throws SQLException {
