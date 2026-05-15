@@ -4,8 +4,10 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.AccountTrustDerivation;
+import org.qortal.account.AccountTrustWeight;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustSnapshotData;
@@ -28,6 +30,8 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class AccountTrustGraphBehaviorTests extends Common {
@@ -196,6 +200,130 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			assertEquals(AccountTrustStatus.UNVERIFIED, aliceSubjectRestored.getMappedTrustStatus());
 			assertTrue("Orphaning the second trusted negative rating should restore mint eligibility",
 					new Account(repository, alice.getAddress()).canMint(false));
+		}
+	}
+
+	@Test
+	public void testPositiveSubjectRatingRemovalRefreshesAndOrphanRestoresSnapshot() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount seedAccount = Common.getTestAccount(repository, "alice");
+			TestAccount subject = Common.getTestAccount(repository, "chloe");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			ensureKnownAccount(repository, seedAccount);
+			ensureKnownAccount(repository, subject);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, dilbert);
+
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, seedAccount, bob);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, seedAccount, dilbert);
+			refreshTrustSnapshots(repository);
+
+			TransactionUtils.signAndMint(repository, ratingData(bob, subject, AccountRatingCategory.SUBJECT, 4), bob);
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, subject, AccountRatingCategory.SUBJECT, 4),
+					dilbert);
+
+			AccountTrustSnapshotData subjectAfterRatings = findSnapshot(repository, subject.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(128_000_000L, subjectAfterRatings.getScore());
+			assertEquals(100_000_000L, subjectAfterRatings.getLevelScore());
+			assertEquals(50_000_000L, subjectAfterRatings.getLevelScoreCap());
+			assertEquals(3, subjectAfterRatings.getLevel());
+			assertEquals(AccountTrustStatus.GOLD, subjectAfterRatings.getMappedTrustStatus());
+
+			TransactionUtils.signAndMint(repository,
+					ratingData(bob, subject, AccountRatingCategory.SUBJECT, AccountRating.NO_RATING), bob);
+
+			assertNull(repository.getAccountRatingRepository().getRating(subject.getPublicKey(), bob.getPublicKey(),
+					AccountRatingCategory.SUBJECT));
+			assertActiveRating(repository, subject, dilbert, AccountRatingCategory.SUBJECT, 4);
+
+			AccountTrustSnapshotData subjectAfterRemoval = findSnapshot(repository, subject.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(64_000_000L, subjectAfterRemoval.getScore());
+			assertEquals(5_000_000L, subjectAfterRemoval.getLevelScore());
+			assertEquals(5_000_000L, subjectAfterRemoval.getLevelScoreCap());
+			assertEquals(0, subjectAfterRemoval.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, subjectAfterRemoval.getMappedTrustStatus());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assertActiveRating(repository, subject, bob, AccountRatingCategory.SUBJECT, 4);
+			assertActiveRating(repository, subject, dilbert, AccountRatingCategory.SUBJECT, 4);
+
+			AccountTrustSnapshotData subjectAfterOrphan = findSnapshot(repository, subject.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(128_000_000L, subjectAfterOrphan.getScore());
+			assertEquals(100_000_000L, subjectAfterOrphan.getLevelScore());
+			assertEquals(50_000_000L, subjectAfterOrphan.getLevelScoreCap());
+			assertEquals(3, subjectAfterOrphan.getLevel());
+			assertEquals(AccountTrustStatus.GOLD, subjectAfterOrphan.getMappedTrustStatus());
+		}
+	}
+
+	@Test
+	public void testNegativeSubjectRatingRemovalClearsSuspiciousAndOrphanRestoresMintBlock() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount seedAccount = Common.getTestAccount(repository, "alice");
+			TestAccount subject = Common.getTestAccount(repository, "chloe");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			ensureKnownAccount(repository, seedAccount);
+			ensureKnownAccount(repository, subject);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, dilbert);
+
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, seedAccount, bob);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, seedAccount, dilbert);
+			refreshTrustSnapshots(repository);
+
+			TransactionUtils.signAndMint(repository, ratingData(bob, subject, AccountRatingCategory.SUBJECT, -2), bob);
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, subject, AccountRatingCategory.SUBJECT, -2),
+					dilbert);
+
+			AccountTrustSnapshotData subjectAfterRatings = findSnapshot(repository, subject.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(-256_000_000L, subjectAfterRatings.getScore());
+			assertEquals(-10_000_000L, subjectAfterRatings.getLevelScore());
+			assertEquals(5_000_000L, subjectAfterRatings.getLevelScoreCap());
+			assertEquals(-1, subjectAfterRatings.getLevel());
+			assertEquals(AccountTrustStatus.SUSPICIOUS, subjectAfterRatings.getMappedTrustStatus());
+			assertFalse("Two trusted negative ratings should block mint eligibility",
+					AccountTrustWeight.canMint(subjectAfterRatings));
+
+			TransactionUtils.signAndMint(repository,
+					ratingData(bob, subject, AccountRatingCategory.SUBJECT, AccountRating.NO_RATING), bob);
+
+			assertNull(repository.getAccountRatingRepository().getRating(subject.getPublicKey(), bob.getPublicKey(),
+					AccountRatingCategory.SUBJECT));
+			assertActiveRating(repository, subject, dilbert, AccountRatingCategory.SUBJECT, -2);
+
+			AccountTrustSnapshotData subjectAfterRemoval = findSnapshot(repository, subject.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(-128_000_000L, subjectAfterRemoval.getScore());
+			assertEquals(-5_000_000L, subjectAfterRemoval.getLevelScore());
+			assertEquals(5_000_000L, subjectAfterRemoval.getLevelScoreCap());
+			assertEquals(0, subjectAfterRemoval.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, subjectAfterRemoval.getMappedTrustStatus());
+			assertTrue("Removing one trusted negative rating should restore mint eligibility",
+					AccountTrustWeight.canMint(subjectAfterRemoval));
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assertActiveRating(repository, subject, bob, AccountRatingCategory.SUBJECT, -2);
+			assertActiveRating(repository, subject, dilbert, AccountRatingCategory.SUBJECT, -2);
+
+			AccountTrustSnapshotData subjectAfterOrphan = findSnapshot(repository, subject.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(-256_000_000L, subjectAfterOrphan.getScore());
+			assertEquals(-10_000_000L, subjectAfterOrphan.getLevelScore());
+			assertEquals(5_000_000L, subjectAfterOrphan.getLevelScoreCap());
+			assertEquals(-1, subjectAfterOrphan.getLevel());
+			assertEquals(AccountTrustStatus.SUSPICIOUS, subjectAfterOrphan.getMappedTrustStatus());
+			assertFalse("Orphaning the removal should restore Suspicious mint blocking",
+					AccountTrustWeight.canMint(subjectAfterOrphan));
 		}
 	}
 
@@ -464,6 +592,16 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			AccountRatingCategory category, int rating) throws DataException {
 		repository.getAccountRatingRepository().save(new AccountRatingData(target.getPublicKey(), rater.getPublicKey(),
 				category, rating));
+	}
+
+	private void assertActiveRating(Repository repository, PrivateKeyAccount target, PrivateKeyAccount rater,
+			AccountRatingCategory category, int expectedRating) throws DataException {
+		AccountRatingData activeRating = repository.getAccountRatingRepository().getRating(target.getPublicKey(),
+				rater.getPublicKey(), category);
+
+		assertNotNull(activeRating);
+		assertEquals(expectedRating, activeRating.getRating());
+		assertEquals(category, activeRating.getCategory());
 	}
 
 	private void refreshTrustSnapshots(Repository repository) throws DataException {

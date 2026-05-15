@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - test: cover account rating removals
+
+Added regression coverage for account-rating removals so rating `0` is proven to remove only the intended active account-rating edge, refresh stored trust snapshots, clear derived Suspicious mint blocking when enough negative evidence is removed, and restore the prior rating and trust result when the removal block is orphaned. This strengthens the trust-network safety model without changing rating transactions, trust scoring, minting, voting, or API behavior.
+
 ### 2026-05-15 - docs: add trust network guide
 
 Added a public-facing account trust network guide that explains why Qortium uses on-chain trust ratings, how signed confidence ratings and the Manager, Trainer, Player, and Subject categories work, how the Minting group seeds the graph, how Gold/Silver/Bronze/Unverified/Suspicious status affects minting and vote weight, and which APIs clients should use to display or audit trust state. The existing Aura trust-tier note remains the detailed implementation-history document, while the new guide gives users and chain builders a clearer current-system overview.

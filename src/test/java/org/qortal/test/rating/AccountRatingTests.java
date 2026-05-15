@@ -153,7 +153,8 @@ public class AccountRatingTests extends Common {
 			assertEquals(2, repository.getAccountRatingRepository()
 					.getRatings(bob.getPublicKey(), alice.getPublicKey(), null, null, null, null).size());
 			assertEquals(1, repository.getAccountRatingRepository()
-					.getRatings(bob.getPublicKey(), alice.getPublicKey(), AccountRatingCategory.PLAYER, null, null, null).size());
+					.getRatings(bob.getPublicKey(), alice.getPublicKey(), AccountRatingCategory.PLAYER, null, null, null)
+					.size());
 
 			AccountRatingSummaryData subjectSummary = repository.getAccountRatingRepository()
 					.getRatingSummary(bob.getPublicKey(), bob.getAddress(), AccountRatingCategory.SUBJECT);
@@ -164,10 +165,34 @@ public class AccountRatingTests extends Common {
 			assertEquals(0, playerSummary.getPositiveRatingCount());
 			assertEquals(1, playerSummary.getNegativeRatingCount());
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.PLAYER, AccountRating.NO_RATING), alice);
+			TransactionUtils.signAndMint(repository,
+					ratingData(alice, bob, AccountRatingCategory.PLAYER, AccountRating.NO_RATING), alice);
 			assertActiveRating(repository, bob, alice, AccountRatingCategory.SUBJECT, 4);
 			assertNull(repository.getAccountRatingRepository().getRating(bob.getPublicKey(), alice.getPublicKey(),
 					AccountRatingCategory.PLAYER));
+			assertEquals(1, repository.getAccountRatingRepository()
+					.getRatings(bob.getPublicKey(), alice.getPublicKey(), null, null, null, null).size());
+			assertEquals(1, repository.getAccountRatingRepository()
+					.getRatings(bob.getPublicKey(), alice.getPublicKey(), AccountRatingCategory.SUBJECT, null, null, null)
+					.size());
+			assertEquals(0, repository.getAccountRatingRepository()
+					.getRatings(bob.getPublicKey(), alice.getPublicKey(), AccountRatingCategory.PLAYER, null, null, null)
+					.size());
+
+			subjectSummary = repository.getAccountRatingRepository()
+					.getRatingSummary(bob.getPublicKey(), bob.getAddress(), AccountRatingCategory.SUBJECT);
+			playerSummary = repository.getAccountRatingRepository()
+					.getRatingSummary(bob.getPublicKey(), bob.getAddress(), AccountRatingCategory.PLAYER);
+			assertEquals(1, subjectSummary.getPositiveRatingCount());
+			assertEquals(0, subjectSummary.getNegativeRatingCount());
+			assertEquals(0, playerSummary.getTotalRatingCount());
+
+			BlockUtils.orphanLastBlock(repository);
+			assertActiveRating(repository, bob, alice, AccountRatingCategory.SUBJECT, 4);
+			assertActiveRating(repository, bob, alice, AccountRatingCategory.PLAYER, -2);
+			assertEquals(2, repository.getAccountRatingRepository()
+					.getRatings(bob.getPublicKey(), alice.getPublicKey(), null, null, null, null).size());
+			TransactionUtils.deleteUnconfirmedTransactions(repository);
 		}
 	}
 
