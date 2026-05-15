@@ -155,13 +155,19 @@ A later implementation layer added a decentralized trust preview:
   Trainer, and Manager categories
 - current minting-group members are the decentralized seed set for the preview
   instead of Aura's hardcoded team-owner seed
-- a seed account's positive Manager influence is divided across that account's
-  outgoing positive Manager ratings by confidence, preserving the budget-like
-  behavior that limits unlimited positive boosting in Aura's manager layer
+- the active Manager derivation is based on the recovered Aura node scorer at
+  `https://github.com/Meta-Node/BrightID-Aura-Node`
+- Manager energy starts from the minting seed set, flows for four positive
+  Manager-rating hops, and splits each account's outgoing energy by confidence
+- after those four hops, the final Manager energy is used to score Manager
+  ratings; positive ratings add `confidence * energy`, and negative ratings
+  subtract `confidence * energy * 4`
 - the preview derives Manager, Trainer, Player, and Subject scores in sequence:
   minting seed weight feeds Manager ratings, Manager score feeds Trainer
   ratings, Trainer score feeds Player ratings, and Player score feeds Subject
   ratings
+- the recovered Aura scorer does not apply a separate per-evaluator cap, so
+  Qortium does not add one in the active derivation yet
 - the Subject level is mapped back to Qortium's simple Gold, Silver, Bronze,
   Unverified, and Suspicious statuses as a derived status
 - the older inbound/outbound confidence counts, mutual positive relationships,
@@ -305,16 +311,24 @@ The first implementation should cover at least these cases:
   resource-rating weight plus minting eligibility status.
 - isolated positive-rating rings with no path from the minting seed set remain
   Unverified with zero category scores.
+- direct one-hop Manager ratings from seed accounts do not create Manager score
+  by themselves; Manager score is based on energy that remains after four
+  positive Manager-rating hops.
+- Manager energy splits by confidence across outgoing positive Manager paths,
+  and negative Manager ratings use the same final-energy source with the
+  four-times flagging multiplier.
 - negative Subject ratings from Unverified or zero-Player accounts do not make
   the target Suspicious or block minting.
 - negative Subject ratings from trusted Player-level accounts can derive
   Suspicious status and block minting, and orphaning that rating restores the
   prior snapshot and mint eligibility.
-- one seed member's positive Manager energy is budgeted across its outgoing
-  Manager ratings, so several positive Manager ratings split the seed budget
-  instead of multiplying it.
+- one seed member's Manager energy is budgeted across its outgoing Manager
+  paths, so several positive Manager paths split the seed budget instead of
+  multiplying it.
 
 ## Open Decisions
 
 - Should the 100%, 50%, and 25% multipliers be fixed consensus constants or
   configurable chain parameters?
+- Should Qortium add its own explicit per-evaluator caps later, even though the
+  recovered Aura scorer does not implement a cap rule?

@@ -5,7 +5,7 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountData;
-import org.qortal.data.account.AccountRating;
+import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
@@ -27,6 +27,7 @@ import org.qortal.utils.Groups;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -81,7 +82,8 @@ public class AccountTrustSnapshotTests extends Common {
 			ensureKnownAccount(repository, dilbert);
 			repository.saveChanges();
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
+			saveManagerTrust(repository, alice, bob, 1);
+			repository.saveChanges();
 			TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
 			TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
 			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
@@ -89,7 +91,7 @@ public class AccountTrustSnapshotTests extends Common {
 			BlockData lastBlockData = repository.getBlockRepository().getLastBlock();
 			List<AccountTrustSnapshotData> snapshots = repository.getAccountRatingRepository()
 					.getTrustDerivationSnapshots(null, null, null);
-			assertEquals(16, snapshots.size());
+			assertEquals(32, snapshots.size());
 
 			AccountTrustSnapshotData aliceSubject = findSnapshot(repository, alice.getAddress(), AccountRatingCategory.SUBJECT);
 			assertArrayEquals(alice.getPublicKey(), aliceSubject.getAccountPublicKey());
@@ -105,7 +107,7 @@ public class AccountTrustSnapshotTests extends Common {
 			AccountTrustSnapshotData bobManager = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.MANAGER);
 			assertEquals(1_000_000L, bobManager.getScore());
 			assertEquals(2, bobManager.getLevel());
-			assertEquals(1, bobManager.getInboundRatings().getPositiveVeryHighCount());
+			assertEquals(1, bobManager.getInboundRatings().getPositiveLowCount());
 
 			AccountTrustSnapshotData chloeTrainer = findSnapshot(repository, chloe.getAddress(), AccountRatingCategory.TRAINER);
 			assertEquals(4_000_000L, chloeTrainer.getScore());
@@ -131,8 +133,8 @@ public class AccountTrustSnapshotTests extends Common {
 			int baselineHeight = repository.getBlockRepository().getBlockchainHeight();
 			assertTrue(repository.getAccountRatingRepository().getTrustDerivationSnapshots(bob.getAddress()).isEmpty());
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
-			assertEquals(1_000_000L, findSnapshot(repository, bob.getAddress(), AccountRatingCategory.MANAGER).getScore());
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.SUBJECT, 4), alice);
+			assertEquals(0L, findSnapshot(repository, bob.getAddress(), AccountRatingCategory.SUBJECT).getScore());
 
 			BlockUtils.orphanLastBlock(repository);
 			assertTrue(repository.getAccountRatingRepository().getTrustDerivationSnapshots(bob.getAddress()).isEmpty());
@@ -152,11 +154,14 @@ public class AccountTrustSnapshotTests extends Common {
 			ensureKnownAccount(repository, bob);
 			repository.saveChanges();
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
+			saveManagerTrust(repository, alice, bob, 1);
+			repository.saveChanges();
+			BlockUtils.mintBlock(repository);
 			assertFalse(repository.getAccountRatingRepository().getTrustDerivationSnapshots(bob.getAddress()).isEmpty());
 
-			TransactionUtils.signAndMint(repository,
-					ratingData(alice, bob, AccountRatingCategory.MANAGER, AccountRating.NO_RATING), alice);
+			removeManagerTrust(repository);
+			repository.saveChanges();
+			BlockUtils.mintBlock(repository);
 
 			assertTrue(repository.getAccountRatingRepository().getTrustDerivationSnapshots(bob.getAddress()).isEmpty());
 		}
@@ -191,6 +196,53 @@ public class AccountTrustSnapshotTests extends Common {
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target,
 			AccountRatingCategory category, int rating) throws DataException {
 		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), category, rating);
+	}
+
+	private void saveManagerTrust(Repository repository, PrivateKeyAccount seedAccount, PrivateKeyAccount managerTarget,
+			int rating) throws DataException {
+		PrivateKeyAccount evaluator = Common.generateRandomSeedAccount(repository);
+
+		ensureKnownAccount(repository, evaluator);
+		saveManagerEnergyPath(repository, seedAccount, evaluator);
+		repository.getAccountRatingRepository()
+				.save(new AccountRatingData(managerTarget.getPublicKey(), evaluator.getPublicKey(),
+						AccountRatingCategory.MANAGER, rating));
+	}
+
+	private void removeManagerTrust(Repository repository) throws DataException {
+		List<AccountRatingData> managerRatings = repository.getAccountRatingRepository()
+				.getRatings(null, null, AccountRatingCategory.MANAGER, null, null, null);
+
+		for (AccountRatingData rating : managerRatings)
+			repository.getAccountRatingRepository().delete(rating.getTargetPublicKey(), rating.getRaterPublicKey(),
+					AccountRatingCategory.MANAGER);
+	}
+
+	private void saveManagerEnergyPath(Repository repository, PrivateKeyAccount seedAccount, PrivateKeyAccount evaluator)
+			throws DataException {
+		List<PrivateKeyAccount> pathAccounts = Arrays.asList(
+				Common.generateRandomSeedAccount(repository),
+				Common.generateRandomSeedAccount(repository),
+				Common.generateRandomSeedAccount(repository));
+
+		ensureKnownAccount(repository, seedAccount);
+		ensureKnownAccount(repository, evaluator);
+		ensureKnownAccount(repository, pathAccounts.get(0));
+		ensureKnownAccount(repository, pathAccounts.get(1));
+		ensureKnownAccount(repository, pathAccounts.get(2));
+
+		repository.getAccountRatingRepository()
+				.save(new AccountRatingData(pathAccounts.get(0).getPublicKey(),
+						seedAccount.getPublicKey(), AccountRatingCategory.MANAGER, 4));
+		repository.getAccountRatingRepository()
+				.save(new AccountRatingData(pathAccounts.get(1).getPublicKey(),
+						pathAccounts.get(0).getPublicKey(), AccountRatingCategory.MANAGER, 4));
+		repository.getAccountRatingRepository()
+				.save(new AccountRatingData(pathAccounts.get(2).getPublicKey(),
+						pathAccounts.get(1).getPublicKey(), AccountRatingCategory.MANAGER, 4));
+		repository.getAccountRatingRepository()
+				.save(new AccountRatingData(evaluator.getPublicKey(),
+						pathAccounts.get(2).getPublicKey(), AccountRatingCategory.MANAGER, 4));
 	}
 
 	private void ensureKnownAccount(Repository repository, PrivateKeyAccount account) throws DataException {

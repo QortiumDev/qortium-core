@@ -2,14 +2,11 @@ package org.qortal.test.api;
 
 import org.junit.Before;
 import org.junit.Test;
-import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
 import org.qortal.api.resource.ResourceRatingsResource;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.block.BlockChain;
-import org.qortal.data.account.AccountRatingData;
-import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.rating.ResourceRatingSummaryData;
@@ -23,6 +20,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.ApiCommon;
+import org.qortal.test.common.AccountTrustTestUtils;
 import org.qortal.test.common.ArbitraryUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
@@ -129,19 +127,7 @@ public class ResourceRatingsApiTests extends ApiCommon {
 
 	private void createDerivedSilverSubjectSnapshot(Repository repository, TestAccount alice, TestAccount bob,
 			TestAccount chloe, TestAccount dilbert) throws DataException {
-		saveAccountRating(repository, alice, bob, AccountRatingCategory.MANAGER, 4);
-		saveAccountRating(repository, bob, chloe, AccountRatingCategory.TRAINER, 4);
-		saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.PLAYER, 4);
-		saveAccountRating(repository, dilbert, alice, AccountRatingCategory.SUBJECT, 4);
-		AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
-				repository.getBlockRepository().getLastBlock().getTimestamp());
-		repository.saveChanges();
-	}
-
-	private void saveAccountRating(Repository repository, PrivateKeyAccount rater, PrivateKeyAccount target,
-			AccountRatingCategory category, int rating) throws DataException {
-		repository.getAccountRatingRepository()
-				.save(new AccountRatingData(target.getPublicKey(), rater.getPublicKey(), category, rating));
+		AccountTrustTestUtils.createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
 	}
 
 	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted, AccountTrustStatus trustStatus) throws DataException {

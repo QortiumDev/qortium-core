@@ -26,6 +26,7 @@ import java.util.TreeSet;
 public class AccountTrustDerivation {
 
 	private static final long STARTING_ENERGY = 1_000_000L;
+	private static final int MANAGER_ENERGY_HOPS = 4;
 	private static final int LIST_IMPACT_LIMIT = 5;
 
 	public static Result derive(Repository repository, String targetAddress) throws DataException {
@@ -65,9 +66,10 @@ public class AccountTrustDerivation {
 		Map<AccountRatingCategory, List<AccountRatingData>> ratingsByCategory = groupRatingsByCategory(allRatings);
 		Set<String> seedAddresses = getMintingSeedAddresses(repository, mintingSeedHeight);
 		Map<String, Long> seedScores = buildSeedScores(seedAddresses);
+		Map<String, Long> managerEnergy = flowManagerEnergy(ratingsByCategory.get(AccountRatingCategory.MANAGER), seedScores);
 
 		Map<String, CategoryScore> managerScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.MANAGER),
-				seedScores, AccountRatingCategory.MANAGER);
+				managerEnergy, AccountRatingCategory.MANAGER);
 		Map<String, CategoryScore> trainerScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.TRAINER),
 				managerScores, AccountRatingCategory.TRAINER);
 		Map<String, CategoryScore> playerScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.PLAYER),
@@ -172,18 +174,46 @@ public class AccountTrustDerivation {
 		return seedScores;
 	}
 
+	private static Map<String, Long> flowManagerEnergy(List<AccountRatingData> managerRatings, Map<String, Long> seedScores) {
+		Map<String, Long> energy = new HashMap<>(seedScores);
+		Map<String, Integer> positiveRatingScales = calculatePositiveRatingScales(managerRatings);
+
+		for (int hop = 0; hop < MANAGER_ENERGY_HOPS; ++hop) {
+			Map<String, Long> nextEnergy = new HashMap<>();
+
+			for (AccountRatingData rating : managerRatings) {
+				if (!AccountRating.isPositive(rating.getRating()))
+					continue;
+
+				long raterEnergy = energy.getOrDefault(rating.getRaterAddress(), 0L);
+				if (raterEnergy <= 0L)
+					continue;
+
+				Integer positiveRatingScale = positiveRatingScales.get(rating.getRaterAddress());
+				if (positiveRatingScale == null || positiveRatingScale <= 0)
+					continue;
+
+				long targetEnergy = AccountRating.saturatedMultiply(raterEnergy,
+						AccountRating.getConfidence(rating.getRating())) / positiveRatingScale;
+				if (targetEnergy != 0L)
+					nextEnergy.merge(rating.getTargetAddress(), targetEnergy, AccountTrustDerivation::saturatedAdd);
+			}
+
+			energy = nextEnergy;
+		}
+
+		return energy;
+	}
+
 	private static Map<String, CategoryScore> deriveCategory(List<AccountRatingData> ratings, Map<String, ?> evaluatorScores,
 			AccountRatingCategory targetCategory) {
 		Map<String, CategoryScore> scores = new HashMap<>();
-		Map<String, Integer> positiveRatingScales = targetCategory == AccountRatingCategory.MANAGER
-				? calculatePositiveRatingScales(ratings)
-				: new HashMap<>();
 
 		for (AccountRatingData rating : ratings) {
 			String raterAddress = rating.getRaterAddress();
 			EvaluatorScore evaluatorScore = getEvaluatorScore(evaluatorScores, raterAddress);
 			long evaluatorWeight = Math.max(evaluatorScore.score, 0L);
-			long impact = calculateImpact(targetCategory, rating, evaluatorWeight, positiveRatingScales.get(raterAddress));
+			long impact = AccountRating.calculateImpactLong(rating.getRating(), evaluatorWeight);
 
 			CategoryScore targetScore = scores.computeIfAbsent(rating.getTargetAddress(), ignored -> new CategoryScore());
 			if (impact != 0L) {
@@ -207,18 +237,6 @@ public class AccountTrustDerivation {
 		}
 
 		return positiveRatingScales;
-	}
-
-	private static long calculateImpact(AccountRatingCategory targetCategory, AccountRatingData rating, long evaluatorWeight,
-			Integer positiveRatingScale) {
-		if (targetCategory == AccountRatingCategory.MANAGER && AccountRating.isPositive(rating.getRating())) {
-			if (positiveRatingScale == null || positiveRatingScale <= 0)
-				return 0L;
-
-			return AccountRating.saturatedMultiply(evaluatorWeight, AccountRating.getConfidence(rating.getRating())) / positiveRatingScale;
-		}
-
-		return AccountRating.calculateImpactLong(rating.getRating(), evaluatorWeight);
 	}
 
 	private static EvaluatorScore getEvaluatorScore(Map<String, ?> evaluatorScores, String raterAddress) {

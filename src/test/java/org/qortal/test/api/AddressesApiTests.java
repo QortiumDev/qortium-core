@@ -4,12 +4,9 @@ import com.google.common.primitives.Bytes;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.Account;
-import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.resource.AddressesResource;
 import org.qortal.controller.OnlineAccountsManager;
-import org.qortal.data.account.AccountRatingData;
-import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.network.OnlineAccountLevel;
@@ -22,6 +19,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.ApiCommon;
+import org.qortal.test.common.AccountTrustTestUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
@@ -218,19 +216,7 @@ public class AddressesApiTests extends ApiCommon {
 
 	private void createDerivedSilverSubjectSnapshot(Repository repository, TestAccount alice, TestAccount bob,
 			TestAccount chloe, TestAccount dilbert) throws DataException {
-		saveAccountRating(repository, alice, bob, AccountRatingCategory.MANAGER, 4);
-		saveAccountRating(repository, bob, chloe, AccountRatingCategory.TRAINER, 4);
-		saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.PLAYER, 4);
-		saveAccountRating(repository, dilbert, alice, AccountRatingCategory.SUBJECT, 4);
-		AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
-				repository.getBlockRepository().getLastBlock().getTimestamp());
-		repository.saveChanges();
-	}
-
-	private void saveAccountRating(Repository repository, PrivateKeyAccount rater, PrivateKeyAccount target,
-			AccountRatingCategory category, int rating) throws DataException {
-		repository.getAccountRatingRepository()
-				.save(new AccountRatingData(target.getPublicKey(), rater.getPublicKey(), category, rating));
+		AccountTrustTestUtils.createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
 	}
 
 }

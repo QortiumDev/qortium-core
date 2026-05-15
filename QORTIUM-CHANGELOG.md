@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-14 - core: use Aura manager energy flow
+
+Changed Qortium's derived trust graph to follow the recovered Aura node scorer more closely for Manager trust. Manager energy now starts from the minting group, flows through four positive Manager-rating hops, splits by confidence along the way, and only then scores Manager ratings with the same positive and negative impact formula used by Aura. This replaces the earlier one-hop seed split, keeps Qortium's decentralized minting group as the seed set, documents that the recovered Aura scorer does not implement separate cap constants, and adds tests for four-hop scoring, confidence splitting, negative Manager flagging, snapshots, and API previews.
+
 ### 2026-05-14 - core: add trust graph behavior tests
 
 Added adversarial regression tests for the active Aura-style trust graph. The tests confirm that isolated positive farm rings do not gain trust without a minting-seed path, weak negative ratings cannot make a target Suspicious, trusted Player-level negative ratings can block minting through derived Suspicious status, orphaning restores the prior trust snapshot and mint eligibility, and one seed account's Manager energy is split across positive Manager ratings instead of being multiplied.

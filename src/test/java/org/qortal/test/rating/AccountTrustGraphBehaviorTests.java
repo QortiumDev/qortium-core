@@ -103,7 +103,7 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			ensureKnownAccount(repository, chloe);
 			ensureKnownAccount(repository, dilbert);
 
-			saveAccountRating(repository, alice, chloe, AccountRatingCategory.MANAGER, 4);
+			saveManagerTrust(repository, alice, chloe, 1);
 			saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.TRAINER, 4);
 			saveAccountRating(repository, dilbert, bob, AccountRatingCategory.PLAYER, 4);
 			refreshTrustSnapshots(repository);
@@ -142,36 +142,121 @@ public class AccountTrustGraphBehaviorTests extends Common {
 	}
 
 	@Test
-	public void testManagerSeedEnergySplitsAcrossPositiveRatings() throws DataException {
+	public void testDirectSeedManagerRatingDoesNotCreateManagerScore() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
-			List<PrivateKeyAccount> managerTargets = Arrays.asList(
-					Common.generateRandomSeedAccount(repository),
-					Common.generateRandomSeedAccount(repository),
-					Common.generateRandomSeedAccount(repository),
-					Common.generateRandomSeedAccount(repository));
+			PrivateKeyAccount managerTarget = Common.generateRandomSeedAccount(repository);
 
 			ensureKnownAccount(repository, alice);
-			for (PrivateKeyAccount managerTarget : managerTargets) {
-				ensureKnownAccount(repository, managerTarget);
-				saveAccountRating(repository, alice, managerTarget, AccountRatingCategory.MANAGER, 4);
-			}
+			ensureKnownAccount(repository, managerTarget);
+			saveAccountRating(repository, alice, managerTarget, AccountRatingCategory.MANAGER, 4);
 
 			refreshTrustSnapshots(repository);
 
-			long totalManagerScore = 0L;
-			for (PrivateKeyAccount managerTarget : managerTargets) {
-				AccountTrustSnapshotData managerSnapshot = findSnapshot(repository, managerTarget.getAddress(),
-						AccountRatingCategory.MANAGER);
-
-				assertEquals(250_000L, managerSnapshot.getScore());
-				assertEquals(2, managerSnapshot.getLevel());
-				assertEquals(AccountTrustStatus.SILVER, managerSnapshot.getMappedTrustStatus());
-				totalManagerScore += managerSnapshot.getScore();
-			}
-
-			assertEquals("Alice's one seed budget should be split, not multiplied", 1_000_000L, totalManagerScore);
+			AccountTrustSnapshotData managerSnapshot = findSnapshot(repository, managerTarget.getAddress(),
+					AccountRatingCategory.MANAGER);
+			assertEquals("Aura manager scoring should use final energy after four manager hops",
+					0L, managerSnapshot.getScore());
+			assertEquals(0, managerSnapshot.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, managerSnapshot.getMappedTrustStatus());
 		}
+	}
+
+	@Test
+	public void testManagerEnergySplitsDuringFourHopFlow() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount branchA1 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount branchA2 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount branchA3 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount evaluatorA = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount branchB1 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount branchB2 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount branchB3 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount evaluatorB = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount targetA = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount targetB = Common.generateRandomSeedAccount(repository);
+			List<PrivateKeyAccount> generatedAccounts = Arrays.asList(branchA1, branchA2, branchA3, evaluatorA,
+					branchB1, branchB2, branchB3, evaluatorB, targetA, targetB);
+
+			ensureKnownAccount(repository, alice);
+			for (PrivateKeyAccount account : generatedAccounts)
+				ensureKnownAccount(repository, account);
+
+			saveAccountRating(repository, alice, branchA1, AccountRatingCategory.MANAGER, 1);
+			saveAccountRating(repository, alice, branchB1, AccountRatingCategory.MANAGER, 3);
+			saveAccountRating(repository, branchA1, branchA2, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, branchA2, branchA3, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, branchA3, evaluatorA, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, branchB1, branchB2, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, branchB2, branchB3, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, branchB3, evaluatorB, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, evaluatorA, targetA, AccountRatingCategory.MANAGER, 1);
+			saveAccountRating(repository, evaluatorB, targetB, AccountRatingCategory.MANAGER, 1);
+
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData targetASnapshot = findSnapshot(repository, targetA.getAddress(),
+					AccountRatingCategory.MANAGER);
+			AccountTrustSnapshotData targetBSnapshot = findSnapshot(repository, targetB.getAddress(),
+					AccountRatingCategory.MANAGER);
+
+			assertEquals(250_000L, targetASnapshot.getScore());
+			assertEquals(750_000L, targetBSnapshot.getScore());
+			assertEquals("Alice's one seed budget should be split by outgoing confidence during energy flow",
+					1_000_000L, targetASnapshot.getScore() + targetBSnapshot.getScore());
+		}
+	}
+
+	@Test
+	public void testNegativeManagerRatingUsesFinalEnergyAndFlaggingMultiplier() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount evaluator = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount managerTarget = Common.generateRandomSeedAccount(repository);
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, evaluator);
+			ensureKnownAccount(repository, managerTarget);
+			saveManagerEnergyPath(repository, alice, evaluator);
+			saveAccountRating(repository, evaluator, managerTarget, AccountRatingCategory.MANAGER, -1);
+
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData managerSnapshot = findSnapshot(repository, managerTarget.getAddress(),
+					AccountRatingCategory.MANAGER);
+
+			assertEquals(-4_000_000L, managerSnapshot.getScore());
+			assertEquals(-1, managerSnapshot.getLevel());
+			assertEquals(AccountTrustStatus.SUSPICIOUS, managerSnapshot.getMappedTrustStatus());
+		}
+	}
+
+	private void saveManagerTrust(Repository repository, PrivateKeyAccount seedAccount, PrivateKeyAccount managerTarget,
+			int rating) throws DataException {
+		PrivateKeyAccount evaluator = Common.generateRandomSeedAccount(repository);
+
+		ensureKnownAccount(repository, evaluator);
+		saveManagerEnergyPath(repository, seedAccount, evaluator);
+		saveAccountRating(repository, evaluator, managerTarget, AccountRatingCategory.MANAGER, rating);
+	}
+
+	private void saveManagerEnergyPath(Repository repository, PrivateKeyAccount seedAccount, PrivateKeyAccount evaluator)
+			throws DataException {
+		List<PrivateKeyAccount> pathAccounts = Arrays.asList(
+				Common.generateRandomSeedAccount(repository),
+				Common.generateRandomSeedAccount(repository),
+				Common.generateRandomSeedAccount(repository));
+
+		ensureKnownAccount(repository, seedAccount);
+		ensureKnownAccount(repository, evaluator);
+		for (PrivateKeyAccount account : pathAccounts)
+			ensureKnownAccount(repository, account);
+
+		saveAccountRating(repository, seedAccount, pathAccounts.get(0), AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, pathAccounts.get(0), pathAccounts.get(1), AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, pathAccounts.get(1), pathAccounts.get(2), AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, pathAccounts.get(2), evaluator, AccountRatingCategory.MANAGER, 4);
 	}
 
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target,

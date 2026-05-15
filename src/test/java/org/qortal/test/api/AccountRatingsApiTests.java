@@ -317,7 +317,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
-	public void testManagerSeedEnergySplitsAcrossPositiveManagerRatings() throws DataException {
+	public void testManagerEnergySplitsAcrossPositiveManagerPaths() throws DataException {
 		TestAccount bob;
 		TestAccount chloe;
 
@@ -326,8 +326,33 @@ public class AccountRatingsApiTests extends ApiCommon {
 			bob = Common.getTestAccount(repository, "bob");
 			chloe = Common.getTestAccount(repository, "chloe");
 
-			saveAccountRating(repository, alice, bob, AccountRatingCategory.MANAGER, 4);
-			saveAccountRating(repository, alice, chloe, AccountRatingCategory.MANAGER, 4);
+			PrivateKeyAccount branchA1 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount branchA2 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount branchA3 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount evaluatorA = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount branchB1 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount branchB2 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount branchB3 = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount evaluatorB = Common.generateRandomSeedAccount(repository);
+			List<PrivateKeyAccount> generatedAccounts = Arrays.asList(branchA1, branchA2, branchA3, evaluatorA,
+					branchB1, branchB2, branchB3, evaluatorB);
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, chloe);
+			for (PrivateKeyAccount account : generatedAccounts)
+				ensureKnownAccount(repository, account);
+
+			saveAccountRating(repository, alice, branchA1, AccountRatingCategory.MANAGER, 1);
+			saveAccountRating(repository, alice, branchB1, AccountRatingCategory.MANAGER, 3);
+			saveAccountRating(repository, branchA1, branchA2, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, branchA2, branchA3, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, branchA3, evaluatorA, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, branchB1, branchB2, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, branchB2, branchB3, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, branchB3, evaluatorB, AccountRatingCategory.MANAGER, 4);
+			saveAccountRating(repository, evaluatorA, bob, AccountRatingCategory.MANAGER, 1);
+			saveAccountRating(repository, evaluatorB, chloe, AccountRatingCategory.MANAGER, 1);
 			refreshTrustSnapshots(repository);
 		}
 
@@ -337,10 +362,10 @@ public class AccountRatingsApiTests extends ApiCommon {
 		AccountTrustPreviewData.CategoryTrust bobManager = findCategory(bobPreview, AccountRatingCategory.MANAGER);
 		AccountTrustPreviewData.CategoryTrust chloeManager = findCategory(chloePreview, AccountRatingCategory.MANAGER);
 
-		assertEquals(500_000L, bobManager.getScore());
-		assertEquals(500_000L, bobManager.getImpacts().get(0).getImpact());
-		assertEquals(500_000L, chloeManager.getScore());
-		assertEquals(500_000L, chloeManager.getImpacts().get(0).getImpact());
+		assertEquals(250_000L, bobManager.getScore());
+		assertEquals(250_000L, bobManager.getImpacts().get(0).getImpact());
+		assertEquals(750_000L, chloeManager.getScore());
+		assertEquals(750_000L, chloeManager.getImpacts().get(0).getImpact());
 	}
 
 	@Test
@@ -361,8 +386,6 @@ public class AccountRatingsApiTests extends ApiCommon {
 
 		List<AccountTrustDerivationData> derivedAccounts = this.accountRatingsResource.getAccountTrustDerivation(
 				null, null, null, null, null, null, null);
-		assertEquals(alice.getAddress(), derivedAccounts.get(0).getAccountAddress());
-
 		AccountTrustDerivationData aliceDerivation = findDerivation(derivedAccounts, alice.getAddress());
 		AccountTrustDerivationData bobDerivation = findDerivation(derivedAccounts, bob.getAddress());
 		AccountTrustDerivationData chloeDerivation = findDerivation(derivedAccounts, chloe.getAddress());
@@ -462,7 +485,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 
 		List<AccountTrustSnapshotData> allSnapshots = this.accountRatingsResource.getAccountTrustSnapshots(
 				null, null, null, null, null, null, null, null);
-		assertEquals(16, allSnapshots.size());
+		assertEquals(32, allSnapshots.size());
 
 		List<AccountTrustSnapshotData> aliceSnapshots = this.accountRatingsResource.getAccountTrustSnapshots(
 				alice.getAddress(), null, null, null, null, null, null, null);
@@ -602,7 +625,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 
 	private void createAuraTrustGraph(Repository repository, TestAccount alice, TestAccount bob, TestAccount chloe,
 			TestAccount dilbert) throws DataException {
-		saveAccountRating(repository, alice, bob, AccountRatingCategory.MANAGER, 4);
+		saveManagerTrust(repository, alice, bob, 1);
 		saveAccountRating(repository, bob, chloe, AccountRatingCategory.TRAINER, 4);
 		saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.PLAYER, 4);
 		saveAccountRating(repository, dilbert, alice, AccountRatingCategory.SUBJECT, 4);
@@ -617,11 +640,39 @@ public class AccountRatingsApiTests extends ApiCommon {
 		ensureKnownAccount(repository, dilbert);
 		repository.saveChanges();
 
-		TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.MANAGER, 4), alice);
+		saveManagerTrust(repository, alice, bob, 1);
+		repository.saveChanges();
 		TransactionUtils.signAndMint(repository, ratingData(bob, chloe, AccountRatingCategory.TRAINER, 4), bob);
 		TransactionUtils.signAndMint(repository, ratingData(chloe, dilbert, AccountRatingCategory.PLAYER, 4), chloe);
 		TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, 4), dilbert);
 		refreshTrustSnapshots(repository);
+	}
+
+	private void saveManagerTrust(Repository repository, PrivateKeyAccount seedAccount, PrivateKeyAccount managerTarget,
+			int rating) throws DataException {
+		PrivateKeyAccount evaluator = Common.generateRandomSeedAccount(repository);
+
+		ensureKnownAccount(repository, evaluator);
+		saveManagerEnergyPath(repository, seedAccount, evaluator);
+		saveAccountRating(repository, evaluator, managerTarget, AccountRatingCategory.MANAGER, rating);
+	}
+
+	private void saveManagerEnergyPath(Repository repository, PrivateKeyAccount seedAccount, PrivateKeyAccount evaluator)
+			throws DataException {
+		List<PrivateKeyAccount> pathAccounts = Arrays.asList(
+				Common.generateRandomSeedAccount(repository),
+				Common.generateRandomSeedAccount(repository),
+				Common.generateRandomSeedAccount(repository));
+
+		ensureKnownAccount(repository, seedAccount);
+		ensureKnownAccount(repository, evaluator);
+		for (PrivateKeyAccount account : pathAccounts)
+			ensureKnownAccount(repository, account);
+
+		saveAccountRating(repository, seedAccount, pathAccounts.get(0), AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, pathAccounts.get(0), pathAccounts.get(1), AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, pathAccounts.get(1), pathAccounts.get(2), AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, pathAccounts.get(2), evaluator, AccountRatingCategory.MANAGER, 4);
 	}
 
 	private void saveAccountRating(Repository repository, PrivateKeyAccount rater, PrivateKeyAccount target,
