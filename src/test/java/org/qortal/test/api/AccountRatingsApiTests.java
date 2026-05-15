@@ -319,11 +319,11 @@ public class AccountRatingsApiTests extends ApiCommon {
 		AccountTrustPreviewData negativePreview = this.accountRatingsResource.getAccountTrustPreview(Base58.encode(alice.getPublicKey()));
 		AccountTrustPreviewData.CategoryTrust negativeSubject = findCategory(negativePreview, AccountRatingCategory.SUBJECT);
 		assertEquals(-96_000_000L, negativeSubject.getScore());
-		assertEquals(-96_000_000L, negativeSubject.getLevelScore());
-		assertEquals(0L, negativeSubject.getLevelScoreCap());
-		assertEquals(-1, negativeSubject.getLevel());
-		assertEquals(AccountTrustStatus.SUSPICIOUS, negativePreview.getDerivedTrustStatus());
-		assertEquals(AccountTrustStatus.SUSPICIOUS, negativePreview.getTrustStatus());
+		assertEquals(0L, negativeSubject.getLevelScore());
+		assertEquals(5_000_000L, negativeSubject.getLevelScoreCap());
+		assertEquals(0, negativeSubject.getLevel());
+		assertEquals(AccountTrustStatus.UNVERIFIED, negativePreview.getDerivedTrustStatus());
+		assertEquals(AccountTrustStatus.UNVERIFIED, negativePreview.getTrustStatus());
 		assertEquals(AccountTrustStatus.UNVERIFIED, negativePreview.getStoredTrustStatus());
 		assertEquals(-128_000_000L, negativeSubject.getImpacts().get(0).getImpact());
 	}

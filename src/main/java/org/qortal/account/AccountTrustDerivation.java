@@ -28,7 +28,8 @@ public class AccountTrustDerivation {
 	private static final long STARTING_ENERGY = 1_000_000L;
 	private static final int MANAGER_ENERGY_HOPS = 4;
 	private static final int LIST_IMPACT_LIMIT = 5;
-	private static final long NO_LEVEL_SCORE_CAP = 0L;
+	private static final int SUSPICIOUS_MIN_RATER_COUNT = 2;
+	private static final int SUSPICIOUS_MIN_RATING_CONFIDENCE = 2;
 
 	public static Result derive(Repository repository, String targetAddress) throws DataException {
 		DerivedGraph graph = deriveGraph(repository, getLiveMintingSeedHeight(repository));
@@ -276,13 +277,17 @@ public class AccountTrustDerivation {
 			impacts = new ArrayList<>(impacts.subList(0, maxImpacts));
 
 		return new AccountTrustPreviewData.CategoryTrust(category, score.score, score.levelScore, score.levelScoreCap,
-				score.level, mapLevelToStatus(score.score, score.level), inboundCounts, impacts);
+				score.level, mapLevelToStatus(score.level), inboundCounts, impacts);
 	}
 
 	private static LevelDecision calculateLevelDecision(AccountRatingCategory category, long score,
 			List<AccountTrustPreviewData.CategoryImpact> impacts) {
+		LevelDecision suspiciousDecision = suspiciousDecisionForCategory(category, impacts);
+		if (meetsSuspiciousRequirements(category, suspiciousDecision, impacts))
+			return suspiciousDecision;
+
 		if (score < 0)
-			return new LevelDecision(-1, score, NO_LEVEL_SCORE_CAP);
+			return zeroLevelDecision(category, impacts);
 
 		switch (category) {
 			case MANAGER:
@@ -375,13 +380,27 @@ public class AccountTrustDerivation {
 		return new LevelDecision(level, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
 	}
 
-	private static long calculateCappedLevelScore(List<AccountTrustPreviewData.CategoryImpact> impacts, long positiveImpactCap) {
+	private static LevelDecision suspiciousDecisionForCategory(AccountRatingCategory category,
+			List<AccountTrustPreviewData.CategoryImpact> impacts) {
+		long levelScoreCap = getSuspiciousLevelScoreCap(category);
+		return new LevelDecision(-1, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
+	}
+
+	private static boolean meetsSuspiciousRequirements(AccountRatingCategory category, LevelDecision suspiciousDecision,
+			List<AccountTrustPreviewData.CategoryImpact> impacts) {
+		return suspiciousDecision.levelScore <= getSuspiciousThreshold(category)
+				&& countNegativeImpacts(impacts, SUSPICIOUS_MIN_RATING_CONFIDENCE) >= SUSPICIOUS_MIN_RATER_COUNT;
+	}
+
+	private static long calculateCappedLevelScore(List<AccountTrustPreviewData.CategoryImpact> impacts, long impactCap) {
 		long levelScore = 0L;
 
 		for (AccountTrustPreviewData.CategoryImpact impact : impacts) {
 			long impactValue = impact.getImpact();
-			if (impactValue > positiveImpactCap)
-				impactValue = positiveImpactCap;
+			if (impactValue > impactCap)
+				impactValue = impactCap;
+			else if (impactValue < -impactCap)
+				impactValue = -impactCap;
 
 			levelScore = saturatedAdd(levelScore, impactValue);
 		}
@@ -391,6 +410,14 @@ public class AccountTrustDerivation {
 
 	private static long getLevelScoreCap(AccountRatingCategory category, int level) {
 		return getLevelThreshold(category, level) / 2L;
+	}
+
+	private static long getSuspiciousLevelScoreCap(AccountRatingCategory category) {
+		return getLevelScoreCap(category, 1);
+	}
+
+	private static long getSuspiciousThreshold(AccountRatingCategory category) {
+		return -getLevelThreshold(category, 1);
 	}
 
 	private static long getLevelThreshold(AccountRatingCategory category, int level) {
@@ -426,8 +453,16 @@ public class AccountTrustDerivation {
 				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0).count();
 	}
 
-	private static AccountTrustStatus mapLevelToStatus(long score, int level) {
-		if (score < 0 || level < 0)
+	private static long countNegativeImpacts(List<AccountTrustPreviewData.CategoryImpact> impacts, int minConfidence) {
+		return impacts.stream()
+				.filter(impact -> impact.getRatingConfidence() >= minConfidence && impact.getImpact() < 0)
+				.map(AccountTrustPreviewData.CategoryImpact::getRaterAddress)
+				.distinct()
+				.count();
+	}
+
+	private static AccountTrustStatus mapLevelToStatus(int level) {
+		if (level < 0)
 			return AccountTrustStatus.SUSPICIOUS;
 		if (level >= 3)
 			return AccountTrustStatus.GOLD;

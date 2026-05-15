@@ -167,13 +167,14 @@ A later implementation layer added a decentralized trust preview:
   ratings, Trainer score feeds Player ratings, and Player score feeds Subject
   ratings
 - the recovered Aura scorer does not apply a separate per-evaluator cap, so
-  Qortium keeps raw category scores visible while adding its own positive
-  level-decision cap based on the Aura documentation's planned cap concept
+  Qortium keeps raw category scores visible while adding its own capped
+  level-decision score based on the Aura documentation's planned cap concept
 - positive level decisions cap each evaluator's impact at half of the target
   level threshold; this means one evaluator cannot satisfy a positive level by
   itself, while raw score and raw impact remain available for audit
-- negative/Suspicious scoring still uses raw negative impact for now so the
-  first cap layer stays limited to positive trust qualification
+- negative/Suspicious decisions use the same signed capped decision score, with
+  Suspicious requiring at least two independent medium-confidence negative
+  raters before raw negative evidence can block minting
 - the Subject level is mapped back to Qortium's simple Gold, Silver, Bronze,
   Unverified, and Suspicious statuses as a derived status
 - the older inbound/outbound confidence counts, mutual positive relationships,
@@ -327,19 +328,25 @@ The first implementation should cover at least these cases:
   four-times flagging multiplier.
 - negative Subject ratings from Unverified or zero-Player accounts do not make
   the target Suspicious or block minting.
-- negative Subject ratings from trusted Player-level accounts can derive
-  Suspicious status and block minting, and orphaning that rating restores the
-  prior snapshot and mint eligibility.
+- a single trusted negative Subject rating records raw negative evidence but
+  does not derive Suspicious status or block minting by itself.
+- two independent medium-confidence negative Subject ratings from trusted
+  Player-level accounts can derive Suspicious status and block minting, and
+  orphaning one of those ratings restores the prior snapshot and mint
+  eligibility.
 - one seed member's Manager energy is budgeted across its outgoing Manager
   paths, so several positive Manager paths split the seed budget instead of
   multiplying it.
 - positive category levels require enough independent capped impact to reach
   their thresholds, preventing a single high-score evaluator from assigning a
   positive level by itself.
+- Suspicious category decisions also require enough independent capped negative
+  impact to reach their thresholds, preventing a single high-score evaluator
+  from assigning Suspicious status by itself.
 
 ## Open Decisions
 
 - Should the 100%, 50%, and 25% multipliers be fixed consensus constants or
   configurable chain parameters?
-- Should negative/Suspicious scoring also receive impact caps or multi-rater
-  requirements, now that positive level qualification is capped?
+- Should a future trust graph require independent teams or seed branches for
+  Suspicious decisions, beyond the current independent-rater requirement?

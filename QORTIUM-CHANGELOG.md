@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - core: cap suspicious trust rating impact
+
+Added capped Suspicious decision scoring to the Aura-style trust graph so one trusted negative rating can no longer block an account from minting by itself. Qortium still stores and exposes raw negative score and raw evaluator impacts for audit, but derived Suspicious status now requires the signed capped decision score to cross the category's negative threshold with at least two independent medium-confidence negative raters. Accounts with raw negative evidence that does not meet that stricter Suspicious rule now remain Unverified instead of being treated as Suspicious.
+
 ### 2026-05-15 - core: cap trust rating level impact
 
 Added per-rating caps to positive Aura-style trust level decisions so one evaluator can no longer assign a positive trust level by itself. Qortium still stores and exposes each category's raw score and raw evaluator impacts, but level and mapped status now use an additional capped level-decision score, with snapshots and APIs returning the cap details for audit. Negative/Suspicious scoring is intentionally unchanged in this step and remains the next trust-network policy area to review.

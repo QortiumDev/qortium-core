@@ -92,17 +92,13 @@ public class AccountTrustGraphBehaviorTests extends Common {
 	}
 
 	@Test
-	public void testTrustedNegativeSubjectRatingMakesTargetSuspiciousAndOrphanRestoresMinting() throws DataException {
+	public void testSingleTrustedNegativeSubjectRatingDoesNotMakeTargetSuspicious() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
-			TestAccount chloe = Common.getTestAccount(repository, "chloe");
-			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
 
 			ensureKnownAccount(repository, alice);
 			ensureKnownAccount(repository, bob);
-			ensureKnownAccount(repository, chloe);
-			ensureKnownAccount(repository, dilbert);
 
 			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, bob);
 			refreshTrustSnapshots(repository);
@@ -125,21 +121,80 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			AccountTrustSnapshotData aliceSubjectAfter = findSnapshot(repository, alice.getAddress(),
 					AccountRatingCategory.SUBJECT);
 			assertEquals(-512_000_000L, aliceSubjectAfter.getScore());
-			assertEquals(-512_000_000L, aliceSubjectAfter.getLevelScore());
-			assertEquals(0L, aliceSubjectAfter.getLevelScoreCap());
-			assertEquals(-1, aliceSubjectAfter.getLevel());
-			assertEquals(AccountTrustStatus.SUSPICIOUS, aliceSubjectAfter.getMappedTrustStatus());
-			assertFalse("Derived Suspicious should block mint eligibility",
+			assertEquals(-5_000_000L, aliceSubjectAfter.getLevelScore());
+			assertEquals(5_000_000L, aliceSubjectAfter.getLevelScoreCap());
+			assertEquals(0, aliceSubjectAfter.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, aliceSubjectAfter.getMappedTrustStatus());
+			assertTrue("One trusted negative rating should not block mint eligibility",
+					new Account(repository, alice.getAddress()).canMint(false));
+		}
+	}
+
+	@Test
+	public void testTwoTrustedNegativeSubjectRatingsMakeTargetSuspiciousAndOrphanRestoresMinting() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, dilbert);
+
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, bob);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, dilbert);
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData bobPlayer = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.PLAYER);
+			assertEquals(3, bobPlayer.getLevel());
+			assertEquals(AccountTrustStatus.GOLD, bobPlayer.getMappedTrustStatus());
+
+			AccountTrustSnapshotData dilbertPlayer = findSnapshot(repository, dilbert.getAddress(),
+					AccountRatingCategory.PLAYER);
+			assertEquals(3, dilbertPlayer.getLevel());
+			assertEquals(AccountTrustStatus.GOLD, dilbertPlayer.getMappedTrustStatus());
+
+			AccountTrustSnapshotData aliceSubjectBefore = findSnapshot(repository, alice.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(AccountTrustStatus.UNVERIFIED, aliceSubjectBefore.getMappedTrustStatus());
+			assertTrue("Alice should be able to mint before the trusted negative ratings",
+					new Account(repository, alice.getAddress()).canMint(false));
+
+			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingCategory.SUBJECT, -2), bob);
+
+			AccountTrustSnapshotData aliceSubjectAfterFirstRating = findSnapshot(repository, alice.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(-128_000_000L, aliceSubjectAfterFirstRating.getScore());
+			assertEquals(-5_000_000L, aliceSubjectAfterFirstRating.getLevelScore());
+			assertEquals(5_000_000L, aliceSubjectAfterFirstRating.getLevelScoreCap());
+			assertEquals(0, aliceSubjectAfterFirstRating.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, aliceSubjectAfterFirstRating.getMappedTrustStatus());
+			assertTrue("One trusted negative rating should not block mint eligibility",
+					new Account(repository, alice.getAddress()).canMint(false));
+
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, -2),
+					dilbert);
+
+			AccountTrustSnapshotData aliceSubjectAfterSecondRating = findSnapshot(repository, alice.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(-256_000_000L, aliceSubjectAfterSecondRating.getScore());
+			assertEquals(-10_000_000L, aliceSubjectAfterSecondRating.getLevelScore());
+			assertEquals(5_000_000L, aliceSubjectAfterSecondRating.getLevelScoreCap());
+			assertEquals(-1, aliceSubjectAfterSecondRating.getLevel());
+			assertEquals(AccountTrustStatus.SUSPICIOUS, aliceSubjectAfterSecondRating.getMappedTrustStatus());
+			assertFalse("Two trusted negative ratings should block mint eligibility",
 					new Account(repository, alice.getAddress()).canMint(false));
 
 			BlockUtils.orphanLastBlock(repository);
 
 			AccountTrustSnapshotData aliceSubjectRestored = findSnapshot(repository, alice.getAddress(),
 					AccountRatingCategory.SUBJECT);
-			assertEquals(0L, aliceSubjectRestored.getScore());
+			assertEquals(-128_000_000L, aliceSubjectRestored.getScore());
+			assertEquals(-5_000_000L, aliceSubjectRestored.getLevelScore());
+			assertEquals(5_000_000L, aliceSubjectRestored.getLevelScoreCap());
 			assertEquals(0, aliceSubjectRestored.getLevel());
 			assertEquals(AccountTrustStatus.UNVERIFIED, aliceSubjectRestored.getMappedTrustStatus());
-			assertTrue("Orphaning the trusted negative rating should restore mint eligibility",
+			assertTrue("Orphaning the second trusted negative rating should restore mint eligibility",
 					new Account(repository, alice.getAddress()).canMint(false));
 		}
 	}
@@ -257,7 +312,7 @@ public class AccountTrustGraphBehaviorTests extends Common {
 	}
 
 	@Test
-	public void testNegativeManagerRatingUsesFinalEnergyAndFlaggingMultiplier() throws DataException {
+	public void testSingleNegativeManagerRatingUsesFinalEnergyAndFlaggingMultiplierWithoutSuspicious() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			PrivateKeyAccount evaluator = Common.generateRandomSeedAccount(repository);
@@ -275,6 +330,34 @@ public class AccountTrustGraphBehaviorTests extends Common {
 					AccountRatingCategory.MANAGER);
 
 			assertEquals(-4_000_000L, managerSnapshot.getScore());
+			assertEquals(-500L, managerSnapshot.getLevelScore());
+			assertEquals(500L, managerSnapshot.getLevelScoreCap());
+			assertEquals(0, managerSnapshot.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, managerSnapshot.getMappedTrustStatus());
+		}
+	}
+
+	@Test
+	public void testTwoNegativeManagerRatingsMakeTargetSuspiciousThroughCap() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount managerTarget = Common.generateRandomSeedAccount(repository);
+			List<PrivateKeyAccount> evaluators;
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, managerTarget);
+			evaluators = AccountTrustTestUtils.saveManagerEnergyPaths(repository, alice, 2);
+			for (PrivateKeyAccount evaluator : evaluators)
+				saveAccountRating(repository, evaluator, managerTarget, AccountRatingCategory.MANAGER, -2);
+
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData managerSnapshot = findSnapshot(repository, managerTarget.getAddress(),
+					AccountRatingCategory.MANAGER);
+
+			assertEquals(-8_000_000L, managerSnapshot.getScore());
+			assertEquals(-1_000L, managerSnapshot.getLevelScore());
+			assertEquals(500L, managerSnapshot.getLevelScoreCap());
 			assertEquals(-1, managerSnapshot.getLevel());
 			assertEquals(AccountTrustStatus.SUSPICIOUS, managerSnapshot.getMappedTrustStatus());
 		}
