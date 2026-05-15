@@ -1262,6 +1262,11 @@ public class HSQLDBDatabaseUpdates {
 							+ "ON AccountTrustDerivationSnapshots (snapshot_height)");
 					break;
 
+				case 67:
+					// Add composite indexes for account-rating graph query paths.
+					createAccountRatingQueryIndexes(connection);
+					break;
+
 				default:
 					// nothing to do
 					return false;
@@ -1324,6 +1329,19 @@ public class HSQLDBDatabaseUpdates {
 			stmt.execute("CREATE INDEX AccountRatingsTargetIndex ON AccountRatings (target)");
 			stmt.execute("CREATE INDEX AccountRatingsRaterIndex ON AccountRatings (rater)");
 			stmt.execute("CREATE INDEX AccountRatingsCategoryIndex ON AccountRatings (category)");
+		}
+	}
+
+	private static void createAccountRatingQueryIndexes(Connection connection) throws SQLException {
+		try (Statement stmt = connection.createStatement()) {
+			stmt.execute("CREATE INDEX IF NOT EXISTS AccountRatingsTargetCategoryRatingIndex "
+					+ "ON AccountRatings (target, category, rating)");
+			stmt.execute("CREATE INDEX IF NOT EXISTS AccountRatingsRaterCategoryTargetIndex "
+					+ "ON AccountRatings (rater, category, target_account)");
+			stmt.execute("CREATE INDEX IF NOT EXISTS AccountRatingsCategoryTargetRaterIndex "
+					+ "ON AccountRatings (category, target_account, rater_account)");
+			stmt.execute("CREATE INDEX IF NOT EXISTS AccountRatingsAccountOrderIndex "
+					+ "ON AccountRatings (target_account, rater_account, category)");
 		}
 	}
 

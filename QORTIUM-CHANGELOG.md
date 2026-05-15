@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - core: index account rating queries
+
+Added focused database indexes for the account-rating trust graph so common inbound, outbound, category-filtered, summary, and paged listing queries have a better scaling path as the graph grows. This does not change account-rating transactions, trust scoring, snapshots, voting, minting, or public API behavior; it prepares the existing trust-network data model for larger communities.
+
 ### 2026-05-15 - core: remove manual account trust status
 
 Removed the older manual account trust-status storage and comparison fields now that Qortium uses stored Aura-style Subject snapshots as the active trust source. Account info, poll vote details, resource-rating summaries, and trust previews now show one snapshot-derived trust status instead of comparing manual and derived values, reducing ambiguity for new Qortium-derived chains.

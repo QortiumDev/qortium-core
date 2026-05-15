@@ -67,6 +67,20 @@ public class AccountTrustSnapshotTests extends Common {
 	}
 
 	@Test
+	public void testAccountRatingQueryIndexes() throws DataException, SQLException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertTrue(indexHasColumns(repository, "AccountRatings", "AccountRatingsTargetCategoryRatingIndex",
+					"target", "category", "rating"));
+			assertTrue(indexHasColumns(repository, "AccountRatings", "AccountRatingsRaterCategoryTargetIndex",
+					"rater", "category", "target_account"));
+			assertTrue(indexHasColumns(repository, "AccountRatings", "AccountRatingsCategoryTargetRaterIndex",
+					"category", "target_account", "rater_account"));
+			assertTrue(indexHasColumns(repository, "AccountRatings", "AccountRatingsAccountOrderIndex",
+					"target_account", "rater_account", "category"));
+		}
+	}
+
+	@Test
 	public void testBlockProcessingStoresDerivedCategorySnapshots() throws DataException {
 		TestAccount alice;
 		TestAccount bob;
@@ -296,5 +310,37 @@ public class AccountTrustSnapshotTests extends Common {
 		}
 
 		return false;
+	}
+
+	private boolean indexHasColumns(Repository repository, String tableName, String indexName, String... columnNames)
+			throws SQLException {
+		String[] actualColumns = new String[columnNames.length];
+		int columnCount = 0;
+		DatabaseMetaData metaData = repository.getConnection().getMetaData();
+
+		try (ResultSet resultSet = metaData.getIndexInfo(null, null, tableName.toUpperCase(), false, false)) {
+			while (resultSet.next()) {
+				if (!indexName.equalsIgnoreCase(resultSet.getString("INDEX_NAME")))
+					continue;
+
+				String columnName = resultSet.getString("COLUMN_NAME");
+				short position = resultSet.getShort("ORDINAL_POSITION");
+				if (columnName == null || position <= 0)
+					continue;
+
+				++columnCount;
+				if (position <= columnNames.length)
+					actualColumns[position - 1] = columnName;
+			}
+		}
+
+		if (columnCount != columnNames.length)
+			return false;
+
+		for (int i = 0; i < columnNames.length; ++i)
+			if (!columnNames[i].equalsIgnoreCase(actualColumns[i]))
+				return false;
+
+		return true;
 	}
 }

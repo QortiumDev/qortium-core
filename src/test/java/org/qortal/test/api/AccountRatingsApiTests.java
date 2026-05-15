@@ -222,13 +222,18 @@ public class AccountRatingsApiTests extends ApiCommon {
 	public void testCategoryAwareListAndSummaryEndpoints() throws DataException {
 		TestAccount bob;
 		TestAccount alice;
+		TestAccount chloe;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			alice = Common.getTestAccount(repository, "alice");
 			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
 
 			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.SUBJECT, 4), alice);
 			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.PLAYER, -2), alice);
+			TransactionUtils.signAndMint(repository, ratingData(chloe, bob, AccountRatingCategory.SUBJECT, 2), chloe);
+			TransactionUtils.signAndMint(repository, ratingData(alice, chloe, AccountRatingCategory.SUBJECT, 1), alice);
+			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingCategory.SUBJECT, 3), bob);
 		}
 
 		String targetPublicKey58 = Base58.encode(bob.getPublicKey());
@@ -244,11 +249,32 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(AccountRatingCategory.PLAYER, playerRatings.get(0).getCategory());
 		assertEquals(-2, playerRatings.get(0).getRating());
 
+		List<AccountRatingData> inboundSubjectRatings = this.accountRatingsResource.getAccountRatings(targetPublicKey58,
+				null, AccountRatingCategory.SUBJECT.name(), null, null, null);
+		assertEquals(2, inboundSubjectRatings.size());
+		assertEquals(4, findRatingByRater(inboundSubjectRatings, alice.getAddress()).getRating());
+		assertEquals(2, findRatingByRater(inboundSubjectRatings, chloe.getAddress()).getRating());
+
+		List<AccountRatingData> outboundSubjectRatings = this.accountRatingsResource.getAccountRatings(null,
+				raterPublicKey58, AccountRatingCategory.SUBJECT.name(), null, null, null);
+		assertEquals(2, outboundSubjectRatings.size());
+		assertEquals(4, findRatingByTarget(outboundSubjectRatings, bob.getAddress()).getRating());
+		assertEquals(1, findRatingByTarget(outboundSubjectRatings, chloe.getAddress()).getRating());
+
+		List<AccountRatingData> allSubjectRatings = this.accountRatingsResource.getAccountRatings(null, null,
+				AccountRatingCategory.SUBJECT.name(), null, null, null);
+		List<AccountRatingData> pagedSubjectRatings = this.accountRatingsResource.getAccountRatings(null, null,
+				AccountRatingCategory.SUBJECT.name(), 2, 1, null);
+		assertEquals(4, allSubjectRatings.size());
+		assertEquals(2, pagedSubjectRatings.size());
+		assertSameRating(allSubjectRatings.get(1), pagedSubjectRatings.get(0));
+		assertSameRating(allSubjectRatings.get(2), pagedSubjectRatings.get(1));
+
 		AccountRatingSummaryData subjectSummary = this.accountRatingsResource.getAccountRatingSummary(targetPublicKey58,
 				AccountRatingCategory.SUBJECT.name());
 		AccountRatingSummaryData playerSummary = this.accountRatingsResource.getAccountRatingSummary(targetPublicKey58,
 				AccountRatingCategory.PLAYER.name());
-		assertEquals(1, subjectSummary.getPositiveRatingCount());
+		assertEquals(2, subjectSummary.getPositiveRatingCount());
 		assertEquals(0, subjectSummary.getNegativeRatingCount());
 		assertEquals(0, playerSummary.getPositiveRatingCount());
 		assertEquals(1, playerSummary.getNegativeRatingCount());
@@ -756,6 +782,27 @@ public class AccountRatingsApiTests extends ApiCommon {
 				.filter(impact -> impact.getRaterAddress().equals(raterAddress))
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("Missing evaluator impact for " + raterAddress));
+	}
+
+	private AccountRatingData findRatingByRater(List<AccountRatingData> ratings, String raterAddress) {
+		return ratings.stream()
+				.filter(rating -> rating.getRaterAddress().equals(raterAddress))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing rating by " + raterAddress));
+	}
+
+	private AccountRatingData findRatingByTarget(List<AccountRatingData> ratings, String targetAddress) {
+		return ratings.stream()
+				.filter(rating -> rating.getTargetAddress().equals(targetAddress))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing rating for " + targetAddress));
+	}
+
+	private void assertSameRating(AccountRatingData expected, AccountRatingData actual) {
+		assertEquals(expected.getTargetAddress(), actual.getTargetAddress());
+		assertEquals(expected.getRaterAddress(), actual.getRaterAddress());
+		assertEquals(expected.getCategory(), actual.getCategory());
+		assertEquals(expected.getRating(), actual.getRating());
 	}
 
 	private AccountTrustPreviewData.CategoryTrust findCategory(AccountTrustPreviewData preview, AccountRatingCategory category) {
