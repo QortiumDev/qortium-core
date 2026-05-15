@@ -13,6 +13,7 @@ import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustExplanationData;
+import org.qortal.data.account.AccountTrustPolicyData;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustProfileData;
 import org.qortal.data.account.AccountTrustSnapshotData;
@@ -52,6 +53,48 @@ public class AccountRatingsApiTests extends ApiCommon {
 	@Test
 	public void testResource() {
 		assertNotNull(this.accountRatingsResource);
+	}
+
+	@Test
+	public void testTrustPolicyEndpointReturnsConfiguredPolicy() {
+		AccountTrustPolicyData policy = this.accountRatingsResource.getAccountTrustPolicy();
+
+		assertEquals(AccountRatingCategory.SUBJECT, policy.getActiveWeightCategory());
+		assertEquals(1_000_000L, policy.getStartingEnergy());
+		assertEquals(4, policy.getManagerEnergyHops());
+		assertEquals(2, policy.getSuspiciousMinRaterCount());
+		assertEquals(2, policy.getSuspiciousMinRatingConfidence());
+		assertEquals(AccountTrustStatus.values().length, policy.getStatusVoteWeights().size());
+		assertEquals(AccountRatingCategory.values().length, policy.getCategoryPolicies().size());
+
+		AccountTrustPolicyData.StatusVoteWeight gold = findStatusVoteWeight(policy, AccountTrustStatus.GOLD);
+		assertEquals(AccountTrustStatus.GOLD.getValue(), gold.getStatusValue());
+		assertEquals(100, gold.getVoteWeightPercent());
+		assertTrue(gold.isTrustAllowsMinting());
+
+		AccountTrustPolicyData.StatusVoteWeight suspicious = findStatusVoteWeight(policy, AccountTrustStatus.SUSPICIOUS);
+		assertEquals(AccountTrustStatus.SUSPICIOUS.getValue(), suspicious.getStatusValue());
+		assertEquals(0, suspicious.getVoteWeightPercent());
+		assertFalse(suspicious.isTrustAllowsMinting());
+
+		AccountTrustPolicyData.CategoryPolicy subject = findCategoryPolicy(policy, AccountRatingCategory.SUBJECT);
+		assertEquals(-10_000_000L, subject.getSuspiciousThreshold());
+		assertEquals(5_000_000L, subject.getSuspiciousLevelScoreCap());
+		assertEquals(4, subject.getLevels().size());
+
+		AccountTrustPolicyData.LevelPolicy subjectLevelTwo = findLevelPolicy(subject, 2);
+		assertEquals(AccountTrustStatus.SILVER, subjectLevelTwo.getMappedTrustStatus());
+		assertEquals(AccountTrustStatus.SILVER.getValue(), subjectLevelTwo.getMappedTrustStatusValue());
+		assertEquals(50, subjectLevelTwo.getMappedTrustWeightPercent());
+		assertEquals(50_000_000L, subjectLevelTwo.getThreshold());
+		assertEquals(25_000_000L, subjectLevelTwo.getLevelScoreCap());
+
+		AccountTrustPolicyData.CategoryPolicy manager = findCategoryPolicy(policy, AccountRatingCategory.MANAGER);
+		assertEquals(-1_000L, manager.getSuspiciousThreshold());
+		assertEquals(500L, manager.getSuspiciousLevelScoreCap());
+		assertEquals(2, manager.getLevels().size());
+		assertEquals(200_000L, findLevelPolicy(manager, 2).getThreshold());
+		assertEquals(100_000L, findLevelPolicy(manager, 2).getLevelScoreCap());
 	}
 
 	@Test
@@ -943,6 +986,30 @@ public class AccountRatingsApiTests extends ApiCommon {
 				.filter(categoryProfile -> categoryProfile.getCategory() == category)
 				.findFirst()
 				.orElseThrow(() -> new AssertionError("Missing category " + category));
+	}
+
+	private AccountTrustPolicyData.StatusVoteWeight findStatusVoteWeight(AccountTrustPolicyData policy,
+			AccountTrustStatus status) {
+		return policy.getStatusVoteWeights().stream()
+				.filter(statusVoteWeight -> statusVoteWeight.getStatus() == status)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing status vote weight " + status));
+	}
+
+	private AccountTrustPolicyData.CategoryPolicy findCategoryPolicy(AccountTrustPolicyData policy,
+			AccountRatingCategory category) {
+		return policy.getCategoryPolicies().stream()
+				.filter(categoryPolicy -> categoryPolicy.getCategory() == category)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing category policy " + category));
+	}
+
+	private AccountTrustPolicyData.LevelPolicy findLevelPolicy(AccountTrustPolicyData.CategoryPolicy categoryPolicy,
+			int level) {
+		return categoryPolicy.getLevels().stream()
+				.filter(levelPolicy -> levelPolicy.getLevel() == level)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing level policy " + level));
 	}
 
 	private AccountTrustExplanationData.ConfiguredLevel findConfiguredLevel(

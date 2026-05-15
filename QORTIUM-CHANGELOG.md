@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - api: add trust policy endpoint
+
+Added a read-only trust policy API that exposes the active chain-configured trust settings clients need to explain account trust results. The endpoint returns the active weighting category, Manager seed-energy flow settings, Suspicious requirements, Gold/Silver/Bronze/Unverified/Suspicious vote multipliers, and each category's thresholds and caps without changing trust scoring, snapshots, ratings, minting, voting, or resource-rating behavior.
+
 ### 2026-05-15 - api: add trust profile endpoint
 
 Added a read-only trust profile API that returns one known account's active Subject trust status, vote-weight multiplier, minting trust allowance, minting seed membership, stored snapshot metadata, and per-category trust/rating-count summary in one response. This gives clients a compact way to display the trust network without combining lower-level snapshot, summary, preview, and explanation endpoints, while leaving trust scoring, ratings, minting, voting, and resource-rating behavior unchanged.

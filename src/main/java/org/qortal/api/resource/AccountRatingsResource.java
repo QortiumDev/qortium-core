@@ -23,6 +23,7 @@ import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustExplanationData;
+import org.qortal.data.account.AccountTrustPolicyData;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustProfileData;
 import org.qortal.data.account.AccountTrustSnapshotData;
@@ -138,6 +139,24 @@ public class AccountRatingsResource {
 
 	public AccountRatingSummaryData getAccountRatingSummary(String targetPublicKey58) {
 		return getAccountRatingSummary(targetPublicKey58, null);
+	}
+
+	@GET
+	@Path("/trust-policy")
+	@Operation(
+			summary = "Get active account trust policy settings",
+			responses = {
+					@ApiResponse(
+							description = "account trust policy",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = AccountTrustPolicyData.class)
+							)
+					)
+			}
+	)
+	public AccountTrustPolicyData getAccountTrustPolicy() {
+		return buildTrustPolicy();
 	}
 
 	@GET
@@ -374,6 +393,31 @@ public class AccountRatingsResource {
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
+	}
+
+	private AccountTrustPolicyData buildTrustPolicy() {
+		List<AccountTrustPolicyData.StatusVoteWeight> statusVoteWeights = new ArrayList<>();
+		for (AccountTrustStatus status : AccountTrustStatus.values())
+			statusVoteWeights.add(new AccountTrustPolicyData.StatusVoteWeight(status,
+					AccountTrustPolicy.getVoteWeightPercent(status)));
+
+		List<AccountTrustPolicyData.CategoryPolicy> categoryPolicies = new ArrayList<>();
+		for (AccountRatingCategory category : AccountRatingCategory.values())
+			categoryPolicies.add(buildTrustCategoryPolicy(category));
+
+		return new AccountTrustPolicyData(AccountTrustPolicy.getActiveWeightCategory(), AccountTrustPolicy.getStartingEnergy(),
+				AccountTrustPolicy.getManagerEnergyHops(), AccountTrustPolicy.getSuspiciousMinRaterCount(),
+				AccountTrustPolicy.getSuspiciousMinRatingConfidence(), statusVoteWeights, categoryPolicies);
+	}
+
+	private AccountTrustPolicyData.CategoryPolicy buildTrustCategoryPolicy(AccountRatingCategory category) {
+		List<AccountTrustPolicyData.LevelPolicy> levels = new ArrayList<>();
+		for (int level = 1; level <= getMaximumConfiguredLevel(category); ++level)
+			levels.add(new AccountTrustPolicyData.LevelPolicy(level, AccountTrustPolicy.mapLevelToStatus(level),
+					AccountTrustPolicy.getLevelThreshold(category, level), AccountTrustPolicy.getLevelScoreCap(category, level)));
+
+		return new AccountTrustPolicyData.CategoryPolicy(category, levels, AccountTrustPolicy.getSuspiciousThreshold(category),
+				AccountTrustPolicy.getSuspiciousLevelScoreCap(category));
 	}
 
 	private AccountTrustProfileData buildTrustProfile(Repository repository, byte[] targetPublicKey, String targetAddress)

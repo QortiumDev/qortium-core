@@ -3,8 +3,10 @@ package org.qortal.test.account;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.AccountTrustPolicy;
+import org.qortal.api.resource.AccountRatingsResource;
 import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountTrustPolicyData;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.repository.DataException;
@@ -188,6 +190,25 @@ public class AccountTrustPolicyTests extends Common {
 	}
 
 	@Test
+	public void testTrustPolicyEndpointReflectsCustomConfig() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"{ \"status\": \"SILVER\", \"percent\": 50 }",
+				"{ \"status\": \"SILVER\", \"percent\": 75 }");
+		config = replaceRequired(config,
+				"{ \"level\": 1, \"threshold\": 1000000, \"cap\": 500000 }",
+				"{ \"level\": 1, \"threshold\": 600000, \"cap\": 300000 }");
+		loadTemporaryConfig(config);
+
+		AccountTrustPolicyData policy = new AccountRatingsResource().getAccountTrustPolicy();
+
+		assertEquals(75, findStatusVoteWeight(policy, AccountTrustStatus.SILVER).getVoteWeightPercent());
+		AccountTrustPolicyData.LevelPolicy playerLevelOne = findLevelPolicy(
+				findCategoryPolicy(policy, AccountRatingCategory.PLAYER), 1);
+		assertEquals(600_000L, playerLevelOne.getThreshold());
+		assertEquals(300_000L, playerLevelOne.getLevelScoreCap());
+	}
+
+	@Test
 	public void testMissingTrustSettingsRejected() throws Exception {
 		assertInvalidConfig(removeAccountTrustSettings(loadDefaultTestChainConfig()),
 				"No \"accountTrustSettings\" entry found");
@@ -238,6 +259,30 @@ public class AccountTrustPolicyTests extends Common {
 	private static AccountTrustPreviewData.CategoryImpact impact(String raterAddress, int evaluatorLevel, int rating,
 			long impact) {
 		return new AccountTrustPreviewData.CategoryImpact(null, raterAddress, evaluatorLevel, 0L, rating, impact);
+	}
+
+	private static AccountTrustPolicyData.StatusVoteWeight findStatusVoteWeight(AccountTrustPolicyData policy,
+			AccountTrustStatus status) {
+		return policy.getStatusVoteWeights().stream()
+				.filter(statusVoteWeight -> statusVoteWeight.getStatus() == status)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing status vote weight " + status));
+	}
+
+	private static AccountTrustPolicyData.CategoryPolicy findCategoryPolicy(AccountTrustPolicyData policy,
+			AccountRatingCategory category) {
+		return policy.getCategoryPolicies().stream()
+				.filter(categoryPolicy -> categoryPolicy.getCategory() == category)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing category policy " + category));
+	}
+
+	private static AccountTrustPolicyData.LevelPolicy findLevelPolicy(AccountTrustPolicyData.CategoryPolicy categoryPolicy,
+			int level) {
+		return categoryPolicy.getLevels().stream()
+				.filter(levelPolicy -> levelPolicy.getLevel() == level)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing level policy " + level));
 	}
 
 	private static String loadDefaultTestChainConfig() throws Exception {
