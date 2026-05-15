@@ -14,6 +14,7 @@ import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustExplanationData;
 import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustProfileData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.RateAccountTransactionData;
@@ -109,6 +110,109 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(4, filteredRatings.get(0).getRating());
 		assertEquals("POSITIVE", filteredRatings.get(0).getRatingDirection());
 		assertEquals(4, filteredRatings.get(0).getRatingConfidence());
+	}
+
+	@Test
+	public void testTrustProfileReturnsEmptyKnownAccountProfile() throws DataException {
+		TestAccount bob;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			bob = Common.getTestAccount(repository, "bob");
+			ensureKnownAccount(repository, bob);
+			repository.saveChanges();
+		}
+
+		AccountTrustProfileData profile = this.accountRatingsResource.getAccountTrustProfile(Base58.encode(bob.getPublicKey()));
+
+		assertEquals(bob.getAddress(), profile.getTargetAddress());
+		assertEquals(AccountTrustStatus.UNVERIFIED, profile.getTrustStatus());
+		assertEquals(AccountTrustStatus.UNVERIFIED.getValue(), profile.getTrustStatusValue());
+		assertEquals(0, profile.getTrustWeightPercent());
+		assertTrue(profile.isTrustAllowsMinting());
+		assertEquals(AccountRatingCategory.SUBJECT, profile.getActiveWeightCategory());
+		assertFalse(profile.isMintingSeedMember());
+		assertNull(profile.getSnapshotHeight());
+		assertNull(profile.getSnapshotTimestamp());
+		assertEquals(AccountRatingCategory.values().length, profile.getCategories().size());
+
+		for (AccountTrustProfileData.CategoryProfile category : profile.getCategories()) {
+			assertEquals(0L, category.getScore());
+			assertEquals(0L, category.getLevelScore());
+			assertEquals(0L, category.getLevelScoreCap());
+			assertEquals(0, category.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, category.getMappedTrustStatus());
+			assertEquals(AccountTrustStatus.UNVERIFIED.getValue(), category.getMappedTrustStatusValue());
+			assertEquals(0, category.getMappedTrustWeightPercent());
+			assertEquals(0, category.getInboundRatings().getTotalRatingCount());
+			assertEquals(0, category.getOutboundRatings().getTotalRatingCount());
+			assertNull(category.getSnapshotHeight());
+			assertNull(category.getSnapshotTimestamp());
+		}
+	}
+
+	@Test
+	public void testTrustProfileReturnsStoredSnapshotsAndCategoryCounts() throws DataException {
+		TestAccount bob;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			AccountTrustPreviewData.RatingCounts subjectInboundCounts = new AccountTrustPreviewData.RatingCounts();
+			subjectInboundCounts.addRating(4);
+			subjectInboundCounts.addRating(-2);
+
+			saveAccountRating(repository, alice, bob, AccountRatingCategory.SUBJECT, 4);
+			saveAccountRating(repository, chloe, bob, AccountRatingCategory.SUBJECT, -2);
+			saveAccountRating(repository, bob, alice, AccountRatingCategory.PLAYER, 3);
+			saveAccountRating(repository, bob, chloe, AccountRatingCategory.MANAGER, -1);
+			saveAccountRating(repository, bob, dilbert, AccountRatingCategory.SUBJECT, 1);
+			saveSubjectSnapshots(repository, subjectDerivation(bob, AccountTrustStatus.BRONZE, subjectInboundCounts));
+		}
+
+		AccountTrustProfileData profile = this.accountRatingsResource.getAccountTrustProfile(Base58.encode(bob.getPublicKey()));
+
+		assertEquals(bob.getAddress(), profile.getTargetAddress());
+		assertEquals(AccountTrustStatus.BRONZE, profile.getTrustStatus());
+		assertEquals(AccountTrustStatus.BRONZE.getValue(), profile.getTrustStatusValue());
+		assertEquals(25, profile.getTrustWeightPercent());
+		assertTrue(profile.isTrustAllowsMinting());
+		assertEquals(AccountRatingCategory.SUBJECT, profile.getActiveWeightCategory());
+		assertTrue(profile.isMintingSeedMember());
+		assertNotNull(profile.getSnapshotHeight());
+		assertNotNull(profile.getSnapshotTimestamp());
+		assertEquals(AccountRatingCategory.values().length, profile.getCategories().size());
+
+		AccountTrustProfileData.CategoryProfile subject = findCategory(profile, AccountRatingCategory.SUBJECT);
+		assertEquals(10_000_000L, subject.getScore());
+		assertEquals(10_000_000L, subject.getLevelScore());
+		assertEquals(0L, subject.getLevelScoreCap());
+		assertEquals(1, subject.getLevel());
+		assertEquals(AccountTrustStatus.BRONZE, subject.getMappedTrustStatus());
+		assertEquals(25, subject.getMappedTrustWeightPercent());
+		assertEquals(1, subject.getInboundRatings().getPositiveVeryHighCount());
+		assertEquals(1, subject.getInboundRatings().getNegativeMediumCount());
+		assertEquals(1, subject.getOutboundRatings().getPositiveLowCount());
+		assertNotNull(subject.getSnapshotHeight());
+		assertNotNull(subject.getSnapshotTimestamp());
+
+		AccountTrustProfileData.CategoryProfile player = findCategory(profile, AccountRatingCategory.PLAYER);
+		assertEquals(0L, player.getScore());
+		assertEquals(AccountTrustStatus.UNVERIFIED, player.getMappedTrustStatus());
+		assertEquals(0, player.getInboundRatings().getTotalRatingCount());
+		assertEquals(1, player.getOutboundRatings().getPositiveHighCount());
+		assertNull(player.getSnapshotHeight());
+		assertNull(player.getSnapshotTimestamp());
+
+		AccountTrustProfileData.CategoryProfile manager = findCategory(profile, AccountRatingCategory.MANAGER);
+		assertEquals(0L, manager.getScore());
+		assertEquals(AccountTrustStatus.UNVERIFIED, manager.getMappedTrustStatus());
+		assertEquals(0, manager.getInboundRatings().getTotalRatingCount());
+		assertEquals(1, manager.getOutboundRatings().getNegativeLowCount());
+		assertNull(manager.getSnapshotHeight());
+		assertNull(manager.getSnapshotTimestamp());
 	}
 
 	@Test
@@ -731,6 +835,10 @@ public class AccountRatingsApiTests extends ApiCommon {
 				() -> this.accountRatingsResource.getAccountTrustPreview(Base58.encode(unknown.getPublicKey())));
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountTrustExplanation(Base58.encode(unknown.getPublicKey()), null));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustProfile(Base58.encode(unknown.getPublicKey())));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustProfile(null));
 	}
 
 	@Test
@@ -741,6 +849,8 @@ public class AccountRatingsApiTests extends ApiCommon {
 				() -> this.accountRatingsResource.getAccountTrustPreview("not-a-public-key"));
 		assertApiError(ApiError.INVALID_PUBLIC_KEY,
 				() -> this.accountRatingsResource.getAccountTrustExplanation("not-a-public-key", null));
+		assertApiError(ApiError.INVALID_PUBLIC_KEY,
+				() -> this.accountRatingsResource.getAccountTrustProfile("not-a-public-key"));
 	}
 
 	@Test
@@ -828,6 +938,13 @@ public class AccountRatingsApiTests extends ApiCommon {
 				.orElseThrow(() -> new AssertionError("Missing category " + category));
 	}
 
+	private AccountTrustProfileData.CategoryProfile findCategory(AccountTrustProfileData profile, AccountRatingCategory category) {
+		return profile.getCategories().stream()
+				.filter(categoryProfile -> categoryProfile.getCategory() == category)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing category " + category));
+	}
+
 	private AccountTrustExplanationData.ConfiguredLevel findConfiguredLevel(
 			AccountTrustExplanationData.CategoryExplanation category, int level) {
 		return category.getConfiguredLevels().stream()
@@ -895,9 +1012,14 @@ public class AccountRatingsApiTests extends ApiCommon {
 
 	private AccountTrustDerivationData subjectDerivation(TestAccount account, AccountTrustStatus trustStatus)
 			throws DataException {
+		return subjectDerivation(account, trustStatus, new AccountTrustPreviewData.RatingCounts());
+	}
+
+	private AccountTrustDerivationData subjectDerivation(TestAccount account, AccountTrustStatus trustStatus,
+			AccountTrustPreviewData.RatingCounts inboundRatings) throws DataException {
 		AccountTrustPreviewData.CategoryTrust subjectTrust = new AccountTrustPreviewData.CategoryTrust(
 				AccountRatingCategory.SUBJECT, scoreForStatus(trustStatus), levelForStatus(trustStatus), trustStatus,
-				new AccountTrustPreviewData.RatingCounts(), Collections.emptyList());
+				inboundRatings, Collections.emptyList());
 		return new AccountTrustDerivationData(account.getPublicKey(), account.getAddress(), trustStatus, true,
 				Collections.singletonList(subjectTrust));
 	}

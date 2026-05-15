@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - api: add trust profile endpoint
+
+Added a read-only trust profile API that returns one known account's active Subject trust status, vote-weight multiplier, minting trust allowance, minting seed membership, stored snapshot metadata, and per-category trust/rating-count summary in one response. This gives clients a compact way to display the trust network without combining lower-level snapshot, summary, preview, and explanation endpoints, while leaving trust scoring, ratings, minting, voting, and resource-rating behavior unchanged.
+
 ### 2026-05-15 - core: index account rating queries
 
 Added focused database indexes for the account-rating trust graph so common inbound, outbound, category-filtered, summary, and paged listing queries have a better scaling path as the graph grows. This does not change account-rating transactions, trust scoring, snapshots, voting, minting, or public API behavior; it prepares the existing trust-network data model for larger communities.

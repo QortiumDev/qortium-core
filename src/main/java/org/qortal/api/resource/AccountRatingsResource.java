@@ -24,6 +24,7 @@ import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustExplanationData;
 import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustProfileData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.RateAccountTransactionData;
@@ -137,6 +138,35 @@ public class AccountRatingsResource {
 
 	public AccountRatingSummaryData getAccountRatingSummary(String targetPublicKey58) {
 		return getAccountRatingSummary(targetPublicKey58, null);
+	}
+
+	@GET
+	@Path("/trust-profile")
+	@Operation(
+			summary = "Get one account's stored trust profile",
+			responses = {
+					@ApiResponse(
+							description = "account trust profile",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = AccountTrustProfileData.class)
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public AccountTrustProfileData getAccountTrustProfile(
+			@Parameter(description = "Target account public key in Base58") @QueryParam("target") String targetPublicKey58) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			byte[] targetPublicKey = requireKnownPublicKey(repository, targetPublicKey58);
+			String targetAddress = Crypto.toAddress(targetPublicKey);
+
+			return buildTrustProfile(repository, targetPublicKey, targetAddress);
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
 	}
 
 	@GET
@@ -344,6 +374,72 @@ public class AccountRatingsResource {
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
+	}
+
+	private AccountTrustProfileData buildTrustProfile(Repository repository, byte[] targetPublicKey, String targetAddress)
+			throws DataException {
+		AccountRatingCategory activeCategory = AccountTrustWeight.getActiveWeightCategory();
+		List<AccountTrustSnapshotData> snapshots = repository.getAccountRatingRepository()
+				.getTrustDerivationSnapshots(targetAddress);
+		Map<AccountRatingCategory, AccountTrustSnapshotData> snapshotsByCategory = new EnumMap<>(AccountRatingCategory.class);
+
+		for (AccountTrustSnapshotData snapshot : snapshots)
+			snapshotsByCategory.put(snapshot.getCategory(), snapshot);
+
+		AccountTrustSnapshotData activeSnapshot = snapshotsByCategory.get(activeCategory);
+		AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeSnapshot);
+		AccountTrustSnapshotData referenceSnapshot = activeSnapshot == null && !snapshots.isEmpty()
+				? snapshots.get(0)
+				: activeSnapshot;
+		boolean mintingSeedMember = referenceSnapshot != null && referenceSnapshot.isMintingSeedMember();
+		Integer snapshotHeight = activeSnapshot == null ? null : activeSnapshot.getSnapshotHeight();
+		Long snapshotTimestamp = activeSnapshot == null ? null : activeSnapshot.getSnapshotTimestamp();
+		Map<AccountRatingCategory, AccountTrustPreviewData.RatingCounts> outboundCountsByCategory =
+				buildOutboundRatingCountsByCategory(repository, targetPublicKey);
+
+		return new AccountTrustProfileData(targetPublicKey, targetAddress, activeTrustStatus, activeCategory,
+				mintingSeedMember, snapshotHeight, snapshotTimestamp,
+				buildCategoryProfiles(snapshotsByCategory, outboundCountsByCategory));
+	}
+
+	private List<AccountTrustProfileData.CategoryProfile> buildCategoryProfiles(
+			Map<AccountRatingCategory, AccountTrustSnapshotData> snapshotsByCategory,
+			Map<AccountRatingCategory, AccountTrustPreviewData.RatingCounts> outboundCountsByCategory) {
+		List<AccountTrustProfileData.CategoryProfile> categories = new ArrayList<>();
+
+		for (AccountRatingCategory category : AccountRatingCategory.values()) {
+			AccountTrustSnapshotData snapshot = snapshotsByCategory.get(category);
+			AccountTrustPreviewData.RatingCounts outboundCounts = outboundCountsByCategory.get(category);
+
+			if (snapshot == null) {
+				categories.add(new AccountTrustProfileData.CategoryProfile(category, 0L, 0L, 0L, 0,
+						AccountTrustStatus.UNVERIFIED, new AccountTrustPreviewData.RatingCounts(), outboundCounts, null, null));
+				continue;
+			}
+
+			categories.add(new AccountTrustProfileData.CategoryProfile(snapshot.getCategory(), snapshot.getScore(),
+					snapshot.getLevelScore(), snapshot.getLevelScoreCap(), snapshot.getLevel(),
+					snapshot.getMappedTrustStatus(), snapshot.getInboundRatings(), outboundCounts, snapshot.getSnapshotHeight(),
+					snapshot.getSnapshotTimestamp()));
+		}
+
+		return categories;
+	}
+
+	private Map<AccountRatingCategory, AccountTrustPreviewData.RatingCounts> buildOutboundRatingCountsByCategory(
+			Repository repository, byte[] raterPublicKey) throws DataException {
+		Map<AccountRatingCategory, AccountTrustPreviewData.RatingCounts> countsByCategory =
+				new EnumMap<>(AccountRatingCategory.class);
+
+		for (AccountRatingCategory category : AccountRatingCategory.values())
+			countsByCategory.put(category, new AccountTrustPreviewData.RatingCounts());
+
+		List<AccountRatingData> outboundRatings = repository.getAccountRatingRepository()
+				.getRatings(null, raterPublicKey, null, null, null, null);
+		for (AccountRatingData rating : outboundRatings)
+			countsByCategory.get(rating.getCategory()).addRating(rating.getRating());
+
+		return countsByCategory;
 	}
 
 	private AccountTrustPreviewData buildTrustPreview(Repository repository, byte[] targetPublicKey, String targetAddress,
