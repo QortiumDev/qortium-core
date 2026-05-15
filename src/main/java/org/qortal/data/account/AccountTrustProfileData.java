@@ -95,8 +95,8 @@ public class AccountTrustProfileData {
 		private AccountTrustStatus mappedTrustStatus;
 		private int mappedTrustStatusValue;
 		private int mappedTrustWeightPercent;
-		private AccountTrustPreviewData.RatingCounts inboundRatings;
-		private AccountTrustPreviewData.RatingCounts outboundRatings;
+		private AccountTrustRatingCountsData inboundRatings;
+		private AccountTrustRatingCountsData outboundRatings;
 		private Integer snapshotHeight;
 		private Long snapshotTimestamp;
 
@@ -104,8 +104,8 @@ public class AccountTrustProfileData {
 		}
 
 		public CategoryProfile(AccountRatingCategory category, long score, long levelScore, long levelScoreCap,
-				int level, AccountTrustStatus mappedTrustStatus, AccountTrustPreviewData.RatingCounts inboundRatings,
-				AccountTrustPreviewData.RatingCounts outboundRatings, Integer snapshotHeight, Long snapshotTimestamp) {
+				int level, AccountTrustStatus mappedTrustStatus, AccountTrustRatingCountsData inboundRatings,
+				AccountTrustRatingCountsData outboundRatings, Integer snapshotHeight, Long snapshotTimestamp) {
 			AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
 
 			this.category = category == null ? AccountRatingCategory.SUBJECT : category;
@@ -116,8 +116,8 @@ public class AccountTrustProfileData {
 			this.mappedTrustStatus = effectiveMappedStatus;
 			this.mappedTrustStatusValue = effectiveMappedStatus.getValue();
 			this.mappedTrustWeightPercent = effectiveMappedStatus.getVoteWeightPercent();
-			this.inboundRatings = inboundRatings == null ? new AccountTrustPreviewData.RatingCounts() : inboundRatings;
-			this.outboundRatings = outboundRatings == null ? new AccountTrustPreviewData.RatingCounts() : outboundRatings;
+			this.inboundRatings = inboundRatings == null ? new AccountTrustRatingCountsData() : inboundRatings;
+			this.outboundRatings = outboundRatings == null ? new AccountTrustRatingCountsData() : outboundRatings;
 			this.snapshotHeight = snapshotHeight;
 			this.snapshotTimestamp = snapshotTimestamp;
 		}
@@ -154,11 +154,11 @@ public class AccountTrustProfileData {
 			return this.mappedTrustWeightPercent;
 		}
 
-		public AccountTrustPreviewData.RatingCounts getInboundRatings() {
+		public AccountTrustRatingCountsData getInboundRatings() {
 			return this.inboundRatings;
 		}
 
-		public AccountTrustPreviewData.RatingCounts getOutboundRatings() {
+		public AccountTrustRatingCountsData getOutboundRatings() {
 			return this.outboundRatings;
 		}
 

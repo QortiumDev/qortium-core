@@ -14,7 +14,9 @@ import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustExplanationData;
 import org.qortal.data.account.AccountTrustPolicyData;
-import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustCategoryData;
+import org.qortal.data.account.AccountTrustCategoryImpactData;
+import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustProfileData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
@@ -196,7 +198,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
 			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
 
-			AccountTrustPreviewData.RatingCounts subjectInboundCounts = new AccountTrustPreviewData.RatingCounts();
+			AccountTrustRatingCountsData subjectInboundCounts = new AccountTrustRatingCountsData();
 			subjectInboundCounts.addRating(4);
 			subjectInboundCounts.addRating(-2);
 
@@ -367,7 +369,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(2, aliceSubject.getLevel());
 		assertEquals(AccountTrustStatus.SILVER, aliceExplanation.getTrustStatus());
 
-		AccountTrustPreviewData.CategoryImpact subjectImpact = aliceSubject.getTopPositiveImpacts().get(0);
+		AccountTrustCategoryImpactData subjectImpact = aliceSubject.getTopPositiveImpacts().get(0);
 		assertEquals(dilbert.getAddress(), subjectImpact.getRaterAddress());
 		assertEquals(3, subjectImpact.getEvaluatorLevel());
 		assertEquals(32_000_000L, subjectImpact.getEvaluatorScore());
@@ -619,7 +621,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertNotNull(aliceDerivation.getSnapshotTimestamp());
 		assertEquals(AccountTrustStatus.SILVER, aliceDerivation.getDerivedTrustStatus());
 		assertEquals(50, aliceDerivation.getDerivedTrustWeightPercent());
-		AccountTrustPreviewData.CategoryTrust storedSubject = findCategory(aliceDerivation, AccountRatingCategory.SUBJECT);
+		AccountTrustCategoryData storedSubject = findCategory(aliceDerivation, AccountRatingCategory.SUBJECT);
 		assertEquals(96_000_000L, storedSubject.getScore());
 		assertEquals(50_000_000L, storedSubject.getLevelScore());
 		assertEquals(25_000_000L, storedSubject.getLevelScoreCap());
@@ -851,7 +853,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(expected.getRating(), actual.getRating());
 	}
 
-	private AccountTrustPreviewData.CategoryTrust findCategory(AccountTrustDerivationData derivation,
+	private AccountTrustCategoryData findCategory(AccountTrustDerivationData derivation,
 			AccountRatingCategory category) {
 		return derivation.getCategories().stream()
 				.filter(categoryTrust -> categoryTrust.getCategory() == category)
@@ -965,12 +967,12 @@ public class AccountRatingsApiTests extends ApiCommon {
 
 	private AccountTrustDerivationData subjectDerivation(TestAccount account, AccountTrustStatus trustStatus)
 			throws DataException {
-		return subjectDerivation(account, trustStatus, new AccountTrustPreviewData.RatingCounts());
+		return subjectDerivation(account, trustStatus, new AccountTrustRatingCountsData());
 	}
 
 	private AccountTrustDerivationData subjectDerivation(TestAccount account, AccountTrustStatus trustStatus,
-			AccountTrustPreviewData.RatingCounts inboundRatings) throws DataException {
-		AccountTrustPreviewData.CategoryTrust subjectTrust = new AccountTrustPreviewData.CategoryTrust(
+			AccountTrustRatingCountsData inboundRatings) throws DataException {
+		AccountTrustCategoryData subjectTrust = new AccountTrustCategoryData(
 				AccountRatingCategory.SUBJECT, scoreForStatus(trustStatus), levelForStatus(trustStatus), trustStatus,
 				inboundRatings, Collections.emptyList());
 		return new AccountTrustDerivationData(account.getPublicKey(), account.getAddress(), trustStatus, true,

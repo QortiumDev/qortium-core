@@ -3,7 +3,7 @@ package org.qortal.account;
 import org.qortal.block.BlockChain;
 import org.qortal.block.BlockChain.AccountTrustSettings;
 import org.qortal.data.account.AccountRatingCategory;
-import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustCategoryImpactData;
 import org.qortal.data.account.AccountTrustStatus;
 
 import java.util.Collections;
@@ -40,9 +40,9 @@ public final class AccountTrustPolicy {
 	}
 
 	public static LevelDecision decideLevel(AccountRatingCategory category, long rawScore,
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
+			List<AccountTrustCategoryImpactData> impacts) {
 		AccountRatingCategory effectiveCategory = effectiveCategory(category);
-		List<AccountTrustPreviewData.CategoryImpact> effectiveImpacts = effectiveImpacts(impacts);
+		List<AccountTrustCategoryImpactData> effectiveImpacts = effectiveImpacts(impacts);
 
 		LevelDecision suspiciousDecision = suspiciousDecisionForCategory(effectiveCategory, effectiveImpacts);
 		if (meetsSuspiciousRequirements(effectiveCategory, suspiciousDecision, effectiveImpacts))
@@ -103,7 +103,7 @@ public final class AccountTrustPolicy {
 		return settings().getSuspiciousMinRatingConfidence();
 	}
 
-	private static LevelDecision calculateManagerLevel(List<AccountTrustPreviewData.CategoryImpact> impacts) {
+	private static LevelDecision calculateManagerLevel(List<AccountTrustCategoryImpactData> impacts) {
 		LevelDecision level2 = decisionForLevel(AccountRatingCategory.MANAGER, 2, impacts);
 		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.MANAGER, 2))
 			return level2;
@@ -115,7 +115,7 @@ public final class AccountTrustPolicy {
 		return zeroLevelDecision(AccountRatingCategory.MANAGER, impacts);
 	}
 
-	private static LevelDecision calculateTrainerLevel(List<AccountTrustPreviewData.CategoryImpact> impacts) {
+	private static LevelDecision calculateTrainerLevel(List<AccountTrustCategoryImpactData> impacts) {
 		LevelDecision level2 = decisionForLevel(AccountRatingCategory.TRAINER, 2, impacts);
 		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.TRAINER, 2))
 			return level2;
@@ -127,7 +127,7 @@ public final class AccountTrustPolicy {
 		return zeroLevelDecision(AccountRatingCategory.TRAINER, impacts);
 	}
 
-	private static LevelDecision calculatePlayerLevel(List<AccountTrustPreviewData.CategoryImpact> impacts) {
+	private static LevelDecision calculatePlayerLevel(List<AccountTrustCategoryImpactData> impacts) {
 		LevelDecision level3 = decisionForLevel(AccountRatingCategory.PLAYER, 3, impacts);
 		if (level3.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 3)
 				&& (hasImpact(impacts, 2, 3) || countImpacts(impacts, 2, 2) >= 2))
@@ -144,7 +144,7 @@ public final class AccountTrustPolicy {
 		return zeroLevelDecision(AccountRatingCategory.PLAYER, impacts);
 	}
 
-	private static LevelDecision calculateSubjectLevel(List<AccountTrustPreviewData.CategoryImpact> impacts) {
+	private static LevelDecision calculateSubjectLevel(List<AccountTrustCategoryImpactData> impacts) {
 		LevelDecision level4 = decisionForLevel(AccountRatingCategory.SUBJECT, 4, impacts);
 		if (level4.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 4)
 				&& (hasImpact(impacts, 3, 3) || countImpacts(impacts, 3, 2) >= 2))
@@ -167,33 +167,33 @@ public final class AccountTrustPolicy {
 	}
 
 	private static LevelDecision zeroLevelDecision(AccountRatingCategory category,
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
+			List<AccountTrustCategoryImpactData> impacts) {
 		long levelScoreCap = getLevelScoreCap(category, 1);
 		return new LevelDecision(0, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
 	}
 
 	private static LevelDecision decisionForLevel(AccountRatingCategory category, int level,
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
+			List<AccountTrustCategoryImpactData> impacts) {
 		long levelScoreCap = getLevelScoreCap(category, level);
 		return new LevelDecision(level, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
 	}
 
 	private static LevelDecision suspiciousDecisionForCategory(AccountRatingCategory category,
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
+			List<AccountTrustCategoryImpactData> impacts) {
 		long levelScoreCap = getSuspiciousLevelScoreCap(category);
 		return new LevelDecision(-1, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
 	}
 
 	private static boolean meetsSuspiciousRequirements(AccountRatingCategory category, LevelDecision suspiciousDecision,
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
+			List<AccountTrustCategoryImpactData> impacts) {
 		return suspiciousDecision.levelScore <= getSuspiciousThreshold(category)
 				&& countNegativeImpacts(impacts, getSuspiciousMinRatingConfidence()) >= getSuspiciousMinRaterCount();
 	}
 
-	private static long calculateCappedLevelScore(List<AccountTrustPreviewData.CategoryImpact> impacts, long impactCap) {
+	private static long calculateCappedLevelScore(List<AccountTrustCategoryImpactData> impacts, long impactCap) {
 		long levelScore = 0L;
 
-		for (AccountTrustPreviewData.CategoryImpact impact : impacts) {
+		for (AccountTrustCategoryImpactData impact : impacts) {
 			long impactValue = impact.getImpact();
 			if (impactValue > impactCap)
 				impactValue = impactCap;
@@ -206,20 +206,20 @@ public final class AccountTrustPolicy {
 		return levelScore;
 	}
 
-	private static boolean hasImpact(List<AccountTrustPreviewData.CategoryImpact> impacts, int minLevel, int minConfidence) {
+	private static boolean hasImpact(List<AccountTrustCategoryImpactData> impacts, int minLevel, int minConfidence) {
 		return impacts.stream().anyMatch(impact -> impact.getEvaluatorLevel() >= minLevel
 				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0);
 	}
 
-	private static long countImpacts(List<AccountTrustPreviewData.CategoryImpact> impacts, int minLevel, int minConfidence) {
+	private static long countImpacts(List<AccountTrustCategoryImpactData> impacts, int minLevel, int minConfidence) {
 		return impacts.stream().filter(impact -> impact.getEvaluatorLevel() >= minLevel
 				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0).count();
 	}
 
-	private static long countNegativeImpacts(List<AccountTrustPreviewData.CategoryImpact> impacts, int minConfidence) {
+	private static long countNegativeImpacts(List<AccountTrustCategoryImpactData> impacts, int minConfidence) {
 		return impacts.stream()
 				.filter(impact -> impact.getRatingConfidence() >= minConfidence && impact.getImpact() < 0)
-				.map(AccountTrustPreviewData.CategoryImpact::getRaterAddress)
+				.map(AccountTrustCategoryImpactData::getRaterAddress)
 				.distinct()
 				.count();
 	}
@@ -232,8 +232,8 @@ public final class AccountTrustPolicy {
 		return BlockChain.getInstance().getAccountTrustSettings();
 	}
 
-	private static List<AccountTrustPreviewData.CategoryImpact> effectiveImpacts(
-			List<AccountTrustPreviewData.CategoryImpact> impacts) {
+	private static List<AccountTrustCategoryImpactData> effectiveImpacts(
+			List<AccountTrustCategoryImpactData> impacts) {
 		return impacts == null ? Collections.emptyList() : impacts;
 	}
 

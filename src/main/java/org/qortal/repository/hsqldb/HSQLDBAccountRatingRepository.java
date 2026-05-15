@@ -4,7 +4,8 @@ import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
-import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustCategoryData;
+import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.repository.AccountRatingRepository;
@@ -193,7 +194,7 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 
 		try {
 			for (AccountTrustDerivationData derivedAccount : derivedAccounts) {
-				for (AccountTrustPreviewData.CategoryTrust categoryTrust : derivedAccount.getCategories())
+				for (AccountTrustCategoryData categoryTrust : derivedAccount.getCategories())
 					saveTrustDerivationSnapshot(derivedAccount, categoryTrust, snapshotHeight, snapshotTimestamp);
 			}
 		} catch (SQLException e) {
@@ -202,9 +203,9 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 	}
 
 	private void saveTrustDerivationSnapshot(AccountTrustDerivationData derivedAccount,
-			AccountTrustPreviewData.CategoryTrust categoryTrust, int snapshotHeight, long snapshotTimestamp)
+			AccountTrustCategoryData categoryTrust, int snapshotHeight, long snapshotTimestamp)
 			throws SQLException {
-		AccountTrustPreviewData.RatingCounts inboundRatings = categoryTrust.getInboundRatings();
+		AccountTrustRatingCountsData inboundRatings = categoryTrust.getInboundRatings();
 		HSQLDBSaver saveHelper = new HSQLDBSaver("AccountTrustDerivationSnapshots");
 
 		saveHelper.bind("account", derivedAccount.getAccountAddress())
@@ -407,7 +408,7 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 				int level = resultSet.getInt(7);
 				AccountTrustStatus mappedTrustStatus = AccountTrustStatus.valueOf(resultSet.getInt(8));
 				boolean mintingSeedMember = resultSet.getBoolean(9);
-				AccountTrustPreviewData.RatingCounts inboundRatings = new AccountTrustPreviewData.RatingCounts(
+				AccountTrustRatingCountsData inboundRatings = new AccountTrustRatingCountsData(
 						resultSet.getInt(10), resultSet.getInt(11), resultSet.getInt(12), resultSet.getInt(13),
 						resultSet.getInt(14), resultSet.getInt(15), resultSet.getInt(16), resultSet.getInt(17));
 				int snapshotHeight = resultSet.getInt(18);

@@ -10,7 +10,8 @@ import org.qortal.controller.BlockMinter;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustDerivationData;
-import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustCategoryData;
+import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.account.RewardShareData;
 import org.qortal.data.block.BlockData;
@@ -132,9 +133,9 @@ public class LevelZeroMintingTests extends Common {
 		repository.getAccountRepository().ensureAccount(new AccountData(account.getAddress(), account.getPublicKey(),
 				Group.NO_GROUP, 0, 0));
 
-		AccountTrustPreviewData.CategoryTrust subjectTrust = new AccountTrustPreviewData.CategoryTrust(
+		AccountTrustCategoryData subjectTrust = new AccountTrustCategoryData(
 				AccountRatingCategory.SUBJECT, scoreForStatus(trustStatus), levelForStatus(trustStatus), trustStatus,
-				new AccountTrustPreviewData.RatingCounts(), Collections.emptyList());
+				new AccountTrustRatingCountsData(), Collections.emptyList());
 		AccountTrustDerivationData derivationData = new AccountTrustDerivationData(account.getPublicKey(),
 				account.getAddress(), trustStatus, true, Collections.singletonList(subjectTrust));
 

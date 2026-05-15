@@ -17,19 +17,19 @@ public class AccountTrustDerivationData {
 	private Integer snapshotHeight;
 	private Long snapshotTimestamp;
 	private boolean live;
-	private List<AccountTrustPreviewData.CategoryTrust> categories;
+	private List<AccountTrustCategoryData> categories;
 
 	protected AccountTrustDerivationData() {
 	}
 
 	public AccountTrustDerivationData(byte[] accountPublicKey, String accountAddress, AccountTrustStatus derivedTrustStatus,
-			boolean mintingSeedMember, List<AccountTrustPreviewData.CategoryTrust> categories) {
+			boolean mintingSeedMember, List<AccountTrustCategoryData> categories) {
 		this(accountPublicKey, accountAddress, derivedTrustStatus, mintingSeedMember, null, null, true, categories);
 	}
 
 	public AccountTrustDerivationData(byte[] accountPublicKey, String accountAddress, AccountTrustStatus derivedTrustStatus,
 			boolean mintingSeedMember, Integer snapshotHeight, Long snapshotTimestamp, boolean live,
-			List<AccountTrustPreviewData.CategoryTrust> categories) {
+			List<AccountTrustCategoryData> categories) {
 		AccountTrustStatus effectiveDerivedTrustStatus = derivedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : derivedTrustStatus;
 
 		this.accountPublicKey = accountPublicKey;
@@ -80,7 +80,7 @@ public class AccountTrustDerivationData {
 		return this.live;
 	}
 
-	public List<AccountTrustPreviewData.CategoryTrust> getCategories() {
+	public List<AccountTrustCategoryData> getCategories() {
 		return this.categories;
 	}
 }

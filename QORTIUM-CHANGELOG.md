@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - refactor: rename trust graph DTOs
+
+Renamed the remaining preview-named account trust helper data classes now that the old trust-preview endpoint has been removed. Trust rating counts, category summaries, and category impacts now use neutral trust-network names while keeping the same response fields and behavior for trust profile, explanation, derivation, snapshot, voting, minting, and resource-rating code.
+
 ### 2026-05-15 - api: remove trust preview endpoint
 
 Removed the old trust-preview endpoint now that Qortium has stable trust profile, explanation, policy, snapshot, and derivation APIs for account trust screens and audit tools. The shared trust rating-count and category DTO helpers remain because the current trust APIs still use them, but preview-only evaluator-impact, mutual-positive, and score-summary response fields were removed to keep the baseline API surface focused before launch.

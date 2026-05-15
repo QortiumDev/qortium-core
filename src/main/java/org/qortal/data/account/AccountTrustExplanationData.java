@@ -95,25 +95,25 @@ public class AccountTrustExplanationData {
 		private AccountTrustStatus mappedTrustStatus;
 		private int mappedTrustStatusValue;
 		private int mappedTrustWeightPercent;
-		private AccountTrustPreviewData.RatingCounts inboundRatings;
+		private AccountTrustRatingCountsData inboundRatings;
 		private List<ConfiguredLevel> configuredLevels;
 		private long suspiciousThreshold;
 		private long suspiciousLevelScoreCap;
 		private int suspiciousMinRaterCount;
 		private int suspiciousMinRatingConfidence;
 		private List<Requirement> requirements;
-		private List<AccountTrustPreviewData.CategoryImpact> topPositiveImpacts;
-		private List<AccountTrustPreviewData.CategoryImpact> topNegativeImpacts;
+		private List<AccountTrustCategoryImpactData> topPositiveImpacts;
+		private List<AccountTrustCategoryImpactData> topNegativeImpacts;
 
 		protected CategoryExplanation() {
 		}
 
 		public CategoryExplanation(AccountRatingCategory category, long score, long levelScore, long levelScoreCap,
-				int level, AccountTrustStatus mappedTrustStatus, AccountTrustPreviewData.RatingCounts inboundRatings,
+				int level, AccountTrustStatus mappedTrustStatus, AccountTrustRatingCountsData inboundRatings,
 				List<ConfiguredLevel> configuredLevels, long suspiciousThreshold, long suspiciousLevelScoreCap,
 				int suspiciousMinRaterCount, int suspiciousMinRatingConfidence, List<Requirement> requirements,
-				List<AccountTrustPreviewData.CategoryImpact> topPositiveImpacts,
-				List<AccountTrustPreviewData.CategoryImpact> topNegativeImpacts) {
+				List<AccountTrustCategoryImpactData> topPositiveImpacts,
+				List<AccountTrustCategoryImpactData> topNegativeImpacts) {
 			AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
 
 			this.category = category == null ? AccountRatingCategory.SUBJECT : category;
@@ -124,7 +124,7 @@ public class AccountTrustExplanationData {
 			this.mappedTrustStatus = effectiveMappedStatus;
 			this.mappedTrustStatusValue = effectiveMappedStatus.getValue();
 			this.mappedTrustWeightPercent = effectiveMappedStatus.getVoteWeightPercent();
-			this.inboundRatings = inboundRatings == null ? new AccountTrustPreviewData.RatingCounts() : inboundRatings;
+			this.inboundRatings = inboundRatings == null ? new AccountTrustRatingCountsData() : inboundRatings;
 			this.configuredLevels = configuredLevels == null ? new ArrayList<>() : configuredLevels;
 			this.suspiciousThreshold = suspiciousThreshold;
 			this.suspiciousLevelScoreCap = suspiciousLevelScoreCap;
@@ -167,7 +167,7 @@ public class AccountTrustExplanationData {
 			return this.mappedTrustWeightPercent;
 		}
 
-		public AccountTrustPreviewData.RatingCounts getInboundRatings() {
+		public AccountTrustRatingCountsData getInboundRatings() {
 			return this.inboundRatings;
 		}
 
@@ -195,11 +195,11 @@ public class AccountTrustExplanationData {
 			return this.requirements;
 		}
 
-		public List<AccountTrustPreviewData.CategoryImpact> getTopPositiveImpacts() {
+		public List<AccountTrustCategoryImpactData> getTopPositiveImpacts() {
 			return this.topPositiveImpacts;
 		}
 
-		public List<AccountTrustPreviewData.CategoryImpact> getTopNegativeImpacts() {
+		public List<AccountTrustCategoryImpactData> getTopNegativeImpacts() {
 			return this.topNegativeImpacts;
 		}
 	}

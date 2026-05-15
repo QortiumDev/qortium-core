@@ -23,7 +23,9 @@ import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustExplanationData;
 import org.qortal.data.account.AccountTrustPolicyData;
-import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustCategoryData;
+import org.qortal.data.account.AccountTrustCategoryImpactData;
+import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustProfileData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
@@ -397,7 +399,7 @@ public class AccountRatingsResource {
 		boolean mintingSeedMember = referenceSnapshot != null && referenceSnapshot.isMintingSeedMember();
 		Integer snapshotHeight = activeSnapshot == null ? null : activeSnapshot.getSnapshotHeight();
 		Long snapshotTimestamp = activeSnapshot == null ? null : activeSnapshot.getSnapshotTimestamp();
-		Map<AccountRatingCategory, AccountTrustPreviewData.RatingCounts> outboundCountsByCategory =
+		Map<AccountRatingCategory, AccountTrustRatingCountsData> outboundCountsByCategory =
 				buildOutboundRatingCountsByCategory(repository, targetPublicKey);
 
 		return new AccountTrustProfileData(targetPublicKey, targetAddress, activeTrustStatus, activeCategory,
@@ -407,16 +409,16 @@ public class AccountRatingsResource {
 
 	private List<AccountTrustProfileData.CategoryProfile> buildCategoryProfiles(
 			Map<AccountRatingCategory, AccountTrustSnapshotData> snapshotsByCategory,
-			Map<AccountRatingCategory, AccountTrustPreviewData.RatingCounts> outboundCountsByCategory) {
+			Map<AccountRatingCategory, AccountTrustRatingCountsData> outboundCountsByCategory) {
 		List<AccountTrustProfileData.CategoryProfile> categories = new ArrayList<>();
 
 		for (AccountRatingCategory category : AccountRatingCategory.values()) {
 			AccountTrustSnapshotData snapshot = snapshotsByCategory.get(category);
-			AccountTrustPreviewData.RatingCounts outboundCounts = outboundCountsByCategory.get(category);
+			AccountTrustRatingCountsData outboundCounts = outboundCountsByCategory.get(category);
 
 			if (snapshot == null) {
 				categories.add(new AccountTrustProfileData.CategoryProfile(category, 0L, 0L, 0L, 0,
-						AccountTrustStatus.UNVERIFIED, new AccountTrustPreviewData.RatingCounts(), outboundCounts, null, null));
+						AccountTrustStatus.UNVERIFIED, new AccountTrustRatingCountsData(), outboundCounts, null, null));
 				continue;
 			}
 
@@ -429,13 +431,13 @@ public class AccountRatingsResource {
 		return categories;
 	}
 
-	private Map<AccountRatingCategory, AccountTrustPreviewData.RatingCounts> buildOutboundRatingCountsByCategory(
+	private Map<AccountRatingCategory, AccountTrustRatingCountsData> buildOutboundRatingCountsByCategory(
 			Repository repository, byte[] raterPublicKey) throws DataException {
-		Map<AccountRatingCategory, AccountTrustPreviewData.RatingCounts> countsByCategory =
+		Map<AccountRatingCategory, AccountTrustRatingCountsData> countsByCategory =
 				new EnumMap<>(AccountRatingCategory.class);
 
 		for (AccountRatingCategory category : AccountRatingCategory.values())
-			countsByCategory.put(category, new AccountTrustPreviewData.RatingCounts());
+			countsByCategory.put(category, new AccountTrustRatingCountsData());
 
 		List<AccountRatingData> outboundRatings = repository.getAccountRatingRepository()
 				.getRatings(null, raterPublicKey, null, null, null, null);
@@ -448,7 +450,7 @@ public class AccountRatingsResource {
 	private AccountTrustExplanationData buildLiveTrustExplanation(byte[] targetPublicKey, String targetAddress,
 			AccountTrustDerivation.Result liveDerivation) {
 		AccountRatingCategory activeCategory = AccountTrustWeight.getActiveWeightCategory();
-		AccountTrustPreviewData.CategoryTrust activeCategoryTrust = getCategoryTrust(liveDerivation.getCategories(), activeCategory);
+		AccountTrustCategoryData activeCategoryTrust = getCategoryTrust(liveDerivation.getCategories(), activeCategory);
 		AccountTrustStatus activeTrustStatus = activeCategoryTrust == null
 				? AccountTrustStatus.UNVERIFIED
 				: activeCategoryTrust.getMappedTrustStatus();
@@ -484,19 +486,19 @@ public class AccountRatingsResource {
 				buildCategoryExplanations(buildCategoryTrustsFromSnapshots(snapshotsByCategory), liveDerivation.getCategories()));
 	}
 
-	private List<AccountTrustPreviewData.CategoryTrust> buildCategoryTrustsFromSnapshots(
+	private List<AccountTrustCategoryData> buildCategoryTrustsFromSnapshots(
 			Map<AccountRatingCategory, AccountTrustSnapshotData> snapshotsByCategory) {
-		List<AccountTrustPreviewData.CategoryTrust> categories = new ArrayList<>();
+		List<AccountTrustCategoryData> categories = new ArrayList<>();
 
 		for (AccountRatingCategory category : AccountRatingCategory.values()) {
 			AccountTrustSnapshotData snapshot = snapshotsByCategory.get(category);
 			if (snapshot == null) {
-				categories.add(new AccountTrustPreviewData.CategoryTrust(category, 0L, 0,
-						AccountTrustStatus.UNVERIFIED, new AccountTrustPreviewData.RatingCounts(), new ArrayList<>()));
+				categories.add(new AccountTrustCategoryData(category, 0L, 0,
+						AccountTrustStatus.UNVERIFIED, new AccountTrustRatingCountsData(), new ArrayList<>()));
 				continue;
 			}
 
-			categories.add(new AccountTrustPreviewData.CategoryTrust(snapshot.getCategory(), snapshot.getScore(),
+			categories.add(new AccountTrustCategoryData(snapshot.getCategory(), snapshot.getScore(),
 					snapshot.getLevelScore(), snapshot.getLevelScoreCap(), snapshot.getLevel(), snapshot.getMappedTrustStatus(),
 					snapshot.getInboundRatings(), new ArrayList<>()));
 		}
@@ -505,20 +507,20 @@ public class AccountRatingsResource {
 	}
 
 	private List<AccountTrustExplanationData.CategoryExplanation> buildCategoryExplanations(
-			List<AccountTrustPreviewData.CategoryTrust> statusCategories,
-			List<AccountTrustPreviewData.CategoryTrust> impactCategories) {
+			List<AccountTrustCategoryData> statusCategories,
+			List<AccountTrustCategoryData> impactCategories) {
 		List<AccountTrustExplanationData.CategoryExplanation> explanations = new ArrayList<>();
 
 		for (AccountRatingCategory category : AccountRatingCategory.values()) {
-			AccountTrustPreviewData.CategoryTrust statusCategory = getCategoryTrust(statusCategories, category);
-			AccountTrustPreviewData.CategoryTrust impactCategory = getCategoryTrust(impactCategories, category);
-			List<AccountTrustPreviewData.CategoryImpact> impacts = impactCategory == null
+			AccountTrustCategoryData statusCategory = getCategoryTrust(statusCategories, category);
+			AccountTrustCategoryData impactCategory = getCategoryTrust(impactCategories, category);
+			List<AccountTrustCategoryImpactData> impacts = impactCategory == null
 					? new ArrayList<>()
 					: impactCategory.getImpacts();
 
 			if (statusCategory == null)
-				statusCategory = new AccountTrustPreviewData.CategoryTrust(category, 0L, 0,
-						AccountTrustStatus.UNVERIFIED, new AccountTrustPreviewData.RatingCounts(), new ArrayList<>());
+				statusCategory = new AccountTrustCategoryData(category, 0L, 0,
+						AccountTrustStatus.UNVERIFIED, new AccountTrustRatingCountsData(), new ArrayList<>());
 
 			explanations.add(buildCategoryExplanation(statusCategory, impacts));
 		}
@@ -527,7 +529,7 @@ public class AccountRatingsResource {
 	}
 
 	private AccountTrustExplanationData.CategoryExplanation buildCategoryExplanation(
-			AccountTrustPreviewData.CategoryTrust categoryTrust, List<AccountTrustPreviewData.CategoryImpact> impacts) {
+			AccountTrustCategoryData categoryTrust, List<AccountTrustCategoryImpactData> impacts) {
 		AccountRatingCategory category = categoryTrust.getCategory();
 		List<AccountTrustExplanationData.ConfiguredLevel> configuredLevels = buildConfiguredLevels(category);
 		List<AccountTrustExplanationData.Requirement> requirements = buildTrustRequirements(category, categoryTrust.getScore(), impacts);
@@ -551,7 +553,7 @@ public class AccountRatingsResource {
 	}
 
 	private List<AccountTrustExplanationData.Requirement> buildTrustRequirements(AccountRatingCategory category,
-			long rawScore, List<AccountTrustPreviewData.CategoryImpact> impacts) {
+			long rawScore, List<AccountTrustCategoryImpactData> impacts) {
 		List<AccountTrustExplanationData.Requirement> requirements = new ArrayList<>();
 		long suspiciousScore = calculateCappedScore(impacts, AccountTrustPolicy.getSuspiciousLevelScoreCap(category));
 		long suspiciousThreshold = AccountTrustPolicy.getSuspiciousThreshold(category);
@@ -586,7 +588,7 @@ public class AccountRatingsResource {
 	}
 
 	private AccountTrustExplanationData.Requirement buildPositiveSupportRequirement(AccountRatingCategory category,
-			int level, List<AccountTrustPreviewData.CategoryImpact> impacts) {
+			int level, List<AccountTrustCategoryImpactData> impacts) {
 		switch (category) {
 			case PLAYER:
 				if (level == 2)
@@ -647,9 +649,9 @@ public class AccountRatingsResource {
 		}
 	}
 
-	private long calculateCappedScore(List<AccountTrustPreviewData.CategoryImpact> impacts, long cap) {
+	private long calculateCappedScore(List<AccountTrustCategoryImpactData> impacts, long cap) {
 		long score = 0L;
-		for (AccountTrustPreviewData.CategoryImpact impact : impacts) {
+		for (AccountTrustCategoryImpactData impact : impacts) {
 			long impactValue = impact.getImpact();
 			if (impactValue > cap)
 				impactValue = cap;
@@ -670,28 +672,28 @@ public class AccountRatingsResource {
 		return result;
 	}
 
-	private long countNegativeImpacts(List<AccountTrustPreviewData.CategoryImpact> impacts, int minConfidence) {
+	private long countNegativeImpacts(List<AccountTrustCategoryImpactData> impacts, int minConfidence) {
 		return impacts.stream()
 				.filter(impact -> impact.getRatingConfidence() >= minConfidence && impact.getImpact() < 0)
-				.map(AccountTrustPreviewData.CategoryImpact::getRaterAddress)
+				.map(AccountTrustCategoryImpactData::getRaterAddress)
 				.distinct()
 				.count();
 	}
 
-	private boolean hasPositiveImpact(List<AccountTrustPreviewData.CategoryImpact> impacts, int minLevel, int minConfidence) {
+	private boolean hasPositiveImpact(List<AccountTrustCategoryImpactData> impacts, int minLevel, int minConfidence) {
 		return impacts.stream().anyMatch(impact -> impact.getEvaluatorLevel() >= minLevel
 				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0);
 	}
 
-	private long countPositiveImpacts(List<AccountTrustPreviewData.CategoryImpact> impacts, int minLevel, int minConfidence) {
+	private long countPositiveImpacts(List<AccountTrustCategoryImpactData> impacts, int minLevel, int minConfidence) {
 		return impacts.stream().filter(impact -> impact.getEvaluatorLevel() >= minLevel
 				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0).count();
 	}
 
-	private List<AccountTrustPreviewData.CategoryImpact> getTopImpacts(
-			List<AccountTrustPreviewData.CategoryImpact> impacts, boolean positive) {
-		List<AccountTrustPreviewData.CategoryImpact> filteredImpacts = new ArrayList<>();
-		for (AccountTrustPreviewData.CategoryImpact impact : impacts) {
+	private List<AccountTrustCategoryImpactData> getTopImpacts(
+			List<AccountTrustCategoryImpactData> impacts, boolean positive) {
+		List<AccountTrustCategoryImpactData> filteredImpacts = new ArrayList<>();
+		for (AccountTrustCategoryImpactData impact : impacts) {
 			if (positive && impact.getImpact() > 0)
 				filteredImpacts.add(impact);
 			else if (!positive && impact.getImpact() < 0)
@@ -699,9 +701,9 @@ public class AccountRatingsResource {
 		}
 
 		filteredImpacts.sort(Comparator
-				.comparingLong((AccountTrustPreviewData.CategoryImpact impact) -> Math.abs(impact.getImpact()))
+				.comparingLong((AccountTrustCategoryImpactData impact) -> Math.abs(impact.getImpact()))
 				.reversed()
-				.thenComparing(AccountTrustPreviewData.CategoryImpact::getRaterAddress));
+				.thenComparing(AccountTrustCategoryImpactData::getRaterAddress));
 
 		if (filteredImpacts.size() > TRUST_EXPLANATION_IMPACT_LIMIT)
 			return new ArrayList<>(filteredImpacts.subList(0, TRUST_EXPLANATION_IMPACT_LIMIT));
@@ -725,15 +727,15 @@ public class AccountRatingsResource {
 			AccountTrustStatus derivedTrustStatus = subjectSnapshot == null
 					? AccountTrustStatus.UNVERIFIED
 					: subjectSnapshot.getMappedTrustStatus();
-			List<AccountTrustPreviewData.CategoryTrust> categories = new ArrayList<>();
+			List<AccountTrustCategoryData> categories = new ArrayList<>();
 
 			for (AccountRatingCategory category : AccountRatingCategory.values()) {
 				AccountTrustSnapshotData snapshot = snapshotsByCategory.get(category);
 				if (snapshot == null)
-					categories.add(new AccountTrustPreviewData.CategoryTrust(category, 0L, 0,
-							AccountTrustStatus.UNVERIFIED, new AccountTrustPreviewData.RatingCounts(), new ArrayList<>()));
+					categories.add(new AccountTrustCategoryData(category, 0L, 0,
+							AccountTrustStatus.UNVERIFIED, new AccountTrustRatingCountsData(), new ArrayList<>()));
 				else
-					categories.add(new AccountTrustPreviewData.CategoryTrust(snapshot.getCategory(), snapshot.getScore(),
+					categories.add(new AccountTrustCategoryData(snapshot.getCategory(), snapshot.getScore(),
 							snapshot.getLevelScore(), snapshot.getLevelScoreCap(), snapshot.getLevel(),
 							snapshot.getMappedTrustStatus(), snapshot.getInboundRatings(), new ArrayList<>()));
 			}
@@ -785,27 +787,27 @@ public class AccountRatingsResource {
 	}
 
 	private static int getCategoryLevel(AccountTrustDerivationData derivedAccount, AccountRatingCategory category) {
-		AccountTrustPreviewData.CategoryTrust categoryTrust = getCategoryTrust(derivedAccount, category);
+		AccountTrustCategoryData categoryTrust = getCategoryTrust(derivedAccount, category);
 		return categoryTrust == null ? 0 : categoryTrust.getLevel();
 	}
 
 	private static long getCategoryScore(AccountTrustDerivationData derivedAccount, AccountRatingCategory category) {
-		AccountTrustPreviewData.CategoryTrust categoryTrust = getCategoryTrust(derivedAccount, category);
+		AccountTrustCategoryData categoryTrust = getCategoryTrust(derivedAccount, category);
 		return categoryTrust == null ? 0L : categoryTrust.getScore();
 	}
 
-	private static AccountTrustPreviewData.CategoryTrust getCategoryTrust(AccountTrustDerivationData derivedAccount,
+	private static AccountTrustCategoryData getCategoryTrust(AccountTrustDerivationData derivedAccount,
 			AccountRatingCategory category) {
-		for (AccountTrustPreviewData.CategoryTrust categoryTrust : derivedAccount.getCategories())
+		for (AccountTrustCategoryData categoryTrust : derivedAccount.getCategories())
 			if (categoryTrust.getCategory() == category)
 				return categoryTrust;
 
 		return null;
 	}
 
-	private static AccountTrustPreviewData.CategoryTrust getCategoryTrust(List<AccountTrustPreviewData.CategoryTrust> categories,
+	private static AccountTrustCategoryData getCategoryTrust(List<AccountTrustCategoryData> categories,
 			AccountRatingCategory category) {
-		for (AccountTrustPreviewData.CategoryTrust categoryTrust : categories)
+		for (AccountTrustCategoryData categoryTrust : categories)
 			if (categoryTrust.getCategory() == category)
 				return categoryTrust;
 

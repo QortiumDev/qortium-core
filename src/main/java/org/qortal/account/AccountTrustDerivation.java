@@ -6,7 +6,9 @@ import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountTrustDerivationData;
-import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustCategoryData;
+import org.qortal.data.account.AccountTrustCategoryImpactData;
+import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
@@ -134,16 +136,16 @@ public class AccountTrustDerivation {
 		return publicKeysByAddress;
 	}
 
-	private static Map<AccountRatingCategory, Map<String, AccountTrustPreviewData.RatingCounts>> buildInboundCountsByCategory(
+	private static Map<AccountRatingCategory, Map<String, AccountTrustRatingCountsData>> buildInboundCountsByCategory(
 			Map<AccountRatingCategory, List<AccountRatingData>> ratingsByCategory) {
-		Map<AccountRatingCategory, Map<String, AccountTrustPreviewData.RatingCounts>> inboundCountsByCategory = new EnumMap<>(
+		Map<AccountRatingCategory, Map<String, AccountTrustRatingCountsData>> inboundCountsByCategory = new EnumMap<>(
 				AccountRatingCategory.class);
 
 		for (AccountRatingCategory category : AccountRatingCategory.values()) {
-			Map<String, AccountTrustPreviewData.RatingCounts> inboundCounts = new HashMap<>();
+			Map<String, AccountTrustRatingCountsData> inboundCounts = new HashMap<>();
 			for (AccountRatingData rating : ratingsByCategory.get(category)) {
-				AccountTrustPreviewData.RatingCounts ratingCounts = inboundCounts.computeIfAbsent(rating.getTargetAddress(),
-						ignored -> new AccountTrustPreviewData.RatingCounts());
+				AccountTrustRatingCountsData ratingCounts = inboundCounts.computeIfAbsent(rating.getTargetAddress(),
+						ignored -> new AccountTrustRatingCountsData());
 				ratingCounts.addRating(rating.getRating());
 			}
 
@@ -216,7 +218,7 @@ public class AccountTrustDerivation {
 			CategoryScore targetScore = scores.computeIfAbsent(rating.getTargetAddress(), ignored -> new CategoryScore());
 			if (impact != 0L) {
 				targetScore.score = saturatedAdd(targetScore.score, impact);
-				targetScore.impacts.add(new AccountTrustPreviewData.CategoryImpact(rating.getRaterPublicKey(),
+				targetScore.impacts.add(new AccountTrustCategoryImpactData(rating.getRaterPublicKey(),
 						raterAddress, evaluatorScore.level, evaluatorScore.score, rating.getRating(), impact));
 			}
 		}
@@ -250,8 +252,8 @@ public class AccountTrustDerivation {
 		return new EvaluatorScore(0L, 0);
 	}
 
-	private static AccountTrustPreviewData.CategoryTrust buildCategoryTrust(AccountRatingCategory category, String targetAddress,
-			Map<String, CategoryScore> scores, Map<String, AccountTrustPreviewData.RatingCounts> inboundCountsByAddress,
+	private static AccountTrustCategoryData buildCategoryTrust(AccountRatingCategory category, String targetAddress,
+			Map<String, CategoryScore> scores, Map<String, AccountTrustRatingCountsData> inboundCountsByAddress,
 			Integer maxImpacts) {
 		CategoryScore score = scores.get(targetAddress);
 		if (score == null) {
@@ -259,20 +261,20 @@ public class AccountTrustDerivation {
 			score.apply(AccountTrustPolicy.decideLevel(category, score.score, score.impacts));
 		}
 
-		AccountTrustPreviewData.RatingCounts inboundCounts = inboundCountsByAddress.get(targetAddress);
+		AccountTrustRatingCountsData inboundCounts = inboundCountsByAddress.get(targetAddress);
 		if (inboundCounts == null)
-			inboundCounts = new AccountTrustPreviewData.RatingCounts();
+			inboundCounts = new AccountTrustRatingCountsData();
 
 		score.impacts.sort(Comparator
-				.comparingLong((AccountTrustPreviewData.CategoryImpact impact) -> Math.abs(impact.getImpact()))
+				.comparingLong((AccountTrustCategoryImpactData impact) -> Math.abs(impact.getImpact()))
 				.reversed()
-				.thenComparing(AccountTrustPreviewData.CategoryImpact::getRaterAddress));
+				.thenComparing(AccountTrustCategoryImpactData::getRaterAddress));
 
-		List<AccountTrustPreviewData.CategoryImpact> impacts = new ArrayList<>(score.impacts);
+		List<AccountTrustCategoryImpactData> impacts = new ArrayList<>(score.impacts);
 		if (maxImpacts != null && maxImpacts >= 0 && impacts.size() > maxImpacts)
 			impacts = new ArrayList<>(impacts.subList(0, maxImpacts));
 
-		return new AccountTrustPreviewData.CategoryTrust(category, score.score, score.levelScore, score.levelScoreCap,
+		return new AccountTrustCategoryData(category, score.score, score.levelScore, score.levelScoreCap,
 				score.level, AccountTrustPolicy.mapLevelToStatus(score.level), inboundCounts, impacts);
 	}
 
@@ -289,7 +291,7 @@ public class AccountTrustDerivation {
 		private long levelScore;
 		private long levelScoreCap;
 		private int level;
-		private final List<AccountTrustPreviewData.CategoryImpact> impacts = new ArrayList<>();
+		private final List<AccountTrustCategoryImpactData> impacts = new ArrayList<>();
 
 		private void apply(AccountTrustPolicy.LevelDecision decision) {
 			this.level = decision.getLevel();
@@ -312,11 +314,11 @@ public class AccountTrustDerivation {
 		private final Set<String> seedAddresses;
 		private final Set<String> accountAddresses;
 		private final Map<String, byte[]> publicKeysByAddress;
-		private final Map<AccountRatingCategory, Map<String, AccountTrustPreviewData.RatingCounts>> inboundCountsByCategory;
+		private final Map<AccountRatingCategory, Map<String, AccountTrustRatingCountsData>> inboundCountsByCategory;
 		private final Map<AccountRatingCategory, Map<String, CategoryScore>> scoresByCategory;
 
 		private DerivedGraph(Set<String> seedAddresses, Set<String> accountAddresses, Map<String, byte[]> publicKeysByAddress,
-				Map<AccountRatingCategory, Map<String, AccountTrustPreviewData.RatingCounts>> inboundCountsByCategory,
+				Map<AccountRatingCategory, Map<String, AccountTrustRatingCountsData>> inboundCountsByCategory,
 				Map<AccountRatingCategory, Map<String, CategoryScore>> scoresByCategory) {
 			this.seedAddresses = seedAddresses;
 			this.accountAddresses = accountAddresses;
@@ -326,7 +328,7 @@ public class AccountTrustDerivation {
 		}
 
 		private Result buildResult(String accountAddress, Integer maxImpactsPerCategory) {
-			List<AccountTrustPreviewData.CategoryTrust> categories = new ArrayList<>();
+			List<AccountTrustCategoryData> categories = new ArrayList<>();
 			categories.add(buildCategoryTrust(AccountRatingCategory.SUBJECT, accountAddress,
 					this.scoresByCategory.get(AccountRatingCategory.SUBJECT),
 					this.inboundCountsByCategory.get(AccountRatingCategory.SUBJECT), maxImpactsPerCategory));
@@ -348,10 +350,10 @@ public class AccountTrustDerivation {
 	public static class Result {
 		private final AccountTrustStatus derivedTrustStatus;
 		private final boolean mintingSeedMember;
-		private final List<AccountTrustPreviewData.CategoryTrust> categories;
+		private final List<AccountTrustCategoryData> categories;
 
 		private Result(AccountTrustStatus derivedTrustStatus, boolean mintingSeedMember,
-				List<AccountTrustPreviewData.CategoryTrust> categories) {
+				List<AccountTrustCategoryData> categories) {
 			this.derivedTrustStatus = derivedTrustStatus;
 			this.mintingSeedMember = mintingSeedMember;
 			this.categories = categories;
@@ -365,7 +367,7 @@ public class AccountTrustDerivation {
 			return this.mintingSeedMember;
 		}
 
-		public List<AccountTrustPreviewData.CategoryTrust> getCategories() {
+		public List<AccountTrustCategoryData> getCategories() {
 			return this.categories;
 		}
 	}

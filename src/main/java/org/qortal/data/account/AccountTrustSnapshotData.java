@@ -17,7 +17,7 @@ public class AccountTrustSnapshotData {
 	private int mappedTrustStatusValue;
 	private int mappedTrustWeightPercent;
 	private boolean mintingSeedMember;
-	private AccountTrustPreviewData.RatingCounts inboundRatings;
+	private AccountTrustRatingCountsData inboundRatings;
 	private int snapshotHeight;
 	private long snapshotTimestamp;
 
@@ -26,14 +26,14 @@ public class AccountTrustSnapshotData {
 
 	public AccountTrustSnapshotData(byte[] accountPublicKey, String accountAddress, AccountRatingCategory category,
 			long score, int level, AccountTrustStatus mappedTrustStatus, boolean mintingSeedMember,
-			AccountTrustPreviewData.RatingCounts inboundRatings, int snapshotHeight, long snapshotTimestamp) {
+			AccountTrustRatingCountsData inboundRatings, int snapshotHeight, long snapshotTimestamp) {
 		this(accountPublicKey, accountAddress, category, score, score, 0L, level, mappedTrustStatus, mintingSeedMember,
 				inboundRatings, snapshotHeight, snapshotTimestamp);
 	}
 
 	public AccountTrustSnapshotData(byte[] accountPublicKey, String accountAddress, AccountRatingCategory category,
 			long score, long levelScore, long levelScoreCap, int level, AccountTrustStatus mappedTrustStatus,
-			boolean mintingSeedMember, AccountTrustPreviewData.RatingCounts inboundRatings, int snapshotHeight,
+			boolean mintingSeedMember, AccountTrustRatingCountsData inboundRatings, int snapshotHeight,
 			long snapshotTimestamp) {
 		AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
 
@@ -48,7 +48,7 @@ public class AccountTrustSnapshotData {
 		this.mappedTrustStatusValue = effectiveMappedStatus.getValue();
 		this.mappedTrustWeightPercent = effectiveMappedStatus.getVoteWeightPercent();
 		this.mintingSeedMember = mintingSeedMember;
-		this.inboundRatings = inboundRatings == null ? new AccountTrustPreviewData.RatingCounts() : inboundRatings;
+		this.inboundRatings = inboundRatings == null ? new AccountTrustRatingCountsData() : inboundRatings;
 		this.snapshotHeight = snapshotHeight;
 		this.snapshotTimestamp = snapshotTimestamp;
 	}
@@ -97,7 +97,7 @@ public class AccountTrustSnapshotData {
 		return this.mintingSeedMember;
 	}
 
-	public AccountTrustPreviewData.RatingCounts getInboundRatings() {
+	public AccountTrustRatingCountsData getInboundRatings() {
 		return this.inboundRatings;
 	}
 

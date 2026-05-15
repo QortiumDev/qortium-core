@@ -7,7 +7,7 @@ import org.qortal.api.resource.AccountRatingsResource;
 import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustPolicyData;
-import org.qortal.data.account.AccountTrustPreviewData;
+import org.qortal.data.account.AccountTrustCategoryImpactData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.Common;
@@ -256,9 +256,9 @@ public class AccountTrustPolicyTests extends Common {
 		assertEquals(expectedCap, AccountTrustPolicy.getLevelScoreCap(category, level));
 	}
 
-	private static AccountTrustPreviewData.CategoryImpact impact(String raterAddress, int evaluatorLevel, int rating,
+	private static AccountTrustCategoryImpactData impact(String raterAddress, int evaluatorLevel, int rating,
 			long impact) {
-		return new AccountTrustPreviewData.CategoryImpact(null, raterAddress, evaluatorLevel, 0L, rating, impact);
+		return new AccountTrustCategoryImpactData(null, raterAddress, evaluatorLevel, 0L, rating, impact);
 	}
 
 	private static AccountTrustPolicyData.StatusVoteWeight findStatusVoteWeight(AccountTrustPolicyData policy,
