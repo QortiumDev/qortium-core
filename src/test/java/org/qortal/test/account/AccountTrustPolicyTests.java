@@ -1,17 +1,34 @@
 package org.qortal.test.account;
 
+import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.AccountTrustPolicy;
+import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.repository.DataException;
+import org.qortal.test.common.Common;
 
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
-public class AccountTrustPolicyTests {
+public class AccountTrustPolicyTests extends Common {
+
+	@Before
+	public void beforeTest() throws DataException {
+		Common.useDefaultSettings();
+	}
 
 	@Test
 	public void testStatusMapping() {
@@ -25,11 +42,20 @@ public class AccountTrustPolicyTests {
 
 	@Test
 	public void testPolicyConstants() {
-		assertEquals(1_000_000L, AccountTrustPolicy.STARTING_ENERGY);
-		assertEquals(4, AccountTrustPolicy.MANAGER_ENERGY_HOPS);
-		assertEquals(AccountRatingCategory.SUBJECT, AccountTrustPolicy.ACTIVE_WEIGHT_CATEGORY);
+		assertEquals(1_000_000L, AccountTrustPolicy.getStartingEnergy());
+		assertEquals(4, AccountTrustPolicy.getManagerEnergyHops());
+		assertEquals(AccountRatingCategory.SUBJECT, AccountTrustPolicy.getActiveWeightCategory());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRaterCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRatingConfidence());
+	}
+
+	@Test
+	public void testConfiguredVoteWeightPercentages() {
+		assertEquals(100, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.GOLD));
+		assertEquals(50, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.SILVER));
+		assertEquals(25, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.BRONZE));
+		assertEquals(0, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.UNVERIFIED));
+		assertEquals(0, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.SUSPICIOUS));
 	}
 
 	@Test
@@ -128,6 +154,81 @@ public class AccountTrustPolicyTests {
 		assertEquals(AccountTrustStatus.SILVER, AccountTrustPolicy.mapLevelToStatus(decision.getLevel()));
 	}
 
+	@Test
+	public void testCustomVoteWeightPolicyChangesEffectiveWeight() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"{ \"status\": \"SILVER\", \"percent\": 50 }",
+				"{ \"status\": \"SILVER\", \"percent\": 75 }");
+		loadTemporaryConfig(config);
+
+		assertEquals(75, AccountTrustStatus.SILVER.getVoteWeightPercent());
+		assertEquals(75, AccountTrustStatus.SILVER.calculateEffectiveVoteWeight(100));
+	}
+
+	@Test
+	public void testCustomLevelPolicyChangesLevelDecision() throws Exception {
+		AccountTrustPolicy.LevelDecision defaultDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.PLAYER,
+				600_000L, Arrays.asList(
+						impact("r1", 0, 1, 300_000L),
+						impact("r2", 0, 1, 300_000L)));
+		assertEquals(0, defaultDecision.getLevel());
+
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"{ \"level\": 1, \"threshold\": 1000000, \"cap\": 500000 }",
+				"{ \"level\": 1, \"threshold\": 600000, \"cap\": 300000 }");
+		loadTemporaryConfig(config);
+
+		AccountTrustPolicy.LevelDecision customDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.PLAYER,
+				600_000L, Arrays.asList(
+						impact("r1", 0, 1, 300_000L),
+						impact("r2", 0, 1, 300_000L)));
+		assertEquals(1, customDecision.getLevel());
+		assertEquals(600_000L, customDecision.getLevelScore());
+		assertEquals(300_000L, customDecision.getLevelScoreCap());
+	}
+
+	@Test
+	public void testMissingTrustSettingsRejected() throws Exception {
+		assertInvalidConfig(removeAccountTrustSettings(loadDefaultTestChainConfig()),
+				"No \"accountTrustSettings\" entry found");
+	}
+
+	@Test
+	public void testInvalidTrustVoteWeightRejected() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"{ \"status\": \"GOLD\", \"percent\": 100 }",
+				"{ \"status\": \"GOLD\", \"percent\": 101 }");
+
+		assertInvalidConfig(config, "Account trust vote weight percent must be between 0 and 100");
+	}
+
+	@Test
+	public void testDuplicateTrustCategoryPolicyRejected() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"category\": \"TRAINER\"",
+				"\"category\": \"MANAGER\"");
+
+		assertInvalidConfig(config, "Duplicate account trust category policy: MANAGER");
+	}
+
+	@Test
+	public void testInvalidTrustCapRejected() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"{ \"level\": 1, \"threshold\": 1000, \"cap\": 500 }",
+				"{ \"level\": 1, \"threshold\": 1000, \"cap\": 0 }");
+
+		assertInvalidConfig(config, "Account trust level cap must be positive and less than the threshold");
+	}
+
+	@Test
+	public void testInvalidSuspiciousThresholdRejected() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"suspiciousThreshold\": -1000",
+				"\"suspiciousThreshold\": 1000");
+
+		assertInvalidConfig(config, "Account trust suspicious threshold must be negative");
+	}
+
 	private static void assertThresholdAndCap(AccountRatingCategory category, int level, long expectedThreshold,
 			long expectedCap) {
 		assertEquals(expectedThreshold, AccountTrustPolicy.getLevelThreshold(category, level));
@@ -137,5 +238,55 @@ public class AccountTrustPolicyTests {
 	private static AccountTrustPreviewData.CategoryImpact impact(String raterAddress, int evaluatorLevel, int rating,
 			long impact) {
 		return new AccountTrustPreviewData.CategoryImpact(null, raterAddress, evaluatorLevel, 0L, rating, impact);
+	}
+
+	private static String loadDefaultTestChainConfig() throws Exception {
+		URL testChainUrl = Common.class.getClassLoader().getResource("test-chain-v2.json");
+		assertNotNull(testChainUrl);
+		return Files.readString(Paths.get(testChainUrl.toURI()), StandardCharsets.UTF_8);
+	}
+
+	private static String replaceRequired(String config, String target, String replacement) {
+		String updatedConfig = config.replace(target, replacement);
+		assertTrue("Config replacement target not found: " + target, !updatedConfig.equals(config));
+		return updatedConfig;
+	}
+
+	private static String removeAccountTrustSettings(String config) {
+		String startMarker = "\t\"accountTrustSettings\": {";
+		String endMarker = "\t\"unitFees\": [";
+		int start = config.indexOf(startMarker);
+		int end = config.indexOf(endMarker, start);
+
+		assertTrue("accountTrustSettings start marker not found", start >= 0);
+		assertTrue("accountTrustSettings end marker not found", end > start);
+
+		return config.substring(0, start) + config.substring(end);
+	}
+
+	private static void loadTemporaryConfig(String config) throws Exception {
+		Path tempDir = Files.createTempDirectory("account-trust-config");
+		Path configPath = tempDir.resolve("blockchain.json");
+
+		Files.writeString(configPath, config, StandardCharsets.UTF_8);
+		BlockChain.fileInstance(tempDir.toString() + java.io.File.separator, configPath.getFileName().toString());
+		Files.deleteIfExists(configPath);
+		Files.deleteIfExists(tempDir);
+	}
+
+	private static void assertInvalidConfig(String config, String expectedMessageFragment) throws Exception {
+		Path tempDir = Files.createTempDirectory("account-trust-config");
+		Path configPath = tempDir.resolve("blockchain.json");
+
+		try {
+			Files.writeString(configPath, config, StandardCharsets.UTF_8);
+			BlockChain.fileInstance(tempDir.toString() + java.io.File.separator, configPath.getFileName().toString());
+			fail("Expected invalid blockchain config");
+		} catch (RuntimeException e) {
+			assertTrue(e.getMessage().contains(expectedMessageFragment));
+		} finally {
+			Files.deleteIfExists(configPath);
+			Files.deleteIfExists(tempDir);
+		}
 	}
 }

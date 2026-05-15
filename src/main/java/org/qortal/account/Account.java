@@ -172,7 +172,7 @@ public class Account {
 			return false;
 
 		AccountTrustSnapshotData activeTrustSnapshot = this.repository.getAccountRatingRepository()
-				.getTrustDerivationSnapshot(this.address, AccountTrustWeight.ACTIVE_WEIGHT_CATEGORY);
+				.getTrustDerivationSnapshot(this.address, AccountTrustWeight.getActiveWeightCategory());
 		if (!AccountTrustWeight.canMint(activeTrustSnapshot))
 			return false;
 

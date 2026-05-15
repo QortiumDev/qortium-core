@@ -165,7 +165,7 @@ public class AccountTrustDerivation {
 		if (seedAddresses.isEmpty())
 			return seedScores;
 
-		long scorePerSeed = AccountTrustPolicy.STARTING_ENERGY / seedAddresses.size();
+		long scorePerSeed = AccountTrustPolicy.getStartingEnergy() / seedAddresses.size();
 		for (String seedAddress : seedAddresses)
 			seedScores.put(seedAddress, scorePerSeed);
 
@@ -176,7 +176,7 @@ public class AccountTrustDerivation {
 		Map<String, Long> energy = new HashMap<>(seedScores);
 		Map<String, Integer> positiveRatingScales = calculatePositiveRatingScales(managerRatings);
 
-		for (int hop = 0; hop < AccountTrustPolicy.MANAGER_ENERGY_HOPS; ++hop) {
+		for (int hop = 0; hop < AccountTrustPolicy.getManagerEnergyHops(); ++hop) {
 			Map<String, Long> nextEnergy = new HashMap<>();
 
 			for (AccountRatingData rating : managerRatings) {

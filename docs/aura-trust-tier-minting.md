@@ -176,8 +176,8 @@ A later implementation layer added a decentralized trust preview:
   Suspicious requiring at least two independent medium-confidence negative
   raters before raw negative evidence can block minting
 - the implemented thresholds, per-rating caps, Suspicious requirements, seed
-  energy, manager hop count, and active Subject weighting category are kept in
-  one trust policy class so consensus-facing values can be reviewed together
+  energy, manager hop count, active Subject weighting category, and vote
+  multipliers are chain-configurable through `accountTrustSettings`
 - the Subject level is mapped back to Qortium's simple Gold, Silver, Bronze,
   Unverified, and Suspicious statuses as a derived status
 - the older inbound/outbound confidence counts, mutual positive relationships,
@@ -286,10 +286,10 @@ rule affects minting or broader consensus behavior.
     close-time weights, and resource-rating weighted summaries.
 11. Use the stored Subject snapshot for Suspicious mint blocking while keeping
     minting-group membership as the base permission.
-
-Later implementation steps should evaluate whether the Subject, Player,
-Trainer, and Manager derivation thresholds should remain fixed constants or
-become chain configuration.
+12. Move trust derivation thresholds, per-rating caps, Suspicious requirements,
+    Manager energy-flow settings, active weighting category, and vote
+    multipliers into chain configuration so derived chains can tune the policy
+    without code changes.
 
 ## Test Scenarios
 
@@ -349,10 +349,10 @@ The first implementation should cover at least these cases:
 - trust policy tests pin the threshold, cap, seed-energy, manager-hop,
   Suspicious requirement, active weighting category, and level-to-status values
   separately from full graph behavior tests.
+- chain-config tests prove trust policy values are required, validated, and
+  actually drive both vote multipliers and level decisions.
 
 ## Open Decisions
 
-- Should the 100%, 50%, and 25% multipliers be fixed consensus constants or
-  configurable chain parameters?
 - Should a future trust graph require independent teams or seed branches for
   Suspicious decisions, beyond the current independent-rater requirement?

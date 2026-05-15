@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - core: make trust policy chain-configurable
+
+Moved Qortium's trust-network policy values into the blockchain config while keeping the current default behavior unchanged. Derived trust thresholds, per-rating caps, Suspicious requirements, Manager seed-energy flow settings, the active Subject weighting category, and Gold/Silver/Bronze vote multipliers are now chain parameters, so new Qortium-derived chains can tune the trust network without editing Java code.
+
 ### 2026-05-15 - core: extract trust policy rules
 
 Moved Qortium's Aura-style trust graph thresholds, per-rating caps, seed-energy constants, active weighting category, Suspicious requirements, and level-to-status mapping into a dedicated trust policy class. This keeps the graph derivation focused on building scores while leaving the consensus-facing policy values in one reviewable place, without changing trust scores, snapshots, vote weights, resource-rating weights, mint eligibility, or API output.

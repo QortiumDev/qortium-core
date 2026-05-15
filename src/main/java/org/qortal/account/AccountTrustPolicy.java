@@ -1,5 +1,7 @@
 package org.qortal.account;
 
+import org.qortal.block.BlockChain;
+import org.qortal.block.BlockChain.AccountTrustSettings;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustPreviewData;
 import org.qortal.data.account.AccountTrustStatus;
@@ -9,14 +11,32 @@ import java.util.List;
 
 public final class AccountTrustPolicy {
 
-	public static final long STARTING_ENERGY = 1_000_000L;
-	public static final int MANAGER_ENERGY_HOPS = 4;
-	public static final AccountRatingCategory ACTIVE_WEIGHT_CATEGORY = AccountRatingCategory.SUBJECT;
-
-	private static final int SUSPICIOUS_MIN_RATER_COUNT = 2;
-	private static final int SUSPICIOUS_MIN_RATING_CONFIDENCE = 2;
-
 	private AccountTrustPolicy() {
+	}
+
+	public static long getStartingEnergy() {
+		return settings().getStartingEnergy();
+	}
+
+	public static int getManagerEnergyHops() {
+		return settings().getManagerEnergyHops();
+	}
+
+	public static AccountRatingCategory getActiveWeightCategory() {
+		return settings().getActiveWeightCategory();
+	}
+
+	public static int getVoteWeightPercent(AccountTrustStatus status) {
+		return settings().getVoteWeightPercent(status);
+	}
+
+	public static int calculateEffectiveVoteWeight(int blocksMinted, AccountTrustStatus status) {
+		int voteWeightPercent = getVoteWeightPercent(status);
+		if (blocksMinted <= 0 || voteWeightPercent <= 0)
+			return 0;
+
+		long effectiveWeight = (long) blocksMinted * voteWeightPercent / 100;
+		return effectiveWeight > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) effectiveWeight;
 	}
 
 	public static LevelDecision decideLevel(AccountRatingCategory category, long rawScore,
@@ -60,46 +80,27 @@ public final class AccountTrustPolicy {
 	}
 
 	public static long getLevelThreshold(AccountRatingCategory category, int level) {
-		switch (effectiveCategory(category)) {
-			case MANAGER:
-				return level == 2 ? 200_000L : 1_000L;
-
-			case TRAINER:
-				return level == 2 ? 1_000_000L : 500_000L;
-
-			case PLAYER:
-				if (level == 3)
-					return 3_000_000L;
-				return level == 2 ? 2_000_000L : 1_000_000L;
-
-			case SUBJECT:
-			default:
-				if (level == 4)
-					return 150_000_000L;
-				if (level == 3)
-					return 100_000_000L;
-				return level == 2 ? 50_000_000L : 10_000_000L;
-		}
+		return settings().getLevelThreshold(effectiveCategory(category), level);
 	}
 
 	public static long getLevelScoreCap(AccountRatingCategory category, int level) {
-		return getLevelThreshold(category, level) / 2L;
+		return settings().getLevelScoreCap(effectiveCategory(category), level);
 	}
 
 	public static long getSuspiciousLevelScoreCap(AccountRatingCategory category) {
-		return getLevelScoreCap(category, 1);
+		return settings().getSuspiciousLevelScoreCap(effectiveCategory(category));
 	}
 
 	public static long getSuspiciousThreshold(AccountRatingCategory category) {
-		return -getLevelThreshold(category, 1);
+		return settings().getSuspiciousThreshold(effectiveCategory(category));
 	}
 
 	public static int getSuspiciousMinRaterCount() {
-		return SUSPICIOUS_MIN_RATER_COUNT;
+		return settings().getSuspiciousMinRaterCount();
 	}
 
 	public static int getSuspiciousMinRatingConfidence() {
-		return SUSPICIOUS_MIN_RATING_CONFIDENCE;
+		return settings().getSuspiciousMinRatingConfidence();
 	}
 
 	private static LevelDecision calculateManagerLevel(List<AccountTrustPreviewData.CategoryImpact> impacts) {
@@ -186,7 +187,7 @@ public final class AccountTrustPolicy {
 	private static boolean meetsSuspiciousRequirements(AccountRatingCategory category, LevelDecision suspiciousDecision,
 			List<AccountTrustPreviewData.CategoryImpact> impacts) {
 		return suspiciousDecision.levelScore <= getSuspiciousThreshold(category)
-				&& countNegativeImpacts(impacts, SUSPICIOUS_MIN_RATING_CONFIDENCE) >= SUSPICIOUS_MIN_RATER_COUNT;
+				&& countNegativeImpacts(impacts, getSuspiciousMinRatingConfidence()) >= getSuspiciousMinRaterCount();
 	}
 
 	private static long calculateCappedLevelScore(List<AccountTrustPreviewData.CategoryImpact> impacts, long impactCap) {
@@ -225,6 +226,10 @@ public final class AccountTrustPolicy {
 
 	private static AccountRatingCategory effectiveCategory(AccountRatingCategory category) {
 		return category == null ? AccountRatingCategory.SUBJECT : category;
+	}
+
+	private static AccountTrustSettings settings() {
+		return BlockChain.getInstance().getAccountTrustSettings();
 	}
 
 	private static List<AccountTrustPreviewData.CategoryImpact> effectiveImpacts(

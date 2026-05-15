@@ -4,6 +4,61 @@
 	"transactionExpiryPeriod": 86400000,
 	"maxBlockSize": 2097152,
 	"maxBytesPerUnitFee": 1024,
+	"accountTrustSettings": {
+		"activeWeightCategory": "SUBJECT",
+		"startingEnergy": 1000000,
+		"managerEnergyHops": 4,
+		"suspiciousMinRaterCount": 2,
+		"suspiciousMinRatingConfidence": 2,
+		"statusVoteWeightPercents": [
+			{ "status": "SUSPICIOUS", "percent": 0 },
+			{ "status": "UNVERIFIED", "percent": 0 },
+			{ "status": "BRONZE", "percent": 25 },
+			{ "status": "SILVER", "percent": 50 },
+			{ "status": "GOLD", "percent": 100 }
+		],
+		"categoryPolicies": [
+			{
+				"category": "MANAGER",
+				"levels": [
+					{ "level": 1, "threshold": 1000, "cap": 500 },
+					{ "level": 2, "threshold": 200000, "cap": 100000 }
+				],
+				"suspiciousThreshold": -1000,
+				"suspiciousCap": 500
+			},
+			{
+				"category": "TRAINER",
+				"levels": [
+					{ "level": 1, "threshold": 500000, "cap": 250000 },
+					{ "level": 2, "threshold": 1000000, "cap": 500000 }
+				],
+				"suspiciousThreshold": -500000,
+				"suspiciousCap": 250000
+			},
+			{
+				"category": "PLAYER",
+				"levels": [
+					{ "level": 1, "threshold": 1000000, "cap": 500000 },
+					{ "level": 2, "threshold": 2000000, "cap": 1000000 },
+					{ "level": 3, "threshold": 3000000, "cap": 1500000 }
+				],
+				"suspiciousThreshold": -1000000,
+				"suspiciousCap": 500000
+			},
+			{
+				"category": "SUBJECT",
+				"levels": [
+					{ "level": 1, "threshold": 10000000, "cap": 5000000 },
+					{ "level": 2, "threshold": 50000000, "cap": 25000000 },
+					{ "level": 3, "threshold": 100000000, "cap": 50000000 },
+					{ "level": 4, "threshold": 150000000, "cap": 75000000 }
+				],
+				"suspiciousThreshold": -10000000,
+				"suspiciousCap": 5000000
+			}
+		]
+	},
 	"unitFees": [
 		{ "timestamp": 0, "fee": "0.01" }
 	],

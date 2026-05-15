@@ -6,9 +6,11 @@ import org.qortal.data.account.AccountTrustStatus;
 
 public class AccountTrustWeight {
 
-	public static final AccountRatingCategory ACTIVE_WEIGHT_CATEGORY = AccountTrustPolicy.ACTIVE_WEIGHT_CATEGORY;
-
 	private AccountTrustWeight() {
+	}
+
+	public static AccountRatingCategory getActiveWeightCategory() {
+		return AccountTrustPolicy.getActiveWeightCategory();
 	}
 
 	public static AccountTrustStatus statusFromSnapshot(AccountTrustSnapshotData snapshotData) {
@@ -16,7 +18,7 @@ public class AccountTrustWeight {
 	}
 
 	public static int calculateEffectiveVoteWeight(int blocksMinted, AccountTrustSnapshotData snapshotData) {
-		return statusFromSnapshot(snapshotData).calculateEffectiveVoteWeight(blocksMinted);
+		return AccountTrustPolicy.calculateEffectiveVoteWeight(blocksMinted, statusFromSnapshot(snapshotData));
 	}
 
 	public static boolean canMint(AccountTrustSnapshotData snapshotData) {

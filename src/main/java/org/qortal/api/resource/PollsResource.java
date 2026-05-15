@@ -457,7 +457,7 @@ public class PollsResource {
                     int rawVoteWeight = voterData == null ? 0 : voterData.getBlocksMinted();
                     int storedVoteWeight = storedTrustStatus.calculateEffectiveVoteWeight(rawVoteWeight);
                     AccountTrustSnapshotData derivedSnapshot = repository.getAccountRatingRepository()
-                            .getTrustDerivationSnapshot(voter, AccountTrustWeight.ACTIVE_WEIGHT_CATEGORY);
+                            .getTrustDerivationSnapshot(voter, AccountTrustWeight.getActiveWeightCategory());
                     AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(derivedSnapshot);
                     int voteWeight = AccountTrustWeight.calculateEffectiveVoteWeight(rawVoteWeight, derivedSnapshot);
 

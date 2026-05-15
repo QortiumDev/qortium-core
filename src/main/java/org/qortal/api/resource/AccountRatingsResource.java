@@ -159,7 +159,7 @@ public class AccountRatingsResource {
 			AccountData targetAccountData = repository.getAccountRepository().getAccount(targetAddress);
 			AccountTrustStatus storedTrustStatus = targetAccountData == null ? AccountTrustStatus.UNVERIFIED : targetAccountData.getTrustStatus();
 			AccountTrustSnapshotData activeTrustSnapshot = repository.getAccountRatingRepository()
-					.getTrustDerivationSnapshot(targetAddress, AccountTrustWeight.ACTIVE_WEIGHT_CATEGORY);
+					.getTrustDerivationSnapshot(targetAddress, AccountTrustWeight.getActiveWeightCategory());
 			AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
 
 			List<AccountRatingData> inboundRatings = repository.getAccountRatingRepository()
@@ -356,7 +356,7 @@ public class AccountRatingsResource {
 		int rawVoteWeight = raterAccountData == null ? 0 : raterAccountData.getBlocksMinted();
 		int storedEffectiveVoteWeight = storedTrustStatus.calculateEffectiveVoteWeight(rawVoteWeight);
 		AccountTrustSnapshotData activeTrustSnapshot = repository.getAccountRatingRepository()
-				.getTrustDerivationSnapshot(ratingData.getRaterAddress(), AccountTrustWeight.ACTIVE_WEIGHT_CATEGORY);
+				.getTrustDerivationSnapshot(ratingData.getRaterAddress(), AccountTrustWeight.getActiveWeightCategory());
 		AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
 		int effectiveVoteWeight = AccountTrustWeight.calculateEffectiveVoteWeight(rawVoteWeight, activeTrustSnapshot);
 		int impact = AccountRating.calculateImpact(ratingData.getRating(), effectiveVoteWeight);

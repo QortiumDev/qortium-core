@@ -6,6 +6,8 @@ import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.eclipse.persistence.jaxb.UnmarshallerProperties;
 import org.qortal.controller.Controller;
+import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.block.BlockData;
 import org.qortal.network.Network;
 import org.qortal.repository.*;
@@ -64,6 +66,8 @@ public class BlockChain {
 	private String testnetMessageMagic;
 	private byte[] mainnetMessageMagicBytes;
 	private byte[] testnetMessageMagicBytes;
+
+	private AccountTrustSettings accountTrustSettings;
 
 	private GenesisBlock.GenesisInfo genesisInfo;
 
@@ -206,6 +210,249 @@ public class BlockChain {
 		public int maxShares;
 	}
 	private List<MaxRewardSharesByTimestamp> maxRewardSharesByTimestamp;
+
+	public static class AccountTrustSettings {
+		public AccountRatingCategory activeWeightCategory;
+		public long startingEnergy;
+		public int managerEnergyHops;
+		public int suspiciousMinRaterCount;
+		public int suspiciousMinRatingConfidence;
+		public List<StatusVoteWeightPercent> statusVoteWeightPercents;
+		public List<AccountTrustCategoryPolicy> categoryPolicies;
+
+		private transient Map<AccountTrustStatus, Integer> voteWeightPercentByStatus;
+		private transient Map<AccountRatingCategory, AccountTrustCategoryPolicy> policyByCategory;
+
+		public AccountRatingCategory getActiveWeightCategory() {
+			return this.activeWeightCategory;
+		}
+
+		public long getStartingEnergy() {
+			return this.startingEnergy;
+		}
+
+		public int getManagerEnergyHops() {
+			return this.managerEnergyHops;
+		}
+
+		public int getSuspiciousMinRaterCount() {
+			return this.suspiciousMinRaterCount;
+		}
+
+		public int getSuspiciousMinRatingConfidence() {
+			return this.suspiciousMinRatingConfidence;
+		}
+
+		public int getVoteWeightPercent(AccountTrustStatus status) {
+			Integer voteWeightPercent = this.voteWeightPercentByStatus.get(status == null ? AccountTrustStatus.UNVERIFIED : status);
+			return voteWeightPercent == null ? 0 : voteWeightPercent;
+		}
+
+		public long getLevelThreshold(AccountRatingCategory category, int level) {
+			return getCategoryPolicy(category).getLevelThreshold(level);
+		}
+
+		public long getLevelScoreCap(AccountRatingCategory category, int level) {
+			return getCategoryPolicy(category).getLevelScoreCap(level);
+		}
+
+		public long getSuspiciousThreshold(AccountRatingCategory category) {
+			return getCategoryPolicy(category).suspiciousThreshold;
+		}
+
+		public long getSuspiciousLevelScoreCap(AccountRatingCategory category) {
+			return getCategoryPolicy(category).suspiciousCap;
+		}
+
+		private AccountTrustCategoryPolicy getCategoryPolicy(AccountRatingCategory category) {
+			AccountTrustCategoryPolicy policy = this.policyByCategory.get(category == null ? AccountRatingCategory.SUBJECT : category);
+			if (policy == null)
+				throw new IllegalStateException("Missing account trust category policy");
+
+			return policy;
+		}
+
+		private void validate() {
+			if (this.activeWeightCategory == null)
+				Settings.throwValidationError("\"accountTrustSettings.activeWeightCategory\" is required");
+
+			if (this.startingEnergy <= 0)
+				Settings.throwValidationError("\"accountTrustSettings.startingEnergy\" must be greater than 0");
+
+			if (this.managerEnergyHops <= 0)
+				Settings.throwValidationError("\"accountTrustSettings.managerEnergyHops\" must be greater than 0");
+
+			if (this.suspiciousMinRaterCount <= 0)
+				Settings.throwValidationError("\"accountTrustSettings.suspiciousMinRaterCount\" must be greater than 0");
+
+			if (this.suspiciousMinRatingConfidence <= 0 || this.suspiciousMinRatingConfidence > 4)
+				Settings.throwValidationError("\"accountTrustSettings.suspiciousMinRatingConfidence\" must be between 1 and 4");
+
+			validateVoteWeights();
+			validateCategoryPolicies();
+		}
+
+		private void validateVoteWeights() {
+			if (this.statusVoteWeightPercents == null)
+				Settings.throwValidationError("\"accountTrustSettings.statusVoteWeightPercents\" is required");
+
+			EnumSet<AccountTrustStatus> seenStatuses = EnumSet.noneOf(AccountTrustStatus.class);
+			for (StatusVoteWeightPercent voteWeightPercent : this.statusVoteWeightPercents) {
+				if (voteWeightPercent == null || voteWeightPercent.status == null)
+					Settings.throwValidationError("\"accountTrustSettings.statusVoteWeightPercents\" contains a missing status");
+
+				if (!seenStatuses.add(voteWeightPercent.status))
+					Settings.throwValidationError("Duplicate account trust vote weight status: " + voteWeightPercent.status);
+
+				if (voteWeightPercent.percent < 0 || voteWeightPercent.percent > 100)
+					Settings.throwValidationError("Account trust vote weight percent must be between 0 and 100");
+			}
+
+			for (AccountTrustStatus status : AccountTrustStatus.values())
+				if (!seenStatuses.contains(status))
+					Settings.throwValidationError("Missing account trust vote weight status: " + status);
+		}
+
+		private void validateCategoryPolicies() {
+			if (this.categoryPolicies == null)
+				Settings.throwValidationError("\"accountTrustSettings.categoryPolicies\" is required");
+
+			EnumSet<AccountRatingCategory> seenCategories = EnumSet.noneOf(AccountRatingCategory.class);
+			for (AccountTrustCategoryPolicy categoryPolicy : this.categoryPolicies) {
+				if (categoryPolicy == null || categoryPolicy.category == null)
+					Settings.throwValidationError("\"accountTrustSettings.categoryPolicies\" contains a missing category");
+
+				if (!seenCategories.add(categoryPolicy.category))
+					Settings.throwValidationError("Duplicate account trust category policy: " + categoryPolicy.category);
+
+				categoryPolicy.validate(this.suspiciousMinRaterCount);
+			}
+
+			for (AccountRatingCategory category : AccountRatingCategory.values())
+				if (!seenCategories.contains(category))
+					Settings.throwValidationError("Missing account trust category policy: " + category);
+		}
+
+		private void fixUp() {
+			EnumMap<AccountTrustStatus, Integer> voteWeights = new EnumMap<>(AccountTrustStatus.class);
+			for (StatusVoteWeightPercent voteWeightPercent : this.statusVoteWeightPercents)
+				voteWeights.put(voteWeightPercent.status, voteWeightPercent.percent);
+
+			EnumMap<AccountRatingCategory, AccountTrustCategoryPolicy> policies = new EnumMap<>(AccountRatingCategory.class);
+			for (AccountTrustCategoryPolicy categoryPolicy : this.categoryPolicies) {
+				categoryPolicy.fixUp();
+				policies.put(categoryPolicy.category, categoryPolicy);
+			}
+
+			this.voteWeightPercentByStatus = Collections.unmodifiableMap(voteWeights);
+			this.policyByCategory = Collections.unmodifiableMap(policies);
+			this.statusVoteWeightPercents = Collections.unmodifiableList(this.statusVoteWeightPercents);
+			this.categoryPolicies = Collections.unmodifiableList(this.categoryPolicies);
+		}
+	}
+
+	public static class StatusVoteWeightPercent {
+		public AccountTrustStatus status;
+		public int percent;
+	}
+
+	public static class AccountTrustCategoryPolicy {
+		public AccountRatingCategory category;
+		public List<AccountTrustLevelPolicy> levels;
+		public long suspiciousThreshold;
+		public long suspiciousCap;
+
+		private transient Map<Integer, AccountTrustLevelPolicy> policyByLevel;
+
+		private long getLevelThreshold(int level) {
+			return getLevelPolicy(level).threshold;
+		}
+
+		private long getLevelScoreCap(int level) {
+			return getLevelPolicy(level).cap;
+		}
+
+		private AccountTrustLevelPolicy getLevelPolicy(int level) {
+			AccountTrustLevelPolicy policy = this.policyByLevel.get(level);
+			if (policy == null)
+				throw new IllegalStateException("Missing account trust level policy");
+
+			return policy;
+		}
+
+		private void validate(int suspiciousMinRaterCount) {
+			if (this.levels == null)
+				Settings.throwValidationError("Account trust category policy is missing levels: " + this.category);
+
+			Set<Integer> requiredLevels = requiredLevels(this.category);
+			Set<Integer> seenLevels = new HashSet<>();
+			for (AccountTrustLevelPolicy levelPolicy : this.levels) {
+				if (levelPolicy == null)
+					Settings.throwValidationError("Account trust category policy contains a missing level: " + this.category);
+
+				if (!requiredLevels.contains(levelPolicy.level))
+					Settings.throwValidationError("Unexpected account trust level " + levelPolicy.level + " for category " + this.category);
+
+				if (!seenLevels.add(levelPolicy.level))
+					Settings.throwValidationError("Duplicate account trust level " + levelPolicy.level + " for category " + this.category);
+
+				levelPolicy.validate(this.category);
+			}
+
+			for (Integer requiredLevel : requiredLevels)
+				if (!seenLevels.contains(requiredLevel))
+					Settings.throwValidationError("Missing account trust level " + requiredLevel + " for category " + this.category);
+
+			if (this.suspiciousThreshold >= 0)
+				Settings.throwValidationError("Account trust suspicious threshold must be negative for category " + this.category);
+
+			long suspiciousRequiredScore = -this.suspiciousThreshold;
+			if (this.suspiciousCap <= 0 || this.suspiciousCap >= suspiciousRequiredScore)
+				Settings.throwValidationError("Account trust suspicious cap must be positive and less than the threshold magnitude for category " + this.category);
+
+			if (this.suspiciousCap <= Long.MAX_VALUE / suspiciousMinRaterCount
+					&& this.suspiciousCap * suspiciousMinRaterCount < suspiciousRequiredScore)
+				Settings.throwValidationError("Account trust suspicious cap and rater count cannot reach threshold for category " + this.category);
+		}
+
+		private void fixUp() {
+			Map<Integer, AccountTrustLevelPolicy> policies = new HashMap<>();
+			for (AccountTrustLevelPolicy levelPolicy : this.levels)
+				policies.put(levelPolicy.level, levelPolicy);
+
+			this.policyByLevel = Collections.unmodifiableMap(policies);
+			this.levels = Collections.unmodifiableList(this.levels);
+		}
+
+		private static Set<Integer> requiredLevels(AccountRatingCategory category) {
+			switch (category) {
+				case MANAGER:
+				case TRAINER:
+					return new HashSet<>(Arrays.asList(1, 2));
+
+				case PLAYER:
+					return new HashSet<>(Arrays.asList(1, 2, 3));
+
+				case SUBJECT:
+				default:
+					return new HashSet<>(Arrays.asList(1, 2, 3, 4));
+			}
+		}
+	}
+
+	public static class AccountTrustLevelPolicy {
+		public int level;
+		public long threshold;
+		public long cap;
+
+		private void validate(AccountRatingCategory category) {
+			if (this.threshold <= 0)
+				Settings.throwValidationError("Account trust level threshold must be greater than 0 for category " + category);
+
+			if (this.cap <= 0 || this.cap >= this.threshold)
+				Settings.throwValidationError("Account trust level cap must be positive and less than the threshold for category " + category);
+		}
+	}
 
 	/** Settings relating to CIYAM AT feature. */
 	public static class CiyamAtSettings {
@@ -438,6 +685,10 @@ public class BlockChain {
 		return devGroupIds;
 	}
 
+	public AccountTrustSettings getAccountTrustSettings() {
+		return this.accountTrustSettings;
+	}
+
 	public CiyamAtSettings getCiyamAtSettings() {
 		return this.ciyamAtSettings;
 	}
@@ -524,6 +775,11 @@ public class BlockChain {
 		if (Arrays.equals(mainnetMagic, testnetMagic))
 			Settings.throwValidationError("\"mainnetMessageMagic\" and \"testnetMessageMagic\" must be different");
 
+		if (this.accountTrustSettings == null)
+			Settings.throwValidationError("No \"accountTrustSettings\" entry found in blockchain config");
+
+		this.accountTrustSettings.validate();
+
 		if (this.minAccountLevelToRewardShare < 0)
 			Settings.throwValidationError("Invalid/missing \"minAccountLevelToRewardShare\" in blockchain config");
 
@@ -585,6 +841,7 @@ public class BlockChain {
 	private void fixUp() {
 		this.mainnetMessageMagicBytes = decodeMessageMagic("mainnetMessageMagic", this.mainnetMessageMagic);
 		this.testnetMessageMagicBytes = decodeMessageMagic("testnetMessageMagic", this.testnetMessageMagic);
+		this.accountTrustSettings.fixUp();
 
 		// Calculate cumulative blocks required for each level
 		int cumulativeBlocks = 0;
