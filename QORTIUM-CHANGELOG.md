@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - core: refresh trust snapshots only when inputs change
+
+Changed stored account trust snapshot refreshes so ordinary blocks no longer recompute the full trust graph when ratings and minting seed membership have not changed. Qortium now refreshes snapshots for account-rating changes, active Minting group membership changes, minting-group configuration boundaries, and first-time snapshot population, while keeping poll result freezing, minting checks, vote weights, resource-rating weights, and public trust API behavior unchanged.
+
 ### 2026-05-15 - refactor: rename trust graph DTOs
 
 Renamed the remaining preview-named account trust helper data classes now that the old trust-preview endpoint has been removed. Trust rating counts, category summaries, and category impacts now use neutral trust-network names while keeping the same response fields and behavior for trust profile, explanation, derivation, snapshot, voting, minting, and resource-rating code.

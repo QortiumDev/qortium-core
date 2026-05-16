@@ -24,6 +24,12 @@ import org.qortal.data.block.BlockData;
 import org.qortal.data.block.BlockSummaryData;
 import org.qortal.data.block.BlockTransactionData;
 import org.qortal.data.network.OnlineAccountData;
+import org.qortal.data.transaction.CreateGroupTransactionData;
+import org.qortal.data.transaction.GroupBanTransactionData;
+import org.qortal.data.transaction.GroupInviteTransactionData;
+import org.qortal.data.transaction.GroupKickTransactionData;
+import org.qortal.data.transaction.JoinGroupTransactionData;
+import org.qortal.data.transaction.LeaveGroupTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.*;
@@ -1585,13 +1591,16 @@ public class Block {
 		}
 
 		// Process transactions (we'll link them to this block after saving the block itself)
-		processTransactions();
+		boolean trustInputsChanged = processTransactions();
 
 		// Group-approval transactions
-		processGroupApprovalTransactions();
+		trustInputsChanged |= processGroupApprovalTransactions();
+		trustInputsChanged |= hasMintingGroupIdBoundary(this.blockData.getHeight());
+		trustInputsChanged |= needsInitialTrustDerivationSnapshotRefresh(this.blockData.getHeight());
 
 		// Store current account trust derivation after rating and group state changes in this block.
-		refreshTrustDerivationSnapshots(this.blockData.getHeight(), this.blockData.getTimestamp());
+		if (trustInputsChanged)
+			refreshTrustDerivationSnapshots(this.blockData.getHeight(), this.blockData.getTimestamp());
 
 		// Snapshot polls that close at this block timestamp before later account changes can move their weights.
 		freezeClosedPolls();
@@ -1723,10 +1732,11 @@ public class Block {
 		distributeBlockReward(reward);
 	}
 
-	protected void processTransactions() throws DataException {
+	protected boolean processTransactions() throws DataException {
 		// Process transactions (we'll link them to this block after saving the block itself)
 		// AT-generated transactions are already prepended to our transactions at this point.
 		List<Transaction> blocksTransactions = this.getTransactions();
+		boolean trustInputsChanged = false;
 
 		for (Transaction transaction : blocksTransactions) {
 			TransactionData transactionData = transaction.getTransactionData();
@@ -1737,16 +1747,21 @@ public class Block {
 
 			// Only process transactions that don't require group-approval.
 			// Group-approval transactions are dealt with later.
-			if (transactionData.getApprovalStatus() == ApprovalStatus.NOT_REQUIRED)
+			if (transactionData.getApprovalStatus() == ApprovalStatus.NOT_REQUIRED) {
 				transaction.process();
+				trustInputsChanged |= doesTransactionChangeTrustInputs(transactionData, this.blockData.getHeight());
+			}
 
 			// Regardless of group-approval, update relevant creator info and fees.
 			transaction.processReferencesAndFees();
 		}
+
+		return trustInputsChanged;
 	}
 
-	protected void processGroupApprovalTransactions() throws DataException {
+	protected boolean processGroupApprovalTransactions() throws DataException {
 		TransactionRepository transactionRepository = this.repository.getTransactionRepository();
+		boolean trustInputsChanged = false;
 
 		// Search for pending transactions that have now expired
 		List<TransactionData> approvalExpiringTransactions = transactionRepository.getApprovalExpiringTransactions(this.blockData.getHeight());
@@ -1793,7 +1808,10 @@ public class Block {
 			transactionRepository.save(transactionData);
 
 			transaction.process();
+			trustInputsChanged |= doesTransactionChangeTrustInputs(transactionData, this.blockData.getHeight());
 		}
+
+		return trustInputsChanged;
 	}
 
 	protected void freezeClosedPolls() throws DataException {
@@ -1802,6 +1820,80 @@ public class Block {
 
 	protected void refreshTrustDerivationSnapshots(int snapshotHeight, long snapshotTimestamp) throws DataException {
 		AccountTrustDerivation.refreshSnapshots(this.repository, snapshotHeight, snapshotTimestamp);
+	}
+
+	protected boolean needsInitialTrustDerivationSnapshotRefresh(int snapshotHeight) throws DataException {
+		if (hasTrustDerivationSnapshots())
+			return false;
+
+		if (!this.repository.getAccountRatingRepository().getRatings(null, null, null, 1, null, null).isEmpty())
+			return true;
+
+		List<Integer> mintingGroupIds = Groups.getGroupIdsToMint(BlockChain.getInstance(), snapshotHeight);
+		return !Groups.getAllMembers(this.repository.getGroupRepository(), mintingGroupIds).isEmpty();
+	}
+
+	protected boolean hasTrustDerivationSnapshots() throws DataException {
+		return !this.repository.getAccountRatingRepository().getTrustDerivationSnapshots(1, null, null).isEmpty();
+	}
+
+	protected boolean hasTrustDerivationSnapshotsAtHeight(int snapshotHeight) throws DataException {
+		List<AccountTrustSnapshotData> snapshots = this.repository.getAccountRatingRepository()
+				.getTrustDerivationSnapshots(1, null, null);
+		return !snapshots.isEmpty() && snapshots.get(0).getSnapshotHeight() == snapshotHeight;
+	}
+
+	protected boolean hasMintingGroupIdBoundary(int height) {
+		if (height <= 0)
+			return false;
+
+		return !new HashSet<>(Groups.getGroupIdsToMint(BlockChain.getInstance(), height))
+				.equals(new HashSet<>(Groups.getGroupIdsToMint(BlockChain.getInstance(), height - 1)));
+	}
+
+	protected boolean doesTransactionChangeTrustInputs(TransactionData transactionData, int snapshotHeight) {
+		TransactionType transactionType = transactionData.getType();
+		if (transactionType == TransactionType.RATE_ACCOUNT)
+			return true;
+
+		switch (transactionType) {
+			case CREATE_GROUP:
+			case JOIN_GROUP:
+			case LEAVE_GROUP:
+			case GROUP_INVITE:
+			case GROUP_KICK:
+			case GROUP_BAN:
+				Integer groupId = getTransactionGroupId(transactionData);
+				return groupId != null && Groups.getGroupIdsToMint(BlockChain.getInstance(), snapshotHeight).contains(groupId);
+
+			default:
+				return false;
+		}
+	}
+
+	private Integer getTransactionGroupId(TransactionData transactionData) {
+		switch (transactionData.getType()) {
+			case CREATE_GROUP:
+				return ((CreateGroupTransactionData) transactionData).getGroupId();
+
+			case JOIN_GROUP:
+				return ((JoinGroupTransactionData) transactionData).getGroupId();
+
+			case LEAVE_GROUP:
+				return ((LeaveGroupTransactionData) transactionData).getGroupId();
+
+			case GROUP_INVITE:
+				return ((GroupInviteTransactionData) transactionData).getGroupId();
+
+			case GROUP_KICK:
+				return ((GroupKickTransactionData) transactionData).getGroupId();
+
+			case GROUP_BAN:
+				return ((GroupBanTransactionData) transactionData).getGroupId();
+
+			default:
+				return null;
+		}
 	}
 
 	protected void processAtFeesAndStates() throws DataException {
@@ -1871,6 +1963,9 @@ public class Block {
 		// Remove poll result snapshots created by this block before vote transactions are orphaned.
 		this.repository.getVotingRepository().deleteFrozenPollResultsAtHeight(this.blockData.getHeight());
 
+		boolean trustInputsChanged = didBlockChangeTrustInputs()
+				|| hasTrustDerivationSnapshotsAtHeight(this.blockData.getHeight());
+
 		// Orphan, and unlink, transactions from this block
 		orphanTransactionsFromBlock();
 
@@ -1891,7 +1986,8 @@ public class Block {
 			}
 		}
 
-		refreshTrustDerivationSnapshotsAfterOrphan();
+		if (trustInputsChanged)
+			refreshTrustDerivationSnapshotsAfterOrphan();
 
 		// Delete block from blockchain
 		this.repository.getBlockRepository().delete(this.blockData);
@@ -1912,6 +2008,28 @@ public class Block {
 			throw new DataException(String.format("Unable to find previous block %d while orphaning trust snapshots", previousHeight));
 
 		refreshTrustDerivationSnapshots(previousHeight, previousBlockData.getTimestamp());
+	}
+
+	protected boolean didBlockChangeTrustInputs() throws DataException {
+		int height = this.blockData.getHeight();
+		if (hasMintingGroupIdBoundary(height))
+			return true;
+
+		for (Transaction transaction : this.getTransactions()) {
+			TransactionData transactionData = transaction.getTransactionData();
+			if (transactionData.getApprovalStatus() == ApprovalStatus.NOT_REQUIRED
+					&& doesTransactionChangeTrustInputs(transactionData, height))
+				return true;
+		}
+
+		List<TransactionData> approvedTransactions = this.repository.getTransactionRepository()
+				.getApprovalTransactionDecidedAtHeight(height);
+		for (TransactionData transactionData : approvedTransactions)
+			if (transactionData.getApprovalStatus() == ApprovalStatus.APPROVED
+					&& doesTransactionChangeTrustInputs(transactionData, height))
+				return true;
+
+		return false;
 	}
 
 	protected void orphanTransactionsFromBlock() throws DataException {

@@ -21,7 +21,8 @@ trust layer:
 
 - the Minting group remains the base permission for minting
 - accounts can rate other known public-key accounts on-chain
-- the chain derives trust status from those ratings after every block
+- the chain refreshes derived trust status when ratings or the Minting group
+  seed set changes
 - Suspicious accounts cannot mint
 - Gold, Silver, Bronze, and Unverified accounts can still mint if they are in
   the Minting group, but their earned history has different governance weight
@@ -68,8 +69,9 @@ layer.
 The trust graph is deterministic chain state. It does not depend on BrightID,
 Aura servers, biometrics, meetings, or any live external service.
 
-After each processed block, Qortium refreshes stored trust snapshots from the
-current on-chain ratings and Minting group membership:
+When account ratings or the Minting group seed set changes, Qortium refreshes
+stored trust snapshots from the current on-chain ratings and Minting group
+membership:
 
 - current Minting group members are the seed set
 - Manager energy starts from that seed set
@@ -84,8 +86,8 @@ Raw scores remain visible for audit. Level decisions use configured caps so
 one evaluator cannot assign a positive level by itself. Suspicious decisions
 also require enough independent negative raters at the configured confidence.
 
-If a block is orphaned, the trust snapshot is refreshed back to the previous
-chain state.
+If a trust-changing block is orphaned, the trust snapshot is refreshed back to
+the previous chain state.
 
 ## Trust Status Effects
 

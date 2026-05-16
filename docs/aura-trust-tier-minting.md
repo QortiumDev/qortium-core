@@ -195,14 +195,15 @@ derivation APIs:
   Subject snapshot was used for active voting and resource-rating weights
 
 The latest implementation layer stores the current derived trust graph as
-repository state after each processed block:
+repository state and refreshes it only when trust inputs change:
 
 - Qortium stores one current snapshot row for each account and category
 - snapshot rows include the derived raw score, capped level-decision score,
   level-decision cap, level, mapped trust status, minting seed membership,
   inbound rating counts, and the block height and timestamp
   that produced the snapshot
-- orphaning a block refreshes the snapshot back to the previous chain state
+- orphaning a trust-changing block refreshes the snapshot back to the previous
+  chain state
 - `GET /account-ratings/trust-derivation` reads the stored snapshot by default,
   while `live=true` recalculates the graph from active ratings for comparison
 - `GET /account-ratings/trust-snapshots` exposes the raw stored rows directly
