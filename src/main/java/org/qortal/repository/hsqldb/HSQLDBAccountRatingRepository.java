@@ -8,6 +8,7 @@ import org.qortal.data.account.AccountTrustCategoryData;
 import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.account.AccountTrustSummaryData;
 import org.qortal.repository.AccountRatingRepository;
 import org.qortal.repository.DataException;
 
@@ -16,6 +17,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,7 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 			+ "positive_low_count, positive_medium_count, positive_high_count, positive_very_high_count, "
 			+ "negative_low_count, negative_medium_count, negative_high_count, negative_very_high_count, "
 			+ "snapshot_height, snapshot_timestamp";
+	private static final String TRUST_SUMMARY_BLOCKS_MINTED_SQL = "CAST(COALESCE(a.blocks_minted, 0) AS BIGINT)";
 
 	protected HSQLDBRepository repository;
 
@@ -232,6 +235,124 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 	}
 
 	@Override
+	public AccountTrustSummaryData getTrustSummary(AccountRatingCategory activeCategory) throws DataException {
+		AccountRatingCategory effectiveActiveCategory = defaultCategory(activeCategory);
+		TrustSnapshotMetadata metadata = getTrustSnapshotMetadata();
+
+		return new AccountTrustSummaryData(effectiveActiveCategory, metadata.snapshotHeight, metadata.snapshotTimestamp,
+				getTrustStatusSummaries(effectiveActiveCategory), getTrustCategorySummaries());
+	}
+
+	private TrustSnapshotMetadata getTrustSnapshotMetadata() throws DataException {
+		String sql = "SELECT MAX(snapshot_height), MAX(snapshot_timestamp) FROM AccountTrustDerivationSnapshots";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
+			if (resultSet == null)
+				return new TrustSnapshotMetadata(null, null);
+
+			int snapshotHeight = resultSet.getInt(1);
+			Integer snapshotHeightValue = resultSet.wasNull() ? null : snapshotHeight;
+			long snapshotTimestamp = resultSet.getLong(2);
+			Long snapshotTimestampValue = resultSet.wasNull() ? null : snapshotTimestamp;
+
+			return new TrustSnapshotMetadata(snapshotHeightValue, snapshotTimestampValue);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch account trust snapshot metadata from repository", e);
+		}
+	}
+
+	private List<AccountTrustSummaryData.StatusSummary> getTrustStatusSummaries(AccountRatingCategory activeCategory)
+			throws DataException {
+		Map<AccountTrustStatus, TrustStatusSummaryValues> summaryValuesByStatus = new EnumMap<>(AccountTrustStatus.class);
+		for (AccountTrustStatus status : AccountTrustStatus.values())
+			summaryValuesByStatus.put(status, new TrustStatusSummaryValues());
+
+		String sql = "SELECT ats.mapped_trust_status, COUNT(*), "
+				+ "COALESCE(SUM(CASE WHEN ats.minting_seed_member THEN 1 ELSE 0 END), 0), "
+				+ "COALESCE(SUM(" + TRUST_SUMMARY_BLOCKS_MINTED_SQL + "), 0), "
+				+ "COALESCE(SUM(" + trustSummaryEffectiveVoteWeightSql() + "), 0) "
+				+ "FROM AccountTrustDerivationSnapshots ats "
+				+ "LEFT JOIN Accounts a ON a.account = ats.account "
+				+ "WHERE ats.category = ? "
+				+ "GROUP BY ats.mapped_trust_status";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, defaultCategory(activeCategory).value)) {
+			if (resultSet != null) {
+				do {
+					AccountTrustStatus status = AccountTrustStatus.valueOf(resultSet.getInt(1));
+					TrustStatusSummaryValues summaryValues = summaryValuesByStatus.get(status);
+					summaryValues.accountCount = resultSet.getLong(2);
+					summaryValues.seedMemberCount = resultSet.getLong(3);
+					summaryValues.rawVoteWeight = resultSet.getLong(4);
+					summaryValues.effectiveVoteWeight = resultSet.getLong(5);
+				} while (resultSet.next());
+			}
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch account trust status summary from repository", e);
+		}
+
+		List<AccountTrustSummaryData.StatusSummary> statusSummaries = new ArrayList<>();
+		for (AccountTrustStatus status : AccountTrustStatus.values()) {
+			TrustStatusSummaryValues summaryValues = summaryValuesByStatus.get(status);
+			statusSummaries.add(new AccountTrustSummaryData.StatusSummary(status, summaryValues.accountCount,
+					summaryValues.seedMemberCount, summaryValues.rawVoteWeight, summaryValues.effectiveVoteWeight));
+		}
+
+		return statusSummaries;
+	}
+
+	private List<AccountTrustSummaryData.CategorySummary> getTrustCategorySummaries() throws DataException {
+		Map<AccountRatingCategory, Map<AccountTrustStatus, Long>> categoryStatusCounts = new EnumMap<>(AccountRatingCategory.class);
+		for (AccountRatingCategory category : AccountRatingCategory.values()) {
+			Map<AccountTrustStatus, Long> statusCounts = new EnumMap<>(AccountTrustStatus.class);
+			for (AccountTrustStatus status : AccountTrustStatus.values())
+				statusCounts.put(status, 0L);
+			categoryStatusCounts.put(category, statusCounts);
+		}
+
+		String sql = "SELECT category, mapped_trust_status, COUNT(*) FROM AccountTrustDerivationSnapshots "
+				+ "GROUP BY category, mapped_trust_status";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
+			if (resultSet != null) {
+				do {
+					AccountRatingCategory category = AccountRatingCategory.valueOf(resultSet.getInt(1));
+					AccountTrustStatus status = AccountTrustStatus.valueOf(resultSet.getInt(2));
+					Map<AccountTrustStatus, Long> statusCounts = categoryStatusCounts.get(defaultCategory(category));
+					statusCounts.put(status, resultSet.getLong(3));
+				} while (resultSet.next());
+			}
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch account trust category summary from repository", e);
+		}
+
+		List<AccountTrustSummaryData.CategorySummary> categorySummaries = new ArrayList<>();
+		for (AccountRatingCategory category : AccountRatingCategory.values()) {
+			List<AccountTrustSummaryData.StatusCount> statusCounts = new ArrayList<>();
+			for (AccountTrustStatus status : AccountTrustStatus.values())
+				statusCounts.add(new AccountTrustSummaryData.StatusCount(status,
+						categoryStatusCounts.get(category).get(status)));
+
+			categorySummaries.add(new AccountTrustSummaryData.CategorySummary(category, statusCounts));
+		}
+
+		return categorySummaries;
+	}
+
+	private String trustSummaryEffectiveVoteWeightSql() {
+		StringBuilder sql = new StringBuilder(256);
+		sql.append("CASE ats.mapped_trust_status ");
+		for (AccountTrustStatus status : AccountTrustStatus.values()) {
+			sql.append("WHEN ").append(status.getValue())
+					.append(" THEN ").append(TRUST_SUMMARY_BLOCKS_MINTED_SQL)
+					.append(" * ").append(status.getVoteWeightPercent()).append(" / 100 ");
+		}
+		sql.append("ELSE 0 END");
+
+		return sql.toString();
+	}
+
+	@Override
 	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(Integer limit, Integer offset, Boolean reverse)
 			throws DataException {
 		return getTrustDerivationSnapshots(null, null, null, null, null, limit, offset, reverse);
@@ -427,5 +548,22 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 
 	private static AccountRatingCategory defaultCategory(AccountRatingCategory category) {
 		return category == null ? AccountRatingCategory.SUBJECT : category;
+	}
+
+	private static class TrustSnapshotMetadata {
+		private final Integer snapshotHeight;
+		private final Long snapshotTimestamp;
+
+		private TrustSnapshotMetadata(Integer snapshotHeight, Long snapshotTimestamp) {
+			this.snapshotHeight = snapshotHeight;
+			this.snapshotTimestamp = snapshotTimestamp;
+		}
+	}
+
+	private static class TrustStatusSummaryValues {
+		private long accountCount;
+		private long seedMemberCount;
+		private long rawVoteWeight;
+		private long effectiveVoteWeight;
 	}
 }

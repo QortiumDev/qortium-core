@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - api: add trust network summary endpoint
+
+Added a read-only trust network summary API that lets clients inspect the stored account trust graph without fetching every snapshot row. The summary reports active Subject status counts, minting seed counts, minting allowance counts, raw `blocksMinted` weight, effective trust-weighted vote influence, snapshot metadata, and per-category status counts so explorers and governance tools can show network health more efficiently while leaving trust scoring, minting, voting, ratings, and transactions unchanged.
+
 ### 2026-05-15 - core: clean trust network baseline schema
 
 Folded the trust-network database schema into its final pre-launch Qortium shape so new chains create category-aware account ratings, account-rating query indexes, rate-account transaction categories, and trust snapshot query indexes directly instead of stepping through older development migrations. This keeps trust scoring, minting, voting, rating, and API behavior unchanged while making the baseline schema cleaner for future Qortium-derived chains.

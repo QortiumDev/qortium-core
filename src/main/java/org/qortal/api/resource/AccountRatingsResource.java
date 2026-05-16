@@ -29,6 +29,7 @@ import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustProfileData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.account.AccountTrustSummaryData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -156,6 +157,30 @@ public class AccountRatingsResource {
 	)
 	public AccountTrustPolicyData getAccountTrustPolicy() {
 		return buildTrustPolicy();
+	}
+
+	@GET
+	@Path("/trust-summary")
+	@Operation(
+			summary = "Get stored account trust network summary",
+			responses = {
+					@ApiResponse(
+							description = "account trust network summary",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = AccountTrustSummaryData.class)
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public AccountTrustSummaryData getAccountTrustSummary() {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return repository.getAccountRatingRepository()
+					.getTrustSummary(AccountTrustPolicy.getActiveWeightCategory());
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
 	}
 
 	@GET

@@ -6,6 +6,7 @@ import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.account.AccountTrustSummaryData;
 
 import java.util.List;
 
@@ -33,6 +34,8 @@ public interface AccountRatingRepository {
 
 	public void replaceTrustDerivationSnapshots(List<AccountTrustDerivationData> derivedAccounts, int snapshotHeight,
 			long snapshotTimestamp) throws DataException;
+
+	public AccountTrustSummaryData getTrustSummary(AccountRatingCategory activeCategory) throws DataException;
 
 	public List<AccountTrustSnapshotData> getTrustDerivationSnapshots(Integer limit, Integer offset, Boolean reverse)
 			throws DataException;

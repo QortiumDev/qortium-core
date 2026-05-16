@@ -20,6 +20,7 @@ import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustProfileData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.account.AccountTrustSummaryData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
@@ -55,6 +56,142 @@ public class AccountRatingsApiTests extends ApiCommon {
 	@Test
 	public void testResource() {
 		assertNotNull(this.accountRatingsResource);
+	}
+
+	@Test
+	public void testTrustSummaryEndpointReturnsEmptyBuckets() {
+		AccountTrustSummaryData summary = this.accountRatingsResource.getAccountTrustSummary();
+
+		assertEquals(AccountRatingCategory.SUBJECT, summary.getActiveWeightCategory());
+		assertNull(summary.getSnapshotHeight());
+		assertNull(summary.getSnapshotTimestamp());
+		assertEquals(0L, summary.getActiveSnapshotAccountCount());
+		assertEquals(0L, summary.getActiveSeedMemberCount());
+		assertEquals(0L, summary.getActiveMintingAllowedCount());
+		assertEquals(0L, summary.getSuspiciousCount());
+		assertEquals(0L, summary.getRawVoteWeight());
+		assertEquals(0L, summary.getEffectiveVoteWeight());
+		assertEquals(AccountTrustStatus.values().length, summary.getStatusSummaries().size());
+		assertEquals(AccountRatingCategory.values().length, summary.getCategorySummaries().size());
+
+		for (AccountTrustSummaryData.StatusSummary statusSummary : summary.getStatusSummaries()) {
+			assertEquals(0L, statusSummary.getAccountCount());
+			assertEquals(0L, statusSummary.getSeedMemberCount());
+			assertEquals(0L, statusSummary.getRawVoteWeight());
+			assertEquals(0L, statusSummary.getEffectiveVoteWeight());
+			assertEquals(statusSummary.getStatus().getValue(), statusSummary.getStatusValue());
+			assertEquals(statusSummary.getStatus().getVoteWeightPercent(), statusSummary.getVoteWeightPercent());
+			assertEquals(statusSummary.getStatus().canMint(), statusSummary.isTrustAllowsMinting());
+		}
+
+		for (AccountTrustSummaryData.CategorySummary categorySummary : summary.getCategorySummaries()) {
+			assertEquals(AccountTrustStatus.values().length, categorySummary.getStatusCounts().size());
+			for (AccountTrustSummaryData.StatusCount statusCount : categorySummary.getStatusCounts()) {
+				assertEquals(statusCount.getStatus().getValue(), statusCount.getStatusValue());
+				assertEquals(0L, statusCount.getAccountCount());
+			}
+		}
+	}
+
+	@Test
+	public void testTrustSummaryEndpointAggregatesStoredSnapshots() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+		PrivateKeyAccount erin;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+			erin = Common.generateRandomSeedAccount(repository);
+
+			setVoteAccount(repository, alice, 101);
+			setVoteAccount(repository, bob, 101);
+			setVoteAccount(repository, chloe, 101);
+			setVoteAccount(repository, dilbert, 101);
+			setVoteAccount(repository, erin, 101);
+
+			repository.getAccountRatingRepository().replaceTrustDerivationSnapshots(Arrays.asList(
+					trustDerivation(alice, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.GOLD),
+							categoryTrust(AccountRatingCategory.MANAGER, AccountTrustStatus.GOLD)),
+					trustDerivation(bob, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.SILVER),
+							categoryTrust(AccountRatingCategory.PLAYER, AccountTrustStatus.SILVER)),
+					trustDerivation(chloe, false,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.BRONZE),
+							categoryTrust(AccountRatingCategory.TRAINER, AccountTrustStatus.BRONZE)),
+					trustDerivation(dilbert, false,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.SUSPICIOUS)),
+					trustDerivation(erin, false,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.UNVERIFIED),
+							categoryTrust(AccountRatingCategory.MANAGER, AccountTrustStatus.SUSPICIOUS))),
+					repository.getBlockRepository().getBlockchainHeight(),
+					repository.getBlockRepository().getLastBlock().getTimestamp());
+			repository.saveChanges();
+		}
+
+		AccountTrustSummaryData summary = this.accountRatingsResource.getAccountTrustSummary();
+
+		assertEquals(AccountRatingCategory.SUBJECT, summary.getActiveWeightCategory());
+		assertNotNull(summary.getSnapshotHeight());
+		assertNotNull(summary.getSnapshotTimestamp());
+		assertEquals(5L, summary.getActiveSnapshotAccountCount());
+		assertEquals(2L, summary.getActiveSeedMemberCount());
+		assertEquals(2L, summary.getActiveMintingAllowedCount());
+		assertEquals(1L, summary.getSuspiciousCount());
+		assertEquals(505L, summary.getRawVoteWeight());
+		assertEquals(176L, summary.getEffectiveVoteWeight());
+
+		AccountTrustSummaryData.StatusSummary gold = findStatusSummary(summary, AccountTrustStatus.GOLD);
+		assertEquals(1L, gold.getAccountCount());
+		assertEquals(1L, gold.getSeedMemberCount());
+		assertEquals(101L, gold.getRawVoteWeight());
+		assertEquals(101L, gold.getEffectiveVoteWeight());
+
+		AccountTrustSummaryData.StatusSummary silver = findStatusSummary(summary, AccountTrustStatus.SILVER);
+		assertEquals(1L, silver.getAccountCount());
+		assertEquals(1L, silver.getSeedMemberCount());
+		assertEquals(101L, silver.getRawVoteWeight());
+		assertEquals(50L, silver.getEffectiveVoteWeight());
+
+		AccountTrustSummaryData.StatusSummary bronze = findStatusSummary(summary, AccountTrustStatus.BRONZE);
+		assertEquals(1L, bronze.getAccountCount());
+		assertEquals(0L, bronze.getSeedMemberCount());
+		assertEquals(25L, bronze.getEffectiveVoteWeight());
+
+		AccountTrustSummaryData.StatusSummary suspicious = findStatusSummary(summary, AccountTrustStatus.SUSPICIOUS);
+		assertEquals(1L, suspicious.getAccountCount());
+		assertEquals(0L, suspicious.getSeedMemberCount());
+		assertEquals(0L, suspicious.getEffectiveVoteWeight());
+		assertFalse(suspicious.isTrustAllowsMinting());
+
+		AccountTrustSummaryData.StatusSummary unverified = findStatusSummary(summary, AccountTrustStatus.UNVERIFIED);
+		assertEquals(1L, unverified.getAccountCount());
+		assertEquals(101L, unverified.getRawVoteWeight());
+		assertEquals(0L, unverified.getEffectiveVoteWeight());
+		assertTrue(unverified.isTrustAllowsMinting());
+
+		AccountTrustSummaryData.CategorySummary subjectSummary = findCategorySummary(summary, AccountRatingCategory.SUBJECT);
+		assertEquals(1L, findStatusCount(subjectSummary, AccountTrustStatus.GOLD).getAccountCount());
+		assertEquals(1L, findStatusCount(subjectSummary, AccountTrustStatus.SILVER).getAccountCount());
+		assertEquals(1L, findStatusCount(subjectSummary, AccountTrustStatus.BRONZE).getAccountCount());
+		assertEquals(1L, findStatusCount(subjectSummary, AccountTrustStatus.UNVERIFIED).getAccountCount());
+		assertEquals(1L, findStatusCount(subjectSummary, AccountTrustStatus.SUSPICIOUS).getAccountCount());
+
+		AccountTrustSummaryData.CategorySummary managerSummary = findCategorySummary(summary, AccountRatingCategory.MANAGER);
+		assertEquals(1L, findStatusCount(managerSummary, AccountTrustStatus.GOLD).getAccountCount());
+		assertEquals(1L, findStatusCount(managerSummary, AccountTrustStatus.SUSPICIOUS).getAccountCount());
+		assertEquals(0L, findStatusCount(managerSummary, AccountTrustStatus.SILVER).getAccountCount());
+
+		AccountTrustSummaryData.CategorySummary playerSummary = findCategorySummary(summary, AccountRatingCategory.PLAYER);
+		assertEquals(1L, findStatusCount(playerSummary, AccountTrustStatus.SILVER).getAccountCount());
+
+		AccountTrustSummaryData.CategorySummary trainerSummary = findCategorySummary(summary, AccountRatingCategory.TRAINER);
+		assertEquals(1L, findStatusCount(trainerSummary, AccountTrustStatus.BRONZE).getAccountCount());
 	}
 
 	@Test
@@ -884,6 +1021,30 @@ public class AccountRatingsApiTests extends ApiCommon {
 				.orElseThrow(() -> new AssertionError("Missing status vote weight " + status));
 	}
 
+	private AccountTrustSummaryData.StatusSummary findStatusSummary(AccountTrustSummaryData summary,
+			AccountTrustStatus status) {
+		return summary.getStatusSummaries().stream()
+				.filter(statusSummary -> statusSummary.getStatus() == status)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing trust summary for status " + status));
+	}
+
+	private AccountTrustSummaryData.CategorySummary findCategorySummary(AccountTrustSummaryData summary,
+			AccountRatingCategory category) {
+		return summary.getCategorySummaries().stream()
+				.filter(categorySummary -> categorySummary.getCategory() == category)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing trust summary for category " + category));
+	}
+
+	private AccountTrustSummaryData.StatusCount findStatusCount(AccountTrustSummaryData.CategorySummary categorySummary,
+			AccountTrustStatus status) {
+		return categorySummary.getStatusCounts().stream()
+				.filter(statusCount -> statusCount.getStatus() == status)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing trust summary count for status " + status));
+	}
+
 	private AccountTrustPolicyData.CategoryPolicy findCategoryPolicy(AccountTrustPolicyData policy,
 			AccountRatingCategory category) {
 		return policy.getCategoryPolicies().stream()
@@ -979,6 +1140,25 @@ public class AccountRatingsApiTests extends ApiCommon {
 				Collections.singletonList(subjectTrust));
 	}
 
+	private AccountTrustDerivationData trustDerivation(PrivateKeyAccount account, boolean seedMember,
+			AccountTrustCategoryData... categories) {
+		AccountTrustStatus subjectStatus = AccountTrustStatus.UNVERIFIED;
+		for (AccountTrustCategoryData category : categories) {
+			if (category.getCategory() == AccountRatingCategory.SUBJECT) {
+				subjectStatus = category.getMappedTrustStatus();
+				break;
+			}
+		}
+
+		return new AccountTrustDerivationData(account.getPublicKey(), account.getAddress(), subjectStatus, seedMember,
+				Arrays.asList(categories));
+	}
+
+	private AccountTrustCategoryData categoryTrust(AccountRatingCategory category, AccountTrustStatus trustStatus) {
+		return new AccountTrustCategoryData(category, scoreForStatus(trustStatus), levelForStatus(trustStatus),
+				trustStatus, new AccountTrustRatingCountsData(), Collections.emptyList());
+	}
+
 	private long scoreForStatus(AccountTrustStatus trustStatus) {
 		switch (trustStatus) {
 			case GOLD:
@@ -1011,7 +1191,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		}
 	}
 
-	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted) throws DataException {
+	private void setVoteAccount(Repository repository, PrivateKeyAccount account, int blocksMinted) throws DataException {
 		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
 		if (accountData == null)
 			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
