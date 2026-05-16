@@ -119,6 +119,12 @@ Raw `blocksMinted` stays visible because it is still useful account-history
 data. Effective weight is the value used for active governance and weighted
 rating calculations.
 
+Clients and chain builders should treat raw `blocksMinted` as history, not as
+governance influence. Raw `blocksMinted` still appears in account records,
+minting-level bookkeeping, reports, chain functions, and vote audit fields. For
+polls, resource-rating summaries, and trust-summary totals, use the effective
+weight fields that include the active Subject trust multiplier.
+
 ## Polls And Frozen Results
 
 Open poll results use the current active Subject snapshot and current

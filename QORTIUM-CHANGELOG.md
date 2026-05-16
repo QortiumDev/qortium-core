@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-16 - api: clarify raw and effective trust weights
+
+Clarified the boundary between raw `blocksMinted` history and effective trust-weighted influence. Account and poll API descriptions now label effective vote weight separately from raw audit weight, and the trust-network guide explains that clients should use effective weight fields for governance and weighted rating displays.
+
 ### 2026-05-16 - test: add trust network scenario coverage
 
 Added broader trust-network scenario tests that model honest independent branches, isolated farm rings, same-branch positive lift attempts, and coordinated negative ratings. These tests make the intended trust behavior easier to calibrate before launch by proving that raw same-branch evidence remains auditable but cannot by itself create positive trust or Suspicious mint blocking.

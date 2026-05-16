@@ -20,7 +20,7 @@ public class PollVotes {
     @Schema(description = "Total number of votes")
     public Integer totalVotes;
 
-    @Schema(description = "Total weight of votes")
+    @Schema(description = "Total effective vote weight after trust-tier multipliers")
     public Integer totalWeight;
 
     @Schema(description = "Total raw blocksMinted weight before trust-tier multipliers")
@@ -29,7 +29,7 @@ public class PollVotes {
     @Schema(description = "List of vote counts for each option")
     public List<OptionCount> voteCounts;
 
-    @Schema(description = "List of vote weights for each option")
+    @Schema(description = "List of effective and raw vote weights for each option")
     public List<OptionWeight> voteWeights;
 
     @Schema(description = "Trust-tier audit details for individual votes")
@@ -81,7 +81,7 @@ public class PollVotes {
         @Schema(description = "Option name")
         public String optionName;
 
-        @Schema(description = "Vote weight")
+        @Schema(description = "Effective vote weight after trust-tier multipliers")
         public Integer voteWeight;
 
         @Schema(description = "Raw blocksMinted vote weight before trust-tier multipliers")

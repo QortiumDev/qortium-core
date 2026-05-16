@@ -1,5 +1,6 @@
 package org.qortal.data.account;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.qortal.group.Group;
 
 import javax.xml.bind.annotation.XmlAccessType;
@@ -14,13 +15,21 @@ public class AccountData {
 	protected byte[] publicKey;
 	protected int defaultGroupId;
 	protected int level;
+	@Schema(description = "Raw minted-block history. This remains account history and is not the effective governance weight.")
 	protected int blocksMinted;
+	@Schema(description = "Active Subject-derived trust status used for trust-weighted voting and rating influence")
 	protected AccountTrustStatus trustStatus;
+	@Schema(description = "Numeric storage value for the active trust status")
 	protected int trustStatusValue;
+	@Schema(description = "Percent of raw blocksMinted that counts as effective voting and rating weight")
 	protected int trustWeightPercent;
+	@Schema(description = "Whether the active trust status allows minting when the account also has base minting permission")
 	protected boolean trustAllowsMinting;
+	@Schema(description = "Effective governance and rating weight after applying the active trust multiplier to blocksMinted")
 	protected int effectiveVoteWeight;
+	@Schema(description = "Block height of the active trust snapshot used for trust fields")
 	protected Integer trustSnapshotHeight;
+	@Schema(description = "Block timestamp of the active trust snapshot used for trust fields")
 	protected Long trustSnapshotTimestamp;
 
 	// Constructors
