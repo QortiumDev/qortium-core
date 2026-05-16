@@ -7,7 +7,9 @@ import org.qortal.data.account.AccountTrustCategoryImpactData;
 import org.qortal.data.account.AccountTrustStatus;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public final class AccountTrustPolicy {
 
@@ -99,6 +101,10 @@ public final class AccountTrustPolicy {
 		return settings().getSuspiciousMinRaterCount();
 	}
 
+	public static int getSuspiciousMinBranchCount() {
+		return settings().getSuspiciousMinBranchCount();
+	}
+
 	public static int getSuspiciousMinRatingConfidence() {
 		return settings().getSuspiciousMinRatingConfidence();
 	}
@@ -187,7 +193,8 @@ public final class AccountTrustPolicy {
 	private static boolean meetsSuspiciousRequirements(AccountRatingCategory category, LevelDecision suspiciousDecision,
 			List<AccountTrustCategoryImpactData> impacts) {
 		return suspiciousDecision.levelScore <= getSuspiciousThreshold(category)
-				&& countNegativeImpacts(impacts, getSuspiciousMinRatingConfidence()) >= getSuspiciousMinRaterCount();
+				&& countNegativeRaters(impacts, getSuspiciousMinRatingConfidence()) >= getSuspiciousMinRaterCount()
+				&& countNegativeTrustBranches(impacts, getSuspiciousMinRatingConfidence()) >= getSuspiciousMinBranchCount();
 	}
 
 	private static long calculateCappedLevelScore(List<AccountTrustCategoryImpactData> impacts, long impactCap) {
@@ -216,12 +223,25 @@ public final class AccountTrustPolicy {
 				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0).count();
 	}
 
-	private static long countNegativeImpacts(List<AccountTrustCategoryImpactData> impacts, int minConfidence) {
+	private static long countNegativeRaters(List<AccountTrustCategoryImpactData> impacts, int minConfidence) {
 		return impacts.stream()
 				.filter(impact -> impact.getRatingConfidence() >= minConfidence && impact.getImpact() < 0)
 				.map(AccountTrustCategoryImpactData::getRaterAddress)
 				.distinct()
 				.count();
+	}
+
+	private static long countNegativeTrustBranches(List<AccountTrustCategoryImpactData> impacts, int minConfidence) {
+		Set<String> trustBranchKeys = new HashSet<>();
+		for (AccountTrustCategoryImpactData impact : impacts) {
+			if (impact.getRatingConfidence() < minConfidence || impact.getImpact() >= 0)
+				continue;
+
+			if (impact.getTrustBranchKeys() != null)
+				trustBranchKeys.addAll(impact.getTrustBranchKeys());
+		}
+
+		return trustBranchKeys.size();
 	}
 
 	private static AccountRatingCategory effectiveCategory(AccountRatingCategory category) {

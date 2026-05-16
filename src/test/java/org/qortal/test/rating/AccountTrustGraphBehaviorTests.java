@@ -267,6 +267,44 @@ public class AccountTrustGraphBehaviorTests extends Common {
 	}
 
 	@Test
+	public void testTwoTrustedNegativeSubjectRatingsFromSameBranchDoNotMakeTargetSuspicious() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, dilbert);
+
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatingsFromSharedManagerBranch(repository, alice,
+					Arrays.asList(bob, dilbert));
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData bobPlayer = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.PLAYER);
+			AccountTrustSnapshotData dilbertPlayer = findSnapshot(repository, dilbert.getAddress(),
+					AccountRatingCategory.PLAYER);
+			assertEquals(AccountTrustStatus.GOLD, bobPlayer.getMappedTrustStatus());
+			assertEquals(AccountTrustStatus.GOLD, dilbertPlayer.getMappedTrustStatus());
+
+			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingCategory.SUBJECT, -2), bob);
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, -2),
+					dilbert);
+
+			AccountTrustSnapshotData aliceSubject = findSnapshot(repository, alice.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(-512_000_000L, aliceSubject.getScore());
+			assertEquals(-10_000_000L, aliceSubject.getLevelScore());
+			assertEquals(5_000_000L, aliceSubject.getLevelScoreCap());
+			assertEquals(0, aliceSubject.getLevel());
+			assertEquals("Two trusted raters from the same trust branch should not satisfy Suspicious branch independence",
+					AccountTrustStatus.UNVERIFIED, aliceSubject.getMappedTrustStatus());
+			assertTrue("Same-branch negative ratings should not block mint eligibility",
+					new Account(repository, alice.getAddress()).canMint(false));
+		}
+	}
+
+	@Test
 	public void testPositiveSubjectRatingRemovalRefreshesAndOrphanRestoresSnapshot() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount seedAccount = Common.getTestAccount(repository, "alice");

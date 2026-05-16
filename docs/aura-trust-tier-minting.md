@@ -180,7 +180,12 @@ derivation APIs:
   itself, while raw score and raw impact remain available for audit
 - negative/Suspicious decisions use the same signed capped decision score, with
   Suspicious requiring at least two independent medium-confidence negative
-  raters before raw negative evidence can block minting
+  raters and at least two independent seed-derived trust branches before raw
+  negative evidence can block minting
+- Qortium defines a trust branch as the first positive Manager hop out of a
+  Minting group seed, so one seed can grow several separately counted branches
+  while same-branch negative raters cannot make a target Suspicious by
+  themselves
 - broad outbound positive-rating budgeting beyond Aura's Manager energy flow
   remains a possible future Qortium-specific policy decision, but it is not
   part of the current Aura-parity scoring model
@@ -369,10 +374,6 @@ The first implementation should cover at least these cases:
 - chain-config tests prove trust policy values are required, validated, and
   actually drive both vote multipliers and level decisions.
 - account trust explanation tests prove empty known accounts remain
-  Unverified, stored and live explanations are distinguishable, and single
-  versus independent negative ratings report the Suspicious checks clearly.
-
-## Open Decisions
-
-- Should a future trust graph require independent teams or seed branches for
-  Suspicious decisions, beyond the current independent-rater requirement?
+  Unverified, stored and live explanations are distinguishable, and single,
+  same-branch, and independent-branch negative ratings report the Suspicious
+  checks clearly.

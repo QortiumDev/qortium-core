@@ -16,6 +16,7 @@ import org.qortal.repository.Repository;
 import org.qortal.utils.Groups;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -65,8 +66,9 @@ public class AccountTrustDerivation {
 				.getRatings(null, null, null, null, null, null);
 		Map<AccountRatingCategory, List<AccountRatingData>> ratingsByCategory = groupRatingsByCategory(allRatings);
 		Set<String> seedAddresses = getMintingSeedAddresses(repository, mintingSeedHeight);
-		Map<String, Long> seedScores = buildSeedScores(seedAddresses);
-		Map<String, Long> managerEnergy = flowManagerEnergy(ratingsByCategory.get(AccountRatingCategory.MANAGER), seedScores);
+		Map<String, EnergyScore> seedEnergy = buildSeedEnergy(seedAddresses);
+		Map<String, EnergyScore> managerEnergy = flowManagerEnergy(ratingsByCategory.get(AccountRatingCategory.MANAGER),
+				seedEnergy, seedAddresses);
 
 		Map<String, CategoryScore> managerScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.MANAGER),
 				managerEnergy, AccountRatingCategory.MANAGER);
@@ -162,47 +164,68 @@ public class AccountTrustDerivation {
 		return seedAddresses;
 	}
 
-	private static Map<String, Long> buildSeedScores(Set<String> seedAddresses) {
-		Map<String, Long> seedScores = new HashMap<>();
+	private static Map<String, EnergyScore> buildSeedEnergy(Set<String> seedAddresses) {
+		Map<String, EnergyScore> seedEnergy = new HashMap<>();
 		if (seedAddresses.isEmpty())
-			return seedScores;
+			return seedEnergy;
 
 		long scorePerSeed = AccountTrustPolicy.getStartingEnergy() / seedAddresses.size();
 		for (String seedAddress : seedAddresses)
-			seedScores.put(seedAddress, scorePerSeed);
+			seedEnergy.put(seedAddress, new EnergyScore(scorePerSeed));
 
-		return seedScores;
+		return seedEnergy;
 	}
 
-	private static Map<String, Long> flowManagerEnergy(List<AccountRatingData> managerRatings, Map<String, Long> seedScores) {
-		Map<String, Long> energy = new HashMap<>(seedScores);
+	private static Map<String, EnergyScore> flowManagerEnergy(List<AccountRatingData> managerRatings,
+			Map<String, EnergyScore> seedEnergy, Set<String> seedAddresses) {
+		Map<String, EnergyScore> energy = new HashMap<>(seedEnergy);
 		Map<String, Integer> positiveRatingScales = calculatePositiveRatingScales(managerRatings);
 
 		for (int hop = 0; hop < AccountTrustPolicy.getManagerEnergyHops(); ++hop) {
-			Map<String, Long> nextEnergy = new HashMap<>();
+			Map<String, EnergyScore> nextEnergy = new HashMap<>();
 
 			for (AccountRatingData rating : managerRatings) {
 				if (!AccountRating.isPositive(rating.getRating()))
 					continue;
 
-				long raterEnergy = energy.getOrDefault(rating.getRaterAddress(), 0L);
-				if (raterEnergy <= 0L)
+				EnergyScore raterEnergy = energy.get(rating.getRaterAddress());
+				if (raterEnergy == null || raterEnergy.score <= 0L)
 					continue;
 
 				Integer positiveRatingScale = positiveRatingScales.get(rating.getRaterAddress());
 				if (positiveRatingScale == null || positiveRatingScale <= 0)
 					continue;
 
-				long targetEnergy = AccountRating.saturatedMultiply(raterEnergy,
+				long targetEnergy = AccountRating.saturatedMultiply(raterEnergy.score,
 						AccountRating.getConfidence(rating.getRating())) / positiveRatingScale;
 				if (targetEnergy != 0L)
-					nextEnergy.merge(rating.getTargetAddress(), targetEnergy, AccountTrustDerivation::saturatedAdd);
+					mergeEnergy(nextEnergy, rating.getTargetAddress(), targetEnergy,
+							branchKeysForManagerTransfer(rating, raterEnergy, seedAddresses));
 			}
 
 			energy = nextEnergy;
 		}
 
 		return energy;
+	}
+
+	private static void mergeEnergy(Map<String, EnergyScore> energyByAddress, String address, long energy,
+			Set<String> trustBranchKeys) {
+		EnergyScore score = energyByAddress.computeIfAbsent(address, ignored -> new EnergyScore());
+		score.score = saturatedAdd(score.score, energy);
+		score.trustBranchKeys.addAll(trustBranchKeys);
+	}
+
+	private static Set<String> branchKeysForManagerTransfer(AccountRatingData rating, EnergyScore raterEnergy,
+			Set<String> seedAddresses) {
+		if (raterEnergy.trustBranchKeys.isEmpty() && seedAddresses.contains(rating.getRaterAddress()))
+			return Collections.singleton(managerBranchKey(rating.getRaterAddress(), rating.getTargetAddress()));
+
+		return raterEnergy.trustBranchKeys;
+	}
+
+	private static String managerBranchKey(String seedAddress, String firstHopAddress) {
+		return seedAddress + ">" + firstHopAddress;
 	}
 
 	private static Map<String, CategoryScore> deriveCategory(List<AccountRatingData> ratings, Map<String, ?> evaluatorScores,
@@ -219,7 +242,10 @@ public class AccountTrustDerivation {
 			if (impact != 0L) {
 				targetScore.score = saturatedAdd(targetScore.score, impact);
 				targetScore.impacts.add(new AccountTrustCategoryImpactData(rating.getRaterPublicKey(),
-						raterAddress, evaluatorScore.level, evaluatorScore.score, rating.getRating(), impact));
+						raterAddress, evaluatorScore.level, evaluatorScore.score, rating.getRating(), impact,
+						new ArrayList<>(evaluatorScore.trustBranchKeys)));
+				if (impact > 0L)
+					targetScore.trustBranchKeys.addAll(evaluatorScore.trustBranchKeys);
 			}
 		}
 
@@ -243,13 +269,18 @@ public class AccountTrustDerivation {
 		Object score = evaluatorScores.get(raterAddress);
 		if (score instanceof CategoryScore) {
 			CategoryScore categoryScore = (CategoryScore) score;
-			return new EvaluatorScore(categoryScore.score, categoryScore.level);
+			return new EvaluatorScore(categoryScore.score, categoryScore.level, categoryScore.trustBranchKeys);
+		}
+
+		if (score instanceof EnergyScore) {
+			EnergyScore energyScore = (EnergyScore) score;
+			return new EvaluatorScore(energyScore.score, 0, energyScore.trustBranchKeys);
 		}
 
 		if (score instanceof Long)
-			return new EvaluatorScore((Long) score, 0);
+			return new EvaluatorScore((Long) score, 0, Collections.emptySet());
 
-		return new EvaluatorScore(0L, 0);
+		return new EvaluatorScore(0L, 0, Collections.emptySet());
 	}
 
 	private static AccountTrustCategoryData buildCategoryTrust(AccountRatingCategory category, String targetAddress,
@@ -291,6 +322,7 @@ public class AccountTrustDerivation {
 		private long levelScore;
 		private long levelScoreCap;
 		private int level;
+		private final Set<String> trustBranchKeys = new TreeSet<>();
 		private final List<AccountTrustCategoryImpactData> impacts = new ArrayList<>();
 
 		private void apply(AccountTrustPolicy.LevelDecision decision) {
@@ -303,10 +335,24 @@ public class AccountTrustDerivation {
 	private static class EvaluatorScore {
 		private final long score;
 		private final int level;
+		private final Set<String> trustBranchKeys;
 
-		private EvaluatorScore(long score, int level) {
+		private EvaluatorScore(long score, int level, Set<String> trustBranchKeys) {
 			this.score = score;
 			this.level = level;
+			this.trustBranchKeys = trustBranchKeys == null ? Collections.emptySet() : trustBranchKeys;
+		}
+	}
+
+	private static class EnergyScore {
+		private long score;
+		private final Set<String> trustBranchKeys = new TreeSet<>();
+
+		private EnergyScore() {
+		}
+
+		private EnergyScore(long score) {
+			this.score = score;
 		}
 	}
 

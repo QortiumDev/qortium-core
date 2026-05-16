@@ -64,9 +64,39 @@ public final class AccountTrustTestUtils {
 		saveAccountRating(repository, trainerPeer, playerTarget, AccountRatingCategory.PLAYER, 2);
 	}
 
+	public static void saveDerivedPlayerLevelThreeRatingsFromSharedManagerBranch(Repository repository,
+			PrivateKeyAccount seedAccount, List<? extends PrivateKeyAccount> playerTargets) throws DataException {
+		PrivateKeyAccount manager = Common.generateRandomSeedAccount(repository);
+		PrivateKeyAccount managerPeer = Common.generateRandomSeedAccount(repository);
+		PrivateKeyAccount trainer = Common.generateRandomSeedAccount(repository);
+		PrivateKeyAccount trainerPeer = Common.generateRandomSeedAccount(repository);
+
+		saveDerivedManagerLevelTwoRatingsFromSharedManagerBranch(repository, seedAccount, Arrays.asList(manager, managerPeer));
+
+		saveAccountRating(repository, manager, trainer, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, managerPeer, trainer, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, manager, trainerPeer, AccountRatingCategory.TRAINER, 4);
+		saveAccountRating(repository, managerPeer, trainerPeer, AccountRatingCategory.TRAINER, 4);
+
+		for (PrivateKeyAccount playerTarget : playerTargets) {
+			saveAccountRating(repository, trainer, playerTarget, AccountRatingCategory.PLAYER, 2);
+			saveAccountRating(repository, trainerPeer, playerTarget, AccountRatingCategory.PLAYER, 2);
+		}
+	}
+
 	public static void saveDerivedManagerLevelTwoRatings(Repository repository, PrivateKeyAccount seedAccount,
 			List<? extends PrivateKeyAccount> managerTargets) throws DataException {
 		List<PrivateKeyAccount> evaluators = saveManagerEnergyPaths(repository, seedAccount, 2);
+
+		for (PrivateKeyAccount evaluator : evaluators) {
+			for (PrivateKeyAccount managerTarget : managerTargets)
+				saveAccountRating(repository, evaluator, managerTarget, AccountRatingCategory.MANAGER, 1);
+		}
+	}
+
+	public static void saveDerivedManagerLevelTwoRatingsFromSharedManagerBranch(Repository repository,
+			PrivateKeyAccount seedAccount, List<? extends PrivateKeyAccount> managerTargets) throws DataException {
+		List<PrivateKeyAccount> evaluators = saveManagerEnergyPathsFromSharedFirstHop(repository, seedAccount, 2);
 
 		for (PrivateKeyAccount evaluator : evaluators) {
 			for (PrivateKeyAccount managerTarget : managerTargets)
@@ -95,6 +125,32 @@ public final class AccountTrustTestUtils {
 			PrivateKeyAccount evaluator = Common.generateRandomSeedAccount(repository);
 			evaluators.add(evaluator);
 			saveManagerEnergyPathRatings(repository, seedAccount, evaluator);
+		}
+
+		return evaluators;
+	}
+
+	public static List<PrivateKeyAccount> saveManagerEnergyPathsFromSharedFirstHop(Repository repository,
+			PrivateKeyAccount seedAccount, int pathCount) throws DataException {
+		List<PrivateKeyAccount> evaluators = new ArrayList<>();
+		PrivateKeyAccount firstHop = Common.generateRandomSeedAccount(repository);
+		PrivateKeyAccount secondHop = Common.generateRandomSeedAccount(repository);
+		PrivateKeyAccount thirdHop = Common.generateRandomSeedAccount(repository);
+
+		ensureKnownAccount(repository, seedAccount);
+		ensureKnownAccount(repository, firstHop);
+		ensureKnownAccount(repository, secondHop);
+		ensureKnownAccount(repository, thirdHop);
+
+		saveAccountRating(repository, seedAccount, firstHop, AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, firstHop, secondHop, AccountRatingCategory.MANAGER, 4);
+		saveAccountRating(repository, secondHop, thirdHop, AccountRatingCategory.MANAGER, 4);
+
+		for (int i = 0; i < pathCount; ++i) {
+			PrivateKeyAccount evaluator = Common.generateRandomSeedAccount(repository);
+			evaluators.add(evaluator);
+			ensureKnownAccount(repository, evaluator);
+			saveAccountRating(repository, thirdHop, evaluator, AccountRatingCategory.MANAGER, 4);
 		}
 
 		return evaluators;

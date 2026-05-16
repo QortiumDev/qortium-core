@@ -2,6 +2,9 @@ package org.qortal.data.account;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 @XmlAccessorType(XmlAccessType.FIELD)
 public class AccountTrustCategoryImpactData {
@@ -13,12 +16,19 @@ public class AccountTrustCategoryImpactData {
 	private String ratingDirection;
 	private int ratingConfidence;
 	private long impact;
+	private List<String> trustBranchKeys;
+	private int trustBranchCount;
 
 	protected AccountTrustCategoryImpactData() {
 	}
 
 	public AccountTrustCategoryImpactData(byte[] raterPublicKey, String raterAddress, int evaluatorLevel,
 			long evaluatorScore, int rating, long impact) {
+		this(raterPublicKey, raterAddress, evaluatorLevel, evaluatorScore, rating, impact, null);
+	}
+
+	public AccountTrustCategoryImpactData(byte[] raterPublicKey, String raterAddress, int evaluatorLevel,
+			long evaluatorScore, int rating, long impact, List<String> trustBranchKeys) {
 		this.raterPublicKey = raterPublicKey;
 		this.raterAddress = raterAddress;
 		this.evaluatorLevel = evaluatorLevel;
@@ -27,6 +37,9 @@ public class AccountTrustCategoryImpactData {
 		this.ratingDirection = AccountRating.getDirection(rating);
 		this.ratingConfidence = AccountRating.getConfidence(rating);
 		this.impact = impact;
+		this.trustBranchKeys = trustBranchKeys == null ? new ArrayList<>() : new ArrayList<>(trustBranchKeys);
+		Collections.sort(this.trustBranchKeys);
+		this.trustBranchCount = this.trustBranchKeys.size();
 	}
 
 	public byte[] getRaterPublicKey() {
@@ -59,5 +72,13 @@ public class AccountTrustCategoryImpactData {
 
 	public long getImpact() {
 		return this.impact;
+	}
+
+	public List<String> getTrustBranchKeys() {
+		return this.trustBranchKeys;
+	}
+
+	public int getTrustBranchCount() {
+		return this.trustBranchCount;
 	}
 }

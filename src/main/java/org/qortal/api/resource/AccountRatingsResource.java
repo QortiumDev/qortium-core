@@ -53,10 +53,12 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Path("/account-ratings")
 @Tag(name = "Account Ratings")
@@ -393,7 +395,8 @@ public class AccountRatingsResource {
 
 		return new AccountTrustPolicyData(AccountTrustPolicy.getActiveWeightCategory(), AccountTrustPolicy.getStartingEnergy(),
 				AccountTrustPolicy.getManagerEnergyHops(), AccountTrustPolicy.getSuspiciousMinRaterCount(),
-				AccountTrustPolicy.getSuspiciousMinRatingConfidence(), statusVoteWeights, categoryPolicies);
+				AccountTrustPolicy.getSuspiciousMinBranchCount(), AccountTrustPolicy.getSuspiciousMinRatingConfidence(),
+				statusVoteWeights, categoryPolicies);
 	}
 
 	private AccountTrustPolicyData.CategoryPolicy buildTrustCategoryPolicy(AccountRatingCategory category) {
@@ -563,8 +566,9 @@ public class AccountRatingsResource {
 				categoryTrust.getLevelScore(), categoryTrust.getLevelScoreCap(), categoryTrust.getLevel(),
 				categoryTrust.getMappedTrustStatus(), categoryTrust.getInboundRatings(), configuredLevels,
 				AccountTrustPolicy.getSuspiciousThreshold(category), AccountTrustPolicy.getSuspiciousLevelScoreCap(category),
-				AccountTrustPolicy.getSuspiciousMinRaterCount(), AccountTrustPolicy.getSuspiciousMinRatingConfidence(),
-				requirements, getTopImpacts(impacts, true), getTopImpacts(impacts, false));
+				AccountTrustPolicy.getSuspiciousMinRaterCount(), AccountTrustPolicy.getSuspiciousMinBranchCount(),
+				AccountTrustPolicy.getSuspiciousMinRatingConfidence(), requirements, getTopImpacts(impacts, true),
+				getTopImpacts(impacts, false));
 	}
 
 	private List<AccountTrustExplanationData.ConfiguredLevel> buildConfiguredLevels(AccountRatingCategory category) {
@@ -582,7 +586,8 @@ public class AccountRatingsResource {
 		List<AccountTrustExplanationData.Requirement> requirements = new ArrayList<>();
 		long suspiciousScore = calculateCappedScore(impacts, AccountTrustPolicy.getSuspiciousLevelScoreCap(category));
 		long suspiciousThreshold = AccountTrustPolicy.getSuspiciousThreshold(category);
-		long negativeRaterCount = countNegativeImpacts(impacts, AccountTrustPolicy.getSuspiciousMinRatingConfidence());
+		long negativeRaterCount = countNegativeRaters(impacts, AccountTrustPolicy.getSuspiciousMinRatingConfidence());
+		long negativeBranchCount = countNegativeTrustBranches(impacts, AccountTrustPolicy.getSuspiciousMinRatingConfidence());
 
 		requirements.add(new AccountTrustExplanationData.Requirement("suspicious.threshold",
 				suspiciousScore <= suspiciousThreshold, Long.toString(suspiciousScore), Long.toString(suspiciousThreshold),
@@ -591,6 +596,10 @@ public class AccountRatingsResource {
 				negativeRaterCount >= AccountTrustPolicy.getSuspiciousMinRaterCount(), Long.toString(negativeRaterCount),
 				Long.toString(AccountTrustPolicy.getSuspiciousMinRaterCount()),
 				"Distinct negative raters must meet the configured minimum confidence."));
+		requirements.add(new AccountTrustExplanationData.Requirement("suspicious.independent-branches",
+				negativeBranchCount >= AccountTrustPolicy.getSuspiciousMinBranchCount(), Long.toString(negativeBranchCount),
+				Long.toString(AccountTrustPolicy.getSuspiciousMinBranchCount()),
+				"Distinct negative trust branches must meet the configured minimum confidence."));
 		requirements.add(new AccountTrustExplanationData.Requirement("positive.raw-score",
 				rawScore >= 0L, Long.toString(rawScore), ">= 0",
 				"Positive trust levels are only considered when raw score is non-negative."));
@@ -697,12 +706,25 @@ public class AccountRatingsResource {
 		return result;
 	}
 
-	private long countNegativeImpacts(List<AccountTrustCategoryImpactData> impacts, int minConfidence) {
+	private long countNegativeRaters(List<AccountTrustCategoryImpactData> impacts, int minConfidence) {
 		return impacts.stream()
 				.filter(impact -> impact.getRatingConfidence() >= minConfidence && impact.getImpact() < 0)
 				.map(AccountTrustCategoryImpactData::getRaterAddress)
 				.distinct()
 				.count();
+	}
+
+	private long countNegativeTrustBranches(List<AccountTrustCategoryImpactData> impacts, int minConfidence) {
+		Set<String> trustBranchKeys = new HashSet<>();
+		for (AccountTrustCategoryImpactData impact : impacts) {
+			if (impact.getRatingConfidence() < minConfidence || impact.getImpact() >= 0)
+				continue;
+
+			if (impact.getTrustBranchKeys() != null)
+				trustBranchKeys.addAll(impact.getTrustBranchKeys());
+		}
+
+		return trustBranchKeys.size();
 	}
 
 	private boolean hasPositiveImpact(List<AccountTrustCategoryImpactData> impacts, int minLevel, int minConfidence) {

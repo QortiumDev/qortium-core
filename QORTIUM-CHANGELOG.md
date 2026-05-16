@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-16 - core: require independent suspicious rating branches
+
+Changed Suspicious trust decisions so negative account-rating evidence must now come from enough independent trust branches as well as enough independent raters. Qortium now tracks the first positive Manager hop out of each Minting group seed as a trust branch, carries that branch through later positive trust, exposes branch counts in trust explanation data, and documents that same-branch negative raters can record evidence but cannot by themselves block another account from minting.
+
 ### 2026-05-15 - test: harden trust network policy scenarios
 
 Added regression tests for additional trust-network safety cases before changing the policy further. The new coverage locks that untrusted positive ratings do not create active trust score, low-confidence negative ratings do not make an account Suspicious even when raw negative score is large, and single qualified raters cannot lift Trainer or Player trust through the configured caps by themselves, while two qualified Manager raters can lift Trainer trust once capped support reaches the threshold.

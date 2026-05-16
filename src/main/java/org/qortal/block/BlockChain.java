@@ -216,6 +216,7 @@ public class BlockChain {
 		public long startingEnergy;
 		public int managerEnergyHops;
 		public int suspiciousMinRaterCount;
+		public int suspiciousMinBranchCount;
 		public int suspiciousMinRatingConfidence;
 		public List<StatusVoteWeightPercent> statusVoteWeightPercents;
 		public List<AccountTrustCategoryPolicy> categoryPolicies;
@@ -237,6 +238,10 @@ public class BlockChain {
 
 		public int getSuspiciousMinRaterCount() {
 			return this.suspiciousMinRaterCount;
+		}
+
+		public int getSuspiciousMinBranchCount() {
+			return this.suspiciousMinBranchCount;
 		}
 
 		public int getSuspiciousMinRatingConfidence() {
@@ -284,6 +289,11 @@ public class BlockChain {
 
 			if (this.suspiciousMinRaterCount <= 0)
 				Settings.throwValidationError("\"accountTrustSettings.suspiciousMinRaterCount\" must be greater than 0");
+
+			if (this.suspiciousMinBranchCount < 0)
+				Settings.throwValidationError("\"accountTrustSettings.suspiciousMinBranchCount\" must not be negative");
+			if (this.suspiciousMinBranchCount == 0)
+				this.suspiciousMinBranchCount = this.suspiciousMinRaterCount;
 
 			if (this.suspiciousMinRatingConfidence <= 0 || this.suspiciousMinRatingConfidence > 4)
 				Settings.throwValidationError("\"accountTrustSettings.suspiciousMinRatingConfidence\" must be between 1 and 4");

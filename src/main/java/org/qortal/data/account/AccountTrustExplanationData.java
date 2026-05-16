@@ -100,6 +100,7 @@ public class AccountTrustExplanationData {
 		private long suspiciousThreshold;
 		private long suspiciousLevelScoreCap;
 		private int suspiciousMinRaterCount;
+		private int suspiciousMinBranchCount;
 		private int suspiciousMinRatingConfidence;
 		private List<Requirement> requirements;
 		private List<AccountTrustCategoryImpactData> topPositiveImpacts;
@@ -111,8 +112,8 @@ public class AccountTrustExplanationData {
 		public CategoryExplanation(AccountRatingCategory category, long score, long levelScore, long levelScoreCap,
 				int level, AccountTrustStatus mappedTrustStatus, AccountTrustRatingCountsData inboundRatings,
 				List<ConfiguredLevel> configuredLevels, long suspiciousThreshold, long suspiciousLevelScoreCap,
-				int suspiciousMinRaterCount, int suspiciousMinRatingConfidence, List<Requirement> requirements,
-				List<AccountTrustCategoryImpactData> topPositiveImpacts,
+				int suspiciousMinRaterCount, int suspiciousMinBranchCount, int suspiciousMinRatingConfidence,
+				List<Requirement> requirements, List<AccountTrustCategoryImpactData> topPositiveImpacts,
 				List<AccountTrustCategoryImpactData> topNegativeImpacts) {
 			AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
 
@@ -129,6 +130,7 @@ public class AccountTrustExplanationData {
 			this.suspiciousThreshold = suspiciousThreshold;
 			this.suspiciousLevelScoreCap = suspiciousLevelScoreCap;
 			this.suspiciousMinRaterCount = suspiciousMinRaterCount;
+			this.suspiciousMinBranchCount = suspiciousMinBranchCount;
 			this.suspiciousMinRatingConfidence = suspiciousMinRatingConfidence;
 			this.requirements = requirements == null ? new ArrayList<>() : requirements;
 			this.topPositiveImpacts = topPositiveImpacts == null ? new ArrayList<>() : topPositiveImpacts;
@@ -185,6 +187,10 @@ public class AccountTrustExplanationData {
 
 		public int getSuspiciousMinRaterCount() {
 			return this.suspiciousMinRaterCount;
+		}
+
+		public int getSuspiciousMinBranchCount() {
+			return this.suspiciousMinBranchCount;
 		}
 
 		public int getSuspiciousMinRatingConfidence() {

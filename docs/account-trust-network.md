@@ -77,6 +77,8 @@ membership:
 - Manager energy starts from that seed set
 - positive Manager ratings move Manager energy through the graph for the
   configured number of hops
+- each first positive Manager hop out of a seed starts a trust branch that is
+  carried through later positive trust
 - final Manager score is used to score Trainer ratings
 - Trainer score is used to score Player ratings
 - Player score is used to score Subject ratings
@@ -84,7 +86,10 @@ membership:
 
 Raw scores remain visible for audit. Level decisions use configured caps so
 one evaluator cannot assign a positive level by itself. Suspicious decisions
-also require enough independent negative raters at the configured confidence.
+also require enough independent negative raters and enough independent trust
+branches at the configured confidence. This means two accounts from the same
+seed-derived branch can record negative evidence, but that same-branch evidence
+cannot by itself block another account from minting.
 
 If a trust-changing block is orphaned, the trust snapshot is refreshed back to
 the previous chain state.

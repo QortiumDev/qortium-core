@@ -48,6 +48,7 @@ public class AccountTrustPolicyTests extends Common {
 		assertEquals(4, AccountTrustPolicy.getManagerEnergyHops());
 		assertEquals(AccountRatingCategory.SUBJECT, AccountTrustPolicy.getActiveWeightCategory());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRaterCount());
+		assertEquals(2, AccountTrustPolicy.getSuspiciousMinBranchCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRatingConfidence());
 	}
 
@@ -117,6 +118,19 @@ public class AccountTrustPolicyTests extends Common {
 		assertEquals(-10_000_000L, decision.getLevelScore());
 		assertEquals(5_000_000L, decision.getLevelScoreCap());
 		assertEquals(AccountTrustStatus.SUSPICIOUS, AccountTrustPolicy.mapLevelToStatus(decision.getLevel()));
+	}
+
+	@Test
+	public void testTwoMediumNegativeImpactsFromSameBranchDoNotMakeSuspicious() {
+		AccountTrustPolicy.LevelDecision decision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				-256_000_000L, Arrays.asList(
+						impact("r1", 3, -2, -128_000_000L, "shared-branch"),
+						impact("r2", 3, -2, -128_000_000L, "shared-branch")));
+
+		assertEquals(0, decision.getLevel());
+		assertEquals(-10_000_000L, decision.getLevelScore());
+		assertEquals(5_000_000L, decision.getLevelScoreCap());
+		assertEquals(AccountTrustStatus.UNVERIFIED, AccountTrustPolicy.mapLevelToStatus(decision.getLevel()));
 	}
 
 	@Test
@@ -190,6 +204,29 @@ public class AccountTrustPolicyTests extends Common {
 	}
 
 	@Test
+	public void testCustomSuspiciousBranchCountChangesLevelDecision() throws Exception {
+		AccountTrustPolicy.LevelDecision defaultDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				-256_000_000L, Arrays.asList(
+						impact("r1", 3, -2, -128_000_000L),
+						impact("r2", 3, -2, -128_000_000L)));
+		assertEquals(-1, defaultDecision.getLevel());
+
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"suspiciousMinBranchCount\": 2",
+				"\"suspiciousMinBranchCount\": 3");
+		loadTemporaryConfig(config);
+
+		AccountTrustPolicy.LevelDecision customDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				-256_000_000L, Arrays.asList(
+						impact("r1", 3, -2, -128_000_000L),
+						impact("r2", 3, -2, -128_000_000L)));
+
+		assertEquals(0, customDecision.getLevel());
+		assertEquals(-10_000_000L, customDecision.getLevelScore());
+		assertEquals(5_000_000L, customDecision.getLevelScoreCap());
+	}
+
+	@Test
 	public void testTrustPolicyEndpointReflectsCustomConfig() throws Exception {
 		String config = replaceRequired(loadDefaultTestChainConfig(),
 				"{ \"status\": \"SILVER\", \"percent\": 50 }",
@@ -197,11 +234,15 @@ public class AccountTrustPolicyTests extends Common {
 		config = replaceRequired(config,
 				"{ \"level\": 1, \"threshold\": 1000000, \"cap\": 500000 }",
 				"{ \"level\": 1, \"threshold\": 600000, \"cap\": 300000 }");
+		config = replaceRequired(config,
+				"\"suspiciousMinBranchCount\": 2",
+				"\"suspiciousMinBranchCount\": 3");
 		loadTemporaryConfig(config);
 
 		AccountTrustPolicyData policy = new AccountRatingsResource().getAccountTrustPolicy();
 
 		assertEquals(75, findStatusVoteWeight(policy, AccountTrustStatus.SILVER).getVoteWeightPercent());
+		assertEquals(3, policy.getSuspiciousMinBranchCount());
 		AccountTrustPolicyData.LevelPolicy playerLevelOne = findLevelPolicy(
 				findCategoryPolicy(policy, AccountRatingCategory.PLAYER), 1);
 		assertEquals(600_000L, playerLevelOne.getThreshold());
@@ -250,6 +291,15 @@ public class AccountTrustPolicyTests extends Common {
 		assertInvalidConfig(config, "Account trust suspicious threshold must be negative");
 	}
 
+	@Test
+	public void testInvalidSuspiciousBranchCountRejected() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"suspiciousMinBranchCount\": 2",
+				"\"suspiciousMinBranchCount\": -1");
+
+		assertInvalidConfig(config, "\"accountTrustSettings.suspiciousMinBranchCount\" must not be negative");
+	}
+
 	private static void assertThresholdAndCap(AccountRatingCategory category, int level, long expectedThreshold,
 			long expectedCap) {
 		assertEquals(expectedThreshold, AccountTrustPolicy.getLevelThreshold(category, level));
@@ -258,7 +308,13 @@ public class AccountTrustPolicyTests extends Common {
 
 	private static AccountTrustCategoryImpactData impact(String raterAddress, int evaluatorLevel, int rating,
 			long impact) {
-		return new AccountTrustCategoryImpactData(null, raterAddress, evaluatorLevel, 0L, rating, impact);
+		return impact(raterAddress, evaluatorLevel, rating, impact, raterAddress + "-branch");
+	}
+
+	private static AccountTrustCategoryImpactData impact(String raterAddress, int evaluatorLevel, int rating,
+			long impact, String... trustBranchKeys) {
+		return new AccountTrustCategoryImpactData(null, raterAddress, evaluatorLevel, 0L, rating, impact,
+				Arrays.asList(trustBranchKeys));
 	}
 
 	private static AccountTrustPolicyData.StatusVoteWeight findStatusVoteWeight(AccountTrustPolicyData policy,

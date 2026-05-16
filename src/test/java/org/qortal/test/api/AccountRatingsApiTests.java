@@ -202,6 +202,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(1_000_000L, policy.getStartingEnergy());
 		assertEquals(4, policy.getManagerEnergyHops());
 		assertEquals(2, policy.getSuspiciousMinRaterCount());
+		assertEquals(2, policy.getSuspiciousMinBranchCount());
 		assertEquals(2, policy.getSuspiciousMinRatingConfidence());
 		assertEquals(AccountTrustStatus.values().length, policy.getStatusVoteWeights().size());
 		assertEquals(AccountRatingCategory.values().length, policy.getCategoryPolicies().size());
@@ -615,6 +616,8 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(1, subject.getTopNegativeImpacts().size());
 		assertEquals(bob.getAddress(), subject.getTopNegativeImpacts().get(0).getRaterAddress());
 		assertEquals(-512_000_000L, subject.getTopNegativeImpacts().get(0).getImpact());
+		assertEquals(2, subject.getSuspiciousMinBranchCount());
+		assertEquals(2, subject.getTopNegativeImpacts().get(0).getTrustBranchCount());
 
 		AccountTrustExplanationData.Requirement suspiciousThreshold = findRequirement(subject, "suspicious.threshold");
 		assertFalse(suspiciousThreshold.isPassed());
@@ -625,6 +628,12 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertFalse(suspiciousRaters.isPassed());
 		assertEquals("1", suspiciousRaters.getActual());
 		assertEquals("2", suspiciousRaters.getRequired());
+
+		AccountTrustExplanationData.Requirement suspiciousBranches = findRequirement(subject,
+				"suspicious.independent-branches");
+		assertTrue(suspiciousBranches.isPassed());
+		assertEquals("2", suspiciousBranches.getActual());
+		assertEquals("2", suspiciousBranches.getRequired());
 	}
 
 	@Test
@@ -661,6 +670,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(-1, subject.getLevel());
 		assertEquals(AccountTrustStatus.SUSPICIOUS, subject.getMappedTrustStatus());
 		assertEquals(2, subject.getTopNegativeImpacts().size());
+		assertEquals(2, subject.getSuspiciousMinBranchCount());
 
 		AccountTrustExplanationData.Requirement suspiciousThreshold = findRequirement(subject, "suspicious.threshold");
 		assertTrue(suspiciousThreshold.isPassed());
@@ -671,6 +681,12 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertTrue(suspiciousRaters.isPassed());
 		assertEquals("2", suspiciousRaters.getActual());
 		assertEquals("2", suspiciousRaters.getRequired());
+
+		AccountTrustExplanationData.Requirement suspiciousBranches = findRequirement(subject,
+				"suspicious.independent-branches");
+		assertTrue(suspiciousBranches.isPassed());
+		assertEquals("4", suspiciousBranches.getActual());
+		assertEquals("2", suspiciousBranches.getRequired());
 	}
 
 	@Test

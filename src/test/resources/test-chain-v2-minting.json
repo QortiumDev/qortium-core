@@ -11,6 +11,7 @@
 		"startingEnergy": 1000000,
 		"managerEnergyHops": 4,
 		"suspiciousMinRaterCount": 2,
+		"suspiciousMinBranchCount": 2,
 		"suspiciousMinRatingConfidence": 2,
 		"statusVoteWeightPercents": [
 			{ "status": "SUSPICIOUS", "percent": 0 },
