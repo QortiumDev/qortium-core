@@ -96,6 +96,31 @@ public class AccountTrustGraphBehaviorTests extends Common {
 	}
 
 	@Test
+	public void testUntrustedPositiveSubjectRatingDoesNotAddScore() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount untrustedRater = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount subject = Common.generateRandomSeedAccount(repository);
+
+			ensureKnownAccount(repository, untrustedRater);
+			ensureKnownAccount(repository, subject);
+
+			saveAccountRating(repository, untrustedRater, subject, AccountRatingCategory.SUBJECT, 4);
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData subjectSnapshot = findSnapshot(repository, subject.getAddress(),
+					AccountRatingCategory.SUBJECT);
+
+			assertEquals("Untrusted positive Subject ratings should remain visible as inbound evidence",
+					1, subjectSnapshot.getInboundRatings().getPositiveVeryHighCount());
+			assertEquals("Untrusted positive Subject ratings should not add active score",
+					0L, subjectSnapshot.getScore());
+			assertEquals(0, subjectSnapshot.getLevelScore());
+			assertEquals(0, subjectSnapshot.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, subjectSnapshot.getMappedTrustStatus());
+		}
+	}
+
+	@Test
 	public void testSingleTrustedNegativeSubjectRatingDoesNotMakeTargetSuspicious() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
@@ -130,6 +155,44 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			assertEquals(0, aliceSubjectAfter.getLevel());
 			assertEquals(AccountTrustStatus.UNVERIFIED, aliceSubjectAfter.getMappedTrustStatus());
 			assertTrue("One trusted negative rating should not block mint eligibility",
+					new Account(repository, alice.getAddress()).canMint(false));
+		}
+	}
+
+	@Test
+	public void testLowConfidenceTrustedNegativeSubjectRatingsDoNotMakeTargetSuspicious() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, dilbert);
+
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, bob);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, dilbert);
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData bobPlayer = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.PLAYER);
+			AccountTrustSnapshotData dilbertPlayer = findSnapshot(repository, dilbert.getAddress(),
+					AccountRatingCategory.PLAYER);
+			assertEquals(AccountTrustStatus.GOLD, bobPlayer.getMappedTrustStatus());
+			assertEquals(AccountTrustStatus.GOLD, dilbertPlayer.getMappedTrustStatus());
+
+			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingCategory.SUBJECT, -1), bob);
+			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, -1),
+					dilbert);
+
+			AccountTrustSnapshotData aliceSubject = findSnapshot(repository, alice.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertEquals(-128_000_000L, aliceSubject.getScore());
+			assertEquals(-10_000_000L, aliceSubject.getLevelScore());
+			assertEquals(5_000_000L, aliceSubject.getLevelScoreCap());
+			assertEquals(0, aliceSubject.getLevel());
+			assertEquals("Low-confidence negative ratings should not meet the Suspicious rater requirement",
+					AccountTrustStatus.UNVERIFIED, aliceSubject.getMappedTrustStatus());
+			assertTrue("Low-confidence negative ratings should not block mint eligibility",
 					new Account(repository, alice.getAddress()).canMint(false));
 		}
 	}
@@ -324,6 +387,105 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			assertEquals(AccountTrustStatus.SUSPICIOUS, subjectAfterOrphan.getMappedTrustStatus());
 			assertFalse("Orphaning the removal should restore Suspicious mint blocking",
 					AccountTrustWeight.canMint(subjectAfterOrphan));
+		}
+	}
+
+	@Test
+	public void testSinglePositiveTrainerImpactDoesNotQualifyThroughCap() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			PrivateKeyAccount trainerTarget = Common.generateRandomSeedAccount(repository);
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, trainerTarget);
+			AccountTrustTestUtils.saveDerivedManagerLevelTwoRatings(repository, alice, Arrays.asList(bob));
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData bobManager = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.MANAGER);
+			assertEquals(AccountTrustStatus.SILVER, bobManager.getMappedTrustStatus());
+
+			saveAccountRating(repository, bob, trainerTarget, AccountRatingCategory.TRAINER, 4);
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData trainerSnapshot = findSnapshot(repository, trainerTarget.getAddress(),
+					AccountRatingCategory.TRAINER);
+			assertEquals(4_000_000L, trainerSnapshot.getScore());
+			assertEquals(250_000L, trainerSnapshot.getLevelScore());
+			assertEquals(250_000L, trainerSnapshot.getLevelScoreCap());
+			assertEquals(0, trainerSnapshot.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, trainerSnapshot.getMappedTrustStatus());
+		}
+	}
+
+	@Test
+	public void testTwoPositiveTrainerImpactsQualifyThroughCap() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+			PrivateKeyAccount trainerTarget = Common.generateRandomSeedAccount(repository);
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, dilbert);
+			ensureKnownAccount(repository, trainerTarget);
+			AccountTrustTestUtils.saveDerivedManagerLevelTwoRatings(repository, alice, Arrays.asList(bob, dilbert));
+
+			saveAccountRating(repository, bob, trainerTarget, AccountRatingCategory.TRAINER, 1);
+			saveAccountRating(repository, dilbert, trainerTarget, AccountRatingCategory.TRAINER, 1);
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData bobManager = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.MANAGER);
+			AccountTrustSnapshotData dilbertManager = findSnapshot(repository, dilbert.getAddress(),
+					AccountRatingCategory.MANAGER);
+			assertEquals(AccountTrustStatus.SILVER, bobManager.getMappedTrustStatus());
+			assertEquals(AccountTrustStatus.SILVER, dilbertManager.getMappedTrustStatus());
+
+			AccountTrustSnapshotData trainerSnapshot = findSnapshot(repository, trainerTarget.getAddress(),
+					AccountRatingCategory.TRAINER);
+			assertEquals(2_000_000L, trainerSnapshot.getScore());
+			assertEquals(1_000_000L, trainerSnapshot.getLevelScore());
+			assertEquals(500_000L, trainerSnapshot.getLevelScoreCap());
+			assertEquals(2, trainerSnapshot.getLevel());
+			assertEquals(AccountTrustStatus.SILVER, trainerSnapshot.getMappedTrustStatus());
+		}
+	}
+
+	@Test
+	public void testSinglePositivePlayerImpactDoesNotQualifyThroughCap() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+			PrivateKeyAccount trainerRater = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount playerTarget = Common.generateRandomSeedAccount(repository);
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, dilbert);
+			ensureKnownAccount(repository, trainerRater);
+			ensureKnownAccount(repository, playerTarget);
+			AccountTrustTestUtils.saveDerivedManagerLevelTwoRatings(repository, alice, Arrays.asList(bob, dilbert));
+			saveAccountRating(repository, bob, trainerRater, AccountRatingCategory.TRAINER, 1);
+			saveAccountRating(repository, dilbert, trainerRater, AccountRatingCategory.TRAINER, 1);
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData trainerRaterSnapshot = findSnapshot(repository, trainerRater.getAddress(),
+					AccountRatingCategory.TRAINER);
+			assertEquals(AccountTrustStatus.SILVER, trainerRaterSnapshot.getMappedTrustStatus());
+
+			saveAccountRating(repository, trainerRater, playerTarget, AccountRatingCategory.PLAYER, 4);
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData playerSnapshot = findSnapshot(repository, playerTarget.getAddress(),
+					AccountRatingCategory.PLAYER);
+			assertEquals(8_000_000L, playerSnapshot.getScore());
+			assertEquals(500_000L, playerSnapshot.getLevelScore());
+			assertEquals(500_000L, playerSnapshot.getLevelScoreCap());
+			assertEquals(0, playerSnapshot.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, playerSnapshot.getMappedTrustStatus());
 		}
 	}
 

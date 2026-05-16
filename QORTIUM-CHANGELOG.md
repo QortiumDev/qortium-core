@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - test: harden trust network policy scenarios
+
+Added regression tests for additional trust-network safety cases before changing the policy further. The new coverage locks that untrusted positive ratings do not create active trust score, low-confidence negative ratings do not make an account Suspicious even when raw negative score is large, and single qualified raters cannot lift Trainer or Player trust through the configured caps by themselves, while two qualified Manager raters can lift Trainer trust once capped support reaches the threshold.
+
 ### 2026-05-15 - api: add trust network summary endpoint
 
 Added a read-only trust network summary API that lets clients inspect the stored account trust graph without fetching every snapshot row. The summary reports active Subject status counts, minting seed counts, minting allowance counts, raw `blocksMinted` weight, effective trust-weighted vote influence, snapshot metadata, and per-category status counts so explorers and governance tools can show network health more efficiently while leaving trust scoring, minting, voting, ratings, and transactions unchanged.
