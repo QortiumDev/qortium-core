@@ -84,12 +84,13 @@ membership:
 - Player score is used to score Subject ratings
 - Subject level maps to Gold, Silver, Bronze, Unverified, or Suspicious
 
-Raw scores remain visible for audit. Level decisions use configured caps so
-one evaluator cannot assign a positive level by itself. Suspicious decisions
-also require enough independent negative raters and enough independent trust
-branches at the configured confidence. This means two accounts from the same
-seed-derived branch can record negative evidence, but that same-branch evidence
-cannot by itself block another account from minting.
+Raw scores remain visible for audit. Positive level decisions use configured
+caps and independent trust-branch requirements so one evaluator or one
+seed-derived branch cannot assign a positive level by itself. Suspicious
+decisions also require enough independent negative raters and enough
+independent trust branches at the configured confidence. This means accounts
+from the same seed-derived branch can record evidence, but that same-branch
+evidence cannot by itself lift or block another account.
 
 If a trust-changing block is orphaned, the trust snapshot is refreshed back to
 the previous chain state.
@@ -170,6 +171,7 @@ The configurable policy includes:
 - the active category used for voting and minting weight
 - the starting Manager energy
 - the number of Manager energy hops
+- the minimum independent positive branches needed for positive trust levels
 - Gold, Silver, Bronze, Unverified, and Suspicious vote multipliers
 - per-category level thresholds
 - per-category per-rating caps

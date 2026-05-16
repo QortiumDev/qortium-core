@@ -178,6 +178,9 @@ derivation APIs:
 - positive level decisions cap each evaluator's impact at half of the target
   level threshold; this means one evaluator cannot satisfy a positive level by
   itself, while raw score and raw impact remain available for audit
+- positive level decisions also require at least two independent seed-derived
+  trust branches, so same-branch raters cannot lift an account into a positive
+  trust tier by themselves
 - negative/Suspicious decisions use the same signed capped decision score, with
   Suspicious requiring at least two independent medium-confidence negative
   raters and at least two independent seed-derived trust branches before raw
@@ -189,9 +192,10 @@ derivation APIs:
 - broad outbound positive-rating budgeting beyond Aura's Manager energy flow
   remains a possible future Qortium-specific policy decision, but it is not
   part of the current Aura-parity scoring model
-- the implemented thresholds, per-rating caps, Suspicious requirements, seed
-  energy, manager hop count, active Subject weighting category, and vote
-  multipliers are chain-configurable through `accountTrustSettings`
+- the implemented thresholds, per-rating caps, positive and Suspicious branch
+  requirements, seed energy, manager hop count, active Subject weighting
+  category, and vote multipliers are chain-configurable through
+  `accountTrustSettings`
 - the Subject level is mapped back to Qortium's simple Gold, Silver, Bronze,
   Unverified, and Suspicious statuses as a derived status
 - the older inbound/outbound confidence counts, mutual positive relationships,
@@ -365,6 +369,9 @@ The first implementation should cover at least these cases:
 - positive category levels require enough independent capped impact to reach
   their thresholds, preventing a single high-score evaluator from assigning a
   positive level by itself.
+- positive category levels also require enough independent trust branches,
+  preventing same-branch positive raters from assigning a positive level by
+  themselves.
 - Suspicious category decisions also require enough independent capped negative
   impact to reach their thresholds, preventing a single high-score evaluator
   from assigning Suspicious status by itself.

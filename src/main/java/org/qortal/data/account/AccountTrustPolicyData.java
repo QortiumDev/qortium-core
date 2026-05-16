@@ -11,6 +11,7 @@ public class AccountTrustPolicyData {
 	private AccountRatingCategory activeWeightCategory;
 	private long startingEnergy;
 	private int managerEnergyHops;
+	private int positiveMinBranchCount;
 	private int suspiciousMinRaterCount;
 	private int suspiciousMinBranchCount;
 	private int suspiciousMinRatingConfidence;
@@ -21,11 +22,13 @@ public class AccountTrustPolicyData {
 	}
 
 	public AccountTrustPolicyData(AccountRatingCategory activeWeightCategory, long startingEnergy, int managerEnergyHops,
-			int suspiciousMinRaterCount, int suspiciousMinBranchCount, int suspiciousMinRatingConfidence,
-			List<StatusVoteWeight> statusVoteWeights, List<CategoryPolicy> categoryPolicies) {
+			int positiveMinBranchCount, int suspiciousMinRaterCount, int suspiciousMinBranchCount,
+			int suspiciousMinRatingConfidence, List<StatusVoteWeight> statusVoteWeights,
+			List<CategoryPolicy> categoryPolicies) {
 		this.activeWeightCategory = activeWeightCategory == null ? AccountRatingCategory.SUBJECT : activeWeightCategory;
 		this.startingEnergy = startingEnergy;
 		this.managerEnergyHops = managerEnergyHops;
+		this.positiveMinBranchCount = positiveMinBranchCount;
 		this.suspiciousMinRaterCount = suspiciousMinRaterCount;
 		this.suspiciousMinBranchCount = suspiciousMinBranchCount;
 		this.suspiciousMinRatingConfidence = suspiciousMinRatingConfidence;
@@ -43,6 +46,10 @@ public class AccountTrustPolicyData {
 
 	public int getManagerEnergyHops() {
 		return this.managerEnergyHops;
+	}
+
+	public int getPositiveMinBranchCount() {
+		return this.positiveMinBranchCount;
 	}
 
 	public int getSuspiciousMinRaterCount() {

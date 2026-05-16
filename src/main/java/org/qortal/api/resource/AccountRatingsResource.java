@@ -394,9 +394,9 @@ public class AccountRatingsResource {
 			categoryPolicies.add(buildTrustCategoryPolicy(category));
 
 		return new AccountTrustPolicyData(AccountTrustPolicy.getActiveWeightCategory(), AccountTrustPolicy.getStartingEnergy(),
-				AccountTrustPolicy.getManagerEnergyHops(), AccountTrustPolicy.getSuspiciousMinRaterCount(),
-				AccountTrustPolicy.getSuspiciousMinBranchCount(), AccountTrustPolicy.getSuspiciousMinRatingConfidence(),
-				statusVoteWeights, categoryPolicies);
+				AccountTrustPolicy.getManagerEnergyHops(), AccountTrustPolicy.getPositiveMinBranchCount(),
+				AccountTrustPolicy.getSuspiciousMinRaterCount(), AccountTrustPolicy.getSuspiciousMinBranchCount(),
+				AccountTrustPolicy.getSuspiciousMinRatingConfidence(), statusVoteWeights, categoryPolicies);
 	}
 
 	private AccountTrustPolicyData.CategoryPolicy buildTrustCategoryPolicy(AccountRatingCategory category) {
@@ -566,9 +566,9 @@ public class AccountRatingsResource {
 				categoryTrust.getLevelScore(), categoryTrust.getLevelScoreCap(), categoryTrust.getLevel(),
 				categoryTrust.getMappedTrustStatus(), categoryTrust.getInboundRatings(), configuredLevels,
 				AccountTrustPolicy.getSuspiciousThreshold(category), AccountTrustPolicy.getSuspiciousLevelScoreCap(category),
-				AccountTrustPolicy.getSuspiciousMinRaterCount(), AccountTrustPolicy.getSuspiciousMinBranchCount(),
-				AccountTrustPolicy.getSuspiciousMinRatingConfidence(), requirements, getTopImpacts(impacts, true),
-				getTopImpacts(impacts, false));
+				AccountTrustPolicy.getPositiveMinBranchCount(), AccountTrustPolicy.getSuspiciousMinRaterCount(),
+				AccountTrustPolicy.getSuspiciousMinBranchCount(), AccountTrustPolicy.getSuspiciousMinRatingConfidence(),
+				requirements, getTopImpacts(impacts, true), getTopImpacts(impacts, false));
 	}
 
 	private List<AccountTrustExplanationData.ConfiguredLevel> buildConfiguredLevels(AccountRatingCategory category) {
@@ -608,10 +608,15 @@ public class AccountRatingsResource {
 			long cap = AccountTrustPolicy.getLevelScoreCap(category, level);
 			long levelScore = calculateCappedScore(impacts, cap);
 			long threshold = AccountTrustPolicy.getLevelThreshold(category, level);
+			long positiveBranchCount = countPositiveTrustBranches(impacts);
 
 			requirements.add(new AccountTrustExplanationData.Requirement("level." + level + ".threshold",
 					levelScore >= threshold, Long.toString(levelScore), Long.toString(threshold),
 					"Capped score must reach this level's threshold."));
+			requirements.add(new AccountTrustExplanationData.Requirement("level." + level + ".independent-branches",
+					positiveBranchCount >= AccountTrustPolicy.getPositiveMinBranchCount(),
+					Long.toString(positiveBranchCount), Long.toString(AccountTrustPolicy.getPositiveMinBranchCount()),
+					"Distinct positive trust branches must meet the configured minimum."));
 
 			AccountTrustExplanationData.Requirement supportRequirement = buildPositiveSupportRequirement(category, level, impacts);
 			if (supportRequirement != null)
@@ -718,6 +723,19 @@ public class AccountRatingsResource {
 		Set<String> trustBranchKeys = new HashSet<>();
 		for (AccountTrustCategoryImpactData impact : impacts) {
 			if (impact.getRatingConfidence() < minConfidence || impact.getImpact() >= 0)
+				continue;
+
+			if (impact.getTrustBranchKeys() != null)
+				trustBranchKeys.addAll(impact.getTrustBranchKeys());
+		}
+
+		return trustBranchKeys.size();
+	}
+
+	private long countPositiveTrustBranches(List<AccountTrustCategoryImpactData> impacts) {
+		Set<String> trustBranchKeys = new HashSet<>();
+		for (AccountTrustCategoryImpactData impact : impacts) {
+			if (impact.getImpact() <= 0)
 				continue;
 
 			if (impact.getTrustBranchKeys() != null)

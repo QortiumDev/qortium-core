@@ -47,6 +47,7 @@ public class AccountTrustPolicyTests extends Common {
 		assertEquals(1_000_000L, AccountTrustPolicy.getStartingEnergy());
 		assertEquals(4, AccountTrustPolicy.getManagerEnergyHops());
 		assertEquals(AccountRatingCategory.SUBJECT, AccountTrustPolicy.getActiveWeightCategory());
+		assertEquals(2, AccountTrustPolicy.getPositiveMinBranchCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRaterCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinBranchCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRatingConfidence());
@@ -171,6 +172,19 @@ public class AccountTrustPolicyTests extends Common {
 	}
 
 	@Test
+	public void testTwoPositiveImpactsFromSameBranchDoNotQualifyThroughBranchRequirement() {
+		AccountTrustPolicy.LevelDecision decision = AccountTrustPolicy.decideLevel(AccountRatingCategory.MANAGER,
+				1_000_000L, Arrays.asList(
+						impact("r1", 0, 1, 500_000L, "shared-branch"),
+						impact("r2", 0, 1, 500_000L, "shared-branch")));
+
+		assertEquals(0, decision.getLevel());
+		assertEquals(1_000L, decision.getLevelScore());
+		assertEquals(500L, decision.getLevelScoreCap());
+		assertEquals(AccountTrustStatus.UNVERIFIED, AccountTrustPolicy.mapLevelToStatus(decision.getLevel()));
+	}
+
+	@Test
 	public void testCustomVoteWeightPolicyChangesEffectiveWeight() throws Exception {
 		String config = replaceRequired(loadDefaultTestChainConfig(),
 				"{ \"status\": \"SILVER\", \"percent\": 50 }",
@@ -201,6 +215,29 @@ public class AccountTrustPolicyTests extends Common {
 		assertEquals(1, customDecision.getLevel());
 		assertEquals(600_000L, customDecision.getLevelScore());
 		assertEquals(300_000L, customDecision.getLevelScoreCap());
+	}
+
+	@Test
+	public void testCustomPositiveBranchCountChangesLevelDecision() throws Exception {
+		AccountTrustPolicy.LevelDecision defaultDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.MANAGER,
+				1_000_000L, Arrays.asList(
+						impact("r1", 0, 1, 500_000L),
+						impact("r2", 0, 1, 500_000L)));
+		assertEquals(2, defaultDecision.getLevel());
+
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"positiveMinBranchCount\": 2",
+				"\"positiveMinBranchCount\": 3");
+		loadTemporaryConfig(config);
+
+		AccountTrustPolicy.LevelDecision customDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.MANAGER,
+				1_000_000L, Arrays.asList(
+						impact("r1", 0, 1, 500_000L),
+						impact("r2", 0, 1, 500_000L)));
+
+		assertEquals(0, customDecision.getLevel());
+		assertEquals(1_000L, customDecision.getLevelScore());
+		assertEquals(500L, customDecision.getLevelScoreCap());
 	}
 
 	@Test
@@ -235,6 +272,9 @@ public class AccountTrustPolicyTests extends Common {
 				"{ \"level\": 1, \"threshold\": 1000000, \"cap\": 500000 }",
 				"{ \"level\": 1, \"threshold\": 600000, \"cap\": 300000 }");
 		config = replaceRequired(config,
+				"\"positiveMinBranchCount\": 2",
+				"\"positiveMinBranchCount\": 3");
+		config = replaceRequired(config,
 				"\"suspiciousMinBranchCount\": 2",
 				"\"suspiciousMinBranchCount\": 3");
 		loadTemporaryConfig(config);
@@ -242,6 +282,7 @@ public class AccountTrustPolicyTests extends Common {
 		AccountTrustPolicyData policy = new AccountRatingsResource().getAccountTrustPolicy();
 
 		assertEquals(75, findStatusVoteWeight(policy, AccountTrustStatus.SILVER).getVoteWeightPercent());
+		assertEquals(3, policy.getPositiveMinBranchCount());
 		assertEquals(3, policy.getSuspiciousMinBranchCount());
 		AccountTrustPolicyData.LevelPolicy playerLevelOne = findLevelPolicy(
 				findCategoryPolicy(policy, AccountRatingCategory.PLAYER), 1);
@@ -289,6 +330,15 @@ public class AccountTrustPolicyTests extends Common {
 				"\"suspiciousThreshold\": 1000");
 
 		assertInvalidConfig(config, "Account trust suspicious threshold must be negative");
+	}
+
+	@Test
+	public void testInvalidPositiveBranchCountRejected() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"positiveMinBranchCount\": 2",
+				"\"positiveMinBranchCount\": 0");
+
+		assertInvalidConfig(config, "\"accountTrustSettings.positiveMinBranchCount\" must be greater than 0");
 	}
 
 	@Test

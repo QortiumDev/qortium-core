@@ -215,6 +215,7 @@ public class BlockChain {
 		public AccountRatingCategory activeWeightCategory;
 		public long startingEnergy;
 		public int managerEnergyHops;
+		public int positiveMinBranchCount;
 		public int suspiciousMinRaterCount;
 		public int suspiciousMinBranchCount;
 		public int suspiciousMinRatingConfidence;
@@ -234,6 +235,10 @@ public class BlockChain {
 
 		public int getManagerEnergyHops() {
 			return this.managerEnergyHops;
+		}
+
+		public int getPositiveMinBranchCount() {
+			return this.positiveMinBranchCount;
 		}
 
 		public int getSuspiciousMinRaterCount() {
@@ -286,6 +291,9 @@ public class BlockChain {
 
 			if (this.managerEnergyHops <= 0)
 				Settings.throwValidationError("\"accountTrustSettings.managerEnergyHops\" must be greater than 0");
+
+			if (this.positiveMinBranchCount <= 0)
+				Settings.throwValidationError("\"accountTrustSettings.positiveMinBranchCount\" must be greater than 0");
 
 			if (this.suspiciousMinRaterCount <= 0)
 				Settings.throwValidationError("\"accountTrustSettings.suspiciousMinRaterCount\" must be greater than 0");

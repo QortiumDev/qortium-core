@@ -97,6 +97,7 @@ public class AccountTrustExplanationData {
 		private int mappedTrustWeightPercent;
 		private AccountTrustRatingCountsData inboundRatings;
 		private List<ConfiguredLevel> configuredLevels;
+		private int positiveMinBranchCount;
 		private long suspiciousThreshold;
 		private long suspiciousLevelScoreCap;
 		private int suspiciousMinRaterCount;
@@ -112,9 +113,9 @@ public class AccountTrustExplanationData {
 		public CategoryExplanation(AccountRatingCategory category, long score, long levelScore, long levelScoreCap,
 				int level, AccountTrustStatus mappedTrustStatus, AccountTrustRatingCountsData inboundRatings,
 				List<ConfiguredLevel> configuredLevels, long suspiciousThreshold, long suspiciousLevelScoreCap,
-				int suspiciousMinRaterCount, int suspiciousMinBranchCount, int suspiciousMinRatingConfidence,
-				List<Requirement> requirements, List<AccountTrustCategoryImpactData> topPositiveImpacts,
-				List<AccountTrustCategoryImpactData> topNegativeImpacts) {
+				int positiveMinBranchCount, int suspiciousMinRaterCount, int suspiciousMinBranchCount,
+				int suspiciousMinRatingConfidence, List<Requirement> requirements,
+				List<AccountTrustCategoryImpactData> topPositiveImpacts, List<AccountTrustCategoryImpactData> topNegativeImpacts) {
 			AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
 
 			this.category = category == null ? AccountRatingCategory.SUBJECT : category;
@@ -127,6 +128,7 @@ public class AccountTrustExplanationData {
 			this.mappedTrustWeightPercent = effectiveMappedStatus.getVoteWeightPercent();
 			this.inboundRatings = inboundRatings == null ? new AccountTrustRatingCountsData() : inboundRatings;
 			this.configuredLevels = configuredLevels == null ? new ArrayList<>() : configuredLevels;
+			this.positiveMinBranchCount = positiveMinBranchCount;
 			this.suspiciousThreshold = suspiciousThreshold;
 			this.suspiciousLevelScoreCap = suspiciousLevelScoreCap;
 			this.suspiciousMinRaterCount = suspiciousMinRaterCount;
@@ -175,6 +177,10 @@ public class AccountTrustExplanationData {
 
 		public List<ConfiguredLevel> getConfiguredLevels() {
 			return this.configuredLevels;
+		}
+
+		public int getPositiveMinBranchCount() {
+			return this.positiveMinBranchCount;
 		}
 
 		public long getSuspiciousThreshold() {

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-16 - core: require independent positive rating branches
+
+Changed positive trust level decisions so accounts need enough independent trust branches as well as enough capped score before they can become Bronze, Silver, or Gold. Qortium now exposes the positive branch requirement in trust policy and explanation data, keeps same-branch positive rating evidence visible as raw score, and documents that same-branch raters cannot by themselves lift another account into a positive trust tier.
+
 ### 2026-05-16 - core: require independent suspicious rating branches
 
 Changed Suspicious trust decisions so negative account-rating evidence must now come from enough independent trust branches as well as enough independent raters. Qortium now tracks the first positive Manager hop out of each Minting group seed as a trust branch, carries that branch through later positive trust, exposes branch counts in trust explanation data, and documents that same-branch negative raters can record evidence but cannot by themselves block another account from minting.

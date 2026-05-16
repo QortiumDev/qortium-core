@@ -201,6 +201,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(AccountRatingCategory.SUBJECT, policy.getActiveWeightCategory());
 		assertEquals(1_000_000L, policy.getStartingEnergy());
 		assertEquals(4, policy.getManagerEnergyHops());
+		assertEquals(2, policy.getPositiveMinBranchCount());
 		assertEquals(2, policy.getSuspiciousMinRaterCount());
 		assertEquals(2, policy.getSuspiciousMinBranchCount());
 		assertEquals(2, policy.getSuspiciousMinRatingConfidence());
@@ -565,9 +566,11 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(2, storedSubject.getLevel());
 		assertEquals(AccountTrustStatus.SILVER, storedSubject.getMappedTrustStatus());
 		assertEquals(4, storedSubject.getConfiguredLevels().size());
+		assertEquals(2, storedSubject.getPositiveMinBranchCount());
 		assertEquals(50_000_000L, findConfiguredLevel(storedSubject, 2).getThreshold());
 		assertEquals(25_000_000L, findConfiguredLevel(storedSubject, 2).getLevelScoreCap());
 		assertTrue(findRequirement(storedSubject, "level.2.threshold").isPassed());
+		assertTrue(findRequirement(storedSubject, "level.2.independent-branches").isPassed());
 		assertTrue(findRequirement(storedSubject, "level.2.positive-support").isPassed());
 		assertFalse(findRequirement(storedSubject, "level.3.threshold").isPassed());
 		assertFalse(storedSubject.getTopPositiveImpacts().isEmpty());

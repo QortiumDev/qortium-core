@@ -101,6 +101,10 @@ public final class AccountTrustPolicy {
 		return settings().getSuspiciousMinRaterCount();
 	}
 
+	public static int getPositiveMinBranchCount() {
+		return settings().getPositiveMinBranchCount();
+	}
+
 	public static int getSuspiciousMinBranchCount() {
 		return settings().getSuspiciousMinBranchCount();
 	}
@@ -111,11 +115,13 @@ public final class AccountTrustPolicy {
 
 	private static LevelDecision calculateManagerLevel(List<AccountTrustCategoryImpactData> impacts) {
 		LevelDecision level2 = decisionForLevel(AccountRatingCategory.MANAGER, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.MANAGER, 2))
+		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.MANAGER, 2)
+				&& meetsPositiveBranchRequirement(impacts))
 			return level2;
 
 		LevelDecision level1 = decisionForLevel(AccountRatingCategory.MANAGER, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.MANAGER, 1))
+		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.MANAGER, 1)
+				&& meetsPositiveBranchRequirement(impacts))
 			return level1;
 
 		return zeroLevelDecision(AccountRatingCategory.MANAGER, impacts);
@@ -123,11 +129,13 @@ public final class AccountTrustPolicy {
 
 	private static LevelDecision calculateTrainerLevel(List<AccountTrustCategoryImpactData> impacts) {
 		LevelDecision level2 = decisionForLevel(AccountRatingCategory.TRAINER, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.TRAINER, 2))
+		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.TRAINER, 2)
+				&& meetsPositiveBranchRequirement(impacts))
 			return level2;
 
 		LevelDecision level1 = decisionForLevel(AccountRatingCategory.TRAINER, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.TRAINER, 1))
+		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.TRAINER, 1)
+				&& meetsPositiveBranchRequirement(impacts))
 			return level1;
 
 		return zeroLevelDecision(AccountRatingCategory.TRAINER, impacts);
@@ -136,15 +144,18 @@ public final class AccountTrustPolicy {
 	private static LevelDecision calculatePlayerLevel(List<AccountTrustCategoryImpactData> impacts) {
 		LevelDecision level3 = decisionForLevel(AccountRatingCategory.PLAYER, 3, impacts);
 		if (level3.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 3)
+				&& meetsPositiveBranchRequirement(impacts)
 				&& (hasImpact(impacts, 2, 3) || countImpacts(impacts, 2, 2) >= 2))
 			return level3;
 
 		LevelDecision level2 = decisionForLevel(AccountRatingCategory.PLAYER, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 2) && hasImpact(impacts, 1, 2))
+		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 2)
+				&& meetsPositiveBranchRequirement(impacts) && hasImpact(impacts, 1, 2))
 			return level2;
 
 		LevelDecision level1 = decisionForLevel(AccountRatingCategory.PLAYER, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 1))
+		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 1)
+				&& meetsPositiveBranchRequirement(impacts))
 			return level1;
 
 		return zeroLevelDecision(AccountRatingCategory.PLAYER, impacts);
@@ -153,20 +164,24 @@ public final class AccountTrustPolicy {
 	private static LevelDecision calculateSubjectLevel(List<AccountTrustCategoryImpactData> impacts) {
 		LevelDecision level4 = decisionForLevel(AccountRatingCategory.SUBJECT, 4, impacts);
 		if (level4.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 4)
+				&& meetsPositiveBranchRequirement(impacts)
 				&& (hasImpact(impacts, 3, 3) || countImpacts(impacts, 3, 2) >= 2))
 			return level4;
 
 		LevelDecision level3 = decisionForLevel(AccountRatingCategory.SUBJECT, 3, impacts);
 		if (level3.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 3)
+				&& meetsPositiveBranchRequirement(impacts)
 				&& (hasImpact(impacts, 2, 3) || countImpacts(impacts, 2, 2) >= 2))
 			return level3;
 
 		LevelDecision level2 = decisionForLevel(AccountRatingCategory.SUBJECT, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 2) && hasImpact(impacts, 1, 2))
+		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 2)
+				&& meetsPositiveBranchRequirement(impacts) && hasImpact(impacts, 1, 2))
 			return level2;
 
 		LevelDecision level1 = decisionForLevel(AccountRatingCategory.SUBJECT, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 1) && hasImpact(impacts, 1, 1))
+		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 1)
+				&& meetsPositiveBranchRequirement(impacts) && hasImpact(impacts, 1, 1))
 			return level1;
 
 		return zeroLevelDecision(AccountRatingCategory.SUBJECT, impacts);
@@ -197,6 +212,10 @@ public final class AccountTrustPolicy {
 				&& countNegativeTrustBranches(impacts, getSuspiciousMinRatingConfidence()) >= getSuspiciousMinBranchCount();
 	}
 
+	private static boolean meetsPositiveBranchRequirement(List<AccountTrustCategoryImpactData> impacts) {
+		return countPositiveTrustBranches(impacts) >= getPositiveMinBranchCount();
+	}
+
 	private static long calculateCappedLevelScore(List<AccountTrustCategoryImpactData> impacts, long impactCap) {
 		long levelScore = 0L;
 
@@ -221,6 +240,19 @@ public final class AccountTrustPolicy {
 	private static long countImpacts(List<AccountTrustCategoryImpactData> impacts, int minLevel, int minConfidence) {
 		return impacts.stream().filter(impact -> impact.getEvaluatorLevel() >= minLevel
 				&& impact.getRatingConfidence() >= minConfidence && impact.getImpact() > 0).count();
+	}
+
+	private static long countPositiveTrustBranches(List<AccountTrustCategoryImpactData> impacts) {
+		Set<String> trustBranchKeys = new HashSet<>();
+		for (AccountTrustCategoryImpactData impact : impacts) {
+			if (impact.getImpact() <= 0)
+				continue;
+
+			if (impact.getTrustBranchKeys() != null)
+				trustBranchKeys.addAll(impact.getTrustBranchKeys());
+		}
+
+		return trustBranchKeys.size();
 	}
 
 	private static long countNegativeRaters(List<AccountTrustCategoryImpactData> impacts, int minConfidence) {

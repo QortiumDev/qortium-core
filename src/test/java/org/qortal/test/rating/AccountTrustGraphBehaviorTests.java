@@ -267,7 +267,7 @@ public class AccountTrustGraphBehaviorTests extends Common {
 	}
 
 	@Test
-	public void testTwoTrustedNegativeSubjectRatingsFromSameBranchDoNotMakeTargetSuspicious() throws DataException {
+	public void testTwoPositiveScoreNegativeSubjectRatingsFromSameBranchDoNotMakeTargetSuspicious() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
@@ -284,8 +284,10 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			AccountTrustSnapshotData bobPlayer = findSnapshot(repository, bob.getAddress(), AccountRatingCategory.PLAYER);
 			AccountTrustSnapshotData dilbertPlayer = findSnapshot(repository, dilbert.getAddress(),
 					AccountRatingCategory.PLAYER);
-			assertEquals(AccountTrustStatus.GOLD, bobPlayer.getMappedTrustStatus());
-			assertEquals(AccountTrustStatus.GOLD, dilbertPlayer.getMappedTrustStatus());
+			assertEquals("Same-branch positive score should not satisfy Player branch independence",
+					AccountTrustStatus.UNVERIFIED, bobPlayer.getMappedTrustStatus());
+			assertEquals("Same-branch positive score should not satisfy Player branch independence",
+					AccountTrustStatus.UNVERIFIED, dilbertPlayer.getMappedTrustStatus());
 
 			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingCategory.SUBJECT, -2), bob);
 			TransactionUtils.signAndMint(repository, ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, -2),
@@ -297,7 +299,7 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			assertEquals(-10_000_000L, aliceSubject.getLevelScore());
 			assertEquals(5_000_000L, aliceSubject.getLevelScoreCap());
 			assertEquals(0, aliceSubject.getLevel());
-			assertEquals("Two trusted raters from the same trust branch should not satisfy Suspicious branch independence",
+			assertEquals("Two same-branch negative raters should not satisfy Suspicious branch independence",
 					AccountTrustStatus.UNVERIFIED, aliceSubject.getMappedTrustStatus());
 			assertTrue("Same-branch negative ratings should not block mint eligibility",
 					new Account(repository, alice.getAddress()).canMint(false));
@@ -488,6 +490,36 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			assertEquals(500_000L, trainerSnapshot.getLevelScoreCap());
 			assertEquals(2, trainerSnapshot.getLevel());
 			assertEquals(AccountTrustStatus.SILVER, trainerSnapshot.getMappedTrustStatus());
+		}
+	}
+
+	@Test
+	public void testTwoPositiveTrainerImpactsFromSameBranchDoNotQualify() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
+			PrivateKeyAccount trainerTarget = Common.generateRandomSeedAccount(repository);
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, dilbert);
+			ensureKnownAccount(repository, trainerTarget);
+			AccountTrustTestUtils.saveDerivedManagerLevelTwoRatingsFromSharedManagerBranch(repository, alice,
+					Arrays.asList(bob, dilbert));
+
+			saveAccountRating(repository, bob, trainerTarget, AccountRatingCategory.TRAINER, 1);
+			saveAccountRating(repository, dilbert, trainerTarget, AccountRatingCategory.TRAINER, 1);
+			refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData trainerSnapshot = findSnapshot(repository, trainerTarget.getAddress(),
+					AccountRatingCategory.TRAINER);
+			assertEquals(2_000_000L, trainerSnapshot.getScore());
+			assertEquals(500_000L, trainerSnapshot.getLevelScore());
+			assertEquals(250_000L, trainerSnapshot.getLevelScoreCap());
+			assertEquals(0, trainerSnapshot.getLevel());
+			assertEquals("Same-branch positive raters should not satisfy positive branch independence",
+					AccountTrustStatus.UNVERIFIED, trainerSnapshot.getMappedTrustStatus());
 		}
 	}
 
