@@ -1178,13 +1178,21 @@ public class HSQLDBDatabaseUpdates {
 				case 59:
 					// Store directed account-to-account trust graph ratings.
 					stmt.execute("CREATE TABLE AccountRatings (target AccountPublicKey NOT NULL, target_account AccountAddress NOT NULL, "
-							+ "rater AccountPublicKey NOT NULL, rater_account AccountAddress NOT NULL, rating TINYINT NOT NULL, "
-							+ "PRIMARY KEY (target, rater))");
+							+ "rater AccountPublicKey NOT NULL, rater_account AccountAddress NOT NULL, category TINYINT NOT NULL, "
+							+ "rating TINYINT NOT NULL, PRIMARY KEY (target, rater, category))");
 					stmt.execute("CREATE INDEX AccountRatingsTargetIndex ON AccountRatings (target)");
 					stmt.execute("CREATE INDEX AccountRatingsRaterIndex ON AccountRatings (rater)");
+					stmt.execute("CREATE INDEX AccountRatingsTargetCategoryRatingIndex "
+							+ "ON AccountRatings (target, category, rating)");
+					stmt.execute("CREATE INDEX AccountRatingsRaterCategoryTargetIndex "
+							+ "ON AccountRatings (rater, category, target_account)");
+					stmt.execute("CREATE INDEX AccountRatingsCategoryTargetRaterIndex "
+							+ "ON AccountRatings (category, target_account, rater_account)");
+					stmt.execute("CREATE INDEX AccountRatingsAccountOrderIndex "
+							+ "ON AccountRatings (target_account, rater_account, category)");
 
 					stmt.execute("CREATE TABLE RateAccountTransactions (signature Signature, rater AccountPublicKey NOT NULL, "
-							+ "target AccountPublicKey NOT NULL, rating TINYINT NOT NULL, previous_rating TINYINT, "
+							+ "target AccountPublicKey NOT NULL, category TINYINT DEFAULT 0 NOT NULL, rating TINYINT NOT NULL, previous_rating TINYINT, "
 							+ TRANSACTION_KEYS + ")");
 					break;
 
@@ -1239,9 +1247,7 @@ public class HSQLDBDatabaseUpdates {
 					break;
 
 				case 65:
-					// Make account trust ratings category-aware for Aura-style scoring.
-					migrateAccountRatingsToCategories(connection);
-					addColumnIfMissing(connection, "RateAccountTransactions", "category", "TINYINT DEFAULT 0 NOT NULL");
+					// Account trust ratings are category-aware from baseline schema case 59.
 					break;
 
 				case 66:
@@ -1260,21 +1266,20 @@ public class HSQLDBDatabaseUpdates {
 							+ "ON AccountTrustDerivationSnapshots (mapped_trust_status, category, level)");
 					stmt.execute("CREATE INDEX AccountTrustDerivationSnapshotHeightIndex "
 							+ "ON AccountTrustDerivationSnapshots (snapshot_height)");
-					break;
-
-				case 67:
-					// Add composite indexes for account-rating graph query paths.
-					createAccountRatingQueryIndexes(connection);
-					break;
-
-				case 68:
-					// Add composite indexes for stored account trust snapshot query paths.
 					stmt.execute("CREATE INDEX AccountTrustDerivationSnapshotSeedIndex "
 							+ "ON AccountTrustDerivationSnapshots (minting_seed_member, account, category)");
 					stmt.execute("CREATE INDEX AccountTrustDerivationSnapshotCategoryLevelIndex "
 							+ "ON AccountTrustDerivationSnapshots (category, level, score, account)");
 					stmt.execute("CREATE INDEX AccountTrustDerivationSnapshotSubjectStatusIndex "
 							+ "ON AccountTrustDerivationSnapshots (category, mapped_trust_status, account)");
+					break;
+
+				case 67:
+					// Account rating query indexes are created by baseline schema case 59.
+					break;
+
+				case 68:
+					// Account trust snapshot query indexes are created by baseline schema case 66.
 					break;
 
 				default:
@@ -1321,43 +1326,6 @@ public class HSQLDBDatabaseUpdates {
 					return;
 				}
 			}
-		}
-	}
-
-	private static void migrateAccountRatingsToCategories(Connection connection) throws SQLException {
-		if (columnExists(connection, "AccountRatings", "category"))
-			return;
-
-		try (Statement stmt = connection.createStatement()) {
-			stmt.execute("CREATE TABLE AccountRatingsNew (target AccountPublicKey NOT NULL, target_account AccountAddress NOT NULL, "
-					+ "rater AccountPublicKey NOT NULL, rater_account AccountAddress NOT NULL, category TINYINT NOT NULL, rating TINYINT NOT NULL, "
-					+ "PRIMARY KEY (target, rater, category))");
-			stmt.execute("INSERT INTO AccountRatingsNew (target, target_account, rater, rater_account, category, rating) "
-					+ "SELECT target, target_account, rater, rater_account, 0, rating FROM AccountRatings");
-			stmt.execute("DROP TABLE AccountRatings");
-			stmt.execute("ALTER TABLE AccountRatingsNew RENAME TO AccountRatings");
-			stmt.execute("CREATE INDEX AccountRatingsTargetIndex ON AccountRatings (target)");
-			stmt.execute("CREATE INDEX AccountRatingsRaterIndex ON AccountRatings (rater)");
-			stmt.execute("CREATE INDEX AccountRatingsCategoryIndex ON AccountRatings (category)");
-		}
-	}
-
-	private static void createAccountRatingQueryIndexes(Connection connection) throws SQLException {
-		try (Statement stmt = connection.createStatement()) {
-			stmt.execute("CREATE INDEX IF NOT EXISTS AccountRatingsTargetCategoryRatingIndex "
-					+ "ON AccountRatings (target, category, rating)");
-			stmt.execute("CREATE INDEX IF NOT EXISTS AccountRatingsRaterCategoryTargetIndex "
-					+ "ON AccountRatings (rater, category, target_account)");
-			stmt.execute("CREATE INDEX IF NOT EXISTS AccountRatingsCategoryTargetRaterIndex "
-					+ "ON AccountRatings (category, target_account, rater_account)");
-			stmt.execute("CREATE INDEX IF NOT EXISTS AccountRatingsAccountOrderIndex "
-					+ "ON AccountRatings (target_account, rater_account, category)");
-		}
-	}
-
-	private static boolean columnExists(Connection connection, String tableName, String columnName) throws SQLException {
-		try (ResultSet resultSet = connection.getMetaData().getColumns(null, null, tableName.toUpperCase(), columnName.toUpperCase())) {
-			return resultSet.next();
 		}
 	}
 

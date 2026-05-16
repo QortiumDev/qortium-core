@@ -76,8 +76,13 @@ public class AccountTrustSnapshotTests extends Common {
 	}
 
 	@Test
-	public void testAccountRatingQueryIndexes() throws DataException, SQLException {
+	public void testAccountRatingBaselineSchema() throws DataException, SQLException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertTrue(tableHasColumn(repository, "AccountRatings", "category"));
+			assertTrue(tableHasPrimaryKey(repository, "AccountRatings", "target"));
+			assertTrue(tableHasPrimaryKey(repository, "AccountRatings", "rater"));
+			assertTrue(tableHasPrimaryKey(repository, "AccountRatings", "category"));
+			assertTrue(tableHasColumn(repository, "RateAccountTransactions", "category"));
 			assertTrue(indexHasColumns(repository, "AccountRatings", "AccountRatingsTargetCategoryRatingIndex",
 					"target", "category", "rating"));
 			assertTrue(indexHasColumns(repository, "AccountRatings", "AccountRatingsRaterCategoryTargetIndex",

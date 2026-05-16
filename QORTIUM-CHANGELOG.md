@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-15 - core: clean trust network baseline schema
+
+Folded the trust-network database schema into its final pre-launch Qortium shape so new chains create category-aware account ratings, account-rating query indexes, rate-account transaction categories, and trust snapshot query indexes directly instead of stepping through older development migrations. This keeps trust scoring, minting, voting, rating, and API behavior unchanged while making the baseline schema cleaner for future Qortium-derived chains.
+
 ### 2026-05-15 - core: refresh trust snapshots only when inputs change
 
 Changed stored account trust snapshot refreshes so ordinary blocks no longer recompute the full trust graph when ratings and minting seed membership have not changed. Qortium now refreshes snapshots for account-rating changes, active Minting group membership changes, minting-group configuration boundaries, and first-time snapshot population, while keeping poll result freezing, minting checks, vote weights, resource-rating weights, and public trust API behavior unchanged.
