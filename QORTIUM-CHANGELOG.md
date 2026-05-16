@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-16 - test: add trust network scenario coverage
+
+Added broader trust-network scenario tests that model honest independent branches, isolated farm rings, same-branch positive lift attempts, and coordinated negative ratings. These tests make the intended trust behavior easier to calibrate before launch by proving that raw same-branch evidence remains auditable but cannot by itself create positive trust or Suspicious mint blocking.
+
 ### 2026-05-16 - core: require independent positive rating branches
 
 Changed positive trust level decisions so accounts need enough independent trust branches as well as enough capped score before they can become Bronze, Silver, or Gold. Qortium now exposes the positive branch requirement in trust policy and explanation data, keeps same-branch positive rating evidence visible as raw score, and documents that same-branch raters cannot by themselves lift another account into a positive trust tier.
