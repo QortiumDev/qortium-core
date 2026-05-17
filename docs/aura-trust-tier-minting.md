@@ -322,13 +322,18 @@ The core trust-network mechanics are implemented:
   evidence behaves the same way when it is submitted through signed
   `RATE_ACCOUNT` transactions, minted blocks, stored snapshot refreshes, rating
   removals, orphan handling, and minting eligibility checks.
+- launch-profile trust-review scenarios show how the default policy handles
+  no-evidence minting members, one trusted supporter, two independent
+  supporters, same-branch evidence, Suspicious mint blocking, and removal-based
+  recovery without changing the active defaults.
 - the current default launch trust policy is documented in the account trust
   network guide and pinned by tests so threshold, cap, branch, confidence, seed
   energy, hop count, and vote-multiplier drift is visible.
 
 Remaining pre-launch work is now hardening rather than core construction:
 
-- continue validating the launch trust profile against realistic graph scenarios
+- review the launch trust profile against any new realistic graph scenarios
+  that are not covered by the current launch-profile tests
 - keep reviewing trust-graph benchmark output and decide whether larger stress
   profiles, account-rating churn controls, or derivation optimization are needed
   before launch
@@ -402,3 +407,8 @@ Current trust-network coverage includes these cases:
 - trust explanation API coverage proves account trust screens can inspect
   configured thresholds and caps, branch and confidence requirements, and the
   strongest positive and negative impacts behind the current result.
+- launch-profile scenario tests prove no-evidence minting members can mint with
+  zero effective vote weight, one trusted Subject supporter leaves only audit
+  score, two independent trusted supporters can create Gold weight,
+  same-branch evidence cannot lift or block by itself, and removing one
+  independent negative rating restores minting from Suspicious.

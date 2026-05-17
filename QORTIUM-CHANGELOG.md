@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: add launch trust review scenarios
+
+Added launch-profile trust-network scenario tests that check how Qortium treats no-evidence minting members, accounts with one trusted supporter, accounts with two independent supporters, same-branch positive and negative evidence, and independent negative ratings that make an account Suspicious. These tests keep the current trust defaults unchanged while giving launch reviewers clearer proof that trust weight, minting allowance, status summaries, and rating removal recovery behave as intended.
+
 ### 2026-05-17 - api: add trust network health summary
 
 Extended the account trust summary API with health fields for launch and explorer monitoring. The summary now reports snapshot row completeness, active rating counts by category, total stored trust-status changes, and latest trust-change metadata so clients can see whether the stored trust graph looks current and internally complete without fetching every rating or snapshot.
