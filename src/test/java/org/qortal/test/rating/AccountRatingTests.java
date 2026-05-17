@@ -9,7 +9,10 @@ import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountRating;
+import org.qortal.data.account.AccountTrustSnapshotData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.RateAccountTransactionData;
+import org.qortal.data.transaction.TransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -22,7 +25,9 @@ import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.Transaction;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class AccountRatingTests extends Common {
 
@@ -86,6 +91,65 @@ public class AccountRatingTests extends Common {
 			assertEquals(false, ratingTransaction.isConfirmableAtHeight(99));
 			assertEquals(false, ratingTransaction.isConfirmableAtHeight(100));
 			assertEquals(true, ratingTransaction.isConfirmableAtHeight(101));
+		}
+	}
+
+	@Test
+	public void testImportedRatingWaitsUntilOnlineAccountWindowEnds() throws DataException, IllegalAccessException {
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchStartHeight", 0, true);
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchSize", 100, true);
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 10, true);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount seedAccount = Common.getTestAccount(repository, "alice");
+			TestAccount supporterA = Common.getTestAccount(repository, "bob");
+			TestAccount supporterB = Common.getTestAccount(repository, "chloe");
+			TestAccount target = Common.getTestAccount(repository, "dilbert");
+
+			AccountTrustTestUtils.ensureKnownAccount(repository, target);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, seedAccount, supporterA);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, seedAccount, supporterB);
+			AccountTrustTestUtils.saveAccountRating(repository, supporterA, target,
+					AccountRatingCategory.SUBJECT, 4);
+			AccountTrustTestUtils.refreshTrustSnapshots(repository);
+			assertSubjectStatus(repository, target, AccountTrustStatus.UNVERIFIED);
+
+			BlockUtils.mintBlocks(repository, 88);
+			assertEquals(89, repository.getBlockRepository().getBlockchainHeight());
+
+			RateAccountTransactionData delayedRatingData = ratingData(supporterB, target,
+					AccountRatingCategory.SUBJECT, 4);
+			TransactionUtils.signAndImportValid(repository, delayedRatingData, supporterB);
+			assertFalse(repository.getTransactionRepository().isConfirmed(delayedRatingData.getSignature()));
+			assertUnconfirmedContains(repository, delayedRatingData);
+
+			for (int height = 90; height <= 100; ++height) {
+				BlockUtils.mintBlock(repository);
+				assertEquals(height, repository.getBlockRepository().getBlockchainHeight());
+				assertFalse(repository.getTransactionRepository().isConfirmed(delayedRatingData.getSignature()));
+				assertUnconfirmedContains(repository, delayedRatingData);
+				assertNull(repository.getAccountRatingRepository().getRating(target.getPublicKey(),
+						supporterB.getPublicKey(), AccountRatingCategory.SUBJECT));
+				assertSubjectStatus(repository, target, AccountTrustStatus.UNVERIFIED);
+			}
+
+			BlockUtils.mintBlock(repository);
+			assertEquals(101, repository.getBlockRepository().getBlockchainHeight());
+			assertTrue(repository.getTransactionRepository().isConfirmed(delayedRatingData.getSignature()));
+			assertUnconfirmedDoesNotContain(repository, delayedRatingData);
+			assertActiveRating(repository, target, supporterB, AccountRatingCategory.SUBJECT, 4);
+			assertSubjectStatus(repository, target, AccountTrustStatus.GOLD);
+			assertEquals(Integer.valueOf(101), ((RateAccountTransactionData) repository.getTransactionRepository()
+					.fromSignature(delayedRatingData.getSignature())).getRatingChangeHeight());
+
+			BlockUtils.orphanLastBlock(repository);
+			assertEquals(100, repository.getBlockRepository().getBlockchainHeight());
+			assertFalse(repository.getTransactionRepository().isConfirmed(delayedRatingData.getSignature()));
+			assertNull(repository.getAccountRatingRepository().getRating(target.getPublicKey(),
+					supporterB.getPublicKey(), AccountRatingCategory.SUBJECT));
+			assertSubjectStatus(repository, target, AccountTrustStatus.UNVERIFIED);
+			assertNull(((RateAccountTransactionData) repository.getTransactionRepository()
+					.fromSignature(delayedRatingData.getSignature())).getRatingChangeHeight());
 		}
 	}
 
@@ -247,5 +311,34 @@ public class AccountRatingTests extends Common {
 		assertEquals(category, activeRating.getCategory());
 		assertEquals(AccountRating.getDirection(expectedRating), activeRating.getRatingDirection());
 		assertEquals(AccountRating.getConfidence(expectedRating), activeRating.getRatingConfidence());
+	}
+
+	private void assertSubjectStatus(Repository repository, PrivateKeyAccount target,
+			AccountTrustStatus expectedStatus) throws DataException {
+		AccountTrustSnapshotData snapshot = findSnapshot(repository, target.getAddress(), AccountRatingCategory.SUBJECT);
+		assertEquals(expectedStatus, snapshot.getMappedTrustStatus());
+	}
+
+	private AccountTrustSnapshotData findSnapshot(Repository repository, String accountAddress,
+			AccountRatingCategory category) throws DataException {
+		return repository.getAccountRatingRepository().getTrustDerivationSnapshots(accountAddress).stream()
+				.filter(snapshot -> snapshot.getCategory() == category)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing snapshot for " + accountAddress
+						+ " in category " + category));
+	}
+
+	private void assertUnconfirmedContains(Repository repository, TransactionData expectedTransactionData)
+			throws DataException {
+		assertTrue(repository.getTransactionRepository().getUnconfirmedTransactions().stream()
+				.anyMatch(transactionData -> java.util.Arrays.equals(transactionData.getSignature(),
+						expectedTransactionData.getSignature())));
+	}
+
+	private void assertUnconfirmedDoesNotContain(Repository repository, TransactionData expectedTransactionData)
+			throws DataException {
+		assertFalse(repository.getTransactionRepository().getUnconfirmedTransactions().stream()
+				.anyMatch(transactionData -> java.util.Arrays.equals(transactionData.getSignature(),
+						expectedTransactionData.getSignature())));
 	}
 }

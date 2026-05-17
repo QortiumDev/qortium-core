@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: cover delayed account rating confirmation windows
+
+Added end-to-end coverage for account ratings submitted near protected reward-window blocks. The new test proves a `RATE_ACCOUNT` transaction can sit unconfirmed through the online-account capture and batch distribution window without changing stored ratings or trust snapshots, then applies normally when the next confirmable block is minted and rolls back cleanly if that block is orphaned.
+
 ### 2026-05-17 - test: add trust bootstrap walkthrough scenario
 
 Added a step-by-step trust-network bootstrap test that starts with stored ratings but no qualified trust evidence, then walks through Minting group seed energy, Manager trust, Trainer trust, Player trust, and final Subject trust. The new coverage shows that Minting group membership seeds the graph without automatically granting Manager status, unqualified ratings remain auditable without adding weight, and only qualified Player support turns Subject trust into active Gold vote weight.
