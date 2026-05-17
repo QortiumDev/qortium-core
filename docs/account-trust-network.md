@@ -172,6 +172,11 @@ shows the chain rules used to interpret that evidence. Explorers that need to
 show recent movement across the network should use `trust-changes` instead of
 diffing full snapshot lists.
 
+Trust explanations are intended to show why the current result happened, not
+only what the result is. They include configured levels, thresholds, caps,
+Suspicious thresholds, independent branch and rater requirements, confidence
+requirements, and the strongest positive and negative impacts used for audit.
+
 ## Chain Builder Configuration
 
 Qortium-derived chains can tune the trust network through

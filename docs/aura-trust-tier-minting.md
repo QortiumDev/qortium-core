@@ -395,3 +395,6 @@ Current trust-network coverage includes these cases:
   Unverified, stored and live explanations are distinguishable, and single,
   same-branch, and independent-branch negative ratings report the Suspicious
   checks clearly.
+- trust explanation API coverage proves account trust screens can inspect
+  configured thresholds and caps, branch and confidence requirements, and the
+  strongest positive and negative impacts behind the current result.

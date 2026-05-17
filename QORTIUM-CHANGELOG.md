@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: harden trust explanation coverage
+
+Added focused trust explanation API coverage so Qortium can prove account trust screens have enough audit detail to explain Unverified, Gold, and Suspicious results. The tests now check stored versus live explanations, configured thresholds and caps, branch and confidence requirements, top positive and negative impacts, and same-branch evidence that remains visible without granting trust.
+
 ### 2026-05-17 - test: add transaction-level trust calibration scenarios
 
 Added transaction-level trust-network calibration scenarios that run the visible account-rating evidence through signed `RATE_ACCOUNT` transactions, block processing, stored snapshot refreshes, status-change history, rating removal, orphan handling, and minting eligibility. This proves the trust-policy behavior works through the actual chain path without changing Qortium defaults, public APIs, transactions, minting, voting, or rating rules.
