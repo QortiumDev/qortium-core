@@ -1193,7 +1193,10 @@ public class HSQLDBDatabaseUpdates {
 
 					stmt.execute("CREATE TABLE RateAccountTransactions (signature Signature, rater AccountPublicKey NOT NULL, "
 							+ "target AccountPublicKey NOT NULL, category TINYINT DEFAULT 0 NOT NULL, rating TINYINT NOT NULL, previous_rating TINYINT, "
+							+ "rating_change_height INT, "
 							+ TRANSACTION_KEYS + ")");
+					stmt.execute("CREATE INDEX RateAccountTransactionEdgeChangeHeightIndex "
+							+ "ON RateAccountTransactions (target, rater, category, rating_change_height)");
 					break;
 
 				case 60:

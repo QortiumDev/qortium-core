@@ -772,6 +772,24 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 		}
 	}
 
+	@Override
+	public Integer getLatestRatingChangeHeight(byte[] targetPublicKey, byte[] raterPublicKey,
+			AccountRatingCategory category) throws DataException {
+		String sql = "SELECT MAX(rating_change_height) FROM RateAccountTransactions "
+				+ "WHERE target = ? AND rater = ? AND category = ? AND rating_change_height IS NOT NULL";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, targetPublicKey, raterPublicKey,
+				defaultCategory(category).value)) {
+			if (resultSet == null)
+				return null;
+
+			int latestHeight = resultSet.getInt(1);
+			return resultSet.wasNull() ? null : latestHeight;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch latest account rating change height from repository", e);
+		}
+	}
+
 	private static String trustStatusChangeKey(String accountAddress, AccountRatingCategory category) {
 		return accountAddress + "\u0000" + defaultCategory(category).value;
 	}

@@ -15,6 +15,7 @@ public class AccountTrustPolicyData {
 	private int suspiciousMinRaterCount;
 	private int suspiciousMinBranchCount;
 	private int suspiciousMinRatingConfidence;
+	private int accountRatingChangeCooldownBlocks;
 	private List<StatusVoteWeight> statusVoteWeights;
 	private List<CategoryPolicy> categoryPolicies;
 
@@ -23,8 +24,8 @@ public class AccountTrustPolicyData {
 
 	public AccountTrustPolicyData(AccountRatingCategory activeWeightCategory, long startingEnergy, int managerEnergyHops,
 			int positiveMinBranchCount, int suspiciousMinRaterCount, int suspiciousMinBranchCount,
-			int suspiciousMinRatingConfidence, List<StatusVoteWeight> statusVoteWeights,
-			List<CategoryPolicy> categoryPolicies) {
+			int suspiciousMinRatingConfidence, int accountRatingChangeCooldownBlocks,
+			List<StatusVoteWeight> statusVoteWeights, List<CategoryPolicy> categoryPolicies) {
 		this.activeWeightCategory = activeWeightCategory == null ? AccountRatingCategory.SUBJECT : activeWeightCategory;
 		this.startingEnergy = startingEnergy;
 		this.managerEnergyHops = managerEnergyHops;
@@ -32,6 +33,7 @@ public class AccountTrustPolicyData {
 		this.suspiciousMinRaterCount = suspiciousMinRaterCount;
 		this.suspiciousMinBranchCount = suspiciousMinBranchCount;
 		this.suspiciousMinRatingConfidence = suspiciousMinRatingConfidence;
+		this.accountRatingChangeCooldownBlocks = accountRatingChangeCooldownBlocks;
 		this.statusVoteWeights = statusVoteWeights == null ? new ArrayList<>() : statusVoteWeights;
 		this.categoryPolicies = categoryPolicies == null ? new ArrayList<>() : categoryPolicies;
 	}
@@ -62,6 +64,10 @@ public class AccountTrustPolicyData {
 
 	public int getSuspiciousMinRatingConfidence() {
 		return this.suspiciousMinRatingConfidence;
+	}
+
+	public int getAccountRatingChangeCooldownBlocks() {
+		return this.accountRatingChangeCooldownBlocks;
 	}
 
 	public List<StatusVoteWeight> getStatusVoteWeights() {

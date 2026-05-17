@@ -18,7 +18,8 @@ public class HSQLDBRateAccountTransactionRepository extends HSQLDBTransactionRep
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT target, category, rating, previous_rating FROM RateAccountTransactions WHERE signature = ?";
+		String sql = "SELECT target, category, rating, previous_rating, rating_change_height "
+				+ "FROM RateAccountTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
@@ -32,7 +33,14 @@ public class HSQLDBRateAccountTransactionRepository extends HSQLDBTransactionRep
 			if (previousRating == 0 && resultSet.wasNull())
 				previousRating = null;
 
-			return new RateAccountTransactionData(baseTransactionData, targetPublicKey, category, rating, previousRating);
+			Integer ratingChangeHeight = resultSet.getInt(5);
+			if (ratingChangeHeight == 0 && resultSet.wasNull())
+				ratingChangeHeight = null;
+
+			RateAccountTransactionData transactionData = new RateAccountTransactionData(baseTransactionData,
+					targetPublicKey, category, rating, previousRating);
+			transactionData.setRatingChangeHeight(ratingChangeHeight);
+			return transactionData;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch rate account transaction from repository", e);
 		}
@@ -49,7 +57,8 @@ public class HSQLDBRateAccountTransactionRepository extends HSQLDBTransactionRep
 				.bind("target", rateAccountTransactionData.getTargetPublicKey())
 				.bind("category", rateAccountTransactionData.getCategoryValue())
 				.bind("rating", rateAccountTransactionData.getRating())
-				.bind("previous_rating", rateAccountTransactionData.getPreviousRating());
+				.bind("previous_rating", rateAccountTransactionData.getPreviousRating())
+				.bind("rating_change_height", rateAccountTransactionData.getRatingChangeHeight());
 
 		try {
 			saveHelper.execute(this.repository);

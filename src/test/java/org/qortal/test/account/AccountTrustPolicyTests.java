@@ -51,6 +51,7 @@ public class AccountTrustPolicyTests extends Common {
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRaterCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinBranchCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRatingConfidence());
+		assertEquals(1440, AccountTrustPolicy.getAccountRatingChangeCooldownBlocks());
 	}
 
 	@Test
@@ -402,6 +403,9 @@ public class AccountTrustPolicyTests extends Common {
 		config = replaceRequired(config,
 				"\"suspiciousMinBranchCount\": 2",
 				"\"suspiciousMinBranchCount\": 3");
+		config = replaceRequired(config,
+				"\"accountRatingChangeCooldownBlocks\": 1440",
+				"\"accountRatingChangeCooldownBlocks\": 720");
 		loadTemporaryConfig(config);
 
 		AccountTrustPolicyData policy = new AccountRatingsResource().getAccountTrustPolicy();
@@ -409,10 +413,21 @@ public class AccountTrustPolicyTests extends Common {
 		assertEquals(75, findStatusVoteWeight(policy, AccountTrustStatus.SILVER).getVoteWeightPercent());
 		assertEquals(3, policy.getPositiveMinBranchCount());
 		assertEquals(3, policy.getSuspiciousMinBranchCount());
+		assertEquals(720, policy.getAccountRatingChangeCooldownBlocks());
 		AccountTrustPolicyData.LevelPolicy playerLevelOne = findLevelPolicy(
 				findCategoryPolicy(policy, AccountRatingCategory.PLAYER), 1);
 		assertEquals(600_000L, playerLevelOne.getThreshold());
 		assertEquals(300_000L, playerLevelOne.getLevelScoreCap());
+	}
+
+	@Test
+	public void testCustomAccountRatingCooldownCanBeDisabled() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"accountRatingChangeCooldownBlocks\": 1440",
+				"\"accountRatingChangeCooldownBlocks\": 0");
+		loadTemporaryConfig(config);
+
+		assertEquals(0, AccountTrustPolicy.getAccountRatingChangeCooldownBlocks());
 	}
 
 	@Test
@@ -473,6 +488,15 @@ public class AccountTrustPolicyTests extends Common {
 				"\"suspiciousMinBranchCount\": -1");
 
 		assertInvalidConfig(config, "\"accountTrustSettings.suspiciousMinBranchCount\" must not be negative");
+	}
+
+	@Test
+	public void testInvalidAccountRatingCooldownRejected() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"accountRatingChangeCooldownBlocks\": 1440",
+				"\"accountRatingChangeCooldownBlocks\": -1");
+
+		assertInvalidConfig(config, "\"accountTrustSettings.accountRatingChangeCooldownBlocks\" must not be negative");
 	}
 
 	private static void assertThresholdAndCap(AccountRatingCategory category, int level, long expectedThreshold,

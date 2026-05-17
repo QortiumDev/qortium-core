@@ -113,6 +113,10 @@ public final class AccountTrustPolicy {
 		return settings().getSuspiciousMinRatingConfidence();
 	}
 
+	public static int getAccountRatingChangeCooldownBlocks() {
+		return settings().getAccountRatingChangeCooldownBlocks();
+	}
+
 	private static LevelDecision calculateManagerLevel(List<AccountTrustCategoryImpactData> impacts) {
 		LevelDecision level2 = decisionForLevel(AccountRatingCategory.MANAGER, 2, impacts);
 		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.MANAGER, 2)

@@ -437,7 +437,8 @@ public class AccountRatingsResource {
 		return new AccountTrustPolicyData(AccountTrustPolicy.getActiveWeightCategory(), AccountTrustPolicy.getStartingEnergy(),
 				AccountTrustPolicy.getManagerEnergyHops(), AccountTrustPolicy.getPositiveMinBranchCount(),
 				AccountTrustPolicy.getSuspiciousMinRaterCount(), AccountTrustPolicy.getSuspiciousMinBranchCount(),
-				AccountTrustPolicy.getSuspiciousMinRatingConfidence(), statusVoteWeights, categoryPolicies);
+				AccountTrustPolicy.getSuspiciousMinRatingConfidence(),
+				AccountTrustPolicy.getAccountRatingChangeCooldownBlocks(), statusVoteWeights, categoryPolicies);
 	}
 
 	private AccountTrustPolicyData.CategoryPolicy buildTrustCategoryPolicy(AccountRatingCategory category) {

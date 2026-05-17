@@ -58,4 +58,7 @@ public interface AccountRatingRepository {
 			AccountTrustStatus previousStatus, AccountTrustStatus newStatus, Integer limit, Integer offset,
 			Boolean reverse) throws DataException;
 
+	public Integer getLatestRatingChangeHeight(byte[] targetPublicKey, byte[] raterPublicKey,
+			AccountRatingCategory category) throws DataException;
+
 }

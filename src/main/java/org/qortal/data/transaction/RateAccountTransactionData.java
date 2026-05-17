@@ -29,6 +29,9 @@ public class RateAccountTransactionData extends TransactionData {
 	@XmlTransient
 	@Schema(hidden = true)
 	private Integer previousRating;
+	@XmlTransient
+	@Schema(hidden = true)
+	private Integer ratingChangeHeight;
 
 	protected RateAccountTransactionData() {
 		super(TransactionType.RATE_ACCOUNT);
@@ -102,5 +105,13 @@ public class RateAccountTransactionData extends TransactionData {
 
 	public void setPreviousRating(Integer previousRating) {
 		this.previousRating = previousRating;
+	}
+
+	public Integer getRatingChangeHeight() {
+		return this.ratingChangeHeight;
+	}
+
+	public void setRatingChangeHeight(Integer ratingChangeHeight) {
+		this.ratingChangeHeight = ratingChangeHeight;
 	}
 }

@@ -2,6 +2,7 @@ package org.qortal.test.common;
 
 import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
@@ -9,6 +10,14 @@ import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 
+import java.io.File;
+import java.io.IOException;
+import java.net.URISyntaxException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -191,5 +200,39 @@ public final class AccountTrustTestUtils {
 	public static void ensureKnownAccount(Repository repository, PrivateKeyAccount account) throws DataException {
 		repository.getAccountRepository()
 				.ensureAccount(new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, 0));
+	}
+
+	public static void useAccountRatingCooldown(int cooldownBlocks)
+			throws IOException, URISyntaxException, DataException {
+		String config = loadDefaultTestChainConfig();
+		config = replaceRequired(config, "\"accountRatingChangeCooldownBlocks\": 1440",
+				"\"accountRatingChangeCooldownBlocks\": " + cooldownBlocks);
+		loadTemporaryConfig(config);
+	}
+
+	private static String loadDefaultTestChainConfig() throws IOException, URISyntaxException {
+		URL testChainUrl = Common.class.getClassLoader().getResource("test-chain-v2.json");
+		if (testChainUrl == null)
+			throw new IllegalStateException("test-chain-v2.json not found");
+
+		return Files.readString(Paths.get(testChainUrl.toURI()), StandardCharsets.UTF_8);
+	}
+
+	private static String replaceRequired(String config, String target, String replacement) {
+		String updatedConfig = config.replace(target, replacement);
+		if (updatedConfig.equals(config))
+			throw new IllegalStateException("Config replacement target not found: " + target);
+
+		return updatedConfig;
+	}
+
+	private static void loadTemporaryConfig(String config) throws IOException {
+		Path tempDir = Files.createTempDirectory("account-trust-cooldown");
+		Path configPath = tempDir.resolve("blockchain.json");
+
+		Files.writeString(configPath, config, StandardCharsets.UTF_8);
+		BlockChain.fileInstance(tempDir.toString() + File.separator, configPath.getFileName().toString());
+		Files.deleteIfExists(configPath);
+		Files.deleteIfExists(tempDir);
 	}
 }

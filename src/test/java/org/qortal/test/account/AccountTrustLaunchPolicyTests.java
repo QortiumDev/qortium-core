@@ -34,6 +34,7 @@ public class AccountTrustLaunchPolicyTests extends Common {
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRaterCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinBranchCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRatingConfidence());
+		assertEquals(1440, AccountTrustPolicy.getAccountRatingChangeCooldownBlocks());
 
 		assertStatusPolicy(AccountTrustStatus.GOLD, 100, true);
 		assertStatusPolicy(AccountTrustStatus.SILVER, 50, true);

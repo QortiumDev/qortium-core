@@ -33,8 +33,9 @@ import static org.junit.Assert.assertTrue;
 public class AccountTrustTransactionCalibrationScenarioTests extends Common {
 
 	@Before
-	public void beforeTest() throws DataException {
+	public void beforeTest() throws Exception {
 		Common.useDefaultSettings();
+		AccountTrustTestUtils.useAccountRatingCooldown(0);
 	}
 
 	@Test

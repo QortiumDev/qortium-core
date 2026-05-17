@@ -219,6 +219,7 @@ public class BlockChain {
 		public int suspiciousMinRaterCount;
 		public int suspiciousMinBranchCount;
 		public int suspiciousMinRatingConfidence;
+		public Integer accountRatingChangeCooldownBlocks;
 		public List<StatusVoteWeightPercent> statusVoteWeightPercents;
 		public List<AccountTrustCategoryPolicy> categoryPolicies;
 
@@ -251,6 +252,10 @@ public class BlockChain {
 
 		public int getSuspiciousMinRatingConfidence() {
 			return this.suspiciousMinRatingConfidence;
+		}
+
+		public int getAccountRatingChangeCooldownBlocks() {
+			return this.accountRatingChangeCooldownBlocks;
 		}
 
 		public int getVoteWeightPercent(AccountTrustStatus status) {
@@ -305,6 +310,12 @@ public class BlockChain {
 
 			if (this.suspiciousMinRatingConfidence <= 0 || this.suspiciousMinRatingConfidence > 4)
 				Settings.throwValidationError("\"accountTrustSettings.suspiciousMinRatingConfidence\" must be between 1 and 4");
+
+			if (this.accountRatingChangeCooldownBlocks == null)
+				Settings.throwValidationError("\"accountTrustSettings.accountRatingChangeCooldownBlocks\" is required");
+
+			if (this.accountRatingChangeCooldownBlocks < 0)
+				Settings.throwValidationError("\"accountTrustSettings.accountRatingChangeCooldownBlocks\" must not be negative");
 
 			validateVoteWeights();
 			validateCategoryPolicies();

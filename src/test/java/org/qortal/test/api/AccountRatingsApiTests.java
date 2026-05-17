@@ -283,6 +283,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(2, policy.getSuspiciousMinRaterCount());
 		assertEquals(2, policy.getSuspiciousMinBranchCount());
 		assertEquals(2, policy.getSuspiciousMinRatingConfidence());
+		assertEquals(1440, policy.getAccountRatingChangeCooldownBlocks());
 		assertEquals(AccountTrustStatus.values().length, policy.getStatusVoteWeights().size());
 		assertEquals(AccountRatingCategory.values().length, policy.getCategoryPolicies().size());
 
@@ -1127,7 +1128,9 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
-	public void testRateAccountEndpointBuildsUnsignedTransaction() throws DataException {
+	public void testRateAccountEndpointBuildsUnsignedTransaction() throws Exception {
+		AccountTrustTestUtils.useAccountRatingCooldown(0);
+
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");

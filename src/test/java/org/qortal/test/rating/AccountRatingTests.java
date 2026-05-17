@@ -12,6 +12,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.BlockUtils;
+import org.qortal.test.common.AccountTrustTestUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
@@ -24,8 +25,9 @@ import static org.junit.Assert.assertNull;
 public class AccountRatingTests extends Common {
 
 	@Before
-	public void beforeTest() throws DataException {
+	public void beforeTest() throws Exception {
 		Common.useDefaultSettings();
+		AccountTrustTestUtils.useAccountRatingCooldown(0);
 	}
 
 	@Test

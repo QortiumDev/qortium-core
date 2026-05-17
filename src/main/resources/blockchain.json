@@ -13,6 +13,7 @@
 		"suspiciousMinRaterCount": 2,
 		"suspiciousMinBranchCount": 2,
 		"suspiciousMinRatingConfidence": 2,
+		"accountRatingChangeCooldownBlocks": 1440,
 		"statusVoteWeightPercents": [
 			{ "status": "SUSPICIOUS", "percent": 0 },
 			{ "status": "UNVERIFIED", "percent": 0 },

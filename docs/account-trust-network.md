@@ -49,6 +49,13 @@ edge from that rater to that target in that category.
 An account can only rate a known account public key. This keeps ratings tied to
 accounts the chain can identify by public key, not just by address.
 
+The default launch policy also limits churn on the same rating edge. After a
+rater changes or removes its rating for the same target and category, it must
+wait 1,440 blocks before changing that same edge again. First ratings are not
+delayed, and ratings for a different target or category are unaffected. Derived
+chains can set `accountRatingChangeCooldownBlocks` to `0` if they want no
+consensus-level cooldown.
+
 ## Rating Categories
 
 Qortium uses four rating categories inspired by Aura:
@@ -150,6 +157,11 @@ These values are pinned by tests as the current Qortium launch profile. Future
 chains can still change them through `accountTrustSettings`, but changes should
 be reviewed as policy choices rather than incidental config edits.
 
+The default launch profile also uses a 1,440-block account-rating change
+cooldown for each rater, target, and category edge. This slows rapid trust-edge
+flipping without limiting a rater's ability to rate other accounts or
+categories.
+
 ## Scale Expectations
 
 Qortium's default test suite includes deterministic trust-graph scale and
@@ -172,8 +184,8 @@ results:
 
 These timings are machine-dependent and are not consensus limits or launch
 guarantees. They are intended to give Qortium maintainers a repeatable baseline
-for deciding whether larger stress profiles, account-rating churn controls, or
-trust-derivation optimization are needed before launch.
+for deciding whether larger stress profiles, additional account-rating churn
+controls, or trust-derivation optimization are needed before launch.
 
 The same opt-in command also prints churn benchmark timings. Those runs mutate
 a generated trust graph across several rounds, refresh snapshots after each
@@ -201,7 +213,7 @@ Clients should use different account-rating APIs for different jobs:
 | `GET /account-ratings/trust-summary` | Lightweight network-wide trust counts, health fields, rating counts, seed counts, and active vote-weight totals |
 | `GET /account-ratings/trust-profile` | Primary account trust display for one account |
 | `GET /account-ratings/trust-explanation` | Detailed explanation of why one account has its current status |
-| `GET /account-ratings/trust-policy` | Chain-configured thresholds, caps, seed settings, Suspicious rules, and vote multipliers |
+| `GET /account-ratings/trust-policy` | Chain-configured thresholds, caps, seed settings, rating-change cooldown, Suspicious rules, and vote multipliers |
 | `GET /account-ratings/trust-derivation` | Network-wide stored or live derived trust rows |
 | `GET /account-ratings/trust-snapshots` | Raw stored per-account, per-category snapshot rows |
 | `GET /account-ratings/trust-changes` | Recent stored trust level and status movements for explorer and audit screens |
@@ -245,6 +257,7 @@ The configurable policy includes:
 - the number of Manager energy hops
 - the minimum independent positive branches needed for positive trust levels
 - Gold, Silver, Bronze, Unverified, and Suspicious vote multipliers
+- the account-rating change cooldown for each rater, target, and category edge
 - per-category level thresholds
 - per-category per-rating caps
 - per-category Suspicious thresholds and caps

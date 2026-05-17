@@ -50,8 +50,9 @@ import static org.junit.Assert.assertTrue;
 public class AccountTrustSnapshotTests extends Common {
 
 	@Before
-	public void beforeTest() throws DataException {
+	public void beforeTest() throws Exception {
 		Common.useDefaultSettings();
+		AccountTrustTestUtils.useAccountRatingCooldown(0);
 	}
 
 	@Test
@@ -91,6 +92,9 @@ public class AccountTrustSnapshotTests extends Common {
 			assertTrue(tableHasPrimaryKey(repository, "AccountRatings", "rater"));
 			assertTrue(tableHasPrimaryKey(repository, "AccountRatings", "category"));
 			assertTrue(tableHasColumn(repository, "RateAccountTransactions", "category"));
+			assertTrue(tableHasColumn(repository, "RateAccountTransactions", "rating_change_height"));
+			assertTrue(indexHasColumns(repository, "RateAccountTransactions",
+					"RateAccountTransactionEdgeChangeHeightIndex", "target", "rater", "category", "rating_change_height"));
 			assertTrue(indexHasColumns(repository, "AccountRatings", "AccountRatingsTargetCategoryRatingIndex",
 					"target", "category", "rating"));
 			assertTrue(indexHasColumns(repository, "AccountRatings", "AccountRatingsRaterCategoryTargetIndex",

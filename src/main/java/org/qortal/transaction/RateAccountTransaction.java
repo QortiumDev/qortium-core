@@ -1,6 +1,7 @@
 package org.qortal.transaction;
 
 import org.qortal.account.Account;
+import org.qortal.account.AccountTrustPolicy;
 import org.qortal.asset.Asset;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
@@ -72,6 +73,9 @@ public class RateAccountTransaction extends Transaction {
 		if (existingRating != null && existingRating.getRating() == rating)
 			return ValidationResult.ACCOUNT_RATING_UNCHANGED;
 
+		if (isRatingChangeTooSoon(targetPublicKey, raterPublicKey, category))
+			return ValidationResult.ACCOUNT_RATING_CHANGE_TOO_SOON;
+
 		Account rater = getRater();
 		if (rater.getConfirmedBalance(Asset.NATIVE) < this.rateAccountTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
@@ -91,6 +95,7 @@ public class RateAccountTransaction extends Transaction {
 		if (previousRatingData != null)
 			this.rateAccountTransactionData.setPreviousRating(previousRatingData.getRating());
 
+		this.rateAccountTransactionData.setRatingChangeHeight(this.repository.getBlockRepository().getBlockchainHeight() + 1);
 		this.repository.getTransactionRepository().save(this.rateAccountTransactionData);
 
 		if (rating == AccountRating.NO_RATING) {
@@ -119,7 +124,29 @@ public class RateAccountTransaction extends Transaction {
 		}
 
 		this.rateAccountTransactionData.setPreviousRating(null);
+		this.rateAccountTransactionData.setRatingChangeHeight(null);
 		this.repository.getTransactionRepository().save(this.rateAccountTransactionData);
+	}
+
+	private boolean isRatingChangeTooSoon(byte[] targetPublicKey, byte[] raterPublicKey,
+			AccountRatingCategory category) throws DataException {
+		int cooldownBlocks = AccountTrustPolicy.getAccountRatingChangeCooldownBlocks();
+		if (cooldownBlocks <= 0)
+			return false;
+
+		Integer latestChangeHeight = this.repository.getAccountRatingRepository()
+				.getLatestRatingChangeHeight(targetPublicKey, raterPublicKey, category);
+		if (latestChangeHeight == null)
+			return false;
+
+		return getCurrentChangeHeight() < latestChangeHeight + cooldownBlocks;
+	}
+
+	private int getCurrentChangeHeight() throws DataException {
+		if (this.rateAccountTransactionData.getRatingChangeHeight() != null)
+			return this.rateAccountTransactionData.getRatingChangeHeight();
+
+		return this.repository.getBlockRepository().getBlockchainHeight() + 1;
 	}
 
 	private static boolean isPublicKeyLengthValid(byte[] publicKey) {

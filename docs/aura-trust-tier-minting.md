@@ -142,6 +142,8 @@ Directed account ratings are native chain data:
 - accounts can rate known public-key accounts with Aura-style signed confidence
   values from `-4` through `4`
 - rating `0` clears the rater's active edge for that target
+- repeated changes or removals on the same rater, target, and category edge are
+  limited by the chain-configured rating-change cooldown
 - account-rating summaries expose positive and negative confidence counts
 - those active edges feed the stored trust snapshots used for minting,
   voting, and resource-rating weight
@@ -192,9 +194,9 @@ Qortium now has deterministic decentralized trust derivation APIs:
   remains a possible future Qortium-specific policy decision, but it is not
   part of the current Aura-parity scoring model
 - the implemented thresholds, per-rating caps, positive and Suspicious branch
-  requirements, seed energy, manager hop count, active Subject weighting
-  category, and vote multipliers are chain-configurable through
-  `accountTrustSettings`
+  requirements, seed energy, manager hop count, account-rating change cooldown,
+  active Subject weighting category, and vote multipliers are chain-configurable
+  through `accountTrustSettings`
 - the Subject level is mapped back to Qortium's simple Gold, Silver, Bronze,
   Unverified, and Suspicious statuses as a derived status
 - the older inbound/outbound confidence counts, mutual positive relationships,
@@ -225,7 +227,8 @@ repository state and refreshes it only when trust inputs change:
   compact response
 - `GET /account-ratings/trust-policy` returns the active chain-configured trust
   policy, including seed-energy flow settings, Suspicious requirements, status
-  vote multipliers, category thresholds, and per-rating caps
+  vote multipliers, category thresholds, per-rating caps, and the rating-change
+  cooldown
 - missing Subject snapshots are treated as Unverified for active weight and
   mint-eligibility calculations
 
@@ -312,8 +315,8 @@ The core trust-network mechanics are implemented:
   coverage for initial population, refreshes, orphan cleanup, replacement, and
   repository reopen persistence.
 - trust derivation thresholds, per-rating caps, branch requirements, Suspicious
-  requirements, Manager energy-flow settings, active weighting category, and
-  vote multipliers are chain-configurable.
+  requirements, Manager energy-flow settings, account-rating change cooldown,
+  active weighting category, and vote multipliers are chain-configurable.
 - test-only permissive, current, and strict policy calibration scenarios show
   how the same evidence changes under different threshold, branch, and
   Suspicious-confidence choices. These profiles are examples for launch review,
@@ -335,8 +338,8 @@ Remaining pre-launch work is now hardening rather than core construction:
 - review the launch trust profile against any new realistic graph scenarios
   that are not covered by the current launch-profile tests
 - keep reviewing trust-graph benchmark output and decide whether larger stress
-  profiles, account-rating churn controls, or derivation optimization are needed
-  before launch
+  profiles, additional account-rating churn controls, or derivation optimization
+  are needed before launch
 - keep docs aligned as launch policy is reviewed
 
 ## Test Coverage
@@ -400,6 +403,10 @@ Current trust-network coverage includes these cases:
   separately from full graph behavior tests.
 - chain-config tests prove trust policy values are required, validated, and
   actually drive both vote multipliers and level decisions.
+- account-rating cooldown tests prove same-edge changes and removals are delayed
+  by policy, while first ratings, different targets, different categories,
+  disabled cooldowns, allowed later changes, and orphan rollback behave
+  correctly.
 - account trust explanation tests prove empty known accounts remain
   Unverified, stored and live explanations are distinguishable, and single,
   same-branch, and independent-branch negative ratings report the Suspicious

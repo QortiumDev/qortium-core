@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - core: add account rating churn cooldown
+
+Added a configurable cooldown for changing or removing the same account-rating edge. Qortium now records the block height of each `RATE_ACCOUNT` change, rejects repeated changes by the same rater for the same target and category until the configured window passes, exposes the cooldown through the trust-policy API, and keeps the default launch profile at 1,440 blocks while still allowing derived chains and tests to disable it with `0`. This slows rapid trust-edge flipping without preventing first ratings or ratings in other categories, and the docs and tests now cover the new rule.
+
 ### 2026-05-17 - test: add launch trust review scenarios
 
 Added launch-profile trust-network scenario tests that check how Qortium treats no-evidence minting members, accounts with one trusted supporter, accounts with two independent supporters, same-branch positive and negative evidence, and independent negative ratings that make an account Suspicious. These tests keep the current trust defaults unchanged while giving launch reviewers clearer proof that trust weight, minting allowance, status summaries, and rating removal recovery behave as intended.
