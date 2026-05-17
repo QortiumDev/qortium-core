@@ -122,7 +122,7 @@ public class AccountTrustLaunchStressScenarioTests extends Common {
 
 			assertSubjectStatus(repository, auditOnlyTarget, AccountTrustStatus.UNVERIFIED, 0);
 			assertSubjectStatus(repository, bronzeTarget, AccountTrustStatus.BRONZE, 250);
-			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 500);
+			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 750);
 			assertSubjectStatus(repository, goldTarget, AccountTrustStatus.GOLD, 1_000);
 		}
 	}

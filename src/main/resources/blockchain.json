@@ -18,7 +18,7 @@
 			{ "status": "SUSPICIOUS", "percent": 0 },
 			{ "status": "UNVERIFIED", "percent": 0 },
 			{ "status": "BRONZE", "percent": 25 },
-			{ "status": "SILVER", "percent": 50 },
+			{ "status": "SILVER", "percent": 75 },
 			{ "status": "GOLD", "percent": 100 }
 		],
 		"categoryPolicies": [
@@ -81,8 +81,8 @@
 	"onlineAccountSignaturesMaxLifetime": 86400000,
 	"mempowTransactionUpdatesTimestamp": 1693558800000,
 	"blockRewardBatchStartHeight": 1508000,
-	"blockRewardBatchSize": 1000,
-	"blockRewardBatchAccountsBlockCount": 25,
+	"blockRewardBatchSize": 100,
+	"blockRewardBatchAccountsBlockCount": 10,
 	"mintingGroupIds": [
 		{ "height": 0, "ids": [ 2 ]}
 	],

@@ -212,11 +212,11 @@ public class BatchRewardTests extends Common {
 	}
 
 	@Test
-	public void testBatchReward1000Blocks() throws DataException, IllegalAccessException {
-		// Set reward batching to every 1000 blocks, starting at block 1000, looking back the last 25 blocks for online accounts
-		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchStartHeight", 1000, true);
-		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchSize", 1000, true);
-		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 25, true);
+	public void testBatchReward100Blocks() throws DataException, IllegalAccessException {
+		// Set reward batching to every 100 blocks, starting at block 100, looking back the last 10 blocks for online accounts
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchStartHeight", 100, true);
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchSize", 100, true);
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 10, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
@@ -231,8 +231,8 @@ public class BatchRewardTests extends Common {
 			// Create self shares for bob, chloe and dilbert
 			AccountUtils.generateSelfShares(repository, List.of(bob, chloe, dilbert));
 
-			// Mint blocks 2-1000 - these should be regular non-batched reward distribution blocks
-			for (int i=2; i<=1000; i++) {
+			// Mint blocks 2-100 - these should be regular non-batched reward distribution blocks
+			for (int i=2; i<=100; i++) {
 				Block block = BlockUtils.mintBlockWithReorgs(repository, 2);
 				assertFalse(block.isBatchRewardDistributionActive());
 				assertTrue(block.isRewardDistributionBlock());
@@ -240,8 +240,8 @@ public class BatchRewardTests extends Common {
 				assertTrue(block.isOnlineAccountsBlock());
 			}
 
-			// Mint blocks 1001-1974 - these should have no online accounts or rewards
-			for (int i=1001; i<=1974; i++) {
+			// Mint blocks 101-189 - these should have no online accounts or rewards
+			for (int i=101; i<=189; i++) {
 				Block block = BlockUtils.mintBlockWithReorgs(repository, 2);
 				assertTrue(block.isBatchRewardDistributionActive());
 				assertFalse(block.isRewardDistributionBlock());
@@ -250,8 +250,8 @@ public class BatchRewardTests extends Common {
 				assertEquals(0, block.getBlockData().getOnlineAccountsCount());
 			}
 
-			// Mint blocks 1975-1999 - these should have online accounts but no rewards
-			for (int i=1975; i<=1998; i++) {
+			// Mint blocks 190-198 - these should have online accounts but no rewards
+			for (int i=190; i<=198; i++) {
 				List<PrivateKeyAccount> onlineAccounts = Arrays.asList(aliceSelfShare, bobSelfShare);
 				Block block = BlockMinter.mintTestingBlock(repository, onlineAccounts.toArray(new PrivateKeyAccount[0]));
 				assertTrue(block.isBatchRewardDistributionActive());
@@ -261,7 +261,7 @@ public class BatchRewardTests extends Common {
 				assertEquals(2, block.getBlockData().getOnlineAccountsCount());
 			}
 
-			// Mint block 1999 - same as above, but with more online accounts
+			// Mint block 199 - same as above, but with more online accounts
 			List<PrivateKeyAccount> onlineAccounts = Arrays.asList(aliceSelfShare, bobSelfShare, chloeSelfShare);
 			Block block = BlockMinter.mintTestingBlock(repository, onlineAccounts.toArray(new PrivateKeyAccount[0]));
 			assertTrue(block.isBatchRewardDistributionActive());
@@ -270,19 +270,19 @@ public class BatchRewardTests extends Common {
 			assertTrue(block.isOnlineAccountsBlock());
 			assertEquals(3, block.getBlockData().getOnlineAccountsCount());
 
-			// Mint block 2000
-			Block block2000 = BlockUtils.mintBlockWithReorgs(repository, 12);
+			// Mint block 200
+			Block block200 = BlockUtils.mintBlockWithReorgs(repository, 12);
 
-			// Online accounts should be included from block 1999
-			assertEquals(3, block2000.getBlockData().getOnlineAccountsCount());
+			// Online accounts should be included from block 199
+			assertEquals(3, block200.getBlockData().getOnlineAccountsCount());
 
-			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 2000);
+			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 200);
 
 			// It's a distribution block (which is technically also an online accounts block)
-			assertTrue(block2000.isBatchRewardDistributionBlock());
-			assertTrue(block2000.isRewardDistributionBlock());
-			assertTrue(block2000.isBatchRewardDistributionActive());
-			assertTrue(block2000.isOnlineAccountsBlock());
+			assertTrue(block200.isBatchRewardDistributionBlock());
+			assertTrue(block200.isRewardDistributionBlock());
+			assertTrue(block200.isBatchRewardDistributionActive());
+			assertTrue(block200.isOnlineAccountsBlock());
 		}
 	}
 
@@ -687,10 +687,10 @@ public class BatchRewardTests extends Common {
 		// target block is in the online-account capture/distribution window.
 		Common.useSettings("test-settings-v2-reward-scaling.json");
 
-		// Set reward batching to every 1000 blocks, starting at block 0, looking back the last 25 blocks for online accounts
+		// Set reward batching to every 100 blocks, starting at block 0, looking back the last 10 blocks for online accounts
 		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchStartHeight", 0, true);
-		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchSize", 1000, true);
-		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 25, true);
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchSize", 100, true);
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 10, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
@@ -705,8 +705,8 @@ public class BatchRewardTests extends Common {
 			// Create self shares for bob, chloe and dilbert
 			AccountUtils.generateSelfShares(repository, List.of(bob, chloe, dilbert));
 
-			// Mint blocks 1-974 - these should have no online accounts or rewards
-			for (int i=1; i<974; i++) {
+			// Mint blocks 1-89 - these should have no online accounts or rewards
+			for (int i=1; i<89; i++) {
 				Block block = BlockUtils.mintBlockWithReorgs(repository, 2);
 				assertTrue(block.isBatchRewardDistributionActive());
 				assertFalse(block.isRewardDistributionBlock());
@@ -715,8 +715,8 @@ public class BatchRewardTests extends Common {
 				assertEquals(0, block.getBlockData().getOnlineAccountsCount());
 			}
 
-			// Mint blocks 975-998 - these should have online accounts but no rewards
-			for (int i=975; i<=998; i++) {
+			// Mint blocks 90-98 - these should have online accounts but no rewards
+			for (int i=90; i<=98; i++) {
 				List<PrivateKeyAccount> onlineAccounts = Arrays.asList(aliceSelfShare, bobSelfShare, chloeSelfShare);
 				Block block = BlockMinter.mintTestingBlock(repository, onlineAccounts.toArray(new PrivateKeyAccount[0]));
 				assertTrue(block.isBatchRewardDistributionActive());
@@ -730,7 +730,7 @@ public class BatchRewardTests extends Common {
 			TransactionData transactionData = AccountUtils.createRewardShare(repository, chloe, chloe, -100, 10000000L);
 			TransactionUtils.signAndImportValid(repository, transactionData, chloe);
 
-			// Mint block 999 - Chloe's account should still be included as the reward share cancellation is delayed
+			// Mint block 99 - Chloe's account should still be included as the reward share cancellation is delayed
 			List<PrivateKeyAccount> onlineAccounts = Arrays.asList(aliceSelfShare, bobSelfShare, chloeSelfShare);
 			Block block = BlockMinter.mintTestingBlock(repository, onlineAccounts.toArray(new PrivateKeyAccount[0]));
 			assertTrue(block.isBatchRewardDistributionActive());
@@ -739,19 +739,19 @@ public class BatchRewardTests extends Common {
 			assertTrue(block.isOnlineAccountsBlock());
 			assertEquals(3, block.getBlockData().getOnlineAccountsCount());
 
-			// Mint block 1000
-			Block block1000 = BlockUtils.mintBlockWithReorgs(repository, 12);
+			// Mint block 100
+			Block block100 = BlockUtils.mintBlockWithReorgs(repository, 12);
 
-			// Online accounts should be included from block 999
-			assertEquals(3, block1000.getBlockData().getOnlineAccountsCount());
+			// Online accounts should be included from block 99
+			assertEquals(3, block100.getBlockData().getOnlineAccountsCount());
 
-			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 1000);
+			assertEquals(repository.getBlockRepository().getBlockchainHeight(), 100);
 
 			// It's a distribution block (which is technically also an online accounts block)
-			assertTrue(block1000.isBatchRewardDistributionBlock());
-			assertTrue(block1000.isRewardDistributionBlock());
-			assertTrue(block1000.isBatchRewardDistributionActive());
-			assertTrue(block1000.isOnlineAccountsBlock());
+			assertTrue(block100.isBatchRewardDistributionBlock());
+			assertTrue(block100.isRewardDistributionBlock());
+			assertTrue(block100.isBatchRewardDistributionActive());
+			assertTrue(block100.isOnlineAccountsBlock());
 		}
 	}
 
@@ -761,10 +761,10 @@ public class BatchRewardTests extends Common {
 		// capture/distribution window, not in ordinary non-batched heights.
 		Common.useSettings("test-settings-v2-reward-scaling.json");
 
-		// Set reward batching to every 1000 blocks, starting at block 0, looking back the last 25 blocks for online accounts
+		// Set reward batching to every 100 blocks, starting at block 0, looking back the last 10 blocks for online accounts
 		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchStartHeight", 0, true);
-		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchSize", 1000, true);
-		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 25, true);
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchSize", 100, true);
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 10, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
@@ -782,18 +782,18 @@ public class BatchRewardTests extends Common {
 			// Mint a block
 			BlockUtils.mintBlock(repository);
 
-			// Check block heights up to 974 - transaction should be confirmable
-			for (int height=2; height<974; height++) {
+			// Check block heights up to 89 - transaction should be confirmable
+			for (int height=2; height<89; height++) {
 				assertEquals(true, rewardShareTransaction.isConfirmableAtHeight(height));
 			}
 
-			// Check block heights 975-1000 - transaction should not be confirmable
-			for (int height=975; height<1000; height++) {
+			// Check block heights 90-100 - transaction should not be confirmable
+			for (int height=90; height<=100; height++) {
 				assertEquals(false, rewardShareTransaction.isConfirmableAtHeight(height));
 			}
 
-			// Check block heights 1001-1974 - transaction should be confirmable again
-			for (int height=1001; height<1974; height++) {
+			// Check block heights 101-189 - transaction should be confirmable again
+			for (int height=101; height<189; height++) {
 				assertEquals(true, rewardShareTransaction.isConfirmableAtHeight(height));
 			}
 		}

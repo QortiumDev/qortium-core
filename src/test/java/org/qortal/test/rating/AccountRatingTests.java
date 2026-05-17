@@ -1,8 +1,10 @@
 package org.qortal.test.rating;
 
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingSummaryData;
@@ -65,6 +67,25 @@ public class AccountRatingTests extends Common {
 					Transaction.fromData(repository, ratingData(alice, bob, AccountRating.NO_RATING)).isValid());
 			assertEquals(Transaction.ValidationResult.OK,
 					Transaction.fromData(repository, ratingData(alice, bob, AccountRatingCategory.PLAYER, 4)).isValid());
+		}
+	}
+
+	@Test
+	public void testRatingDelayedDuringOnlineAccountBlocks() throws DataException, IllegalAccessException {
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchStartHeight", 0, true);
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchSize", 100, true);
+		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 10, true);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			Transaction ratingTransaction = Transaction.fromData(repository, ratingData(alice, bob, 4));
+
+			assertEquals(true, ratingTransaction.isConfirmableAtHeight(89));
+			assertEquals(false, ratingTransaction.isConfirmableAtHeight(90));
+			assertEquals(false, ratingTransaction.isConfirmableAtHeight(99));
+			assertEquals(false, ratingTransaction.isConfirmableAtHeight(100));
+			assertEquals(true, ratingTransaction.isConfirmableAtHeight(101));
 		}
 	}
 

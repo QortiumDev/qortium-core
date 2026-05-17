@@ -177,7 +177,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(2L, summary.getActiveMintingAllowedCount());
 		assertEquals(1L, summary.getSuspiciousCount());
 		assertEquals(505L, summary.getRawVoteWeight());
-		assertEquals(176L, summary.getEffectiveVoteWeight());
+		assertEquals(201L, summary.getEffectiveVoteWeight());
 
 		AccountTrustSummaryData.StatusSummary gold = findStatusSummary(summary, AccountTrustStatus.GOLD);
 		assertEquals(1L, gold.getAccountCount());
@@ -189,7 +189,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(1L, silver.getAccountCount());
 		assertEquals(1L, silver.getSeedMemberCount());
 		assertEquals(101L, silver.getRawVoteWeight());
-		assertEquals(50L, silver.getEffectiveVoteWeight());
+		assertEquals(75L, silver.getEffectiveVoteWeight());
 
 		AccountTrustSummaryData.StatusSummary bronze = findStatusSummary(summary, AccountTrustStatus.BRONZE);
 		assertEquals(1L, bronze.getAccountCount());
@@ -309,7 +309,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		AccountTrustPolicyData.LevelPolicy subjectLevelTwo = findLevelPolicy(subject, 2);
 		assertEquals(AccountTrustStatus.SILVER, subjectLevelTwo.getMappedTrustStatus());
 		assertEquals(AccountTrustStatus.SILVER.getValue(), subjectLevelTwo.getMappedTrustStatusValue());
-		assertEquals(50, subjectLevelTwo.getMappedTrustWeightPercent());
+		assertEquals(75, subjectLevelTwo.getMappedTrustWeightPercent());
 		assertEquals(50_000_000L, subjectLevelTwo.getThreshold());
 		assertEquals(25_000_000L, subjectLevelTwo.getLevelScoreCap());
 
@@ -944,7 +944,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertFalse(storedExplanation.isLive());
 		assertEquals(alice.getAddress(), storedExplanation.getTargetAddress());
 		assertEquals(AccountTrustStatus.SILVER, storedExplanation.getTrustStatus());
-		assertEquals(50, storedExplanation.getTrustWeightPercent());
+		assertEquals(75, storedExplanation.getTrustWeightPercent());
 		assertEquals(AccountRatingCategory.SUBJECT, storedExplanation.getActiveWeightCategory());
 		assertTrue(storedExplanation.isMintingSeedMember());
 		assertNotNull(storedExplanation.getSnapshotHeight());
@@ -1168,7 +1168,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertNotNull(aliceDerivation.getSnapshotHeight());
 		assertNotNull(aliceDerivation.getSnapshotTimestamp());
 		assertEquals(AccountTrustStatus.SILVER, aliceDerivation.getDerivedTrustStatus());
-		assertEquals(50, aliceDerivation.getDerivedTrustWeightPercent());
+		assertEquals(75, aliceDerivation.getDerivedTrustWeightPercent());
 		AccountTrustCategoryData storedSubject = findCategory(aliceDerivation, AccountRatingCategory.SUBJECT);
 		assertEquals(96_000_000L, storedSubject.getScore());
 		assertEquals(50_000_000L, storedSubject.getLevelScore());

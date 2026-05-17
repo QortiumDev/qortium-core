@@ -142,7 +142,7 @@ public class AccountTrustSnapshotTests extends Common {
 			assertEquals(25_000_000L, aliceSubject.getLevelScoreCap());
 			assertEquals(2, aliceSubject.getLevel());
 			assertEquals(AccountTrustStatus.SILVER, aliceSubject.getMappedTrustStatus());
-			assertEquals(50, aliceSubject.getMappedTrustWeightPercent());
+			assertEquals(75, aliceSubject.getMappedTrustWeightPercent());
 			assertEquals(2, aliceSubject.getInboundRatings().getPositiveMediumCount());
 			assertEquals(lastBlockData.getHeight().intValue(), aliceSubject.getSnapshotHeight());
 			assertEquals(lastBlockData.getTimestamp(), aliceSubject.getSnapshotTimestamp());

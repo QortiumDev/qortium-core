@@ -52,9 +52,16 @@ accounts the chain can identify by public key, not just by address.
 The default launch policy also limits churn on the same rating edge. After a
 rater changes or removes its rating for the same target and category, it must
 wait 1,440 blocks before changing that same edge again. First ratings are not
-delayed, and ratings for a different target or category are unaffected. Derived
-chains can set `accountRatingChangeCooldownBlocks` to `0` if they want no
-consensus-level cooldown.
+delayed, ratings for a different target or category are unaffected, and one
+person's rating does not delay anyone else's rating. Derived chains can set
+`accountRatingChangeCooldownBlocks` to `0` if they want no consensus-level
+cooldown.
+
+During the online-account capture and reward-distribution blocks used for batch
+rewards, `RATE_ACCOUNT` transactions are left pending instead of being
+confirmed. They can confirm again when the protected reward window ends. This
+keeps trust-changing ratings from changing minting eligibility inside the same
+short window that decides a batch reward.
 
 Wallets and explorers can query `GET /account-ratings/cooldown` before building
 a rating transaction. It reports the latest change height, earliest allowed
@@ -81,6 +88,9 @@ Qortium uses four rating categories inspired by Aura:
 The active enforcement status comes from the stored Subject snapshot. The other
 categories help decide who has enough graph position to influence the next
 layer.
+
+These are rating layers, not the final trust statuses shown to users. Gold,
+Silver, Bronze, Unverified, and Suspicious are derived from the Subject layer.
 
 ## How Trust Is Derived
 
@@ -123,7 +133,7 @@ effects like this:
 | Trust status | Minting effect | Voting/resource-rating multiplier |
 | --- | --- | --- |
 | Gold | Can mint if in the Minting group | 100% |
-| Silver | Can mint if in the Minting group | 50% |
+| Silver | Can mint if in the Minting group | 75% |
 | Bronze | Can mint if in the Minting group | 25% |
 | Unverified | Can mint if in the Minting group | 0% |
 | Suspicious | Cannot mint, even if in the Minting group | 0% |
@@ -132,7 +142,7 @@ Missing Subject snapshots are treated as Unverified.
 
 The multiplier applies to raw `blocksMinted` when Qortium calculates effective
 vote weight or weighted resource-rating influence. For example, an account
-with 10,000 `blocksMinted` has 10,000 effective weight as Gold, 5,000 as
+with 10,000 `blocksMinted` has 10,000 effective weight as Gold, 7,500 as
 Silver, 2,500 as Bronze, and 0 as Unverified or Suspicious.
 
 Raw `blocksMinted` stays visible because it is still useful account-history
@@ -149,7 +159,7 @@ weight fields that include the active Subject trust multiplier.
 
 Qortium's launch trust profile uses Subject trust as the active minting,
 voting, and resource-rating weight category. Gold counts at 100%, Silver at
-50%, Bronze at 25%, and Unverified or Suspicious accounts count at 0%.
+75%, Bronze at 25%, and Unverified or Suspicious accounts count at 0%.
 
 The Manager seed starts with 1,000,000 energy and flows through four positive
 Manager-rating hops. Positive trust levels require at least two independent
@@ -172,6 +182,11 @@ The default launch profile also uses a 1,440-block account-rating change
 cooldown for each rater, target, and category edge. This slows rapid trust-edge
 flipping without limiting a rater's ability to rate other accounts or
 categories.
+
+Qortium's launch reward profile distributes minting rewards in 100-block
+batches. The last 10 blocks before each batch payout carry online-account
+signatures, and trust-rating and reward-share changes wait in the mempool until
+that protected window ends.
 
 ## Scale Expectations
 

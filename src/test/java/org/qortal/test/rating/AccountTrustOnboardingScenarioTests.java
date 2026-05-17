@@ -203,7 +203,7 @@ public class AccountTrustOnboardingScenarioTests extends Common {
 			assertEquals(25_000_000L, silverSubject.getLevelScoreCap());
 			assertEquals(2, silverSubject.getLevel());
 			assertEquals(AccountTrustStatus.SILVER, silverSubject.getMappedTrustStatus());
-			assertEquals(500, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, silverSubject));
+			assertEquals(750, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, silverSubject));
 
 			assertEquals(AccountTrustStatus.BRONZE, getProfile(bronzeTarget).getTrustStatus());
 			assertEquals(AccountTrustStatus.SILVER, getProfile(silverTarget).getTrustStatus());

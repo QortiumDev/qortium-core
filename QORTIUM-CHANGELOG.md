@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - core: tune trust and reward launch policy
+
+Adjusted the Qortium launch policy for trust-weighted influence and batched rewards. Silver trust now counts for 75% of earned `blocksMinted` weight while Gold remains 100% and Bronze remains 25%, keeping strong but not final trust closer to full participation, and poll/resource rating tallies now read those percentages from the configured trust policy instead of hardcoded values. Batch rewards now use 100-block batches with a 10-block online-account capture window, and account-rating transactions wait for that protected reward window to end before confirming, matching the delayed-confirmation approach already used for reward-share changes. The account-rating cooldown remains 1,440 blocks and is documented as applying only to the same rater, target, and category edge.
+
 ### 2026-05-17 - docs: record trust launch performance review
 
 Recorded the latest local performance review for the account trust network. The updated guide now includes refreshed static and churn benchmark numbers for the medium and large generated trust graphs, and the Aura trust-tier note explains that the latest review stayed close to the existing baseline. This keeps the launch documentation honest about current performance while making clear that these are local reference measurements, not consensus limits, and that no immediate trust-derivation optimization is currently required before launch.

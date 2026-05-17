@@ -482,16 +482,7 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 	}
 
 	private String trustSummaryEffectiveVoteWeightSql() {
-		StringBuilder sql = new StringBuilder(256);
-		sql.append("CASE ats.mapped_trust_status ");
-		for (AccountTrustStatus status : AccountTrustStatus.values()) {
-			sql.append("WHEN ").append(status.getValue())
-					.append(" THEN ").append(TRUST_SUMMARY_BLOCKS_MINTED_SQL)
-					.append(" * ").append(status.getVoteWeightPercent()).append(" / 100 ");
-		}
-		sql.append("ELSE 0 END");
-
-		return sql.toString();
+		return HSQLDBTrustWeightSql.effectiveWeightSql("ats.mapped_trust_status", TRUST_SUMMARY_BLOCKS_MINTED_SQL);
 	}
 
 	@Override

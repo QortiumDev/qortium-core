@@ -233,10 +233,10 @@ public class PollsApiTests extends ApiCommon {
 
 			PollVotes pollVotes = this.pollsResource.getPollVotes(pollName, true);
 			assertEquals(Integer.valueOf(5), pollVotes.totalVotes);
-			assertEquals(Integer.valueOf(50), pollVotes.totalWeight);
+			assertEquals(Integer.valueOf(75), pollVotes.totalWeight);
 			assertEquals(Integer.valueOf(502), pollVotes.rawTotalWeight);
 			assertNull(pollVotes.voteDetails);
-			assertEquals(50, findOptionWeight(pollVotes.voteWeights, "1"));
+			assertEquals(75, findOptionWeight(pollVotes.voteWeights, "1"));
 			assertEquals(0, findOptionWeight(pollVotes.voteWeights, "2"));
 			assertEquals(0, findOptionWeight(pollVotes.voteWeights, "3"));
 			assertEquals(100, findOptionRawWeight(pollVotes.voteWeights, "1"));
@@ -260,9 +260,9 @@ public class PollsApiTests extends ApiCommon {
 
 			PollVotes.VoteDetail aliceVoteDetail = findVoteDetail(fullPollVotes.voteDetails, alice.getAddress());
 			assertEquals(AccountTrustStatus.SILVER.name(), aliceVoteDetail.trustStatus);
-			assertEquals(Integer.valueOf(50), aliceVoteDetail.effectiveVoteWeight);
+			assertEquals(Integer.valueOf(75), aliceVoteDetail.effectiveVoteWeight);
 			assertEquals(Integer.valueOf(AccountTrustStatus.SILVER.getValue()), aliceVoteDetail.trustStatusValue);
-			assertEquals(Integer.valueOf(50), aliceVoteDetail.trustWeightPercent);
+			assertEquals(Integer.valueOf(75), aliceVoteDetail.trustWeightPercent);
 			assertNotNull(aliceVoteDetail.trustSnapshotHeight);
 			assertNotNull(aliceVoteDetail.trustSnapshotTimestamp);
 
@@ -274,9 +274,9 @@ public class PollsApiTests extends ApiCommon {
 
 			PollVotes updatedPollVotes = this.pollsResource.getPollVotes(pollName, true);
 			assertEquals(Integer.valueOf(5), updatedPollVotes.totalVotes);
-			assertEquals(Integer.valueOf(50), updatedPollVotes.totalWeight);
+			assertEquals(Integer.valueOf(75), updatedPollVotes.totalWeight);
 			assertEquals(Integer.valueOf(502), updatedPollVotes.rawTotalWeight);
-			assertEquals(50, findOptionWeight(updatedPollVotes.voteWeights, "1"));
+			assertEquals(75, findOptionWeight(updatedPollVotes.voteWeights, "1"));
 			assertEquals(0, findOptionWeight(updatedPollVotes.voteWeights, "2"));
 			assertEquals(202, findOptionRawWeight(updatedPollVotes.voteWeights, "2"));
 		}
@@ -306,17 +306,17 @@ public class PollsApiTests extends ApiCommon {
 
 			PollVotes closedPollVotes = this.pollsResource.getPollVotes(pollName, false);
 			assertEquals(Integer.valueOf(2), closedPollVotes.totalVotes);
-			assertEquals(Integer.valueOf(50), closedPollVotes.totalWeight);
+			assertEquals(Integer.valueOf(75), closedPollVotes.totalWeight);
 			assertEquals(Integer.valueOf(202), closedPollVotes.rawTotalWeight);
-			assertEquals(50, findOptionWeight(closedPollVotes.voteWeights, "1"));
+			assertEquals(75, findOptionWeight(closedPollVotes.voteWeights, "1"));
 			assertEquals(0, findOptionWeight(closedPollVotes.voteWeights, "2"));
 			assertEquals(101, findOptionRawWeight(closedPollVotes.voteWeights, "1"));
 			assertEquals(101, findOptionRawWeight(closedPollVotes.voteWeights, "2"));
 
 			PollVotes.VoteDetail aliceVoteDetail = findVoteDetail(closedPollVotes.voteDetails, alice.getAddress());
 			assertEquals(AccountTrustStatus.SILVER.name(), aliceVoteDetail.trustStatus);
-			assertEquals(Integer.valueOf(50), aliceVoteDetail.trustWeightPercent);
-			assertEquals(Integer.valueOf(50), aliceVoteDetail.effectiveVoteWeight);
+			assertEquals(Integer.valueOf(75), aliceVoteDetail.trustWeightPercent);
+			assertEquals(Integer.valueOf(75), aliceVoteDetail.effectiveVoteWeight);
 			assertNull(aliceVoteDetail.trustSnapshotHeight);
 			assertNull(aliceVoteDetail.trustSnapshotTimestamp);
 
@@ -325,9 +325,9 @@ public class PollsApiTests extends ApiCommon {
 
 			PollVotes updatedPollVotes = this.pollsResource.getPollVotes(pollName, false);
 			assertEquals(Integer.valueOf(2), updatedPollVotes.totalVotes);
-			assertEquals(Integer.valueOf(50), updatedPollVotes.totalWeight);
+			assertEquals(Integer.valueOf(75), updatedPollVotes.totalWeight);
 			assertEquals(Integer.valueOf(202), updatedPollVotes.rawTotalWeight);
-			assertEquals(50, findOptionWeight(updatedPollVotes.voteWeights, "1"));
+			assertEquals(75, findOptionWeight(updatedPollVotes.voteWeights, "1"));
 			assertEquals(0, findOptionWeight(updatedPollVotes.voteWeights, "2"));
 		}
 	}

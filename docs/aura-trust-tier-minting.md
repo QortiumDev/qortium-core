@@ -102,7 +102,7 @@ modifies what that account can earn or how much its earned history counts.
 | Trust status | Minting effect | Voting multiplier |
 | --- | --- | --- |
 | Gold | Can mint if in the minting group | 100% |
-| Silver | Can mint if in the minting group | 50% |
+| Silver | Can mint if in the minting group | 75% |
 | Bronze | Can mint if in the minting group | 25% |
 | Unverified | Can mint if in the minting group | 0% |
 | Suspicious | Cannot mint, even if in the minting group | 0% |
@@ -111,7 +111,7 @@ This keeps `blocksMinted` as the familiar accumulated work signal. The
 multiplier is applied when calculating effective voting weight. For example:
 
 - a Gold account with 10,000 `blocksMinted` votes with 10,000 effective weight
-- a Silver account with 10,000 `blocksMinted` votes with 5,000 effective weight
+- a Silver account with 10,000 `blocksMinted` votes with 7,500 effective weight
 - a Bronze account with 10,000 `blocksMinted` votes with 2,500 effective weight
 - an Unverified account can cast a vote, but contributes zero effective weight
 - a Suspicious account is blocked from minting and contributes zero effective
@@ -144,6 +144,11 @@ Directed account ratings are native chain data:
 - rating `0` clears the rater's active edge for that target
 - repeated changes or removals on the same rater, target, and category edge are
   limited by the chain-configured rating-change cooldown
+- the cooldown is per edge, so one rater can still rate other targets and other
+  raters are not delayed by someone else's rating
+- during the online-account capture and reward-distribution blocks used for
+  batch rewards, account-rating changes remain pending until the protected
+  reward window ends
 - `GET /account-ratings/cooldown` lets clients show the latest change height,
   earliest allowed height, remaining block count, and whether the edge can be
   changed in the next block
@@ -383,7 +388,7 @@ Current trust-network coverage includes these cases:
 - missing Subject snapshots are treated as Unverified for minting eligibility.
 - raw `blocksMinted` still increases for eligible minting accounts according to
   the existing block or batch reward rules.
-- vote tallies apply 100%, 50%, 25%, and 0% derived Subject multipliers
+- vote tallies apply 100%, 75%, 25%, and 0% derived Subject multipliers
   correctly.
 - an Unverified account's vote is recorded but contributes zero weight.
 - a Suspicious account's existing raw `blocksMinted` does not create effective

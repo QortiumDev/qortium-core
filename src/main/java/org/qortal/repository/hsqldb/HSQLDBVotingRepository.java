@@ -22,17 +22,8 @@ import java.util.Map;
 public class HSQLDBVotingRepository implements VotingRepository {
 
 	protected HSQLDBRepository repository;
-	private static final String ACTIVE_TRUST_STATUS_SQL = "COALESCE(ats.mapped_trust_status, 0)";
-	private static final String EFFECTIVE_VOTE_WEIGHT_SQL = "CASE " + ACTIVE_TRUST_STATUS_SQL + " "
-			+ "WHEN 3 THEN a.blocks_minted "
-			+ "WHEN 2 THEN a.blocks_minted / 2 "
-			+ "WHEN 1 THEN a.blocks_minted / 4 "
-			+ "ELSE 0 END";
-	private static final String TRUST_WEIGHT_PERCENT_SQL = "CASE " + ACTIVE_TRUST_STATUS_SQL + " "
-			+ "WHEN 3 THEN 100 "
-			+ "WHEN 2 THEN 50 "
-			+ "WHEN 1 THEN 25 "
-			+ "ELSE 0 END";
+	private static final String ACTIVE_TRUST_STATUS_SQL = HSQLDBTrustWeightSql.activeTrustStatusSql("ats");
+	private static final String RAW_VOTE_WEIGHT_SQL = "CAST(COALESCE(a.blocks_minted, 0) AS BIGINT)";
 
 	public HSQLDBVotingRepository(HSQLDBRepository repository) {
 		this.repository = repository;
@@ -251,11 +242,13 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public void freezeClosedPolls(int blockHeight, long blockTimestamp) throws DataException {
+		String effectiveVoteWeightSql = HSQLDBTrustWeightSql.effectiveWeightSql(ACTIVE_TRUST_STATUS_SQL, RAW_VOTE_WEIGHT_SQL);
+		String trustWeightPercentSql = HSQLDBTrustWeightSql.trustWeightPercentSql(ACTIVE_TRUST_STATUS_SQL);
 		String frozenResultsSql = "INSERT INTO PollFrozenResults "
 				+ "(poll_id, option_index, vote_count, vote_weight, raw_vote_weight, freeze_height, freeze_timestamp) "
 				+ "SELECT p.poll_id, po.option_index, COUNT(pv.voter), "
-				+ "COALESCE(SUM(" + EFFECTIVE_VOTE_WEIGHT_SQL + "), 0), "
-				+ "COALESCE(SUM(a.blocks_minted), 0), ?, ? "
+				+ "COALESCE(SUM(" + effectiveVoteWeightSql + "), 0), "
+				+ "COALESCE(SUM(" + RAW_VOTE_WEIGHT_SQL + "), 0), ?, ? "
 				+ "FROM Polls p "
 				+ "JOIN PollOptions po ON po.poll_id = p.poll_id "
 				+ "LEFT JOIN PollVotes pv ON pv.poll_id = p.poll_id AND pv.option_index = po.option_index + 1 "
@@ -268,8 +261,8 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 		String frozenVoteDetailsSql = "INSERT INTO PollFrozenVoteDetails "
 				+ "(poll_id, voter, option_index, raw_vote_weight, trust_status, trust_weight_percent, effective_vote_weight, freeze_height, freeze_timestamp) "
-				+ "SELECT p.poll_id, pv.voter, pv.option_index, COALESCE(a.blocks_minted, 0), " + ACTIVE_TRUST_STATUS_SQL + ", "
-				+ TRUST_WEIGHT_PERCENT_SQL + ", " + EFFECTIVE_VOTE_WEIGHT_SQL + ", ?, ? "
+				+ "SELECT p.poll_id, pv.voter, pv.option_index, " + RAW_VOTE_WEIGHT_SQL + ", " + ACTIVE_TRUST_STATUS_SQL + ", "
+				+ trustWeightPercentSql + ", " + effectiveVoteWeightSql + ", ?, ? "
 				+ "FROM Polls p "
 				+ "JOIN PollVotes pv ON pv.poll_id = p.poll_id "
 				+ "LEFT JOIN Accounts a ON pv.voter = a.public_key "

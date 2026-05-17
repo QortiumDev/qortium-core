@@ -3,6 +3,7 @@ package org.qortal.transaction;
 import org.qortal.account.Account;
 import org.qortal.account.AccountRatingValidation;
 import org.qortal.asset.Asset;
+import org.qortal.block.Block;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
@@ -57,6 +58,15 @@ public class RateAccountTransaction extends Transaction {
 			return ValidationResult.NO_BALANCE;
 
 		return ValidationResult.OK;
+	}
+
+	@Override
+	public boolean isConfirmableAtHeight(int height) {
+		if (Block.isBatchRewardDistributionActive(height)
+				&& (Block.isOnlineAccountsBlock(height) || Block.isBatchRewardDistributionBlock(height)))
+			return false;
+
+		return true;
 	}
 
 	@Override
