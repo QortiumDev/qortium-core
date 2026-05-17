@@ -12,9 +12,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.*;
 import org.qortal.api.model.SimpleTransactionSignRequest;
+import org.qortal.block.Block;
 import org.qortal.controller.Controller;
 import org.qortal.controller.LiteNode;
 import org.qortal.crypto.Crypto;
+import org.qortal.data.transaction.TransactionConfirmationTimingData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.globalization.Translator;
 import org.qortal.repository.DataException;
@@ -47,6 +49,10 @@ import java.util.concurrent.locks.ReentrantLock;
 @Path("/transactions")
 @Tag(name = "Transactions")
 public class TransactionsResource {
+
+	private static final int CONFIRMATION_TIMING_SCAN_BLOCKS = 10_000;
+	private static final String PROTECTED_ONLINE_ACCOUNT_WINDOW = "PROTECTED_ONLINE_ACCOUNT_WINDOW";
+	private static final String UNKNOWN_DELAY = "UNKNOWN";
 
 	@Context
 	HttpServletRequest request;
@@ -575,6 +581,99 @@ public class TransactionsResource {
 		}  catch (TransformationException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
 		}
+	}
+
+	@POST
+	@Path("/confirmation-timing")
+	@Operation(
+			summary = "Get confirmation timing for supplied transaction data",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.TEXT_PLAIN,
+							schema = @Schema(
+									type = "string"
+							)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "transaction confirmation timing",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(
+											implementation = TransactionConfirmationTimingData.class
+									)
+							)
+					)
+			}
+	)
+	@ApiErrors({
+			ApiError.INVALID_CRITERIA, ApiError.INVALID_DATA, ApiError.JSON, ApiError.REPOSITORY_ISSUE,
+			ApiError.TRANSFORMATION_ERROR
+	})
+	public TransactionConfirmationTimingData getTransactionConfirmationTiming(String rawInputBytes58) {
+		byte[] rawInputBytes = Base58.decode(rawInputBytes58);
+		if (rawInputBytes.length == 0)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.JSON);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			byte[] rawBytes = Bytes.concat(rawInputBytes, new byte[TransactionTransformer.SIGNATURE_LENGTH]);
+
+			TransactionData transactionData = TransactionTransformer.fromBytes(rawBytes);
+			if (transactionData == null)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+			return buildConfirmationTiming(repository, transaction);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		}
+	}
+
+	private static TransactionConfirmationTimingData buildConfirmationTiming(Repository repository,
+			Transaction transaction) throws DataException {
+		int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+		int candidateHeight = currentHeight + 1;
+		boolean transactionConfirmable = transaction.isConfirmable();
+		boolean confirmableAtCandidateHeight = transactionConfirmable
+				&& transaction.isConfirmableAtHeight(candidateHeight);
+
+		Integer firstConfirmableHeight = null;
+		Integer confirmationDelayBlocks = null;
+		String delayReason = null;
+
+		if (transactionConfirmable && !confirmableAtCandidateHeight) {
+			firstConfirmableHeight = findFirstConfirmableHeight(transaction, candidateHeight);
+			if (firstConfirmableHeight != null)
+				confirmationDelayBlocks = firstConfirmableHeight - candidateHeight;
+			delayReason = delayReason(candidateHeight);
+		}
+
+		return new TransactionConfirmationTimingData(transaction.getTransactionData().getType(), currentHeight,
+				candidateHeight, transactionConfirmable, confirmableAtCandidateHeight, firstConfirmableHeight,
+				confirmationDelayBlocks, delayReason);
+	}
+
+	private static Integer findFirstConfirmableHeight(Transaction transaction, int candidateHeight) {
+		int maxHeight = candidateHeight + CONFIRMATION_TIMING_SCAN_BLOCKS;
+		for (int height = candidateHeight + 1; height <= maxHeight; ++height) {
+			if (transaction.isConfirmableAtHeight(height))
+				return height;
+		}
+
+		return null;
+	}
+
+	private static String delayReason(int candidateHeight) {
+		if (Block.isBatchRewardDistributionActive(candidateHeight)
+				&& (Block.isOnlineAccountsBlock(candidateHeight)
+				|| Block.isBatchRewardDistributionBlock(candidateHeight)))
+			return PROTECTED_ONLINE_ACCOUNT_WINDOW;
+
+		return UNKNOWN_DELAY;
 	}
 
 	@GET

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - api: expose generic transaction confirmation timing
+
+Added a generic transaction confirmation timing API so clients can tell when a valid transaction is accepted but waiting for a later confirmable block. This applies the same explanation path to account ratings, reward-share changes, privilege transfers, and any future transaction type with height-based confirmation limits, without changing transaction validation, mempool behavior, block minting, or trust scoring.
+
 ### 2026-05-17 - test: cover delayed account rating confirmation windows
 
 Added end-to-end coverage for account ratings submitted near protected reward-window blocks. The new test proves a `RATE_ACCOUNT` transaction can sit unconfirmed through the online-account capture and batch distribution window without changing stored ratings or trust snapshots, then applies normally when the next confirmable block is minted and rolls back cleanly if that block is orphaned.
