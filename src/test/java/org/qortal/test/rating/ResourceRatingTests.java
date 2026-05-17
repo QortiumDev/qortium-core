@@ -154,7 +154,7 @@ public class ResourceRatingTests extends Common {
 			assertEquals(3, summary.getRatingCount());
 			assertEquals(17L, summary.getRatingTotal());
 			assertEquals(Long.valueOf(305L), summary.getRawTotalWeight());
-			assertEquals(Long.valueOf(77L), summary.getTotalWeight());
+			assertEquals(Long.valueOf(72L), summary.getTotalWeight());
 			assertEquals(17.0d / 3.0d, summary.getAverageRating(), 0.0000001d);
 			assertEquals(1737.0d / 305.0d, summary.getRawWeightedAverageRating(), 0.0000001d);
 			assertEquals(10.0d, summary.getWeightedAverageRating(), 0.0000001d);
@@ -166,7 +166,7 @@ public class ResourceRatingTests extends Common {
 			assertEquals(0L, distributionFor(summary, 6).getRatingWeight());
 			assertEquals(1, distributionFor(summary, 10).getRatingCount());
 			assertEquals(103L, distributionFor(summary, 10).getRawRatingWeight());
-			assertEquals(77L, distributionFor(summary, 10).getRatingWeight());
+			assertEquals(72L, distributionFor(summary, 10).getRatingWeight());
 		}
 	}
 

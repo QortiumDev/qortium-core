@@ -17,8 +17,8 @@
 		"statusVoteWeightPercents": [
 			{ "status": "SUSPICIOUS", "percent": 0 },
 			{ "status": "UNVERIFIED", "percent": 0 },
-			{ "status": "BRONZE", "percent": 25 },
-			{ "status": "SILVER", "percent": 75 },
+			{ "status": "BRONZE", "percent": 40 },
+			{ "status": "SILVER", "percent": 70 },
 			{ "status": "GOLD", "percent": 100 }
 		],
 		"categoryPolicies": [

@@ -121,8 +121,8 @@ public class AccountTrustLaunchStressScenarioTests extends Common {
 			rateByBothSupporters(repository, supporterA, supporterB, goldTarget, 4);
 
 			assertSubjectStatus(repository, auditOnlyTarget, AccountTrustStatus.UNVERIFIED, 0);
-			assertSubjectStatus(repository, bronzeTarget, AccountTrustStatus.BRONZE, 250);
-			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 750);
+			assertSubjectStatus(repository, bronzeTarget, AccountTrustStatus.BRONZE, 400);
+			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 700);
 			assertSubjectStatus(repository, goldTarget, AccountTrustStatus.GOLD, 1_000);
 		}
 	}
@@ -224,7 +224,7 @@ public class AccountTrustLaunchStressScenarioTests extends Common {
 			assertEquals(AccountTrustStatus.BRONZE, targetSubject.getMappedTrustStatus());
 			assertEquals(1, targetSubject.getLevel());
 			assertEquals(10_000_000L, targetSubject.getLevelScore());
-			assertEquals(250, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, targetSubject));
+			assertEquals(400, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, targetSubject));
 		}
 	}
 

@@ -58,7 +58,7 @@ public class AccountTrustTransitionScenarioTests extends Common {
 				addMintingSeed(repository, extraSeed);
 			AccountTrustTestUtils.refreshTrustSnapshots(repository);
 
-			assertSubjectStatus(repository, target, AccountTrustStatus.BRONZE, 250);
+			assertSubjectStatus(repository, target, AccountTrustStatus.BRONZE, 400);
 
 			for (PrivateKeyAccount extraSeed : extraSeeds)
 				repository.getGroupRepository().deleteMember(TestChainBootstrapUtils.MINTING_GROUP_ID,

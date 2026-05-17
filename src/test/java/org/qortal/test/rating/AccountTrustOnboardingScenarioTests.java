@@ -194,7 +194,7 @@ public class AccountTrustOnboardingScenarioTests extends Common {
 			assertEquals(5_000_000L, bronzeSubject.getLevelScoreCap());
 			assertEquals(1, bronzeSubject.getLevel());
 			assertEquals(AccountTrustStatus.BRONZE, bronzeSubject.getMappedTrustStatus());
-			assertEquals(250, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, bronzeSubject));
+			assertEquals(400, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, bronzeSubject));
 
 			AccountTrustSnapshotData silverSubject = findSnapshot(repository, silverTarget.getAddress(),
 					AccountRatingCategory.SUBJECT);
@@ -203,7 +203,7 @@ public class AccountTrustOnboardingScenarioTests extends Common {
 			assertEquals(25_000_000L, silverSubject.getLevelScoreCap());
 			assertEquals(2, silverSubject.getLevel());
 			assertEquals(AccountTrustStatus.SILVER, silverSubject.getMappedTrustStatus());
-			assertEquals(750, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, silverSubject));
+			assertEquals(700, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, silverSubject));
 
 			assertEquals(AccountTrustStatus.BRONZE, getProfile(bronzeTarget).getTrustStatus());
 			assertEquals(AccountTrustStatus.SILVER, getProfile(silverTarget).getTrustStatus());

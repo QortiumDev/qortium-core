@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - core: rebalance trust vote multipliers
+
+Changed Qortium's default trust vote multipliers so Gold still counts for 100% of earned `blocksMinted`, Silver now counts for 70%, and Bronze now counts for 40%. This keeps Unverified and Suspicious accounts at zero effective voting or resource-rating weight, while making Bronze participation more meaningful and keeping Gold clearly strongest. The trust graph, rating rules, Suspicious blocking, minting eligibility, and stored snapshot mechanics are unchanged.
+
 ### 2026-05-17 - test: cover trust rating client workflow
 
 Added API-level workflow coverage for account trust ratings so wallet and explorer behavior is tested as one coherent path. The new tests load trust profile, explanation, policy, preview, cooldown, unsigned rating transaction, confirmation timing, transaction signing, block confirmation, and post-confirmation refresh for both adding and removing a rating. This strengthens confidence in the documented client flow without changing trust scoring, transaction validation, public APIs, schemas, or policy defaults.

@@ -90,9 +90,9 @@ public class AddressesApiTests extends ApiCommon {
 			AccountData accountInfo = this.addressesResource.getAccountInfo(aliceAddress);
 			assertEquals(AccountTrustStatus.SILVER, accountInfo.getTrustStatus());
 			assertEquals(AccountTrustStatus.SILVER.getValue(), accountInfo.getTrustStatusValue());
-			assertEquals(75, accountInfo.getTrustWeightPercent());
+			assertEquals(70, accountInfo.getTrustWeightPercent());
 			assertTrue(accountInfo.isTrustAllowsMinting());
-			assertEquals(75, accountInfo.getEffectiveVoteWeight());
+			assertEquals(70, accountInfo.getEffectiveVoteWeight());
 			assertNotNull(accountInfo.getTrustSnapshotHeight());
 			assertNotNull(accountInfo.getTrustSnapshotTimestamp());
 		}

@@ -67,8 +67,8 @@ public class AccountTrustLaunchCommunityScenarioTests extends Common {
 			assertTrue("No-evidence Minting group seeds should still be able to mint",
 					new Account(repository, seedAccount.getAddress()).canMint(false));
 			assertSubjectStatus(repository, auditOnlyTarget, AccountTrustStatus.UNVERIFIED, 0);
-			assertSubjectStatus(repository, bronzeTarget, AccountTrustStatus.BRONZE, 250);
-			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 750);
+			assertSubjectStatus(repository, bronzeTarget, AccountTrustStatus.BRONZE, 400);
+			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 700);
 			assertSubjectStatus(repository, goldTarget, AccountTrustStatus.GOLD, 1_000);
 			assertSubjectStatus(repository, suspiciousTarget, AccountTrustStatus.SUSPICIOUS, 0);
 			assertFalse("Suspicious trust status should not allow minting",
@@ -153,7 +153,7 @@ public class AccountTrustLaunchCommunityScenarioTests extends Common {
 			rateByAllSigned(repository, Arrays.asList(supporterA, supporterB), suspiciousTarget, -2);
 
 			assertSubjectStatus(repository, goldTarget, AccountTrustStatus.GOLD, 1_000);
-			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 750);
+			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 700);
 			assertSubjectStatus(repository, suspiciousTarget, AccountTrustStatus.SUSPICIOUS, 0);
 			assertFalse(AccountTrustWeight.canMint(findSnapshot(repository, suspiciousTarget.getAddress(),
 					AccountRatingCategory.SUBJECT)));
@@ -174,7 +174,7 @@ public class AccountTrustLaunchCommunityScenarioTests extends Common {
 			assertTrue(AccountTrustWeight.canMint(findSnapshot(repository, suspiciousTarget.getAddress(),
 					AccountRatingCategory.SUBJECT)));
 			assertSubjectStatus(repository, goldTarget, AccountTrustStatus.GOLD, 1_000);
-			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 750);
+			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 700);
 		}
 	}
 

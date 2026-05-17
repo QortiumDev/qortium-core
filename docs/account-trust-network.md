@@ -133,8 +133,8 @@ effects like this:
 | Trust status | Minting effect | Voting/resource-rating multiplier |
 | --- | --- | --- |
 | Gold | Can mint if in the Minting group | 100% |
-| Silver | Can mint if in the Minting group | 75% |
-| Bronze | Can mint if in the Minting group | 25% |
+| Silver | Can mint if in the Minting group | 70% |
+| Bronze | Can mint if in the Minting group | 40% |
 | Unverified | Can mint if in the Minting group | 0% |
 | Suspicious | Cannot mint, even if in the Minting group | 0% |
 
@@ -142,8 +142,8 @@ Missing Subject snapshots are treated as Unverified.
 
 The multiplier applies to raw `blocksMinted` when Qortium calculates effective
 vote weight or weighted resource-rating influence. For example, an account
-with 10,000 `blocksMinted` has 10,000 effective weight as Gold, 7,500 as
-Silver, 2,500 as Bronze, and 0 as Unverified or Suspicious.
+with 10,000 `blocksMinted` has 10,000 effective weight as Gold, 7,000 as
+Silver, 4,000 as Bronze, and 0 as Unverified or Suspicious.
 
 Raw `blocksMinted` stays visible because it is still useful account-history
 data. Effective weight is the value used for active governance and weighted
@@ -159,7 +159,7 @@ weight fields that include the active Subject trust multiplier.
 
 Qortium's launch trust profile uses Subject trust as the active minting,
 voting, and resource-rating weight category. Gold counts at 100%, Silver at
-75%, Bronze at 25%, and Unverified or Suspicious accounts count at 0%.
+70%, Bronze at 40%, and Unverified or Suspicious accounts count at 0%.
 
 The Manager seed starts with 1,000,000 energy and flows through four positive
 Manager-rating hops. Positive trust levels require at least two independent

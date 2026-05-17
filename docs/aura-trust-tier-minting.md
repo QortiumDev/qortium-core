@@ -102,8 +102,8 @@ modifies what that account can earn or how much its earned history counts.
 | Trust status | Minting effect | Voting multiplier |
 | --- | --- | --- |
 | Gold | Can mint if in the minting group | 100% |
-| Silver | Can mint if in the minting group | 75% |
-| Bronze | Can mint if in the minting group | 25% |
+| Silver | Can mint if in the minting group | 70% |
+| Bronze | Can mint if in the minting group | 40% |
 | Unverified | Can mint if in the minting group | 0% |
 | Suspicious | Cannot mint, even if in the minting group | 0% |
 
@@ -111,8 +111,8 @@ This keeps `blocksMinted` as the familiar accumulated work signal. The
 multiplier is applied when calculating effective voting weight. For example:
 
 - a Gold account with 10,000 `blocksMinted` votes with 10,000 effective weight
-- a Silver account with 10,000 `blocksMinted` votes with 7,500 effective weight
-- a Bronze account with 10,000 `blocksMinted` votes with 2,500 effective weight
+- a Silver account with 10,000 `blocksMinted` votes with 7,000 effective weight
+- a Bronze account with 10,000 `blocksMinted` votes with 4,000 effective weight
 - an Unverified account can cast a vote, but contributes zero effective weight
 - a Suspicious account is blocked from minting and contributes zero effective
   weight
@@ -388,7 +388,7 @@ Current trust-network coverage includes these cases:
 - missing Subject snapshots are treated as Unverified for minting eligibility.
 - raw `blocksMinted` still increases for eligible minting accounts according to
   the existing block or batch reward rules.
-- vote tallies apply 100%, 75%, 25%, and 0% derived Subject multipliers
+- vote tallies apply 100%, 70%, 40%, and 0% derived Subject multipliers
   correctly.
 - an Unverified account's vote is recorded but contributes zero weight.
 - a Suspicious account's existing raw `blocksMinted` does not create effective
