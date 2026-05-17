@@ -39,7 +39,7 @@ for live, display-backed, funded-wallet, or long-running checks.
 - `-Dqortium.runLongMempowTests=true`
   Runs the long MemoryPoW compute benchmarks. The default suite keeps fast compute and known-nonce verification coverage instead.
 - `-Dqortium.runLongTrustNetworkTests=true`
-  Runs larger synthetic account trust network derivation benchmarks. The default suite keeps a smaller deterministic scale sanity test.
+  Runs larger synthetic account trust network derivation and rating-churn benchmarks. The default suite keeps smaller deterministic scale and churn sanity tests.
 - `-Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false`
   Allows GUI display tests to open the splash frame and system tray when a desktop display is available. Headless Maven runs still exercise the splash no-op path.
   A manual `GUI display tests` GitHub Actions workflow runs the same checks under `xvfb`.
@@ -61,7 +61,7 @@ mvn test -DskipJUnitTests=false
 # Long MemoryPoW benchmarks
 mvn test -DskipJUnitTests=false -Dqortium.runLongMempowTests=true -Dtest=org.qortal.test.MemoryPoWTests
 
-# Long trust network benchmarks
+# Long trust network derivation and churn benchmarks
 mvn test -DskipJUnitTests=false -Dqortium.runLongTrustNetworkTests=true -Dtest=org.qortal.test.rating.AccountTrustScaleTests
 
 # Display-backed GUI checks

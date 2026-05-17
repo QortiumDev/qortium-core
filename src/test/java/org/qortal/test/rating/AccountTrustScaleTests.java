@@ -6,6 +6,7 @@ import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountTrustCategoryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustSnapshotData;
@@ -70,6 +71,46 @@ public class AccountTrustScaleTests extends Common {
 
 		runSyntheticBenchmark(new SyntheticTrustGraphProfile("medium", 3, 6, 12, 18, 24, 32));
 		runSyntheticBenchmark(new SyntheticTrustGraphProfile("large", 4, 10, 30, 45, 60, 75));
+		runSyntheticChurnBenchmark(new SyntheticTrustGraphProfile("medium", 3, 6, 12, 18, 24, 32), 4, 48, 24);
+		runSyntheticChurnBenchmark(new SyntheticTrustGraphProfile("large", 4, 10, 30, 45, 60, 75), 4, 120, 60);
+	}
+
+	@Test
+	public void testSyntheticTrustGraphChurnRefreshScaleSanity() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			SyntheticTrustGraph graph = createSyntheticTrustGraph(repository,
+					new SyntheticTrustGraphProfile("default-churn", 2, 3, 4, 6, 8, 10));
+			repository.saveChanges();
+
+			AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
+					repository.getBlockRepository().getLastBlock().getTimestamp());
+			repository.saveChanges();
+
+			int baselineRatingCount = graph.getActiveRatingCount();
+			int expectedSnapshotCount = graph.expectedAccountAddresses.size() * AccountRatingCategory.values().length;
+			assertEquals(expectedSnapshotCount, repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, null, null)
+					.size());
+
+			ChurnResult churnResult = applyDeterministicChurn(repository, graph, 0, 12, 6);
+			repository.saveChanges();
+
+			assertTrue("Synthetic churn should change ratings", churnResult.changedRatings > 0);
+			assertTrue("Synthetic churn should remove ratings", churnResult.removedRatings > 0);
+			assertEquals(baselineRatingCount - churnResult.removedRatings, graph.getActiveRatingCount());
+
+			AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
+					repository.getBlockRepository().getLastBlock().getTimestamp());
+			repository.saveChanges();
+
+			List<AccountTrustDerivationData> derivedAccounts = AccountTrustDerivation.deriveAll(repository);
+			assertDerivedGraphShape(repository, graph, derivedAccounts);
+
+			List<AccountTrustSnapshotData> snapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, null, null);
+			assertEquals(expectedSnapshotCount, snapshots.size());
+			assertSnapshotRowsAreComplete(graph.expectedAccountAddresses, snapshots);
+		}
 	}
 
 	private void runSyntheticBenchmark(SyntheticTrustGraphProfile profile) throws DataException {
@@ -96,14 +137,110 @@ public class AccountTrustScaleTests extends Common {
 			long totalTime = deriveTime + refreshTime;
 
 			System.out.printf("Trust graph benchmark %s: accounts=%d, ratings=%d, snapshots=%d, derive=%dms, refresh=%dms, total=%dms%n",
-					profile.name, graph.expectedAccountAddresses.size(), graph.ratingCount, snapshotCount, deriveTime,
+					profile.name, graph.expectedAccountAddresses.size(), graph.getActiveRatingCount(), snapshotCount, deriveTime,
 					refreshTime, totalTime);
 		}
 	}
 
+	private void runSyntheticChurnBenchmark(SyntheticTrustGraphProfile profile, int churnRounds, int changesPerRound,
+			int removalsPerRound) throws DataException {
+		Common.useDefaultSettings();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			SyntheticTrustGraph graph = createSyntheticTrustGraph(repository, profile);
+			repository.saveChanges();
+
+			AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
+					repository.getBlockRepository().getLastBlock().getTimestamp());
+			repository.saveChanges();
+
+			int startingRatingCount = graph.getActiveRatingCount();
+			int changedRatings = 0;
+			int removedRatings = 0;
+			long totalRefreshTime = 0L;
+			long maxRefreshTime = 0L;
+
+			for (int round = 0; round < churnRounds; ++round) {
+				ChurnResult churnResult = applyDeterministicChurn(repository, graph, round, changesPerRound, removalsPerRound);
+				changedRatings += churnResult.changedRatings;
+				removedRatings += churnResult.removedRatings;
+				repository.saveChanges();
+
+				long refreshStart = System.currentTimeMillis();
+				AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
+						repository.getBlockRepository().getLastBlock().getTimestamp());
+				repository.saveChanges();
+				long refreshTime = System.currentTimeMillis() - refreshStart;
+				totalRefreshTime += refreshTime;
+				maxRefreshTime = Math.max(maxRefreshTime, refreshTime);
+
+				assertDerivedGraphShape(repository, graph, AccountTrustDerivation.deriveAll(repository));
+			}
+
+			int snapshotCount = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, null, null)
+					.size();
+			long averageRefreshTime = churnRounds == 0 ? 0L : totalRefreshTime / churnRounds;
+
+			System.out.printf("Trust graph churn benchmark %s: accounts=%d, startingRatings=%d, endingRatings=%d, rounds=%d, changedRatings=%d, removedRatings=%d, snapshots=%d, totalRefresh=%dms, averageRefresh=%dms, maxRefresh=%dms%n",
+					profile.name, graph.expectedAccountAddresses.size(), startingRatingCount, graph.getActiveRatingCount(),
+					churnRounds, changedRatings, removedRatings, snapshotCount, totalRefreshTime, averageRefreshTime,
+					maxRefreshTime);
+		}
+	}
+
+	private ChurnResult applyDeterministicChurn(Repository repository, SyntheticTrustGraph graph, int round,
+			int maxRatingChanges, int maxRatingRemovals) throws DataException {
+		int removedRatings = removeSubjectRatings(repository, graph, round, maxRatingRemovals);
+		int changedRatings = changeActiveRatings(repository, graph, round, maxRatingChanges);
+
+		return new ChurnResult(changedRatings, removedRatings);
+	}
+
+	private int removeSubjectRatings(Repository repository, SyntheticTrustGraph graph, int round, int maxRatingRemovals)
+			throws DataException {
+		List<SyntheticRating> activeRatings = graph.getActiveRatings();
+		if (activeRatings.isEmpty() || maxRatingRemovals <= 0)
+			return 0;
+
+		int removedRatings = 0;
+		int start = Math.floorMod(round * 11, activeRatings.size());
+		for (int i = 0; i < activeRatings.size() && removedRatings < maxRatingRemovals; ++i) {
+			SyntheticRating rating = activeRatings.get((start + i * 13) % activeRatings.size());
+			if (rating.category != AccountRatingCategory.SUBJECT || !rating.active)
+				continue;
+
+			rating.remove(repository);
+			++removedRatings;
+		}
+
+		return removedRatings;
+	}
+
+	private int changeActiveRatings(Repository repository, SyntheticTrustGraph graph, int round, int maxRatingChanges)
+			throws DataException {
+		List<SyntheticRating> activeRatings = graph.getActiveRatings();
+		if (activeRatings.isEmpty() || maxRatingChanges <= 0)
+			return 0;
+
+		int changedRatings = 0;
+		int start = Math.floorMod(round * 7, activeRatings.size());
+		for (int i = 0; i < activeRatings.size() && changedRatings < maxRatingChanges; ++i) {
+			SyntheticRating rating = activeRatings.get((start + i * 5) % activeRatings.size());
+			if (!rating.active)
+				continue;
+
+			int updatedRating = rating.rating == 4 ? 3 : 4;
+			rating.change(repository, updatedRating);
+			++changedRatings;
+		}
+
+		return changedRatings;
+	}
+
 	private void assertDerivedGraphShape(Repository repository, SyntheticTrustGraph graph,
 			List<AccountTrustDerivationData> derivedAccounts) throws DataException {
-		assertEquals(graph.ratingCount, repository.getAccountRatingRepository()
+		assertEquals(graph.getActiveRatingCount(), repository.getAccountRatingRepository()
 				.getRatings(null, null, null, null, null, null)
 				.size());
 		assertEquals(graph.expectedAccountAddresses.size(), derivedAccounts.size());
@@ -148,9 +285,9 @@ public class AccountTrustScaleTests extends Common {
 	private SyntheticTrustGraph createSyntheticTrustGraph(Repository repository, SyntheticTrustGraphProfile profile)
 			throws DataException {
 		Set<String> expectedAccountAddresses = new TreeSet<>(getActiveMintingSeedAddresses(repository));
+		List<SyntheticRating> ratings = new ArrayList<>();
 		List<PrivateKeyAccount> seeds = generateKnownAccounts(repository, profile.seedCount, expectedAccountAddresses);
 		List<PrivateKeyAccount> managerEvaluators = new ArrayList<>();
-		int ratingCount = 0;
 
 		for (PrivateKeyAccount seed : seeds) {
 			ensureMintingGroupMember(repository, seed);
@@ -161,10 +298,10 @@ public class AccountTrustScaleTests extends Common {
 				PrivateKeyAccount evaluator = generateKnownAccount(repository, expectedAccountAddresses);
 				managerEvaluators.add(evaluator);
 
-				ratingCount += saveRating(repository, seed, firstHop, AccountRatingCategory.MANAGER);
-				ratingCount += saveRating(repository, firstHop, secondHop, AccountRatingCategory.MANAGER);
-				ratingCount += saveRating(repository, secondHop, thirdHop, AccountRatingCategory.MANAGER);
-				ratingCount += saveRating(repository, thirdHop, evaluator, AccountRatingCategory.MANAGER);
+				saveRating(repository, ratings, seed, firstHop, AccountRatingCategory.MANAGER);
+				saveRating(repository, ratings, firstHop, secondHop, AccountRatingCategory.MANAGER);
+				saveRating(repository, ratings, secondHop, thirdHop, AccountRatingCategory.MANAGER);
+				saveRating(repository, ratings, thirdHop, evaluator, AccountRatingCategory.MANAGER);
 			}
 		}
 
@@ -181,25 +318,25 @@ public class AccountTrustScaleTests extends Common {
 
 		for (PrivateKeyAccount evaluator : managerEvaluators) {
 			for (PrivateKeyAccount managerTarget : managerTargets)
-				ratingCount += saveRating(repository, evaluator, managerTarget, AccountRatingCategory.MANAGER);
+				saveRating(repository, ratings, evaluator, managerTarget, AccountRatingCategory.MANAGER);
 		}
 
 		for (PrivateKeyAccount managerTarget : managerTargets) {
 			for (PrivateKeyAccount trainerTarget : trainerTargets)
-				ratingCount += saveRating(repository, managerTarget, trainerTarget, AccountRatingCategory.TRAINER);
+				saveRating(repository, ratings, managerTarget, trainerTarget, AccountRatingCategory.TRAINER);
 		}
 
 		for (PrivateKeyAccount trainerTarget : trainerTargets) {
 			for (PrivateKeyAccount playerTarget : playerTargets)
-				ratingCount += saveRating(repository, trainerTarget, playerTarget, AccountRatingCategory.PLAYER);
+				saveRating(repository, ratings, trainerTarget, playerTarget, AccountRatingCategory.PLAYER);
 		}
 
 		for (PrivateKeyAccount playerTarget : playerTargets) {
 			for (PrivateKeyAccount subjectTarget : subjectTargets)
-				ratingCount += saveRating(repository, playerTarget, subjectTarget, AccountRatingCategory.SUBJECT);
+				saveRating(repository, ratings, playerTarget, subjectTarget, AccountRatingCategory.SUBJECT);
 		}
 
-		return new SyntheticTrustGraph(expectedAccountAddresses, ratingCount);
+		return new SyntheticTrustGraph(expectedAccountAddresses, ratings);
 	}
 
 	private List<PrivateKeyAccount> generateKnownAccounts(Repository repository, int count,
@@ -237,19 +374,79 @@ public class AccountTrustScaleTests extends Common {
 		return seedAddresses;
 	}
 
-	private int saveRating(Repository repository, PrivateKeyAccount rater, PrivateKeyAccount target,
-			AccountRatingCategory category) throws DataException {
+	private void saveRating(Repository repository, List<SyntheticRating> ratings, PrivateKeyAccount rater,
+			PrivateKeyAccount target, AccountRatingCategory category) throws DataException {
 		AccountTrustTestUtils.saveAccountRating(repository, rater, target, category, 4);
-		return 1;
+		ratings.add(new SyntheticRating(rater, target, category, 4));
+	}
+
+	private static class ChurnResult {
+		private final int changedRatings;
+		private final int removedRatings;
+
+		private ChurnResult(int changedRatings, int removedRatings) {
+			this.changedRatings = changedRatings;
+			this.removedRatings = removedRatings;
+		}
 	}
 
 	private static class SyntheticTrustGraph {
 		private final Set<String> expectedAccountAddresses;
-		private final int ratingCount;
+		private final List<SyntheticRating> ratings;
 
-		private SyntheticTrustGraph(Set<String> expectedAccountAddresses, int ratingCount) {
+		private SyntheticTrustGraph(Set<String> expectedAccountAddresses, List<SyntheticRating> ratings) {
 			this.expectedAccountAddresses = Collections.unmodifiableSet(new TreeSet<>(expectedAccountAddresses));
-			this.ratingCount = ratingCount;
+			this.ratings = ratings;
+		}
+
+		private List<SyntheticRating> getActiveRatings() {
+			List<SyntheticRating> activeRatings = new ArrayList<>();
+			for (SyntheticRating rating : this.ratings) {
+				if (rating.active)
+					activeRatings.add(rating);
+			}
+
+			return activeRatings;
+		}
+
+		private int getActiveRatingCount() {
+			int ratingCount = 0;
+			for (SyntheticRating rating : this.ratings) {
+				if (rating.active)
+					++ratingCount;
+			}
+
+			return ratingCount;
+		}
+	}
+
+	private static class SyntheticRating {
+		private final PrivateKeyAccount rater;
+		private final PrivateKeyAccount target;
+		private final AccountRatingCategory category;
+		private int rating;
+		private boolean active = true;
+
+		private SyntheticRating(PrivateKeyAccount rater, PrivateKeyAccount target, AccountRatingCategory category,
+				int rating) {
+			this.rater = rater;
+			this.target = target;
+			this.category = category;
+			this.rating = rating;
+		}
+
+		private void change(Repository repository, int updatedRating) throws DataException {
+			repository.getAccountRatingRepository()
+					.save(new AccountRatingData(this.target.getPublicKey(), this.rater.getPublicKey(), this.category,
+							updatedRating));
+			this.rating = updatedRating;
+			this.active = true;
+		}
+
+		private void remove(Repository repository) throws DataException {
+			repository.getAccountRatingRepository()
+					.delete(this.target.getPublicKey(), this.rater.getPublicKey(), this.category);
+			this.active = false;
 		}
 	}
 

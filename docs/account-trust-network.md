@@ -152,11 +152,11 @@ be reviewed as policy choices rather than incidental config edits.
 
 ## Scale Expectations
 
-Qortium's default test suite includes a deterministic trust-graph scale sanity
-test. It proves that a multi-category synthetic graph can be derived and stored
-with complete per-account snapshots.
+Qortium's default test suite includes deterministic trust-graph scale and
+rating-churn sanity tests. They prove that a multi-category synthetic graph can
+be derived, changed, pruned, and stored with complete per-account snapshots.
 
-There is also an opt-in benchmark for larger generated graphs:
+There is also an opt-in benchmark for larger generated graphs and rating churn:
 
 ```bash
 mvn test -DskipJUnitTests=false -Dqortium.runLongTrustNetworkTests=true -Dtest=org.qortal.test.rating.AccountTrustScaleTests
@@ -174,6 +174,11 @@ These timings are machine-dependent and are not consensus limits or launch
 guarantees. They are intended to give Qortium maintainers a repeatable baseline
 for deciding whether larger stress profiles, account-rating churn controls, or
 trust-derivation optimization are needed before launch.
+
+The same opt-in command also prints churn benchmark timings. Those runs mutate
+a generated trust graph across several rounds, refresh snapshots after each
+round, and report total, average, and maximum refresh time so maintainers can
+review whether repeated rating changes need additional launch rules.
 
 ## Polls And Frozen Results
 

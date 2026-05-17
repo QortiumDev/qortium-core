@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: add trust rating churn benchmarks
+
+Added deterministic and opt-in benchmark coverage for account-rating churn in the trust network. The scale tests now prove that a synthetic trust graph can have ratings changed and removed while keeping complete snapshot rows, and the long trust-network benchmark now reports refresh timing across repeated churn rounds so Qortium can decide later whether rating-change limits or trust-derivation optimization are needed before launch.
+
 ### 2026-05-17 - docs: record trust graph scale expectations
 
 Recorded the current trust-network benchmark baseline so Qortium maintainers can see how the synthetic trust graph performs before launch. The account trust guide now documents the opt-in benchmark command, the latest local medium and large profile timings, and the limits of those numbers as reference measurements rather than consensus guarantees, while the Aura trust-tier note now points follow-up work toward larger stress profiles, rating churn controls, or derivation optimization only if benchmark review shows they are needed.
