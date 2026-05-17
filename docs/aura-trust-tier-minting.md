@@ -320,15 +320,17 @@ The core trust-network mechanics are implemented:
   evidence behaves the same way when it is submitted through signed
   `RATE_ACCOUNT` transactions, minted blocks, stored snapshot refreshes, rating
   removals, orphan handling, and minting eligibility checks.
+- the current default launch trust policy is documented in the account trust
+  network guide and pinned by tests so threshold, cap, branch, confidence, seed
+  energy, hop count, and vote-multiplier drift is visible.
 
 Remaining pre-launch work is now hardening rather than core construction:
 
-- continue calibrating default thresholds and caps against realistic graph
-  scenarios
+- continue validating the launch trust profile against realistic graph scenarios
 - improve observability around recent trust-status changes
 - keep stress-testing derivation cost with larger synthetic graphs and review
-  opt-in benchmark output before launch defaults settle
-- keep docs aligned as launch defaults settle
+  opt-in benchmark output before launch
+- keep docs aligned as launch policy is reviewed
 
 ## Test Coverage
 

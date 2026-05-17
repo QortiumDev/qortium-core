@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: pin launch trust policy profile
+
+Documented Qortium's current launch trust policy profile and added tests that pin the default trust thresholds, per-rating caps, branch requirements, Suspicious requirements, seed-energy settings, vote multipliers, and main-versus-test-chain config parity. This makes future trust-policy changes intentional and reviewable without changing the active defaults.
+
 ### 2026-05-17 - test: harden trust explanation coverage
 
 Added focused trust explanation API coverage so Qortium can prove account trust screens have enough audit detail to explain Unverified, Gold, and Suspicious results. The tests now check stored versus live explanations, configured thresholds and caps, branch and confidence requirements, top positive and negative impacts, and same-branch evidence that remains visible without granting trust.

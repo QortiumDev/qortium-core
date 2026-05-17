@@ -127,6 +127,29 @@ minting-level bookkeeping, reports, chain functions, and vote audit fields. For
 polls, resource-rating summaries, and trust-summary totals, use the effective
 weight fields that include the active Subject trust multiplier.
 
+## Default Launch Trust Policy
+
+Qortium's launch trust profile uses Subject trust as the active minting,
+voting, and resource-rating weight category. Gold counts at 100%, Silver at
+50%, Bronze at 25%, and Unverified or Suspicious accounts count at 0%.
+
+The Manager seed starts with 1,000,000 energy and flows through four positive
+Manager-rating hops. Positive trust levels require at least two independent
+seed-derived branches. Suspicious decisions require at least two independent
+negative raters, at least two independent negative branches, and at least
+medium negative confidence.
+
+| Category | Positive levels: threshold / per-rating cap | Suspicious threshold / cap |
+| --- | --- | --- |
+| Manager | L1: 1,000 / 500; L2: 200,000 / 100,000 | -1,000 / 500 |
+| Trainer | L1: 500,000 / 250,000; L2: 1,000,000 / 500,000 | -500,000 / 250,000 |
+| Player | L1: 1,000,000 / 500,000; L2: 2,000,000 / 1,000,000; L3: 3,000,000 / 1,500,000 | -1,000,000 / 500,000 |
+| Subject | L1: 10,000,000 / 5,000,000; L2: 50,000,000 / 25,000,000; L3: 100,000,000 / 50,000,000; L4: 150,000,000 / 75,000,000 | -10,000,000 / 5,000,000 |
+
+These values are pinned by tests as the current Qortium launch profile. Future
+chains can still change them through `accountTrustSettings`, but changes should
+be reviewed as policy choices rather than incidental config edits.
+
 ## Polls And Frozen Results
 
 Open poll results use the current active Subject snapshot and current
