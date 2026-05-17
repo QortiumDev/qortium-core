@@ -191,28 +191,35 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(1L, gold.getAccountCount());
 		assertEquals(1L, gold.getSeedMemberCount());
 		assertEquals(101L, gold.getRawVoteWeight());
+		assertEquals(100, gold.getVoteWeightPercent());
 		assertEquals(101L, gold.getEffectiveVoteWeight());
 
 		AccountTrustSummaryData.StatusSummary silver = findStatusSummary(summary, AccountTrustStatus.SILVER);
 		assertEquals(1L, silver.getAccountCount());
 		assertEquals(1L, silver.getSeedMemberCount());
 		assertEquals(101L, silver.getRawVoteWeight());
+		assertEquals(70, silver.getVoteWeightPercent());
 		assertEquals(70L, silver.getEffectiveVoteWeight());
 
 		AccountTrustSummaryData.StatusSummary bronze = findStatusSummary(summary, AccountTrustStatus.BRONZE);
 		assertEquals(1L, bronze.getAccountCount());
 		assertEquals(0L, bronze.getSeedMemberCount());
+		assertEquals(101L, bronze.getRawVoteWeight());
+		assertEquals(40, bronze.getVoteWeightPercent());
 		assertEquals(40L, bronze.getEffectiveVoteWeight());
 
 		AccountTrustSummaryData.StatusSummary suspicious = findStatusSummary(summary, AccountTrustStatus.SUSPICIOUS);
 		assertEquals(1L, suspicious.getAccountCount());
 		assertEquals(0L, suspicious.getSeedMemberCount());
+		assertEquals(101L, suspicious.getRawVoteWeight());
+		assertEquals(0, suspicious.getVoteWeightPercent());
 		assertEquals(0L, suspicious.getEffectiveVoteWeight());
 		assertFalse(suspicious.isTrustAllowsMinting());
 
 		AccountTrustSummaryData.StatusSummary unverified = findStatusSummary(summary, AccountTrustStatus.UNVERIFIED);
 		assertEquals(1L, unverified.getAccountCount());
 		assertEquals(101L, unverified.getRawVoteWeight());
+		assertEquals(0, unverified.getVoteWeightPercent());
 		assertEquals(0L, unverified.getEffectiveVoteWeight());
 		assertTrue(unverified.isTrustAllowsMinting());
 

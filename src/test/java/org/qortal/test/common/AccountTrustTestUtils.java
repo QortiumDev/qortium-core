@@ -6,6 +6,10 @@ import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
+import org.qortal.data.account.AccountTrustCategoryData;
+import org.qortal.data.account.AccountTrustDerivationData;
+import org.qortal.data.account.AccountTrustRatingCountsData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -195,6 +199,78 @@ public final class AccountTrustTestUtils {
 		AccountTrustDerivation.refreshSnapshots(repository, repository.getBlockRepository().getBlockchainHeight() + 1,
 				repository.getBlockRepository().getLastBlock().getTimestamp());
 		repository.saveChanges();
+	}
+
+	public static void setBlocksMinted(Repository repository, PrivateKeyAccount account, int blocksMinted)
+			throws DataException {
+		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
+		if (accountData == null)
+			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
+
+		accountData.setPublicKey(account.getPublicKey());
+		accountData.setBlocksMinted(blocksMinted);
+
+		repository.getAccountRepository().setMintedBlockCount(accountData);
+		repository.saveChanges();
+	}
+
+	public static void replaceSubjectTrustSnapshots(Repository repository,
+			AccountTrustDerivationData... derivationData) throws DataException {
+		repository.getAccountRatingRepository().replaceTrustDerivationSnapshots(Arrays.asList(derivationData),
+				repository.getBlockRepository().getBlockchainHeight(),
+				repository.getBlockRepository().getLastBlock().getTimestamp());
+		repository.saveChanges();
+	}
+
+	public static AccountTrustDerivationData subjectTrustSnapshot(PrivateKeyAccount account,
+			AccountTrustStatus trustStatus) {
+		return subjectTrustSnapshot(account, trustStatus, false);
+	}
+
+	public static AccountTrustDerivationData subjectTrustSnapshot(PrivateKeyAccount account,
+			AccountTrustStatus trustStatus, boolean seedMember) {
+		AccountTrustCategoryData subjectTrust = new AccountTrustCategoryData(
+				AccountRatingCategory.SUBJECT,
+				scoreForStatus(trustStatus),
+				levelForStatus(trustStatus),
+				trustStatus,
+				new AccountTrustRatingCountsData(),
+				List.of());
+
+		return new AccountTrustDerivationData(account.getPublicKey(), account.getAddress(), trustStatus, seedMember,
+				List.of(subjectTrust));
+	}
+
+	public static long scoreForStatus(AccountTrustStatus trustStatus) {
+		switch (trustStatus) {
+			case GOLD:
+				return 100_000_000L;
+			case SILVER:
+				return 50_000_000L;
+			case BRONZE:
+				return 10_000_000L;
+			case SUSPICIOUS:
+				return -1L;
+			case UNVERIFIED:
+			default:
+				return 0L;
+		}
+	}
+
+	public static int levelForStatus(AccountTrustStatus trustStatus) {
+		switch (trustStatus) {
+			case GOLD:
+				return 3;
+			case SILVER:
+				return 2;
+			case BRONZE:
+				return 1;
+			case SUSPICIOUS:
+				return -1;
+			case UNVERIFIED:
+			default:
+				return 0;
+		}
 	}
 
 	public static void ensureKnownAccount(Repository repository, PrivateKeyAccount account) throws DataException {

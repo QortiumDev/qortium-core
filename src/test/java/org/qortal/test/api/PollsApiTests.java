@@ -6,14 +6,12 @@ import org.qortal.api.ApiError;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.model.PollVotes;
 import org.qortal.api.resource.PollsResource;
-import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.UpdatePollTransactionData;
 import org.qortal.data.transaction.VoteOnPollTransactionData;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollOptionData;
 import org.qortal.data.voting.VoteOnPollData;
-import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -25,7 +23,6 @@ import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.voting.Poll;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -215,70 +212,50 @@ public class PollsApiTests extends ApiCommon {
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
 			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
-			PrivateKeyAccount unverified = createUnverifiedVoteAccount(repository, 100);
+			PrivateKeyAccount suspicious = Common.generateRandomSeedAccount(repository);
 
-			createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
+			AccountTrustTestUtils.setBlocksMinted(repository, alice, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, bob, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, chloe, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, dilbert, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, suspicious, 100);
 
-			setVoteAccount(repository, "alice", 100);
-			setVoteAccount(repository, "bob", 101);
-			setVoteAccount(repository, "chloe", 101);
-			setVoteAccount(repository, "dilbert", 100);
+			AccountTrustTestUtils.replaceSubjectTrustSnapshots(repository,
+					AccountTrustTestUtils.subjectTrustSnapshot(alice, AccountTrustStatus.GOLD),
+					AccountTrustTestUtils.subjectTrustSnapshot(bob, AccountTrustStatus.SILVER),
+					AccountTrustTestUtils.subjectTrustSnapshot(chloe, AccountTrustStatus.BRONZE),
+					AccountTrustTestUtils.subjectTrustSnapshot(dilbert, AccountTrustStatus.UNVERIFIED),
+					AccountTrustTestUtils.subjectTrustSnapshot(suspicious, AccountTrustStatus.SUSPICIOUS));
 
 			repository.getVotingRepository().save(new VoteOnPollData(pollName, alice.getPublicKey(), 1));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 2));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 2));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, dilbert.getPublicKey(), 3));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, unverified.getPublicKey(), 3));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, dilbert.getPublicKey(), 2));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, suspicious.getPublicKey(), 2));
 			repository.saveChanges();
 
 			PollVotes pollVotes = this.pollsResource.getPollVotes(pollName, true);
 			assertEquals(Integer.valueOf(5), pollVotes.totalVotes);
-			assertEquals(Integer.valueOf(70), pollVotes.totalWeight);
-			assertEquals(Integer.valueOf(502), pollVotes.rawTotalWeight);
+			assertEquals(Integer.valueOf(210), pollVotes.totalWeight);
+			assertEquals(Integer.valueOf(500), pollVotes.rawTotalWeight);
 			assertNull(pollVotes.voteDetails);
-			assertEquals(70, findOptionWeight(pollVotes.voteWeights, "1"));
+			assertEquals(210, findOptionWeight(pollVotes.voteWeights, "1"));
 			assertEquals(0, findOptionWeight(pollVotes.voteWeights, "2"));
 			assertEquals(0, findOptionWeight(pollVotes.voteWeights, "3"));
-			assertEquals(100, findOptionRawWeight(pollVotes.voteWeights, "1"));
-			assertEquals(202, findOptionRawWeight(pollVotes.voteWeights, "2"));
-			assertEquals(200, findOptionRawWeight(pollVotes.voteWeights, "3"));
+			assertEquals(300, findOptionRawWeight(pollVotes.voteWeights, "1"));
+			assertEquals(200, findOptionRawWeight(pollVotes.voteWeights, "2"));
+			assertEquals(0, findOptionRawWeight(pollVotes.voteWeights, "3"));
 
 			PollVotes fullPollVotes = this.pollsResource.getPollVotes(pollName, false);
 			assertNotNull(fullPollVotes.voteDetails);
 			assertEquals(5, fullPollVotes.voteDetails.size());
-			assertEquals(Integer.valueOf(502), fullPollVotes.rawTotalWeight);
+			assertEquals(Integer.valueOf(500), fullPollVotes.rawTotalWeight);
 
-			PollVotes.VoteDetail bobVoteDetail = findVoteDetail(fullPollVotes.voteDetails, bob.getAddress());
-			assertEquals(Integer.valueOf(2), bobVoteDetail.optionIndex);
-			assertEquals(Integer.valueOf(101), bobVoteDetail.rawVoteWeight);
-			assertEquals(AccountTrustStatus.UNVERIFIED.name(), bobVoteDetail.trustStatus);
-			assertEquals(Integer.valueOf(AccountTrustStatus.UNVERIFIED.getValue()), bobVoteDetail.trustStatusValue);
-			assertEquals(Integer.valueOf(0), bobVoteDetail.trustWeightPercent);
-			assertEquals(Integer.valueOf(0), bobVoteDetail.effectiveVoteWeight);
-			assertNotNull(bobVoteDetail.trustSnapshotHeight);
-			assertNotNull(bobVoteDetail.trustSnapshotTimestamp);
-
-			PollVotes.VoteDetail aliceVoteDetail = findVoteDetail(fullPollVotes.voteDetails, alice.getAddress());
-			assertEquals(AccountTrustStatus.SILVER.name(), aliceVoteDetail.trustStatus);
-			assertEquals(Integer.valueOf(70), aliceVoteDetail.effectiveVoteWeight);
-			assertEquals(Integer.valueOf(AccountTrustStatus.SILVER.getValue()), aliceVoteDetail.trustStatusValue);
-			assertEquals(Integer.valueOf(70), aliceVoteDetail.trustWeightPercent);
-			assertNotNull(aliceVoteDetail.trustSnapshotHeight);
-			assertNotNull(aliceVoteDetail.trustSnapshotTimestamp);
-
-			PollVotes.VoteDetail unverifiedVoteDetail = findVoteDetail(fullPollVotes.voteDetails, unverified.getAddress());
-			assertEquals(Integer.valueOf(3), unverifiedVoteDetail.optionIndex);
-			assertEquals(Integer.valueOf(100), unverifiedVoteDetail.rawVoteWeight);
-			assertEquals(AccountTrustStatus.UNVERIFIED.name(), unverifiedVoteDetail.trustStatus);
-			assertEquals(Integer.valueOf(0), unverifiedVoteDetail.effectiveVoteWeight);
-
-			PollVotes updatedPollVotes = this.pollsResource.getPollVotes(pollName, true);
-			assertEquals(Integer.valueOf(5), updatedPollVotes.totalVotes);
-			assertEquals(Integer.valueOf(70), updatedPollVotes.totalWeight);
-			assertEquals(Integer.valueOf(502), updatedPollVotes.rawTotalWeight);
-			assertEquals(70, findOptionWeight(updatedPollVotes.voteWeights, "1"));
-			assertEquals(0, findOptionWeight(updatedPollVotes.voteWeights, "2"));
-			assertEquals(202, findOptionRawWeight(updatedPollVotes.voteWeights, "2"));
+			assertVoteDetail(fullPollVotes.voteDetails, alice, 1, AccountTrustStatus.GOLD, 100, 100, true);
+			assertVoteDetail(fullPollVotes.voteDetails, bob, 1, AccountTrustStatus.SILVER, 100, 70, true);
+			assertVoteDetail(fullPollVotes.voteDetails, chloe, 1, AccountTrustStatus.BRONZE, 100, 40, true);
+			assertVoteDetail(fullPollVotes.voteDetails, dilbert, 2, AccountTrustStatus.UNVERIFIED, 100, 0, true);
+			assertVoteDetail(fullPollVotes.voteDetails, suspicious, 2, AccountTrustStatus.SUSPICIOUS, 100, 0, true);
 		}
 	}
 
@@ -293,69 +270,65 @@ public class PollsApiTests extends ApiCommon {
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
 			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
-			createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
-			setVoteAccount(repository, "alice", 100);
-			setVoteAccount(repository, "bob", 101);
+			PrivateKeyAccount suspicious = Common.generateRandomSeedAccount(repository);
+
+			AccountTrustTestUtils.setBlocksMinted(repository, alice, 99);
+			AccountTrustTestUtils.setBlocksMinted(repository, bob, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, chloe, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, dilbert, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, suspicious, 100);
+
+			AccountTrustTestUtils.replaceSubjectTrustSnapshots(repository,
+					AccountTrustTestUtils.subjectTrustSnapshot(alice, AccountTrustStatus.GOLD),
+					AccountTrustTestUtils.subjectTrustSnapshot(bob, AccountTrustStatus.SILVER),
+					AccountTrustTestUtils.subjectTrustSnapshot(chloe, AccountTrustStatus.BRONZE),
+					AccountTrustTestUtils.subjectTrustSnapshot(dilbert, AccountTrustStatus.UNVERIFIED),
+					AccountTrustTestUtils.subjectTrustSnapshot(suspicious, AccountTrustStatus.SUSPICIOUS));
 
 			repository.getVotingRepository().save(new VoteOnPollData(pollName, alice.getPublicKey(), 1));
-			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 2));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, chloe.getPublicKey(), 1));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, dilbert.getPublicKey(), 2));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, suspicious.getPublicKey(), 2));
 			repository.saveChanges();
 
 			BlockUtils.mintBlock(repository);
 			assertNotNull(repository.getVotingRepository().getFrozenPollResults(pollName));
 
 			PollVotes closedPollVotes = this.pollsResource.getPollVotes(pollName, false);
-			assertEquals(Integer.valueOf(2), closedPollVotes.totalVotes);
-			assertEquals(Integer.valueOf(70), closedPollVotes.totalWeight);
-			assertEquals(Integer.valueOf(202), closedPollVotes.rawTotalWeight);
-			assertEquals(70, findOptionWeight(closedPollVotes.voteWeights, "1"));
+			assertEquals(Integer.valueOf(5), closedPollVotes.totalVotes);
+			assertEquals(Integer.valueOf(210), closedPollVotes.totalWeight);
+			assertEquals(Integer.valueOf(500), closedPollVotes.rawTotalWeight);
+			assertEquals(210, findOptionWeight(closedPollVotes.voteWeights, "1"));
 			assertEquals(0, findOptionWeight(closedPollVotes.voteWeights, "2"));
-			assertEquals(101, findOptionRawWeight(closedPollVotes.voteWeights, "1"));
-			assertEquals(101, findOptionRawWeight(closedPollVotes.voteWeights, "2"));
+			assertEquals(300, findOptionRawWeight(closedPollVotes.voteWeights, "1"));
+			assertEquals(200, findOptionRawWeight(closedPollVotes.voteWeights, "2"));
 
-			PollVotes.VoteDetail aliceVoteDetail = findVoteDetail(closedPollVotes.voteDetails, alice.getAddress());
-			assertEquals(AccountTrustStatus.SILVER.name(), aliceVoteDetail.trustStatus);
-			assertEquals(Integer.valueOf(70), aliceVoteDetail.trustWeightPercent);
-			assertEquals(Integer.valueOf(70), aliceVoteDetail.effectiveVoteWeight);
-			assertNull(aliceVoteDetail.trustSnapshotHeight);
-			assertNull(aliceVoteDetail.trustSnapshotTimestamp);
+			assertVoteDetail(closedPollVotes.voteDetails, alice, 1, AccountTrustStatus.GOLD, 100, 100, false);
+			assertVoteDetail(closedPollVotes.voteDetails, bob, 1, AccountTrustStatus.SILVER, 100, 70, false);
+			assertVoteDetail(closedPollVotes.voteDetails, chloe, 1, AccountTrustStatus.BRONZE, 100, 40, false);
+			assertVoteDetail(closedPollVotes.voteDetails, dilbert, 2, AccountTrustStatus.UNVERIFIED, 100, 0, false);
+			assertVoteDetail(closedPollVotes.voteDetails, suspicious, 2, AccountTrustStatus.SUSPICIOUS, 100, 0, false);
 
-			setVoteAccount(repository, "alice", 1000);
-			setVoteAccount(repository, "bob", 1000);
+			AccountTrustTestUtils.setBlocksMinted(repository, alice, 1000);
+			AccountTrustTestUtils.setBlocksMinted(repository, bob, 1000);
+			AccountTrustTestUtils.setBlocksMinted(repository, chloe, 1000);
+			AccountTrustTestUtils.setBlocksMinted(repository, dilbert, 1000);
+			AccountTrustTestUtils.setBlocksMinted(repository, suspicious, 1000);
+			AccountTrustTestUtils.replaceSubjectTrustSnapshots(repository,
+					AccountTrustTestUtils.subjectTrustSnapshot(alice, AccountTrustStatus.GOLD),
+					AccountTrustTestUtils.subjectTrustSnapshot(bob, AccountTrustStatus.GOLD),
+					AccountTrustTestUtils.subjectTrustSnapshot(chloe, AccountTrustStatus.GOLD),
+					AccountTrustTestUtils.subjectTrustSnapshot(dilbert, AccountTrustStatus.GOLD),
+					AccountTrustTestUtils.subjectTrustSnapshot(suspicious, AccountTrustStatus.GOLD));
 
 			PollVotes updatedPollVotes = this.pollsResource.getPollVotes(pollName, false);
-			assertEquals(Integer.valueOf(2), updatedPollVotes.totalVotes);
-			assertEquals(Integer.valueOf(70), updatedPollVotes.totalWeight);
-			assertEquals(Integer.valueOf(202), updatedPollVotes.rawTotalWeight);
-			assertEquals(70, findOptionWeight(updatedPollVotes.voteWeights, "1"));
+			assertEquals(Integer.valueOf(5), updatedPollVotes.totalVotes);
+			assertEquals(Integer.valueOf(210), updatedPollVotes.totalWeight);
+			assertEquals(Integer.valueOf(500), updatedPollVotes.rawTotalWeight);
+			assertEquals(210, findOptionWeight(updatedPollVotes.voteWeights, "1"));
 			assertEquals(0, findOptionWeight(updatedPollVotes.voteWeights, "2"));
 		}
-	}
-
-	private void setVoteAccount(Repository repository, String accountName, int blocksMinted) throws DataException {
-		TestAccount account = Common.getTestAccount(repository, accountName);
-		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
-		if (accountData == null)
-			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
-
-		accountData.setPublicKey(account.getPublicKey());
-		accountData.setBlocksMinted(blocksMinted);
-
-		repository.getAccountRepository().setMintedBlockCount(accountData);
-		repository.saveChanges();
-	}
-
-	private PrivateKeyAccount createUnverifiedVoteAccount(Repository repository, int blocksMinted) throws DataException {
-		byte[] privateKey = new byte[32];
-		Arrays.fill(privateKey, (byte) 7);
-		PrivateKeyAccount account = new PrivateKeyAccount(repository, privateKey);
-		AccountData accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
-
-		repository.getAccountRepository().ensureAccount(accountData);
-		repository.getAccountRepository().setMintedBlockCount(accountData);
-		repository.saveChanges();
-
-		return account;
 	}
 
 	private int findOptionWeight(List<PollVotes.OptionWeight> voteWeights, String optionName) {
@@ -381,9 +354,23 @@ public class PollsApiTests extends ApiCommon {
 				.orElseThrow(() -> new AssertionError("Missing vote detail for " + voterAddress));
 	}
 
-	private void createDerivedSilverSubjectSnapshot(Repository repository, TestAccount alice, TestAccount bob,
-			TestAccount chloe, TestAccount dilbert) throws DataException {
-		AccountTrustTestUtils.createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
+	private void assertVoteDetail(List<PollVotes.VoteDetail> voteDetails, PrivateKeyAccount voter, int optionIndex,
+			AccountTrustStatus trustStatus, int rawWeight, int effectiveWeight, boolean hasLiveSnapshotMetadata) {
+		PollVotes.VoteDetail voteDetail = findVoteDetail(voteDetails, voter.getAddress());
+		assertEquals(Integer.valueOf(optionIndex), voteDetail.optionIndex);
+		assertEquals(Integer.valueOf(rawWeight), voteDetail.rawVoteWeight);
+		assertEquals(trustStatus.name(), voteDetail.trustStatus);
+		assertEquals(Integer.valueOf(trustStatus.getValue()), voteDetail.trustStatusValue);
+		assertEquals(Integer.valueOf(trustStatus.getVoteWeightPercent()), voteDetail.trustWeightPercent);
+		assertEquals(Integer.valueOf(effectiveWeight), voteDetail.effectiveVoteWeight);
+
+		if (hasLiveSnapshotMetadata) {
+			assertNotNull(voteDetail.trustSnapshotHeight);
+			assertNotNull(voteDetail.trustSnapshotTimestamp);
+		} else {
+			assertNull(voteDetail.trustSnapshotHeight);
+			assertNull(voteDetail.trustSnapshotTimestamp);
+		}
 	}
 
 	private void createTestPoll(Repository repository, String pollName) throws DataException {

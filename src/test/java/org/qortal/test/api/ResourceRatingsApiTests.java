@@ -7,7 +7,7 @@ import org.qortal.api.ApiError;
 import org.qortal.api.resource.ResourceRatingsResource;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.block.BlockChain;
-import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.rating.ResourceRatingSummaryData;
 import org.qortal.data.transaction.ArbitraryTransactionData;
 import org.qortal.data.transaction.BaseTransactionData;
@@ -62,12 +62,12 @@ public class ResourceRatingsApiTests extends ApiCommon {
 
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
-			TestAccount chloe = Common.getTestAccount(repository, "chloe");
-			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
-			createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
 
-			setVoteAccount(repository, alice, 100);
-			setVoteAccount(repository, bob, 101);
+			AccountTrustTestUtils.setBlocksMinted(repository, alice, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, bob, 101);
+			AccountTrustTestUtils.replaceSubjectTrustSnapshots(repository,
+					AccountTrustTestUtils.subjectTrustSnapshot(alice, AccountTrustStatus.SILVER),
+					AccountTrustTestUtils.subjectTrustSnapshot(bob, AccountTrustStatus.UNVERIFIED));
 
 			TransactionUtils.signAndMint(repository, ratingData(alice, 10), alice);
 			TransactionUtils.signAndMint(repository, ratingData(bob, 6), bob);
@@ -79,14 +79,14 @@ public class ResourceRatingsApiTests extends ApiCommon {
 		assertEquals(IDENTIFIER, summary.getIdentifier());
 		assertEquals(2, summary.getRatingCount());
 		assertEquals(Long.valueOf(203L), summary.getRawTotalWeight());
-		assertEquals(Long.valueOf(76L), summary.getTotalWeight());
+		assertEquals(Long.valueOf(71L), summary.getTotalWeight());
 		assertEquals(1626.0d / 203.0d, summary.getRawWeightedAverageRating(), 0.0000001d);
 		assertEquals(10.0d, summary.getWeightedAverageRating(), 0.0000001d);
 
 		List<ResourceRatingSummaryData> summaries = this.resourceRatingsResource.getResourceRatings("APP", RESOURCE_NAME, null, null, null, null);
 		assertEquals(1, summaries.size());
 		assertEquals(RESOURCE_NAME, summaries.get(0).getName());
-		assertEquals(Long.valueOf(76L), summaries.get(0).getTotalWeight());
+		assertEquals(Long.valueOf(71L), summaries.get(0).getTotalWeight());
 	}
 
 	@Test
@@ -116,23 +116,6 @@ public class ResourceRatingsApiTests extends ApiCommon {
 
 	private RateResourceTransactionData ratingData(PrivateKeyAccount rater, int rating) throws DataException {
 		return new RateResourceTransactionData(TestTransaction.generateBase(rater), Service.APP.value, RESOURCE_NAME, null, rating);
-	}
-
-	private void createDerivedSilverSubjectSnapshot(Repository repository, TestAccount alice, TestAccount bob,
-			TestAccount chloe, TestAccount dilbert) throws DataException {
-		AccountTrustTestUtils.createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
-	}
-
-	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted) throws DataException {
-		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
-		if (accountData == null)
-			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
-
-		accountData.setPublicKey(account.getPublicKey());
-		accountData.setBlocksMinted(blocksMinted);
-
-		repository.getAccountRepository().setMintedBlockCount(accountData);
-		repository.saveChanges();
 	}
 
 	private void publishResource(Repository repository, String name, Service service, String identifier) throws DataException {

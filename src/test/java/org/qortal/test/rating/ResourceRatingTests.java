@@ -5,7 +5,7 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.block.BlockChain;
-import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.rating.ResourceRatingData;
 import org.qortal.data.rating.ResourceRatingDistributionData;
 import org.qortal.data.rating.ResourceRatingSummaryData;
@@ -110,7 +110,7 @@ public class ResourceRatingTests extends Common {
 			publishResource(repository, RESOURCE_NAME, Service.APP, IDENTIFIER);
 
 			TestAccount alice = Common.getTestAccount(repository, "alice");
-			setVoteAccount(repository, alice, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, alice, 100);
 
 			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 9), alice);
 			ResourceRatingSummaryData summary = repository.getResourceRatingRepository()
@@ -138,35 +138,52 @@ public class ResourceRatingTests extends Common {
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
 			TestAccount dilbert = Common.getTestAccount(repository, "dilbert");
-			createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
+			PrivateKeyAccount suspicious = Common.generateRandomSeedAccount(repository);
 
-			setVoteAccount(repository, alice, 100);
-			setVoteAccount(repository, bob, 101);
-			setVoteAccount(repository, chloe, 101);
+			AccountTrustTestUtils.setBlocksMinted(repository, alice, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, bob, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, chloe, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, dilbert, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, suspicious, 100);
 
-			TransactionUtils.signAndMint(repository, ratingData(alice, Service.APP, RESOURCE_NAME, IDENTIFIER, 10), alice);
-			TransactionUtils.signAndMint(repository, ratingData(bob, Service.APP, RESOURCE_NAME, IDENTIFIER, 6), bob);
-			TransactionUtils.signAndMint(repository, ratingData(chloe, Service.APP, RESOURCE_NAME, IDENTIFIER, 1), chloe);
+			AccountTrustTestUtils.replaceSubjectTrustSnapshots(repository,
+					AccountTrustTestUtils.subjectTrustSnapshot(alice, AccountTrustStatus.GOLD),
+					AccountTrustTestUtils.subjectTrustSnapshot(bob, AccountTrustStatus.SILVER),
+					AccountTrustTestUtils.subjectTrustSnapshot(chloe, AccountTrustStatus.BRONZE),
+					AccountTrustTestUtils.subjectTrustSnapshot(dilbert, AccountTrustStatus.UNVERIFIED),
+					AccountTrustTestUtils.subjectTrustSnapshot(suspicious, AccountTrustStatus.SUSPICIOUS));
+
+			saveResourceRating(repository, alice, 10);
+			saveResourceRating(repository, bob, 8);
+			saveResourceRating(repository, chloe, 6);
+			saveResourceRating(repository, dilbert, 4);
+			saveResourceRating(repository, suspicious, 2);
 
 			ResourceRatingSummaryData summary = repository.getResourceRatingRepository()
 					.getRatingSummary(Service.APP, ResourceRating.toNameKey(RESOURCE_NAME), RESOURCE_NAME, ResourceRating.toIdentifierKey(IDENTIFIER));
 
-			assertEquals(3, summary.getRatingCount());
-			assertEquals(17L, summary.getRatingTotal());
-			assertEquals(Long.valueOf(305L), summary.getRawTotalWeight());
-			assertEquals(Long.valueOf(72L), summary.getTotalWeight());
-			assertEquals(17.0d / 3.0d, summary.getAverageRating(), 0.0000001d);
-			assertEquals(1737.0d / 305.0d, summary.getRawWeightedAverageRating(), 0.0000001d);
-			assertEquals(10.0d, summary.getWeightedAverageRating(), 0.0000001d);
-			assertEquals(1, distributionFor(summary, 1).getRatingCount());
-			assertEquals(101L, distributionFor(summary, 1).getRawRatingWeight());
-			assertEquals(0L, distributionFor(summary, 1).getRatingWeight());
+			assertEquals(5, summary.getRatingCount());
+			assertEquals(30L, summary.getRatingTotal());
+			assertEquals(Long.valueOf(500L), summary.getRawTotalWeight());
+			assertEquals(Long.valueOf(210L), summary.getTotalWeight());
+			assertEquals(6.0d, summary.getAverageRating(), 0.0000001d);
+			assertEquals(6.0d, summary.getRawWeightedAverageRating(), 0.0000001d);
+			assertEquals(1800.0d / 210.0d, summary.getWeightedAverageRating(), 0.0000001d);
+			assertEquals(1, distributionFor(summary, 2).getRatingCount());
+			assertEquals(100L, distributionFor(summary, 2).getRawRatingWeight());
+			assertEquals(0L, distributionFor(summary, 2).getRatingWeight());
+			assertEquals(1, distributionFor(summary, 4).getRatingCount());
+			assertEquals(100L, distributionFor(summary, 4).getRawRatingWeight());
+			assertEquals(0L, distributionFor(summary, 4).getRatingWeight());
 			assertEquals(1, distributionFor(summary, 6).getRatingCount());
-			assertEquals(101L, distributionFor(summary, 6).getRawRatingWeight());
-			assertEquals(0L, distributionFor(summary, 6).getRatingWeight());
+			assertEquals(100L, distributionFor(summary, 6).getRawRatingWeight());
+			assertEquals(40L, distributionFor(summary, 6).getRatingWeight());
+			assertEquals(1, distributionFor(summary, 8).getRatingCount());
+			assertEquals(100L, distributionFor(summary, 8).getRawRatingWeight());
+			assertEquals(70L, distributionFor(summary, 8).getRatingWeight());
 			assertEquals(1, distributionFor(summary, 10).getRatingCount());
-			assertEquals(103L, distributionFor(summary, 10).getRawRatingWeight());
-			assertEquals(72L, distributionFor(summary, 10).getRatingWeight());
+			assertEquals(100L, distributionFor(summary, 10).getRawRatingWeight());
+			assertEquals(100L, distributionFor(summary, 10).getRatingWeight());
 		}
 	}
 
@@ -202,20 +219,10 @@ public class ResourceRatingTests extends Common {
 				.orElseThrow(() -> new AssertionError("Missing distribution for rating " + rating));
 	}
 
-	private void createDerivedSilverSubjectSnapshot(Repository repository, TestAccount alice, TestAccount bob,
-			TestAccount chloe, TestAccount dilbert) throws DataException {
-		AccountTrustTestUtils.createDerivedSilverSubjectSnapshot(repository, alice, bob, chloe, dilbert);
-	}
-
-	private void setVoteAccount(Repository repository, TestAccount account, int blocksMinted) throws DataException {
-		AccountData accountData = repository.getAccountRepository().getAccount(account.getAddress());
-		if (accountData == null)
-			accountData = new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, blocksMinted);
-
-		accountData.setPublicKey(account.getPublicKey());
-		accountData.setBlocksMinted(blocksMinted);
-
-		repository.getAccountRepository().setMintedBlockCount(accountData);
+	private void saveResourceRating(Repository repository, PrivateKeyAccount rater, int rating) throws DataException {
+		repository.getResourceRatingRepository().save(new ResourceRatingData(Service.APP,
+				ResourceRating.toNameKey(RESOURCE_NAME), RESOURCE_NAME, ResourceRating.toIdentifierKey(IDENTIFIER),
+				rater.getPublicKey(), rating));
 		repository.saveChanges();
 	}
 

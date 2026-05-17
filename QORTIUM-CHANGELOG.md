@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: audit trust weighted influence paths
+
+Added regression coverage that checks trust-weighted influence across poll tallies, frozen poll results, resource-rating summaries, and trust-summary totals for Gold, Silver, Bronze, Unverified, and Suspicious accounts. The tests now pin the difference between raw `blocksMinted` history and effective trust-weighted influence so future changes do not accidentally count unverified or suspicious accounts, or bypass the current 100/70/40 launch multipliers.
+
 ### 2026-05-17 - docs: add trust network client integration guide
 
 Added a wallet and explorer integration guide for the account trust network so clients have one practical reference for account trust display, rating previews, cooldown handling, delayed confirmation visibility, network dashboards, and effective vote-weight presentation. The existing trust docs and launch checklist now point to the guide, reducing the risk that clients show raw `blocksMinted` as active governance power or treat protected-window rating delays as failed transactions.
