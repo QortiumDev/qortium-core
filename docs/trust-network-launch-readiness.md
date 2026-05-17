@@ -49,6 +49,30 @@ For every final trust-policy review, also run:
 git diff --check
 ```
 
+## Latest Local Verification
+
+The latest local verification run was completed on 2026-05-17:
+
+- focused delayed-confirmation tests passed:
+  - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.api.TransactionsApiTests,org.qortal.test.rating.AccountRatingTests`
+  - result: 16 tests passed, 0 failures, 0 errors, 0 skipped
+- full readiness suite passed:
+  - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.api.AccountRatingsApiTests,org.qortal.test.api.AddressesApiTests,org.qortal.test.api.PollsApiTests,org.qortal.test.api.TransactionsApiTests,org.qortal.test.rating.AccountRatingCooldownTests,org.qortal.test.rating.AccountRatingTests,org.qortal.test.rating.AccountTrustSnapshotTests,org.qortal.test.rating.AccountTrustOnboardingScenarioTests,org.qortal.test.rating.AccountTrustLaunchScenarioTests,org.qortal.test.rating.AccountTrustLaunchStressScenarioTests,org.qortal.test.rating.AccountTrustLaunchCommunityScenarioTests,org.qortal.test.rating.AccountTrustTransitionScenarioTests,org.qortal.test.rating.AccountTrustAdversarialScenarioTests,org.qortal.test.rating.AccountTrustTransactionCalibrationScenarioTests,org.qortal.test.rating.ResourceRatingTests`
+  - result: 134 tests passed, 0 failures, 0 errors, 0 skipped
+- long trust-network benchmark passed:
+  - command: `mvn test -DskipJUnitTests=false -Dqortium.runLongTrustNetworkTests=true -Dtest=org.qortal.test.rating.AccountTrustScaleTests`
+  - result: 3 tests passed, 0 failures, 0 errors, 0 skipped
+  - medium static graph: 162 accounts, 1,704 ratings, 648 snapshots,
+    19 ms derive, 24 ms refresh, 43 ms total
+  - large static graph: 375 accounts, 9,910 ratings, 1,500 snapshots,
+    91 ms derive, 85 ms refresh, 176 ms total
+  - medium churn graph: 4 rounds, 192 changed ratings, 96 removed ratings,
+    71 ms total refresh, 17 ms average refresh, 20 ms max refresh
+  - large churn graph: 4 rounds, 480 changed ratings, 240 removed ratings,
+    315 ms total refresh, 78 ms average refresh, 90 ms max refresh
+
+These are local reference measurements, not consensus limits.
+
 ## Launch Decisions To Recheck
 
 The core trust-network implementation is in place. The remaining review should

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: verify trust network launch readiness
+
+Added API coverage proving a delayed `RATE_ACCOUNT` transaction remains visible through the unconfirmed transaction API while it waits through the protected online-account window, then confirms once the window ends. The trust-network launch checklist now records the latest local focused test run, full readiness suite, and long benchmark results so the current launch profile has an auditable verification checkpoint without changing trust scoring, consensus rules, transaction schemas, or policy defaults.
+
 ### 2026-05-17 - docs: add trust network launch readiness checklist
 
 Added a dedicated trust-network launch readiness checklist that records Qortium's current trust defaults, required verification commands, open launch-review decisions, and the conditions for treating the trust network as launch-ready. The existing trust docs now point to this checklist so policy review, benchmark review, and client readiness can be tracked in one place without changing consensus rules, APIs, transactions, or config values.

@@ -129,6 +129,39 @@ public class TransactionsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testDelayedRateAccountRemainsVisibleAsUnconfirmed()
+			throws DataException, IllegalAccessException, TransformationException {
+		useShortProtectedWindow();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			mintToHeight(repository, 89);
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			RateAccountTransactionData transactionData = new RateAccountTransactionData(
+					TestTransaction.generateBase(alice), bob.getPublicKey(), 4);
+
+			TransactionUtils.signAndImportValid(repository, transactionData, alice);
+			assertFalse(repository.getTransactionRepository().isConfirmed(transactionData.getSignature()));
+			assertProtectedWindowDelay(repository, rawTransaction(transactionData), TransactionType.RATE_ACCOUNT);
+			assertUnconfirmedApiContains(TransactionType.RATE_ACCOUNT, alice.getPublicKey(), transactionData);
+
+			BlockUtils.mintBlock(repository);
+			assertEquals(90, repository.getBlockRepository().getBlockchainHeight());
+			assertFalse(repository.getTransactionRepository().isConfirmed(transactionData.getSignature()));
+			assertUnconfirmedApiContains(TransactionType.RATE_ACCOUNT, alice.getPublicKey(), transactionData);
+
+			mintToHeight(repository, 100);
+			assertFalse(repository.getTransactionRepository().isConfirmed(transactionData.getSignature()));
+			assertUnconfirmedApiContains(TransactionType.RATE_ACCOUNT, alice.getPublicKey(), transactionData);
+
+			BlockUtils.mintBlock(repository);
+			assertEquals(101, repository.getBlockRepository().getBlockchainHeight());
+			assertTrue(repository.getTransactionRepository().isConfirmed(transactionData.getSignature()));
+			assertUnconfirmedApiDoesNotContain(TransactionType.RATE_ACCOUNT, alice.getPublicKey(), transactionData);
+		}
+	}
+
+	@Test
 	public void testConfirmationTimingForRewardShareWindowDelay()
 			throws DataException, IllegalAccessException, TransformationException {
 		useShortProtectedWindow();
@@ -175,6 +208,22 @@ public class TransactionsApiTests extends ApiCommon {
 		assertEquals(Integer.valueOf(101), timing.getFirstConfirmableHeight());
 		assertEquals(Integer.valueOf(11), timing.getConfirmationDelayBlocks());
 		assertEquals("PROTECTED_ONLINE_ACCOUNT_WINDOW", timing.getDelayReason());
+	}
+
+	private void assertUnconfirmedApiContains(TransactionType transactionType, byte[] creatorPublicKey,
+			TransactionData expectedTransactionData) {
+		assertTrue(this.transactionsResource.getUnconfirmedTransactions(Arrays.asList(transactionType),
+				Base58.encode(creatorPublicKey), null, null, null).stream()
+				.anyMatch(transactionData -> Arrays.equals(transactionData.getSignature(),
+						expectedTransactionData.getSignature())));
+	}
+
+	private void assertUnconfirmedApiDoesNotContain(TransactionType transactionType, byte[] creatorPublicKey,
+			TransactionData expectedTransactionData) {
+		assertFalse(this.transactionsResource.getUnconfirmedTransactions(Arrays.asList(transactionType),
+				Base58.encode(creatorPublicKey), null, null, null).stream()
+				.anyMatch(transactionData -> Arrays.equals(transactionData.getSignature(),
+						expectedTransactionData.getSignature())));
 	}
 
 	private static void useShortProtectedWindow() throws IllegalAccessException {
