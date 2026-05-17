@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: add realistic trust launch graph scenarios
+
+Added realistic launch-community trust scenarios that combine honest onboarding, a no-evidence Minting group seed, isolated farm clusters, Suspicious trust blocking, and mistaken-rating recovery in the same style of graph. The new coverage keeps the current trust policy unchanged while proving Gold, Silver, Bronze, Unverified, and Suspicious outcomes stay stable across mixed launch conditions.
+
 ### 2026-05-17 - api: expose generic transaction confirmation timing
 
 Added a generic transaction confirmation timing API so clients can tell when a valid transaction is accepted but waiting for a later confirmable block. This applies the same explanation path to account ratings, reward-share changes, privilege transfers, and any future transaction type with height-based confirmation limits, without changing transaction validation, mempool behavior, block minting, or trust scoring.
