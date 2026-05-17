@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: document honest trust onboarding scenarios
+
+Added signed-transaction trust-network onboarding scenario tests for the current launch policy. The new coverage proves Minting group members without trust evidence can still mint while carrying zero vote weight, trusted supporters can move accounts through audit-only, Bronze, Silver, and Gold outcomes, support removal is delayed by the account-rating cooldown, and the trust profile and explanation APIs show the result. This documents the ordinary onboarding path without changing trust scoring, transactions, APIs, schema, or default policy values.
+
 ### 2026-05-17 - test: harden launch trust adversarial flows
 
 Added signed-transaction adversarial trust-network scenario tests for the current launch policy. The new coverage proves isolated farm rings stay Unverified, same-branch positive or negative evidence remains visible without granting trust or Suspicious blocking, independent negative evidence can block minting, and the account-rating cooldown blocks rapid trust-edge flipping while still allowing recovery after the configured window. This strengthens launch confidence without changing trust scoring, transactions, APIs, schema, or default policy values.
