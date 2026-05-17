@@ -5,7 +5,9 @@ import org.junit.Test;
 import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
+import org.qortal.api.model.SimpleTransactionSignRequest;
 import org.qortal.api.resource.AccountRatingsResource;
+import org.qortal.api.resource.TransactionsResource;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
@@ -25,6 +27,8 @@ import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.account.AccountTrustStatusChangeData;
 import org.qortal.data.account.AccountTrustSummaryData;
 import org.qortal.data.transaction.RateAccountTransactionData;
+import org.qortal.data.transaction.TransactionConfirmationTimingData;
+import org.qortal.data.transaction.TransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -37,6 +41,8 @@ import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.Transaction;
+import org.qortal.transform.TransformationException;
+import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.Base58;
 
 import java.util.Arrays;
@@ -52,10 +58,12 @@ import static org.junit.Assert.assertTrue;
 public class AccountRatingsApiTests extends ApiCommon {
 
 	private AccountRatingsResource accountRatingsResource;
+	private TransactionsResource transactionsResource;
 
 	@Before
 	public void buildResource() {
 		this.accountRatingsResource = (AccountRatingsResource) ApiCommon.buildResource(AccountRatingsResource.class);
+		this.transactionsResource = (TransactionsResource) ApiCommon.buildResource(TransactionsResource.class);
 	}
 
 	@Test
@@ -1462,6 +1470,162 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testAccountRatingClientWorkflowConfirmsPreviewedTrustChange() throws Exception {
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+		PrivateKeyAccount target;
+		PrivateKeyAccount firstPlayer;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+			target = Common.generateRandomSeedAccount(repository);
+			firstPlayer = Common.generateRandomSeedAccount(repository);
+
+			createAuraTrustGraph(repository, alice, bob, chloe, dilbert);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, firstPlayer);
+			ensureKnownAccount(repository, target);
+			saveAccountRating(repository, firstPlayer, target, AccountRatingCategory.SUBJECT, 4);
+			repository.saveChanges();
+		}
+
+		String targetPublicKey58 = Base58.encode(target.getPublicKey());
+		String raterPublicKey58 = Base58.encode(dilbert.getPublicKey());
+
+		AccountTrustProfileData currentProfile = this.accountRatingsResource.getAccountTrustProfile(targetPublicKey58);
+		assertEquals(AccountTrustStatus.UNVERIFIED, currentProfile.getTrustStatus());
+
+		AccountTrustExplanationData currentExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(targetPublicKey58, true);
+		assertTrue(currentExplanation.isLive());
+		assertEquals(AccountTrustStatus.UNVERIFIED, currentExplanation.getTrustStatus());
+
+		AccountTrustPolicyData policy = this.accountRatingsResource.getAccountTrustPolicy();
+		assertEquals(AccountRatingCategory.SUBJECT, policy.getActiveWeightCategory());
+
+		AccountRatingImpactPreviewData preview = this.accountRatingsResource.getAccountRatingImpactPreview(
+				targetPublicKey58, raterPublicKey58, AccountRatingCategory.SUBJECT.name(), 4);
+		assertEquals(Transaction.ValidationResult.OK.name(), preview.getValidationResult());
+		assertTrue(preview.isCanSubmit());
+		assertNull(preview.getActiveRating());
+		assertEquals(Integer.valueOf(4), preview.getPreviewActiveRating());
+		assertEquals(AccountTrustStatus.UNVERIFIED, preview.getCurrentTrust().getDerivedTrustStatus());
+		assertTrue(preview.getPreviewTrust().getDerivedTrustStatus() != AccountTrustStatus.UNVERIFIED);
+		assertTrue(preview.isTrustStatusChanged());
+		assertTrue(preview.isTrustWeightChanged());
+		assertEquals(0, preview.getCooldown().getBlocksRemaining());
+
+		AccountRatingCooldownData cooldown = this.accountRatingsResource.getAccountRatingCooldown(
+				targetPublicKey58, raterPublicKey58, AccountRatingCategory.SUBJECT.name());
+		assertTrue(cooldown.isCanChangeNow());
+		assertNull(cooldown.getActiveRating());
+
+		RateAccountTransactionData ratingTransactionData = ratingData(dilbert, target, AccountRatingCategory.SUBJECT, 4);
+		String rawUnsignedTransaction = this.accountRatingsResource.rateAccount(ratingTransactionData);
+		assertNotNull(rawUnsignedTransaction);
+		assertFalse(rawUnsignedTransaction.isEmpty());
+
+		TransactionConfirmationTimingData timing = this.transactionsResource
+				.getTransactionConfirmationTiming(rawUnsignedTransaction);
+		assertEquals(Transaction.TransactionType.RATE_ACCOUNT, timing.getTransactionType());
+		assertTrue(timing.isTransactionConfirmable());
+		assertTrue(timing.isConfirmableAtCandidateHeight());
+		assertNull(timing.getConfirmationDelayBlocks());
+		assertNull(timing.getDelayReason());
+
+		String signedTransaction = signTransaction(dilbert, rawUnsignedTransaction);
+		importSignedTransactionAndMint(signedTransaction);
+
+		AccountTrustProfileData confirmedProfile = this.accountRatingsResource.getAccountTrustProfile(targetPublicKey58);
+		assertEquals(preview.getPreviewTrust().getDerivedTrustStatus(), confirmedProfile.getTrustStatus());
+		assertEquals(preview.getPreviewTrust().getDerivedTrustWeightPercent(), confirmedProfile.getTrustWeightPercent());
+		assertNotNull(confirmedProfile.getSnapshotHeight());
+		assertNotNull(confirmedProfile.getSnapshotTimestamp());
+
+		AccountTrustExplanationData confirmedExplanation = this.accountRatingsResource
+				.getAccountTrustExplanation(targetPublicKey58, null);
+		assertFalse(confirmedExplanation.isLive());
+		assertEquals(preview.getPreviewTrust().getDerivedTrustStatus(), confirmedExplanation.getTrustStatus());
+
+		List<AccountRatingData> activeRatings = this.accountRatingsResource.getAccountRatings(targetPublicKey58,
+				raterPublicKey58, AccountRatingCategory.SUBJECT.name(), null, null, null);
+		assertEquals(1, activeRatings.size());
+		assertEquals(4, activeRatings.get(0).getRating());
+	}
+
+	@Test
+	public void testAccountRatingClientWorkflowRemovesRating() throws Exception {
+		AccountTrustTestUtils.useAccountRatingCooldown(0);
+
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+		PrivateKeyAccount target;
+		PrivateKeyAccount firstPlayer;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+			target = Common.generateRandomSeedAccount(repository);
+			firstPlayer = Common.generateRandomSeedAccount(repository);
+
+			createAuraTrustGraph(repository, alice, bob, chloe, dilbert);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, firstPlayer);
+			saveAccountRating(repository, firstPlayer, target, AccountRatingCategory.SUBJECT, 4);
+			saveAccountRating(repository, dilbert, target, AccountRatingCategory.SUBJECT, 4);
+			refreshTrustSnapshots(repository);
+		}
+
+		String targetPublicKey58 = Base58.encode(target.getPublicKey());
+		String raterPublicKey58 = Base58.encode(dilbert.getPublicKey());
+
+		AccountTrustProfileData currentProfile = this.accountRatingsResource.getAccountTrustProfile(targetPublicKey58);
+		assertTrue(currentProfile.getTrustStatus() != AccountTrustStatus.UNVERIFIED);
+
+		AccountRatingImpactPreviewData preview = this.accountRatingsResource.getAccountRatingImpactPreview(
+				targetPublicKey58, raterPublicKey58, AccountRatingCategory.SUBJECT.name(), AccountRating.NO_RATING);
+		assertEquals(Transaction.ValidationResult.OK.name(), preview.getValidationResult());
+		assertTrue(preview.isCanSubmit());
+		assertEquals(Integer.valueOf(4), preview.getActiveRating());
+		assertNull(preview.getPreviewActiveRating());
+		assertEquals(currentProfile.getTrustStatus(), preview.getCurrentTrust().getDerivedTrustStatus());
+		assertEquals(AccountTrustStatus.UNVERIFIED, preview.getPreviewTrust().getDerivedTrustStatus());
+		assertTrue(preview.isTrustStatusChanged());
+
+		RateAccountTransactionData removalTransactionData = ratingData(dilbert, target,
+				AccountRatingCategory.SUBJECT, AccountRating.NO_RATING);
+		String rawUnsignedTransaction = this.accountRatingsResource.rateAccount(removalTransactionData);
+		TransactionConfirmationTimingData timing = this.transactionsResource
+				.getTransactionConfirmationTiming(rawUnsignedTransaction);
+		assertEquals(Transaction.TransactionType.RATE_ACCOUNT, timing.getTransactionType());
+		assertTrue(timing.isTransactionConfirmable());
+		assertTrue(timing.isConfirmableAtCandidateHeight());
+
+		String signedTransaction = signTransaction(dilbert, rawUnsignedTransaction);
+		importSignedTransactionAndMint(signedTransaction);
+
+		AccountTrustProfileData confirmedProfile = this.accountRatingsResource.getAccountTrustProfile(targetPublicKey58);
+		assertEquals(AccountTrustStatus.UNVERIFIED, confirmedProfile.getTrustStatus());
+		assertNotNull(confirmedProfile.getSnapshotHeight());
+
+		List<AccountRatingData> removedRatings = this.accountRatingsResource.getAccountRatings(targetPublicKey58,
+				raterPublicKey58, AccountRatingCategory.SUBJECT.name(), null, null, null);
+		assertTrue(removedRatings.isEmpty());
+
+		List<AccountRatingData> remainingRatings = this.accountRatingsResource.getAccountRatings(targetPublicKey58,
+				Base58.encode(firstPlayer.getPublicKey()), AccountRatingCategory.SUBJECT.name(), null, null, null);
+		assertEquals(1, remainingRatings.size());
+		assertEquals(4, remainingRatings.get(0).getRating());
+	}
+
+	@Test
 	public void testMissingTargetFailsSummary() {
 		PrivateKeyAccount unknown = Common.generateRandomSeedAccount(null);
 		TestAccount alice = Common.getTestAccount(null, "alice");
@@ -1556,6 +1720,34 @@ public class AccountRatingsApiTests extends ApiCommon {
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target,
 			AccountRatingCategory category, int rating) throws DataException {
 		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), category, rating);
+	}
+
+	private String signTransaction(PrivateKeyAccount signer, String rawUnsignedTransaction) {
+		SimpleTransactionSignRequest signRequest = new SimpleTransactionSignRequest();
+		signRequest.privateKey = signer.getPrivateKey();
+		signRequest.transactionBytes = Base58.decode(rawUnsignedTransaction);
+
+		return this.transactionsResource.signTransaction(signRequest);
+	}
+
+	private void importSignedTransactionAndMint(String signedTransaction)
+			throws DataException, TransformationException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TransactionData transactionData = TransactionTransformer.fromBytes(Base58.decode(signedTransaction));
+			assertNotNull(transactionData);
+
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+			assertTrue("Transaction's signature should be valid", transaction.isSignatureValid());
+
+			try {
+				Thread.sleep(1L);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+			}
+
+			assertEquals(Transaction.ValidationResult.OK, transaction.importAsUnconfirmed());
+			BlockUtils.mintBlock(repository);
+		}
 	}
 
 	private AccountRatingData findRatingByRater(List<AccountRatingData> ratings, String raterAddress) {

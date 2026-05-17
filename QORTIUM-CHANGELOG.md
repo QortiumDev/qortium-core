@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: cover trust rating client workflow
+
+Added API-level workflow coverage for account trust ratings so wallet and explorer behavior is tested as one coherent path. The new tests load trust profile, explanation, policy, preview, cooldown, unsigned rating transaction, confirmation timing, transaction signing, block confirmation, and post-confirmation refresh for both adding and removing a rating. This strengthens confidence in the documented client flow without changing trust scoring, transaction validation, public APIs, schemas, or policy defaults.
+
 ### 2026-05-17 - docs: add trust rating workflow guide
 
 Added a practical account trust rating workflow to the trust-network guide so wallet builders, explorer builders, and reviewers can follow the intended user path from profile review through category choice, confidence selection, preview, cooldown checks, transaction building, confirmation timing, submission, and post-confirmation refresh. This keeps the trust policy unchanged while making the existing APIs easier to apply correctly.
