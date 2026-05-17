@@ -364,9 +364,12 @@ Remaining pre-launch work is now hardening rather than core construction:
 
 - review the launch trust profile against any new realistic graph scenarios
   that are not covered by the current launch-profile tests
+- treat the latest medium and large static and churn benchmark review as close
+  to the documented baseline, with no immediate trust-derivation optimization
+  currently required before launch
 - keep reviewing trust-graph benchmark output and decide whether larger stress
-  profiles, additional account-rating churn controls, or derivation optimization
-  are needed before launch
+  profiles or additional account-rating churn controls are needed if future
+  assumptions change
 - keep docs aligned as launch policy is reviewed
 
 ## Test Coverage

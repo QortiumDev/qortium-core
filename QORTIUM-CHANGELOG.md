@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - docs: record trust launch performance review
+
+Recorded the latest local performance review for the account trust network. The updated guide now includes refreshed static and churn benchmark numbers for the medium and large generated trust graphs, and the Aura trust-tier note explains that the latest review stayed close to the existing baseline. This keeps the launch documentation honest about current performance while making clear that these are local reference measurements, not consensus limits, and that no immediate trust-derivation optimization is currently required before launch.
+
 ### 2026-05-17 - test: add trust launch transition scenarios
 
 Added launch-transition tests for the account trust network. The new coverage shows that changing the Minting group seed set can dilute and later restore Subject trust, removing Manager-layer support cascades through Trainer, Player, and Subject trust, losing evaluator-category trust drops downstream Subject support, and signed support removal plus block orphaning restores the prior rating, snapshot, and status-change history. This strengthens pre-launch confidence without changing trust scoring, transactions, APIs, schema, or default policy values.

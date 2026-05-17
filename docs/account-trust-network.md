@@ -201,8 +201,8 @@ results:
 
 | Profile | Accounts | Ratings | Snapshot rows | Derive | Refresh | Total |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| medium | 162 | 1,704 | 648 | 17 ms | 24 ms | 41 ms |
-| large | 375 | 9,910 | 1,500 | 89 ms | 86 ms | 175 ms |
+| medium | 162 | 1,704 | 648 | 19 ms | 26 ms | 45 ms |
+| large | 375 | 9,910 | 1,500 | 89 ms | 93 ms | 182 ms |
 
 These timings are machine-dependent and are not consensus limits or launch
 guarantees. They are intended to give Qortium maintainers a repeatable baseline
@@ -212,7 +212,17 @@ controls, or trust-derivation optimization are needed before launch.
 The same opt-in command also prints churn benchmark timings. Those runs mutate
 a generated trust graph across several rounds, refresh snapshots after each
 round, and report total, average, and maximum refresh time so maintainers can
-review whether repeated rating changes need additional launch rules.
+review whether repeated rating changes need additional launch rules:
+
+| Profile | Accounts | Starting ratings | Ending ratings | Rounds | Changed | Removed | Snapshot rows | Total refresh | Average refresh | Max refresh |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| medium | 162 | 1,704 | 1,608 | 4 | 192 | 96 | 648 | 77 ms | 19 ms | 24 ms |
+| large | 375 | 9,910 | 9,670 | 4 | 480 | 240 | 1,500 | 292 ms | 73 ms | 83 ms |
+
+The latest local review remains close to the previous baseline and does not
+currently point to a required pre-launch trust-derivation optimization. Larger
+community assumptions, new realistic graph scenarios, or future benchmark drift
+should reopen that decision.
 
 ## Polls And Frozen Results
 
