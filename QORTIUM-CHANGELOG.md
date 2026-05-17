@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-16 - docs: update trust network implementation status
+
+Updated the Aura trust-tier design note so it describes the trust network as an implemented Qortium system rather than a staged proposal. The document now separates completed mechanics from remaining pre-launch hardening work, making it clearer that future trust-network work is mainly calibration, observability, and performance testing.
+
 ### 2026-05-16 - api: clarify raw and effective trust weights
 
 Clarified the boundary between raw `blocksMinted` history and effective trust-weighted influence. Account and poll API descriptions now label effective vote weight separately from raw audit weight, and the trust-network guide explains that clients should use effective weight fields for governance and weighted rating displays.

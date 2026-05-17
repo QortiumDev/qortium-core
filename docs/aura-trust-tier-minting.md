@@ -1,11 +1,10 @@
 # Aura Trust-Tier Minting
 
-This note records a proposed direction for using a BrightID/Aura-style trust
-graph to reduce farm-account influence in Qortium without requiring constant
-manual policing of minters.
+This note records Qortium's BrightID/Aura-style trust graph design for reducing
+farm-account influence without requiring constant manual policing of minters.
 
-This document tracks the first implementation and the remaining design work for
-Aura-style trust tiers in Qortium.
+This document tracks the implemented trust-tier architecture and the remaining
+pre-launch hardening work for Aura-style trust tiers in Qortium.
 
 For a reader-facing explanation of the current system, see
 `docs/account-trust-network.md`.
@@ -61,14 +60,14 @@ verification with a numeric `score`, direct reports, and reported connections.
 Its user-facing guidance is based on making real "already known" connections
 and avoiding incorrect strong connections to strangers, because reports and
 penalties reduce the score. Bitu is useful background for understanding
-BrightID's trust graph, but it does not directly provide the Gold, Silver,
-Bronze, Suspicious, and Unverified tiers proposed here.
+BrightID's trust graph, but it does not directly provide Qortium's Gold,
+Silver, Bronze, Suspicious, and Unverified tiers.
 
 Aura is the closest match for Qortium's needs. BrightID's app models Aura as a
 verification with a `score` and `level`, and the Aura explorer displays those
-levels as Gold, Silver, Bronze, Suspicious, or Unverified. The current Qortium
-proposal uses that tiered status idea. It does not require Qortium to copy
-BrightID meetings, BrightID's full app flow, or Bitu's score rules.
+levels as Gold, Silver, Bronze, Suspicious, or Unverified. Qortium uses that
+tiered status idea without copying BrightID meetings, BrightID's full app flow,
+or Bitu's score rules.
 
 The most directly relevant reference for this idea is the Aura graph displayed
 by BrightID Explorer. In `BrightID-Explorer/scripts/aura.py`, the explorer reads
@@ -92,11 +91,10 @@ absence of a relationship. Qortium treats rating `0` as no active edge, rather
 than a stored trust signal. The native account-rating transaction records signed
 confidence from `-4` through `4`: positive values are positive confidence,
 negative values are negative confidence, and `0` clears the rater's current
-active edge for that target. This mirrors the useful trust-graph shape without
-yet deriving Gold, Silver, Bronze, Suspicious, or Unverified account status from
-those edges.
+active edge for that target. Those active edges feed the deterministic
+Qortium-native trust derivation described below.
 
-## Proposed Rule
+## Active Rule
 
 Minting-group membership remains the base permission. Aura-style status then
 modifies what that account can earn or how much its earned history counts.
@@ -125,29 +123,30 @@ weight so users can understand why a vote has the weight it has.
 
 ## Current Implementation Choices
 
-The current implementation keeps the deterministic trust-status and vote-weight
+The implementation keeps the deterministic trust-status and vote-weight
 foundation entirely inside Qortium consensus state:
 
 - active trust status comes from the stored Subject trust snapshot
 - accounts without a Subject snapshot are treated as Unverified
 - accounts with a Suspicious Subject snapshot cannot mint, even if they remain
   in the minting group
-- vote tallies use the active Subject snapshot at tally time
+- open poll vote tallies use the active Subject snapshot at tally time
+- frozen poll results store the active Subject snapshot and weight at close
+  time
 - account, poll-vote, and resource-rating responses expose read-only fields
   so raw `blocksMinted`, trust status, multiplier, and effective vote weight
   are visible without a separate manual account status
 
-The next implementation layer adds directed account ratings as chain data:
+Directed account ratings are native chain data:
 
 - accounts can rate known public-key accounts with Aura-style signed confidence
   values from `-4` through `4`
 - rating `0` clears the rater's active edge for that target
 - account-rating summaries expose positive and negative confidence counts
-- these edges do not change trust status, minting eligibility, or vote weight
-  until a later deterministic trust-tier derivation rule is added
+- those active edges feed the stored trust snapshots used for minting,
+  voting, and resource-rating weight
 
-A later implementation layer added deterministic decentralized trust
-derivation APIs:
+Qortium now has deterministic decentralized trust derivation APIs:
 
 - the derived graph uses only active on-chain `RATE_ACCOUNT` edges
 - the current derived graph can be listed through
@@ -200,8 +199,8 @@ derivation APIs:
   Unverified, and Suspicious statuses as a derived status
 - the older inbound/outbound confidence counts, mutual positive relationships,
   and evaluator impacts are still exposed for audit context
-- this layer originally exposed the graph for audit only, before the stored
-  Subject snapshot was used for active voting and resource-rating weights
+- the graph is exposed for audit and the stored Subject snapshot is used for
+  active voting, resource-rating weights, and Suspicious mint blocking
 
 The latest implementation layer stores the current derived trust graph as
 repository state and refreshes it only when trust inputs change:
@@ -263,8 +262,8 @@ This approach reuses the parts of Qortal/Qortium that already exist:
   membership.
 - `Block.increaseAccountLevels()` already increments `blocksMinted` for valid
   minting participants.
-- poll vote APIs and repository queries already aggregate vote weight from
-  `blocksMinted`.
+- poll vote APIs and repository queries aggregate effective trust-weighted
+  vote weight from raw `blocksMinted`.
 
 The active enforcement model is intentionally small in concept:
 
@@ -287,41 +286,40 @@ For that reason, the preferred Qortium direction is a native on-chain trust
 graph, not live external lookups, trusted imports, or authority-controlled
 status updates. The trust profile, explanation, and derivation APIs remain
 useful so the community can inspect graph behavior, including farm-ring
-behavior, before any further derived-status rule affects minting or broader
-consensus behavior.
+behavior, while keeping the consensus-critical answer derived from local chain
+state.
 
-## Implementation Path
+## Implementation Status
 
-1. Add a Qortium account trust status model with values for Gold, Silver,
-   Bronze, Unverified, and Suspicious.
-2. Add a vote-weight helper that converts raw `blocksMinted` to effective vote
-   weight using the current trust multiplier.
-3. Update poll vote aggregation to use effective vote weight instead of raw
-   `blocksMinted`.
-4. Expose read-only audit fields on account and voting responses so users can
-   see the raw and effective weights.
-5. Add tests for mint eligibility, vote weighting, audit fields, and
-   trust-status changes.
-6. Add read-only decentralized trust APIs that summarize active account-rating
-   evidence and explain the derived graph.
-7. Store the derived trust graph as block-anchored repository state.
-8. Use the stored Subject snapshot for active poll vote weights, frozen poll
-    close-time weights, and resource-rating weighted summaries.
-9. Use the stored Subject snapshot for Suspicious mint blocking while keeping
-    minting-group membership as the base permission.
-10. Move trust derivation thresholds, per-rating caps, Suspicious requirements,
-    Manager energy-flow settings, active weighting category, and vote
-    multipliers into chain configuration so derived chains can tune the policy
-    without code changes.
-11. Add a read-only trust explanation endpoint that shows the stored active
-    status, policy requirements, threshold/cap checks, and top rating impacts
-    for one account, with optional live recalculation for comparison.
-12. Remove the older manual account trust-status column and comparison fields
-    so stored Subject snapshots are the single active trust source.
+The core trust-network mechanics are implemented:
 
-## Test Scenarios
+- Qortium has account trust statuses for Gold, Silver, Bronze, Unverified, and
+  Suspicious.
+- raw `blocksMinted` is converted to effective voting and rating weight through
+  the active Subject trust multiplier.
+- poll vote aggregation, frozen poll results, resource-rating summaries, and
+  trust summaries use effective trust-weighted values where governance
+  influence matters.
+- account, voting, rating, and trust APIs expose raw and effective values so
+  clients can audit the calculation.
+- account ratings, trust snapshots, trust derivation, trust profile, trust
+  explanation, trust policy, and trust summary APIs are available.
+- stored Subject snapshots are the single active trust source for minting
+  trust allowance and weight multipliers.
+- trust derivation thresholds, per-rating caps, branch requirements, Suspicious
+  requirements, Manager energy-flow settings, active weighting category, and
+  vote multipliers are chain-configurable.
 
-The first implementation should cover at least these cases:
+Remaining pre-launch work is now hardening rather than core construction:
+
+- calibrate default thresholds and caps against realistic graph scenarios
+- improve observability around recent trust-status changes
+- stress-test derivation cost with larger synthetic graphs
+- keep docs aligned as launch defaults settle
+
+## Test Coverage
+
+Current trust-network coverage includes these cases:
 
 - Gold, Silver, Bronze, and Unverified Subject snapshots can mint only when
   the account is in the minting group.
