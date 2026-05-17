@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: add trust bootstrap walkthrough scenario
+
+Added a step-by-step trust-network bootstrap test that starts with stored ratings but no qualified trust evidence, then walks through Minting group seed energy, Manager trust, Trainer trust, Player trust, and final Subject trust. The new coverage shows that Minting group membership seeds the graph without automatically granting Manager status, unqualified ratings remain auditable without adding weight, and only qualified Player support turns Subject trust into active Gold vote weight.
+
 ### 2026-05-17 - core: tune trust and reward launch policy
 
 Adjusted the Qortium launch policy for trust-weighted influence and batched rewards. Silver trust now counts for 75% of earned `blocksMinted` weight while Gold remains 100% and Bronze remains 25%, keeping strong but not final trust closer to full participation, and poll/resource rating tallies now read those percentages from the configured trust policy instead of hardcoded values. Batch rewards now use 100-block batches with a 10-block online-account capture window, and account-rating transactions wait for that protected reward window to end before confirming, matching the delayed-confirmation approach already used for reward-share changes. The account-rating cooldown remains 1,440 blocks and is documented as applying only to the same rater, target, and category edge.
