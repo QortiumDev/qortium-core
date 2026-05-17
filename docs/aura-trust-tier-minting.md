@@ -316,6 +316,10 @@ The core trust-network mechanics are implemented:
   how the same evidence changes under different threshold, branch, and
   Suspicious-confidence choices. These profiles are examples for launch review,
   not new Qortium defaults.
+- transaction-level calibration scenarios prove the visible account-rating
+  evidence behaves the same way when it is submitted through signed
+  `RATE_ACCOUNT` transactions, minted blocks, stored snapshot refreshes, rating
+  removals, orphan handling, and minting eligibility checks.
 
 Remaining pre-launch work is now hardening rather than core construction:
 

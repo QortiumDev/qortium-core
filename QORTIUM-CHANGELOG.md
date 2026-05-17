@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: add transaction-level trust calibration scenarios
+
+Added transaction-level trust-network calibration scenarios that run the visible account-rating evidence through signed `RATE_ACCOUNT` transactions, block processing, stored snapshot refreshes, status-change history, rating removal, orphan handling, and minting eligibility. This proves the trust-policy behavior works through the actual chain path without changing Qortium defaults, public APIs, transactions, minting, voting, or rating rules.
+
 ### 2026-05-17 - test: add trust policy calibration scenarios
 
 Added test-only permissive, current, and strict trust-policy calibration scenarios so Qortium-derived chains can see how threshold, branch, and Suspicious-confidence choices change the same evidence. These examples keep Qortium's active defaults unchanged while making launch policy tradeoffs easier to review.
