@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - docs: add trust rating workflow guide
+
+Added a practical account trust rating workflow to the trust-network guide so wallet builders, explorer builders, and reviewers can follow the intended user path from profile review through category choice, confidence selection, preview, cooldown checks, transaction building, confirmation timing, submission, and post-confirmation refresh. This keeps the trust policy unchanged while making the existing APIs easier to apply correctly.
+
 ### 2026-05-17 - test: add realistic trust launch graph scenarios
 
 Added realistic launch-community trust scenarios that combine honest onboarding, a no-evidence Minting group seed, isolated farm clusters, Suspicious trust blocking, and mistaken-rating recovery in the same style of graph. The new coverage keeps the current trust policy unchanged while proving Gold, Silver, Bronze, Unverified, and Suspicious outcomes stay stable across mixed launch conditions.

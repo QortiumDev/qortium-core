@@ -299,6 +299,54 @@ only what the result is. They include configured levels, thresholds, caps,
 Suspicious thresholds, independent branch and rater requirements, confidence
 requirements, and the strongest positive and negative impacts used for audit.
 
+## Trust Rating Workflow
+
+A wallet or explorer should treat account ratings as an informed action, not as
+a simple like or dislike button. A practical flow is:
+
+1. Load `GET /account-ratings/trust-profile?target=...` for the target account
+   so the user can see the current status, vote multiplier, minting allowance,
+   seed membership, and category summary.
+2. If the user needs more detail, load
+   `GET /account-ratings/trust-explanation?target=...` and
+   `GET /account-ratings/trust-policy` so the screen can show the evidence and
+   the chain policy used to interpret it.
+3. Ask the user which category they want to rate:
+   - `Subject` for the final account trust that affects minting, voting, and
+     resource-rating weight.
+   - `Player` for accounts that should be able to influence Subject trust.
+   - `Trainer` for accounts that should be able to influence Player trust.
+   - `Manager` for accounts that should be able to carry seed trust outward
+     from the Minting group.
+4. Ask for confidence. Use `1` through `4` for positive trust, `-1` through
+   `-4` for negative trust, and `0` to remove the user's active rating in that
+   category.
+5. Call `GET /account-ratings/preview` with the rater, target, category, and
+   proposed rating. This shows whether the change is currently valid and what
+   the live trust impact would be if it were confirmed.
+6. Call `GET /account-ratings/cooldown` if the UI needs to show the exact
+   latest change height, earliest allowed height, or remaining block count for
+   that rater, target, and category edge.
+7. Build the unsigned transaction with `POST /account-ratings/rate`,
+   optionally ask `POST /transactions/confirmation-timing` whether that raw
+   transaction is waiting for a protected reward window, then sign it locally
+   or with the existing transaction signing API and submit it through
+   `POST /transactions/process`.
+8. After confirmation, refresh `trust-profile` and `trust-explanation`. Stored
+   trust snapshots update when the rating is processed in a block, so the
+   before-confirmation preview is not a replacement for the confirmed result.
+
+The cooldown applies only to the same rater, target, and category edge. A
+blocked change does not stop the same rater from rating another target or
+category, and it does not delay anyone else's rating. During protected
+online-account and reward-distribution blocks, a valid `RATE_ACCOUNT`
+transaction may remain unconfirmed until the protected window ends. That is a
+timing rule, not a rejection.
+
+The preview and cooldown APIs are user-interface aids. Final transaction
+validation still decides whether the transaction can be accepted, and block
+processing still decides when the stored trust graph changes.
+
 ## Chain Builder Configuration
 
 Qortium-derived chains can tune the trust network through
