@@ -12,6 +12,9 @@ For a reader-facing explanation of the current system, see
 For the current launch checklist, see
 `docs/trust-network-launch-readiness.md`.
 
+For wallet and explorer integration guidance, see
+`docs/trust-network-client-integration.md`.
+
 ## Goal
 
 Qortium already has a simple foundation for minting and vote weight:

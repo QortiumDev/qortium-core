@@ -256,6 +256,9 @@ polls stable and auditable.
 
 ## Client API Guide
 
+For a practical wallet and explorer integration checklist, see
+`docs/trust-network-client-integration.md`.
+
 Clients should use different account-rating APIs for different jobs:
 
 | Endpoint | Use |

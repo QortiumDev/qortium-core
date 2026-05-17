@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - docs: add trust network client integration guide
+
+Added a wallet and explorer integration guide for the account trust network so clients have one practical reference for account trust display, rating previews, cooldown handling, delayed confirmation visibility, network dashboards, and effective vote-weight presentation. The existing trust docs and launch checklist now point to the guide, reducing the risk that clients show raw `blocksMinted` as active governance power or treat protected-window rating delays as failed transactions.
+
 ### 2026-05-17 - test: verify trust network launch readiness
 
 Added API coverage proving a delayed `RATE_ACCOUNT` transaction remains visible through the unconfirmed transaction API while it waits through the protected online-account window, then confirms once the window ends. The trust-network launch checklist now records the latest local focused test run, full readiness suite, and long benchmark results so the current launch profile has an auditable verification checkpoint without changing trust scoring, consensus rules, transaction schemas, or policy defaults.
