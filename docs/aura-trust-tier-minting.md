@@ -328,8 +328,9 @@ Remaining pre-launch work is now hardening rather than core construction:
 
 - continue validating the launch trust profile against realistic graph scenarios
 - improve observability around recent trust-status changes
-- keep stress-testing derivation cost with larger synthetic graphs and review
-  opt-in benchmark output before launch
+- keep reviewing trust-graph benchmark output and decide whether larger stress
+  profiles, account-rating churn controls, or derivation optimization are needed
+  before launch
 - keep docs aligned as launch policy is reviewed
 
 ## Test Coverage

@@ -150,6 +150,31 @@ These values are pinned by tests as the current Qortium launch profile. Future
 chains can still change them through `accountTrustSettings`, but changes should
 be reviewed as policy choices rather than incidental config edits.
 
+## Scale Expectations
+
+Qortium's default test suite includes a deterministic trust-graph scale sanity
+test. It proves that a multi-category synthetic graph can be derived and stored
+with complete per-account snapshots.
+
+There is also an opt-in benchmark for larger generated graphs:
+
+```bash
+mvn test -DskipJUnitTests=false -Dqortium.runLongTrustNetworkTests=true -Dtest=org.qortal.test.rating.AccountTrustScaleTests
+```
+
+A local benchmark run on the current implementation produced these reference
+results:
+
+| Profile | Accounts | Ratings | Snapshot rows | Derive | Refresh | Total |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| medium | 162 | 1,704 | 648 | 17 ms | 24 ms | 41 ms |
+| large | 375 | 9,910 | 1,500 | 89 ms | 86 ms | 175 ms |
+
+These timings are machine-dependent and are not consensus limits or launch
+guarantees. They are intended to give Qortium maintainers a repeatable baseline
+for deciding whether larger stress profiles, account-rating churn controls, or
+trust-derivation optimization are needed before launch.
+
 ## Polls And Frozen Results
 
 Open poll results use the current active Subject snapshot and current
