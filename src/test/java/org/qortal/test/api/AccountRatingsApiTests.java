@@ -11,6 +11,7 @@ import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingCooldownData;
 import org.qortal.data.account.AccountRatingData;
+import org.qortal.data.account.AccountRatingImpactPreviewData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustExplanationData;
@@ -35,6 +36,7 @@ import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
+import org.qortal.transaction.Transaction;
 import org.qortal.utils.Base58;
 
 import java.util.Arrays;
@@ -432,6 +434,200 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(cooldown.getCandidateChangeHeight(), cooldown.getEarliestAllowedHeight());
 		assertEquals(0, cooldown.getBlocksRemaining());
 		assertTrue(cooldown.isCanChangeNow());
+	}
+
+	@Test
+	public void testAccountRatingImpactPreviewShowsLiveStatusChangeWithoutSavingRating() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+		PrivateKeyAccount target;
+		PrivateKeyAccount secondPlayer;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+			target = Common.generateRandomSeedAccount(repository);
+			secondPlayer = Common.generateRandomSeedAccount(repository);
+
+			createAuraTrustGraph(repository, alice, bob, chloe, dilbert);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, secondPlayer);
+			ensureKnownAccount(repository, target);
+			saveAccountRating(repository, secondPlayer, target, AccountRatingCategory.SUBJECT, 4);
+			repository.saveChanges();
+		}
+
+		AccountRatingImpactPreviewData preview = this.accountRatingsResource.getAccountRatingImpactPreview(
+				Base58.encode(target.getPublicKey()), Base58.encode(dilbert.getPublicKey()),
+				AccountRatingCategory.SUBJECT.name(), 4);
+
+		assertEquals(Transaction.ValidationResult.OK.name(), preview.getValidationResult());
+		assertEquals(Transaction.ValidationResult.OK.value, preview.getValidationResultValue());
+		assertTrue(preview.isCanSubmit());
+		assertEquals(target.getAddress(), preview.getTargetAddress());
+		assertEquals(dilbert.getAddress(), preview.getRaterAddress());
+		assertEquals(AccountRatingCategory.SUBJECT, preview.getCategory());
+		assertEquals(4, preview.getCandidateRating());
+		assertEquals("POSITIVE", preview.getCandidateRatingDirection());
+		assertEquals(4, preview.getCandidateRatingConfidence());
+		assertNull(preview.getActiveRating());
+		assertEquals(Integer.valueOf(4), preview.getPreviewActiveRating());
+		assertEquals(AccountTrustStatus.UNVERIFIED, preview.getCurrentTrust().getDerivedTrustStatus());
+		assertTrue(preview.getPreviewTrust().getDerivedTrustStatus() != AccountTrustStatus.UNVERIFIED);
+		assertTrue(preview.isTrustStatusChanged());
+		assertTrue(preview.isTrustWeightChanged());
+		assertTrue(preview.isSelectedCategoryLevelChanged());
+		assertTrue(preview.isSelectedCategoryScoreChanged());
+		assertEquals(0, preview.getCooldown().getBlocksRemaining());
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertNull(repository.getAccountRatingRepository().getRating(target.getPublicKey(), dilbert.getPublicKey(),
+					AccountRatingCategory.SUBJECT));
+			AccountTrustDerivation.Result liveResult = AccountTrustDerivation.derive(repository, target.getAddress());
+			assertEquals(AccountTrustStatus.UNVERIFIED, liveResult.getDerivedTrustStatus());
+		}
+	}
+
+	@Test
+	public void testAccountRatingImpactPreviewShowsRemovalWithoutDeletingRating() throws Exception {
+		AccountTrustTestUtils.useAccountRatingCooldown(0);
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+		PrivateKeyAccount target;
+		PrivateKeyAccount secondPlayer;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+			target = Common.generateRandomSeedAccount(repository);
+			secondPlayer = Common.generateRandomSeedAccount(repository);
+
+			createAuraTrustGraph(repository, alice, bob, chloe, dilbert);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, secondPlayer);
+			saveAccountRating(repository, secondPlayer, target, AccountRatingCategory.SUBJECT, 4);
+			saveAccountRating(repository, dilbert, target, AccountRatingCategory.SUBJECT, 4);
+			repository.saveChanges();
+		}
+
+		AccountRatingImpactPreviewData preview = this.accountRatingsResource.getAccountRatingImpactPreview(
+				Base58.encode(target.getPublicKey()), Base58.encode(dilbert.getPublicKey()),
+				AccountRatingCategory.SUBJECT.name(), AccountRating.NO_RATING);
+
+		assertEquals(Transaction.ValidationResult.OK.name(), preview.getValidationResult());
+		assertTrue(preview.isCanSubmit());
+		assertEquals(Integer.valueOf(4), preview.getActiveRating());
+		assertNull(preview.getPreviewActiveRating());
+		assertTrue(preview.getCurrentTrust().getDerivedTrustStatus() != AccountTrustStatus.UNVERIFIED);
+		assertEquals(AccountTrustStatus.UNVERIFIED, preview.getPreviewTrust().getDerivedTrustStatus());
+		assertTrue(preview.isTrustStatusChanged());
+		assertTrue(preview.isSelectedCategoryScoreChanged());
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			AccountRatingData activeRating = repository.getAccountRatingRepository()
+					.getRating(target.getPublicKey(), dilbert.getPublicKey(), AccountRatingCategory.SUBJECT);
+			assertNotNull(activeRating);
+			assertEquals(4, activeRating.getRating());
+		}
+	}
+
+	@Test
+	public void testAccountRatingImpactPreviewReportsCooldownBlockedChange() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.SUBJECT, 4), alice);
+		}
+
+		AccountRatingImpactPreviewData preview = this.accountRatingsResource.getAccountRatingImpactPreview(
+				Base58.encode(bob.getPublicKey()), Base58.encode(alice.getPublicKey()),
+				AccountRatingCategory.SUBJECT.name(), 3);
+
+		assertEquals(Transaction.ValidationResult.ACCOUNT_RATING_CHANGE_TOO_SOON.name(), preview.getValidationResult());
+		assertFalse(preview.isCanSubmit());
+		assertEquals(Integer.valueOf(4), preview.getActiveRating());
+		assertEquals(Integer.valueOf(4), preview.getPreviewActiveRating());
+		assertFalse(preview.isTrustStatusChanged());
+		assertFalse(preview.isTrustWeightChanged());
+		assertFalse(preview.isSelectedCategoryLevelChanged());
+		assertFalse(preview.isSelectedCategoryScoreChanged());
+		assertFalse(preview.getCooldown().isCanChangeNow());
+	}
+
+	@Test
+	public void testAccountRatingImpactPreviewReportsNoOpAndUnknownTarget() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		PrivateKeyAccount unknown;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			unknown = Common.generateRandomSeedAccount(repository);
+
+			saveAccountRating(repository, alice, bob, AccountRatingCategory.SUBJECT, 4);
+			repository.saveChanges();
+		}
+
+		AccountRatingImpactPreviewData noOpPreview = this.accountRatingsResource.getAccountRatingImpactPreview(
+				Base58.encode(bob.getPublicKey()), Base58.encode(alice.getPublicKey()),
+				AccountRatingCategory.SUBJECT.name(), 4);
+		assertEquals(Transaction.ValidationResult.ACCOUNT_RATING_UNCHANGED.name(), noOpPreview.getValidationResult());
+		assertFalse(noOpPreview.isCanSubmit());
+		assertEquals(Integer.valueOf(4), noOpPreview.getActiveRating());
+		assertEquals(Integer.valueOf(4), noOpPreview.getPreviewActiveRating());
+
+		AccountRatingImpactPreviewData unknownPreview = this.accountRatingsResource.getAccountRatingImpactPreview(
+				Base58.encode(unknown.getPublicKey()), Base58.encode(alice.getPublicKey()),
+				AccountRatingCategory.SUBJECT.name(), 4);
+		assertEquals(Transaction.ValidationResult.PUBLIC_KEY_UNKNOWN.name(), unknownPreview.getValidationResult());
+		assertFalse(unknownPreview.isCanSubmit());
+		assertEquals(AccountTrustStatus.UNVERIFIED, unknownPreview.getCurrentTrust().getDerivedTrustStatus());
+		assertEquals(AccountTrustStatus.UNVERIFIED, unknownPreview.getPreviewTrust().getDerivedTrustStatus());
+	}
+
+	@Test
+	public void testAccountRatingImpactPreviewReportsSelectedNonSubjectCategory() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+		PrivateKeyAccount playerTarget;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+			playerTarget = Common.generateRandomSeedAccount(repository);
+
+			createAuraTrustGraph(repository, alice, bob, chloe, dilbert);
+			ensureKnownAccount(repository, playerTarget);
+			repository.saveChanges();
+		}
+
+		AccountRatingImpactPreviewData preview = this.accountRatingsResource.getAccountRatingImpactPreview(
+				Base58.encode(playerTarget.getPublicKey()), Base58.encode(chloe.getPublicKey()),
+				AccountRatingCategory.PLAYER.name(), 2);
+
+		assertEquals(Transaction.ValidationResult.OK.name(), preview.getValidationResult());
+		assertEquals(AccountRatingCategory.PLAYER, preview.getCategory());
+		assertEquals(AccountTrustStatus.UNVERIFIED, preview.getCurrentTrust().getDerivedTrustStatus());
+		assertEquals(AccountTrustStatus.UNVERIFIED, preview.getPreviewTrust().getDerivedTrustStatus());
+		assertFalse(preview.isTrustStatusChanged());
+		assertTrue(preview.isSelectedCategoryScoreChanged());
+		assertEquals(AccountRatingCategory.PLAYER, preview.getPreviewSelectedCategory().getCategory());
+		assertTrue(preview.getPreviewSelectedCategory().getScore() > 0L);
 	}
 
 	@Test
@@ -1283,6 +1479,15 @@ public class AccountRatingsApiTests extends ApiCommon {
 						Base58.encode(alice.getPublicKey()), null));
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountRatingCooldown(null, Base58.encode(alice.getPublicKey()), null));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountRatingImpactPreview(null,
+						Base58.encode(alice.getPublicKey()), null, 4));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountRatingImpactPreview(Base58.encode(unknown.getPublicKey()),
+						null, null, 4));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountRatingImpactPreview(Base58.encode(unknown.getPublicKey()),
+						Base58.encode(alice.getPublicKey()), null, null));
 	}
 
 	@Test
@@ -1302,6 +1507,12 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertApiError(ApiError.INVALID_PUBLIC_KEY,
 				() -> this.accountRatingsResource.getAccountRatingCooldown(Base58.encode(bob.getPublicKey()),
 						"not-a-public-key", null));
+		assertApiError(ApiError.INVALID_PUBLIC_KEY,
+				() -> this.accountRatingsResource.getAccountRatingImpactPreview("not-a-public-key",
+						Base58.encode(alice.getPublicKey()), null, 4));
+		assertApiError(ApiError.INVALID_PUBLIC_KEY,
+				() -> this.accountRatingsResource.getAccountRatingImpactPreview(Base58.encode(bob.getPublicKey()),
+						"not-a-public-key", null, 4));
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountRatingCooldown(Base58.encode(bob.getPublicKey()), null, null));
 	}
@@ -1317,6 +1528,10 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountRatingCooldown(Base58.encode(Common.getTestAccount(null, "bob").getPublicKey()),
 						Base58.encode(Common.getTestAccount(null, "alice").getPublicKey()), "not-a-category"));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountRatingImpactPreview(
+						Base58.encode(Common.getTestAccount(null, "bob").getPublicKey()),
+						Base58.encode(Common.getTestAccount(null, "alice").getPublicKey()), "not-a-category", 4));
 	}
 
 	@Test

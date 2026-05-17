@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - api: preview account rating impact
+
+Added a read-only account-rating impact preview so wallets and explorers can show what a proposed `RATE_ACCOUNT` change would do before a user signs it. The new endpoint checks the same rating, no-op, self-rating, unknown-target, and cooldown rules as the transaction path, then applies valid candidate ratings only in memory to compare the current live trust result with the preview result. This helps users understand rating changes and removals without changing active ratings, stored trust snapshots, or trust-status history.
+
 ### 2026-05-17 - test: add trust launch stress scenarios
 
 Added signed-transaction launch stress tests for the account trust network. The new coverage shows how the current policy behaves when one supporter rates many accounts, two independent supporters rate many accounts, a mixed onboarding batch reaches different tiers, support is removed after cooldown, Suspicious status recovers after a negative rating is removed, and extra Minting group seed members dilute support outcomes. This gives launch reviewers clearer pressure-test evidence without changing trust scoring, transactions, APIs, schema, or default policy values.

@@ -16,6 +16,7 @@ import org.qortal.repository.Repository;
 import org.qortal.utils.Groups;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -32,6 +33,15 @@ public class AccountTrustDerivation {
 
 	public static Result derive(Repository repository, String targetAddress) throws DataException {
 		DerivedGraph graph = deriveGraph(repository, getLiveMintingSeedHeight(repository));
+		return graph.buildResult(targetAddress, null);
+	}
+
+	public static Result deriveWithRatingOverlay(Repository repository, String targetAddress,
+			AccountRatingData ratingOverlay) throws DataException {
+		List<AccountRatingData> allRatings = repository.getAccountRatingRepository()
+				.getRatings(null, null, null, null, null, null);
+		DerivedGraph graph = deriveGraph(repository, getLiveMintingSeedHeight(repository),
+				applyRatingOverlay(allRatings, ratingOverlay));
 		return graph.buildResult(targetAddress, null);
 	}
 
@@ -64,6 +74,11 @@ public class AccountTrustDerivation {
 	private static DerivedGraph deriveGraph(Repository repository, int mintingSeedHeight) throws DataException {
 		List<AccountRatingData> allRatings = repository.getAccountRatingRepository()
 				.getRatings(null, null, null, null, null, null);
+		return deriveGraph(repository, mintingSeedHeight, allRatings);
+	}
+
+	private static DerivedGraph deriveGraph(Repository repository, int mintingSeedHeight,
+			List<AccountRatingData> allRatings) throws DataException {
 		Map<AccountRatingCategory, List<AccountRatingData>> ratingsByCategory = groupRatingsByCategory(allRatings);
 		Set<String> seedAddresses = getMintingSeedAddresses(repository, mintingSeedHeight);
 		Map<String, EnergyScore> seedEnergy = buildSeedEnergy(seedAddresses);
@@ -88,6 +103,38 @@ public class AccountTrustDerivation {
 		return new DerivedGraph(seedAddresses, collectAccountAddresses(seedAddresses, allRatings, scoresByCategory),
 				buildKnownPublicKeysByAddress(repository, seedAddresses, allRatings),
 				buildInboundCountsByCategory(ratingsByCategory), scoresByCategory);
+	}
+
+	private static List<AccountRatingData> applyRatingOverlay(List<AccountRatingData> ratings,
+			AccountRatingData ratingOverlay) {
+		if (ratingOverlay == null)
+			return ratings;
+
+		List<AccountRatingData> updatedRatings = new ArrayList<>();
+		boolean replacedExistingEdge = false;
+
+		for (AccountRatingData rating : ratings) {
+			if (isSameRatingEdge(rating, ratingOverlay)) {
+				replacedExistingEdge = true;
+				if (AccountRating.isActive(ratingOverlay.getRating()))
+					updatedRatings.add(ratingOverlay);
+
+				continue;
+			}
+
+			updatedRatings.add(rating);
+		}
+
+		if (!replacedExistingEdge && AccountRating.isActive(ratingOverlay.getRating()))
+			updatedRatings.add(ratingOverlay);
+
+		return updatedRatings;
+	}
+
+	private static boolean isSameRatingEdge(AccountRatingData left, AccountRatingData right) {
+		return Arrays.equals(left.getTargetPublicKey(), right.getTargetPublicKey())
+				&& Arrays.equals(left.getRaterPublicKey(), right.getRaterPublicKey())
+				&& left.getCategory() == right.getCategory();
 	}
 
 	private static Map<AccountRatingCategory, List<AccountRatingData>> groupRatingsByCategory(List<AccountRatingData> ratings) {

@@ -147,6 +147,9 @@ Directed account ratings are native chain data:
 - `GET /account-ratings/cooldown` lets clients show the latest change height,
   earliest allowed height, remaining block count, and whether the edge can be
   changed in the next block
+- `GET /account-ratings/preview` lets clients show the validation result and
+  live trust impact of a proposed rating or removal before the user signs it,
+  without changing active ratings or stored snapshots
 - account-rating summaries expose positive and negative confidence counts
 - those active edges feed the stored trust snapshots used for minting,
   voting, and resource-rating weight
@@ -234,6 +237,8 @@ repository state and refreshes it only when trust inputs change:
   cooldown
 - `GET /account-ratings/cooldown` returns the current cooldown status for one
   rater, target, and category edge
+- `GET /account-ratings/preview` compares one candidate rating or removal
+  against the current live derivation using an in-memory overlay
 - missing Subject snapshots are treated as Unverified for active weight and
   mint-eligibility calculations
 
@@ -338,6 +343,9 @@ The core trust-network mechanics are implemented:
   one-supporter audit evidence, Bronze, Silver, Gold, cooldown-gated support
   removal, and trust profile/explanation API reporting through the transaction
   path.
+- account-rating impact preview tests prove valid candidates, removals, no-op
+  ratings, unknown targets, cooldown blocks, and non-Subject categories are
+  reported without mutating active ratings or stored snapshots.
 - launch stress scenarios show how the current policy behaves when trusted
   supporters rate many accounts, mixed onboarding batches reach different
   tiers, support is removed after cooldown, Suspicious status recovers, and

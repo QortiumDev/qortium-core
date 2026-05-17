@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.qortal.account.AccountRatingValidation;
 import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.AccountTrustPolicy;
 import org.qortal.account.AccountTrustWeight;
@@ -17,9 +18,11 @@ import org.qortal.api.ApiException;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingCooldownData;
 import org.qortal.data.account.AccountRatingData;
+import org.qortal.data.account.AccountRatingImpactPreviewData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustExplanationData;
@@ -166,8 +169,44 @@ public class AccountRatingsResource {
 			@Parameter(description = "Optional account rating category: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			byte[] targetPublicKey = requireKnownPublicKey(repository, targetPublicKey58);
-			String targetAddress = Crypto.toAddress(targetPublicKey);
 			byte[] raterPublicKey = requirePublicKey(raterPublicKey58);
+			AccountRatingCategory category = parseOptionalCategory(categoryName);
+
+			return buildAccountRatingCooldown(repository, targetPublicKey, raterPublicKey, category);
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/preview")
+	@Operation(
+			summary = "Preview the live trust impact of a proposed account rating",
+			responses = {
+					@ApiResponse(
+							description = "account rating impact preview",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = AccountRatingImpactPreviewData.class)
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public AccountRatingImpactPreviewData getAccountRatingImpactPreview(
+			@Parameter(description = "Target account public key in Base58") @QueryParam("target") String targetPublicKey58,
+			@Parameter(description = "Rater account public key in Base58") @QueryParam("rater") String raterPublicKey58,
+			@Parameter(description = "Optional account rating category: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName,
+			@Parameter(description = "Proposed rating: -4 through -1, 0 to remove, or 1 through 4") @QueryParam("rating") Integer rating) {
+		if (rating == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			byte[] targetPublicKey = requirePublicKey(targetPublicKey58);
+			byte[] raterPublicKey = requirePublicKey(raterPublicKey58);
+			String targetAddress = Crypto.toAddress(targetPublicKey);
 			String raterAddress = Crypto.toAddress(raterPublicKey);
 			AccountRatingCategory category = parseOptionalCategory(categoryName);
 			if (category == null)
@@ -176,19 +215,29 @@ public class AccountRatingsResource {
 			AccountRatingData activeRatingData = repository.getAccountRatingRepository()
 					.getRating(targetPublicKey, raterPublicKey, category);
 			Integer activeRating = activeRatingData == null ? null : activeRatingData.getRating();
-			int cooldownBlocks = AccountTrustPolicy.getAccountRatingChangeCooldownBlocks();
-			Integer latestRatingChangeHeight = repository.getAccountRatingRepository()
-					.getLatestRatingChangeHeight(targetPublicKey, raterPublicKey, category);
-			int currentHeight = repository.getBlockRepository().getBlockchainHeight();
-			int candidateChangeHeight = currentHeight + 1;
-			int earliestAllowedHeight = calculateEarliestAllowedHeight(candidateChangeHeight, latestRatingChangeHeight,
-					cooldownBlocks);
-			int blocksRemaining = Math.max(0, earliestAllowedHeight - candidateChangeHeight);
-			boolean canChangeNow = blocksRemaining == 0;
+			AccountRatingCooldownData cooldown = buildAccountRatingCooldown(repository, targetPublicKey, raterPublicKey,
+					category);
+			Transaction.ValidationResult validationResult = AccountRatingValidation.validateRatingChange(repository,
+					targetPublicKey, raterPublicKey, category, rating, cooldown.getCandidateChangeHeight());
 
-			return new AccountRatingCooldownData(targetPublicKey, targetAddress, raterPublicKey, raterAddress, category,
-					activeRating, cooldownBlocks, latestRatingChangeHeight, currentHeight, candidateChangeHeight,
-					earliestAllowedHeight, blocksRemaining, canChangeNow);
+			AccountTrustDerivation.Result currentResult = AccountTrustDerivation.derive(repository, targetAddress);
+			AccountTrustDerivation.Result previewResult = currentResult;
+			Integer previewActiveRating = activeRating;
+			if (validationResult == Transaction.ValidationResult.OK) {
+				AccountRatingData ratingOverlay = new AccountRatingData(targetPublicKey, targetAddress, raterPublicKey,
+						raterAddress, category, rating);
+				previewResult = AccountTrustDerivation.deriveWithRatingOverlay(repository, targetAddress, ratingOverlay);
+				previewActiveRating = AccountRating.isActive(rating) ? rating : null;
+			}
+
+			AccountTrustDerivationData currentTrust = buildLiveTrustDerivationData(targetPublicKey, targetAddress,
+					currentResult);
+			AccountTrustDerivationData previewTrust = buildLiveTrustDerivationData(targetPublicKey, targetAddress,
+					previewResult);
+
+			return new AccountRatingImpactPreviewData(targetPublicKey, raterPublicKey, category, rating, activeRating,
+					previewActiveRating, validationResult, cooldown, currentTrust, previewTrust,
+					getCategoryTrust(currentTrust, category), getCategoryTrust(previewTrust, category));
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -476,6 +525,31 @@ public class AccountRatingsResource {
 		}
 	}
 
+	private AccountRatingCooldownData buildAccountRatingCooldown(Repository repository, byte[] targetPublicKey,
+			byte[] raterPublicKey, AccountRatingCategory category) throws DataException {
+		String targetAddress = Crypto.toAddress(targetPublicKey);
+		String raterAddress = Crypto.toAddress(raterPublicKey);
+		if (category == null)
+			category = AccountRatingCategory.SUBJECT;
+
+		AccountRatingData activeRatingData = repository.getAccountRatingRepository()
+				.getRating(targetPublicKey, raterPublicKey, category);
+		Integer activeRating = activeRatingData == null ? null : activeRatingData.getRating();
+		int cooldownBlocks = AccountTrustPolicy.getAccountRatingChangeCooldownBlocks();
+		Integer latestRatingChangeHeight = repository.getAccountRatingRepository()
+				.getLatestRatingChangeHeight(targetPublicKey, raterPublicKey, category);
+		int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+		int candidateChangeHeight = currentHeight + 1;
+		int earliestAllowedHeight = calculateEarliestAllowedHeight(candidateChangeHeight, latestRatingChangeHeight,
+				cooldownBlocks);
+		int blocksRemaining = Math.max(0, earliestAllowedHeight - candidateChangeHeight);
+		boolean canChangeNow = blocksRemaining == 0;
+
+		return new AccountRatingCooldownData(targetPublicKey, targetAddress, raterPublicKey, raterAddress, category,
+				activeRating, cooldownBlocks, latestRatingChangeHeight, currentHeight, candidateChangeHeight,
+				earliestAllowedHeight, blocksRemaining, canChangeNow);
+	}
+
 	private AccountTrustPolicyData buildTrustPolicy() {
 		List<AccountTrustPolicyData.StatusVoteWeight> statusVoteWeights = new ArrayList<>();
 		for (AccountTrustStatus status : AccountTrustStatus.values())
@@ -535,6 +609,12 @@ public class AccountRatingsResource {
 		return new AccountTrustProfileData(targetPublicKey, targetAddress, activeTrustStatus, activeCategory,
 				mintingSeedMember, snapshotHeight, snapshotTimestamp,
 				buildCategoryProfiles(snapshotsByCategory, outboundCountsByCategory));
+	}
+
+	private AccountTrustDerivationData buildLiveTrustDerivationData(byte[] targetPublicKey, String targetAddress,
+			AccountTrustDerivation.Result derivation) {
+		return new AccountTrustDerivationData(targetPublicKey, targetAddress, derivation.getDerivedTrustStatus(),
+				derivation.isMintingSeedMember(), null, null, true, derivation.getCategories());
 	}
 
 	private List<AccountTrustProfileData.CategoryProfile> buildCategoryProfiles(

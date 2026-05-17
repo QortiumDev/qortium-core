@@ -1,10 +1,9 @@
 package org.qortal.transaction;
 
 import org.qortal.account.Account;
-import org.qortal.account.AccountTrustPolicy;
+import org.qortal.account.AccountRatingValidation;
 import org.qortal.asset.Asset;
 import org.qortal.crypto.Crypto;
-import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingData;
@@ -15,7 +14,6 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.transform.Transformer;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -44,37 +42,15 @@ public class RateAccountTransaction extends Transaction {
 
 	@Override
 	public ValidationResult isValid() throws DataException {
-		int rating = this.rateAccountTransactionData.getRating();
-		if (!AccountRating.isValid(rating))
-			return ValidationResult.INVALID_ACCOUNT_RATING;
-
-		AccountRatingCategory category = this.rateAccountTransactionData.getCategory();
-		if (category == null)
-			return ValidationResult.INVALID_ACCOUNT_RATING;
-
 		byte[] targetPublicKey = this.rateAccountTransactionData.getTargetPublicKey();
-		if (!isPublicKeyLengthValid(targetPublicKey))
-			return ValidationResult.INVALID_PUBLIC_KEY;
-
 		byte[] raterPublicKey = this.rateAccountTransactionData.getRaterPublicKey();
-		if (Arrays.equals(targetPublicKey, raterPublicKey))
-			return ValidationResult.CANNOT_RATE_SELF;
+		AccountRatingCategory category = this.rateAccountTransactionData.getCategory();
+		int rating = this.rateAccountTransactionData.getRating();
 
-		String targetAddress = Crypto.toAddress(targetPublicKey);
-		AccountData targetAccountData = this.repository.getAccountRepository().getAccount(targetAddress);
-		if (targetAccountData == null || targetAccountData.getPublicKey() == null
-				|| !Arrays.equals(targetPublicKey, targetAccountData.getPublicKey()))
-			return ValidationResult.PUBLIC_KEY_UNKNOWN;
-
-		AccountRatingData existingRating = this.repository.getAccountRatingRepository().getRating(targetPublicKey, raterPublicKey, category);
-		if (existingRating == null && rating == AccountRating.NO_RATING)
-			return ValidationResult.ACCOUNT_RATING_UNCHANGED;
-
-		if (existingRating != null && existingRating.getRating() == rating)
-			return ValidationResult.ACCOUNT_RATING_UNCHANGED;
-
-		if (isRatingChangeTooSoon(targetPublicKey, raterPublicKey, category))
-			return ValidationResult.ACCOUNT_RATING_CHANGE_TOO_SOON;
+		ValidationResult validationResult = AccountRatingValidation.validateRatingChange(this.repository, targetPublicKey,
+				raterPublicKey, category, rating, getCurrentChangeHeight());
+		if (validationResult != ValidationResult.OK)
+			return validationResult;
 
 		Account rater = getRater();
 		if (rater.getConfirmedBalance(Asset.NATIVE) < this.rateAccountTransactionData.getFee())
@@ -126,20 +102,6 @@ public class RateAccountTransaction extends Transaction {
 		this.rateAccountTransactionData.setPreviousRating(null);
 		this.rateAccountTransactionData.setRatingChangeHeight(null);
 		this.repository.getTransactionRepository().save(this.rateAccountTransactionData);
-	}
-
-	private boolean isRatingChangeTooSoon(byte[] targetPublicKey, byte[] raterPublicKey,
-			AccountRatingCategory category) throws DataException {
-		int cooldownBlocks = AccountTrustPolicy.getAccountRatingChangeCooldownBlocks();
-		if (cooldownBlocks <= 0)
-			return false;
-
-		Integer latestChangeHeight = this.repository.getAccountRatingRepository()
-				.getLatestRatingChangeHeight(targetPublicKey, raterPublicKey, category);
-		if (latestChangeHeight == null)
-			return false;
-
-		return getCurrentChangeHeight() < latestChangeHeight + cooldownBlocks;
 	}
 
 	private int getCurrentChangeHeight() throws DataException {
