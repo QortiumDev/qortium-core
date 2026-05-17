@@ -186,6 +186,9 @@ support, mixed onboarding batches, support removal, Suspicious recovery, and
 seed dilution as the Minting group grows. Signed adversarial scenarios cover
 isolated farm rings, same-branch evidence, independent Suspicious blocking,
 cooldown blocking, and cooldown-based recovery.
+Launch transition scenarios cover Minting group seed-set changes,
+Manager-to-Subject cascade breaks and recovery, evaluator-category trust loss,
+and signed support-removal orphaning.
 
 There is also an opt-in benchmark for larger generated graphs and rating churn:
 

@@ -350,6 +350,9 @@ The core trust-network mechanics are implemented:
   supporters rate many accounts, mixed onboarding batches reach different
   tiers, support is removed after cooldown, Suspicious status recovers, and
   extra Minting group seed members dilute support outcomes.
+- launch transition scenarios prove seed-set changes, category-chain breaks,
+  evaluator-category trust loss, recovery, and block orphaning move stored
+  snapshots and status-change history as expected.
 - signed adversarial launch scenarios prove isolated farm rings, same-branch
   evidence, independent Suspicious blocking, cooldown blocking, and
   cooldown-based recovery through the transaction path.
@@ -450,6 +453,9 @@ Current trust-network coverage includes these cases:
 - launch stress scenario tests prove multi-target support behavior, mixed
   onboarding tier spread, cooldown-gated support removal, Suspicious recovery,
   and Minting group seed dilution under the current launch defaults.
+- launch transition scenario tests prove Minting group seed changes,
+  Manager-to-Subject cascade breaks and recovery, evaluator-category trust loss,
+  and signed support-removal orphaning.
 - signed adversarial scenario tests prove the same launch safety assumptions
   through block processing, trust snapshot refreshes, status-change history, and
   account-rating cooldown API reporting.
