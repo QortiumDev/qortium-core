@@ -66,6 +66,14 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(AccountRatingCategory.SUBJECT, summary.getActiveWeightCategory());
 		assertNull(summary.getSnapshotHeight());
 		assertNull(summary.getSnapshotTimestamp());
+		assertEquals(0L, summary.getSnapshotAccountCount());
+		assertEquals(0L, summary.getSnapshotRowCount());
+		assertEquals(0L, summary.getExpectedSnapshotRowCount());
+		assertTrue(summary.isSnapshotsComplete());
+		assertEquals(0L, summary.getActiveRatingCount());
+		assertEquals(0L, summary.getTrustStatusChangeCount());
+		assertNull(summary.getLatestTrustChangeHeight());
+		assertNull(summary.getLatestTrustChangeTimestamp());
 		assertEquals(0L, summary.getActiveSnapshotAccountCount());
 		assertEquals(0L, summary.getActiveSeedMemberCount());
 		assertEquals(0L, summary.getActiveMintingAllowedCount());
@@ -74,6 +82,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(0L, summary.getEffectiveVoteWeight());
 		assertEquals(AccountTrustStatus.values().length, summary.getStatusSummaries().size());
 		assertEquals(AccountRatingCategory.values().length, summary.getCategorySummaries().size());
+		assertEquals(AccountRatingCategory.values().length, summary.getRatingCategorySummaries().size());
 
 		for (AccountTrustSummaryData.StatusSummary statusSummary : summary.getStatusSummaries()) {
 			assertEquals(0L, statusSummary.getAccountCount());
@@ -91,6 +100,12 @@ public class AccountRatingsApiTests extends ApiCommon {
 				assertEquals(statusCount.getStatus().getValue(), statusCount.getStatusValue());
 				assertEquals(0L, statusCount.getAccountCount());
 			}
+		}
+
+		for (AccountTrustSummaryData.RatingCategorySummary ratingCategorySummary : summary.getRatingCategorySummaries()) {
+			assertEquals(0L, ratingCategorySummary.getRatingCount());
+			assertEquals(0L, ratingCategorySummary.getPositiveRatingCount());
+			assertEquals(0L, ratingCategorySummary.getNegativeRatingCount());
 		}
 	}
 
@@ -114,6 +129,11 @@ public class AccountRatingsApiTests extends ApiCommon {
 			setVoteAccount(repository, chloe, 101);
 			setVoteAccount(repository, dilbert, 101);
 			setVoteAccount(repository, erin, 101);
+
+			saveAccountRating(repository, alice, bob, AccountRatingCategory.SUBJECT, 4);
+			saveAccountRating(repository, bob, alice, AccountRatingCategory.SUBJECT, -2);
+			saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.MANAGER, 3);
+			saveAccountRating(repository, dilbert, chloe, AccountRatingCategory.PLAYER, -1);
 
 			repository.getAccountRatingRepository().replaceTrustDerivationSnapshots(Arrays.asList(
 					trustDerivation(alice, true,
@@ -140,6 +160,14 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(AccountRatingCategory.SUBJECT, summary.getActiveWeightCategory());
 		assertNotNull(summary.getSnapshotHeight());
 		assertNotNull(summary.getSnapshotTimestamp());
+		assertEquals(5L, summary.getSnapshotAccountCount());
+		assertEquals(9L, summary.getSnapshotRowCount());
+		assertEquals(20L, summary.getExpectedSnapshotRowCount());
+		assertFalse(summary.isSnapshotsComplete());
+		assertEquals(4L, summary.getActiveRatingCount());
+		assertEquals(0L, summary.getTrustStatusChangeCount());
+		assertNull(summary.getLatestTrustChangeHeight());
+		assertNull(summary.getLatestTrustChangeTimestamp());
 		assertEquals(5L, summary.getActiveSnapshotAccountCount());
 		assertEquals(2L, summary.getActiveSeedMemberCount());
 		assertEquals(2L, summary.getActiveMintingAllowedCount());
@@ -193,6 +221,55 @@ public class AccountRatingsApiTests extends ApiCommon {
 
 		AccountTrustSummaryData.CategorySummary trainerSummary = findCategorySummary(summary, AccountRatingCategory.TRAINER);
 		assertEquals(1L, findStatusCount(trainerSummary, AccountTrustStatus.BRONZE).getAccountCount());
+
+		AccountTrustSummaryData.RatingCategorySummary subjectRatings =
+				findRatingCategorySummary(summary, AccountRatingCategory.SUBJECT);
+		assertEquals(2L, subjectRatings.getRatingCount());
+		assertEquals(1L, subjectRatings.getPositiveRatingCount());
+		assertEquals(1L, subjectRatings.getNegativeRatingCount());
+
+		AccountTrustSummaryData.RatingCategorySummary managerRatings =
+				findRatingCategorySummary(summary, AccountRatingCategory.MANAGER);
+		assertEquals(1L, managerRatings.getRatingCount());
+		assertEquals(1L, managerRatings.getPositiveRatingCount());
+		assertEquals(0L, managerRatings.getNegativeRatingCount());
+
+		AccountTrustSummaryData.RatingCategorySummary playerRatings =
+				findRatingCategorySummary(summary, AccountRatingCategory.PLAYER);
+		assertEquals(1L, playerRatings.getRatingCount());
+		assertEquals(0L, playerRatings.getPositiveRatingCount());
+		assertEquals(1L, playerRatings.getNegativeRatingCount());
+
+		AccountTrustSummaryData.RatingCategorySummary trainerRatings =
+				findRatingCategorySummary(summary, AccountRatingCategory.TRAINER);
+		assertEquals(0L, trainerRatings.getRatingCount());
+	}
+
+	@Test
+	public void testTrustSummaryEndpointReportsCompleteSnapshotsAndLatestChange() throws DataException {
+		TestAccount alice;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+
+			replaceTrustSnapshots(repository, 10, 1000L,
+					completeTrustDerivation(alice, true, AccountTrustStatus.UNVERIFIED));
+			replaceTrustSnapshots(repository, 11, 2000L,
+					completeTrustDerivation(alice, true, AccountTrustStatus.GOLD));
+		}
+
+		AccountTrustSummaryData summary = this.accountRatingsResource.getAccountTrustSummary();
+
+		assertEquals(1L, summary.getSnapshotAccountCount());
+		assertEquals(AccountRatingCategory.values().length, summary.getSnapshotRowCount());
+		assertEquals(AccountRatingCategory.values().length, summary.getExpectedSnapshotRowCount());
+		assertTrue(summary.isSnapshotsComplete());
+		assertEquals(1L, summary.getTrustStatusChangeCount());
+		assertEquals(Integer.valueOf(11), summary.getLatestTrustChangeHeight());
+		assertEquals(Long.valueOf(2000L), summary.getLatestTrustChangeTimestamp());
+
+		AccountTrustSummaryData.StatusSummary gold = findStatusSummary(summary, AccountTrustStatus.GOLD);
+		assertEquals(1L, gold.getAccountCount());
 	}
 
 	@Test
@@ -1194,6 +1271,14 @@ public class AccountRatingsApiTests extends ApiCommon {
 				.orElseThrow(() -> new AssertionError("Missing trust summary for category " + category));
 	}
 
+	private AccountTrustSummaryData.RatingCategorySummary findRatingCategorySummary(AccountTrustSummaryData summary,
+			AccountRatingCategory category) {
+		return summary.getRatingCategorySummaries().stream()
+				.filter(categorySummary -> categorySummary.getCategory() == category)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing rating summary for category " + category));
+	}
+
 	private AccountTrustSummaryData.StatusCount findStatusCount(AccountTrustSummaryData.CategorySummary categorySummary,
 			AccountTrustStatus status) {
 		return categorySummary.getStatusCounts().stream()
@@ -1316,6 +1401,15 @@ public class AccountRatingsApiTests extends ApiCommon {
 
 		return new AccountTrustDerivationData(account.getPublicKey(), account.getAddress(), subjectStatus, seedMember,
 				Arrays.asList(categories));
+	}
+
+	private AccountTrustDerivationData completeTrustDerivation(PrivateKeyAccount account, boolean seedMember,
+			AccountTrustStatus subjectStatus) {
+		return trustDerivation(account, seedMember,
+				categoryTrust(AccountRatingCategory.SUBJECT, subjectStatus),
+				categoryTrust(AccountRatingCategory.PLAYER, AccountTrustStatus.UNVERIFIED),
+				categoryTrust(AccountRatingCategory.TRAINER, AccountTrustStatus.UNVERIFIED),
+				categoryTrust(AccountRatingCategory.MANAGER, AccountTrustStatus.UNVERIFIED));
 	}
 
 	private AccountTrustCategoryData categoryTrust(AccountRatingCategory category, AccountTrustStatus trustStatus) {

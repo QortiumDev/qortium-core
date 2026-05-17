@@ -198,7 +198,7 @@ Clients should use different account-rating APIs for different jobs:
 
 | Endpoint | Use |
 | --- | --- |
-| `GET /account-ratings/trust-summary` | Lightweight network-wide trust counts, seed counts, and active vote-weight totals |
+| `GET /account-ratings/trust-summary` | Lightweight network-wide trust counts, health fields, rating counts, seed counts, and active vote-weight totals |
 | `GET /account-ratings/trust-profile` | Primary account trust display for one account |
 | `GET /account-ratings/trust-explanation` | Detailed explanation of why one account has its current status |
 | `GET /account-ratings/trust-policy` | Chain-configured thresholds, caps, seed settings, Suspicious rules, and vote multipliers |
@@ -217,7 +217,10 @@ snapshot overview without asking the client to fetch every trust row. It shows
 how many stored active accounts sit in each trust status, how many are minting
 seed members, how many of those seed members are still allowed to mint after
 Suspicious filtering, how much raw `blocksMinted` weight exists, and how much
-of that weight currently counts after trust multipliers.
+of that weight currently counts after trust multipliers. It also reports
+snapshot completeness, active rating counts by category, and latest stored
+trust-status change metadata so clients can show whether the trust graph looks
+current and internally complete.
 
 For diagnostic screens, pair `trust-explanation` with `trust-policy`. The
 explanation shows one account's stored or live evidence; the policy endpoint

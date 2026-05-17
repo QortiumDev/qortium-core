@@ -304,6 +304,8 @@ The core trust-network mechanics are implemented:
   clients can audit the calculation.
 - account ratings, trust snapshots, trust derivation, trust profile, trust
   explanation, trust policy, and trust summary APIs are available.
+- the trust summary API includes snapshot completeness, active rating counts,
+  and latest trust-status change metadata for explorer and admin health views.
 - stored Subject snapshots are the single active trust source for minting
   trust allowance and weight multipliers.
 - stored trust snapshots and trust-status change history have lifecycle
@@ -327,7 +329,6 @@ The core trust-network mechanics are implemented:
 Remaining pre-launch work is now hardening rather than core construction:
 
 - continue validating the launch trust profile against realistic graph scenarios
-- improve observability around recent trust-status changes
 - keep reviewing trust-graph benchmark output and decide whether larger stress
   profiles, account-rating churn controls, or derivation optimization are needed
   before launch

@@ -11,6 +11,14 @@ public class AccountTrustSummaryData {
 	private AccountRatingCategory activeWeightCategory;
 	private Integer snapshotHeight;
 	private Long snapshotTimestamp;
+	private long snapshotAccountCount;
+	private long snapshotRowCount;
+	private long expectedSnapshotRowCount;
+	private boolean snapshotsComplete;
+	private long activeRatingCount;
+	private long trustStatusChangeCount;
+	private Integer latestTrustChangeHeight;
+	private Long latestTrustChangeTimestamp;
 	private long activeSnapshotAccountCount;
 	private long activeSeedMemberCount;
 	private long activeMintingAllowedCount;
@@ -19,17 +27,30 @@ public class AccountTrustSummaryData {
 	private long effectiveVoteWeight;
 	private List<StatusSummary> statusSummaries;
 	private List<CategorySummary> categorySummaries;
+	private List<RatingCategorySummary> ratingCategorySummaries;
 
 	protected AccountTrustSummaryData() {
 	}
 
-	public AccountTrustSummaryData(AccountRatingCategory activeWeightCategory, Integer snapshotHeight,
-			Long snapshotTimestamp, List<StatusSummary> statusSummaries, List<CategorySummary> categorySummaries) {
+	public AccountTrustSummaryData(AccountRatingCategory activeWeightCategory, Integer snapshotHeight, Long snapshotTimestamp,
+			long snapshotAccountCount, long snapshotRowCount, long expectedSnapshotRowCount, boolean snapshotsComplete,
+			long activeRatingCount, long trustStatusChangeCount, Integer latestTrustChangeHeight,
+			Long latestTrustChangeTimestamp, List<StatusSummary> statusSummaries,
+			List<CategorySummary> categorySummaries, List<RatingCategorySummary> ratingCategorySummaries) {
 		this.activeWeightCategory = activeWeightCategory == null ? AccountRatingCategory.SUBJECT : activeWeightCategory;
 		this.snapshotHeight = snapshotHeight;
 		this.snapshotTimestamp = snapshotTimestamp;
+		this.snapshotAccountCount = snapshotAccountCount;
+		this.snapshotRowCount = snapshotRowCount;
+		this.expectedSnapshotRowCount = expectedSnapshotRowCount;
+		this.snapshotsComplete = snapshotsComplete;
+		this.activeRatingCount = activeRatingCount;
+		this.trustStatusChangeCount = trustStatusChangeCount;
+		this.latestTrustChangeHeight = latestTrustChangeHeight;
+		this.latestTrustChangeTimestamp = latestTrustChangeTimestamp;
 		this.statusSummaries = statusSummaries == null ? new ArrayList<>() : statusSummaries;
 		this.categorySummaries = categorySummaries == null ? new ArrayList<>() : categorySummaries;
+		this.ratingCategorySummaries = ratingCategorySummaries == null ? new ArrayList<>() : ratingCategorySummaries;
 		this.updateTotals();
 	}
 
@@ -43,6 +64,38 @@ public class AccountTrustSummaryData {
 
 	public Long getSnapshotTimestamp() {
 		return this.snapshotTimestamp;
+	}
+
+	public long getSnapshotAccountCount() {
+		return this.snapshotAccountCount;
+	}
+
+	public long getSnapshotRowCount() {
+		return this.snapshotRowCount;
+	}
+
+	public long getExpectedSnapshotRowCount() {
+		return this.expectedSnapshotRowCount;
+	}
+
+	public boolean isSnapshotsComplete() {
+		return this.snapshotsComplete;
+	}
+
+	public long getActiveRatingCount() {
+		return this.activeRatingCount;
+	}
+
+	public long getTrustStatusChangeCount() {
+		return this.trustStatusChangeCount;
+	}
+
+	public Integer getLatestTrustChangeHeight() {
+		return this.latestTrustChangeHeight;
+	}
+
+	public Long getLatestTrustChangeTimestamp() {
+		return this.latestTrustChangeTimestamp;
 	}
 
 	public long getActiveSnapshotAccountCount() {
@@ -75,6 +128,10 @@ public class AccountTrustSummaryData {
 
 	public List<CategorySummary> getCategorySummaries() {
 		return this.categorySummaries;
+	}
+
+	public List<RatingCategorySummary> getRatingCategorySummaries() {
+		return this.ratingCategorySummaries;
 	}
 
 	private void updateTotals() {
@@ -209,6 +266,41 @@ public class AccountTrustSummaryData {
 
 		public long getAccountCount() {
 			return this.accountCount;
+		}
+	}
+
+	@XmlAccessorType(XmlAccessType.FIELD)
+	public static class RatingCategorySummary {
+		private AccountRatingCategory category;
+		private long ratingCount;
+		private long positiveRatingCount;
+		private long negativeRatingCount;
+
+		protected RatingCategorySummary() {
+		}
+
+		public RatingCategorySummary(AccountRatingCategory category, long ratingCount, long positiveRatingCount,
+				long negativeRatingCount) {
+			this.category = category == null ? AccountRatingCategory.SUBJECT : category;
+			this.ratingCount = ratingCount;
+			this.positiveRatingCount = positiveRatingCount;
+			this.negativeRatingCount = negativeRatingCount;
+		}
+
+		public AccountRatingCategory getCategory() {
+			return this.category;
+		}
+
+		public long getRatingCount() {
+			return this.ratingCount;
+		}
+
+		public long getPositiveRatingCount() {
+			return this.positiveRatingCount;
+		}
+
+		public long getNegativeRatingCount() {
+			return this.negativeRatingCount;
 		}
 	}
 }

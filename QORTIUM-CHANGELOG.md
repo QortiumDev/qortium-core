@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - api: add trust network health summary
+
+Extended the account trust summary API with health fields for launch and explorer monitoring. The summary now reports snapshot row completeness, active rating counts by category, total stored trust-status changes, and latest trust-change metadata so clients can see whether the stored trust graph looks current and internally complete without fetching every rating or snapshot.
+
 ### 2026-05-17 - test: add trust rating churn benchmarks
 
 Added deterministic and opt-in benchmark coverage for account-rating churn in the trust network. The scale tests now prove that a synthetic trust graph can have ratings changed and removed while keeping complete snapshot rows, and the long trust-network benchmark now reports refresh timing across repeated churn rounds so Qortium can decide later whether rating-change limits or trust-derivation optimization are needed before launch.

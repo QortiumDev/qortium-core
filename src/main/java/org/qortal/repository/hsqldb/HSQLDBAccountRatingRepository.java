@@ -187,7 +187,7 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 	@Override
 	public void replaceTrustDerivationSnapshots(List<AccountTrustDerivationData> derivedAccounts, int snapshotHeight,
 			long snapshotTimestamp) throws DataException {
-		TrustSnapshotMetadata currentMetadata = getTrustSnapshotMetadata();
+		TrustSnapshotHealth currentMetadata = getTrustSnapshotHealth();
 		boolean rollbackRefresh = currentMetadata.snapshotHeight != null && snapshotHeight < currentMetadata.snapshotHeight;
 		Map<String, AccountTrustSnapshotData> previousSnapshotsByChangeKey = rollbackRefresh
 				? Collections.emptyMap()
@@ -307,27 +307,37 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 	@Override
 	public AccountTrustSummaryData getTrustSummary(AccountRatingCategory activeCategory) throws DataException {
 		AccountRatingCategory effectiveActiveCategory = defaultCategory(activeCategory);
-		TrustSnapshotMetadata metadata = getTrustSnapshotMetadata();
+		TrustSnapshotHealth snapshotHealth = getTrustSnapshotHealth();
+		List<AccountTrustSummaryData.RatingCategorySummary> ratingCategorySummaries = getTrustRatingCategorySummaries();
+		TrustStatusChangeHealth statusChangeHealth = getTrustStatusChangeHealth();
 
-		return new AccountTrustSummaryData(effectiveActiveCategory, metadata.snapshotHeight, metadata.snapshotTimestamp,
-				getTrustStatusSummaries(effectiveActiveCategory), getTrustCategorySummaries());
+		return new AccountTrustSummaryData(effectiveActiveCategory, snapshotHealth.snapshotHeight,
+				snapshotHealth.snapshotTimestamp, snapshotHealth.snapshotAccountCount, snapshotHealth.snapshotRowCount,
+				snapshotHealth.expectedSnapshotRowCount, snapshotHealth.snapshotsComplete,
+				getActiveRatingCount(ratingCategorySummaries), statusChangeHealth.changeCount,
+				statusChangeHealth.latestChangeHeight, statusChangeHealth.latestChangeTimestamp,
+				getTrustStatusSummaries(effectiveActiveCategory), getTrustCategorySummaries(), ratingCategorySummaries);
 	}
 
-	private TrustSnapshotMetadata getTrustSnapshotMetadata() throws DataException {
-		String sql = "SELECT MAX(snapshot_height), MAX(snapshot_timestamp) FROM AccountTrustDerivationSnapshots";
+	private TrustSnapshotHealth getTrustSnapshotHealth() throws DataException {
+		String sql = "SELECT MAX(snapshot_height), MAX(snapshot_timestamp), COUNT(DISTINCT account), COUNT(*) "
+				+ "FROM AccountTrustDerivationSnapshots";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
 			if (resultSet == null)
-				return new TrustSnapshotMetadata(null, null);
+				return new TrustSnapshotHealth(null, null, 0L, 0L);
 
 			int snapshotHeight = resultSet.getInt(1);
 			Integer snapshotHeightValue = resultSet.wasNull() ? null : snapshotHeight;
 			long snapshotTimestamp = resultSet.getLong(2);
 			Long snapshotTimestampValue = resultSet.wasNull() ? null : snapshotTimestamp;
+			long snapshotAccountCount = resultSet.getLong(3);
+			long snapshotRowCount = resultSet.getLong(4);
 
-			return new TrustSnapshotMetadata(snapshotHeightValue, snapshotTimestampValue);
+			return new TrustSnapshotHealth(snapshotHeightValue, snapshotTimestampValue, snapshotAccountCount,
+					snapshotRowCount);
 		} catch (SQLException e) {
-			throw new DataException("Unable to fetch account trust snapshot metadata from repository", e);
+			throw new DataException("Unable to fetch account trust snapshot health from repository", e);
 		}
 	}
 
@@ -407,6 +417,68 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 		}
 
 		return categorySummaries;
+	}
+
+	private List<AccountTrustSummaryData.RatingCategorySummary> getTrustRatingCategorySummaries() throws DataException {
+		Map<AccountRatingCategory, RatingCategorySummaryValues> summaryValuesByCategory =
+				new EnumMap<>(AccountRatingCategory.class);
+		for (AccountRatingCategory category : AccountRatingCategory.values())
+			summaryValuesByCategory.put(category, new RatingCategorySummaryValues());
+
+		String sql = "SELECT category, COUNT(*), "
+				+ "COALESCE(SUM(CASE WHEN rating > 0 THEN 1 ELSE 0 END), 0), "
+				+ "COALESCE(SUM(CASE WHEN rating < 0 THEN 1 ELSE 0 END), 0) "
+				+ "FROM AccountRatings GROUP BY category";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
+			if (resultSet != null) {
+				do {
+					AccountRatingCategory category = AccountRatingCategory.valueOf(resultSet.getInt(1));
+					RatingCategorySummaryValues summaryValues = summaryValuesByCategory.get(defaultCategory(category));
+					summaryValues.ratingCount = resultSet.getLong(2);
+					summaryValues.positiveRatingCount = resultSet.getLong(3);
+					summaryValues.negativeRatingCount = resultSet.getLong(4);
+				} while (resultSet.next());
+			}
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch account rating category summary from repository", e);
+		}
+
+		List<AccountTrustSummaryData.RatingCategorySummary> ratingCategorySummaries = new ArrayList<>();
+		for (AccountRatingCategory category : AccountRatingCategory.values()) {
+			RatingCategorySummaryValues summaryValues = summaryValuesByCategory.get(category);
+			ratingCategorySummaries.add(new AccountTrustSummaryData.RatingCategorySummary(category,
+					summaryValues.ratingCount, summaryValues.positiveRatingCount, summaryValues.negativeRatingCount));
+		}
+
+		return ratingCategorySummaries;
+	}
+
+	private long getActiveRatingCount(List<AccountTrustSummaryData.RatingCategorySummary> ratingCategorySummaries) {
+		long activeRatingCount = 0L;
+		for (AccountTrustSummaryData.RatingCategorySummary ratingCategorySummary : ratingCategorySummaries)
+			activeRatingCount += ratingCategorySummary.getRatingCount();
+
+		return activeRatingCount;
+	}
+
+	private TrustStatusChangeHealth getTrustStatusChangeHealth() throws DataException {
+		String sql = "SELECT COUNT(*), MAX(snapshot_height), MAX(snapshot_timestamp) FROM AccountTrustStatusChanges";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
+			if (resultSet == null)
+				return new TrustStatusChangeHealth(0L, null, null);
+
+			long changeCount = resultSet.getLong(1);
+			int latestChangeHeight = resultSet.getInt(2);
+			Integer latestChangeHeightValue = resultSet.wasNull() ? null : latestChangeHeight;
+			long latestChangeTimestamp = resultSet.getLong(3);
+			Long latestChangeTimestampValue = resultSet.wasNull() ? null : latestChangeTimestamp;
+
+			return new TrustStatusChangeHealth(changeCount, latestChangeHeightValue, latestChangeTimestampValue);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch account trust status change health from repository", e);
+		}
 	}
 
 	private String trustSummaryEffectiveVoteWeightSql() {
@@ -708,13 +780,22 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 		return category == null ? AccountRatingCategory.SUBJECT : category;
 	}
 
-	private static class TrustSnapshotMetadata {
+	private static class TrustSnapshotHealth {
 		private final Integer snapshotHeight;
 		private final Long snapshotTimestamp;
+		private final long snapshotAccountCount;
+		private final long snapshotRowCount;
+		private final long expectedSnapshotRowCount;
+		private final boolean snapshotsComplete;
 
-		private TrustSnapshotMetadata(Integer snapshotHeight, Long snapshotTimestamp) {
+		private TrustSnapshotHealth(Integer snapshotHeight, Long snapshotTimestamp, long snapshotAccountCount,
+				long snapshotRowCount) {
 			this.snapshotHeight = snapshotHeight;
 			this.snapshotTimestamp = snapshotTimestamp;
+			this.snapshotAccountCount = snapshotAccountCount;
+			this.snapshotRowCount = snapshotRowCount;
+			this.expectedSnapshotRowCount = snapshotAccountCount * AccountRatingCategory.values().length;
+			this.snapshotsComplete = snapshotRowCount == this.expectedSnapshotRowCount;
 		}
 	}
 
@@ -723,5 +804,23 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 		private long seedMemberCount;
 		private long rawVoteWeight;
 		private long effectiveVoteWeight;
+	}
+
+	private static class RatingCategorySummaryValues {
+		private long ratingCount;
+		private long positiveRatingCount;
+		private long negativeRatingCount;
+	}
+
+	private static class TrustStatusChangeHealth {
+		private final long changeCount;
+		private final Integer latestChangeHeight;
+		private final Long latestChangeTimestamp;
+
+		private TrustStatusChangeHealth(long changeCount, Integer latestChangeHeight, Long latestChangeTimestamp) {
+			this.changeCount = changeCount;
+			this.latestChangeHeight = latestChangeHeight;
+			this.latestChangeTimestamp = latestChangeTimestamp;
+		}
 	}
 }
