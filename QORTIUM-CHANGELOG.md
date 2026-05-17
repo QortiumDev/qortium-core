@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-16 - test: add trust policy calibration matrix
+
+Added focused policy calibration tests for the trust network settings that Qortium-derived chains can tune before launch. The new coverage proves that vote multipliers, positive caps, Suspicious caps, Suspicious rater count, and Suspicious confidence requirements each change decisions, capped scores, or effective weight in the expected direction without changing the current default policy.
+
 ### 2026-05-16 - docs: update trust network implementation status
 
 Updated the Aura trust-tier design note so it describes the trust network as an implemented Qortium system rather than a staged proposal. The document now separates completed mechanics from remaining pre-launch hardening work, making it clearer that future trust-network work is mainly calibration, observability, and performance testing.

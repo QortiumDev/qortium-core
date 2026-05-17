@@ -264,6 +264,131 @@ public class AccountTrustPolicyTests extends Common {
 	}
 
 	@Test
+	public void testCalibrationMatrixVoteMultipliersChangeEffectiveWeights() throws Exception {
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"{ \"status\": \"BRONZE\", \"percent\": 25 }",
+				"{ \"status\": \"BRONZE\", \"percent\": 40 }");
+		config = replaceRequired(config,
+				"{ \"status\": \"SILVER\", \"percent\": 50 }",
+				"{ \"status\": \"SILVER\", \"percent\": 60 }");
+		config = replaceRequired(config,
+				"{ \"status\": \"GOLD\", \"percent\": 100 }",
+				"{ \"status\": \"GOLD\", \"percent\": 90 }");
+		loadTemporaryConfig(config);
+
+		assertEquals(400, AccountTrustPolicy.calculateEffectiveVoteWeight(1000, AccountTrustStatus.BRONZE));
+		assertEquals(600, AccountTrustPolicy.calculateEffectiveVoteWeight(1000, AccountTrustStatus.SILVER));
+		assertEquals(900, AccountTrustPolicy.calculateEffectiveVoteWeight(1000, AccountTrustStatus.GOLD));
+		assertEquals(0, AccountTrustPolicy.calculateEffectiveVoteWeight(1000, AccountTrustStatus.UNVERIFIED));
+		assertEquals(0, AccountTrustPolicy.calculateEffectiveVoteWeight(1000, AccountTrustStatus.SUSPICIOUS));
+	}
+
+	@Test
+	public void testCalibrationMatrixPositiveCapsChangeLevelDecision() throws Exception {
+		AccountTrustPolicy.LevelDecision defaultDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				12_000_000L, Arrays.asList(
+						impact("r1", 1, 1, 6_000_000L),
+						impact("r2", 1, 1, 6_000_000L)));
+		assertEquals(1, defaultDecision.getLevel());
+		assertEquals(10_000_000L, defaultDecision.getLevelScore());
+		assertEquals(5_000_000L, defaultDecision.getLevelScoreCap());
+
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"{ \"level\": 1, \"threshold\": 10000000, \"cap\": 5000000 }",
+				"{ \"level\": 1, \"threshold\": 10000000, \"cap\": 4000000 }");
+		loadTemporaryConfig(config);
+
+		AccountTrustPolicy.LevelDecision customDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				12_000_000L, Arrays.asList(
+						impact("r1", 1, 1, 6_000_000L),
+						impact("r2", 1, 1, 6_000_000L)));
+		assertEquals(0, customDecision.getLevel());
+		assertEquals(8_000_000L, customDecision.getLevelScore());
+		assertEquals(4_000_000L, customDecision.getLevelScoreCap());
+	}
+
+	@Test
+	public void testCalibrationMatrixSuspiciousCapsChangeCappedScore() throws Exception {
+		AccountTrustPolicy.LevelDecision defaultDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				-12_000_000L, Arrays.asList(
+						impact("r1", 3, -2, -6_000_000L),
+						impact("r2", 3, -2, -6_000_000L)));
+		assertEquals(-1, defaultDecision.getLevel());
+		assertEquals(-10_000_000L, defaultDecision.getLevelScore());
+		assertEquals(5_000_000L, defaultDecision.getLevelScoreCap());
+
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"suspiciousCap\": 5000000",
+				"\"suspiciousCap\": 6000000");
+		loadTemporaryConfig(config);
+
+		AccountTrustPolicy.LevelDecision customDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				-12_000_000L, Arrays.asList(
+						impact("r1", 3, -2, -6_000_000L),
+						impact("r2", 3, -2, -6_000_000L)));
+		assertEquals(-1, customDecision.getLevel());
+		assertEquals(-12_000_000L, customDecision.getLevelScore());
+		assertEquals(6_000_000L, customDecision.getLevelScoreCap());
+	}
+
+	@Test
+	public void testCalibrationMatrixSuspiciousRaterCountChangesLevelDecision() throws Exception {
+		AccountTrustPolicy.LevelDecision defaultDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				-18_000_000L, Arrays.asList(
+						impact("r1", 3, -2, -6_000_000L),
+						impact("r2", 3, -2, -6_000_000L)));
+		assertEquals(-1, defaultDecision.getLevel());
+
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"suspiciousMinRaterCount\": 2",
+				"\"suspiciousMinRaterCount\": 3");
+		loadTemporaryConfig(config);
+
+		AccountTrustPolicy.LevelDecision twoRaterDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				-18_000_000L, Arrays.asList(
+						impact("r1", 3, -2, -6_000_000L),
+						impact("r2", 3, -2, -6_000_000L)));
+		assertEquals(0, twoRaterDecision.getLevel());
+		assertEquals(-10_000_000L, twoRaterDecision.getLevelScore());
+
+		AccountTrustPolicy.LevelDecision threeRaterDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				-18_000_000L, Arrays.asList(
+						impact("r1", 3, -2, -6_000_000L),
+						impact("r2", 3, -2, -6_000_000L),
+						impact("r3", 3, -2, -6_000_000L)));
+		assertEquals(-1, threeRaterDecision.getLevel());
+		assertEquals(-15_000_000L, threeRaterDecision.getLevelScore());
+	}
+
+	@Test
+	public void testCalibrationMatrixSuspiciousConfidenceChangesLevelDecision() throws Exception {
+		AccountTrustPolicy.LevelDecision defaultDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.SUBJECT,
+				-12_000_000L, Arrays.asList(
+						impact("r1", 3, -2, -6_000_000L),
+						impact("r2", 3, -2, -6_000_000L)));
+		assertEquals(-1, defaultDecision.getLevel());
+
+		String config = replaceRequired(loadDefaultTestChainConfig(),
+				"\"suspiciousMinRatingConfidence\": 2",
+				"\"suspiciousMinRatingConfidence\": 3");
+		loadTemporaryConfig(config);
+
+		AccountTrustPolicy.LevelDecision mediumConfidenceDecision = AccountTrustPolicy.decideLevel(
+				AccountRatingCategory.SUBJECT, -12_000_000L, Arrays.asList(
+						impact("r1", 3, -2, -6_000_000L),
+						impact("r2", 3, -2, -6_000_000L)));
+		assertEquals(0, mediumConfidenceDecision.getLevel());
+		assertEquals(-10_000_000L, mediumConfidenceDecision.getLevelScore());
+
+		AccountTrustPolicy.LevelDecision highConfidenceDecision = AccountTrustPolicy.decideLevel(
+				AccountRatingCategory.SUBJECT, -12_000_000L, Arrays.asList(
+						impact("r1", 3, -3, -6_000_000L),
+						impact("r2", 3, -3, -6_000_000L)));
+		assertEquals(-1, highConfidenceDecision.getLevel());
+		assertEquals(-10_000_000L, highConfidenceDecision.getLevelScore());
+	}
+
+	@Test
 	public void testTrustPolicyEndpointReflectsCustomConfig() throws Exception {
 		String config = replaceRequired(loadDefaultTestChainConfig(),
 				"{ \"status\": \"SILVER\", \"percent\": 50 }",
