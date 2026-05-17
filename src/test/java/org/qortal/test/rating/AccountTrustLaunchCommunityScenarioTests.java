@@ -11,6 +11,8 @@ import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.account.AccountTrustSummaryData;
+import org.qortal.data.group.GroupData;
+import org.qortal.data.group.GroupMemberData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -19,6 +21,7 @@ import org.qortal.test.common.AccountTrustTestUtils;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
+import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.Transaction;
@@ -36,6 +39,148 @@ public class AccountTrustLaunchCommunityScenarioTests extends Common {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
+	}
+
+	@Test
+	public void testLaunchAcceptanceScenarioCombinesHonestUsersFarmResistanceAndRecovery() throws Exception {
+		AccountTrustTestUtils.useAccountRatingCooldown(3);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount seedAccount = Common.getTestAccount(repository, "alice");
+			TestAccount supporterA = Common.getTestAccount(repository, "bob");
+			TestAccount supporterB = Common.getTestAccount(repository, "dilbert");
+			TestAccount noEvidenceMinter = Common.getTestAccount(repository, "chloe");
+			List<PrivateKeyAccount> independentSupporters = Arrays.asList(supporterA, supporterB);
+			PrivateKeyAccount bronzeTarget = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount silverTarget = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount goldTarget = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount farmA = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount farmB = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount farmC = Common.generateRandomSeedAccount(repository);
+			List<PrivateKeyAccount> farmAccounts = Arrays.asList(farmA, farmB, farmC);
+			PrivateKeyAccount sameBranchSeed = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount sameBranchSupporterA = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount sameBranchSupporterB = Common.generateRandomSeedAccount(repository);
+			List<PrivateKeyAccount> sameBranchSupporters = Arrays.asList(sameBranchSupporterA, sameBranchSupporterB);
+			PrivateKeyAccount sameBranchPositiveTarget = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount sameBranchNegativeTarget = Common.generateRandomSeedAccount(repository);
+			PrivateKeyAccount mistakenSuspiciousTarget = Common.generateRandomSeedAccount(repository);
+
+			ensureKnownAccounts(repository, seedAccount, supporterA, supporterB, noEvidenceMinter, bronzeTarget,
+					silverTarget, goldTarget, farmA, farmB, farmC, mistakenSuspiciousTarget);
+			AccountTrustTestUtils.setBlocksMinted(repository, noEvidenceMinter, 1_000);
+			AccountTrustTestUtils.setBlocksMinted(repository, bronzeTarget, 1_000);
+			AccountTrustTestUtils.setBlocksMinted(repository, silverTarget, 1_000);
+			AccountTrustTestUtils.setBlocksMinted(repository, goldTarget, 1_000);
+			AccountTrustTestUtils.setBlocksMinted(repository, mistakenSuspiciousTarget, 1_000);
+			for (PrivateKeyAccount farmAccount : farmAccounts)
+				AccountTrustTestUtils.setBlocksMinted(repository, farmAccount, 1_000);
+
+			prepareTrustedSupporters(repository, seedAccount, independentSupporters);
+
+			rateByAll(repository, independentSupporters, bronzeTarget, 1);
+			rateByAll(repository, independentSupporters, silverTarget, 2);
+			rateByAll(repository, independentSupporters, goldTarget, 4);
+
+			AccountTrustTestUtils.saveAccountRating(repository, farmA, farmB, AccountRatingCategory.MANAGER, 4);
+			AccountTrustTestUtils.saveAccountRating(repository, farmB, farmC, AccountRatingCategory.TRAINER, 4);
+			AccountTrustTestUtils.saveAccountRating(repository, farmC, farmA, AccountRatingCategory.PLAYER, 4);
+			AccountTrustTestUtils.saveAccountRating(repository, farmA, farmC, AccountRatingCategory.SUBJECT, 4);
+			AccountTrustTestUtils.saveAccountRating(repository, farmB, farmA, AccountRatingCategory.SUBJECT, 4);
+			AccountTrustTestUtils.refreshTrustSnapshots(repository);
+
+			rateByAllSigned(repository, independentSupporters, mistakenSuspiciousTarget, -2);
+
+			Account noEvidenceAccount = new Account(repository, noEvidenceMinter.getAddress());
+			assertEquals(AccountTrustStatus.UNVERIFIED, noEvidenceAccount.getTrustStatus());
+			assertEquals(0, noEvidenceAccount.getEffectiveVoteWeight());
+			assertSubjectStatus(repository, bronzeTarget, AccountTrustStatus.BRONZE, 400);
+			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 700);
+			assertSubjectStatus(repository, goldTarget, AccountTrustStatus.GOLD, 1_000);
+
+			for (PrivateKeyAccount farmAccount : farmAccounts)
+				assertFarmAccountRemainsUnverified(repository, farmAccount);
+
+			assertSubjectStatus(repository, mistakenSuspiciousTarget, AccountTrustStatus.SUSPICIOUS, 0);
+			assertFalse("Independent negative evidence should block trust-level mint eligibility",
+					AccountTrustWeight.canMint(findSnapshot(repository, mistakenSuspiciousTarget.getAddress(),
+							AccountRatingCategory.SUBJECT)));
+			ensureMintingGroupMember(repository, mistakenSuspiciousTarget);
+			assertFalse("Independent negative evidence should block Minting group member minting",
+					new Account(repository, mistakenSuspiciousTarget.getAddress()).canMint(false));
+			repository.getGroupRepository().deleteMember(TestChainBootstrapUtils.MINTING_GROUP_ID,
+					mistakenSuspiciousTarget.getAddress());
+			repository.saveChanges();
+
+			AccountTrustSummaryData summary = repository.getAccountRatingRepository()
+					.getTrustSummary(AccountTrustPolicy.getActiveWeightCategory());
+			assertTrue(summary.isSnapshotsComplete());
+			assertTrue(findStatusSummary(summary, AccountTrustStatus.UNVERIFIED).getAccountCount() > 0);
+			assertTrue(findStatusSummary(summary, AccountTrustStatus.BRONZE).getAccountCount() > 0);
+			assertTrue(findStatusSummary(summary, AccountTrustStatus.SILVER).getAccountCount() > 0);
+			assertTrue(findStatusSummary(summary, AccountTrustStatus.GOLD).getAccountCount() > 0);
+			assertTrue(findStatusSummary(summary, AccountTrustStatus.SUSPICIOUS).getAccountCount() > 0);
+
+			assertEquals(Transaction.ValidationResult.ACCOUNT_RATING_CHANGE_TOO_SOON,
+					Transaction.fromData(repository, ratingData(supporterA, mistakenSuspiciousTarget,
+							AccountRatingCategory.SUBJECT, AccountRating.NO_RATING)).isValid());
+
+			BlockUtils.mintBlock(repository);
+			TransactionUtils.signAndMint(repository,
+					ratingData(supporterA, mistakenSuspiciousTarget, AccountRatingCategory.SUBJECT,
+							AccountRating.NO_RATING),
+					supporterA);
+
+			assertNull(repository.getAccountRatingRepository().getRating(mistakenSuspiciousTarget.getPublicKey(),
+					supporterA.getPublicKey(), AccountRatingCategory.SUBJECT));
+			assertSubjectStatus(repository, mistakenSuspiciousTarget, AccountTrustStatus.UNVERIFIED, 0);
+			ensureMintingGroupMember(repository, mistakenSuspiciousTarget);
+			assertTrue("Removing one mistaken negative rating should restore minting",
+					new Account(repository, mistakenSuspiciousTarget.getAddress()).canMint(false));
+			repository.getGroupRepository().deleteMember(TestChainBootstrapUtils.MINTING_GROUP_ID,
+					mistakenSuspiciousTarget.getAddress());
+			repository.saveChanges();
+			assertSubjectStatus(repository, bronzeTarget, AccountTrustStatus.BRONZE, 400);
+			assertSubjectStatus(repository, silverTarget, AccountTrustStatus.SILVER, 700);
+			assertSubjectStatus(repository, goldTarget, AccountTrustStatus.GOLD, 1_000);
+
+			ensureKnownAccounts(repository, sameBranchSeed, sameBranchSupporterA, sameBranchSupporterB,
+					sameBranchPositiveTarget, sameBranchNegativeTarget);
+			ensureMintingGroupMember(repository, sameBranchSeed);
+			AccountTrustTestUtils.setBlocksMinted(repository, sameBranchPositiveTarget, 1_000);
+			AccountTrustTestUtils.setBlocksMinted(repository, sameBranchNegativeTarget, 1_000);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatingsFromSharedManagerBranch(repository, sameBranchSeed,
+					sameBranchSupporters);
+			rateByAll(repository, sameBranchSupporters, sameBranchPositiveTarget, 4);
+			rateByAll(repository, sameBranchSupporters, sameBranchNegativeTarget, -2);
+			AccountTrustTestUtils.refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData sameBranchPositiveSubject = findSnapshot(repository,
+					sameBranchPositiveTarget.getAddress(), AccountRatingCategory.SUBJECT);
+			assertTrue("Same-branch positive support should remain auditable",
+					sameBranchPositiveSubject.getScore() > 0);
+			assertEquals("Same-branch positive support should not satisfy branch independence",
+					0, sameBranchPositiveSubject.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, sameBranchPositiveSubject.getMappedTrustStatus());
+			assertEquals(0, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, sameBranchPositiveSubject));
+
+			AccountTrustSnapshotData sameBranchNegativeSubject = findSnapshot(repository,
+					sameBranchNegativeTarget.getAddress(), AccountRatingCategory.SUBJECT);
+			assertTrue("Same-branch negative support should remain auditable",
+					sameBranchNegativeSubject.getScore() < 0);
+			assertEquals("Same-branch negative support should not satisfy Suspicious branch independence",
+					0, sameBranchNegativeSubject.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, sameBranchNegativeSubject.getMappedTrustStatus());
+			ensureMintingGroupMember(repository, sameBranchNegativeTarget);
+			assertTrue("Same-branch negative support should not block minting",
+					new Account(repository, sameBranchNegativeTarget.getAddress()).canMint(false));
+
+			ensureMintingGroupMember(repository, noEvidenceMinter);
+			assertEquals(AccountTrustStatus.UNVERIFIED, noEvidenceAccount.getTrustStatus());
+			assertEquals(0, noEvidenceAccount.getEffectiveVoteWeight());
+			assertTrue("No-evidence Minting group members should still be able to mint",
+					noEvidenceAccount.canMint(false));
+		}
 	}
 
 	@Test
@@ -208,12 +353,37 @@ public class AccountTrustLaunchCommunityScenarioTests extends Common {
 			AccountTrustTestUtils.ensureKnownAccount(repository, account);
 	}
 
+	private void ensureMintingGroupMember(Repository repository, PrivateKeyAccount account) throws DataException {
+		AccountTrustTestUtils.ensureKnownAccount(repository, account);
+		if (repository.getGroupRepository().memberExists(TestChainBootstrapUtils.MINTING_GROUP_ID, account.getAddress()))
+			return;
+
+		GroupData groupData = repository.getGroupRepository().fromGroupId(TestChainBootstrapUtils.MINTING_GROUP_ID);
+		repository.getGroupRepository().save(new GroupMemberData(TestChainBootstrapUtils.MINTING_GROUP_ID,
+				account.getAddress(), groupData.getCreated(), groupData.getReference()));
+		repository.saveChanges();
+	}
+
 	private void assertSubjectStatus(Repository repository, PrivateKeyAccount target,
 			AccountTrustStatus expectedStatus, int expectedVoteWeight) throws DataException {
 		AccountTrustSnapshotData subject = findSnapshot(repository, target.getAddress(), AccountRatingCategory.SUBJECT);
 
 		assertEquals(expectedStatus, subject.getMappedTrustStatus());
 		assertEquals(expectedVoteWeight, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, subject));
+	}
+
+	private void assertFarmAccountRemainsUnverified(Repository repository, PrivateKeyAccount farmAccount)
+			throws DataException {
+		for (AccountRatingCategory category : AccountRatingCategory.values()) {
+			AccountTrustSnapshotData snapshot = findSnapshot(repository, farmAccount.getAddress(), category);
+
+			assertEquals("Isolated farm ratings should not create " + category + " score", 0L, snapshot.getScore());
+			assertEquals("Isolated farm ratings should not create " + category + " level", 0, snapshot.getLevel());
+			assertEquals("Isolated farm accounts should remain Unverified", AccountTrustStatus.UNVERIFIED,
+					snapshot.getMappedTrustStatus());
+			assertEquals("Isolated farm accounts should have zero effective weight", 0,
+					AccountTrustWeight.calculateEffectiveVoteWeight(1_000, snapshot));
+		}
 	}
 
 	private AccountTrustSnapshotData findSnapshot(Repository repository, String accountAddress,

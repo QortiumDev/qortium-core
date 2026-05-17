@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: add trust launch acceptance scenario
+
+Added one combined launch acceptance scenario for the account trust network. The test walks through honest Bronze, Silver, and Gold onboarding, isolated farm-ring resistance, Suspicious mint blocking, cooldown-gated recovery from a mistaken negative rating, same-branch rating limits, and a no-evidence Minting group member that can still mint but has no voting weight. This gives the launch review a single end-to-end trust-network story without changing trust policy, transaction rules, APIs, schemas, or runtime behavior.
+
 ### 2026-05-17 - api: expose trust profile vote weight
 
 Added raw `blocksMinted` and effective trust-weighted vote weight to the account trust profile API so wallets and explorers can use one trust-profile response for an account's status, multiplier, raw minting history, and active influence. The trust docs now describe `trust-profile` as the preferred account display source for these values, reducing the chance that clients show raw history as active governance power.
