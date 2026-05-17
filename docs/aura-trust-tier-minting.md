@@ -338,6 +338,10 @@ The core trust-network mechanics are implemented:
   one-supporter audit evidence, Bronze, Silver, Gold, cooldown-gated support
   removal, and trust profile/explanation API reporting through the transaction
   path.
+- launch stress scenarios show how the current policy behaves when trusted
+  supporters rate many accounts, mixed onboarding batches reach different
+  tiers, support is removed after cooldown, Suspicious status recovers, and
+  extra Minting group seed members dilute support outcomes.
 - signed adversarial launch scenarios prove isolated farm rings, same-branch
   evidence, independent Suspicious blocking, cooldown blocking, and
   cooldown-based recovery through the transaction path.
@@ -435,6 +439,9 @@ Current trust-network coverage includes these cases:
   no-evidence Minting group members have zero vote weight, trusted support can
   reach Bronze, Silver, and Gold, removing support is cooldown-gated, and trust
   profile/explanation APIs show the current result.
+- launch stress scenario tests prove multi-target support behavior, mixed
+  onboarding tier spread, cooldown-gated support removal, Suspicious recovery,
+  and Minting group seed dilution under the current launch defaults.
 - signed adversarial scenario tests prove the same launch safety assumptions
   through block processing, trust snapshot refreshes, status-change history, and
   account-rating cooldown API reporting.

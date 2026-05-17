@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: add trust launch stress scenarios
+
+Added signed-transaction launch stress tests for the account trust network. The new coverage shows how the current policy behaves when one supporter rates many accounts, two independent supporters rate many accounts, a mixed onboarding batch reaches different tiers, support is removed after cooldown, Suspicious status recovers after a negative rating is removed, and extra Minting group seed members dilute support outcomes. This gives launch reviewers clearer pressure-test evidence without changing trust scoring, transactions, APIs, schema, or default policy values.
+
 ### 2026-05-17 - test: document honest trust onboarding scenarios
 
 Added signed-transaction trust-network onboarding scenario tests for the current launch policy. The new coverage proves Minting group members without trust evidence can still mint while carrying zero vote weight, trusted supporters can move accounts through audit-only, Bronze, Silver, and Gold outcomes, support removal is delayed by the account-rating cooldown, and the trust profile and explanation APIs show the result. This documents the ordinary onboarding path without changing trust scoring, transactions, APIs, schema, or default policy values.

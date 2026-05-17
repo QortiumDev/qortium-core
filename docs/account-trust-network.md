@@ -175,9 +175,11 @@ be derived, changed, pruned, and stored with complete per-account snapshots.
 It also includes signed-transaction honest onboarding scenarios for the launch
 policy: no-evidence Minting group members, one-supporter audit evidence,
 Bronze, Silver, and Gold progression, cooldown-gated support removal, and trust
-profile and explanation API checks. Signed adversarial scenarios cover isolated
-farm rings, same-branch evidence, independent Suspicious blocking, cooldown
-blocking, and cooldown-based recovery.
+profile and explanation API checks. Launch stress scenarios cover multi-target
+support, mixed onboarding batches, support removal, Suspicious recovery, and
+seed dilution as the Minting group grows. Signed adversarial scenarios cover
+isolated farm rings, same-branch evidence, independent Suspicious blocking,
+cooldown blocking, and cooldown-based recovery.
 
 There is also an opt-in benchmark for larger generated graphs and rating churn:
 
