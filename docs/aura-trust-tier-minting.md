@@ -9,6 +9,9 @@ pre-launch hardening work for Aura-style trust tiers in Qortium.
 For a reader-facing explanation of the current system, see
 `docs/account-trust-network.md`.
 
+For the current launch checklist, see
+`docs/trust-network-launch-readiness.md`.
+
 ## Goal
 
 Qortium already has a simple foundation for minting and vote weight:
@@ -367,6 +370,8 @@ The core trust-network mechanics are implemented:
 
 Remaining pre-launch work is now hardening rather than core construction:
 
+- use `docs/trust-network-launch-readiness.md` as the current checklist for
+  launch verification and open policy review
 - review the launch trust profile against any new realistic graph scenarios
   that are not covered by the current launch-profile tests
 - treat the latest medium and large static and churn benchmark review as close

@@ -9,6 +9,9 @@ earned minting history is counted. An account still earns `blocksMinted` by
 minting blocks, but its active Subject trust status decides how much of that
 history counts as voting or rating weight.
 
+For the current launch checklist, see
+`docs/trust-network-launch-readiness.md`.
+
 ## Why It Exists
 
 The basic Qortal-style model gives more governance weight to accounts that have

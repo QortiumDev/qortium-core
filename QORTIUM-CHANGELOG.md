@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - docs: add trust network launch readiness checklist
+
+Added a dedicated trust-network launch readiness checklist that records Qortium's current trust defaults, required verification commands, open launch-review decisions, and the conditions for treating the trust network as launch-ready. The existing trust docs now point to this checklist so policy review, benchmark review, and client readiness can be tracked in one place without changing consensus rules, APIs, transactions, or config values.
+
 ### 2026-05-17 - core: rebalance trust vote multipliers
 
 Changed Qortium's default trust vote multipliers so Gold still counts for 100% of earned `blocksMinted`, Silver now counts for 70%, and Bronze now counts for 40%. This keeps Unverified and Suspicious accounts at zero effective voting or resource-rating weight, while making Bronze participation more meaningful and keeping Gold clearly strongest. The trust graph, rating rules, Suspicious blocking, minting eligibility, and stored snapshot mechanics are unchanged.
