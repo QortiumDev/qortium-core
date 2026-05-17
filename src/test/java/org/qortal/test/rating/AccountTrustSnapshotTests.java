@@ -6,8 +6,12 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountTrustCategoryData;
+import org.qortal.data.account.AccountTrustDerivationData;
+import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.account.AccountTrustStatusChangeData;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.transaction.CreateGroupTransactionData;
 import org.qortal.data.transaction.GroupApprovalTransactionData;
@@ -32,7 +36,11 @@ import org.qortal.utils.Groups;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -263,6 +271,37 @@ public class AccountTrustSnapshotTests extends Common {
 	}
 
 	@Test
+	public void testFirstTrustSnapshotPopulationUsesMintingSeedState() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Set<String> seedAddresses = getMintingSeedAddresses(repository,
+					repository.getBlockRepository().getBlockchainHeight() + 1);
+			assertFalse(seedAddresses.isEmpty());
+			assertTrue(repository.getAccountRatingRepository().getTrustDerivationSnapshots(null, null, null).isEmpty());
+
+			BlockUtils.mintBlock(repository);
+			BlockData lastBlockData = repository.getBlockRepository().getLastBlock();
+
+			List<AccountTrustSnapshotData> snapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(null, null, null);
+			assertEquals(seedAddresses.size() * AccountRatingCategory.values().length, snapshots.size());
+			assertCompleteSnapshotCategories(snapshots, seedAddresses);
+
+			for (String seedAddress : seedAddresses) {
+				AccountTrustSnapshotData subjectSnapshot = findSnapshot(repository, seedAddress,
+						AccountRatingCategory.SUBJECT);
+				assertTrue(subjectSnapshot.isMintingSeedMember());
+				assertEquals(AccountTrustStatus.UNVERIFIED, subjectSnapshot.getMappedTrustStatus());
+				assertEquals(lastBlockData.getHeight().intValue(), subjectSnapshot.getSnapshotHeight());
+				assertEquals(lastBlockData.getTimestamp(), subjectSnapshot.getSnapshotTimestamp());
+			}
+
+			assertTrue(repository.getAccountRatingRepository()
+					.getTrustStatusChanges(null, null, null, null, null, null, null)
+					.isEmpty());
+		}
+	}
+
+	@Test
 	public void testRateAccountBlockSnapshotRestoresOnOrphan() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
@@ -286,6 +325,113 @@ public class AccountTrustSnapshotTests extends Common {
 
 			AccountTrustSnapshotData aliceSubject = findSnapshot(repository, alice.getAddress(), AccountRatingCategory.SUBJECT);
 			assertEquals(baselineHeight, aliceSubject.getSnapshotHeight());
+		}
+	}
+
+	@Test
+	public void testSameHeightTrustSnapshotReplacementReplacesRowsAndChangeHistory() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			ensureKnownAccount(repository, alice);
+
+			replaceTrustSnapshots(repository, 10, 1000L,
+					trustDerivation(alice, true, AccountTrustStatus.UNVERIFIED));
+			replaceTrustSnapshots(repository, 11, 2000L,
+					trustDerivation(alice, true, AccountTrustStatus.GOLD));
+
+			assertEquals(4, repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(alice.getAddress()).size());
+			List<AccountTrustStatusChangeData> initialChanges = repository.getAccountRatingRepository()
+					.getTrustStatusChanges(alice.getAddress(), AccountRatingCategory.SUBJECT,
+							AccountTrustStatus.UNVERIFIED, AccountTrustStatus.GOLD, null, null, null);
+			assertEquals(1, initialChanges.size());
+
+			replaceTrustSnapshots(repository, 11, 3000L,
+					trustDerivation(alice, true, AccountTrustStatus.SILVER));
+
+			List<AccountTrustSnapshotData> replacedSnapshots = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(alice.getAddress());
+			assertEquals(4, replacedSnapshots.size());
+			AccountTrustSnapshotData aliceSubject = findSnapshot(repository, alice.getAddress(), AccountRatingCategory.SUBJECT);
+			assertEquals(AccountTrustStatus.SILVER, aliceSubject.getMappedTrustStatus());
+			assertEquals(11, aliceSubject.getSnapshotHeight());
+			assertEquals(3000L, aliceSubject.getSnapshotTimestamp());
+
+			List<AccountTrustStatusChangeData> replacedChanges = repository.getAccountRatingRepository()
+					.getTrustStatusChanges(alice.getAddress(), AccountRatingCategory.SUBJECT,
+							null, null, null, null, null);
+			assertEquals(1, replacedChanges.size());
+			assertEquals(AccountTrustStatus.GOLD, replacedChanges.get(0).getPreviousTrustStatus());
+			assertEquals(AccountTrustStatus.SILVER, replacedChanges.get(0).getNewTrustStatus());
+			assertEquals(11, replacedChanges.get(0).getSnapshotHeight());
+			assertEquals(3000L, replacedChanges.get(0).getSnapshotTimestamp());
+		}
+	}
+
+	@Test
+	public void testRollbackTrustSnapshotReplacementRemovesOrphanedChangeHistory() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			ensureKnownAccount(repository, alice);
+
+			replaceTrustSnapshots(repository, 10, 1000L,
+					trustDerivation(alice, true, AccountTrustStatus.UNVERIFIED));
+			replaceTrustSnapshots(repository, 11, 2000L,
+					trustDerivation(alice, true, AccountTrustStatus.GOLD));
+			assertEquals(1, repository.getAccountRatingRepository()
+					.getTrustStatusChanges(alice.getAddress(), AccountRatingCategory.SUBJECT,
+							AccountTrustStatus.UNVERIFIED, AccountTrustStatus.GOLD, null, null, null)
+					.size());
+
+			replaceTrustSnapshots(repository, 10, 1000L,
+					trustDerivation(alice, true, AccountTrustStatus.UNVERIFIED));
+
+			assertEquals(4, repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshots(alice.getAddress()).size());
+			assertEquals(AccountTrustStatus.UNVERIFIED, findSnapshot(repository, alice.getAddress(),
+					AccountRatingCategory.SUBJECT).getMappedTrustStatus());
+			assertTrue(repository.getAccountRatingRepository()
+					.getTrustStatusChanges(alice.getAddress(), null, null, null, null, null, null)
+					.isEmpty());
+		}
+	}
+
+	@Test
+	public void testTrustSnapshotsAndChangeHistorySurviveRepositoryReopen() throws DataException {
+		Common.useSettingsAndDb(Common.testSettingsFilename, false);
+
+		try {
+			String aliceAddress;
+
+			try (final Repository repository = RepositoryManager.getRepository()) {
+				TestAccount alice = Common.getTestAccount(repository, "alice");
+				aliceAddress = alice.getAddress();
+				ensureKnownAccount(repository, alice);
+
+				replaceTrustSnapshots(repository, 10, 1000L,
+						trustDerivation(alice, true, AccountTrustStatus.UNVERIFIED));
+				replaceTrustSnapshots(repository, 11, 2000L,
+						trustDerivation(alice, true, AccountTrustStatus.GOLD));
+			}
+
+			RepositoryManager.closeRepositoryFactory();
+			Common.setRepository(false);
+
+			try (final Repository repository = RepositoryManager.getRepository()) {
+				List<AccountTrustSnapshotData> reopenedSnapshots = repository.getAccountRatingRepository()
+						.getTrustDerivationSnapshots(aliceAddress);
+				assertEquals(4, reopenedSnapshots.size());
+				assertEquals(AccountTrustStatus.GOLD, findSnapshot(repository, aliceAddress,
+						AccountRatingCategory.SUBJECT).getMappedTrustStatus());
+
+				List<AccountTrustStatusChangeData> reopenedChanges = repository.getAccountRatingRepository()
+						.getTrustStatusChanges(aliceAddress, AccountRatingCategory.SUBJECT,
+								AccountTrustStatus.UNVERIFIED, AccountTrustStatus.GOLD, null, null, null);
+				assertEquals(1, reopenedChanges.size());
+				assertEquals(11, reopenedChanges.get(0).getSnapshotHeight());
+			}
+		} finally {
+			Common.useDefaultSettings();
 		}
 	}
 
@@ -440,6 +586,67 @@ public class AccountTrustSnapshotTests extends Common {
 		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), category, rating);
 	}
 
+	private Set<String> getMintingSeedAddresses(Repository repository, int snapshotHeight) throws DataException {
+		Set<String> seedAddresses = new TreeSet<>(Groups.getAllMembers(repository.getGroupRepository(),
+				Groups.getGroupIdsToMint(BlockChain.getInstance(), snapshotHeight)));
+		seedAddresses.remove(Group.NULL_OWNER_ADDRESS);
+		return seedAddresses;
+	}
+
+	private void replaceTrustSnapshots(Repository repository, int snapshotHeight, long snapshotTimestamp,
+			AccountTrustDerivationData... derivationData) throws DataException {
+		repository.getAccountRatingRepository().replaceTrustDerivationSnapshots(Arrays.asList(derivationData),
+				snapshotHeight, snapshotTimestamp);
+		repository.saveChanges();
+	}
+
+	private AccountTrustDerivationData trustDerivation(PrivateKeyAccount account, boolean seedMember,
+			AccountTrustStatus trustStatus) {
+		return new AccountTrustDerivationData(account.getPublicKey(), account.getAddress(), trustStatus, seedMember,
+				Arrays.asList(
+						categoryTrust(AccountRatingCategory.SUBJECT, trustStatus),
+						categoryTrust(AccountRatingCategory.PLAYER, AccountTrustStatus.UNVERIFIED),
+						categoryTrust(AccountRatingCategory.TRAINER, AccountTrustStatus.UNVERIFIED),
+						categoryTrust(AccountRatingCategory.MANAGER, AccountTrustStatus.UNVERIFIED)));
+	}
+
+	private AccountTrustCategoryData categoryTrust(AccountRatingCategory category, AccountTrustStatus trustStatus) {
+		return new AccountTrustCategoryData(category, scoreForStatus(trustStatus), levelForStatus(trustStatus),
+				trustStatus, new AccountTrustRatingCountsData(), Collections.emptyList());
+	}
+
+	private long scoreForStatus(AccountTrustStatus trustStatus) {
+		switch (trustStatus) {
+			case GOLD:
+				return 100_000_000L;
+			case SILVER:
+				return 50_000_000L;
+			case BRONZE:
+				return 10_000_000L;
+			case SUSPICIOUS:
+				return -1L;
+			case UNVERIFIED:
+			default:
+				return 0L;
+		}
+	}
+
+	private int levelForStatus(AccountTrustStatus trustStatus) {
+		switch (trustStatus) {
+			case GOLD:
+				return 3;
+			case SILVER:
+				return 2;
+			case BRONZE:
+				return 1;
+			case SUSPICIOUS:
+				return -1;
+			case UNVERIFIED:
+			default:
+				return 0;
+		}
+	}
+
 	private void ensureKnownAccount(Repository repository, PrivateKeyAccount account) throws DataException {
 		repository.getAccountRepository()
 				.ensureAccount(new AccountData(account.getAddress(), account.getPublicKey(), Group.NO_GROUP, 0, 0));
@@ -462,6 +669,17 @@ public class AccountTrustSnapshotTests extends Common {
 		assertEquals(AccountRatingCategory.PLAYER, snapshots.get(1).getCategory());
 		assertEquals(AccountRatingCategory.TRAINER, snapshots.get(2).getCategory());
 		assertEquals(AccountRatingCategory.MANAGER, snapshots.get(3).getCategory());
+	}
+
+	private void assertCompleteSnapshotCategories(List<AccountTrustSnapshotData> snapshots, Set<String> expectedAccounts) {
+		Set<String> foundAccountCategories = new TreeSet<>();
+		for (AccountTrustSnapshotData snapshot : snapshots)
+			foundAccountCategories.add(snapshot.getAccountAddress() + ":" + snapshot.getCategory().name());
+
+		for (String accountAddress : expectedAccounts) {
+			for (AccountRatingCategory category : AccountRatingCategory.values())
+				assertTrue(foundAccountCategories.contains(accountAddress + ":" + category.name()));
+		}
 	}
 
 	private boolean tableHasColumn(Repository repository, String tableName, String columnName) throws SQLException {

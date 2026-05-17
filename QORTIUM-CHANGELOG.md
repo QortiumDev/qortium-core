@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: harden trust snapshot lifecycle
+
+Added stronger lifecycle coverage for stored account trust snapshots and trust-status change history. The tests now prove initial snapshot population from Minting group seed state, same-height snapshot replacement, rollback cleanup of orphaned change rows, and disk-backed repository reopen persistence without changing trust scoring, minting, voting, ratings, or public APIs.
+
 ### 2026-05-17 - test: add trust network scale validation
 
 Added deterministic synthetic scale coverage and opt-in long benchmarks for the account trust network. The default test suite now proves that a larger multi-category trust graph can be derived and stored with complete per-account snapshots, while local benchmark runs can print derivation and refresh timings for bigger generated graphs before Qortium launch defaults are finalized.

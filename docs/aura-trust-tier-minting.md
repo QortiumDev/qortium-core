@@ -306,6 +306,9 @@ The core trust-network mechanics are implemented:
   explanation, trust policy, and trust summary APIs are available.
 - stored Subject snapshots are the single active trust source for minting
   trust allowance and weight multipliers.
+- stored trust snapshots and trust-status change history have lifecycle
+  coverage for initial population, refreshes, orphan cleanup, replacement, and
+  repository reopen persistence.
 - trust derivation thresholds, per-rating caps, branch requirements, Suspicious
   requirements, Manager energy-flow settings, active weighting category, and
   vote multipliers are chain-configurable.
