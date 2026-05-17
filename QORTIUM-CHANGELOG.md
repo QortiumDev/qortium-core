@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: harden launch trust adversarial flows
+
+Added signed-transaction adversarial trust-network scenario tests for the current launch policy. The new coverage proves isolated farm rings stay Unverified, same-branch positive or negative evidence remains visible without granting trust or Suspicious blocking, independent negative evidence can block minting, and the account-rating cooldown blocks rapid trust-edge flipping while still allowing recovery after the configured window. This strengthens launch confidence without changing trust scoring, transactions, APIs, schema, or default policy values.
+
 ### 2026-05-17 - api: expose account rating cooldown status
 
 Added a read-only account-rating cooldown API so wallets and explorers can show whether one rater, target, and category edge can be changed in the next block. The endpoint reports the active rating, configured cooldown, latest change height, earliest allowed height, remaining blocks, and a simple allowed flag without changing consensus validation. This gives users a clear explanation before they try to change or remove a rating too soon.

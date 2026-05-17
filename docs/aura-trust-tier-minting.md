@@ -334,6 +334,9 @@ The core trust-network mechanics are implemented:
   no-evidence minting members, one trusted supporter, two independent
   supporters, same-branch evidence, Suspicious mint blocking, and removal-based
   recovery without changing the active defaults.
+- signed adversarial launch scenarios prove isolated farm rings, same-branch
+  evidence, independent Suspicious blocking, cooldown blocking, and
+  cooldown-based recovery through the transaction path.
 - the current default launch trust policy is documented in the account trust
   network guide and pinned by tests so threshold, cap, branch, confidence, seed
   energy, hop count, and vote-multiplier drift is visible.
@@ -424,3 +427,6 @@ Current trust-network coverage includes these cases:
   score, two independent trusted supporters can create Gold weight,
   same-branch evidence cannot lift or block by itself, and removing one
   independent negative rating restores minting from Suspicious.
+- signed adversarial scenario tests prove the same launch safety assumptions
+  through block processing, trust snapshot refreshes, status-change history, and
+  account-rating cooldown API reporting.

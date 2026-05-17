@@ -172,6 +172,9 @@ categories.
 Qortium's default test suite includes deterministic trust-graph scale and
 rating-churn sanity tests. They prove that a multi-category synthetic graph can
 be derived, changed, pruned, and stored with complete per-account snapshots.
+It also includes signed-transaction adversarial scenarios for the launch policy:
+isolated farm rings, same-branch evidence, independent Suspicious blocking,
+cooldown blocking, and cooldown-based recovery.
 
 There is also an opt-in benchmark for larger generated graphs and rating churn:
 
