@@ -144,6 +144,9 @@ Directed account ratings are native chain data:
 - rating `0` clears the rater's active edge for that target
 - repeated changes or removals on the same rater, target, and category edge are
   limited by the chain-configured rating-change cooldown
+- `GET /account-ratings/cooldown` lets clients show the latest change height,
+  earliest allowed height, remaining block count, and whether the edge can be
+  changed in the next block
 - account-rating summaries expose positive and negative confidence counts
 - those active edges feed the stored trust snapshots used for minting,
   voting, and resource-rating weight
@@ -229,6 +232,8 @@ repository state and refreshes it only when trust inputs change:
   policy, including seed-energy flow settings, Suspicious requirements, status
   vote multipliers, category thresholds, per-rating caps, and the rating-change
   cooldown
+- `GET /account-ratings/cooldown` returns the current cooldown status for one
+  rater, target, and category edge
 - missing Subject snapshots are treated as Unverified for active weight and
   mint-eligibility calculations
 

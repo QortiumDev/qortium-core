@@ -18,6 +18,7 @@ import org.qortal.api.ApiExceptionFactory;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountRatingCooldownData;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
@@ -142,6 +143,57 @@ public class AccountRatingsResource {
 
 	public AccountRatingSummaryData getAccountRatingSummary(String targetPublicKey58) {
 		return getAccountRatingSummary(targetPublicKey58, null);
+	}
+
+	@GET
+	@Path("/cooldown")
+	@Operation(
+			summary = "Get account rating cooldown status for one rater, target, and category edge",
+			responses = {
+					@ApiResponse(
+							description = "account rating cooldown status",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = AccountRatingCooldownData.class)
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.INVALID_PUBLIC_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public AccountRatingCooldownData getAccountRatingCooldown(
+			@Parameter(description = "Target account public key in Base58") @QueryParam("target") String targetPublicKey58,
+			@Parameter(description = "Rater account public key in Base58") @QueryParam("rater") String raterPublicKey58,
+			@Parameter(description = "Optional account rating category: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			byte[] targetPublicKey = requireKnownPublicKey(repository, targetPublicKey58);
+			String targetAddress = Crypto.toAddress(targetPublicKey);
+			byte[] raterPublicKey = requirePublicKey(raterPublicKey58);
+			String raterAddress = Crypto.toAddress(raterPublicKey);
+			AccountRatingCategory category = parseOptionalCategory(categoryName);
+			if (category == null)
+				category = AccountRatingCategory.SUBJECT;
+
+			AccountRatingData activeRatingData = repository.getAccountRatingRepository()
+					.getRating(targetPublicKey, raterPublicKey, category);
+			Integer activeRating = activeRatingData == null ? null : activeRatingData.getRating();
+			int cooldownBlocks = AccountTrustPolicy.getAccountRatingChangeCooldownBlocks();
+			Integer latestRatingChangeHeight = repository.getAccountRatingRepository()
+					.getLatestRatingChangeHeight(targetPublicKey, raterPublicKey, category);
+			int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+			int candidateChangeHeight = currentHeight + 1;
+			int earliestAllowedHeight = calculateEarliestAllowedHeight(candidateChangeHeight, latestRatingChangeHeight,
+					cooldownBlocks);
+			int blocksRemaining = Math.max(0, earliestAllowedHeight - candidateChangeHeight);
+			boolean canChangeNow = blocksRemaining == 0;
+
+			return new AccountRatingCooldownData(targetPublicKey, targetAddress, raterPublicKey, raterAddress, category,
+					activeRating, cooldownBlocks, latestRatingChangeHeight, currentHeight, candidateChangeHeight,
+					earliestAllowedHeight, blocksRemaining, canChangeNow);
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
 	}
 
 	@GET
@@ -449,6 +501,14 @@ public class AccountRatingsResource {
 
 		return new AccountTrustPolicyData.CategoryPolicy(category, levels, AccountTrustPolicy.getSuspiciousThreshold(category),
 				AccountTrustPolicy.getSuspiciousLevelScoreCap(category));
+	}
+
+	private int calculateEarliestAllowedHeight(int candidateChangeHeight, Integer latestRatingChangeHeight,
+			int cooldownBlocks) {
+		if (cooldownBlocks <= 0 || latestRatingChangeHeight == null)
+			return candidateChangeHeight;
+
+		return Math.max(candidateChangeHeight, latestRatingChangeHeight + cooldownBlocks);
 	}
 
 	private AccountTrustProfileData buildTrustProfile(Repository repository, byte[] targetPublicKey, String targetAddress)
@@ -964,6 +1024,13 @@ public class AccountRatingsResource {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PUBLIC_KEY);
 
 		return publicKey;
+	}
+
+	private byte[] requirePublicKey(String publicKey58) {
+		if (publicKey58 == null || publicKey58.trim().isEmpty())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		return parsePublicKey(publicKey58);
 	}
 
 	private AccountRatingCategory parseOptionalCategory(String categoryName) {

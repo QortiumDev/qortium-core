@@ -9,6 +9,7 @@ import org.qortal.api.resource.AccountRatingsResource;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountRatingCooldownData;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingSummaryData;
 import org.qortal.data.account.AccountTrustDerivationData;
@@ -29,6 +30,7 @@ import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.AccountTrustTestUtils;
 import org.qortal.test.common.ApiCommon;
+import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
@@ -315,6 +317,121 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(2, manager.getLevels().size());
 		assertEquals(200_000L, findLevelPolicy(manager, 2).getThreshold());
 		assertEquals(100_000L, findLevelPolicy(manager, 2).getLevelScoreCap());
+	}
+
+	@Test
+	public void testRatingCooldownEndpointReturnsOpenEdgeStatus() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+		}
+
+		AccountRatingCooldownData cooldown = this.accountRatingsResource.getAccountRatingCooldown(
+				Base58.encode(bob.getPublicKey()), Base58.encode(alice.getPublicKey()), null);
+
+		assertEquals(bob.getAddress(), cooldown.getTargetAddress());
+		assertEquals(alice.getAddress(), cooldown.getRaterAddress());
+		assertEquals(AccountRatingCategory.SUBJECT, cooldown.getCategory());
+		assertNull(cooldown.getActiveRating());
+		assertEquals(1440, cooldown.getCooldownBlocks());
+		assertNull(cooldown.getLatestRatingChangeHeight());
+		assertEquals(cooldown.getCurrentHeight() + 1, cooldown.getCandidateChangeHeight());
+		assertEquals(cooldown.getCandidateChangeHeight(), cooldown.getEarliestAllowedHeight());
+		assertEquals(0, cooldown.getBlocksRemaining());
+		assertTrue(cooldown.isCanChangeNow());
+	}
+
+	@Test
+	public void testRatingCooldownEndpointReportsActiveCooldown() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		int latestChangeHeight;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.SUBJECT, 4), alice);
+			latestChangeHeight = repository.getBlockRepository().getBlockchainHeight();
+		}
+
+		AccountRatingCooldownData cooldown = this.accountRatingsResource.getAccountRatingCooldown(
+				Base58.encode(bob.getPublicKey()), Base58.encode(alice.getPublicKey()),
+				AccountRatingCategory.SUBJECT.name());
+
+		assertEquals(Integer.valueOf(4), cooldown.getActiveRating());
+		assertEquals(1440, cooldown.getCooldownBlocks());
+		assertEquals(Integer.valueOf(latestChangeHeight), cooldown.getLatestRatingChangeHeight());
+		assertEquals(latestChangeHeight, cooldown.getCurrentHeight());
+		assertEquals(latestChangeHeight + 1, cooldown.getCandidateChangeHeight());
+		assertEquals(latestChangeHeight + 1440, cooldown.getEarliestAllowedHeight());
+		assertEquals(1439, cooldown.getBlocksRemaining());
+		assertFalse(cooldown.isCanChangeNow());
+	}
+
+	@Test
+	public void testRatingCooldownEndpointReportsAllowedAfterWindow() throws Exception {
+		AccountTrustTestUtils.useAccountRatingCooldown(2);
+		TestAccount alice;
+		TestAccount bob;
+		int latestChangeHeight;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.SUBJECT, 4), alice);
+			latestChangeHeight = repository.getBlockRepository().getBlockchainHeight();
+		}
+
+		AccountRatingCooldownData activeCooldown = this.accountRatingsResource.getAccountRatingCooldown(
+				Base58.encode(bob.getPublicKey()), Base58.encode(alice.getPublicKey()),
+				AccountRatingCategory.SUBJECT.name());
+		assertEquals(2, activeCooldown.getCooldownBlocks());
+		assertEquals(latestChangeHeight + 2, activeCooldown.getEarliestAllowedHeight());
+		assertEquals(1, activeCooldown.getBlocksRemaining());
+		assertFalse(activeCooldown.isCanChangeNow());
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			BlockUtils.mintBlock(repository);
+		}
+
+		AccountRatingCooldownData expiredCooldown = this.accountRatingsResource.getAccountRatingCooldown(
+				Base58.encode(bob.getPublicKey()), Base58.encode(alice.getPublicKey()),
+				AccountRatingCategory.SUBJECT.name());
+		assertEquals(latestChangeHeight + 2, expiredCooldown.getCandidateChangeHeight());
+		assertEquals(latestChangeHeight + 2, expiredCooldown.getEarliestAllowedHeight());
+		assertEquals(0, expiredCooldown.getBlocksRemaining());
+		assertTrue(expiredCooldown.isCanChangeNow());
+	}
+
+	@Test
+	public void testRatingCooldownEndpointReportsDisabledCooldown() throws Exception {
+		AccountTrustTestUtils.useAccountRatingCooldown(0);
+		TestAccount alice;
+		TestAccount bob;
+		int latestChangeHeight;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+
+			TransactionUtils.signAndMint(repository, ratingData(alice, bob, AccountRatingCategory.SUBJECT, 4), alice);
+			latestChangeHeight = repository.getBlockRepository().getBlockchainHeight();
+		}
+
+		AccountRatingCooldownData cooldown = this.accountRatingsResource.getAccountRatingCooldown(
+				Base58.encode(bob.getPublicKey()), Base58.encode(alice.getPublicKey()),
+				AccountRatingCategory.SUBJECT.name());
+
+		assertEquals(0, cooldown.getCooldownBlocks());
+		assertEquals(Integer.valueOf(latestChangeHeight), cooldown.getLatestRatingChangeHeight());
+		assertEquals(cooldown.getCandidateChangeHeight(), cooldown.getEarliestAllowedHeight());
+		assertEquals(0, cooldown.getBlocksRemaining());
+		assertTrue(cooldown.isCanChangeNow());
 	}
 
 	@Test
@@ -1151,6 +1268,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 	@Test
 	public void testMissingTargetFailsSummary() {
 		PrivateKeyAccount unknown = Common.generateRandomSeedAccount(null);
+		TestAccount alice = Common.getTestAccount(null, "alice");
 
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountRatingSummary(Base58.encode(unknown.getPublicKey())));
@@ -1160,16 +1278,32 @@ public class AccountRatingsApiTests extends ApiCommon {
 				() -> this.accountRatingsResource.getAccountTrustProfile(Base58.encode(unknown.getPublicKey())));
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountTrustProfile(null));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountRatingCooldown(Base58.encode(unknown.getPublicKey()),
+						Base58.encode(alice.getPublicKey()), null));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountRatingCooldown(null, Base58.encode(alice.getPublicKey()), null));
 	}
 
 	@Test
 	public void testInvalidPublicKeyFailsList() {
+		TestAccount alice = Common.getTestAccount(null, "alice");
+		TestAccount bob = Common.getTestAccount(null, "bob");
+
 		assertApiError(ApiError.INVALID_PUBLIC_KEY,
 				() -> this.accountRatingsResource.getAccountRatings("not-a-public-key", null, null, null, null));
 		assertApiError(ApiError.INVALID_PUBLIC_KEY,
 				() -> this.accountRatingsResource.getAccountTrustExplanation("not-a-public-key", null));
 		assertApiError(ApiError.INVALID_PUBLIC_KEY,
 				() -> this.accountRatingsResource.getAccountTrustProfile("not-a-public-key"));
+		assertApiError(ApiError.INVALID_PUBLIC_KEY,
+				() -> this.accountRatingsResource.getAccountRatingCooldown("not-a-public-key",
+						Base58.encode(alice.getPublicKey()), null));
+		assertApiError(ApiError.INVALID_PUBLIC_KEY,
+				() -> this.accountRatingsResource.getAccountRatingCooldown(Base58.encode(bob.getPublicKey()),
+						"not-a-public-key", null));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountRatingCooldown(Base58.encode(bob.getPublicKey()), null, null));
 	}
 
 	@Test
@@ -1180,6 +1314,9 @@ public class AccountRatingsApiTests extends ApiCommon {
 				() -> this.accountRatingsResource.getAccountTrustDerivation(null, "not-a-category", null, null, null, null, null));
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountTrustSnapshots(null, "not-a-category", null, null, null, null, null, null));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountRatingCooldown(Base58.encode(Common.getTestAccount(null, "bob").getPublicKey()),
+						Base58.encode(Common.getTestAccount(null, "alice").getPublicKey()), "not-a-category"));
 	}
 
 	@Test

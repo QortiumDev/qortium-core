@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - api: expose account rating cooldown status
+
+Added a read-only account-rating cooldown API so wallets and explorers can show whether one rater, target, and category edge can be changed in the next block. The endpoint reports the active rating, configured cooldown, latest change height, earliest allowed height, remaining blocks, and a simple allowed flag without changing consensus validation. This gives users a clear explanation before they try to change or remove a rating too soon.
+
 ### 2026-05-17 - core: add account rating churn cooldown
 
 Added a configurable cooldown for changing or removing the same account-rating edge. Qortium now records the block height of each `RATE_ACCOUNT` change, rejects repeated changes by the same rater for the same target and category until the configured window passes, exposes the cooldown through the trust-policy API, and keeps the default launch profile at 1,440 blocks while still allowing derived chains and tests to disable it with `0`. This slows rapid trust-edge flipping without preventing first ratings or ratings in other categories, and the docs and tests now cover the new rule.

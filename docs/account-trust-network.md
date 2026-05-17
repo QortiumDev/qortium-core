@@ -56,6 +56,11 @@ delayed, and ratings for a different target or category are unaffected. Derived
 chains can set `accountRatingChangeCooldownBlocks` to `0` if they want no
 consensus-level cooldown.
 
+Wallets and explorers can query `GET /account-ratings/cooldown` before building
+a rating transaction. It reports the latest change height, earliest allowed
+height, remaining block count, and whether the same rater, target, and category
+edge can be changed in the next block.
+
 ## Rating Categories
 
 Qortium uses four rating categories inspired by Aura:
@@ -219,6 +224,7 @@ Clients should use different account-rating APIs for different jobs:
 | `GET /account-ratings/trust-changes` | Recent stored trust level and status movements for explorer and audit screens |
 | `GET /account-ratings` | Active directed account ratings, with target, rater, and category filters |
 | `GET /account-ratings/summary` | Inbound rating counts for one target account |
+| `GET /account-ratings/cooldown` | Current cooldown status for one rater, target, and category edge |
 
 For normal account screens, `trust-profile` should be the first choice. It
 summarizes the active status, vote multiplier, minting trust allowance, seed
@@ -239,6 +245,10 @@ explanation shows one account's stored or live evidence; the policy endpoint
 shows the chain rules used to interpret that evidence. Explorers that need to
 show recent movement across the network should use `trust-changes` instead of
 diffing full snapshot lists.
+
+For rating transaction builders, use `cooldown` to explain why a rating change
+or removal is not ready yet. The endpoint does not replace transaction
+validation; it only reports the time-based rule for one rating edge.
 
 Trust explanations are intended to show why the current result happened, not
 only what the result is. They include configured levels, thresholds, caps,
