@@ -12,6 +12,7 @@ import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.account.AccountTrustStatusChangeData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
@@ -252,6 +253,12 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			assertFalse("Two trusted negative ratings should block mint eligibility",
 					new Account(repository, alice.getAddress()).canMint(false));
 
+			List<AccountTrustStatusChangeData> suspiciousChanges = repository.getAccountRatingRepository()
+					.getTrustStatusChanges(alice.getAddress(), AccountRatingCategory.SUBJECT,
+							AccountTrustStatus.UNVERIFIED, AccountTrustStatus.SUSPICIOUS, null, null, null);
+			assertEquals(1, suspiciousChanges.size());
+			assertEquals(aliceSubjectAfterSecondRating.getSnapshotHeight(), suspiciousChanges.get(0).getSnapshotHeight());
+
 			BlockUtils.orphanLastBlock(repository);
 
 			AccountTrustSnapshotData aliceSubjectRestored = findSnapshot(repository, alice.getAddress(),
@@ -263,6 +270,10 @@ public class AccountTrustGraphBehaviorTests extends Common {
 			assertEquals(AccountTrustStatus.UNVERIFIED, aliceSubjectRestored.getMappedTrustStatus());
 			assertTrue("Orphaning the second trusted negative rating should restore mint eligibility",
 					new Account(repository, alice.getAddress()).canMint(false));
+			assertTrue(repository.getAccountRatingRepository()
+					.getTrustStatusChanges(alice.getAddress(), AccountRatingCategory.SUBJECT,
+							AccountTrustStatus.UNVERIFIED, AccountTrustStatus.SUSPICIOUS, null, null, null)
+					.isEmpty());
 		}
 	}
 

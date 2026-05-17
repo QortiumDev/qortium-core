@@ -29,6 +29,7 @@ import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustProfileData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.account.AccountTrustStatusChangeData;
 import org.qortal.data.account.AccountTrustSummaryData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.repository.DataException;
@@ -180,6 +181,46 @@ public class AccountRatingsResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			return repository.getAccountRatingRepository()
 					.getTrustSummary(AccountTrustPolicy.getActiveWeightCategory());
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/trust-changes")
+	@Operation(
+			summary = "List stored account trust level and status changes",
+			responses = {
+					@ApiResponse(
+							description = "account trust level and status changes",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									array = @ArraySchema(schema = @Schema(implementation = AccountTrustStatusChangeData.class))
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public List<AccountTrustStatusChangeData> getAccountTrustStatusChanges(
+			@Parameter(description = "Optional account address") @QueryParam("account") String account,
+			@Parameter(description = "Optional category: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName,
+			@Parameter(description = "Optional previous mapped trust status: GOLD, SILVER, BRONZE, UNVERIFIED, or SUSPICIOUS") @QueryParam("previousStatus") String previousStatusName,
+			@Parameter(description = "Optional new mapped trust status: GOLD, SILVER, BRONZE, UNVERIFIED, or SUSPICIOUS") @QueryParam("newStatus") String newStatusName,
+			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
+			@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
+			@Parameter(description = "If true, return oldest changes first. The default is newest changes first.") @QueryParam("reverse") Boolean reverse) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String accountAddress = parseOptionalAddress(account);
+			AccountRatingCategory category = parseOptionalCategory(categoryName);
+			AccountTrustStatus previousStatus = parseOptionalTrustStatus(previousStatusName);
+			AccountTrustStatus newStatus = parseOptionalTrustStatus(newStatusName);
+
+			validateTrustDerivationCriteria(null, limit, offset);
+
+			return repository.getAccountRatingRepository().getTrustStatusChanges(accountAddress, category, previousStatus,
+					newStatus, limit, offset, reverse);
+		} catch (ApiException e) {
+			throw e;
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}

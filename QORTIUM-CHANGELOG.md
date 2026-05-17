@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-16 - api: add trust status change history
+
+Added stored trust-status change history and a read-only API for explorer and admin audit screens. Qortium now records when derived account trust levels or statuses move between snapshot refreshes, removes orphaned change rows during rollback, and lets clients filter recent changes by account, category, previous status, and new status.
+
 ### 2026-05-16 - test: add trust policy calibration matrix
 
 Added focused policy calibration tests for the trust network settings that Qortium-derived chains can tune before launch. The new coverage proves that vote multipliers, positive caps, Suspicious caps, Suspicious rater count, and Suspicious confidence requirements each change decisions, capped scores, or effective weight in the expected direction without changing the current default policy.

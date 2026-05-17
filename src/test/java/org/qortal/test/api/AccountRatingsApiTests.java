@@ -20,6 +20,7 @@ import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustProfileData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.account.AccountTrustStatusChangeData;
 import org.qortal.data.account.AccountTrustSummaryData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.group.Group;
@@ -912,6 +913,143 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testTrustChangesEndpointRecordsFiltersAndPagesTransitions() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+
+			replaceTrustSnapshots(repository, 10, 1000L,
+					trustDerivation(alice, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.UNVERIFIED),
+							categoryTrust(AccountRatingCategory.MANAGER, AccountTrustStatus.SILVER)),
+					trustDerivation(bob, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.UNVERIFIED),
+							categoryTrust(AccountRatingCategory.MANAGER, AccountTrustStatus.UNVERIFIED)));
+		}
+
+		assertTrue(this.accountRatingsResource.getAccountTrustStatusChanges(
+				null, null, null, null, null, null, null).isEmpty());
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			replaceTrustSnapshots(repository, 11, 2000L,
+					trustDerivation(alice, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.GOLD),
+							categoryTrust(AccountRatingCategory.MANAGER, AccountTrustStatus.SILVER)),
+					trustDerivation(bob, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.BRONZE),
+							categoryTrust(AccountRatingCategory.MANAGER, AccountTrustStatus.SUSPICIOUS)));
+
+			replaceTrustSnapshots(repository, 12, 3000L,
+					trustDerivation(alice, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.SILVER),
+							categoryTrust(AccountRatingCategory.MANAGER, AccountTrustStatus.SILVER)),
+					trustDerivation(bob, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.BRONZE),
+							categoryTrust(AccountRatingCategory.MANAGER, AccountTrustStatus.SUSPICIOUS)));
+		}
+
+		List<AccountTrustStatusChangeData> changes = this.accountRatingsResource.getAccountTrustStatusChanges(
+				null, null, null, null, null, null, null);
+		assertEquals(4, changes.size());
+
+		AccountTrustStatusChangeData newest = changes.get(0);
+		assertEquals(alice.getAddress(), newest.getAccountAddress());
+		assertEquals(AccountRatingCategory.SUBJECT, newest.getCategory());
+		assertEquals(3, newest.getPreviousLevel());
+		assertEquals(2, newest.getNewLevel());
+		assertEquals(AccountTrustStatus.GOLD, newest.getPreviousTrustStatus());
+		assertEquals(AccountTrustStatus.SILVER, newest.getNewTrustStatus());
+		assertEquals(AccountTrustStatus.GOLD.getValue(), newest.getPreviousTrustStatusValue());
+		assertEquals(AccountTrustStatus.SILVER.getValue(), newest.getNewTrustStatusValue());
+		assertEquals(100_000_000L, newest.getPreviousScore());
+		assertEquals(50_000_000L, newest.getNewScore());
+		assertEquals(11, newest.getPreviousSnapshotHeight());
+		assertEquals(2000L, newest.getPreviousSnapshotTimestamp());
+		assertEquals(12, newest.getSnapshotHeight());
+		assertEquals(3000L, newest.getSnapshotTimestamp());
+		assertTrue(newest.isPreviousMintingSeedMember());
+		assertTrue(newest.isNewMintingSeedMember());
+
+		List<AccountTrustStatusChangeData> filtered = this.accountRatingsResource.getAccountTrustStatusChanges(
+				bob.getAddress(), AccountRatingCategory.MANAGER.name(), AccountTrustStatus.UNVERIFIED.name(),
+				AccountTrustStatus.SUSPICIOUS.name(), null, null, null);
+		assertEquals(1, filtered.size());
+		assertEquals(bob.getAddress(), filtered.get(0).getAccountAddress());
+		assertEquals(AccountRatingCategory.MANAGER, filtered.get(0).getCategory());
+		assertEquals(AccountTrustStatus.UNVERIFIED, filtered.get(0).getPreviousTrustStatus());
+		assertEquals(AccountTrustStatus.SUSPICIOUS, filtered.get(0).getNewTrustStatus());
+
+		List<AccountTrustStatusChangeData> paged = this.accountRatingsResource.getAccountTrustStatusChanges(
+				null, null, null, null, 1, 1, null);
+		assertEquals(1, paged.size());
+		assertEquals(changes.get(1).getAccountAddress(), paged.get(0).getAccountAddress());
+		assertEquals(changes.get(1).getCategory(), paged.get(0).getCategory());
+
+		List<AccountTrustStatusChangeData> oldestFirst = this.accountRatingsResource.getAccountTrustStatusChanges(
+				null, null, null, null, 1, null, true);
+		assertEquals(1, oldestFirst.size());
+		assertEquals(11, oldestFirst.get(0).getSnapshotHeight());
+	}
+
+	@Test
+	public void testTrustChangeHistorySkipsScoreOnlyChanges() throws DataException {
+		TestAccount alice;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+
+			replaceTrustSnapshots(repository, 10, 1000L,
+					trustDerivation(alice, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.BRONZE, 10_000_000L)));
+			replaceTrustSnapshots(repository, 11, 2000L,
+					trustDerivation(alice, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.BRONZE, 11_000_000L)));
+		}
+
+		assertTrue(this.accountRatingsResource.getAccountTrustStatusChanges(
+				null, null, null, null, null, null, null).isEmpty());
+	}
+
+	@Test
+	public void testTrustChangeHistoryRollbackRemovesOrphanedRows() throws DataException {
+		TestAccount alice;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+
+			replaceTrustSnapshots(repository, 10, 1000L,
+					trustDerivation(alice, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.UNVERIFIED)));
+			replaceTrustSnapshots(repository, 11, 2000L,
+					trustDerivation(alice, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.GOLD)));
+		}
+
+		List<AccountTrustStatusChangeData> changes = this.accountRatingsResource.getAccountTrustStatusChanges(
+				null, null, null, null, null, null, null);
+		assertEquals(1, changes.size());
+		assertEquals(11, changes.get(0).getSnapshotHeight());
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			replaceTrustSnapshots(repository, 10, 1000L,
+					trustDerivation(alice, true,
+							categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.UNVERIFIED)));
+		}
+
+		assertTrue(this.accountRatingsResource.getAccountTrustStatusChanges(
+				null, null, null, null, null, null, null).isEmpty());
+
+		List<AccountTrustSnapshotData> snapshots = this.accountRatingsResource.getAccountTrustSnapshots(
+				alice.getAddress(), AccountRatingCategory.SUBJECT.name(), null, null, null, null, null, null);
+		assertEquals(1, snapshots.size());
+		assertEquals(AccountTrustStatus.UNVERIFIED, snapshots.get(0).getMappedTrustStatus());
+		assertEquals(10, snapshots.get(0).getSnapshotHeight());
+	}
+
+	@Test
 	public void testRateAccountEndpointBuildsUnsignedTransaction() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
@@ -1145,6 +1283,13 @@ public class AccountRatingsApiTests extends ApiCommon {
 		repository.saveChanges();
 	}
 
+	private void replaceTrustSnapshots(Repository repository, int snapshotHeight, long snapshotTimestamp,
+			AccountTrustDerivationData... derivationData) throws DataException {
+		repository.getAccountRatingRepository().replaceTrustDerivationSnapshots(Arrays.asList(derivationData),
+				snapshotHeight, snapshotTimestamp);
+		repository.saveChanges();
+	}
+
 	private AccountTrustDerivationData subjectDerivation(TestAccount account, AccountTrustStatus trustStatus)
 			throws DataException {
 		return subjectDerivation(account, trustStatus, new AccountTrustRatingCountsData());
@@ -1176,6 +1321,12 @@ public class AccountRatingsApiTests extends ApiCommon {
 	private AccountTrustCategoryData categoryTrust(AccountRatingCategory category, AccountTrustStatus trustStatus) {
 		return new AccountTrustCategoryData(category, scoreForStatus(trustStatus), levelForStatus(trustStatus),
 				trustStatus, new AccountTrustRatingCountsData(), Collections.emptyList());
+	}
+
+	private AccountTrustCategoryData categoryTrust(AccountRatingCategory category, AccountTrustStatus trustStatus,
+			long score) {
+		return new AccountTrustCategoryData(category, score, levelForStatus(trustStatus), trustStatus,
+				new AccountTrustRatingCountsData(), Collections.emptyList());
 	}
 
 	private long scoreForStatus(AccountTrustStatus trustStatus) {

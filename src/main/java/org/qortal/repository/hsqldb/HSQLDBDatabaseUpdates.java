@@ -1282,6 +1282,28 @@ public class HSQLDBDatabaseUpdates {
 					// Account trust snapshot query indexes are created by baseline schema case 66.
 					break;
 
+				case 69:
+					// Store derived trust level/status changes for explorer and audit history.
+					stmt.execute("CREATE TABLE AccountTrustStatusChanges (account AccountAddress NOT NULL, "
+							+ "account_public_key AccountPublicKey, category TINYINT NOT NULL, "
+							+ "previous_level INT NOT NULL, new_level INT NOT NULL, "
+							+ "previous_mapped_trust_status INT NOT NULL, new_mapped_trust_status INT NOT NULL, "
+							+ "previous_score BIGINT NOT NULL, new_score BIGINT NOT NULL, "
+							+ "previous_level_score BIGINT NOT NULL, new_level_score BIGINT NOT NULL, "
+							+ "previous_minting_seed_member BOOLEAN NOT NULL, new_minting_seed_member BOOLEAN NOT NULL, "
+							+ "previous_snapshot_height INT NOT NULL, previous_snapshot_timestamp EpochMillis NOT NULL, "
+							+ "snapshot_height INT NOT NULL, snapshot_timestamp EpochMillis NOT NULL, "
+							+ "PRIMARY KEY (account, category, snapshot_height))");
+					stmt.execute("CREATE INDEX AccountTrustStatusChangeHeightIndex "
+							+ "ON AccountTrustStatusChanges (snapshot_height, category, account)");
+					stmt.execute("CREATE INDEX AccountTrustStatusChangeAccountIndex "
+							+ "ON AccountTrustStatusChanges (account, category, snapshot_height)");
+					stmt.execute("CREATE INDEX AccountTrustStatusChangePreviousStatusIndex "
+							+ "ON AccountTrustStatusChanges (previous_mapped_trust_status, category, snapshot_height)");
+					stmt.execute("CREATE INDEX AccountTrustStatusChangeNewStatusIndex "
+							+ "ON AccountTrustStatusChanges (new_mapped_trust_status, category, snapshot_height)");
+					break;
+
 				default:
 					// nothing to do
 					return false;

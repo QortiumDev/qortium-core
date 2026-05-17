@@ -8,6 +8,7 @@ import org.qortal.data.account.AccountTrustCategoryData;
 import org.qortal.data.account.AccountTrustRatingCountsData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.account.AccountTrustStatusChangeData;
 import org.qortal.data.account.AccountTrustSummaryData;
 import org.qortal.repository.AccountRatingRepository;
 import org.qortal.repository.DataException;
@@ -186,10 +187,21 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 	@Override
 	public void replaceTrustDerivationSnapshots(List<AccountTrustDerivationData> derivedAccounts, int snapshotHeight,
 			long snapshotTimestamp) throws DataException {
+		TrustSnapshotMetadata currentMetadata = getTrustSnapshotMetadata();
+		boolean rollbackRefresh = currentMetadata.snapshotHeight != null && snapshotHeight < currentMetadata.snapshotHeight;
+		Map<String, AccountTrustSnapshotData> previousSnapshotsByChangeKey = rollbackRefresh
+				? Collections.emptyMap()
+				: getTrustSnapshotsByChangeKey();
+
 		try {
+			if (rollbackRefresh)
+				this.repository.delete("AccountTrustStatusChanges", "snapshot_height > ?", snapshotHeight);
+			else
+				this.repository.delete("AccountTrustStatusChanges", "snapshot_height >= ?", snapshotHeight);
+
 			this.repository.delete("AccountTrustDerivationSnapshots");
 		} catch (SQLException e) {
-			throw new DataException("Unable to delete account trust derivation snapshots from repository", e);
+			throw new DataException("Unable to delete account trust derivation snapshot history from repository", e);
 		}
 
 		if (derivedAccounts == null || derivedAccounts.isEmpty())
@@ -200,6 +212,9 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 				for (AccountTrustCategoryData categoryTrust : derivedAccount.getCategories())
 					saveTrustDerivationSnapshot(derivedAccount, categoryTrust, snapshotHeight, snapshotTimestamp);
 			}
+
+			if (!rollbackRefresh)
+				saveTrustStatusChanges(previousSnapshotsByChangeKey, derivedAccounts, snapshotHeight, snapshotTimestamp);
 		} catch (SQLException e) {
 			throw new DataException("Unable to save account trust derivation snapshot into repository", e);
 		}
@@ -228,6 +243,61 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 				.bind("negative_medium_count", inboundRatings.getNegativeMediumCount())
 				.bind("negative_high_count", inboundRatings.getNegativeHighCount())
 				.bind("negative_very_high_count", inboundRatings.getNegativeVeryHighCount())
+				.bind("snapshot_height", snapshotHeight)
+				.bind("snapshot_timestamp", snapshotTimestamp);
+
+		saveHelper.execute(this.repository);
+	}
+
+	private Map<String, AccountTrustSnapshotData> getTrustSnapshotsByChangeKey() throws DataException {
+		List<AccountTrustSnapshotData> snapshots = getTrustDerivationSnapshots(null, null, null);
+		Map<String, AccountTrustSnapshotData> snapshotsByChangeKey = new HashMap<>();
+
+		for (AccountTrustSnapshotData snapshot : snapshots)
+			snapshotsByChangeKey.put(trustStatusChangeKey(snapshot.getAccountAddress(), snapshot.getCategory()), snapshot);
+
+		return snapshotsByChangeKey;
+	}
+
+	private void saveTrustStatusChanges(Map<String, AccountTrustSnapshotData> previousSnapshotsByChangeKey,
+			List<AccountTrustDerivationData> derivedAccounts, int snapshotHeight, long snapshotTimestamp)
+			throws SQLException {
+		for (AccountTrustDerivationData derivedAccount : derivedAccounts) {
+			for (AccountTrustCategoryData categoryTrust : derivedAccount.getCategories()) {
+				AccountTrustSnapshotData previousSnapshot = previousSnapshotsByChangeKey.get(
+						trustStatusChangeKey(derivedAccount.getAccountAddress(), categoryTrust.getCategory()));
+				if (previousSnapshot == null)
+					continue;
+
+				if (previousSnapshot.getLevel() == categoryTrust.getLevel()
+						&& previousSnapshot.getMappedTrustStatus() == categoryTrust.getMappedTrustStatus())
+					continue;
+
+				saveTrustStatusChange(previousSnapshot, derivedAccount, categoryTrust, snapshotHeight, snapshotTimestamp);
+			}
+		}
+	}
+
+	private void saveTrustStatusChange(AccountTrustSnapshotData previousSnapshot,
+			AccountTrustDerivationData derivedAccount, AccountTrustCategoryData categoryTrust, int snapshotHeight,
+			long snapshotTimestamp) throws SQLException {
+		HSQLDBSaver saveHelper = new HSQLDBSaver("AccountTrustStatusChanges");
+
+		saveHelper.bind("account", derivedAccount.getAccountAddress())
+				.bind("account_public_key", derivedAccount.getAccountPublicKey())
+				.bind("category", categoryTrust.getCategory().value)
+				.bind("previous_level", previousSnapshot.getLevel())
+				.bind("new_level", categoryTrust.getLevel())
+				.bind("previous_mapped_trust_status", previousSnapshot.getMappedTrustStatusValue())
+				.bind("new_mapped_trust_status", categoryTrust.getMappedTrustStatusValue())
+				.bind("previous_score", previousSnapshot.getScore())
+				.bind("new_score", categoryTrust.getScore())
+				.bind("previous_level_score", previousSnapshot.getLevelScore())
+				.bind("new_level_score", categoryTrust.getLevelScore())
+				.bind("previous_minting_seed_member", previousSnapshot.isMintingSeedMember())
+				.bind("new_minting_seed_member", derivedAccount.isMintingSeedMember())
+				.bind("previous_snapshot_height", previousSnapshot.getSnapshotHeight())
+				.bind("previous_snapshot_timestamp", previousSnapshot.getSnapshotTimestamp())
 				.bind("snapshot_height", snapshotHeight)
 				.bind("snapshot_timestamp", snapshotTimestamp);
 
@@ -544,6 +614,94 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch account trust derivation snapshots from repository", e);
 		}
+	}
+
+	@Override
+	public List<AccountTrustStatusChangeData> getTrustStatusChanges(String accountAddress, AccountRatingCategory category,
+			AccountTrustStatus previousStatus, AccountTrustStatus newStatus, Integer limit, Integer offset,
+			Boolean reverse) throws DataException {
+		if (limit != null && limit == 0)
+			return new ArrayList<>();
+
+		StringBuilder sql = new StringBuilder(512);
+		List<Object> bindParams = new ArrayList<>();
+		List<String> whereClauses = new ArrayList<>();
+
+		sql.append("SELECT account_public_key, account, category, previous_level, new_level, "
+				+ "previous_mapped_trust_status, new_mapped_trust_status, previous_score, new_score, "
+				+ "previous_level_score, new_level_score, previous_minting_seed_member, new_minting_seed_member, "
+				+ "previous_snapshot_height, previous_snapshot_timestamp, snapshot_height, snapshot_timestamp "
+				+ "FROM AccountTrustStatusChanges");
+
+		if (accountAddress != null) {
+			whereClauses.add("account = ?");
+			bindParams.add(accountAddress);
+		}
+
+		if (category != null) {
+			whereClauses.add("category = ?");
+			bindParams.add(category.value);
+		}
+
+		if (previousStatus != null) {
+			whereClauses.add("previous_mapped_trust_status = ?");
+			bindParams.add(previousStatus.getValue());
+		}
+
+		if (newStatus != null) {
+			whereClauses.add("new_mapped_trust_status = ?");
+			bindParams.add(newStatus.getValue());
+		}
+
+		if (!whereClauses.isEmpty())
+			sql.append(" WHERE ").append(String.join(" AND ", whereClauses));
+
+		String sortDirection = Boolean.TRUE.equals(reverse) ? " ASC" : " DESC";
+		sql.append(" ORDER BY snapshot_height").append(sortDirection)
+				.append(", snapshot_timestamp").append(sortDirection)
+				.append(", account ASC, category ASC");
+		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+
+		List<AccountTrustStatusChangeData> changes = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {
+			if (resultSet == null)
+				return changes;
+
+			do {
+				byte[] accountPublicKey = resultSet.getBytes(1);
+				String rowAccountAddress = resultSet.getString(2);
+				AccountRatingCategory rowCategory = AccountRatingCategory.valueOf(resultSet.getInt(3));
+				int previousLevel = resultSet.getInt(4);
+				int newLevel = resultSet.getInt(5);
+				AccountTrustStatus rowPreviousStatus = AccountTrustStatus.valueOf(resultSet.getInt(6));
+				AccountTrustStatus rowNewStatus = AccountTrustStatus.valueOf(resultSet.getInt(7));
+				long previousScore = resultSet.getLong(8);
+				long newScore = resultSet.getLong(9);
+				long previousLevelScore = resultSet.getLong(10);
+				long newLevelScore = resultSet.getLong(11);
+				boolean previousMintingSeedMember = resultSet.getBoolean(12);
+				boolean newMintingSeedMember = resultSet.getBoolean(13);
+				int previousSnapshotHeight = resultSet.getInt(14);
+				long previousSnapshotTimestamp = resultSet.getLong(15);
+				int snapshotHeight = resultSet.getInt(16);
+				long snapshotTimestamp = resultSet.getLong(17);
+
+				changes.add(new AccountTrustStatusChangeData(accountPublicKey, rowAccountAddress,
+						defaultCategory(rowCategory), previousLevel, newLevel, rowPreviousStatus, rowNewStatus,
+						previousScore, newScore, previousLevelScore, newLevelScore, previousMintingSeedMember,
+						newMintingSeedMember, previousSnapshotHeight, previousSnapshotTimestamp, snapshotHeight,
+						snapshotTimestamp));
+			} while (resultSet.next());
+
+			return changes;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch account trust status changes from repository", e);
+		}
+	}
+
+	private static String trustStatusChangeKey(String accountAddress, AccountRatingCategory category) {
+		return accountAddress + "\u0000" + defaultCategory(category).value;
 	}
 
 	private static AccountRatingCategory defaultCategory(AccountRatingCategory category) {

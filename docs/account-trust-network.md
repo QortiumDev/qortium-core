@@ -93,7 +93,9 @@ from the same seed-derived branch can record evidence, but that same-branch
 evidence cannot by itself lift or block another account.
 
 If a trust-changing block is orphaned, the trust snapshot is refreshed back to
-the previous chain state.
+the previous chain state. Stored trust-status change history from orphaned
+heights is removed with it, so explorers do not show movement that is no
+longer part of the active chain.
 
 ## Trust Status Effects
 
@@ -149,6 +151,7 @@ Clients should use different account-rating APIs for different jobs:
 | `GET /account-ratings/trust-policy` | Chain-configured thresholds, caps, seed settings, Suspicious rules, and vote multipliers |
 | `GET /account-ratings/trust-derivation` | Network-wide stored or live derived trust rows |
 | `GET /account-ratings/trust-snapshots` | Raw stored per-account, per-category snapshot rows |
+| `GET /account-ratings/trust-changes` | Recent stored trust level and status movements for explorer and audit screens |
 | `GET /account-ratings` | Active directed account ratings, with target, rater, and category filters |
 | `GET /account-ratings/summary` | Inbound rating counts for one target account |
 
@@ -165,7 +168,9 @@ of that weight currently counts after trust multipliers.
 
 For diagnostic screens, pair `trust-explanation` with `trust-policy`. The
 explanation shows one account's stored or live evidence; the policy endpoint
-shows the chain rules used to interpret that evidence.
+shows the chain rules used to interpret that evidence. Explorers that need to
+show recent movement across the network should use `trust-changes` instead of
+diffing full snapshot lists.
 
 ## Chain Builder Configuration
 
