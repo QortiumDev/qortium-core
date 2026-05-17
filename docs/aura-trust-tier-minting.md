@@ -314,7 +314,8 @@ Remaining pre-launch work is now hardening rather than core construction:
 
 - calibrate default thresholds and caps against realistic graph scenarios
 - improve observability around recent trust-status changes
-- stress-test derivation cost with larger synthetic graphs
+- keep stress-testing derivation cost with larger synthetic graphs and review
+  opt-in benchmark output before launch defaults settle
 - keep docs aligned as launch defaults settle
 
 ## Test Coverage

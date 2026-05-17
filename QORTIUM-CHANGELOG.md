@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: add trust network scale validation
+
+Added deterministic synthetic scale coverage and opt-in long benchmarks for the account trust network. The default test suite now proves that a larger multi-category trust graph can be derived and stored with complete per-account snapshots, while local benchmark runs can print derivation and refresh timings for bigger generated graphs before Qortium launch defaults are finalized.
+
 ### 2026-05-16 - api: add trust status change history
 
 Added stored trust-status change history and a read-only API for explorer and admin audit screens. Qortium now records when derived account trust levels or statuses move between snapshot refreshes, removes orphaned change rows during rollback, and lets clients filter recent changes by account, category, previous status, and new status.
