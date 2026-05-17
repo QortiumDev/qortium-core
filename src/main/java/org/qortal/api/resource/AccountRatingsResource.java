@@ -597,6 +597,9 @@ public class AccountRatingsResource {
 
 		AccountTrustSnapshotData activeSnapshot = snapshotsByCategory.get(activeCategory);
 		AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeSnapshot);
+		AccountData targetAccountData = repository.getAccountRepository().getAccount(targetAddress);
+		int blocksMinted = targetAccountData == null ? 0 : targetAccountData.getBlocksMinted();
+		int effectiveVoteWeight = activeTrustStatus.calculateEffectiveVoteWeight(blocksMinted);
 		AccountTrustSnapshotData referenceSnapshot = activeSnapshot == null && !snapshots.isEmpty()
 				? snapshots.get(0)
 				: activeSnapshot;
@@ -606,8 +609,8 @@ public class AccountRatingsResource {
 		Map<AccountRatingCategory, AccountTrustRatingCountsData> outboundCountsByCategory =
 				buildOutboundRatingCountsByCategory(repository, targetPublicKey);
 
-		return new AccountTrustProfileData(targetPublicKey, targetAddress, activeTrustStatus, activeCategory,
-				mintingSeedMember, snapshotHeight, snapshotTimestamp,
+		return new AccountTrustProfileData(targetPublicKey, targetAddress, activeTrustStatus, blocksMinted,
+				effectiveVoteWeight, activeCategory, mintingSeedMember, snapshotHeight, snapshotTimestamp,
 				buildCategoryProfiles(snapshotsByCategory, outboundCountsByCategory));
 	}
 

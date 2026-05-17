@@ -712,8 +712,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			bob = Common.getTestAccount(repository, "bob");
-			ensureKnownAccount(repository, bob);
-			repository.saveChanges();
+			setVoteAccount(repository, bob, 250);
 		}
 
 		AccountTrustProfileData profile = this.accountRatingsResource.getAccountTrustProfile(Base58.encode(bob.getPublicKey()));
@@ -723,6 +722,8 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(AccountTrustStatus.UNVERIFIED.getValue(), profile.getTrustStatusValue());
 		assertEquals(0, profile.getTrustWeightPercent());
 		assertTrue(profile.isTrustAllowsMinting());
+		assertEquals(250, profile.getBlocksMinted());
+		assertEquals(0, profile.getEffectiveVoteWeight());
 		assertEquals(AccountRatingCategory.SUBJECT, profile.getActiveWeightCategory());
 		assertFalse(profile.isMintingSeedMember());
 		assertNull(profile.getSnapshotHeight());
@@ -763,6 +764,7 @@ public class AccountRatingsApiTests extends ApiCommon {
 			saveAccountRating(repository, bob, alice, AccountRatingCategory.PLAYER, 3);
 			saveAccountRating(repository, bob, chloe, AccountRatingCategory.MANAGER, -1);
 			saveAccountRating(repository, bob, dilbert, AccountRatingCategory.SUBJECT, 1);
+			setVoteAccount(repository, bob, 250);
 			saveSubjectSnapshots(repository, subjectDerivation(bob, AccountTrustStatus.BRONZE, subjectInboundCounts));
 		}
 
@@ -773,6 +775,8 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(AccountTrustStatus.BRONZE.getValue(), profile.getTrustStatusValue());
 		assertEquals(40, profile.getTrustWeightPercent());
 		assertTrue(profile.isTrustAllowsMinting());
+		assertEquals(250, profile.getBlocksMinted());
+		assertEquals(100, profile.getEffectiveVoteWeight());
 		assertEquals(AccountRatingCategory.SUBJECT, profile.getActiveWeightCategory());
 		assertTrue(profile.isMintingSeedMember());
 		assertNotNull(profile.getSnapshotHeight());

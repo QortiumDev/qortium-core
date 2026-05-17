@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - api: expose trust profile vote weight
+
+Added raw `blocksMinted` and effective trust-weighted vote weight to the account trust profile API so wallets and explorers can use one trust-profile response for an account's status, multiplier, raw minting history, and active influence. The trust docs now describe `trust-profile` as the preferred account display source for these values, reducing the chance that clients show raw history as active governance power.
+
 ### 2026-05-17 - test: audit trust weighted influence paths
 
 Added regression coverage that checks trust-weighted influence across poll tallies, frozen poll results, resource-rating summaries, and trust-summary totals for Gold, Silver, Bronze, Unverified, and Suspicious accounts. The tests now pin the difference between raw `blocksMinted` history and effective trust-weighted influence so future changes do not accidentally count unverified or suspicious accounts, or bypass the current 100/70/40 launch multipliers.

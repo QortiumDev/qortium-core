@@ -239,9 +239,9 @@ repository state and refreshes it only when trust inputs change:
   Suspicious requirements, level checks, and top positive or negative rating
   impacts; `live=true` recalculates the current graph for comparison
 - `GET /account-ratings/trust-profile` returns one known account's active trust
-  status, vote-weight multiplier, minting trust allowance, seed membership,
-  stored snapshot metadata, and per-category trust/rating-count summary in one
-  compact response
+  status, vote-weight multiplier, minting trust allowance, seed membership, raw
+  `blocksMinted`, effective trust-weighted vote weight, stored snapshot
+  metadata, and per-category trust/rating-count summary in one compact response
 - `GET /account-ratings/trust-policy` returns the active chain-configured trust
   policy, including seed-energy flow settings, Suspicious requirements, status
   vote multipliers, category thresholds, per-rating caps, and the rating-change

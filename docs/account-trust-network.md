@@ -277,7 +277,8 @@ Clients should use different account-rating APIs for different jobs:
 
 For normal account screens, `trust-profile` should be the first choice. It
 summarizes the active status, vote multiplier, minting trust allowance, seed
-membership, snapshot metadata, and per-category rating counts in one response.
+membership, raw `blocksMinted`, effective trust-weighted vote weight, snapshot
+metadata, and per-category rating counts in one response.
 
 For explorer and dashboard screens, `trust-summary` gives a compact stored
 snapshot overview without asking the client to fetch every trust row. It shows

@@ -1,5 +1,7 @@
 package org.qortal.data.account;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import java.util.ArrayList;
@@ -14,6 +16,10 @@ public class AccountTrustProfileData {
 	private int trustStatusValue;
 	private int trustWeightPercent;
 	private boolean trustAllowsMinting;
+	@Schema(description = "Raw minted-block history. This remains account history and is not the effective governance weight.")
+	private int blocksMinted;
+	@Schema(description = "Effective governance and rating weight after applying the active trust multiplier to blocksMinted")
+	private int effectiveVoteWeight;
 	private AccountRatingCategory activeWeightCategory;
 	private boolean mintingSeedMember;
 	private Integer snapshotHeight;
@@ -24,8 +30,8 @@ public class AccountTrustProfileData {
 	}
 
 	public AccountTrustProfileData(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
-			AccountRatingCategory activeWeightCategory, boolean mintingSeedMember, Integer snapshotHeight,
-			Long snapshotTimestamp, List<CategoryProfile> categories) {
+			int blocksMinted, int effectiveVoteWeight, AccountRatingCategory activeWeightCategory,
+			boolean mintingSeedMember, Integer snapshotHeight, Long snapshotTimestamp, List<CategoryProfile> categories) {
 		AccountTrustStatus effectiveTrustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
 
 		this.targetPublicKey = targetPublicKey;
@@ -34,6 +40,8 @@ public class AccountTrustProfileData {
 		this.trustStatusValue = effectiveTrustStatus.getValue();
 		this.trustWeightPercent = effectiveTrustStatus.getVoteWeightPercent();
 		this.trustAllowsMinting = effectiveTrustStatus.canMint();
+		this.blocksMinted = blocksMinted;
+		this.effectiveVoteWeight = effectiveVoteWeight;
 		this.activeWeightCategory = activeWeightCategory == null ? AccountRatingCategory.SUBJECT : activeWeightCategory;
 		this.mintingSeedMember = mintingSeedMember;
 		this.snapshotHeight = snapshotHeight;
@@ -63,6 +71,14 @@ public class AccountTrustProfileData {
 
 	public boolean isTrustAllowsMinting() {
 		return this.trustAllowsMinting;
+	}
+
+	public int getBlocksMinted() {
+		return this.blocksMinted;
+	}
+
+	public int getEffectiveVoteWeight() {
+		return this.effectiveVoteWeight;
 	}
 
 	public AccountRatingCategory getActiveWeightCategory() {

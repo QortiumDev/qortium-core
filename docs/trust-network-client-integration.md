@@ -23,9 +23,9 @@ GET /account-ratings/trust-profile?target=...
 
 Show the account's active trust status, vote multiplier, minting trust
 allowance, Minting group seed membership, snapshot height, snapshot timestamp,
-and category summaries. If a screen shows `blocksMinted`, show the effective
-trust-weighted value beside it so users do not mistake raw history for active
-influence.
+raw `blocksMinted`, effective trust-weighted vote weight, and category
+summaries. If a screen shows `blocksMinted`, show the effective trust-weighted
+value beside it so users do not mistake raw history for active influence.
 
 For detailed audit screens, pair:
 
