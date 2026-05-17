@@ -312,10 +312,15 @@ The core trust-network mechanics are implemented:
 - trust derivation thresholds, per-rating caps, branch requirements, Suspicious
   requirements, Manager energy-flow settings, active weighting category, and
   vote multipliers are chain-configurable.
+- test-only permissive, current, and strict policy calibration scenarios show
+  how the same evidence changes under different threshold, branch, and
+  Suspicious-confidence choices. These profiles are examples for launch review,
+  not new Qortium defaults.
 
 Remaining pre-launch work is now hardening rather than core construction:
 
-- calibrate default thresholds and caps against realistic graph scenarios
+- continue calibrating default thresholds and caps against realistic graph
+  scenarios
 - improve observability around recent trust-status changes
 - keep stress-testing derivation cost with larger synthetic graphs and review
   opt-in benchmark output before launch defaults settle

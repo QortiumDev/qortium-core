@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: add trust policy calibration scenarios
+
+Added test-only permissive, current, and strict trust-policy calibration scenarios so Qortium-derived chains can see how threshold, branch, and Suspicious-confidence choices change the same evidence. These examples keep Qortium's active defaults unchanged while making launch policy tradeoffs easier to review.
+
 ### 2026-05-17 - test: harden trust snapshot lifecycle
 
 Added stronger lifecycle coverage for stored account trust snapshots and trust-status change history. The tests now prove initial snapshot population from Minting group seed state, same-height snapshot replacement, rollback cleanup of orphaned change rows, and disk-backed repository reopen persistence without changing trust scoring, minting, voting, ratings, or public APIs.
