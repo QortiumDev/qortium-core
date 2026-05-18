@@ -19,7 +19,7 @@
 		<commons-text.version>1.12.0</commons-text.version>
 		<commons-io.version>2.18.0</commons-io.version>
 		<commons-compress.version>1.27.1</commons-compress.version>
-		<commons-lang3.version>3.17.0</commons-lang3.version>
+		<commons-lang3.version>3.20.0</commons-lang3.version>
 		<dagger.version>1.2.2</dagger.version>
 		<dbus-java.version>4.3.2</dbus-java.version>
 		<extendedset.version>0.12.3</extendedset.version>
@@ -42,7 +42,8 @@
 		<json.version>20240303</json.version>
 		<jsoup.version>1.18.1</jsoup.version>
 		<junit-jupiter-engine.version>5.11.0-M2</junit-jupiter-engine.version>
-		<log4j.version>2.23.1</log4j.version>
+		<junit.version>4.13.2</junit.version>
+		<log4j.version>2.25.4</log4j.version>
 		<maven-build-helper-plugin.version>3.6.0</maven-build-helper-plugin.version>
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<maven-dependency-plugin.version>3.6.1</maven-dependency-plugin.version>
@@ -66,9 +67,9 @@
 		<replacer.version>1.5.3</replacer.version>
 		<simplemagic.version>1.17</simplemagic.version>
 		<slf4j.version>1.7.36</slf4j.version>
-		<swagger-api.version>2.2.30</swagger-api.version>
+		<swagger-api.version>2.2.50</swagger-api.version>
 		<swagger-ui.version>5.18.2</swagger-ui.version>
-		<tika-core.version>3.1.0</tika-core.version>
+		<tika-core.version>3.2.2</tika-core.version>
 		<jupnp.version>3.0.4</jupnp.version>
 		<xz.version>1.10</xz.version>
 	</properties>
@@ -548,6 +549,12 @@
 			<groupId>com.googlecode.json-simple</groupId>
 			<artifactId>json-simple</artifactId>
 			<version>${json-simple.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>junit</groupId>
+					<artifactId>junit</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.json</groupId>
@@ -781,6 +788,12 @@
 			<version>${swagger-ui.version}</version>
 		</dependency>
 		<!-- Testing -->
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>${junit.version}</version>
+			<scope>test</scope>
+		</dependency>
 		<!-- disabled pending better Eclipse support
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>

@@ -36,9 +36,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-
 // Minting new blocks
 
 public class BlockMinter extends Thread {
@@ -549,7 +546,8 @@ public class BlockMinter extends Thread {
 		PrivateKeyAccount mintingAccount = mintingAndOnlineAccounts[0];
 
 		Block block = mintTestingBlockRetainingTimestamps(repository, mintingAccount);
-		assertNotNull("Minted block must not be null", block);
+		if (block == null)
+			throw new DataException("Minted block must not be null");
 
 		return block;
 	}
@@ -573,7 +571,8 @@ public class BlockMinter extends Thread {
 		// Make sure there are no online accounts
 		OnlineAccountsManager.getInstance().removeAllOnlineAccounts();
 		List<OnlineAccountData> onlineAccounts = OnlineAccountsManager.getInstance().getOnlineAccounts();
-		assertTrue(onlineAccounts.isEmpty());
+		if (!onlineAccounts.isEmpty())
+			throw new DataException("Testing block mint expected no online accounts");
 
 		return mintTestingBlockRetainingTimestamps(repository, mintingAccount);
 	}

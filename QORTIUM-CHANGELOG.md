@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - deps: update direct security dependencies
+
+Updated the first batch of direct security-sensitive dependencies without changing Qortium APIs, consensus behavior, transaction formats, or runtime settings. Log4j, Tika, Commons Lang, and Swagger's Jackson path now resolve to patched lines, and the old JUnit dependency inherited through `json-simple` is excluded from compile/runtime scope while keeping JUnit available only for tests. A leftover production-code use of JUnit assertions in the testing block minter was replaced with normal `DataException` checks so runtime code no longer needs JUnit.
+
 ### 2026-05-18 - docs: record dependency security review
 
 Recorded the first dependency security review for the Qortium baseline. The new note explains which vulnerable dependencies can be handled as a narrow maintenance batch, why bitcoinj, Netty, and Jetty need separate follow-up work, and where the local scan artifacts came from. This keeps the security review visible in tracked project history instead of leaving it only in terminal output.
