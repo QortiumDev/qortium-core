@@ -32,6 +32,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -83,7 +85,7 @@ public class NamesResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.NO_REPLY, ApiError.REPOSITORY_ISSUE})
 	public List<NameSummary> getNamesByAddress(@PathParam("address") String address, @Parameter(ref = "limit") @QueryParam("limit") Integer limit, @Parameter(ref = "offset") @QueryParam("offset") Integer offset,
 			@Parameter(ref="reverse") @QueryParam("reverse") Boolean reverse) {
 		if (!Crypto.isValidAddress(address))
@@ -94,6 +96,10 @@ public class NamesResource {
 
 			if (Settings.getInstance().isLite()) {
 				names = LiteNode.getInstance().fetchAccountNames(address);
+				if (names == null)
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer name data available");
+
+				names = applyLiteNameSlice(names, limit, offset, reverse);
 			}
 			else {
 				names = repository.getNameRepository().getNamesByOwner(address, limit, offset, reverse);
@@ -158,7 +164,7 @@ public class NamesResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.NAME_UNKNOWN, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.NAME_UNKNOWN, ApiError.NO_REPLY, ApiError.REPOSITORY_ISSUE})
 	public NameData getName(@PathParam("name") String name) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			NameData nameData;
@@ -166,6 +172,8 @@ public class NamesResource {
 
 			if (Settings.getInstance().isLite()) {
 				nameData = LiteNode.getInstance().fetchNameData(name);
+				if (nameData == null)
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer name data available");
 			}
 			else {
 				nameData = repository.getNameRepository().fromReducedName(reducedName);
@@ -181,6 +189,25 @@ public class NamesResource {
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
+	}
+
+	private static List<NameData> applyLiteNameSlice(List<NameData> names, Integer limit, Integer offset, Boolean reverse) {
+		List<NameData> sortedNames = new ArrayList<>(names);
+		Comparator<NameData> comparator = Comparator.comparingLong(NameData::getRegistered);
+		if (Boolean.TRUE.equals(reverse))
+			comparator = comparator.reversed();
+
+		sortedNames.sort(comparator);
+
+		int fromIndex = offset == null ? 0 : Math.max(0, offset);
+		if (fromIndex >= sortedNames.size())
+			return new ArrayList<>();
+
+		int toIndex = sortedNames.size();
+		if (limit != null && limit > 0)
+			toIndex = Math.min(fromIndex + limit, sortedNames.size());
+
+		return new ArrayList<>(sortedNames.subList(fromIndex, toIndex));
 	}
 
 	@GET

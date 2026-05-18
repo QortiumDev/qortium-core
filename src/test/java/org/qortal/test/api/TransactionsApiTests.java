@@ -69,6 +69,14 @@ public class TransactionsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testLiteGetAddressTransactionsFailsClearlyWithoutPeerData() throws Exception {
+		useLiteMode();
+
+		assertApiError(org.qortal.api.ApiError.NO_REPLY,
+				() -> this.transactionsResource.getAddressTransactions(aliceAddress, null, null, null));
+	}
+
+	@Test
 	public void testSearchTransactions() {
 		List<TransactionType> txTypes = Arrays.asList(TransactionType.PAYMENT, TransactionType.ISSUE_ASSET);
 

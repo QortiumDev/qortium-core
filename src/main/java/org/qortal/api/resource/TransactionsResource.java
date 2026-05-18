@@ -375,11 +375,11 @@ public class TransactionsResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.INVALID_ADDRESS,  ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.NO_REPLY, ApiError.REPOSITORY_ISSUE})
 	public List<TransactionData> getAddressTransactions(@PathParam("address") String address,
-												 		@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
-												 		@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
-														@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
+															@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
+															@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
+															@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
 		if (!Crypto.isValidAddress(address)) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 		}
@@ -390,12 +390,17 @@ public class TransactionsResource {
 		if (offset == null) {
 			offset = 0;
 		}
+		if (reverse == null) {
+			reverse = false;
+		}
 
 		List<TransactionData> transactions;
 
 		if (Settings.getInstance().isLite()) {
 			// Fetch from network
 			transactions = LiteNode.getInstance().fetchAccountTransactions(address, limit, offset);
+			if (transactions == null)
+				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer transaction data available");
 
 			// Sort the data, since we can't guarantee the order that a peer sent it in
 			if (reverse) {

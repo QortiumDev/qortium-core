@@ -1,9 +1,11 @@
 package org.qortal.test.common;
 
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiException;
 import org.qortal.repository.DataException;
+import org.qortal.settings.Settings;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
@@ -132,6 +134,10 @@ public class ApiCommon extends Common {
 			for (Integer offset : SAMPLE_OFFSET_VALUES)
 				for (Boolean reverse : ALL_BOOLEAN_VALUES)
 					assertNoApiError(() -> apiCall.call(limit, offset, reverse));
+	}
+
+	protected static void useLiteMode() throws IllegalAccessException {
+		FieldUtils.writeField(Settings.getInstance(), "lite", true, true);
 	}
 
 }

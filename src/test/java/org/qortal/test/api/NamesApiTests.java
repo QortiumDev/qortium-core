@@ -72,6 +72,21 @@ public class NamesApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testLiteGetNamesByAddressFailsClearlyWithoutPeerData() throws Exception {
+		useLiteMode();
+
+		assertApiError(org.qortal.api.ApiError.NO_REPLY,
+				() -> this.namesResource.getNamesByAddress(aliceAddress, null, null, null));
+	}
+
+	@Test
+	public void testLiteGetNameFailsClearlyWithoutPeerData() throws Exception {
+		useLiteMode();
+
+		assertApiError(org.qortal.api.ApiError.NO_REPLY, () -> this.namesResource.getName("test-name"));
+	}
+
+	@Test
 	public void testGetAllAssets() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			// Register-name

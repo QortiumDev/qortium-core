@@ -30,4 +30,14 @@ public class AccountMessageTests {
 		assertEquals(accountData.getLevel(), decodedData.getLevel());
 		assertEquals(accountData.getBlocksMinted(), decodedData.getBlocksMinted());
 	}
+
+	@Test
+	public void testGetNameRoundTrip() throws MessageException {
+		String name = "test-name";
+		GetNameMessage message = new GetNameMessage(name);
+
+		GetNameMessage decodedMessage = (GetNameMessage) GetNameMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+
+		assertEquals(name, decodedMessage.getName());
+	}
 }

@@ -72,6 +72,30 @@ public class AddressesApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testLiteGetAccountInfoReturnsPlaceholderWithoutPeerData() throws Exception {
+		useLiteMode();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Account unknownAccount = Common.generateRandomSeedAccount(repository);
+			assertNull(repository.getAccountRepository().getAccount(unknownAccount.getAddress()));
+
+			AccountData accountInfo = this.addressesResource.getAccountInfo(unknownAccount.getAddress());
+			assertEquals(unknownAccount.getAddress(), accountInfo.getAddress());
+			assertNull(accountInfo.getPublicKey());
+		}
+	}
+
+	@Test
+	public void testLiteGetAccountInfoDoesNotUseLocalRepositoryAccountData() throws Exception {
+		useLiteMode();
+
+		AccountData accountInfo = this.addressesResource.getAccountInfo(aliceAddress);
+
+		assertEquals(aliceAddress, accountInfo.getAddress());
+		assertNull(accountInfo.getPublicKey());
+	}
+
+	@Test
 	public void testGetAccountInfoIncludesTrustAuditFields() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");

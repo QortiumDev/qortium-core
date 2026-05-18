@@ -76,6 +76,14 @@ public class AddressesResource {
 		if (!Crypto.isValidAddress(address))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
+		if (Settings.getInstance().isLite()) {
+			AccountData accountData = LiteNode.getInstance().fetchAccountData(address);
+			if (accountData == null)
+				return new AccountData(address);
+
+			return accountData;
+		}
+
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			AccountData accountData = repository.getAccountRepository().getAccount(address);
 			// Valid addresses can receive funds before their public key is known on chain.

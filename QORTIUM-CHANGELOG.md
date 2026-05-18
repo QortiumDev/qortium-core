@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - lite: fix phase one lite-node correctness gaps
+
+Added the first lite-node planning note and fixed the most immediate lite-mode correctness gaps it identified. Lite name lookup now serializes the requested name correctly, account-info requests use the lite fetch path when lite mode is enabled, and lite API branches fail with a clear no-reply error when peer data is unavailable instead of falling into null handling problems.
+
 ### 2026-05-18 - test: clean up name save repository transaction
 
 Updated the name save regression test so it explicitly discards the temporary repository writes it creates while checking direct name registration and unregister behavior. This keeps the test behavior the same while preventing repository close from logging the cleaned-up test transaction as a critical uncommitted-work warning.

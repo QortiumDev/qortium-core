@@ -12,7 +12,7 @@ public class GetNameMessage extends Message {
 
 	private String name;
 
-	public GetNameMessage(String address) {
+	public GetNameMessage(String name) {
 		super(MessageType.GET_NAME);
 
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
