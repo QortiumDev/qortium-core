@@ -66,6 +66,34 @@ The upgrade also removes bitcoinj's old transitive OkHttp `3.14.9` and Okio
 `1.17.2` runtime path. The refreshed OSV batch query for the resolved runtime
 tree produced no vulnerable dependency entries.
 
+## Current Security Monitoring Status
+
+The follow-up security automation is active on GitHub. Dependabot watches Maven
+and GitHub Actions dependencies, Dependabot security updates are enabled, pull
+requests get OSV comparison scanning, and the active branch gets a scheduled
+OSV source scan.
+
+At this checkpoint, GitHub Dependabot alerts and GitHub code-scanning alerts are
+clear. The latest local source scan with `osv-scanner scan source -r
+--no-resolve .` also reports no issues, and the local Grype directory scan
+reports no vulnerabilities.
+
+Qortium's latest stable maintenance batch moved these dependencies and build
+plugins onto current supported baselines:
+
+- Log4j family: `2.26.0`
+- jsoup: `1.22.2`
+- Apache Commons Net: `3.13.0`
+- Maven Jar Plugin: `3.5.0`
+- Maven Surefire Plugin: `3.5.5`
+
+The local OSV source scan currently uses `--no-resolve` because full Maven
+resolution still trips over the inherited
+`com.github.QuickMythril:AT:1b731d1` dependency, which is not available from a
+normal Maven repository. The GitHub OSV workflow remains useful because it
+compares dependency manifests and lockfile-style inputs without requiring that
+local full-resolution path to succeed.
+
 ## Review Artifacts
 
 The local scan artifacts were generated under `target/`:

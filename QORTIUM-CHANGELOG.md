@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - docs: refresh dependency security status
+
+Refreshed Qortium's dependency security review after the latest maintenance batch. The review now records that GitHub dependency and code-scanning alerts are currently clear, automated OSV and Dependabot monitoring are active, Log4j, jsoup, Commons Net, and the Maven build plugins have been moved to current maintenance baselines, and local OSV source scanning still uses the documented no-resolution mode because the inherited `AT` dependency cannot be resolved from normal Maven repositories.
+
 ### 2026-05-18 - build: update Maven maintenance plugins
 
 Updated Qortium's Maven jar packaging and test runner plugins to current maintenance releases. This keeps the build tooling aligned with supported plugin versions while preserving the existing package layout, default skipped-test behavior, focused CI checks, and Java 17 build target.
