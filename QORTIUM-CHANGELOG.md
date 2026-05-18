@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - ci: refresh security-scan Maven cache
+
+Updated Qortium's OSV scan workflows and documented local scan command so Maven cache keys include checked-in local Maven artifacts and SBOM generation forces dependency-resolution retries. This prevents older cache entries from carrying stale missing-artifact state into the security scan path after local dependency provenance changes.
+
 ### 2026-05-18 - ci: refresh Maven cache after local dependency changes
 
 Updated the main GitHub build workflow so Maven cache keys include Qortium's checked-in local Maven artifacts and the first Maven step forces dependency-resolution retries. This keeps older GitHub cache entries from remembering that the vendored AT artifact was missing before it was added to the repository.

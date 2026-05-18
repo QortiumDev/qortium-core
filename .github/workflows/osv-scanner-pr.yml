@@ -23,7 +23,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-osv-${{ hashFiles('**/pom.xml') }}
+          key: ${{ runner.os }}-maven-osv-${{ hashFiles('**/pom.xml', 'lib/**/*.pom', 'lib/**/*.jar') }}
           restore-keys: |
             ${{ runner.os }}-maven-osv-
             ${{ runner.os }}-maven-
@@ -44,7 +44,7 @@ jobs:
 
       - name: Generate old Maven dependency SBOM
         run: |
-          mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom \
+          mvn -B -U org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom \
             -DskipTests \
             -DoutputFormat=json \
             -DoutputName=bom.cdx \
@@ -67,7 +67,7 @@ jobs:
 
       - name: Generate new Maven dependency SBOM
         run: |
-          mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom \
+          mvn -B -U org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom \
             -DskipTests \
             -DoutputFormat=json \
             -DoutputName=bom.cdx \

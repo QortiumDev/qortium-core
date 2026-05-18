@@ -97,7 +97,7 @@ OSV's native Maven source resolver does not honor Qortium's checked-in
 scan path is:
 
 ```bash
-mvn -B org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom \
+mvn -B -U org.cyclonedx:cyclonedx-maven-plugin:2.9.1:makeBom \
   -DskipTests \
   -DoutputFormat=json \
   -DoutputName=bom.cdx \
