@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - build: update Maven maintenance plugins
+
+Updated Qortium's Maven jar packaging and test runner plugins to current maintenance releases. This keeps the build tooling aligned with supported plugin versions while preserving the existing package layout, default skipped-test behavior, focused CI checks, and Java 17 build target.
+
 ### 2026-05-18 - deps: update stable runtime hygiene dependencies
 
 Updated Qortium's jsoup and Apache Commons Net runtime dependencies to current stable maintenance releases. These updates keep HTML parsing and network utility code closer to maintained upstream baselines without changing Qortium APIs, consensus rules, transaction formats, runtime settings, or user-facing behavior.
