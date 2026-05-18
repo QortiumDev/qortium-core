@@ -1,6 +1,6 @@
 package org.qortal.notification;
 
-import org.eclipse.jetty.websocket.api.Session;
+import org.eclipse.jetty.ee8.websocket.api.Session;
 
 /**
  * An index entry pointing from an event/service bucket back to a session + rule.

@@ -37,7 +37,7 @@
 		<jacoco.minimum.line.coverage>0.30</jacoco.minimum.line.coverage>
 		<jaxb-runtime.version>2.3.9</jaxb-runtime.version>
 		<jersey.version>2.47</jersey.version>
-		<jetty.version>10.0.26</jetty.version> <!-- Next logical jump -->
+		<jetty.version>12.1.9</jetty.version>
 		<json-simple.version>1.1.1</json-simple.version>
 		<json.version>20240303</json.version>
 		<jsoup.version>1.18.1</jsoup.version>
@@ -102,7 +102,7 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>${maven-compiler-plugin.version}</version>
 				<configuration>
-					<release>11</release>
+					<release>17</release>
 					<proc>none</proc>
 				</configuration>
 			</plugin>
@@ -682,14 +682,14 @@
 			<!-- <classifier>config</classifier> 25-Jan Removed as there is no config classifier -->
 		</dependency>
 		<dependency>
-			<groupId>org.eclipse.jetty</groupId>
-			<artifactId>jetty-servlet</artifactId>
+			<groupId>org.eclipse.jetty.ee8</groupId>
+			<artifactId>jetty-ee8-servlet</artifactId>
 			<version>${jetty.version}</version>
 			<type>jar</type>
 		</dependency>
 		<dependency>
-			<groupId>org.eclipse.jetty</groupId>
-			<artifactId>jetty-servlets</artifactId>
+			<groupId>org.eclipse.jetty.ee8</groupId>
+			<artifactId>jetty-ee8-servlets</artifactId>
 			<version>${jetty.version}</version>
 		</dependency>
 		<dependency>
@@ -714,13 +714,13 @@
 		</dependency>
 		<dependency>
 			<groupId>org.eclipse.jetty.http2</groupId>
-			<artifactId>http2-server</artifactId>
+			<artifactId>jetty-http2-server</artifactId>
 			<version>${jetty.version}</version>
 		</dependency>
 		<!-- Websocket support -->
 		<dependency>
-			<groupId>org.eclipse.jetty.websocket</groupId>
-			<artifactId>websocket-jetty-server</artifactId>
+			<groupId>org.eclipse.jetty.ee8.websocket</groupId>
+			<artifactId>jetty-ee8-websocket-jetty-server</artifactId>
 			<version>${jetty.version}</version>
 		</dependency>
 		<!-- Jersey -->

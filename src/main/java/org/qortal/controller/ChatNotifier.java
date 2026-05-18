@@ -1,6 +1,6 @@
 package org.qortal.controller;
 
-import org.eclipse.jetty.websocket.api.Session;
+import org.eclipse.jetty.ee8.websocket.api.Session;
 import org.qortal.data.transaction.ChatTransactionData;
 
 import java.util.ArrayList;

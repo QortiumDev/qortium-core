@@ -1,12 +1,16 @@
 package org.qortal.test.common;
 
-import org.eclipse.jetty.server.Request;
 import org.junit.Before;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiException;
 import org.qortal.repository.DataException;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
+import java.util.Collections;
+import java.util.Locale;
+
+import javax.servlet.http.HttpServletRequest;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -26,17 +30,36 @@ public class ApiCommon extends Common {
 		public abstract void call(Integer limit, Integer offset, Boolean reverse);
 	}
 
-	public static class FakeRequest extends Request {
-		public FakeRequest() {
-			super(null, null);
-		}
-
-		@Override
-		public String getRemoteAddr() {
-			return "127.0.0.1";
-		}
-	}
-	private static final FakeRequest FAKE_REQUEST = new FakeRequest();
+	private static final HttpServletRequest FAKE_REQUEST = (HttpServletRequest) Proxy.newProxyInstance(
+			ApiCommon.class.getClassLoader(),
+			new Class[] { HttpServletRequest.class },
+			(proxy, method, args) -> {
+				switch (method.getName()) {
+					case "getRemoteAddr":
+						return "127.0.0.1";
+					case "getLocale":
+						return Locale.getDefault();
+					case "getHeaderNames":
+						return Collections.emptyEnumeration();
+					case "getMethod":
+						return "GET";
+					case "getRequestURI":
+						return "";
+					case "getServerName":
+						return "localhost";
+					case "toString":
+						return "FakeRequest";
+					default:
+						Class<?> returnType = method.getReturnType();
+						if (returnType == boolean.class)
+							return false;
+						if (returnType == int.class)
+							return 0;
+						if (returnType == long.class)
+							return 0L;
+						return null;
+				}
+			});
 
 	public String aliceAddress;
 	public String bobAddress;

@@ -3,29 +3,21 @@ package org.qortal.api;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.server.handler.ErrorHandler;
+import org.eclipse.jetty.util.Callback;
 import org.qortal.settings.Settings;
-
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
 
 public class ApiErrorHandler extends ErrorHandler {
 
 	private static final Logger LOGGER = LogManager.getLogger(ApiErrorHandler.class);
 
 	@Override
-	public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response) throws IOException, ServletException {
+	public boolean handle(Request request, Response response, Callback callback) throws Exception {
 		if (Settings.getInstance().isApiLoggingEnabled()) {
-			String requestURI = request.getRequestURI();
+			String requestURI = request.getHttpURI().asString();
 
-			String queryString = request.getQueryString();
-			if (queryString != null)
-				requestURI += "?" + queryString;
-
-			Throwable th = (Throwable) request.getAttribute(RequestDispatcher.ERROR_EXCEPTION);
+			Throwable th = (Throwable) request.getAttribute(ErrorHandler.ERROR_EXCEPTION);
 			if (th != null) {
 				LOGGER.error(String.format("Unexpected %s during request %s", th.getClass().getCanonicalName(), requestURI));
 			} else {
@@ -33,7 +25,7 @@ public class ApiErrorHandler extends ErrorHandler {
 			}
 		}
 
-		super.handle(target, baseRequest, request, response);
+		return super.handle(request, response, callback);
 	}
 
 }

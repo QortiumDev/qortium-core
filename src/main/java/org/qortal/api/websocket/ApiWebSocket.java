@@ -1,11 +1,11 @@
 package org.qortal.api.websocket;
 
 import org.eclipse.jetty.http.pathmap.UriTemplatePathSpec;
-import org.eclipse.jetty.websocket.api.Session;
-//import org.eclipse.jetty.websocket.server.JettyServletUpgradeRequest;
-import org.eclipse.jetty.websocket.server.JettyServerUpgradeRequest;
-import org.eclipse.jetty.websocket.server.JettyWebSocketServlet;
-import org.eclipse.jetty.websocket.server.JettyWebSocketServletFactory;
+import org.eclipse.jetty.ee8.websocket.api.Session;
+//import org.eclipse.jetty.ee8.websocket.server.JettyServletUpgradeRequest;
+import org.eclipse.jetty.ee8.websocket.server.JettyServerUpgradeRequest;
+import org.eclipse.jetty.ee8.websocket.server.JettyWebSocketServlet;
+import org.eclipse.jetty.ee8.websocket.server.JettyWebSocketServletFactory;
 import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.eclipse.persistence.jaxb.MarshallerProperties;
 import org.qortal.api.ApiError;

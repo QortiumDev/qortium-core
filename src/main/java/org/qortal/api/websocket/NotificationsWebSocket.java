@@ -4,10 +4,10 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.eclipse.jetty.websocket.api.Session;
-import org.eclipse.jetty.websocket.api.WriteCallback;
-import org.eclipse.jetty.websocket.api.annotations.*;
-import org.eclipse.jetty.websocket.server.JettyWebSocketServletFactory;
+import org.eclipse.jetty.ee8.websocket.api.Session;
+import org.eclipse.jetty.ee8.websocket.api.WriteCallback;
+import org.eclipse.jetty.ee8.websocket.api.annotations.*;
+import org.eclipse.jetty.ee8.websocket.server.JettyWebSocketServletFactory;
 import org.qortal.notification.NotificationManager;
 import org.qortal.notification.NotificationSubscription;
 

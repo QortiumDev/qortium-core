@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - deps: migrate Jetty to 12 EE8
+
+Moved Qortium from Jetty 10 to Jetty 12's maintained EE8 line so the API server, gateway, proxy, HTTP/2 support, and websocket endpoints keep their existing `javax.servlet` behavior while using a current Jetty runtime. This raises the build target to Java 17 and updates the embedded Jetty error handler to the Jetty 12 request/response callback API without changing API routes, websocket paths, CORS settings, TLS settings, or node configuration semantics.
+
 ### 2026-05-18 - deps: update direct security dependencies
 
 Updated the first batch of direct security-sensitive dependencies without changing Qortium APIs, consensus behavior, transaction formats, or runtime settings. Log4j, Tika, Commons Lang, and Swagger's Jackson path now resolve to patched lines, and the old JUnit dependency inherited through `json-simple` is excluded from compile/runtime scope while keeping JUnit available only for tests. A leftover production-code use of JUnit assertions in the testing block minter was replaced with normal `DataException` checks so runtime code no longer needs JUnit.

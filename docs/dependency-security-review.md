@@ -25,6 +25,13 @@ API, consensus, transaction, or settings changes:
 - `json-simple` pulls old JUnit into compile scope. Qortium should exclude that
   transitive dependency and keep JUnit only as an explicit test dependency.
 
+## Resolved Jetty Work
+
+Jetty `10.0.26` had HTTP parsing advisories and no newer Jetty 10 patch release
+in Maven Central. Qortium moved to Jetty `12.1.9` using Jetty's EE8 artifacts so
+the API, gateway, proxy, websocket, and HTTP/2 code can stay on the existing
+`javax.servlet` surface while running on a maintained Jetty line.
+
 ## Deferred Security Work
 
 These findings need separate work because they are larger than simple dependency
@@ -39,10 +46,6 @@ patches:
   advisories. Updating gRPC alone does not currently land on a Netty version
   that clears every listed advisory, so this needs a separate gRPC/Netty
   dependency-management pass.
-- Jetty `10.0.26` has HTTP parsing advisories. Maven Central does not provide a
-  newer Jetty 10 line beyond `10.0.26`, so clearing those advisories likely
-  requires a Jetty 11 or 12 migration with API, gateway, websocket, TLS, and
-  Swagger smoke testing.
 
 ## Review Artifacts
 
@@ -51,6 +54,8 @@ The local scan artifacts were generated under `target/`:
 - `target/runtime-dependencies.txt`
 - `target/osv-vulns.json`
 - `target/osv-vuln-details.json`
+- `target/runtime-dependencies-after-jetty12.txt`
+- `target/osv-vulns-after-jetty12.json`
 
 Those files are build artifacts, not tracked project history. This document is
 the durable summary of the review.
