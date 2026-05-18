@@ -228,6 +228,60 @@ public class AccountTrustLaunchStressScenarioTests extends Common {
 		}
 	}
 
+	@Test
+	public void testMintingSeedFarmSubjectOnlyRatingsStayUnverifiedWithZeroWeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			List<PrivateKeyAccount> farmAccounts = generateKnownAccounts(repository, 4);
+
+			for (PrivateKeyAccount farmAccount : farmAccounts) {
+				ensureMintingGroupMember(repository, farmAccount);
+				AccountTrustTestUtils.setBlocksMinted(repository, farmAccount, 1_000);
+			}
+
+			for (int i = 0; i < farmAccounts.size(); ++i) {
+				PrivateKeyAccount rater = farmAccounts.get(i);
+				PrivateKeyAccount target = farmAccounts.get((i + 1) % farmAccounts.size());
+				AccountTrustTestUtils.saveAccountRating(repository, rater, target, AccountRatingCategory.SUBJECT, 4);
+			}
+			AccountTrustTestUtils.refreshTrustSnapshots(repository);
+
+			for (PrivateKeyAccount farmAccount : farmAccounts) {
+				assertSubjectStatus(repository, farmAccount, AccountTrustStatus.UNVERIFIED, 0);
+				assertTrue("Unverified Minting group farm accounts should still be able to mint",
+						new Account(repository, farmAccount.getAddress()).canMint(false));
+			}
+		}
+	}
+
+	@Test
+	public void testMintingSeedFarmSharedBranchRatingsStayUnverifiedWithZeroWeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount farmSeed = Common.generateRandomSeedAccount(repository);
+			List<PrivateKeyAccount> sharedBranchPlayers = generateKnownAccounts(repository, 2);
+			PrivateKeyAccount farmTarget = Common.generateRandomSeedAccount(repository);
+
+			ensureKnownAccounts(repository, farmSeed, farmTarget);
+			ensureMintingGroupMember(repository, farmSeed);
+			ensureMintingGroupMember(repository, farmTarget);
+			AccountTrustTestUtils.setBlocksMinted(repository, farmTarget, 1_000);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatingsFromSharedManagerBranch(repository, farmSeed,
+					sharedBranchPlayers);
+			for (PrivateKeyAccount player : sharedBranchPlayers)
+				AccountTrustTestUtils.saveAccountRating(repository, player, farmTarget, AccountRatingCategory.SUBJECT, 4);
+			AccountTrustTestUtils.refreshTrustSnapshots(repository);
+
+			AccountTrustSnapshotData farmTargetSubject = findSnapshot(repository, farmTarget.getAddress(),
+					AccountRatingCategory.SUBJECT);
+			assertTrue("Same-branch farm support should remain auditable", farmTargetSubject.getScore() > 0);
+			assertEquals("Same-branch farm support should not satisfy branch independence",
+					0, farmTargetSubject.getLevel());
+			assertEquals(AccountTrustStatus.UNVERIFIED, farmTargetSubject.getMappedTrustStatus());
+			assertEquals(0, AccountTrustWeight.calculateEffectiveVoteWeight(1_000, farmTargetSubject));
+			assertTrue("Same-branch farm support should not block minting",
+					new Account(repository, farmTarget.getAddress()).canMint(false));
+		}
+	}
+
 	private List<PrivateKeyAccount> generateKnownAccounts(Repository repository, int count) throws DataException {
 		List<PrivateKeyAccount> accounts = new ArrayList<>();
 		for (int i = 0; i < count; ++i) {

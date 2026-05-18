@@ -59,9 +59,14 @@ The latest local verification run was completed on 2026-05-17:
 - focused delayed-confirmation tests passed:
   - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.api.TransactionsApiTests,org.qortal.test.rating.AccountRatingTests`
   - result: 16 tests passed, 0 failures, 0 errors, 0 skipped
+- focused seed-farm pressure tests passed:
+  - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.rating.AccountTrustLaunchStressScenarioTests`
+  - result: 8 tests passed, 0 failures, 0 errors, 0 skipped
+  - note: subject-only Minting group farm ratings and same-branch farm support
+    remain Unverified with zero effective weight
 - full readiness suite passed:
   - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.api.AccountRatingsApiTests,org.qortal.test.api.AddressesApiTests,org.qortal.test.api.PollsApiTests,org.qortal.test.api.TransactionsApiTests,org.qortal.test.rating.AccountRatingCooldownTests,org.qortal.test.rating.AccountRatingTests,org.qortal.test.rating.AccountTrustSnapshotTests,org.qortal.test.rating.AccountTrustOnboardingScenarioTests,org.qortal.test.rating.AccountTrustLaunchScenarioTests,org.qortal.test.rating.AccountTrustLaunchStressScenarioTests,org.qortal.test.rating.AccountTrustLaunchCommunityScenarioTests,org.qortal.test.rating.AccountTrustTransitionScenarioTests,org.qortal.test.rating.AccountTrustAdversarialScenarioTests,org.qortal.test.rating.AccountTrustTransactionCalibrationScenarioTests,org.qortal.test.rating.ResourceRatingTests`
-  - result: 134 tests passed, 0 failures, 0 errors, 0 skipped
+  - result: 137 tests passed, 0 failures, 0 errors, 0 skipped
 - long trust-network benchmark passed:
   - command: `mvn test -DskipJUnitTests=false -Dqortium.runLongTrustNetworkTests=true -Dtest=org.qortal.test.rating.AccountTrustScaleTests`
   - result: 3 tests passed, 0 failures, 0 errors, 0 skipped
@@ -92,6 +97,11 @@ answer these questions before launch:
   visibility, cooldown display, and effective vote-weight display?
 - Are the current `100/70/40` vote multipliers still the preferred balance
   between farm resistance and meaningful early participation?
+- Should launch add a seed-eligibility guard before using the public Minting
+  group as the full trust seed set? A 2026-05-17 pressure run found that
+  subject-only Minting group farm ratings and same-branch farm support stay
+  Unverified, but controlled independent Minting group seed branches can
+  self-promote a farm target to Silver under the current seed rule.
 
 ## Ready When
 

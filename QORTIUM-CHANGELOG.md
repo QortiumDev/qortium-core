@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-17 - test: cover minting-seed farm pressure
+
+Added launch-stress coverage for farm accounts that join the Minting group and try to gain account-trust influence through subject-only ratings or same-branch support. Those farm patterns now have regression coverage proving they remain Unverified with zero effective voting weight, while the launch-readiness notes record that a stronger independent-seed-branch pressure run exposed a separate seed-eligibility gap for later policy work.
+
 ### 2026-05-17 - test: add trust launch acceptance scenario
 
 Added one combined launch acceptance scenario for the account trust network. The test walks through honest Bronze, Silver, and Gold onboarding, isolated farm-ring resistance, Suspicious mint blocking, cooldown-gated recovery from a mistaken negative rating, same-branch rating limits, and a no-evidence Minting group member that can still mint but has no voting weight. This gives the launch review a single end-to-end trust-network story without changing trust policy, transaction rules, APIs, schemas, or runtime behavior.
