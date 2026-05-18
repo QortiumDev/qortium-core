@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - lite: retry capable peers for lite data
+
+Updated lite nodes to send lite-data requests only to peers that explicitly advertise lite-data service, skip peers that are stale or unsuitable, and retry a small shuffled set before reporting that peer data is unavailable. Also added an initial server-side bound for lite name and transaction responses so non-lite nodes can serve lite requests by default without returning unbounded result sets.
+
 ### 2026-05-18 - lite: advertise lite-data peer capability
 
 Started the second lite-node phase by making ordinary non-lite Qortium nodes advertise that they can serve lite-data requests during peer handshake, and fixed capability decoding so HELLO_V2 maps are read from the right part of the message. Lite nodes do not advertise this role, which gives later lite request routing a clear network contract instead of guessing which peers can answer wallet and name lookups.

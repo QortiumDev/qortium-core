@@ -119,6 +119,13 @@ Make peer-backed data requests intentional and bounded:
 - add server-side limits to every lite-data response shape
 - add request logging and counters so lite-data load can be observed
 
+The first Phase 2 implementation treats every non-lite node as a lite-data
+server, advertises that role as `LITE_DATA = 1`, and makes lite nodes require
+that capability before sending peer-backed account, balance, name, or
+transaction-history requests. Account-name and account-transaction lite
+responses are capped at 100 records per peer response until protocol-level
+pagination is added for every response shape.
+
 ### Phase 3: Multi-Peer Consistency
 
 Reduce single-peer trust for wallet-facing data:

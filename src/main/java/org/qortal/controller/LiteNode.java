@@ -21,14 +21,16 @@ public class LiteNode {
 
     public static final String LITE_DATA_CAPABILITY = "LITE_DATA";
     public static final int LITE_DATA_CAPABILITY_VERSION = 1;
+    public static final int MAX_LITE_DATA_PEER_ATTEMPTS = 3;
+    public static final int MAX_NAMES_PER_MESSAGE = 100;
+    public static final int MAX_TRANSACTIONS_PER_MESSAGE = 100;
+
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private static LiteNode instance;
 
 
     public Map<Integer, Long> pendingRequests = Collections.synchronizedMap(new HashMap<>());
-
-    public int MAX_TRANSACTIONS_PER_MESSAGE = 100;
-
 
     public LiteNode() {
 
@@ -137,56 +139,65 @@ public class LiteNode {
 
 
     private Message sendMessage(Message message, MessageType expectedResponseMessageType) {
-        // This asks a random peer for the data
-        // TODO: ask multiple peers, and disregard everything if there are any significant differences in the responses
-
         // Needs a mutable copy of the unmodifiableList
         List<Peer> peers = new ArrayList<>(Network.getInstance().getImmutableHandshakedPeers());
 
-        // Disregard peers that have "misbehaved" recently
+        peers.removeIf(peer -> !canServeLiteData(peer));
         peers.removeIf(Controller.hasMisbehaved);
-
-        // Disregard peers that only have genesis block
-        // TODO: peers.removeIf(Controller.hasOnlyGenesisBlock);
-
-        // Disregard peers that are on an old version
+        peers.removeIf(Controller.hasOnlyGenesisBlock);
         peers.removeIf(Controller.hasOldVersion);
-
-        // Disregard peers that are on a known inferior chain tip
-        // TODO: peers.removeIf(Controller.hasInferiorChainTip);
+        peers.removeIf(Controller.hasInferiorChainTip);
 
         if (peers.isEmpty()) {
-            LOGGER.info("No peers available to send {} message to", message.getType());
+            LOGGER.info("No capable lite-data peers available to send {} message to", message.getType());
             return null;
         }
 
-        // Pick random peer
-        int index = new SecureRandom().nextInt(peers.size());
-        Peer peer = peers.get(index);
+        Collections.shuffle(peers, RANDOM);
+        int maxAttempts = Math.min(peers.size(), MAX_LITE_DATA_PEER_ATTEMPTS);
 
-        LOGGER.info("Sending {} message to peer {}...", message.getType(), peer);
+        for (int i = 0; i < maxAttempts; ++i) {
+            Peer peer = peers.get(i);
 
-        Message responseMessage;
+            LOGGER.info("Sending {} message to lite-data peer {} ({}/{})...", message.getType(), peer, i + 1, maxAttempts);
 
-        try {
-            responseMessage = peer.getResponse(message);
+            Message responseMessage;
 
-        } catch (InterruptedException e) {
-            return null;
+            try {
+                responseMessage = peer.getResponse(message);
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
+
+            if (responseMessage == null) {
+                LOGGER.info("Lite-data peer {} didn't respond to {} message", peer, message.getType());
+                continue;
+            }
+            else if (responseMessage.getType() != expectedResponseMessageType) {
+                LOGGER.info("Lite-data peer {} responded with unexpected message type {} (should be {})", peer, responseMessage.getType(), expectedResponseMessageType);
+                continue;
+            }
+
+            LOGGER.info("Lite-data peer {} responded with {} message", peer, responseMessage.getType());
+
+            return responseMessage;
         }
 
-        if (responseMessage == null) {
-            LOGGER.info("Peer {} didn't respond to {} message", peer, message.getType());
-            return null;
-        }
-        else if (responseMessage.getType() != expectedResponseMessageType) {
-            LOGGER.info("Peer responded with unexpected message type {} (should be {})", peer, responseMessage.getType(), expectedResponseMessageType);
-            return null;
-        }
+        LOGGER.info("No capable lite-data peers returned a {} response for {} message", expectedResponseMessageType, message.getType());
+        return null;
+    }
 
-        LOGGER.info("Peer {} responded with {} message", peer, responseMessage.getType());
+    static boolean canServeLiteData(Peer peer) {
+        return peer != null && isSupportedLiteDataCapability(peer.getPeerCapability(LITE_DATA_CAPABILITY));
+    }
 
-        return responseMessage;
+    static boolean isSupportedLiteDataCapability(Object capability) {
+        if (!(capability instanceof Number))
+            return false;
+
+        return ((Number) capability).intValue() >= LITE_DATA_CAPABILITY_VERSION;
     }
 
 }

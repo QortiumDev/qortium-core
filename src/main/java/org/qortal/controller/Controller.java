@@ -2236,8 +2236,9 @@ public class Controller extends Thread {
 	private void onNetworkGetAccountTransactionsMessage(Peer peer, Message message) {
 		GetAccountTransactionsMessage getAccountTransactionsMessage = (GetAccountTransactionsMessage) message;
 		String address = getAccountTransactionsMessage.getAddress();
-		int limit = Math.min(getAccountTransactionsMessage.getLimit(), 100);
-		int offset = getAccountTransactionsMessage.getOffset();
+		int requestedLimit = getAccountTransactionsMessage.getLimit();
+		int limit = requestedLimit <= 0 ? LiteNode.MAX_TRANSACTIONS_PER_MESSAGE : Math.min(requestedLimit, LiteNode.MAX_TRANSACTIONS_PER_MESSAGE);
+		int offset = Math.max(0, getAccountTransactionsMessage.getOffset());
 		this.stats.getAccountTransactionsMessageStats.requests.incrementAndGet();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
@@ -2285,7 +2286,7 @@ public class Controller extends Thread {
 		this.stats.getAccountNamesMessageStats.requests.incrementAndGet();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			List<NameData> namesDataList = repository.getNameRepository().getNamesByOwner(address);
+			List<NameData> namesDataList = repository.getNameRepository().getNamesByOwner(address, LiteNode.MAX_NAMES_PER_MESSAGE, 0, false);
 
 			if (namesDataList == null) {
 				// We don't have this account
