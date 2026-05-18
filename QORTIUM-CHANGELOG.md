@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - deps: update Log4j maintenance baseline
+
+Updated Qortium's Log4j dependency family to the current Log4j 2 maintenance line. This keeps the node's logging stack on a fresh security-supported baseline without changing log configuration, runtime settings, APIs, consensus behavior, or transaction handling.
+
 ### 2026-05-18 - ci: keep security automation actionable
 
 Adjusted the new security automation so it stays useful on the current Qortium branch. The main GitHub Actions build now checks that the project packages successfully and runs the focused API regression test added for the Jetty CORS cleanup, while Dependabot routine update monitoring avoids major-version migration pull requests that need separate compatibility work instead of being treated as small security-maintenance updates.
