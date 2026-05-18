@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - docs: define lite-node state-root design
+
+Added the Phase 4B lite-node state-root design so Qortium has a concrete target for moving from anchored peer agreement to cryptographically verified lite data. The design records one combined post-block state root, the first account, balance, name, and owner-name state covered by proofs, deterministic key and value encoding requirements, block processing and orphaning expectations, and the later proof-bearing lite response shape while deliberately deferring complete address-history proofs to a separate committed index design.
+
 ### 2026-05-18 - lite: anchor lite-data responses to chain tips
 
 Added the first Phase 4 lite-node anchoring step by making lite-data peers return account, balance, name, and transaction responses with a clear data status plus the block height, block signature, and timestamp behind the answer. Lite nodes now require peers to agree on both the returned data and that block anchor before treating a response as agreed, and unknown account, balance, or name lookups now use anchored response messages instead of unanchored generic unknown replies. This improves freshness and chain-context checking for lite mode while keeping the documentation clear that these are still peer-agreed answers, not cryptographic state proofs.

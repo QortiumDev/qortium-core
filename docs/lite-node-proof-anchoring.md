@@ -52,6 +52,11 @@ True verification needs a state commitment in the chain. The simplest starting
 point is one combined state root committed into each block. A state root is a
 small hash that represents the full canonical state after that block.
 
+The Phase 4B state-root design is tracked in
+`docs/lite-node-state-root-design.md`. That document is the implementation
+target for the later consensus work that adds committed roots and proof-bearing
+lite responses.
+
 The committed state should eventually cover at least:
 
 - account data
@@ -103,7 +108,8 @@ much larger than the block root itself.
    improvement. This helps freshness and chain-context checks without changing
    consensus.
 2. Design the authenticated state tree as a separate consensus milestone before
-   changing block serialization.
+   changing block serialization. The initial design is tracked in
+   `docs/lite-node-state-root-design.md`.
 3. Start the state-root design with one combined root, canonical state keys, and
    deterministic value serialization.
 4. Add proof-bearing lite responses only after full nodes can compute, validate,

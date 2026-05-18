@@ -177,8 +177,9 @@ stronger data model:
 The Phase 4 direction is defined in `docs/lite-node-proof-anchoring.md`. The
 first Phase 4 implementation anchors lite responses to the serving peer's
 current chain tip and makes agreement include that anchor. The next larger
-milestone is a separate state-root consensus design for full cryptographic
-proofs.
+milestone is the state-root consensus design in
+`docs/lite-node-state-root-design.md`, followed by implementation of committed
+roots and proof-bearing lite responses.
 
 ## Acceptance Criteria
 
