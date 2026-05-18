@@ -226,20 +226,27 @@ public class AddressesResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.INVALID_ASSET_ID, ApiError.INVALID_HEIGHT,  ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.INVALID_ASSET_ID, ApiError.INVALID_HEIGHT, ApiError.NO_REPLY, ApiError.REPOSITORY_ISSUE})
 	public BigDecimal getBalance(@PathParam("address") String address,
 			@QueryParam("assetId") Long assetId) {
 		if (!Crypto.isValidAddress(address))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Account account = new Account(repository, address);
-
 			if (assetId == null)
 				assetId = Asset.NATIVE;
 			else if (!repository.getAssetRepository().assetExists(assetId))
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ASSET_ID);
 
+			if (Settings.getInstance().isLite()) {
+				AccountBalanceData accountBalanceData = LiteNode.getInstance().fetchAccountBalance(address, assetId);
+				if (accountBalanceData == null)
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer balance data available");
+
+				return Amounts.toBigDecimal(accountBalanceData.getBalance());
+			}
+
+			Account account = new Account(repository, address);
 			return Amounts.toBigDecimal(account.getConfirmedBalance(assetId));
 		} catch (ApiException e) {
 			throw e;

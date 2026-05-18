@@ -68,6 +68,8 @@ the change:
   using the existing lite account-data fetch path.
 - Some lite API paths assumed peer fetches always return non-null data, which
   could turn a peer failure into a server-side null-pointer failure.
+- Lite balance lookup could return zero when no peer data was available, which
+  made an unavailable peer response look like a real empty balance.
 - Lite transaction listing had nullable `reverse` handling and did client-side
   ordering after peer fetches.
 - Lite account-name lookup ignored `limit`, `offset`, and `reverse` because the
@@ -98,6 +100,7 @@ Fix the concrete bugs before expanding lite mode:
 
 - fix `GET_NAME` serialization and add a round-trip test
 - route account-info lookup through `LiteNode.fetchAccountData()` in lite mode
+- make lite balance lookup fail clearly when peer data is unavailable
 - normalize nullable lite API options before use
 - return clear repository/API errors when peer data is unavailable
 - make lite name and transaction API behavior match non-lite pagination and

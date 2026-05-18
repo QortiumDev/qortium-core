@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - lite: finish phase one lite-node coverage
+
+Finished the first lite-node correctness pass by making lite balance lookups report a clear no-reply error when peer data is unavailable instead of returning a misleading zero balance. Added focused round-trip coverage for the remaining lite account, balance, name, and transaction request messages so the baseline peer message formats are checked by tests before later lite-node trust and peer-selection work begins.
+
 ### 2026-05-18 - lite: fix phase one lite-node correctness gaps
 
 Added the first lite-node planning note and fixed the most immediate lite-mode correctness gaps it identified. Lite name lookup now serializes the requested name correctly, account-info requests use the lite fetch path when lite mode is enabled, and lite API branches fail with a clear no-reply error when peer data is unavailable instead of falling into null handling problems.

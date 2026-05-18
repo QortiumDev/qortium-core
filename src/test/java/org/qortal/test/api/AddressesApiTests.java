@@ -5,6 +5,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.api.ApiError;
 import org.qortal.api.resource.AddressesResource;
 import org.qortal.controller.OnlineAccountsManager;
 import org.qortal.data.account.AccountData;
@@ -93,6 +94,13 @@ public class AddressesApiTests extends ApiCommon {
 
 		assertEquals(aliceAddress, accountInfo.getAddress());
 		assertNull(accountInfo.getPublicKey());
+	}
+
+	@Test
+	public void testLiteGetBalanceFailsClearlyWithoutPeerData() throws Exception {
+		useLiteMode();
+
+		assertApiError(ApiError.NO_REPLY, () -> this.addressesResource.getBalance(aliceAddress, null));
 	}
 
 	@Test
