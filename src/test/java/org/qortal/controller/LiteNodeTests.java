@@ -4,16 +4,21 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.block.BlockSummaryData;
+import org.qortal.data.network.PeerData;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.group.Group;
+import org.qortal.network.Peer;
+import org.qortal.network.PeerAddress;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.Common;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -45,6 +50,52 @@ public class LiteNodeTests {
 				LiteNode.normalizeTransactionLimit(LiteNode.MAX_TRANSACTIONS_PER_REQUEST));
 		assertEquals(LiteNode.MAX_TRANSACTIONS_PER_REQUEST,
 				LiteNode.normalizeTransactionLimit(LiteNode.MAX_TRANSACTIONS_PER_REQUEST + 1));
+	}
+
+	@Test
+	public void testPrefersUniqueLargestChainTipGroup() {
+		Peer firstMajorityPeer = peerWithChainTip(1, bytes(64, 1));
+		Peer minorityPeer = peerWithChainTip(2, bytes(64, 2));
+		Peer secondMajorityPeer = peerWithChainTip(3, bytes(64, 1));
+
+		List<Peer> peers = Arrays.asList(firstMajorityPeer, minorityPeer, secondMajorityPeer);
+
+		assertEquals(Arrays.asList(firstMajorityPeer, secondMajorityPeer),
+				LiteNode.preferChainTipAgreementPeers(peers));
+	}
+
+	@Test
+	public void testTiedChainTipGroupsKeepAllPeers() {
+		Peer firstPeer = peerWithChainTip(1, bytes(64, 1));
+		Peer secondPeer = peerWithChainTip(2, bytes(64, 1));
+		Peer thirdPeer = peerWithChainTip(3, bytes(64, 2));
+		Peer fourthPeer = peerWithChainTip(4, bytes(64, 2));
+
+		List<Peer> peers = Arrays.asList(firstPeer, secondPeer, thirdPeer, fourthPeer);
+
+		assertEquals(peers, LiteNode.preferChainTipAgreementPeers(peers));
+	}
+
+	@Test
+	public void testChainTipGroupsBelowAgreementKeepAllPeers() {
+		Peer firstPeer = peerWithChainTip(1, bytes(64, 1));
+		Peer secondPeer = peerWithChainTip(2, bytes(64, 2));
+		Peer thirdPeer = peerWithChainTip(3, bytes(64, 3));
+
+		List<Peer> peers = Arrays.asList(firstPeer, secondPeer, thirdPeer);
+
+		assertEquals(peers, LiteNode.preferChainTipAgreementPeers(peers));
+	}
+
+	@Test
+	public void testMissingChainTipDataDoesNotCreatePreferredGroup() {
+		Peer missingTipPeer = peerWithoutChainTip(1);
+		Peer missingSignaturePeer = peerWithChainTip(2, null);
+		Peer validTipPeer = peerWithChainTip(3, bytes(64, 3));
+
+		List<Peer> peers = Arrays.asList(missingTipPeer, missingSignaturePeer, validTipPeer);
+
+		assertEquals(peers, LiteNode.preferChainTipAgreementPeers(peers));
 	}
 
 	@Test
@@ -178,6 +229,16 @@ public class LiteNodeTests {
 	private static TransactionData paymentTransaction(byte[] signature) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(1L, Group.NO_GROUP, bytes(32, 1), 1L, signature);
 		return new PaymentTransactionData(baseTransactionData, "recipient", 1L);
+	}
+
+	private static Peer peerWithChainTip(int index, byte[] signature) {
+		Peer peer = peerWithoutChainTip(index);
+		peer.setChainTipData(new BlockSummaryData(index, signature, bytes(32, index), index));
+		return peer;
+	}
+
+	private static Peer peerWithoutChainTip(int index) {
+		return new Peer(new PeerData(PeerAddress.fromString("127.0.0." + index + ":1234")), Peer.NETWORK);
 	}
 
 	private static byte[] bytes(int size, int seed) {

@@ -4,12 +4,14 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.block.BlockSummaryData;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.network.Network;
 import org.qortal.network.Peer;
 import org.qortal.network.message.*;
 import org.qortal.utils.Base58;
+import org.qortal.utils.ByteArray;
 
 import java.security.SecureRandom;
 import java.util.*;
@@ -277,6 +279,7 @@ public class LiteNode {
             return LiteDataResult.unavailable();
         }
 
+        peers = preferChainTipAgreementPeers(peers);
         Collections.shuffle(peers, RANDOM);
         int maxAttempts = Math.min(peers.size(), MAX_LITE_DATA_PEER_ATTEMPTS);
         List<LiteDataCandidate<T>> candidates = new ArrayList<>();
@@ -358,6 +361,36 @@ public class LiteNode {
             return MAX_TRANSACTIONS_PER_REQUEST;
 
         return Math.min(limit, MAX_TRANSACTIONS_PER_REQUEST);
+    }
+
+    static List<Peer> preferChainTipAgreementPeers(List<Peer> peers) {
+        Map<ByteArray, List<Peer>> peersByChainTip = new HashMap<>();
+
+        for (Peer peer : peers) {
+            BlockSummaryData chainTipData = peer.getChainTipData();
+            if (chainTipData == null || chainTipData.getSignature() == null)
+                continue;
+
+            peersByChainTip.computeIfAbsent(ByteArray.wrap(chainTipData.getSignature()), ignored -> new ArrayList<>())
+                    .add(peer);
+        }
+
+        List<Peer> preferredPeers = null;
+        boolean tiedLargestGroup = false;
+
+        for (List<Peer> chainTipPeers : peersByChainTip.values()) {
+            if (preferredPeers == null || chainTipPeers.size() > preferredPeers.size()) {
+                preferredPeers = chainTipPeers;
+                tiedLargestGroup = false;
+            } else if (chainTipPeers.size() == preferredPeers.size()) {
+                tiedLargestGroup = true;
+            }
+        }
+
+        if (preferredPeers != null && preferredPeers.size() >= REQUIRED_LITE_DATA_AGREEMENT && !tiedLargestGroup)
+            return new ArrayList<>(preferredPeers);
+
+        return peers;
     }
 
     private static <T> T agreedValueOrNull(LiteDataResult<T> result) {

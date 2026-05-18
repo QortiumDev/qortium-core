@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - lite: prefer chain-tip agreement for lite-data peers
+
+Finished the remaining Phase 3 lite-node peer-selection cleanup by preferring capable lite-data peers that report the same chain tip when a clear agreement group is available. This keeps lite requests from mixing peers on different tips when there is a better agreed peer group, while preserving the existing fallback behavior when the connected peers do not provide a clear enough chain-tip group.
+
 ### 2026-05-18 - lite: require agreement for lite-data responses
 
 Finished the first Phase 3 lite-node trust pass by requiring peer-backed account, balance, name, and transaction lookups to reach two matching responses before they are treated as agreed data. Lite APIs now distinguish no usable peer data from conflicting peer data, preserve clear unknown-data behavior when peers agree the data is unknown, and avoid presenting a single peer's wallet-facing response as authoritative.

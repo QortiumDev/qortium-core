@@ -42,7 +42,8 @@ complete.
 ### Single-Peer Trust
 
 `LiteNode` now chooses from a small shuffled set of peers that advertise
-lite-data service and pass basic suitability filters. It requires two matching
+lite-data service, pass basic suitability filters, and preferably report the
+same chain tip as at least one other capable peer. It requires two matching
 usable responses before treating peer-backed account, balance, name, or
 transaction-history data as agreed.
 
@@ -152,6 +153,11 @@ disagreeing usable responses are reported as conflicted. Lite API endpoints map
 unavailable peer data to the existing no-reply error and conflicting peer data
 to a dedicated conflict error, while agreed unknown data follows each
 endpoint's normal unknown-data behavior.
+
+The final Phase 3 cleanup also prefers the largest unique group of capable
+peers that report the same chain tip, when that group is large enough to meet
+the two-peer agreement requirement. Ambiguous or too-small chain-tip groups
+fall back to the full eligible peer set.
 
 ### Phase 4: Proof Or Checkpoint Anchoring
 
