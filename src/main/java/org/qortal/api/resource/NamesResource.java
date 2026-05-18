@@ -85,7 +85,7 @@ public class NamesResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.NO_REPLY, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.NO_REPLY, ApiError.LITE_DATA_CONFLICT, ApiError.REPOSITORY_ISSUE})
 	public List<NameSummary> getNamesByAddress(@PathParam("address") String address, @Parameter(ref = "limit") @QueryParam("limit") Integer limit, @Parameter(ref = "offset") @QueryParam("offset") Integer offset,
 			@Parameter(ref="reverse") @QueryParam("reverse") Boolean reverse) {
 		if (!Crypto.isValidAddress(address))
@@ -95,9 +95,23 @@ public class NamesResource {
 			List<NameData> names;
 
 			if (Settings.getInstance().isLite()) {
-				names = LiteNode.getInstance().fetchAccountNames(address);
-				if (names == null)
-					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer name data available");
+				LiteNode.LiteDataResult<List<NameData>> result = LiteNode.getInstance().fetchAccountNamesResult(address);
+				switch (result.getStatus()) {
+					case AGREED:
+						names = result.getValue();
+						break;
+
+					case UNKNOWN:
+						names = new ArrayList<>();
+						break;
+
+					case CONFLICTED:
+						throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.LITE_DATA_CONFLICT, "Conflicting lite peer name data");
+
+					case UNAVAILABLE:
+					default:
+						throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer name data available");
+				}
 
 				names = applyLiteNameSlice(names, limit, offset, reverse);
 			}
@@ -164,16 +178,30 @@ public class NamesResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.NAME_UNKNOWN, ApiError.NO_REPLY, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.NAME_UNKNOWN, ApiError.NO_REPLY, ApiError.LITE_DATA_CONFLICT, ApiError.REPOSITORY_ISSUE})
 	public NameData getName(@PathParam("name") String name) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			NameData nameData;
 			String reducedName = Unicode.sanitize(name);
 
 			if (Settings.getInstance().isLite()) {
-				nameData = LiteNode.getInstance().fetchNameData(name);
-				if (nameData == null)
-					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer name data available");
+				LiteNode.LiteDataResult<NameData> result = LiteNode.getInstance().fetchNameDataResult(name);
+				switch (result.getStatus()) {
+					case AGREED:
+						nameData = result.getValue();
+						break;
+
+					case UNKNOWN:
+						nameData = null;
+						break;
+
+					case CONFLICTED:
+						throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.LITE_DATA_CONFLICT, "Conflicting lite peer name data");
+
+					case UNAVAILABLE:
+					default:
+						throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer name data available");
+				}
 			}
 			else {
 				nameData = repository.getNameRepository().fromReducedName(reducedName);

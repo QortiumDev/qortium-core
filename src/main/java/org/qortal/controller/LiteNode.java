@@ -14,6 +14,7 @@ import org.qortal.utils.Base58;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 
 import static org.qortal.network.message.MessageType.*;
 
@@ -142,12 +143,14 @@ public class LiteNode {
      * @return accountData - the account data for this address, or null if not retrieved
      */
     public AccountData fetchAccountData(String address) {
+        return agreedValueOrNull(fetchAccountDataResult(address));
+    }
+
+    public LiteDataResult<AccountData> fetchAccountDataResult(String address) {
         GetAccountMessage getAccountMessage = new GetAccountMessage(address);
-        AccountMessage accountMessage = (AccountMessage) this.sendMessage(getAccountMessage, ACCOUNT);
-        if (accountMessage == null) {
-            return null;
-        }
-        return accountMessage.getAccountData();
+        return this.sendMessageResult(getAccountMessage, ACCOUNT,
+                message -> ((AccountMessage) message).getAccountData(),
+                LiteNode::accountDataFingerprint);
     }
 
     /**
@@ -156,12 +159,14 @@ public class LiteNode {
      * @return balance - the balance for this address and assetId, or null if not retrieved
      */
     public AccountBalanceData fetchAccountBalance(String address, long assetId) {
+        return agreedValueOrNull(fetchAccountBalanceResult(address, assetId));
+    }
+
+    public LiteDataResult<AccountBalanceData> fetchAccountBalanceResult(String address, long assetId) {
         GetAccountBalanceMessage getAccountMessage = new GetAccountBalanceMessage(address, assetId);
-        AccountBalanceMessage accountMessage = (AccountBalanceMessage) this.sendMessage(getAccountMessage, ACCOUNT_BALANCE);
-        if (accountMessage == null) {
-            return null;
-        }
-        return accountMessage.getAccountBalanceData();
+        return this.sendMessageResult(getAccountMessage, ACCOUNT_BALANCE,
+                message -> ((AccountBalanceMessage) message).getAccountBalanceData(),
+                LiteNode::accountBalanceFingerprint);
     }
 
     /**
@@ -172,21 +177,33 @@ public class LiteNode {
      * @return a list of TransactionData objects, or null if not retrieved
      */
     public List<TransactionData> fetchAccountTransactions(String address, int limit, int offset) {
+        return agreedValueOrNull(fetchAccountTransactionsResult(address, limit, offset));
+    }
+
+    public LiteDataResult<List<TransactionData>> fetchAccountTransactionsResult(String address, int limit, int offset) {
         limit = normalizeTransactionLimit(limit);
 
         List<TransactionData> allTransactions = new ArrayList<>();
         while (allTransactions.size() < limit) {
-            int requestLimit = Math.min(MAX_TRANSACTIONS_PER_MESSAGE, limit - allTransactions.size());
+            final int requestLimit = Math.min(MAX_TRANSACTIONS_PER_MESSAGE, limit - allTransactions.size());
             GetAccountTransactionsMessage getAccountTransactionsMessage = new GetAccountTransactionsMessage(address, requestLimit, offset);
-            TransactionsMessage transactionsMessage = (TransactionsMessage) this.sendMessage(getAccountTransactionsMessage, TRANSACTIONS);
-            if (transactionsMessage == null) {
-                // An error occurred, so give up instead of returning partial results
-                return null;
-            }
+            LiteDataResult<List<TransactionData>> result = this.sendMessageResult(getAccountTransactionsMessage, TRANSACTIONS,
+                    message -> {
+                        List<TransactionData> transactions = ((TransactionsMessage) message).getTransactions();
+                        if (transactions == null)
+                            return null;
 
-            List<TransactionData> transactions = transactionsMessage.getTransactions();
-            if (transactions.size() > requestLimit)
-                transactions = transactions.subList(0, requestLimit);
+                        if (transactions.size() > requestLimit)
+                            transactions = transactions.subList(0, requestLimit);
+
+                        return new ArrayList<>(transactions);
+                    },
+                    LiteNode::transactionListFingerprint);
+
+            if (!result.isAgreed())
+                return result;
+
+            List<TransactionData> transactions = result.getValue();
 
             allTransactions.addAll(transactions);
             if (transactions.size() < requestLimit) {
@@ -195,7 +212,7 @@ public class LiteNode {
             }
             offset += requestLimit;
         }
-        return allTransactions;
+        return LiteDataResult.agreed(allTransactions);
     }
 
     /**
@@ -204,12 +221,17 @@ public class LiteNode {
      * @return a list of NameData objects, or null if not retrieved
      */
     public List<NameData> fetchAccountNames(String address) {
+        return agreedValueOrNull(fetchAccountNamesResult(address));
+    }
+
+    public LiteDataResult<List<NameData>> fetchAccountNamesResult(String address) {
         GetAccountNamesMessage getAccountNamesMessage = new GetAccountNamesMessage(address);
-        NamesMessage namesMessage = (NamesMessage) this.sendMessage(getAccountNamesMessage, NAMES);
-        if (namesMessage == null) {
-            return null;
-        }
-        return namesMessage.getNameDataList();
+        return this.sendMessageResult(getAccountNamesMessage, NAMES,
+                message -> {
+                    List<NameData> nameDataList = ((NamesMessage) message).getNameDataList();
+                    return nameDataList == null ? null : new ArrayList<>(nameDataList);
+                },
+                LiteNode::nameDataListFingerprint);
     }
 
     /**
@@ -218,21 +240,26 @@ public class LiteNode {
      * @return a NameData object, or null if not retrieved
      */
     public NameData fetchNameData(String name) {
+        return agreedValueOrNull(fetchNameDataResult(name));
+    }
+
+    public LiteDataResult<NameData> fetchNameDataResult(String name) {
         GetNameMessage getNameMessage = new GetNameMessage(name);
-        NamesMessage namesMessage = (NamesMessage) this.sendMessage(getNameMessage, NAMES);
-        if (namesMessage == null) {
-            return null;
-        }
-        List<NameData> nameDataList = namesMessage.getNameDataList();
-        if (nameDataList == null || nameDataList.size() != 1) {
-            return null;
-        }
-        // We are only expecting a single item in the list
-        return nameDataList.get(0);
+        return this.sendMessageResult(getNameMessage, NAMES,
+                message -> {
+                    List<NameData> nameDataList = ((NamesMessage) message).getNameDataList();
+                    if (nameDataList == null || nameDataList.size() != 1)
+                        return null;
+
+                    // We are only expecting a single item in the list
+                    return nameDataList.get(0);
+                },
+                LiteNode::nameDataFingerprint);
     }
 
 
-    private Message sendMessage(Message message, MessageType expectedResponseMessageType) {
+    private <T> LiteDataResult<T> sendMessageResult(Message message, MessageType expectedResponseMessageType,
+            Function<Message, T> dataExtractor, Function<T, String> fingerprintExtractor) {
         this.stats.requests.incrementAndGet();
 
         // Needs a mutable copy of the unmodifiableList
@@ -247,11 +274,12 @@ public class LiteNode {
         if (peers.isEmpty()) {
             this.stats.noCapablePeers.incrementAndGet();
             LOGGER.info("No capable lite-data peers available to send {} message to", message.getType());
-            return null;
+            return LiteDataResult.unavailable();
         }
 
         Collections.shuffle(peers, RANDOM);
         int maxAttempts = Math.min(peers.size(), MAX_LITE_DATA_PEER_ATTEMPTS);
+        List<LiteDataCandidate<T>> candidates = new ArrayList<>();
 
         for (int i = 0; i < maxAttempts; ++i) {
             Peer peer = peers.get(i);
@@ -267,12 +295,22 @@ public class LiteNode {
             } catch (InterruptedException e) {
                 this.stats.interruptedRequests.incrementAndGet();
                 Thread.currentThread().interrupt();
-                return null;
+                return LiteDataResult.unavailable();
             }
 
             if (responseMessage == null) {
                 this.stats.emptyResponses.incrementAndGet();
                 LOGGER.info("Lite-data peer {} didn't respond to {} message", peer, message.getType());
+                continue;
+            }
+            else if (responseMessage.getType() == GENERIC_UNKNOWN) {
+                LOGGER.info("Lite-data peer {} reported unknown data for {} message", peer, message.getType());
+                candidates.add(LiteDataCandidate.unknown());
+
+                LiteDataResult<T> result = chooseAgreedResult(candidates);
+                if (hasLiteDataAgreement(result))
+                    return result;
+
                 continue;
             }
             else if (responseMessage.getType() != expectedResponseMessageType) {
@@ -281,14 +319,27 @@ public class LiteNode {
                 continue;
             }
 
-            this.stats.successfulResponses.incrementAndGet();
-            LOGGER.info("Lite-data peer {} responded with {} message", peer, responseMessage.getType());
+            T responseData = dataExtractor.apply(responseMessage);
+            String fingerprint = responseData == null ? null : fingerprintExtractor.apply(responseData);
+            if (fingerprint == null) {
+                this.stats.unexpectedResponses.incrementAndGet();
+                LOGGER.info("Lite-data peer {} returned non-comparable {} data for {} message", peer, expectedResponseMessageType, message.getType());
+                candidates.add(LiteDataCandidate.conflicted());
+                continue;
+            }
 
-            return responseMessage;
+            this.stats.successfulResponses.incrementAndGet();
+            LOGGER.info("Lite-data peer {} responded with comparable {} message", peer, responseMessage.getType());
+
+            candidates.add(LiteDataCandidate.data(responseData, fingerprint));
+            LiteDataResult<T> result = chooseAgreedResult(candidates);
+            if (hasLiteDataAgreement(result))
+                return result;
         }
 
-        LOGGER.info("No capable lite-data peers returned a {} response for {} message", expectedResponseMessageType, message.getType());
-        return null;
+        LiteDataResult<T> result = chooseAgreedResult(candidates);
+        LOGGER.info("Lite-data {} request for {} finished with {} status", message.getType(), expectedResponseMessageType, result.getStatus());
+        return result;
     }
 
     static boolean canServeLiteData(Peer peer) {
@@ -307,6 +358,14 @@ public class LiteNode {
             return MAX_TRANSACTIONS_PER_REQUEST;
 
         return Math.min(limit, MAX_TRANSACTIONS_PER_REQUEST);
+    }
+
+    private static <T> T agreedValueOrNull(LiteDataResult<T> result) {
+        return result.isAgreed() ? result.getValue() : null;
+    }
+
+    private static boolean hasLiteDataAgreement(LiteDataResult<?> result) {
+        return result.getStatus() == LiteDataStatus.AGREED || result.getStatus() == LiteDataStatus.UNKNOWN;
     }
 
     static <T> LiteDataResult<T> chooseAgreedResult(List<LiteDataCandidate<T>> candidates) {

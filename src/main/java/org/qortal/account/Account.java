@@ -80,7 +80,22 @@ public class Account {
 
 		if (Settings.getInstance().isLite()) {
 			// Lite nodes request data from peers instead of the local db
-			accountBalanceData = LiteNode.getInstance().fetchAccountBalance(this.address, assetId);
+			LiteNode.LiteDataResult<AccountBalanceData> result = LiteNode.getInstance().fetchAccountBalanceResult(this.address, assetId);
+			switch (result.getStatus()) {
+				case AGREED:
+					accountBalanceData = result.getValue();
+					break;
+
+				case UNKNOWN:
+					return 0;
+
+				case CONFLICTED:
+					throw new DataException(String.format("Conflicting lite peer balance data for %s [assetId %d]", this.address, assetId));
+
+				case UNAVAILABLE:
+				default:
+					throw new DataException(String.format("No lite peer balance data available for %s [assetId %d]", this.address, assetId));
+			}
 		}
 		else {
 			// All other node types fetch from the local db

@@ -71,17 +71,27 @@ public class AddressesResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.NO_REPLY, ApiError.LITE_DATA_CONFLICT, ApiError.REPOSITORY_ISSUE})
 	public AccountData getAccountInfo(@PathParam("address") String address) {
 		if (!Crypto.isValidAddress(address))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 
 		if (Settings.getInstance().isLite()) {
-			AccountData accountData = LiteNode.getInstance().fetchAccountData(address);
-			if (accountData == null)
-				return new AccountData(address);
+			LiteNode.LiteDataResult<AccountData> result = LiteNode.getInstance().fetchAccountDataResult(address);
+			switch (result.getStatus()) {
+				case AGREED:
+					return result.getValue();
 
-			return accountData;
+				case UNKNOWN:
+					return new AccountData(address);
+
+				case CONFLICTED:
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.LITE_DATA_CONFLICT, "Conflicting lite peer account data");
+
+				case UNAVAILABLE:
+				default:
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer account data available");
+			}
 		}
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
@@ -226,7 +236,7 @@ public class AddressesResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.INVALID_ASSET_ID, ApiError.INVALID_HEIGHT, ApiError.NO_REPLY, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.INVALID_ASSET_ID, ApiError.INVALID_HEIGHT, ApiError.NO_REPLY, ApiError.LITE_DATA_CONFLICT, ApiError.REPOSITORY_ISSUE})
 	public BigDecimal getBalance(@PathParam("address") String address,
 			@QueryParam("assetId") Long assetId) {
 		if (!Crypto.isValidAddress(address))
@@ -239,11 +249,21 @@ public class AddressesResource {
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ASSET_ID);
 
 			if (Settings.getInstance().isLite()) {
-				AccountBalanceData accountBalanceData = LiteNode.getInstance().fetchAccountBalance(address, assetId);
-				if (accountBalanceData == null)
-					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer balance data available");
+				LiteNode.LiteDataResult<AccountBalanceData> result = LiteNode.getInstance().fetchAccountBalanceResult(address, assetId);
+				switch (result.getStatus()) {
+					case AGREED:
+						return Amounts.toBigDecimal(result.getValue().getBalance());
 
-				return Amounts.toBigDecimal(accountBalanceData.getBalance());
+					case UNKNOWN:
+						return Amounts.toBigDecimal(0L);
+
+					case CONFLICTED:
+						throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.LITE_DATA_CONFLICT, "Conflicting lite peer balance data");
+
+					case UNAVAILABLE:
+					default:
+						throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer balance data available");
+				}
 			}
 
 			Account account = new Account(repository, address);

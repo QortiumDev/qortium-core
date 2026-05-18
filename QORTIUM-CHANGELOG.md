@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - lite: require agreement for lite-data responses
+
+Finished the first Phase 3 lite-node trust pass by requiring peer-backed account, balance, name, and transaction lookups to reach two matching responses before they are treated as agreed data. Lite APIs now distinguish no usable peer data from conflicting peer data, preserve clear unknown-data behavior when peers agree the data is unknown, and avoid presenting a single peer's wallet-facing response as authoritative.
+
 ### 2026-05-18 - lite: add multi-peer lite-data result model
 
 Added the internal result model Qortium needs before lite nodes can stop trusting the first peer response. Lite-data lookups now have a shared vocabulary for agreed, unknown, unavailable, and conflicted results, plus canonical comparison helpers for account data, balances, names, name lists, and transaction lists so later peer responses can be compared consistently instead of relying on object equality or message byte storage.

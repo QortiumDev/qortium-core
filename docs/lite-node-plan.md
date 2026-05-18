@@ -28,8 +28,9 @@ The current implementation already has a useful skeleton:
   and some startup database checks.
 - The peer protocol has request and response messages for account data, account
   balances, account names, individual names, and account transactions.
-- `LiteNode` sends these requests to connected peers and returns the peer's
-  response to API and account-balance callers.
+- `LiteNode` sends these requests to capable connected peers and requires
+  matching peer responses before returning agreed data to API and
+  account-balance callers.
 - Full-node handlers in `Controller` answer the lite request messages from
   local repository data.
 
@@ -41,12 +42,13 @@ complete.
 ### Single-Peer Trust
 
 `LiteNode` now chooses from a small shuffled set of peers that advertise
-lite-data service and pass basic suitability filters. It still accepts the
-first matching response. There is no quorum, proof, or multi-peer consistency
-check yet.
+lite-data service and pass basic suitability filters. It requires two matching
+usable responses before treating peer-backed account, balance, name, or
+transaction-history data as agreed.
 
-This means one dishonest or stale peer can lie about wallet-facing data such as
-balances, names, or transaction history.
+This removes the old first-peer-wins behavior, but it is still not a full
+proof model. Two stale or dishonest peers can still agree on bad wallet-facing
+data until Phase 4 adds stronger anchoring.
 
 ### Transaction Validation And Relay
 
@@ -142,6 +144,15 @@ Reduce single-peer trust for wallet-facing data:
   and agreed data
 - keep the API response behavior conservative when peers disagree
 
+The first Phase 3 implementation requests each lite-data item from up to three
+capable peers and requires two matching responses. Matching data responses are
+returned as agreed data, matching `GENERIC_UNKNOWN` responses are treated as
+agreed unknown data, no usable agreement is reported as unavailable, and
+disagreeing usable responses are reported as conflicted. Lite API endpoints map
+unavailable peer data to the existing no-reply error and conflicting peer data
+to a dedicated conflict error, while agreed unknown data follows each
+endpoint's normal unknown-data behavior.
+
 ### Phase 4: Proof Or Checkpoint Anchoring
 
 If lite mode is expected to support higher-trust wallet decisions, add a
@@ -171,8 +182,6 @@ Lite mode should not be treated as ready until:
 
 ## Open Decisions
 
-- Whether phase 3 quorum should require exact response equality or allow a
-  majority result when one peer fails to respond.
 - Whether lite nodes should store any short-lived peer-response cache.
 - Whether lite mode should support transaction creation flows before proof or
   checkpoint anchoring exists.

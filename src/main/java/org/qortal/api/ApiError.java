@@ -135,7 +135,8 @@ public enum ApiError {
 
 	// Data
 	FILE_NOT_FOUND(1401, 404),
-	NO_REPLY(1402, 404);
+	NO_REPLY(1402, 404),
+	LITE_DATA_CONFLICT(1403, 409);
 
 	private static final Map<Integer, ApiError> map = stream(ApiError.values()).collect(toMap(apiError -> apiError.code, apiError -> apiError));
 

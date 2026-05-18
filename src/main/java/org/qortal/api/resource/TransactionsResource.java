@@ -375,7 +375,7 @@ public class TransactionsResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.NO_REPLY, ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.NO_REPLY, ApiError.LITE_DATA_CONFLICT, ApiError.REPOSITORY_ISSUE})
 	public List<TransactionData> getAddressTransactions(@PathParam("address") String address,
 															@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
 															@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
@@ -398,9 +398,23 @@ public class TransactionsResource {
 
 		if (Settings.getInstance().isLite()) {
 			// Fetch from network
-			transactions = LiteNode.getInstance().fetchAccountTransactions(address, limit, offset);
-			if (transactions == null)
-				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer transaction data available");
+			LiteNode.LiteDataResult<List<TransactionData>> result = LiteNode.getInstance().fetchAccountTransactionsResult(address, limit, offset);
+			switch (result.getStatus()) {
+				case AGREED:
+					transactions = result.getValue();
+					break;
+
+				case UNKNOWN:
+					transactions = new ArrayList<>();
+					break;
+
+				case CONFLICTED:
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.LITE_DATA_CONFLICT, "Conflicting lite peer transaction data");
+
+				case UNAVAILABLE:
+				default:
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.NO_REPLY, "No lite peer transaction data available");
+			}
 
 			// Sort the data, since we can't guarantee the order that a peer sent it in
 			if (reverse) {

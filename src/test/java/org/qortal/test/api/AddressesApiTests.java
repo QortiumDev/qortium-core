@@ -73,16 +73,14 @@ public class AddressesApiTests extends ApiCommon {
 	}
 
 	@Test
-	public void testLiteGetAccountInfoReturnsPlaceholderWithoutPeerData() throws Exception {
+	public void testLiteGetAccountInfoFailsClearlyWithoutPeerData() throws Exception {
 		useLiteMode();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Account unknownAccount = Common.generateRandomSeedAccount(repository);
 			assertNull(repository.getAccountRepository().getAccount(unknownAccount.getAddress()));
 
-			AccountData accountInfo = this.addressesResource.getAccountInfo(unknownAccount.getAddress());
-			assertEquals(unknownAccount.getAddress(), accountInfo.getAddress());
-			assertNull(accountInfo.getPublicKey());
+			assertApiError(ApiError.NO_REPLY, () -> this.addressesResource.getAccountInfo(unknownAccount.getAddress()));
 		}
 	}
 
@@ -90,10 +88,7 @@ public class AddressesApiTests extends ApiCommon {
 	public void testLiteGetAccountInfoDoesNotUseLocalRepositoryAccountData() throws Exception {
 		useLiteMode();
 
-		AccountData accountInfo = this.addressesResource.getAccountInfo(aliceAddress);
-
-		assertEquals(aliceAddress, accountInfo.getAddress());
-		assertNull(accountInfo.getPublicKey());
+		assertApiError(ApiError.NO_REPLY, () -> this.addressesResource.getAccountInfo(aliceAddress));
 	}
 
 	@Test
@@ -101,6 +96,11 @@ public class AddressesApiTests extends ApiCommon {
 		useLiteMode();
 
 		assertApiError(ApiError.NO_REPLY, () -> this.addressesResource.getBalance(aliceAddress, null));
+	}
+
+	@Test
+	public void testLiteDataConflictApiErrorIsRegistered() {
+		assertEquals(ApiError.LITE_DATA_CONFLICT, ApiError.fromCode(ApiError.LITE_DATA_CONFLICT.getCode()));
 	}
 
 	@Test
