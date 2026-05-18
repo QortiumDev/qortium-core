@@ -18,7 +18,7 @@ jobs:
       uses: actions/cache@v5
       with:
         path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml', 'lib/**/*.pom', 'lib/**/*.jar') }}
         restore-keys: |
           ${{ runner.os }}-maven-
     - name: Set up the Java JDK
@@ -29,7 +29,7 @@ jobs:
 
     - name: Load custom deps
       run: |
-        mvn install -DskipTests=true --file pom.xml
+        mvn -B -U install -DskipTests=true --file pom.xml
 
     - name: Build package
       run: |

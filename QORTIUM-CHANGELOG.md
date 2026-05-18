@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - ci: refresh Maven cache after local dependency changes
+
+Updated the main GitHub build workflow so Maven cache keys include Qortium's checked-in local Maven artifacts and the first Maven step forces dependency-resolution retries. This keeps older GitHub cache entries from remembering that the vendored AT artifact was missing before it was added to the repository.
+
 ### 2026-05-18 - docs: mark dependency security review current
 
 Updated Qortium's dependency security review so it reflects the resolved direct-dependency cleanup, the locally vendored AT artifact, the Maven-resolved SBOM scanning path, and the latest stable dependency-maintenance versions. This keeps the public security notes aligned with the current branch instead of leaving earlier findings written as future work.
