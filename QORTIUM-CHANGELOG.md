@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - docs: define lite-node proof anchoring plan
+
+Added the Phase 4 lite-node design note so the project has a clear path from peer-agreed lite data toward stronger verification. The note separates anchored peer responses from true cryptographic state proofs, explains why full proof support requires future block-level state commitments, and records one combined state root as the preferred starting design before any consensus or protocol changes are made.
+
 ### 2026-05-18 - lite: prefer chain-tip agreement for lite-data peers
 
 Finished the remaining Phase 3 lite-node peer-selection cleanup by preferring capable lite-data peers that report the same chain tip when a clear agreement group is available. This keeps lite requests from mixing peers on different tips when there is a better agreed peer group, while preserving the existing fallback behavior when the connected peers do not provide a clear enough chain-tip group.

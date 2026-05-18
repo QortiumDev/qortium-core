@@ -170,8 +170,9 @@ stronger data model:
 - avoid presenting peer-reported balances or history as fully verified unless
   the response has enough evidence for that claim
 
-This phase should be designed separately because it affects protocol shape,
-storage assumptions, and wallet trust messaging.
+The Phase 4 direction is defined in `docs/lite-node-proof-anchoring.md`. The
+recommended next step is anchored lite responses first, followed by a separate
+state-root consensus design for full cryptographic proofs.
 
 ## Acceptance Criteria
 
