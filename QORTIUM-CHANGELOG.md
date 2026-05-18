@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - deps: update stable maintenance dependencies
+
+Updated a conservative batch of stable runtime and build dependencies, including Apache Commons utilities, Guava, json.org, java-diff-utils, XZ, Swagger UI, and two Maven build plugins. These updates keep common parsing, archive, utility, API-documentation, and packaging support closer to maintained upstream baselines without taking on larger major-version or prerelease migrations.
+
 ### 2026-05-18 - ci: enable full OSV Maven resolution
 
 Updated Qortium's OSV GitHub workflows to scan Maven-resolved CycloneDX dependency reports instead of raw manifests. Maven now resolves the full dependency graph, including the locally vendored AT artifact, before OSV checks the generated SBOM for vulnerable packages.

@@ -16,21 +16,21 @@
 		<build.timestamp>${maven.build.timestamp}</build.timestamp>
 		<ciyam-at.version>1b731d1</ciyam-at.version> <!-- QuickMythril/AT v1.4.3 fork point -->
 		<commons-net.version>3.13.0</commons-net.version>
-		<commons-text.version>1.12.0</commons-text.version>
-		<commons-io.version>2.18.0</commons-io.version>
-		<commons-compress.version>1.27.1</commons-compress.version>
+		<commons-text.version>1.15.0</commons-text.version>
+		<commons-io.version>2.22.0</commons-io.version>
+		<commons-compress.version>1.28.0</commons-compress.version>
 		<commons-lang3.version>3.20.0</commons-lang3.version>
 		<dagger.version>1.2.2</dagger.version>
 		<dbus-java.version>4.3.2</dbus-java.version>
 		<extendedset.version>0.12.3</extendedset.version>
 		<git-commit-id-plugin.version>4.9.10</git-commit-id-plugin.version>
 		<grpc.version>1.81.0</grpc.version>
-		<guava.version>33.3.1-jre</guava.version>
+		<guava.version>33.6.0-jre</guava.version>
 		<hamcrest-library.version>2.2</hamcrest-library.version>
 		<homoglyph.version>1.2.1</homoglyph.version>
 		<hsqldb.version>2.7.4</hsqldb.version>
 		<icu4j.version>76.1</icu4j.version>
-		<java-diff-utils.version>4.15</java-diff-utils.version>
+		<java-diff-utils.version>4.17</java-diff-utils.version>
 		<jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
 		<jacoco.minimum.branch.coverage>0.20</jacoco.minimum.branch.coverage>
 		<jacoco.minimum.instruction.coverage>0.30</jacoco.minimum.instruction.coverage>
@@ -39,12 +39,12 @@
 		<jersey.version>2.47</jersey.version>
 		<jetty.version>12.1.9</jetty.version>
 		<json-simple.version>1.1.1</json-simple.version>
-		<json.version>20240303</json.version>
+		<json.version>20251224</json.version>
 		<jsoup.version>1.22.2</jsoup.version>
 		<junit-jupiter-engine.version>5.11.0-M2</junit-jupiter-engine.version>
 		<junit.version>4.13.2</junit.version>
 		<log4j.version>2.26.0</log4j.version>
-		<maven-build-helper-plugin.version>3.6.0</maven-build-helper-plugin.version>
+		<maven-build-helper-plugin.version>3.6.1</maven-build-helper-plugin.version>
 		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
 		<maven-dependency-plugin.version>3.6.1</maven-dependency-plugin.version>
 		<maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
@@ -52,7 +52,7 @@
 		<versions-maven-plugin.version>2.21.0</versions-maven-plugin.version>
 		<maven-reproducible-build-plugin.version>0.17</maven-reproducible-build-plugin.version>
 		<maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
-		<maven-shade-plugin.version>3.6.0</maven-shade-plugin.version>
+		<maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
 		<maven-install-plugin.version>3.1.3</maven-install-plugin.version>
 		<maven-surefire-plugin.version>3.5.5</maven-surefire-plugin.version>
 		<netty.version>4.1.133.Final</netty.version>
@@ -69,10 +69,10 @@
 		<simplemagic.version>1.17</simplemagic.version>
 		<slf4j.version>1.7.36</slf4j.version>
 		<swagger-api.version>2.2.50</swagger-api.version>
-		<swagger-ui.version>5.18.2</swagger-ui.version>
+		<swagger-ui.version>5.32.5</swagger-ui.version>
 		<tika-core.version>3.2.2</tika-core.version>
 		<jupnp.version>3.0.4</jupnp.version>
-		<xz.version>1.10</xz.version>
+		<xz.version>1.12</xz.version>
 	</properties>
 	<dependencyManagement>
 		<dependencies>

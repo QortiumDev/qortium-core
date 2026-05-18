@@ -1,6 +1,5 @@
 package org.qortal.test.block;
 
-import org.checkerframework.checker.units.qual.K;
 import org.junit.Assert;
 import org.junit.Test;
 import org.qortal.block.Block;
