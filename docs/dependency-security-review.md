@@ -28,6 +28,7 @@ security fixes:
 - Apache Commons IO: `2.22.0`
 - Apache Commons Text: `1.15.0`
 - Guava: `33.6.0-jre`
+- ICU4J: `78.3`
 - java-diff-utils: `4.17`
 - json.org: `20251224`
 - Maven Build Helper Plugin: `3.6.1`

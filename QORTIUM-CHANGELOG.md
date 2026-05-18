@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - deps: update ICU4J maintenance baseline
+
+Updated Qortium's ICU4J dependency family to the current stable maintenance release and refreshed the dependency security review to record the new baseline. This keeps Unicode normalization and charset support current while preserving the existing name, asset, group, and poll sanitization behavior.
+
 ### 2026-05-18 - build: update Maven plugin maintenance baseline
 
 Updated Qortium's Maven compiler, dependency, install, and resource plugins to current Maven 3-compatible maintenance releases, and pinned the dependency plugin version explicitly in the build. This keeps the packaging and resource-processing toolchain current without moving the project onto Maven 4 beta plugin lines.

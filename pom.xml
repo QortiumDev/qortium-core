@@ -29,7 +29,7 @@
 		<hamcrest-library.version>2.2</hamcrest-library.version>
 		<homoglyph.version>1.2.1</homoglyph.version>
 		<hsqldb.version>2.7.4</hsqldb.version>
-		<icu4j.version>76.1</icu4j.version>
+		<icu4j.version>78.3</icu4j.version>
 		<java-diff-utils.version>4.17</java-diff-utils.version>
 		<jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
 		<jacoco.minimum.branch.coverage>0.20</jacoco.minimum.branch.coverage>
