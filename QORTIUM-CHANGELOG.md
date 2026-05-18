@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - lite: advertise lite-data peer capability
+
+Started the second lite-node phase by making ordinary non-lite Qortium nodes advertise that they can serve lite-data requests during peer handshake, and fixed capability decoding so HELLO_V2 maps are read from the right part of the message. Lite nodes do not advertise this role, which gives later lite request routing a clear network contract instead of guessing which peers can answer wallet and name lookups.
+
 ### 2026-05-18 - lite: finish phase one lite-node coverage
 
 Finished the first lite-node correctness pass by making lite balance lookups report a clear no-reply error when peer data is unavailable instead of returning a misleading zero balance. Added focused round-trip coverage for the remaining lite account, balance, name, and transaction request messages so the baseline peer message formats are checked by tests before later lite-node trust and peer-selection work begins.

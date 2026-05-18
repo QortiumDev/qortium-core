@@ -224,16 +224,8 @@ public class Serialization {
 	 * @since v5.1.0
 	 */
 	public static Map<String, Object> deserializeMap(ByteBuffer bytes) throws IOException {
-		byte[] byteArray;
-
-		if (bytes.hasArray()) {
-			// Use the backing array directly if available
-			byteArray = bytes.array();
-		} else {
-			// Otherwise, copy remaining bytes into new array
-			byteArray = new byte[bytes.remaining()];
-			bytes.get(byteArray);
-		}
+		byte[] byteArray = new byte[bytes.remaining()];
+		bytes.get(byteArray);
 
 		try (DataInputStream dis = new DataInputStream(new ByteArrayInputStream(byteArray))) {
 			int mapSize = dis.readInt();

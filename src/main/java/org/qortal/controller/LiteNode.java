@@ -19,6 +19,9 @@ public class LiteNode {
 
     private static final Logger LOGGER = LogManager.getLogger(LiteNode.class);
 
+    public static final String LITE_DATA_CAPABILITY = "LITE_DATA";
+    public static final int LITE_DATA_CAPABILITY_VERSION = 1;
+
     private static LiteNode instance;
 
 

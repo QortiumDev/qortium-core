@@ -4,6 +4,7 @@ import com.google.common.primitives.Bytes;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.controller.Controller;
+import org.qortal.controller.LiteNode;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
 import org.qortal.network.message.*;
@@ -607,12 +608,7 @@ public enum Handshake {
 
 		Map<String, Object> capabilities = null;
 		if (useHelloV2) {
-			capabilities = new HashMap<>();
-			if (Settings.getInstance().isQdnEnabled()) {
-				capabilities.put("QDN", Settings.getInstance().getQDNListenPort());
-			} else {
-				capabilities.put("QDN", 0);
-			}
+			capabilities = buildHelloV2Capabilities();
 		}
 
 		Message helloMessage = useHelloV2
@@ -625,6 +621,20 @@ public enum Handshake {
 		}
 
 		return true;
+	}
+
+	static Map<String, Object> buildHelloV2Capabilities() {
+		Map<String, Object> capabilities = new HashMap<>();
+		if (Settings.getInstance().isQdnEnabled()) {
+			capabilities.put("QDN", Settings.getInstance().getQDNListenPort());
+		} else {
+			capabilities.put("QDN", 0);
+		}
+
+		if (!Settings.getInstance().isLite())
+			capabilities.put(LiteNode.LITE_DATA_CAPABILITY, LiteNode.LITE_DATA_CAPABILITY_VERSION);
+
+		return capabilities;
 	}
 
 	private static Handshake processHelloMessage(Peer peer, HelloMessage helloMessage) {

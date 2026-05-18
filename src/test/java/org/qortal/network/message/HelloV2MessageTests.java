@@ -1,0 +1,28 @@
+package org.qortal.network.message;
+
+import org.junit.Test;
+import org.qortal.controller.LiteNode;
+import org.qortal.network.Peer;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.Assert.assertEquals;
+
+public class HelloV2MessageTests {
+
+	@Test
+	public void testLiteDataCapabilityRoundTrip() throws MessageException {
+		Map<String, Object> capabilities = new HashMap<>();
+		capabilities.put(LiteNode.LITE_DATA_CAPABILITY, LiteNode.LITE_DATA_CAPABILITY_VERSION);
+
+		HelloV2Message message = new HelloV2Message(123L, "6.1.4", "127.0.0.1:12392", capabilities, Peer.NETWORK);
+
+		HelloV2Message decodedMessage = (HelloV2Message) HelloV2Message.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+		Object liteDataCapability = decodedMessage.getCapabilities().getCapability(LiteNode.LITE_DATA_CAPABILITY);
+
+		assertEquals(LiteNode.LITE_DATA_CAPABILITY_VERSION, ((Number) liteDataCapability).intValue());
+	}
+
+}
