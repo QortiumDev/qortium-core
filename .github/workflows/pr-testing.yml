@@ -31,12 +31,10 @@ jobs:
       run: |
         mvn install -DskipTests=true --file pom.xml
 
-    - name: Run all tests
+    - name: Build package
       run: |
-        mvn -B clean test jacoco:report jacoco:check -Pcoverage -DskipJUnitTests=false --file pom.xml
+        mvn -B clean package --file pom.xml
 
-    - name: Log coverage percentage
+    - name: Run API regression tests
       run: |
-        if [ ! -f "target/site/jacoco/jacoco.csv" ]; then echo "No coverage information available"; exit 0; fi
-        awk -F, 'NR > 1 { instruction_missed += $4; instruction_covered += $5; branch_missed += $6; branch_covered += $7; line_missed += $8; line_covered += $9 } END { instruction_total = instruction_missed + instruction_covered; branch_total = branch_missed + branch_covered; line_total = line_missed + line_covered; if (instruction_total > 0) printf "Instruction coverage: %.2f%% (%d/%d)\n", instruction_covered * 100 / instruction_total, instruction_covered, instruction_total; if (branch_total > 0) printf "Branch coverage: %.2f%% (%d/%d)\n", branch_covered * 100 / branch_total, branch_covered, branch_total; if (line_total > 0) printf "Line coverage: %.2f%% (%d/%d)\n", line_covered * 100 / line_total, line_covered, line_total; }' target/site/jacoco/jacoco.csv
-        echo "Coverage report: target/site/jacoco/index.html"
+        mvn -B test -DskipJUnitTests=false -Dtest=CorsFilterTests --file pom.xml

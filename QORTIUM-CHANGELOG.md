@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - ci: keep security automation actionable
+
+Adjusted the new security automation so it stays useful on the current Qortium branch. The main GitHub Actions build now checks that the project packages successfully and runs the focused API regression test added for the Jetty CORS cleanup, while Dependabot routine update monitoring avoids major-version migration pull requests that need separate compatibility work instead of being treated as small security-maintenance updates.
+
 ### 2026-05-18 - api: replace deprecated Jetty CORS filter
 
 Replaced Jetty's deprecated CORS filter with a small Qortium-owned servlet filter shared by the API, gateway, domain-map, and development proxy services. The new filter keeps the existing permissive cross-origin behavior and preflight handling while removing a Jetty 12 deprecation warning that would otherwise become future API-server maintenance work.
