@@ -5,6 +5,7 @@ import org.apache.logging.log4j.Logger;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.block.BlockSummaryData;
+import org.qortal.data.network.LiteDataAnchor;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.network.Network;
@@ -25,7 +26,7 @@ public class LiteNode {
     private static final Logger LOGGER = LogManager.getLogger(LiteNode.class);
 
     public static final String LITE_DATA_CAPABILITY = "LITE_DATA";
-    public static final int LITE_DATA_CAPABILITY_VERSION = 1;
+    public static final int LITE_DATA_CAPABILITY_VERSION = 2;
     public static final int REQUIRED_LITE_DATA_AGREEMENT = 2;
     public static final int MAX_LITE_DATA_PEER_ATTEMPTS = 3;
     public static final int MAX_NAMES_PER_MESSAGE = 100;
@@ -61,26 +62,36 @@ public class LiteNode {
     public static final class LiteDataResult<T> {
         private final LiteDataStatus status;
         private final T value;
+        private final LiteDataAnchor anchor;
 
-        private LiteDataResult(LiteDataStatus status, T value) {
+        private LiteDataResult(LiteDataStatus status, T value, LiteDataAnchor anchor) {
             this.status = status;
             this.value = value;
+            this.anchor = anchor;
         }
 
         public static <T> LiteDataResult<T> agreed(T value) {
-            return new LiteDataResult<>(LiteDataStatus.AGREED, value);
+            return agreed(value, null);
+        }
+
+        public static <T> LiteDataResult<T> agreed(T value, LiteDataAnchor anchor) {
+            return new LiteDataResult<>(LiteDataStatus.AGREED, value, anchor);
         }
 
         public static <T> LiteDataResult<T> unknown() {
-            return new LiteDataResult<>(LiteDataStatus.UNKNOWN, null);
+            return unknown(null);
+        }
+
+        public static <T> LiteDataResult<T> unknown(LiteDataAnchor anchor) {
+            return new LiteDataResult<>(LiteDataStatus.UNKNOWN, null, anchor);
         }
 
         public static <T> LiteDataResult<T> unavailable() {
-            return new LiteDataResult<>(LiteDataStatus.UNAVAILABLE, null);
+            return new LiteDataResult<>(LiteDataStatus.UNAVAILABLE, null, null);
         }
 
         public static <T> LiteDataResult<T> conflicted() {
-            return new LiteDataResult<>(LiteDataStatus.CONFLICTED, null);
+            return new LiteDataResult<>(LiteDataStatus.CONFLICTED, null, null);
         }
 
         public LiteDataStatus getStatus() {
@@ -89,6 +100,10 @@ public class LiteNode {
 
         public T getValue() {
             return this.value;
+        }
+
+        public LiteDataAnchor getAnchor() {
+            return this.anchor;
         }
 
         public boolean isAgreed() {
@@ -106,23 +121,53 @@ public class LiteNode {
         private final LiteDataCandidateType type;
         private final T value;
         private final String fingerprint;
+        private final LiteDataAnchor anchor;
 
-        private LiteDataCandidate(LiteDataCandidateType type, T value, String fingerprint) {
+        private LiteDataCandidate(LiteDataCandidateType type, T value, String fingerprint, LiteDataAnchor anchor) {
             this.type = type;
             this.value = value;
             this.fingerprint = fingerprint;
+            this.anchor = anchor;
         }
 
         static <T> LiteDataCandidate<T> data(T value, String fingerprint) {
-            return new LiteDataCandidate<>(LiteDataCandidateType.DATA, value, fingerprint);
+            return data(value, fingerprint, null);
+        }
+
+        static <T> LiteDataCandidate<T> data(T value, String fingerprint, LiteDataAnchor anchor) {
+            return new LiteDataCandidate<>(LiteDataCandidateType.DATA, value, fingerprint, anchor);
         }
 
         static <T> LiteDataCandidate<T> unknown() {
-            return new LiteDataCandidate<>(LiteDataCandidateType.UNKNOWN, null, null);
+            return unknown(null, null);
+        }
+
+        static <T> LiteDataCandidate<T> unknown(String fingerprint, LiteDataAnchor anchor) {
+            return new LiteDataCandidate<>(LiteDataCandidateType.UNKNOWN, null, fingerprint, anchor);
         }
 
         static <T> LiteDataCandidate<T> conflicted() {
-            return new LiteDataCandidate<>(LiteDataCandidateType.CONFLICTED, null, null);
+            return new LiteDataCandidate<>(LiteDataCandidateType.CONFLICTED, null, null, null);
+        }
+    }
+
+    private static final class AnchoredLiteData<T> {
+        private final LiteDataResponseStatus status;
+        private final T value;
+        private final LiteDataAnchor anchor;
+
+        private AnchoredLiteData(LiteDataResponseStatus status, T value, LiteDataAnchor anchor) {
+            this.status = status;
+            this.value = value;
+            this.anchor = anchor;
+        }
+
+        static <T> AnchoredLiteData<T> data(T value, LiteDataAnchor anchor) {
+            return new AnchoredLiteData<>(LiteDataResponseStatus.DATA, value, anchor);
+        }
+
+        static <T> AnchoredLiteData<T> unknown(LiteDataAnchor anchor) {
+            return new AnchoredLiteData<>(LiteDataResponseStatus.UNKNOWN, null, anchor);
         }
     }
 
@@ -151,7 +196,10 @@ public class LiteNode {
     public LiteDataResult<AccountData> fetchAccountDataResult(String address) {
         GetAccountMessage getAccountMessage = new GetAccountMessage(address);
         return this.sendMessageResult(getAccountMessage, ACCOUNT,
-                message -> ((AccountMessage) message).getAccountData(),
+                message -> {
+                    AccountMessage accountMessage = (AccountMessage) message;
+                    return anchoredLiteData(accountMessage.getStatus(), accountMessage.getAnchor(), accountMessage.getAccountData());
+                },
                 LiteNode::accountDataFingerprint);
     }
 
@@ -167,7 +215,11 @@ public class LiteNode {
     public LiteDataResult<AccountBalanceData> fetchAccountBalanceResult(String address, long assetId) {
         GetAccountBalanceMessage getAccountMessage = new GetAccountBalanceMessage(address, assetId);
         return this.sendMessageResult(getAccountMessage, ACCOUNT_BALANCE,
-                message -> ((AccountBalanceMessage) message).getAccountBalanceData(),
+                message -> {
+                    AccountBalanceMessage accountBalanceMessage = (AccountBalanceMessage) message;
+                    return anchoredLiteData(accountBalanceMessage.getStatus(), accountBalanceMessage.getAnchor(),
+                            accountBalanceMessage.getAccountBalanceData());
+                },
                 LiteNode::accountBalanceFingerprint);
     }
 
@@ -186,19 +238,24 @@ public class LiteNode {
         limit = normalizeTransactionLimit(limit);
 
         List<TransactionData> allTransactions = new ArrayList<>();
+        LiteDataAnchor agreedAnchor = null;
         while (allTransactions.size() < limit) {
             final int requestLimit = Math.min(MAX_TRANSACTIONS_PER_MESSAGE, limit - allTransactions.size());
             GetAccountTransactionsMessage getAccountTransactionsMessage = new GetAccountTransactionsMessage(address, requestLimit, offset);
             LiteDataResult<List<TransactionData>> result = this.sendMessageResult(getAccountTransactionsMessage, TRANSACTIONS,
                     message -> {
-                        List<TransactionData> transactions = ((TransactionsMessage) message).getTransactions();
+                        TransactionsMessage transactionsMessage = (TransactionsMessage) message;
+                        if (transactionsMessage.getStatus() == LiteDataResponseStatus.UNKNOWN)
+                            return AnchoredLiteData.unknown(transactionsMessage.getAnchor());
+
+                        List<TransactionData> transactions = transactionsMessage.getTransactions();
                         if (transactions == null)
                             return null;
 
                         if (transactions.size() > requestLimit)
                             transactions = transactions.subList(0, requestLimit);
 
-                        return new ArrayList<>(transactions);
+                        return AnchoredLiteData.data(new ArrayList<>(transactions), transactionsMessage.getAnchor());
                     },
                     LiteNode::transactionListFingerprint);
 
@@ -206,6 +263,7 @@ public class LiteNode {
                 return result;
 
             List<TransactionData> transactions = result.getValue();
+            agreedAnchor = result.getAnchor();
 
             allTransactions.addAll(transactions);
             if (transactions.size() < requestLimit) {
@@ -214,7 +272,7 @@ public class LiteNode {
             }
             offset += requestLimit;
         }
-        return LiteDataResult.agreed(allTransactions);
+        return LiteDataResult.agreed(allTransactions, agreedAnchor);
     }
 
     /**
@@ -230,8 +288,12 @@ public class LiteNode {
         GetAccountNamesMessage getAccountNamesMessage = new GetAccountNamesMessage(address);
         return this.sendMessageResult(getAccountNamesMessage, NAMES,
                 message -> {
-                    List<NameData> nameDataList = ((NamesMessage) message).getNameDataList();
-                    return nameDataList == null ? null : new ArrayList<>(nameDataList);
+                    NamesMessage namesMessage = (NamesMessage) message;
+                    if (namesMessage.getStatus() == LiteDataResponseStatus.UNKNOWN)
+                        return AnchoredLiteData.unknown(namesMessage.getAnchor());
+
+                    List<NameData> nameDataList = namesMessage.getNameDataList();
+                    return nameDataList == null ? null : AnchoredLiteData.data(new ArrayList<>(nameDataList), namesMessage.getAnchor());
                 },
                 LiteNode::nameDataListFingerprint);
     }
@@ -249,19 +311,23 @@ public class LiteNode {
         GetNameMessage getNameMessage = new GetNameMessage(name);
         return this.sendMessageResult(getNameMessage, NAMES,
                 message -> {
-                    List<NameData> nameDataList = ((NamesMessage) message).getNameDataList();
+                    NamesMessage namesMessage = (NamesMessage) message;
+                    if (namesMessage.getStatus() == LiteDataResponseStatus.UNKNOWN)
+                        return AnchoredLiteData.unknown(namesMessage.getAnchor());
+
+                    List<NameData> nameDataList = namesMessage.getNameDataList();
                     if (nameDataList == null || nameDataList.size() != 1)
                         return null;
 
                     // We are only expecting a single item in the list
-                    return nameDataList.get(0);
+                    return AnchoredLiteData.data(nameDataList.get(0), namesMessage.getAnchor());
                 },
                 LiteNode::nameDataFingerprint);
     }
 
 
     private <T> LiteDataResult<T> sendMessageResult(Message message, MessageType expectedResponseMessageType,
-            Function<Message, T> dataExtractor, Function<T, String> fingerprintExtractor) {
+            Function<Message, AnchoredLiteData<T>> dataExtractor, Function<T, String> fingerprintExtractor) {
         this.stats.requests.incrementAndGet();
 
         // Needs a mutable copy of the unmodifiableList
@@ -307,13 +373,8 @@ public class LiteNode {
                 continue;
             }
             else if (responseMessage.getType() == GENERIC_UNKNOWN) {
-                LOGGER.info("Lite-data peer {} reported unknown data for {} message", peer, message.getType());
-                candidates.add(LiteDataCandidate.unknown());
-
-                LiteDataResult<T> result = chooseAgreedResult(candidates);
-                if (hasLiteDataAgreement(result))
-                    return result;
-
+                this.stats.unexpectedResponses.incrementAndGet();
+                LOGGER.info("Lite-data peer {} returned legacy unanchored unknown data for {} message", peer, message.getType());
                 continue;
             }
             else if (responseMessage.getType() != expectedResponseMessageType) {
@@ -322,19 +383,40 @@ public class LiteNode {
                 continue;
             }
 
-            T responseData = dataExtractor.apply(responseMessage);
-            String fingerprint = responseData == null ? null : fingerprintExtractor.apply(responseData);
-            if (fingerprint == null) {
+            AnchoredLiteData<T> responseData = dataExtractor.apply(responseMessage);
+            if (responseData == null || responseData.status == null) {
                 this.stats.unexpectedResponses.incrementAndGet();
                 LOGGER.info("Lite-data peer {} returned non-comparable {} data for {} message", peer, expectedResponseMessageType, message.getType());
                 candidates.add(LiteDataCandidate.conflicted());
                 continue;
             }
 
+            String anchorFingerprint = liteDataAnchorFingerprint(responseData.anchor);
+            if (anchorFingerprint == null) {
+                this.stats.unexpectedResponses.incrementAndGet();
+                LOGGER.info("Lite-data peer {} returned unanchored {} data for {} message", peer, expectedResponseMessageType, message.getType());
+                candidates.add(LiteDataCandidate.conflicted());
+                continue;
+            }
+
+            if (responseData.status == LiteDataResponseStatus.UNKNOWN) {
+                candidates.add(LiteDataCandidate.unknown(anchorFingerprint, responseData.anchor));
+            } else {
+                String payloadFingerprint = responseData.value == null ? null : fingerprintExtractor.apply(responseData.value);
+                String responseFingerprint = anchoredDataFingerprint(payloadFingerprint, anchorFingerprint);
+                if (responseFingerprint == null) {
+                    this.stats.unexpectedResponses.incrementAndGet();
+                    LOGGER.info("Lite-data peer {} returned non-comparable {} data for {} message", peer, expectedResponseMessageType, message.getType());
+                    candidates.add(LiteDataCandidate.conflicted());
+                    continue;
+                }
+
+                candidates.add(LiteDataCandidate.data(responseData.value, responseFingerprint, responseData.anchor));
+            }
+
             this.stats.successfulResponses.incrementAndGet();
             LOGGER.info("Lite-data peer {} responded with comparable {} message", peer, responseMessage.getType());
 
-            candidates.add(LiteDataCandidate.data(responseData, fingerprint));
             LiteDataResult<T> result = chooseAgreedResult(candidates);
             if (hasLiteDataAgreement(result))
                 return result;
@@ -343,6 +425,13 @@ public class LiteNode {
         LiteDataResult<T> result = chooseAgreedResult(candidates);
         LOGGER.info("Lite-data {} request for {} finished with {} status", message.getType(), expectedResponseMessageType, result.getStatus());
         return result;
+    }
+
+    private static <T> AnchoredLiteData<T> anchoredLiteData(LiteDataResponseStatus status, LiteDataAnchor anchor, T value) {
+        if (status == LiteDataResponseStatus.UNKNOWN)
+            return AnchoredLiteData.unknown(anchor);
+
+        return AnchoredLiteData.data(value, anchor);
     }
 
     static boolean canServeLiteData(Peer peer) {
@@ -403,9 +492,10 @@ public class LiteNode {
 
     static <T> LiteDataResult<T> chooseAgreedResult(List<LiteDataCandidate<T>> candidates) {
         Map<String, Integer> dataCountsByFingerprint = new HashMap<>();
+        Map<String, Integer> unknownCountsByFingerprint = new HashMap<>();
         Map<String, T> valuesByFingerprint = new HashMap<>();
+        Map<String, LiteDataAnchor> anchorsByFingerprint = new HashMap<>();
         Set<String> usableCategories = new HashSet<>();
-        int unknownCount = 0;
         boolean hasNonComparableResponse = false;
 
         for (LiteDataCandidate<T> candidate : candidates) {
@@ -414,10 +504,17 @@ public class LiteNode {
 
             switch (candidate.type) {
                 case UNKNOWN:
-                    ++unknownCount;
-                    usableCategories.add("UNKNOWN");
+                    if (candidate.fingerprint == null) {
+                        hasNonComparableResponse = true;
+                        break;
+                    }
+
+                    usableCategories.add("UNKNOWN:" + candidate.fingerprint);
+                    anchorsByFingerprint.putIfAbsent(candidate.fingerprint, candidate.anchor);
+                    int unknownCount = unknownCountsByFingerprint.getOrDefault(candidate.fingerprint, 0) + 1;
+                    unknownCountsByFingerprint.put(candidate.fingerprint, unknownCount);
                     if (unknownCount >= REQUIRED_LITE_DATA_AGREEMENT)
-                        return LiteDataResult.unknown();
+                        return LiteDataResult.unknown(anchorsByFingerprint.get(candidate.fingerprint));
                     break;
 
                 case DATA:
@@ -428,10 +525,12 @@ public class LiteNode {
 
                     usableCategories.add("DATA:" + candidate.fingerprint);
                     valuesByFingerprint.putIfAbsent(candidate.fingerprint, candidate.value);
+                    anchorsByFingerprint.putIfAbsent(candidate.fingerprint, candidate.anchor);
                     int count = dataCountsByFingerprint.getOrDefault(candidate.fingerprint, 0) + 1;
                     dataCountsByFingerprint.put(candidate.fingerprint, count);
                     if (count >= REQUIRED_LITE_DATA_AGREEMENT)
-                        return LiteDataResult.agreed(valuesByFingerprint.get(candidate.fingerprint));
+                        return LiteDataResult.agreed(valuesByFingerprint.get(candidate.fingerprint),
+                                anchorsByFingerprint.get(candidate.fingerprint));
                     break;
 
                 case CONFLICTED:
@@ -444,6 +543,27 @@ public class LiteNode {
             return LiteDataResult.conflicted();
 
         return LiteDataResult.unavailable();
+    }
+
+    static String liteDataAnchorFingerprint(LiteDataAnchor anchor) {
+        if (anchor == null || anchor.getBlockSignature() == null)
+            return null;
+
+        StringBuilder fingerprint = new StringBuilder();
+        appendFingerprintField(fingerprint, anchor.getHeight());
+        appendFingerprintField(fingerprint, fingerprintBytes(anchor.getBlockSignature()));
+        appendFingerprintField(fingerprint, anchor.getTimestamp());
+        return fingerprint.toString();
+    }
+
+    static String anchoredDataFingerprint(String payloadFingerprint, String anchorFingerprint) {
+        if (payloadFingerprint == null || anchorFingerprint == null)
+            return null;
+
+        StringBuilder fingerprint = new StringBuilder();
+        appendFingerprintField(fingerprint, payloadFingerprint);
+        appendFingerprintField(fingerprint, anchorFingerprint);
+        return fingerprint.toString();
     }
 
     static String accountDataFingerprint(AccountData accountData) {

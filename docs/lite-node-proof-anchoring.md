@@ -22,12 +22,13 @@ Anchored peer agreement is useful, but it is not the same as a full state proof.
 
 ## Phase 4A: Anchored Lite Responses
 
-The next implementation step should add anchor metadata to lite-data responses.
-Each response should carry the returned data plus the chain context used by the
-serving peer, such as block height and block signature. If a later state root is
-available, that root should also be part of the anchor.
+The first Phase 4A implementation adds anchor metadata to lite-data responses.
+Each response now carries a response status, the returned data when available,
+and the chain context used by the serving peer. The current anchor records the
+block height, block signature, and block timestamp. If a later state root is
+available, that root should also become part of the anchor.
 
-Lite nodes should then require peers to agree on both:
+Lite nodes now require peers to agree on both:
 
 - the returned account, balance, name, or transaction data
 - the anchor metadata for that response
@@ -37,9 +38,13 @@ answer. It also makes API behavior more honest: a result can be described as
 peer-agreed data anchored to a particular block context, not as fully verified
 state.
 
-Phase 4A should not claim to prove balances, account data, names, or address
-history. Without a committed state root and proof path, the serving peers are
-still attesting to the derived data.
+The lite-data capability version is now `LITE_DATA = 2` for this anchored
+response format. Unknown account, balance, and name answers use anchored
+response messages instead of unanchored generic unknown replies.
+
+Phase 4A does not prove balances, account data, names, or address history.
+Without a committed state root and proof path, the serving peers are still
+attesting to the derived data.
 
 ## Full State Proof Direction
 
@@ -94,8 +99,8 @@ much larger than the block root itself.
 
 ## Recommended Path
 
-1. Implement Phase 4A anchored lite responses first. This is a bounded protocol
-   improvement that helps freshness and chain-context checks without changing
+1. Keep Phase 4A anchored lite responses as the current bounded protocol
+   improvement. This helps freshness and chain-context checks without changing
    consensus.
 2. Design the authenticated state tree as a separate consensus milestone before
    changing block serialization.

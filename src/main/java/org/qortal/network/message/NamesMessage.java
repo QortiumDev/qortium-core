@@ -3,6 +3,7 @@ package org.qortal.network.message;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
 import org.qortal.data.naming.NameData;
+import org.qortal.data.network.LiteDataAnchor;
 import org.qortal.naming.Name;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.Transformer;
@@ -19,14 +20,25 @@ public class NamesMessage extends Message {
 
 	private static final int SIGNATURE_LENGTH = Transformer.SIGNATURE_LENGTH;
 
+	private LiteDataResponseStatus status;
+	private LiteDataAnchor anchor;
 	private List<NameData> nameDataList;
 
-	public NamesMessage(List<NameData> nameDataList) {
+	public NamesMessage(List<NameData> nameDataList, LiteDataAnchor anchor) {
 		super(MessageType.NAMES);
+
+		if (nameDataList == null)
+			throw new IllegalArgumentException("Name data list is required for lite DATA response");
+
+		this.status = LiteDataResponseStatus.DATA;
+		this.anchor = anchor;
+		this.nameDataList = nameDataList;
 
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
 		try {
+			LiteDataMessageUtils.serializeStatusAndAnchor(bytes, this.status, this.anchor);
+
 			bytes.write(Ints.toByteArray(nameDataList.size()));
 
 			for (int i = 0; i < nameDataList.size(); ++i) {
@@ -76,10 +88,45 @@ public class NamesMessage extends Message {
 		this.checksumBytes = Message.generateChecksum(this.dataBytes);
 	}
 
-	public NamesMessage(int id, List<NameData> nameDataList) {
+	private NamesMessage(LiteDataResponseStatus status, LiteDataAnchor anchor) {
+		super(MessageType.NAMES);
+
+		if (status != LiteDataResponseStatus.UNKNOWN)
+			throw new IllegalArgumentException("Only UNKNOWN responses can omit name data");
+
+		this.status = status;
+		this.anchor = anchor;
+
+		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+
+		try {
+			LiteDataMessageUtils.serializeStatusAndAnchor(bytes, this.status, this.anchor);
+		} catch (IOException e) {
+			throw new AssertionError("IOException shouldn't occur with ByteArrayOutputStream");
+		}
+
+		this.dataBytes = bytes.toByteArray();
+		this.checksumBytes = Message.generateChecksum(this.dataBytes);
+	}
+
+	private NamesMessage(int id, LiteDataResponseStatus status, LiteDataAnchor anchor, List<NameData> nameDataList) {
 		super(id, MessageType.NAMES);
 
+		this.status = status;
+		this.anchor = anchor;
 		this.nameDataList = nameDataList;
+	}
+
+	public static NamesMessage unknown(LiteDataAnchor anchor) {
+		return new NamesMessage(LiteDataResponseStatus.UNKNOWN, anchor);
+	}
+
+	public LiteDataResponseStatus getStatus() {
+		return this.status;
+	}
+
+	public LiteDataAnchor getAnchor() {
+		return this.anchor;
 	}
 
 	public List<NameData> getNameDataList() {
@@ -89,6 +136,16 @@ public class NamesMessage extends Message {
 
 	public static Message fromByteBuffer(int id, ByteBuffer bytes) throws MessageException {
 		try {
+			LiteDataResponseStatus status = LiteDataMessageUtils.deserializeStatus(bytes);
+			LiteDataAnchor anchor = LiteDataMessageUtils.deserializeAnchor(bytes);
+
+			if (status == LiteDataResponseStatus.UNKNOWN) {
+				if (bytes.hasRemaining())
+					throw new BufferUnderflowException();
+
+				return new NamesMessage(id, status, anchor, null);
+			}
+
 			final int nameCount = bytes.getInt();
 
 			List<NameData> nameDataList = new ArrayList<>(nameCount);
@@ -137,7 +194,7 @@ public class NamesMessage extends Message {
 				throw new BufferUnderflowException();
 			}
 
-			return new NamesMessage(id, nameDataList);
+			return new NamesMessage(id, status, anchor, nameDataList);
 
 		} catch (TransformationException e) {
 			throw new MessageException(e.getMessage(), e);
@@ -145,7 +202,9 @@ public class NamesMessage extends Message {
 	}
 
 	public NamesMessage cloneWithNewId(int newId) {
-		NamesMessage clone = new NamesMessage(this.nameDataList);
+		NamesMessage clone = this.status == LiteDataResponseStatus.UNKNOWN
+				? NamesMessage.unknown(this.anchor)
+				: new NamesMessage(this.nameDataList, this.anchor);
 		clone.setId(newId);
 		return clone;
 	}

@@ -22,6 +22,7 @@ import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.block.BlockSummaryData;
+import org.qortal.data.network.LiteDataAnchor;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.network.PeerData;
 import org.qortal.data.transaction.ArbitraryTransactionData;
@@ -2168,24 +2169,28 @@ public class Controller extends Thread {
 		this.stats.getAccountMessageStats.requests.incrementAndGet();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			LiteDataAnchor anchor = this.getLiteDataAnchor(repository);
+			if (anchor == null) {
+				peer.disconnect("failed to anchor account response");
+				return;
+			}
+
 			AccountData accountData = repository.getAccountRepository().getAccount(address);
 
 			if (accountData == null) {
 				// We don't have this account
 				this.stats.getAccountMessageStats.unknownAccounts.getAndIncrement();
 
-				// Send valid, yet unexpected message type in response, so peer doesn't have to wait for timeout
 				LOGGER.debug(() -> String.format("Sending 'account unknown' response to peer %s for GET_ACCOUNT request for unknown account %s", peer, address));
 
-				// Send generic 'unknown' message as it's very short
-				Message accountUnknownMessage = new GenericUnknownMessage();
+				Message accountUnknownMessage = AccountMessage.unknown(anchor);
 				accountUnknownMessage.setId(message.getId());
 				if (!peer.sendMessage(accountUnknownMessage))
 					peer.disconnect("failed to send account-unknown response");
 				return;
 			}
 
-			AccountMessage accountMessage = new AccountMessage(accountData);
+			AccountMessage accountMessage = new AccountMessage(accountData, anchor);
 			accountMessage.setId(message.getId());
 
 			if (!peer.sendMessage(accountMessage)) {
@@ -2204,24 +2209,28 @@ public class Controller extends Thread {
 		this.stats.getAccountBalanceMessageStats.requests.incrementAndGet();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			LiteDataAnchor anchor = this.getLiteDataAnchor(repository);
+			if (anchor == null) {
+				peer.disconnect("failed to anchor account-balance response");
+				return;
+			}
+
 			AccountBalanceData accountBalanceData = repository.getAccountRepository().getBalance(address, assetId);
 
 			if (accountBalanceData == null) {
 				// We don't have this account
 				this.stats.getAccountBalanceMessageStats.unknownAccounts.getAndIncrement();
 
-				// Send valid, yet unexpected message type in response, so peer doesn't have to wait for timeout
 				LOGGER.debug(() -> String.format("Sending 'account unknown' response to peer %s for GET_ACCOUNT_BALANCE request for unknown account %s and asset ID %d", peer, address, assetId));
 
-				// Send generic 'unknown' message as it's very short
-				Message accountUnknownMessage = new GenericUnknownMessage();
+				Message accountUnknownMessage = AccountBalanceMessage.unknown(anchor);
 				accountUnknownMessage.setId(message.getId());
 				if (!peer.sendMessage(accountUnknownMessage))
 					peer.disconnect("failed to send account-unknown response");
 				return;
 			}
 
-			AccountBalanceMessage accountMessage = new AccountBalanceMessage(accountBalanceData);
+			AccountBalanceMessage accountMessage = new AccountBalanceMessage(accountBalanceData, anchor);
 			accountMessage.setId(message.getId());
 
 			if (!peer.sendMessage(accountMessage)) {
@@ -2242,6 +2251,12 @@ public class Controller extends Thread {
 		this.stats.getAccountTransactionsMessageStats.requests.incrementAndGet();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			LiteDataAnchor anchor = this.getLiteDataAnchor(repository);
+			if (anchor == null) {
+				peer.disconnect("failed to anchor account-transactions response");
+				return;
+			}
+
 			List<byte[]> signatures = repository.getTransactionRepository().getSignaturesMatchingCriteria(null, null, null,
 					null, null, null, address, TransactionsResource.ConfirmationStatus.CONFIRMED, limit, offset, false);
 
@@ -2255,18 +2270,16 @@ public class Controller extends Thread {
 				// We don't have this account
 				this.stats.getAccountTransactionsMessageStats.unknownAccounts.getAndIncrement();
 
-				// Send valid, yet unexpected message type in response, so peer doesn't have to wait for timeout
 				LOGGER.debug(() -> String.format("Sending 'account unknown' response to peer %s for GET_ACCOUNT_TRANSACTIONS request for unknown account %s", peer, address));
 
-				// Send generic 'unknown' message as it's very short
-				Message accountUnknownMessage = new GenericUnknownMessage();
+				Message accountUnknownMessage = TransactionsMessage.unknown(anchor);
 				accountUnknownMessage.setId(message.getId());
 				if (!peer.sendMessage(accountUnknownMessage))
 					peer.disconnect("failed to send account-unknown response");
 				return;
 			}
 
-			TransactionsMessage transactionsMessage = new TransactionsMessage(transactions);
+			TransactionsMessage transactionsMessage = new TransactionsMessage(transactions, anchor);
 			transactionsMessage.setId(message.getId());
 
 			if (!peer.sendMessage(transactionsMessage)) {
@@ -2286,24 +2299,28 @@ public class Controller extends Thread {
 		this.stats.getAccountNamesMessageStats.requests.incrementAndGet();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			LiteDataAnchor anchor = this.getLiteDataAnchor(repository);
+			if (anchor == null) {
+				peer.disconnect("failed to anchor account-names response");
+				return;
+			}
+
 			List<NameData> namesDataList = repository.getNameRepository().getNamesByOwner(address, LiteNode.MAX_NAMES_PER_MESSAGE, 0, false);
 
 			if (namesDataList == null) {
 				// We don't have this account
 				this.stats.getAccountNamesMessageStats.unknownAccounts.getAndIncrement();
 
-				// Send valid, yet unexpected message type in response, so peer doesn't have to wait for timeout
 				LOGGER.debug(() -> String.format("Sending 'account unknown' response to peer %s for GET_ACCOUNT_NAMES request for unknown account %s", peer, address));
 
-				// Send generic 'unknown' message as it's very short
-				Message accountUnknownMessage = new GenericUnknownMessage();
+				Message accountUnknownMessage = NamesMessage.unknown(anchor);
 				accountUnknownMessage.setId(message.getId());
 				if (!peer.sendMessage(accountUnknownMessage))
 					peer.disconnect("failed to send account-unknown response");
 				return;
 			}
 
-			NamesMessage namesMessage = new NamesMessage(namesDataList);
+			NamesMessage namesMessage = new NamesMessage(namesDataList, anchor);
 			namesMessage.setId(message.getId());
 
 			if (!peer.sendMessage(namesMessage)) {
@@ -2321,24 +2338,28 @@ public class Controller extends Thread {
 		this.stats.getNameMessageStats.requests.incrementAndGet();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			LiteDataAnchor anchor = this.getLiteDataAnchor(repository);
+			if (anchor == null) {
+				peer.disconnect("failed to anchor name response");
+				return;
+			}
+
 			NameData nameData = repository.getNameRepository().fromName(name);
 
 			if (nameData == null) {
 				// We don't have this account
 				this.stats.getNameMessageStats.unknownAccounts.getAndIncrement();
 
-				// Send valid, yet unexpected message type in response, so peer doesn't have to wait for timeout
 				LOGGER.debug(() -> String.format("Sending 'name unknown' response to peer %s for GET_NAME request for unknown name %s", peer, name));
 
-				// Send generic 'unknown' message as it's very short
-				Message nameUnknownMessage = new GenericUnknownMessage();
+				Message nameUnknownMessage = NamesMessage.unknown(anchor);
 				nameUnknownMessage.setId(message.getId());
 				if (!peer.sendMessage(nameUnknownMessage))
 					peer.disconnect("failed to send name-unknown response");
 				return;
 			}
 
-			NamesMessage namesMessage = new NamesMessage(Arrays.asList(nameData));
+			NamesMessage namesMessage = new NamesMessage(Arrays.asList(nameData), anchor);
 			namesMessage.setId(message.getId());
 
 			if (!peer.sendMessage(namesMessage)) {
@@ -2352,6 +2373,10 @@ public class Controller extends Thread {
 
 
 	// Utilities
+
+	private LiteDataAnchor getLiteDataAnchor(Repository repository) throws DataException {
+		return LiteDataAnchor.fromBlockData(repository.getBlockRepository().getLastBlock());
+	}
 
 	/** Returns a list of peers that are not misbehaving, and have a recent block. */
 	public List<Peer> getRecentBehavingPeers() {

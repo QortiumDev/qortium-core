@@ -3,9 +3,11 @@ package org.qortal.network.message;
 import org.junit.Test;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.network.LiteDataAnchor;
 import org.qortal.data.naming.NameData;
 import org.qortal.test.common.Common;
 import org.qortal.transform.Transformer;
+import org.qortal.transform.block.BlockTransformer;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -17,16 +19,20 @@ import static org.junit.Assert.assertEquals;
 public class AccountMessageTests {
 
 	@Test
-	public void testRoundTrip() {
+	public void testRoundTrip() throws MessageException {
 		byte[] publicKey = new byte[32];
 		for (int i = 0; i < publicKey.length; i++) {
 			publicKey[i] = (byte) (i + 1);
 		}
 
+		LiteDataAnchor anchor = anchor();
 		AccountData accountData = new AccountData(Common.getTestAccount(null, "alice").getAddress(), publicKey, 1, 3, 4);
-		AccountMessage message = new AccountMessage(accountData);
+		AccountMessage message = new AccountMessage(accountData, anchor);
 
 		AccountMessage decodedMessage = (AccountMessage) AccountMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+		assertEquals(LiteDataResponseStatus.DATA, decodedMessage.getStatus());
+		assertAnchor(anchor, decodedMessage.getAnchor());
+
 		AccountData decodedData = decodedMessage.getAccountData();
 
 		assertEquals(accountData.getAddress(), decodedData.getAddress());
@@ -34,6 +40,18 @@ public class AccountMessageTests {
 		assertEquals(accountData.getDefaultGroupId(), decodedData.getDefaultGroupId());
 		assertEquals(accountData.getLevel(), decodedData.getLevel());
 		assertEquals(accountData.getBlocksMinted(), decodedData.getBlocksMinted());
+	}
+
+	@Test
+	public void testAccountUnknownRoundTrip() throws MessageException {
+		LiteDataAnchor anchor = anchor();
+		AccountMessage message = AccountMessage.unknown(anchor);
+
+		AccountMessage decodedMessage = (AccountMessage) AccountMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+
+		assertEquals(LiteDataResponseStatus.UNKNOWN, decodedMessage.getStatus());
+		assertAnchor(anchor, decodedMessage.getAnchor());
+		assertEquals(null, decodedMessage.getAccountData());
 	}
 
 	@Test
@@ -93,11 +111,15 @@ public class AccountMessageTests {
 	}
 
 	@Test
-	public void testAccountBalanceRoundTrip() {
+	public void testAccountBalanceRoundTrip() throws MessageException {
+		LiteDataAnchor anchor = anchor();
 		AccountBalanceData accountBalanceData = new AccountBalanceData(Common.getTestAccount(null, "alice").getAddress(), 123L, 456L);
-		AccountBalanceMessage message = new AccountBalanceMessage(accountBalanceData);
+		AccountBalanceMessage message = new AccountBalanceMessage(accountBalanceData, anchor);
 
 		AccountBalanceMessage decodedMessage = (AccountBalanceMessage) AccountBalanceMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+		assertEquals(LiteDataResponseStatus.DATA, decodedMessage.getStatus());
+		assertAnchor(anchor, decodedMessage.getAnchor());
+
 		AccountBalanceData decodedData = decodedMessage.getAccountBalanceData();
 
 		assertEquals(accountBalanceData.getAddress(), decodedData.getAddress());
@@ -106,7 +128,20 @@ public class AccountMessageTests {
 	}
 
 	@Test
+	public void testAccountBalanceUnknownRoundTrip() throws MessageException {
+		LiteDataAnchor anchor = anchor();
+		AccountBalanceMessage message = AccountBalanceMessage.unknown(anchor);
+
+		AccountBalanceMessage decodedMessage = (AccountBalanceMessage) AccountBalanceMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+
+		assertEquals(LiteDataResponseStatus.UNKNOWN, decodedMessage.getStatus());
+		assertAnchor(anchor, decodedMessage.getAnchor());
+		assertEquals(null, decodedMessage.getAccountBalanceData());
+	}
+
+	@Test
 	public void testNamesRoundTrip() throws MessageException {
+		LiteDataAnchor anchor = anchor();
 		String owner = Common.getTestAccount(null, "alice").getAddress();
 		String saleRecipient = Common.getTestAccount(null, "bob").getAddress();
 		byte[] reference = new byte[Transformer.SIGNATURE_LENGTH];
@@ -116,9 +151,12 @@ public class AccountMessageTests {
 
 		NameData nameData = new NameData("test-name", "test-name", owner, "{\"test\":true}",
 				12345L, 12346L, true, 1000L, saleRecipient, reference, 1);
-		NamesMessage message = new NamesMessage(Collections.singletonList(nameData));
+		NamesMessage message = new NamesMessage(Collections.singletonList(nameData), anchor);
 
 		NamesMessage decodedMessage = (NamesMessage) NamesMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+		assertEquals(LiteDataResponseStatus.DATA, decodedMessage.getStatus());
+		assertAnchor(anchor, decodedMessage.getAnchor());
+
 		List<NameData> decodedDataList = decodedMessage.getNameDataList();
 		assertEquals(1, decodedDataList.size());
 
@@ -134,5 +172,55 @@ public class AccountMessageTests {
 		assertEquals(nameData.getSaleRecipient(), decodedData.getSaleRecipient());
 		assertArrayEquals(nameData.getReference(), decodedData.getReference());
 		assertEquals(nameData.getCreationGroupId(), decodedData.getCreationGroupId());
+	}
+
+	@Test
+	public void testNamesUnknownRoundTrip() throws MessageException {
+		LiteDataAnchor anchor = anchor();
+		NamesMessage message = NamesMessage.unknown(anchor);
+
+		NamesMessage decodedMessage = (NamesMessage) NamesMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+
+		assertEquals(LiteDataResponseStatus.UNKNOWN, decodedMessage.getStatus());
+		assertAnchor(anchor, decodedMessage.getAnchor());
+		assertEquals(null, decodedMessage.getNameDataList());
+	}
+
+	@Test
+	public void testTransactionsRoundTrip() throws MessageException {
+		LiteDataAnchor anchor = anchor();
+		TransactionsMessage message = new TransactionsMessage(Collections.emptyList(), anchor);
+
+		TransactionsMessage decodedMessage = (TransactionsMessage) TransactionsMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+
+		assertEquals(LiteDataResponseStatus.DATA, decodedMessage.getStatus());
+		assertAnchor(anchor, decodedMessage.getAnchor());
+		assertEquals(0, decodedMessage.getTransactions().size());
+	}
+
+	@Test
+	public void testTransactionsUnknownRoundTrip() throws MessageException {
+		LiteDataAnchor anchor = anchor();
+		TransactionsMessage message = TransactionsMessage.unknown(anchor);
+
+		TransactionsMessage decodedMessage = (TransactionsMessage) TransactionsMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+
+		assertEquals(LiteDataResponseStatus.UNKNOWN, decodedMessage.getStatus());
+		assertAnchor(anchor, decodedMessage.getAnchor());
+		assertEquals(null, decodedMessage.getTransactions());
+	}
+
+	private static LiteDataAnchor anchor() {
+		byte[] blockSignature = new byte[BlockTransformer.BLOCK_SIGNATURE_LENGTH];
+		for (int i = 0; i < blockSignature.length; ++i)
+			blockSignature[i] = (byte) (i + 1);
+
+		return new LiteDataAnchor(12, blockSignature, 3456L);
+	}
+
+	private static void assertAnchor(LiteDataAnchor expected, LiteDataAnchor actual) {
+		assertEquals(expected.getHeight(), actual.getHeight());
+		assertArrayEquals(expected.getBlockSignature(), actual.getBlockSignature());
+		assertEquals(expected.getTimestamp(), actual.getTimestamp());
 	}
 }

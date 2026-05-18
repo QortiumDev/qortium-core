@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - lite: anchor lite-data responses to chain tips
+
+Added the first Phase 4 lite-node anchoring step by making lite-data peers return account, balance, name, and transaction responses with a clear data status plus the block height, block signature, and timestamp behind the answer. Lite nodes now require peers to agree on both the returned data and that block anchor before treating a response as agreed, and unknown account, balance, or name lookups now use anchored response messages instead of unanchored generic unknown replies. This improves freshness and chain-context checking for lite mode while keeping the documentation clear that these are still peer-agreed answers, not cryptographic state proofs.
+
 ### 2026-05-18 - docs: define lite-node proof anchoring plan
 
 Added the Phase 4 lite-node design note so the project has a clear path from peer-agreed lite data toward stronger verification. The note separates anchored peer responses from true cryptographic state proofs, explains why full proof support requires future block-level state commitments, and records one combined state root as the preferred starting design before any consensus or protocol changes are made.

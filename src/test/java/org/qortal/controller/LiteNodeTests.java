@@ -6,6 +6,7 @@ import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.block.BlockSummaryData;
 import org.qortal.data.network.PeerData;
+import org.qortal.data.network.LiteDataAnchor;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
@@ -15,6 +16,7 @@ import org.qortal.network.Peer;
 import org.qortal.network.PeerAddress;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.Common;
+import org.qortal.transform.block.BlockTransformer;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,8 +38,8 @@ public class LiteNodeTests {
 		assertFalse(LiteNode.isSupportedLiteDataCapability(null));
 		assertFalse(LiteNode.isSupportedLiteDataCapability("1"));
 		assertFalse(LiteNode.isSupportedLiteDataCapability(0));
+		assertFalse(LiteNode.isSupportedLiteDataCapability(1));
 
-		assertTrue(LiteNode.isSupportedLiteDataCapability(1));
 		assertTrue(LiteNode.isSupportedLiteDataCapability(2L));
 	}
 
@@ -113,45 +115,81 @@ public class LiteNodeTests {
 
 	@Test
 	public void testTwoMatchingDataResponsesAgree() {
+		LiteDataAnchor anchor = anchor(1);
+		String fingerprint = anchoredFingerprint("same", anchor);
+
 		LiteNode.LiteDataResult<String> result = LiteNode.chooseAgreedResult(Arrays.asList(
-				LiteNode.LiteDataCandidate.data("first", "same"),
-				LiteNode.LiteDataCandidate.data("second", "same"),
-				LiteNode.LiteDataCandidate.data("third", "different")));
+				LiteNode.LiteDataCandidate.data("first", fingerprint, anchor),
+				LiteNode.LiteDataCandidate.data("second", fingerprint, anchor),
+				LiteNode.LiteDataCandidate.data("third", anchoredFingerprint("different", anchor), anchor)));
 
 		assertEquals(LiteNode.LiteDataStatus.AGREED, result.getStatus());
 		assertEquals("first", result.getValue());
+		assertEquals(anchor.getHeight(), result.getAnchor().getHeight());
 	}
 
 	@Test
 	public void testTwoUnknownResponsesReturnUnknown() {
+		LiteDataAnchor anchor = anchor(1);
+		String fingerprint = LiteNode.liteDataAnchorFingerprint(anchor);
+
 		LiteNode.LiteDataResult<String> result = LiteNode.chooseAgreedResult(Arrays.asList(
-				LiteNode.LiteDataCandidate.unknown(),
-				LiteNode.LiteDataCandidate.unknown()));
+				LiteNode.LiteDataCandidate.unknown(fingerprint, anchor),
+				LiteNode.LiteDataCandidate.unknown(fingerprint, anchor)));
 
 		assertEquals(LiteNode.LiteDataStatus.UNKNOWN, result.getStatus());
+		assertEquals(anchor.getHeight(), result.getAnchor().getHeight());
 	}
 
 	@Test
 	public void testNoUsableAgreementReturnsUnavailable() {
+		LiteDataAnchor anchor = anchor(1);
+
 		LiteNode.LiteDataResult<String> noResponses = LiteNode.chooseAgreedResult(Collections.emptyList());
 		assertEquals(LiteNode.LiteDataStatus.UNAVAILABLE, noResponses.getStatus());
 
 		LiteNode.LiteDataResult<String> oneResponse = LiteNode.chooseAgreedResult(Collections.singletonList(
-				LiteNode.LiteDataCandidate.data("first", "same")));
+				LiteNode.LiteDataCandidate.data("first", anchoredFingerprint("same", anchor), anchor)));
 		assertEquals(LiteNode.LiteDataStatus.UNAVAILABLE, oneResponse.getStatus());
 	}
 
 	@Test
 	public void testDisagreeingResponsesConflict() {
+		LiteDataAnchor anchor = anchor(1);
+
 		LiteNode.LiteDataResult<String> dataVsUnknown = LiteNode.chooseAgreedResult(Arrays.asList(
-				LiteNode.LiteDataCandidate.data("first", "same"),
-				LiteNode.LiteDataCandidate.unknown()));
+				LiteNode.LiteDataCandidate.data("first", anchoredFingerprint("same", anchor), anchor),
+				LiteNode.LiteDataCandidate.unknown(LiteNode.liteDataAnchorFingerprint(anchor), anchor)));
 		assertEquals(LiteNode.LiteDataStatus.CONFLICTED, dataVsUnknown.getStatus());
 
 		LiteNode.LiteDataResult<String> mismatchedData = LiteNode.chooseAgreedResult(Arrays.asList(
-				LiteNode.LiteDataCandidate.data("first", "first"),
-				LiteNode.LiteDataCandidate.data("second", "second")));
+				LiteNode.LiteDataCandidate.data("first", anchoredFingerprint("first", anchor), anchor),
+				LiteNode.LiteDataCandidate.data("second", anchoredFingerprint("second", anchor), anchor)));
 		assertEquals(LiteNode.LiteDataStatus.CONFLICTED, mismatchedData.getStatus());
+	}
+
+	@Test
+	public void testMatchingDataWithDifferentAnchorsConflicts() {
+		LiteDataAnchor firstAnchor = anchor(1);
+		LiteDataAnchor secondAnchor = anchor(2);
+
+		LiteNode.LiteDataResult<String> result = LiteNode.chooseAgreedResult(Arrays.asList(
+				LiteNode.LiteDataCandidate.data("first", anchoredFingerprint("same", firstAnchor), firstAnchor),
+				LiteNode.LiteDataCandidate.data("second", anchoredFingerprint("same", secondAnchor), secondAnchor)));
+
+		assertEquals(LiteNode.LiteDataStatus.CONFLICTED, result.getStatus());
+	}
+
+	@Test
+	public void testUnknownResponsesWithDifferentAnchorsConflict() {
+		LiteDataAnchor firstAnchor = anchor(1);
+		LiteDataAnchor secondAnchor = anchor(2);
+
+		LiteNode.LiteDataResult<String> result = LiteNode.chooseAgreedResult(Arrays.asList(
+				LiteNode.LiteDataCandidate.unknown(LiteNode.liteDataAnchorFingerprint(firstAnchor), firstAnchor),
+				LiteNode.LiteDataCandidate.unknown(LiteNode.liteDataAnchorFingerprint(secondAnchor), secondAnchor)));
+
+		assertEquals(LiteNode.LiteDataStatus.CONFLICTED, result.getStatus());
 	}
 
 	@Test
@@ -239,6 +277,14 @@ public class LiteNodeTests {
 
 	private static Peer peerWithoutChainTip(int index) {
 		return new Peer(new PeerData(PeerAddress.fromString("127.0.0." + index + ":1234")), Peer.NETWORK);
+	}
+
+	private static LiteDataAnchor anchor(int seed) {
+		return new LiteDataAnchor(seed, bytes(BlockTransformer.BLOCK_SIGNATURE_LENGTH, seed), 1000L + seed);
+	}
+
+	private static String anchoredFingerprint(String payloadFingerprint, LiteDataAnchor anchor) {
+		return LiteNode.anchoredDataFingerprint(payloadFingerprint, LiteNode.liteDataAnchorFingerprint(anchor));
 	}
 
 	private static byte[] bytes(int size, int seed) {

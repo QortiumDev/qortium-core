@@ -2,6 +2,7 @@ package org.qortal.network.message;
 
 import com.google.common.primitives.Longs;
 import org.qortal.data.account.AccountBalanceData;
+import org.qortal.data.network.LiteDataAnchor;
 import org.qortal.transform.Transformer;
 import org.qortal.utils.Base58;
 
@@ -13,14 +14,25 @@ public class AccountBalanceMessage extends Message {
 
 	private static final int ADDRESS_LENGTH = Transformer.ADDRESS_LENGTH;
 
+	private LiteDataResponseStatus status;
+	private LiteDataAnchor anchor;
 	private AccountBalanceData accountBalanceData;
 
-	public AccountBalanceMessage(AccountBalanceData accountBalanceData) {
+	public AccountBalanceMessage(AccountBalanceData accountBalanceData, LiteDataAnchor anchor) {
 		super(MessageType.ACCOUNT_BALANCE);
+
+		if (accountBalanceData == null)
+			throw new IllegalArgumentException("Account balance data is required for lite DATA response");
+
+		this.status = LiteDataResponseStatus.DATA;
+		this.anchor = anchor;
+		this.accountBalanceData = accountBalanceData;
 
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
 		try {
+			LiteDataMessageUtils.serializeStatusAndAnchor(bytes, this.status, this.anchor);
+
 			// Send raw address instead of base58 encoded
 			byte[] address = Base58.decode(accountBalanceData.getAddress());
 			bytes.write(address);
@@ -37,10 +49,45 @@ public class AccountBalanceMessage extends Message {
 		this.checksumBytes = Message.generateChecksum(this.dataBytes);
 	}
 
-	public AccountBalanceMessage(int id, AccountBalanceData accountBalanceData) {
+	private AccountBalanceMessage(LiteDataResponseStatus status, LiteDataAnchor anchor) {
+		super(MessageType.ACCOUNT_BALANCE);
+
+		if (status != LiteDataResponseStatus.UNKNOWN)
+			throw new IllegalArgumentException("Only UNKNOWN responses can omit account balance data");
+
+		this.status = status;
+		this.anchor = anchor;
+
+		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+
+		try {
+			LiteDataMessageUtils.serializeStatusAndAnchor(bytes, this.status, this.anchor);
+		} catch (IOException e) {
+			throw new AssertionError("IOException shouldn't occur with ByteArrayOutputStream");
+		}
+
+		this.dataBytes = bytes.toByteArray();
+		this.checksumBytes = Message.generateChecksum(this.dataBytes);
+	}
+
+	private AccountBalanceMessage(int id, LiteDataResponseStatus status, LiteDataAnchor anchor, AccountBalanceData accountBalanceData) {
 		super(id, MessageType.ACCOUNT_BALANCE);
 
+		this.status = status;
+		this.anchor = anchor;
 		this.accountBalanceData = accountBalanceData;
+	}
+
+	public static AccountBalanceMessage unknown(LiteDataAnchor anchor) {
+		return new AccountBalanceMessage(LiteDataResponseStatus.UNKNOWN, anchor);
+	}
+
+	public LiteDataResponseStatus getStatus() {
+		return this.status;
+	}
+
+	public LiteDataAnchor getAnchor() {
+		return this.anchor;
 	}
 
 	public AccountBalanceData getAccountBalanceData() {
@@ -48,7 +95,13 @@ public class AccountBalanceMessage extends Message {
 	}
 
 
-	public static Message fromByteBuffer(int id, ByteBuffer byteBuffer) {
+	public static Message fromByteBuffer(int id, ByteBuffer byteBuffer) throws MessageException {
+		LiteDataResponseStatus status = LiteDataMessageUtils.deserializeStatus(byteBuffer);
+		LiteDataAnchor anchor = LiteDataMessageUtils.deserializeAnchor(byteBuffer);
+
+		if (status == LiteDataResponseStatus.UNKNOWN)
+			return new AccountBalanceMessage(id, status, anchor, null);
+
 		byte[] addressBytes = new byte[ADDRESS_LENGTH];
 		byteBuffer.get(addressBytes);
 		String address = Base58.encode(addressBytes);
@@ -58,11 +111,13 @@ public class AccountBalanceMessage extends Message {
 		long balance = byteBuffer.getLong();
 
 		AccountBalanceData accountBalanceData = new AccountBalanceData(address, assetId, balance);
-		return new AccountBalanceMessage(id, accountBalanceData);
+		return new AccountBalanceMessage(id, status, anchor, accountBalanceData);
 	}
 
 	public AccountBalanceMessage cloneWithNewId(int newId) {
-		AccountBalanceMessage clone = new AccountBalanceMessage(this.accountBalanceData);
+		AccountBalanceMessage clone = this.status == LiteDataResponseStatus.UNKNOWN
+				? AccountBalanceMessage.unknown(this.anchor)
+				: new AccountBalanceMessage(this.accountBalanceData, this.anchor);
 		clone.setId(newId);
 		return clone;
 	}

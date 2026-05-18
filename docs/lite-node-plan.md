@@ -31,6 +31,9 @@ The current implementation already has a useful skeleton:
 - `LiteNode` sends these requests to capable connected peers and requires
   matching peer responses before returning agreed data to API and
   account-balance callers.
+- Lite-data responses now include `DATA` or `UNKNOWN` status plus a block
+  height, block signature, and timestamp anchor. Lite nodes require agreement
+  on both the data and that anchor.
 - Full-node handlers in `Controller` answer the lite request messages from
   local repository data.
 
@@ -47,9 +50,11 @@ same chain tip as at least one other capable peer. It requires two matching
 usable responses before treating peer-backed account, balance, name, or
 transaction-history data as agreed.
 
-This removes the old first-peer-wins behavior, but it is still not a full
+This removes the old first-peer-wins behavior and now prevents stale data and
+current data from being treated as the same answer. It is still not a full
 proof model. Two stale or dishonest peers can still agree on bad wallet-facing
-data until Phase 4 adds stronger anchoring.
+data until later state-root proof work gives lite nodes a way to verify answers
+cryptographically.
 
 ### Transaction Validation And Relay
 
@@ -81,7 +86,7 @@ the change:
 
 ### Peer Capability Baseline
 
-HELLO_V2 now advertises `LITE_DATA = 1` from non-lite nodes. Lite nodes require
+HELLO_V2 now advertises `LITE_DATA = 2` from non-lite nodes. Lite nodes require
 that capability before sending peer-backed account, balance, name, or
 transaction-history requests, so they no longer ask arbitrary peers or other
 lite nodes for derived data.
@@ -124,7 +129,7 @@ Make peer-backed data requests intentional and bounded:
 - add request logging and counters so lite-data load can be observed
 
 The first Phase 2 implementation treats every non-lite node as a lite-data
-server, advertises that role as `LITE_DATA = 1`, and makes lite nodes require
+server, advertises that role as `LITE_DATA = 2`, and makes lite nodes require
 that capability before sending peer-backed account, balance, name, or
 transaction-history requests. Account-name and account-transaction lite
 responses are capped at 100 records per peer response until protocol-level
@@ -147,12 +152,11 @@ Reduce single-peer trust for wallet-facing data:
 
 The first Phase 3 implementation requests each lite-data item from up to three
 capable peers and requires two matching responses. Matching data responses are
-returned as agreed data, matching `GENERIC_UNKNOWN` responses are treated as
-agreed unknown data, no usable agreement is reported as unavailable, and
+returned as agreed data, no usable agreement is reported as unavailable, and
 disagreeing usable responses are reported as conflicted. Lite API endpoints map
 unavailable peer data to the existing no-reply error and conflicting peer data
-to a dedicated conflict error, while agreed unknown data follows each
-endpoint's normal unknown-data behavior.
+to a dedicated conflict error, while agreed unknown data follows each endpoint's
+normal unknown-data behavior.
 
 The final Phase 3 cleanup also prefers the largest unique group of capable
 peers that report the same chain tip, when that group is large enough to meet
@@ -171,8 +175,10 @@ stronger data model:
   the response has enough evidence for that claim
 
 The Phase 4 direction is defined in `docs/lite-node-proof-anchoring.md`. The
-recommended next step is anchored lite responses first, followed by a separate
-state-root consensus design for full cryptographic proofs.
+first Phase 4 implementation anchors lite responses to the serving peer's
+current chain tip and makes agreement include that anchor. The next larger
+milestone is a separate state-root consensus design for full cryptographic
+proofs.
 
 ## Acceptance Criteria
 
