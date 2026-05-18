@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - build: update Maven plugin maintenance baseline
+
+Updated Qortium's Maven compiler, dependency, install, and resource plugins to current Maven 3-compatible maintenance releases, and pinned the dependency plugin version explicitly in the build. This keeps the packaging and resource-processing toolchain current without moving the project onto Maven 4 beta plugin lines.
+
 ### 2026-05-18 - ci: refresh security-scan Maven cache
 
 Updated Qortium's OSV scan workflows and documented local scan command so Maven cache keys include checked-in local Maven artifacts and SBOM generation forces dependency-resolution retries. This prevents older cache entries from carrying stale missing-artifact state into the security scan path after local dependency provenance changes.

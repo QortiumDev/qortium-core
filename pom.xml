@@ -45,15 +45,15 @@
 		<junit.version>4.13.2</junit.version>
 		<log4j.version>2.26.0</log4j.version>
 		<maven-build-helper-plugin.version>3.6.1</maven-build-helper-plugin.version>
-		<maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
-		<maven-dependency-plugin.version>3.6.1</maven-dependency-plugin.version>
+		<maven-compiler-plugin.version>3.15.0</maven-compiler-plugin.version>
+		<maven-dependency-plugin.version>3.10.0</maven-dependency-plugin.version>
 		<maven-jar-plugin.version>3.5.0</maven-jar-plugin.version>
 		<maven-package-info-plugin.version>1.1.0</maven-package-info-plugin.version>
 		<versions-maven-plugin.version>2.21.0</versions-maven-plugin.version>
 		<maven-reproducible-build-plugin.version>0.17</maven-reproducible-build-plugin.version>
-		<maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
+		<maven-resources-plugin.version>3.5.0</maven-resources-plugin.version>
 		<maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
-		<maven-install-plugin.version>3.1.3</maven-install-plugin.version>
+		<maven-install-plugin.version>3.1.4</maven-install-plugin.version>
 		<maven-surefire-plugin.version>3.5.5</maven-surefire-plugin.version>
 		<netty.version>4.1.133.Final</netty.version>
 		<os-maven-plugin.version>1.7.1</os-maven-plugin.version>
@@ -121,6 +121,7 @@
 			<!-- unpack swagger-ui to target folder -->
 			<plugin>
 				<artifactId>maven-dependency-plugin</artifactId>
+				<version>${maven-dependency-plugin.version}</version>
 				<executions>
 					<execution>
 						<id>swagger ui</id>
