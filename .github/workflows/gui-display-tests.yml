@@ -3,14 +3,17 @@ name: GUI display tests
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   guiDisplayTests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
       - name: Cache local Maven repository
-        uses: actions/cache@v3
+        uses: actions/cache@v5
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
@@ -18,7 +21,7 @@ jobs:
             ${{ runner.os }}-maven-
 
       - name: Set up the Java JDK
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'

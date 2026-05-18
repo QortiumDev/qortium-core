@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - ci: modernize GitHub Actions security baseline
+
+Updated Qortium's GitHub Actions workflows to use the current checkout, cache, and Java setup action generations, keep workflow token permissions read-only by default, and run the main build workflow against the active `qortium-6.1.4` branch instead of the stale inherited `master` target. This keeps CI on the Java 17 baseline while reducing the chance that outdated workflow actions become the next maintenance or security weak point.
+
 ### 2026-05-18 - api: expose supported cross-chain blockchains
 
 Added a read-only cross-chain discovery API so wallets, explorers, and other apps can ask a Qortium node which foreign blockchains it supports. The new endpoint reports configured metadata such as blockchain name, currency code, active network, wallet-enabled state, and supported trade capabilities without starting wallets or checking live foreign-chain servers, giving apps a safer way to adapt to each Qortium chain's supported blockchain set.
