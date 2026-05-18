@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - deps: update stable runtime hygiene dependencies
+
+Updated Qortium's jsoup and Apache Commons Net runtime dependencies to current stable maintenance releases. These updates keep HTML parsing and network utility code closer to maintained upstream baselines without changing Qortium APIs, consensus rules, transaction formats, runtime settings, or user-facing behavior.
+
 ### 2026-05-18 - deps: update Log4j maintenance baseline
 
 Updated Qortium's Log4j dependency family to the current Log4j 2 maintenance line. This keeps the node's logging stack on a fresh security-supported baseline without changing log configuration, runtime settings, APIs, consensus behavior, or transaction handling.
