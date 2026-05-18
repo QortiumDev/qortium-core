@@ -12,6 +12,7 @@ import org.qortal.network.message.*;
 
 import java.security.SecureRandom;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.qortal.network.message.MessageType.*;
 
@@ -24,6 +25,7 @@ public class LiteNode {
     public static final int MAX_LITE_DATA_PEER_ATTEMPTS = 3;
     public static final int MAX_NAMES_PER_MESSAGE = 100;
     public static final int MAX_TRANSACTIONS_PER_MESSAGE = 100;
+    public static final int MAX_TRANSACTIONS_PER_REQUEST = 500;
 
     private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -31,6 +33,18 @@ public class LiteNode {
 
 
     public Map<Integer, Long> pendingRequests = Collections.synchronizedMap(new HashMap<>());
+
+    final StatsSnapshot stats = new StatsSnapshot();
+
+    static class StatsSnapshot {
+        public final AtomicLong requests = new AtomicLong();
+        public final AtomicLong noCapablePeers = new AtomicLong();
+        public final AtomicLong peerAttempts = new AtomicLong();
+        public final AtomicLong emptyResponses = new AtomicLong();
+        public final AtomicLong unexpectedResponses = new AtomicLong();
+        public final AtomicLong successfulResponses = new AtomicLong();
+        public final AtomicLong interruptedRequests = new AtomicLong();
+    }
 
     public LiteNode() {
 
@@ -81,25 +95,28 @@ public class LiteNode {
      * @return a list of TransactionData objects, or null if not retrieved
      */
     public List<TransactionData> fetchAccountTransactions(String address, int limit, int offset) {
-        List<TransactionData> allTransactions = new ArrayList<>();
-        if (limit == 0) {
-            limit = Integer.MAX_VALUE;
-        }
-        int batchSize = Math.min(limit, MAX_TRANSACTIONS_PER_MESSAGE);
+        limit = normalizeTransactionLimit(limit);
 
+        List<TransactionData> allTransactions = new ArrayList<>();
         while (allTransactions.size() < limit) {
-            GetAccountTransactionsMessage getAccountTransactionsMessage = new GetAccountTransactionsMessage(address, batchSize, offset);
+            int requestLimit = Math.min(MAX_TRANSACTIONS_PER_MESSAGE, limit - allTransactions.size());
+            GetAccountTransactionsMessage getAccountTransactionsMessage = new GetAccountTransactionsMessage(address, requestLimit, offset);
             TransactionsMessage transactionsMessage = (TransactionsMessage) this.sendMessage(getAccountTransactionsMessage, TRANSACTIONS);
             if (transactionsMessage == null) {
                 // An error occurred, so give up instead of returning partial results
                 return null;
             }
-            allTransactions.addAll(transactionsMessage.getTransactions());
-            if (transactionsMessage.getTransactions().size() < batchSize) {
+
+            List<TransactionData> transactions = transactionsMessage.getTransactions();
+            if (transactions.size() > requestLimit)
+                transactions = transactions.subList(0, requestLimit);
+
+            allTransactions.addAll(transactions);
+            if (transactions.size() < requestLimit) {
                 // No more transactions to fetch
                 break;
             }
-            offset += batchSize;
+            offset += requestLimit;
         }
         return allTransactions;
     }
@@ -139,6 +156,8 @@ public class LiteNode {
 
 
     private Message sendMessage(Message message, MessageType expectedResponseMessageType) {
+        this.stats.requests.incrementAndGet();
+
         // Needs a mutable copy of the unmodifiableList
         List<Peer> peers = new ArrayList<>(Network.getInstance().getImmutableHandshakedPeers());
 
@@ -149,6 +168,7 @@ public class LiteNode {
         peers.removeIf(Controller.hasInferiorChainTip);
 
         if (peers.isEmpty()) {
+            this.stats.noCapablePeers.incrementAndGet();
             LOGGER.info("No capable lite-data peers available to send {} message to", message.getType());
             return null;
         }
@@ -164,22 +184,27 @@ public class LiteNode {
             Message responseMessage;
 
             try {
+                this.stats.peerAttempts.incrementAndGet();
                 responseMessage = peer.getResponse(message);
 
             } catch (InterruptedException e) {
+                this.stats.interruptedRequests.incrementAndGet();
                 Thread.currentThread().interrupt();
                 return null;
             }
 
             if (responseMessage == null) {
+                this.stats.emptyResponses.incrementAndGet();
                 LOGGER.info("Lite-data peer {} didn't respond to {} message", peer, message.getType());
                 continue;
             }
             else if (responseMessage.getType() != expectedResponseMessageType) {
+                this.stats.unexpectedResponses.incrementAndGet();
                 LOGGER.info("Lite-data peer {} responded with unexpected message type {} (should be {})", peer, responseMessage.getType(), expectedResponseMessageType);
                 continue;
             }
 
+            this.stats.successfulResponses.incrementAndGet();
             LOGGER.info("Lite-data peer {} responded with {} message", peer, responseMessage.getType());
 
             return responseMessage;
@@ -198,6 +223,13 @@ public class LiteNode {
             return false;
 
         return ((Number) capability).intValue() >= LITE_DATA_CAPABILITY_VERSION;
+    }
+
+    static int normalizeTransactionLimit(int limit) {
+        if (limit <= 0)
+            return MAX_TRANSACTIONS_PER_REQUEST;
+
+        return Math.min(limit, MAX_TRANSACTIONS_PER_REQUEST);
     }
 
 }

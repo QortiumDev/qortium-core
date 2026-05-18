@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - lite: finish phase two lite-data limits
+
+Finished the second lite-node pass by capping total lite transaction-history fetches, adding internal counters for lite-data peer request outcomes, and updating the lite-node plan so it reflects the capability routing and response limits now in place. This keeps lite peer requests bounded while leaving multi-peer agreement and proof work for the later trust phases.
+
 ### 2026-05-18 - lite: retry capable peers for lite data
 
 Updated lite nodes to send lite-data requests only to peers that explicitly advertise lite-data service, skip peers that are stale or unsuitable, and retry a small shuffled set before reporting that peer data is unavailable. Also added an initial server-side bound for lite name and transaction responses so non-lite nodes can serve lite requests by default without returning unbounded result sets.

@@ -40,9 +40,10 @@ complete.
 
 ### Single-Peer Trust
 
-`LiteNode` currently chooses one random handshaked peer and accepts that peer's
-response if the message type matches. There is no retry set, quorum, chain-tip
-consistency check, proof, or lite-serving capability check.
+`LiteNode` now chooses from a small shuffled set of peers that advertise
+lite-data service and pass basic suitability filters. It still accepts the
+first matching response. There is no quorum, proof, or multi-peer consistency
+check yet.
 
 This means one dishonest or stale peer can lie about wallet-facing data such as
 balances, names, or transaction history.
@@ -75,18 +76,18 @@ the change:
 - Lite account-name lookup ignored `limit`, `offset`, and `reverse` because the
   current peer message has no pagination fields.
 
-### Missing Peer Capability
+### Peer Capability Baseline
 
-HELLO_V2 capabilities currently advertise QDN availability, but not lite-data
-service availability. A lite node therefore cannot deliberately choose peers
-that claim they can serve lite data, and it can accidentally ask another lite
-node or unsuitable peer for derived data.
+HELLO_V2 now advertises `LITE_DATA = 1` from non-lite nodes. Lite nodes require
+that capability before sending peer-backed account, balance, name, or
+transaction-history requests, so they no longer ask arbitrary peers or other
+lite nodes for derived data.
 
 ### Response Shaping, Privacy, And DoS
 
-Account transaction responses are capped server-side, but the lite client can
-loop until it has fetched all transactions when the API limit is zero. Account
-name responses currently return all names for an owner.
+Account transaction and account-name peer responses are capped server-side.
+Lite transaction-history requests also have a total fetch cap when the API asks
+for an unlimited result set.
 
 Lite data requests also reveal the queried address or name to selected peers.
 That is acceptable only if the product treats lite mode as peer-visible and
@@ -124,7 +125,11 @@ server, advertises that role as `LITE_DATA = 1`, and makes lite nodes require
 that capability before sending peer-backed account, balance, name, or
 transaction-history requests. Account-name and account-transaction lite
 responses are capped at 100 records per peer response until protocol-level
-pagination is added for every response shape.
+pagination is added for every response shape. Lite transaction-history requests
+are capped at 500 total records per API call when the caller does not request a
+smaller limit. `LiteNode` also tracks internal counters for request attempts,
+empty or unexpected peer responses, successful responses, interruptions, and
+cases where no capable peers are available.
 
 ### Phase 3: Multi-Peer Consistency
 
