@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - ci: add dependency vulnerability monitoring
+
+Added automated dependency monitoring so Qortium does not depend on occasional local scans to notice new security advisories. Pull requests to `qortium-6.1.4` now get OSV comparison scanning, the active branch gets a weekly full OSV scan, and Dependabot watches both Maven dependencies and GitHub Actions workflow dependencies for update candidates.
+
 ### 2026-05-18 - ci: modernize GitHub Actions security baseline
 
 Updated Qortium's GitHub Actions workflows to use the current checkout, cache, and Java setup action generations, keep workflow token permissions read-only by default, and run the main build workflow against the active `qortium-6.1.4` branch instead of the stale inherited `master` target. This keeps CI on the Java 17 baseline while reducing the chance that outdated workflow actions become the next maintenance or security weak point.
