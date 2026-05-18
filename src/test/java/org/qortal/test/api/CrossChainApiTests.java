@@ -3,8 +3,25 @@ package org.qortal.test.api;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.api.ApiError;
+import org.qortal.api.model.crosschain.SupportedBlockchainInfo;
 import org.qortal.api.resource.CrossChainResource;
+import org.qortal.crosschain.BitcoinyChainConfig;
+import org.qortal.crosschain.BitcoinyChainSpec;
+import org.qortal.crosschain.BitcoinyChainSpecs;
+import org.qortal.crosschain.BitcoinyNetwork;
+import org.qortal.crosschain.ForeignBlockchainRegistry;
+import org.qortal.crosschain.PirateChain;
+import org.qortal.settings.Settings;
 import org.qortal.test.common.ApiCommon;
+
+import java.lang.reflect.Field;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class CrossChainApiTests extends ApiCommon {
 
@@ -17,6 +34,26 @@ public class CrossChainApiTests extends ApiCommon {
 	@Before
 	public void buildResource() {
 		this.crossChainResource = (CrossChainResource) ApiCommon.buildResource(CrossChainResource.class);
+	}
+
+	@Test
+	public void testGetSupportedBlockchains() {
+		List<SupportedBlockchainInfo> blockchains = this.crossChainResource.getSupportedBlockchains();
+
+		assertEquals(ForeignBlockchainRegistry.entries().size(), blockchains.size());
+		assertSupportedBitcoinInfo(blockchains);
+		assertSupportedPirateChainInfo(blockchains);
+	}
+
+	@Test
+	public void testGetSupportedBlockchainsDoesNotStartPirateChain() throws ReflectiveOperationException {
+		PirateChain.resetForTesting();
+
+		this.crossChainResource.getSupportedBlockchains();
+
+		Field instanceField = PirateChain.class.getDeclaredField("instance");
+		instanceField.setAccessible(true);
+		assertNull(instanceField.get(null));
 	}
 
 	@Test
@@ -48,6 +85,56 @@ public class CrossChainApiTests extends ApiCommon {
 		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(UNKNOWN_BLOCKCHAIN, null, null, null, null, null, null, limit, offset, reverse));
 		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(null, UNKNOWN_BLOCKCHAIN, null, null, null, null, null, limit, offset, reverse));
 		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(null, null, UNKNOWN_BLOCKCHAIN, null, null, null, null, limit, offset, reverse));
+	}
+
+	private static void assertSupportedBitcoinInfo(List<SupportedBlockchainInfo> blockchains) {
+		SupportedBlockchainInfo bitcoin = findBlockchain(blockchains, "BITCOIN");
+		ForeignBlockchainRegistry.Entry bitcoinEntry = ForeignBlockchainRegistry.fromString("BTC");
+		BitcoinyChainSpec bitcoinSpec = BitcoinyChainSpecs.BITCOIN;
+		BitcoinyChainConfig bitcoinConfig = bitcoinSpec.getConfig();
+		BitcoinyNetwork activeNetwork = Settings.getInstance().getBitcoinyNetwork(bitcoinConfig.getCurrencyCode());
+
+		assertNotNull(bitcoinEntry);
+		assertEquals(bitcoinEntry.name(), bitcoin.name);
+		assertEquals(bitcoinConfig.getCurrencyCode(), bitcoin.currencyCode);
+		assertEquals(bitcoinConfig.getDisplayName(), bitcoin.displayName);
+		assertEquals("BITCOINY", bitcoin.type);
+		assertEquals("/crosschain/BITCOIN", bitcoin.apiPath);
+		assertTrue(bitcoin.walletEnabled);
+		assertEquals(activeNetwork.name(), bitcoin.activeNetwork);
+		assertEquals(activeNetwork.getChainId(), bitcoin.chainId);
+		assertEquals(bitcoinEntry.getSlip44CoinType(), bitcoin.slip44CoinType);
+		assertEquals(bitcoinConfig.getDecimalPlaces(), bitcoin.decimalPlaces);
+		assertTrue(bitcoin.supportsWallet);
+		assertTrue(bitcoin.supportsHtlc);
+		assertTrue(bitcoin.supportsQortTrades);
+		assertEquals(bitcoinSpec.supportsForeignForeignTrades(), bitcoin.supportsForeignForeignTrades);
+	}
+
+	private static void assertSupportedPirateChainInfo(List<SupportedBlockchainInfo> blockchains) {
+		SupportedBlockchainInfo pirateChain = findBlockchain(blockchains, ForeignBlockchainRegistry.PIRATECHAIN_NAME);
+
+		assertEquals(ForeignBlockchainRegistry.PIRATECHAIN_NAME, pirateChain.name);
+		assertEquals(PirateChain.CURRENCY_CODE, pirateChain.currencyCode);
+		assertEquals(PirateChain.WALLET_CONFIG.getDisplayName(), pirateChain.displayName);
+		assertEquals("PIRATECHAIN", pirateChain.type);
+		assertEquals("/crosschain/arrr", pirateChain.apiPath);
+		assertTrue(pirateChain.walletEnabled);
+		assertEquals(Settings.getInstance().getPirateChainNet().name(), pirateChain.activeNetwork);
+		assertNull(pirateChain.chainId);
+		assertNull(pirateChain.slip44CoinType);
+		assertEquals(8, pirateChain.decimalPlaces);
+		assertTrue(pirateChain.supportsWallet);
+		assertTrue(pirateChain.supportsHtlc);
+		assertTrue(pirateChain.supportsQortTrades);
+		assertFalse(pirateChain.supportsForeignForeignTrades);
+	}
+
+	private static SupportedBlockchainInfo findBlockchain(List<SupportedBlockchainInfo> blockchains, String name) {
+		return blockchains.stream()
+				.filter(blockchain -> name.equals(blockchain.name))
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("Missing supported blockchain: " + name));
 	}
 
 }

@@ -21,6 +21,7 @@ import org.qortal.api.Security;
 import org.qortal.api.model.CrossChainCancelRequest;
 import org.qortal.api.model.CrossChainTradeLedgerEntry;
 import org.qortal.api.model.CrossChainTradeSummary;
+import org.qortal.api.model.crosschain.SupportedBlockchainInfo;
 import org.qortal.asset.Asset;
 import org.qortal.controller.ForeignFeesManager;
 import org.qortal.controller.tradebot.TradeBot;
@@ -28,8 +29,12 @@ import org.qortal.crosschain.ACCT;
 import org.qortal.crosschain.AcctRegistry;
 import org.qortal.crosschain.AcctMode;
 import org.qortal.crosschain.Bitcoiny;
+import org.qortal.crosschain.BitcoinyChainConfig;
+import org.qortal.crosschain.BitcoinyChainSpec;
+import org.qortal.crosschain.BitcoinyNetwork;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
+import org.qortal.crosschain.PirateChain;
 import org.qortal.crosschain.TradeDirection;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.at.ATData;
@@ -45,6 +50,7 @@ import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.settings.Settings;
 import org.qortal.transaction.MessageTransaction;
 import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
@@ -85,6 +91,30 @@ public class CrossChainResource {
 	@Context
 	ServletContext context;
 
+
+	@GET
+	@Path("/blockchains")
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "List supported cross-chain blockchains",
+		description = "Returns static and configured metadata for supported foreign blockchains without checking live wallet or server status.",
+		responses = {
+			@ApiResponse(
+				content = @Content(
+					array = @ArraySchema(
+						schema = @Schema(
+							implementation = SupportedBlockchainInfo.class
+						)
+					)
+				)
+			)
+		}
+	)
+	public List<SupportedBlockchainInfo> getSupportedBlockchains() {
+		return ForeignBlockchainRegistry.entries().stream()
+				.map(CrossChainResource::toSupportedBlockchainInfo)
+				.collect(Collectors.toList());
+	}
 
 	@GET
 	@Path("/tradeoffers")
@@ -1001,6 +1031,53 @@ public class CrossChainResource {
 
 	private static void decorateTradeDataWithPresence(CrossChainTradeData crossChainTradeData) {
 		TradeBot.getInstance().decorateTradeDataWithPresence(crossChainTradeData);
+	}
+
+	private static SupportedBlockchainInfo toSupportedBlockchainInfo(ForeignBlockchainRegistry.Entry entry) {
+		if (entry.isBitcoiny())
+			return toSupportedBitcoinyBlockchainInfo(entry);
+
+		return toSupportedPirateChainInfo(entry);
+	}
+
+	private static SupportedBlockchainInfo toSupportedBitcoinyBlockchainInfo(ForeignBlockchainRegistry.Entry entry) {
+		BitcoinyChainSpec spec = entry.getBitcoinySpec();
+		BitcoinyChainConfig config = spec.getConfig();
+		BitcoinyNetwork activeNetwork = Settings.getInstance().getBitcoinyNetwork(config.getCurrencyCode());
+
+		return new SupportedBlockchainInfo(
+				entry.name(),
+				config.getCurrencyCode(),
+				config.getDisplayName(),
+				"BITCOINY",
+				"/crosschain/" + entry.name(),
+				Settings.getInstance().isWalletEnabled(config.getCurrencyCode()),
+				activeNetwork.name(),
+				activeNetwork.getChainId(),
+				entry.getSlip44CoinType(),
+				config.getDecimalPlaces(),
+				true,
+				true,
+				true,
+				spec.supportsForeignForeignTrades());
+	}
+
+	private static SupportedBlockchainInfo toSupportedPirateChainInfo(ForeignBlockchainRegistry.Entry entry) {
+		return new SupportedBlockchainInfo(
+				entry.name(),
+				PirateChain.CURRENCY_CODE,
+				PirateChain.WALLET_CONFIG.getDisplayName(),
+				"PIRATECHAIN",
+				"/crosschain/arrr",
+				Settings.getInstance().isWalletEnabled(PirateChain.CURRENCY_CODE),
+				Settings.getInstance().getPirateChainNet().name(),
+				null,
+				entry.getSlip44CoinType(),
+				8,
+				true,
+				true,
+				true,
+				false);
 	}
 
 	private ForeignBlockchainRegistry.Entry resolveForeignBlockchainFilter(String foreignBlockchain) {

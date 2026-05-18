@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - api: expose supported cross-chain blockchains
+
+Added a read-only cross-chain discovery API so wallets, explorers, and other apps can ask a Qortium node which foreign blockchains it supports. The new endpoint reports configured metadata such as blockchain name, currency code, active network, wallet-enabled state, and supported trade capabilities without starting wallets or checking live foreign-chain servers, giving apps a safer way to adapt to each Qortium chain's supported blockchain set.
+
 ### 2026-05-18 - deps: update bitcoinj security baseline
 
 Updated Qortium from bitcoinj `0.16.3` to `0.17.1` so the inherited cross-chain signing boundary uses the patched bitcoinj line. The migration adapts Qortium's Bitcoiny networks, HTLC signing, transaction builders, address helpers, deterministic-wallet tests, and Pirate Chain `t3`/`b` P2SH compatibility to bitcoinj's newer API layout while keeping the existing cross-chain behavior intact. The resolved runtime tree no longer includes the old vulnerable OkHttp and Okio transitive path, and the refreshed OSV runtime scan found no vulnerable dependency entries.
