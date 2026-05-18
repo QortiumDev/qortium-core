@@ -9,6 +9,7 @@ import org.qortal.data.transaction.TransactionData;
 import org.qortal.network.Network;
 import org.qortal.network.Peer;
 import org.qortal.network.message.*;
+import org.qortal.utils.Base58;
 
 import java.security.SecureRandom;
 import java.util.*;
@@ -22,6 +23,7 @@ public class LiteNode {
 
     public static final String LITE_DATA_CAPABILITY = "LITE_DATA";
     public static final int LITE_DATA_CAPABILITY_VERSION = 1;
+    public static final int REQUIRED_LITE_DATA_AGREEMENT = 2;
     public static final int MAX_LITE_DATA_PEER_ATTEMPTS = 3;
     public static final int MAX_NAMES_PER_MESSAGE = 100;
     public static final int MAX_TRANSACTIONS_PER_MESSAGE = 100;
@@ -44,6 +46,81 @@ public class LiteNode {
         public final AtomicLong unexpectedResponses = new AtomicLong();
         public final AtomicLong successfulResponses = new AtomicLong();
         public final AtomicLong interruptedRequests = new AtomicLong();
+    }
+
+    public enum LiteDataStatus {
+        AGREED,
+        UNKNOWN,
+        UNAVAILABLE,
+        CONFLICTED
+    }
+
+    public static final class LiteDataResult<T> {
+        private final LiteDataStatus status;
+        private final T value;
+
+        private LiteDataResult(LiteDataStatus status, T value) {
+            this.status = status;
+            this.value = value;
+        }
+
+        public static <T> LiteDataResult<T> agreed(T value) {
+            return new LiteDataResult<>(LiteDataStatus.AGREED, value);
+        }
+
+        public static <T> LiteDataResult<T> unknown() {
+            return new LiteDataResult<>(LiteDataStatus.UNKNOWN, null);
+        }
+
+        public static <T> LiteDataResult<T> unavailable() {
+            return new LiteDataResult<>(LiteDataStatus.UNAVAILABLE, null);
+        }
+
+        public static <T> LiteDataResult<T> conflicted() {
+            return new LiteDataResult<>(LiteDataStatus.CONFLICTED, null);
+        }
+
+        public LiteDataStatus getStatus() {
+            return this.status;
+        }
+
+        public T getValue() {
+            return this.value;
+        }
+
+        public boolean isAgreed() {
+            return this.status == LiteDataStatus.AGREED;
+        }
+    }
+
+    private enum LiteDataCandidateType {
+        DATA,
+        UNKNOWN,
+        CONFLICTED
+    }
+
+    static final class LiteDataCandidate<T> {
+        private final LiteDataCandidateType type;
+        private final T value;
+        private final String fingerprint;
+
+        private LiteDataCandidate(LiteDataCandidateType type, T value, String fingerprint) {
+            this.type = type;
+            this.value = value;
+            this.fingerprint = fingerprint;
+        }
+
+        static <T> LiteDataCandidate<T> data(T value, String fingerprint) {
+            return new LiteDataCandidate<>(LiteDataCandidateType.DATA, value, fingerprint);
+        }
+
+        static <T> LiteDataCandidate<T> unknown() {
+            return new LiteDataCandidate<>(LiteDataCandidateType.UNKNOWN, null, null);
+        }
+
+        static <T> LiteDataCandidate<T> conflicted() {
+            return new LiteDataCandidate<>(LiteDataCandidateType.CONFLICTED, null, null);
+        }
     }
 
     public LiteNode() {
@@ -230,6 +307,149 @@ public class LiteNode {
             return MAX_TRANSACTIONS_PER_REQUEST;
 
         return Math.min(limit, MAX_TRANSACTIONS_PER_REQUEST);
+    }
+
+    static <T> LiteDataResult<T> chooseAgreedResult(List<LiteDataCandidate<T>> candidates) {
+        Map<String, Integer> dataCountsByFingerprint = new HashMap<>();
+        Map<String, T> valuesByFingerprint = new HashMap<>();
+        Set<String> usableCategories = new HashSet<>();
+        int unknownCount = 0;
+        boolean hasNonComparableResponse = false;
+
+        for (LiteDataCandidate<T> candidate : candidates) {
+            if (candidate == null)
+                continue;
+
+            switch (candidate.type) {
+                case UNKNOWN:
+                    ++unknownCount;
+                    usableCategories.add("UNKNOWN");
+                    if (unknownCount >= REQUIRED_LITE_DATA_AGREEMENT)
+                        return LiteDataResult.unknown();
+                    break;
+
+                case DATA:
+                    if (candidate.fingerprint == null) {
+                        hasNonComparableResponse = true;
+                        break;
+                    }
+
+                    usableCategories.add("DATA:" + candidate.fingerprint);
+                    valuesByFingerprint.putIfAbsent(candidate.fingerprint, candidate.value);
+                    int count = dataCountsByFingerprint.getOrDefault(candidate.fingerprint, 0) + 1;
+                    dataCountsByFingerprint.put(candidate.fingerprint, count);
+                    if (count >= REQUIRED_LITE_DATA_AGREEMENT)
+                        return LiteDataResult.agreed(valuesByFingerprint.get(candidate.fingerprint));
+                    break;
+
+                case CONFLICTED:
+                    hasNonComparableResponse = true;
+                    break;
+            }
+        }
+
+        if (usableCategories.size() > 1 || hasNonComparableResponse)
+            return LiteDataResult.conflicted();
+
+        return LiteDataResult.unavailable();
+    }
+
+    static String accountDataFingerprint(AccountData accountData) {
+        if (accountData == null)
+            return null;
+
+        StringBuilder fingerprint = new StringBuilder();
+        appendFingerprintField(fingerprint, accountData.getAddress());
+        appendFingerprintField(fingerprint, fingerprintBytes(accountData.getPublicKey()));
+        appendFingerprintField(fingerprint, accountData.getDefaultGroupId());
+        appendFingerprintField(fingerprint, accountData.getLevel());
+        appendFingerprintField(fingerprint, accountData.getBlocksMinted());
+        return fingerprint.toString();
+    }
+
+    static String accountBalanceFingerprint(AccountBalanceData accountBalanceData) {
+        if (accountBalanceData == null)
+            return null;
+
+        StringBuilder fingerprint = new StringBuilder();
+        appendFingerprintField(fingerprint, accountBalanceData.getAddress());
+        appendFingerprintField(fingerprint, accountBalanceData.getAssetId());
+        appendFingerprintField(fingerprint, accountBalanceData.getBalance());
+        return fingerprint.toString();
+    }
+
+    static String nameDataFingerprint(NameData nameData) {
+        if (nameData == null)
+            return null;
+
+        StringBuilder fingerprint = new StringBuilder();
+        appendFingerprintField(fingerprint, nameData.getName());
+        appendFingerprintField(fingerprint, nameData.getReducedName());
+        appendFingerprintField(fingerprint, nameData.getOwner());
+        appendFingerprintField(fingerprint, nameData.getData());
+        appendFingerprintField(fingerprint, nameData.getRegistered());
+        appendFingerprintField(fingerprint, nameData.getUpdated());
+        appendFingerprintField(fingerprint, nameData.isForSale());
+        appendFingerprintField(fingerprint, nameData.getSalePrice());
+        appendFingerprintField(fingerprint, nameData.getSaleRecipient());
+        appendFingerprintField(fingerprint, fingerprintBytes(nameData.getReference()));
+        appendFingerprintField(fingerprint, nameData.getCreationGroupId());
+        return fingerprint.toString();
+    }
+
+    static String nameDataListFingerprint(List<NameData> nameDataList) {
+        if (nameDataList == null)
+            return null;
+
+        List<String> nameFingerprints = new ArrayList<>(nameDataList.size());
+        for (NameData nameData : nameDataList) {
+            String fingerprint = nameDataFingerprint(nameData);
+            if (fingerprint == null)
+                return null;
+
+            nameFingerprints.add(fingerprint);
+        }
+
+        Collections.sort(nameFingerprints);
+        return listFingerprint(nameFingerprints);
+    }
+
+    static String transactionListFingerprint(List<TransactionData> transactions) {
+        if (transactions == null)
+            return null;
+
+        List<String> transactionSignatures = new ArrayList<>(transactions.size());
+        for (TransactionData transactionData : transactions) {
+            if (transactionData == null || transactionData.getSignature() == null)
+                return null;
+
+            transactionSignatures.add(Base58.encode(transactionData.getSignature()));
+        }
+
+        Collections.sort(transactionSignatures);
+        return listFingerprint(transactionSignatures);
+    }
+
+    private static String listFingerprint(List<String> itemFingerprints) {
+        StringBuilder fingerprint = new StringBuilder();
+        for (String itemFingerprint : itemFingerprints)
+            appendFingerprintField(fingerprint, itemFingerprint);
+
+        return fingerprint.toString();
+    }
+
+    private static String fingerprintBytes(byte[] bytes) {
+        return bytes == null ? null : Base58.encode(bytes);
+    }
+
+    private static void appendFingerprintField(StringBuilder fingerprint, Object value) {
+        if (value == null) {
+            fingerprint.append("-1;");
+            return;
+        }
+
+        String field = value.toString();
+        fingerprint.append(field.length()).append(':').append(field).append(';');
     }
 
 }

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - lite: add multi-peer lite-data result model
+
+Added the internal result model Qortium needs before lite nodes can stop trusting the first peer response. Lite-data lookups now have a shared vocabulary for agreed, unknown, unavailable, and conflicted results, plus canonical comparison helpers for account data, balances, names, name lists, and transaction lists so later peer responses can be compared consistently instead of relying on object equality or message byte storage.
+
 ### 2026-05-18 - lite: finish phase two lite-data limits
 
 Finished the second lite-node pass by capping total lite transaction-history fetches, adding internal counters for lite-data peer request outcomes, and updating the lite-node plan so it reflects the capability routing and response limits now in place. This keeps lite peer requests bounded while leaving multi-peer agreement and proof work for the later trust phases.

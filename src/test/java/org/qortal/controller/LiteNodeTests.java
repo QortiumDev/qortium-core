@@ -1,12 +1,30 @@
 package org.qortal.controller;
 
+import org.junit.Before;
 import org.junit.Test;
+import org.qortal.data.account.AccountBalanceData;
+import org.qortal.data.account.AccountData;
+import org.qortal.data.naming.NameData;
+import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.PaymentTransactionData;
+import org.qortal.data.transaction.TransactionData;
+import org.qortal.group.Group;
+import org.qortal.repository.DataException;
+import org.qortal.test.common.Common;
+
+import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class LiteNodeTests {
+
+	@Before
+	public void before() throws DataException {
+		Common.useDefaultSettings();
+	}
 
 	@Test
 	public void testLiteDataCapabilityRequiresSupportedNumericVersion() {
@@ -40,6 +58,134 @@ public class LiteNodeTests {
 		assertEquals(0, liteNode.stats.unexpectedResponses.get());
 		assertEquals(0, liteNode.stats.successfulResponses.get());
 		assertEquals(0, liteNode.stats.interruptedRequests.get());
+	}
+
+	@Test
+	public void testTwoMatchingDataResponsesAgree() {
+		LiteNode.LiteDataResult<String> result = LiteNode.chooseAgreedResult(Arrays.asList(
+				LiteNode.LiteDataCandidate.data("first", "same"),
+				LiteNode.LiteDataCandidate.data("second", "same"),
+				LiteNode.LiteDataCandidate.data("third", "different")));
+
+		assertEquals(LiteNode.LiteDataStatus.AGREED, result.getStatus());
+		assertEquals("first", result.getValue());
+	}
+
+	@Test
+	public void testTwoUnknownResponsesReturnUnknown() {
+		LiteNode.LiteDataResult<String> result = LiteNode.chooseAgreedResult(Arrays.asList(
+				LiteNode.LiteDataCandidate.unknown(),
+				LiteNode.LiteDataCandidate.unknown()));
+
+		assertEquals(LiteNode.LiteDataStatus.UNKNOWN, result.getStatus());
+	}
+
+	@Test
+	public void testNoUsableAgreementReturnsUnavailable() {
+		LiteNode.LiteDataResult<String> noResponses = LiteNode.chooseAgreedResult(Collections.emptyList());
+		assertEquals(LiteNode.LiteDataStatus.UNAVAILABLE, noResponses.getStatus());
+
+		LiteNode.LiteDataResult<String> oneResponse = LiteNode.chooseAgreedResult(Collections.singletonList(
+				LiteNode.LiteDataCandidate.data("first", "same")));
+		assertEquals(LiteNode.LiteDataStatus.UNAVAILABLE, oneResponse.getStatus());
+	}
+
+	@Test
+	public void testDisagreeingResponsesConflict() {
+		LiteNode.LiteDataResult<String> dataVsUnknown = LiteNode.chooseAgreedResult(Arrays.asList(
+				LiteNode.LiteDataCandidate.data("first", "same"),
+				LiteNode.LiteDataCandidate.unknown()));
+		assertEquals(LiteNode.LiteDataStatus.CONFLICTED, dataVsUnknown.getStatus());
+
+		LiteNode.LiteDataResult<String> mismatchedData = LiteNode.chooseAgreedResult(Arrays.asList(
+				LiteNode.LiteDataCandidate.data("first", "first"),
+				LiteNode.LiteDataCandidate.data("second", "second")));
+		assertEquals(LiteNode.LiteDataStatus.CONFLICTED, mismatchedData.getStatus());
+	}
+
+	@Test
+	public void testNonComparableResponseConflicts() {
+		LiteNode.LiteDataResult<String> result = LiteNode.chooseAgreedResult(Collections.singletonList(
+				LiteNode.LiteDataCandidate.conflicted()));
+
+		assertEquals(LiteNode.LiteDataStatus.CONFLICTED, result.getStatus());
+	}
+
+	@Test
+	public void testAccountDataFingerprintCoversMessageFields() {
+		AccountData accountData = new AccountData("Qaddress", bytes(32, 1), Group.NO_GROUP, 2, 3);
+		AccountData matchingAccountData = new AccountData("Qaddress", bytes(32, 1), Group.NO_GROUP, 2, 3);
+		AccountData changedAccountData = new AccountData("Qaddress", bytes(32, 2), Group.NO_GROUP, 2, 3);
+
+		assertEquals(LiteNode.accountDataFingerprint(accountData), LiteNode.accountDataFingerprint(matchingAccountData));
+		assertFalse(LiteNode.accountDataFingerprint(accountData).equals(LiteNode.accountDataFingerprint(changedAccountData)));
+	}
+
+	@Test
+	public void testAccountBalanceFingerprintCoversMessageFields() {
+		AccountBalanceData accountBalanceData = new AccountBalanceData("Qaddress", 0L, 100L);
+		AccountBalanceData matchingAccountBalanceData = new AccountBalanceData("Qaddress", 0L, 100L);
+		AccountBalanceData changedAccountBalanceData = new AccountBalanceData("Qaddress", 0L, 101L);
+
+		assertEquals(LiteNode.accountBalanceFingerprint(accountBalanceData),
+				LiteNode.accountBalanceFingerprint(matchingAccountBalanceData));
+		assertFalse(LiteNode.accountBalanceFingerprint(accountBalanceData).equals(
+				LiteNode.accountBalanceFingerprint(changedAccountBalanceData)));
+	}
+
+	@Test
+	public void testNameFingerprintCoversMessageFields() {
+		NameData nameData = nameData("name", "owner", 100L, bytes(64, 1));
+		NameData matchingNameData = nameData("name", "owner", 100L, bytes(64, 1));
+		NameData changedNameData = nameData("name", "owner", 101L, bytes(64, 1));
+
+		assertEquals(LiteNode.nameDataFingerprint(nameData), LiteNode.nameDataFingerprint(matchingNameData));
+		assertFalse(LiteNode.nameDataFingerprint(nameData).equals(LiteNode.nameDataFingerprint(changedNameData)));
+	}
+
+	@Test
+	public void testNameListFingerprintUsesSortedNameFingerprints() {
+		NameData firstNameData = nameData("first", "owner", 100L, bytes(64, 1));
+		NameData secondNameData = nameData("second", "owner", 101L, bytes(64, 2));
+
+		assertEquals(LiteNode.nameDataListFingerprint(Arrays.asList(firstNameData, secondNameData)),
+				LiteNode.nameDataListFingerprint(Arrays.asList(secondNameData, firstNameData)));
+	}
+
+	@Test
+	public void testTransactionListFingerprintUsesSortedSignatures() {
+		TransactionData firstTransaction = paymentTransaction(bytes(64, 1));
+		TransactionData secondTransaction = paymentTransaction(bytes(64, 2));
+		TransactionData changedTransaction = paymentTransaction(bytes(64, 3));
+
+		assertEquals(LiteNode.transactionListFingerprint(Arrays.asList(firstTransaction, secondTransaction)),
+				LiteNode.transactionListFingerprint(Arrays.asList(secondTransaction, firstTransaction)));
+		assertFalse(LiteNode.transactionListFingerprint(Collections.singletonList(firstTransaction)).equals(
+				LiteNode.transactionListFingerprint(Collections.singletonList(changedTransaction))));
+	}
+
+	@Test
+	public void testUnsignedTransactionListIsNotAgreeable() {
+		TransactionData unsignedTransaction = paymentTransaction(null);
+
+		assertEquals(null, LiteNode.transactionListFingerprint(Collections.singletonList(unsignedTransaction)));
+	}
+
+	private static NameData nameData(String name, String owner, long registered, byte[] reference) {
+		return new NameData(name, name, owner, "{}", registered, null, false, null, null, reference, Group.NO_GROUP);
+	}
+
+	private static TransactionData paymentTransaction(byte[] signature) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(1L, Group.NO_GROUP, bytes(32, 1), 1L, signature);
+		return new PaymentTransactionData(baseTransactionData, "recipient", 1L);
+	}
+
+	private static byte[] bytes(int size, int seed) {
+		byte[] bytes = new byte[size];
+		for (int i = 0; i < bytes.length; ++i)
+			bytes[i] = (byte) (seed + i);
+
+		return bytes;
 	}
 
 }
