@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - docs: mark dependency security review current
+
+Updated Qortium's dependency security review so it reflects the resolved direct-dependency cleanup, the locally vendored AT artifact, the Maven-resolved SBOM scanning path, and the latest stable dependency-maintenance versions. This keeps the public security notes aligned with the current branch instead of leaving earlier findings written as future work.
+
 ### 2026-05-18 - deps: update stable maintenance dependencies
 
 Updated a conservative batch of stable runtime and build dependencies, including Apache Commons utilities, Guava, json.org, java-diff-utils, XZ, Swagger UI, and two Maven build plugins. These updates keep common parsing, archive, utility, API-documentation, and packaging support closer to maintained upstream baselines without taking on larger major-version or prerelease migrations.
