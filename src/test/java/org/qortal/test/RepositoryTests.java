@@ -7,6 +7,7 @@ import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.asset.Asset;
+import org.qortal.controller.arbitrary.ArbitraryDataCacheManager;
 import org.qortal.crosschain.BitcoinyACCTv3;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountBalanceData;
@@ -15,14 +16,18 @@ import org.qortal.data.chat.ChatMessage;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.repository.hsqldb.HSQLDBDatabaseUpdates;
 import org.qortal.repository.hsqldb.HSQLDBRepository;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 
 import java.lang.reflect.Field;
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -44,6 +49,33 @@ public class RepositoryTests extends Common {
 	public void testGetRepository() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			assertNotNull(repository);
+		}
+	}
+
+	@Test
+	public void testPopulateLatestSignaturesOnEmptyRepository() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:empty-qdn-signatures-" + System.nanoTime();
+
+		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
+			connection.setAutoCommit(false);
+			HSQLDBDatabaseUpdates.updateDatabase(connection);
+
+			try (Statement statement = connection.createStatement()) {
+				statement.executeUpdate("UPDATE DatabaseInfo SET latest_signature_populated = 0");
+			}
+			connection.commit();
+
+			ArbitraryDataCacheManager.populateLatestSignaturesIfNecessary(connection);
+
+			try (Statement statement = connection.createStatement();
+					ResultSet resultSet = statement.executeQuery("SELECT latest_signature_populated FROM DatabaseInfo")) {
+				assertTrue(resultSet.next());
+				assertEquals(1, resultSet.getInt(1));
+			}
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("SHUTDOWN");
+			}
 		}
 	}
 

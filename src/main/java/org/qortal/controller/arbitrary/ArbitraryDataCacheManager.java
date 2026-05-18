@@ -125,59 +125,71 @@ public class ArbitraryDataCacheManager extends Thread {
 
                     LOGGER.info("Updating {} arbitrary resources with latest signatures", signatureByData.size());
 
-                    String populateSql = "UPDATE ArbitraryResourcesCache SET latest_signature = ? WHERE name = ? AND service = ? AND identifier = ?";
-                    PreparedStatement preparedStatement = connection.prepareStatement(populateSql);
-
-                    // preserve the auto commit enabling, so we can return to
+                    // Preserve the connection's auto-commit mode so callers keep their expected transaction behavior.
                     boolean autoCommit = connection.getAutoCommit();
                     connection.setAutoCommit(false);
 
-                    // for each signature by data pairing, prepare a database update statement and add it to a batch
-                    for (Map.Entry<ArbitraryTransactionDataHashWrapper, byte[]> entry : signatureByData.entrySet()) {
-                        preparedStatement.setBytes(1, entry.getValue());
+                    try {
+                        if (!signatureByData.isEmpty()) {
+                            String populateSql = "UPDATE ArbitraryResourcesCache SET latest_signature = ? WHERE name = ? AND service = ? AND identifier = ?";
+                            try (PreparedStatement preparedStatement = connection.prepareStatement(populateSql)) {
+                                // for each signature by data pairing, prepare a database update statement and add it to a batch
+                                for (Map.Entry<ArbitraryTransactionDataHashWrapper, byte[]> entry : signatureByData.entrySet()) {
+                                    preparedStatement.setBytes(1, entry.getValue());
 
-                        ArbitraryTransactionDataHashWrapper wrapper = entry.getKey();
-                        preparedStatement.setString(2, wrapper.getName());
-                        preparedStatement.setInt(3, entry.getKey().getService());
+                                    ArbitraryTransactionDataHashWrapper wrapper = entry.getKey();
+                                    preparedStatement.setString(2, wrapper.getName());
+                                    preparedStatement.setInt(3, entry.getKey().getService());
 
-                        String identifier = entry.getKey().getIdentifier();
-                        preparedStatement.setString(4, identifier != null ? identifier : "default");
+                                    String identifier = entry.getKey().getIdentifier();
+                                    preparedStatement.setString(4, identifier != null ? identifier : "default");
 
-                        preparedStatement.addBatch();
-                    }
+                                    preparedStatement.addBatch();
+                                }
 
-                    preparedStatement.executeBatch();
-
-                    LOGGER.info("Updated arbitrary resources with latest signatures");
-
-                    try (Statement stmt = connection.createStatement()) {
-                        stmt.execute("UPDATE ArbitraryResourcesCache SET lower_case_name = LCASE(name)");
-                    }
-
-                    LOGGER.info("Updated arbitrary resources with lower case names for indexing purposes");
-
-                    // update latest signature populated flag to database info
-                    String updateFlagSql = "UPDATE DatabaseInfo SET latest_signature_populated = 1";
-                    try (PreparedStatement updateFlagStatement = connection.prepareStatement(updateFlagSql)) {
-
-                        updateFlagStatement.executeUpdate();
-
-                        // verify the change
-                        String verifyFlagSql = "SELECT latest_signature_populated FROM DatabaseInfo";
-                        try (PreparedStatement verifyFlagStatement = connection.prepareStatement(verifyFlagSql);
-                             ResultSet rs = verifyFlagStatement.executeQuery()) {
-
-                            if (rs.next() && rs.getInt("latest_signature_populated") == 1) {
-                                LOGGER.info("latest signature populated flag has been set");
-                            }
-                            else {
-                                LOGGER.info("latest signature populated flag has not been set");
+                                preparedStatement.executeBatch();
                             }
                         }
-                    }
 
-                    connection.commit();
-                    connection.setAutoCommit(autoCommit);
+                        LOGGER.info("Updated arbitrary resources with latest signatures");
+
+                        try (Statement stmt = connection.createStatement()) {
+                            stmt.execute("UPDATE ArbitraryResourcesCache SET lower_case_name = LCASE(name)");
+                        }
+
+                        LOGGER.info("Updated arbitrary resources with lower case names for indexing purposes");
+
+                        // update latest signature populated flag to database info
+                        String updateFlagSql = "UPDATE DatabaseInfo SET latest_signature_populated = 1";
+                        try (PreparedStatement updateFlagStatement = connection.prepareStatement(updateFlagSql)) {
+
+                            updateFlagStatement.executeUpdate();
+
+                            // verify the change
+                            String verifyFlagSql = "SELECT latest_signature_populated FROM DatabaseInfo";
+                            try (PreparedStatement verifyFlagStatement = connection.prepareStatement(verifyFlagSql);
+                                 ResultSet rs = verifyFlagStatement.executeQuery()) {
+
+                                if (rs.next() && rs.getInt("latest_signature_populated") == 1) {
+                                    LOGGER.info("latest signature populated flag has been set");
+                                }
+                                else {
+                                    LOGGER.info("latest signature populated flag has not been set");
+                                }
+                            }
+                        }
+
+                        connection.commit();
+                    } catch (SQLException e) {
+                        try {
+                            connection.rollback();
+                        } catch (SQLException rollbackException) {
+                            e.addSuppressed(rollbackException);
+                        }
+                        throw e;
+                    } finally {
+                        connection.setAutoCommit(autoCommit);
+                    }
 
                     LOGGER.info("arbitrary resources data latest signatures committed");
                 }

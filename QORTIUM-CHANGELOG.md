@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - fix: allow empty QDN cache startup
+
+Fixed fresh repository startup when there are no QDN signatures to populate yet. Qortium now skips the empty database batch, still records the QDN cache as populated, and keeps the node able to continue toward API startup on a clean database.
+
 ### 2026-05-18 - build: align Java 17 runtime requirements
 
 Aligned Qortium's documented runtime requirement, local start scripts, and GitHub Actions builds with the Java 17 baseline introduced by the Jetty 12 migration. The cleanup also removes stale Jetty 10 wording from websocket comments so the code and project notes point to the same maintained runtime target before the next dependency-security migration.
