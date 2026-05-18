@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - ci: enable full OSV Maven resolution
+
+Updated Qortium's OSV GitHub workflows to scan Maven-resolved CycloneDX dependency reports instead of raw manifests. Maven now resolves the full dependency graph, including the locally vendored AT artifact, before OSV checks the generated SBOM for vulnerable packages.
+
 ### 2026-05-18 - deps: vendor AT dependency for local resolution
 
 Vendored Qortium's pinned CIYAM AT dependency into the repository's local Maven artifact tree and removed the remaining JitPack repository dependency from the main build. This keeps the consensus-critical AT VM pinned to the same QuickMythril fork commit while making fresh builds and dependency scanners resolve it from tracked project provenance instead of a build-on-demand service.
