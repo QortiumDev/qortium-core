@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - deps: vendor AT dependency for local resolution
+
+Vendored Qortium's pinned CIYAM AT dependency into the repository's local Maven artifact tree and removed the remaining JitPack repository dependency from the main build. This keeps the consensus-critical AT VM pinned to the same QuickMythril fork commit while making fresh builds and dependency scanners resolve it from tracked project provenance instead of a build-on-demand service.
+
 ### 2026-05-18 - docs: refresh dependency security status
 
 Refreshed Qortium's dependency security review after the latest maintenance batch. The review now records that GitHub dependency and code-scanning alerts are currently clear, automated OSV and Dependabot monitoring are active, Log4j, jsoup, Commons Net, and the Maven build plugins have been moved to current maintenance baselines, and local OSV source scanning still uses the documented no-resolution mode because the inherited `AT` dependency cannot be resolved from normal Maven repositories.

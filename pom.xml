@@ -472,11 +472,6 @@
 			<name>project</name>
 			<url>file:${project.basedir}/lib</url>
 		</repository>
-		<!-- jitpack for build-on-demand of GitHub-hosted dependencies -->
-		<repository>
-			<id>jitpack.io</id>
-			<url>https://jitpack.io</url>
-		</repository>
 		<repository>
 			<id>central</id>
 			<name>Maven Central</name>

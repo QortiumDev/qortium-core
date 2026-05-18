@@ -11,6 +11,14 @@ Qortium-controlled fork:
 - Maven coordinate: `com.github.QuickMythril:AT`
 - Version pin: `1b731d1`
 - Local checkout: `~/git/AT`
+- Local jar: `lib/com/github/QuickMythril/AT/1b731d1/AT-1b731d1.jar`
+- Local POM: `lib/com/github/QuickMythril/AT/1b731d1/AT-1b731d1.pom`
+- Pinned commit:
+  `1b731d19e66718d0f46183609c6a3ac76c2eeeb0`
+- Local jar SHA-256:
+  `1e2182966c3dd59c327e204e3c0a37d7eb29131160dab38261670f7780a65d17`
+- Local POM SHA-256:
+  `7212e561c70740d7b13cadf11c158bf518572f1df4812cb84058b72d4a948b3c`
 - Upstream lineage: `ciyam/AT` -> `catbref/AT` -> `IceBurst/AT` ->
   `QuickMythril/AT`
 
@@ -22,6 +30,12 @@ VM dependency before any Qortium-specific AT changes are made.
 The IceBurst `v1.4.3` fork point mainly added JitPack/Maven build support and
 dependency updates on top of the Qortal-era `catbref/AT` lineage. The core AT VM
 behavior used by Qortium should remain unchanged at this fork point.
+
+Qortium vendors the pinned AT jar and a small local Maven POM under `lib/` so
+builds and dependency scanners can resolve this consensus-critical dependency
+without depending on JitPack availability. The local POM intentionally omits the
+plugin and test dependencies from the JitPack-generated POM because the runtime
+AT classes imported by Qortium use only JDK classes.
 
 ## bitcoinj
 
