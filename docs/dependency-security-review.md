@@ -32,6 +32,24 @@ in Maven Central. Qortium moved to Jetty `12.1.9` using Jetty's EE8 artifacts so
 the API, gateway, proxy, websocket, and HTTP/2 code can stay on the existing
 `javax.servlet` surface while running on a maintained Jetty line.
 
+## Jetty and Java 17 Follow-Up Notes
+
+The Jetty migration and Java 17 baseline are complete enough to move on to the
+next dependency-security item. The branch builds with Java 17, the README and
+start scripts now require Java 17, GitHub Actions runs on Temurin 17, and a
+packaged-node smoke test covered the API info endpoint, API documentation route,
+and a websocket upgrade.
+
+There are two non-blocking cleanup items to keep visible:
+
+- Jetty 12 EE8 still supports the current `CrossOriginFilter`, but marks it as
+  deprecated for future removal. Qortium should replace that CORS setup with a
+  small local filter or another Jetty-supported approach in a later API cleanup.
+  This does not block the bitcoinj or Netty security work.
+- The GitHub workflows now use Java 17, but still use the v3 generation of
+  checkout, cache, and setup-java actions. Updating those actions is ordinary CI
+  maintenance, not part of the Jetty security fix.
+
 ## Deferred Security Work
 
 These findings need separate work because they are larger than simple dependency

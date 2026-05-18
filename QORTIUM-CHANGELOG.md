@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - docs: record Jetty follow-up considerations
+
+Recorded the remaining Jetty and Java 17 follow-up considerations before moving to the next dependency-security item. The security review now explains that the Java 17 baseline and Jetty smoke coverage are complete enough to proceed, while keeping the deprecated Jetty CORS filter and older GitHub Actions versions visible as later cleanup work.
+
 ### 2026-05-18 - fix: allow empty QDN cache startup
 
 Fixed fresh repository startup when there are no QDN signatures to populate yet. Qortium now skips the empty database batch, still records the QDN cache as populated, and keeps the node able to continue toward API startup on a clean database.
