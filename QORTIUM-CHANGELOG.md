@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - test: clean up name save repository transaction
+
+Updated the name save regression test so it explicitly discards the temporary repository writes it creates while checking direct name registration and unregister behavior. This keeps the test behavior the same while preventing repository close from logging the cleaned-up test transaction as a critical uncommitted-work warning.
+
 ### 2026-05-18 - deps: update ICU4J maintenance baseline
 
 Updated Qortium's ICU4J dependency family to the current stable maintenance release and refreshed the dependency security review to record the new baseline. This keeps Unicode normalization and charset support current while preserving the existing name, asset, group, and poll sanitization behavior.
