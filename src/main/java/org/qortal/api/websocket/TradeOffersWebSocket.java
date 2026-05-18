@@ -61,7 +61,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 	private static final Map<Session, Long> sessionLocalAssetId = Collections.synchronizedMap(new HashMap<>());
 
 	/**
-	 * Updated for Jetty 10.
+	 * Uses JettyWebSocketServletFactory for websocket mapping.
 	 */
 	@Override
 	protected void configure(JettyWebSocketServletFactory factory) {
@@ -274,7 +274,7 @@ public class TradeOffersWebSocket extends ApiWebSocket implements Listener {
 				marshall(stringWriter, crossChainOfferSummaries);
 				String output = stringWriter.toString();
 
-				// Updated for Jetty 10 async send pattern
+				// Use Jetty's async send pattern.
 				session.getRemote().sendString(output, WriteCallback.NOOP);
 				return true;
 			} catch (IOException e) {

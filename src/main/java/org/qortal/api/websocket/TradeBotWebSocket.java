@@ -33,7 +33,7 @@ public class TradeBotWebSocket extends ApiWebSocket implements Listener {
     private static final Map<Session, ForeignBlockchainRegistry.Entry> sessionRequestedForeignBlockchain = Collections.synchronizedMap(new HashMap<>());
 
     /**
-     * Updated for Jetty 10.
+     * Uses JettyWebSocketServletFactory for websocket mapping.
      */
     @Override
     protected void configure(JettyWebSocketServletFactory factory) {
@@ -173,7 +173,7 @@ public class TradeBotWebSocket extends ApiWebSocket implements Listener {
                 marshall(stringWriter, tradeBotEntries);
                 String output = stringWriter.toString();
 
-                // Updated from sendStringByFuture to Jetty 10 async send pattern
+                // Use Jetty's async send pattern.
                 session.getRemote().sendString(output, WriteCallback.NOOP);
                 return true;
             } catch (IOException e) {

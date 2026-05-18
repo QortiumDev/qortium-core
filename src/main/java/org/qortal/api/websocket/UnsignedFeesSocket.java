@@ -26,7 +26,7 @@ public class UnsignedFeesSocket extends ApiWebSocket implements Listener {
 	private static final Logger LOGGER = LogManager.getLogger(UnsignedFeesSocket.class);
 
 	/**
-	 * Updated for Jetty 10.
+	 * Uses JettyWebSocketServletFactory for websocket mapping.
 	 */
 	@Override
 	protected void configure(JettyWebSocketServletFactory factory) {

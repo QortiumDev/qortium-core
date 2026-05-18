@@ -1,7 +1,7 @@
 # Qortal Project - Qortal Core - Primary Repository
 The Qortal Core is the blockchain and node component of the overall project. It contains the primary API, and ability to make calls to create transactions, and interact with the Qortal Blockchain Network. 
 
-In order to run the Qortal Core, a machine with java 11+ installed is required. Minimum RAM specs will vary depending on settings, but as low as 4GB of RAM should be acceptable in most scenarios. 
+In order to run the Qortal Core, a machine with Java 17+ installed is required. Minimum RAM specs will vary depending on settings, but as low as 4GB of RAM should be acceptable in most scenarios.
 
 Qortal is a complete infrastructure platform with a blockchain backend, it is capable of indefinite web and application hosting with no continual fees, replacement of DNS and centralized name systems and communications systems, and is the foundation of the next generation digital infrastructure of the world. Qortal is unique in nearly every way, and was written from scratch to address as many concerns from both the existing 'blockchain space' and the 'typical internet' as possible, while maintaining a system that is easy to use and able to run on 'any' computer. 
 
@@ -17,7 +17,7 @@ Building the future one block at a time. Welcome to Qortal.
 
 ## Build / Run
 
-- Requires Java 11. OpenJDK 11 recommended over Java SE.
+- Requires Java 17 or newer. OpenJDK/Temurin 17 is recommended.
 - Install Maven
 - Use Maven to fetch dependencies and build: `mvn clean package`
 - Update Maven dependencies: `mvn install` 
@@ -47,7 +47,7 @@ Building the future one block at a time. Welcome to Qortal.
 - Run -> Edit Configurations
 - Add New Application
 - Name: qortium
-- SDK: java 11
+- SDK: java 17
 - Main Class: org.qortal.controller.Controller
 - Program arguments: settings.json -Dlog4j.configurationFile=log4j2.properties -ea
 - Environment variables: Djava.net.preferIPv4Stack=false

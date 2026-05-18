@@ -21,7 +21,7 @@ public class AdminStatusWebSocket extends ApiWebSocket implements Listener {
 	private static final AtomicReference<String> previousOutput = new AtomicReference<>(null);
 
 	/**
-	 * Jetty 10 uses JettyWebSocketServletFactory and requires manual mapping.
+	 * Use JettyWebSocketServletFactory for manual websocket mapping.
 	 */
 	@Override
 	protected void configure(JettyWebSocketServletFactory factory) {

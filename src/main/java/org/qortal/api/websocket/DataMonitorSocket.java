@@ -26,7 +26,7 @@ public class DataMonitorSocket extends ApiWebSocket implements Listener {
 	private static final Logger LOGGER = LogManager.getLogger(DataMonitorSocket.class);
 
 	/**
-	 * Updated for Jetty 10 using JettyWebSocketServletFactory.
+	 * Uses JettyWebSocketServletFactory for websocket mapping.
 	 */
 	@Override
 	protected void configure(JettyWebSocketServletFactory factory) {
@@ -93,7 +93,7 @@ public class DataMonitorSocket extends ApiWebSocket implements Listener {
 		try {
 			marshall(stringWriter, dataMonitorInfo);
 
-			// Jetty 10 uses sendString with a WriteCallback for asynchronous delivery
+			// Use sendString with a WriteCallback for asynchronous delivery.
 			if (session.isOpen()) {
 				session.getRemote().sendString(stringWriter.toString(), WriteCallback.NOOP);
 			}

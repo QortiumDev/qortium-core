@@ -26,7 +26,7 @@ import static org.qortal.data.chat.ChatMessage.Encoding;
 public class ActiveChatsWebSocket extends ApiWebSocket {
 
 	/**
-	 * Jetty 10 implementation of configure.
+	 * Jetty websocket configure implementation.
 	 * This maps the current servlet instance to the websocket upgrade path.
 	 */
 	@Override

@@ -22,7 +22,7 @@ import static org.qortal.data.chat.ChatMessage.Encoding;
 public class ChatMessagesWebSocket extends ApiWebSocket {
 
 	/**
-	 * Jetty 10 implementation of configure.
+	 * Jetty websocket configure implementation.
 	 */
 	@Override
 	protected void configure(JettyWebSocketServletFactory factory) {
@@ -120,7 +120,7 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 	@OnWebSocketMessage
 	public void onWebSocketMessage(Session session, String message) {
 		if (Objects.equals(message, "ping")) {
-			// Updated to Jetty 10 async send pattern
+			// Use Jetty's async send pattern.
 			if (session.isOpen()) {
 				session.getRemote().sendString("pong", WriteCallback.NOOP);
 			}
@@ -162,7 +162,7 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 		try {
 			marshall(stringWriter, chatMessages);
 
-			// In Jetty 10, use sendString with WriteCallback.NOOP to replace sendStringByFuture
+			// Use sendString with WriteCallback.NOOP for asynchronous delivery.
 			if (session.isOpen()) {
 				session.getRemote().sendString(stringWriter.toString(), WriteCallback.NOOP);
 			}

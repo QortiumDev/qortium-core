@@ -26,7 +26,7 @@ import java.util.Objects;
 public class BlocksWebSocket extends ApiWebSocket implements Listener {
 
 	/**
-	 * Jetty 10 implementation of configure.
+	 * Jetty websocket configure implementation.
 	 */
 	@Override
 	protected void configure(JettyWebSocketServletFactory factory) {
@@ -145,7 +145,7 @@ public class BlocksWebSocket extends ApiWebSocket implements Listener {
 		try {
 			marshall(stringWriter, blockSummary);
 
-			// In Jetty 10, sendStringByFuture is replaced by sendString with a Callback.
+			// Use sendString with a callback for asynchronous delivery.
 			if (session.isOpen()) {
 				session.getRemote().sendString(stringWriter.toString(), WriteCallback.NOOP);
 			}

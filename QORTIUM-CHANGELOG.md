@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - build: align Java 17 runtime requirements
+
+Aligned Qortium's documented runtime requirement, local start scripts, and GitHub Actions builds with the Java 17 baseline introduced by the Jetty 12 migration. The cleanup also removes stale Jetty 10 wording from websocket comments so the code and project notes point to the same maintained runtime target before the next dependency-security migration.
+
 ### 2026-05-18 - deps: migrate Jetty to 12 EE8
 
 Moved Qortium from Jetty 10 to Jetty 12's maintained EE8 line so the API server, gateway, proxy, HTTP/2 support, and websocket endpoints keep their existing `javax.servlet` behavior while using a current Jetty runtime. This raises the build target to Java 17 and updates the embedded Jetty error handler to the Jetty 12 request/response callback API without changing API routes, websocket paths, CORS settings, TLS settings, or node configuration semantics.

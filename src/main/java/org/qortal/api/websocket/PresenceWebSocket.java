@@ -74,7 +74,7 @@ public class PresenceWebSocket extends ApiWebSocket implements Listener {
 	private static final Map<Session, PresenceType> sessionPresenceTypes = Collections.synchronizedMap(new HashMap<>());
 
 	/**
-	 * Updated for Jetty 10.
+	 * Uses JettyWebSocketServletFactory for websocket mapping.
 	 */
 	@Override
 	protected void configure(JettyWebSocketServletFactory factory) {

@@ -25,7 +25,7 @@ public abstract class ApiWebSocket extends JettyWebSocketServlet {
 	private static final Map<Class<? extends ApiWebSocket>, List<Session>> SESSIONS_BY_CLASS = new HashMap<>();
 
 	/**
-	 * Jetty 10 requires an implementation of configure.
+	 * Jetty websocket servlets require an implementation of configure.
 	 * Subclasses should override this or call super if using custom mappings.
 	 */
 	@Override
@@ -57,7 +57,7 @@ public abstract class ApiWebSocket extends JettyWebSocketServlet {
 		StringWriter stringWriter = new StringWriter();
 		try {
 			marshall(stringWriter, apiErrorRoot);
-			session.getRemote().sendString(stringWriter.toString(), null); // Jetty 10 sendString now requires a Callback or is blocking
+			session.getRemote().sendString(stringWriter.toString(), null); // Send asynchronously with the default callback handling.
 		} catch (IOException e) {
 			// Remote end probably closed
 		}
