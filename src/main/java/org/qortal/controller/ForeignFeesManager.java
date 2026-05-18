@@ -2,7 +2,7 @@ package org.qortal.controller;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.qortal.controller.tradebot.TradeBot;

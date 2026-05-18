@@ -1,8 +1,8 @@
 package org.qortal.test.crosschain;
 
 import com.google.common.hash.HashCode;
-import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.ECKey;
+import org.bitcoinj.base.Coin;
+import org.bitcoinj.crypto.ECKey;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.core.Transaction;
 import org.junit.After;

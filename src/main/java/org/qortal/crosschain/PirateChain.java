@@ -2,8 +2,12 @@ package org.qortal.crosschain;
 
 import cash.z.wallet.sdk.rpc.CompactFormats;
 import com.rust.litewalletjni.LiteWalletJni;
+import org.bitcoinj.base.Base58;
+import org.bitcoinj.base.Bech32;
+import org.bitcoinj.base.Coin;
+import org.bitcoinj.base.exceptions.AddressFormatException;
 import org.bitcoinj.core.*;
-import org.bitcoinj.utils.MonetaryFormat;
+import org.bitcoinj.base.utils.MonetaryFormat;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -177,7 +181,7 @@ public class PirateChain extends Bitcoiny {
 	// Constructors and instance
 
 	private PirateChain(PirateChainNet pirateChainNet, BitcoinyBlockchainProvider blockchain, Context bitcoinjContext, String currencyCode) {
-		super(blockchain, bitcoinjContext, currencyCode, DEFAULT_FEE_PER_KB);
+		super(blockchain, bitcoinjContext, pirateChainNet.getParams(), currencyCode, DEFAULT_FEE_PER_KB);
 		this.pirateChainNet = pirateChainNet;
 
 		pirateChainCheckScheduler.scheduleWithFixedDelay(this::establishConnection, 30, 300, TimeUnit.SECONDS);

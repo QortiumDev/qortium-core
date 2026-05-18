@@ -1,42 +1,65 @@
 package org.qortal.test.crosschain;
 
+import org.bitcoinj.base.ScriptType;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.crypto.DeterministicKey;
 import org.bitcoinj.crypto.HDPath;
-import org.bitcoinj.script.Script;
 import org.bitcoinj.wallet.DeterministicKeyChain;
 import org.bitcoinj.wallet.DeterministicSeed;
-import org.bitcoinj.wallet.Wallet;
 import org.qortal.crosschain.BitcoinyChainSpecs;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.ForeignBlockchainRegistry;
+import org.qortal.crypto.Crypto;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.Common;
+import org.qortal.utils.Base58;
+
+import java.nio.ByteBuffer;
+import java.security.SecureRandom;
 
 public class BitcoinyTestsUtils {
 
-    public static void main(String[] args) throws DataException, ForeignBlockchainException {
+	public static void main(String[] args) throws DataException, ForeignBlockchainException {
 
-        Common.useDefaultSettings();
+		Common.useDefaultSettings();
 
-        final String rootKey = generateBip32RootKey(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST4).getParams());
-        String address = ForeignBlockchainRegistry.fromStringRequired("LITECOIN").getBitcoinyInstance().getUnusedReceiveAddress(rootKey);
+		final String rootKey = generateBip32RootKey(BitcoinyChainSpecs.LITECOIN.getNetwork(BitcoinyChainSpecs.TEST4).getParams());
+		String address = ForeignBlockchainRegistry.fromStringRequired("LITECOIN").getBitcoinyInstance().getUnusedReceiveAddress(rootKey);
 
-        System.out.println("rootKey = " + rootKey);
-        System.out.println("address = " + address);
+		System.out.println("rootKey = " + rootKey);
+		System.out.println("address = " + address);
 
-        System.exit(0);
-    }
+		System.exit(0);
+	}
 
-    public static String generateBip32RootKey(NetworkParameters networkParameters) {
+	public static String generateBip32RootKey(NetworkParameters networkParameters) {
 
-        final Wallet wallet = Wallet.createDeterministic(networkParameters, Script.ScriptType.P2PKH);
-        final DeterministicSeed seed = wallet.getKeyChainSeed();
-        final DeterministicKeyChain keyChain = DeterministicKeyChain.builder().seed(seed).build();
-        final HDPath path = keyChain.getAccountPath();
-        final DeterministicKey parent = keyChain.getKeyByPath(path, true);
-        final String rootKey = parent.serializePrivB58(networkParameters);
+		final DeterministicSeed seed = DeterministicSeed.ofRandom(new SecureRandom(),
+				DeterministicSeed.DEFAULT_SEED_ENTROPY_BITS, DeterministicKeyChain.DEFAULT_PASSPHRASE_FOR_MNEMONIC);
+		final DeterministicKeyChain keyChain = DeterministicKeyChain.builder()
+				.seed(seed)
+				.outputScriptType(ScriptType.P2PKH)
+				.build();
+		final HDPath path = keyChain.getAccountPath();
+		final DeterministicKey parent = keyChain.getKeyByPath(path, true);
+		final String rootKey = serializePrivB58(parent, networkParameters);
 
-        return rootKey;
-    }
+		return rootKey;
+	}
+
+	private static String serializePrivB58(DeterministicKey key, NetworkParameters networkParameters) {
+		ByteBuffer payload = ByteBuffer.allocate(78);
+		payload.putInt(networkParameters.getBip32HeaderP2PKHpriv());
+		payload.put((byte) key.getDepth());
+		payload.putInt(key.getParentFingerprint());
+		payload.putInt(key.getChildNumber().i());
+		payload.put(key.getChainCode());
+		payload.put(key.getPrivKeyBytes33());
+
+		byte[] payloadBytes = payload.array();
+		byte[] extendedKey = new byte[payloadBytes.length + 4];
+		System.arraycopy(payloadBytes, 0, extendedKey, 0, payloadBytes.length);
+		System.arraycopy(Crypto.doubleDigest(payloadBytes), 0, extendedKey, payloadBytes.length, 4);
+		return Base58.encode(extendedKey);
+	}
 }

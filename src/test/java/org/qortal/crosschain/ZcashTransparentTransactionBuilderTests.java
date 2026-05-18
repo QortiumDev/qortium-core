@@ -2,9 +2,9 @@ package org.qortal.crosschain;
 
 import cash.z.wallet.sdk.rpc.CompactFormats.CompactBlock;
 import com.google.common.hash.HashCode;
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 import org.bitcoinj.core.Context;
-import org.bitcoinj.core.ECKey;
+import org.bitcoinj.crypto.ECKey;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.qortal.crypto.Crypto;
@@ -145,6 +145,7 @@ public class ZcashTransparentTransactionBuilderTests {
 
 		private TestZcashBitcoiny(MockProvider provider) {
 			super(provider, new Context(BitcoinyChainSpecs.ZCASH.getNetwork(BitcoinyChainSpecs.MAIN).getParams()),
+					BitcoinyChainSpecs.ZCASH.getNetwork(BitcoinyChainSpecs.MAIN).getParams(),
 					BitcoinyChainSpecs.ZCASH_CURRENCY_CODE, Coin.valueOf(10_000L));
 			provider.setBlockchain(this);
 		}

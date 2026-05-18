@@ -2,8 +2,9 @@ package org.qortal.test.crosschain;
 
 import com.google.common.hash.HashCode;
 import com.google.common.primitives.Bytes;
-import org.bitcoinj.core.Address;
-import org.bitcoinj.core.ECKey;
+import org.bitcoinj.base.Address;
+import org.bitcoinj.base.ScriptType;
+import org.bitcoinj.crypto.ECKey;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.script.Script;
 import org.junit.Test;
@@ -116,7 +117,7 @@ public class BitcoinyAddressTests {
 	public void testBech32P2wpkhDecode() {
 		NetworkParameters params = bitcoinTest3Params();
 		ECKey key = ECKey.fromPrivate(HashCode.fromString("11".repeat(32)).asBytes());
-		String address = Address.fromKey(params, key, Script.ScriptType.P2WPKH).toString();
+		String address = Address.fromKey(params, key, ScriptType.P2WPKH).toString();
 
 		BitcoinyAddress decoded = BitcoinyAddress.fromString(params, address);
 

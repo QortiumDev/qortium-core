@@ -1,7 +1,7 @@
 package org.qortal.crosschain;
 
-import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.ECKey;
+import org.bitcoinj.base.Coin;
+import org.bitcoinj.crypto.ECKey;
 import org.bitcoinj.core.Transaction;
 import org.qortal.transform.TransformationException;
 

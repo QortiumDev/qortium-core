@@ -1,6 +1,6 @@
 package org.qortal.crosschain;
 
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 import org.bitcoinj.core.Context;
 import org.junit.After;
 import org.junit.Test;
@@ -96,6 +96,7 @@ public class ElectrumServerPersistenceTests extends Common {
 							servers,
 							BitcoinyChainConfig.defaultElectrumXPorts()),
 					new Context(BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams()),
+					BitcoinyChainSpecs.BITCOIN.getNetwork(BitcoinyChainSpecs.MAIN).getParams(),
 					"BTC",
 					Coin.valueOf(5_000));
 

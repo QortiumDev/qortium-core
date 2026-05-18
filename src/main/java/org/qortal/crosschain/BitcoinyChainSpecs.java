@@ -1,8 +1,8 @@
 package org.qortal.crosschain;
 
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.utils.MonetaryFormat;
+import org.bitcoinj.base.utils.MonetaryFormat;
 import org.qortal.crosschain.ChainableServer.ConnectionType;
 import org.qortal.crosschain.ElectrumX.Server;
 
@@ -87,9 +87,9 @@ public final class BitcoinyChainSpecs {
 			.bip32Headers(0x0488B21E, 0x0488ADE4)
 			.bip32SegwitHeaders(0x04b24746, 0x04b2430c)
 			.majorityWindow(750, 950, 1000)
-			.dnsSeeds("seed.bitcoin.sipa.be", "dnsseed.bluematt.me", "dnsseed.bitcoin.dashjr.org",
-					"seed.bitcoinstats.com", "seed.bitcoin.jonasschnelli.ch", "seed.btc.petertodd.net",
-					"seed.bitcoin.sprovoost.nl", "dnsseed.emzy.de", "seed.bitcoin.wiz.biz")
+			.dnsSeeds("seed.bitcoin.sipa.be", "dnsseed.bluematt.me", "dnsseed.bitcoin.dashjr-list-of-p2p-nodes.us",
+					"seed.bitcoin.jonasschnelli.ch", "seed.btc.petertodd.net", "seed.bitcoin.sprovoost.nl",
+					"dnsseed.emzy.de", "seed.bitcoin.wiz.biz", "seed.mainnet.achownodes.xyz")
 			.build();
 	private static final NetworkParameters BITCOIN_TEST_NET_PARAMS = bitcoinParams("org.bitcoin.test", NetworkParameters.PAYMENT_PROTOCOL_ID_TESTNET, "tb")
 			.genesis(1296688602L, 414098458L, 0x1d00ffffL, "000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943")
@@ -104,7 +104,8 @@ public final class BitcoinyChainSpecs {
 			.bip32SegwitHeaders(0x045f1cf6, 0x045f18bc)
 			.majorityWindow(51, 75, 100)
 			.dnsSeeds("testnet-seed.bitcoin.jonasschnelli.ch", "seed.tbtc.petertodd.net",
-					"seed.testnet.bitcoin.sprovoost.nl", "testnet-seed.bluematt.me")
+					"seed.testnet.bitcoin.sprovoost.nl", "testnet-seed.bluematt.me",
+					"seed.testnet.achownodes.xyz")
 			.build();
 	private static final NetworkParameters BITCOIN_TEST4_NET_PARAMS = bitcoinParams("org.bitcoin.test4", NetworkParameters.PAYMENT_PROTOCOL_ID_TESTNET, "tb")
 			.genesis(1714777860L, 393743547L, 0x1d00ffffL, "00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043")

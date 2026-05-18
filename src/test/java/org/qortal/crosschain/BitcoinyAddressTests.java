@@ -1,6 +1,7 @@
 package org.qortal.crosschain;
 
 import com.google.common.hash.HashCode;
+import org.bitcoinj.base.Bech32;
 import org.bitcoinj.core.NetworkParameters;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -61,6 +62,23 @@ public class BitcoinyAddressTests {
 		assertEquals(BitcoinyAddress.Type.P2SH, p2shAddress.getType());
 		assertTrue(p2shAddress.toString().startsWith("3"));
 		assertArrayEquals(scriptHash, BitcoinyAddress.fromString(bitcoinParams, p2shAddress.toString()).getPayload());
+	}
+
+	@Test
+	public void testBech32RawValuesRoundTrip() {
+		byte[] values = new byte[] {
+				0, 1, 2, 3, 4, 5, 6, 7,
+				8, 9, 10, 11, 12, 13, 14, 15,
+				16, 17, 18, 19, 20, 21, 22, 23,
+				24, 25, 26, 27, 28, 29, 30, 31
+		};
+
+		String encoded = BitcoinyAddress.encodeBech32Values("ZS", values);
+		Bech32.Bech32Data decoded = Bech32.decode(encoded);
+
+		assertTrue(encoded.startsWith("zs1"));
+		assertEquals("zs", decoded.hrp);
+		assertArrayEquals(values, decoded.bytes());
 	}
 
 	@Test

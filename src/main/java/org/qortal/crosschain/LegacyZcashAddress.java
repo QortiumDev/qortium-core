@@ -21,9 +21,15 @@
 
 package org.qortal.crosschain;
 
-import org.bitcoinj.core.*;
+import org.bitcoinj.base.Address;
+import org.bitcoinj.base.Base58;
+import org.bitcoinj.base.Network;
+import org.bitcoinj.base.ScriptType;
+import org.bitcoinj.base.Sha256Hash;
+import org.bitcoinj.base.exceptions.AddressFormatException;
+import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.params.Networks;
-import org.bitcoinj.script.Script.ScriptType;
+import org.bitcoinj.crypto.ECKey;
 
 import javax.annotation.Nullable;
 import java.util.Arrays;
@@ -40,18 +46,22 @@ import java.util.Objects;
  * should be interpreted. Whilst almost all addresses today are hashes of public keys, another (currently unsupported
  * type) can contain a hash of a script instead.</p>
  */
-public class LegacyZcashAddress extends Address {
+public class LegacyZcashAddress implements Address, Cloneable {
     /**
      * An address is a RIPEMD160 hash of a public key, therefore is always 160 bits or 20 bytes.
      */
     public static final int LENGTH = 20;
 
+    private final NetworkParameters params;
+    private final byte[] bytes;
+
     /** True if P2SH, false if P2PKH. */
     public final boolean p2sh;
 
-    /* Zcash P2SH header bytes */
-    private static int P2SH_HEADER_1 = 28;
-    private static int P2SH_HEADER_2 = 189;
+	/* Zcash P2SH header bytes */
+	private static final int P2SH_HEADER_1 = 28;
+	private static final int P2SH_HEADER_2 = 189;
+	private static final int P2SH_HEADER = (P2SH_HEADER_1 << 8) | P2SH_HEADER_2;
 
     /**
      * Private constructor. Use {@link #fromBase58(NetworkParameters, String)},
@@ -66,10 +76,13 @@ public class LegacyZcashAddress extends Address {
      *            20-byte hash of pubkey or script
      */
     private LegacyZcashAddress(NetworkParameters params, boolean p2sh, byte[] hash160) throws AddressFormatException {
-        super(params, hash160);
+        if (params == null)
+            throw new IllegalArgumentException("Network parameters are required");
         if (hash160.length != 20)
             throw new AddressFormatException.InvalidDataLength(
                     "Legacy addresses are 20 byte (160 bit) hashes, but got: " + hash160.length);
+        this.params = params;
+        this.bytes = Arrays.copyOf(hash160, hash160.length);
         this.p2sh = p2sh;
     }
 
@@ -130,23 +143,36 @@ public class LegacyZcashAddress extends Address {
     public static LegacyZcashAddress fromBase58(@Nullable NetworkParameters params, String base58)
             throws AddressFormatException, AddressFormatException.WrongNetwork {
         byte[] versionAndDataBytes = Base58.decodeChecked(base58);
-        int version = versionAndDataBytes[0] & 0xFF;
-        byte[] bytes = Arrays.copyOfRange(versionAndDataBytes, 1, versionAndDataBytes.length);
         if (params == null) {
             for (NetworkParameters p : Networks.get()) {
-                if (version == p.getAddressHeader())
-                    return new LegacyZcashAddress(p, false, bytes);
-                else if (version == p.getP2SHHeader())
-                    return new LegacyZcashAddress(p, true, bytes);
+                LegacyZcashAddress address = fromVersionAndData(p, versionAndDataBytes);
+                if (address != null)
+                    return address;
             }
             throw new AddressFormatException.InvalidPrefix("No network found for " + base58);
         } else {
-            if (version == params.getAddressHeader())
-                return new LegacyZcashAddress(params, false, bytes);
-            else if (version == params.getP2SHHeader())
-                return new LegacyZcashAddress(params, true, bytes);
-            throw new AddressFormatException.WrongNetwork(version);
+            LegacyZcashAddress address = fromVersionAndData(params, versionAndDataBytes);
+            if (address != null)
+                return address;
+
+            throw new AddressFormatException.WrongNetwork(versionAndDataBytes.length == 0 ? -1 : versionAndDataBytes[0] & 0xff);
         }
+    }
+
+    private static LegacyZcashAddress fromVersionAndData(NetworkParameters params, byte[] versionAndDataBytes) {
+        byte[] addressHeader = headerBytes(params.getAddressHeader());
+        if (startsWith(versionAndDataBytes, addressHeader))
+            return new LegacyZcashAddress(params, false, Arrays.copyOfRange(versionAndDataBytes, addressHeader.length, versionAndDataBytes.length));
+
+		byte[] legacyP2shHeader = headerBytes(P2SH_HEADER);
+		if (startsWith(versionAndDataBytes, legacyP2shHeader))
+			return new LegacyZcashAddress(params, true, Arrays.copyOfRange(versionAndDataBytes, legacyP2shHeader.length, versionAndDataBytes.length));
+
+		byte[] p2shHeader = headerBytes(params.getP2SHHeader());
+		if (!Arrays.equals(p2shHeader, legacyP2shHeader) && startsWith(versionAndDataBytes, p2shHeader))
+			return new LegacyZcashAddress(params, true, Arrays.copyOfRange(versionAndDataBytes, p2shHeader.length, versionAndDataBytes.length));
+
+        return null;
     }
 
     /**
@@ -154,9 +180,9 @@ public class LegacyZcashAddress extends Address {
      * 
      * @return version header as one byte
      */
-    public int getVersion() {
-        return p2sh ? params.getP2SHHeader() : params.getAddressHeader();
-    }
+	public int getVersion() {
+		return p2sh ? P2SH_HEADER : params.getAddressHeader();
+	}
 
     /**
      * Returns the base58-encoded textual form, including version and checksum bytes.
@@ -170,7 +196,7 @@ public class LegacyZcashAddress extends Address {
     /** The (big endian) 20 byte hash that is the core of a Bitcoin address. */
     @Override
     public byte[] getHash() {
-        return bytes;
+        return Arrays.copyOf(bytes, bytes.length);
     }
 
     /**
@@ -184,6 +210,17 @@ public class LegacyZcashAddress extends Address {
         return p2sh ? ScriptType.P2SH : ScriptType.P2PKH;
     }
 
+    @Override
+    public Network network() {
+        return this.params.network();
+    }
+
+    @Override
+    public NetworkParameters getParameters() {
+        return this.params;
+    }
+
+    @Override
     public int compareTo(Address address) {
         return this.toString().compareTo(address.toString());
     }
@@ -207,12 +244,12 @@ public class LegacyZcashAddress extends Address {
         if (o == null || getClass() != o.getClass())
             return false;
         LegacyZcashAddress other = (LegacyZcashAddress) o;
-        return super.equals(other) && this.p2sh == other.p2sh;
+        return Objects.equals(this.params, other.params) && this.p2sh == other.p2sh && Arrays.equals(this.bytes, other.bytes);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), p2sh);
+        return Objects.hash(this.params, this.p2sh, Arrays.hashCode(this.bytes));
     }
 
     @Override
@@ -222,22 +259,48 @@ public class LegacyZcashAddress extends Address {
 
     @Override
     public LegacyZcashAddress clone() throws CloneNotSupportedException {
-        return (LegacyZcashAddress) super.clone();
+        return new LegacyZcashAddress(this.params, this.p2sh, this.bytes);
     }
 
     public static String encodeChecked(int version, byte[] payload) {
-        if (version < 0 || version > 255)
-            throw new IllegalArgumentException("Version not in range.");
+        if (version < 0)
+            throw new IllegalArgumentException("Version must not be negative.");
 
         // A stringified buffer is:
-        // 1 byte version + data bytes + 4 bytes check code (a truncated hash)
-        byte[] addressBytes = new byte[2 + payload.length + 4];
-        addressBytes[0] = (byte) P2SH_HEADER_1;
-        addressBytes[1] = (byte) P2SH_HEADER_2;
-        System.arraycopy(payload, 0, addressBytes, 2, payload.length);
-        byte[] checksum = Sha256Hash.hashTwice(addressBytes, 0, payload.length + 2);
-        System.arraycopy(checksum, 0, addressBytes, payload.length + 2, 4);
+        // version bytes + data bytes + 4 bytes check code (a truncated hash)
+        byte[] header = headerBytes(version);
+        byte[] addressBytes = new byte[header.length + payload.length + 4];
+        System.arraycopy(header, 0, addressBytes, 0, header.length);
+        System.arraycopy(payload, 0, addressBytes, header.length, payload.length);
+        byte[] checksum = Sha256Hash.hashTwice(addressBytes, 0, payload.length + header.length);
+        System.arraycopy(checksum, 0, addressBytes, payload.length + header.length, 4);
         return Base58.encode(addressBytes);
+    }
+
+    private static byte[] headerBytes(int header) {
+        if (header <= 0xff)
+            return new byte[] { (byte) header };
+
+        int byteCount = 0;
+        for (int value = header; value != 0; value >>>= 8)
+            ++byteCount;
+
+        byte[] bytes = new byte[byteCount];
+        for (int index = byteCount - 1, value = header; index >= 0; --index, value >>>= 8)
+            bytes[index] = (byte) value;
+
+        return bytes;
+    }
+
+    private static boolean startsWith(byte[] bytes, byte[] prefix) {
+        if (bytes.length < prefix.length)
+            return false;
+
+        for (int index = 0; index < prefix.length; ++index)
+            if (bytes[index] != prefix[index])
+                return false;
+
+        return true;
     }
 
 //    // Comparator for LegacyAddress, left argument must be LegacyAddress, right argument can be any Address

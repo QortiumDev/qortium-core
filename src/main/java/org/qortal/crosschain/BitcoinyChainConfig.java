@@ -1,6 +1,6 @@
 package org.qortal.crosschain;
 
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 import org.qortal.crosschain.ChainableServer.ConnectionType;
 
 import java.util.EnumMap;

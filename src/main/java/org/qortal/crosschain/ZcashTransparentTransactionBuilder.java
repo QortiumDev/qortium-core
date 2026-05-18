@@ -2,9 +2,9 @@ package org.qortal.crosschain;
 
 import com.google.common.hash.HashCode;
 import com.google.common.primitives.Bytes;
-import org.bitcoinj.core.Coin;
-import org.bitcoinj.core.ECKey;
-import org.bitcoinj.core.Sha256Hash;
+import org.bitcoinj.base.Coin;
+import org.bitcoinj.crypto.ECKey;
+import org.bitcoinj.base.Sha256Hash;
 import org.bouncycastle.crypto.digests.Blake2bDigest;
 import org.qortal.crypto.Crypto;
 
@@ -70,7 +70,7 @@ final class ZcashTransparentTransactionBuilder {
 			long selectedTotal = 0L;
 			List<Input> selectedInputs = new ArrayList<>();
 			long feeRate = feePerByte != null ? feePerByte : Math.max(1L, bitcoiny.getFeePerKb().value / 1000L);
-			long minChange = bitcoiny.getNetworkParameters().getMinNonDustOutput().value;
+			long minChange = bitcoiny.getMinNonDustOutput().value;
 
 			for (SpendCandidate candidate : spendCandidates) {
 				selectedInputs.add(Input.p2pkh(candidate.output, candidate.key, NO_LOCKTIME_SEQUENCE));

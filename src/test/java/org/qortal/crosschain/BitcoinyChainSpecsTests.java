@@ -3,7 +3,7 @@ package org.qortal.crosschain;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.bitcoinj.core.Block;
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 import org.bitcoinj.core.NetworkParameters;
 import org.bitcoinj.params.MainNetParams;
 import org.bitcoinj.params.RegTestParams;
@@ -265,7 +265,7 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(0x0488B21E, bitcoinCashMainNetParams.getBip32HeaderP2PKHpub());
 		assertEquals(0x0488ADE4, bitcoinCashMainNetParams.getBip32HeaderP2PKHpriv());
 		assertEquals(Coin.COIN.multiply(21_000_000L), bitcoinCashMainNetParams.getMaxMoney());
-		assertEquals(Coin.valueOf(546L), bitcoinCashMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.valueOf(546L), getMinNonDustOutput(bitcoinCashMainNetParams));
 		assertTrue(BitcoinyChainSpecs.BITCOIN_CASH.hasSpendableOutputScriptFilter());
 		assertTrue(BitcoinyChainSpecs.BITCOIN_CASH.isSpendableOutputScript(BitcoinyScript.p2pkhScript(new byte[20])));
 		assertFalse(BitcoinyChainSpecs.BITCOIN_CASH.isSpendableOutputScript(new byte[] { (byte) 0xef, 0x01 }));
@@ -481,7 +481,7 @@ public class BitcoinyChainSpecsTests {
 		assertNull(dogecoinMainNetParams.getSegwitAddressHrp());
 		assertEquals(0x02facafd, dogecoinMainNetParams.getBip32HeaderP2PKHpub());
 		assertEquals(0x02fac398, dogecoinMainNetParams.getBip32HeaderP2PKHpriv());
-		assertEquals(Coin.COIN, dogecoinMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.COIN, getMinNonDustOutput(dogecoinMainNetParams));
 		assertEquals(false, dogecoinMainNetParams.hasMaxMoney());
 	}
 
@@ -509,7 +509,7 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(128, ravencoinMainNetParams.getDumpedPrivateKeyHeader());
 		assertNull(ravencoinMainNetParams.getSegwitAddressHrp());
 		assertEquals(2_100_000, ravencoinMainNetParams.getSubsidyDecreaseBlockCount());
-		assertEquals(Coin.valueOf(2_730L), ravencoinMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.valueOf(2_730L), getMinNonDustOutput(ravencoinMainNetParams));
 	}
 
 	@Test
@@ -553,7 +553,7 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(0x0488B21E, peercoinMainNetParams.getBip32HeaderP2PKHpub());
 		assertEquals(0x0488ADE4, peercoinMainNetParams.getBip32HeaderP2PKHpriv());
 		assertEquals(Coin.valueOf(21_000_000L * 1_000_000L), peercoinMainNetParams.getMaxMoney());
-		assertEquals(Coin.valueOf(10_000L), peercoinMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.valueOf(10_000L), getMinNonDustOutput(peercoinMainNetParams));
 		assertEquals("PPC 1.00", peercoinMainNetParams.getMonetaryFormat().format(Coin.valueOf(1_000_000L)).toString());
 		assertEquals(6, BitcoinyChainSpecs.PEERCOIN.getConfig().getDecimalPlaces());
 
@@ -622,7 +622,7 @@ public class BitcoinyChainSpecsTests {
 		assertNull(firoMainNetParams.getSegwitAddressHrp());
 		assertEquals(0x0488B21E, firoMainNetParams.getBip32HeaderP2PKHpub());
 		assertEquals(0x0488ADE4, firoMainNetParams.getBip32HeaderP2PKHpriv());
-		assertEquals(Coin.valueOf(1000L), firoMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.valueOf(1000L), getMinNonDustOutput(firoMainNetParams));
 		assertFalse(firoMainNetParams.hasMaxMoney());
 		assertEquals("FIRO 1.00", firoMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
 	}
@@ -655,7 +655,7 @@ public class BitcoinyChainSpecsTests {
 		assertNull(komodoMainNetParams.getSegwitAddressHrp());
 		assertEquals(0x0488B21E, komodoMainNetParams.getBip32HeaderP2PKHpub());
 		assertEquals(0x0488ADE4, komodoMainNetParams.getBip32HeaderP2PKHpriv());
-		assertEquals(Coin.valueOf(1000L), komodoMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.valueOf(1000L), getMinNonDustOutput(komodoMainNetParams));
 		assertFalse(komodoMainNetParams.hasMaxMoney());
 		assertEquals("KMD 1.00", komodoMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
 	}
@@ -695,7 +695,7 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(750, verusMainNetParams.getMajorityEnforceBlockUpgrade());
 		assertEquals(950, verusMainNetParams.getMajorityRejectBlockOutdated());
 		assertEquals(4000, verusMainNetParams.getMajorityWindow());
-		assertEquals(Coin.valueOf(1000L), verusMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.valueOf(1000L), getMinNonDustOutput(verusMainNetParams));
 		assertFalse(verusMainNetParams.hasMaxMoney());
 		assertEquals("VRSC 1.00", verusMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
 	}
@@ -735,7 +735,7 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(950, zcashMainNetParams.getMajorityRejectBlockOutdated());
 		assertEquals(4000, zcashMainNetParams.getMajorityWindow());
 		assertEquals(Coin.COIN.multiply(21_000_000L), zcashMainNetParams.getMaxMoney());
-		assertEquals(Coin.valueOf(1000L), zcashMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.valueOf(1000L), getMinNonDustOutput(zcashMainNetParams));
 		assertEquals("ZEC 1.00", zcashMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
 	}
 
@@ -768,7 +768,7 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(32, lbryMainNetParams.getSubsidyDecreaseBlockCount());
 		assertEquals(0x0488B21E, lbryMainNetParams.getBip32HeaderP2PKHpub());
 		assertEquals(0x0488ADE4, lbryMainNetParams.getBip32HeaderP2PKHpriv());
-		assertEquals(Coin.valueOf(546L), lbryMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.valueOf(546L), getMinNonDustOutput(lbryMainNetParams));
 		assertFalse(lbryMainNetParams.hasMaxMoney());
 		assertEquals("LBC 1.00", lbryMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
 		assertTrue(BitcoinyChainSpecs.LBRY_CREDITS.hasSpendableOutputScriptFilter());
@@ -811,7 +811,7 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(0x022D2533, vergeMainNetParams.getBip32HeaderP2PKHpub());
 		assertEquals(0x0221312B, vergeMainNetParams.getBip32HeaderP2PKHpriv());
 		assertEquals(Coin.valueOf(16_555_000_000L * 1_000_000L), vergeMainNetParams.getMaxMoney());
-		assertEquals(Coin.valueOf(10_000L), vergeMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.valueOf(10_000L), getMinNonDustOutput(vergeMainNetParams));
 		assertEquals("XVG 1.00", vergeMainNetParams.getMonetaryFormat().format(Coin.valueOf(1_000_000L)).toString());
 		assertEquals(6, BitcoinyChainSpecs.VERGE.getConfig().getDecimalPlaces());
 
@@ -847,7 +847,7 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(0x0488B21E, pirateMainNetParams.getBip32HeaderP2PKHpub());
 		assertEquals(0x0488ADE4, pirateMainNetParams.getBip32HeaderP2PKHpriv());
 		assertEquals(Coin.COIN.multiply(200_000_000L), pirateMainNetParams.getMaxMoney());
-		assertEquals(Coin.valueOf(100_000L), pirateMainNetParams.getMinNonDustOutput());
+		assertEquals(Coin.valueOf(100_000L), getMinNonDustOutput(pirateMainNetParams));
 		assertEquals("PIRATE 1.00", pirateMainNetParams.getMonetaryFormat().format(Coin.COIN).toString());
 	}
 
@@ -965,7 +965,7 @@ public class BitcoinyChainSpecsTests {
 		assertEquals(expectedGenesisBlock.hasTransactions(), actualGenesisBlock.hasTransactions());
 		assertEquals(expectedGenesisBlock.getTransactions().size(), actualGenesisBlock.getTransactions().size());
 		for (int index = 0; index < expectedGenesisBlock.getTransactions().size(); index++)
-			assertEquals(expectedGenesisBlock.getTransactions().get(index).getHash(), actualGenesisBlock.getTransactions().get(index).getHash());
+			assertEquals(expectedGenesisBlock.getTransactions().get(index).getTxId(), actualGenesisBlock.getTransactions().get(index).getTxId());
 		assertEquals(expected.getMaxTarget(), actual.getMaxTarget());
 		assertEquals(expected.getTargetTimespan(), actual.getTargetTimespan());
 		assertEquals(expected.getInterval(), actual.getInterval());
@@ -987,10 +987,14 @@ public class BitcoinyChainSpecsTests {
 		if (compareDnsSeeds)
 			assertArrayEquals(expected.getDnsSeeds(), actual.getDnsSeeds());
 		assertEquals(expected.getMaxMoney(), actual.getMaxMoney());
-		assertEquals(expected.getMinNonDustOutput(), actual.getMinNonDustOutput());
+		assertEquals(getMinNonDustOutput(expected), getMinNonDustOutput(actual));
 		assertEquals(expected.getMonetaryFormat().format(Coin.COIN).toString(), actual.getMonetaryFormat().format(Coin.COIN).toString());
 		assertEquals(expected.getMonetaryFormat().format(Coin.valueOf(123456789L)).toString(), actual.getMonetaryFormat().format(Coin.valueOf(123456789L)).toString());
 		assertEquals(expected.hasMaxMoney(), actual.hasMaxMoney());
+	}
+
+	private static Coin getMinNonDustOutput(NetworkParameters params) {
+		return StaticBitcoinyParams.getMinNonDustOutput(params);
 	}
 
 	private static Block getGenesisBlock(NetworkParameters params) {

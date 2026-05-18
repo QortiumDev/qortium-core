@@ -1,6 +1,6 @@
 package org.qortal.test.crosschain;
 
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 import org.bitcoinj.core.Context;
 import org.bitcoinj.core.NetworkParameters;
 import org.qortal.crosschain.Bitcoiny;
@@ -18,7 +18,7 @@ class TestBitcoiny extends Bitcoiny {
 
 	TestBitcoiny(NetworkParameters params, MockBitcoinyBlockchainProvider blockchainProvider, String currencyCode,
 			Predicate<byte[]> spendableOutputScriptFilter) {
-		super(blockchainProvider, new Context(params), currencyCode, Coin.valueOf(1_000L));
+		super(blockchainProvider, new Context(params), params, currencyCode, Coin.valueOf(1_000L));
 		this.spendableOutputScriptFilter = spendableOutputScriptFilter;
 		blockchainProvider.setBlockchain(this);
 	}

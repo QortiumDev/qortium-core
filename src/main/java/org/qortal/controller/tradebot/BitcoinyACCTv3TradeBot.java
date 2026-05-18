@@ -2,7 +2,9 @@ package org.qortal.controller.tradebot;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bitcoinj.base.Coin;
 import org.bitcoinj.core.*;
+import org.bitcoinj.crypto.ECKey;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.api.model.crosschain.TradeBotCreateRequest;

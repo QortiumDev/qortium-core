@@ -11,7 +11,7 @@
 		<!-- Override with -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false when intentionally running GUI tests with a display. -->
 		<test.awt.headless>true</test.awt.headless>
 
-		<bitcoinj.version>0.16.3</bitcoinj.version>
+		<bitcoinj.version>0.17.1</bitcoinj.version>
 		<bouncycastle.version>1.84</bouncycastle.version>
 		<build.timestamp>${maven.build.timestamp}</build.timestamp>
 		<ciyam-at.version>1b731d1</ciyam-at.version> <!-- QuickMythril/AT v1.4.3 fork point -->

@@ -2,9 +2,9 @@ package org.qortal.test;
 
 import com.google.common.hash.HashCode;
 import org.apache.commons.io.FileUtils;
-import org.bitcoinj.core.Address;
-import org.bitcoinj.core.AddressFormatException;
-import org.bitcoinj.core.ECKey;
+import org.bitcoinj.base.Address;
+import org.bitcoinj.base.exceptions.AddressFormatException;
+import org.bitcoinj.crypto.ECKey;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.junit.After;

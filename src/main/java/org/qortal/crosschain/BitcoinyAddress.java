@@ -23,6 +23,7 @@ public final class BitcoinyAddress {
 	private static final int CASHADDR_CHECKSUM_LENGTH = 8;
 	private static final int CASHADDR_P2PKH_VERSION = 0;
 	private static final int CASHADDR_P2SH_VERSION = 8;
+	private static final int ZCASH_LEGACY_P2SH_HEADER = 0x1cbd;
 
 	static {
 		Arrays.fill(BECH32_CHARSET_REV, -1);
@@ -85,6 +86,15 @@ public final class BitcoinyAddress {
 			byte[] hash = Arrays.copyOfRange(payload, p2shHeader.length, payload.length);
 			if (hash.length == Bitcoiny.HASH160_LENGTH)
 				return new BitcoinyAddress(Type.P2SH, hash, address);
+		}
+
+		if (supportsLegacyZcashP2sh(params)) {
+			byte[] zcashP2shHeader = headerBytes(ZCASH_LEGACY_P2SH_HEADER);
+			if (startsWith(payload, zcashP2shHeader)) {
+				byte[] hash = Arrays.copyOfRange(payload, zcashP2shHeader.length, payload.length);
+				if (hash.length == Bitcoiny.HASH160_LENGTH)
+					return new BitcoinyAddress(Type.P2SH, hash, address);
+			}
 		}
 
 		throw new IllegalArgumentException("Address version is not valid for this network");
@@ -153,6 +163,11 @@ public final class BitcoinyAddress {
 				return false;
 
 		return true;
+	}
+
+	private static boolean supportsLegacyZcashP2sh(NetworkParameters params) {
+		return params.getAddressHeader() == 60 && params.getP2SHHeader() == 85
+				&& "zs".equals(params.getSegwitAddressHrp());
 	}
 
 	private static BitcoinyAddress fromCashAddressHash(String prefix, int version, Type type, byte[] hash) {
@@ -467,6 +482,32 @@ public final class BitcoinyAddress {
 
 	public byte[] getPayload() {
 		return Arrays.copyOf(this.payload, this.payload.length);
+	}
+
+	public static String encodeBech32Values(String hrp, byte[] payloadValues) {
+		if (hrp == null || hrp.isEmpty())
+			throw new IllegalArgumentException("Missing Bech32 HRP");
+
+		String normalizedHrp = hrp.toLowerCase(Locale.ROOT);
+		int[] values = new int[payloadValues.length + 6];
+		for (int index = 0; index < payloadValues.length; ++index) {
+			int value = payloadValues[index] & 0xff;
+			if (value > 31)
+				throw new IllegalArgumentException("Invalid Bech32 value");
+
+			values[index] = value;
+		}
+
+		int polymod = bech32Polymod(hrpExpand(normalizedHrp), values) ^ 1;
+		for (int index = 0; index < 6; ++index)
+			values[payloadValues.length + index] = (polymod >> (5 * (5 - index))) & 31;
+
+		StringBuilder builder = new StringBuilder(normalizedHrp.length() + 1 + values.length);
+		builder.append(normalizedHrp).append('1');
+		for (int value : values)
+			builder.append(BECH32_CHARSET.charAt(value));
+
+		return builder.toString();
 	}
 
 	public boolean isP2PKH() {

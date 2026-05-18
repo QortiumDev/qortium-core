@@ -1,7 +1,9 @@
 package org.qortal.test.crosschain.apps;
 
 import com.google.common.hash.HashCode;
+import org.bitcoinj.base.Coin;
 import org.bitcoinj.core.*;
+import org.bitcoinj.crypto.ECKey;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyAddress;
 import org.qortal.crosschain.BitcoinyHTLC;

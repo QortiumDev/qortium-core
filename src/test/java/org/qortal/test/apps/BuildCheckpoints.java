@@ -18,12 +18,12 @@ public class BuildCheckpoints {
 	public static void main(String[] args) throws Exception {
 		final NetworkParameters params = RegTestParams.get();
 
-		final BlockStore store = new MemoryBlockStore(params);
-		final BlockChain chain = new BlockChain(params, store);
+		final BlockStore store = new MemoryBlockStore(params.getGenesisBlock());
+		final BlockChain chain = new BlockChain(params.network(), store);
 		final PeerGroup peerGroup = new PeerGroup(params, chain);
 
 		final InetAddress ipAddress = InetAddress.getLoopbackAddress();
-		final PeerAddress peerAddress = new PeerAddress(params, ipAddress);
+		final PeerAddress peerAddress = PeerAddress.simple(ipAddress, params.getPort());
 		peerGroup.addAddress(peerAddress);
 		peerGroup.start();
 

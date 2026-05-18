@@ -13,6 +13,7 @@ public class ConfiguredBitcoiny extends Bitcoiny {
 						ElectrumServerList.getServers(config.getCurrencyCode(), network.name(), network.getServers()),
 						config.getDefaultElectrumXPorts(), config.getDecimalPlaces()),
 				new Context(network.getParams()),
+				network.getParams(),
 				config.getCurrencyCode(),
 				config.getDefaultFeePerKb());
 

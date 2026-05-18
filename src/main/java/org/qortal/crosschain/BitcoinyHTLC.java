@@ -2,8 +2,11 @@ package org.qortal.crosschain;
 
 import com.google.common.hash.HashCode;
 import com.google.common.primitives.Bytes;
+import org.bitcoinj.base.Coin;
+import org.bitcoinj.base.Sha256Hash;
 import org.bitcoinj.core.*;
 import org.bitcoinj.core.Transaction.SigHash;
+import org.bitcoinj.crypto.ECKey;
 import org.bitcoinj.crypto.TransactionSignature;
 import org.bitcoinj.script.Script;
 import org.qortal.crypto.Crypto;
@@ -119,14 +122,14 @@ public class BitcoinyHTLC {
 
 		for (int inputIndex = 0; inputIndex < fundingOutputs.size(); ++inputIndex) {
 			UnspentOutput fundingOutput = fundingOutputs.get(inputIndex);
-			TransactionOutPoint fundingOutPoint = new TransactionOutPoint(params, fundingOutput.index, Sha256Hash.wrap(fundingOutput.hash));
+			TransactionOutPoint fundingOutPoint = new TransactionOutPoint(fundingOutput.index, Sha256Hash.wrap(fundingOutput.hash));
 
 			// Input (without scriptSig prior to signing)
-			TransactionInput input = new TransactionInput(params, null, redeemScriptBytes, fundingOutPoint);
+			TransactionInput input = new TransactionInput(null, redeemScriptBytes, fundingOutPoint);
 			if (lockTime != null)
-				input.setSequenceNumber(LOCKTIME_NO_RBF_SEQUENCE); // Use max-value - 1, so lockTime can be used but not RBF
+				input = input.withSequence(LOCKTIME_NO_RBF_SEQUENCE); // Use max-value - 1, so lockTime can be used but not RBF
 			else
-				input.setSequenceNumber(NO_LOCKTIME_NO_RBF_SEQUENCE); // Use max-value, so no lockTime and no RBF
+				input = input.withSequence(NO_LOCKTIME_NO_RBF_SEQUENCE); // Use max-value, so no lockTime and no RBF
 			transaction.addInput(input);
 		}
 
@@ -146,7 +149,7 @@ public class BitcoinyHTLC {
 			byte[] scriptSigBytes = scriptSigBuilder.apply(txSigBytes);
 
 			// Set input scriptSig
-			transaction.getInput(inputIndex).setScriptSig(new Script(scriptSigBytes));
+			transaction.replaceInput(inputIndex, transaction.getInput(inputIndex).withScriptSig(new Script(scriptSigBytes)));
 		}
 
 		return transaction;

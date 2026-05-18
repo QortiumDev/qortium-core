@@ -4,9 +4,9 @@ import cash.z.wallet.sdk.rpc.CompactFormats.CompactBlock;
 import com.google.common.hash.HashCode;
 import com.google.common.primitives.Bytes;
 import org.apache.commons.lang3.reflect.FieldUtils;
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 import org.bitcoinj.core.Context;
-import org.bitcoinj.core.ECKey;
+import org.bitcoinj.crypto.ECKey;
 import org.bitcoinj.core.NetworkParameters;
 import org.junit.After;
 import org.junit.Before;
@@ -1723,7 +1723,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 
 		private MockBitcoiny(NetworkParameters params, String currencyCode, byte[] receivePublicKeyHash, long minimumOrderAmount,
 				MockProvider provider, String... validWalletKeys) {
-			super(provider, new Context(params), currencyCode, Coin.valueOf(1_000L));
+			super(provider, new Context(params), params, currencyCode, Coin.valueOf(1_000L));
 			this.receivePublicKeyHash = receivePublicKeyHash;
 			this.minimumOrderAmount = minimumOrderAmount;
 			this.validWalletKeys = new HashSet<>(Arrays.asList(validWalletKeys));

@@ -29,13 +29,14 @@ Qortium currently depends directly on upstream bitcoinj for the remaining
 Bitcoin-like transaction signing and compatibility boundary:
 
 - Maven coordinate: `org.bitcoinj:bitcoinj-core`
-- Version pin: `0.16.3`
+- Version pin: `0.17.1`
 
 The shared BTC-like parameter, address, script, wallet-scan, raw-transaction,
 UTXO, and ACCT identity paths have moved into Qortium code. bitcoinj remains in
-use for transaction construction/signing and a few compatibility types. Removing
-that final dependency boundary should be treated as a dedicated crosschain
-signing project, not as provenance cleanup.
+use for transaction construction/signing and a few compatibility types. The
+`0.17.1` baseline keeps that boundary on bitcoinj's patched security line.
+Removing that final dependency boundary should be treated as a dedicated
+crosschain signing project, not as provenance cleanup.
 
 ## HSQLDB
 

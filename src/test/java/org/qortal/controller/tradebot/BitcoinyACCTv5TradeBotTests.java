@@ -3,9 +3,9 @@ package org.qortal.controller.tradebot;
 import cash.z.wallet.sdk.rpc.CompactFormats.CompactBlock;
 import com.google.common.hash.HashCode;
 import com.google.common.primitives.Bytes;
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 import org.bitcoinj.core.Context;
-import org.bitcoinj.core.ECKey;
+import org.bitcoinj.crypto.ECKey;
 import org.bitcoinj.core.NetworkParameters;
 import org.junit.After;
 import org.junit.Before;
@@ -584,7 +584,7 @@ public class BitcoinyACCTv5TradeBotTests extends Common {
 		}
 
 		private MockBitcoiny(NetworkParameters params, MockProvider provider) {
-			super(provider, new Context(params), "BTC", Coin.valueOf(1_000L));
+			super(provider, new Context(params), params, "BTC", Coin.valueOf(1_000L));
 			provider.setBlockchain(this);
 		}
 

@@ -45,7 +45,7 @@ There are two non-blocking cleanup items to keep visible:
 - Jetty 12 EE8 still supports the current `CrossOriginFilter`, but marks it as
   deprecated for future removal. Qortium should replace that CORS setup with a
   small local filter or another Jetty-supported approach in a later API cleanup.
-  This does not block the bitcoinj or Netty security work.
+  This does not block other dependency-security work.
 - The GitHub workflows now use Java 17, but still use the v3 generation of
   checkout, cache, and setup-java actions. Updating those actions is ordinary CI
   maintenance, not part of the Jetty security fix.
@@ -57,16 +57,17 @@ advisories. Qortium moved gRPC to `1.81.0` and pins the Netty family to
 `4.1.133.Final` through Netty's Maven BOM so `grpc-netty` and every resolved
 Netty module use the same security-patched line.
 
-## Deferred Security Work
+## Resolved Bitcoinj Work
 
-These findings need separate work because they are larger than simple dependency
-patches:
+bitcoinj `0.16.3` had a script-verification advisory fixed in bitcoinj
+`0.17.1`. Qortium moved to bitcoinj `0.17.1` and updated the cross-chain code
+for bitcoinj's relocated base, crypto, address, script, transaction, and network
+parameter APIs while preserving the existing Bitcoiny HTLC, transaction-builder,
+deterministic-wallet, and Pirate Chain compatibility behavior.
 
-- bitcoinj `0.16.3` has a script-verification advisory fixed in bitcoinj
-  `0.17.1`, but a dry-run upgrade showed package and API movement for core types
-  such as `Coin`, `ECKey`, `Address`, and `Sha256Hash`. This should be a
-  dedicated cross-chain compatibility migration or a separate decision to remove
-  inherited cross-chain surfaces.
+The upgrade also removes bitcoinj's old transitive OkHttp `3.14.9` and Okio
+`1.17.2` runtime path. The refreshed OSV batch query for the resolved runtime
+tree produced no vulnerable dependency entries.
 
 ## Review Artifacts
 
@@ -79,6 +80,8 @@ The local scan artifacts were generated under `target/`:
 - `target/osv-vulns-after-jetty12.json`
 - `target/runtime-dependencies-after-netty.txt`
 - `target/osv-vulns-after-netty.json`
+- `target/runtime-dependencies-after-bitcoinj.txt`
+- `target/osv-vulns-after-bitcoinj.json`
 
 Those files are build artifacts, not tracked project history. This document is
 the durable summary of the review.

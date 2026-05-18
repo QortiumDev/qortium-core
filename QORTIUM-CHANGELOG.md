@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - deps: update bitcoinj security baseline
+
+Updated Qortium from bitcoinj `0.16.3` to `0.17.1` so the inherited cross-chain signing boundary uses the patched bitcoinj line. The migration adapts Qortium's Bitcoiny networks, HTLC signing, transaction builders, address helpers, deterministic-wallet tests, and Pirate Chain `t3`/`b` P2SH compatibility to bitcoinj's newer API layout while keeping the existing cross-chain behavior intact. The resolved runtime tree no longer includes the old vulnerable OkHttp and Okio transitive path, and the refreshed OSV runtime scan found no vulnerable dependency entries.
+
 ### 2026-05-18 - deps: update gRPC and Netty security baseline
 
 Updated Qortium's gRPC runtime and pinned the Netty dependency family to a patched 4.1 line so the Zcash-family light-client networking path no longer resolves the vulnerable Netty 4.1.110 modules. This keeps the change limited to dependency resolution and records bitcoinj as the remaining larger security migration because it requires cross-chain API compatibility work.

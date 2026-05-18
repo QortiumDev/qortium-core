@@ -3,9 +3,13 @@ package org.qortal.crosschain;
 import com.google.common.hash.HashCode;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bitcoinj.base.Address;
+import org.bitcoinj.base.Coin;
+import org.bitcoinj.base.Network;
+import org.bitcoinj.base.Sha256Hash;
 import org.bitcoinj.core.*;
 import org.bitcoinj.crypto.DeterministicHierarchy;
-import org.bitcoinj.params.AbstractBitcoinNetParams;
+import org.bitcoinj.crypto.ECKey;
 import org.bitcoinj.script.Script;
 import org.bitcoinj.wallet.SendRequest;
 import org.bitcoinj.wallet.Wallet;
@@ -27,7 +31,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /** Bitcoin-like (Bitcoin, Litecoin, etc.) support */
-public abstract class Bitcoiny extends AbstractBitcoinNetParams implements ForeignBlockchain {
+public abstract class Bitcoiny implements ForeignBlockchain {
 
 	protected static final Logger LOGGER = LogManager.getLogger(Bitcoiny.class);
 
@@ -72,25 +76,21 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 
 	// Constructors and instance
 
-	protected Bitcoiny(BitcoinyBlockchainProvider blockchainProvider, Context bitcoinjContext, String currencyCode, Coin feePerKb) {
-		this.genesisBlock = this.getGenesisBlock();
+	protected Bitcoiny(BitcoinyBlockchainProvider blockchainProvider, Context bitcoinjContext, NetworkParameters params, String currencyCode, Coin feePerKb) {
 		this.blockchainProvider = blockchainProvider;
 		this.bitcoinjContext = bitcoinjContext;
 		this.currencyCode = currencyCode;
 		this.feePerKb = feePerKb;
-
-		this.params = this.bitcoinjContext.getParams();
+		this.params = params;
 	}
 
 	// Getters & setters
-	@Override
 	public String getPaymentProtocolId() {
-		return this.id;
+		return this.params.getPaymentProtocolId();
 	}
 
-	@Override
 	public Block getGenesisBlock() {
-		return this.genesisBlock;
+		return this.params.getGenesisBlock();
 	}
 
 	public BitcoinyBlockchainProvider getBlockchainProvider() {
@@ -108,6 +108,10 @@ public abstract class Bitcoiny extends AbstractBitcoinNetParams implements Forei
 
 	public NetworkParameters getNetworkParameters() {
 		return this.params;
+	}
+
+	public Coin getMinNonDustOutput() {
+		return StaticBitcoinyParams.getMinNonDustOutput(this.params);
 	}
 
 	// Interface obligations
@@ -1593,8 +1597,8 @@ public List<SimpleTransaction> getWalletTransactions(String key58) throws Foreig
 		}
 
 		@Override
-		public NetworkParameters getParams() {
-			return this.bitcoiny.params;
+		public Network network() {
+			return this.bitcoiny.params.network();
 		}
 	}
 

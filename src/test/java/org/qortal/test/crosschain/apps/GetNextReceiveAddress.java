@@ -1,6 +1,6 @@
 package org.qortal.test.crosschain.apps;
 
-import org.bitcoinj.core.AddressFormatException;
+import org.bitcoinj.base.exceptions.AddressFormatException;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.qortal.crosschain.Bitcoiny;

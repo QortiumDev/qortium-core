@@ -1,6 +1,6 @@
 package org.qortal.test.crosschain.apps;
 
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinySignedTransaction;
 

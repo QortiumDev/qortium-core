@@ -3,7 +3,7 @@ package org.qortal.api.resource;
 import com.google.common.primitives.Bytes;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
 
 import org.bouncycastle.util.Strings;
 import org.json.simple.JSONObject;

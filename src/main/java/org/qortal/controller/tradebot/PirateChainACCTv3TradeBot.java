@@ -4,8 +4,8 @@ import com.google.common.hash.HashCode;
 import com.rust.litewalletjni.LiteWalletJni;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bitcoinj.core.Bech32;
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Bech32;
+import org.bitcoinj.base.Coin;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.api.model.crosschain.TradeBotCreateRequest;
@@ -129,7 +129,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		}
 
 		Bech32.Bech32Data decodedReceivingAddress = Bech32.decode(tradeBotCreateRequest.receivingAddress);
-		byte[] pirateChainReceivingAccountInfo = decodedReceivingAddress.data;
+		byte[] pirateChainReceivingAccountInfo = decodedReceivingAddress.bytes();
 
 		PublicKeyAccount creator = new PublicKeyAccount(repository, tradeBotCreateRequest.creatorPublicKey);
 
@@ -757,7 +757,7 @@ public class PirateChainACCTv3TradeBot implements AcctTradeBot {
 		long feeTimestamp = calcFeeTimestamp(lockTimeA, crossChainTradeData.tradeTimeout);
 		long p2shFee = PirateChain.getInstance().getP2shFee(feeTimestamp);
 		long minimumAmountA = crossChainTradeData.expectedForeignAmount + p2shFee;
-		String receivingAddress = Bech32.encode(Bech32.Encoding.BECH32, "zs", receivingAccountInfo);
+		String receivingAddress = BitcoinyAddress.encodeBech32Values("zs", receivingAccountInfo);
 
 		BitcoinyHTLC.Status htlcStatusA = PirateChainHTLC.determineHtlcStatus(pirateChain.getBlockchainProvider(), p2shAddress, minimumAmountA);
 

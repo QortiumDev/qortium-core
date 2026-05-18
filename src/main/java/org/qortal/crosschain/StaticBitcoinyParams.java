@@ -1,28 +1,34 @@
 package org.qortal.crosschain;
 
-import org.bitcoinj.core.Block;
-import org.bitcoinj.core.Coin;
+import org.bitcoinj.base.Coin;
+import org.bitcoinj.base.Monetary;
+import org.bitcoinj.base.Network;
 import org.bitcoinj.core.NetworkParameters;
-import org.bitcoinj.core.Sha256Hash;
+import org.bitcoinj.base.Sha256Hash;
+import org.bitcoinj.core.BitcoinSerializer;
+import org.bitcoinj.core.Block;
 import org.bitcoinj.core.StoredBlock;
 import org.bitcoinj.core.Transaction;
 import org.bitcoinj.core.TransactionInput;
 import org.bitcoinj.core.TransactionOutput;
-import org.bitcoinj.core.Utils;
 import org.bitcoinj.core.VerificationException;
-import org.bitcoinj.params.AbstractBitcoinNetParams;
 import org.bitcoinj.script.Script;
 import org.bitcoinj.store.BlockStore;
 import org.bitcoinj.store.BlockStoreException;
-import org.bitcoinj.utils.MonetaryFormat;
+import org.bitcoinj.base.utils.MonetaryFormat;
+import org.bitcoinj.base.internal.ByteUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
-final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
+final class StaticBitcoinyParams extends NetworkParameters {
+
+	private static final Coin DEFAULT_MAX_MONEY = Coin.COIN.multiply(21_000_000L);
+	private static final Coin DEFAULT_MIN_NON_DUST_OUTPUT = Coin.valueOf(546L);
 
 	private final String paymentProtocolId;
 	private final String uriScheme;
@@ -41,9 +47,12 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 	private final Coin minNonDustOutput;
 	private final MonetaryFormat monetaryFormat;
 	private final Boolean hasMaxMoney;
+	private volatile Block genesisBlock;
 
 	private StaticBitcoinyParams(Builder builder) {
-		this.id = builder.id;
+		super(new StaticNetwork(builder.id, builder.uriScheme, builder.addressHeader, builder.p2shHeader, builder.segwitAddressHrp,
+				builder.maxMoney, builder.hasMaxMoney));
+
 		this.paymentProtocolId = builder.paymentProtocolId;
 		this.uriScheme = builder.uriScheme;
 		this.cashAddressPrefix = builder.cashAddressPrefix;
@@ -52,9 +61,9 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 		this.genesisNonce = builder.genesisNonce;
 		this.genesisDifficultyTarget = builder.genesisDifficultyTarget;
 		this.genesisMerkleRoot = builder.genesisMerkleRoot == null ? null : Sha256Hash.wrap(builder.genesisMerkleRoot);
-		this.genesisCoinbaseScript = builder.genesisCoinbaseScript == null ? null : Utils.HEX.decode(builder.genesisCoinbaseScript);
+		this.genesisCoinbaseScript = builder.genesisCoinbaseScript == null ? null : ByteUtils.parseHex(builder.genesisCoinbaseScript);
 		this.genesisOutputValue = builder.genesisOutputValue;
-		this.genesisOutputScript = builder.genesisOutputScript == null ? null : Utils.HEX.decode(builder.genesisOutputScript);
+		this.genesisOutputScript = builder.genesisOutputScript == null ? null : ByteUtils.parseHex(builder.genesisOutputScript);
 		this.genesisHash = Sha256Hash.wrap(builder.genesisHash);
 		this.difficultyValidationFailure = builder.difficultyValidationFailure;
 		this.maxMoney = builder.maxMoney;
@@ -64,9 +73,9 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 
 		this.targetTimespan = builder.targetTimespan;
 		this.interval = builder.interval;
-		this.maxTarget = builder.maxTarget != null ? builder.maxTarget : Utils.decodeCompactBits(builder.maxTargetCompact);
+		this.maxTarget = builder.maxTarget != null ? builder.maxTarget : ByteUtils.decodeCompactBits(builder.maxTargetCompact);
 		this.port = builder.port;
-		this.packetMagic = builder.packetMagic;
+		this.packetMagic = (int) builder.packetMagic;
 		this.dumpedPrivateKeyHeader = builder.dumpedPrivateKeyHeader;
 		this.addressHeader = builder.addressHeader;
 		this.p2shHeader = builder.p2shHeader;
@@ -93,18 +102,15 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 			if (this.genesisBlock == null) {
 				Block generatedGenesisBlock;
 				if (this.genesisMerkleRoot == null) {
-					generatedGenesisBlock = Block.createGenesis(this);
-					generatedGenesisBlock.setDifficultyTarget(this.genesisDifficultyTarget);
-					generatedGenesisBlock.setTime(this.genesisTime);
-					generatedGenesisBlock.setNonce(this.genesisNonce);
+					generatedGenesisBlock = Block.createGenesis(Instant.ofEpochSecond(this.genesisTime), this.genesisDifficultyTarget, this.genesisNonce);
 				} else {
 					List<Transaction> genesisTransactions = this.genesisCoinbaseScript == null ? List.of() : List.of(createGenesisTransaction());
-					generatedGenesisBlock = new Block(this, this.genesisVersion, Sha256Hash.ZERO_HASH, this.genesisMerkleRoot,
+					generatedGenesisBlock = new Block(this.genesisVersion, Sha256Hash.ZERO_HASH, this.genesisMerkleRoot,
 							this.genesisTime, this.genesisDifficultyTarget, this.genesisNonce, genesisTransactions);
 				}
 
 				List<Transaction> transactions = generatedGenesisBlock.getTransactions() == null ? List.of() : generatedGenesisBlock.getTransactions();
-				this.genesisBlock = new StaticGenesisBlock(this, generatedGenesisBlock.getVersion(), generatedGenesisBlock.getPrevBlockHash(),
+				this.genesisBlock = new StaticGenesisBlock(generatedGenesisBlock.getVersion(), generatedGenesisBlock.getPrevBlockHash(),
 						generatedGenesisBlock.getMerkleRoot(), generatedGenesisBlock.getTimeSeconds(), generatedGenesisBlock.getDifficultyTarget(),
 						generatedGenesisBlock.getNonce(), transactions, this.genesisHash);
 
@@ -119,7 +125,7 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 	private Transaction createGenesisTransaction() {
 		try {
 			Transaction transaction = new Transaction(this);
-			transaction.addInput(new TransactionInput(this, transaction, this.genesisCoinbaseScript));
+			transaction.addInput(TransactionInput.coinbaseInput(transaction, this.genesisCoinbaseScript));
 
 			ByteArrayOutputStream outputScript = new ByteArrayOutputStream();
 			Script.writeBytes(outputScript, this.genesisOutputScript);
@@ -148,27 +154,38 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 
 	@Override
 	public Coin getMaxMoney() {
-		return this.maxMoney != null ? this.maxMoney : super.getMaxMoney();
+		return this.maxMoney != null ? this.maxMoney : DEFAULT_MAX_MONEY;
 	}
 
-	@Override
 	public Coin getMinNonDustOutput() {
-		return this.minNonDustOutput != null ? this.minNonDustOutput : super.getMinNonDustOutput();
+		return this.minNonDustOutput != null ? this.minNonDustOutput : DEFAULT_MIN_NON_DUST_OUTPUT;
 	}
 
 	@Override
 	public MonetaryFormat getMonetaryFormat() {
-		return this.monetaryFormat != null ? this.monetaryFormat : super.getMonetaryFormat();
+		return this.monetaryFormat != null ? this.monetaryFormat : MonetaryFormat.BTC;
 	}
 
 	@Override
 	public boolean hasMaxMoney() {
-		return this.hasMaxMoney != null ? this.hasMaxMoney : super.hasMaxMoney();
+		return this.hasMaxMoney == null || this.hasMaxMoney;
+	}
+
+	@Override
+	public BitcoinSerializer getSerializer() {
+		return new BitcoinSerializer(this);
 	}
 
 	@Override
 	public void checkDifficultyTransitions(StoredBlock storedPrev, Block next, BlockStore blockStore) throws VerificationException, BlockStoreException {
 		throw new VerificationException(this.difficultyValidationFailure);
+	}
+
+	static Coin getMinNonDustOutput(NetworkParameters params) {
+		if (params instanceof StaticBitcoinyParams)
+			return ((StaticBitcoinyParams) params).getMinNonDustOutput();
+
+		return DEFAULT_MIN_NON_DUST_OUTPUT;
 	}
 
 	static final class Builder {
@@ -351,9 +368,9 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 	private static final class StaticGenesisBlock extends Block {
 		private final Sha256Hash configuredHash;
 
-		private StaticGenesisBlock(NetworkParameters params, long version, Sha256Hash prevBlockHash, Sha256Hash merkleRoot, long time, long difficultyTarget, long nonce,
+		private StaticGenesisBlock(long version, Sha256Hash prevBlockHash, Sha256Hash merkleRoot, long time, long difficultyTarget, long nonce,
 				List<Transaction> transactions, Sha256Hash configuredHash) {
-			super(params, version, prevBlockHash, merkleRoot, time, difficultyTarget, nonce, transactions);
+			super(version, prevBlockHash, merkleRoot, time, difficultyTarget, nonce, transactions);
 			this.configuredHash = configuredHash;
 		}
 
@@ -365,6 +382,66 @@ final class StaticBitcoinyParams extends AbstractBitcoinNetParams {
 		@Override
 		public String getHashAsString() {
 			return this.configuredHash.toString();
+		}
+	}
+
+	private static final class StaticNetwork implements Network {
+		private final String id;
+		private final String uriScheme;
+		private final int addressHeader;
+		private final int p2shHeader;
+		private final String segwitAddressHrp;
+		private final Coin maxMoney;
+		private final boolean hasMaxMoney;
+
+		private StaticNetwork(String id, String uriScheme, int addressHeader, int p2shHeader, String segwitAddressHrp, Coin maxMoney, Boolean hasMaxMoney) {
+			this.id = id;
+			this.uriScheme = uriScheme;
+			this.addressHeader = addressHeader;
+			this.p2shHeader = p2shHeader;
+			this.segwitAddressHrp = segwitAddressHrp;
+			this.maxMoney = maxMoney != null ? maxMoney : DEFAULT_MAX_MONEY;
+			this.hasMaxMoney = hasMaxMoney == null || hasMaxMoney;
+		}
+
+		@Override
+		public String id() {
+			return this.id;
+		}
+
+		@Override
+		public int legacyAddressHeader() {
+			return this.addressHeader;
+		}
+
+		@Override
+		public int legacyP2SHHeader() {
+			return this.p2shHeader;
+		}
+
+		@Override
+		public String segwitAddressHrp() {
+			return this.segwitAddressHrp;
+		}
+
+		@Override
+		public String uriScheme() {
+			return this.uriScheme;
+		}
+
+		@Override
+		public boolean hasMaxMoney() {
+			return this.hasMaxMoney;
+		}
+
+		@Override
+		public Coin maxMoney() {
+			return this.maxMoney;
+		}
+
+		@Override
+		public boolean exceedsMaxMoney(Monetary amount) {
+			return this.hasMaxMoney && amount.getValue() > this.maxMoney.value;
 		}
 	}
 }
