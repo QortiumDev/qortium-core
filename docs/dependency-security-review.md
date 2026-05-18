@@ -50,6 +50,13 @@ There are two non-blocking cleanup items to keep visible:
   checkout, cache, and setup-java actions. Updating those actions is ordinary CI
   maintenance, not part of the Jetty security fix.
 
+## Resolved Netty Work
+
+Netty `4.1.110.Final` was pulled through gRPC and had several HTTP and DoS
+advisories. Qortium moved gRPC to `1.81.0` and pins the Netty family to
+`4.1.133.Final` through Netty's Maven BOM so `grpc-netty` and every resolved
+Netty module use the same security-patched line.
+
 ## Deferred Security Work
 
 These findings need separate work because they are larger than simple dependency
@@ -60,10 +67,6 @@ patches:
   such as `Coin`, `ECKey`, `Address`, and `Sha256Hash`. This should be a
   dedicated cross-chain compatibility migration or a separate decision to remove
   inherited cross-chain surfaces.
-- Netty `4.1.110.Final` is pulled through gRPC and has several HTTP and DoS
-  advisories. Updating gRPC alone does not currently land on a Netty version
-  that clears every listed advisory, so this needs a separate gRPC/Netty
-  dependency-management pass.
 
 ## Review Artifacts
 
@@ -74,6 +77,8 @@ The local scan artifacts were generated under `target/`:
 - `target/osv-vuln-details.json`
 - `target/runtime-dependencies-after-jetty12.txt`
 - `target/osv-vulns-after-jetty12.json`
+- `target/runtime-dependencies-after-netty.txt`
+- `target/osv-vulns-after-netty.json`
 
 Those files are build artifacts, not tracked project history. This document is
 the durable summary of the review.
