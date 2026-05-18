@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - api: replace deprecated Jetty CORS filter
+
+Replaced Jetty's deprecated CORS filter with a small Qortium-owned servlet filter shared by the API, gateway, domain-map, and development proxy services. The new filter keeps the existing permissive cross-origin behavior and preflight handling while removing a Jetty 12 deprecation warning that would otherwise become future API-server maintenance work.
+
 ### 2026-05-18 - ci: add dependency vulnerability monitoring
 
 Added automated dependency monitoring so Qortium does not depend on occasional local scans to notice new security advisories. Pull requests to `qortium-6.1.4` now get OSV comparison scanning, the active branch gets a weekly full OSV scan, and Dependabot watches both Maven dependencies and GitHub Actions workflow dependencies for update candidates.

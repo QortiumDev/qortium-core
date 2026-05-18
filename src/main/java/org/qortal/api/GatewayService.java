@@ -6,10 +6,8 @@ import org.eclipse.jetty.rewrite.handler.RewriteHandler;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.server.handler.InetAccessHandler;
-import org.eclipse.jetty.ee8.servlet.FilterHolder;
 import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee8.servlet.ServletHolder;
-import org.eclipse.jetty.ee8.servlets.CrossOriginFilter;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletContainer;
@@ -140,11 +138,7 @@ public class GatewayService {
 			rewriteHandler.setHandler(context);
 
 			// Cross-origin resource sharing
-			FilterHolder corsFilterHolder = new FilterHolder(CrossOriginFilter.class);
-			corsFilterHolder.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM, "*");
-			corsFilterHolder.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM, "GET, POST, DELETE");
-			corsFilterHolder.setInitParameter(CrossOriginFilter.CHAIN_PREFLIGHT_PARAM, "false");
-			context.addFilter(corsFilterHolder, "/*", null);
+			CorsFilter.addTo(context);
 
 			// API servlet
 			ServletContainer container = new ServletContainer(this.config);

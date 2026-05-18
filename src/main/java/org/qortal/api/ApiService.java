@@ -14,10 +14,8 @@ import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.util.component.LifeCycle;
 import org.eclipse.jetty.server.handler.InetAccessHandler;
 import org.eclipse.jetty.ee8.servlet.DefaultServlet;
-import org.eclipse.jetty.ee8.servlet.FilterHolder;
 import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee8.servlet.ServletHolder;
-import org.eclipse.jetty.ee8.servlets.CrossOriginFilter;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.ee8.websocket.server.config.JettyWebSocketServletContainerInitializer;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -270,11 +268,7 @@ public class ApiService {
 			rewriteHandler.setHandler(context);
 
 			// Cross-origin resource sharing
-			FilterHolder corsFilterHolder = new FilterHolder(CrossOriginFilter.class);
-			corsFilterHolder.setInitParameter(CrossOriginFilter.ALLOWED_ORIGINS_PARAM, "*");
-			corsFilterHolder.setInitParameter(CrossOriginFilter.ALLOWED_METHODS_PARAM, "GET, POST, DELETE");
-			corsFilterHolder.setInitParameter(CrossOriginFilter.CHAIN_PREFLIGHT_PARAM, "false");
-			context.addFilter(corsFilterHolder, "/*", null);
+			CorsFilter.addTo(context);
 
 			// API servlet - fresh config per server lifecycle (Jersey locks config on use)
 			ServletContainer container = new ServletContainer(createResourceConfig());

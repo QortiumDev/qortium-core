@@ -40,15 +40,12 @@ start scripts now require Java 17, GitHub Actions runs on Temurin 17, and a
 packaged-node smoke test covered the API info endpoint, API documentation route,
 and a websocket upgrade.
 
-There are two non-blocking cleanup items to keep visible:
+The two non-blocking cleanup items from the migration were later resolved:
 
-- Jetty 12 EE8 still supports the current `CrossOriginFilter`, but marks it as
-  deprecated for future removal. Qortium should replace that CORS setup with a
-  small local filter or another Jetty-supported approach in a later API cleanup.
-  This does not block other dependency-security work.
-- The GitHub workflows now use Java 17, but still use the v3 generation of
-  checkout, cache, and setup-java actions. Updating those actions is ordinary CI
-  maintenance, not part of the Jetty security fix.
+- Qortium replaced Jetty's deprecated `CrossOriginFilter` with a small local
+  servlet filter while preserving the existing permissive CORS behavior.
+- The GitHub workflows now use Java 17 and current major versions of checkout,
+  cache, and setup-java.
 
 ## Resolved Netty Work
 
