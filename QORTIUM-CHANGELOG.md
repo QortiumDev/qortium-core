@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-18 - docs: record dependency security review
+
+Recorded the first dependency security review for the Qortium baseline. The new note explains which vulnerable dependencies can be handled as a narrow maintenance batch, why bitcoinj, Netty, and Jetty need separate follow-up work, and where the local scan artifacts came from. This keeps the security review visible in tracked project history instead of leaving it only in terminal output.
+
 ### 2026-05-17 - test: cover minting-seed farm pressure
 
 Added launch-stress coverage for farm accounts that join the Minting group and try to gain account-trust influence through subject-only ratings or same-branch support. Those farm patterns now have regression coverage proving they remain Unverified with zero effective voting weight, while the launch-readiness notes record that a stronger independent-seed-branch pressure run exposed a separate seed-eligibility gap for later policy work.
