@@ -5,8 +5,10 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
+import org.qortal.crypto.Crypto;
 import org.qortal.data.group.GroupInviteData;
 import org.qortal.data.group.GroupAdminData;
+import org.qortal.data.account.RewardShareData;
 import org.qortal.data.transaction.AddGroupAdminTransactionData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.CancelGroupInviteTransactionData;
@@ -21,9 +23,13 @@ import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
+import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
+import org.qortal.transform.TransformationException;
+import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.Unicode;
 
 import static org.junit.Assert.*;
@@ -218,6 +224,100 @@ public class MiscTests extends Common {
 	}
 
 	@Test
+	public void testJoinMintingGroupCreatesMintingAuthorization() throws DataException, TransformationException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			byte[] mintingPublicKey = getSelfMintingPublicKey(bob);
+
+			assertNull(repository.getAccountRepository().getRewardShare(mintingPublicKey));
+
+			JoinGroupTransactionData transactionData = new JoinGroupTransactionData(TestTransaction.generateBase(bob),
+					TestChainBootstrapUtils.MINTING_GROUP_ID, mintingPublicKey);
+
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+			transaction.sign(bob);
+			byte[] serializedTransaction = TransactionTransformer.toBytes(transactionData);
+			JoinGroupTransactionData deserializedTransactionData = (JoinGroupTransactionData) TransactionTransformer.fromBytes(serializedTransaction);
+			assertArrayEquals(mintingPublicKey, deserializedTransactionData.getMintingPublicKey());
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, bob);
+			assertEquals(ValidationResult.OK, result);
+			BlockUtils.mintBlock(repository);
+
+			assertTrue(isMember(repository, bob.getAddress(), TestChainBootstrapUtils.MINTING_GROUP_ID));
+
+			RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(mintingPublicKey);
+			assertNotNull(rewardShareData);
+			assertArrayEquals(bob.getPublicKey(), rewardShareData.getMinterPublicKey());
+			assertEquals(bob.getAddress(), rewardShareData.getMinter());
+			assertEquals(bob.getAddress(), rewardShareData.getRecipient());
+			assertEquals(0, rewardShareData.getSharePercent());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			assertFalse(isMember(repository, bob.getAddress(), TestChainBootstrapUtils.MINTING_GROUP_ID));
+			assertNull(repository.getAccountRepository().getRewardShare(mintingPublicKey));
+		}
+	}
+
+	@Test
+	public void testJoinNonMintingGroupRejectsMintingAuthorization() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			byte[] mintingPublicKey = getSelfMintingPublicKey(bob);
+
+			JoinGroupTransactionData transactionData = new JoinGroupTransactionData(TestTransaction.generateBase(bob),
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, mintingPublicKey);
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, bob);
+			assertEquals(ValidationResult.INVALID_GROUP_ID, result);
+		}
+	}
+
+	@Test
+	public void testJoinMintingGroupDoesNotReplaceExistingSelfShare() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			PrivateKeyAccount chloeRewardShare = Common.getTestAccount(repository, "chloe-reward-share");
+			byte[] requestedMintingPublicKey = getSelfMintingPublicKey(bob);
+
+			RewardShareData existingSelfShareData = new RewardShareData(bob.getPublicKey(), bob.getAddress(),
+					bob.getAddress(), chloeRewardShare.getPublicKey(), 0);
+			repository.getAccountRepository().save(existingSelfShareData);
+			repository.saveChanges();
+
+			JoinGroupTransactionData transactionData = new JoinGroupTransactionData(TestTransaction.generateBase(bob),
+					TestChainBootstrapUtils.MINTING_GROUP_ID, requestedMintingPublicKey);
+			TransactionUtils.signAndMint(repository, transactionData, bob);
+
+			RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(bob.getPublicKey(), bob.getAddress());
+			assertNotNull(rewardShareData);
+			assertArrayEquals(chloeRewardShare.getPublicKey(), rewardShareData.getRewardSharePublicKey());
+			assertNull(repository.getAccountRepository().getRewardShare(requestedMintingPublicKey));
+		}
+	}
+
+	@Test
+	public void testJoinMintingGroupRejectsReusedMintingPublicKey() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			PrivateKeyAccount aliceRewardShare = Common.getTestAccount(repository, "alice-reward-share");
+
+			RewardShareData existingSelfShareData = new RewardShareData(alice.getPublicKey(), alice.getAddress(),
+					alice.getAddress(), aliceRewardShare.getPublicKey(), 0);
+			repository.getAccountRepository().save(existingSelfShareData);
+			repository.saveChanges();
+
+			JoinGroupTransactionData transactionData = new JoinGroupTransactionData(TestTransaction.generateBase(bob),
+					TestChainBootstrapUtils.MINTING_GROUP_ID, aliceRewardShare.getPublicKey());
+
+			ValidationResult result = TransactionUtils.signAndImport(repository, transactionData, bob);
+			assertEquals(ValidationResult.INVALID_PUBLIC_KEY, result);
+		}
+	}
+
+	@Test
 	public void testJoinClosedGroupWithExpiredInviteCreatesJoinRequest() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -375,6 +475,10 @@ public class MiscTests extends Common {
 	private void joinGroup(Repository repository, PrivateKeyAccount joiner, int groupId) throws DataException {
 		JoinGroupTransactionData transactionData = new JoinGroupTransactionData(TestTransaction.generateBase(joiner), groupId);
 		TransactionUtils.signAndMint(repository, transactionData, joiner);
+	}
+
+	private byte[] getSelfMintingPublicKey(PrivateKeyAccount account) {
+		return Crypto.toPublicKey(account.getRewardSharePrivateKey(account.getPublicKey()));
 	}
 
 	private void groupInvite(Repository repository, PrivateKeyAccount admin, int groupId, String invitee, int timeToLive) throws DataException {

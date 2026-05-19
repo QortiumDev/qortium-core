@@ -98,10 +98,6 @@ public class RewardShareTransaction extends Transaction {
 
 	@Override
 	public ValidationResult isValid() throws DataException {
-		// Check reward share given to recipient. Negative is potentially OK to end a current reward-share. Zero also fine.
-		if (this.rewardShareTransactionData.getSharePercent() > MAX_SHARE)
-			return ValidationResult.INVALID_REWARD_SHARE_PERCENT;
-
 		// Check reward-share public key is correct length
 		if (this.rewardShareTransactionData.getRewardSharePublicKey().length != Transformer.PUBLIC_KEY_LENGTH)
 			return ValidationResult.INVALID_PUBLIC_KEY;
@@ -114,12 +110,15 @@ public class RewardShareTransaction extends Transaction {
 		Account recipient = getRecipient();
 		final boolean isCancellingSharePercent = this.rewardShareTransactionData.getSharePercent() < 0;
 
+		// Positive percentage values only matter when rewards are actually shared with a different recipient.
+		final boolean isRecipientAlsoMinter = creator.getAddress().equals(recipient.getAddress());
+		if (!isRecipientAlsoMinter && this.rewardShareTransactionData.getSharePercent() > MAX_SHARE)
+			return ValidationResult.INVALID_REWARD_SHARE_PERCENT;
+
 		// Creator themselves needs to be allowed to mint (unless cancelling)
 		if (!isCancellingSharePercent && !creator.canMint(false))
 			return ValidationResult.NOT_MINTING_ACCOUNT;
 
-		// Special rules apply depending on whether recipient is also minter
-		final boolean isRecipientAlsoMinter = creator.getAddress().equals(recipient.getAddress());
 		if (!isCancellingSharePercent && !isRecipientAlsoMinter && !creator.canRewardShare())
 			return ValidationResult.ACCOUNT_CANNOT_REWARD_SHARE;
 
@@ -147,9 +146,9 @@ public class RewardShareTransaction extends Transaction {
 				return ValidationResult.MAXIMUM_REWARD_SHARES;
 
 		} else {
-			// This transaction intends to modify/terminate an existing reward-share
+			// This transaction intends to modify/terminate an existing reward-share.
 
-			// Modifying an existing self-share is pointless and forbidden (due to 0 fee). Deleting self-share is OK though.
+			// Modifying an existing self-share/minting authorization is pointless. Deleting one is OK.
 			if (isRecipientAlsoMinter && !isCancellingSharePercent)
 				return ValidationResult.SELF_SHARE_EXISTS;
 		}
@@ -194,10 +193,13 @@ public class RewardShareTransaction extends Transaction {
 		if (isSharePercentNegative) {
 			this.repository.getAccountRepository().delete(mintingAccount.getPublicKey(), this.rewardShareTransactionData.getRecipient());
 		} else {
-			// Save reward-share info
+			boolean isRecipientAlsoMinter = mintingAccount.getAddress().equals(this.rewardShareTransactionData.getRecipient());
+			int sharePercent = isRecipientAlsoMinter ? 0 : this.rewardShareTransactionData.getSharePercent();
+
+			// Save reward-share info. Self-shares are minting authorization records, so their percentage is ignored.
 			rewardShareData = new RewardShareData(mintingAccount.getPublicKey(), mintingAccount.getAddress(),
 					this.rewardShareTransactionData.getRecipient(), this.rewardShareTransactionData.getRewardSharePublicKey(),
-					this.rewardShareTransactionData.getSharePercent());
+					sharePercent);
 			this.repository.getAccountRepository().save(rewardShareData);
 		}
 	}

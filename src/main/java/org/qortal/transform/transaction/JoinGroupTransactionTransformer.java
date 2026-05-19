@@ -30,6 +30,7 @@ public class JoinGroupTransactionTransformer extends TransactionTransformer {
 		layout.add("joiner's public key", TransformationType.PUBLIC_KEY);
 		addMempowFeeNonceToLayout(layout, TransactionType.JOIN_GROUP);
 		layout.add("group ID", TransformationType.INT);
+		layout.add("optional minting public key", TransformationType.PUBLIC_KEY);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
 	}
@@ -44,6 +45,12 @@ public class JoinGroupTransactionTransformer extends TransactionTransformer {
 
 		int groupId = byteBuffer.getInt();
 
+		byte[] mintingPublicKey = null;
+		if (byteBuffer.remaining() == PUBLIC_KEY_LENGTH + FEE_LENGTH + SIGNATURE_LENGTH)
+			mintingPublicKey = Serialization.deserializePublicKey(byteBuffer);
+		else if (byteBuffer.remaining() != FEE_LENGTH + SIGNATURE_LENGTH)
+			throw new TransformationException("Unexpected byte data length for JOIN_GROUP transaction");
+
 		long fee = byteBuffer.getLong();
 
 		byte[] signature = new byte[SIGNATURE_LENGTH];
@@ -51,11 +58,14 @@ public class JoinGroupTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, joinerPublicKey, fee, nonce, signature);
 
-		return new JoinGroupTransactionData(baseTransactionData, groupId);
+		return new JoinGroupTransactionData(baseTransactionData, groupId, mintingPublicKey);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
-		return getBaseLength(transactionData) + EXTRAS_LENGTH;
+		JoinGroupTransactionData joinGroupTransactionData = (JoinGroupTransactionData) transactionData;
+
+		return getBaseLength(transactionData) + EXTRAS_LENGTH
+				+ (joinGroupTransactionData.getMintingPublicKey() == null ? 0 : PUBLIC_KEY_LENGTH);
 	}
 
 	public static byte[] toBytes(TransactionData transactionData) throws TransformationException {
@@ -67,6 +77,9 @@ public class JoinGroupTransactionTransformer extends TransactionTransformer {
 			transformCommonBytes(transactionData, bytes);
 
 			bytes.write(Ints.toByteArray(joinGroupTransactionData.getGroupId()));
+
+			if (joinGroupTransactionData.getMintingPublicKey() != null)
+				bytes.write(joinGroupTransactionData.getMintingPublicKey());
 
 			bytes.write(Longs.toByteArray(joinGroupTransactionData.getFee()));
 

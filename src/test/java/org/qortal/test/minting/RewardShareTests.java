@@ -196,6 +196,29 @@ public class RewardShareTests extends Common {
 	}
 
 	@Test
+	public void testSelfSharePercentIsIgnored() throws DataException {
+		final String testAccountName = "dilbert";
+		final int ignoredSharePercent = 250_00;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount signingAccount = Common.getTestAccount(repository, testAccountName);
+
+			TransactionData transactionData = AccountUtils.createRewardShare(repository, testAccountName, testAccountName, ignoredSharePercent);
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+
+			assertEquals("Self-share percentage should not be validated as a payout split",
+					ValidationResult.OK, transaction.isValidUnconfirmed());
+
+			TransactionUtils.signAndMint(repository, transactionData, signingAccount);
+
+			RewardShareData rewardShareData = repository.getAccountRepository()
+					.getRewardShare(signingAccount.getPublicKey(), signingAccount.getAddress());
+			assertNotNull(rewardShareData);
+			assertEquals("Self-share percentage should be normalized", 0, rewardShareData.getSharePercent());
+		}
+	}
+
+	@Test
 	public void testMintingGroupRulesApplyFromGenesis() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount aliceAccount = Common.getTestAccount(repository, "alice");

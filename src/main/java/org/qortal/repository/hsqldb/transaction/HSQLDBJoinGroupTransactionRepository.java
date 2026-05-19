@@ -17,20 +17,23 @@ public class HSQLDBJoinGroupTransactionRepository extends HSQLDBTransactionRepos
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT group_id, invite_reference, previous_group_id FROM JoinGroupTransactions WHERE signature = ?";
+		String sql = "SELECT group_id, minting_public_key, minting_authorization_created, invite_reference, previous_group_id FROM JoinGroupTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
 				return null;
 
 			int groupId = resultSet.getInt(1);
-			byte[] inviteReference = resultSet.getBytes(2);
+			byte[] mintingPublicKey = resultSet.getBytes(2);
+			boolean mintingAuthorizationCreated = resultSet.getBoolean(3);
+			byte[] inviteReference = resultSet.getBytes(4);
 
-			Integer previousGroupId = resultSet.getInt(3);
+			Integer previousGroupId = resultSet.getInt(5);
 			if (previousGroupId == 0 && resultSet.wasNull())
 				previousGroupId = null;
 
-			return new JoinGroupTransactionData(baseTransactionData, groupId, inviteReference, previousGroupId);
+			return new JoinGroupTransactionData(baseTransactionData, groupId, mintingPublicKey,
+					mintingAuthorizationCreated, inviteReference, previousGroupId);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch join group transaction from repository", e);
 		}
@@ -43,7 +46,9 @@ public class HSQLDBJoinGroupTransactionRepository extends HSQLDBTransactionRepos
 		HSQLDBSaver saveHelper = new HSQLDBSaver("JoinGroupTransactions");
 
 		saveHelper.bind("signature", joinGroupTransactionData.getSignature()).bind("joiner", joinGroupTransactionData.getJoinerPublicKey())
-				.bind("group_id", joinGroupTransactionData.getGroupId()).bind("invite_reference", joinGroupTransactionData.getInviteReference())
+				.bind("group_id", joinGroupTransactionData.getGroupId()).bind("minting_public_key", joinGroupTransactionData.getMintingPublicKey())
+				.bind("minting_authorization_created", joinGroupTransactionData.isMintingAuthorizationCreated())
+				.bind("invite_reference", joinGroupTransactionData.getInviteReference())
 				.bind("previous_group_id", joinGroupTransactionData.getPreviousGroupId());
 
 		try {

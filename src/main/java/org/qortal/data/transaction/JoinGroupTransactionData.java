@@ -21,6 +21,13 @@ public class JoinGroupTransactionData extends TransactionData {
 	private byte[] joinerPublicKey;
 	@Schema(description = "which group to join", example = "my-group")
 	private int groupId;
+	@Schema(description = "optional minting public key to authorize when joining a minting group")
+	private byte[] mintingPublicKey;
+	/** Whether processing this transaction created a minting authorization self-share. */
+	// No need to expose this via API
+	@XmlTransient
+	@Schema(hidden = true)
+	private boolean mintingAuthorizationCreated;
 	/** Reference to GROUP_INVITE transaction, used to rebuild invite during orphaning. */
 	// No need to ever expose this via API
 	@XmlTransient
@@ -44,18 +51,29 @@ public class JoinGroupTransactionData extends TransactionData {
 	}
 
 	/** From repository */
-	public JoinGroupTransactionData(BaseTransactionData baseTransactionData, int groupId, byte[] inviteReference, Integer previousGroupId) {
+	public JoinGroupTransactionData(BaseTransactionData baseTransactionData, int groupId, byte[] mintingPublicKey,
+			boolean mintingAuthorizationCreated, byte[] inviteReference, Integer previousGroupId) {
 		super(TransactionType.JOIN_GROUP, baseTransactionData);
 
 		this.joinerPublicKey = baseTransactionData.creatorPublicKey;
 		this.groupId = groupId;
+		this.mintingPublicKey = mintingPublicKey;
+		this.mintingAuthorizationCreated = mintingAuthorizationCreated;
 		this.inviteReference = inviteReference;
 		this.previousGroupId = previousGroupId;
+	}
+
+	public JoinGroupTransactionData(BaseTransactionData baseTransactionData, int groupId, byte[] inviteReference, Integer previousGroupId) {
+		this(baseTransactionData, groupId, null, false, inviteReference, previousGroupId);
 	}
 
 	/** From network/API */
 	public JoinGroupTransactionData(BaseTransactionData baseTransactionData, int groupId) {
 		this(baseTransactionData, groupId, null, null);
+	}
+
+	public JoinGroupTransactionData(BaseTransactionData baseTransactionData, int groupId, byte[] mintingPublicKey) {
+		this(baseTransactionData, groupId, mintingPublicKey, false, null, null);
 	}
 
 	// Getters / setters
@@ -66,6 +84,18 @@ public class JoinGroupTransactionData extends TransactionData {
 
 	public int getGroupId() {
 		return this.groupId;
+	}
+
+	public byte[] getMintingPublicKey() {
+		return this.mintingPublicKey;
+	}
+
+	public boolean isMintingAuthorizationCreated() {
+		return this.mintingAuthorizationCreated;
+	}
+
+	public void setMintingAuthorizationCreated(boolean mintingAuthorizationCreated) {
+		this.mintingAuthorizationCreated = mintingAuthorizationCreated;
 	}
 
 	public byte[] getInviteReference() {

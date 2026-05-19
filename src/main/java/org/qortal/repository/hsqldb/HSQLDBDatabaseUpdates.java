@@ -541,6 +541,7 @@ public class HSQLDBDatabaseUpdates {
 
 					// Join group
 					stmt.execute("CREATE TABLE JoinGroupTransactions (signature Signature, joiner AccountPublicKey NOT NULL, group_id GroupID NOT NULL, "
+							+ "minting_public_key AccountPublicKey, minting_authorization_created BOOLEAN NOT NULL DEFAULT FALSE, "
 							+ "invite_reference Signature, previous_group_id GroupID, " + TRANSACTION_KEYS + ")");
 
 					// Leave group
@@ -1321,6 +1322,12 @@ public class HSQLDBDatabaseUpdates {
 					stmt.execute("CREATE INDEX ChatMessagesRecipientIndex ON ChatMessages (recipient, sender, created_when)");
 					stmt.execute("CREATE INDEX ChatMessagesDirectIndex ON ChatMessages (sender, recipient, created_when)");
 					stmt.execute("CREATE INDEX ChatMessagesChatReferenceIndex ON ChatMessages (chat_reference)");
+					break;
+
+				case 71:
+					// Optional minting-key authorization attached to minting-group join transactions.
+					addColumnIfMissing(connection, "JoinGroupTransactions", "minting_public_key", "AccountPublicKey");
+					addColumnIfMissing(connection, "JoinGroupTransactions", "minting_authorization_created", "BOOLEAN NOT NULL DEFAULT FALSE");
 					break;
 
 				default:

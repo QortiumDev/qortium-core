@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - feat: authorize minting keys from minting-group joins
+
+Added an optional minting public key to minting-group join transactions so an account can publish its minting authorization as part of joining the group. Qortium now records that authorization as a self-share in the existing reward-share table only when needed, leaves existing self-shares alone, rejects minting keys that already belong to another account, and treats self-share percentages as ignored minting-authorization metadata instead of real reward-splitting percentages.
+
 ### 2026-05-19 - deps: update Netty 4.2 baseline
 
 Updated Qortium's Netty dependency family to the current 4.2 maintenance baseline used by gRPC networking. The startup defaults now keep Netty on the pooled allocator unless an operator explicitly chooses another allocator, which gives the fork the security and maintenance fixes from Netty 4.2 while avoiding an unrelated allocator-behavior change during the first rollout.
