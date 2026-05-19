@@ -4,6 +4,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.bouncycastle.util.encoders.Base64;
+import org.qortal.api.resource.ChatResource;
 import org.qortal.data.chat.ChatMessage;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
@@ -13,6 +14,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.settings.Settings;
+import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
@@ -20,10 +22,19 @@ import org.qortal.test.common.transaction.PaymentTestTransaction;
 import org.qortal.utils.NTP;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class ChatCleanupManagerTests extends Common {
 
@@ -92,6 +103,45 @@ public class ChatCleanupManagerTests extends Common {
 	}
 
 	@Test
+	public void testCleanupWhileReadingChatDoesNotBreakCurrentMessages() throws Exception {
+		final int readerCount = 4;
+		long now = now();
+		long expiredTimestamp = now - Settings.getInstance().getChatMessageRetentionPeriod() - 1L;
+		byte[] expiredSignature = signature(4);
+		byte[] currentSignature = signature(5);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+
+			repository.getChatStoreRepository().save(chat(alice, expiredSignature, "expired", expiredTimestamp));
+			repository.getChatStoreRepository().save(chat(alice, currentSignature, "current", now));
+			repository.saveChanges();
+		}
+
+		runConcurrently(readerCount + 1, index -> {
+			if (index == 0) {
+				ChatCleanupManager.getInstance().cleanupOnce();
+				return;
+			}
+
+			ChatResource chatResource = (ChatResource) ApiCommon.buildResource(ChatResource.class);
+			for (int i = 0; i < 10; ++i) {
+				List<ChatMessage> messages = chatResource.searchChat(
+						null, null, Group.NO_GROUP, Collections.emptyList(), null, null, null,
+						ChatMessage.Encoding.BASE64, null, null, null);
+
+				assertTrue(messages.stream()
+						.anyMatch(message -> Arrays.equals(message.getSignature(), currentSignature)));
+			}
+		});
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertNull(repository.getChatStoreRepository().fromSignature(expiredSignature));
+			assertNotNull(repository.getChatStoreRepository().fromSignature(currentSignature));
+		}
+	}
+
+	@Test
 	public void testStartAndShutdownAreIdempotentAndRestartable() {
 		ChatCleanupManager manager = ChatCleanupManager.getInstance();
 
@@ -129,6 +179,52 @@ public class ChatCleanupManagerTests extends Common {
 
 	private static byte[] bytes(String text) {
 		return text.getBytes(StandardCharsets.UTF_8);
+	}
+
+	private static void runConcurrently(int workerCount, ConcurrentAction action) throws Exception {
+		ExecutorService executor = Executors.newFixedThreadPool(workerCount);
+		CountDownLatch readyLatch = new CountDownLatch(workerCount);
+		CountDownLatch startLatch = new CountDownLatch(1);
+		AtomicReference<Throwable> failure = new AtomicReference<>();
+
+		for (int i = 0; i < workerCount; ++i) {
+			final int index = i;
+			executor.submit(() -> {
+				readyLatch.countDown();
+
+				try {
+					startLatch.await();
+					action.run(index);
+				} catch (Throwable e) {
+					failure.compareAndSet(null, e);
+				}
+			});
+		}
+
+		assertTrue(readyLatch.await(5, TimeUnit.SECONDS));
+		startLatch.countDown();
+		executor.shutdown();
+		assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+
+		rethrowFailure(failure.get());
+	}
+
+	private static void rethrowFailure(Throwable failure) throws Exception {
+		if (failure == null)
+			return;
+
+		if (failure instanceof Exception)
+			throw (Exception) failure;
+
+		if (failure instanceof Error)
+			throw (Error) failure;
+
+		throw new AssertionError(failure);
+	}
+
+	@FunctionalInterface
+	private interface ConcurrentAction {
+		void run(int index) throws Exception;
 	}
 
 }

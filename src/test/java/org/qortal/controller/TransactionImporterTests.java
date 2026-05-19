@@ -3,6 +3,8 @@ package org.qortal.controller;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.api.ApiError;
+import org.qortal.api.ApiException;
 import org.qortal.api.resource.TransactionsResource;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
@@ -36,6 +38,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -191,6 +197,129 @@ public class TransactionImporterTests extends Common {
 
 		assertEquals(1, notificationCount.get());
 		assertTrue(storedWhenNotified.get());
+	}
+
+	@Test
+	public void testConcurrentLocalApiChatSubmissionsStoreAndNotifyOnce() throws Exception {
+		final int workerCount = 8;
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "concurrent api duplicate chat");
+		}
+
+		String rawChat = rawTransaction(chatData);
+		AtomicInteger successCount = new AtomicInteger();
+		AtomicInteger duplicateFailureCount = new AtomicInteger();
+		AtomicInteger notificationCount = new AtomicInteger();
+		AtomicBoolean storedWhenNotified = new AtomicBoolean(false);
+
+		ChatNotifier.getInstance().register(null, notifiedData -> {
+			notificationCount.incrementAndGet();
+
+			try (final Repository repository = RepositoryManager.getRepository()) {
+				storedWhenNotified.set(repository.getChatStoreRepository().fromSignature(notifiedData.getSignature()) != null);
+			} catch (DataException e) {
+				throw new RuntimeException(e);
+			}
+		});
+
+		runConcurrently(workerCount, index -> {
+			TransactionsResource transactionsResource = (TransactionsResource) ApiCommon.buildResource(TransactionsResource.class);
+			try {
+				assertEquals("true", transactionsResource.processTransaction(rawChat, null));
+				successCount.incrementAndGet();
+			} catch (ApiException e) {
+				if (ApiError.fromCode(e.error) == ApiError.TRANSACTION_INVALID) {
+					duplicateFailureCount.incrementAndGet();
+					return;
+				}
+
+				throw e;
+			}
+		});
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertNotNull(repository.getChatStoreRepository().fromSignature(chatData.getSignature()));
+			assertEquals(1, repository.getChatStoreRepository().countMessagesMatchingCriteria(
+					null, null, Group.NO_GROUP, null, null, Collections.emptyList(), null));
+			assertTrue(repository.getTransactionRepository().getUnconfirmedTransactions().isEmpty());
+		}
+
+		assertEquals(1, successCount.get());
+		assertEquals(workerCount - 1, duplicateFailureCount.get());
+		assertEquals(1, notificationCount.get());
+		assertTrue(storedWhenNotified.get());
+	}
+
+	@Test
+	public void testConcurrentPeerChatMessagesDeduplicateQueueAndNotifyOnce() throws Exception {
+		final int workerCount = 8;
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "concurrent peer duplicate chat");
+		}
+
+		AtomicInteger notificationCount = new AtomicInteger();
+		ChatNotifier.getInstance().register(null, notifiedData -> notificationCount.incrementAndGet());
+
+		runConcurrently(workerCount, index -> this.transactionImporter.onNetworkTransactionMessage(null, inboundTransactionMessage(chatData)));
+
+		assertTrue(this.transactionImporter.incomingChatTransactionQueueContains(chatData.getSignature()));
+
+		this.transactionImporter.processChatTransactionsInQueue();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertNotNull(repository.getChatStoreRepository().fromSignature(chatData.getSignature()));
+			assertFalse(this.transactionImporter.incomingChatTransactionQueueContains(chatData.getSignature()));
+			assertEquals(1, repository.getChatStoreRepository().countMessagesMatchingCriteria(
+					null, null, Group.NO_GROUP, null, null, Collections.emptyList(), null));
+		}
+
+		assertEquals(1, notificationCount.get());
+	}
+
+	@Test
+	public void testConcurrentPeerQueueAndLocalApiSubmitStoreAndNotifyOnce() throws Exception {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "concurrent api peer duplicate chat");
+		}
+
+		String rawChat = rawTransaction(chatData);
+		AtomicInteger successCount = new AtomicInteger();
+		AtomicInteger notificationCount = new AtomicInteger();
+
+		ChatNotifier.getInstance().register(null, notifiedData -> notificationCount.incrementAndGet());
+
+		runConcurrently(2, index -> {
+			if (index == 0) {
+				this.transactionImporter.onNetworkTransactionMessage(null, inboundTransactionMessage(chatData));
+				return;
+			}
+
+			TransactionsResource transactionsResource = (TransactionsResource) ApiCommon.buildResource(TransactionsResource.class);
+			assertEquals("true", transactionsResource.processTransaction(rawChat, null));
+			successCount.incrementAndGet();
+		});
+
+		this.transactionImporter.processChatTransactionsInQueue();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertNotNull(repository.getChatStoreRepository().fromSignature(chatData.getSignature()));
+			assertFalse(this.transactionImporter.incomingChatTransactionQueueContains(chatData.getSignature()));
+			assertEquals(1, repository.getChatStoreRepository().countMessagesMatchingCriteria(
+					null, null, Group.NO_GROUP, null, null, Collections.emptyList(), null));
+			assertTrue(repository.getTransactionRepository().getUnconfirmedTransactions().isEmpty());
+		}
+
+		assertEquals(1, successCount.get());
+		assertEquals(1, notificationCount.get());
 	}
 
 	@Test
@@ -373,9 +502,55 @@ public class TransactionImporterTests extends Common {
 		}
 	}
 
+	private static void runConcurrently(int workerCount, ConcurrentAction action) throws Exception {
+		ExecutorService executor = Executors.newFixedThreadPool(workerCount);
+		CountDownLatch readyLatch = new CountDownLatch(workerCount);
+		CountDownLatch startLatch = new CountDownLatch(1);
+		AtomicReference<Throwable> failure = new AtomicReference<>();
+
+		for (int i = 0; i < workerCount; ++i) {
+			final int index = i;
+			executor.submit(() -> {
+				readyLatch.countDown();
+
+				try {
+					startLatch.await();
+					action.run(index);
+				} catch (Throwable e) {
+					failure.compareAndSet(null, e);
+				}
+			});
+		}
+
+		assertTrue(readyLatch.await(5, TimeUnit.SECONDS));
+		startLatch.countDown();
+		executor.shutdown();
+		assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+
+		rethrowFailure(failure.get());
+	}
+
+	private static void rethrowFailure(Throwable failure) throws Exception {
+		if (failure == null)
+			return;
+
+		if (failure instanceof Exception)
+			throw (Exception) failure;
+
+		if (failure instanceof Error)
+			throw (Error) failure;
+
+		throw new AssertionError(failure);
+	}
+
 	private static long now() {
 		Long now = NTP.getTime();
 		return now != null ? now : System.currentTimeMillis();
+	}
+
+	@FunctionalInterface
+	private interface ConcurrentAction {
+		void run(int index) throws Exception;
 	}
 
 	private static class CapturingPeer extends Peer {
