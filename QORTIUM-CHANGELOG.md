@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - deps: update Netty 4.2 baseline
+
+Updated Qortium's Netty dependency family to the current 4.2 maintenance baseline used by gRPC networking. The startup defaults now keep Netty on the pooled allocator unless an operator explicitly chooses another allocator, which gives the fork the security and maintenance fixes from Netty 4.2 while avoiding an unrelated allocator-behavior change during the first rollout.
+
 ### 2026-05-19 - deps: update Tika Core MIME detection baseline
 
 Updated Qortium's Apache Tika Core dependency to the current 3.3 maintenance baseline used for upload MIME detection and filename-extension recovery. This keeps QDN upload handling on the maintained Tika line while preserving Qortium's existing upload flow and stored data behavior.

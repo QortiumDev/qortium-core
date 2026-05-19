@@ -95,6 +95,8 @@ public class Controller extends Thread {
 		// This must go before any calls to LogManager/Logger
 		System.setProperty("log4j2.formatMsgNoLookups", "true");
 		System.setProperty("java.util.logging.manager", "org.apache.logging.log4j.jul.LogManager");
+		if (System.getProperty("io.netty.allocator.type") == null)
+			System.setProperty("io.netty.allocator.type", "pooled");
 	}
 
 	/** Controller start-up time (ms) taken using <tt>System.currentTimeMillis()</tt>. */
