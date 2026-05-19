@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - api: add batch primary-name lookup
+
+Added a batch primary-name lookup API so wallets, explorers, and other clients can resolve the primary names for several addresses with one request instead of repeating the single-address endpoint. The new endpoint keeps the response in the same order as the request, preserves duplicate addresses, reports valid addresses without primary names as `null`, and stays full-node-only until Qortium has a designed lite-data batch lookup path.
+
 ### 2026-05-19 - qdn: exclude blocked names from index discovery
 
 Updated QDN index discovery so index resources published by locally blocked names are excluded while filling the arbitrary index cache. This keeps blocked-name policy from only hiding final resource results while still allowing blocked publishers to influence local index discovery.

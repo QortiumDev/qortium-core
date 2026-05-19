@@ -3,6 +3,8 @@ package org.qortal.test.api;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.api.ApiError;
+import org.qortal.api.model.NameSummary;
 import org.qortal.api.resource.NamesResource;
 import org.qortal.data.transaction.RegisterNameTransactionData;
 import org.qortal.data.transaction.SellNameTransactionData;
@@ -16,7 +18,13 @@ import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.RegisterNameTransaction;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 
 public class NamesApiTests extends ApiCommon {
 
@@ -69,6 +77,50 @@ public class NamesApiTests extends ApiCommon {
 
 			assertNotNull(this.namesResource.getName(name));
 		}
+	}
+
+	@Test
+	public void testGetPrimaryNamesByAddresses() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			String name = "test-name";
+
+			RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, "{}");
+			transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			List<NameSummary> primaryNames = this.namesResource.getPrimaryNamesByAddresses(
+					Arrays.asList(bob.getAddress(), alice.getAddress(), alice.getAddress()));
+
+			assertEquals(3, primaryNames.size());
+			assertEquals(bob.getAddress(), primaryNames.get(0).getOwner());
+			assertNull(primaryNames.get(0).getName());
+			assertEquals(alice.getAddress(), primaryNames.get(1).getOwner());
+			assertEquals(name, primaryNames.get(1).getName());
+			assertEquals(alice.getAddress(), primaryNames.get(2).getOwner());
+			assertEquals(name, primaryNames.get(2).getName());
+		}
+	}
+
+	@Test
+	public void testGetPrimaryNamesByAddressesRejectsInvalidInput() {
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.namesResource.getPrimaryNamesByAddresses(null));
+
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.namesResource.getPrimaryNamesByAddresses(Collections.emptyList()));
+
+		assertApiError(ApiError.INVALID_ADDRESS,
+				() -> this.namesResource.getPrimaryNamesByAddresses(Collections.singletonList("not-an-address")));
+	}
+
+	@Test
+	public void testLiteGetPrimaryNamesByAddressesFailsClearly() throws Exception {
+		useLiteMode();
+
+		assertApiError(ApiError.UNAUTHORIZED,
+				() -> this.namesResource.getPrimaryNamesByAddresses(Collections.singletonList(aliceAddress)));
 	}
 
 	@Test

@@ -35,6 +35,7 @@ import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -120,6 +121,50 @@ public class NamesResource {
 			}
 
 			return names.stream().map(NameSummary::new).collect(Collectors.toList());
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/primary")
+	@Operation(
+		summary = "List primary names for a list of addresses",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				array = @ArraySchema(schema = @Schema(type = "string"))
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "primary name summaries in request order",
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					array = @ArraySchema(schema = @Schema(implementation = NameSummary.class))
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.INVALID_ADDRESS, ApiError.REPOSITORY_ISSUE, ApiError.UNAUTHORIZED})
+	public List<NameSummary> getPrimaryNamesByAddresses(List<String> addresses) {
+		if (addresses == null || addresses.isEmpty())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		for (String address : addresses)
+			if (address == null || !Crypto.isValidAddress(address))
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+
+		if (Settings.getInstance().isLite())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.UNAUTHORIZED);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Map<String, String> primaryNames = repository.getNameRepository().getPrimaryNamesByOwners(addresses);
+
+			return addresses.stream()
+					.map(address -> new NameSummary(new NameData(primaryNames.get(address), address)))
+					.collect(Collectors.toList());
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
