@@ -562,35 +562,39 @@ public class TransactionImporter extends Thread {
     }
 
     private void processNetworkGetUnconfirmedTransactionsMessages() {
-        if (Controller.isStopping()) {
-            return;
-        }
-
-        List<PeerMessage> messagesToProcess;
-        synchronized (getUnconfirmedTransactionsMessageLock) {
-            messagesToProcess = new ArrayList<>(getUnconfirmedTransactionsMessageList);
-            getUnconfirmedTransactionsMessageList.clear();
-        }
-
-        if( messagesToProcess.isEmpty() ) return;
-
-        List<byte[]> signatures = Collections.emptyList();
-
-        // If we're NOT up-to-date then don't send out unconfirmed transactions
-        // as it's possible they are already included in a later block that we don't have.
-        if (Controller.getInstance().isUpToDate()) {
-            try (final Repository repository = RepositoryManager.getRepository()) {
-                signatures = repository.getTransactionRepository().getUnconfirmedTransactionSignatures();
-            } catch (DataException e) {
-                LOGGER.error(String.format("Repository issue while sending unconfirmed transaction signatures to peers"), e);
+        try {
+            if (Controller.isStopping()) {
+                return;
             }
-        }
 
-        Message transactionSignaturesMessage = new TransactionSignaturesMessage(signatures);
+            List<PeerMessage> messagesToProcess;
+            synchronized (getUnconfirmedTransactionsMessageLock) {
+                messagesToProcess = new ArrayList<>(getUnconfirmedTransactionsMessageList);
+                getUnconfirmedTransactionsMessageList.clear();
+            }
 
-        for( PeerMessage messageToProcess : messagesToProcess ) {
-            if (!messageToProcess.getPeer().sendMessage(transactionSignaturesMessage))
-                messageToProcess.getPeer().disconnect("failed to send unconfirmed transaction signatures");
+            if( messagesToProcess.isEmpty() ) return;
+
+            List<byte[]> signatures = new ArrayList<>();
+
+            // If we're NOT up-to-date then don't send out unconfirmed transactions
+            // as it's possible they are already included in a later block that we don't have.
+            if (Controller.getInstance().isUpToDate()) {
+                try (final Repository repository = RepositoryManager.getRepository()) {
+                    signatures.addAll(repository.getTransactionRepository().getUnconfirmedTransactionSignatures());
+                } catch (DataException e) {
+                    LOGGER.error(String.format("Repository issue while sending unconfirmed transaction signatures to peers"), e);
+                }
+            }
+
+            Message transactionSignaturesMessage = new TransactionSignaturesMessage(signatures);
+
+            for( PeerMessage messageToProcess : messagesToProcess ) {
+                if (!messageToProcess.getPeer().sendMessage(transactionSignaturesMessage))
+                    messageToProcess.getPeer().disconnect("failed to send unconfirmed transaction signatures");
+            }
+        } catch (Exception e) {
+            LOGGER.error(e.getMessage(), e);
         }
     }
 
