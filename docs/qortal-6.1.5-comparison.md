@@ -551,6 +551,22 @@ delivery. Tests should cover concurrent peer and API submissions, duplicate
 signatures, cleanup while reads are active, and websocket notification during
 retention cleanup.
 
+### Current Qortium Chat Implementation Status
+
+Qortium's non-encryption chat-store foundation is now implemented through a
+series of focused commits. The completed pieces are the dedicated transient
+chat table, Qortium chat validation service, REST chat reads, local
+`/transactions/process` CHAT submission, chat build and nonce-compute routing,
+chat websocket reads and notifier delivery, peer-originated chat ingress, peer
+chat signature inventory and `GET_TRANSACTION` lookup, and retention cleanup
+lifecycle.
+
+The remaining chat work before calling private group chat complete is broader
+runtime regression confidence and the separate Core-managed private group
+encryption phase. The encryption phase still needs decisions for payload
+envelope, key distribution, rotation, recovery for new members, and whether
+plaintext closed-group CHAT submissions should be rejected.
+
 ### Repository Helper Queries
 
 Qortium should keep only the upstream repository helpers that support accepted
@@ -581,7 +597,7 @@ separate from the skipped aggressive QDN deletion changes.
 
 | Area | Type | Qortium decision | Integration notes | Follow-up tests |
 | --- | --- | --- | --- | --- |
-| Chat transaction delegate and chat routing | Feature / architecture change | Plan deeper Qortium version | Use most of the direction, but review storage, validation, persistence, API routing, websocket routing, and network propagation piece by piece before implementation. | Chat API behavior, websocket behavior, network transaction request behavior, restart persistence, invalidation timing, stale cache behavior. |
+| Chat transaction delegate and chat routing | Feature / architecture change | Implemented Qortium version / encryption deferred | Implemented with Qortium's dedicated transient chat store, validator, REST/API routing, websocket routing, peer ingress, peer inventory, and retention cleanup. Do not port the upstream singleton delegate or JSON backup path. Private group encryption remains a later Core-managed design phase. | Broader duplicate, cleanup, peer/API interaction, websocket notification, and shutdown regression coverage; later encryption behavior tests. |
 | AT executable monitoring API | API addition | Skip upstream / defer custom | Do not port the hardcoded Qortal endpoint. A future Qortium endpoint should be generic, registry-backed, bounded, and free of q-fund, lottery, escrow, or old per-coin ACCT assumptions. | Only needed if a custom endpoint is designed later. |
 | Batch primary-name lookup API | API addition | Ported with Qortium API shape | Implemented as `POST /names/primary`. The upstream `/names/list` alias was intentionally omitted because `list` is confusing beside existing list concepts. | Valid/invalid address handling, empty list behavior, missing primary names, duplicate addresses, lite-mode rejection. |
 | Group analytics APIs | API addition | Skip upstream / defer custom | Do not port the Qortal group balance and activity leaderboard endpoints. If Qortium needs analytics later, design them as optional explorer or admin tooling with clearer names, bounds, and amount handling. | Only needed if custom analytics are designed later. |

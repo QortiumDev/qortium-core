@@ -3,6 +3,7 @@ package org.qortal.controller;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.api.resource.TransactionsResource;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -19,9 +20,13 @@ import org.qortal.network.message.TransactionSignaturesMessage;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.transaction.ChatTransaction;
+import org.qortal.transform.TransformationException;
+import org.qortal.transform.transaction.TransactionTransformer;
+import org.qortal.utils.Base58;
 import org.qortal.utils.NTP;
 
 import java.lang.reflect.Constructor;
@@ -148,6 +153,89 @@ public class TransactionImporterTests extends Common {
 	}
 
 	@Test
+	public void testQueuedPeerChatAlreadyStoredByLocalApiIsIgnoredWithoutSecondNotification() throws Exception {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "api wins duplicate race");
+		}
+
+		AtomicInteger notificationCount = new AtomicInteger();
+		AtomicBoolean storedWhenNotified = new AtomicBoolean(false);
+		ChatNotifier.getInstance().register(null, notifiedData -> {
+			notificationCount.incrementAndGet();
+
+			try (final Repository repository = RepositoryManager.getRepository()) {
+				storedWhenNotified.set(repository.getChatStoreRepository().fromSignature(notifiedData.getSignature()) != null);
+			} catch (DataException e) {
+				throw new RuntimeException(e);
+			}
+		});
+
+		this.transactionImporter.onNetworkTransactionMessage(null, inboundTransactionMessage(chatData));
+		assertTrue(this.transactionImporter.incomingChatTransactionQueueContains(chatData.getSignature()));
+
+		TransactionsResource transactionsResource = (TransactionsResource) ApiCommon.buildResource(TransactionsResource.class);
+		assertEquals("true", transactionsResource.processTransaction(rawTransaction(chatData), null));
+
+		this.transactionImporter.processChatTransactionsInQueue();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertNotNull(repository.getChatStoreRepository().fromSignature(chatData.getSignature()));
+			assertFalse(this.transactionImporter.incomingChatTransactionQueueContains(chatData.getSignature()));
+			assertEquals(1, repository.getChatStoreRepository().countMessagesMatchingCriteria(
+					null, null, Group.NO_GROUP, null, null, Collections.emptyList(), null));
+			assertTrue(repository.getTransactionRepository().getUnconfirmedTransactions().isEmpty());
+		}
+
+		assertEquals(1, notificationCount.get());
+		assertTrue(storedWhenNotified.get());
+	}
+
+	@Test
+	public void testPeerChatIngressAlreadyStoredDoesNotNotifyAgain() throws Exception {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "already stored peer chat");
+			repository.getChatStoreRepository().save(chatData);
+			repository.saveChanges();
+		}
+
+		AtomicInteger notificationCount = new AtomicInteger();
+		ChatNotifier.getInstance().register(null, notifiedData -> notificationCount.incrementAndGet());
+
+		this.transactionImporter.onNetworkTransactionMessage(null, inboundTransactionMessage(chatData));
+		this.transactionImporter.processChatTransactionsInQueue();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertNotNull(repository.getChatStoreRepository().fromSignature(chatData.getSignature()));
+			assertFalse(this.transactionImporter.incomingChatTransactionQueueContains(chatData.getSignature()));
+			assertEquals(1, repository.getChatStoreRepository().countMessagesMatchingCriteria(
+					null, null, Group.NO_GROUP, null, null, Collections.emptyList(), null));
+		}
+
+		assertEquals(0, notificationCount.get());
+	}
+
+	@Test
+	public void testImporterShutdownIsSafeWithQueuedPeerChat() throws Exception {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "queued during shutdown");
+		}
+
+		this.transactionImporter.onNetworkTransactionMessage(null, inboundTransactionMessage(chatData));
+		assertTrue(this.transactionImporter.incomingChatTransactionQueueContains(chatData.getSignature()));
+
+		this.transactionImporter.shutdown();
+	}
+
+	@Test
 	public void testGetTransactionReturnsStoredChatFromDedicatedStore() throws Exception {
 		ChatTransactionData chatData;
 
@@ -268,6 +356,10 @@ public class TransactionImporterTests extends Common {
 		Constructor<TransactionSignaturesMessage> constructor = TransactionSignaturesMessage.class.getDeclaredConstructor(int.class, List.class);
 		constructor.setAccessible(true);
 		return constructor.newInstance(-1, signatures);
+	}
+
+	private static String rawTransaction(TransactionData transactionData) throws TransformationException {
+		return Base58.encode(TransactionTransformer.toBytes(transactionData));
 	}
 
 	private static Message parseOutgoing(Message message) throws MessageException {

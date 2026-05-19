@@ -3,6 +3,8 @@ package org.qortal.chat;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.bouncycastle.util.encoders.Base64;
+import org.qortal.data.chat.ChatMessage;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -19,6 +21,7 @@ import org.qortal.utils.NTP;
 
 import java.nio.charset.StandardCharsets;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
@@ -54,7 +57,11 @@ public class ChatCleanupManagerTests extends Common {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			assertNull(repository.getChatStoreRepository().fromSignature(expiredSignature));
-			assertNotNull(repository.getChatStoreRepository().fromSignature(currentSignature));
+			ChatTransactionData currentChatData = repository.getChatStoreRepository().fromSignature(currentSignature);
+			assertNotNull(currentChatData);
+
+			ChatMessage currentMessage = repository.getChatStoreRepository().toChatMessage(currentChatData, ChatMessage.Encoding.BASE64);
+			assertEquals(Base64.toBase64String(bytes("current")), currentMessage.getData());
 		}
 	}
 
@@ -118,6 +125,10 @@ public class ChatCleanupManagerTests extends Common {
 		byte[] signature = new byte[64];
 		signature[63] = (byte) value;
 		return signature;
+	}
+
+	private static byte[] bytes(String text) {
+		return text.getBytes(StandardCharsets.UTF_8);
 	}
 
 }

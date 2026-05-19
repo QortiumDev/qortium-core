@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - test: harden dedicated chat runtime coverage
+
+Added regression coverage around Qortium's dedicated chat runtime so duplicate CHAT submissions across local API and peer-ingress paths are stored and notified only once, already stored peer chats are ignored without duplicate notifications, queued peer chat does not break importer shutdown, and retained chat remains readable after cleanup. The 6.1.5 comparison notes now mark the non-encryption chat-store foundation as implemented while keeping Core-managed private group encryption as the next separate design phase.
+
 ### 2026-05-19 - chat: add dedicated chat retention cleanup
 
 Added a small lifecycle manager that periodically removes expired messages from Qortium's dedicated transient chat store using the existing chat retention setting. This keeps chat storage bounded over time without touching normal transaction history or the standard unconfirmed transaction pool, and wires the cleanup task into node startup and shutdown alongside the other chat runtime pieces.
