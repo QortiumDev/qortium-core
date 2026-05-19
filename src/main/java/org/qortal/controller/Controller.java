@@ -12,6 +12,7 @@ import org.qortal.api.resource.TransactionsResource;
 import org.qortal.block.Block;
 import org.qortal.block.BlockChain;
 import org.qortal.block.BlockChain.BlockTimingByHeight;
+import org.qortal.chat.ChatCleanupManager;
 import org.qortal.controller.arbitrary.*;
 import org.qortal.controller.hsqldb.HSQLDBBalanceRecorder;
 import org.qortal.controller.hsqldb.HSQLDBDataCacheManager;
@@ -608,6 +609,9 @@ public class Controller extends Thread {
 
 		LOGGER.info("Starting follower");
 		Follower.getInstance().start();
+
+		LOGGER.info("Starting chat cleanup manager");
+		ChatCleanupManager.getInstance().start();
 
 		LOGGER.info("Starting transaction importer");
 		TransactionImporter.getInstance().start();
@@ -1237,6 +1241,9 @@ public class Controller extends Thread {
 
 				LOGGER.info("Shutting down foreign fees manager");
 				ForeignFeesManager.getInstance().shutdown();
+
+				LOGGER.info("Shutting down chat cleanup manager");
+				ChatCleanupManager.getInstance().shutdown();
 
 				LOGGER.info("Shutting down transaction importer");
 				TransactionImporter.getInstance().shutdown();

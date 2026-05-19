@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - chat: add dedicated chat retention cleanup
+
+Added a small lifecycle manager that periodically removes expired messages from Qortium's dedicated transient chat store using the existing chat retention setting. This keeps chat storage bounded over time without touching normal transaction history or the standard unconfirmed transaction pool, and wires the cleanup task into node startup and shutdown alongside the other chat runtime pieces.
+
 ### 2026-05-19 - chat: serve peer chat inventory from dedicated store
 
 Updated peer transaction lookup and unconfirmed-signature inventory so retained chat messages in Qortium's dedicated transient chat store are visible through the existing peer transaction request flow. Peers can now fetch stored CHAT data by signature, receive stored CHAT signatures in unconfirmed inventory, and avoid re-requesting chat signatures this node already has or has queued for peer chat ingress.
