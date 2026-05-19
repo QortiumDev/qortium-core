@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - chat: route chat build APIs through dedicated service
+
+Updated the local chat build and nonce-compute APIs so they validate through Qortium's dedicated chat service instead of the old unconfirmed transaction path. This keeps chat creation aligned with the dedicated transient chat store, uses the same proof-of-work difficulty rules for nonce creation and signature checks, preserves the existing raw unsigned CHAT response format, and still avoids storing, broadcasting, or notifying from the build-only endpoints.
+
 ### 2026-05-19 - chat: route local chat submissions to dedicated store
 
 Updated `/transactions/process` so signed local chat submissions are validated through Qortium's dedicated chat service and stored in the dedicated transient chat store instead of the normal unconfirmed transaction tables. The endpoint keeps the existing success response shapes for API v1 and v2, leaves ordinary transactions on the existing unconfirmed path, and deliberately avoids peer broadcast or websocket notification until those chat paths are routed in later commits.

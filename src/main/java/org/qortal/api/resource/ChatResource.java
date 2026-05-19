@@ -14,6 +14,7 @@ import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.Security;
+import org.qortal.chat.ChatService;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.chat.ActiveChats;
 import org.qortal.data.chat.ChatMessage;
@@ -22,8 +23,6 @@ import org.qortal.data.transaction.TransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
-import org.qortal.transaction.ChatTransaction;
-import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.TransactionType;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.transform.TransformationException;
@@ -266,9 +265,7 @@ public class ChatResource {
 		Security.checkApiCallAllowed(request);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			ChatTransaction chatTransaction = (ChatTransaction) Transaction.fromData(repository, transactionData);
-
-			ValidationResult result = chatTransaction.isValidUnconfirmed();
+			ValidationResult result = ChatService.getInstance().validateForBuild(repository, transactionData);
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -325,17 +322,15 @@ public class ChatResource {
 			if (transactionData.getType() != TransactionType.CHAT)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
 
-			ChatTransaction chatTransaction = (ChatTransaction) Transaction.fromData(repository, transactionData);
+			ChatTransactionData chatTransactionData = (ChatTransactionData) transactionData;
 
-			// Quicker validity check first before we compute nonce
-			ValidationResult result = chatTransaction.isValid();
+			ValidationResult result = ChatService.getInstance().validateForBuild(repository, chatTransactionData);
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
-			chatTransaction.computeNonce();
+			ChatService.getInstance().computeNonce(repository, chatTransactionData);
 
-			// Re-check, but ignores signature
-			result = chatTransaction.isValidUnconfirmed();
+			result = ChatService.getInstance().validateForBuild(repository, chatTransactionData);
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 

@@ -1,24 +1,34 @@
 package org.qortal.test.api;
 
+import com.google.common.primitives.Bytes;
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.bouncycastle.util.encoders.Base64;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.api.ApiError;
 import org.qortal.api.resource.ChatResource;
+import org.qortal.chat.ChatService;
 import org.qortal.data.chat.ActiveChats;
 import org.qortal.data.chat.ChatMessage;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
+import org.qortal.data.transaction.PaymentTransactionData;
+import org.qortal.data.transaction.TransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.settings.Settings;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
+import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.ChatTransaction;
 import org.qortal.transaction.Transaction.ValidationResult;
+import org.qortal.transform.TransformationException;
+import org.qortal.transform.transaction.ChatTransactionTransformer;
+import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.Base58;
 import org.qortal.utils.NTP;
 
@@ -29,6 +39,7 @@ import java.util.List;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ChatResourceTests extends ApiCommon {
@@ -160,6 +171,101 @@ public class ChatResourceTests extends ApiCommon {
 						ChatMessage.Encoding.BASE64, null, null, null));
 	}
 
+	@Test
+	public void testBuildChatUsesDedicatedServiceWithoutStoring() throws DataException, TransformationException {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = chat(alice, Group.NO_GROUP, null, "build only", null, now());
+		}
+
+		String rawChat = this.chatResource.buildChat(null, chatData);
+		ChatTransactionData decodedChatData = decodeUnsignedChat(rawChat);
+
+		assertEquals(chatData.getTimestamp(), decodedChatData.getTimestamp());
+		assertEquals(chatData.getTxGroupId(), decodedChatData.getTxGroupId());
+		assertArrayEquals(chatData.getSenderPublicKey(), decodedChatData.getSenderPublicKey());
+		assertEquals(chatData.getSender(), decodedChatData.getSender());
+		assertEquals(chatData.getRecipient(), decodedChatData.getRecipient());
+		assertArrayEquals(chatData.getData(), decodedChatData.getData());
+		assertEquals(chatData.getNonce(), decodedChatData.getNonce());
+		assertNull(decodedChatData.getSignature());
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertEquals(0, repository.getChatStoreRepository().countMessagesMatchingCriteria(
+					null, null, Group.NO_GROUP, null, null, Arrays.asList(), null));
+			assertTrue(repository.getTransactionRepository().getUnconfirmedTransactions().isEmpty());
+		}
+	}
+
+	@Test
+	public void testBuildChatUsesChatStoreBackedRateLimit() throws Exception {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			FieldUtils.writeField(Settings.getInstance(), "maxRecentChatMessagesPerAccount", 1, true);
+
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			storeChat(repository, alice, Group.NO_GROUP, null, "existing", signature(9), now());
+			chatData = chat(alice, Group.NO_GROUP, null, "rate limited", null, now() + 1);
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chatResource.buildChat(null, chatData));
+	}
+
+	@Test
+	public void testComputeChatUsesDedicatedServiceNonce() throws DataException, TransformationException {
+		ChatTransactionData chatData;
+		TestAccount alice;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			chatData = chat(alice, Group.NO_GROUP, null, "compute nonce", null, now());
+		}
+
+		String computedRawChat = this.chatResource.buildChat(null, rawUnsignedChat(chatData));
+		ChatTransactionData computedChatData = decodeUnsignedChat(computedRawChat);
+
+		assertArrayEquals(chatData.getData(), computedChatData.getData());
+		assertNull(computedChatData.getSignature());
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			new ChatTransaction(repository, computedChatData).sign(alice);
+
+			assertTrue(ChatService.getInstance().isSignatureValid(repository, computedChatData));
+			assertNull(repository.getChatStoreRepository().fromSignature(computedChatData.getSignature()));
+			assertTrue(repository.getTransactionRepository().getUnconfirmedTransactions().isEmpty());
+		}
+	}
+
+	@Test
+	public void testComputeChatRejectsInvalidDataLengthThroughDedicatedService() throws DataException, TransformationException {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = chat(alice, Group.NO_GROUP, null, new byte[0], null, now());
+		}
+
+		String rawChat = rawUnsignedChat(chatData);
+		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chatResource.buildChat(null, rawChat));
+	}
+
+	@Test
+	public void testComputeChatRejectsNonChatTransactionData() throws DataException, TransformationException {
+		PaymentTransactionData paymentData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			paymentData = new PaymentTransactionData(TestTransaction.generateBase(alice), bob.getAddress(), 1L);
+		}
+
+		String rawPayment = rawUnsignedTransaction(paymentData);
+		assertApiError(ApiError.INVALID_DATA, () -> this.chatResource.buildChat(null, rawPayment));
+	}
+
 	private static ChatTransactionData storeChat(Repository repository, TestAccount sender, int groupId, String recipient,
 			String message, byte[] signature, long timestamp) throws DataException {
 		ChatTransactionData chatData = chat(sender, groupId, recipient, message, signature, timestamp);
@@ -186,6 +292,10 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	private static ChatTransactionData chat(TestAccount sender, int groupId, String recipient, String message, byte[] signature, long timestamp) {
+		return chat(sender, groupId, recipient, message.getBytes(StandardCharsets.UTF_8), signature, timestamp);
+	}
+
+	private static ChatTransactionData chat(TestAccount sender, int groupId, String recipient, byte[] data, byte[] signature, long timestamp) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				timestamp,
 				groupId,
@@ -195,7 +305,25 @@ public class ChatResourceTests extends ApiCommon {
 				signature);
 
 		return new ChatTransactionData(baseTransactionData, sender.getAddress(), 0, recipient, null,
-				message.getBytes(StandardCharsets.UTF_8), true, false);
+				data, true, false);
+	}
+
+	private static String rawUnsignedChat(ChatTransactionData chatData) throws TransformationException {
+		return Base58.encode(ChatTransactionTransformer.toBytes(chatData));
+	}
+
+	private static String rawUnsignedTransaction(TransactionData transactionData) throws TransformationException {
+		return Base58.encode(TransactionTransformer.toBytes(transactionData));
+	}
+
+	private static ChatTransactionData decodeUnsignedChat(String rawBytes58) throws TransformationException {
+		byte[] rawBytes = Base58.decode(rawBytes58);
+		rawBytes = Bytes.concat(rawBytes, new byte[TransactionTransformer.SIGNATURE_LENGTH]);
+
+		TransactionData transactionData = TransactionTransformer.fromBytes(rawBytes);
+		transactionData.setSignature(null);
+
+		return (ChatTransactionData) transactionData;
 	}
 
 	private static long now() {

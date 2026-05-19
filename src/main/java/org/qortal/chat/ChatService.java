@@ -60,15 +60,16 @@ public class ChatService {
 
 		int difficulty;
 		try {
-			PublicKeyAccount sender = new PublicKeyAccount(repository, senderPublicKey);
-			difficulty = sender.getConfirmedBalance(Asset.NATIVE) >= ChatTransaction.POW_NATIVE_THRESHOLD
-					? ChatTransaction.POW_DIFFICULTY_ABOVE_NATIVE_THRESHOLD
-					: ChatTransaction.POW_DIFFICULTY_BELOW_NATIVE_THRESHOLD;
+			difficulty = getPoWDifficulty(repository, senderPublicKey);
 		} catch (DataException e) {
 			return false;
 		}
 
 		return MemoryPoW.verify2(transactionBytes, ChatTransaction.POW_BUFFER_SIZE, difficulty, chatTransactionData.getNonce());
+	}
+
+	public ValidationResult validateForBuild(Repository repository, ChatTransactionData chatTransactionData) throws DataException {
+		return validateForStore(repository, chatTransactionData);
 	}
 
 	public ValidationResult validateForStore(Repository repository, ChatTransactionData chatTransactionData) throws DataException {
@@ -132,6 +133,15 @@ public class ChatService {
 		return ValidationResult.OK;
 	}
 
+	public void computeNonce(Repository repository, ChatTransactionData chatTransactionData) throws DataException, TransformationException {
+		byte[] transactionBytes = TransactionTransformer.toBytesForSigning(chatTransactionData);
+
+		ChatTransactionTransformer.clearNonce(transactionBytes);
+
+		int difficulty = getPoWDifficulty(repository, chatTransactionData.getSenderPublicKey());
+		chatTransactionData.setNonce(MemoryPoW.compute2(transactionBytes, ChatTransaction.POW_BUFFER_SIZE, difficulty));
+	}
+
 	/**
 	 * Stores a chat transaction after non-signature validation.
 	 * Callers should check {@link #isSignatureValid(Repository, ChatTransactionData)}
@@ -170,6 +180,13 @@ public class ChatService {
 
 		String recipient = chatTransactionData.getRecipient();
 		return recipient == null || groupRepository.memberExists(txGroupId, recipient);
+	}
+
+	private int getPoWDifficulty(Repository repository, byte[] senderPublicKey) throws DataException {
+		PublicKeyAccount sender = new PublicKeyAccount(repository, senderPublicKey);
+		return sender.getConfirmedBalance(Asset.NATIVE) >= ChatTransaction.POW_NATIVE_THRESHOLD
+				? ChatTransaction.POW_DIFFICULTY_ABOVE_NATIVE_THRESHOLD
+				: ChatTransaction.POW_DIFFICULTY_BELOW_NATIVE_THRESHOLD;
 	}
 
 	private static boolean isUsablePublicKey(byte[] publicKey) {
