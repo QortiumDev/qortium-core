@@ -67,6 +67,7 @@ public class HSQLDBRepository implements Repository {
 	private final BlockRepository blockRepository = new HSQLDBBlockRepository(this);
 	private final BlockArchiveRepository blockArchiveRepository = new HSQLDBBlockArchiveRepository(this);
 	private final ChatRepository chatRepository = new HSQLDBChatRepository(this);
+	private final ChatStoreRepository chatStoreRepository = new HSQLDBChatStoreRepository(this);
 	private final CrossChainRepository crossChainRepository = new HSQLDBCrossChainRepository(this);
 	private final GroupRepository groupRepository = new HSQLDBGroupRepository(this);
 	private final MessageRepository messageRepository = new HSQLDBMessageRepository(this);
@@ -150,6 +151,11 @@ public class HSQLDBRepository implements Repository {
 	@Override
 	public ChatRepository getChatRepository() {
 		return this.chatRepository;
+	}
+
+	@Override
+	public ChatStoreRepository getChatStoreRepository() {
+		return this.chatStoreRepository;
 	}
 
 	@Override

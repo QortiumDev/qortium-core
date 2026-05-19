@@ -1307,6 +1307,22 @@ public class HSQLDBDatabaseUpdates {
 							+ "ON AccountTrustStatusChanges (new_mapped_trust_status, category, snapshot_height)");
 					break;
 
+				case 70:
+					// Dedicated transient chat-message store, separate from block transaction history.
+					stmt.execute("CREATE TABLE ChatMessages (signature Signature, created_when EpochMillis NOT NULL, "
+							+ "tx_group_id GroupID NOT NULL, sender_public_key AccountPublicKey NOT NULL, "
+							+ "sender AccountAddress NOT NULL, nonce INT NOT NULL, recipient AccountAddress, "
+							+ "chat_reference Signature, is_text BOOLEAN NOT NULL, is_encrypted BOOLEAN NOT NULL, "
+							+ "data MessageData NOT NULL, PRIMARY KEY (signature))");
+					stmt.execute("CREATE INDEX ChatMessagesTimestampIndex ON ChatMessages (created_when)");
+					stmt.execute("CREATE INDEX ChatMessagesGroupIndex ON ChatMessages (tx_group_id, created_when)");
+					stmt.execute("CREATE INDEX ChatMessagesSenderIndex ON ChatMessages (sender, created_when)");
+					stmt.execute("CREATE INDEX ChatMessagesSenderPublicKeyIndex ON ChatMessages (sender_public_key, created_when)");
+					stmt.execute("CREATE INDEX ChatMessagesRecipientIndex ON ChatMessages (recipient, sender, created_when)");
+					stmt.execute("CREATE INDEX ChatMessagesDirectIndex ON ChatMessages (sender, recipient, created_when)");
+					stmt.execute("CREATE INDEX ChatMessagesChatReferenceIndex ON ChatMessages (chat_reference)");
+					break;
+
 				default:
 					// nothing to do
 					return false;

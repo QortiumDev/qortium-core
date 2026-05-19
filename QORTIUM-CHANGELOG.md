@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - chat: add dedicated transient chat store
+
+Added the first storage foundation for Qortium's planned chat redesign. Chat messages can now be saved in a dedicated transient chat table that is separate from block transaction history, preserves the original message bytes and encryption flags, supports direct and group chat queries, counts recent messages for rate-limit decisions, and removes old messages based on a configurable retention period. This does not route live APIs, websockets, or peer traffic to the new store yet; it gives the next chat-work phases a tested place to move those paths deliberately.
+
 ### 2026-05-19 - docs: record private chat encryption direction
 
 Updated the 6.1.5 chat plan so Qortium's dedicated chat store is built with future Core-managed private group encryption in mind. The notes now clarify that closed groups are not private by default today, that Qortal Hub's client-side group encryption is useful reference material but not the selected Core design, and that the first chat-store implementation should preserve opaque message bytes and encryption metadata without adding plaintext assumptions.

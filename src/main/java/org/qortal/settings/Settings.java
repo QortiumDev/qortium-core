@@ -157,6 +157,8 @@ public class Settings {
 	private int maxRecentChatMessagesPerAccount = 250;
 	/** Maximum age of a CHAT transaction to be considered 'recent' */
 	private long recentChatMessagesMaxAge = 60 * 60 * 1000L; // milliseconds
+	/** How long transient chat messages remain available from the dedicated chat store */
+	private long chatMessageRetentionPeriod = 24 * 60 * 60 * 1000L; // milliseconds
 
 	/** Legacy auto-update boolean. Use autoUpdateMode for new settings. */
 	private Boolean autoUpdateEnabled = null;
@@ -1541,6 +1543,10 @@ public class Settings {
 
 	public long getRecentChatMessagesMaxAge() {
 		return recentChatMessagesMaxAge;
+	}
+
+	public long getChatMessageRetentionPeriod() {
+		return this.chatMessageRetentionPeriod;
 	}
 
 	public int getBlockCacheSize() {
