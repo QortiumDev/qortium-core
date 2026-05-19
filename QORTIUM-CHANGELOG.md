@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - deps: update Tika Core MIME detection baseline
+
+Updated Qortium's Apache Tika Core dependency to the current 3.3 maintenance baseline used for upload MIME detection and filename-extension recovery. This keeps QDN upload handling on the maintained Tika line while preserving Qortium's existing upload flow and stored data behavior.
+
 ### 2026-05-19 - deps: update Jersey maintenance baseline
 
 Updated Qortium's Jersey dependency family to the current 2.x maintenance baseline used by the API server. This keeps the existing `javax.ws.rs` API model in place while taking the latest Jersey 2.x fixes for the REST, multipart, and injection libraries that serve Qortium's HTTP endpoints.
