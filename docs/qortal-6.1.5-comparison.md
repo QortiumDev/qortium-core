@@ -4,9 +4,10 @@ This document inventories the upstream Qortal changes between the Qortal
 `6.1.4` and `6.1.5` release points so Qortium can decide which work belongs in
 the fork.
 
-It is intentionally neutral. It records what changed, where it changed, and
-which review bucket each change belongs in. It does not decide whether any
-change should be kept, rewritten, postponed, or skipped for Qortium.
+The inventory sections are intentionally neutral. They record what changed,
+where it changed, and which review bucket each change belongs in. The triage
+sections record Qortium decisions made during review so the remaining work can
+be planned without revisiting settled choices.
 
 ## Compared Range
 
@@ -175,20 +176,383 @@ the first-parent changed-file count for merge commits.
 | `src/main/java/org/qortal/utils/FilesystemUtils.java` | Modified | +40/-0 | Utility cleanup | Adds file-age and deletion helpers shared by cleanup and diagnostics code. |
 | `src/main/java/org/qortal/utils/JsonUtils.java` | Added | +79/-0 | JSON utility | Adds Jackson-based JSON save/load helpers for chat transaction lists. |
 
+## Review Decisions So Far
+
+Qortium has accepted the narrow fixes that improve compatibility or robustness
+without adding Qortal-specific product surface. These include provider-neutral
+PKCS12 keystore loading, QDN blocked-name index filtering, QDN Boolean filter
+handling, unconfirmed transaction response hardening, per-block response
+exception isolation, and batch primary-name lookup.
+
+The batch primary-name API was adapted instead of copied exactly. Qortium uses
+`POST /names/primary` and intentionally omits the upstream `/names/list` alias
+because `list` is already overloaded by other user-facing concepts.
+
+Several upstream additions are skipped or deferred because they should be
+designed for Qortium instead of inherited directly: permissive settings JSON,
+the thread-dump scheduler, executable AT monitoring, group analytics,
+filesystem helper movement, and aggressive QDN cleanup.
+
+The chat transaction delegate is the remaining architectural item. Qortium
+wants to use much of the direction, but it needs a deeper piece-by-piece plan
+covering storage, JSON persistence, API routing, websocket routing, validation,
+network propagation, and cache refresh behavior before implementation begins.
+
+Jackson JSON support and chat repository loading helpers should not be ported
+for runtime chat storage. The remaining repository helpers are selected only
+where a kept feature needs them: batch primary-name lookup is ported, while
+global primary-name loading, global group-membership loading, and group
+analytics-only helpers are skipped for now. The Qortium version bump should be
+decided last.
+
+## Chat Delegate Detailed Review
+
+The chat delegate is being reviewed as a set of smaller behavior decisions,
+because the upstream commits combine storage, validation, API routing, network
+propagation, persistence, and lifecycle changes.
+
+### Qortium Chat Plan Summary
+
+Qortium should use the upstream chat delegate as design input, not as code to
+copy directly. The Qortium version should make a dedicated transient chat store
+the source of truth for runtime chat, while keeping memory use limited to
+bounded, rebuildable hot caches.
+
+Do not use the upstream singleton `ChatTransactionDelegate` as the authoritative
+store, do not use periodic JSON files for runtime chat persistence, and do not
+use full-table name, group, or balance caches as validation authority. Local
+API chat submission should validate and store synchronously. Peer-originated
+chat can use a bounded asynchronous ingress path if needed.
+
+REST chat APIs, chat websockets, and peer transaction lookup should all read
+from the dedicated chat store or a service backed by it. Bounded hot caches can
+accelerate recent signatures, active chats, and rate-limit checks, but cache
+misses and rebuilds should fall back to the store.
+
+### Implementation Phases
+
+1. Add the chat retention setting, dedicated chat-store schema, repository
+   methods, and service boundary.
+2. Build one Qortium chat validator with duplicate checks, retention rules,
+   rate-limit accounting, and current blocked-name and group validation
+   behavior preserved.
+3. Route `/chat`, `/chat/compute`, and `/transactions/process` through the
+   Qortium chat service while preserving clear local API success and failure
+   semantics.
+4. Route peer-originated chat through bounded ingress, and serve peer
+   transaction-signature inventory plus `GET_TRANSACTION` lookups from the chat
+   store.
+5. Route chat websockets and notifier delivery through the same chat-store
+   service, then add lifecycle startup, cleanup, and shutdown handling for the
+   selected runtime components.
+6. Add concurrency and regression coverage for duplicate signatures, retention
+   cleanup, rate limits, API submission, peer ingress, REST reads, websocket
+   delivery, and shutdown.
+
+### Storage Model
+
+Qortium should not use upstream's full in-memory validated chat list as the
+source of truth. The goal is still to separate chat from the normal
+unconfirmed transaction store, but chat should live in a dedicated transient
+chat store first. Memory should be used only for bounded acceleration, such as
+latest active chats, recent sender rate limits, and short-lived
+signature/reference lookups for currently advertised messages.
+
+This avoids making recent chat volume scale directly with JVM heap, avoids
+using periodic JSON backup as the main durability path, and leaves room for a
+real chat database with expiry and indexes.
+
+### Chat Store Indexing And Hot Caches
+
+The dedicated chat store should own the authoritative lookup paths for chat
+signature, transaction reference, chat reference, group and timestamp, direct
+participants, sender, and expiry. These indexes should support REST reads,
+websocket initial reads, peer `GET_TRANSACTION` replies, retention cleanup, and
+rate-limit accounting without depending on a full in-memory mirror of recent
+chat.
+
+Bounded hot caches are acceptable as optimizations for recent signature lookup,
+latest active chats, and per-sender rate-limit timestamps. They should be
+rebuildable from the chat store, pruned by the relevant retention or rate-limit
+window, and never treated as the only copy of accepted chat data.
+
+### Chat Expiry And Cleanup
+
+Qortium should give node operators a local settings value for chat retention
+instead of tying chat cleanup to the blockchain transaction expiry period once
+chat is no longer stored in the normal unconfirmed transaction path.
+
+Use a dedicated `chatMessageRetentionPeriod` setting in `settings.json`, stored
+in milliseconds, with a default of `86400000` to preserve today's effective
+24-hour behavior. The setting should control deletion from the dedicated chat
+store first, with bounded memory caches pruned afterward. It should not change
+transaction validity or consensus behavior, and it should remain separate from
+`recentChatMessagesMaxAge`, which is a rate-limit window rather than a chat
+history retention policy.
+
+### JSON Backup And Restore
+
+Qortium should not port upstream's periodic JSON backup as the main chat
+persistence mechanism. Once chat has a dedicated store, that store should be
+the source of truth. Runtime chat persistence should not depend on rewriting a
+full `ChatTransactions.json` snapshot every few minutes or loading that file
+into memory on startup.
+
+Readable export or backup tooling can be designed later as an explicit admin
+or diagnostic feature, but it should not be part of the core chat storage path.
+This also means `JsonUtils` and the extra Jackson Databind dependency should
+not be added solely for chat persistence unless a later accepted feature needs
+them.
+
+### Name Cache And Blocked-Name Checks
+
+Qortium can use a primary-name cache for chat display enrichment, but it should
+not use that cache as the full blocked-name validation policy. Current chat
+validation checks all names owned by the sender against the local blocked-name
+list, and Qortium should preserve that behavior.
+
+If chat validation moves into a delegate, blocked-name checks should either
+query the sender's owned names at validation time or use a separate cache that
+tracks all owned names by owner. Primary-name-only lookup should remain a
+display optimization, not a moderation rule.
+
+### Group Membership Cache
+
+Qortium should not port the upstream global group-membership cache as-is. Group
+membership caching should be treated as an optional performance optimization,
+not a change in chat validation behavior. Current validation checks that the
+sender belongs to the chat group and, for group-recipient chats, that the
+recipient belongs to the group too. Qortium should preserve those checks.
+
+The first Qortium chat-store design can keep repository-backed group
+membership validation or use a small on-demand cache with short expiry or clear
+membership-change invalidation. Avoid a five-minute global refresh as the
+primary authority, because it can be stale after joins, leaves, kicks, bans, or
+other group changes, and because memory use grows with every group membership
+on the chain.
+
+### Balance Cache And Chat PoW
+
+Qortium should not port the upstream global balance cache for chat memory-PoW
+difficulty. Chat nonce validation should use the sender's current confirmed
+native-asset balance, as the existing transaction validation path does, rather
+than a broad five-minute cache of all non-zero balances.
+
+If validation batching creates repeated balance lookups for the same sender,
+Qortium can add small batch-local memoization inside one validation pass. Avoid
+using stale balance data as the authority for PoW difficulty, because senders
+near the balance threshold could otherwise be accepted or rejected differently
+depending on cache timing.
+
+### Incoming Chat Validation Queue
+
+Qortium should not port the upstream incoming chat queue as-is. The upstream
+delegate lets `/transactions/process` and peer-originated chat submissions add
+chat transactions to a background queue, then returns normal processing success
+before the chat has actually passed validation. Invalid queued chats can fail
+later without a useful response to the submitting caller.
+
+The first Qortium design should either validate and store local API submissions
+synchronously, or use a hybrid model where local API submissions return a real
+validation result while peer-originated chats use a bounded, signature-deduped
+queue. Any asynchronous chat queue should have explicit capacity, duplicate
+handling, and status semantics, rather than presenting a queued chat as already
+processed.
+
+### Chat Validation Logic
+
+Qortium should not copy the upstream delegate validation method as-is. It
+partially duplicates the current `ChatTransaction` and
+`Transaction.isValidUnconfirmed()` path, but it also depends on upstream caches
+that Qortium does not want to use as validation authority and it does not
+preserve every current Qortium rule.
+
+The Qortium chat-store implementation should use one explicit chat validator
+for API submissions, peer-originated chats, and store insertion. That validator
+should preserve current behavior for signature and memory-PoW checks, fresh
+confirmed native-asset balance lookup, blocked-address checks, all-owned-name
+blocked checks, sender and recipient group membership, recipient address
+validation, data length validation, duplicate signature checks, and existing
+general-chat support. It should replace only the checks that depend on the
+normal unconfirmed transaction table, using chat-store duplicate checks,
+pending-queue duplicate checks, chat-store-backed rate limiting, and the new
+chat retention setting instead.
+
+### Rate-Limit Accounting
+
+Qortium should keep the existing `maxRecentChatMessagesPerAccount` and
+`recentChatMessagesMaxAge` settings, but the dedicated chat store should be
+the authority for accepted-message counts once chat leaves the normal
+unconfirmed transaction table.
+
+A bounded per-sender timestamp cache can be added for active senders if needed,
+but it should be backed by the chat store and pruned by the same rate-limit
+window. If peer-originated chat uses an asynchronous queue, pending or reserved
+messages should count toward the sender's limit so a burst cannot bypass the
+limit before validation completes.
+
+### Chat API Read Routing
+
+Qortium should keep the current chat read API surface but route reads through a
+Qortium chat-store service or repository instead of the upstream singleton
+delegate. The dedicated chat store should be the source of truth for
+`/chat/messages`, `/chat/messages/count`, `/chat/message/{signature}`, and
+`/chat/active`, with bounded hot caches added only as implementation
+optimizations if active-chat or recent-message reads need them.
+
+The upstream transaction `reference` filter can be useful, but it should be
+added only with clear API documentation that distinguishes the transaction
+reference field from the existing `chatreference` reply/reference field.
+
+### Chat Build And Compute Routing
+
+Qortium should not route `/chat` and `/chat/compute` through the upstream
+singleton delegate. These endpoints should eventually use the same Qortium chat
+validator and nonce helper as chat submission, with modes appropriate for
+unsigned and pre-submit transactions.
+
+The current `ChatTransaction` path can remain until the dedicated chat-store
+implementation is ready, but the final design should compute chat nonce
+difficulty from the sender's fresh confirmed native-asset balance and then
+revalidate enough to prove the computed nonce matches the current difficulty.
+The build and compute endpoints should not depend on the upstream global
+balance cache or delegate validation method.
+
+### `/transactions/process` Chat Routing
+
+Qortium should not copy the upstream `/transactions/process` chat delegation
+semantics. CHAT transactions should leave the normal unconfirmed transaction
+pool, but local API submission should still return success only after the chat
+has been validated and stored in the dedicated chat store.
+
+The Qortium path should detect CHAT submissions, run the Qortium chat
+validator, store accepted chats in the chat store, notify local listeners, and
+return the existing API success shape only after those steps succeed.
+Peer-originated chats can still use a bounded asynchronous queue if selected,
+but `/transactions/process` should preserve clear accepted-or-rejected
+semantics for local clients.
+
+### Network Transaction Routing
+
+Qortium should route peer-originated CHAT messages away from the normal
+unconfirmed transaction importer, but it should send them through a bounded
+Qortium chat-ingress path rather than the upstream singleton delegate. Accepted
+peer chats should be validated, stored in the dedicated chat store, and then
+made available by signature for peer transaction lookup.
+
+For the 6.1.5 integration path, Qortium can keep using the existing peer
+transaction-signature and `GET_TRANSACTION` messages for chat compatibility,
+but those responses should be backed by chat-store lookups instead of broad
+in-memory delegate maps. A separate chat inventory protocol can be considered
+later if Qortium wants to stop mixing transient chat with transaction
+inventory.
+
+### Websocket Routing
+
+Qortium chat websockets should follow the same backend decision as the REST
+chat read APIs. Initial websocket reads should come from the Qortium chat-store
+service or repository, not the upstream singleton delegate, so `/chat/messages`,
+`/chat/active`, active-chat websockets, and chat-message websockets all use the
+same source of truth.
+
+Live websocket notifications should fire only after a chat has been validated
+and stored. The accepted `ChatTransactionData` can be used as the event payload,
+but conversion to websocket `ChatMessage` output should use the same
+store/service enrichment path as REST reads so encoding, name enrichment, and
+filtering remain consistent.
+
+### JSON Dependency And Helper
+
+Qortium should not port the upstream `JsonUtils` helper or add a direct
+Jackson Databind dependency for runtime chat persistence. The helper exists to
+support upstream's `qortal-backup/ChatTransactions.json` source-of-truth path,
+which Qortium does not want to use.
+
+Readable chat export or import can be designed later as explicit admin or
+diagnostic tooling with clear failure handling and atomic writes. It should not
+be part of the core chat storage path.
+
+### Existing HSQLDB Chat Row Loading
+
+Qortium does not need a backwards-compatibility path for existing chat rows,
+because it is intended as a clean baseline for new chains rather than an
+upgrade path for existing Qortal or Qortium nodes.
+
+Do not port upstream's `ChatRepository.getAllChatData()` loader or add a chat
+backfill path solely to warm delegated chat state from old `ChatTransactions`
+rows. The dedicated chat store should be designed as the only runtime chat
+storage model for new chains.
+
+### Controller Lifecycle
+
+Qortium should not start or stop the upstream `ChatTransactionDelegate`
+singleton. A Qortium-specific chat service lifecycle should be added only for
+runtime components that the final design actually keeps, such as a bounded peer
+ingress queue, retention cleanup, optional bounded caches, or notification
+wiring.
+
+That lifecycle should start after the repository and chain services it depends
+on are ready, and before API or network chat handling relies on it. Shutdown
+should stop queues, cleanup jobs, and cache executors cleanly, but it should not
+perform JSON backup.
+
+### Thread-Safety Follow-Up Fixes
+
+Qortium should not port the upstream thread-safety follow-up fixes as code
+unless the upstream delegate is ported, which is not the selected direction.
+Those fixes are tied to the upstream singleton's mutable in-memory maps and
+schedulers.
+
+The Qortium chat service should still apply the concurrency lessons from those
+fixes. The final design should define clear ownership and locking for peer
+ingress queues, pending signatures, accepted chat storage, hot signature lookup,
+active-chat caches, rate-limit caches, retention cleanup, and notifier
+delivery. Tests should cover concurrent peer and API submissions, duplicate
+signatures, cleanup while reads are active, and websocket notification during
+retention cleanup.
+
+### Repository Helper Queries
+
+Qortium should keep only the upstream repository helpers that support accepted
+features. The batch primary-name lookup helper is already ported for
+`POST /names/primary`.
+
+Do not port the upstream all-primary-name lookup for the global chat name
+cache, the all-group-membership lookup for the global group-membership cache,
+or the chat row loader for backwards compatibility. Group analytics-only
+repository helpers should remain skipped with the group analytics APIs. If a
+future Qortium chat feature needs broader name or group data, it should design
+bounded or event-invalidated queries for that feature instead of inheriting the
+upstream full-table cache warmers.
+
+### QDN Storage Manager Hardening
+
+Qortium should keep the idea of making QDN storage-size checks resilient to
+unexpected filesystem failures, but it should not copy the upstream broad
+exception handling as-is. The useful part is preventing one directory-size
+calculation error from stopping future storage checks.
+
+A Qortium version should catch filesystem and runtime scan failures around
+storage-size calculation or inside that method, log them clearly, and preserve
+the existing clean `InterruptedException` shutdown behavior. This should remain
+separate from the skipped aggressive QDN deletion changes.
+
 ## Triage Worksheet
 
 | Area | Type | Qortium decision | Integration notes | Follow-up tests |
 | --- | --- | --- | --- | --- |
-| Chat transaction delegate and chat routing | Feature / architecture change | Undecided | Review whether Qortium wants chat outside normal transaction storage, JSON persistence in `qortal-backup`, and singleton in-memory indexes. | Chat API behavior, websocket behavior, network transaction request behavior, restart persistence, invalidation timing. |
-| AT executable monitoring API | API addition | Undecided | Review whether executable AT monitoring is useful for Qortium's expected node and explorer surfaces. | API response shape, repository filtering, Swagger output. |
-| Batch primary-name lookup API | API addition | Undecided | Review compatibility with Qortium's name and primary-name direction. | Valid/invalid address handling, empty list behavior, missing primary names, authorization expectations. |
-| Group analytics APIs | API addition | Undecided | Review whether group balance and yearly activity analytics belong in the base fork or remain Qortal-specific. | Query ordering, pagination, year boundaries, large group performance. |
-| QDN blocked-name and filter fixes | Fix | Undecided | Review against Qortium's QDN and list-policy direction. | Blocked-name filtering, followed-only filtering, cache-enabled and SQL fallback paths. |
-| QDN cleanup changes | Behavior change | Undecided | Review more aggressive deletion and removed repository checks before adopting. | Storage-threshold behavior, original-copy retention, random deletion safety, notification expectations. |
-| Transaction importer hardening | Fix | Undecided | Review independently from chat delegation where possible. | GET_TRANSACTION batching, exception handling, signature-cache behavior. |
-| Block-message exception isolation | Fix | Undecided | Review as a narrow network robustness fix. | Multi-block request batches with one failing block serialization path. |
-| Thread dump scheduler | Diagnostic feature | Undecided | Review settings names, output location, retention behavior, and whether runtime diagnostics should be included by default. | Disabled-by-default behavior, interval scheduling, file cleanup, shutdown behavior. |
-| Settings comments and trailing commas | Config parser behavior | Undecided | Review whether permissive settings parsing should be accepted for Qortium config files. | Comment lines, trailing commas, malformed JSON, path handling. |
-| Provider-neutral PKCS12 keystore | Fix | Undecided | Review as a narrow compatibility fix for restricted admin export/import behavior. | PKCS12 load path with available default providers. |
-| Jackson JSON utility | Dependency / utility | Undecided | Review only if a selected feature needs JSON import/export. | Dependency tree impact, serialization of target data type, missing/corrupt file behavior. |
-| Version bump | Release metadata | Undecided | Do not directly apply to Qortium without deciding Qortium's own versioning scheme. | Maven version and generated package metadata. |
+| Chat transaction delegate and chat routing | Feature / architecture change | Plan deeper Qortium version | Use most of the direction, but review storage, validation, persistence, API routing, websocket routing, and network propagation piece by piece before implementation. | Chat API behavior, websocket behavior, network transaction request behavior, restart persistence, invalidation timing, stale cache behavior. |
+| AT executable monitoring API | API addition | Skip upstream / defer custom | Do not port the hardcoded Qortal endpoint. A future Qortium endpoint should be generic, registry-backed, bounded, and free of q-fund, lottery, escrow, or old per-coin ACCT assumptions. | Only needed if a custom endpoint is designed later. |
+| Batch primary-name lookup API | API addition | Ported with Qortium API shape | Implemented as `POST /names/primary`. The upstream `/names/list` alias was intentionally omitted because `list` is confusing beside existing list concepts. | Valid/invalid address handling, empty list behavior, missing primary names, duplicate addresses, lite-mode rejection. |
+| Group analytics APIs | API addition | Skip upstream / defer custom | Do not port the Qortal group balance and activity leaderboard endpoints. If Qortium needs analytics later, design them as optional explorer or admin tooling with clearer names, bounds, and amount handling. | Only needed if custom analytics are designed later. |
+| QDN blocked-name and filter fixes | Fix | Ported | Accepted the narrow blocked-name index exclusion and Boolean-wrapper filter fixes. These match Qortium's local list-policy direction. | Blocked-name filtering, followed-only filtering, cache-enabled and SQL fallback paths. |
+| QDN cleanup and storage hardening | Behavior change / robustness | Split decision | Do not port the aggressive cleanup change as-is. It greatly increases random deletion pressure and removes safety checks and notifications. Keep only a narrow QDN storage-manager hardening idea: storage-size scan failures should be logged without killing future checks, while shutdown interrupts remain clean. | Future cleanup tests should cover storage thresholds, original-copy retention, random deletion safety, notification behavior, storage-size scan failures, and shutdown interruption. |
+| Filesystem helper move | Utility cleanup | Skip for now | Do not move file-age helpers only for parity. Revisit if a kept feature needs shared filesystem cleanup helpers. | Only needed if a future feature uses the shared helpers. |
+| Transaction importer hardening | Fix | Ported narrow fix | Accepted the scheduler fail-safe and mutable-signature-list fix without adopting the upstream chat-delegate routing pieces yet. | GET_TRANSACTION batching, exception handling, signature-cache behavior. |
+| Block-message exception isolation | Fix | Ported | Accepted as a narrow network robustness fix so one failing block response does not stop the rest of a queued response batch. | Multi-block request batches with one failing block serialization path. |
+| Thread dump scheduler | Diagnostic feature | Skip upstream / defer custom | Do not port the upstream scheduler. A future Qortium diagnostics feature should choose its own settings, output path, retention policy, and API/admin integration. | Only needed if custom diagnostics are designed later. |
+| Settings comments and trailing commas | Config parser behavior | Skip | Keep strict JSON parsing. Qortium should expose settings APIs for new users instead of making manual settings edits more permissive, while advanced users can use valid JSON directly. | Existing strict settings parsing tests are sufficient unless settings APIs change. |
+| Provider-neutral PKCS12 keystore | Fix | Ported | Accepted as a narrow compatibility fix for restricted admin certificate behavior. | PKCS12 load path with available default providers. |
+| Repository helper queries | Repository support | Partial / selected only | Primary-name batch lookup support is ported. Do not port chat-loading helpers for backwards compatibility, all-primary-name loading for the upstream name cache, all-group-membership loading for the upstream group cache, or group analytics-only helpers. | Keep tests for `POST /names/primary`; add future helper tests only for selected Qortium-specific features. |
+| Jackson JSON utility | Dependency / utility | Skip for chat persistence | Do not add the upstream `JsonUtils` helper or a direct Jackson Databind dependency for runtime chat storage. Revisit only if Qortium later designs explicit admin export/import tooling. | Only needed if a future export/import feature is designed. |
+| Version bump | Release metadata | Defer until end | Do not directly apply Qortal's Maven version. Decide Qortium's own version only after the selected 6.1.5 changes are complete. | Maven version and generated package metadata. |

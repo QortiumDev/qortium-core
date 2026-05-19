@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - docs: record upstream 6.1.5 triage decisions
+
+Updated the upstream Qortal 6.1.5 comparison document so it records which changes Qortium has already ported, skipped, deferred, or left for deeper planning. The document now includes a detailed Qortium chat plan that rejects the upstream singleton delegate as the source of truth, chooses a dedicated transient chat store, records the selected repository-helper decisions, and separates the skipped aggressive QDN cleanup behavior from the narrow storage-manager hardening idea.
+
 ### 2026-05-19 - api: add batch primary-name lookup
 
 Added a batch primary-name lookup API so wallets, explorers, and other clients can resolve the primary names for several addresses with one request instead of repeating the single-address endpoint. The new endpoint keeps the response in the same order as the request, preserves duplicate addresses, reports valid addresses without primary names as `null`, and stays full-node-only until Qortium has a designed lite-data batch lookup path.
