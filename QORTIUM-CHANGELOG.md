@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - testnet: default to local single-node testing
+
+Refreshed the bundled testnet setup so testers can start with a local single-node chain instead of assembling a multi-node testnet first. The testnet chain template is now compact, current-format, and neutral: it has no prefunded accounts, no native asset issued at genesis, and only one default minting-group member with a matching minting key so the local node can produce blocks. The testnet settings now default to safer loopback-only access, and the helper scripts generate disposable local runtime files with a fresh genesis timestamp, add the default local minting key, and stop the local node cleanly.
+
 ### 2026-05-19 - feat: authorize minting keys from minting-group joins
 
 Added an optional minting public key to minting-group join transactions so an account can publish its minting authorization as part of joining the group. Qortium now records that authorization as a self-share in the existing reward-share table only when needed, leaves existing self-shares alone, rejects minting keys that already belong to another account, and treats self-share percentages as ignored minting-authorization metadata instead of real reward-splitting percentages.

@@ -1,50 +1,130 @@
-#!/bin/sh
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Validate Java is installed and the minimum version is available
-MIN_JAVA_VER='17'
+MIN_JAVA_VER=17
+DEFAULT_MINTING_PRIVATE_KEY="1CeDCg9TSdBwJNGVTGG7pCKsvsyyoEcaVXYvDT1Xb9f"
 
-if command -v java > /dev/null 2>&1; then
-    # Example: openjdk version "17.0.12" 2024-07-16
-    version=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}' | cut -d'.' -f1,2)
-    if echo "${version}" "${MIN_JAVA_VER}" | awk '{ if ($2 > 0 && $1 >= $2) exit 0; else exit 1}'; then
-        echo 'Passed Java version check'
-    else
-        echo "Please upgrade your Java to version ${MIN_JAVA_VER} or greater"
-        exit 1
-    fi
-else
-  echo "Java is not available, please install Java ${MIN_JAVA_VER} or greater"
-  exit 1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-test.json"
+SETTINGS_LOCAL="${SCRIPT_DIR}/settings-test-local.json"
+CHAIN_TEMPLATE="${SCRIPT_DIR}/testchain.json"
+CHAIN_LOCAL="${SCRIPT_DIR}/testchain-local.json"
+RUN_LOG="${SCRIPT_DIR}/run.log"
+RUN_PID="${SCRIPT_DIR}/run.pid"
+DB_PATH="${SCRIPT_DIR}/db-testnet"
+
+cd "${SCRIPT_DIR}"
+
+if [ -f "${RUN_PID}" ]; then
+	read -r existing_pid < "${RUN_PID}" || existing_pid=""
+	if [ -n "${existing_pid}" ] && ps -p "${existing_pid}" >/dev/null 2>&1; then
+		echo "Qortium testnet is already running as pid ${existing_pid}"
+		exit 0
+	fi
+
+	rm -f "${RUN_PID}"
 fi
 
-# No qortium.jar but we have a Maven built one?
-# Be helpful and copy across to correct location
-if [ ! -e qortium.jar ]; then
-	for qortium_jar in target/qortium*.jar; do
-		if [ -f "${qortium_jar}" ]; then
-			echo "Copying Maven-built Qortium JAR to correct pathname"
-			cp "${qortium_jar}" qortium.jar
-			break
+if command -v java >/dev/null 2>&1; then
+	version="$(java -version 2>&1 | awk -F '"' '/version/ {print $2}' | cut -d. -f1)"
+	if ! awk -v found="${version}" -v required="${MIN_JAVA_VER}" 'BEGIN { exit !(found >= required) }'; then
+		echo "Please upgrade Java to version ${MIN_JAVA_VER} or greater"
+		exit 1
+	fi
+else
+	echo "Java is not available. Please install Java ${MIN_JAVA_VER} or greater."
+	exit 1
+fi
+
+find_qortium_jar() {
+	if [ -f "${SCRIPT_DIR}/qortium.jar" ]; then
+		printf '%s\n' "${SCRIPT_DIR}/qortium.jar"
+		return 0
+	fi
+
+	if [ -f "${REPO_DIR}/qortium.jar" ]; then
+		printf '%s\n' "${REPO_DIR}/qortium.jar"
+		return 0
+	fi
+
+	local jar
+	for jar in "${REPO_DIR}"/target/qortium*.jar; do
+		if [ -f "${jar}" ]; then
+			printf '%s\n' "${jar}"
+			return 0
 		fi
 	done
+
+	return 1
+}
+
+JAR_PATH="$(find_qortium_jar || true)"
+if [ -z "${JAR_PATH}" ]; then
+	echo "Could not find qortium.jar."
+	echo "Build it first with: mvn -q -DskipTests package"
+	exit 1
 fi
 
-# Limits Java JVM stack size and maximum heap usage.
-# Comment out for bigger systems, e.g. non-routers
-# or when API documentation is enabled
-JVM_MEMORY_ARGS="-Xss256m -XX:+UseSerialGC"
+if [ -f "${CHAIN_LOCAL}" ]; then
+	echo "Using existing local chain config: ${CHAIN_LOCAL}"
+else
+	if [ -d "${DB_PATH}" ] && find "${DB_PATH}" -mindepth 1 -print -quit | grep -q .; then
+		echo "Existing testnet database found, but ${CHAIN_LOCAL} is missing."
+		echo "Restore ${CHAIN_LOCAL}, or reset the local testnet by removing ${DB_PATH}."
+		exit 1
+	fi
 
-# Although java.net.preferIPv4Stack is supposed to be false by default,
-# some platforms override it to true. Hence we explicitly set it to false
-# to obtain desired behaviour.
-# shellcheck disable=SC2086 # JVM_MEMORY_ARGS intentionally expands to multiple arguments.
+	GENESIS_TIMESTAMP="$(($(date +%s) * 1000 - 60000))"
+	awk -v genesis_timestamp="${GENESIS_TIMESTAMP}" '
+		/"genesisInfo"[[:space:]]*:/ { in_genesis = 1 }
+		in_genesis && !updated && /"timestamp"[[:space:]]*:[[:space:]]*[0-9]+/ {
+			sub(/"timestamp"[[:space:]]*:[[:space:]]*[0-9]+/, "\"timestamp\": " genesis_timestamp)
+			updated = 1
+		}
+		{ print }
+	' "${CHAIN_TEMPLATE}" > "${CHAIN_LOCAL}"
+	echo "Created local chain config: ${CHAIN_LOCAL}"
+fi
+
+sed 's/"blockchainConfig": "testchain.json"/"blockchainConfig": "testchain-local.json"/' \
+	"${SETTINGS_TEMPLATE}" > "${SETTINGS_LOCAL}"
+
+JVM_MEMORY_ARGS=("-Xss256m" "-XX:+UseSerialGC")
+
 nohup nice -n 20 java \
 	-Djava.net.preferIPv4Stack=false \
-	${JVM_MEMORY_ARGS} \
-	-jar qortium.jar \
-	settings-test.json \
-	1>run.log 2>&1 &
+	"${JVM_MEMORY_ARGS[@]}" \
+	-jar "${JAR_PATH}" \
+	"${SETTINGS_LOCAL}" \
+	>"${RUN_LOG}" 2>&1 &
 
-# Save backgrounded process's PID
-echo $! > run.pid
-echo qortium running as pid $!
+echo "$!" > "${RUN_PID}"
+echo "Qortium testnet running as pid $!"
+echo "Console log: ${RUN_LOG}"
+echo "Application log: ${SCRIPT_DIR}/qortium.log"
+
+if ! command -v curl >/dev/null 2>&1; then
+	echo "curl is not available. Add the default minting key after startup with:"
+	echo "curl -X POST http://localhost:62391/admin/mintingaccounts -d ${DEFAULT_MINTING_PRIVATE_KEY}"
+	exit 0
+fi
+
+echo -n "Adding default local minting key"
+for _ in $(seq 1 60); do
+	if curl -fsS -X POST "http://localhost:62391/admin/mintingaccounts" \
+		--data "${DEFAULT_MINTING_PRIVATE_KEY}" >/dev/null 2>&1; then
+		echo
+		echo "Default local minting key added"
+		exit 0
+	fi
+
+	echo -n "."
+	sleep 1
+done
+
+echo
+echo "The node started, but the default minting key was not added automatically."
+echo "Run this after the API is ready:"
+echo "curl -X POST http://localhost:62391/admin/mintingaccounts -d ${DEFAULT_MINTING_PRIVATE_KEY}"

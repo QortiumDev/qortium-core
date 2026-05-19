@@ -1,85 +1,79 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-# Check for color support
-if [ -t 1 ]; then
-	ncolors=$( tput colors )
-	if [ -n "${ncolors}" ] && [ "${ncolors}" -ge 8 ]; then
-		if normal="$( tput sgr0 )"; then
-			# use terminfo names
-			red="$( tput setaf 1 )"
-			green="$( tput setaf 2)"
-		else
-			# use termcap names for FreeBSD compat
-			normal="$( tput me )"
-			red="$( tput AF 1 )"
-			green="$( tput AF 2)"
-		fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUN_PID="${SCRIPT_DIR}/run.pid"
+APIKEY_FILE="${SCRIPT_DIR}/apikey.txt"
+
+api_port=62391
+stale_pid=0
+for arg in "$@"; do
+	case "${arg}" in
+		--api-port=*)
+			api_port="${arg#*=}"
+			;;
+		--mainnet|-m)
+			api_port=12391
+			;;
+		--testnet|-t)
+			api_port=62391
+			;;
+	esac
+done
+
+pid=""
+if [ -f "${RUN_PID}" ]; then
+	read -r pid < "${RUN_PID}" || pid=""
+fi
+
+if [ -n "${pid}" ] && ! ps -p "${pid}" >/dev/null 2>&1; then
+	pid=""
+	stale_pid=1
+fi
+
+if [ -z "${pid}" ]; then
+	pid="$(ps aux | awk '/[q]ortium.*settings-test-local\.json/ { print $2; exit }')"
+fi
+
+apikey=""
+if [ -f "${APIKEY_FILE}" ]; then
+	apikey="$(cat "${APIKEY_FILE}")"
+fi
+
+success=0
+if [ -n "${apikey}" ] && command -v curl >/dev/null 2>&1; then
+	echo "Stopping Qortium via API..."
+	if curl --url "http://localhost:${api_port}/admin/stop?apiKey=${apikey}" >/dev/null 2>&1; then
+		success=1
 	fi
 fi
 
-# Track the pid if we can find it
-read -r pid 2>/dev/null <run.pid
-is_pid_valid=$?
-
-# Swap out the API port if the --testnet (or -t) argument is specified
-api_port=12391
-for arg in "$@"; do
-  case "${arg}" in
-    --testnet|-t)
-      api_port=62391
-      break
-      ;;
-  esac
-done
-
-# Attempt to locate the process ID if we don't have one
-if [ -z "${pid}" ]; then
-  pid=$(ps aux | awk '/[q]ortium.jar/ { print $2; exit }')
-  is_pid_valid=$?
+if [ "${success}" -ne 1 ] && [ -n "${pid}" ]; then
+	echo "Stopping Qortium process ${pid}..."
+	if kill -15 "${pid}"; then
+		success=1
+	fi
 fi
 
-# Locate the API key if it exists
-apikey=$(cat apikey.txt)
-success=0
+if [ "${success}" -ne 1 ]; then
+	if [ "${stale_pid}" -eq 1 ]; then
+		rm -f "${RUN_PID}"
+		echo "Qortium testnet is not running; removed stale pid file"
+		exit 0
+	fi
 
-# Try and stop via the API
-if [ -n "$apikey" ]; then
-  echo "Stopping Qortium via API..."
-  if curl --url "http://localhost:${api_port}/admin/stop?apiKey=$apikey" 1>/dev/null 2>&1; then
-    success=1
-  fi
+	echo "Stop command failed - local testnet node is not running."
+	exit 1
 fi
 
-# Try to kill process with SIGTERM
-if [ "$success" -ne 1 ] && [ -n "$pid" ]; then
-  echo "Stopping Qortium process $pid..."
-  if kill -15 "${pid}"; then
-    success=1
-  fi
+if [ -n "${pid}" ]; then
+	echo -n "Waiting for Qortium to stop"
+	while state="$(ps -p "${pid}" -o stat= 2>/dev/null)" && [ -n "${state}" ] && [ "${state}" != "Z" ]; do
+		echo -n "."
+		sleep 1
+	done
+	echo
 fi
 
-# Warn and exit if still no success
-if [ "$success" -ne 1 ]; then
-  if [ -n "$pid" ]; then
-    echo "${red}Stop command failed - not running with process id ${pid}?${normal}"
-  else
-    echo "${red}Stop command failed - not running?${normal}"
-  fi
-  exit 1
-fi
-
-if [ "$success" -eq 1 ]; then
-  echo "Qortium node should be shutting down"
-  if [ "${is_pid_valid}" -eq 0 ]; then
-    echo -n "Monitoring for Qortium node to end"
-    while s=$(ps -p "$pid" -o stat=) && [[ "$s" && "$s" != 'Z' ]]; do
-      echo -n .
-      sleep 1
-    done
-    echo
-    echo "${green}Qortium ended gracefully${normal}"
-    rm -f run.pid
-  fi
-fi
-
-exit 0
+rm -f "${RUN_PID}"
+echo "Qortium testnet stopped"

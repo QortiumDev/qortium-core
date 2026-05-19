@@ -1,24 +1,39 @@
 {
   "listenPort": 62392,
   "apiPort": 62391,
-  "bindAddress": "0.0.0.0",
+  "bindAddress": "127.0.0.1",
   "isTestNet": true,
-  "singleNodeTestnet": false,
-  "minPeerVersion": "4.5.2",
+  "singleNodeTestnet": true,
+  "minPeerVersion": "6.1.0",
   "allowConnectionsWithOlderPeerVersions": false,
   "bitcoinyNetworks": {
     "BTC": "TEST3",
     "LTC": "TEST4"
   },
   "wallets": {
+    "BTC": false,
+    "BCH": false,
+    "LTC": false,
     "DOGE": false,
     "DGB": false,
     "RVN": false,
-    "DASH": false
+    "DASH": false,
+    "PPC": false,
+    "NMC": false,
+    "FIRO": false,
+    "KMD": false,
+    "VRSC": false,
+    "ZEC": false,
+    "LBC": false,
+    "XVG": false,
+    "ARRR": false
   },
   "repositoryPath": "db-testnet",
+  "exportPath": "qortium-backup-test",
   "blockchainConfig": "testchain.json",
   "minBlockchainPeers": 1,
+  "minOutboundPeers": 0,
+  "uPnPEnabled": false,
   "apiDocumentationEnabled": true,
   "apiRestricted": false,
   "bootstrap": false,
@@ -28,13 +43,11 @@
   "uiLocalServers": [
     "localhost",
     "127.0.0.1",
-    "0.0.0.0/0",
-    "::/0"
+    "::1"
   ],
   "apiWhitelist": [
     "localhost",
     "127.0.0.1",
-    "0.0.0.0/0",
-    "::/0"
+    "::1"
   ]
 }

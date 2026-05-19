@@ -1,136 +1,106 @@
-# How to build a testnet
+# Local Testnet
 
-## Create testnet blockchain config
+The files in this folder are for running a disposable Qortium testnet from a
+local build. The default path is a single-node testnet so testers can try the
+node without setting up peers, separate machines, or a multi-node minting
+rotation.
 
-- The simplest option is to use the testchain.json included in this folder.
-- Alternatively, you can create one by copying the mainnet blockchain config `src/main/resources/blockchain.json`
-- Insert `"isTestChain": true,` after the opening `{`
-- Modify testnet genesis block, feature triggers etc
+## Quick Start
 
-### Testnet genesis block
+Build Qortium from the repository root:
 
-- Set `timestamp` to a nearby future value, e.g. 15 mins from 'now'
-	This is to give yourself enough time to set up other testnet nodes
-- Retain the initial `ISSUE_ASSET` transactions!
-- Add at least one `REWARD_SHARE` transaction otherwise no-one can mint initial blocks!
-	You will need to calculate `rewardSharePublicKey` (and private key),
-	or make a new account on mainnet and use self-share key values
-- Accounts start at level zero and gain levels naturally from minted blocks
-- Add `GENESIS` transactions to add native asset funds to accounts as needed
-
-## Testnet `settings.json`
-
-- Create a new `settings-test.json`
-- Make sure to add `"isTestNet": true,`
-- Make sure to reference testnet blockchain config file: `"blockchainConfig": "testchain.json",`
-- It is a good idea to use a separate database: `"repositoryPath": "db-testnet",`
-- You might also need to add a `"bitcoinyNetworks"` map for supported foreign test networks. Currently Bitcoin uses `"TEST3"` and Litecoin uses `"TEST4"`.
-- Disable wallets for any foreign coins that do not have a supported test network unless you intentionally want to use their mainnet.
-- Also make sure to use a custom `listenPort` (not 62391 or 12391) to ensure that transactions remain isolated to your testnet.
-
-## Other nodes
-
-- Copy `testchain.json` and `settings-test.json` to other nodes
-- Alternatively, you can run multiple nodes on the same machine by:
-	* Copying `settings-test.json` to `settings-test-1.json`
-	* Configure different `repositoryPath`
-	* Configure use of different ports:
-		+ `"apiPort": 22391,`
-		+ `"listenPort": 22392,`
-
-## Starting-up
-
-- Start up at least as many nodes as `minBlockchainPeers` (or adjust this value instead)
-- Probably best to perform API call `DELETE /peers/known`
-- Add other nodes via API call `POST /peers <peer-hostname-or-IP>`
-- Add minting private key to nodes via API call `POST /admin/mintingaccounts <minting-private-key>`
-    The keys must have corresponding `REWARD_SHARE` transactions in testnet genesis block
-- You must have at least 2 separate minting keys and two separate nodes. Assign one minting key to each node.
-- Alternatively, comment out the `if (mintedLastBlock) { }` conditional in BlockMinter.java to allow for a single node and key.
-- Wait for genesis block timestamp to pass
-- A node should mint block 2 approximately 60 seconds after genesis block timestamp
-- Other testnet nodes will sync *as long as there is at least `minBlockchainPeers` peers with an "up-to-date" chain`
-- You can also use API call `POST /admin/forcesync <connected-peer-IP-and-port>` on stuck nodes
-
-## Single-node testnet
-
-A single-node testnet is possible with an additional settings, or to more easily start a new testnet.
-Just add this setting:
-```
-"singleNodeTestnet": true
-```
-This will automatically allow multiple consecutive blocks to be minted, as well as setting minBlockchainPeers to 0.
-Remember to put these values back after introducing other nodes.
-
-## Fixed network
-
-To restrict a testnet to a set of private nodes, you can use the "fixed network" feature.
-This ensures that the testnet nodes only communicate with each other and not other known peers.
-To do this, add the following setting to each testnet node, substituting the IP addresses:
-```
-"fixedNetwork": [
-  "192.168.0.101:62392",
-  "192.168.0.102:62392",
-  "192.168.0.103:62392"
-]
+```sh
+mvn -q -DskipTests package
 ```
 
-## Dealing with stuck chain
+Start the local testnet:
 
-Maybe your nodes have been offline and no-one has minted a recent testnet block.
-Your options are:
-
-- Start a new testnet from scratch
-- Fire up your testnet node(s)
-- Force one of your nodes to mint by:
-	+ Set a debugger breakpoint on Settings.getMinBlockchainPeers()
-	+ When breakpoint is hit, change `this.minBlockchainPeers` to zero, then continue
-- Once one of your nodes has minted blocks up to 'now', you can use "forcesync" on the other nodes
-
-## Tools
-
-- `qort` tool, but use `-t` option for default testnet API port (62391)
-- `qort` tool, but first set shell variable: `export BASE_URL=some-node-hostname-or-ip:port`
-- `qort` tool, but prepend with one-time shell variable: `BASE_URL=some-node-hostname-or-ip:port qort ......`
-- `peer-heights`, but use `-t` option, or `BASE_URL` shell variable as above
-
-## Example settings-test.json
-```
-{
-  "isTestNet": true,
-  "bitcoinyNetworks": {
-    "BTC": "TEST3",
-    "LTC": "TEST4"
-  },
-  "wallets": {
-    "DOGE": false,
-    "DGB": false,
-    "RVN": false,
-    "DASH": false
-  },
-  "repositoryPath": "db-testnet",
-  "blockchainConfig": "testchain.json",
-  "minBlockchainPeers": 1,
-  "apiDocumentationEnabled": true,
-  "apiRestricted": false,
-  "bootstrap": false,
-  "maxPeerConnectionTime": 999999999,
-  "localAuthBypassEnabled": true,
-  "singleNodeTestnet": true,
-  "recoveryModeTimeout": 0
-}
+```sh
+./testnet/start.sh
 ```
 
-<a name="quick-start"></a>
-## Quick start
-Here are some steps to quickly get a single node testnet up and running with a generic minting account:
-1. Start with template `settings-test.json`, and `testchain.json` which can be found in this folder. Copy/move them to the same directory as the jar.
-2. Set a custom `listenPort` in settings-test.json (not 62391 or 12391) to ensure that transactions remain isolated to your testnet.
-3. Make sure feature triggers and other timestamp/height activations are correctly set. Generally these would be `0` so that they are enabled from the start.
-4. Set a recent genesis `timestamp` in testchain.json, and add this reward share entry:
-`{ "type": "REWARD_SHARE", "minterPublicKey": "DwcUnhxjamqppgfXCLgbYRx8H9XFPUc2qYRy3CEvQWEw", "recipient": "QbTDMss7NtRxxQaSqBZtSLSNdSYgvGaqFf", "rewardSharePublicKey": "CRvQXxFfUMfr4q3o1PcUZPA4aPCiubBsXkk47GzRo754", "sharePercent": 0 },`
-5. Start the node, passing in settings-test.json, e.g: `java -jar qortium.jar settings-test.json`
-6. Once started, add the corresponding minting key to the node:
-`curl -X POST "http://localhost:62391/admin/mintingaccounts" -d "F48mYJycFgRdqtc58kiovwbcJgVukjzRE4qRRtRsK9ix"`
-7. Alternatively you can use your own minting account instead of the generic one above.
-8. After a short while, blocks should be minted from the genesis timestamp until the current time.
+The script starts the node on the local testnet API port:
+
+```text
+http://localhost:62391
+```
+
+Stop it with:
+
+```sh
+./testnet/stop.sh
+```
+
+## What The Script Does
+
+`start.sh` uses `settings-test.json` and `testchain.json` as tracked templates,
+then creates local runtime copies:
+
+- `settings-test-local.json`
+- `testchain-local.json`
+- `db-testnet/`
+- `qortium-backup-test/`
+- `run.log`
+- `run.pid`
+- `qortium.log`
+- `QortiumKeyStore.jks`
+
+The generated chain file uses a fresh genesis timestamp on the first start so
+the local node does not have to catch up from an old committed date. Later
+starts reuse the same local chain file until you reset the testnet, so the
+database and genesis block stay in sync. The script also adds the default local
+minting key with:
+
+```sh
+curl -X POST http://localhost:62391/admin/mintingaccounts -d 1CeDCg9TSdBwJNGVTGG7pCKsvsyyoEcaVXYvDT1Xb9f
+```
+
+That key is only for this disposable local testnet. The matching account is
+created with a zero balance, joined to the minting group, and published with the
+corresponding minting public key so it can mint without receiving a prefunded
+native-asset allocation.
+
+## Resetting
+
+Stop the node first, then remove the local runtime files:
+
+```sh
+rm -rf testnet/db-testnet \
+  testnet/qortium-backup-test \
+  testnet/settings-test-local.json \
+  testnet/testchain-local.json \
+  testnet/run.log \
+  testnet/run.pid \
+  testnet/qortium.log \
+  testnet/QortiumKeyStore.jks
+```
+
+The next `./testnet/start.sh` run will create a fresh local chain.
+
+## Template Settings
+
+`settings-test.json` is intentionally local by default:
+
+- `singleNodeTestnet` is `true`, which lets one node mint consecutive blocks
+  without peers.
+- the API and peer bind address are loopback-only.
+- broad API whitelists are not enabled.
+- outbound peer targets and UPnP are disabled.
+- foreign wallets are disabled by default.
+
+## Multi-Node Testnets
+
+For a multi-node testnet, copy the templates for each node and change the local
+copies deliberately:
+
+- set `singleNodeTestnet` to `false`
+- set `minBlockchainPeers` to the number of peers required before minting
+- use a different `repositoryPath` per node
+- use different `apiPort` and `listenPort` values per node
+- bind to an address other nodes can reach
+- configure `fixedNetwork` or add peers manually through the API
+- add a valid minting key to each node with `POST /admin/mintingaccounts`
+
+Do not reuse the generated `testchain-local.json` from one node after another
+node has already started from a different genesis timestamp. Multi-node testnets
+must share the exact same chain config.

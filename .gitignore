@@ -13,6 +13,10 @@
 /log.txt.*
 /run.pid
 /run.log
+/testnet/run.pid
+/testnet/run.log
+/testnet/qortium.log
+/testnet/QortiumKeyStore.jks
 apikey.txt
 
 # Local configuration
@@ -22,6 +26,10 @@ apikey.txt
 /run-testnet*.sh
 /notes*
 /log4j2-test.properties
+/testnet/settings-test-local.json
+/testnet/testchain-local.json
+/testnet/db-testnet/
+/testnet/qortium-backup-test/
 
 # Build output and packaged artifacts
 /bin/
