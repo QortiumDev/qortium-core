@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - build: update Qortium version to 6.1.5
+
+Updated Qortium's Maven project version and active GitHub branch filters to 6.1.5 now that the selected upstream Qortal 6.1.5 changes have been integrated, skipped with documented rationale, or deferred as Qortium-specific future work. This makes generated build metadata and repository automation line up with the completed 6.1.5 integration checkpoint.
+
 ### 2026-05-19 - test: add chat concurrency hardening coverage
 
 Added deterministic concurrency coverage for Qortium's dedicated chat runtime. The tests now exercise simultaneous duplicate local chat submissions, concurrent peer-ingress duplicates, local API and peer duplicate interaction, cleanup while chat reads are active, notifier registration churn during notification delivery, and importer shutdown with queued chat, giving the completed non-encryption chat-store foundation stronger protection before the later private-group encryption phase.

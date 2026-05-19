@@ -4,7 +4,7 @@ on:
   schedule:
     - cron: "30 12 * * 1"
   push:
-    branches: [ qortium-6.1.4 ]
+    branches: [ qortium-6.1.5 ]
   workflow_dispatch:
 
 permissions:

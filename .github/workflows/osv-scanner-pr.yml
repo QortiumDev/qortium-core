@@ -2,9 +2,9 @@ name: OSV-Scanner PR Scan
 
 on:
   pull_request:
-    branches: [ qortium-6.1.4 ]
+    branches: [ qortium-6.1.5 ]
   merge_group:
-    branches: [ qortium-6.1.4 ]
+    branches: [ qortium-6.1.5 ]
 
 permissions:
   actions: read
