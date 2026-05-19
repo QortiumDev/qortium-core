@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - qdn: exclude blocked names from index discovery
+
+Updated QDN index discovery so index resources published by locally blocked names are excluded while filling the arbitrary index cache. This keeps blocked-name policy from only hiding final resource results while still allowing blocked publishers to influence local index discovery.
+
 ### 2026-05-19 - fix: isolate block response failures per request
 
 Updated GET_BLOCK response handling so a failure while building or sending one known block response is logged for that block instead of stopping the rest of the queued block requests. This keeps peer responses more resilient under partial block data, serialization, or send failures without changing block validation or synchronization rules.
