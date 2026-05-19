@@ -53,7 +53,7 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 			int txGroupId = Integer.parseInt(txGroupIds.get(0));
 
 			try (final Repository repository = RepositoryManager.getRepository()) {
-				List<ChatMessage> chatMessages = repository.getChatRepository().getMessagesMatchingCriteria(
+				List<ChatMessage> chatMessages = repository.getChatStoreRepository().getMessagesMatchingCriteria(
 						null,
 						null,
 						txGroupId,
@@ -84,7 +84,7 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 		}
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			List<ChatMessage> chatMessages = repository.getChatRepository().getMessagesMatchingCriteria(
+			List<ChatMessage> chatMessages = repository.getChatStoreRepository().getMessagesMatchingCriteria(
 					null,
 					null,
 					null,
@@ -175,7 +175,7 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 		// Convert ChatTransactionData to ChatMessage
 		ChatMessage chatMessage;
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			chatMessage = repository.getChatRepository().toChatMessage(chatTransactionData, getTargetEncoding(session));
+			chatMessage = repository.getChatStoreRepository().toChatMessage(chatTransactionData, getTargetEncoding(session));
 		} catch (DataException e) {
 			// No output this time?
 			return;

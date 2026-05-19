@@ -14,6 +14,7 @@ import org.qortal.api.*;
 import org.qortal.api.model.SimpleTransactionSignRequest;
 import org.qortal.block.Block;
 import org.qortal.chat.ChatService;
+import org.qortal.controller.ChatNotifier;
 import org.qortal.controller.Controller;
 import org.qortal.controller.LiteNode;
 import org.qortal.crypto.Crypto;
@@ -930,6 +931,8 @@ public class TransactionsResource {
 				} finally {
 					blockchainLock.unlock();
 				}
+
+				ChatNotifier.getInstance().onNewChatTransaction(chatTransactionData);
 
 				return processTransactionResponse(apiVersion, transactionData);
 			}

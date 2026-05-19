@@ -9,6 +9,7 @@ import org.qortal.api.ApiService;
 import org.qortal.api.resource.TransactionsResource;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.block.BlockChain;
+import org.qortal.controller.ChatNotifier;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
@@ -44,6 +45,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -107,6 +110,39 @@ public class TransactionsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testProcessChatNotifiesAfterDedicatedStoreSave() throws DataException, TransformationException {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "local chat notify", now());
+		}
+
+		AtomicReference<ChatTransactionData> notifiedChatData = new AtomicReference<>();
+		AtomicBoolean storedWhenNotified = new AtomicBoolean(false);
+
+		ChatNotifier.getInstance().register(null, notifiedData -> {
+			notifiedChatData.set(notifiedData);
+
+			try (final Repository repository = RepositoryManager.getRepository()) {
+				storedWhenNotified.set(repository.getChatStoreRepository().fromSignature(notifiedData.getSignature()) != null);
+			} catch (DataException e) {
+				throw new RuntimeException(e);
+			}
+		});
+
+		try {
+			assertEquals("true", this.transactionsResource.processTransaction(rawTransaction(chatData), null));
+		} finally {
+			ChatNotifier.getInstance().deregister(null);
+		}
+
+		assertNotNull(notifiedChatData.get());
+		assertTrue(Arrays.equals(chatData.getSignature(), notifiedChatData.get().getSignature()));
+		assertTrue(storedWhenNotified.get());
+	}
+
+	@Test
 	public void testProcessChatApiV2ReturnsTransactionData() throws Exception {
 		useApiVersion(2);
 
@@ -149,8 +185,17 @@ public class TransactionsApiTests extends ApiCommon {
 			chatData = signedChat(repository, alice, new byte[0], now());
 		}
 
-		assertApiError(ApiError.TRANSACTION_INVALID,
-				() -> this.transactionsResource.processTransaction(rawTransactionUnchecked(chatData), null));
+		AtomicBoolean notified = new AtomicBoolean(false);
+		ChatNotifier.getInstance().register(null, notifiedData -> notified.set(true));
+
+		try {
+			assertApiError(ApiError.TRANSACTION_INVALID,
+					() -> this.transactionsResource.processTransaction(rawTransactionUnchecked(chatData), null));
+		} finally {
+			ChatNotifier.getInstance().deregister(null);
+		}
+
+		assertFalse(notified.get());
 	}
 
 	@Test

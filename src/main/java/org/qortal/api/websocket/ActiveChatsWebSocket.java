@@ -87,7 +87,7 @@ public class ActiveChatsWebSocket extends ApiWebSocket {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Boolean hasChatReference = getHasChatReference(session);
 
-			ActiveChats activeChats = repository.getChatRepository().getActiveChats(ourAddress, getTargetEncoding(session), hasChatReference);
+			ActiveChats activeChats = repository.getChatStoreRepository().getActiveChats(ourAddress, getTargetEncoding(session), hasChatReference);
 
 			StringWriter stringWriter = new StringWriter();
 

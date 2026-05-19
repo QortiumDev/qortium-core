@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - chat: route chat websockets to dedicated store
+
+Updated chat websocket reads so live chat clients use Qortium's dedicated transient chat store instead of the old chat transaction repository. Local signed chat submissions now notify chat websocket listeners only after the message has been validated and saved in the dedicated store, while peer networking and broadcast behavior remain unchanged for later chat phases.
+
 ### 2026-05-19 - chat: route chat build APIs through dedicated service
 
 Updated the local chat build and nonce-compute APIs so they validate through Qortium's dedicated chat service instead of the old unconfirmed transaction path. This keeps chat creation aligned with the dedicated transient chat store, uses the same proof-of-work difficulty rules for nonce creation and signature checks, preserves the existing raw unsigned CHAT response format, and still avoids storing, broadcasting, or notifying from the build-only endpoints.
