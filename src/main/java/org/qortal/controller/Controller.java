@@ -1752,26 +1752,39 @@ public class Controller extends Thread {
 
 			for( BlockData blockData : blockDataList) {
 
-				if (PruneManager.getInstance().isBlockPruned(blockData.getHeight())) {
+				try {
+					if (PruneManager.getInstance().isBlockPruned(blockData.getHeight())) {
 
-					// If this is a pruned block, we likely only have partial data, so best not to sent it
-					continue;
-				}
+						// If this is a pruned block, we likely only have partial data, so best not to sent it
+						continue;
+					}
 
-				String signature58 = Base58.encode(blockData.getSignature());
+					String signature58 = Base58.encode(blockData.getSignature());
 
-				PeerMessage peerMessage = toProcessBySignature58.get(signature58);
+					PeerMessage peerMessage = toProcessBySignature58.get(signature58);
 
-				Message message = peerMessage.getMessage();
-				Peer peer = peerMessage.getPeer();
+					Message message = peerMessage.getMessage();
+					Peer peer = peerMessage.getPeer();
 
-				signature58Processed.add(signature58);
+					signature58Processed.add(signature58);
 
-				Block block = new Block(repository, blockData);
+					Block block = new Block(repository, blockData);
 
-				// V2 support
-				if (peer.getPeersVersion() >= BlockV2Message.MIN_PEER_VERSION) {
-					Message blockMessage = new BlockV2Message(block);
+					// V2 support
+					if (peer.getPeersVersion() >= BlockV2Message.MIN_PEER_VERSION) {
+						Message blockMessage = new BlockV2Message(block);
+						blockMessage.setId(message.getId());
+
+						if (!peer.sendMessage(blockMessage)) {
+							peer.disconnect("failed to send block");
+							// Don't fall-through to caching because failure to send might be from failure to build message
+							continue;
+						}
+
+						continue;
+					}
+
+					CachedBlockMessage blockMessage = new CachedBlockMessage(block);
 					blockMessage.setId(message.getId());
 
 					if (!peer.sendMessage(blockMessage)) {
@@ -1780,25 +1793,18 @@ public class Controller extends Thread {
 						continue;
 					}
 
-					continue;
-				}
+					int blockCacheSize = Settings.getInstance().getBlockCacheSize();
 
-				CachedBlockMessage blockMessage = new CachedBlockMessage(block);
-				blockMessage.setId(message.getId());
+					// If request is for a recent block, cache it
+					if (getChainHeight() - blockData.getHeight() <= blockCacheSize) {
+						this.stats.getBlockMessageStats.cacheFills.incrementAndGet();
 
-				if (!peer.sendMessage(blockMessage)) {
-					peer.disconnect("failed to send block");
-					// Don't fall-through to caching because failure to send might be from failure to build message
-					continue;
-				}
-
-				int blockCacheSize = Settings.getInstance().getBlockCacheSize();
-
-				// If request is for a recent block, cache it
-				if (getChainHeight() - blockData.getHeight() <= blockCacheSize) {
-					this.stats.getBlockMessageStats.cacheFills.incrementAndGet();
-
-					this.blockMessageCache.put(ByteArray.wrap(blockData.getSignature()), blockMessage);
+						this.blockMessageCache.put(ByteArray.wrap(blockData.getSignature()), blockMessage);
+					}
+				} catch (IllegalStateException e) {
+					LOGGER.warn(e.getMessage());
+				} catch (Exception e) {
+					LOGGER.error(e.getMessage(), e);
 				}
 			}
 

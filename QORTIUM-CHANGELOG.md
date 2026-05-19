@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - fix: isolate block response failures per request
+
+Updated GET_BLOCK response handling so a failure while building or sending one known block response is logged for that block instead of stopping the rest of the queued block requests. This keeps peer responses more resilient under partial block data, serialization, or send failures without changing block validation or synchronization rules.
+
 ### 2026-05-19 - fix: harden unconfirmed transaction response scheduler
 
 Updated the scheduled network response path for unconfirmed transaction signature requests so unexpected failures are logged instead of stopping future scheduler runs. The response now builds signatures in a mutable list while preserving Qortium's existing transaction flow and deliberately avoiding Qortal's separate chat-delegate behavior.
