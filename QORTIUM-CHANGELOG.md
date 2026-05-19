@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - deps: update Jersey maintenance baseline
+
+Updated Qortium's Jersey dependency family to the current 2.x maintenance baseline used by the API server. This keeps the existing `javax.ws.rs` API model in place while taking the latest Jersey 2.x fixes for the REST, multipart, and injection libraries that serve Qortium's HTTP endpoints.
+
 ### 2026-05-19 - deps: update Protobuf Java patch baseline
 
 Updated Qortium's Protobuf Java runtime dependency to the current 3.25 patch baseline. This keeps the committed generated gRPC and protobuf sources authoritative while taking the latest patch fixes in the runtime library used by light-client RPC code and other protobuf parsing paths.
