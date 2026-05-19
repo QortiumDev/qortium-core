@@ -229,10 +229,22 @@ from the dedicated chat store or a service backed by it. Bounded hot caches can
 accelerate recent signatures, active chats, and rate-limit checks, but cache
 misses and rebuilds should fall back to the store.
 
+Private group chat should be designed as Core-managed privacy, not only as a
+client convention. Closed groups currently control joining and approval, but
+Core does not make their chat private by default. Current Qortal Hub behavior
+is useful reference material: Hub encrypts private-group chat payloads before
+submission and publishes group key material through QDN `DOCUMENT_PRIVATE`
+resources such as `symmetric-qchat-group-{groupId}`. Qortium should not import
+that client implementation directly or treat QDN key publishes as the selected
+Core design yet. Instead, the chat-store foundation should preserve ciphertext
+and metadata cleanly so a later Core encryption phase can define the envelope,
+key distribution, rotation, and plaintext rejection policy deliberately.
+
 ### Implementation Phases
 
 1. Add the chat retention setting, dedicated chat-store schema, repository
-   methods, and service boundary.
+   methods, and service boundary. Store chat data as opaque bytes and preserve
+   encryption-related metadata without assuming message contents are readable.
 2. Build one Qortium chat validator with duplicate checks, retention rules,
    rate-limit accounting, and current blocked-name and group validation
    behavior preserved.
@@ -245,7 +257,12 @@ misses and rebuilds should fall back to the store.
 5. Route chat websockets and notifier delivery through the same chat-store
    service, then add lifecycle startup, cleanup, and shutdown handling for the
    selected runtime components.
-6. Add concurrency and regression coverage for duplicate signatures, retention
+6. Design and implement Core-managed private group chat encryption as a later
+   phase before private group chat is considered complete. This phase should
+   decide the encrypted payload envelope, key distribution, key rotation,
+   recovery behavior for new members, and whether plaintext closed-group CHAT
+   submissions are rejected.
+7. Add concurrency and regression coverage for duplicate signatures, retention
    cleanup, rate limits, API submission, peer ingress, REST reads, websocket
    delivery, and shutdown.
 
@@ -261,6 +278,29 @@ signature/reference lookups for currently advertised messages.
 This avoids making recent chat volume scale directly with JVM heap, avoids
 using periodic JSON backup as the main durability path, and leaves room for a
 real chat database with expiry and indexes.
+
+The chat store should treat message `data` as opaque payload bytes. It should
+preserve `isEncrypted`, `isText`, `txGroupId`, `recipient`, `chatReference`,
+signatures, timestamps, and sender metadata exactly enough for validation,
+routing, peer lookup, REST output, and future encryption enforcement. It should
+not add plaintext message indexing or decrypted-content storage as part of the
+6.1.5 chat-store foundation.
+
+### Private Group Chat Encryption Direction
+
+Qortium should aim for closed-group chat to be private by default in Core, but
+that should be a separate design phase after the dedicated chat-store and
+routing foundation is in place. The first chat-store implementation should not
+depend on Hub-side encryption, but it should avoid decisions that would make
+Core-managed encryption difficult later.
+
+The later encryption phase should define a Qortium-owned encrypted group chat
+payload envelope, key ownership model, key distribution path, rotation rules,
+member join and removal behavior, and local API behavior when a closed-group
+message is submitted without encryption. Hub's current group encryption model
+can be used as reference because it already supports new members viewing older
+encrypted messages when they receive the group key material, but Qortium should
+review that tradeoff explicitly before turning it into Core policy.
 
 ### Chat Store Indexing And Hot Caches
 

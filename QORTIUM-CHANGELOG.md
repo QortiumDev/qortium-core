@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - docs: record private chat encryption direction
+
+Updated the 6.1.5 chat plan so Qortium's dedicated chat store is built with future Core-managed private group encryption in mind. The notes now clarify that closed groups are not private by default today, that Qortal Hub's client-side group encryption is useful reference material but not the selected Core design, and that the first chat-store implementation should preserve opaque message bytes and encryption metadata without adding plaintext assumptions.
+
 ### 2026-05-19 - fix: harden QDN storage-size checks
 
 Updated QDN storage-size calculation so unexpected filesystem scan failures are logged without stopping future storage checks or corrupting the last successful capacity values. The calculation now counts a separate temporary data directory correctly instead of counting the main data directory twice, while keeping shutdown interruption behavior clean and avoiding the upstream aggressive QDN cleanup changes.
