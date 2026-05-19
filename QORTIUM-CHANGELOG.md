@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - chat: serve peer chat inventory from dedicated store
+
+Updated peer transaction lookup and unconfirmed-signature inventory so retained chat messages in Qortium's dedicated transient chat store are visible through the existing peer transaction request flow. Peers can now fetch stored CHAT data by signature, receive stored CHAT signatures in unconfirmed inventory, and avoid re-requesting chat signatures this node already has or has queued for peer chat ingress.
+
 ### 2026-05-19 - chat: route peer chat ingress to dedicated store
 
 Updated incoming peer chat handling so CHAT transaction messages are validated through Qortium's dedicated chat service and stored in the dedicated transient chat store instead of entering the normal unconfirmed transaction importer. Accepted peer chats now notify local chat listeners after storage, while peer signature inventory and `GET_TRANSACTION` lookup remain unchanged for the next network chat phase.

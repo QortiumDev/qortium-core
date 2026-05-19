@@ -150,6 +150,12 @@ public class TransactionImporter extends Thread {
         }
     }
 
+    boolean incomingChatTransactionQueueContains(byte[] signature) {
+        synchronized (incomingChatTransactions) {
+            return incomingChatTransactions.containsKey(Base58.encode(signature));
+        }
+    }
+
     private void removeIncomingTransaction(byte[] signature) {
         incomingTransactions.keySet().removeIf(t -> Arrays.equals(t.getSignature(), signature));
     }
@@ -549,7 +555,7 @@ public class TransactionImporter extends Thread {
         }
     }
 
-    private void processNetworkGetTransactionMessages() {
+    void processNetworkGetTransactionMessages() {
         if (Controller.isStopping()) {
             return;
         }
@@ -604,8 +610,18 @@ public class TransactionImporter extends Thread {
             if( !signaturesNeeded.isEmpty() ) {
                 // Not found in import queue, so try the database
                 try (final Repository repository = RepositoryManager.getRepository()) {
+                    Map<String, TransactionData> storedTransactionsBySignature58 = repository.getTransactionRepository()
+                            .fromSignatures(signaturesNeeded).stream()
+                            .collect(Collectors.toMap(transactionData -> Base58.encode(transactionData.getSignature()), Function.identity()));
+
+                    transactionsToSendBySignature58.putAll(storedTransactionsBySignature58);
+
+                    List<byte[]> chatSignaturesNeeded = signaturesNeeded.stream()
+                            .filter(signature -> !storedTransactionsBySignature58.containsKey(Base58.encode(signature)))
+                            .collect(Collectors.toList());
+
                     transactionsToSendBySignature58.putAll(
-                            repository.getTransactionRepository().fromSignatures(signaturesNeeded).stream()
+                            repository.getChatStoreRepository().fromSignatures(chatSignaturesNeeded).stream()
                                     .collect(Collectors.toMap(transactionData -> Base58.encode(transactionData.getSignature()), Function.identity()))
                     );
                 } catch (DataException e) {
@@ -657,7 +673,7 @@ public class TransactionImporter extends Thread {
         }
     }
 
-    private void processNetworkGetUnconfirmedTransactionsMessages() {
+    void processNetworkGetUnconfirmedTransactionsMessages() {
         try {
             if (Controller.isStopping()) {
                 return;
@@ -678,6 +694,7 @@ public class TransactionImporter extends Thread {
             if (Controller.getInstance().isUpToDate()) {
                 try (final Repository repository = RepositoryManager.getRepository()) {
                     signatures.addAll(repository.getTransactionRepository().getUnconfirmedTransactionSignatures());
+                    signatures.addAll(repository.getChatStoreRepository().getSignatures());
                 } catch (DataException e) {
                     LOGGER.error(String.format("Repository issue while sending unconfirmed transaction signatures to peers"), e);
                 }
@@ -761,6 +778,11 @@ public class TransactionImporter extends Thread {
                         continue;
                     }
 
+                    if (incomingChatTransactionQueueContains(signature)) {
+                        LOGGER.trace(() -> String.format("Ignoring existing queued CHAT transaction %s from peer %s", Base58.encode(signature), peerMessage.getPeer()));
+                        continue;
+                    }
+
                     signatureBySignature58.put(signature58, signature);
                     peerBySignature58.put(signature58, peerMessage.getPeer());
                 }
@@ -791,6 +813,12 @@ public class TransactionImporter extends Thread {
                                 .map(TransactionData::getSignature)
                                 .map(Base58::encode)
                                 .collect(Collectors.toList());
+
+                        existingSig58s.addAll(repository.getChatStoreRepository()
+                                .fromSignatures(batchSigs).stream()
+                                .map(TransactionData::getSignature)
+                                .map(Base58::encode)
+                                .collect(Collectors.toList()));
 
                         for (String sig58 : existingSig58s) {
                             signatureBySignature58.remove(sig58);

@@ -96,6 +96,52 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 	}
 
 	@Override
+	public List<ChatTransactionData> fromSignatures(List<byte[]> signatures) throws DataException {
+		List<ChatTransactionData> chatTransactionData = new ArrayList<>();
+		if (signatures == null || signatures.isEmpty())
+			return chatTransactionData;
+
+		StringBuilder sql = new StringBuilder(1024);
+		sql.append("SELECT created_when, tx_group_id, sender_public_key, sender, nonce, recipient, ");
+		sql.append("chat_reference, is_text, is_encrypted, data, signature ");
+		sql.append("FROM ChatMessages WHERE signature IN (");
+		sql.append(String.join(", ", java.util.Collections.nCopies(signatures.size(), "?")));
+		sql.append(")");
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), (Object[]) signatures.toArray(new byte[0][]))) {
+			if (resultSet == null)
+				return chatTransactionData;
+
+			do {
+				chatTransactionData.add(this.toChatTransactionData(resultSet));
+			} while (resultSet.next());
+
+			return chatTransactionData;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch chat messages from repository", e);
+		}
+	}
+
+	@Override
+	public List<byte[]> getSignatures() throws DataException {
+		String sql = "SELECT signature FROM ChatMessages ORDER BY created_when DESC, signature DESC";
+
+		List<byte[]> signatures = new ArrayList<>();
+		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
+			if (resultSet == null)
+				return signatures;
+
+			do {
+				signatures.add(resultSet.getBytes(1));
+			} while (resultSet.next());
+
+			return signatures;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch chat message signatures from repository", e);
+		}
+	}
+
+	@Override
 	public ChatMessage toChatMessage(ChatTransactionData chatTransactionData, Encoding encoding) throws DataException {
 		String sender = chatTransactionData.getSender();
 		if (sender == null)

@@ -7,7 +7,15 @@ import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.group.Group;
+import org.qortal.data.network.PeerData;
+import org.qortal.network.Peer;
+import org.qortal.network.PeerAddress;
+import org.qortal.network.message.GetTransactionMessage;
+import org.qortal.network.message.GetUnconfirmedTransactionsMessage;
+import org.qortal.network.message.Message;
+import org.qortal.network.message.MessageException;
 import org.qortal.network.message.TransactionMessage;
+import org.qortal.network.message.TransactionSignaturesMessage;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
@@ -17,8 +25,12 @@ import org.qortal.transaction.ChatTransaction;
 import org.qortal.utils.NTP;
 
 import java.lang.reflect.Constructor;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -135,6 +147,92 @@ public class TransactionImporterTests extends Common {
 		assertEquals(1, notificationCount.get());
 	}
 
+	@Test
+	public void testGetTransactionReturnsStoredChatFromDedicatedStore() throws Exception {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "lookup stored chat");
+
+			repository.getChatStoreRepository().save(chatData);
+			repository.saveChanges();
+		}
+
+		CapturingPeer peer = new CapturingPeer();
+		this.transactionImporter.onNetworkGetTransactionMessage(peer, inboundGetTransactionMessage(chatData.getSignature()));
+		this.transactionImporter.processNetworkGetTransactionMessages();
+
+		waitForSentMessages(peer, 1);
+
+		assertEquals(1, peer.getSentMessages().size());
+		TransactionMessage transactionMessage = (TransactionMessage) parseOutgoing(peer.getSentMessages().get(0));
+		assertTrue(transactionMessage.getTransactionData() instanceof ChatTransactionData);
+		assertArrayEquals(chatData.getSignature(), transactionMessage.getTransactionData().getSignature());
+	}
+
+	@Test
+	public void testGetUnconfirmedTransactionsIncludesStoredChatSignatures() throws Exception {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "inventory stored chat");
+
+			repository.getChatStoreRepository().save(chatData);
+			repository.saveChanges();
+		}
+
+		CapturingPeer peer = new CapturingPeer();
+		this.transactionImporter.onNetworkGetUnconfirmedTransactionsMessage(peer, new GetUnconfirmedTransactionsMessage());
+		this.transactionImporter.processNetworkGetUnconfirmedTransactionsMessages();
+
+		assertEquals(1, peer.getSentMessages().size());
+		TransactionSignaturesMessage signaturesMessage = (TransactionSignaturesMessage) parseOutgoing(peer.getSentMessages().get(0));
+		assertTrue(signaturesMessage.getSignatures().stream()
+				.anyMatch(signature -> Arrays.equals(signature, chatData.getSignature())));
+	}
+
+	@Test
+	public void testTransactionSignaturesDoesNotRequestStoredChat() throws Exception {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "advertised stored chat");
+
+			repository.getChatStoreRepository().save(chatData);
+			repository.saveChanges();
+		}
+
+		CapturingPeer peer = new CapturingPeer();
+		this.transactionImporter.onNetworkTransactionSignaturesMessage(peer,
+				inboundTransactionSignaturesMessage(Collections.singletonList(chatData.getSignature())));
+		this.transactionImporter.processNetworkTransactionSignaturesMessage();
+
+		assertTrue(peer.getSentMessages().isEmpty());
+	}
+
+	@Test
+	public void testTransactionSignaturesDoesNotRequestQueuedPeerChat() throws Exception {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "advertised queued chat");
+		}
+
+		CapturingPeer peer = new CapturingPeer();
+		this.transactionImporter.onNetworkTransactionMessage(peer, inboundTransactionMessage(chatData));
+		assertTrue(this.transactionImporter.incomingChatTransactionQueueContains(chatData.getSignature()));
+
+		this.transactionImporter.onNetworkTransactionSignaturesMessage(peer,
+				inboundTransactionSignaturesMessage(Collections.singletonList(chatData.getSignature())));
+		this.transactionImporter.processNetworkTransactionSignaturesMessage();
+
+		assertTrue(peer.getSentMessages().isEmpty());
+	}
+
 	private static ChatTransactionData signedChat(Repository repository, TestAccount sender, String message) throws DataException {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				now(),
@@ -160,9 +258,65 @@ public class TransactionImporterTests extends Common {
 		return constructor.newInstance(-1, transactionData);
 	}
 
+	private static GetTransactionMessage inboundGetTransactionMessage(byte[] signature) throws Exception {
+		Constructor<GetTransactionMessage> constructor = GetTransactionMessage.class.getDeclaredConstructor(int.class, byte[].class);
+		constructor.setAccessible(true);
+		return constructor.newInstance(-1, signature);
+	}
+
+	private static TransactionSignaturesMessage inboundTransactionSignaturesMessage(List<byte[]> signatures) throws Exception {
+		Constructor<TransactionSignaturesMessage> constructor = TransactionSignaturesMessage.class.getDeclaredConstructor(int.class, List.class);
+		constructor.setAccessible(true);
+		return constructor.newInstance(-1, signatures);
+	}
+
+	private static Message parseOutgoing(Message message) throws MessageException {
+		return Message.fromByteBuffer(ByteBuffer.wrap(message.toBytes()));
+	}
+
+	private static void waitForSentMessages(CapturingPeer peer, int count) throws InterruptedException {
+		long timeout = System.currentTimeMillis() + 2_000L;
+		while (peer.getSentMessages().size() < count && System.currentTimeMillis() < timeout) {
+			Thread.sleep(10L);
+		}
+	}
+
 	private static long now() {
 		Long now = NTP.getTime();
 		return now != null ? now : System.currentTimeMillis();
+	}
+
+	private static class CapturingPeer extends Peer {
+
+		private final List<Message> sentMessages = Collections.synchronizedList(new ArrayList<>());
+		private boolean disconnected;
+
+		private CapturingPeer() {
+			super(new PeerData(new PeerAddress("127.0.0.1:9084")), Peer.NETWORK);
+		}
+
+		@Override
+		public boolean sendMessage(Message message) {
+			this.sentMessages.add(message);
+			return true;
+		}
+
+		@Override
+		public void disconnect(String reason) {
+			this.disconnected = true;
+		}
+
+		private List<Message> getSentMessages() {
+			synchronized (this.sentMessages) {
+				return new ArrayList<>(this.sentMessages);
+			}
+		}
+
+		@SuppressWarnings("unused")
+		private boolean isDisconnected() {
+			return this.disconnected;
+		}
+
 	}
 
 }
