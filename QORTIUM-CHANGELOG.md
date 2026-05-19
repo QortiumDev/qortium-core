@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - chat: add dedicated chat validation service
+
+Added a Qortium-owned chat validation service for the dedicated chat store. The service validates signed chat messages against the current chat rules, uses the new chat store for duplicate and rate-limit checks, stores accepted messages without adding them to the normal unconfirmed transaction pool, and keeps the live API, websocket, and peer routing unchanged for the next planned chat phases.
+
 ### 2026-05-19 - chat: add dedicated transient chat store
 
 Added the first storage foundation for Qortium's planned chat redesign. Chat messages can now be saved in a dedicated transient chat table that is separate from block transaction history, preserves the original message bytes and encryption flags, supports direct and group chat queries, counts recent messages for rate-limit decisions, and removes old messages based on a configurable retention period. This does not route live APIs, websockets, or peer traffic to the new store yet; it gives the next chat-work phases a tested place to move those paths deliberately.
