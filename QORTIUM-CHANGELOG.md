@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - docs: compare upstream Qortal 6.1.5 changes
+
+Added a neutral comparison document for the upstream Qortal `6.1.4` to `6.1.5` release range so Qortium can review the 24 commits and 31 changed files before deciding what belongs in the fork. The document groups the changes by area, records every commit and changed file, and leaves each Qortium integration decision marked as undecided for later triage.
+
 ### 2026-05-18 - docs: define lite-node state-root design
 
 Added the Phase 4B lite-node state-root design so Qortium has a concrete target for moving from anchored peer agreement to cryptographically verified lite data. The design records one combined post-block state root, the first account, balance, name, and owner-name state covered by proofs, deterministic key and value encoding requirements, block processing and orphaning expectations, and the later proof-bearing lite response shape while deliberately deferring complete address-history proofs to a separate committed index design.
