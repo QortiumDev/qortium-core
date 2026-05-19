@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - tx: publicize creators before confirmed processing
+
+Moved normal confirmed transaction creator metadata into the account table before each transaction's own processing runs, so a first transaction can establish its public key without a separate publicize or placeholder balance transaction. Group joins now also handle missing default-group rows defensively, and the local testnet genesis can join its default minter directly without a zero-balance setup transaction.
+
 ### 2026-05-19 - scripts: harden main node lifecycle helpers
 
 Updated the main start and stop helper scripts so normal local node operation is safer and easier to diagnose. The start script now works from any directory, avoids launching a duplicate node when an active pid file exists, uses the built jar directly instead of copying it into the repository root, and prints the jar and log paths it is using. The stop script now works from any directory, handles missing API keys and stale pid files cleanly, supports an explicit API port override, and avoids broad process matching that could stop the wrong Qortium node.

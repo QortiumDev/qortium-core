@@ -1379,6 +1379,8 @@ public class Block {
 
 				// Process transaction to make sure other transactions validate properly
 				try {
+					transaction.processCreatorAccount();
+
 					// Only process transactions that don't require group-approval.
 					// Group-approval transactions are dealt with later.
 					if (transactionData.getApprovalStatus() == ApprovalStatus.NOT_REQUIRED)
@@ -1745,6 +1747,8 @@ public class Block {
 			if (transactionData.getType() == TransactionType.AT)
 				this.repository.getTransactionRepository().save(transactionData);
 
+			transaction.processCreatorAccount();
+
 			// Only process transactions that don't require group-approval.
 			// Group-approval transactions are dealt with later.
 			if (transactionData.getApprovalStatus() == ApprovalStatus.NOT_REQUIRED) {
@@ -1807,6 +1811,7 @@ public class Block {
 			transactionData.setApprovalStatus(ApprovalStatus.APPROVED);
 			transactionRepository.save(transactionData);
 
+			transaction.processCreatorAccount();
 			transaction.process();
 			trustInputsChanged |= doesTransactionChangeTrustInputs(transactionData, this.blockData.getHeight());
 		}

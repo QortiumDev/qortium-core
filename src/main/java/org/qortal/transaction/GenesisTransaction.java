@@ -109,6 +109,11 @@ public class GenesisTransaction extends Transaction {
 	}
 
 	@Override
+	public void processCreatorAccount() {
+		// Do not attempt to process a non-existent genesis sender.
+	}
+
+	@Override
 	public void processReferencesAndFees() throws DataException {
 		// Do not attempt to process a non-existent genesis sender.
 

@@ -55,9 +55,9 @@ minting key with:
 curl -X POST http://localhost:62391/admin/mintingaccounts -d 1CeDCg9TSdBwJNGVTGG7pCKsvsyyoEcaVXYvDT1Xb9f
 ```
 
-That key is only for this disposable local testnet. The matching account is
-created with a zero balance, joined to the minting group, and published with the
-corresponding minting public key so it can mint without receiving a prefunded
+That key is only for this disposable local testnet. The matching account joins
+the minting group and publishes the corresponding minting public key directly
+from the join transaction, so it can mint without receiving a prefunded
 native-asset allocation.
 
 ## Resetting

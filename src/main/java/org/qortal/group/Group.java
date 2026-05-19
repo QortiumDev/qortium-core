@@ -817,11 +817,14 @@ public class Group {
 			joinGroupTransactionData.setInviteReference(null);
 		}
 
+		joiner.ensureAccount();
+
 		// Actually add new member to group
 		this.addMember(joiner.getAddress(), joinGroupTransactionData);
 
 		// If joiner's defaultGroupId is NO_GROUP then set it to joined group
-		if (joiner.getDefaultGroupId() == Group.NO_GROUP) {
+		Integer defaultGroupId = joiner.getDefaultGroupId();
+		if (defaultGroupId == null || defaultGroupId == Group.NO_GROUP) {
 			joiner.setDefaultGroupId(joinGroupTransactionData.getGroupId());
 			// Reflect that this has happened in joinGroupTransactionData
 			joinGroupTransactionData.setPreviousGroupId(Group.NO_GROUP);

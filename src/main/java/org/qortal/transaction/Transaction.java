@@ -1046,6 +1046,15 @@ public abstract class Transaction {
 	}
 
 	/**
+	 * Ensure confirmed transaction creator metadata exists before transaction-specific processing.
+	 *
+	 * @throws DataException
+	 */
+	public void processCreatorAccount() throws DataException {
+		this.getCreator().ensureAccount();
+	}
+
+	/**
 	 * Actually process a transaction, updating the blockchain.
 	 * <p>
 	 * Processes transaction, updating balances, references, assets, etc. as appropriate.

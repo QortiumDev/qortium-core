@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
 import org.qortal.crypto.Crypto;
+import org.qortal.data.account.AccountData;
 import org.qortal.data.group.GroupInviteData;
 import org.qortal.data.group.GroupAdminData;
 import org.qortal.data.account.RewardShareData;
@@ -156,6 +157,34 @@ public class MiscTests extends Common {
 
 			// Confirm Bob no longer a member
 			assertFalse(isMember(repository, bob.getAddress(), groupId));
+		}
+	}
+
+	@Test
+	public void testFirstJoinGroupTransactionPublishesAccount() throws DataException {
+		Common.useSettings("test-settings-v2-no-native-asset.json");
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			alice.ensureAccount();
+			TestChainBootstrapUtils.ensureDefaultTestChainBootstrap(repository);
+			repository.saveChanges();
+
+			PrivateKeyAccount joiner = Common.generateRandomSeedAccount(repository);
+			int groupId = TestChainBootstrapUtils.MINTING_GROUP_ID;
+
+			assertNull(repository.getAccountRepository().getAccount(joiner.getAddress()));
+
+			BaseTransactionData baseTransactionData = new BaseTransactionData(TransactionUtils.nextTimestamp(repository),
+					Group.NO_GROUP, joiner.getPublicKey(), 0L, null);
+			JoinGroupTransactionData transactionData = new JoinGroupTransactionData(baseTransactionData, groupId);
+			TransactionUtils.signAndMint(repository, transactionData, joiner);
+
+			AccountData joinerData = repository.getAccountRepository().getAccount(joiner.getAddress());
+			assertNotNull(joinerData);
+			assertArrayEquals(joiner.getPublicKey(), joinerData.getPublicKey());
+			assertEquals(groupId, joinerData.getDefaultGroupId());
+			assertTrue(repository.getGroupRepository().memberExists(groupId, joiner.getAddress()));
 		}
 	}
 

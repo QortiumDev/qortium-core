@@ -142,6 +142,11 @@ public class AtTransaction extends Transaction {
 	}
 
 	@Override
+	public void processCreatorAccount() {
+		// AT transactions are emitted by AT accounts and use explicit AT account handling.
+	}
+
+	@Override
 	public void orphan() throws DataException {
 		Long amount = this.atTransactionData.getAmount();
 
