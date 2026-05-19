@@ -2,8 +2,10 @@ package org.qortal.controller;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortal.chat.ChatService;
 import org.qortal.controller.arbitrary.PeerMessage;
 import org.qortal.data.block.BlockData;
+import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.network.Network;
 import org.qortal.network.Peer;
@@ -64,6 +66,9 @@ public class TransactionImporter extends Thread {
     /** Map of incoming transaction that are in the import queue. Key is transaction data, value is whether signature has been validated. */
     private final Map<TransactionData, Boolean> incomingTransactions = Collections.synchronizedMap(new HashMap<>());
 
+    /** Map of incoming peer CHAT transactions keyed by base58 signature. */
+    private final Map<String, ChatTransactionData> incomingChatTransactions = Collections.synchronizedMap(new LinkedHashMap<>());
+
     /** Map of recent invalid unconfirmed transactions. Key is base58 transaction signature, value is do-not-request expiry timestamp. */
     private final Map<String, Long> invalidUnconfirmedTransactions = Collections.synchronizedMap(new HashMap<>());
 
@@ -96,6 +101,7 @@ public class TransactionImporter extends Thread {
                 // Process incoming transactions queue
                 validateTransactionsInQueue();
                 importTransactionsInQueue();
+                processChatTransactionsInQueue();
 
                 // Clean up invalid incoming transactions list
                 cleanupInvalidTransactionsList(NTP.getTime());
@@ -427,6 +433,14 @@ public class TransactionImporter extends Thread {
         TransactionMessage transactionMessage = (TransactionMessage) message;
         TransactionData transactionData = transactionMessage.getTransactionData();
 
+        if (transactionData == null)
+            return;
+
+        if (transactionData.getType() == Transaction.TransactionType.CHAT) {
+            queueIncomingChatTransaction((ChatTransactionData) transactionData);
+            return;
+        }
+
         if (this.incomingTransactions.size() < MAX_INCOMING_TRANSACTIONS) {
             synchronized (this.incomingTransactions) {
                 if (!incomingTransactionQueueContains(transactionData.getSignature())) {
@@ -434,6 +448,88 @@ public class TransactionImporter extends Thread {
                 }
             }
         }
+    }
+
+    private void queueIncomingChatTransaction(ChatTransactionData chatTransactionData) {
+        byte[] signature = chatTransactionData.getSignature();
+        if (signature == null)
+            return;
+
+        synchronized (this.incomingChatTransactions) {
+            if (this.incomingChatTransactions.size() >= MAX_INCOMING_TRANSACTIONS)
+                return;
+
+            this.incomingChatTransactions.putIfAbsent(Base58.encode(signature), chatTransactionData);
+        }
+    }
+
+    void processChatTransactionsInQueue() {
+        List<ChatTransactionData> chatTransactions;
+        synchronized (this.incomingChatTransactions) {
+            if (this.incomingChatTransactions.isEmpty())
+                return;
+
+            chatTransactions = new ArrayList<>(this.incomingChatTransactions.values());
+        }
+
+        if (Synchronizer.getInstance().isSyncRequested() || Synchronizer.getInstance().isSynchronizing())
+            return;
+
+        if (chatTransactions.size() > MAX_IMPORT_TRANSACTIONS_PER_CYCLE) {
+            LOGGER.debug("Capping peer CHAT import cycle at {} (queue has {})", MAX_IMPORT_TRANSACTIONS_PER_CYCLE, chatTransactions.size());
+            chatTransactions = chatTransactions.subList(0, MAX_IMPORT_TRANSACTIONS_PER_CYCLE);
+        }
+
+        ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
+        if (!blockchainLock.tryLock()) {
+            LOGGER.debug("Too busy to import peer CHAT transaction queue");
+            return;
+        }
+
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            for (ChatTransactionData chatTransactionData : chatTransactions) {
+                if (isStopping)
+                    return;
+
+                if (Synchronizer.getInstance().isSyncRequestPending())
+                    return;
+
+                String signature58 = Base58.encode(chatTransactionData.getSignature());
+
+                try {
+                    if (!ChatService.getInstance().isSignatureValid(repository, chatTransactionData)) {
+                        LOGGER.debug("Ignoring peer CHAT transaction {} with invalid signature", signature58);
+                        addInvalidUnconfirmedTransaction(signature58, INVALID_TRANSACTION_RECHECK_INTERVAL);
+                        continue;
+                    }
+
+                    Transaction.ValidationResult validationResult = ChatService.getInstance().validateAndStore(repository, chatTransactionData);
+                    if (validationResult == Transaction.ValidationResult.OK) {
+                        LOGGER.debug("Stored peer CHAT transaction {}", signature58);
+                        ChatNotifier.getInstance().onNewChatTransaction(chatTransactionData);
+                    } else if (validationResult == Transaction.ValidationResult.TRANSACTION_ALREADY_EXISTS) {
+                        LOGGER.trace(() -> String.format("Ignoring existing peer CHAT transaction %s", signature58));
+                    } else {
+                        LOGGER.debug("Ignoring invalid ({}) peer CHAT transaction {}", validationResult.name(), signature58);
+                        addInvalidUnconfirmedTransaction(signature58, INVALID_TRANSACTION_RECHECK_INTERVAL);
+                    }
+                } finally {
+                    synchronized (this.incomingChatTransactions) {
+                        this.incomingChatTransactions.remove(signature58);
+                    }
+                }
+            }
+        } catch (DataException e) {
+            LOGGER.error("Repository issue while importing peer CHAT transactions", e);
+        } finally {
+            blockchainLock.unlock();
+        }
+    }
+
+    private void addInvalidUnconfirmedTransaction(String signature58, long expiryLength) {
+        Long now = NTP.getTime();
+        if (now != null)
+            invalidUnconfirmedTransactions.put(signature58, now + expiryLength);
     }
 
     // List to collect messages

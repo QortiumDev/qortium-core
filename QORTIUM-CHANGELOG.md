@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - chat: route peer chat ingress to dedicated store
+
+Updated incoming peer chat handling so CHAT transaction messages are validated through Qortium's dedicated chat service and stored in the dedicated transient chat store instead of entering the normal unconfirmed transaction importer. Accepted peer chats now notify local chat listeners after storage, while peer signature inventory and `GET_TRANSACTION` lookup remain unchanged for the next network chat phase.
+
 ### 2026-05-19 - chat: route chat websockets to dedicated store
 
 Updated chat websocket reads so live chat clients use Qortium's dedicated transient chat store instead of the old chat transaction repository. Local signed chat submissions now notify chat websocket listeners only after the message has been validated and saved in the dedicated store, while peer networking and broadcast behavior remain unchanged for later chat phases.
