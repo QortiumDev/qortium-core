@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - chat: route local chat submissions to dedicated store
+
+Updated `/transactions/process` so signed local chat submissions are validated through Qortium's dedicated chat service and stored in the dedicated transient chat store instead of the normal unconfirmed transaction tables. The endpoint keeps the existing success response shapes for API v1 and v2, leaves ordinary transactions on the existing unconfirmed path, and deliberately avoids peer broadcast or websocket notification until those chat paths are routed in later commits.
+
 ### 2026-05-19 - chat: route chat read APIs to dedicated store
 
 Updated the REST chat read endpoints so they read from Qortium's dedicated transient chat store instead of the old unconfirmed transaction tables. Chat message search, message lookup by signature, active-chat discovery, and message counts now use the new store, with count returning the true number of matching stored messages rather than the size of a paged result. Chat submission, websockets, and peer networking remain unchanged for later chat phases.

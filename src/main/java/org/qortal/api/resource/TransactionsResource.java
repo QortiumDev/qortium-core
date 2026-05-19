@@ -13,9 +13,11 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.*;
 import org.qortal.api.model.SimpleTransactionSignRequest;
 import org.qortal.block.Block;
+import org.qortal.chat.ChatService;
 import org.qortal.controller.Controller;
 import org.qortal.controller.LiteNode;
 import org.qortal.crypto.Crypto;
+import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.data.transaction.TransactionConfirmationTimingData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.globalization.Translator;
@@ -911,6 +913,27 @@ public class TransactionsResource {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			if (transactionData.getType() == TransactionType.CHAT) {
+				ChatTransactionData chatTransactionData = (ChatTransactionData) transactionData;
+
+				if (!ChatService.getInstance().isSignatureValid(repository, chatTransactionData))
+					throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_SIGNATURE);
+
+				ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
+				if (!blockchainLock.tryLock(60, TimeUnit.SECONDS))
+					throw createTransactionInvalidException(request, ValidationResult.NO_BLOCKCHAIN_LOCK);
+
+				try {
+					ValidationResult result = ChatService.getInstance().validateAndStore(repository, chatTransactionData);
+					if (result != ValidationResult.OK)
+						throw createTransactionInvalidException(request, result);
+				} finally {
+					blockchainLock.unlock();
+				}
+
+				return processTransactionResponse(apiVersion, transactionData);
+			}
+
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
 			if (!transaction.isSignatureValid())
@@ -930,19 +953,7 @@ public class TransactionsResource {
 				blockchainLock.unlock();
 			}
 
-			switch (apiVersion) {
-				case 1:
-					return "true";
-
-				case 2:
-				default:
-					// Marshall transactionData to string
-					StringWriter stringWriter = new StringWriter();
-					ApiRequest.marshall(stringWriter, transactionData);
-					return stringWriter.toString();
-			}
-
-
+			return processTransactionResponse(apiVersion, transactionData);
 		} catch (NumberFormatException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA, e);
 		} catch (DataException e) {
@@ -951,6 +962,19 @@ public class TransactionsResource {
 			throw createTransactionInvalidException(request, ValidationResult.NO_BLOCKCHAIN_LOCK);
 		} catch (IOException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		}
+	}
+
+	private static String processTransactionResponse(int apiVersion, TransactionData transactionData) throws IOException {
+		switch (apiVersion) {
+			case 1:
+				return "true";
+
+			case 2:
+			default:
+				StringWriter stringWriter = new StringWriter();
+				ApiRequest.marshall(stringWriter, transactionData);
+				return stringWriter.toString();
 		}
 	}
 

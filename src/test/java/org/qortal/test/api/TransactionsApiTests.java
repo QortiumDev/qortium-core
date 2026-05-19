@@ -4,10 +4,13 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.api.ApiError;
+import org.qortal.api.ApiService;
 import org.qortal.api.resource.TransactionsResource;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.block.BlockChain;
 import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.data.transaction.RewardShareTransactionData;
@@ -25,14 +28,22 @@ import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
+import org.qortal.transaction.ChatTransaction;
+import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.TransactionType;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.Amounts;
 import org.qortal.utils.Base58;
+import org.qortal.utils.NTP;
 
+import javax.servlet.http.HttpServletRequest;
+import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -74,6 +85,94 @@ public class TransactionsApiTests extends ApiCommon {
 
 		assertApiError(org.qortal.api.ApiError.NO_REPLY,
 				() -> this.transactionsResource.getAddressTransactions(aliceAddress, null, null, null));
+	}
+
+	@Test
+	public void testProcessChatStoresInDedicatedStoreOnly() throws DataException, TransformationException {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "local chat", now());
+		}
+
+		assertEquals("true", this.transactionsResource.processTransaction(rawTransaction(chatData), null));
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertNotNull(repository.getChatStoreRepository().fromSignature(chatData.getSignature()));
+			assertNull(repository.getTransactionRepository().fromSignature(chatData.getSignature()));
+			assertFalse(repository.getTransactionRepository().exists(chatData.getSignature()));
+			assertTrue(repository.getTransactionRepository().getUnconfirmedTransactions().isEmpty());
+		}
+	}
+
+	@Test
+	public void testProcessChatApiV2ReturnsTransactionData() throws Exception {
+		useApiVersion(2);
+
+		ChatTransactionData chatData;
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "local chat v2", now());
+		}
+
+		String response = this.transactionsResource.processTransaction(rawTransaction(chatData), null);
+
+		assertTrue(response.contains("\"type\":\"CHAT\""));
+		assertTrue(response.contains("\"signature\""));
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertNotNull(repository.getChatStoreRepository().fromSignature(chatData.getSignature()));
+		}
+	}
+
+	@Test
+	public void testProcessChatRejectsInvalidSignature() throws DataException, TransformationException {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, "bad signature", now());
+			chatData.setSignature(new byte[64]);
+		}
+
+		assertApiError(ApiError.INVALID_SIGNATURE,
+				() -> this.transactionsResource.processTransaction(rawTransactionUnchecked(chatData), null));
+	}
+
+	@Test
+	public void testProcessChatRejectsInvalidChatData() throws DataException, TransformationException {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = signedChat(repository, alice, new byte[0], now());
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.transactionsResource.processTransaction(rawTransactionUnchecked(chatData), null));
+	}
+
+	@Test
+	public void testProcessOrdinaryTransactionStillUsesUnconfirmedPath() throws DataException, TransformationException {
+		PaymentTransactionData paymentData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			paymentData = new PaymentTransactionData(TestTransaction.generateBase(alice), bob.getAddress(), 1L);
+
+			Transaction transaction = Transaction.fromData(repository, paymentData);
+			transaction.sign(alice);
+		}
+
+		assertEquals("true", this.transactionsResource.processTransaction(rawTransaction(paymentData), null));
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			assertTrue(repository.getTransactionRepository().exists(paymentData.getSignature()));
+			assertTrue(repository.getTransactionRepository().getUnconfirmedTransactions().stream()
+					.anyMatch(transactionData -> Arrays.equals(transactionData.getSignature(), paymentData.getSignature())));
+		}
 	}
 
 	@Test
@@ -249,6 +348,76 @@ public class TransactionsApiTests extends ApiCommon {
 
 	private static String rawTransaction(TransactionData transactionData) throws TransformationException {
 		return Base58.encode(TransactionTransformer.toBytes(transactionData));
+	}
+
+	private static String rawTransactionUnchecked(TransactionData transactionData) {
+		try {
+			return rawTransaction(transactionData);
+		} catch (TransformationException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	private static ChatTransactionData signedChat(Repository repository, TestAccount sender, String message, long timestamp) throws DataException {
+		return signedChat(repository, sender, message.getBytes(StandardCharsets.UTF_8), timestamp);
+	}
+
+	private static ChatTransactionData signedChat(Repository repository, TestAccount sender, byte[] data, long timestamp) throws DataException {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(
+				timestamp,
+				Group.NO_GROUP,
+				sender.getPublicKey(),
+				0L,
+				0,
+				null);
+
+		ChatTransactionData chatData = new ChatTransactionData(baseTransactionData, sender.getAddress(), 0, null, null, data, true, false);
+		ChatTransaction chatTransaction = new ChatTransaction(repository, chatData);
+		chatTransaction.computeNonce();
+		chatTransaction.sign(sender);
+		return chatData;
+	}
+
+	private static long now() {
+		Long now = NTP.getTime();
+		return now != null ? now : System.currentTimeMillis();
+	}
+
+	private void useApiVersion(int apiVersion) throws IllegalAccessException {
+		HttpServletRequest request = (HttpServletRequest) Proxy.newProxyInstance(
+				ApiCommon.class.getClassLoader(),
+				new Class[] { HttpServletRequest.class },
+				(proxy, method, args) -> {
+					switch (method.getName()) {
+						case "getHeader":
+							return ApiService.API_VERSION_HEADER.equals(args[0]) ? String.valueOf(apiVersion) : null;
+						case "getRemoteAddr":
+							return "127.0.0.1";
+						case "getLocale":
+							return Locale.getDefault();
+						case "getHeaderNames":
+							return Collections.emptyEnumeration();
+						case "getMethod":
+							return "POST";
+						case "getRequestURI":
+							return "/transactions/process";
+						case "getServerName":
+							return "localhost";
+						case "toString":
+							return "ApiVersionTestRequest";
+						default:
+							Class<?> returnType = method.getReturnType();
+							if (returnType == boolean.class)
+								return false;
+							if (returnType == int.class)
+								return 0;
+							if (returnType == long.class)
+								return 0L;
+							return null;
+					}
+				});
+
+		FieldUtils.writeField(this.transactionsResource, "request", request, true);
 	}
 
 }
