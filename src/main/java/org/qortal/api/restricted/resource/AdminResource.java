@@ -157,7 +157,7 @@ public class AdminResource {
 			return "CA certificate not found.";
 		}
 		try {
-			KeyStore keyStore = KeyStore.getInstance("PKCS12", "BC");
+			KeyStore keyStore = KeyStore.getInstance("PKCS12");
 			try (FileInputStream fis = new FileInputStream(keystorePath.toFile())) {
 				keyStore.load(fis, keystorePassword.toCharArray());
 			}
@@ -206,7 +206,7 @@ public class AdminResource {
 			return new CertificateSanInfo(dns, ip);
 		}
 		try {
-			KeyStore keyStore = KeyStore.getInstance("PKCS12", "BC");
+			KeyStore keyStore = KeyStore.getInstance("PKCS12");
 			try (FileInputStream fis = new FileInputStream(keystorePath.toFile())) {
 				keyStore.load(fis, keystorePassword.toCharArray());
 			}

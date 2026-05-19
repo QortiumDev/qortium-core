@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - fix: use provider-neutral PKCS12 keystore loading
+
+Updated the restricted admin certificate helper to load PKCS12 keystores through Java's default PKCS12 support instead of requiring the Bouncy Castle provider by name. This keeps the certificate and SAN lookup behavior the same while reducing provider-specific assumptions inherited from upstream Qortal.
+
 ### 2026-05-19 - docs: compare upstream Qortal 6.1.5 changes
 
 Added a neutral comparison document for the upstream Qortal `6.1.4` to `6.1.5` release range so Qortium can review the 24 commits and 31 changed files before deciding what belongs in the fork. The document groups the changes by area, records every commit and changed file, and leaves each Qortium integration decision marked as undecided for later triage.
