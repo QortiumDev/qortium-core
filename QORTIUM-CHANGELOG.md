@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - chat: route chat read APIs to dedicated store
+
+Updated the REST chat read endpoints so they read from Qortium's dedicated transient chat store instead of the old unconfirmed transaction tables. Chat message search, message lookup by signature, active-chat discovery, and message counts now use the new store, with count returning the true number of matching stored messages rather than the size of a paged result. Chat submission, websockets, and peer networking remain unchanged for later chat phases.
+
 ### 2026-05-19 - chat: add dedicated chat validation service
 
 Added a Qortium-owned chat validation service for the dedicated chat store. The service validates signed chat messages against the current chat rules, uses the new chat store for duplicate and rate-limit checks, stores accepted messages without adding them to the normal unconfirmed transaction pool, and keeps the live API, websocket, and peer routing unchanged for the next planned chat phases.

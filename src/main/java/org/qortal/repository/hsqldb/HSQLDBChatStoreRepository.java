@@ -96,6 +96,44 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 	}
 
 	@Override
+	public ChatMessage toChatMessage(ChatTransactionData chatTransactionData, Encoding encoding) throws DataException {
+		String sender = chatTransactionData.getSender();
+		if (sender == null)
+			sender = Crypto.toAddress(chatTransactionData.getSenderPublicKey());
+
+		String sql = "SELECT "
+				+ "(SELECT name FROM " + PRIMARY_NAMES_TABLE + " WHERE owner = ?), "
+				+ "(SELECT name FROM " + PRIMARY_NAMES_TABLE + " WHERE owner = ?)";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, sender, chatTransactionData.getRecipient())) {
+			String senderName = null;
+			String recipientName = null;
+
+			if (resultSet != null) {
+				senderName = resultSet.getString(1);
+				recipientName = resultSet.getString(2);
+			}
+
+			return new ChatMessage(
+					chatTransactionData.getTimestamp(),
+					chatTransactionData.getTxGroupId(),
+					chatTransactionData.getSenderPublicKey(),
+					sender,
+					senderName,
+					chatTransactionData.getRecipient(),
+					recipientName,
+					chatTransactionData.getChatReference(),
+					encoding,
+					chatTransactionData.getData(),
+					chatTransactionData.getIsText(),
+					chatTransactionData.getIsEncrypted(),
+					chatTransactionData.getSignature());
+		} catch (SQLException e) {
+			throw new DataException("Unable to convert chat message from repository", e);
+		}
+	}
+
+	@Override
 	public List<ChatMessage> getMessagesMatchingCriteria(Long before, Long after, Integer txGroupId,
 			byte[] chatReferenceBytes, Boolean hasChatReference, List<String> involving, String senderAddress,
 			Encoding encoding, Integer limit, Integer offset, Boolean reverse) throws DataException {

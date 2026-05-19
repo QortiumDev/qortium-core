@@ -95,7 +95,7 @@ public class ChatResource {
 			chatReferenceBytes = Base58.decode(chatReference);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			return repository.getChatRepository().getMessagesMatchingCriteria(
+			return repository.getChatStoreRepository().getMessagesMatchingCriteria(
 					before,
 					after,
 					txGroupId,
@@ -158,16 +158,14 @@ public class ChatResource {
 			chatReferenceBytes = Base58.decode(chatReference);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			return repository.getChatRepository().getMessagesMatchingCriteria(
+			return repository.getChatStoreRepository().countMessagesMatchingCriteria(
 					before,
 					after,
 					txGroupId,
 					chatReferenceBytes,
 					hasChatReference,
 					involvingAddresses,
-					sender,
-					encoding,
-					limit, offset, reverse).size();
+					sender);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
@@ -194,12 +192,12 @@ public class ChatResource {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
-			ChatTransactionData chatTransactionData = (ChatTransactionData) repository.getTransactionRepository().fromSignature(signature);
+			ChatTransactionData chatTransactionData = repository.getChatStoreRepository().fromSignature(signature);
 			if (chatTransactionData == null) {
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Message not found");
 			}
 
-			return repository.getChatRepository().toChatMessage(chatTransactionData, encoding);
+			return repository.getChatStoreRepository().toChatMessage(chatTransactionData, encoding);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
@@ -231,7 +229,7 @@ public class ChatResource {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
 	
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			return repository.getChatRepository().getActiveChats(address, encoding, hasChatReference);
+			return repository.getChatStoreRepository().getActiveChats(address, encoding, hasChatReference);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}

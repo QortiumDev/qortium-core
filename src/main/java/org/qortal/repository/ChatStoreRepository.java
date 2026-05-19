@@ -16,6 +16,8 @@ public interface ChatStoreRepository {
 
 	public ChatTransactionData fromSignature(byte[] signature) throws DataException;
 
+	public ChatMessage toChatMessage(ChatTransactionData chatTransactionData, Encoding encoding) throws DataException;
+
 	public List<ChatMessage> getMessagesMatchingCriteria(Long before, Long after, Integer txGroupId,
 			byte[] chatReferenceBytes, Boolean hasChatReference, List<String> involving, String senderAddress,
 			Encoding encoding, Integer limit, Integer offset, Boolean reverse) throws DataException;
