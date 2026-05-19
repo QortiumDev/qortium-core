@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - fix: respect false QDN cache filter options
+
+Fixed cached QDN resource filtering so `followedOnly=false` and `excludeBlocked=false` are treated as disabled filters instead of being applied just because the setting was present. This keeps the cache-backed search path aligned with the SQL fallback path and avoids hiding resources when callers explicitly pass false.
+
 ### 2026-05-19 - fix: use provider-neutral PKCS12 keystore loading
 
 Updated the restricted admin certificate helper to load PKCS12 keystores through Java's default PKCS12 support instead of requiring the Bouncy Castle provider by name. This keeps the certificate and SAN lookup behavior the same while reducing provider-specific assumptions inherited from upstream Qortal.
