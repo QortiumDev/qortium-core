@@ -294,13 +294,12 @@ routing foundation is in place. The first chat-store implementation should not
 depend on Hub-side encryption, but it should avoid decisions that would make
 Core-managed encryption difficult later.
 
-The later encryption phase should define a Qortium-owned encrypted group chat
-payload envelope, key ownership model, key distribution path, rotation rules,
-member join and removal behavior, and local API behavior when a closed-group
-message is submitted without encryption. Hub's current group encryption model
-can be used as reference because it already supports new members viewing older
-encrypted messages when they receive the group key material, but Qortium should
-review that tradeoff explicitly before turning it into Core policy.
+The dedicated planning notes now live in
+[`docs/private-group-chat-encryption.md`](private-group-chat-encryption.md).
+That document records the current Hub reference model, the Qortium direction,
+the decisions still needed before implementation, and the recommended first
+implementation shape. The 6.1.5 comparison should continue to track the release
+triage result, while the encryption document owns the next design phase.
 
 ### Chat Store Indexing And Hot Caches
 

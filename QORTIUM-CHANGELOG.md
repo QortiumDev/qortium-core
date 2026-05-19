@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - docs: plan private group chat encryption
+
+Added a dedicated planning document for Core-managed private group chat encryption. The notes explain why closed groups are not private enough today, summarize Qortal Hub's current QDN-based encrypted group chat model as reference material, and record the Qortium direction before implementation begins: closed-group chat should become private by default in Core, use a Qortium-owned encrypted payload envelope, keep chat-store payloads opaque, and decide key distribution, rotation, history, and plaintext rejection deliberately. The 6.1.5 comparison now points to this new design document instead of carrying the next phase directly.
+
 ### 2026-05-19 - build: update Qortium version to 6.1.5
 
 Updated Qortium's Maven project version and active GitHub branch filters to 6.1.5 now that the selected upstream Qortal 6.1.5 changes have been integrated, skipped with documented rationale, or deferred as Qortium-specific future work. This makes generated build metadata and repository automation line up with the completed 6.1.5 integration checkpoint.
