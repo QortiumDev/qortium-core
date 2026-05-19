@@ -1,61 +1,78 @@
-#!/bin/sh
+#!/usr/bin/env bash
+set -euo pipefail
 
 # There's no need to run as root, so don't allow it, for security reasons
-if [ "$USER" = "root" ]; then
+if [ "$(id -u)" -eq 0 ]; then
 	echo "Please su to non-root user before running"
-	exit
+	exit 1
 fi
 
-# Validate Java is installed and the minimum version is available
-MIN_JAVA_VER='17'
+MIN_JAVA_VER=17
 
-if command -v java > /dev/null 2>&1; then
-    # Example: openjdk version "17.0.12" 2024-07-16
-    version=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}' | cut -d'.' -f1,2)
-    if echo "${version}" "${MIN_JAVA_VER}" | awk '{ if ($2 > 0 && $1 >= $2) exit 0; else exit 1}'; then
-        echo 'Passed Java version check'
-    else
-        echo "Please upgrade your Java to version ${MIN_JAVA_VER} or greater"
-        exit 1
-    fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUN_LOG="${SCRIPT_DIR}/run.log"
+RUN_PID="${SCRIPT_DIR}/run.pid"
+
+cd "${SCRIPT_DIR}"
+
+if [ -f "${RUN_PID}" ]; then
+	read -r existing_pid < "${RUN_PID}" || existing_pid=""
+	if [ -n "${existing_pid}" ] && ps -p "${existing_pid}" >/dev/null 2>&1; then
+		echo "Qortium is already running as pid ${existing_pid}"
+		echo "Log file: ${RUN_LOG}"
+		exit 0
+	fi
+
+	rm -f "${RUN_PID}"
+fi
+
+if command -v java >/dev/null 2>&1; then
+	version="$(java -version 2>&1 | awk -F '"' '/version/ { print $2 }' | awk -F. '{ if ($1 == "1") print $2; else print $1 }')"
+	if ! awk -v found="${version:-0}" -v required="${MIN_JAVA_VER}" 'BEGIN { exit !(found >= required) }'; then
+		echo "Please upgrade Java to version ${MIN_JAVA_VER} or greater"
+		exit 1
+	fi
 else
-  echo "Java is not available, please install Java ${MIN_JAVA_VER} or greater"
-  exit 1
+	echo "Java is not available. Please install Java ${MIN_JAVA_VER} or greater."
+	exit 1
 fi
 
-# No qortium.jar but we have a Maven built one?
-# Be helpful and copy across to correct location
-if [ ! -e qortium.jar ]; then
-	for qortium_jar in target/qortium*.jar; do
-		if [ -f "${qortium_jar}" ]; then
-			echo "Copying Maven-built Qortium JAR to correct pathname"
-			cp "${qortium_jar}" qortium.jar
-			break
+find_qortium_jar() {
+	if [ -f "${SCRIPT_DIR}/qortium.jar" ]; then
+		printf '%s\n' "${SCRIPT_DIR}/qortium.jar"
+		return 0
+	fi
+
+	local jar
+	for jar in "${SCRIPT_DIR}"/target/qortium*.jar; do
+		if [ -f "${jar}" ]; then
+			printf '%s\n' "${jar}"
+			return 0
 		fi
 	done
+
+	return 1
+}
+
+JAR_PATH="$(find_qortium_jar || true)"
+if [ -z "${JAR_PATH}" ]; then
+	echo "Could not find qortium.jar."
+	echo "Build it first with: mvn -q -DskipTests package"
+	exit 1
 fi
 
 # Limits Java JVM stack size and maximum heap usage.
 # Comment out for bigger systems, e.g. non-routers
-# or when API documentation is enabled
-# JAVA MEMORY SETTINGS BELOW - These settings are essentially optimized default settings.
-# Combined with the latest changes on Qortium Core,
-# should give a dramatic increase In performance due to optimized Garbage Collection.
-# These memory arguments should work on machines with as little as 6GB of RAM.
-# If you want to run on a machine with less than 6GB of RAM, it is suggested to increase the '50' below to '75'
-# Qortium Core will utilize only as much RAM as it needs, but up-to the amount set in percentage below.
-JVM_MEMORY_ARGS="-XX:MaxRAMPercentage=50 -XX:+UseG1GC -Xss1024k"
+# or when API documentation is enabled.
+JVM_MEMORY_ARGS=("-XX:MaxRAMPercentage=50" "-XX:+UseG1GC" "-Xss1024k")
 
-# Although java.net.preferIPv4Stack is supposed to be false by default,
-# some platforms override it to true. Hence we explicitly set it to false
-# to obtain desired behaviour.
-# shellcheck disable=SC2086 # JVM_MEMORY_ARGS intentionally expands to multiple arguments.
 nohup nice -n 20 java \
 	-Djava.net.preferIPv4Stack=false \
-	${JVM_MEMORY_ARGS} \
-	-jar qortium.jar \
-	1>run.log 2>&1 &
+	"${JVM_MEMORY_ARGS[@]}" \
+	-jar "${JAR_PATH}" \
+	>"${RUN_LOG}" 2>&1 &
 
-# Save backgrounded process's PID
-echo $! > run.pid
-echo qortium running as pid $!
+echo "$!" > "${RUN_PID}"
+echo "Qortium running as pid $!"
+echo "Jar file: ${JAR_PATH}"
+echo "Log file: ${RUN_LOG}"

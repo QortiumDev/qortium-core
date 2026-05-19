@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - scripts: harden main node lifecycle helpers
+
+Updated the main start and stop helper scripts so normal local node operation is safer and easier to diagnose. The start script now works from any directory, avoids launching a duplicate node when an active pid file exists, uses the built jar directly instead of copying it into the repository root, and prints the jar and log paths it is using. The stop script now works from any directory, handles missing API keys and stale pid files cleanly, supports an explicit API port override, and avoids broad process matching that could stop the wrong Qortium node.
+
 ### 2026-05-19 - testnet: default to local single-node testing
 
 Refreshed the bundled testnet setup so testers can start with a local single-node chain instead of assembling a multi-node testnet first. The testnet chain template is now compact, current-format, and neutral: it has no prefunded accounts, no native asset issued at genesis, and only one default minting-group member with a matching minting key so the local node can produce blocks. The testnet settings now default to safer loopback-only access, and the helper scripts generate disposable local runtime files with a fresh genesis timestamp, add the default local minting key, and stop the local node cleanly.

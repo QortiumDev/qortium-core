@@ -1,85 +1,96 @@
 #!/usr/bin/env bash
+set -euo pipefail
 
-# Check for color support
-if [ -t 1 ]; then
-	ncolors=$( tput colors )
-	if [ -n "${ncolors}" ] && [ "${ncolors}" -ge 8 ]; then
-		if normal="$( tput sgr0 )"; then
-			# use terminfo names
-			red="$( tput setaf 1 )"
-			green="$( tput setaf 2)"
-		else
-			# use termcap names for FreeBSD compat
-			normal="$( tput me )"
-			red="$( tput AF 1 )"
-			green="$( tput AF 2)"
-		fi
+normal=""
+red=""
+green=""
+if [ -t 1 ] && command -v tput >/dev/null 2>&1; then
+	ncolors="$(tput colors 2>/dev/null || true)"
+	if [[ "${ncolors}" =~ ^[0-9]+$ ]] && [ "${ncolors}" -ge 8 ]; then
+		normal="$(tput sgr0 2>/dev/null || true)"
+		red="$(tput setaf 1 2>/dev/null || true)"
+		green="$(tput setaf 2 2>/dev/null || true)"
 	fi
 fi
 
-# Track the pid if we can find it
-read -r pid 2>/dev/null <run.pid
-is_pid_valid=$?
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUN_PID="${SCRIPT_DIR}/run.pid"
+APIKEY_FILE="${SCRIPT_DIR}/apikey.txt"
 
-# Swap out the API port if the --testnet (or -t) argument is specified
 api_port=12391
 for arg in "$@"; do
-  case "${arg}" in
-    --testnet|-t)
-      api_port=62391
-      break
-      ;;
-  esac
+	case "${arg}" in
+		--api-port=*)
+			api_port="${arg#*=}"
+			;;
+		--mainnet|-m)
+			api_port=12391
+			;;
+		--testnet|-t)
+			api_port=62391
+			;;
+	esac
 done
 
-# Attempt to locate the process ID if we don't have one
+pid=""
+stale_pid=0
+if [ -f "${RUN_PID}" ]; then
+	read -r pid < "${RUN_PID}" || pid=""
+fi
+
+if [ -n "${pid}" ] && ! ps -p "${pid}" >/dev/null 2>&1; then
+	pid=""
+	stale_pid=1
+fi
+
 if [ -z "${pid}" ]; then
-  pid=$(pgrep -f 'qortium\.jar' | head -n 1)
-  is_pid_valid=$?
+	pid="$(ps aux | awk -v repo_dir="${SCRIPT_DIR}" '$0 ~ /[j]ava/ && $0 ~ /qortium.*\.jar/ && index($0, repo_dir) { print $2; exit }')"
 fi
 
-# Locate the API key if it exists
-apikey=$(cat apikey.txt)
+apikey=""
+if [ -f "${APIKEY_FILE}" ]; then
+	apikey="$(cat "${APIKEY_FILE}")"
+fi
+
 success=0
-
-# Try and stop via the API
-if [ -n "$apikey" ]; then
-  echo "Stopping Qortium via API..."
-  if curl --url "http://localhost:${api_port}/admin/stop?apiKey=$apikey" 1>/dev/null 2>&1; then
-    success=1
-  fi
+if [ -n "${apikey}" ] && command -v curl >/dev/null 2>&1; then
+	echo "Stopping Qortium via API..."
+	if curl --url "http://localhost:${api_port}/admin/stop?apiKey=${apikey}" >/dev/null 2>&1; then
+		success=1
+	fi
 fi
 
-# Try to kill process with SIGTERM
-if [ "$success" -ne 1 ] && [ -n "$pid" ]; then
-  echo "Stopping Qortium process $pid..."
-  if kill -15 "${pid}"; then
-    success=1
-  fi
+if [ "${success}" -ne 1 ] && [ -n "${pid}" ]; then
+	echo "Stopping Qortium process ${pid}..."
+	if kill -15 "${pid}"; then
+		success=1
+	fi
 fi
 
-# Warn and exit if still no success
-if [ "$success" -ne 1 ]; then
-  if [ -n "$pid" ]; then
-    echo "${red}Stop command failed - not running with process id ${pid}?${normal}"
-  else
-    echo "${red}Stop command failed - not running?${normal}"
-  fi
-  exit 1
+if [ "${success}" -ne 1 ]; then
+	if [ "${stale_pid}" -eq 1 ]; then
+		rm -f "${RUN_PID}"
+		echo "Qortium is not running; removed stale pid file"
+		exit 0
+	fi
+
+	if [ -n "${pid}" ]; then
+		echo "${red}Stop command failed - not running with process id ${pid}?${normal}"
+	else
+		echo "${red}Stop command failed - not running?${normal}"
+	fi
+	exit 1
 fi
 
-if [ "$success" -eq 1 ]; then
-  echo "Qortium node should be shutting down"
-  if [ "${is_pid_valid}" -eq 0 ]; then
-    echo -n "Monitoring for Qortium node to end"
-    while s=$(ps -p "$pid" -o stat=) && [[ "$s" && "$s" != 'Z' ]]; do
-      echo -n .
-      sleep 1
-    done
-    echo
-    echo "${green}Qortium ended gracefully${normal}"
-    rm -f run.pid
-  fi
+echo "Qortium node should be shutting down"
+if [ -n "${pid}" ]; then
+	echo -n "Monitoring for Qortium node to end"
+	while state="$(ps -p "${pid}" -o stat= 2>/dev/null | tr -d '[:space:]')" && [ -n "${state}" ] && [ "${state}" != "Z" ]; do
+		echo -n "."
+		sleep 1
+	done
+	echo
+	echo "${green}Qortium ended gracefully${normal}"
 fi
 
-exit 0
+rm -f "${RUN_PID}"
