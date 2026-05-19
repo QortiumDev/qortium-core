@@ -408,47 +408,47 @@ public class ArbitraryDataStorageManager extends Thread {
             return;
         }
 
-        long totalSize = 0;
-        long remainingCapacity = 0;
-
-        // Calculate remaining capacity
         try {
-            remainingCapacity = this.getRemainingUsableStorageCapacity();
-        } catch (IOException e) {
-            LOGGER.info("Unable to calculate remaining storage capacity: {}", e.getMessage());
-            return;
-        }
+            long totalSize = 0;
 
-        // Calculate total size of data directory
-        LOGGER.trace("Calculating data directory size...");
-        Path dataDirectoryPath = Paths.get(Settings.getInstance().getDataPath());
-        if (dataDirectoryPath.toFile().exists()) {
-            totalSize += FileUtils.sizeOfDirectory(dataDirectoryPath.toFile());
-        }
+            // Calculate remaining capacity
+            long remainingCapacity = this.getRemainingUsableStorageCapacity();
 
-        // Add total size of temp directory, if it's not already inside the data directory
-        Path tempDirectoryPath = Paths.get(Settings.getInstance().getTempDataPath());
-        if (tempDirectoryPath.toFile().exists()) {
-            if (!FilesystemUtils.isChild(tempDirectoryPath, dataDirectoryPath)) {
-                LOGGER.trace("Calculating temp directory size...");
+            // Calculate total size of data directory
+            LOGGER.trace("Calculating data directory size...");
+            Path dataDirectoryPath = Paths.get(Settings.getInstance().getDataPath());
+            if (dataDirectoryPath.toFile().exists()) {
                 totalSize += FileUtils.sizeOfDirectory(dataDirectoryPath.toFile());
             }
+
+            // Add total size of temp directory, if it's not already inside the data directory
+            Path tempDirectoryPath = Paths.get(Settings.getInstance().getTempDataPath());
+            if (tempDirectoryPath.toFile().exists()) {
+                if (!FilesystemUtils.isChild(tempDirectoryPath, dataDirectoryPath)) {
+                    LOGGER.trace("Calculating temp directory size...");
+                    totalSize += FileUtils.sizeOfDirectory(tempDirectoryPath.toFile());
+                }
+            }
+
+            // It's essential that used space is included in the storage capacity
+            LOGGER.trace("Calculating total storage capacity...");
+            long storageCapacity = remainingCapacity + totalSize;
+
+            // Make sure to limit the storage capacity if the user is overriding it in the settings
+            if (Settings.getInstance().getMaxStorageCapacity() != null) {
+                storageCapacity = Math.min(storageCapacity, Settings.getInstance().getMaxStorageCapacity());
+            }
+
+            this.totalDirectorySize = totalSize;
+            this.lastDirectorySizeCheck = now;
+            this.storageCapacity = storageCapacity;
+
+            LOGGER.info("Total used: {} bytes, Total capacity: {} bytes", this.totalDirectorySize, this.storageCapacity);
+        } catch (IOException e) {
+            LOGGER.info("Unable to calculate remaining storage capacity: {}", e.getMessage());
+        } catch (RuntimeException e) {
+            LOGGER.warn("Unable to calculate QDN storage capacity", e);
         }
-
-        this.totalDirectorySize = totalSize;
-        this.lastDirectorySizeCheck = now;
-
-        // It's essential that used space (this.totalDirectorySize) is included in the storage capacity
-        LOGGER.trace("Calculating total storage capacity...");
-        long storageCapacity = remainingCapacity + this.totalDirectorySize;
-
-        // Make sure to limit the storage capacity if the user is overriding it in the settings
-        if (Settings.getInstance().getMaxStorageCapacity() != null) {
-            storageCapacity = Math.min(storageCapacity, Settings.getInstance().getMaxStorageCapacity());
-        }
-        this.storageCapacity = storageCapacity;
-
-        LOGGER.info("Total used: {} bytes, Total capacity: {} bytes", this.totalDirectorySize, this.storageCapacity);
     }
 
     private long getRemainingUsableStorageCapacity() throws IOException {

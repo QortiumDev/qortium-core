@@ -28,6 +28,7 @@ import org.qortal.utils.ListUtils;
 import org.qortal.utils.NTP;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
@@ -124,6 +125,67 @@ public class ArbitraryDataStorageCapacityTests extends Common {
         // then multiplied by 4, to allow for names that don't use much space
         long expectedStorageCapacityPerName = (long)(totalStorageCapacity / 6.0f) * 4L;
         assertEquals(expectedStorageCapacityPerName, storageManager.storageCapacityPerName(storageFullThreshold));
+    }
+
+    @Test
+    public void testCalculateDirectorySizeIncludesSeparateTempDirectory() throws IOException, IllegalAccessException {
+        ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
+        Path testRoot = Files.createTempDirectory("qdn-storage-capacity");
+        Path dataPath = testRoot.resolve("data");
+        Path tempDataPath = testRoot.resolve("temp");
+
+        try {
+            Files.createDirectories(dataPath);
+            Files.createDirectories(tempDataPath);
+            Files.write(dataPath.resolve("data.bin"), new byte[16]);
+            Files.write(tempDataPath.resolve("temp.bin"), new byte[24]);
+
+            FieldUtils.writeField(Settings.getInstance(), "dataPath", dataPath.toString(), true);
+            FieldUtils.writeField(Settings.getInstance(), "tempDataPath", tempDataPath.toString(), true);
+
+            storageManager.calculateDirectorySize(1000L);
+
+            assertEquals(40L, storageManager.getTotalDirectorySize());
+            assertTrue(storageManager.isStorageCapacityCalculated());
+        } finally {
+            FileUtils.deleteQuietly(testRoot.toFile());
+        }
+    }
+
+    @Test
+    public void testCalculateDirectorySizeFailurePreservesPreviousValues() throws IOException, IllegalAccessException {
+        ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
+        Path testRoot = Files.createTempDirectory("qdn-storage-capacity-failure");
+        Path dataPath = testRoot.resolve("data");
+        Path tempDataPath = testRoot.resolve("temp");
+        Path invalidTempDataPath = testRoot.resolve("temp-file");
+
+        try {
+            Files.createDirectories(dataPath);
+            Files.createDirectories(tempDataPath);
+            Files.write(dataPath.resolve("data.bin"), new byte[16]);
+            Files.write(tempDataPath.resolve("temp.bin"), new byte[24]);
+            Files.write(invalidTempDataPath, new byte[5]);
+
+            FieldUtils.writeField(Settings.getInstance(), "dataPath", dataPath.toString(), true);
+            FieldUtils.writeField(Settings.getInstance(), "tempDataPath", tempDataPath.toString(), true);
+
+            storageManager.calculateDirectorySize(1000L);
+            long previousTotalDirectorySize = storageManager.getTotalDirectorySize();
+            Long previousStorageCapacity = storageManager.getStorageCapacity();
+
+            assertEquals(40L, previousTotalDirectorySize);
+            assertNotNull(previousStorageCapacity);
+
+            FieldUtils.writeField(Settings.getInstance(), "tempDataPath", invalidTempDataPath.toString(), true);
+
+            storageManager.calculateDirectorySize(2000L);
+
+            assertEquals(previousTotalDirectorySize, storageManager.getTotalDirectorySize());
+            assertEquals(previousStorageCapacity, storageManager.getStorageCapacity());
+        } finally {
+            FileUtils.deleteQuietly(testRoot.toFile());
+        }
     }
 
 

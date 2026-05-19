@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - fix: harden QDN storage-size checks
+
+Updated QDN storage-size calculation so unexpected filesystem scan failures are logged without stopping future storage checks or corrupting the last successful capacity values. The calculation now counts a separate temporary data directory correctly instead of counting the main data directory twice, while keeping shutdown interruption behavior clean and avoiding the upstream aggressive QDN cleanup changes.
+
 ### 2026-05-19 - docs: record upstream 6.1.5 triage decisions
 
 Updated the upstream Qortal 6.1.5 comparison document so it records which changes Qortium has already ported, skipped, deferred, or left for deeper planning. The document now includes a detailed Qortium chat plan that rejects the upstream singleton delegate as the source of truth, chooses a dedicated transient chat store, records the selected repository-helper decisions, and separates the skipped aggressive QDN cleanup behavior from the narrow storage-manager hardening idea.
