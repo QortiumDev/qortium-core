@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - deps: update Protobuf Java patch baseline
+
+Updated Qortium's Protobuf Java runtime dependency to the current 3.25 patch baseline. This keeps the committed generated gRPC and protobuf sources authoritative while taking the latest patch fixes in the runtime library used by light-client RPC code and other protobuf parsing paths.
+
 ### 2026-05-19 - docs: plan private group chat encryption
 
 Added a dedicated planning document for Core-managed private group chat encryption. The notes explain why closed groups are not private enough today, summarize Qortal Hub's current QDN-based encrypted group chat model as reference material, and record the Qortium direction before implementation begins: closed-group chat should become private by default in Core, use a Qortium-owned encrypted payload envelope, keep chat-store payloads opaque, and decide key distribution, rotation, history, and plaintext rejection deliberately. The 6.1.5 comparison now points to this new design document instead of carrying the next phase directly.
