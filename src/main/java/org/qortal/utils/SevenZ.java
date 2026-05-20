@@ -35,10 +35,13 @@ public class SevenZ {
                 if (entry.isDirectory()){
                     continue;
                 }
-                File curfile = new File(destination, entry.getName());
+                File curfile = newFile(destination, entry);
                 File parent = curfile.getParentFile();
-                if (!parent.exists()) {
-                    parent.mkdirs();
+                if (parent == null) {
+                    throw new IOException("Entry has no parent directory: " + entry.getName());
+                }
+                if (!parent.isDirectory() && !parent.mkdirs()) {
+                    throw new IOException("Failed to create directory " + parent);
                 }
                 long fileSize = entry.getSize();
 
@@ -57,6 +60,24 @@ public class SevenZ {
                 }
             }
         }
+    }
+
+    private static File newFile(File destinationDir, SevenZArchiveEntry entry) throws IOException {
+        String entryName = entry.getName();
+        if (entryName == null || entryName.isEmpty() || new File(entryName).isAbsolute()) {
+            throw new IOException("Entry is outside of the target dir: " + entryName);
+        }
+
+        File destFile = new File(destinationDir, entryName);
+
+        String destDirPath = destinationDir.getCanonicalPath();
+        String destFilePath = destFile.getCanonicalPath();
+
+        if (!destFilePath.startsWith(destDirPath + File.separator)) {
+            throw new IOException("Entry is outside of the target dir: " + entryName);
+        }
+
+        return destFile;
     }
 
     private static void addToArchiveCompression(SevenZOutputFile out, File file, String dir) throws IOException {

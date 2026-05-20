@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Fix unsafe 7z bootstrap extraction
+
+Hardened Qortium's 7z archive extraction so a malicious bootstrap archive cannot write files outside the intended extraction folder. Bootstrap imports now reject unsafe archive entries instead of silently creating parent folders and writing wherever the entry path points, while normal nested bootstrap archives continue to extract as expected.
+
 ### 2026-05-20 - chat: recover private group historical keys
 
 Added historical private group chat key recovery for cases where a current member is missing the key for an older message from a previous membership epoch. Clients can now include the missing epoch id when requesting a specific key, recovery can relay matching historical key announcements without exposing raw keys, and validation still keeps new user messages and rotation requests tied to the current group membership.
