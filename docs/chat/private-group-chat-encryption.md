@@ -28,25 +28,30 @@ not depend on QDN publication.
 
 ## V1 Key Model
 
-Qortium will use cached per-sender keys for each group membership epoch.
+Qortium will use shared random group keys for each membership epoch.
 
 A membership epoch is the current closed-group membership snapshot. Core should
 derive a deterministic epoch id from the group id and sorted current member
 public keys, so every node can identify the same membership state without
 storing extra consensus data.
 
+If a member joins and later leaves, returning the group to the same member set,
+the epoch id returns to the same value. This is an accepted V1 tradeoff: the
+same current members are allowed to read current messages, and manual rotation
+can create a fresh key when a group wants a clean break.
+
 For each closed group and membership epoch:
 
-- each sender owns a random sender key for messages they send
-- that sender key is cached locally
-- messages from that sender are encrypted with the cached sender key
-- the sender key is announced to current group members using pairwise encrypted
-  key wrappers
-- later messages from the same sender can reuse the cached sender key until the
-  epoch changes or the sender rotates it
+- a group key is a random AES-256 key, not a deterministic value
+- any current member can create and announce a group key for the current epoch
+- more than one group key can be valid for the same epoch
+- each encrypted message identifies the exact key id needed to decrypt it
+- any member that has the referenced key can decrypt the message
 
-The sender key must be random, not derived from public group state. The
-deterministic part is the membership epoch id, not the encryption key itself.
+The chain backs the current membership state. It does not need to choose one
+consensus "latest" chat key. Messages name the key they use, and recipients
+accept any valid signed key announcement that matches the current epoch and the
+message's key id.
 
 ## Envelope Types
 
@@ -56,35 +61,53 @@ for the first implementation.
 
 V1 envelope types:
 
-- `MESSAGE`: encrypted user message content
-- `KEY_ANNOUNCEMENT`: sender key wrapped for one or more current members
-- `KEY_REQUEST`: request for a missing sender key for a group epoch
-- `ROTATION_REQUEST`: signed request asking senders to rotate their keys
+- `MESSAGE`: encrypted user message content referencing a group id, epoch id,
+  and key id
+- `KEY_ANNOUNCEMENT`: signed group-key announcement with encrypted wrappers for
+  current members
+- `KEY_REQUEST`: request for a missing key id, or for any usable key for the
+  current epoch
+- `ROTATION_REQUEST`: signed request asking members to stop using older keys and
+  create or use a fresh key
 
 Normal encrypted closed-group messages should set `isEncrypted` to `true`.
 Because transaction data contains ciphertext, clients should not rely on
 `isText` to mean the stored payload is directly readable text.
 
 Envelope metadata should identify the version, envelope type, group id,
-membership epoch id, sender public key, sender key id, and the data needed for
-the specific envelope type.
+membership epoch id, key id, creator or sender public key, and the data needed
+for the specific envelope type.
 
 ## Key Announcements And Requests
 
-When sending to a closed group, Core should check whether the local sender has a
-current sender key for the current membership epoch.
+When sending to a closed group, Core should compute the current membership epoch
+and check whether the local node has a usable group key for that epoch.
 
-If no key exists, Core creates one and announces it to the current members. If a
-key exists but has not been announced recently, Core may re-announce it before
-or with a message.
+If no usable key exists, Core creates a random group key and announces it to the
+current members. The announcement must be signed by the announcing member and
+must include encrypted wrappers for the current member public keys.
 
-If a member receives a message but does not have the matching sender key, their
+A key id is a commitment to the random group key and its group/epoch context.
+Recipients verify a key announcement by checking that:
+
+- the announcement signature is valid
+- the signer is a current member for the announced epoch
+- the group id and epoch id match the current group membership
+- the announcement is addressed to current member public keys
+- their wrapper decrypts to a key whose commitment matches the key id
+
+Peers without the recipient private key can validate the announcement structure,
+signature, and membership. Only actual recipients can prove their wrapper
+decrypts to the announced key.
+
+If a member receives a message but does not have the matching group key, their
 node can send a signed `KEY_REQUEST` control envelope for that group, membership
-epoch, sender, and key id.
+epoch, and key id. If the request does not name a key id, it asks for any usable
+key for the current epoch.
 
-In V1, key re-announcements are sender-owned: the original sender responds by
-announcing that sender key to the requester. Forwarding another sender's key is
-deferred to a later design because it increases trust and leakage concerns.
+Any node can relay a signed key announcement it has already seen. Nodes should
+not return raw group keys. The recipient trusts a relayed announcement only
+after verifying the original signature and decrypting its own wrapper.
 
 Control envelopes are allowed for closed groups even after plaintext
 closed-group chat is rejected, because they are chat-layer metadata rather than
@@ -92,28 +115,36 @@ user message content.
 
 ## Rotation And History
 
-Membership changes force a new membership epoch. Joins, leaves, kicks, and bans
-therefore move future messages to new sender keys.
+Membership changes naturally change the epoch id unless the group returns to an
+identical member set. While a member is absent, messages are encrypted under the
+different current epoch. If the old member set returns later, previously cached
+keys for that identical member set can be reused unless the group rotates.
 
 Manual rotation is also supported:
 
-- a local user can rotate their own sender key at any time
+- a local user can rotate the group key they use for new sends
 - the group owner or an admin can publish a signed `ROTATION_REQUEST`
 - rotation requests are rate-limited to prevent abuse
-- seeing an accepted rotation request causes each sender to rotate their own key
-  the next time they send
+- seeing an accepted rotation request causes local senders to stop using older
+  keys for new messages and create or select a fresh key for the same epoch
 
 V1 keeps any-member rotation requests as a future policy option. Owner/admin
 requests are the initial default because they are easier to reason about and
 less likely to create key churn.
 
-History follows forward secrecy limits:
+History follows the limits of shared keys:
 
 - new members receive access to future messages only
-- removed members lose access to future messages only
+- removed members lose access to messages sent while they are not members
+- if an old identical member set returns, old keys for that set can still work
+  unless the group rotates
 - old messages cannot be clawed back from anyone who already had the old key
 - if a member account or device is compromised, the real fix is to remove that
-  member, which forces a new membership epoch
+  member or rotate keys after the account is safe
+
+This shared-key model has a larger blast radius than per-sender keys: one leaked
+group key exposes all messages that used that key. Qortium accepts that V1
+tradeoff because it makes key recovery and user experience simpler.
 
 ## Planned Local APIs
 
@@ -122,12 +153,12 @@ provide restricted local APIs for:
 
 - sending an encrypted closed-group message
 - decrypting closed-group messages for a local account
-- requesting a missing sender key
-- re-announcing the local sender key
-- rotating the local sender key
+- requesting a missing group key
+- re-announcing a known signed group-key announcement
+- rotating the local group key used for new sends
 - requesting group rotation as owner or admin
 
-Core will need local access to the sender account's private key for encryption,
+Core will need local access to the account private key for encryption,
 decryption, signing, and key wrapping. The first API can follow existing
 private-key-based local endpoints. A later wallet or unlocked-account design can
 hide private keys from callers more cleanly.
@@ -141,7 +172,7 @@ relay:
 - closed-group user messages must use the Qortium private group envelope once
   the feature is active
 - closed-group control envelopes must be structurally valid and signed by a
-  current member
+  current member when the envelope type requires a signer
 - peer validation should not need plaintext or private group keys
 - the chat store should not decrypt or index closed-group message content
 
@@ -152,21 +183,24 @@ clearly instead of silently excluding that member.
 
 1. Add envelope serialization and parsing tests.
 2. Add chat-specific AES-GCM helpers with associated data.
-3. Add membership epoch id computation.
-4. Add a local sender-key cache for group id, epoch id, sender public key, key
-   id, key bytes, and announcement timestamps.
-5. Add pairwise key wrapping using the sender and recipient account public
+3. Add membership epoch id computation from group id and sorted member public
    keys.
-6. Add local APIs for send, decrypt, key request, key announcement, local
+4. Add group key id and key-announcement signature verification.
+5. Add a local group-key cache for group id, epoch id, key id, key bytes,
+   signed announcement bytes, creator public key, and usage timestamps.
+6. Add pairwise key wrapping using announcing and recipient account public keys.
+7. Add local APIs for send, decrypt, key request, key announcement relay, local
    rotation, and owner/admin rotation request.
-7. Update `ChatService` validation for closed-group envelope requirements.
-8. Add integration tests for send, read, missing-key recovery, membership
-   changes, manual rotation, plaintext rejection, and open-group compatibility.
+8. Update `ChatService` validation for closed-group envelope requirements.
+9. Add integration tests for send, read, missing-key recovery, multiple valid
+   keys in one epoch, membership changes, manual rotation, plaintext rejection,
+   and open-group compatibility.
 
 ## Non-Goals For V1
 
 - Do not publish group chat keys through QDN.
-- Do not add one shared group-wide key controlled by owners or admins.
+- Do not require one consensus-backed latest chat key for a group epoch.
+- Do not derive secret keys from public group state.
 - Do not allow automatic old-history access for new members.
 - Do not let the chat store decrypt or index closed-group plaintext.
 - Do not require backwards compatibility with old closed-group chat history,

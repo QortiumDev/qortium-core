@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - docs: revise private group chat encryption design
+
+Revised Qortium's private group chat encryption design to use shared random group keys for each membership epoch instead of per-sender keys. The updated design keeps key distribution inside Core without QDN, accepts identical member sets reusing the same epoch id, allows multiple signed key announcements in one epoch, lets any node relay signed announcements without exposing raw keys, and documents the larger shared-key blast radius as an accepted simplicity tradeoff.
+
 ### 2026-05-20 - docs: define private group chat encryption design
 
 Defined Qortium's first private group chat encryption design before implementation starts. The chat planning doc now chooses Core-managed closed-group encryption with cached per-sender keys for each membership epoch, no QDN key publishing, automatic future-key changes when group membership changes, owner/admin rotation requests, missing-key request handling, and a staged implementation path for envelope, key cache, API, validation, and integration tests.
