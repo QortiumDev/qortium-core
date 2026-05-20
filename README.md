@@ -1,72 +1,129 @@
-# Qortal Project - Qortal Core - Primary Repository
-The Qortal Core is the blockchain and node component of the overall project. It contains the primary API, and ability to make calls to create transactions, and interact with the Qortal Blockchain Network. 
+# Qortium Core
 
-In order to run the Qortal Core, a machine with Java 17+ installed is required. Minimum RAM specs will vary depending on settings, but as low as 4GB of RAM should be acceptable in most scenarios.
+Qortium is a stripped-down and cleaned-up fork of Qortal Core. The goal is to
+keep a practical blockchain node foundation that other projects can understand,
+test, and adapt into their own chain with less inherited baggage.
 
-Qortal is a complete infrastructure platform with a blockchain backend, it is capable of indefinite web and application hosting with no continual fees, replacement of DNS and centralized name systems and communications systems, and is the foundation of the next generation digital infrastructure of the world. Qortal is unique in nearly every way, and was written from scratch to address as many concerns from both the existing 'blockchain space' and the 'typical internet' as possible, while maintaining a system that is easy to use and able to run on 'any' computer. 
+This repository contains the Java node, blockchain processing code, local APIs,
+networking, build tooling, and the early Qortium documentation set.
 
-Qortal contains extensive functionality geared toward complete decentralization of the digital world. Removal of 'middlemen' of any kind from all transactions, and ability to publish websites and applications that require no continual fees, on a name that is truly owned by the account that registered it, or purchased it from another. A single name on Qortal is capable of being both a namespace and a 'username'. That single name can have an application, website, public and private data, communications, authentication, the namespace itself and more, which can subsequently be sold to anyone else without the need to change any type of 'hosting' or DNS entries that do not exist, email that doesn't exist, etc. Maintaining the same functionality as those replaced features of web 2.0. 
+## Current Status
 
-Over time Qortal has progressed into a fully featured environment catering to any and all types of people and organizations, and will continue to advance as time goes on. Brining more features, capability, device support, and availale replacements for web2.0. Ultimately building a new, completely user-controlled digital world without limits. 
+Qortium is active development software for builders and testers. It is not yet
+packaged as a polished end-user application, and some inherited Qortal/QDN
+terminology still appears in older docs and APIs while the fork is cleaned up.
 
-Qortal has no owner, no company on top of it, and is completely community built, run, and funded. A community-established and run group of developers known as the 'dev-group' or Qortal Development Group, make group_approval based decisions for the project's future. If you are a developer interested in assisting with the project, you meay reach out to the Qortal Development Group in any of the available Qortal community locations. Either on the Qortal network itself, or on one of the temporary centralized social media locations. 
+For a plain-language history of the fork work, start with
+[QORTIUM-CHANGELOG.md](QORTIUM-CHANGELOG.md).
 
-Building the future one block at a time. Welcome to Qortal. 
+## Tester Quick Start
 
-# Building the Qortal Core from Source
+The easiest first test is the local single-node testnet. It starts a disposable
+chain on your machine and avoids setting up peers or a multi-node minting
+rotation.
 
-## Build / Run
+Prerequisites:
 
-- Requires Java 17 or newer. OpenJDK/Temurin 17 is recommended.
-- Install Maven
-- Use Maven to fetch dependencies and build: `mvn clean package`
-- Update Maven dependencies: `mvn install` 
-- Built JAR should be something like `target/qortium-1.0.jar`
-- Create basic *settings.json* file: `echo '{}' > settings.json`
-- Run JAR in same working directory as *settings.json*: `java -jar target/qortium-1.0.jar`
-- Wrap in shell script, add JVM flags, redirection, backgrounding, etc. as necessary.
-- Or use supplied example shell script: *start.sh*
+- Java 17 or newer
+- Maven
 
-## Docker Build / Run
+Build from the repository root:
 
-- Copy env template: `cp .env.example .env`
-- Build and start with host port publishing (default): `docker compose up -d --build`
-- Internal Docker network only (no host port publishing): `docker compose -f docker-compose.internal.yml up -d --build`
-- Stop container: `docker compose down`
-- Node data and *settings.json* are stored in: `./data/qortium`
-- JVM start arguments file is stored in: `./data/qortium/start-arguments.txt`
-  - Default content: `-XX:MaxRAMPercentage=25 -XX:+UseG1GC -Xss1024k`
-  - Edit this file and restart the container to apply memory/runtime argument changes
-- Follow logs: `docker compose logs -f qortium`
-- Network name can be set using `QORTIUM_NETWORK_NAME` in `.env`
-- Port source of truth is `./data/qortium/settings.json`; keep `.env` `QORTIUM_API_PORT` / `QORTIUM_P2P_PORT` / `QORTIUM_QDN_PORT` in sync
-- If other containers need API access, update API whitelist in `settings.json` (by default only loopback is allowed)
+```sh
+mvn -q -DskipTests package
+```
 
-## IntelliJ IDEA Configuration
+Start the local testnet:
 
-- Run -> Edit Configurations
-- Add New Application
-- Name: qortium
-- SDK: java 17
-- Main Class: org.qortal.controller.Controller
-- Program arguments: settings.json -Dlog4j.configurationFile=log4j2.properties -ea
-- Environment variables: Djava.net.preferIPv4Stack=false
+```sh
+./testnet/start.sh
+```
 
-# Using a pre-built Qortal 'jar' binary
+The local testnet API listens at:
 
-If you prefer to utilize a released version of Qortal, you may do so by downloading one of the available releases from the releases page, that are also linked on https://qortal.org and https://qortal.dev. 
+```text
+http://localhost:62391
+```
 
-# Learning Q-App Development
+Stop it with:
 
-https://qortal.dev contains dev documentation for building JS/React (and other client-side languages) applications or 'Q-Apps' on Qortal. Q-Apps are published on Registered Qortal Names, and aside from a single Name Registration fee, and a fraction of QORT for a publish transaction, require zero continual costs. These applications get more redundant with each new access from a new Qortal Node, making your application faster for the next user to download, and stronger as time goes on. Q-Apps live indefinitely in the history of the blockchain-secured Qortal Data Network (QDN).
+```sh
+./testnet/stop.sh
+```
 
-# How to learn more
+See [testnet/README.md](testnet/README.md) for reset instructions, generated
+runtime files, and multi-node testnet notes.
 
-If the project interests you, you may learn more from the various web2 and QDN based websites focused on introductory information. 
+## Local Node Build And Run
 
-https://qortal.org - primary internet presence 
-https://qortal.dev - new primary project site 
-https://wiki.qortal.org - community built and managed wiki with detailed information regarding the project
-https://qortal.dev/wiki - a simpler setup-focused wiki
+For normal local node operation, build the jar and use the root lifecycle
+helpers:
 
-links to telegram and discord communities are at the top of https://qortal.org as well. 
+```sh
+mvn -q -DskipTests package
+./start.sh
+```
+
+Stop the node with:
+
+```sh
+./stop.sh
+```
+
+The root scripts look for `qortium.jar` first and otherwise use a built
+`target/qortium*.jar`. Runtime state such as `settings.json`, `run.log`, and
+the database directory is local to the repository working directory unless
+configured otherwise.
+
+## Docker
+
+Docker support is available for developers who prefer a containerized node.
+
+```sh
+cp .env.example .env
+docker compose up -d --build
+docker compose logs -f qortium
+docker compose down
+```
+
+For an internal Docker network without host port publishing:
+
+```sh
+docker compose -f docker-compose.internal.yml up -d --build
+```
+
+Container data and `settings.json` are stored under `./data/qortium`. The JVM
+start arguments file is stored at `./data/qortium/start-arguments.txt`.
+
+## Development
+
+Useful local checks:
+
+```sh
+mvn -q -DskipTests compile
+mvn -q test
+```
+
+For IDE runs, use Java 17 and the main class:
+
+```text
+org.qortal.controller.Controller
+```
+
+Use `settings.json` as the program argument when running a normal local node.
+
+## Documentation
+
+- [Qortium changelog](QORTIUM-CHANGELOG.md) - plain-language project history
+- [Local testnet guide](testnet/README.md) - single-node and multi-node testnet setup
+- [Testing notes](docs/testing.md) - repository test guidance
+- [Dependency security review](docs/dependency-security-review.md) - current security posture and dependency notes
+- [Dependency provenance](docs/dependency-provenance.md) - pinned and vendored dependency rationale
+- [Qortal 6.1.5 comparison](docs/qortal-6.1.5-comparison.md) - upstream comparison and integration notes
+- [Account trust network](docs/account-trust-network.md) - trust model and rating behavior
+- [Trust network client integration](docs/trust-network-client-integration.md) - wallet/explorer integration guidance
+- [Private group chat encryption plan](docs/private-group-chat-encryption.md) - planned private chat direction
+
+Some root-level documents, including `AutoUpdates.md`, `DATABASE.md`,
+`Q-Apps.md`, and `v6.md`, are inherited or transitional references. They will be
+reviewed and reorganized in later documentation passes.

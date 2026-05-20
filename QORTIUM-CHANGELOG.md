@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-19 - docs: refresh Qortium README
+
+Rewrote the root README so the repository now opens with Qortium's current purpose, status, and practical build paths instead of inherited Qortal project copy. The new README gives testers a direct single-node testnet quick start, keeps normal local and Docker run instructions concise, and links to the main Qortium docs without moving the broader markdown files yet.
+
 ### 2026-05-19 - tx: publicize creators before confirmed processing
 
 Moved normal confirmed transaction creator metadata into the account table before each transaction's own processing runs, so a first transaction can establish its public key without a separate publicize or placeholder balance transaction. Group joins now also handle missing default-group rows defensively, and the local testnet genesis can join its default minter directly without a zero-balance setup transaction.
