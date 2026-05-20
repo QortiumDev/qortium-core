@@ -223,8 +223,10 @@ public class ChatServiceTests extends Common {
 	public void testClosedGroupKeyAnnouncementEnvelopeIsAccepted() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
 			int groupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-key-announcement", false,
 					ApprovalThreshold.ONE, 10, 40);
+			addMember(repository, groupId, bob);
 			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
 					groupId);
 			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 10);
@@ -235,6 +237,10 @@ public class ChatServiceTests extends Common {
 					keyAnnouncement.toBytes(), false, true, now());
 
 			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, keyAnnouncementChatData));
+
+			ChatTransactionData relayedKeyAnnouncementData = signedChat(repository, bob, groupId, null,
+					keyAnnouncement.toBytes(), false, true, now() + 1);
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, relayedKeyAnnouncementData));
 		}
 	}
 

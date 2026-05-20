@@ -16,6 +16,8 @@ import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.Security;
 import org.qortal.api.model.PrivateGroupChatDecryptRequest;
 import org.qortal.api.model.PrivateGroupChatDecryptResponse;
+import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayRequest;
+import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayResponse;
 import org.qortal.api.model.PrivateGroupChatKeyRequestRequest;
 import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
 import org.qortal.api.model.PrivateGroupChatSendRequest;
@@ -414,6 +416,69 @@ public class ChatResource {
 
 			PrivateGroupChatKeyRequestResponse response = new PrivateGroupChatKeyRequestResponse();
 			response.requestSignature = result.getRequestSignature();
+			response.epochId = result.getEpochId();
+			response.keyId = result.getKeyId();
+			return response;
+		} catch (PrivateGroupChatService.ValidationException e) {
+			throw TransactionsResource.createTransactionInvalidException(request, e.getValidationResult());
+		} catch (PrivateGroupChatService.PrivateGroupChatException | GeneralSecurityException | IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/group/key-announcement/relay")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "Relay private group chat key announcement",
+		description = "Publishes a new CHAT transaction carrying a previously stored or cached signed private group key announcement for the current membership epoch. This relays the signed announcement envelope without exposing raw group keys.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = PrivateGroupChatKeyAnnouncementRelayRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "stored relayed private group chat key announcement signature",
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					schema = @Schema(
+						implementation = PrivateGroupChatKeyAnnouncementRelayResponse.class
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_DATA, ApiError.INVALID_CRITERIA, ApiError.TRANSACTION_INVALID,
+			ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public PrivateGroupChatKeyAnnouncementRelayResponse relayPrivateGroupChatKeyAnnouncement(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PrivateGroupChatKeyAnnouncementRelayRequest relayRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (relayRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+		if (relayRequest.relayerPrivateKey == null || relayRequest.relayerPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateGroupChatService.KeyAnnouncementRelayResult result = PrivateGroupChatService.getInstance()
+					.relayKeyAnnouncement(repository, relayRequest.relayerPrivateKey, relayRequest.groupId,
+							relayRequest.epochId, relayRequest.keyId);
+
+			PrivateGroupChatKeyAnnouncementRelayResponse response = new PrivateGroupChatKeyAnnouncementRelayResponse();
+			response.announcementSignature = result.getAnnouncementSignature();
 			response.epochId = result.getEpochId();
 			response.keyId = result.getKeyId();
 			return response;

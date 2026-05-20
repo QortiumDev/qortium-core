@@ -195,6 +195,78 @@ public class PrivateGroupChatServiceTests extends Common {
 	}
 
 	@Test
+	public void testRelayKeyAnnouncementStoresExistingAnnouncementEnvelope() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-relay-stored");
+			PrivateGroupChatService.SendResult sendResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, bytes("secret"), true, null);
+			ChatTransactionData originalAnnouncementData = repository.getChatStoreRepository().fromSignature(
+					sendResult.getKeyAnnouncementSignature());
+			PrivateGroupChatEnvelope originalAnnouncement = PrivateGroupChatEnvelope.fromBytes(
+					originalAnnouncementData.getData());
+
+			PrivateGroupChatService.KeyAnnouncementRelayResult relayResult = PrivateGroupChatService.getInstance()
+					.relayKeyAnnouncement(repository, fixture.bob.getPrivateKey(), fixture.groupId,
+							sendResult.getEpochId(), sendResult.getKeyId());
+
+			assertNotNull(relayResult.getAnnouncementSignature());
+			assertArrayEquals(sendResult.getEpochId(), relayResult.getEpochId());
+			assertArrayEquals(sendResult.getKeyId(), relayResult.getKeyId());
+
+			ChatTransactionData relayData = repository.getChatStoreRepository().fromSignature(
+					relayResult.getAnnouncementSignature());
+			assertNotNull(relayData);
+			assertEquals(fixture.bob.getAddress(), relayData.getSender());
+			assertFalse(relayData.getIsText());
+			assertTrue(relayData.getIsEncrypted());
+			assertArrayEquals(originalAnnouncement.toBytes(), relayData.getData());
+		}
+	}
+
+	@Test
+	public void testRelayKeyAnnouncementCanUseCachedAnnouncement() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-relay-cache");
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					fixture.groupId);
+			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 20);
+			PrivateGroupChatEnvelope keyAnnouncement = PrivateGroupChatKeyAnnouncement.create(epoch,
+					groupKey, fixture.alice.getPrivateKey());
+			PrivateGroupChatKeyCache.getInstance().putLocal(epoch, keyAnnouncement, groupKey);
+
+			PrivateGroupChatService.KeyAnnouncementRelayResult relayResult = PrivateGroupChatService.getInstance()
+					.relayKeyAnnouncement(repository, fixture.bob.getPrivateKey(), fixture.groupId,
+							epoch.getEpochId(), null);
+
+			assertNotNull(relayResult.getAnnouncementSignature());
+			assertArrayEquals(epoch.getEpochId(), relayResult.getEpochId());
+			assertArrayEquals(keyAnnouncement.getKeyId(), relayResult.getKeyId());
+
+			ChatTransactionData relayData = repository.getChatStoreRepository().fromSignature(
+					relayResult.getAnnouncementSignature());
+			assertArrayEquals(keyAnnouncement.toBytes(), relayData.getData());
+		}
+	}
+
+	@Test
+	public void testRelayKeyAnnouncementRejectsMissingOrUnauthorizedRelay() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-relay-missing");
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					fixture.groupId);
+
+			assertThrows(PrivateGroupChatService.PrivateGroupChatException.class,
+					() -> PrivateGroupChatService.getInstance().relayKeyAnnouncement(repository,
+							fixture.bob.getPrivateKey(), fixture.groupId, epoch.getEpochId(),
+							bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 30)));
+
+			assertThrows(GeneralSecurityException.class,
+					() -> PrivateGroupChatService.getInstance().relayKeyAnnouncement(repository,
+							fixture.chloe.getPrivateKey(), fixture.groupId, epoch.getEpochId(), null));
+		}
+	}
+
+	@Test
 	public void testDecryptRehydratesCachedKeyFromStoredAnnouncement() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Fixture fixture = createFixture(repository, "private-service-missing-key");

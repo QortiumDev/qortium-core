@@ -108,9 +108,10 @@ validates the requester signature and requires the requester to be the CHAT
 transaction sender, so request publication is tied to the local account making
 the request.
 
-Any node can relay a signed key announcement it has already seen. Nodes should
-not return raw group keys. The recipient trusts a relayed announcement only
-after verifying the original signature and decrypting its own wrapper.
+Any current member node can relay a signed key announcement it has already seen
+for the current epoch. Nodes should not return raw group keys. The recipient
+trusts a relayed announcement only after verifying the original signature and
+decrypting its own wrapper.
 
 Control envelopes are allowed for closed groups even after plaintext
 closed-group chat is rejected, because they are chat-layer metadata rather than

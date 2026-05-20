@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: relay private group key announcements
+
+Added local support for relaying private group chat key announcements without exposing raw group keys. A current closed-group member can now republish a previously stored or cached signed key announcement for the current membership epoch, giving peers another chance to recover a missing key while preserving the original announcement signature and validation rules.
+
 ### 2026-05-20 - chat: add private group key requests
 
 Added signed private group chat key requests so a current closed-group member can ask the group for a missing encryption key without exposing message contents or raw key material. Qortium now creates, validates, stores, and exposes a local API for these request envelopes while still rejecting rotation requests until the separate rotation policy is implemented.

@@ -8,6 +8,8 @@ import org.junit.Test;
 import org.qortal.api.ApiError;
 import org.qortal.api.model.PrivateGroupChatDecryptRequest;
 import org.qortal.api.model.PrivateGroupChatDecryptResponse;
+import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayRequest;
+import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayResponse;
 import org.qortal.api.model.PrivateGroupChatKeyRequestRequest;
 import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
 import org.qortal.api.model.PrivateGroupChatSendRequest;
@@ -279,6 +281,51 @@ public class ChatResourceTests extends ApiCommon {
 			assertEquals(PrivateGroupChatEnvelope.Type.KEY_REQUEST, envelope.getType());
 			assertArrayEquals(response.epochId, envelope.getEpochId());
 			assertArrayEquals(response.keyId, envelope.getKeyId());
+		}
+	}
+
+	@Test
+	public void testPrivateGroupKeyAnnouncementRelay() throws Exception {
+		byte[] payload = "private api relay message".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatKeyAnnouncementRelayRequest relayRequest = new PrivateGroupChatKeyAnnouncementRelayRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-key-relay");
+			addMember(repository, groupId, bob);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.data = payload;
+			sendRequest.isText = true;
+			relayRequest.relayerPrivateKey = bob.getPrivateKey();
+			relayRequest.groupId = groupId;
+		}
+
+		PrivateGroupChatSendResponse sendResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		relayRequest.epochId = sendResponse.epochId;
+		relayRequest.keyId = sendResponse.keyId;
+
+		PrivateGroupChatKeyAnnouncementRelayResponse relayResponse =
+				this.chatResource.relayPrivateGroupChatKeyAnnouncement(null, relayRequest);
+
+		assertNotNull(relayResponse.announcementSignature);
+		assertArrayEquals(sendResponse.epochId, relayResponse.epochId);
+		assertArrayEquals(sendResponse.keyId, relayResponse.keyId);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChatTransactionData originalAnnouncementData = repository.getChatStoreRepository().fromSignature(
+					sendResponse.keyAnnouncementSignature);
+			ChatTransactionData relayData = repository.getChatStoreRepository().fromSignature(
+					relayResponse.announcementSignature);
+			assertNotNull(relayData);
+			assertTrue(relayData.getIsEncrypted());
+			assertArrayEquals(originalAnnouncementData.getData(), relayData.getData());
+			PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(relayData.getData());
+			assertEquals(PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, envelope.getType());
+			assertArrayEquals(relayResponse.keyId, envelope.getKeyId());
 		}
 	}
 

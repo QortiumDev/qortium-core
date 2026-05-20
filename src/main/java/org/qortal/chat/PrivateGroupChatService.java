@@ -117,6 +117,34 @@ public class PrivateGroupChatService {
 		}
 	}
 
+	public KeyAnnouncementRelayResult relayKeyAnnouncement(Repository repository, byte[] relayerPrivateKey,
+			int groupId, byte[] epochId, byte[] keyId) throws DataException, GeneralSecurityException,
+			TransformationException, PrivateGroupChatException, ValidationException {
+		validatePrivateKey(relayerPrivateKey, "relayer private key");
+		if (epochId == null || epochId.length != PrivateGroupChatEnvelope.EPOCH_ID_LENGTH)
+			throw new IllegalArgumentException("epoch id is invalid");
+		if (keyId != null && keyId.length != PrivateGroupChatEnvelope.KEY_ID_LENGTH)
+			throw new IllegalArgumentException("key id is invalid");
+
+		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
+		boolean locked;
+		try {
+			locked = blockchainLock.tryLock(BLOCKCHAIN_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new ValidationException(ValidationResult.NO_BLOCKCHAIN_LOCK, e);
+		}
+
+		if (!locked)
+			throw new ValidationException(ValidationResult.NO_BLOCKCHAIN_LOCK);
+
+		try {
+			return this.doRelayKeyAnnouncement(repository, relayerPrivateKey, groupId, epochId, keyId);
+		} finally {
+			blockchainLock.unlock();
+		}
+	}
+
 	private static PrivateGroupChatKeyCache.Entry getAuthorizedCachedKey(PrivateGroupChatEnvelope messageEnvelope,
 			byte[] recipientPrivateKey) {
 		PrivateGroupChatKeyCache.Entry keyEntry = PrivateGroupChatKeyCache.getInstance().get(
@@ -175,6 +203,53 @@ public class PrivateGroupChatService {
 		}
 
 		return null;
+	}
+
+	private static PrivateGroupChatEnvelope findRelayableKeyAnnouncement(Repository repository,
+			PrivateGroupChatMembership.MembershipEpoch epoch, byte[] keyId) throws DataException {
+		PrivateGroupChatKeyCache.Entry keyEntry = keyId == null
+				? PrivateGroupChatKeyCache.getInstance().getAny(epoch.getGroupId(), epoch.getEpochId())
+				: PrivateGroupChatKeyCache.getInstance().get(epoch.getGroupId(), epoch.getEpochId(), keyId);
+
+		if (keyEntry != null) {
+			try {
+				PrivateGroupChatEnvelope announcementEnvelope = PrivateGroupChatEnvelope.fromBytes(
+						keyEntry.getAnnouncementBytes());
+				if (isRelayableKeyAnnouncement(epoch, announcementEnvelope, keyId))
+					return announcementEnvelope;
+			} catch (TransformationException e) {
+				// Ignore invalid local cache data and fall back to the stored chat history.
+			}
+		}
+
+		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(epoch.getGroupId());
+		for (ChatTransactionData groupMessage : groupMessages) {
+			if (!groupMessage.getIsEncrypted())
+				continue;
+
+			PrivateGroupChatEnvelope announcementEnvelope;
+			try {
+				announcementEnvelope = PrivateGroupChatEnvelope.fromBytes(groupMessage.getData());
+			} catch (TransformationException e) {
+				continue;
+			}
+
+			if (isRelayableKeyAnnouncement(epoch, announcementEnvelope, keyId))
+				return announcementEnvelope;
+		}
+
+		return null;
+	}
+
+	private static boolean isRelayableKeyAnnouncement(PrivateGroupChatMembership.MembershipEpoch epoch,
+			PrivateGroupChatEnvelope announcementEnvelope, byte[] keyId) {
+		if (announcementEnvelope.getType() != PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT)
+			return false;
+
+		if (keyId != null && !Arrays.equals(announcementEnvelope.getKeyId(), keyId))
+			return false;
+
+		return PrivateGroupChatKeyAnnouncement.isValid(epoch, announcementEnvelope);
 	}
 
 	private SendResult doSend(Repository repository, byte[] senderPrivateKey, int groupId, byte[] data,
@@ -239,6 +314,31 @@ public class PrivateGroupChatService {
 		storeSignedChat(repository, keyRequestData, requester);
 
 		return new KeyRequestResult(keyRequestData.getSignature(), epoch.getEpochId(), keyId);
+	}
+
+	private KeyAnnouncementRelayResult doRelayKeyAnnouncement(Repository repository, byte[] relayerPrivateKey,
+			int groupId, byte[] epochId, byte[] keyId) throws DataException, GeneralSecurityException,
+			TransformationException, PrivateGroupChatException, ValidationException {
+		PrivateKeyAccount relayer = new PrivateKeyAccount(repository, relayerPrivateKey);
+		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+				groupId);
+
+		if (!Arrays.equals(epoch.getEpochId(), epochId))
+			throw new PrivateGroupChatException("Private group chat key announcement relay requires the current membership epoch");
+
+		if (!isMember(epoch, relayer.getPublicKey()))
+			throw new GeneralSecurityException("Key announcement relayer is not a current member of this private group chat epoch");
+
+		PrivateGroupChatEnvelope keyAnnouncement = findRelayableKeyAnnouncement(repository, epoch, keyId);
+		if (keyAnnouncement == null)
+			throw new PrivateGroupChatException("Private group chat key announcement was not found");
+
+		ChatTransactionData relayData = buildChatTransaction(relayer, groupId, null,
+				keyAnnouncement.toBytes(), false, true);
+		storeSignedChat(repository, relayData, relayer);
+
+		return new KeyAnnouncementRelayResult(relayData.getSignature(), keyAnnouncement.getEpochId(),
+				keyAnnouncement.getKeyId());
 	}
 
 	private static ChatTransactionData buildChatTransaction(PrivateKeyAccount sender, int groupId,
@@ -368,6 +468,30 @@ public class PrivateGroupChatService {
 
 		public byte[] getRequestSignature() {
 			return copy(this.requestSignature);
+		}
+
+		public byte[] getEpochId() {
+			return copy(this.epochId);
+		}
+
+		public byte[] getKeyId() {
+			return copy(this.keyId);
+		}
+	}
+
+	public static class KeyAnnouncementRelayResult {
+		private final byte[] announcementSignature;
+		private final byte[] epochId;
+		private final byte[] keyId;
+
+		private KeyAnnouncementRelayResult(byte[] announcementSignature, byte[] epochId, byte[] keyId) {
+			this.announcementSignature = copy(announcementSignature);
+			this.epochId = copy(epochId);
+			this.keyId = copy(keyId);
+		}
+
+		public byte[] getAnnouncementSignature() {
+			return copy(this.announcementSignature);
 		}
 
 		public byte[] getEpochId() {
