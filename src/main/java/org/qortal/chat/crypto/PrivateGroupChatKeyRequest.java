@@ -20,23 +20,40 @@ public class PrivateGroupChatKeyRequest {
 			byte[] requesterPrivateKey, byte[] keyId) throws GeneralSecurityException {
 		validateEpoch(epoch);
 		validateLength(requesterPrivateKey, Transformer.PRIVATE_KEY_LENGTH, "requester private key");
-		if (keyId != null)
-			validateLength(keyId, PrivateGroupChatEnvelope.KEY_ID_LENGTH, "key id");
 
 		byte[] requesterPublicKey = Crypto.toPublicKey(requesterPrivateKey);
 		if (!containsPublicKey(epoch.getMemberPublicKeys(), requesterPublicKey))
 			throw new GeneralSecurityException("Key requester is not a current group member");
 
-		byte[] signature = Crypto.sign(requesterPrivateKey, buildSigningBytes(epoch.getGroupId(),
-				epoch.getEpochId(), requesterPublicKey, keyId));
+		return create(epoch.getGroupId(), epoch.getEpochId(), requesterPrivateKey, keyId);
+	}
 
-		return PrivateGroupChatEnvelope.keyRequest(epoch.getGroupId(), epoch.getEpochId(), requesterPublicKey,
-				keyId, signature);
+	public static PrivateGroupChatEnvelope create(int groupId, byte[] epochId, byte[] requesterPrivateKey,
+			byte[] keyId) throws GeneralSecurityException {
+		validateLength(epochId, PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, "epoch id");
+		validateLength(requesterPrivateKey, Transformer.PRIVATE_KEY_LENGTH, "requester private key");
+		if (keyId != null)
+			validateLength(keyId, PrivateGroupChatEnvelope.KEY_ID_LENGTH, "key id");
+
+		byte[] requesterPublicKey = Crypto.toPublicKey(requesterPrivateKey);
+		byte[] signature = Crypto.sign(requesterPrivateKey, buildSigningBytes(groupId, epochId,
+				requesterPublicKey, keyId));
+
+		return PrivateGroupChatEnvelope.keyRequest(groupId, epochId, requesterPublicKey, keyId, signature);
 	}
 
 	public static boolean isValid(PrivateGroupChatMembership.MembershipEpoch epoch, PrivateGroupChatEnvelope envelope) {
 		try {
 			validate(epoch, envelope);
+			return true;
+		} catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
+			return false;
+		}
+	}
+
+	public static boolean isHistoricallyValid(PrivateGroupChatEnvelope envelope) {
+		try {
+			validateHistorical(envelope);
 			return true;
 		} catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
 			return false;
@@ -72,6 +89,29 @@ public class PrivateGroupChatKeyRequest {
 
 		byte[] signingBytes = buildSigningBytes(envelope.getGroupId(), envelope.getEpochId(),
 				requesterPublicKey, keyId);
+		if (!Crypto.verify(requesterPublicKey, signature, signingBytes))
+			throw new GeneralSecurityException("Key request signature is invalid");
+	}
+
+	private static void validateHistorical(PrivateGroupChatEnvelope envelope) throws GeneralSecurityException {
+		if (envelope == null)
+			throw new GeneralSecurityException("Key request envelope is missing");
+
+		if (envelope.getType() != PrivateGroupChatEnvelope.Type.KEY_REQUEST)
+			throw new GeneralSecurityException("Envelope is not a key request");
+
+		byte[] epochId = envelope.getEpochId();
+		byte[] requesterPublicKey = envelope.getRequesterPublicKey();
+		byte[] signature = envelope.getSignature();
+		validateLength(epochId, PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, "epoch id");
+		validateLength(requesterPublicKey, PrivateGroupChatEnvelope.PUBLIC_KEY_LENGTH, "requester public key");
+		validateLength(signature, PrivateGroupChatEnvelope.SIGNATURE_LENGTH, "signature");
+
+		byte[] keyId = envelope.hasRequestedKeyId() ? envelope.getKeyId() : null;
+		if (keyId != null)
+			validateLength(keyId, PrivateGroupChatEnvelope.KEY_ID_LENGTH, "key id");
+
+		byte[] signingBytes = buildSigningBytes(envelope.getGroupId(), epochId, requesterPublicKey, keyId);
 		if (!Crypto.verify(requesterPublicKey, signature, signingBytes))
 			throw new GeneralSecurityException("Key request signature is invalid");
 	}

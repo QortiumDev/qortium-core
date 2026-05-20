@@ -362,7 +362,64 @@ public class PrivateGroupChatServiceTests extends Common {
 	}
 
 	@Test
-	public void testResolveKeyRequestsReportsOldEpochAndInvalidRequests() throws Exception {
+	public void testResolveKeyRequestsRecoversHistoricalKeyForCurrentMember() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-resolve-historical");
+			byte[] plaintext = bytes("old epoch recovery");
+			PrivateGroupChatMembership.MembershipEpoch oldEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
+					repository, fixture.groupId);
+			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 100);
+			byte[] keyId = PrivateGroupChatCrypto.computeKeyId(fixture.groupId, oldEpoch.getEpochId(), groupKey);
+			byte[] nonce = PrivateGroupChatCrypto.generateNonce();
+			byte[] ciphertext = PrivateGroupChatCrypto.encryptMessage(groupKey, fixture.groupId,
+					oldEpoch.getEpochId(), keyId, nonce, plaintext);
+			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(fixture.groupId,
+					oldEpoch.getEpochId(), keyId, nonce, ciphertext);
+			ChatTransactionData messageData = signedChat(repository, fixture.alice, fixture.groupId,
+					messageEnvelope.toBytes(), true, true, now());
+
+			assertEquals(ValidationResult.OK, ChatService.getInstance().validateAndStore(repository, messageData));
+			addMember(repository, fixture.groupId, fixture.chloe);
+			PrivateGroupChatKeyCache.getInstance().clear();
+
+			assertThrows(PrivateGroupChatService.PrivateGroupChatException.class,
+					() -> PrivateGroupChatService.getInstance().decrypt(repository, fixture.bob.getPrivateKey(),
+							messageData.getSignature()));
+
+			PrivateGroupChatService.KeyRequestResult keyRequestResult = PrivateGroupChatService.getInstance()
+					.requestKey(repository, fixture.bob.getPrivateKey(), fixture.groupId, oldEpoch.getEpochId(), keyId);
+			assertArrayEquals(oldEpoch.getEpochId(), keyRequestResult.getEpochId());
+			assertArrayEquals(keyId, keyRequestResult.getKeyId());
+
+			PrivateGroupChatEnvelope keyAnnouncement = PrivateGroupChatKeyAnnouncement.create(oldEpoch, groupKey,
+					fixture.alice.getPrivateKey());
+			PrivateGroupChatKeyCache.getInstance().putLocal(oldEpoch, keyAnnouncement, groupKey);
+
+			List<PrivateGroupChatService.KeyRequestRecoveryResult> results = PrivateGroupChatService.getInstance()
+					.resolveKeyRequests(repository, fixture.alice.getPrivateKey(), fixture.groupId, null);
+
+			assertEquals(1, results.size());
+			PrivateGroupChatService.KeyRequestRecoveryResult result = results.get(0);
+			assertEquals(PrivateGroupChatService.KeyRequestRecoveryStatus.RELAYED, result.getStatus());
+			assertArrayEquals(keyRequestResult.getRequestSignature(), result.getRequestSignature());
+			assertArrayEquals(oldEpoch.getEpochId(), result.getEpochId());
+			assertArrayEquals(keyId, result.getRequestedKeyId());
+			assertArrayEquals(keyId, result.getRelayedKeyId());
+			assertNotNull(result.getAnnouncementSignature());
+
+			PrivateGroupChatKeyCache.getInstance().clear();
+			PrivateGroupChatService.DecryptResult decryptResult = PrivateGroupChatService.getInstance().decrypt(
+					repository, fixture.bob.getPrivateKey(), messageData.getSignature());
+			assertArrayEquals(plaintext, decryptResult.getData());
+
+			assertThrows(PrivateGroupChatService.PrivateGroupChatException.class,
+					() -> PrivateGroupChatService.getInstance().decrypt(repository, fixture.chloe.getPrivateKey(),
+							messageData.getSignature()));
+		}
+	}
+
+	@Test
+	public void testResolveKeyRequestsReportsHistoricalNoKeyAndInvalidRequests() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Fixture fixture = createFixture(repository, "private-service-resolve-invalid");
 			PrivateGroupChatService.getInstance().requestKey(repository, fixture.bob.getPrivateKey(),
@@ -383,7 +440,7 @@ public class PrivateGroupChatServiceTests extends Common {
 
 			assertEquals(2, results.size());
 			assertEquals(1, countRecoveryStatus(results,
-					PrivateGroupChatService.KeyRequestRecoveryStatus.NOT_CURRENT_EPOCH));
+					PrivateGroupChatService.KeyRequestRecoveryStatus.NO_KEY_AVAILABLE));
 			assertEquals(1, countRecoveryStatus(results,
 					PrivateGroupChatService.KeyRequestRecoveryStatus.INVALID_REQUEST));
 		}

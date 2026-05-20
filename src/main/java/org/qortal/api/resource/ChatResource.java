@@ -575,7 +575,7 @@ public class ChatResource {
 	@Produces(MediaType.APPLICATION_JSON)
 	@Operation(
 		summary = "Request private group chat key",
-		description = "Publishes a signed private closed-group key request for the current membership epoch. The request can name a specific key id or ask for any usable current key.",
+		description = "Publishes a signed private closed-group key request. By default this requests the current membership epoch; supplying an epoch id requests a specific historical key id.",
 		requestBody = @RequestBody(
 			required = true,
 			content = @Content(
@@ -612,7 +612,7 @@ public class ChatResource {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateGroupChatService.KeyRequestResult result = PrivateGroupChatService.getInstance().requestKey(repository,
-					keyRequest.requesterPrivateKey, keyRequest.groupId, keyRequest.keyId);
+					keyRequest.requesterPrivateKey, keyRequest.groupId, keyRequest.epochId, keyRequest.keyId);
 
 			PrivateGroupChatKeyRequestResponse response = new PrivateGroupChatKeyRequestResponse();
 			response.requestSignature = result.getRequestSignature();

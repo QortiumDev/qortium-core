@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: recover private group historical keys
+
+Added historical private group chat key recovery for cases where a current member is missing the key for an older message from a previous membership epoch. Clients can now include the missing epoch id when requesting a specific key, recovery can relay matching historical key announcements without exposing raw keys, and validation still keeps new user messages and rotation requests tied to the current group membership.
+
 ### 2026-05-20 - chat: document private group chat workflow
 
 Documented the current Core-managed private group chat client workflow and added an end-to-end API regression covering active chat discovery, inbox counts, missing-key reporting, key request recovery, and successful decryption after a relayed announcement. This turns the private group chat design notes into practical developer guidance for using the implemented local APIs.

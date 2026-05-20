@@ -104,10 +104,16 @@ decrypts to the announced key.
 If a member receives a message but does not have the matching group key, their
 node can send a signed `KEY_REQUEST` control envelope for that group, the
 current membership epoch, and optionally a specific key id. If the request does
-not name a key id, it asks for any usable key for the current epoch. Qortium
-validates the requester signature and requires the requester to be the CHAT
-transaction sender, so request publication is tied to the local account making
-the request.
+not name a key id, it asks for any usable key for the current epoch.
+
+A current member can also request a specific historical key by supplying the
+missing message's epoch id and key id. Historical requests must name a key id,
+and recovery only relays an announcement that includes a wrapper for the
+requesting public key. Members who have left the group can still use keys or
+announcements they already possess locally, but they cannot publish new
+recovery requests after leaving. Qortium validates the requester signature and
+requires the requester to be the CHAT transaction sender, so request publication
+is tied to the local account making the request.
 
 Any current member node can relay a signed key announcement it has already seen
 for the current epoch. Nodes should not return raw group keys. The recipient
@@ -166,7 +172,9 @@ restricted local APIs under `/chat/private/group`:
   when the local node has or can recover the matching key.
 - `POST /decrypt` decrypts one stored private message by CHAT transaction
   signature.
-- `POST /key-request` publishes a signed request for a missing group key.
+- `POST /key-request` publishes a signed request for a missing group key. It
+  defaults to the current epoch, or can include an epoch id and key id to
+  request a specific historical key.
 - `POST /key-requests/resolve` scans stored current-epoch key requests and
   relays matching signed key announcements known to the local member node.
 - `POST /key-announcement/relay` republishes a previously stored or cached
@@ -188,7 +196,8 @@ The recommended client read flow is:
 2. Use `/messages/count` for pagination and unread-style counts.
 3. Use `/messages` for the inbox view.
 4. If `/active` or `/messages` returns `MISSING_KEY`, publish `/key-request`
-   with the returned epoch id and key id.
+   with the returned key id. Include the returned epoch id when it does not
+   match the group's current epoch.
 5. Ask another current member node to run `/key-requests/resolve` for that
    group, or have a known member relay a specific announcement with
    `/key-announcement/relay`.
@@ -216,8 +225,11 @@ relay:
 - open-group, direct, and general chat keep their current behavior
 - closed-group user messages must use the Qortium private group envelope once
   the feature is active
-- closed-group control envelopes must be structurally valid and signed by a
-  current member when the envelope type requires a signer
+- closed-group control envelopes must be structurally valid and signed by the
+  expected requester or creator
+- key announcements and specific key requests may reference historical epochs
+  for recovery, but user messages and rotation requests remain current-epoch
+  only
 - peer validation should not need plaintext or private group keys
 - the chat store should not decrypt or index closed-group message content
 
@@ -235,9 +247,9 @@ tests.
 
 The current test coverage includes send/read behavior, missing-key reporting,
 stored-announcement rehydration, explicit key request recovery, multiple valid
-keys in one epoch, membership epoch changes, manual rotation, owner/admin
-rotation requests, plaintext rejection for closed groups, and open-group
-compatibility.
+keys in one epoch, historical key recovery after membership changes, membership
+epoch changes, manual rotation, owner/admin rotation requests, plaintext
+rejection for closed groups, and open-group compatibility.
 
 ## Non-Goals For V1
 

@@ -947,6 +947,67 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	@Test
+	public void testPrivateGroupHistoricalKeyRequestUsesSuppliedEpoch() throws Exception {
+		byte[] payload = "private api historical recovery".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatMessagesRequest messagesRequest = new PrivateGroupChatMessagesRequest();
+		PrivateGroupChatKeyRequestRequest keyRequest = new PrivateGroupChatKeyRequestRequest();
+		byte[] epochId;
+		byte[] keyId;
+		int groupId;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			groupId = createClosedGroup(repository, alice, "chat-api-private-historical-request");
+			addMember(repository, groupId, bob);
+
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
+					repository, groupId);
+			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 80);
+			keyId = PrivateGroupChatCrypto.computeKeyId(groupId, epoch.getEpochId(), groupKey);
+			byte[] nonce = PrivateGroupChatCrypto.generateNonce();
+			byte[] ciphertext = PrivateGroupChatCrypto.encryptMessage(groupKey, groupId, epoch.getEpochId(),
+					keyId, nonce, payload);
+			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(groupId,
+					epoch.getEpochId(), keyId, nonce, ciphertext);
+			ChatTransactionData chatData = chat(alice, groupId, null, messageEnvelope.toBytes(), true, true,
+					null, now());
+			ChatTransaction chatTransaction = new ChatTransaction(repository, chatData);
+			chatTransaction.computeNonce();
+			chatTransaction.sign(alice);
+
+			assertEquals(ValidationResult.OK, ChatService.getInstance().validateAndStore(repository, chatData));
+			addMember(repository, groupId, chloe);
+
+			messagesRequest.recipientPrivateKey = bob.getPrivateKey();
+			messagesRequest.groupId = groupId;
+			messagesRequest.encoding = ChatMessage.Encoding.BASE64;
+			keyRequest.requesterPrivateKey = bob.getPrivateKey();
+			keyRequest.groupId = groupId;
+			keyRequest.epochId = epoch.getEpochId();
+			keyRequest.keyId = keyId;
+			epochId = epoch.getEpochId();
+		}
+
+		PrivateGroupChatKeyCache.getInstance().clear();
+		List<PrivateGroupChatMessageResponse> messages = this.chatResource.listPrivateGroupChatMessages(null,
+				messagesRequest);
+		assertEquals(1, messages.size());
+		assertEquals(PrivateGroupChatMessageResponse.Status.MISSING_KEY, messages.get(0).status);
+		assertArrayEquals(epochId, messages.get(0).epochId);
+		assertArrayEquals(keyId, messages.get(0).keyId);
+
+		PrivateGroupChatKeyRequestResponse response = this.chatResource.requestPrivateGroupChatKey(null, keyRequest);
+		assertArrayEquals(epochId, response.epochId);
+		assertArrayEquals(keyId, response.keyId);
+
+		keyRequest.keyId = null;
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.chatResource.requestPrivateGroupChatKey(null, keyRequest));
+	}
+
+	@Test
 	public void testPrivateGroupRotateKey() throws Exception {
 		PrivateGroupChatRotateRequest rotateRequest = new PrivateGroupChatRotateRequest();
 

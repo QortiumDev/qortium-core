@@ -308,9 +308,19 @@ public class PrivateGroupChatService {
 	public KeyRequestResult requestKey(Repository repository, byte[] requesterPrivateKey, int groupId, byte[] keyId)
 			throws DataException, GeneralSecurityException, TransformationException, PrivateGroupChatException,
 			ValidationException {
+		return this.requestKey(repository, requesterPrivateKey, groupId, null, keyId);
+	}
+
+	public KeyRequestResult requestKey(Repository repository, byte[] requesterPrivateKey, int groupId, byte[] epochId,
+			byte[] keyId) throws DataException, GeneralSecurityException, TransformationException,
+			PrivateGroupChatException, ValidationException {
 		validatePrivateKey(requesterPrivateKey, "requester private key");
+		if (epochId != null && epochId.length != PrivateGroupChatEnvelope.EPOCH_ID_LENGTH)
+			throw new IllegalArgumentException("epoch id is invalid");
 		if (keyId != null && keyId.length != PrivateGroupChatEnvelope.KEY_ID_LENGTH)
 			throw new IllegalArgumentException("key id is invalid");
+		if (epochId != null && keyId == null)
+			throw new IllegalArgumentException("historical key request requires key id");
 
 		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
 		boolean locked;
@@ -325,7 +335,7 @@ public class PrivateGroupChatService {
 			throw new ValidationException(ValidationResult.NO_BLOCKCHAIN_LOCK);
 
 		try {
-			return this.doRequestKey(repository, requesterPrivateKey, groupId, keyId);
+			return this.doRequestKey(repository, requesterPrivateKey, groupId, epochId, keyId);
 		} finally {
 			blockchainLock.unlock();
 		}
@@ -526,6 +536,50 @@ public class PrivateGroupChatService {
 		return null;
 	}
 
+	private static PrivateGroupChatEnvelope findRecoverableKeyAnnouncement(Repository repository,
+			PrivateGroupChatMembership.MembershipEpoch currentEpoch, byte[] epochId, byte[] keyId,
+			byte[] requesterPublicKey) throws DataException {
+		if (Arrays.equals(epochId, currentEpoch.getEpochId()))
+			return findRelayableKeyAnnouncement(repository, currentEpoch, keyId);
+
+		if (keyId == null)
+			return null;
+
+		PrivateGroupChatKeyCache.Entry keyEntry = PrivateGroupChatKeyCache.getInstance().get(
+				currentEpoch.getGroupId(), epochId, keyId);
+		if (keyEntry != null) {
+			try {
+				PrivateGroupChatEnvelope announcementEnvelope = PrivateGroupChatEnvelope.fromBytes(
+						keyEntry.getAnnouncementBytes());
+				if (isRecoverableHistoricalKeyAnnouncement(currentEpoch.getGroupId(), epochId, keyId,
+						requesterPublicKey, announcementEnvelope))
+					return announcementEnvelope;
+			} catch (TransformationException e) {
+				// Ignore invalid local cache data and fall back to the stored chat history.
+			}
+		}
+
+		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(
+				currentEpoch.getGroupId());
+		for (ChatTransactionData groupMessage : groupMessages) {
+			if (!groupMessage.getIsEncrypted())
+				continue;
+
+			PrivateGroupChatEnvelope announcementEnvelope;
+			try {
+				announcementEnvelope = PrivateGroupChatEnvelope.fromBytes(groupMessage.getData());
+			} catch (TransformationException e) {
+				continue;
+			}
+
+			if (isRecoverableHistoricalKeyAnnouncement(currentEpoch.getGroupId(), epochId, keyId,
+					requesterPublicKey, announcementEnvelope))
+				return announcementEnvelope;
+		}
+
+		return null;
+	}
+
 	private static boolean isRelayableKeyAnnouncement(PrivateGroupChatMembership.MembershipEpoch epoch,
 			PrivateGroupChatEnvelope announcementEnvelope, byte[] keyId) {
 		if (announcementEnvelope.getType() != PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT)
@@ -535,6 +589,34 @@ public class PrivateGroupChatService {
 			return false;
 
 		return PrivateGroupChatKeyAnnouncement.isValid(epoch, announcementEnvelope);
+	}
+
+	private static boolean isRecoverableHistoricalKeyAnnouncement(int groupId, byte[] epochId, byte[] keyId,
+			byte[] requesterPublicKey, PrivateGroupChatEnvelope announcementEnvelope) {
+		if (announcementEnvelope.getType() != PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT)
+			return false;
+
+		if (announcementEnvelope.getGroupId() != groupId)
+			return false;
+
+		if (!Arrays.equals(announcementEnvelope.getEpochId(), epochId))
+			return false;
+
+		if (!Arrays.equals(announcementEnvelope.getKeyId(), keyId))
+			return false;
+
+		if (!hasRecipientWrapper(announcementEnvelope, requesterPublicKey))
+			return false;
+
+		return PrivateGroupChatKeyAnnouncement.isHistoricallyValid(announcementEnvelope);
+	}
+
+	private static boolean hasRecipientWrapper(PrivateGroupChatEnvelope announcementEnvelope, byte[] recipientPublicKey) {
+		for (PrivateGroupChatEnvelope.KeyWrapper keyWrapper : announcementEnvelope.getKeyWrappers())
+			if (Arrays.equals(keyWrapper.getRecipientPublicKey(), recipientPublicKey))
+				return true;
+
+		return false;
 	}
 
 	private SendResult doSend(Repository repository, byte[] senderPrivateKey, int groupId, byte[] data,
@@ -597,34 +679,37 @@ public class PrivateGroupChatService {
 				keyAnnouncementResult.keyEntry.getKeyId());
 	}
 
-	private KeyRequestResult doRequestKey(Repository repository, byte[] requesterPrivateKey, int groupId, byte[] keyId)
-			throws DataException, GeneralSecurityException, TransformationException, PrivateGroupChatException,
-			ValidationException {
+	private KeyRequestResult doRequestKey(Repository repository, byte[] requesterPrivateKey, int groupId,
+			byte[] epochId, byte[] keyId) throws DataException, GeneralSecurityException, TransformationException,
+			PrivateGroupChatException, ValidationException {
 		PrivateKeyAccount requester = new PrivateKeyAccount(repository, requesterPrivateKey);
-		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
-				groupId);
+		PrivateGroupChatMembership.MembershipEpoch currentEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
+				repository, groupId);
 
-		if (!isMember(epoch, requester.getPublicKey()))
+		if (!isMember(currentEpoch, requester.getPublicKey()))
 			throw new GeneralSecurityException("Key requester is not a current member of this private group chat epoch");
 
-		PrivateGroupChatEnvelope keyRequest = PrivateGroupChatKeyRequest.create(epoch, requesterPrivateKey, keyId);
+		byte[] requestEpochId = epochId == null ? currentEpoch.getEpochId() : copy(epochId);
+		PrivateGroupChatEnvelope keyRequest = epochId == null
+				? PrivateGroupChatKeyRequest.create(currentEpoch, requesterPrivateKey, keyId)
+				: PrivateGroupChatKeyRequest.create(groupId, requestEpochId, requesterPrivateKey, keyId);
 		ChatTransactionData keyRequestData = buildChatTransaction(requester, groupId, null,
 				keyRequest.toBytes(), false, true);
 		storeSignedChat(repository, keyRequestData, requester);
 
-		return new KeyRequestResult(keyRequestData.getSignature(), epoch.getEpochId(), keyId);
+		return new KeyRequestResult(keyRequestData.getSignature(), requestEpochId, keyId);
 	}
 
 	private List<KeyRequestRecoveryResult> doResolveKeyRequests(Repository repository, byte[] relayerPrivateKey,
 			int groupId, Integer limit) throws DataException, GeneralSecurityException {
 		PrivateKeyAccount relayer = new PrivateKeyAccount(repository, relayerPrivateKey);
-		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
-				groupId);
+		PrivateGroupChatMembership.MembershipEpoch currentEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
+				repository, groupId);
 
-		if (!isMember(epoch, relayer.getPublicKey()))
+		if (!isMember(currentEpoch, relayer.getPublicKey()))
 			throw new GeneralSecurityException("Key request relayer is not a current member of this private group chat epoch");
 
-		Set<ByteArrayKey> relayedKeyIds = new HashSet<>();
+		Set<EpochKey> relayedKeys = new HashSet<>();
 		byte[] relayedAnyRequestKeyId = null;
 		List<KeyRequestRecoveryResult> results = new ArrayList<>();
 		for (ChatTransactionData groupMessage : repository.getChatStoreRepository().getGroupMessages(groupId)) {
@@ -644,27 +729,30 @@ public class PrivateGroupChatService {
 			if (keyRequest.getType() != PrivateGroupChatEnvelope.Type.KEY_REQUEST)
 				continue;
 
-			KeyRequestRecoveryResult validationResult = validateRecoverableKeyRequest(epoch, groupMessage, keyRequest);
+			KeyRequestRecoveryResult validationResult = validateRecoverableKeyRequest(currentEpoch, groupMessage, keyRequest);
 			if (validationResult != null) {
 				results.add(validationResult);
 				continue;
 			}
 
 			byte[] requestedKeyId = keyRequest.hasRequestedKeyId() ? keyRequest.getKeyId() : null;
-			if (requestedKeyId == null && relayedAnyRequestKeyId != null) {
+			boolean currentEpochRequest = Arrays.equals(keyRequest.getEpochId(), currentEpoch.getEpochId());
+			if (currentEpochRequest && requestedKeyId == null && relayedAnyRequestKeyId != null) {
 				results.add(KeyRequestRecoveryResult.duplicate(groupMessage, keyRequest, relayedAnyRequestKeyId));
 				continue;
 			}
 
-			PrivateGroupChatEnvelope keyAnnouncement = findRelayableKeyAnnouncement(repository, epoch, requestedKeyId);
+			PrivateGroupChatEnvelope keyAnnouncement = findRecoverableKeyAnnouncement(repository, currentEpoch,
+					keyRequest.getEpochId(), requestedKeyId, keyRequest.getRequesterPublicKey());
 			if (keyAnnouncement == null) {
 				results.add(KeyRequestRecoveryResult.noKeyAvailable(groupMessage, keyRequest));
 				continue;
 			}
 
 			byte[] relayedKeyId = keyAnnouncement.getKeyId();
-			if (relayedKeyIds.contains(new ByteArrayKey(relayedKeyId))) {
-				if (requestedKeyId == null)
+			EpochKey relayedKey = new EpochKey(keyAnnouncement.getEpochId(), relayedKeyId);
+			if (relayedKeys.contains(relayedKey)) {
+				if (currentEpochRequest && requestedKeyId == null)
 					relayedAnyRequestKeyId = relayedKeyId;
 
 				results.add(KeyRequestRecoveryResult.duplicate(groupMessage, keyRequest, relayedKeyId));
@@ -675,8 +763,8 @@ public class PrivateGroupChatService {
 				ChatTransactionData relayData = buildChatTransaction(relayer, groupId, null,
 						keyAnnouncement.toBytes(), false, true);
 				storeSignedChat(repository, relayData, relayer);
-				relayedKeyIds.add(new ByteArrayKey(relayedKeyId));
-				if (requestedKeyId == null)
+				relayedKeys.add(relayedKey);
+				if (currentEpochRequest && requestedKeyId == null)
 					relayedAnyRequestKeyId = relayedKeyId;
 
 				results.add(KeyRequestRecoveryResult.relayed(groupMessage, keyRequest, relayData.getSignature(),
@@ -690,18 +778,28 @@ public class PrivateGroupChatService {
 	}
 
 	private static KeyRequestRecoveryResult validateRecoverableKeyRequest(
-			PrivateGroupChatMembership.MembershipEpoch epoch, ChatTransactionData chatTransactionData,
+			PrivateGroupChatMembership.MembershipEpoch currentEpoch, ChatTransactionData chatTransactionData,
 			PrivateGroupChatEnvelope keyRequest) {
-		if (keyRequest.getGroupId() != epoch.getGroupId())
+		if (keyRequest.getGroupId() != currentEpoch.getGroupId())
 			return KeyRequestRecoveryResult.invalidRequest(chatTransactionData, keyRequest);
-
-		if (!Arrays.equals(keyRequest.getEpochId(), epoch.getEpochId()))
-			return KeyRequestRecoveryResult.notCurrentEpoch(chatTransactionData, keyRequest);
 
 		if (!Arrays.equals(keyRequest.getRequesterPublicKey(), chatTransactionData.getSenderPublicKey()))
 			return KeyRequestRecoveryResult.invalidRequest(chatTransactionData, keyRequest);
 
-		if (!PrivateGroupChatKeyRequest.isValid(epoch, keyRequest))
+		if (!isMember(currentEpoch, keyRequest.getRequesterPublicKey()))
+			return KeyRequestRecoveryResult.invalidRequest(chatTransactionData, keyRequest);
+
+		if (Arrays.equals(keyRequest.getEpochId(), currentEpoch.getEpochId())) {
+			if (!PrivateGroupChatKeyRequest.isValid(currentEpoch, keyRequest))
+				return KeyRequestRecoveryResult.invalidRequest(chatTransactionData, keyRequest);
+
+			return null;
+		}
+
+		if (!keyRequest.hasRequestedKeyId())
+			return KeyRequestRecoveryResult.invalidRequest(chatTransactionData, keyRequest);
+
+		if (!PrivateGroupChatKeyRequest.isHistoricallyValid(keyRequest))
 			return KeyRequestRecoveryResult.invalidRequest(chatTransactionData, keyRequest);
 
 		return null;
@@ -876,11 +974,13 @@ public class PrivateGroupChatService {
 		}
 	}
 
-	private static class ByteArrayKey {
-		private final byte[] bytes;
+	private static class EpochKey {
+		private final byte[] epochId;
+		private final byte[] keyId;
 
-		private ByteArrayKey(byte[] bytes) {
-			this.bytes = copy(bytes);
+		private EpochKey(byte[] epochId, byte[] keyId) {
+			this.epochId = copy(epochId);
+			this.keyId = copy(keyId);
 		}
 
 		@Override
@@ -888,16 +988,19 @@ public class PrivateGroupChatService {
 			if (this == other)
 				return true;
 
-			if (!(other instanceof ByteArrayKey))
+			if (!(other instanceof EpochKey))
 				return false;
 
-			ByteArrayKey otherKey = (ByteArrayKey) other;
-			return Arrays.equals(this.bytes, otherKey.bytes);
+			EpochKey otherKey = (EpochKey) other;
+			return Arrays.equals(this.epochId, otherKey.epochId)
+					&& Arrays.equals(this.keyId, otherKey.keyId);
 		}
 
 		@Override
 		public int hashCode() {
-			return Arrays.hashCode(this.bytes);
+			int result = Arrays.hashCode(this.epochId);
+			result = 31 * result + Arrays.hashCode(this.keyId);
+			return result;
 		}
 	}
 

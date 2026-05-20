@@ -58,6 +58,15 @@ public class PrivateGroupChatKeyAnnouncement {
 		}
 	}
 
+	public static boolean isHistoricallyValid(PrivateGroupChatEnvelope envelope) {
+		try {
+			validateHistorical(envelope);
+			return true;
+		} catch (GeneralSecurityException | IllegalArgumentException | IllegalStateException e) {
+			return false;
+		}
+	}
+
 	public static byte[] unwrapForRecipient(PrivateGroupChatMembership.MembershipEpoch epoch,
 			PrivateGroupChatEnvelope envelope, byte[] recipientPrivateKey) throws GeneralSecurityException {
 		validateLength(recipientPrivateKey, Transformer.PRIVATE_KEY_LENGTH, "recipient private key");

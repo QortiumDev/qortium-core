@@ -226,26 +226,39 @@ public class ChatService {
 			return ValidationResult.INVALID_TX_GROUP_ID;
 		}
 
-		if (!Arrays.equals(envelope.getEpochId(), epoch.getEpochId()))
-			return ValidationResult.INVALID_DATA_LENGTH;
-
 		switch (envelope.getType()) {
 			case MESSAGE:
-				return ValidationResult.OK;
+				return Arrays.equals(envelope.getEpochId(), epoch.getEpochId())
+						? ValidationResult.OK
+						: ValidationResult.INVALID_DATA_LENGTH;
 
 			case KEY_ANNOUNCEMENT:
-				return PrivateGroupChatKeyAnnouncement.isValid(epoch, envelope)
+				if (Arrays.equals(envelope.getEpochId(), epoch.getEpochId()))
+					return PrivateGroupChatKeyAnnouncement.isValid(epoch, envelope)
+							? ValidationResult.OK
+							: ValidationResult.INVALID_DATA_LENGTH;
+
+				return PrivateGroupChatKeyAnnouncement.isHistoricallyValid(envelope)
 						? ValidationResult.OK
 						: ValidationResult.INVALID_DATA_LENGTH;
 
 			case KEY_REQUEST:
-				return Arrays.equals(envelope.getRequesterPublicKey(), chatTransactionData.getSenderPublicKey())
-						&& PrivateGroupChatKeyRequest.isValid(epoch, envelope)
+				if (!Arrays.equals(envelope.getRequesterPublicKey(), chatTransactionData.getSenderPublicKey()))
+					return ValidationResult.INVALID_DATA_LENGTH;
+
+				if (Arrays.equals(envelope.getEpochId(), epoch.getEpochId()))
+					return PrivateGroupChatKeyRequest.isValid(epoch, envelope)
+							? ValidationResult.OK
+							: ValidationResult.INVALID_DATA_LENGTH;
+
+				return envelope.hasRequestedKeyId()
+						&& PrivateGroupChatKeyRequest.isHistoricallyValid(envelope)
 						? ValidationResult.OK
 						: ValidationResult.INVALID_DATA_LENGTH;
 
 			case ROTATION_REQUEST:
-				return Arrays.equals(envelope.getRequesterPublicKey(), chatTransactionData.getSenderPublicKey())
+				return Arrays.equals(envelope.getEpochId(), epoch.getEpochId())
+						&& Arrays.equals(envelope.getRequesterPublicKey(), chatTransactionData.getSenderPublicKey())
 						&& PrivateGroupChatRotationRequest.isValid(epoch, envelope)
 						&& isOwnerOrAdmin(repository, groupData, envelope.getRequesterPublicKey())
 						? ValidationResult.OK

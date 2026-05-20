@@ -291,6 +291,58 @@ public class ChatServiceTests extends Common {
 	}
 
 	@Test
+	public void testClosedGroupHistoricalRecoveryControlsAreAccepted() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-service-historical-recovery", false,
+					ApprovalThreshold.ONE, 10, 40);
+			addMember(repository, groupId, bob);
+
+			PrivateGroupChatMembership.MembershipEpoch oldEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
+					repository, groupId);
+			byte[] keyId = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 60);
+			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 61);
+			PrivateGroupChatEnvelope keyAnnouncement = PrivateGroupChatKeyAnnouncement.create(oldEpoch, groupKey,
+					alice.getPrivateKey());
+			PrivateGroupChatEnvelope keyRequest = PrivateGroupChatKeyRequest.create(groupId,
+					oldEpoch.getEpochId(), bob.getPrivateKey(), keyId);
+			PrivateGroupChatEnvelope keyRequestWithoutKeyId = PrivateGroupChatKeyRequest.create(groupId,
+					oldEpoch.getEpochId(), bob.getPrivateKey(), null);
+			PrivateGroupChatEnvelope message = PrivateGroupChatEnvelope.message(groupId, oldEpoch.getEpochId(),
+					keyId, bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 62), bytes(32, 63));
+			PrivateGroupChatEnvelope rotationRequest = PrivateGroupChatRotationRequest.create(oldEpoch,
+					alice.getPrivateKey());
+
+			addMember(repository, groupId, chloe);
+
+			ChatTransactionData historicalAnnouncementData = signedChat(repository, bob, groupId, null,
+					keyAnnouncement.toBytes(), false, true, now());
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, historicalAnnouncementData));
+
+			ChatTransactionData historicalRequestData = signedChat(repository, bob, groupId, null,
+					keyRequest.toBytes(), false, true, now() + 1);
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, historicalRequestData));
+
+			ChatTransactionData historicalRequestWithoutKeyData = signedChat(repository, bob, groupId, null,
+					keyRequestWithoutKeyId.toBytes(), false, true, now() + 2);
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH,
+					CHAT_SERVICE.validateForStore(repository, historicalRequestWithoutKeyData));
+
+			ChatTransactionData historicalMessageData = signedChat(repository, alice, groupId, null,
+					message.toBytes(), true, true, now() + 3);
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH, CHAT_SERVICE.validateForStore(repository,
+					historicalMessageData));
+
+			ChatTransactionData historicalRotationData = signedChat(repository, alice, groupId, null,
+					rotationRequest.toBytes(), false, true, now() + 4);
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH, CHAT_SERVICE.validateForStore(repository,
+					historicalRotationData));
+		}
+	}
+
+	@Test
 	public void testClosedGroupPrivateEnvelopeContextAndUnsupportedTypesAreRejected() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");

@@ -26,4 +26,10 @@ public class PrivateGroupChatKeyRequestRequest {
 	)
 	public byte[] keyId;
 
+	@Schema(
+		description = "optional historical membership epoch id to request the key for; defaults to the current epoch when omitted",
+		example = "epoch_id"
+	)
+	public byte[] epochId;
+
 }
