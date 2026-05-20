@@ -8,10 +8,13 @@ import org.junit.Test;
 import org.qortal.api.ApiError;
 import org.qortal.api.model.PrivateGroupChatDecryptRequest;
 import org.qortal.api.model.PrivateGroupChatDecryptResponse;
+import org.qortal.api.model.PrivateGroupChatKeyRequestRequest;
+import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
 import org.qortal.api.model.PrivateGroupChatSendRequest;
 import org.qortal.api.model.PrivateGroupChatSendResponse;
 import org.qortal.api.resource.ChatResource;
 import org.qortal.chat.ChatService;
+import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyCache;
 import org.qortal.data.chat.ActiveChats;
 import org.qortal.data.chat.ChatMessage;
@@ -247,6 +250,39 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	@Test
+	public void testPrivateGroupKeyRequest() throws Exception {
+		PrivateGroupChatKeyRequestRequest keyRequest = new PrivateGroupChatKeyRequestRequest();
+		byte[] keyId = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 1);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-key-request");
+			addMember(repository, groupId, bob);
+
+			keyRequest.requesterPrivateKey = bob.getPrivateKey();
+			keyRequest.groupId = groupId;
+			keyRequest.keyId = keyId;
+		}
+
+		PrivateGroupChatKeyRequestResponse response = this.chatResource.requestPrivateGroupChatKey(null, keyRequest);
+
+		assertNotNull(response.requestSignature);
+		assertNotNull(response.epochId);
+		assertArrayEquals(keyId, response.keyId);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChatTransactionData keyRequestData = repository.getChatStoreRepository().fromSignature(response.requestSignature);
+			assertNotNull(keyRequestData);
+			assertTrue(keyRequestData.getIsEncrypted());
+			PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(keyRequestData.getData());
+			assertEquals(PrivateGroupChatEnvelope.Type.KEY_REQUEST, envelope.getType());
+			assertArrayEquals(response.epochId, envelope.getEpochId());
+			assertArrayEquals(response.keyId, envelope.getKeyId());
+		}
+	}
+
+	@Test
 	public void testBuildChatUsesDedicatedServiceWithoutStoring() throws DataException, TransformationException {
 		ChatTransactionData chatData;
 
@@ -423,6 +459,14 @@ public class ChatResourceTests extends ApiCommon {
 		byte[] signature = new byte[64];
 		signature[63] = (byte) value;
 		return signature;
+	}
+
+	private static byte[] bytes(int length, int seed) {
+		byte[] bytes = new byte[length];
+		for (int i = 0; i < length; ++i)
+			bytes[i] = (byte) (seed + i);
+
+		return bytes;
 	}
 
 }

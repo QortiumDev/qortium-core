@@ -145,6 +145,56 @@ public class PrivateGroupChatServiceTests extends Common {
 	}
 
 	@Test
+	public void testRequestKeyStoresKeyRequestEnvelope() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-key-request");
+			byte[] keyId = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 5);
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					fixture.groupId);
+
+			PrivateGroupChatService.KeyRequestResult result = PrivateGroupChatService.getInstance().requestKey(repository,
+					fixture.bob.getPrivateKey(), fixture.groupId, keyId);
+
+			assertNotNull(result.getRequestSignature());
+			assertArrayEquals(epoch.getEpochId(), result.getEpochId());
+			assertArrayEquals(keyId, result.getKeyId());
+
+			ChatTransactionData keyRequestData = repository.getChatStoreRepository().fromSignature(
+					result.getRequestSignature());
+			assertNotNull(keyRequestData);
+			assertEquals(fixture.groupId, keyRequestData.getTxGroupId());
+			assertEquals(fixture.bob.getAddress(), keyRequestData.getSender());
+			assertFalse(keyRequestData.getIsText());
+			assertTrue(keyRequestData.getIsEncrypted());
+
+			PrivateGroupChatEnvelope keyRequest = PrivateGroupChatEnvelope.fromBytes(keyRequestData.getData());
+			assertEquals(PrivateGroupChatEnvelope.Type.KEY_REQUEST, keyRequest.getType());
+			assertArrayEquals(fixture.bob.getPublicKey(), keyRequest.getRequesterPublicKey());
+			assertArrayEquals(keyId, keyRequest.getKeyId());
+			assertEquals(ValidationResult.TRANSACTION_ALREADY_EXISTS,
+					ChatService.getInstance().validateForStore(repository, keyRequestData));
+		}
+	}
+
+	@Test
+	public void testRequestKeyWithoutSpecificKeyIdAndNonMemberRejection() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-key-request-any");
+
+			PrivateGroupChatService.KeyRequestResult result = PrivateGroupChatService.getInstance().requestKey(repository,
+					fixture.bob.getPrivateKey(), fixture.groupId, null);
+
+			assertNotNull(result.getRequestSignature());
+			assertNotNull(result.getEpochId());
+			assertNull(result.getKeyId());
+
+			assertThrows(GeneralSecurityException.class,
+					() -> PrivateGroupChatService.getInstance().requestKey(repository, fixture.chloe.getPrivateKey(),
+							fixture.groupId, null));
+		}
+	}
+
+	@Test
 	public void testDecryptRehydratesCachedKeyFromStoredAnnouncement() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Fixture fixture = createFixture(repository, "private-service-missing-key");

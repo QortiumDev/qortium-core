@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.qortal.chat.ChatService;
 import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
+import org.qortal.chat.crypto.PrivateGroupChatKeyRequest;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.group.GroupMemberData;
@@ -238,13 +239,35 @@ public class ChatServiceTests extends Common {
 	}
 
 	@Test
+	public void testClosedGroupKeyRequestEnvelopeIsAccepted() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-key-request", false,
+					ApprovalThreshold.ONE, 10, 40);
+			addMember(repository, groupId, bob);
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					groupId);
+			PrivateGroupChatEnvelope keyRequest = PrivateGroupChatKeyRequest.create(epoch, bob.getPrivateKey(),
+					bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 20));
+
+			ChatTransactionData keyRequestData = signedChat(repository, bob, groupId, null,
+					keyRequest.toBytes(), false, true, now());
+
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, keyRequestData));
+		}
+	}
+
+	@Test
 	public void testClosedGroupPrivateEnvelopeContextAndUnsupportedTypesAreRejected() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
 			int firstGroupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-context-first", false,
 					ApprovalThreshold.ONE, 10, 40);
 			int secondGroupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-context-second", false,
 					ApprovalThreshold.ONE, 10, 40);
+			addMember(repository, firstGroupId, bob);
 			PrivateGroupChatMembership.MembershipEpoch firstEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
 					firstGroupId);
 			PrivateGroupChatMembership.MembershipEpoch secondEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
@@ -263,10 +286,17 @@ public class ChatServiceTests extends Common {
 					keyRequest.toBytes(), false, true, now() + 1);
 			assertEquals(ValidationResult.INVALID_DATA_LENGTH, CHAT_SERVICE.validateForStore(repository, keyRequestData));
 
+			PrivateGroupChatEnvelope relayedKeyRequest = PrivateGroupChatKeyRequest.create(firstEpoch,
+					bob.getPrivateKey(), null);
+			ChatTransactionData relayedKeyRequestData = signedChat(repository, alice, firstGroupId, null,
+					relayedKeyRequest.toBytes(), false, true, now() + 2);
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH,
+					CHAT_SERVICE.validateForStore(repository, relayedKeyRequestData));
+
 			PrivateGroupChatEnvelope rotationRequest = PrivateGroupChatEnvelope.rotationRequest(firstGroupId,
 					firstEpoch.getEpochId(), alice.getPublicKey(), bytes(PrivateGroupChatEnvelope.SIGNATURE_LENGTH, 40));
 			ChatTransactionData rotationRequestData = signedChat(repository, alice, firstGroupId, null,
-					rotationRequest.toBytes(), false, true, now() + 2);
+					rotationRequest.toBytes(), false, true, now() + 3);
 			assertEquals(ValidationResult.INVALID_DATA_LENGTH, CHAT_SERVICE.validateForStore(repository, rotationRequestData));
 
 			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(firstGroupId, firstEpoch.getEpochId(),
@@ -274,7 +304,7 @@ public class ChatServiceTests extends Common {
 					bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 51),
 					bytes(32, 52));
 			ChatTransactionData missingEncryptedFlagData = signedChat(repository, alice, firstGroupId, null,
-					messageEnvelope.toBytes(), true, false, now() + 3);
+					messageEnvelope.toBytes(), true, false, now() + 4);
 			assertEquals(ValidationResult.INVALID_DATA_LENGTH,
 					CHAT_SERVICE.validateForStore(repository, missingEncryptedFlagData));
 		}

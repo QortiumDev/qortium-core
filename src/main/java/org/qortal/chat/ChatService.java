@@ -5,6 +5,7 @@ import org.qortal.asset.Asset;
 import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
+import org.qortal.chat.crypto.PrivateGroupChatKeyRequest;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
 import org.qortal.data.group.GroupData;
@@ -237,6 +238,11 @@ public class ChatService {
 						: ValidationResult.INVALID_DATA_LENGTH;
 
 			case KEY_REQUEST:
+				return Arrays.equals(envelope.getRequesterPublicKey(), chatTransactionData.getSenderPublicKey())
+						&& PrivateGroupChatKeyRequest.isValid(epoch, envelope)
+						? ValidationResult.OK
+						: ValidationResult.INVALID_DATA_LENGTH;
+
 			case ROTATION_REQUEST:
 			default:
 				return ValidationResult.INVALID_DATA_LENGTH;

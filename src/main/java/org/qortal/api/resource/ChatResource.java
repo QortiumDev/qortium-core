@@ -16,6 +16,8 @@ import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.Security;
 import org.qortal.api.model.PrivateGroupChatDecryptRequest;
 import org.qortal.api.model.PrivateGroupChatDecryptResponse;
+import org.qortal.api.model.PrivateGroupChatKeyRequestRequest;
+import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
 import org.qortal.api.model.PrivateGroupChatSendRequest;
 import org.qortal.api.model.PrivateGroupChatSendResponse;
 import org.qortal.chat.ChatService;
@@ -356,6 +358,67 @@ public class ChatResource {
 			response.epochId = result.getEpochId();
 			response.keyId = result.getKeyId();
 			return response;
+		} catch (PrivateGroupChatService.PrivateGroupChatException | GeneralSecurityException | IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/group/key-request")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "Request private group chat key",
+		description = "Publishes a signed private closed-group key request for the current membership epoch. The request can name a specific key id or ask for any usable current key.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = PrivateGroupChatKeyRequestRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "stored private group chat key request signature",
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					schema = @Schema(
+						implementation = PrivateGroupChatKeyRequestResponse.class
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_DATA, ApiError.INVALID_CRITERIA, ApiError.TRANSACTION_INVALID,
+			ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public PrivateGroupChatKeyRequestResponse requestPrivateGroupChatKey(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PrivateGroupChatKeyRequestRequest keyRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (keyRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+		if (keyRequest.requesterPrivateKey == null || keyRequest.requesterPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateGroupChatService.KeyRequestResult result = PrivateGroupChatService.getInstance().requestKey(repository,
+					keyRequest.requesterPrivateKey, keyRequest.groupId, keyRequest.keyId);
+
+			PrivateGroupChatKeyRequestResponse response = new PrivateGroupChatKeyRequestResponse();
+			response.requestSignature = result.getRequestSignature();
+			response.epochId = result.getEpochId();
+			response.keyId = result.getKeyId();
+			return response;
+		} catch (PrivateGroupChatService.ValidationException e) {
+			throw TransactionsResource.createTransactionInvalidException(request, e.getValidationResult());
 		} catch (PrivateGroupChatService.PrivateGroupChatException | GeneralSecurityException | IllegalArgumentException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
 		} catch (TransformationException e) {

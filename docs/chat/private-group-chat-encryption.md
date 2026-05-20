@@ -65,8 +65,8 @@ V1 envelope types:
   and key id
 - `KEY_ANNOUNCEMENT`: signed group-key announcement with encrypted wrappers for
   current members
-- `KEY_REQUEST`: request for a missing key id, or for any usable key for the
-  current epoch
+- `KEY_REQUEST`: signed request for a missing key id, or for any usable key for
+  the current epoch
 - `ROTATION_REQUEST`: signed request asking members to stop using older keys and
   create or use a fresh key
 
@@ -101,9 +101,12 @@ signature, and membership. Only actual recipients can prove their wrapper
 decrypts to the announced key.
 
 If a member receives a message but does not have the matching group key, their
-node can send a signed `KEY_REQUEST` control envelope for that group, membership
-epoch, and key id. If the request does not name a key id, it asks for any usable
-key for the current epoch.
+node can send a signed `KEY_REQUEST` control envelope for that group, the
+current membership epoch, and optionally a specific key id. If the request does
+not name a key id, it asks for any usable key for the current epoch. Qortium
+validates the requester signature and requires the requester to be the CHAT
+transaction sender, so request publication is tied to the local account making
+the request.
 
 Any node can relay a signed key announcement it has already seen. Nodes should
 not return raw group keys. The recipient trusts a relayed announcement only

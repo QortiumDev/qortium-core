@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group key requests
+
+Added signed private group chat key requests so a current closed-group member can ask the group for a missing encryption key without exposing message contents or raw key material. Qortium now creates, validates, stores, and exposes a local API for these request envelopes while still rejecting rotation requests until the separate rotation policy is implemented.
+
 ### 2026-05-20 - chat: support private group chat historical epochs
 
 Allowed private group chat decryption to use the key announcement that matches the message's original membership epoch instead of requiring the group to still have that same current member set. Older messages can now remain readable to accounts that were included in the signed key announcement, while newer members still cannot use a node-wide cached key to decrypt messages from before they joined, and new outgoing messages continue to use the current group membership epoch.

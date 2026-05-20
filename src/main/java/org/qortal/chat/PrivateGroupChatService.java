@@ -5,6 +5,7 @@ import org.qortal.chat.crypto.PrivateGroupChatCrypto;
 import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortal.chat.crypto.PrivateGroupChatKeyCache;
+import org.qortal.chat.crypto.PrivateGroupChatKeyRequest;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
 import org.qortal.controller.ChatNotifier;
 import org.qortal.controller.Controller;
@@ -88,6 +89,32 @@ public class PrivateGroupChatService {
 
 		return new DecryptResult(plaintext, chatTransactionData.getIsText(), envelope.getGroupId(),
 				envelope.getEpochId(), envelope.getKeyId());
+	}
+
+	public KeyRequestResult requestKey(Repository repository, byte[] requesterPrivateKey, int groupId, byte[] keyId)
+			throws DataException, GeneralSecurityException, TransformationException, PrivateGroupChatException,
+			ValidationException {
+		validatePrivateKey(requesterPrivateKey, "requester private key");
+		if (keyId != null && keyId.length != PrivateGroupChatEnvelope.KEY_ID_LENGTH)
+			throw new IllegalArgumentException("key id is invalid");
+
+		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
+		boolean locked;
+		try {
+			locked = blockchainLock.tryLock(BLOCKCHAIN_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new ValidationException(ValidationResult.NO_BLOCKCHAIN_LOCK, e);
+		}
+
+		if (!locked)
+			throw new ValidationException(ValidationResult.NO_BLOCKCHAIN_LOCK);
+
+		try {
+			return this.doRequestKey(repository, requesterPrivateKey, groupId, keyId);
+		} finally {
+			blockchainLock.unlock();
+		}
 	}
 
 	private static PrivateGroupChatKeyCache.Entry getAuthorizedCachedKey(PrivateGroupChatEnvelope messageEnvelope,
@@ -196,6 +223,24 @@ public class PrivateGroupChatService {
 		return new SendResult(messageData.getSignature(), keyAnnouncementSignature, epoch.getEpochId(), keyId);
 	}
 
+	private KeyRequestResult doRequestKey(Repository repository, byte[] requesterPrivateKey, int groupId, byte[] keyId)
+			throws DataException, GeneralSecurityException, TransformationException, PrivateGroupChatException,
+			ValidationException {
+		PrivateKeyAccount requester = new PrivateKeyAccount(repository, requesterPrivateKey);
+		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+				groupId);
+
+		if (!isMember(epoch, requester.getPublicKey()))
+			throw new GeneralSecurityException("Key requester is not a current member of this private group chat epoch");
+
+		PrivateGroupChatEnvelope keyRequest = PrivateGroupChatKeyRequest.create(epoch, requesterPrivateKey, keyId);
+		ChatTransactionData keyRequestData = buildChatTransaction(requester, groupId, null,
+				keyRequest.toBytes(), false, true);
+		storeSignedChat(repository, keyRequestData, requester);
+
+		return new KeyRequestResult(keyRequestData.getSignature(), epoch.getEpochId(), keyId);
+	}
+
 	private static ChatTransactionData buildChatTransaction(PrivateKeyAccount sender, int groupId,
 			byte[] chatReference, byte[] data, boolean isText, boolean isEncrypted) throws PrivateGroupChatException {
 		Long now = NTP.getTime();
@@ -299,6 +344,30 @@ public class PrivateGroupChatService {
 
 		public int getGroupId() {
 			return this.groupId;
+		}
+
+		public byte[] getEpochId() {
+			return copy(this.epochId);
+		}
+
+		public byte[] getKeyId() {
+			return copy(this.keyId);
+		}
+	}
+
+	public static class KeyRequestResult {
+		private final byte[] requestSignature;
+		private final byte[] epochId;
+		private final byte[] keyId;
+
+		private KeyRequestResult(byte[] requestSignature, byte[] epochId, byte[] keyId) {
+			this.requestSignature = copy(requestSignature);
+			this.epochId = copy(epochId);
+			this.keyId = copy(keyId);
+		}
+
+		public byte[] getRequestSignature() {
+			return copy(this.requestSignature);
 		}
 
 		public byte[] getEpochId() {
