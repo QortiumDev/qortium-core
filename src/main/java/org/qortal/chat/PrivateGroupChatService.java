@@ -155,6 +155,85 @@ public class PrivateGroupChatService {
 		return results;
 	}
 
+	public List<ActiveChatResult> listActiveChats(Repository repository, byte[] recipientPrivateKey,
+			ChatMessage.Encoding encoding) throws DataException {
+		validatePrivateKey(recipientPrivateKey, "recipient private key");
+
+		PrivateKeyAccount recipient = new PrivateKeyAccount(repository, recipientPrivateKey);
+		List<GroupData> groups = repository.getGroupRepository().getGroupsWithMember(recipient.getAddress());
+
+		List<ActiveChatResult> results = new ArrayList<>();
+		for (GroupData groupData : groups) {
+			if (groupData.isOpen())
+				continue;
+
+			ListedMessageData latestMessage = latestPrivateMessage(repository, groupData.getGroupId());
+			if (latestMessage == null) {
+				results.add(ActiveChatResult.noMessages(groupData));
+				continue;
+			}
+
+			ChatMessage message = repository.getChatStoreRepository().toChatMessage(latestMessage.chatTransactionData,
+					encoding);
+
+			try {
+				DecryptResult decryptResult = decryptMessageData(repository, recipientPrivateKey,
+						latestMessage.chatTransactionData, latestMessage.envelope);
+				results.add(ActiveChatResult.decrypted(groupData, message, decryptResult));
+			} catch (PrivateGroupChatException | GeneralSecurityException e) {
+				results.add(ActiveChatResult.missingKey(groupData, message, latestMessage.envelope.getEpochId(),
+						latestMessage.envelope.getKeyId(), latestMessage.chatTransactionData.getIsText()));
+			}
+		}
+
+		results.sort(PrivateGroupChatService::compareActiveChats);
+		return results;
+	}
+
+	private static ListedMessageData latestPrivateMessage(Repository repository, int groupId) throws DataException {
+		for (ChatTransactionData chatTransactionData : repository.getChatStoreRepository().getGroupMessages(groupId)) {
+			if (!chatTransactionData.getIsEncrypted())
+				continue;
+
+			PrivateGroupChatEnvelope envelope;
+			try {
+				envelope = PrivateGroupChatEnvelope.fromBytes(chatTransactionData.getData());
+			} catch (TransformationException e) {
+				continue;
+			}
+
+			if (envelope.getType() != PrivateGroupChatEnvelope.Type.MESSAGE)
+				continue;
+
+			if (envelope.getGroupId() != groupId)
+				continue;
+
+			return new ListedMessageData(chatTransactionData, envelope);
+		}
+
+		return null;
+	}
+
+	private static int compareActiveChats(ActiveChatResult left, ActiveChatResult right) {
+		Long leftTimestamp = left.getTimestamp();
+		Long rightTimestamp = right.getTimestamp();
+		boolean leftHasMessage = leftTimestamp != null;
+		boolean rightHasMessage = rightTimestamp != null;
+
+		if (leftHasMessage != rightHasMessage)
+			return leftHasMessage ? -1 : 1;
+
+		if (leftHasMessage) {
+			int timestampComparison = Long.compare(rightTimestamp, leftTimestamp);
+			if (timestampComparison != 0)
+				return timestampComparison;
+		}
+
+		String leftName = left.getGroupName() == null ? "" : left.getGroupName();
+		String rightName = right.getGroupName() == null ? "" : right.getGroupName();
+		return String.CASE_INSENSITIVE_ORDER.compare(leftName, rightName);
+	}
+
 	private static DecryptResult decryptMessageData(Repository repository, byte[] recipientPrivateKey,
 			ChatTransactionData chatTransactionData, PrivateGroupChatEnvelope envelope)
 			throws DataException, GeneralSecurityException, PrivateGroupChatException {
@@ -814,6 +893,86 @@ public class PrivateGroupChatService {
 		INVALID_REQUEST,
 		NOT_CURRENT_EPOCH,
 		RELAY_FAILED
+	}
+
+	public enum ActiveChatStatus {
+		DECRYPTED,
+		MISSING_KEY,
+		NO_MESSAGES
+	}
+
+	public static class ActiveChatResult {
+		private final GroupData groupData;
+		private final ChatMessage message;
+		private final byte[] data;
+		private final Boolean isText;
+		private final byte[] epochId;
+		private final byte[] keyId;
+		private final ActiveChatStatus status;
+
+		private ActiveChatResult(GroupData groupData, ChatMessage message, byte[] data, Boolean isText,
+				byte[] epochId, byte[] keyId, ActiveChatStatus status) {
+			this.groupData = groupData;
+			this.message = message;
+			this.data = copy(data);
+			this.isText = isText;
+			this.epochId = copy(epochId);
+			this.keyId = copy(keyId);
+			this.status = status;
+		}
+
+		private static ActiveChatResult noMessages(GroupData groupData) {
+			return new ActiveChatResult(groupData, null, null, null, null, null,
+					ActiveChatStatus.NO_MESSAGES);
+		}
+
+		private static ActiveChatResult decrypted(GroupData groupData, ChatMessage message,
+				DecryptResult decryptResult) {
+			return new ActiveChatResult(groupData, message, decryptResult.getData(), decryptResult.isText(),
+					decryptResult.getEpochId(), decryptResult.getKeyId(), ActiveChatStatus.DECRYPTED);
+		}
+
+		private static ActiveChatResult missingKey(GroupData groupData, ChatMessage message, byte[] epochId,
+				byte[] keyId, boolean isText) {
+			return new ActiveChatResult(groupData, message, null, isText, epochId, keyId,
+					ActiveChatStatus.MISSING_KEY);
+		}
+
+		public int getGroupId() {
+			return this.groupData.getGroupId();
+		}
+
+		public String getGroupName() {
+			return this.groupData.getGroupName();
+		}
+
+		public ChatMessage getMessage() {
+			return this.message;
+		}
+
+		public Long getTimestamp() {
+			return this.message == null ? null : this.message.getTimestamp();
+		}
+
+		public byte[] getData() {
+			return copy(this.data);
+		}
+
+		public Boolean isText() {
+			return this.isText;
+		}
+
+		public byte[] getEpochId() {
+			return copy(this.epochId);
+		}
+
+		public byte[] getKeyId() {
+			return copy(this.keyId);
+		}
+
+		public ActiveChatStatus getStatus() {
+			return this.status;
+		}
 	}
 
 	public static class KeyRequestRecoveryResult {

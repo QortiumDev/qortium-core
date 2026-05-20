@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group active chat API
+
+Added a local private group active-chat API so clients can list the closed groups available to an account and see each group's latest private user message without reading raw control envelopes. The new endpoint decrypts the latest message when possible, reports missing keys clearly when it cannot, includes empty private groups for complete chat lists, and leaves key requests or relays as explicit follow-up actions.
+
 ### 2026-05-20 - chat: classify private group chat envelopes
 
 Added internal classification for stored private group chat envelopes so normal chat views can distinguish real private group messages from key announcements, key requests, and rotation requests. Public chat search, counts, and active-chat summaries now hide that control traffic while direct signature lookup and private group recovery scans can still see the raw records they need.

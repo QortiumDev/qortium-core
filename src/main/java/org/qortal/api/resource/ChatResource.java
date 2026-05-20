@@ -14,6 +14,8 @@ import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.Security;
+import org.qortal.api.model.PrivateGroupChatActiveChatResponse;
+import org.qortal.api.model.PrivateGroupChatActiveChatsRequest;
 import org.qortal.api.model.PrivateGroupChatDecryptRequest;
 import org.qortal.api.model.PrivateGroupChatDecryptResponse;
 import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayRequest;
@@ -249,6 +251,66 @@ public class ChatResource {
 	
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			return repository.getChatStoreRepository().getActiveChats(address, encoding, hasChatReference);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/group/active")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "List active private group chats",
+		description = "Returns the local account's current closed groups with each group's latest private user message decrypted when the local node has or can recover the matching group key.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = PrivateGroupChatActiveChatsRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "active private group chats",
+				content = @Content(
+					array = @ArraySchema(
+						schema = @Schema(
+							implementation = PrivateGroupChatActiveChatResponse.class
+						)
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public List<PrivateGroupChatActiveChatResponse> listPrivateGroupActiveChats(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PrivateGroupChatActiveChatsRequest activeChatsRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (activeChatsRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (activeChatsRequest.recipientPrivateKey == null
+				|| activeChatsRequest.recipientPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Encoding encoding = activeChatsRequest.encoding != null ? activeChatsRequest.encoding : Encoding.BASE58;
+			List<PrivateGroupChatService.ActiveChatResult> results = PrivateGroupChatService.getInstance()
+					.listActiveChats(repository, activeChatsRequest.recipientPrivateKey, encoding);
+
+			List<PrivateGroupChatActiveChatResponse> response = new ArrayList<>(results.size());
+			for (PrivateGroupChatService.ActiveChatResult result : results)
+				response.add(new PrivateGroupChatActiveChatResponse(result, encoding));
+
+			return response;
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}

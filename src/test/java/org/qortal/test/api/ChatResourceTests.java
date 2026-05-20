@@ -6,6 +6,8 @@ import org.bouncycastle.util.encoders.Base64;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.api.ApiError;
+import org.qortal.api.model.PrivateGroupChatActiveChatResponse;
+import org.qortal.api.model.PrivateGroupChatActiveChatsRequest;
 import org.qortal.api.model.PrivateGroupChatDecryptRequest;
 import org.qortal.api.model.PrivateGroupChatDecryptResponse;
 import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayRequest;
@@ -357,6 +359,130 @@ public class ChatResourceTests extends ApiCommon {
 		ChatMessage keyRequestMessage = this.chatResource.getMessageBySignature(
 				Base58.encode(keyRequestResponse.requestSignature), ChatMessage.Encoding.BASE64);
 		assertArrayEquals(keyRequestResponse.requestSignature, keyRequestMessage.getSignature());
+	}
+
+	@Test
+	public void testPrivateGroupActiveChatsReturnsLatestDecryptedMessageAndSkipsControls() throws Exception {
+		byte[] firstPayload = "private active first".getBytes(StandardCharsets.UTF_8);
+		byte[] secondPayload = "private active latest".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatKeyRequestRequest keyRequest = new PrivateGroupChatKeyRequestRequest();
+		PrivateGroupChatActiveChatsRequest activeRequest = new PrivateGroupChatActiveChatsRequest();
+		String groupName = "chat-api-private-active";
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, groupName);
+			addMember(repository, groupId, bob);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.isText = true;
+			keyRequest.requesterPrivateKey = bob.getPrivateKey();
+			keyRequest.groupId = groupId;
+			activeRequest.recipientPrivateKey = bob.getPrivateKey();
+			activeRequest.encoding = ChatMessage.Encoding.BASE64;
+		}
+
+		sendRequest.data = firstPayload;
+		PrivateGroupChatSendResponse firstResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		sendRequest.data = secondPayload;
+		sendRequest.chatReference = firstResponse.messageSignature;
+		PrivateGroupChatSendResponse secondResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		keyRequest.keyId = secondResponse.keyId;
+		this.chatResource.requestPrivateGroupChatKey(null, keyRequest);
+
+		List<PrivateGroupChatActiveChatResponse> activeChats = this.chatResource.listPrivateGroupActiveChats(null,
+				activeRequest);
+		PrivateGroupChatActiveChatResponse activeChat = activeChats.stream()
+				.filter(chat -> chat.groupId == sendRequest.groupId)
+				.findFirst()
+				.orElse(null);
+
+		assertNotNull(activeChat);
+		assertEquals(groupName, activeChat.groupName);
+		assertEquals(PrivateGroupChatActiveChatResponse.Status.DECRYPTED, activeChat.status);
+		assertEquals(Base64.toBase64String(secondPayload), activeChat.data);
+		assertEquals(Boolean.TRUE, activeChat.isText);
+		assertEquals(Boolean.TRUE, activeChat.isEncrypted);
+		assertArrayEquals(secondResponse.messageSignature, activeChat.signature);
+		assertArrayEquals(firstResponse.messageSignature, activeChat.chatReference);
+		assertArrayEquals(secondResponse.epochId, activeChat.epochId);
+		assertArrayEquals(secondResponse.keyId, activeChat.keyId);
+	}
+
+	@Test
+	public void testPrivateGroupActiveChatsReportsMissingKeyNoMessagesAndExcludesOpenGroups() throws Exception {
+		PrivateGroupChatActiveChatsRequest activeRequest = new PrivateGroupChatActiveChatsRequest();
+		int missingKeyGroupId;
+		int emptyGroupId;
+		int openGroupId;
+		byte[] missingEpochId;
+		byte[] missingKeyId;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			missingKeyGroupId = createClosedGroup(repository, alice, "chat-api-active-missing-key");
+			emptyGroupId = createClosedGroup(repository, alice, "chat-api-active-empty");
+			openGroupId = GroupUtils.createGroup(repository, alice, "chat-api-active-open", true,
+					ApprovalThreshold.ONE, 10, 40);
+			addMember(repository, missingKeyGroupId, bob);
+			addMember(repository, emptyGroupId, bob);
+			addMember(repository, openGroupId, bob);
+
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
+					repository, missingKeyGroupId);
+			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 40);
+			missingKeyId = PrivateGroupChatCrypto.computeKeyId(missingKeyGroupId, epoch.getEpochId(), groupKey);
+			byte[] nonce = PrivateGroupChatCrypto.generateNonce();
+			byte[] ciphertext = PrivateGroupChatCrypto.encryptMessage(groupKey, missingKeyGroupId,
+					epoch.getEpochId(), missingKeyId, nonce, "missing active key".getBytes(StandardCharsets.UTF_8));
+			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(missingKeyGroupId,
+					epoch.getEpochId(), missingKeyId, nonce, ciphertext);
+			ChatTransactionData chatData = chat(alice, missingKeyGroupId, null, messageEnvelope.toBytes(),
+					true, true, null, now());
+			ChatTransaction chatTransaction = new ChatTransaction(repository, chatData);
+			chatTransaction.computeNonce();
+			chatTransaction.sign(alice);
+
+			assertTrue(ChatService.getInstance().isSignatureValid(repository, chatData));
+			assertEquals(ValidationResult.OK, ChatService.getInstance().validateAndStore(repository, chatData));
+
+			activeRequest.recipientPrivateKey = bob.getPrivateKey();
+			activeRequest.encoding = ChatMessage.Encoding.BASE64;
+			missingEpochId = epoch.getEpochId();
+		}
+
+		PrivateGroupChatKeyCache.getInstance().clear();
+		List<PrivateGroupChatActiveChatResponse> activeChats = this.chatResource.listPrivateGroupActiveChats(null,
+				activeRequest);
+
+		PrivateGroupChatActiveChatResponse missingKeyChat = activeChats.stream()
+				.filter(chat -> chat.groupId == missingKeyGroupId)
+				.findFirst()
+				.orElse(null);
+		PrivateGroupChatActiveChatResponse emptyChat = activeChats.stream()
+				.filter(chat -> chat.groupId == emptyGroupId)
+				.findFirst()
+				.orElse(null);
+
+		assertNotNull(missingKeyChat);
+		assertEquals(PrivateGroupChatActiveChatResponse.Status.MISSING_KEY, missingKeyChat.status);
+		assertNull(missingKeyChat.data);
+		assertEquals(Boolean.TRUE, missingKeyChat.isText);
+		assertArrayEquals(missingEpochId, missingKeyChat.epochId);
+		assertArrayEquals(missingKeyId, missingKeyChat.keyId);
+
+		assertNotNull(emptyChat);
+		assertEquals(PrivateGroupChatActiveChatResponse.Status.NO_MESSAGES, emptyChat.status);
+		assertNull(emptyChat.timestamp);
+		assertNull(emptyChat.data);
+		assertNull(emptyChat.epochId);
+		assertNull(emptyChat.keyId);
+
+		assertTrue(activeChats.stream().noneMatch(chat -> chat.groupId == openGroupId));
 	}
 
 	@Test
