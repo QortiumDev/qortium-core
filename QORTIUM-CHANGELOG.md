@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group chat key cache
+
+Added an in-memory private group chat key cache for the next stage of closed-group encryption. The cache can store locally created keys, verify and unwrap received key announcements for a local recipient, look up exact or current-epoch keys with defensive copies, and keep this state process-local until chat APIs and announcement rehydration are wired in later.
+
 ### 2026-05-20 - chat: add private group chat key announcements
 
 Added signed private group chat key announcements that bind a shared group key to a specific closed-group membership epoch. Qortium can now create a key announcement with wrapped copies for every current member, verify that the announcement was signed by a current member and covers the exact current member set, and let each recipient unwrap their own copy of the group key without changing live chat routing yet.
