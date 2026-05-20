@@ -4,6 +4,11 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.chat.ChatService;
+import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
+import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
+import org.qortal.chat.crypto.PrivateGroupChatMembership;
+import org.qortal.data.group.GroupData;
+import org.qortal.data.group.GroupMemberData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.group.Group;
@@ -17,6 +22,7 @@ import org.qortal.test.common.GroupUtils;
 import org.qortal.test.common.TestAccount;
 import org.qortal.transaction.ChatTransaction;
 import org.qortal.transaction.Transaction.ValidationResult;
+import org.qortal.transform.Transformer;
 import org.qortal.utils.NTP;
 
 import java.nio.charset.StandardCharsets;
@@ -150,9 +156,140 @@ public class ChatServiceTests extends Common {
 		}
 	}
 
+	@Test
+	public void testPlaintextStillAllowedOutsideClosedGroupBroadcasts() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			ChatTransactionData noGroupChatData = signedChat(repository, alice, Group.NO_GROUP, null, "no group chat", now());
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, noGroupChatData));
+
+			int openGroupId = GroupUtils.createGroup(repository, alice, "chat-service-open-plain", true,
+					ApprovalThreshold.ONE, 10, 40);
+			ChatTransactionData openGroupChatData = signedChat(repository, alice, openGroupId, null,
+					"open group chat", now() + 1);
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, openGroupChatData));
+
+			int closedGroupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-direct", false,
+					ApprovalThreshold.ONE, 10, 40);
+			addMember(repository, closedGroupId, bob);
+			ChatTransactionData closedGroupDirectChatData = signedChat(repository, alice, closedGroupId,
+					bob.getAddress(), "closed group direct chat", now() + 2);
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, closedGroupDirectChatData));
+		}
+	}
+
+	@Test
+	public void testClosedGroupPlaintextAndMalformedPrivatePayloadsAreRejected() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-plain", false,
+					ApprovalThreshold.ONE, 10, 40);
+
+			ChatTransactionData plaintextChatData = signedChat(repository, alice, groupId, null,
+					"closed plaintext", now());
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH, CHAT_SERVICE.validateForStore(repository, plaintextChatData));
+
+			ChatTransactionData malformedPrivateChatData = signedChat(repository, alice, groupId, null,
+					"not an envelope".getBytes(StandardCharsets.UTF_8), true, true, now() + 1);
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH,
+					CHAT_SERVICE.validateForStore(repository, malformedPrivateChatData));
+		}
+	}
+
+	@Test
+	public void testClosedGroupPrivateMessageEnvelopeIsAccepted() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-message", false,
+					ApprovalThreshold.ONE, 10, 40);
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					groupId);
+			PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.message(groupId, epoch.getEpochId(),
+					bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 1),
+					bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 2),
+					bytes(32, 3));
+
+			ChatTransactionData privateChatData = signedChat(repository, alice, groupId, null,
+					envelope.toBytes(), true, true, now());
+
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, privateChatData));
+		}
+	}
+
+	@Test
+	public void testClosedGroupKeyAnnouncementEnvelopeIsAccepted() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-key-announcement", false,
+					ApprovalThreshold.ONE, 10, 40);
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					groupId);
+			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 10);
+			PrivateGroupChatEnvelope keyAnnouncement = PrivateGroupChatKeyAnnouncement.create(epoch,
+					groupKey, alice.getPrivateKey());
+
+			ChatTransactionData keyAnnouncementChatData = signedChat(repository, alice, groupId, null,
+					keyAnnouncement.toBytes(), false, true, now());
+
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, keyAnnouncementChatData));
+		}
+	}
+
+	@Test
+	public void testClosedGroupPrivateEnvelopeContextAndUnsupportedTypesAreRejected() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int firstGroupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-context-first", false,
+					ApprovalThreshold.ONE, 10, 40);
+			int secondGroupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-context-second", false,
+					ApprovalThreshold.ONE, 10, 40);
+			PrivateGroupChatMembership.MembershipEpoch firstEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					firstGroupId);
+			PrivateGroupChatMembership.MembershipEpoch secondEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					secondGroupId);
+
+			PrivateGroupChatEnvelope wrongGroupEnvelope = PrivateGroupChatEnvelope.message(secondGroupId,
+					secondEpoch.getEpochId(), bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 20),
+					bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 21), bytes(32, 22));
+			ChatTransactionData wrongGroupData = signedChat(repository, alice, firstGroupId, null,
+					wrongGroupEnvelope.toBytes(), true, true, now());
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH, CHAT_SERVICE.validateForStore(repository, wrongGroupData));
+
+			PrivateGroupChatEnvelope keyRequest = PrivateGroupChatEnvelope.keyRequest(firstGroupId, firstEpoch.getEpochId(),
+					alice.getPublicKey(), null, bytes(PrivateGroupChatEnvelope.SIGNATURE_LENGTH, 30));
+			ChatTransactionData keyRequestData = signedChat(repository, alice, firstGroupId, null,
+					keyRequest.toBytes(), false, true, now() + 1);
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH, CHAT_SERVICE.validateForStore(repository, keyRequestData));
+
+			PrivateGroupChatEnvelope rotationRequest = PrivateGroupChatEnvelope.rotationRequest(firstGroupId,
+					firstEpoch.getEpochId(), alice.getPublicKey(), bytes(PrivateGroupChatEnvelope.SIGNATURE_LENGTH, 40));
+			ChatTransactionData rotationRequestData = signedChat(repository, alice, firstGroupId, null,
+					rotationRequest.toBytes(), false, true, now() + 2);
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH, CHAT_SERVICE.validateForStore(repository, rotationRequestData));
+
+			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(firstGroupId, firstEpoch.getEpochId(),
+					bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 50),
+					bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 51),
+					bytes(32, 52));
+			ChatTransactionData missingEncryptedFlagData = signedChat(repository, alice, firstGroupId, null,
+					messageEnvelope.toBytes(), true, false, now() + 3);
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH,
+					CHAT_SERVICE.validateForStore(repository, missingEncryptedFlagData));
+		}
+	}
+
 	private static ChatTransactionData signedChat(Repository repository, TestAccount sender, int groupId, String recipient,
 			String message, long timestamp) throws DataException {
-		ChatTransactionData chatData = unsignedChat(sender, groupId, recipient, message, timestamp, null);
+		return signedChat(repository, sender, groupId, recipient, message.getBytes(StandardCharsets.UTF_8),
+				true, false, timestamp);
+	}
+
+	private static ChatTransactionData signedChat(Repository repository, TestAccount sender, int groupId, String recipient,
+			byte[] data, boolean isText, boolean isEncrypted, long timestamp) throws DataException {
+		ChatTransactionData chatData = unsignedChat(sender, groupId, recipient, data, isText, isEncrypted,
+				timestamp, null);
 		ChatTransaction chatTransaction = new ChatTransaction(repository, chatData);
 		chatTransaction.computeNonce();
 		chatTransaction.sign(sender);
@@ -166,6 +303,11 @@ public class ChatServiceTests extends Common {
 
 	private static ChatTransactionData unsignedChat(TestAccount sender, int groupId, String recipient,
 			byte[] data, long timestamp, byte[] signature) {
+		return unsignedChat(sender, groupId, recipient, data, true, false, timestamp, signature);
+	}
+
+	private static ChatTransactionData unsignedChat(TestAccount sender, int groupId, String recipient,
+			byte[] data, boolean isText, boolean isEncrypted, long timestamp, byte[] signature) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				timestamp,
 				groupId,
@@ -174,7 +316,8 @@ public class ChatServiceTests extends Common {
 				0,
 				signature);
 
-		return new ChatTransactionData(baseTransactionData, sender.getAddress(), 0, recipient, null, data, true, false);
+		return new ChatTransactionData(baseTransactionData, sender.getAddress(), 0, recipient, null,
+				data, isText, isEncrypted);
 	}
 
 	private static long now() {
@@ -186,6 +329,23 @@ public class ChatServiceTests extends Common {
 		byte[] signature = new byte[64];
 		signature[63] = (byte) value;
 		return signature;
+	}
+
+	private static void addMember(Repository repository, int groupId, TestAccount account) throws DataException {
+		account.ensureAccount();
+
+		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+		repository.getGroupRepository().save(new GroupMemberData(groupId, account.getAddress(),
+				groupData.getCreated(), groupData.getReference()));
+		repository.saveChanges();
+	}
+
+	private static byte[] bytes(int length, int seed) {
+		byte[] bytes = new byte[length];
+		for (int i = 0; i < bytes.length; ++i)
+			bytes[i] = (byte) (seed + i);
+
+		return bytes;
 	}
 
 }

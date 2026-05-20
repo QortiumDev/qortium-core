@@ -2,8 +2,12 @@ package org.qortal.chat;
 
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.asset.Asset;
+import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
+import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
+import org.qortal.chat.crypto.PrivateGroupChatMembership;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
+import org.qortal.data.group.GroupData;
 import org.qortal.data.naming.NameData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.group.Group;
@@ -125,6 +129,10 @@ public class ChatService {
 		if (data == null || data.length < 1 || data.length > ChatTransaction.MAX_DATA_SIZE)
 			return ValidationResult.INVALID_DATA_LENGTH;
 
+		ValidationResult privateGroupChatResult = validatePrivateGroupChatPayload(repository, chatTransactionData);
+		if (privateGroupChatResult != ValidationResult.OK)
+			return privateGroupChatResult;
+
 		long rateLimitCutoffTimestamp = now - Settings.getInstance().getRecentChatMessagesMaxAge();
 		int recentCount = repository.getChatStoreRepository().countRecentBySender(senderPublicKey, rateLimitCutoffTimestamp);
 		if (recentCount >= Settings.getInstance().getMaxRecentChatMessagesPerAccount())
@@ -180,6 +188,59 @@ public class ChatService {
 
 		String recipient = chatTransactionData.getRecipient();
 		return recipient == null || groupRepository.memberExists(txGroupId, recipient);
+	}
+
+	private ValidationResult validatePrivateGroupChatPayload(Repository repository, ChatTransactionData chatTransactionData) throws DataException {
+		int txGroupId = chatTransactionData.getTxGroupId();
+		if (txGroupId == Group.NO_GROUP || chatTransactionData.getRecipient() != null)
+			return ValidationResult.OK;
+
+		GroupData groupData = repository.getGroupRepository().fromGroupId(txGroupId);
+		if (groupData == null)
+			return ValidationResult.INVALID_TX_GROUP_ID;
+
+		if (groupData.isOpen())
+			return ValidationResult.OK;
+
+		if (!chatTransactionData.getIsEncrypted())
+			return ValidationResult.INVALID_DATA_LENGTH;
+
+		PrivateGroupChatEnvelope envelope;
+		try {
+			envelope = PrivateGroupChatEnvelope.fromBytes(chatTransactionData.getData());
+		} catch (TransformationException e) {
+			return ValidationResult.INVALID_DATA_LENGTH;
+		}
+
+		if (envelope.getGroupId() != txGroupId)
+			return ValidationResult.INVALID_DATA_LENGTH;
+
+		PrivateGroupChatMembership.MembershipEpoch epoch;
+		try {
+			epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository, txGroupId);
+		} catch (IllegalStateException e) {
+			return ValidationResult.PUBLIC_KEY_UNKNOWN;
+		} catch (IllegalArgumentException e) {
+			return ValidationResult.INVALID_TX_GROUP_ID;
+		}
+
+		if (!Arrays.equals(envelope.getEpochId(), epoch.getEpochId()))
+			return ValidationResult.INVALID_DATA_LENGTH;
+
+		switch (envelope.getType()) {
+			case MESSAGE:
+				return ValidationResult.OK;
+
+			case KEY_ANNOUNCEMENT:
+				return PrivateGroupChatKeyAnnouncement.isValid(epoch, envelope)
+						? ValidationResult.OK
+						: ValidationResult.INVALID_DATA_LENGTH;
+
+			case KEY_REQUEST:
+			case ROTATION_REQUEST:
+			default:
+				return ValidationResult.INVALID_DATA_LENGTH;
+		}
 	}
 
 	private int getPoWDifficulty(Repository repository, byte[] senderPublicKey) throws DataException {

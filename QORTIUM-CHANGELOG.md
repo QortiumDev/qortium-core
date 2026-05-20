@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: require private envelopes for closed groups
+
+Started enforcing the private group chat envelope format for closed-group broadcast CHAT transactions. Closed groups now reject plaintext or malformed broadcast chat payloads, accept encrypted private message envelopes and valid signed key announcements, and leave open-group, no-group, and direct-recipient chat behavior unchanged while key-request and rotation-request flows wait for their own APIs.
+
 ### 2026-05-20 - chat: add private group chat local APIs
 
 Added restricted local APIs for sending and decrypting Core-managed private closed-group chat messages. The new API can create a cached group key for the current membership epoch, publish a signed key announcement when needed, store the encrypted message as a signed CHAT transaction, and decrypt messages when the local node already has the matching key, while leaving closed-group plaintext enforcement for a later step.
