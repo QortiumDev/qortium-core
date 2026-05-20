@@ -1,5 +1,9 @@
 # Qortal v6.0.0
 
+> **Status: Upstream reference.** This page preserves Qortal network-design
+> notes for comparison. It is not the current Qortium network roadmap or a
+> tester setup guide.
+
 **Upcoming Qortal Changes | Network Upgrades** **MAJOR Qortal Networking and QDN Update** **Primary Developers:** Phil, Ice
 
 This is the next MAJOR version update for Qortal with substantial changes to core services.

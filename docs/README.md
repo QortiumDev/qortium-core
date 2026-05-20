@@ -5,52 +5,62 @@ This index groups the tracked Qortium docs by topic. The root
 [Qortium changelog](../QORTIUM-CHANGELOG.md) is the plain-language project
 history.
 
+## Document Status Labels
+
+- `Tester guide`: current instructions for nontechnical testers.
+- `Developer reference`: current technical guidance for contributors.
+- `Chain builder reference`: current guidance for projects using Qortium as a
+  base chain.
+- `Planning note`: active design direction, not final user instructions.
+- `Legacy reference`: retained historical material, not the recommended path.
+- `Upstream reference`: Qortal reference material kept for comparison only.
+
 ## Getting Started And Testing
 
-- [Tester build helper](../build.sh) - guided local build with prerequisite checks
-- [Local testnet guide](../testnet/README.md) - first-test walkthrough and multi-node setup
-- [Testing notes](development/testing.md) - repository test guidance and opt-in checks
+- `Tester guide` [Tester build helper](../build.sh) - guided local build with prerequisite checks
+- `Tester guide` [Local testnet guide](../testnet/README.md) - first-test walkthrough and multi-node setup
+- `Developer reference` [Testing notes](development/testing.md) - repository test guidance and opt-in checks
 
 ## Development And Operations
 
-- [Database inspection](development/database.md) - local HSQLDB inspection notes
-- [Current QDN auto-update scripts](../tools/auto-update-scripts/README.md) - current update publisher flow
-- [Legacy GitHub-mirror auto-update notes](legacy/auto-updates-github-mirror.md) - older auto-update reference
-- [Windows installer notes](../WindowsInstaller/README.md) - installer build notes
+- `Developer reference` [Database inspection](development/database.md) - local HSQLDB inspection notes
+- `Developer reference` [Current QDN auto-update scripts](../tools/auto-update-scripts/README.md) - current update publisher flow
+- `Legacy reference` [Legacy GitHub-mirror auto-update notes](legacy/auto-updates-github-mirror.md) - older auto-update reference
+- `Developer reference` [Windows installer notes](../WindowsInstaller/README.md) - installer build notes
 
 ## Chain Design
 
-- [Chain parameter audit](chain-design/chain-parameter-audit.md) - remaining hardcoded chain parameter review
+- `Chain builder reference` [Chain parameter audit](chain-design/chain-parameter-audit.md) - remaining hardcoded chain parameter review
 
 ## Trust System
 
-- [Account trust network](trust/account-trust-network.md) - user-facing trust model
-- [Aura trust-tier minting](trust/aura-trust-tier-minting.md) - deeper trust-tier design notes
-- [Trust network client integration](trust/trust-network-client-integration.md) - wallet and explorer guidance
-- [Trust network launch readiness](trust/trust-network-launch-readiness.md) - launch verification checklist
+- `Chain builder reference` [Account trust network](trust/account-trust-network.md) - user-facing trust model
+- `Planning note` [Aura trust-tier minting](trust/aura-trust-tier-minting.md) - deeper trust-tier design notes
+- `Developer reference` [Trust network client integration](trust/trust-network-client-integration.md) - wallet and explorer guidance
+- `Planning note` [Trust network launch readiness](trust/trust-network-launch-readiness.md) - launch verification checklist
 
 ## Lite Node Work
 
-- [Lite node plan](lite-node/lite-node-plan.md) - current lite-node roadmap
-- [Lite node proof anchoring](lite-node/lite-node-proof-anchoring.md) - response anchoring plan
-- [Lite node state-root design](lite-node/lite-node-state-root-design.md) - later proof-bearing response design
+- `Planning note` [Lite node plan](lite-node/lite-node-plan.md) - current lite-node roadmap
+- `Planning note` [Lite node proof anchoring](lite-node/lite-node-proof-anchoring.md) - response anchoring plan
+- `Planning note` [Lite node state-root design](lite-node/lite-node-state-root-design.md) - later proof-bearing response design
 
 ## Chat And QDN
 
-- [Private group chat encryption plan](chat/private-group-chat-encryption.md) - planned Core-managed private chat direction
-- [QDN app documentation](qdn/q-apps.md) - QDN app concepts and request examples
+- `Planning note` [Private group chat encryption plan](chat/private-group-chat-encryption.md) - planned Core-managed private chat direction
+- `Developer reference` [QDN app documentation](qdn/q-apps.md) - QDN app concepts and request examples
 
 ## Cross-Chain Support
 
-- [Bitcoiny chain specs](cross-chain/bitcoiny-chain-specs.md) - cross-chain adapter notes
-- [Foreign/foreign trade design](cross-chain/crosschain-foreign-foreign-trades.md) - trade flow design
-- [Reverse ACCT trade design](cross-chain/crosschain-reverse-trades.md) - reverse trade design
-- [Electrum server refresh](cross-chain/electrum-server-refresh.md) - Electrum server list maintenance
-- [Zcash-family chain support](cross-chain/zcash-family-chain-support.md) - deferred native wallet notes
+- `Developer reference` [Bitcoiny chain specs](cross-chain/bitcoiny-chain-specs.md) - cross-chain adapter notes
+- `Planning note` [Foreign/foreign trade design](cross-chain/crosschain-foreign-foreign-trades.md) - trade flow design
+- `Planning note` [Reverse ACCT trade design](cross-chain/crosschain-reverse-trades.md) - reverse trade design
+- `Developer reference` [Electrum server refresh](cross-chain/electrum-server-refresh.md) - Electrum server list maintenance
+- `Planning note` [Zcash-family chain support](cross-chain/zcash-family-chain-support.md) - deferred native wallet notes
 
 ## Dependencies And Upstream
 
-- [Dependency security review](dependencies/dependency-security-review.md) - current dependency security posture
-- [Dependency provenance](dependencies/dependency-provenance.md) - pinned and vendored dependency rationale
-- [Qortal 6.1.5 comparison](upstream/qortal-6.1.5-comparison.md) - upstream comparison and integration notes
-- [Qortal v6 network notes](upstream/qortal-v6-network-notes.md) - transitional upstream network-design reference
+- `Developer reference` [Dependency security review](dependencies/dependency-security-review.md) - current dependency security posture
+- `Developer reference` [Dependency provenance](dependencies/dependency-provenance.md) - pinned and vendored dependency rationale
+- `Upstream reference` [Qortal 6.1.5 comparison](upstream/qortal-6.1.5-comparison.md) - upstream comparison and integration notes
+- `Upstream reference` [Qortal v6 network notes](upstream/qortal-v6-network-notes.md) - transitional upstream network-design reference

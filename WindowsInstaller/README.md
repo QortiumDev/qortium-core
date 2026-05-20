@@ -1,5 +1,9 @@
 # Windows installer
 
+> **Status: Developer reference.** These installer notes were inherited from
+> Qortal's Advanced Installer setup and need a future Qortium release-process
+> review before they should be treated as final release instructions.
+
 ## Prerequisites
 
 * AdvancedInstaller v19.4 or better, and enterprise licence.

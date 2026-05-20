@@ -1,8 +1,9 @@
 # Auto Updates
 
-Legacy note: this document describes the older GitHub-mirror auto-update flow.
-The current QDN auto-update scripts are documented in
-[tools/auto-update-scripts/README.md](../../tools/auto-update-scripts/README.md).
+> **Status: Legacy reference.** This page describes the older
+> GitHub-mirror auto-update flow. The current QDN auto-update scripts are
+> documented in
+> [tools/auto-update-scripts/README.md](../../tools/auto-update-scripts/README.md).
 
 Qortium ships with automatic updates disabled by default.
 

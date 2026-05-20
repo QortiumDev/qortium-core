@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - docs: label documentation status
+
+Added status labels to the documentation index so testers, developers, chain builders, and contributors can tell which pages are current guidance, active planning notes, legacy reference material, or upstream Qortal comparison material. The inherited auto-update, Windows installer, upstream network, and QDN app docs now also open with short status notices, making the documentation set safer to navigate before the larger content rewrites begin.
+
 ### 2026-05-20 - docs: add first testnet walkthrough
 
 Added a clearer first-test path around the local single-node testnet so testers can build the jar, start the disposable chain, confirm the API and block height, stop the node, and reset the generated runtime files without copying long cleanup commands. The new status and reset helpers keep the recommended onboarding flow visible from the README while leaving the existing start and stop behavior unchanged.

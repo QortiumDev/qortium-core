@@ -1,5 +1,9 @@
 # QDN App Documentation
 
+> **Status: Developer reference.** This is the active QDN app reference for
+> Qortium, but it still needs a fuller Qortium review for inherited terminology,
+> examples, and user-facing assumptions.
+
 ## Introduction
 
 Q-Apps are static web apps written in javascript, HTML, CSS, and other static assets. The key difference between a Q-App and a fully static site is its ability to interact with both the logged-in user and on-chain data. This is achieved using the API described in this document.
