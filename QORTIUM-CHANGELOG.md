@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group chat membership epochs
+
+Added private group chat membership epoch helpers so closed-group encryption can identify the exact member set a group key belongs to. Qortium can now derive a stable epoch id from a closed group's current member public keys, reject groups that cannot safely be encrypted yet because a member has no known public key, and keep this foundation separate from live chat routing until the key-announcement and API layers are ready.
+
 ### 2026-05-20 - chat: add private group chat crypto helpers
 
 Added private group chat crypto helpers for the next stage of closed-group encryption. The new helper can generate group keys and nonces, compute context-bound key ids, encrypt and decrypt messages with AES-GCM associated data, and wrap shared group keys to individual members using existing account shared-secret derivation without changing live chat behavior yet.
