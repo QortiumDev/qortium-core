@@ -76,6 +76,25 @@ public class PrivateGroupChatKeyCache {
 		return selectedEntry.toEntry();
 	}
 
+	public synchronized Entry getNewestCreated(int groupId, byte[] epochId) {
+		validateLength(epochId, PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, "epoch id");
+
+		CachedEntry selectedEntry = null;
+		for (CachedEntry cachedEntry : this.entriesByKey.values()) {
+			if (cachedEntry.getGroupId() != groupId || !Arrays.equals(cachedEntry.getEpochId(), epochId))
+				continue;
+
+			if (selectedEntry == null || cachedEntry.wasCreatedAfter(selectedEntry))
+				selectedEntry = cachedEntry;
+		}
+
+		if (selectedEntry == null)
+			return null;
+
+		selectedEntry.touch(now(), nextSequence());
+		return selectedEntry.toEntry();
+	}
+
 	public synchronized void clear() {
 		this.entriesByKey.clear();
 	}
@@ -212,6 +231,10 @@ public class PrivateGroupChatKeyCache {
 			if (this.lastUsedSequence != otherEntry.lastUsedSequence)
 				return this.lastUsedSequence > otherEntry.lastUsedSequence;
 
+			return this.createdSequence > otherEntry.createdSequence;
+		}
+
+		private boolean wasCreatedAfter(CachedEntry otherEntry) {
 			return this.createdSequence > otherEntry.createdSequence;
 		}
 

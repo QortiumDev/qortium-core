@@ -20,6 +20,8 @@ import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayRequest;
 import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayResponse;
 import org.qortal.api.model.PrivateGroupChatKeyRequestRequest;
 import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
+import org.qortal.api.model.PrivateGroupChatRotateRequest;
+import org.qortal.api.model.PrivateGroupChatRotateResponse;
 import org.qortal.api.model.PrivateGroupChatSendRequest;
 import org.qortal.api.model.PrivateGroupChatSendResponse;
 import org.qortal.chat.ChatService;
@@ -479,6 +481,67 @@ public class ChatResource {
 
 			PrivateGroupChatKeyAnnouncementRelayResponse response = new PrivateGroupChatKeyAnnouncementRelayResponse();
 			response.announcementSignature = result.getAnnouncementSignature();
+			response.epochId = result.getEpochId();
+			response.keyId = result.getKeyId();
+			return response;
+		} catch (PrivateGroupChatService.ValidationException e) {
+			throw TransactionsResource.createTransactionInvalidException(request, e.getValidationResult());
+		} catch (PrivateGroupChatService.PrivateGroupChatException | GeneralSecurityException | IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/group/rotate")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "Rotate local private group chat key",
+		description = "Creates and stores a fresh signed private group key announcement for the current membership epoch. Future local sends use the newly announced key while older keys remain usable for decrypting older messages.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = PrivateGroupChatRotateRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "fresh private group chat key announcement",
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					schema = @Schema(
+						implementation = PrivateGroupChatRotateResponse.class
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_DATA, ApiError.INVALID_CRITERIA, ApiError.TRANSACTION_INVALID,
+			ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public PrivateGroupChatRotateResponse rotatePrivateGroupChatKey(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PrivateGroupChatRotateRequest rotateRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (rotateRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+		if (rotateRequest.rotatorPrivateKey == null || rotateRequest.rotatorPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateGroupChatService.KeyRotationResult result = PrivateGroupChatService.getInstance().rotateKey(repository,
+					rotateRequest.rotatorPrivateKey, rotateRequest.groupId);
+
+			PrivateGroupChatRotateResponse response = new PrivateGroupChatRotateResponse();
+			response.keyAnnouncementSignature = result.getKeyAnnouncementSignature();
 			response.epochId = result.getEpochId();
 			response.keyId = result.getKeyId();
 			return response;

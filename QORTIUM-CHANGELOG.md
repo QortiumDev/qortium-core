@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add local private group key rotation
+
+Added local private group chat key rotation so a current closed-group member can publish a fresh key announcement for the current membership epoch and use that new key for future sends. Older keys remain available for decrypting older messages, and send selection now prefers the newest locally created key instead of whichever cached key was touched most recently.
+
 ### 2026-05-20 - chat: relay private group key announcements
 
 Added local support for relaying private group chat key announcements without exposing raw group keys. A current closed-group member can now republish a previously stored or cached signed key announcement for the current membership epoch, giving peers another chance to recover a missing key while preserving the original announcement signature and validation rules.

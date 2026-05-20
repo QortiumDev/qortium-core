@@ -143,6 +143,28 @@ public class PrivateGroupChatKeyCacheTests extends Common {
 	}
 
 	@Test
+	public void testNewestCreatedSelectionIgnoresRecentUse() throws DataException, GeneralSecurityException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "key-cache-newest-created");
+			byte[] firstGroupKey = bytes(Transformer.AES256_LENGTH, 80);
+			byte[] secondGroupKey = bytes(Transformer.AES256_LENGTH, 120);
+			PrivateGroupChatEnvelope firstAnnouncement = PrivateGroupChatKeyAnnouncement.create(fixture.epoch,
+					firstGroupKey, fixture.alice.getPrivateKey());
+			PrivateGroupChatEnvelope secondAnnouncement = PrivateGroupChatKeyAnnouncement.create(fixture.epoch,
+					secondGroupKey, fixture.bob.getPrivateKey());
+
+			PrivateGroupChatKeyCache cache = new PrivateGroupChatKeyCache();
+			cache.putLocal(fixture.epoch, firstAnnouncement, firstGroupKey);
+			cache.putLocal(fixture.epoch, secondAnnouncement, secondGroupKey);
+
+			cache.get(fixture.groupId, fixture.epoch.getEpochId(), firstAnnouncement.getKeyId());
+			assertArrayEquals(firstGroupKey, cache.getAny(fixture.groupId, fixture.epoch.getEpochId()).getGroupKey());
+			assertArrayEquals(secondGroupKey, cache.getNewestCreated(fixture.groupId,
+					fixture.epoch.getEpochId()).getGroupKey());
+		}
+	}
+
+	@Test
 	public void testInvalidAnnouncementsAndKeysAreRejected() throws DataException, GeneralSecurityException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Fixture fixture = createFixture(repository, "key-cache-invalid");

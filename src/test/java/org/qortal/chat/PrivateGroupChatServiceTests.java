@@ -267,6 +267,52 @@ public class PrivateGroupChatServiceTests extends Common {
 	}
 
 	@Test
+	public void testRotateKeyStoresFreshAnnouncementAndFutureSendUsesIt() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-local-rotate");
+			byte[] firstPlaintext = bytes("before rotation");
+			PrivateGroupChatService.SendResult firstResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, firstPlaintext, true, null);
+
+			PrivateGroupChatService.KeyRotationResult rotationResult = PrivateGroupChatService.getInstance().rotateKey(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId);
+
+			assertNotNull(rotationResult.getKeyAnnouncementSignature());
+			assertArrayEquals(firstResult.getEpochId(), rotationResult.getEpochId());
+			assertFalse(Arrays.equals(firstResult.getKeyId(), rotationResult.getKeyId()));
+
+			ChatTransactionData rotationAnnouncementData = repository.getChatStoreRepository().fromSignature(
+					rotationResult.getKeyAnnouncementSignature());
+			assertNotNull(rotationAnnouncementData);
+			assertEquals(fixture.alice.getAddress(), rotationAnnouncementData.getSender());
+			assertFalse(rotationAnnouncementData.getIsText());
+			assertTrue(rotationAnnouncementData.getIsEncrypted());
+
+			PrivateGroupChatService.SendResult secondResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, bytes("after rotation"), true,
+					firstResult.getMessageSignature());
+			assertNull(secondResult.getKeyAnnouncementSignature());
+			assertArrayEquals(rotationResult.getEpochId(), secondResult.getEpochId());
+			assertArrayEquals(rotationResult.getKeyId(), secondResult.getKeyId());
+
+			PrivateGroupChatService.DecryptResult oldDecryptResult = PrivateGroupChatService.getInstance().decrypt(repository,
+					fixture.bob.getPrivateKey(), firstResult.getMessageSignature());
+			assertArrayEquals(firstPlaintext, oldDecryptResult.getData());
+		}
+	}
+
+	@Test
+	public void testRotateKeyRejectsNonMember() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-local-rotate-nonmember");
+
+			assertThrows(GeneralSecurityException.class,
+					() -> PrivateGroupChatService.getInstance().rotateKey(repository,
+							fixture.chloe.getPrivateKey(), fixture.groupId));
+		}
+	}
+
+	@Test
 	public void testDecryptRehydratesCachedKeyFromStoredAnnouncement() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Fixture fixture = createFixture(repository, "private-service-missing-key");

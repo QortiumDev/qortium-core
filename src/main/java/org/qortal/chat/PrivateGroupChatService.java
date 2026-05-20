@@ -145,6 +145,30 @@ public class PrivateGroupChatService {
 		}
 	}
 
+	public KeyRotationResult rotateKey(Repository repository, byte[] rotatorPrivateKey, int groupId)
+			throws DataException, GeneralSecurityException, TransformationException, PrivateGroupChatException,
+			ValidationException {
+		validatePrivateKey(rotatorPrivateKey, "rotator private key");
+
+		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
+		boolean locked;
+		try {
+			locked = blockchainLock.tryLock(BLOCKCHAIN_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new ValidationException(ValidationResult.NO_BLOCKCHAIN_LOCK, e);
+		}
+
+		if (!locked)
+			throw new ValidationException(ValidationResult.NO_BLOCKCHAIN_LOCK);
+
+		try {
+			return this.doRotateKey(repository, rotatorPrivateKey, groupId);
+		} finally {
+			blockchainLock.unlock();
+		}
+	}
+
 	private static PrivateGroupChatKeyCache.Entry getAuthorizedCachedKey(PrivateGroupChatEnvelope messageEnvelope,
 			byte[] recipientPrivateKey) {
 		PrivateGroupChatKeyCache.Entry keyEntry = PrivateGroupChatKeyCache.getInstance().get(
@@ -263,23 +287,17 @@ public class PrivateGroupChatService {
 			throw new GeneralSecurityException("Sender is not a current member of this private group chat epoch");
 
 		PrivateGroupChatKeyCache keyCache = PrivateGroupChatKeyCache.getInstance();
-		PrivateGroupChatKeyCache.Entry keyEntry = keyCache.getAny(groupId, epoch.getEpochId());
+		PrivateGroupChatKeyCache.Entry keyEntry = keyCache.getNewestCreated(groupId, epoch.getEpochId());
 
 		byte[] groupKey;
 		byte[] keyId;
 		byte[] keyAnnouncementSignature = null;
 		if (keyEntry == null) {
-			groupKey = PrivateGroupChatCrypto.generateGroupKey();
-			PrivateGroupChatEnvelope keyAnnouncement = PrivateGroupChatKeyAnnouncement.create(epoch,
-					groupKey, senderPrivateKey);
-
-			ChatTransactionData keyAnnouncementData = buildChatTransaction(sender, groupId, null,
-					keyAnnouncement.toBytes(), false, true);
-			storeSignedChat(repository, keyAnnouncementData, sender);
-			keyCache.putLocal(epoch, keyAnnouncement, groupKey);
-
-			keyId = keyAnnouncement.getKeyId();
-			keyAnnouncementSignature = keyAnnouncementData.getSignature();
+			KeyAnnouncementResult keyAnnouncementResult = createAndStoreKeyAnnouncement(repository, sender,
+					senderPrivateKey, epoch);
+			groupKey = keyAnnouncementResult.keyEntry.getGroupKey();
+			keyId = keyAnnouncementResult.keyEntry.getKeyId();
+			keyAnnouncementSignature = keyAnnouncementResult.keyAnnouncementSignature;
 		} else {
 			groupKey = keyEntry.getGroupKey();
 			keyId = keyEntry.getKeyId();
@@ -296,6 +314,23 @@ public class PrivateGroupChatService {
 		storeSignedChat(repository, messageData, sender);
 
 		return new SendResult(messageData.getSignature(), keyAnnouncementSignature, epoch.getEpochId(), keyId);
+	}
+
+	private KeyRotationResult doRotateKey(Repository repository, byte[] rotatorPrivateKey, int groupId)
+			throws DataException, GeneralSecurityException, TransformationException, PrivateGroupChatException,
+			ValidationException {
+		PrivateKeyAccount rotator = new PrivateKeyAccount(repository, rotatorPrivateKey);
+		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+				groupId);
+
+		if (!isMember(epoch, rotator.getPublicKey()))
+			throw new GeneralSecurityException("Key rotator is not a current member of this private group chat epoch");
+
+		KeyAnnouncementResult keyAnnouncementResult = createAndStoreKeyAnnouncement(repository, rotator,
+				rotatorPrivateKey, epoch);
+
+		return new KeyRotationResult(keyAnnouncementResult.keyAnnouncementSignature, epoch.getEpochId(),
+				keyAnnouncementResult.keyEntry.getKeyId());
 	}
 
 	private KeyRequestResult doRequestKey(Repository repository, byte[] requesterPrivateKey, int groupId, byte[] keyId)
@@ -357,6 +392,22 @@ public class PrivateGroupChatService {
 
 		return new ChatTransactionData(baseTransactionData, sender.getAddress(), 0, null, chatReference,
 				data, isText, isEncrypted);
+	}
+
+	private static KeyAnnouncementResult createAndStoreKeyAnnouncement(Repository repository, PrivateKeyAccount sender,
+			byte[] senderPrivateKey, PrivateGroupChatMembership.MembershipEpoch epoch) throws GeneralSecurityException,
+			DataException, TransformationException, ValidationException, PrivateGroupChatException {
+		byte[] groupKey = PrivateGroupChatCrypto.generateGroupKey();
+		PrivateGroupChatEnvelope keyAnnouncement = PrivateGroupChatKeyAnnouncement.create(epoch, groupKey,
+				senderPrivateKey);
+
+		ChatTransactionData keyAnnouncementData = buildChatTransaction(sender, epoch.getGroupId(), null,
+				keyAnnouncement.toBytes(), false, true);
+		storeSignedChat(repository, keyAnnouncementData, sender);
+
+		PrivateGroupChatKeyCache.Entry keyEntry = PrivateGroupChatKeyCache.getInstance().putLocal(epoch,
+				keyAnnouncement, groupKey);
+		return new KeyAnnouncementResult(keyEntry, keyAnnouncementData.getSignature());
 	}
 
 	private static void storeSignedChat(Repository repository, ChatTransactionData chatTransactionData,
@@ -500,6 +551,40 @@ public class PrivateGroupChatService {
 
 		public byte[] getKeyId() {
 			return copy(this.keyId);
+		}
+	}
+
+	public static class KeyRotationResult {
+		private final byte[] keyAnnouncementSignature;
+		private final byte[] epochId;
+		private final byte[] keyId;
+
+		private KeyRotationResult(byte[] keyAnnouncementSignature, byte[] epochId, byte[] keyId) {
+			this.keyAnnouncementSignature = copy(keyAnnouncementSignature);
+			this.epochId = copy(epochId);
+			this.keyId = copy(keyId);
+		}
+
+		public byte[] getKeyAnnouncementSignature() {
+			return copy(this.keyAnnouncementSignature);
+		}
+
+		public byte[] getEpochId() {
+			return copy(this.epochId);
+		}
+
+		public byte[] getKeyId() {
+			return copy(this.keyId);
+		}
+	}
+
+	private static class KeyAnnouncementResult {
+		private final PrivateGroupChatKeyCache.Entry keyEntry;
+		private final byte[] keyAnnouncementSignature;
+
+		private KeyAnnouncementResult(PrivateGroupChatKeyCache.Entry keyEntry, byte[] keyAnnouncementSignature) {
+			this.keyEntry = keyEntry;
+			this.keyAnnouncementSignature = copy(keyAnnouncementSignature);
 		}
 	}
 

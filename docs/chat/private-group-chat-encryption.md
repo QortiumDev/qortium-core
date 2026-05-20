@@ -126,7 +126,7 @@ keys for that identical member set can be reused unless the group rotates.
 
 Manual rotation is also supported:
 
-- a local user can rotate the group key they use for new sends
+- a current member can rotate the group key their local node uses for new sends
 - the group owner or an admin can publish a signed `ROTATION_REQUEST`
 - rotation requests are rate-limited to prevent abuse
 - seeing an accepted rotation request causes local senders to stop using older
