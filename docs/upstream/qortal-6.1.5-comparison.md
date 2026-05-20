@@ -295,7 +295,7 @@ depend on Hub-side encryption, but it should avoid decisions that would make
 Core-managed encryption difficult later.
 
 The dedicated planning notes now live in
-[`docs/private-group-chat-encryption.md`](private-group-chat-encryption.md).
+[`docs/chat/private-group-chat-encryption.md`](../chat/private-group-chat-encryption.md).
 That document records the current Hub reference model, the Qortium direction,
 the decisions still needed before implementation, and the recommended first
 implementation shape. The 6.1.5 comparison should continue to track the release

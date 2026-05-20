@@ -237,7 +237,7 @@ myfunction();
 
 ### Timeouts
 
-Request timeouts are handled automatically when using qdnRequest(). The timeout value will differ based on the action being used - see `getDefaultTimeout()` in [q-apps.js](src/main/resources/q-apps/q-apps.js) for the current values.
+Request timeouts are handled automatically when using qdnRequest(). The timeout value will differ based on the action being used - see `getDefaultTimeout()` in [q-apps.js](../../src/main/resources/q-apps/q-apps.js) for the current values.
 
 If a request times out it will throw an error - `The request timed out` - which can be handled by the Q-App.
 
@@ -907,7 +907,7 @@ Select "Preview" in the UI after choosing the zip. This allows for full Q-App te
 
 ### Testnets
 
-For an end-to-end test of Q-App publishing, you can use the official testnet, or set up a single node testnet of your own (often referred to as devnet) on your local machine. See [Single Node Testnet Quick Start Guide](testnet/README.md#quick-start).
+For an end-to-end test of Q-App publishing, you can use the official testnet, or set up a single node testnet of your own (often referred to as devnet) on your local machine. See [Single Node Testnet Quick Start Guide](../../testnet/README.md#quick-start).
 
 
 ### Debugging

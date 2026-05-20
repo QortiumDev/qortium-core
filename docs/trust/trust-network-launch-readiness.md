@@ -27,7 +27,7 @@ These values are documented in `account-trust-network.md` and pinned by tests.
 Changing them should be treated as a launch policy change.
 
 Wallet and explorer builders should use
-`docs/trust-network-client-integration.md` as the current integration guide.
+`docs/trust/trust-network-client-integration.md` as the current integration guide.
 
 ## Required Verification
 
@@ -93,7 +93,7 @@ answer these questions before launch:
 - Is the same-edge `1,440` block cooldown enough churn control, or do launch
   assumptions justify an additional policy?
 - Do wallet and explorer clients follow
-  `docs/trust-network-client-integration.md` for pending account-rating
+  `docs/trust/trust-network-client-integration.md` for pending account-rating
   visibility, cooldown display, and effective vote-weight display?
 - Are the current `100/70/40` vote multipliers still the preferred balance
   between farm resistance and meaningful early participation?
@@ -113,7 +113,7 @@ The trust network can be treated as launch-ready when:
 - launch reviewers accept the current policy defaults
 - no new realistic graph scenario exposes an unwanted Gold, Silver, Bronze,
   Unverified, or Suspicious outcome
-- clients follow `docs/trust-network-client-integration.md` when explaining
+- clients follow `docs/trust/trust-network-client-integration.md` when explaining
   active trust status, pending rating timing, cooldowns, and effective vote
   weight without relying on raw `blocksMinted` alone
 - `account-trust-network.md`, `aura-trust-tier-minting.md`, and this checklist

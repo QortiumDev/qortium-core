@@ -174,11 +174,11 @@ stronger data model:
 - avoid presenting peer-reported balances or history as fully verified unless
   the response has enough evidence for that claim
 
-The Phase 4 direction is defined in `docs/lite-node-proof-anchoring.md`. The
+The Phase 4 direction is defined in `docs/lite-node/lite-node-proof-anchoring.md`. The
 first Phase 4 implementation anchors lite responses to the serving peer's
 current chain tip and makes agreement include that anchor. The next larger
 milestone is the state-root consensus design in
-`docs/lite-node-state-root-design.md`, followed by implementation of committed
+`docs/lite-node/lite-node-state-root-design.md`, followed by implementation of committed
 roots and proof-bearing lite responses.
 
 ## Acceptance Criteria

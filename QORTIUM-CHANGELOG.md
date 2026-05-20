@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - docs: organize documentation layout
+
+Organized the markdown documentation by topic so the repository root stays focused on the README and the human-readable changelog. The new documentation index points testers, developers, chain builders, and contributors to the right guides, while inherited and transitional notes remain available under legacy or upstream folders instead of being mixed into the main root docs.
+
 ### 2026-05-19 - docs: refresh Qortium README
 
 Rewrote the root README so the repository now opens with Qortium's current purpose, status, and practical build paths instead of inherited Qortal project copy. The new README gives testers a direct single-node testnet quick start, keeps normal local and Docker run instructions concise, and links to the main Qortium docs without moving the broader markdown files yet.

@@ -114,16 +114,12 @@ Use `settings.json` as the program argument when running a normal local node.
 
 ## Documentation
 
+- [Documentation index](docs/README.md) - topic-based guide to the docs tree
 - [Qortium changelog](QORTIUM-CHANGELOG.md) - plain-language project history
 - [Local testnet guide](testnet/README.md) - single-node and multi-node testnet setup
-- [Testing notes](docs/testing.md) - repository test guidance
-- [Dependency security review](docs/dependency-security-review.md) - current security posture and dependency notes
-- [Dependency provenance](docs/dependency-provenance.md) - pinned and vendored dependency rationale
-- [Qortal 6.1.5 comparison](docs/qortal-6.1.5-comparison.md) - upstream comparison and integration notes
-- [Account trust network](docs/account-trust-network.md) - trust model and rating behavior
-- [Trust network client integration](docs/trust-network-client-integration.md) - wallet/explorer integration guidance
-- [Private group chat encryption plan](docs/private-group-chat-encryption.md) - planned private chat direction
+- [Testing notes](docs/development/testing.md) - repository test guidance
+- [Account trust network](docs/trust/account-trust-network.md) - trust model and rating behavior
+- [QDN app documentation](docs/qdn/q-apps.md) - QDN app concepts and request examples
 
-Some root-level documents, including `AutoUpdates.md`, `DATABASE.md`,
-`Q-Apps.md`, and `v6.md`, are inherited or transitional references. They will be
-reviewed and reorganized in later documentation passes.
+Most detailed docs now live under `docs/` by topic. Tool-specific docs remain
+beside the scripts or packaging files they describe.

@@ -10,7 +10,7 @@ minting blocks, but its active Subject trust status decides how much of that
 history counts as voting or rating weight.
 
 For the current launch checklist, see
-`docs/trust-network-launch-readiness.md`.
+`docs/trust/trust-network-launch-readiness.md`.
 
 ## Why It Exists
 
@@ -257,7 +257,7 @@ polls stable and auditable.
 ## Client API Guide
 
 For a practical wallet and explorer integration checklist, see
-`docs/trust-network-client-integration.md`.
+`docs/trust/trust-network-client-integration.md`.
 
 Clients should use different account-rating APIs for different jobs:
 
