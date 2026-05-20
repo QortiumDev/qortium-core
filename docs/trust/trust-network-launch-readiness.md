@@ -29,6 +29,19 @@ Changing them should be treated as a launch policy change.
 Wallet and explorer builders should use
 `docs/trust/trust-network-client-integration.md` as the current integration guide.
 
+## Launch Trust Model
+
+Qortium's current launch target is a trusted-seed model. The Minting group is
+the practical trust seed set because early minting membership is expected to be
+socially trusted by the launch community, not open permissionless membership
+from day one.
+
+Under this model, no separate seed-eligibility guard is required before launch.
+The trust graph does not prove the first seed accounts are honest; it uses the
+accepted launch seed set to expand, weight, and audit trust after launch. If a
+future chain opens minting membership more broadly, seed eligibility should be
+reviewed again before treating all Minting group members as trust seeds.
+
 ## Required Verification
 
 Before treating the trust network as launch-ready, run the focused trust and
@@ -107,11 +120,11 @@ answer these questions before launch:
   visibility, cooldown display, and effective vote-weight display?
 - Are the current `100/70/40` vote multipliers still the preferred balance
   between farm resistance and meaningful early participation?
-- Should launch add a seed-eligibility guard before using the public Minting
-  group as the full trust seed set? A 2026-05-17 pressure run found that
-  subject-only Minting group farm ratings and same-branch farm support stay
-  Unverified, but controlled independent Minting group seed branches can
-  self-promote a farm target to Silver under the current seed rule.
+- Does the trusted-seed launch assumption still match the expected launch
+  community? A 2026-05-17 pressure run found that subject-only Minting group
+  farm ratings and same-branch farm support stay Unverified, but controlled
+  independent Minting group seed branches can self-promote a farm target to
+  Silver under the current seed rule.
 
 ## Ready When
 
@@ -121,6 +134,7 @@ The trust network can be treated as launch-ready when:
 - benchmark output does not point to an immediate derivation or storage
   optimization
 - launch reviewers accept the current policy defaults
+- launch reviewers accept the trusted-seed model for the first network launch
 - no new realistic graph scenario exposes an unwanted Gold, Silver, Bronze,
   Unverified, or Suspicious outcome
 - clients follow `docs/trust/trust-network-client-integration.md` when explaining

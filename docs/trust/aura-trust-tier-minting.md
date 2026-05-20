@@ -176,6 +176,9 @@ Qortium now has deterministic decentralized trust derivation APIs:
   Trainer, and Manager categories
 - current minting-group members are the decentralized seed set for derivation
   instead of Aura's hardcoded team-owner seed
+- this Minting group seed set is intentional for Qortium's trusted-seed launch
+  model, where early minting membership is expected to be socially trusted
+  rather than open permissionless membership from day one
 - the active Manager derivation is based on the recovered Aura node scorer at
   `https://github.com/Meta-Node/BrightID-Aura-Node`
 - Manager energy starts from the minting seed set, flows for four positive
@@ -383,6 +386,8 @@ Remaining pre-launch work is now hardening rather than core construction:
 - keep reviewing trust-graph benchmark output and decide whether larger stress
   profiles or additional account-rating churn controls are needed if future
   assumptions change
+- revisit seed eligibility if a future launch model opens Minting group
+  membership beyond the current trusted-seed assumption
 - keep docs aligned as launch policy is reviewed
 
 ## Test Coverage

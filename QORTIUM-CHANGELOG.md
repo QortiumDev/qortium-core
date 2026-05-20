@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - docs: document trusted-seed launch model
+
+Documented Qortium's trusted-seed launch model for the account trust network. The trust docs now explain that the first launch relies on socially trusted early Minting group members as the practical seed set, treats that as an accepted launch assumption instead of an unresolved seed-guard blocker, and keeps seed eligibility as a future review item if minting membership becomes more open or permissionless.
+
 ### 2026-05-20 - docs: update trust launch readiness results
 
 Updated the trust-network launch checklist with current local verification results after aligning the test harness with Qortium's active trust defaults. The checklist now records the passing focused policy, transaction API, documented readiness, expanded trust/API, and long benchmark runs while keeping seed eligibility as the remaining launch policy question.

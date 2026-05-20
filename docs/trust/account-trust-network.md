@@ -33,6 +33,20 @@ trust layer:
 This turns account farming into a graph problem instead of a public duplicate
 account investigation.
 
+## Launch Trust Model
+
+Qortium's first launch model assumes the early trust seeds are socially trusted
+launch participants. In the current implementation, current Minting group
+members are the trust seed set, so early Minting group membership is also the
+launch community's practical seed selection process.
+
+The trust network does not cryptographically prove that the first seed accounts
+are honest. It starts from the launch community's accepted seed set, then uses
+on-chain ratings to expand, weight, audit, and reduce trust as the network
+develops. If a future chain opens Minting group membership to a broader or more
+permissionless process, it should review whether trust seeds still belong in
+that same group or need a separate eligibility rule.
+
 ## Account Ratings
 
 Account ratings are native chain transactions. A rater records one active
