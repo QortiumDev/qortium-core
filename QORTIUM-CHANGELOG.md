@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - docs: define private group chat encryption design
+
+Defined Qortium's first private group chat encryption design before implementation starts. The chat planning doc now chooses Core-managed closed-group encryption with cached per-sender keys for each membership epoch, no QDN key publishing, automatic future-key changes when group membership changes, owner/admin rotation requests, missing-key request handling, and a staged implementation path for envelope, key cache, API, validation, and integration tests.
+
 ### 2026-05-20 - docs: refresh chain parameter audit
 
 Refreshed the chain-parameter audit so it matches Qortium's current cleanup state instead of the older April branch snapshot. The audit now treats native-asset and runtime identity cleanup as mostly complete, identifies production `blockchain.json` and genesis governance defaults as the next high-priority fork-parameter work, and keeps test fixtures, API naming, cross-chain naming, and package branding as separate follow-up tracks.

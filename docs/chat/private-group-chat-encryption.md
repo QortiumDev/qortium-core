@@ -1,128 +1,175 @@
-# Private Group Chat Encryption Plan
+# Private Group Chat Encryption Design
 
-This document records the starting plan for making closed-group chat private by
-default in Qortium Core.
+This document records the chosen first design for making closed-group chat
+private by default in Qortium Core.
 
-The 6.1.5 chat-store work is now complete enough to support this design phase:
-chat messages are stored outside the normal unconfirmed transaction pool,
-message payload bytes are treated as opaque data, and the store preserves the
-fields needed for future encryption policy such as `txGroupId`, `recipient`,
+The 6.1.5 chat-store work is complete enough to support this phase: chat
+messages are stored outside the normal unconfirmed transaction pool, message
+payload bytes are treated as opaque data, and the store preserves the fields
+needed for future encryption policy such as `txGroupId`, `recipient`,
 `chatReference`, `isText`, and `isEncrypted`.
 
-## Current Problem
+## Goal
 
-Closed groups currently control membership and approval, but their group chat is
-not automatically private at Core level. A client can choose to encrypt a
-closed-group chat message, but Core does not currently require that behavior for
-closed groups or manage the group keys needed to make it consistent across
-clients.
+Closed groups should behave like private group chat without asking normal users
+to understand key publishing, group-key rotation, or Hub-specific QDN resources.
 
-For Qortium, closed-group chat should eventually mean private group chat by
-default. The implementation should be owned by Core so every compatible client
-gets the same rule set and does not need to invent its own group-encryption
-system.
+When a local user sends a message to a closed group, Core should:
 
-## Hub Reference Model
+- discover the current group membership
+- use Core-managed encryption automatically
+- encrypt only for the members who are current at that time
+- keep the dedicated chat store opaque
+- leave open-group, direct, and general chat behavior unchanged
 
-The current Qortal Hub implementation is useful reference material, but it is
-not the final Qortium Core design.
+The first implementation should not copy Hub's QDN `DOCUMENT_PRIVATE` key-bundle
+flow. QDN can remain useful for other data, but private group chat keys should
+not depend on QDN publication.
 
-Hub currently:
+## V1 Key Model
 
-- Publishes group key material through QDN `DOCUMENT_PRIVATE` resources.
-- Uses identifiers such as `symmetric-qchat-group-{groupId}`.
-- Lets group admins publish encrypted symmetric-key bundles for group members.
-- Stores a versioned key object and encrypts each chat payload with the highest
-  available group key.
-- Supports encrypted chat messages, edits, reactions, and notifications by
-  encrypting the client message object before CHAT submission.
-- Allows a member with the current key bundle to decrypt older messages covered
-  by that bundle.
+Qortium will use cached per-sender keys for each group membership epoch.
 
-This model proves the feature is practical, but it has tradeoffs that Qortium
-should decide deliberately before moving the responsibility into Core.
+A membership epoch is the current closed-group membership snapshot. Core should
+derive a deterministic epoch id from the group id and sorted current member
+public keys, so every node can identify the same membership state without
+storing extra consensus data.
 
-## Qortium Direction
+For each closed group and membership epoch:
 
-Qortium should design a Core-owned group chat encryption layer instead of
-copying the Hub QDN key-publish flow directly.
+- each sender owns a random sender key for messages they send
+- that sender key is cached locally
+- messages from that sender are encrypted with the cached sender key
+- the sender key is announced to current group members using pairwise encrypted
+  key wrappers
+- later messages from the same sender can reuse the cached sender key until the
+  epoch changes or the sender rotates it
 
-The expected direction is:
+The sender key must be random, not derived from public group state. The
+deterministic part is the membership epoch id, not the encryption key itself.
 
-- Closed-group CHAT submissions should require Core-managed encryption once the
-  feature is enabled.
-- Open-group CHAT behavior should remain unchanged unless a future feature
-  explicitly adds optional open-group encryption.
-- Chat payloads should remain opaque to the dedicated chat store; Core should
-  validate encryption metadata and route messages without indexing plaintext.
-- The encryption envelope should be Qortium-owned, versioned, and explicit
-  enough for clients to detect, display, and migrate formats.
-- Key lifecycle should follow group lifecycle events such as joins, leaves,
-  kicks, bans, admin changes, and owner changes.
+## Envelope Types
 
-## Decisions To Make Before Code
+Encrypted group chat data should use a Qortium-owned versioned envelope inside
+`ChatTransactionData.data`. The CHAT transaction format does not need to change
+for the first implementation.
 
-The implementation should not start until these decisions are made and recorded:
+V1 envelope types:
 
-- Payload envelope: the exact binary or structured format placed in CHAT
-  `data`, including version, group id, key id, nonce, ciphertext, and any
-  sender or algorithm metadata.
-- Encryption algorithms: the symmetric encryption mode, nonce size, key size,
-  authentication behavior, and whether existing Core crypto helpers are enough.
-- Key distribution: how group members receive group chat keys without depending
-  on Hub-specific QDN publishes as the authoritative mechanism.
-- Key ownership: whether keys can be created or rotated by the owner only,
-  admins, or another explicit authority.
-- Rotation triggers: which group events force a new key and whether rotation is
-  immediate, queued, or lazy on the next chat submission.
-- New-member history: whether new members can decrypt old messages, only new
-  messages after joining, or a bounded history chosen by admins.
-- Removed-member access: whether leaving, kicked, or banned members lose access
-  only to future keys or whether additional measures are needed.
-- Plaintext policy: whether Core rejects plaintext closed-group CHAT
-  submissions immediately after activation or allows a compatibility period.
-- API shape: whether clients submit plaintext to a local Core API that encrypts
-  it, submit an encrypted envelope produced by a helper API, or both.
-- Recovery behavior: what happens when key material is missing, corrupted, or
-  not yet available to a member.
+- `MESSAGE`: encrypted user message content
+- `KEY_ANNOUNCEMENT`: sender key wrapped for one or more current members
+- `KEY_REQUEST`: request for a missing sender key for a group epoch
+- `ROTATION_REQUEST`: signed request asking senders to rotate their keys
 
-## Recommended First Implementation Shape
+Normal encrypted closed-group messages should set `isEncrypted` to `true`.
+Because transaction data contains ciphertext, clients should not rely on
+`isText` to mean the stored payload is directly readable text.
 
-The first Qortium implementation should be conservative:
+Envelope metadata should identify the version, envelope type, group id,
+membership epoch id, sender public key, sender key id, and the data needed for
+the specific envelope type.
 
-- Add a versioned encrypted group chat envelope for closed-group messages.
-- Add Core APIs that let local clients ask Core to prepare, encrypt, and submit
-  closed-group chat without exposing group keys to app code unnecessarily.
-- Reject plaintext closed-group CHAT submissions once the feature is active for
-  a chain.
-- Rotate keys forward when membership changes remove access, with old messages
-  remaining decryptable only to members who already had the old key.
-- Keep historical recovery simple at first: new members should receive future
-  keys, not automatic access to all old closed-group chat history, unless a
-  later design explicitly adds admin-approved history sharing.
-- Keep the dedicated chat store as the authoritative transient message store and
-  add only encryption-specific metadata or helper tables where needed for key
-  lifecycle.
+## Key Announcements And Requests
 
-## Planning Sequence
+When sending to a closed group, Core should check whether the local sender has a
+current sender key for the current membership epoch.
 
-1. Review the existing Core CHAT transaction format, group membership events,
-   and wallet/key access points.
-2. Define the encrypted payload envelope and key record model.
-3. Define local API behavior for creating, encrypting, decrypting, and
-   submitting closed-group chat.
-4. Define validation behavior for closed-group plaintext rejection and encrypted
-   envelope checks.
-5. Define key rotation behavior for group membership and admin events.
-6. Add tests for envelope parsing, key lifecycle, closed-group validation, API
-   submission, REST reads, websocket delivery, peer ingress, and retention.
+If no key exists, Core creates one and announces it to the current members. If a
+key exists but has not been announced recently, Core may re-announce it before
+or with a message.
 
-## Non-Goals For The First Pass
+If a member receives a message but does not have the matching sender key, their
+node can send a signed `KEY_REQUEST` control envelope for that group, membership
+epoch, sender, and key id.
 
-- Do not copy Hub's QDN `DOCUMENT_PRIVATE` key-publish flow into Core as-is.
-- Do not add plaintext message indexing for closed-group chat.
-- Do not make the dedicated chat store decrypt messages for normal reads.
+In V1, key re-announcements are sender-owned: the original sender responds by
+announcing that sender key to the requester. Forwarding another sender's key is
+deferred to a later design because it increases trust and leakage concerns.
+
+Control envelopes are allowed for closed groups even after plaintext
+closed-group chat is rejected, because they are chat-layer metadata rather than
+user message content.
+
+## Rotation And History
+
+Membership changes force a new membership epoch. Joins, leaves, kicks, and bans
+therefore move future messages to new sender keys.
+
+Manual rotation is also supported:
+
+- a local user can rotate their own sender key at any time
+- the group owner or an admin can publish a signed `ROTATION_REQUEST`
+- rotation requests are rate-limited to prevent abuse
+- seeing an accepted rotation request causes each sender to rotate their own key
+  the next time they send
+
+V1 keeps any-member rotation requests as a future policy option. Owner/admin
+requests are the initial default because they are easier to reason about and
+less likely to create key churn.
+
+History follows forward secrecy limits:
+
+- new members receive access to future messages only
+- removed members lose access to future messages only
+- old messages cannot be clawed back from anyone who already had the old key
+- if a member account or device is compromised, the real fix is to remove that
+  member, which forces a new membership epoch
+
+## Planned Local APIs
+
+Clients should not need to implement group encryption themselves. Core should
+provide restricted local APIs for:
+
+- sending an encrypted closed-group message
+- decrypting closed-group messages for a local account
+- requesting a missing sender key
+- re-announcing the local sender key
+- rotating the local sender key
+- requesting group rotation as owner or admin
+
+Core will need local access to the sender account's private key for encryption,
+decryption, signing, and key wrapping. The first API can follow existing
+private-key-based local endpoints. A later wallet or unlocked-account design can
+hide private keys from callers more cleanly.
+
+## Validation Policy
+
+Core validation should remain lightweight and compatible with normal peer
+relay:
+
+- open-group, direct, and general chat keep their current behavior
+- closed-group user messages must use the Qortium private group envelope once
+  the feature is active
+- closed-group control envelopes must be structurally valid and signed by a
+  current member
+- peer validation should not need plaintext or private group keys
+- the chat store should not decrypt or index closed-group message content
+
+If any current group member lacks a known public key, local send should fail
+clearly instead of silently excluding that member.
+
+## Implementation Sequence
+
+1. Add envelope serialization and parsing tests.
+2. Add chat-specific AES-GCM helpers with associated data.
+3. Add membership epoch id computation.
+4. Add a local sender-key cache for group id, epoch id, sender public key, key
+   id, key bytes, and announcement timestamps.
+5. Add pairwise key wrapping using the sender and recipient account public
+   keys.
+6. Add local APIs for send, decrypt, key request, key announcement, local
+   rotation, and owner/admin rotation request.
+7. Update `ChatService` validation for closed-group envelope requirements.
+8. Add integration tests for send, read, missing-key recovery, membership
+   changes, manual rotation, plaintext rejection, and open-group compatibility.
+
+## Non-Goals For V1
+
+- Do not publish group chat keys through QDN.
+- Do not add one shared group-wide key controlled by owners or admins.
+- Do not allow automatic old-history access for new members.
+- Do not let the chat store decrypt or index closed-group plaintext.
 - Do not require backwards compatibility with old closed-group chat history,
   because Qortium is intended as a baseline for new chains.
-- Do not design admin-only encrypted group content unless it is needed for the
-  chat-key lifecycle itself.
+- Do not add any-member rotation requests until the owner/admin request policy
+  has been implemented and tested.
