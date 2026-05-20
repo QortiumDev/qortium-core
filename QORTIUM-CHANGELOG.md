@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group chat local APIs
+
+Added restricted local APIs for sending and decrypting Core-managed private closed-group chat messages. The new API can create a cached group key for the current membership epoch, publish a signed key announcement when needed, store the encrypted message as a signed CHAT transaction, and decrypt messages when the local node already has the matching key, while leaving closed-group plaintext enforcement for a later step.
+
 ### 2026-05-20 - chat: add private group chat key cache
 
 Added an in-memory private group chat key cache for the next stage of closed-group encryption. The cache can store locally created keys, verify and unwrap received key announcements for a local recipient, look up exact or current-epoch keys with defensive copies, and keep this state process-local until chat APIs and announcement rehydration are wired in later.

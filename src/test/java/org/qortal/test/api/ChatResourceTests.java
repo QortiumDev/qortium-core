@@ -6,21 +6,30 @@ import org.bouncycastle.util.encoders.Base64;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.api.ApiError;
+import org.qortal.api.model.PrivateGroupChatDecryptRequest;
+import org.qortal.api.model.PrivateGroupChatDecryptResponse;
+import org.qortal.api.model.PrivateGroupChatSendRequest;
+import org.qortal.api.model.PrivateGroupChatSendResponse;
 import org.qortal.api.resource.ChatResource;
 import org.qortal.chat.ChatService;
+import org.qortal.chat.crypto.PrivateGroupChatKeyCache;
 import org.qortal.data.chat.ActiveChats;
 import org.qortal.data.chat.ChatMessage;
+import org.qortal.data.group.GroupData;
+import org.qortal.data.group.GroupMemberData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.group.Group;
+import org.qortal.group.Group.ApprovalThreshold;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.settings.Settings;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.GroupUtils;
 import org.qortal.test.common.TestAccount;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
@@ -49,6 +58,7 @@ public class ChatResourceTests extends ApiCommon {
 	@Before
 	public void buildResource() {
 		this.chatResource = (ChatResource) ApiCommon.buildResource(ChatResource.class);
+		PrivateGroupChatKeyCache.getInstance().clear();
 	}
 
 	@Test
@@ -172,6 +182,66 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	@Test
+	public void testPrivateGroupSendAndDecrypt() throws Exception {
+		byte[] payload = "private api message".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatDecryptRequest decryptRequest = new PrivateGroupChatDecryptRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-send");
+			addMember(repository, groupId, bob);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.data = payload;
+			sendRequest.isText = true;
+			decryptRequest.recipientPrivateKey = bob.getPrivateKey();
+		}
+
+		PrivateGroupChatSendResponse sendResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		assertNotNull(sendResponse.keyAnnouncementSignature);
+		assertNotNull(sendResponse.messageSignature);
+		assertNotNull(sendResponse.epochId);
+		assertNotNull(sendResponse.keyId);
+
+		decryptRequest.messageSignature = sendResponse.messageSignature;
+		PrivateGroupChatDecryptResponse decryptResponse = this.chatResource.decryptPrivateGroupChat(null, decryptRequest);
+
+		assertArrayEquals(payload, decryptResponse.data);
+		assertTrue(decryptResponse.isText);
+		assertEquals(sendRequest.groupId, decryptResponse.groupId);
+		assertArrayEquals(sendResponse.epochId, decryptResponse.epochId);
+		assertArrayEquals(sendResponse.keyId, decryptResponse.keyId);
+	}
+
+	@Test
+	public void testPrivateGroupDecryptRequiresCachedKey() throws Exception {
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatDecryptRequest decryptRequest = new PrivateGroupChatDecryptRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-missing-key");
+			addMember(repository, groupId, bob);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.data = "private api message".getBytes(StandardCharsets.UTF_8);
+			sendRequest.isText = true;
+			decryptRequest.recipientPrivateKey = bob.getPrivateKey();
+		}
+
+		PrivateGroupChatSendResponse sendResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		decryptRequest.messageSignature = sendResponse.messageSignature;
+		PrivateGroupChatKeyCache.getInstance().clear();
+
+		assertApiError(ApiError.INVALID_CRITERIA, () -> this.chatResource.decryptPrivateGroupChat(null, decryptRequest));
+	}
+
+	@Test
 	public void testBuildChatUsesDedicatedServiceWithoutStoring() throws DataException, TransformationException {
 		ChatTransactionData chatData;
 
@@ -289,6 +359,19 @@ public class ChatResourceTests extends ApiCommon {
 		assertEquals(ValidationResult.OK, chatTransaction.importAsUnconfirmed());
 
 		return chatData;
+	}
+
+	private static int createClosedGroup(Repository repository, TestAccount owner, String groupName) throws DataException {
+		return GroupUtils.createGroup(repository, owner, groupName, false, ApprovalThreshold.ONE, 10, 40);
+	}
+
+	private static void addMember(Repository repository, int groupId, TestAccount account) throws DataException {
+		account.ensureAccount();
+
+		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+		repository.getGroupRepository().save(new GroupMemberData(groupId, account.getAddress(),
+				groupData.getCreated(), groupData.getReference()));
+		repository.saveChanges();
 	}
 
 	private static ChatTransactionData chat(TestAccount sender, int groupId, String recipient, String message, byte[] signature, long timestamp) {

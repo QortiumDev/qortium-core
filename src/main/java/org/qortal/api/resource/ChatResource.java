@@ -14,7 +14,12 @@ import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.Security;
+import org.qortal.api.model.PrivateGroupChatDecryptRequest;
+import org.qortal.api.model.PrivateGroupChatDecryptResponse;
+import org.qortal.api.model.PrivateGroupChatSendRequest;
+import org.qortal.api.model.PrivateGroupChatSendResponse;
 import org.qortal.chat.ChatService;
+import org.qortal.chat.PrivateGroupChatService;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.chat.ActiveChats;
 import org.qortal.data.chat.ChatMessage;
@@ -26,6 +31,7 @@ import org.qortal.repository.RepositoryManager;
 import org.qortal.transaction.Transaction.TransactionType;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.transform.TransformationException;
+import org.qortal.transform.Transformer;
 import org.qortal.transform.transaction.ChatTransactionTransformer;
 import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.Base58;
@@ -34,6 +40,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import java.security.GeneralSecurityException;
 import java.util.List;
 
 import static org.qortal.data.chat.ChatMessage.Encoding;
@@ -229,6 +236,130 @@ public class ChatResource {
 	
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			return repository.getChatStoreRepository().getActiveChats(address, encoding, hasChatReference);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/group/send")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "Send encrypted private group chat message",
+		description = "Creates and stores signed CHAT transactions for a Core-managed encrypted closed-group message. If the local node has no cached key for the current membership epoch, this also stores a key announcement first.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = PrivateGroupChatSendRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "stored private group chat transaction signatures",
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					schema = @Schema(
+						implementation = PrivateGroupChatSendResponse.class
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_DATA, ApiError.INVALID_CRITERIA, ApiError.TRANSACTION_INVALID,
+			ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public PrivateGroupChatSendResponse sendPrivateGroupChat(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PrivateGroupChatSendRequest sendRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (sendRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+		if (sendRequest.senderPrivateKey == null || sendRequest.senderPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateGroupChatService.SendResult result = PrivateGroupChatService.getInstance().send(repository,
+					sendRequest.senderPrivateKey, sendRequest.groupId, sendRequest.data, sendRequest.isText,
+					sendRequest.chatReference);
+
+			PrivateGroupChatSendResponse response = new PrivateGroupChatSendResponse();
+			response.messageSignature = result.getMessageSignature();
+			response.keyAnnouncementSignature = result.getKeyAnnouncementSignature();
+			response.epochId = result.getEpochId();
+			response.keyId = result.getKeyId();
+			return response;
+		} catch (PrivateGroupChatService.ValidationException e) {
+			throw TransactionsResource.createTransactionInvalidException(request, e.getValidationResult());
+		} catch (PrivateGroupChatService.PrivateGroupChatException | GeneralSecurityException | IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/group/decrypt")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "Decrypt private group chat message",
+		description = "Decrypts a stored private closed-group CHAT message using a locally cached group key.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = PrivateGroupChatDecryptRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "decrypted private group chat message",
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					schema = @Schema(
+						implementation = PrivateGroupChatDecryptResponse.class
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_DATA, ApiError.INVALID_CRITERIA, ApiError.TRANSFORMATION_ERROR,
+			ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public PrivateGroupChatDecryptResponse decryptPrivateGroupChat(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PrivateGroupChatDecryptRequest decryptRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (decryptRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+		if (decryptRequest.recipientPrivateKey == null || decryptRequest.recipientPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateGroupChatService.DecryptResult result = PrivateGroupChatService.getInstance().decrypt(repository,
+					decryptRequest.recipientPrivateKey, decryptRequest.messageSignature);
+
+			PrivateGroupChatDecryptResponse response = new PrivateGroupChatDecryptResponse();
+			response.data = result.getData();
+			response.isText = result.isText();
+			response.groupId = result.getGroupId();
+			response.epochId = result.getEpochId();
+			response.keyId = result.getKeyId();
+			return response;
+		} catch (PrivateGroupChatService.PrivateGroupChatException | GeneralSecurityException | IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
