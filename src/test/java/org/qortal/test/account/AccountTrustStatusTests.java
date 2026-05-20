@@ -31,8 +31,8 @@ public class AccountTrustStatusTests extends Common {
 	@Test
 	public void testEffectiveVoteWeightMultipliers() {
 		assertEquals(100, AccountTrustStatus.GOLD.calculateEffectiveVoteWeight(100));
-		assertEquals(75, AccountTrustStatus.SILVER.calculateEffectiveVoteWeight(101));
-		assertEquals(25, AccountTrustStatus.BRONZE.calculateEffectiveVoteWeight(101));
+		assertEquals(70, AccountTrustStatus.SILVER.calculateEffectiveVoteWeight(101));
+		assertEquals(40, AccountTrustStatus.BRONZE.calculateEffectiveVoteWeight(101));
 		assertEquals(0, AccountTrustStatus.UNVERIFIED.calculateEffectiveVoteWeight(100));
 		assertEquals(0, AccountTrustStatus.SUSPICIOUS.calculateEffectiveVoteWeight(100));
 	}

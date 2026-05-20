@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - test: align trust policy defaults
+
+Updated the account trust policy tests so their pinned launch expectations match Qortium's current Silver and Bronze vote-weight defaults. The tests now verify the configured 70% Silver and 40% Bronze multipliers, and the custom-policy cases replace those current defaults instead of older calibration values.
+
 ### 2026-05-20 - docs: label documentation status
 
 Added status labels to the documentation index so testers, developers, chain builders, and contributors can tell which pages are current guidance, active planning notes, legacy reference material, or upstream Qortal comparison material. The inherited auto-update, Windows installer, upstream network, and QDN app docs now also open with short status notices, making the documentation set safer to navigate before the larger content rewrites begin.

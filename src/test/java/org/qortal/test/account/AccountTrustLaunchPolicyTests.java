@@ -37,8 +37,8 @@ public class AccountTrustLaunchPolicyTests extends Common {
 		assertEquals(1440, AccountTrustPolicy.getAccountRatingChangeCooldownBlocks());
 
 		assertStatusPolicy(AccountTrustStatus.GOLD, 100, true);
-		assertStatusPolicy(AccountTrustStatus.SILVER, 75, true);
-		assertStatusPolicy(AccountTrustStatus.BRONZE, 25, true);
+		assertStatusPolicy(AccountTrustStatus.SILVER, 70, true);
+		assertStatusPolicy(AccountTrustStatus.BRONZE, 40, true);
 		assertStatusPolicy(AccountTrustStatus.UNVERIFIED, 0, true);
 		assertStatusPolicy(AccountTrustStatus.SUSPICIOUS, 0, false);
 

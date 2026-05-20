@@ -57,8 +57,8 @@ public class AccountTrustPolicyTests extends Common {
 	@Test
 	public void testConfiguredVoteWeightPercentages() {
 		assertEquals(100, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.GOLD));
-		assertEquals(75, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.SILVER));
-		assertEquals(25, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.BRONZE));
+		assertEquals(70, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.SILVER));
+		assertEquals(40, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.BRONZE));
 		assertEquals(0, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.UNVERIFIED));
 		assertEquals(0, AccountTrustPolicy.getVoteWeightPercent(AccountTrustStatus.SUSPICIOUS));
 	}
@@ -188,7 +188,7 @@ public class AccountTrustPolicyTests extends Common {
 	@Test
 	public void testCustomVoteWeightPolicyChangesEffectiveWeight() throws Exception {
 		String config = replaceRequired(loadDefaultTestChainConfig(),
-				"{ \"status\": \"SILVER\", \"percent\": 75 }",
+				"{ \"status\": \"SILVER\", \"percent\": 70 }",
 				"{ \"status\": \"SILVER\", \"percent\": 60 }");
 		loadTemporaryConfig(config);
 
@@ -267,17 +267,17 @@ public class AccountTrustPolicyTests extends Common {
 	@Test
 	public void testCalibrationMatrixVoteMultipliersChangeEffectiveWeights() throws Exception {
 		String config = replaceRequired(loadDefaultTestChainConfig(),
-				"{ \"status\": \"BRONZE\", \"percent\": 25 }",
-				"{ \"status\": \"BRONZE\", \"percent\": 40 }");
+				"{ \"status\": \"BRONZE\", \"percent\": 40 }",
+				"{ \"status\": \"BRONZE\", \"percent\": 35 }");
 		config = replaceRequired(config,
-				"{ \"status\": \"SILVER\", \"percent\": 75 }",
+				"{ \"status\": \"SILVER\", \"percent\": 70 }",
 				"{ \"status\": \"SILVER\", \"percent\": 60 }");
 		config = replaceRequired(config,
 				"{ \"status\": \"GOLD\", \"percent\": 100 }",
 				"{ \"status\": \"GOLD\", \"percent\": 90 }");
 		loadTemporaryConfig(config);
 
-		assertEquals(400, AccountTrustPolicy.calculateEffectiveVoteWeight(1000, AccountTrustStatus.BRONZE));
+		assertEquals(350, AccountTrustPolicy.calculateEffectiveVoteWeight(1000, AccountTrustStatus.BRONZE));
 		assertEquals(600, AccountTrustPolicy.calculateEffectiveVoteWeight(1000, AccountTrustStatus.SILVER));
 		assertEquals(900, AccountTrustPolicy.calculateEffectiveVoteWeight(1000, AccountTrustStatus.GOLD));
 		assertEquals(0, AccountTrustPolicy.calculateEffectiveVoteWeight(1000, AccountTrustStatus.UNVERIFIED));
@@ -392,7 +392,7 @@ public class AccountTrustPolicyTests extends Common {
 	@Test
 	public void testTrustPolicyEndpointReflectsCustomConfig() throws Exception {
 		String config = replaceRequired(loadDefaultTestChainConfig(),
-				"{ \"status\": \"SILVER\", \"percent\": 75 }",
+				"{ \"status\": \"SILVER\", \"percent\": 70 }",
 				"{ \"status\": \"SILVER\", \"percent\": 65 }");
 		config = replaceRequired(config,
 				"{ \"level\": 1, \"threshold\": 1000000, \"cap\": 500000 }",
