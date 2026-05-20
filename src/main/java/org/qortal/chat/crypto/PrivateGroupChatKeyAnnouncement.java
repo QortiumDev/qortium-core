@@ -72,6 +72,20 @@ public class PrivateGroupChatKeyAnnouncement {
 				keyWrapper.getWrappedKey(), recipientPrivateKey, envelope.getCreatorPublicKey());
 	}
 
+	public static byte[] unwrapHistoricalForRecipient(PrivateGroupChatEnvelope envelope, byte[] recipientPrivateKey)
+			throws GeneralSecurityException {
+		validateLength(recipientPrivateKey, Transformer.PRIVATE_KEY_LENGTH, "recipient private key");
+		validateHistorical(envelope);
+
+		byte[] recipientPublicKey = Crypto.toPublicKey(recipientPrivateKey);
+		PrivateGroupChatEnvelope.KeyWrapper keyWrapper = findWrapper(envelope.getKeyWrappers(), recipientPublicKey);
+		if (keyWrapper == null)
+			throw new GeneralSecurityException("Key announcement does not include recipient wrapper");
+
+		return PrivateGroupChatCrypto.unwrapGroupKey(envelope.getGroupId(), envelope.getEpochId(), envelope.getKeyId(),
+				keyWrapper.getWrappedKey(), recipientPrivateKey, envelope.getCreatorPublicKey());
+	}
+
 	private static void validate(PrivateGroupChatMembership.MembershipEpoch epoch, PrivateGroupChatEnvelope envelope)
 			throws GeneralSecurityException {
 		validateEpoch(epoch);
@@ -107,6 +121,30 @@ public class PrivateGroupChatKeyAnnouncement {
 			throw new GeneralSecurityException("Key announcement signature is invalid");
 	}
 
+	private static void validateHistorical(PrivateGroupChatEnvelope envelope) throws GeneralSecurityException {
+		if (envelope == null)
+			throw new GeneralSecurityException("Key announcement envelope is missing");
+
+		if (envelope.getType() != PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT)
+			throw new GeneralSecurityException("Envelope is not a key announcement");
+
+		byte[] keyId = envelope.getKeyId();
+		byte[] epochId = envelope.getEpochId();
+		byte[] creatorPublicKey = envelope.getCreatorPublicKey();
+		byte[] signature = envelope.getSignature();
+		validateLength(keyId, PrivateGroupChatEnvelope.KEY_ID_LENGTH, "key id");
+		validateLength(epochId, PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, "epoch id");
+		validateLength(creatorPublicKey, PrivateGroupChatEnvelope.PUBLIC_KEY_LENGTH, "creator public key");
+		validateLength(signature, PrivateGroupChatEnvelope.SIGNATURE_LENGTH, "signature");
+
+		List<PrivateGroupChatEnvelope.KeyWrapper> sortedWrappers = validateAndSortWrappers(envelope.getKeyWrappers());
+		byte[] signingBytes = buildSigningBytes(envelope.getGroupId(), epochId, keyId,
+				creatorPublicKey, sortedWrappers);
+
+		if (!Crypto.verify(creatorPublicKey, signature, signingBytes))
+			throw new GeneralSecurityException("Key announcement signature is invalid");
+	}
+
 	private static List<PrivateGroupChatEnvelope.KeyWrapper> validateAndSortWrappers(List<byte[]> memberPublicKeys,
 			List<PrivateGroupChatEnvelope.KeyWrapper> keyWrappers) throws GeneralSecurityException {
 		if (keyWrappers == null || keyWrappers.isEmpty())
@@ -136,6 +174,30 @@ public class PrivateGroupChatKeyAnnouncement {
 
 		if (recipientSet.size() != memberSet.size())
 			throw new GeneralSecurityException("Key announcement does not cover every current group member");
+
+		return sortedWrappers(keyWrappers);
+	}
+
+	private static List<PrivateGroupChatEnvelope.KeyWrapper> validateAndSortWrappers(
+			List<PrivateGroupChatEnvelope.KeyWrapper> keyWrappers) throws GeneralSecurityException {
+		if (keyWrappers == null || keyWrappers.isEmpty())
+			throw new GeneralSecurityException("Key announcement has no wrappers");
+
+		Set<ByteArray> recipientSet = new HashSet<>(keyWrappers.size());
+		for (PrivateGroupChatEnvelope.KeyWrapper keyWrapper : keyWrappers) {
+			if (keyWrapper == null)
+				throw new GeneralSecurityException("Key announcement wrapper is missing");
+
+			byte[] recipientPublicKey = keyWrapper.getRecipientPublicKey();
+			validateLength(recipientPublicKey, PrivateGroupChatEnvelope.PUBLIC_KEY_LENGTH, "recipient public key");
+
+			if (!recipientSet.add(ByteArray.copyOf(recipientPublicKey)))
+				throw new GeneralSecurityException("Key announcement includes duplicate recipient wrapper");
+
+			byte[] wrappedKey = keyWrapper.getWrappedKey();
+			if (wrappedKey == null || wrappedKey.length <= PrivateGroupChatEnvelope.NONCE_LENGTH)
+				throw new GeneralSecurityException("Key announcement wrapper is too short");
+		}
 
 		return sortedWrappers(keyWrappers);
 	}

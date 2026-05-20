@@ -40,6 +40,13 @@ public class PrivateGroupChatKeyCache {
 		return put(announcementEnvelope, groupKey, now(), nextSequence());
 	}
 
+	public synchronized Entry putFromHistoricalAnnouncement(PrivateGroupChatEnvelope announcementEnvelope,
+			byte[] recipientPrivateKey) throws GeneralSecurityException {
+		byte[] groupKey = PrivateGroupChatKeyAnnouncement.unwrapHistoricalForRecipient(announcementEnvelope,
+				recipientPrivateKey);
+		return put(announcementEnvelope, groupKey, now(), nextSequence());
+	}
+
 	public synchronized Entry get(int groupId, byte[] epochId, byte[] keyId) {
 		CacheKey cacheKey = new CacheKey(groupId, epochId, keyId);
 		CachedEntry cachedEntry = this.entriesByKey.get(cacheKey);

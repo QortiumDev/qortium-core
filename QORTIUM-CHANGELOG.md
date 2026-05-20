@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: support private group chat historical epochs
+
+Allowed private group chat decryption to use the key announcement that matches the message's original membership epoch instead of requiring the group to still have that same current member set. Older messages can now remain readable to accounts that were included in the signed key announcement, while newer members still cannot use a node-wide cached key to decrypt messages from before they joined, and new outgoing messages continue to use the current group membership epoch.
+
 ### 2026-05-20 - chat: rehydrate private group keys from announcements
 
 Made private group chat decryption recover missing local keys from stored key announcements. A recipient node can now clear or miss its in-memory key cache, scan the retained group chat history for a matching signed key announcement, unwrap the group key for its local account, cache it, and continue decrypting without requiring the sender's node-local cache state.

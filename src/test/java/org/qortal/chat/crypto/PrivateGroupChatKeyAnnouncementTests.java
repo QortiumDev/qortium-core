@@ -139,6 +139,43 @@ public class PrivateGroupChatKeyAnnouncementTests extends Common {
 	}
 
 	@Test
+	public void testHistoricalUnwrapAcceptsSignedOldEpochAfterMembershipChanges() throws DataException, GeneralSecurityException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+
+			int groupId = createClosedGroup(repository, alice, "key-announcement-historical");
+			addMember(repository, groupId, bob);
+			PrivateGroupChatMembership.MembershipEpoch oldEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository, groupId);
+			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 35);
+			PrivateGroupChatEnvelope envelope = PrivateGroupChatKeyAnnouncement.create(oldEpoch,
+					groupKey, alice.getPrivateKey());
+
+			addMember(repository, groupId, chloe);
+			PrivateGroupChatMembership.MembershipEpoch currentEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					groupId);
+			assertFalse(PrivateGroupChatKeyAnnouncement.isValid(currentEpoch, envelope));
+			assertThrows(GeneralSecurityException.class,
+					() -> PrivateGroupChatKeyAnnouncement.unwrapForRecipient(currentEpoch, envelope, bob.getPrivateKey()));
+
+			assertArrayEquals(groupKey,
+					PrivateGroupChatKeyAnnouncement.unwrapHistoricalForRecipient(envelope, bob.getPrivateKey()));
+			assertThrows(GeneralSecurityException.class,
+					() -> PrivateGroupChatKeyAnnouncement.unwrapHistoricalForRecipient(envelope, chloe.getPrivateKey()));
+
+			byte[] tamperedSignature = envelope.getSignature();
+			tamperedSignature[0] ^= 1;
+			PrivateGroupChatEnvelope invalidSignature = PrivateGroupChatEnvelope.keyAnnouncement(
+					envelope.getGroupId(), envelope.getEpochId(), envelope.getKeyId(), envelope.getCreatorPublicKey(),
+					envelope.getKeyWrappers(), tamperedSignature);
+			assertThrows(GeneralSecurityException.class,
+					() -> PrivateGroupChatKeyAnnouncement.unwrapHistoricalForRecipient(invalidSignature,
+							bob.getPrivateKey()));
+		}
+	}
+
+	@Test
 	public void testWrapperCoverageMustMatchCurrentMembers() throws DataException, GeneralSecurityException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");

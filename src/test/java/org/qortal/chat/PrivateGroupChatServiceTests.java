@@ -25,9 +25,11 @@ import org.qortal.utils.NTP;
 
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -123,7 +125,7 @@ public class PrivateGroupChatServiceTests extends Common {
 			PrivateGroupChatService.SendResult sendResult = PrivateGroupChatService.getInstance().send(repository,
 					fixture.alice.getPrivateKey(), fixture.groupId, bytes("secret"), true, null);
 
-			assertThrows(GeneralSecurityException.class,
+			assertThrows(PrivateGroupChatService.PrivateGroupChatException.class,
 					() -> PrivateGroupChatService.getInstance().decrypt(repository, fixture.chloe.getPrivateKey(),
 							sendResult.getMessageSignature()));
 		}
@@ -184,6 +186,61 @@ public class PrivateGroupChatServiceTests extends Common {
 			assertThrows(PrivateGroupChatService.PrivateGroupChatException.class,
 					() -> PrivateGroupChatService.getInstance().decrypt(repository, fixture.bob.getPrivateKey(),
 							messageData.getSignature()));
+		}
+	}
+
+	@Test
+	public void testHistoricalMemberCanDecryptOldMessageAfterMembershipChange() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-historical-decrypt");
+			byte[] plaintext = bytes("old epoch secret");
+
+			PrivateGroupChatService.SendResult oldResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, plaintext, true, null);
+			PrivateGroupChatKeyCache.getInstance().clear();
+
+			addMember(repository, fixture.groupId, fixture.chloe);
+			PrivateGroupChatMembership.MembershipEpoch currentEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					fixture.groupId);
+			assertFalse(Arrays.equals(oldResult.getEpochId(), currentEpoch.getEpochId()));
+
+			PrivateGroupChatService.DecryptResult decryptResult = PrivateGroupChatService.getInstance().decrypt(repository,
+					fixture.bob.getPrivateKey(), oldResult.getMessageSignature());
+			assertArrayEquals(plaintext, decryptResult.getData());
+			assertArrayEquals(oldResult.getEpochId(), decryptResult.getEpochId());
+			assertArrayEquals(oldResult.getKeyId(), decryptResult.getKeyId());
+
+			assertThrows(PrivateGroupChatService.PrivateGroupChatException.class,
+					() -> PrivateGroupChatService.getInstance().decrypt(repository, fixture.chloe.getPrivateKey(),
+							oldResult.getMessageSignature()));
+		}
+	}
+
+	@Test
+	public void testSendAfterMembershipChangeUsesNewEpoch() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-new-epoch");
+			PrivateGroupChatService.SendResult oldResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, bytes("old message"), true, null);
+
+			addMember(repository, fixture.groupId, fixture.chloe);
+			byte[] plaintext = bytes("new epoch message");
+			PrivateGroupChatService.SendResult newResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, plaintext, true, oldResult.getMessageSignature());
+			PrivateGroupChatMembership.MembershipEpoch currentEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					fixture.groupId);
+
+			assertNotNull(newResult.getKeyAnnouncementSignature());
+			assertFalse(Arrays.equals(oldResult.getEpochId(), newResult.getEpochId()));
+			assertArrayEquals(currentEpoch.getEpochId(), newResult.getEpochId());
+
+			PrivateGroupChatService.DecryptResult bobDecryptResult = PrivateGroupChatService.getInstance().decrypt(repository,
+					fixture.bob.getPrivateKey(), newResult.getMessageSignature());
+			assertArrayEquals(plaintext, bobDecryptResult.getData());
+
+			PrivateGroupChatService.DecryptResult chloeDecryptResult = PrivateGroupChatService.getInstance().decrypt(repository,
+					fixture.chloe.getPrivateKey(), newResult.getMessageSignature());
+			assertArrayEquals(plaintext, chloeDecryptResult.getData());
 		}
 	}
 

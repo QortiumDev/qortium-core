@@ -8,7 +8,6 @@ import org.qortal.chat.crypto.PrivateGroupChatKeyCache;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
 import org.qortal.controller.ChatNotifier;
 import org.qortal.controller.Controller;
-import org.qortal.crypto.Crypto;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.repository.DataException;
@@ -77,19 +76,9 @@ public class PrivateGroupChatService {
 		if (envelope.getType() != PrivateGroupChatEnvelope.Type.MESSAGE)
 			throw new PrivateGroupChatException("Private group chat transaction is not an encrypted message");
 
-		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
-				envelope.getGroupId());
-		if (!Arrays.equals(epoch.getEpochId(), envelope.getEpochId()))
-			throw new PrivateGroupChatException("Private group chat message is not for the current membership epoch");
-
-		byte[] recipientPublicKey = Crypto.toPublicKey(recipientPrivateKey);
-		if (!isMember(epoch, recipientPublicKey))
-			throw new GeneralSecurityException("Recipient is not a current member of this private group chat epoch");
-
-		PrivateGroupChatKeyCache.Entry keyEntry = PrivateGroupChatKeyCache.getInstance().get(envelope.getGroupId(),
-				envelope.getEpochId(), envelope.getKeyId());
+		PrivateGroupChatKeyCache.Entry keyEntry = getAuthorizedCachedKey(envelope, recipientPrivateKey);
 		if (keyEntry == null)
-			keyEntry = rehydrateKeyFromAnnouncements(repository, epoch, envelope.getKeyId(), recipientPrivateKey);
+			keyEntry = rehydrateKeyFromAnnouncements(repository, envelope, recipientPrivateKey);
 
 		if (keyEntry == null)
 			throw new PrivateGroupChatException("Private group chat key is not cached locally");
@@ -101,9 +90,31 @@ public class PrivateGroupChatService {
 				envelope.getEpochId(), envelope.getKeyId());
 	}
 
+	private static PrivateGroupChatKeyCache.Entry getAuthorizedCachedKey(PrivateGroupChatEnvelope messageEnvelope,
+			byte[] recipientPrivateKey) {
+		PrivateGroupChatKeyCache.Entry keyEntry = PrivateGroupChatKeyCache.getInstance().get(
+				messageEnvelope.getGroupId(), messageEnvelope.getEpochId(), messageEnvelope.getKeyId());
+		if (keyEntry == null)
+			return null;
+
+		try {
+			PrivateGroupChatEnvelope announcementEnvelope = PrivateGroupChatEnvelope.fromBytes(keyEntry.getAnnouncementBytes());
+			byte[] unwrappedGroupKey = PrivateGroupChatKeyAnnouncement.unwrapHistoricalForRecipient(announcementEnvelope,
+					recipientPrivateKey);
+
+			if (!Arrays.equals(unwrappedGroupKey, keyEntry.getGroupKey()))
+				return null;
+
+			return keyEntry;
+		} catch (GeneralSecurityException | IllegalArgumentException | TransformationException e) {
+			return null;
+		}
+	}
+
 	private static PrivateGroupChatKeyCache.Entry rehydrateKeyFromAnnouncements(Repository repository,
-			PrivateGroupChatMembership.MembershipEpoch epoch, byte[] keyId, byte[] recipientPrivateKey) throws DataException {
-		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(epoch.getGroupId());
+			PrivateGroupChatEnvelope messageEnvelope, byte[] recipientPrivateKey) throws DataException {
+		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(
+				messageEnvelope.getGroupId());
 
 		for (ChatTransactionData groupMessage : groupMessages) {
 			if (!groupMessage.getIsEncrypted())
@@ -119,17 +130,17 @@ public class PrivateGroupChatService {
 			if (announcementEnvelope.getType() != PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT)
 				continue;
 
-			if (announcementEnvelope.getGroupId() != epoch.getGroupId())
+			if (announcementEnvelope.getGroupId() != messageEnvelope.getGroupId())
 				continue;
 
-			if (!Arrays.equals(announcementEnvelope.getEpochId(), epoch.getEpochId()))
+			if (!Arrays.equals(announcementEnvelope.getEpochId(), messageEnvelope.getEpochId()))
 				continue;
 
-			if (!Arrays.equals(announcementEnvelope.getKeyId(), keyId))
+			if (!Arrays.equals(announcementEnvelope.getKeyId(), messageEnvelope.getKeyId()))
 				continue;
 
 			try {
-				return PrivateGroupChatKeyCache.getInstance().putFromAnnouncement(epoch, announcementEnvelope,
+				return PrivateGroupChatKeyCache.getInstance().putFromHistoricalAnnouncement(announcementEnvelope,
 						recipientPrivateKey);
 			} catch (GeneralSecurityException | IllegalArgumentException e) {
 				// Ignore unusable announcements and keep looking for another valid wrapper.

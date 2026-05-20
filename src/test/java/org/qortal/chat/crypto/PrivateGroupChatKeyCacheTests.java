@@ -70,6 +70,33 @@ public class PrivateGroupChatKeyCacheTests extends Common {
 	}
 
 	@Test
+	public void testPutFromHistoricalAnnouncementDoesNotRequireCurrentEpoch() throws DataException, GeneralSecurityException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "key-cache-historical");
+			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 15);
+			PrivateGroupChatEnvelope announcement = PrivateGroupChatKeyAnnouncement.create(fixture.epoch,
+					groupKey, fixture.alice.getPrivateKey());
+
+			addMember(repository, fixture.groupId, fixture.chloe);
+			PrivateGroupChatMembership.MembershipEpoch currentEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					fixture.groupId);
+
+			PrivateGroupChatKeyCache cache = new PrivateGroupChatKeyCache();
+			assertThrows(GeneralSecurityException.class,
+					() -> cache.putFromAnnouncement(currentEpoch, announcement, fixture.bob.getPrivateKey()));
+
+			PrivateGroupChatKeyCache.Entry storedEntry = cache.putFromHistoricalAnnouncement(announcement,
+					fixture.bob.getPrivateKey());
+			assertArrayEquals(groupKey, storedEntry.getGroupKey());
+			assertArrayEquals(groupKey, cache.get(fixture.groupId, fixture.epoch.getEpochId(),
+					announcement.getKeyId()).getGroupKey());
+
+			assertThrows(GeneralSecurityException.class,
+					() -> cache.putFromHistoricalAnnouncement(announcement, fixture.chloe.getPrivateKey()));
+		}
+	}
+
+	@Test
 	public void testDuplicateKeyRefreshesSingleEntry() throws DataException, GeneralSecurityException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Fixture fixture = createFixture(repository, "key-cache-duplicate");
