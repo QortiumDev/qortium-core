@@ -8,8 +8,11 @@ import org.json.JSONObject;
 import org.qortal.arbitrary.ArbitraryDataDiff.ModifiedPath;
 import org.qortal.repository.DataException;
 import org.qortal.utils.Base58;
+import org.qortal.utils.FilesystemUtils;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -70,7 +73,7 @@ public class ArbitraryDataMetadataPatch extends ArbitraryDataQdnMetadata {
             if (added != null) {
                 for (int i=0; i<added.length(); i++) {
                     String pathString = added.getString(i);
-                    this.addedPaths.add(Paths.get(pathString));
+                    this.addedPaths.add(ArbitraryDataMetadataPatch.readPatchPath(pathString));
                 }
             }
         }
@@ -89,9 +92,17 @@ public class ArbitraryDataMetadataPatch extends ArbitraryDataQdnMetadata {
             if (removed != null) {
                 for (int i=0; i<removed.length(); i++) {
                     String pathString = removed.getString(i);
-                    this.removedPaths.add(Paths.get(pathString));
+                    this.removedPaths.add(ArbitraryDataMetadataPatch.readPatchPath(pathString));
                 }
             }
+        }
+    }
+
+    private static Path readPatchPath(String pathString) throws DataException {
+        try {
+            return FilesystemUtils.safeRelativePath(Paths.get(pathString));
+        } catch (InvalidPathException | IOException e) {
+            throw new DataException("Invalid patch path: " + pathString, e);
         }
     }
 

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Fix unsafe QDN patch path handling
+
+Hardened QDN patch merging so patch metadata cannot point added, modified, or removed files outside the intended source and merge folders. Qortium now rejects unsafe patch paths before applying file changes and normalizes internal containment checks used by cleanup safeguards.
+
 ### 2026-05-20 - Fix unsafe 7z bootstrap extraction
 
 Hardened Qortium's 7z archive extraction so a malicious bootstrap archive cannot write files outside the intended extraction folder. Bootstrap imports now reject unsafe archive entries instead of silently creating parent folders and writing wherever the entry path points, while normal nested bootstrap archives continue to extract as expected.

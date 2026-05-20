@@ -9,6 +9,7 @@ import org.qortal.crypto.Crypto;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.ArbitraryUtils;
 import org.qortal.test.common.Common;
+import org.qortal.utils.Base58;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -151,6 +152,42 @@ public class ArbitraryDataMergeTests extends Common {
             assertEquals("Current state matches previous state. Nothing to do.", expectedException.getMessage());
         }
 
+    }
+
+    @Test
+    public void testMergeRejectsAddedPathTraversal() throws IOException {
+        Path beforePath = Files.createTempDirectory("testMergeRejectsAddedPathTraversalBefore");
+        Path patchPath = Files.createTempDirectory("testMergeRejectsAddedPathTraversalPatch");
+        Files.writeString(beforePath.resolve("existing.txt"), "existing");
+        byte[] signature = randomSignature();
+
+        writePatchMetadata(patchPath, signature, "[\"../outside.txt\"]", "[]", "[]");
+
+        assertUnsafePatchRejected(beforePath, patchPath, signature);
+    }
+
+    @Test
+    public void testMergeRejectsRemovedPathTraversal() throws IOException {
+        Path beforePath = Files.createTempDirectory("testMergeRejectsRemovedPathTraversalBefore");
+        Path patchPath = Files.createTempDirectory("testMergeRejectsRemovedPathTraversalPatch");
+        Files.writeString(beforePath.resolve("existing.txt"), "existing");
+        byte[] signature = randomSignature();
+
+        writePatchMetadata(patchPath, signature, "[]", "[\"../outside.txt\"]", "[]");
+
+        assertUnsafePatchRejected(beforePath, patchPath, signature);
+    }
+
+    @Test
+    public void testMergeRejectsModifiedPathTraversal() throws IOException {
+        Path beforePath = Files.createTempDirectory("testMergeRejectsModifiedPathTraversalBefore");
+        Path patchPath = Files.createTempDirectory("testMergeRejectsModifiedPathTraversalPatch");
+        Files.writeString(beforePath.resolve("existing.txt"), "existing");
+        byte[] signature = randomSignature();
+
+        writePatchMetadata(patchPath, signature, "[]", "[]", "[{\"path\":\"../outside.txt\",\"type\":\"UNIFIED_DIFF\"}]");
+
+        assertUnsafePatchRejected(beforePath, patchPath, signature);
     }
 
     @Test
@@ -440,6 +477,33 @@ public class ArbitraryDataMergeTests extends Common {
         finalPathDigest.compute();
         assertEquals(path2Digest.getHash58(), finalPathDigest.getHash58());
 
+    }
+
+    private static byte[] randomSignature() {
+        byte[] signature = new byte[32];
+        new Random().nextBytes(signature);
+        return signature;
+    }
+
+    private static void writePatchMetadata(Path patchPath, byte[] signature, String addedJson,
+                                           String removedJson, String modifiedJson) throws IOException {
+        Path qdnPath = patchPath.resolve(".qdn");
+        Files.createDirectories(qdnPath);
+
+        String json = String.format("{\"prevSig\":\"%s\",\"added\":%s,\"removed\":%s,\"modified\":%s}",
+                Base58.encode(signature), addedJson, removedJson, modifiedJson);
+        Files.writeString(qdnPath.resolve("patch"), json);
+    }
+
+    private static void assertUnsafePatchRejected(Path beforePath, Path patchPath, byte[] signature) throws IOException {
+        ArbitraryDataCombiner combiner = new ArbitraryDataCombiner(beforePath, patchPath, signature);
+
+        try {
+            combiner.combine();
+            fail("Unsafe patch path should be rejected");
+        } catch (DataException e) {
+            assertTrue(e.getMessage().contains("Invalid patch path"));
+        }
     }
 
 }

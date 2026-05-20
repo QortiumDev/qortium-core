@@ -87,7 +87,7 @@ public class ArbitraryDataMerge {
         List<Path> addedPaths = this.metadata.getAddedPaths();
         for (Path path : addedPaths) {
             LOGGER.trace("File was added: {}", path.toString());
-            Path filePath = Paths.get(this.pathAfter.toString(), path.toString());
+            Path filePath = FilesystemUtils.resolveInsideBase(this.pathAfter, path);
             ArbitraryDataMerge.copyPathToBaseDir(filePath, this.mergePath, path);
         }
 
@@ -112,7 +112,7 @@ public class ArbitraryDataMerge {
         }
         else if (modifiedPath.getDiffType() == DiffType.COMPLETE_FILE) {
             // Copy complete file
-            Path filePath = Paths.get(this.pathAfter.toString(), modifiedPath.getPath().toString());
+            Path filePath = FilesystemUtils.resolveInsideBase(this.pathAfter, modifiedPath.getPath());
             ArbitraryDataMerge.copyPathToBaseDir(filePath, this.mergePath, modifiedPath.getPath());
         }
         else {
@@ -132,7 +132,7 @@ public class ArbitraryDataMerge {
         }
 
         File sourceFile = source.toFile();
-        Path dest = Paths.get(base.toString(), relativePath.toString());
+        Path dest = FilesystemUtils.resolveInsideBase(base, relativePath);
         LOGGER.trace("Copying {} to {}", source, dest);
 
         if (sourceFile.isFile()) {
@@ -151,13 +151,15 @@ public class ArbitraryDataMerge {
             throw new IOException(String.format("File not found: %s", source.toString()));
         }
 
-        Path dest = Paths.get(base.toString(), relativePath.toString());
+        Path dest = relativePath == null || relativePath.toString().isEmpty()
+                ? base.toAbsolutePath().normalize()
+                : FilesystemUtils.resolveInsideBase(base, relativePath);
         LOGGER.trace("Copying {} to {}", source, dest);
         FilesystemUtils.copyAndReplaceDirectory(source.toString(), dest.toString());
     }
 
     private static void deletePathInBaseDir(Path base, Path relativePath) throws IOException {
-        Path dest = Paths.get(base.toString(), relativePath.toString());
+        Path dest = FilesystemUtils.resolveInsideBase(base, relativePath);
         File file = new File(dest.toString());
         if (file.exists() && file.isFile()) {
             if (FilesystemUtils.pathInsideDataOrTempPath(dest)) {

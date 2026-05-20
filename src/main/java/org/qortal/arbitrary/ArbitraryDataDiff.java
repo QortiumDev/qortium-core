@@ -8,6 +8,7 @@ import org.qortal.arbitrary.patch.UnifiedDiffPatch;
 import org.qortal.crypto.Crypto;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
+import org.qortal.utils.FilesystemUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,10 +40,14 @@ public class ArbitraryDataDiff {
             this.diffType = diffType;
         }
 
-        public ModifiedPath(JSONObject jsonObject) {
+        public ModifiedPath(JSONObject jsonObject) throws DataException {
             String pathString = jsonObject.getString("path");
             if (pathString != null) {
-                this.path = Paths.get(pathString);
+                try {
+                    this.path = FilesystemUtils.safeRelativePath(Paths.get(pathString));
+                } catch (InvalidPathException | IOException e) {
+                    throw new DataException("Invalid patch path: " + pathString, e);
+                }
             }
 
             String diffTypeString = jsonObject.getString("type");

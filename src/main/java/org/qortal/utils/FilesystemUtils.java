@@ -194,9 +194,9 @@ public class FilesystemUtils {
         if (path == null) {
             return false;
         }
-        Path dataPath = Paths.get(Settings.getInstance().getDataPath()).toAbsolutePath();
-        Path tempDataPath = Paths.get(Settings.getInstance().getTempDataPath()).toAbsolutePath();
-        Path absolutePath = path.toAbsolutePath();
+        Path dataPath = Paths.get(Settings.getInstance().getDataPath()).toAbsolutePath().normalize();
+        Path tempDataPath = Paths.get(Settings.getInstance().getTempDataPath()).toAbsolutePath().normalize();
+        Path absolutePath = path.toAbsolutePath().normalize();
         if (absolutePath.startsWith(dataPath) || absolutePath.startsWith(tempDataPath)) {
             return true;
         }
@@ -204,7 +204,39 @@ public class FilesystemUtils {
     }
 
     public static boolean isChild(Path child, Path parent) {
-        return child.toAbsolutePath().startsWith(parent.toAbsolutePath());
+        if (child == null || parent == null) {
+            return false;
+        }
+        return child.toAbsolutePath().normalize().startsWith(parent.toAbsolutePath().normalize());
+    }
+
+    public static Path safeRelativePath(Path path) throws IOException {
+        if (path == null) {
+            throw new IOException("Path is null");
+        }
+
+        Path normalizedPath = path.normalize();
+        if (normalizedPath.isAbsolute() || normalizedPath.toString().isEmpty() || normalizedPath.startsWith("..")) {
+            throw new IOException("Path is outside of the target dir: " + path);
+        }
+
+        return normalizedPath;
+    }
+
+    public static Path resolveInsideBase(Path base, Path relativePath) throws IOException {
+        if (base == null) {
+            throw new IOException("Base path is null");
+        }
+
+        Path normalizedBase = base.toAbsolutePath().normalize();
+        Path safeRelativePath = FilesystemUtils.safeRelativePath(relativePath);
+        Path resolvedPath = normalizedBase.resolve(safeRelativePath).normalize();
+
+        if (!resolvedPath.startsWith(normalizedBase)) {
+            throw new IOException("Path is outside of the target dir: " + relativePath);
+        }
+
+        return resolvedPath;
     }
 
     public static long getDirectorySize(Path path) throws IOException {

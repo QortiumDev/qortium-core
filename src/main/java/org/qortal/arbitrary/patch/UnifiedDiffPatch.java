@@ -163,9 +163,9 @@ public class UnifiedDiffPatch {
 
         // If a path has been supplied, we need to append it to the base paths
         if (pathSuffix != null) {
-            originalPath = Paths.get(this.before.toString(), pathSuffix.toString());
-            patchPath = Paths.get(this.after.toString(), pathSuffix.toString());
-            mergePath = Paths.get(this.destination.toString(), pathSuffix.toString());
+            originalPath = FilesystemUtils.resolveInsideBase(this.before, pathSuffix);
+            patchPath = FilesystemUtils.resolveInsideBase(this.after, pathSuffix);
+            mergePath = FilesystemUtils.resolveInsideBase(this.destination, pathSuffix);
         }
 
         if (!patchPath.toFile().exists()) {
