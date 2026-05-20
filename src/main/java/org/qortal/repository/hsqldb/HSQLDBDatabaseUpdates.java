@@ -1330,6 +1330,13 @@ public class HSQLDBDatabaseUpdates {
 					addColumnIfMissing(connection, "JoinGroupTransactions", "minting_authorization_created", "BOOLEAN NOT NULL DEFAULT FALSE");
 					break;
 
+				case 72:
+					// Internal classification for private group chat control envelopes.
+					addColumnIfMissing(connection, "ChatMessages", "private_group_envelope_type", "VARCHAR(32)");
+					stmt.execute("CREATE INDEX ChatMessagesPrivateGroupEnvelopeIndex "
+							+ "ON ChatMessages (tx_group_id, private_group_envelope_type, created_when)");
+					break;
+
 				default:
 					// nothing to do
 					return false;

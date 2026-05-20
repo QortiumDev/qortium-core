@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: classify private group chat envelopes
+
+Added internal classification for stored private group chat envelopes so normal chat views can distinguish real private group messages from key announcements, key requests, and rotation requests. Public chat search, counts, and active-chat summaries now hide that control traffic while direct signature lookup and private group recovery scans can still see the raw records they need.
+
 ### 2026-05-20 - chat: add private group key request recovery
 
 Added an explicit private group chat recovery API that lets a current group member scan stored key requests and relay matching signed key announcements the local node already knows. This completes the missing-key loop without making inbox reads publish transactions, avoids duplicate relays for the same key in one call, and reports unavailable, stale, invalid, duplicate, or relayed requests clearly to clients.

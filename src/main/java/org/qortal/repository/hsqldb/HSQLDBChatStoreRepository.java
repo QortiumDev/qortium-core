@@ -1,16 +1,19 @@
 package org.qortal.repository.hsqldb;
 
+import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.chat.ActiveChats;
 import org.qortal.data.chat.ActiveChats.DirectChat;
 import org.qortal.data.chat.ActiveChats.GroupChat;
 import org.qortal.data.chat.ChatMessage;
+import org.qortal.data.group.GroupData;
 import org.qortal.data.group.GroupMemberData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.repository.ChatStoreRepository;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
+import org.qortal.transform.TransformationException;
 import org.qortal.utils.NTP;
 
 import java.sql.ResultSet;
@@ -27,6 +30,8 @@ import static org.qortal.data.chat.ChatMessage.Encoding;
 public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 	private static final String PRIMARY_NAMES_TABLE = "PrimaryNames";
+	private static final String VISIBLE_PRIVATE_GROUP_ENVELOPE_FILTER =
+			"(CM.private_group_envelope_type IS NULL OR CM.private_group_envelope_type = ?)";
 
 	protected HSQLDBRepository repository;
 
@@ -49,8 +54,9 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 		String sql = "INSERT INTO ChatMessages "
 				+ "(signature, created_when, tx_group_id, sender_public_key, sender, nonce, recipient, "
-				+ "chat_reference, is_text, is_encrypted, data) "
-				+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+				+ "chat_reference, is_text, is_encrypted, data, private_group_envelope_type) "
+				+ "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+		String privateGroupEnvelopeType = classifyPrivateGroupEnvelope(chatTransactionData);
 
 		try {
 			this.repository.executeCheckedUpdate(sql,
@@ -64,7 +70,8 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 					chatTransactionData.getChatReference(),
 					chatTransactionData.getIsText(),
 					chatTransactionData.getIsEncrypted(),
-					chatTransactionData.getData());
+					chatTransactionData.getData(),
+					privateGroupEnvelopeType);
 		} catch (SQLException e) {
 			throw new DataException("Unable to save chat message into repository", e);
 		}
@@ -293,6 +300,8 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 		List<String> whereClauses = new ArrayList<>();
 		List<Object> bindParams = new ArrayList<>();
+		whereClauses.add(VISIBLE_PRIVATE_GROUP_ENVELOPE_FILTER);
+		bindParams.add(PrivateGroupChatEnvelope.Type.MESSAGE.name());
 
 		if (before != null) {
 			whereClauses.add("CM.created_when < ?");
@@ -403,7 +412,8 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 				+ "LEFT OUTER JOIN " + PRIMARY_NAMES_TABLE + " AS SenderNames ON SenderNames.owner = CM.sender "
 				+ "WHERE CM.created_when >= ? "
 				+ "AND CM.recipient IS NULL "
-				+ "AND CM.tx_group_id IN (SELECT group_id FROM GroupMembers WHERE address = ?) ";
+				+ "AND CM.tx_group_id IN (SELECT group_id FROM GroupMembers WHERE address = ?) "
+				+ "AND " + VISIBLE_PRIVATE_GROUP_ENVELOPE_FILTER + " ";
 
 		if (hasChatReference != null) {
 			if (hasChatReference)
@@ -415,7 +425,8 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 		latestSql += "ORDER BY CM.created_when DESC";
 
 		Map<Integer, Object[]> latestPerGroup = new HashMap<>();
-		try (ResultSet resultSet = this.repository.checkedExecute(latestSql, cutoffTimestamp, address)) {
+		try (ResultSet resultSet = this.repository.checkedExecute(latestSql, cutoffTimestamp, address,
+				PrivateGroupChatEnvelope.Type.MESSAGE.name())) {
 			if (resultSet != null) {
 				do {
 					int groupId = resultSet.getInt(1);
@@ -578,6 +589,27 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 
 		return new ChatMessage(timestamp, groupId, senderPublicKey, sender, senderName, recipient,
 				recipientName, chatReference, encoding, data, isText, isEncrypted, signature);
+	}
+
+	private String classifyPrivateGroupEnvelope(ChatTransactionData chatTransactionData) throws DataException {
+		if (chatTransactionData.getRecipient() != null
+				|| !chatTransactionData.getIsEncrypted()
+				|| chatTransactionData.getTxGroupId() <= 0)
+			return null;
+
+		GroupData groupData = this.repository.getGroupRepository().fromGroupId(chatTransactionData.getTxGroupId());
+		if (groupData == null || groupData.isOpen())
+			return null;
+
+		try {
+			PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(chatTransactionData.getData());
+			if (envelope.getGroupId() != chatTransactionData.getTxGroupId())
+				return null;
+
+			return envelope.getType().name();
+		} catch (TransformationException e) {
+			return null;
+		}
 	}
 
 	private static class MessageCriteria {

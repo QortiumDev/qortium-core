@@ -306,6 +306,60 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	@Test
+	public void testNormalChatViewsHidePrivateGroupControls() throws Exception {
+		byte[] payload = "private api normal views".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatKeyRequestRequest keyRequest = new PrivateGroupChatKeyRequestRequest();
+		String aliceAddress;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-normal-views");
+			addMember(repository, groupId, bob);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.data = payload;
+			sendRequest.isText = true;
+			keyRequest.requesterPrivateKey = bob.getPrivateKey();
+			keyRequest.groupId = groupId;
+			aliceAddress = alice.getAddress();
+		}
+
+		PrivateGroupChatSendResponse sendResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		keyRequest.keyId = sendResponse.keyId;
+		PrivateGroupChatKeyRequestResponse keyRequestResponse = this.chatResource.requestPrivateGroupChatKey(null,
+				keyRequest);
+
+		List<ChatMessage> messages = this.chatResource.searchChat(
+				null, null, sendRequest.groupId, Arrays.asList(), null, null, null,
+				ChatMessage.Encoding.BASE64, null, null, null);
+
+		assertEquals(1, messages.size());
+		assertArrayEquals(sendResponse.messageSignature, messages.get(0).getSignature());
+
+		int count = this.chatResource.countChatMessages(
+				null, null, sendRequest.groupId, Arrays.asList(), null, null, null,
+				ChatMessage.Encoding.BASE64, null, null, null);
+
+		assertEquals(1, count);
+
+		ActiveChats activeChats = this.chatResource.getActiveChats(aliceAddress, ChatMessage.Encoding.BASE64, null);
+		ActiveChats.GroupChat groupChat = activeChats.getGroups().stream()
+				.filter(activeGroupChat -> activeGroupChat.getGroupId() == sendRequest.groupId)
+				.findFirst()
+				.orElse(null);
+
+		assertNotNull(groupChat);
+		assertArrayEquals(sendResponse.messageSignature, groupChat.getSignature());
+
+		ChatMessage keyRequestMessage = this.chatResource.getMessageBySignature(
+				Base58.encode(keyRequestResponse.requestSignature), ChatMessage.Encoding.BASE64);
+		assertArrayEquals(keyRequestResponse.requestSignature, keyRequestMessage.getSignature());
+	}
+
+	@Test
 	public void testPrivateGroupMessagesRehydrateCachedKeyFromStoredAnnouncement() throws Exception {
 		byte[] payload = "private api inbox rehydrate".getBytes(StandardCharsets.UTF_8);
 		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();

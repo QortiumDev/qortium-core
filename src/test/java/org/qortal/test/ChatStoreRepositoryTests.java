@@ -3,6 +3,7 @@ package org.qortal.test;
 import org.bouncycastle.util.encoders.Base64;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.data.chat.ActiveChats;
 import org.qortal.data.chat.ChatMessage;
 import org.qortal.data.transaction.BaseTransactionData;
@@ -12,6 +13,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.GroupUtils;
 import org.qortal.test.common.TestAccount;
 import org.qortal.utils.NTP;
 
@@ -245,6 +247,87 @@ public class ChatStoreRepositoryTests extends Common {
 		}
 	}
 
+	@Test
+	public void testPrivateGroupControlsHiddenFromNormalQueriesButRawScanRetainsThem() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-store-private-classify", false);
+			long timestamp = now();
+			byte[] epochId = bytes(PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, 20);
+
+			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(groupId, epochId,
+					bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 21),
+					bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 22),
+					bytes("private group message"));
+			PrivateGroupChatEnvelope keyRequestEnvelope = PrivateGroupChatEnvelope.keyRequest(groupId, epochId,
+					alice.getPublicKey(), bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 23), signature(24));
+
+			ChatTransactionData messageData = chat(repository, alice, groupId, null,
+					signature(16), messageEnvelope.toBytes(), true, true, timestamp, null);
+			ChatTransactionData keyRequestData = chat(repository, alice, groupId, null,
+					signature(17), keyRequestEnvelope.toBytes(), false, true, timestamp + 1, null);
+
+			repository.getChatStoreRepository().save(messageData);
+			repository.getChatStoreRepository().save(keyRequestData);
+			repository.saveChanges();
+
+			List<ChatMessage> messages = repository.getChatStoreRepository().getMessagesMatchingCriteria(
+					null, null, groupId, null, null, null, null, ChatMessage.Encoding.BASE64, null, null, null);
+
+			assertEquals(1, messages.size());
+			assertArrayEquals(messageData.getSignature(), messages.get(0).getSignature());
+
+			int count = repository.getChatStoreRepository().countMessagesMatchingCriteria(
+					null, null, groupId, null, null, null, null);
+
+			assertEquals(1, count);
+			assertNotNull(repository.getChatStoreRepository().fromSignature(keyRequestData.getSignature()));
+
+			List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(groupId);
+			assertEquals(2, groupMessages.size());
+			assertArrayEquals(keyRequestData.getSignature(), groupMessages.get(0).getSignature());
+			assertArrayEquals(messageData.getSignature(), groupMessages.get(1).getSignature());
+		}
+	}
+
+	@Test
+	public void testPrivateGroupControlsDoNotBumpActiveGroupChat() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-store-private-active", false);
+			long timestamp = now();
+			byte[] epochId = bytes(PrivateGroupChatEnvelope.EPOCH_ID_LENGTH, 30);
+
+			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(groupId, epochId,
+					bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 31),
+					bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 32),
+					bytes("active private group message"));
+			PrivateGroupChatEnvelope rotationRequestEnvelope = PrivateGroupChatEnvelope.rotationRequest(groupId,
+					epochId, alice.getPublicKey(), signature(33));
+
+			ChatTransactionData messageData = chat(repository, alice, groupId, null,
+					signature(18), messageEnvelope.toBytes(), true, true, timestamp, null);
+			ChatTransactionData rotationRequestData = chat(repository, alice, groupId, null,
+					signature(19), rotationRequestEnvelope.toBytes(), false, true, timestamp + 1, null);
+
+			repository.getChatStoreRepository().save(messageData);
+			repository.getChatStoreRepository().save(rotationRequestData);
+			repository.saveChanges();
+
+			ActiveChats activeChats = repository.getChatStoreRepository().getActiveChats(
+					alice.getAddress(), ChatMessage.Encoding.BASE64, null);
+
+			ActiveChats.GroupChat groupChat = activeChats.getGroups().stream()
+					.filter(activeGroupChat -> activeGroupChat.getGroupId() == groupId)
+					.findFirst()
+					.orElse(null);
+
+			assertNotNull(groupChat);
+			assertArrayEquals(messageData.getSignature(), groupChat.getSignature());
+			assertEquals(Base64.toBase64String(messageData.getData()), groupChat.getData());
+		}
+	}
+
 	private static ChatTransactionData chat(Repository repository, TestAccount sender, int groupId, String recipient,
 			byte[] signature, byte[] data, boolean isText, boolean isEncrypted, long timestamp, byte[] chatReference) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
@@ -265,6 +348,14 @@ public class ChatStoreRepositoryTests extends Common {
 
 	private static byte[] bytes(String text) {
 		return text.getBytes(StandardCharsets.UTF_8);
+	}
+
+	private static byte[] bytes(int length, int seed) {
+		byte[] bytes = new byte[length];
+		for (int i = 0; i < bytes.length; ++i)
+			bytes[i] = (byte) (seed + i);
+
+		return bytes;
 	}
 
 	private static byte[] signature(int value) {
