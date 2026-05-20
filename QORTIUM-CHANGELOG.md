@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group chat crypto helpers
+
+Added private group chat crypto helpers for the next stage of closed-group encryption. The new helper can generate group keys and nonces, compute context-bound key ids, encrypt and decrypt messages with AES-GCM associated data, and wrap shared group keys to individual members using existing account shared-secret derivation without changing live chat behavior yet.
+
 ### 2026-05-20 - chat: add private group chat envelope primitives
 
 Added the first private group chat code foundation by introducing a versioned envelope format for encrypted closed-group chat payloads. The new primitives define structural message, key announcement, key request, and rotation request envelopes with strict parsing and defensive copies, giving later encryption, key-cache, API, and validation work a stable data shape without changing live chat behavior yet.
