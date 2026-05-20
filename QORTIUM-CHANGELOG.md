@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group chat key announcements
+
+Added signed private group chat key announcements that bind a shared group key to a specific closed-group membership epoch. Qortium can now create a key announcement with wrapped copies for every current member, verify that the announcement was signed by a current member and covers the exact current member set, and let each recipient unwrap their own copy of the group key without changing live chat routing yet.
+
 ### 2026-05-20 - chat: add private group chat membership epochs
 
 Added private group chat membership epoch helpers so closed-group encryption can identify the exact member set a group key belongs to. Qortium can now derive a stable epoch id from a closed group's current member public keys, reject groups that cannot safely be encrypted yet because a member has no known public key, and keep this foundation separate from live chat routing until the key-announcement and API layers are ready.
