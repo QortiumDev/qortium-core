@@ -17,6 +17,7 @@ import org.qortal.api.model.PrivateGroupChatKeyRequestRecoveryRequest;
 import org.qortal.api.model.PrivateGroupChatKeyRequestRecoveryResponse;
 import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
 import org.qortal.api.model.PrivateGroupChatMessageResponse;
+import org.qortal.api.model.PrivateGroupChatMessageCountRequest;
 import org.qortal.api.model.PrivateGroupChatMessagesRequest;
 import org.qortal.api.model.PrivateGroupChatRotateRequest;
 import org.qortal.api.model.PrivateGroupChatRotateResponse;
@@ -305,6 +306,112 @@ public class ChatResourceTests extends ApiCommon {
 		assertArrayEquals(sendResponse.messageSignature, message.signature);
 		assertArrayEquals(sendResponse.epochId, message.epochId);
 		assertArrayEquals(sendResponse.keyId, message.keyId);
+	}
+
+	@Test
+	public void testPrivateGroupMessageCountMatchesInboxFiltersAndSkipsControls() throws Exception {
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatKeyRequestRequest keyRequest = new PrivateGroupChatKeyRequestRequest();
+		PrivateGroupChatRotationRequestRequest rotationRequest = new PrivateGroupChatRotationRequestRequest();
+		PrivateGroupChatMessageCountRequest countRequest = new PrivateGroupChatMessageCountRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-count");
+			addMember(repository, groupId, bob);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.isText = true;
+			keyRequest.requesterPrivateKey = bob.getPrivateKey();
+			keyRequest.groupId = groupId;
+			rotationRequest.requesterPrivateKey = alice.getPrivateKey();
+			rotationRequest.groupId = groupId;
+			countRequest.recipientPrivateKey = bob.getPrivateKey();
+			countRequest.groupId = groupId;
+		}
+
+		sendRequest.data = "private count first".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatSendResponse firstResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		sendRequest.data = "private count second".getBytes(StandardCharsets.UTF_8);
+		sendRequest.chatReference = firstResponse.messageSignature;
+		PrivateGroupChatSendResponse secondResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		keyRequest.keyId = secondResponse.keyId;
+		this.chatResource.requestPrivateGroupChatKey(null, keyRequest);
+		this.chatResource.requestPrivateGroupChatRotation(null, rotationRequest);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			repository.getChatStoreRepository().save(chat(alice, sendRequest.groupId, null,
+					"plain count noise", signature(91), now()));
+			repository.getChatStoreRepository().save(chat(alice, sendRequest.groupId, null,
+					"malformed encrypted count noise".getBytes(StandardCharsets.UTF_8), false, true,
+					signature(92), now() + 1));
+			repository.saveChanges();
+		}
+
+		assertEquals(2, this.chatResource.countPrivateGroupChatMessages(null, countRequest));
+
+		countRequest.hasChatReference = true;
+		assertEquals(1, this.chatResource.countPrivateGroupChatMessages(null, countRequest));
+
+		countRequest.hasChatReference = false;
+		assertEquals(1, this.chatResource.countPrivateGroupChatMessages(null, countRequest));
+
+		countRequest.hasChatReference = null;
+		countRequest.chatReference = firstResponse.messageSignature;
+		assertEquals(1, this.chatResource.countPrivateGroupChatMessages(null, countRequest));
+	}
+
+	@Test
+	public void testPrivateGroupMessageCountIncludesMissingKeyMessagesAndRejectsInvalidRequests() throws Exception {
+		PrivateGroupChatMessageCountRequest countRequest = new PrivateGroupChatMessageCountRequest();
+		int groupId;
+		int openGroupId;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			groupId = createClosedGroup(repository, alice, "chat-api-private-count-missing-key");
+			openGroupId = GroupUtils.createGroup(repository, alice, "chat-api-private-count-open", true,
+					ApprovalThreshold.ONE, 10, 40);
+			addMember(repository, groupId, bob);
+			addMember(repository, openGroupId, bob);
+
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
+					repository, groupId);
+			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 50);
+			byte[] keyId = PrivateGroupChatCrypto.computeKeyId(groupId, epoch.getEpochId(), groupKey);
+			byte[] nonce = PrivateGroupChatCrypto.generateNonce();
+			byte[] ciphertext = PrivateGroupChatCrypto.encryptMessage(groupKey, groupId, epoch.getEpochId(),
+					keyId, nonce, "missing count key".getBytes(StandardCharsets.UTF_8));
+			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(groupId,
+					epoch.getEpochId(), keyId, nonce, ciphertext);
+			ChatTransactionData chatData = chat(alice, groupId, null, messageEnvelope.toBytes(), true, true,
+					null, now());
+			ChatTransaction chatTransaction = new ChatTransaction(repository, chatData);
+			chatTransaction.computeNonce();
+			chatTransaction.sign(alice);
+
+			assertTrue(ChatService.getInstance().isSignatureValid(repository, chatData));
+			assertEquals(ValidationResult.OK, ChatService.getInstance().validateAndStore(repository, chatData));
+
+			countRequest.recipientPrivateKey = bob.getPrivateKey();
+			countRequest.groupId = groupId;
+		}
+
+		PrivateGroupChatKeyCache.getInstance().clear();
+		assertEquals(1, this.chatResource.countPrivateGroupChatMessages(null, countRequest));
+
+		countRequest.groupId = openGroupId;
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.chatResource.countPrivateGroupChatMessages(null, countRequest));
+
+		countRequest.groupId = groupId;
+		countRequest.recipientPrivateKey = new byte[Transformer.PRIVATE_KEY_LENGTH - 1];
+		assertApiError(ApiError.INVALID_PRIVATE_KEY,
+				() -> this.chatResource.countPrivateGroupChatMessages(null, countRequest));
 	}
 
 	@Test

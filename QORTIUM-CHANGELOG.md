@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group message count API
+
+Added a local private group message count API so clients can count encrypted closed-group inbox messages without fetching every page. The count uses the same filters as the private inbox, counts messages even when the local node is missing the key, and excludes key announcements, key requests, rotation requests, malformed rows, and other non-message chat records.
+
 ### 2026-05-20 - chat: add private group active chat API
 
 Added a local private group active-chat API so clients can list the closed groups available to an account and see each group's latest private user message without reading raw control envelopes. The new endpoint decrypts the latest message when possible, reports missing keys clearly when it cannot, includes empty private groups for complete chat lists, and leaves key requests or relays as explicit follow-up actions.

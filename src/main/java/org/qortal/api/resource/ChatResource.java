@@ -24,6 +24,7 @@ import org.qortal.api.model.PrivateGroupChatKeyRequestRequest;
 import org.qortal.api.model.PrivateGroupChatKeyRequestRecoveryRequest;
 import org.qortal.api.model.PrivateGroupChatKeyRequestRecoveryResponse;
 import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
+import org.qortal.api.model.PrivateGroupChatMessageCountRequest;
 import org.qortal.api.model.PrivateGroupChatMessageResponse;
 import org.qortal.api.model.PrivateGroupChatMessagesRequest;
 import org.qortal.api.model.PrivateGroupChatRotateRequest;
@@ -378,6 +379,65 @@ public class ChatResource {
 				response.add(new PrivateGroupChatMessageResponse(result, encoding));
 
 			return response;
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/group/messages/count")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.TEXT_PLAIN)
+	@Operation(
+		summary = "Count private group chat messages",
+		description = "Returns the number of retained closed-group private chat user messages matching the supplied inbox filters. Missing-key messages are counted because they are still real user messages.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = PrivateGroupChatMessageCountRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "count of private group chat messages",
+				content = @Content(
+					mediaType = MediaType.TEXT_PLAIN,
+					schema = @Schema(
+						type = "integer"
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public int countPrivateGroupChatMessages(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PrivateGroupChatMessageCountRequest countRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (countRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (countRequest.recipientPrivateKey == null
+				|| countRequest.recipientPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		if (countRequest.before != null && countRequest.before < 1500000000000L)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (countRequest.after != null && countRequest.after < 1500000000000L)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return PrivateGroupChatService.getInstance().countMessages(repository,
+					countRequest.recipientPrivateKey, countRequest.groupId, countRequest.before,
+					countRequest.after, countRequest.chatReference, countRequest.hasChatReference,
+					countRequest.sender);
 		} catch (IllegalArgumentException e) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
 		} catch (DataException e) {

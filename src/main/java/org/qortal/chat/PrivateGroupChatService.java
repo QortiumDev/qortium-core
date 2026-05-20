@@ -94,40 +94,9 @@ public class PrivateGroupChatService {
 			throws DataException {
 		validatePrivateKey(recipientPrivateKey, "recipient private key");
 
-		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
-		if (groupData == null)
-			throw new IllegalArgumentException("group does not exist");
-		if (groupData.isOpen())
-			throw new IllegalArgumentException("group is not closed");
-
-		List<ListedMessageData> listedMessages = new ArrayList<>();
-		for (ChatTransactionData chatTransactionData : repository.getChatStoreRepository().getGroupMessages(groupId)) {
-			if (!matchesListCriteria(chatTransactionData, before, after, chatReference, hasChatReference, sender))
-				continue;
-
-			if (!chatTransactionData.getIsEncrypted())
-				continue;
-
-			PrivateGroupChatEnvelope envelope;
-			try {
-				envelope = PrivateGroupChatEnvelope.fromBytes(chatTransactionData.getData());
-			} catch (TransformationException e) {
-				continue;
-			}
-
-			if (envelope.getType() != PrivateGroupChatEnvelope.Type.MESSAGE)
-				continue;
-
-			listedMessages.add(new ListedMessageData(chatTransactionData, envelope));
-		}
-
-		Comparator<ListedMessageData> comparator = Comparator
-				.comparingLong((ListedMessageData data) -> data.chatTransactionData.getTimestamp())
-				.thenComparing((left, right) -> compareBytes(left.chatTransactionData.getSignature(),
-						right.chatTransactionData.getSignature()));
-		if (reverse != null && reverse)
-			comparator = comparator.reversed();
-		listedMessages.sort(comparator);
+		List<ListedMessageData> listedMessages = listMatchingPrivateMessages(repository, groupId, before, after,
+				chatReference, hasChatReference, sender);
+		sortListedMessages(listedMessages, reverse);
 
 		int fromIndex = Math.max(offset == null ? 0 : offset, 0);
 		if (fromIndex >= listedMessages.size())
@@ -153,6 +122,14 @@ public class PrivateGroupChatService {
 		}
 
 		return results;
+	}
+
+	public int countMessages(Repository repository, byte[] recipientPrivateKey, int groupId, Long before,
+			Long after, byte[] chatReference, Boolean hasChatReference, String sender) throws DataException {
+		validatePrivateKey(recipientPrivateKey, "recipient private key");
+
+		return listMatchingPrivateMessages(repository, groupId, before, after, chatReference, hasChatReference,
+				sender).size();
 	}
 
 	public List<ActiveChatResult> listActiveChats(Repository repository, byte[] recipientPrivateKey,
@@ -192,26 +169,64 @@ public class PrivateGroupChatService {
 
 	private static ListedMessageData latestPrivateMessage(Repository repository, int groupId) throws DataException {
 		for (ChatTransactionData chatTransactionData : repository.getChatStoreRepository().getGroupMessages(groupId)) {
-			if (!chatTransactionData.getIsEncrypted())
-				continue;
-
-			PrivateGroupChatEnvelope envelope;
-			try {
-				envelope = PrivateGroupChatEnvelope.fromBytes(chatTransactionData.getData());
-			} catch (TransformationException e) {
-				continue;
-			}
-
-			if (envelope.getType() != PrivateGroupChatEnvelope.Type.MESSAGE)
-				continue;
-
-			if (envelope.getGroupId() != groupId)
-				continue;
-
-			return new ListedMessageData(chatTransactionData, envelope);
+			ListedMessageData listedMessage = toListedPrivateMessage(chatTransactionData, groupId);
+			if (listedMessage != null)
+				return listedMessage;
 		}
 
 		return null;
+	}
+
+	private static List<ListedMessageData> listMatchingPrivateMessages(Repository repository, int groupId,
+			Long before, Long after, byte[] chatReference, Boolean hasChatReference, String sender) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+		if (groupData == null)
+			throw new IllegalArgumentException("group does not exist");
+		if (groupData.isOpen())
+			throw new IllegalArgumentException("group is not closed");
+
+		List<ListedMessageData> listedMessages = new ArrayList<>();
+		for (ChatTransactionData chatTransactionData : repository.getChatStoreRepository().getGroupMessages(groupId)) {
+			if (!matchesListCriteria(chatTransactionData, before, after, chatReference, hasChatReference, sender))
+				continue;
+
+			ListedMessageData listedMessage = toListedPrivateMessage(chatTransactionData, groupId);
+			if (listedMessage != null)
+				listedMessages.add(listedMessage);
+		}
+
+		return listedMessages;
+	}
+
+	private static ListedMessageData toListedPrivateMessage(ChatTransactionData chatTransactionData, int groupId) {
+		if (!chatTransactionData.getIsEncrypted())
+			return null;
+
+		PrivateGroupChatEnvelope envelope;
+		try {
+			envelope = PrivateGroupChatEnvelope.fromBytes(chatTransactionData.getData());
+		} catch (TransformationException e) {
+			return null;
+		}
+
+		if (envelope.getType() != PrivateGroupChatEnvelope.Type.MESSAGE)
+			return null;
+
+		if (envelope.getGroupId() != groupId)
+			return null;
+
+		return new ListedMessageData(chatTransactionData, envelope);
+	}
+
+	private static void sortListedMessages(List<ListedMessageData> listedMessages, Boolean reverse) {
+		Comparator<ListedMessageData> comparator = Comparator
+				.comparingLong((ListedMessageData data) -> data.chatTransactionData.getTimestamp())
+				.thenComparing((left, right) -> compareBytes(left.chatTransactionData.getSignature(),
+						right.chatTransactionData.getSignature()));
+		if (reverse != null && reverse)
+			comparator = comparator.reversed();
+
+		listedMessages.sort(comparator);
 	}
 
 	private static int compareActiveChats(ActiveChatResult left, ActiveChatResult right) {
