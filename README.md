@@ -36,10 +36,11 @@ Use the build helper from the repository root:
 The helper checks Java, javac, and Maven first. If something is missing, it
 links to the official install docs and stops before running the build.
 
-Start the local testnet:
+Start the local testnet and confirm that it is minting blocks:
 
 ```sh
 ./testnet/start.sh
+./testnet/status.sh --wait
 ```
 
 The local testnet API listens at:
@@ -54,8 +55,8 @@ Stop it with:
 ./testnet/stop.sh
 ```
 
-See [testnet/README.md](testnet/README.md) for reset instructions, generated
-runtime files, and multi-node testnet notes.
+See [testnet/README.md](testnet/README.md) for the full first-test walkthrough,
+reset instructions, generated runtime files, and multi-node testnet notes.
 
 ## Local Node Build And Run
 

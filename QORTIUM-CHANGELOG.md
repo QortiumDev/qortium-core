@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - docs: add first testnet walkthrough
+
+Added a clearer first-test path around the local single-node testnet so testers can build the jar, start the disposable chain, confirm the API and block height, stop the node, and reset the generated runtime files without copying long cleanup commands. The new status and reset helpers keep the recommended onboarding flow visible from the README while leaving the existing start and stop behavior unchanged.
+
 ### 2026-05-20 - docs: add tester build helper
 
 Added an interactive build helper for testers who are not comfortable starting with raw Maven commands. The helper checks for Java 17, a JDK compiler, and Maven, explains the exact build command before running it, points users to official install docs when prerequisites are missing, and prints the next local testnet commands after a successful jar build.

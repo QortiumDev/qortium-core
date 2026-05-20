@@ -5,7 +5,7 @@ local build. The default path is a single-node testnet so testers can try the
 node without setting up peers, separate machines, or a multi-node minting
 rotation.
 
-## Quick Start
+## First Test Walkthrough
 
 Build Qortium from the repository root:
 
@@ -23,16 +23,28 @@ Start the local testnet:
 ./testnet/start.sh
 ```
 
-The script starts the node on the local testnet API port:
+Confirm that the API is reachable and the node is minting blocks:
 
-```text
-http://localhost:62391
+```sh
+./testnet/status.sh --wait
 ```
 
-Stop it with:
+The status helper checks the local testnet API at:
+
+```text
+http://localhost:62391/blocks/height
+```
+
+Stop the local testnet with:
 
 ```sh
 ./testnet/stop.sh
+```
+
+Reset the local testnet when you want a fresh disposable chain:
+
+```sh
+./testnet/reset.sh
 ```
 
 ## What The Script Does
@@ -48,6 +60,7 @@ then creates local runtime copies:
 - `run.pid`
 - `qortium.log`
 - `QortiumKeyStore.jks`
+- `apikey.txt`
 
 The generated chain file uses a fresh genesis timestamp on the first start so
 the local node does not have to catch up from an old committed date. Later
@@ -66,17 +79,11 @@ native-asset allocation.
 
 ## Resetting
 
-Stop the node first, then remove the local runtime files:
+The reset helper stops the node if it is running, then removes the generated
+local runtime files:
 
 ```sh
-rm -rf testnet/db-testnet \
-  testnet/qortium-backup-test \
-  testnet/settings-test-local.json \
-  testnet/testchain-local.json \
-  testnet/run.log \
-  testnet/run.pid \
-  testnet/qortium.log \
-  testnet/QortiumKeyStore.jks
+./testnet/reset.sh
 ```
 
 The next `./testnet/start.sh` run will create a fresh local chain.
