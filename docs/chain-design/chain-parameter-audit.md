@@ -1,207 +1,180 @@
 # Chain Parameter Audit
 
-Date: 2026-04-30
+Date: 2026-05-20
 
-Branch: `chain-parameter-audit`
+Branch: `qortium-6.1.5`
 
-Baseline commit: `e15be13b67f44df70c4d9f19723652721fa9d192`
-
-Baseline build: `mvn clean package` passed on 2026-04-30.
+Review context: current Qortium fork cleanup after the 6.1.5 integration,
+single-node testnet work, documentation reorganization, and trusted-seed launch
+model decision.
 
 ## Purpose
 
-Qortium's current direction is to become a cleaner baseline for teams that want
-to fork Qortal without inheriting Qortal's chain-specific history, governance
-seed data, branding, and runtime assumptions. This audit records the remaining
-hardcoded areas found before the next extraction pass.
+Qortium's direction is to become a cleaner baseline for teams that want to fork
+Qortal without inheriting Qortal's chain-specific history, governance seed data,
+branding, and runtime assumptions.
 
 This document is an inventory and priority guide. It does not by itself change
-runtime behavior.
+runtime behavior. Production chain config edits, genesis edits, test fixture
+cleanup, API compatibility changes, and broad branding work should remain
+separate commits.
+
+## Current Status
+
+Several earlier fork-cleanup targets are now mostly complete:
+
+- the protocol native asset ID is named `Asset.NATIVE` in core code
+- the main `blockchain.json` no longer seeds a QORT native asset
+- runtime native-asset bootstrap is possible through a development-group
+  approved `ISSUE_ASSET` transaction when asset ID `0` does not exist
+- mainnet and testnet peer-network magic values are chain-configured and use
+  Qortium defaults
+- runtime file names, default ports, startup scripts, Docker names, and build
+  metadata now use Qortium defaults
+- QDN app names have moved to neutral `qdn://`, `qdnRequest`, and `.qdn`
+  surfaces without legacy Qortal aliases
+- the trust-network launch model is now documented as a trusted-seed model,
+  with early Minting group members acting as the practical trust seed set
+
+The remaining high-priority work is not the native asset constant. The next
+cleanup target is the production chain configuration and the genesis/governance
+shape it implies.
 
 ## Highest Priority
 
-### Main Chain Genesis And Governance
+### Production Chain Defaults
 
-`src/main/resources/blockchain.json` no longer seeds a QORT native asset, but
-it still contains consensus-defining genesis group data:
+`src/main/resources/blockchain.json` is still the main production chain
+configuration. It currently has Qortium naming, but several values still look
+like inherited or partially edited launch parameters rather than deliberate
+Qortium defaults:
 
-- neutral development and minting group creation entries, currently owned by the
-  null account and open for public membership
-- group seed choices that are still consensus-defining rather than generated
-  from an explicit fork template
+- `mempowTransactionUpdatesTimestamp` is set to an inherited timestamp
+- `blockRewardBatchStartHeight` is set to an inherited high activation height
+- `featureTriggers.transactionV6Timestamp` is deferred far into the future
+- the reward curve still uses inherited height intervals and reward values
+- account-level share bins, activation thresholds, and block-count levels still
+  carry inherited economic assumptions
+- development and minting group IDs are fixed as consensus-facing group IDs
 
-These are consensus-defining defaults. A reusable baseline should either ship a
-neutral example genesis or make these values clearly supplied by a fork's chain
-configuration process.
+Recommendation:
 
-Initial recommendation:
+- decide whether `src/main/resources/blockchain.json` is Qortium's intended
+  launch config or a neutral fork template
+- for a clean Qortium launch config, make feature activation heights and
+  timestamps explicit launch choices instead of inherited values
+- review the reward curve, account levels, share bins, and fee settings as
+  economics, not cleanup trivia
+- keep any production chain-config edits separate from test fixture cleanup
 
-- keep asset ID `0` as the native-asset protocol primitive
-- let a development-group-approved runtime asset issue create asset ID `0`
-  instead of seeding QORT in genesis
-- stop treating `QORT` as the hardcoded name of the native-asset primitive
-- continue reducing inherited main genesis seed data into a neutral baseline or
-  generated fork template
-- make the governance group seed model explicit enough that a new chain can
-  choose no seed governance, public bootstrap groups, one seed admin group, or
-  its own configured groups
+### Genesis Governance And Trusted Seeds
+
+The main genesis currently creates `development` and `minting` groups from the
+null account public key. Those groups are open, use `PCT40` approval, and are
+referenced by `devGroupIds` and `mintingGroupIds`.
+
+The trusted-seed launch decision means this is acceptable only if it is an
+intentional launch model: early Minting group membership is socially trusted,
+and that group is the practical trust seed set. It should not be treated as an
+accidental leftover from Qortal.
+
+Recommendation:
+
+- choose and document the intended main genesis profile before editing it
+- valid profiles include no seed governance, public bootstrap groups, one seed
+  admin group, or custom fork-supplied groups
+- if Qortium keeps public development and minting groups in the main config,
+  document that as the default trusted-seed launch profile
+- if Qortium wants a reusable neutral template, move launch-specific groups into
+  an example config or generator before calling the baseline reusable
+
+## Completed Or Lower-Risk Tracks
 
 ### Native Asset Identity
 
-`src/main/java/org/qortal/asset/Asset.java` now exposes only
-`Asset.NATIVE = 0L` for the protocol native asset ID. The temporary
-`Asset.QORT` Java compatibility alias has been removed after production and
-test code were moved to `Asset.NATIVE`. Simple native-asset wording in comments,
-API descriptions, translations, and demo text now avoids hardcoded QORT labels.
-Cross-chain native-side trade fields, repository storage, and display labels
-now describe the chain-side asset as native/NATIVE instead of QORT.
+Core code now uses `Asset.NATIVE = 0L` for the protocol native asset ID. The old
+`Asset.QORT` compatibility alias has been removed, and the main genesis no
+longer creates a QORT asset.
 
-The protocol still needs a stable native asset ID, but the display name should
-not be fixed to QORT in fork-facing code.
+The remaining native-asset work is mostly display and API wording:
 
-Initial recommendation:
+- avoid hardcoded QORT labels in schema text and examples
+- source future display labels from chain or application identity metadata if a
+  user-facing asset ticker is needed
+- keep `Asset.NATIVE` as the protocol primitive unless there is a separate
+  migration plan
 
-- keep using neutral naming in core code for the native asset ID
-- preserve compatibility aliases only where needed during migration
-- source display labels like `QORT` from chain config or application identity
-  metadata
-- update comments and docs after the runtime constant is neutralized
+### Network, Runtime, And Build Identity
 
-### Network Identity
+Network magic, runtime defaults, Docker/startup paths, jar naming, Maven
+artifact identity, and Swagger title are already Qortium-oriented.
 
-`src/main/resources/blockchain.json` now defines the four-byte peer network
-message magic values for mainnet and testnet mode. Qortium uses `QRTM` and
-`qrtm` by default, and both the normal peer network and the data network read
-the active value from chain configuration instead of hardcoded inherited QORT
-constants.
-
-The network magic is consensus-adjacent peer identity: nodes with different
-values will reject each other's messages. Forks should choose unique values in
-their chain configuration before launching a network.
-
-### Runtime Defaults And Data Locations
-
-`src/main/java/org/qortal/settings/Settings.java` now uses Qortium runtime
-defaults for local file names:
-
-- P2P ports `12392` and `62392`
-- API ports `12391` and `62391`
-- developer proxy ports `12393` and `62393`
-- `QortiumKeyStore.jks`
-- `qortium-backup`
-
-Docker, startup scripts, and compose files now use Qortium jar, data path,
-container, network, and environment-variable defaults.
-
-Initial recommendation:
-
-- keep consensus chain parameters separate from application packaging identity
-- avoid changing network ports until the intended fork baseline values are
-  decided
-
-## Medium Priority
-
-### Build, API, And Package Identity
-
-`pom.xml` now builds `org.qortium:qortium` and sets Swagger output to
-`Qortium API Documentation`, while the Java package namespace and main class
-still use `org.qortal`.
-
-This is broad and touches imports throughout the tree. It is not the first
-consensus-risk item, but it is part of making Qortium feel like a real baseline
-instead of a lightly edited Qortal checkout.
-
-Initial recommendation:
-
-- defer full package rename until after chain parameters are extracted
-- change low-risk build metadata first, such as artifact name and generated API
-  title
-- only rename Java packages in a dedicated mechanical commit after tests are
-  stable
+The Java package namespace and main class still use `org.qortal`. This is broad
+mechanical work and should remain deferred until chain parameters and genesis
+policy are settled.
 
 ### Test Chain Fixtures
 
-The standard `src/test/resources/test-chain-v2*.json` fixtures now seed native
-asset ID `0` as `NATIVE`, while the no-native-asset fixture intentionally omits
-asset `0`. These fixtures still carry `dev-group`, `minter-group`,
-Qortal-style addresses, and fixed reward-share keys.
+The `src/test/resources/test-chain-v2*.json` fixtures intentionally seed
+deterministic accounts, native asset ID `0`, funded balances, fixture groups,
+and reward-share keys for tests. Some fixture names still use `dev-group` and
+`minter-group`, and many addresses are inherited deterministic test identities.
 
-The shared Java test helpers and direct native-asset test assertions now use
-`Asset.NATIVE`, but broader inherited test names, cross-chain labels, and
-chain-specific identities remain.
+Recommendation:
 
-Some fixed keys are useful for deterministic tests, so the goal should be
-neutral fixture naming rather than removing all fixture data.
+- keep deterministic keys, balances, and reward-share records where tests need
+  them
+- rename fixture labels and comments to neutral terms where this does not
+  obscure test intent
+- do not mix test fixture cleanup with production `blockchain.json` or genesis
+  changes
 
-Initial recommendation:
+### Cross-Chain And API Naming
 
-- keep deterministic keys where they are test mechanics
-- rename fixture groups and comments to neutral terms
-- keep native asset fixture labels neutral unless a test is explicitly about a
-  Qortal compatibility surface
-- avoid mixing test fixture cleanup with production genesis changes
+Some cross-chain classes and schemas still use Qortal-era naming, including
+fields such as `supportsQortTrades` and descriptions that refer to QORT. These
+are user-facing or compatibility-facing names, not immediate consensus
+parameters.
 
-### Cross-Chain ACCT Coupling
+Recommendation:
 
-The v3 ACCT classes still describe trades in terms of Qortal-side addresses,
-`qortalAtAddress`, and registry-selected foreign blockchains.
+- clean schema descriptions and display text first
+- only rename public API fields after choosing a compatibility strategy
+- keep ACCT registry cleanup separate from supported foreign-chain inventory
 
-This area mixes two concerns:
+### UI, QDN, Documentation, And Branding
 
-- which external blockchains are supported
-- which ACCT implementations are active for this chain
+The top-level README, documentation index, and many user-facing Qortium paths
+have been refreshed. Some inherited Qortal wording remains in upstream
+reference docs, QDN/Q-App compatibility text, UI/tray resources, icons,
+installer material, comments, and tests.
 
-Initial recommendation:
+Recommendation:
 
-- split the active ACCT registry from the broad supported-blockchain enum
-- keep the existing v3 implementations while the registry is introduced
-- later rename Qortal-specific field names only when API compatibility strategy
-  is clear
-
-## Lower Priority
-
-### UI, Q-Apps, Documentation, And Branding
-
-The repository still contains Qortal names and assets in the README, tray UI,
-icons, Q-Apps browser helpers, demo resources, shell scripts, installer files,
-and user-facing text.
-
-These should be cleaned up, but most are not consensus parameters. The safest
-approach is to handle them in branding-focused commits after the consensus and
-runtime identity decisions are clearer.
-
-Initial recommendation:
-
-- update top-level README and user-visible Qortium messaging early
-- replace tray labels and icons in a UI/packaging commit
-- QDN app names have moved to neutral `qdn://`, `qdnRequest`, and `.qdn`
-  surfaces without legacy Qortal aliases
-
-### API Examples
-
-Many API schema annotations still use Qortal public keys and addresses as
-examples. These do not define runtime behavior, but they make the baseline look
-chain-specific.
-
-Initial recommendation:
-
-- replace examples with neutral fixture identities
-- keep example values syntactically valid for the current address format
-- do this after fixture naming is settled
+- leave upstream reference docs clearly labeled rather than rewriting their
+  historical content
+- handle tray/UI/icon/installer branding in a dedicated packaging pass
+- defer full Java package rename to a mechanical package-identity commit
 
 ## Suggested Implementation Order
 
-1. Make native asset display metadata come from chain configuration.
-2. Continue replacing or templating the remaining main `blockchain.json` genesis
-   seed data.
-3. Clean test fixtures separately from production genesis.
-4. Add application identity defaults for backup paths, data paths, jar naming,
-   Docker names, and API documentation title.
-6. Split ACCT registration from the supported external blockchain list.
-7. Run broad branding and package cleanup after the core assumptions are no
-   longer hardcoded.
+1. Refresh production `blockchain.json` defaults: activation heights,
+   timestamps, reward curve, account levels, fee assumptions, and share bins.
+2. Decide and clean the main genesis governance profile: no seed governance,
+   public bootstrap groups, one seed admin group, or custom fork-supplied
+   groups.
+3. Clean test fixtures separately from production genesis and economics.
+4. Clean API/schema wording and cross-chain naming without breaking public
+   fields unless a compatibility strategy is chosen.
+5. Run broad branding, UI, installer, and Java package cleanup after consensus
+   and runtime assumptions are no longer hardcoded.
 
-## Current Notes
+## Working Rules For This Cleanup
 
-The branch was created with only `temp.txt` untracked before this audit. That
-file appears to be local working notes and is intentionally not included here.
+- Treat production `blockchain.json` edits as consensus-facing changes.
+- Keep each logical change in its own commit with a matching
+  `QORTIUM-CHANGELOG.md` entry.
+- Do not combine production genesis changes with fixture renames.
+- Do not combine API compatibility decisions with comment or branding cleanup.
+- Run focused tests for any code/config behavior change; docs-only updates need
+  at least `git diff --check`.

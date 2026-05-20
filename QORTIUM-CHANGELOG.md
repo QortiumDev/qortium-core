@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - docs: refresh chain parameter audit
+
+Refreshed the chain-parameter audit so it matches Qortium's current cleanup state instead of the older April branch snapshot. The audit now treats native-asset and runtime identity cleanup as mostly complete, identifies production `blockchain.json` and genesis governance defaults as the next high-priority fork-parameter work, and keeps test fixtures, API naming, cross-chain naming, and package branding as separate follow-up tracks.
+
 ### 2026-05-20 - docs: document trusted-seed launch model
 
 Documented Qortium's trusted-seed launch model for the account trust network. The trust docs now explain that the first launch relies on socially trusted early Minting group members as the practical seed set, treats that as an accepted launch assumption instead of an unresolved seed-guard blocker, and keeps seed eligibility as a future review item if minting membership becomes more open or permissionless.
