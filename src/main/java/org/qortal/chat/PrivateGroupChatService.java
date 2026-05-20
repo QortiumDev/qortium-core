@@ -7,8 +7,10 @@ import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortal.chat.crypto.PrivateGroupChatKeyCache;
 import org.qortal.chat.crypto.PrivateGroupChatKeyRequest;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
+import org.qortal.chat.crypto.PrivateGroupChatRotationRequest;
 import org.qortal.controller.ChatNotifier;
 import org.qortal.controller.Controller;
+import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.repository.DataException;
@@ -164,6 +166,30 @@ public class PrivateGroupChatService {
 
 		try {
 			return this.doRotateKey(repository, rotatorPrivateKey, groupId);
+		} finally {
+			blockchainLock.unlock();
+		}
+	}
+
+	public RotationRequestResult requestRotation(Repository repository, byte[] requesterPrivateKey, int groupId)
+			throws DataException, GeneralSecurityException, TransformationException, PrivateGroupChatException,
+			ValidationException {
+		validatePrivateKey(requesterPrivateKey, "requester private key");
+
+		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
+		boolean locked;
+		try {
+			locked = blockchainLock.tryLock(BLOCKCHAIN_LOCK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new ValidationException(ValidationResult.NO_BLOCKCHAIN_LOCK, e);
+		}
+
+		if (!locked)
+			throw new ValidationException(ValidationResult.NO_BLOCKCHAIN_LOCK);
+
+		try {
+			return this.doRequestRotation(repository, requesterPrivateKey, groupId);
 		} finally {
 			blockchainLock.unlock();
 		}
@@ -351,6 +377,27 @@ public class PrivateGroupChatService {
 		return new KeyRequestResult(keyRequestData.getSignature(), epoch.getEpochId(), keyId);
 	}
 
+	private RotationRequestResult doRequestRotation(Repository repository, byte[] requesterPrivateKey, int groupId)
+			throws DataException, GeneralSecurityException, TransformationException, PrivateGroupChatException,
+			ValidationException {
+		PrivateKeyAccount requester = new PrivateKeyAccount(repository, requesterPrivateKey);
+		PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+				groupId);
+
+		if (!isMember(epoch, requester.getPublicKey()))
+			throw new GeneralSecurityException("Rotation requester is not a current member of this private group chat epoch");
+
+		if (!isOwnerOrAdmin(repository, groupId, requester.getAddress()))
+			throw new GeneralSecurityException("Rotation requester is not a current group owner or admin");
+
+		PrivateGroupChatEnvelope rotationRequest = PrivateGroupChatRotationRequest.create(epoch, requesterPrivateKey);
+		ChatTransactionData rotationRequestData = buildChatTransaction(requester, groupId, null,
+				rotationRequest.toBytes(), false, true);
+		storeSignedChat(repository, rotationRequestData, requester);
+
+		return new RotationRequestResult(rotationRequestData.getSignature(), epoch.getEpochId());
+	}
+
 	private KeyAnnouncementRelayResult doRelayKeyAnnouncement(Repository repository, byte[] relayerPrivateKey,
 			int groupId, byte[] epochId, byte[] keyId) throws DataException, GeneralSecurityException,
 			TransformationException, PrivateGroupChatException, ValidationException {
@@ -438,6 +485,17 @@ public class PrivateGroupChatService {
 				return true;
 
 		return false;
+	}
+
+	private static boolean isOwnerOrAdmin(Repository repository, int groupId, String address) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+		if (groupData == null)
+			throw new IllegalArgumentException("group does not exist");
+
+		if (address.equals(groupData.getOwner()))
+			return true;
+
+		return repository.getGroupRepository().adminExists(groupId, address);
 	}
 
 	public static class SendResult {
@@ -551,6 +609,24 @@ public class PrivateGroupChatService {
 
 		public byte[] getKeyId() {
 			return copy(this.keyId);
+		}
+	}
+
+	public static class RotationRequestResult {
+		private final byte[] requestSignature;
+		private final byte[] epochId;
+
+		private RotationRequestResult(byte[] requestSignature, byte[] epochId) {
+			this.requestSignature = copy(requestSignature);
+			this.epochId = copy(epochId);
+		}
+
+		public byte[] getRequestSignature() {
+			return copy(this.requestSignature);
+		}
+
+		public byte[] getEpochId() {
+			return copy(this.epochId);
 		}
 	}
 

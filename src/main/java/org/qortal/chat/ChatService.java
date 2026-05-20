@@ -6,6 +6,7 @@ import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
 import org.qortal.chat.crypto.PrivateGroupChatKeyRequest;
+import org.qortal.chat.crypto.PrivateGroupChatRotationRequest;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
 import org.qortal.data.group.GroupData;
@@ -244,9 +245,23 @@ public class ChatService {
 						: ValidationResult.INVALID_DATA_LENGTH;
 
 			case ROTATION_REQUEST:
+				return Arrays.equals(envelope.getRequesterPublicKey(), chatTransactionData.getSenderPublicKey())
+						&& PrivateGroupChatRotationRequest.isValid(epoch, envelope)
+						&& isOwnerOrAdmin(repository, groupData, envelope.getRequesterPublicKey())
+						? ValidationResult.OK
+						: ValidationResult.INVALID_DATA_LENGTH;
+
 			default:
 				return ValidationResult.INVALID_DATA_LENGTH;
 		}
+	}
+
+	private static boolean isOwnerOrAdmin(Repository repository, GroupData groupData, byte[] publicKey) throws DataException {
+		String address = Crypto.toAddress(publicKey);
+		if (address.equals(groupData.getOwner()))
+			return true;
+
+		return repository.getGroupRepository().adminExists(groupData.getGroupId(), address);
 	}
 
 	private int getPoWDifficulty(Repository repository, byte[] senderPublicKey) throws DataException {

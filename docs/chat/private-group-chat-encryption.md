@@ -128,7 +128,7 @@ Manual rotation is also supported:
 
 - a current member can rotate the group key their local node uses for new sends
 - the group owner or an admin can publish a signed `ROTATION_REQUEST`
-- rotation requests are rate-limited to prevent abuse
+- rotation requests use the normal chat sender rate limit
 - seeing an accepted rotation request causes local senders to stop using older
   keys for new messages and create or select a fresh key for the same epoch
 

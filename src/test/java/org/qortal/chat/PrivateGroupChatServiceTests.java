@@ -7,6 +7,7 @@ import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortal.chat.crypto.PrivateGroupChatKeyCache;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
+import org.qortal.data.group.GroupAdminData;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.group.GroupMemberData;
 import org.qortal.data.transaction.BaseTransactionData;
@@ -313,6 +314,50 @@ public class PrivateGroupChatServiceTests extends Common {
 	}
 
 	@Test
+	public void testRequestRotationStoresRotationRequestEnvelope() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-rotation-request");
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					fixture.groupId);
+
+			PrivateGroupChatService.RotationRequestResult result = PrivateGroupChatService.getInstance()
+					.requestRotation(repository, fixture.alice.getPrivateKey(), fixture.groupId);
+
+			assertNotNull(result.getRequestSignature());
+			assertArrayEquals(epoch.getEpochId(), result.getEpochId());
+
+			ChatTransactionData rotationRequestData = repository.getChatStoreRepository().fromSignature(
+					result.getRequestSignature());
+			assertNotNull(rotationRequestData);
+			assertEquals(fixture.groupId, rotationRequestData.getTxGroupId());
+			assertEquals(fixture.alice.getAddress(), rotationRequestData.getSender());
+			assertFalse(rotationRequestData.getIsText());
+			assertTrue(rotationRequestData.getIsEncrypted());
+
+			PrivateGroupChatEnvelope rotationRequest = PrivateGroupChatEnvelope.fromBytes(rotationRequestData.getData());
+			assertEquals(PrivateGroupChatEnvelope.Type.ROTATION_REQUEST, rotationRequest.getType());
+			assertArrayEquals(fixture.alice.getPublicKey(), rotationRequest.getRequesterPublicKey());
+		}
+	}
+
+	@Test
+	public void testRequestRotationAllowsAdminAndRejectsOrdinaryMember() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-rotation-request-admin");
+			addAdmin(repository, fixture.groupId, fixture.bob);
+			addMember(repository, fixture.groupId, fixture.chloe);
+
+			PrivateGroupChatService.RotationRequestResult result = PrivateGroupChatService.getInstance()
+					.requestRotation(repository, fixture.bob.getPrivateKey(), fixture.groupId);
+			assertNotNull(result.getRequestSignature());
+
+			assertThrows(GeneralSecurityException.class,
+					() -> PrivateGroupChatService.getInstance().requestRotation(repository,
+							fixture.chloe.getPrivateKey(), fixture.groupId));
+		}
+	}
+
+	@Test
 	public void testDecryptRehydratesCachedKeyFromStoredAnnouncement() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Fixture fixture = createFixture(repository, "private-service-missing-key");
@@ -482,6 +527,13 @@ public class PrivateGroupChatServiceTests extends Common {
 		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
 		repository.getGroupRepository().save(new GroupMemberData(groupId, account.getAddress(),
 				groupData.getCreated(), groupData.getReference()));
+		repository.saveChanges();
+	}
+
+	private static void addAdmin(Repository repository, int groupId, TestAccount account) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+		repository.getGroupRepository().save(new GroupAdminData(groupId, account.getAddress(),
+				groupData.getReference()));
 		repository.saveChanges();
 	}
 

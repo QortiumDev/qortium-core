@@ -8,6 +8,8 @@ import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortal.chat.crypto.PrivateGroupChatKeyRequest;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
+import org.qortal.chat.crypto.PrivateGroupChatRotationRequest;
+import org.qortal.data.group.GroupAdminData;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.group.GroupMemberData;
 import org.qortal.data.transaction.BaseTransactionData;
@@ -265,6 +267,30 @@ public class ChatServiceTests extends Common {
 	}
 
 	@Test
+	public void testClosedGroupRotationRequestEnvelopeIsAcceptedForOwnerOrAdmin() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-rotation-request", false,
+					ApprovalThreshold.ONE, 10, 40);
+			addMember(repository, groupId, bob);
+			addAdmin(repository, groupId, bob);
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					groupId);
+
+			PrivateGroupChatEnvelope ownerRequest = PrivateGroupChatRotationRequest.create(epoch, alice.getPrivateKey());
+			ChatTransactionData ownerRequestData = signedChat(repository, alice, groupId, null,
+					ownerRequest.toBytes(), false, true, now());
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, ownerRequestData));
+
+			PrivateGroupChatEnvelope adminRequest = PrivateGroupChatRotationRequest.create(epoch, bob.getPrivateKey());
+			ChatTransactionData adminRequestData = signedChat(repository, bob, groupId, null,
+					adminRequest.toBytes(), false, true, now() + 1);
+			assertEquals(ValidationResult.OK, CHAT_SERVICE.validateForStore(repository, adminRequestData));
+		}
+	}
+
+	@Test
 	public void testClosedGroupPrivateEnvelopeContextAndUnsupportedTypesAreRejected() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
@@ -305,12 +331,19 @@ public class ChatServiceTests extends Common {
 					rotationRequest.toBytes(), false, true, now() + 3);
 			assertEquals(ValidationResult.INVALID_DATA_LENGTH, CHAT_SERVICE.validateForStore(repository, rotationRequestData));
 
+			PrivateGroupChatEnvelope memberRotationRequest = PrivateGroupChatRotationRequest.create(firstEpoch,
+					bob.getPrivateKey());
+			ChatTransactionData memberRotationRequestData = signedChat(repository, bob, firstGroupId, null,
+					memberRotationRequest.toBytes(), false, true, now() + 4);
+			assertEquals(ValidationResult.INVALID_DATA_LENGTH,
+					CHAT_SERVICE.validateForStore(repository, memberRotationRequestData));
+
 			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(firstGroupId, firstEpoch.getEpochId(),
 					bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 50),
 					bytes(PrivateGroupChatEnvelope.NONCE_LENGTH, 51),
 					bytes(32, 52));
 			ChatTransactionData missingEncryptedFlagData = signedChat(repository, alice, firstGroupId, null,
-					messageEnvelope.toBytes(), true, false, now() + 4);
+					messageEnvelope.toBytes(), true, false, now() + 5);
 			assertEquals(ValidationResult.INVALID_DATA_LENGTH,
 					CHAT_SERVICE.validateForStore(repository, missingEncryptedFlagData));
 		}
@@ -373,6 +406,13 @@ public class ChatServiceTests extends Common {
 		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
 		repository.getGroupRepository().save(new GroupMemberData(groupId, account.getAddress(),
 				groupData.getCreated(), groupData.getReference()));
+		repository.saveChanges();
+	}
+
+	private static void addAdmin(Repository repository, int groupId, TestAccount account) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+		repository.getGroupRepository().save(new GroupAdminData(groupId, account.getAddress(),
+				groupData.getReference()));
 		repository.saveChanges();
 	}
 

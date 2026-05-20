@@ -14,6 +14,8 @@ import org.qortal.api.model.PrivateGroupChatKeyRequestRequest;
 import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
 import org.qortal.api.model.PrivateGroupChatRotateRequest;
 import org.qortal.api.model.PrivateGroupChatRotateResponse;
+import org.qortal.api.model.PrivateGroupChatRotationRequestRequest;
+import org.qortal.api.model.PrivateGroupChatRotationRequestResponse;
 import org.qortal.api.model.PrivateGroupChatSendRequest;
 import org.qortal.api.model.PrivateGroupChatSendResponse;
 import org.qortal.api.resource.ChatResource;
@@ -360,6 +362,37 @@ public class ChatResourceTests extends ApiCommon {
 			assertEquals(PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, envelope.getType());
 			assertArrayEquals(rotateResponse.epochId, envelope.getEpochId());
 			assertArrayEquals(rotateResponse.keyId, envelope.getKeyId());
+		}
+	}
+
+	@Test
+	public void testPrivateGroupRotationRequest() throws Exception {
+		PrivateGroupChatRotationRequestRequest rotationRequest = new PrivateGroupChatRotationRequestRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-rotation-request");
+			addMember(repository, groupId, bob);
+
+			rotationRequest.requesterPrivateKey = alice.getPrivateKey();
+			rotationRequest.groupId = groupId;
+		}
+
+		PrivateGroupChatRotationRequestResponse rotationResponse =
+				this.chatResource.requestPrivateGroupChatRotation(null, rotationRequest);
+
+		assertNotNull(rotationResponse.requestSignature);
+		assertNotNull(rotationResponse.epochId);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChatTransactionData rotationRequestData = repository.getChatStoreRepository().fromSignature(
+					rotationResponse.requestSignature);
+			assertNotNull(rotationRequestData);
+			assertTrue(rotationRequestData.getIsEncrypted());
+			PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(rotationRequestData.getData());
+			assertEquals(PrivateGroupChatEnvelope.Type.ROTATION_REQUEST, envelope.getType());
+			assertArrayEquals(rotationResponse.epochId, envelope.getEpochId());
 		}
 	}
 
