@@ -11,6 +11,7 @@ import org.qortal.chat.crypto.PrivateGroupChatRotationRequest;
 import org.qortal.controller.ChatNotifier;
 import org.qortal.controller.Controller;
 import org.qortal.crypto.Crypto;
+import org.qortal.data.chat.ChatMessage;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
@@ -23,7 +24,9 @@ import org.qortal.transform.Transformer;
 import org.qortal.utils.NTP;
 
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
@@ -80,6 +83,79 @@ public class PrivateGroupChatService {
 		if (envelope.getType() != PrivateGroupChatEnvelope.Type.MESSAGE)
 			throw new PrivateGroupChatException("Private group chat transaction is not an encrypted message");
 
+		return decryptMessageData(repository, recipientPrivateKey, chatTransactionData, envelope);
+	}
+
+	public List<ListMessageResult> listMessages(Repository repository, byte[] recipientPrivateKey, int groupId,
+			Long before, Long after, byte[] chatReference, Boolean hasChatReference, String sender,
+			ChatMessage.Encoding encoding, Integer limit, Integer offset, Boolean reverse)
+			throws DataException {
+		validatePrivateKey(recipientPrivateKey, "recipient private key");
+
+		GroupData groupData = repository.getGroupRepository().fromGroupId(groupId);
+		if (groupData == null)
+			throw new IllegalArgumentException("group does not exist");
+		if (groupData.isOpen())
+			throw new IllegalArgumentException("group is not closed");
+
+		List<ListedMessageData> listedMessages = new ArrayList<>();
+		for (ChatTransactionData chatTransactionData : repository.getChatStoreRepository().getGroupMessages(groupId)) {
+			if (!matchesListCriteria(chatTransactionData, before, after, chatReference, hasChatReference, sender))
+				continue;
+
+			if (!chatTransactionData.getIsEncrypted())
+				continue;
+
+			PrivateGroupChatEnvelope envelope;
+			try {
+				envelope = PrivateGroupChatEnvelope.fromBytes(chatTransactionData.getData());
+			} catch (TransformationException e) {
+				continue;
+			}
+
+			if (envelope.getType() != PrivateGroupChatEnvelope.Type.MESSAGE)
+				continue;
+
+			listedMessages.add(new ListedMessageData(chatTransactionData, envelope));
+		}
+
+		Comparator<ListedMessageData> comparator = Comparator
+				.comparingLong((ListedMessageData data) -> data.chatTransactionData.getTimestamp())
+				.thenComparing((left, right) -> compareBytes(left.chatTransactionData.getSignature(),
+						right.chatTransactionData.getSignature()));
+		if (reverse != null && reverse)
+			comparator = comparator.reversed();
+		listedMessages.sort(comparator);
+
+		int fromIndex = Math.max(offset == null ? 0 : offset, 0);
+		if (fromIndex >= listedMessages.size())
+			return new ArrayList<>();
+
+		int toIndex = listedMessages.size();
+		if (limit != null && limit > 0)
+			toIndex = Math.min(fromIndex + limit, listedMessages.size());
+
+		List<ListMessageResult> results = new ArrayList<>();
+		for (ListedMessageData listedMessage : listedMessages.subList(fromIndex, toIndex)) {
+			ChatMessage message = repository.getChatStoreRepository().toChatMessage(listedMessage.chatTransactionData,
+					encoding);
+
+			try {
+				DecryptResult decryptResult = decryptMessageData(repository, recipientPrivateKey,
+						listedMessage.chatTransactionData, listedMessage.envelope);
+				results.add(ListMessageResult.decrypted(message, decryptResult));
+			} catch (PrivateGroupChatException | GeneralSecurityException e) {
+				results.add(ListMessageResult.missingKey(message, listedMessage.envelope.getEpochId(),
+						listedMessage.envelope.getKeyId(), listedMessage.chatTransactionData.getIsText()));
+			}
+		}
+
+		return results;
+	}
+
+	private static DecryptResult decryptMessageData(Repository repository, byte[] recipientPrivateKey,
+			ChatTransactionData chatTransactionData, PrivateGroupChatEnvelope envelope)
+			throws DataException, GeneralSecurityException, PrivateGroupChatException {
 		PrivateGroupChatKeyCache.Entry keyEntry = getAuthorizedCachedKey(envelope, recipientPrivateKey);
 		if (keyEntry == null)
 			keyEntry = rehydrateKeyFromAnnouncements(repository, envelope, recipientPrivateKey);
@@ -92,6 +168,45 @@ public class PrivateGroupChatService {
 
 		return new DecryptResult(plaintext, chatTransactionData.getIsText(), envelope.getGroupId(),
 				envelope.getEpochId(), envelope.getKeyId());
+	}
+
+	private static boolean matchesListCriteria(ChatTransactionData chatTransactionData, Long before, Long after,
+			byte[] chatReference, Boolean hasChatReference, String sender) {
+		if (before != null && chatTransactionData.getTimestamp() >= before)
+			return false;
+
+		if (after != null && chatTransactionData.getTimestamp() <= after)
+			return false;
+
+		byte[] messageChatReference = chatTransactionData.getChatReference();
+		if (chatReference != null && !Arrays.equals(messageChatReference, chatReference))
+			return false;
+
+		if (hasChatReference != null && hasChatReference && messageChatReference == null)
+			return false;
+
+		if (hasChatReference != null && !hasChatReference && messageChatReference != null)
+			return false;
+
+		return sender == null || sender.equals(chatTransactionData.getSender());
+	}
+
+	private static int compareBytes(byte[] left, byte[] right) {
+		if (left == right)
+			return 0;
+		if (left == null)
+			return -1;
+		if (right == null)
+			return 1;
+
+		int minLength = Math.min(left.length, right.length);
+		for (int i = 0; i < minLength; ++i) {
+			int comparison = Byte.compare(left[i], right[i]);
+			if (comparison != 0)
+				return comparison;
+		}
+
+		return Integer.compare(left.length, right.length);
 	}
 
 	public KeyRequestResult requestKey(Repository repository, byte[] requesterPrivateKey, int groupId, byte[] keyId)
@@ -538,6 +653,68 @@ public class PrivateGroupChatService {
 			return true;
 
 		return repository.getGroupRepository().adminExists(groupId, address);
+	}
+
+	private static class ListedMessageData {
+		private final ChatTransactionData chatTransactionData;
+		private final PrivateGroupChatEnvelope envelope;
+
+		private ListedMessageData(ChatTransactionData chatTransactionData, PrivateGroupChatEnvelope envelope) {
+			this.chatTransactionData = chatTransactionData;
+			this.envelope = envelope;
+		}
+	}
+
+	public static class ListMessageResult {
+		private final ChatMessage message;
+		private final byte[] data;
+		private final boolean isText;
+		private final byte[] epochId;
+		private final byte[] keyId;
+		private final boolean decrypted;
+
+		private ListMessageResult(ChatMessage message, byte[] data, boolean isText, byte[] epochId, byte[] keyId,
+				boolean decrypted) {
+			this.message = message;
+			this.data = copy(data);
+			this.isText = isText;
+			this.epochId = copy(epochId);
+			this.keyId = copy(keyId);
+			this.decrypted = decrypted;
+		}
+
+		private static ListMessageResult decrypted(ChatMessage message, DecryptResult decryptResult) {
+			return new ListMessageResult(message, decryptResult.getData(), decryptResult.isText(),
+					decryptResult.getEpochId(), decryptResult.getKeyId(), true);
+		}
+
+		private static ListMessageResult missingKey(ChatMessage message, byte[] epochId, byte[] keyId, boolean isText) {
+			return new ListMessageResult(message, null, isText, epochId, keyId, false);
+		}
+
+		public ChatMessage getMessage() {
+			return this.message;
+		}
+
+		public byte[] getData() {
+			return copy(this.data);
+		}
+
+		public boolean isText() {
+			return this.isText;
+		}
+
+		public byte[] getEpochId() {
+			return copy(this.epochId);
+		}
+
+		public byte[] getKeyId() {
+			return copy(this.keyId);
+		}
+
+		public boolean isDecrypted() {
+			return this.decrypted;
+		}
 	}
 
 	public static class SendResult {

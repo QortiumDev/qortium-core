@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group inbox API
+
+Added a side-effect-free private group chat inbox API so local clients can list closed-group user messages and receive decrypted data when the matching key is available. Messages that cannot be decrypted now report the missing epoch and key id instead of failing the whole read, giving clients a clear path to request or relay the missing key without exposing control envelopes as user chat.
+
 ### 2026-05-20 - chat: honor private group rotation requests
 
 Finished the private group chat rotation-request flow by making local sends look for the newest accepted owner/admin request in the current membership epoch before reusing a cached group key. When a valid request is present, Qortium now publishes and uses a fresh key for future messages while keeping older keys available so older messages still decrypt.

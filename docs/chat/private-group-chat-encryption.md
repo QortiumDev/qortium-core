@@ -156,7 +156,7 @@ Clients should not need to implement group encryption themselves. Core should
 provide restricted local APIs for:
 
 - sending an encrypted closed-group message
-- decrypting closed-group messages for a local account
+- listing and decrypting closed-group messages for a local account
 - requesting a missing group key
 - re-announcing a known signed group-key announcement
 - rotating the local group key used for new sends
@@ -166,6 +166,18 @@ Core will need local access to the account private key for encryption,
 decryption, signing, and key wrapping. The first API can follow existing
 private-key-based local endpoints. A later wallet or unlocked-account design can
 hide private keys from callers more cleanly.
+
+The recommended client flow is:
+
+1. send new closed-group messages with the private group send API
+2. list readable group messages with the private group messages API
+3. when a listed message reports `MISSING_KEY`, publish a key request for the
+   returned epoch/key id
+4. relay a matching signed key announcement when another local member has it
+5. retry the message list after the missing key is available locally
+
+The message list API is read-only. It does not publish key requests
+automatically, so clients can decide when missing-key recovery is worth using.
 
 ## Validation Policy
 

@@ -20,6 +20,8 @@ import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayRequest;
 import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayResponse;
 import org.qortal.api.model.PrivateGroupChatKeyRequestRequest;
 import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
+import org.qortal.api.model.PrivateGroupChatMessageResponse;
+import org.qortal.api.model.PrivateGroupChatMessagesRequest;
 import org.qortal.api.model.PrivateGroupChatRotateRequest;
 import org.qortal.api.model.PrivateGroupChatRotateResponse;
 import org.qortal.api.model.PrivateGroupChatRotationRequestRequest;
@@ -49,6 +51,7 @@ import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.qortal.data.chat.ChatMessage.Encoding;
@@ -244,6 +247,75 @@ public class ChatResource {
 	
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			return repository.getChatStoreRepository().getActiveChats(address, encoding, hasChatReference);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/group/messages")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "List private group chat messages",
+		description = "Returns closed-group private chat user messages with decrypted data when the local node has or can recover the matching group key. Missing keys are reported per message without publishing key requests.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = PrivateGroupChatMessagesRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "private group chat messages",
+				content = @Content(
+					array = @ArraySchema(
+						schema = @Schema(
+							implementation = PrivateGroupChatMessageResponse.class
+						)
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public List<PrivateGroupChatMessageResponse> listPrivateGroupChatMessages(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			PrivateGroupChatMessagesRequest messagesRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (messagesRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (messagesRequest.recipientPrivateKey == null
+				|| messagesRequest.recipientPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		if (messagesRequest.before != null && messagesRequest.before < 1500000000000L)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (messagesRequest.after != null && messagesRequest.after < 1500000000000L)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Encoding encoding = messagesRequest.encoding != null ? messagesRequest.encoding : Encoding.BASE58;
+			List<PrivateGroupChatService.ListMessageResult> results = PrivateGroupChatService.getInstance()
+					.listMessages(repository, messagesRequest.recipientPrivateKey, messagesRequest.groupId,
+							messagesRequest.before, messagesRequest.after, messagesRequest.chatReference,
+							messagesRequest.hasChatReference, messagesRequest.sender, encoding,
+							messagesRequest.limit, messagesRequest.offset, messagesRequest.reverse);
+
+			List<PrivateGroupChatMessageResponse> response = new ArrayList<>(results.size());
+			for (PrivateGroupChatService.ListMessageResult result : results)
+				response.add(new PrivateGroupChatMessageResponse(result, encoding));
+
+			return response;
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}

@@ -12,6 +12,8 @@ import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayRequest;
 import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayResponse;
 import org.qortal.api.model.PrivateGroupChatKeyRequestRequest;
 import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
+import org.qortal.api.model.PrivateGroupChatMessageResponse;
+import org.qortal.api.model.PrivateGroupChatMessagesRequest;
 import org.qortal.api.model.PrivateGroupChatRotateRequest;
 import org.qortal.api.model.PrivateGroupChatRotateResponse;
 import org.qortal.api.model.PrivateGroupChatRotationRequestRequest;
@@ -20,8 +22,10 @@ import org.qortal.api.model.PrivateGroupChatSendRequest;
 import org.qortal.api.model.PrivateGroupChatSendResponse;
 import org.qortal.api.resource.ChatResource;
 import org.qortal.chat.ChatService;
+import org.qortal.chat.crypto.PrivateGroupChatCrypto;
 import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyCache;
+import org.qortal.chat.crypto.PrivateGroupChatMembership;
 import org.qortal.data.chat.ActiveChats;
 import org.qortal.data.chat.ChatMessage;
 import org.qortal.data.group.GroupData;
@@ -45,6 +49,7 @@ import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.ChatTransaction;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.transform.TransformationException;
+import org.qortal.transform.Transformer;
 import org.qortal.transform.transaction.ChatTransactionTransformer;
 import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.Base58;
@@ -253,6 +258,159 @@ public class ChatResourceTests extends ApiCommon {
 		assertArrayEquals(payload, decryptResponse.data);
 		assertArrayEquals(sendResponse.epochId, decryptResponse.epochId);
 		assertArrayEquals(sendResponse.keyId, decryptResponse.keyId);
+	}
+
+	@Test
+	public void testPrivateGroupMessagesDecryptsUserMessagesAndSkipsControls() throws Exception {
+		byte[] payload = "private api inbox message".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatMessagesRequest messagesRequest = new PrivateGroupChatMessagesRequest();
+		PrivateGroupChatKeyRequestRequest keyRequest = new PrivateGroupChatKeyRequestRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-inbox");
+			addMember(repository, groupId, bob);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.data = payload;
+			sendRequest.isText = true;
+			messagesRequest.recipientPrivateKey = bob.getPrivateKey();
+			messagesRequest.groupId = groupId;
+			messagesRequest.encoding = ChatMessage.Encoding.BASE64;
+			keyRequest.requesterPrivateKey = bob.getPrivateKey();
+			keyRequest.groupId = groupId;
+		}
+
+		PrivateGroupChatSendResponse sendResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		keyRequest.keyId = sendResponse.keyId;
+		this.chatResource.requestPrivateGroupChatKey(null, keyRequest);
+
+		List<PrivateGroupChatMessageResponse> messages = this.chatResource.listPrivateGroupChatMessages(null,
+				messagesRequest);
+
+		assertEquals(1, messages.size());
+		PrivateGroupChatMessageResponse message = messages.get(0);
+		assertEquals(PrivateGroupChatMessageResponse.Status.DECRYPTED, message.status);
+		assertEquals(Base64.toBase64String(payload), message.data);
+		assertTrue(message.isText);
+		assertTrue(message.isEncrypted);
+		assertEquals(sendRequest.groupId, message.txGroupId);
+		assertArrayEquals(sendResponse.messageSignature, message.signature);
+		assertArrayEquals(sendResponse.epochId, message.epochId);
+		assertArrayEquals(sendResponse.keyId, message.keyId);
+	}
+
+	@Test
+	public void testPrivateGroupMessagesRehydrateCachedKeyFromStoredAnnouncement() throws Exception {
+		byte[] payload = "private api inbox rehydrate".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatMessagesRequest messagesRequest = new PrivateGroupChatMessagesRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-inbox-rehydrate");
+			addMember(repository, groupId, bob);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.data = payload;
+			sendRequest.isText = true;
+			messagesRequest.recipientPrivateKey = bob.getPrivateKey();
+			messagesRequest.groupId = groupId;
+			messagesRequest.encoding = ChatMessage.Encoding.BASE64;
+		}
+
+		this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		PrivateGroupChatKeyCache.getInstance().clear();
+
+		List<PrivateGroupChatMessageResponse> messages = this.chatResource.listPrivateGroupChatMessages(null,
+				messagesRequest);
+
+		assertEquals(1, messages.size());
+		assertEquals(PrivateGroupChatMessageResponse.Status.DECRYPTED, messages.get(0).status);
+		assertEquals(Base64.toBase64String(payload), messages.get(0).data);
+	}
+
+	@Test
+	public void testPrivateGroupMessagesReportMissingKey() throws Exception {
+		PrivateGroupChatMessagesRequest messagesRequest = new PrivateGroupChatMessagesRequest();
+		byte[] epochId;
+		byte[] keyId;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-inbox-missing-key");
+			addMember(repository, groupId, bob);
+
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					groupId);
+			byte[] groupKey = bytes(Transformer.AES256_LENGTH, 30);
+			keyId = PrivateGroupChatCrypto.computeKeyId(groupId, epoch.getEpochId(), groupKey);
+			byte[] nonce = PrivateGroupChatCrypto.generateNonce();
+			byte[] ciphertext = PrivateGroupChatCrypto.encryptMessage(groupKey, groupId, epoch.getEpochId(),
+					keyId, nonce, "missing key".getBytes(StandardCharsets.UTF_8));
+			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(groupId, epoch.getEpochId(),
+					keyId, nonce, ciphertext);
+			ChatTransactionData chatData = chat(alice, groupId, null, messageEnvelope.toBytes(), true, true,
+					null, now());
+			ChatTransaction chatTransaction = new ChatTransaction(repository, chatData);
+			chatTransaction.computeNonce();
+			chatTransaction.sign(alice);
+
+			assertTrue(ChatService.getInstance().isSignatureValid(repository, chatData));
+			assertEquals(ValidationResult.OK, ChatService.getInstance().validateAndStore(repository, chatData));
+
+			messagesRequest.recipientPrivateKey = bob.getPrivateKey();
+			messagesRequest.groupId = groupId;
+			messagesRequest.encoding = ChatMessage.Encoding.BASE64;
+			epochId = epoch.getEpochId();
+		}
+
+		PrivateGroupChatKeyCache.getInstance().clear();
+		List<PrivateGroupChatMessageResponse> messages = this.chatResource.listPrivateGroupChatMessages(null,
+				messagesRequest);
+
+		assertEquals(1, messages.size());
+		assertEquals(PrivateGroupChatMessageResponse.Status.MISSING_KEY, messages.get(0).status);
+		assertNull(messages.get(0).data);
+		assertArrayEquals(epochId, messages.get(0).epochId);
+		assertArrayEquals(keyId, messages.get(0).keyId);
+	}
+
+	@Test
+	public void testPrivateGroupMessagesDoNotExposePlaintextToNonMember() throws Exception {
+		byte[] payload = "private api inbox nonmember".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatMessagesRequest messagesRequest = new PrivateGroupChatMessagesRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-inbox-nonmember");
+			addMember(repository, groupId, bob);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.data = payload;
+			sendRequest.isText = true;
+			messagesRequest.recipientPrivateKey = chloe.getPrivateKey();
+			messagesRequest.groupId = groupId;
+			messagesRequest.encoding = ChatMessage.Encoding.BASE64;
+		}
+
+		this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		List<PrivateGroupChatMessageResponse> messages = this.chatResource.listPrivateGroupChatMessages(null,
+				messagesRequest);
+
+		assertEquals(1, messages.size());
+		assertEquals(PrivateGroupChatMessageResponse.Status.MISSING_KEY, messages.get(0).status);
+		assertNull(messages.get(0).data);
 	}
 
 	@Test
@@ -534,6 +692,11 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	private static ChatTransactionData chat(TestAccount sender, int groupId, String recipient, byte[] data, byte[] signature, long timestamp) {
+		return chat(sender, groupId, recipient, data, true, false, signature, timestamp);
+	}
+
+	private static ChatTransactionData chat(TestAccount sender, int groupId, String recipient, byte[] data,
+			boolean isText, boolean isEncrypted, byte[] signature, long timestamp) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				timestamp,
 				groupId,
@@ -543,7 +706,7 @@ public class ChatResourceTests extends ApiCommon {
 				signature);
 
 		return new ChatTransactionData(baseTransactionData, sender.getAddress(), 0, recipient, null,
-				data, true, false);
+				data, isText, isEncrypted);
 	}
 
 	private static String rawUnsignedChat(ChatTransactionData chatData) throws TransformationException {
