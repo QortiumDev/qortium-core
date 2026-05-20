@@ -10,6 +10,7 @@ import org.qortal.api.resource.TransactionsResource;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.block.BlockChain;
 import org.qortal.controller.ChatNotifier;
+import org.qortal.controller.Controller;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
@@ -22,6 +23,7 @@ import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.settings.Settings;
 import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.BlockUtils;
@@ -59,8 +61,11 @@ public class TransactionsApiTests extends ApiCommon {
 	private TransactionsResource transactionsResource;
 
 	@Before
-	public void buildResource() {
+	public void buildResource() throws Exception {
 		this.transactionsResource = (TransactionsResource) ApiCommon.buildResource(TransactionsResource.class);
+		// processTransaction requires a recent local chain tip and, outside single-node testnet mode, peers.
+		FieldUtils.writeField(Settings.getInstance(), "singleNodeTestnet", true, true);
+		Controller.getInstance().refillLatestBlocksCache();
 	}
 
 	@Test

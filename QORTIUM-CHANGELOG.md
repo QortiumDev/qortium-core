@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - test: initialize transaction API sync state
+
+Updated the transaction API tests to initialize the controller's latest-block cache and run those tests as a local single-node testnet. This keeps the production synchronization guard intact while letting `/transactions/process` tests reach the transaction validation paths they are meant to cover.
+
 ### 2026-05-20 - test: align trust policy defaults
 
 Updated the account trust policy tests so their pinned launch expectations match Qortium's current Silver and Bronze vote-weight defaults. The tests now verify the configured 70% Silver and 40% Bronze multipliers, and the custom-policy cases replace those current defaults instead of older calibration values.
