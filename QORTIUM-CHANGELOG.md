@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: honor private group rotation requests
+
+Finished the private group chat rotation-request flow by making local sends look for the newest accepted owner/admin request in the current membership epoch before reusing a cached group key. When a valid request is present, Qortium now publishes and uses a fresh key for future messages while keeping older keys available so older messages still decrypt.
+
 ### 2026-05-20 - chat: add private group rotation requests
 
 Added signed private group chat rotation requests so a closed-group owner or admin can ask current members to move future sends to a fresh key for the current membership epoch. Qortium now creates, validates, stores, and exposes a local API for these request envelopes while rejecting requests from ordinary members.

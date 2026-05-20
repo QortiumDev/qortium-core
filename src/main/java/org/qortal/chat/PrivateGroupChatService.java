@@ -10,6 +10,7 @@ import org.qortal.chat.crypto.PrivateGroupChatMembership;
 import org.qortal.chat.crypto.PrivateGroupChatRotationRequest;
 import org.qortal.controller.ChatNotifier;
 import org.qortal.controller.Controller;
+import org.qortal.crypto.Crypto;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
@@ -314,6 +315,9 @@ public class PrivateGroupChatService {
 
 		PrivateGroupChatKeyCache keyCache = PrivateGroupChatKeyCache.getInstance();
 		PrivateGroupChatKeyCache.Entry keyEntry = keyCache.getNewestCreated(groupId, epoch.getEpochId());
+		Long latestRotationRequestTimestamp = latestAcceptedRotationRequestTimestamp(repository, epoch);
+		if (keyEntry != null && !isUsableAfterRotationRequest(keyEntry, latestRotationRequestTimestamp))
+			keyEntry = null;
 
 		byte[] groupKey;
 		byte[] keyId;
@@ -396,6 +400,44 @@ public class PrivateGroupChatService {
 		storeSignedChat(repository, rotationRequestData, requester);
 
 		return new RotationRequestResult(rotationRequestData.getSignature(), epoch.getEpochId());
+	}
+
+	private static Long latestAcceptedRotationRequestTimestamp(Repository repository,
+			PrivateGroupChatMembership.MembershipEpoch epoch) throws DataException {
+		List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(epoch.getGroupId());
+		for (ChatTransactionData groupMessage : groupMessages) {
+			if (!groupMessage.getIsEncrypted())
+				continue;
+
+			PrivateGroupChatEnvelope envelope;
+			try {
+				envelope = PrivateGroupChatEnvelope.fromBytes(groupMessage.getData());
+			} catch (TransformationException e) {
+				continue;
+			}
+
+			if (isAcceptedRotationRequest(repository, epoch, envelope))
+				return groupMessage.getTimestamp();
+		}
+
+		return null;
+	}
+
+	private static boolean isAcceptedRotationRequest(Repository repository,
+			PrivateGroupChatMembership.MembershipEpoch epoch, PrivateGroupChatEnvelope envelope) throws DataException {
+		if (envelope.getType() != PrivateGroupChatEnvelope.Type.ROTATION_REQUEST)
+			return false;
+
+		if (!PrivateGroupChatRotationRequest.isValid(epoch, envelope))
+			return false;
+
+		return isOwnerOrAdmin(repository, epoch.getGroupId(), Crypto.toAddress(envelope.getRequesterPublicKey()));
+	}
+
+	private static boolean isUsableAfterRotationRequest(PrivateGroupChatKeyCache.Entry keyEntry,
+			Long latestRotationRequestTimestamp) {
+		return latestRotationRequestTimestamp == null
+				|| keyEntry.getCreatedTimestamp() > latestRotationRequestTimestamp;
 	}
 
 	private KeyAnnouncementRelayResult doRelayKeyAnnouncement(Repository repository, byte[] relayerPrivateKey,

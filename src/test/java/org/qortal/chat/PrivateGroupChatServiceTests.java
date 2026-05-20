@@ -7,6 +7,7 @@ import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortal.chat.crypto.PrivateGroupChatKeyCache;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
+import org.qortal.chat.crypto.PrivateGroupChatRotationRequest;
 import org.qortal.data.group.GroupAdminData;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.group.GroupMemberData;
@@ -354,6 +355,61 @@ public class PrivateGroupChatServiceTests extends Common {
 			assertThrows(GeneralSecurityException.class,
 					() -> PrivateGroupChatService.getInstance().requestRotation(repository,
 							fixture.chloe.getPrivateKey(), fixture.groupId));
+		}
+	}
+
+	@Test
+	public void testAcceptedRotationRequestForcesFreshKeyOnNextSend() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-rotation-request-fresh-key");
+			byte[] oldPlaintext = bytes("before owner request");
+			PrivateGroupChatService.SendResult firstResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, oldPlaintext, true, null);
+
+			PrivateGroupChatService.RotationRequestResult rotationRequestResult = PrivateGroupChatService.getInstance()
+					.requestRotation(repository, fixture.alice.getPrivateKey(), fixture.groupId);
+			assertNotNull(rotationRequestResult.getRequestSignature());
+
+			byte[] newPlaintext = bytes("after owner request");
+			PrivateGroupChatService.SendResult secondResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.bob.getPrivateKey(), fixture.groupId, newPlaintext, true, firstResult.getMessageSignature());
+
+			assertNotNull(secondResult.getKeyAnnouncementSignature());
+			assertArrayEquals(firstResult.getEpochId(), secondResult.getEpochId());
+			assertFalse(Arrays.equals(firstResult.getKeyId(), secondResult.getKeyId()));
+
+			PrivateGroupChatService.DecryptResult oldDecryptResult = PrivateGroupChatService.getInstance().decrypt(repository,
+					fixture.bob.getPrivateKey(), firstResult.getMessageSignature());
+			assertArrayEquals(oldPlaintext, oldDecryptResult.getData());
+
+			PrivateGroupChatService.DecryptResult newDecryptResult = PrivateGroupChatService.getInstance().decrypt(repository,
+					fixture.alice.getPrivateKey(), secondResult.getMessageSignature());
+			assertArrayEquals(newPlaintext, newDecryptResult.getData());
+		}
+	}
+
+	@Test
+	public void testOrdinaryMemberRotationRequestDoesNotAffectNextSend() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-rotation-request-member-ignored");
+			PrivateGroupChatService.SendResult firstResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, bytes("before member request"), true, null);
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					fixture.groupId);
+			PrivateGroupChatEnvelope ordinaryMemberRequest = PrivateGroupChatRotationRequest.create(epoch,
+					fixture.bob.getPrivateKey());
+			ChatTransactionData ordinaryMemberRequestData = signedChat(repository, fixture.bob, fixture.groupId,
+					ordinaryMemberRequest.toBytes(), false, true, now() + 1000);
+			repository.getChatStoreRepository().save(ordinaryMemberRequestData);
+			repository.saveChanges();
+
+			PrivateGroupChatService.SendResult secondResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, bytes("after ignored member request"), true,
+					firstResult.getMessageSignature());
+
+			assertNull(secondResult.getKeyAnnouncementSignature());
+			assertArrayEquals(firstResult.getEpochId(), secondResult.getEpochId());
+			assertArrayEquals(firstResult.getKeyId(), secondResult.getKeyId());
 		}
 	}
 
