@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - docs: add tester build helper
+
+Added an interactive build helper for testers who are not comfortable starting with raw Maven commands. The helper checks for Java 17, a JDK compiler, and Maven, explains the exact build command before running it, points users to official install docs when prerequisites are missing, and prints the next local testnet commands after a successful jar build.
+
 ### 2026-05-20 - docs: organize documentation layout
 
 Organized the markdown documentation by topic so the repository root stays focused on the README and the human-readable changelog. The new documentation index points testers, developers, chain builders, and contributors to the right guides, while inherited and transitional notes remain available under legacy or upstream folders instead of being mixed into the main root docs.

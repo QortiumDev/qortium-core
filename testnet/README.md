@@ -10,8 +10,12 @@ rotation.
 Build Qortium from the repository root:
 
 ```sh
-mvn -q -DskipTests package
+./build.sh
 ```
+
+The helper checks Java, javac, and Maven first. If a prerequisite is missing,
+it links to the official install docs and asks you to run it again after
+installing the missing tool.
 
 Start the local testnet:
 

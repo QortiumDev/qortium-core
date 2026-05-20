@@ -27,11 +27,14 @@ Prerequisites:
 - Java 17 or newer
 - Maven
 
-Build from the repository root:
+Use the build helper from the repository root:
 
 ```sh
-mvn -q -DskipTests package
+./build.sh
 ```
+
+The helper checks Java, javac, and Maven first. If something is missing, it
+links to the official install docs and stops before running the build.
 
 Start the local testnet:
 
@@ -56,11 +59,11 @@ runtime files, and multi-node testnet notes.
 
 ## Local Node Build And Run
 
-For normal local node operation, build the jar and use the root lifecycle
-helpers:
+For normal local node operation, build the jar with the helper and use the root
+lifecycle scripts:
 
 ```sh
-mvn -q -DskipTests package
+./build.sh
 ./start.sh
 ```
 
@@ -100,6 +103,7 @@ start arguments file is stored at `./data/qortium/start-arguments.txt`.
 Useful local checks:
 
 ```sh
+mvn -q -DskipTests package
 mvn -q -DskipTests compile
 mvn -q test
 ```

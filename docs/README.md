@@ -7,6 +7,7 @@ history.
 
 ## Getting Started And Testing
 
+- [Tester build helper](../build.sh) - guided local build with prerequisite checks
 - [Local testnet guide](../testnet/README.md) - single-node and multi-node testnet setup
 - [Testing notes](development/testing.md) - repository test guidance and opt-in checks
 
