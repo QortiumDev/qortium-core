@@ -1,13 +1,14 @@
-# Private Group Chat Encryption Design
+# Private Group Chat Encryption Workflow
 
-This document records the chosen first design for making closed-group chat
+This document records the implemented V1 workflow for making closed-group chat
 private by default in Qortium Core.
 
-The 6.1.5 chat-store work is complete enough to support this phase: chat
-messages are stored outside the normal unconfirmed transaction pool, message
-payload bytes are treated as opaque data, and the store preserves the fields
-needed for future encryption policy such as `txGroupId`, `recipient`,
-`chatReference`, `isText`, and `isEncrypted`.
+The 6.1.5 chat-store work supports this flow: chat messages are stored outside
+the normal unconfirmed transaction pool, message payload bytes are treated as
+opaque data, and the store preserves the fields needed for private chat policy
+such as `txGroupId`, `recipient`, `chatReference`, `isText`, and `isEncrypted`.
+Core now exposes local private group chat APIs for sending, listing, counting,
+missing-key recovery, announcement relay, and key rotation.
 
 ## Goal
 
@@ -150,37 +151,62 @@ This shared-key model has a larger blast radius than per-sender keys: one leaked
 group key exposes all messages that used that key. Qortium accepts that V1
 tradeoff because it makes key recovery and user experience simpler.
 
-## Planned Local APIs
+## Local API Workflow
 
-Clients should not need to implement group encryption themselves. Core should
-provide restricted local APIs for:
+Clients should not implement group encryption themselves. Core provides
+restricted local APIs under `/chat/private/group`:
 
-- sending an encrypted closed-group message
-- listing and decrypting closed-group messages for a local account
-- requesting a missing group key
-- re-announcing a known signed group-key announcement
-- rotating the local group key used for new sends
-- requesting group rotation as owner or admin
+- `POST /send` sends an encrypted closed-group message and publishes a key
+  announcement first when the local node needs a key for the current epoch.
+- `POST /active` lists current closed groups for a local account and returns
+  each group's latest private user message when readable.
+- `POST /messages/count` counts retained private user messages matching the
+  supplied inbox filters, including messages whose key is currently missing.
+- `POST /messages` lists retained private user messages and decrypts each one
+  when the local node has or can recover the matching key.
+- `POST /decrypt` decrypts one stored private message by CHAT transaction
+  signature.
+- `POST /key-request` publishes a signed request for a missing group key.
+- `POST /key-requests/resolve` scans stored current-epoch key requests and
+  relays matching signed key announcements known to the local member node.
+- `POST /key-announcement/relay` republishes a previously stored or cached
+  signed key announcement without exposing the raw group key.
+- `POST /rotate` creates a fresh local group key announcement for future sends
+  in the current epoch.
+- `POST /rotation-request` lets a group owner or admin ask current members to
+  stop using older keys for future sends in the current epoch.
 
-Core will need local access to the account private key for encryption,
-decryption, signing, and key wrapping. The first API can follow existing
-private-key-based local endpoints. A later wallet or unlocked-account design can
-hide private keys from callers more cleanly.
+Core needs local access to the account private key for encryption, decryption,
+signing, and key wrapping. These APIs therefore follow the existing
+private-key-based local endpoint pattern. A later wallet or unlocked-account
+design can hide private keys from callers more cleanly.
 
-The recommended client flow is:
+The recommended client read flow is:
 
-1. send new closed-group messages with the private group send API
-2. list readable group messages with the private group messages API
-3. when a listed message reports `MISSING_KEY`, publish a key request for the
-   returned epoch/key id
-4. ask another current member node to resolve stored key requests and relay any
-   matching signed key announcements it already knows
-5. retry the message list after the missing key is available locally
+1. Use `/active` to discover closed groups and their latest private-message
+   status.
+2. Use `/messages/count` for pagination and unread-style counts.
+3. Use `/messages` for the inbox view.
+4. If `/active` or `/messages` returns `MISSING_KEY`, publish `/key-request`
+   with the returned epoch id and key id.
+5. Ask another current member node to run `/key-requests/resolve` for that
+   group, or have a known member relay a specific announcement with
+   `/key-announcement/relay`.
+6. Retry `/messages` after the relayed announcement is stored locally.
 
-The message list API is read-only. It does not publish key requests
-automatically, so clients can decide when missing-key recovery is worth using.
-The key-request recovery API is the explicit side-effecting step that publishes
-relayed key announcements.
+`/active` returns `DECRYPTED`, `MISSING_KEY`, or `NO_MESSAGES`. `/messages`
+returns `DECRYPTED` or `MISSING_KEY` for each user message. `MISSING_KEY`
+responses include the epoch id and key id needed for recovery.
+
+The read APIs are side-effect free: they do not publish key requests or relays
+automatically. `/key-request`, `/key-requests/resolve`,
+`/key-announcement/relay`, `/rotate`, and `/rotation-request` are the explicit
+side-effecting recovery and rotation steps.
+
+The normal `/chat/messages`, `/chat/messages/count`, and
+`/chat/active/{address}` endpoints remain compatibility/raw views. They filter
+or expose private chat control traffic according to their legacy purpose, but
+closed-group clients should use the private group APIs above.
 
 ## Validation Policy
 
@@ -198,22 +224,20 @@ relay:
 If any current group member lacks a known public key, local send should fail
 clearly instead of silently excluding that member.
 
-## Implementation Sequence
+## Implementation Status
 
-1. Add envelope serialization and parsing tests.
-2. Add chat-specific AES-GCM helpers with associated data.
-3. Add membership epoch id computation from group id and sorted member public
-   keys.
-4. Add group key id and key-announcement signature verification.
-5. Add a local group-key cache for group id, epoch id, key id, key bytes,
-   signed announcement bytes, creator public key, and usage timestamps.
-6. Add pairwise key wrapping using announcing and recipient account public keys.
-7. Add local APIs for send, decrypt, key request, key announcement relay, local
-   rotation, and owner/admin rotation request.
-8. Update `ChatService` validation for closed-group envelope requirements.
-9. Add integration tests for send, read, missing-key recovery, multiple valid
-   keys in one epoch, membership changes, manual rotation, plaintext rejection,
-   and open-group compatibility.
+V1 is implemented in Core with envelope serialization, AES-GCM message
+encryption, membership epoch ids, signed key announcements, pairwise key
+wrapping, process-local key caching, private group local APIs, closed-group
+plaintext rejection, key request recovery, key announcement relay, local key
+rotation, owner/admin rotation requests, and focused API/service/repository
+tests.
+
+The current test coverage includes send/read behavior, missing-key reporting,
+stored-announcement rehydration, explicit key request recovery, multiple valid
+keys in one epoch, membership epoch changes, manual rotation, owner/admin
+rotation requests, plaintext rejection for closed groups, and open-group
+compatibility.
 
 ## Non-Goals For V1
 

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: document private group chat workflow
+
+Documented the current Core-managed private group chat client workflow and added an end-to-end API regression covering active chat discovery, inbox counts, missing-key reporting, key request recovery, and successful decryption after a relayed announcement. This turns the private group chat design notes into practical developer guidance for using the implemented local APIs.
+
 ### 2026-05-20 - chat: add private group message count API
 
 Added a local private group message count API so clients can count encrypted closed-group inbox messages without fetching every page. The count uses the same filters as the private inbox, counts messages even when the local node is missing the key, and excludes key announcements, key requests, rotation requests, malformed rows, and other non-message chat records.

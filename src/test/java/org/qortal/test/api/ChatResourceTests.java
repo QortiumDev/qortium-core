@@ -29,6 +29,7 @@ import org.qortal.api.resource.ChatResource;
 import org.qortal.chat.ChatService;
 import org.qortal.chat.crypto.PrivateGroupChatCrypto;
 import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
+import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortal.chat.crypto.PrivateGroupChatKeyCache;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
 import org.qortal.data.chat.ActiveChats;
@@ -832,6 +833,117 @@ public class ChatResourceTests extends ApiCommon {
 			assertEquals(PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, envelope.getType());
 			assertArrayEquals(sendResponse.keyId, envelope.getKeyId());
 		}
+	}
+
+	@Test
+	public void testPrivateGroupWorkflowRecoversMissingKeyEndToEnd() throws Exception {
+		byte[] payload = "private api workflow recovery".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatActiveChatsRequest activeRequest = new PrivateGroupChatActiveChatsRequest();
+		PrivateGroupChatMessageCountRequest countRequest = new PrivateGroupChatMessageCountRequest();
+		PrivateGroupChatMessagesRequest messagesRequest = new PrivateGroupChatMessagesRequest();
+		PrivateGroupChatKeyRequestRequest keyRequest = new PrivateGroupChatKeyRequestRequest();
+		PrivateGroupChatKeyRequestRecoveryRequest recoveryRequest = new PrivateGroupChatKeyRequestRecoveryRequest();
+		byte[] groupKey;
+		byte[] epochId;
+		byte[] keyId;
+		int groupId;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			groupId = createClosedGroup(repository, alice, "chat-api-private-workflow-recovery");
+			addMember(repository, groupId, bob);
+
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
+					repository, groupId);
+			groupKey = bytes(Transformer.AES256_LENGTH, 60);
+			keyId = PrivateGroupChatCrypto.computeKeyId(groupId, epoch.getEpochId(), groupKey);
+			byte[] nonce = PrivateGroupChatCrypto.generateNonce();
+			byte[] ciphertext = PrivateGroupChatCrypto.encryptMessage(groupKey, groupId, epoch.getEpochId(),
+					keyId, nonce, payload);
+			PrivateGroupChatEnvelope messageEnvelope = PrivateGroupChatEnvelope.message(groupId,
+					epoch.getEpochId(), keyId, nonce, ciphertext);
+			ChatTransactionData chatData = chat(alice, groupId, null, messageEnvelope.toBytes(), true, true,
+					null, now());
+			ChatTransaction chatTransaction = new ChatTransaction(repository, chatData);
+			chatTransaction.computeNonce();
+			chatTransaction.sign(alice);
+
+			assertTrue(ChatService.getInstance().isSignatureValid(repository, chatData));
+			assertEquals(ValidationResult.OK, ChatService.getInstance().validateAndStore(repository, chatData));
+
+			activeRequest.recipientPrivateKey = bob.getPrivateKey();
+			activeRequest.encoding = ChatMessage.Encoding.BASE64;
+			countRequest.recipientPrivateKey = bob.getPrivateKey();
+			countRequest.groupId = groupId;
+			messagesRequest.recipientPrivateKey = bob.getPrivateKey();
+			messagesRequest.groupId = groupId;
+			messagesRequest.encoding = ChatMessage.Encoding.BASE64;
+			keyRequest.requesterPrivateKey = bob.getPrivateKey();
+			keyRequest.groupId = groupId;
+			keyRequest.keyId = keyId;
+			recoveryRequest.relayerPrivateKey = alice.getPrivateKey();
+			recoveryRequest.groupId = groupId;
+			epochId = epoch.getEpochId();
+		}
+
+		PrivateGroupChatKeyCache.getInstance().clear();
+
+		List<PrivateGroupChatActiveChatResponse> activeChats = this.chatResource.listPrivateGroupActiveChats(null,
+				activeRequest);
+		PrivateGroupChatActiveChatResponse activeChat = activeChats.stream()
+				.filter(chat -> chat.groupId == groupId)
+				.findFirst()
+				.orElse(null);
+
+		assertNotNull(activeChat);
+		assertEquals(PrivateGroupChatActiveChatResponse.Status.MISSING_KEY, activeChat.status);
+		assertArrayEquals(epochId, activeChat.epochId);
+		assertArrayEquals(keyId, activeChat.keyId);
+		assertEquals(1, this.chatResource.countPrivateGroupChatMessages(null, countRequest));
+
+		List<PrivateGroupChatMessageResponse> missingMessages = this.chatResource.listPrivateGroupChatMessages(null,
+				messagesRequest);
+		assertEquals(1, missingMessages.size());
+		assertEquals(PrivateGroupChatMessageResponse.Status.MISSING_KEY, missingMessages.get(0).status);
+		assertArrayEquals(epochId, missingMessages.get(0).epochId);
+		assertArrayEquals(keyId, missingMessages.get(0).keyId);
+
+		PrivateGroupChatKeyRequestResponse keyRequestResponse = this.chatResource.requestPrivateGroupChatKey(null,
+				keyRequest);
+		assertArrayEquals(epochId, keyRequestResponse.epochId);
+		assertArrayEquals(keyId, keyRequestResponse.keyId);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
+					repository, groupId);
+			PrivateGroupChatEnvelope keyAnnouncement = PrivateGroupChatKeyAnnouncement.create(epoch, groupKey,
+					alice.getPrivateKey());
+			PrivateGroupChatKeyCache.getInstance().putLocal(epoch, keyAnnouncement, groupKey);
+		}
+
+		List<PrivateGroupChatKeyRequestRecoveryResponse> recoveryResponses =
+				this.chatResource.resolvePrivateGroupChatKeyRequests(null, recoveryRequest);
+		assertEquals(1, recoveryResponses.size());
+		PrivateGroupChatKeyRequestRecoveryResponse recoveryResponse = recoveryResponses.get(0);
+		assertEquals(org.qortal.chat.PrivateGroupChatService.KeyRequestRecoveryStatus.RELAYED,
+				recoveryResponse.status);
+		assertArrayEquals(keyRequestResponse.requestSignature, recoveryResponse.requestSignature);
+		assertArrayEquals(keyId, recoveryResponse.requestedKeyId);
+		assertArrayEquals(keyId, recoveryResponse.relayedKeyId);
+		assertNotNull(recoveryResponse.announcementSignature);
+
+		PrivateGroupChatKeyCache.getInstance().clear();
+		List<PrivateGroupChatMessageResponse> recoveredMessages = this.chatResource.listPrivateGroupChatMessages(null,
+				messagesRequest);
+
+		assertEquals(1, recoveredMessages.size());
+		PrivateGroupChatMessageResponse recoveredMessage = recoveredMessages.get(0);
+		assertEquals(PrivateGroupChatMessageResponse.Status.DECRYPTED, recoveredMessage.status);
+		assertEquals(Base64.toBase64String(payload), recoveredMessage.data);
+		assertArrayEquals(epochId, recoveredMessage.epochId);
+		assertArrayEquals(keyId, recoveredMessage.keyId);
 	}
 
 	@Test

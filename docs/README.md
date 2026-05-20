@@ -47,7 +47,7 @@ history.
 
 ## Chat And QDN
 
-- `Planning note` [Private group chat encryption plan](chat/private-group-chat-encryption.md) - planned Core-managed private chat direction
+- `Developer reference` [Private group chat encryption workflow](chat/private-group-chat-encryption.md) - Core-managed private group chat design and client API flow
 - `Developer reference` [QDN app documentation](qdn/q-apps.md) - QDN app concepts and request examples
 
 ## Cross-Chain Support
