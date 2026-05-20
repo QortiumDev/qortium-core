@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group chat envelope primitives
+
+Added the first private group chat code foundation by introducing a versioned envelope format for encrypted closed-group chat payloads. The new primitives define structural message, key announcement, key request, and rotation request envelopes with strict parsing and defensive copies, giving later encryption, key-cache, API, and validation work a stable data shape without changing live chat behavior yet.
+
 ### 2026-05-20 - docs: revise private group chat encryption design
 
 Revised Qortium's private group chat encryption design to use shared random group keys for each membership epoch instead of per-sender keys. The updated design keeps key distribution inside Core without QDN, accepts identical member sets reusing the same epoch id, allows multiple signed key announcements in one epoch, lets any node relay signed announcements without exposing raw keys, and documents the larger shared-key blast radius as an accepted simplicity tradeoff.
