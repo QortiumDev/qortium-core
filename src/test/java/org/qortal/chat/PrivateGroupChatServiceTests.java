@@ -6,6 +6,7 @@ import org.qortal.chat.crypto.PrivateGroupChatCrypto;
 import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortal.chat.crypto.PrivateGroupChatKeyCache;
+import org.qortal.chat.crypto.PrivateGroupChatKeyRequest;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
 import org.qortal.chat.crypto.PrivateGroupChatRotationRequest;
 import org.qortal.data.group.GroupAdminData;
@@ -28,6 +29,7 @@ import org.qortal.utils.NTP;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -265,6 +267,125 @@ public class PrivateGroupChatServiceTests extends Common {
 			assertThrows(GeneralSecurityException.class,
 					() -> PrivateGroupChatService.getInstance().relayKeyAnnouncement(repository,
 							fixture.chloe.getPrivateKey(), fixture.groupId, epoch.getEpochId(), null));
+		}
+	}
+
+	@Test
+	public void testResolveKeyRequestsRelaysSpecificKeyRequest() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-resolve-specific");
+			PrivateGroupChatService.SendResult sendResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, bytes("secret"), true, null);
+			PrivateGroupChatService.KeyRequestResult keyRequestResult = PrivateGroupChatService.getInstance()
+					.requestKey(repository, fixture.bob.getPrivateKey(), fixture.groupId, sendResult.getKeyId());
+
+			List<PrivateGroupChatService.KeyRequestRecoveryResult> results = PrivateGroupChatService.getInstance()
+					.resolveKeyRequests(repository, fixture.alice.getPrivateKey(), fixture.groupId, null);
+
+			assertEquals(1, results.size());
+			PrivateGroupChatService.KeyRequestRecoveryResult result = results.get(0);
+			assertEquals(PrivateGroupChatService.KeyRequestRecoveryStatus.RELAYED, result.getStatus());
+			assertArrayEquals(keyRequestResult.getRequestSignature(), result.getRequestSignature());
+			assertArrayEquals(fixture.bob.getPublicKey(), result.getRequesterPublicKey());
+			assertArrayEquals(sendResult.getEpochId(), result.getEpochId());
+			assertArrayEquals(sendResult.getKeyId(), result.getRequestedKeyId());
+			assertArrayEquals(sendResult.getKeyId(), result.getRelayedKeyId());
+			assertNotNull(result.getAnnouncementSignature());
+
+			ChatTransactionData originalAnnouncementData = repository.getChatStoreRepository().fromSignature(
+					sendResult.getKeyAnnouncementSignature());
+			ChatTransactionData relayedAnnouncementData = repository.getChatStoreRepository().fromSignature(
+					result.getAnnouncementSignature());
+			assertNotNull(relayedAnnouncementData);
+			assertEquals(fixture.alice.getAddress(), relayedAnnouncementData.getSender());
+			assertArrayEquals(originalAnnouncementData.getData(), relayedAnnouncementData.getData());
+		}
+	}
+
+	@Test
+	public void testResolveKeyRequestsRelaysAnyUsableKeyRequest() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-resolve-any");
+			PrivateGroupChatService.SendResult sendResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, bytes("secret"), true, null);
+			PrivateGroupChatService.getInstance().requestKey(repository, fixture.bob.getPrivateKey(),
+					fixture.groupId, null);
+
+			List<PrivateGroupChatService.KeyRequestRecoveryResult> results = PrivateGroupChatService.getInstance()
+					.resolveKeyRequests(repository, fixture.alice.getPrivateKey(), fixture.groupId, null);
+
+			assertEquals(1, results.size());
+			assertEquals(PrivateGroupChatService.KeyRequestRecoveryStatus.RELAYED, results.get(0).getStatus());
+			assertNull(results.get(0).getRequestedKeyId());
+			assertArrayEquals(sendResult.getKeyId(), results.get(0).getRelayedKeyId());
+			assertNotNull(results.get(0).getAnnouncementSignature());
+		}
+	}
+
+	@Test
+	public void testResolveKeyRequestsDeduplicatesRelayedKeys() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-resolve-duplicates");
+			PrivateGroupChatService.SendResult sendResult = PrivateGroupChatService.getInstance().send(repository,
+					fixture.alice.getPrivateKey(), fixture.groupId, bytes("secret"), true, null);
+			PrivateGroupChatService.getInstance().requestKey(repository, fixture.bob.getPrivateKey(),
+					fixture.groupId, sendResult.getKeyId());
+			PrivateGroupChatService.getInstance().requestKey(repository, fixture.alice.getPrivateKey(),
+					fixture.groupId, sendResult.getKeyId());
+
+			List<PrivateGroupChatService.KeyRequestRecoveryResult> results = PrivateGroupChatService.getInstance()
+					.resolveKeyRequests(repository, fixture.bob.getPrivateKey(), fixture.groupId, null);
+
+			assertEquals(2, results.size());
+			assertEquals(1, countRecoveryStatus(results, PrivateGroupChatService.KeyRequestRecoveryStatus.RELAYED));
+			assertEquals(1, countRecoveryStatus(results, PrivateGroupChatService.KeyRequestRecoveryStatus.DUPLICATE_KEY));
+		}
+	}
+
+	@Test
+	public void testResolveKeyRequestsReportsNoKeyAvailable() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-resolve-missing");
+			byte[] missingKeyId = bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 80);
+			PrivateGroupChatService.getInstance().requestKey(repository, fixture.bob.getPrivateKey(),
+					fixture.groupId, missingKeyId);
+
+			List<PrivateGroupChatService.KeyRequestRecoveryResult> results = PrivateGroupChatService.getInstance()
+					.resolveKeyRequests(repository, fixture.alice.getPrivateKey(), fixture.groupId, null);
+
+			assertEquals(1, results.size());
+			assertEquals(PrivateGroupChatService.KeyRequestRecoveryStatus.NO_KEY_AVAILABLE, results.get(0).getStatus());
+			assertArrayEquals(missingKeyId, results.get(0).getRequestedKeyId());
+			assertNull(results.get(0).getRelayedKeyId());
+			assertNull(results.get(0).getAnnouncementSignature());
+		}
+	}
+
+	@Test
+	public void testResolveKeyRequestsReportsOldEpochAndInvalidRequests() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Fixture fixture = createFixture(repository, "private-service-resolve-invalid");
+			PrivateGroupChatService.getInstance().requestKey(repository, fixture.bob.getPrivateKey(),
+					fixture.groupId, bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 90));
+			addMember(repository, fixture.groupId, fixture.chloe);
+
+			PrivateGroupChatMembership.MembershipEpoch currentEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
+					fixture.groupId);
+			PrivateGroupChatEnvelope mismatchedSenderRequest = PrivateGroupChatKeyRequest.create(currentEpoch,
+					fixture.bob.getPrivateKey(), bytes(PrivateGroupChatEnvelope.KEY_ID_LENGTH, 91));
+			ChatTransactionData invalidRequestData = signedChat(repository, fixture.alice, fixture.groupId,
+					mismatchedSenderRequest.toBytes(), false, true, now() + 1000);
+			repository.getChatStoreRepository().save(invalidRequestData);
+			repository.saveChanges();
+
+			List<PrivateGroupChatService.KeyRequestRecoveryResult> results = PrivateGroupChatService.getInstance()
+					.resolveKeyRequests(repository, fixture.alice.getPrivateKey(), fixture.groupId, null);
+
+			assertEquals(2, results.size());
+			assertEquals(1, countRecoveryStatus(results,
+					PrivateGroupChatService.KeyRequestRecoveryStatus.NOT_CURRENT_EPOCH));
+			assertEquals(1, countRecoveryStatus(results,
+					PrivateGroupChatService.KeyRequestRecoveryStatus.INVALID_REQUEST));
 		}
 	}
 
@@ -637,6 +758,16 @@ public class PrivateGroupChatServiceTests extends Common {
 		byte[] signature = new byte[64];
 		signature[63] = (byte) value;
 		return signature;
+	}
+
+	private static int countRecoveryStatus(List<PrivateGroupChatService.KeyRequestRecoveryResult> results,
+			PrivateGroupChatService.KeyRequestRecoveryStatus status) {
+		int count = 0;
+		for (PrivateGroupChatService.KeyRequestRecoveryResult result : results)
+			if (result.getStatus() == status)
+				++count;
+
+		return count;
 	}
 
 	private static class Fixture {

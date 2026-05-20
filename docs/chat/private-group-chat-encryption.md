@@ -173,11 +173,14 @@ The recommended client flow is:
 2. list readable group messages with the private group messages API
 3. when a listed message reports `MISSING_KEY`, publish a key request for the
    returned epoch/key id
-4. relay a matching signed key announcement when another local member has it
+4. ask another current member node to resolve stored key requests and relay any
+   matching signed key announcements it already knows
 5. retry the message list after the missing key is available locally
 
 The message list API is read-only. It does not publish key requests
 automatically, so clients can decide when missing-key recovery is worth using.
+The key-request recovery API is the explicit side-effecting step that publishes
+relayed key announcements.
 
 ## Validation Policy
 

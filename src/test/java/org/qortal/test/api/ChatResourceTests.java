@@ -11,6 +11,8 @@ import org.qortal.api.model.PrivateGroupChatDecryptResponse;
 import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayRequest;
 import org.qortal.api.model.PrivateGroupChatKeyAnnouncementRelayResponse;
 import org.qortal.api.model.PrivateGroupChatKeyRequestRequest;
+import org.qortal.api.model.PrivateGroupChatKeyRequestRecoveryRequest;
+import org.qortal.api.model.PrivateGroupChatKeyRequestRecoveryResponse;
 import org.qortal.api.model.PrivateGroupChatKeyRequestResponse;
 import org.qortal.api.model.PrivateGroupChatMessageResponse;
 import org.qortal.api.model.PrivateGroupChatMessagesRequest;
@@ -488,6 +490,60 @@ public class ChatResourceTests extends ApiCommon {
 			PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(relayData.getData());
 			assertEquals(PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, envelope.getType());
 			assertArrayEquals(relayResponse.keyId, envelope.getKeyId());
+		}
+	}
+
+	@Test
+	public void testPrivateGroupKeyRequestRecovery() throws Exception {
+		byte[] payload = "private api recovery message".getBytes(StandardCharsets.UTF_8);
+		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
+		PrivateGroupChatKeyRequestRequest keyRequest = new PrivateGroupChatKeyRequestRequest();
+		PrivateGroupChatKeyRequestRecoveryRequest recoveryRequest = new PrivateGroupChatKeyRequestRecoveryRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = createClosedGroup(repository, alice, "chat-api-private-key-recovery");
+			addMember(repository, groupId, bob);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.groupId = groupId;
+			sendRequest.data = payload;
+			sendRequest.isText = true;
+			keyRequest.requesterPrivateKey = bob.getPrivateKey();
+			keyRequest.groupId = groupId;
+			recoveryRequest.relayerPrivateKey = alice.getPrivateKey();
+			recoveryRequest.groupId = groupId;
+		}
+
+		PrivateGroupChatSendResponse sendResponse = this.chatResource.sendPrivateGroupChat(null, sendRequest);
+		keyRequest.keyId = sendResponse.keyId;
+		PrivateGroupChatKeyRequestResponse keyRequestResponse = this.chatResource.requestPrivateGroupChatKey(null,
+				keyRequest);
+
+		List<PrivateGroupChatKeyRequestRecoveryResponse> recoveryResponses =
+				this.chatResource.resolvePrivateGroupChatKeyRequests(null, recoveryRequest);
+
+		assertEquals(1, recoveryResponses.size());
+		PrivateGroupChatKeyRequestRecoveryResponse recoveryResponse = recoveryResponses.get(0);
+		assertEquals(org.qortal.chat.PrivateGroupChatService.KeyRequestRecoveryStatus.RELAYED,
+				recoveryResponse.status);
+		assertArrayEquals(keyRequestResponse.requestSignature, recoveryResponse.requestSignature);
+		assertArrayEquals(sendResponse.keyId, recoveryResponse.requestedKeyId);
+		assertArrayEquals(sendResponse.keyId, recoveryResponse.relayedKeyId);
+		assertNotNull(recoveryResponse.announcementSignature);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChatTransactionData originalAnnouncementData = repository.getChatStoreRepository().fromSignature(
+					sendResponse.keyAnnouncementSignature);
+			ChatTransactionData relayedAnnouncementData = repository.getChatStoreRepository().fromSignature(
+					recoveryResponse.announcementSignature);
+			assertNotNull(relayedAnnouncementData);
+			assertTrue(relayedAnnouncementData.getIsEncrypted());
+			assertArrayEquals(originalAnnouncementData.getData(), relayedAnnouncementData.getData());
+			PrivateGroupChatEnvelope envelope = PrivateGroupChatEnvelope.fromBytes(relayedAnnouncementData.getData());
+			assertEquals(PrivateGroupChatEnvelope.Type.KEY_ANNOUNCEMENT, envelope.getType());
+			assertArrayEquals(sendResponse.keyId, envelope.getKeyId());
 		}
 	}
 

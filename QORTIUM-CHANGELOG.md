@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: add private group key request recovery
+
+Added an explicit private group chat recovery API that lets a current group member scan stored key requests and relay matching signed key announcements the local node already knows. This completes the missing-key loop without making inbox reads publish transactions, avoids duplicate relays for the same key in one call, and reports unavailable, stale, invalid, duplicate, or relayed requests clearly to clients.
+
 ### 2026-05-20 - chat: add private group inbox API
 
 Added a side-effect-free private group chat inbox API so local clients can list closed-group user messages and receive decrypted data when the matching key is available. Messages that cannot be decrypted now report the missing epoch and key id instead of failing the whole read, giving clients a clear path to request or relay the missing key without exposing control envelopes as user chat.
