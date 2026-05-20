@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - chat: rehydrate private group keys from announcements
+
+Made private group chat decryption recover missing local keys from stored key announcements. A recipient node can now clear or miss its in-memory key cache, scan the retained group chat history for a matching signed key announcement, unwrap the group key for its local account, cache it, and continue decrypting without requiring the sender's node-local cache state.
+
 ### 2026-05-20 - chat: require private envelopes for closed groups
 
 Started enforcing the private group chat envelope format for closed-group broadcast CHAT transactions. Closed groups now reject plaintext or malformed broadcast chat payloads, accept encrypted private message envelopes and valid signed key announcements, and leave open-group, no-group, and direct-recipient chat behavior unchanged while key-request and rotation-request flows wait for their own APIs.

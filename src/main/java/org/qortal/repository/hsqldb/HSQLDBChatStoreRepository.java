@@ -142,6 +142,28 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 	}
 
 	@Override
+	public List<ChatTransactionData> getGroupMessages(int txGroupId) throws DataException {
+		String sql = "SELECT created_when, tx_group_id, sender_public_key, sender, nonce, recipient, "
+				+ "chat_reference, is_text, is_encrypted, data, signature "
+				+ "FROM ChatMessages WHERE tx_group_id = ? AND recipient IS NULL "
+				+ "ORDER BY created_when DESC, signature DESC";
+
+		List<ChatTransactionData> chatTransactionData = new ArrayList<>();
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, txGroupId)) {
+			if (resultSet == null)
+				return chatTransactionData;
+
+			do {
+				chatTransactionData.add(this.toChatTransactionData(resultSet));
+			} while (resultSet.next());
+
+			return chatTransactionData;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch group chat messages from repository", e);
+		}
+	}
+
+	@Override
 	public ChatMessage toChatMessage(ChatTransactionData chatTransactionData, Encoding encoding) throws DataException {
 		String sender = chatTransactionData.getSender();
 		if (sender == null)

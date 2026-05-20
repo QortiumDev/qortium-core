@@ -217,7 +217,8 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	@Test
-	public void testPrivateGroupDecryptRequiresCachedKey() throws Exception {
+	public void testPrivateGroupDecryptRehydratesCachedKeyFromStoredAnnouncement() throws Exception {
+		byte[] payload = "private api message".getBytes(StandardCharsets.UTF_8);
 		PrivateGroupChatSendRequest sendRequest = new PrivateGroupChatSendRequest();
 		PrivateGroupChatDecryptRequest decryptRequest = new PrivateGroupChatDecryptRequest();
 
@@ -229,7 +230,7 @@ public class ChatResourceTests extends ApiCommon {
 
 			sendRequest.senderPrivateKey = alice.getPrivateKey();
 			sendRequest.groupId = groupId;
-			sendRequest.data = "private api message".getBytes(StandardCharsets.UTF_8);
+			sendRequest.data = payload;
 			sendRequest.isText = true;
 			decryptRequest.recipientPrivateKey = bob.getPrivateKey();
 		}
@@ -238,7 +239,11 @@ public class ChatResourceTests extends ApiCommon {
 		decryptRequest.messageSignature = sendResponse.messageSignature;
 		PrivateGroupChatKeyCache.getInstance().clear();
 
-		assertApiError(ApiError.INVALID_CRITERIA, () -> this.chatResource.decryptPrivateGroupChat(null, decryptRequest));
+		PrivateGroupChatDecryptResponse decryptResponse = this.chatResource.decryptPrivateGroupChat(null, decryptRequest);
+
+		assertArrayEquals(payload, decryptResponse.data);
+		assertArrayEquals(sendResponse.epochId, decryptResponse.epochId);
+		assertArrayEquals(sendResponse.keyId, decryptResponse.keyId);
 	}
 
 	@Test

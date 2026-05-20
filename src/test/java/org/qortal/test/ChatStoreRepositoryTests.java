@@ -212,6 +212,39 @@ public class ChatStoreRepositoryTests extends Common {
 		}
 	}
 
+	@Test
+	public void testGetGroupMessagesReturnsBroadcastRowsNewestFirst() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = 501;
+			long timestamp = now();
+
+			ChatTransactionData olderGroupData = chat(repository, alice, groupId, null,
+					signature(12), bytes("older group"), true, false, timestamp, null);
+			ChatTransactionData newerGroupData = chat(repository, alice, groupId, null,
+					signature(13), bytes("newer group"), true, false, timestamp + 1, null);
+			ChatTransactionData directGroupData = chat(repository, alice, groupId, bob.getAddress(),
+					signature(14), bytes("direct group"), true, false, timestamp + 2, null);
+			ChatTransactionData otherGroupData = chat(repository, alice, groupId + 1, null,
+					signature(15), bytes("other group"), true, false, timestamp + 3, null);
+
+			repository.getChatStoreRepository().save(olderGroupData);
+			repository.getChatStoreRepository().save(newerGroupData);
+			repository.getChatStoreRepository().save(directGroupData);
+			repository.getChatStoreRepository().save(otherGroupData);
+			repository.saveChanges();
+
+			List<ChatTransactionData> groupMessages = repository.getChatStoreRepository().getGroupMessages(groupId);
+
+			assertEquals(2, groupMessages.size());
+			assertArrayEquals(newerGroupData.getSignature(), groupMessages.get(0).getSignature());
+			assertArrayEquals(olderGroupData.getSignature(), groupMessages.get(1).getSignature());
+			assertNull(groupMessages.get(0).getRecipient());
+			assertNull(groupMessages.get(1).getRecipient());
+		}
+	}
+
 	private static ChatTransactionData chat(Repository repository, TestAccount sender, int groupId, String recipient,
 			byte[] signature, byte[] data, boolean isText, boolean isEncrypted, long timestamp, byte[] chatReference) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
