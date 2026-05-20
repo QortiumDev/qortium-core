@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - docs: update trust launch readiness results
+
+Updated the trust-network launch checklist with current local verification results after aligning the test harness with Qortium's active trust defaults. The checklist now records the passing focused policy, transaction API, documented readiness, expanded trust/API, and long benchmark runs while keeping seed eligibility as the remaining launch policy question.
+
 ### 2026-05-20 - test: initialize transaction API sync state
 
 Updated the transaction API tests to initialize the controller's latest-block cache and run those tests as a local single-node testnet. This keeps the production synchronization guard intact while letting `/transactions/process` tests reach the transaction validation paths they are meant to cover.

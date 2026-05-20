@@ -38,6 +38,13 @@ weighting tests:
 mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.api.AccountRatingsApiTests,org.qortal.test.api.AddressesApiTests,org.qortal.test.api.PollsApiTests,org.qortal.test.api.TransactionsApiTests,org.qortal.test.rating.AccountRatingCooldownTests,org.qortal.test.rating.AccountRatingTests,org.qortal.test.rating.AccountTrustSnapshotTests,org.qortal.test.rating.AccountTrustOnboardingScenarioTests,org.qortal.test.rating.AccountTrustLaunchScenarioTests,org.qortal.test.rating.AccountTrustLaunchStressScenarioTests,org.qortal.test.rating.AccountTrustLaunchCommunityScenarioTests,org.qortal.test.rating.AccountTrustTransitionScenarioTests,org.qortal.test.rating.AccountTrustAdversarialScenarioTests,org.qortal.test.rating.AccountTrustTransactionCalibrationScenarioTests,org.qortal.test.rating.ResourceRatingTests
 ```
 
+When changing launch defaults or client-facing trust APIs, also run the expanded
+trust/API review suite:
+
+```bash
+mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.account.AccountTrustPolicyTests,org.qortal.test.account.AccountTrustStatusTests,org.qortal.test.account.AccountTrustPolicyCalibrationScenarioTests,org.qortal.test.account.AccountTrustLaunchPolicyTests,org.qortal.test.api.AccountRatingsApiTests,org.qortal.test.api.AccountTrustExplanationApiTests,org.qortal.test.api.ResourceRatingsApiTests,org.qortal.test.api.AddressesApiTests,org.qortal.test.api.PollsApiTests,org.qortal.test.rating.AccountRatingCooldownTests,org.qortal.test.rating.AccountRatingTests,org.qortal.test.rating.AccountTrustBootstrapWalkthroughTests,org.qortal.test.rating.AccountTrustGraphBehaviorTests,org.qortal.test.rating.AccountTrustScenarioTests,org.qortal.test.rating.AccountTrustSnapshotTests,org.qortal.test.rating.AccountTrustOnboardingScenarioTests,org.qortal.test.rating.AccountTrustLaunchScenarioTests,org.qortal.test.rating.AccountTrustLaunchStressScenarioTests,org.qortal.test.rating.AccountTrustLaunchCommunityScenarioTests,org.qortal.test.rating.AccountTrustTransitionScenarioTests,org.qortal.test.rating.AccountTrustAdversarialScenarioTests,org.qortal.test.rating.AccountTrustTransactionCalibrationScenarioTests,org.qortal.test.rating.ResourceRatingTests
+```
+
 Run the long trust-network benchmark when launch assumptions change, especially
 if the expected community graph is much larger or churnier than the current
 reference profiles:
@@ -54,30 +61,33 @@ git diff --check
 
 ## Latest Local Verification
 
-The latest local verification run was completed on 2026-05-17:
+The latest local verification run was completed on 2026-05-20:
 
-- focused delayed-confirmation tests passed:
-  - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.api.TransactionsApiTests,org.qortal.test.rating.AccountRatingTests`
+- trust policy default tests passed:
+  - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.account.AccountTrustPolicyTests,org.qortal.test.account.AccountTrustStatusTests,org.qortal.test.account.AccountTrustLaunchPolicyTests`
+  - result: 37 tests passed, 0 failures, 0 errors, 0 skipped
+- transaction API sync-state tests passed:
+  - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.api.TransactionsApiTests`
   - result: 16 tests passed, 0 failures, 0 errors, 0 skipped
-- focused seed-farm pressure tests passed:
-  - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.rating.AccountTrustLaunchStressScenarioTests`
-  - result: 8 tests passed, 0 failures, 0 errors, 0 skipped
-  - note: subject-only Minting group farm ratings and same-branch farm support
-    remain Unverified with zero effective weight
 - full readiness suite passed:
   - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.api.AccountRatingsApiTests,org.qortal.test.api.AddressesApiTests,org.qortal.test.api.PollsApiTests,org.qortal.test.api.TransactionsApiTests,org.qortal.test.rating.AccountRatingCooldownTests,org.qortal.test.rating.AccountRatingTests,org.qortal.test.rating.AccountTrustSnapshotTests,org.qortal.test.rating.AccountTrustOnboardingScenarioTests,org.qortal.test.rating.AccountTrustLaunchScenarioTests,org.qortal.test.rating.AccountTrustLaunchStressScenarioTests,org.qortal.test.rating.AccountTrustLaunchCommunityScenarioTests,org.qortal.test.rating.AccountTrustTransitionScenarioTests,org.qortal.test.rating.AccountTrustAdversarialScenarioTests,org.qortal.test.rating.AccountTrustTransactionCalibrationScenarioTests,org.qortal.test.rating.ResourceRatingTests`
-  - result: 137 tests passed, 0 failures, 0 errors, 0 skipped
+  - result: 148 tests passed, 0 failures, 0 errors, 0 skipped
+  - note: subject-only Minting group farm ratings and same-branch farm support
+    remain Unverified with zero effective weight
+- expanded trust/API review suite passed:
+  - command: `mvn test -DskipJUnitTests=false -Dtest=org.qortal.test.account.AccountTrustPolicyTests,org.qortal.test.account.AccountTrustStatusTests,org.qortal.test.account.AccountTrustPolicyCalibrationScenarioTests,org.qortal.test.account.AccountTrustLaunchPolicyTests,org.qortal.test.api.AccountRatingsApiTests,org.qortal.test.api.AccountTrustExplanationApiTests,org.qortal.test.api.ResourceRatingsApiTests,org.qortal.test.api.AddressesApiTests,org.qortal.test.api.PollsApiTests,org.qortal.test.rating.AccountRatingCooldownTests,org.qortal.test.rating.AccountRatingTests,org.qortal.test.rating.AccountTrustBootstrapWalkthroughTests,org.qortal.test.rating.AccountTrustGraphBehaviorTests,org.qortal.test.rating.AccountTrustScenarioTests,org.qortal.test.rating.AccountTrustSnapshotTests,org.qortal.test.rating.AccountTrustOnboardingScenarioTests,org.qortal.test.rating.AccountTrustLaunchScenarioTests,org.qortal.test.rating.AccountTrustLaunchStressScenarioTests,org.qortal.test.rating.AccountTrustLaunchCommunityScenarioTests,org.qortal.test.rating.AccountTrustTransitionScenarioTests,org.qortal.test.rating.AccountTrustAdversarialScenarioTests,org.qortal.test.rating.AccountTrustTransactionCalibrationScenarioTests,org.qortal.test.rating.ResourceRatingTests`
+  - result: 213 tests passed, 0 failures, 0 errors, 0 skipped
 - long trust-network benchmark passed:
   - command: `mvn test -DskipJUnitTests=false -Dqortium.runLongTrustNetworkTests=true -Dtest=org.qortal.test.rating.AccountTrustScaleTests`
   - result: 3 tests passed, 0 failures, 0 errors, 0 skipped
   - medium static graph: 162 accounts, 1,704 ratings, 648 snapshots,
-    19 ms derive, 24 ms refresh, 43 ms total
+    32 ms derive, 29 ms refresh, 61 ms total
   - large static graph: 375 accounts, 9,910 ratings, 1,500 snapshots,
-    91 ms derive, 85 ms refresh, 176 ms total
+    109 ms derive, 83 ms refresh, 192 ms total
   - medium churn graph: 4 rounds, 192 changed ratings, 96 removed ratings,
-    71 ms total refresh, 17 ms average refresh, 20 ms max refresh
+    74 ms total refresh, 18 ms average refresh, 21 ms max refresh
   - large churn graph: 4 rounds, 480 changed ratings, 240 removed ratings,
-    315 ms total refresh, 78 ms average refresh, 90 ms max refresh
+    309 ms total refresh, 77 ms average refresh, 85 ms max refresh
 
 These are local reference measurements, not consensus limits.
 
