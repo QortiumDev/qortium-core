@@ -239,6 +239,88 @@ public class DevProxyServerResourceTests {
     }
 
     @Test
+    public void testProxyRewritesProtocolRelativeLocalRedirects() throws Exception {
+        byte[] redirectBody = "protocol-relative local redirect".getBytes(StandardCharsets.UTF_8);
+        byte[] targetBody = "target reached".getBytes(StandardCharsets.UTF_8);
+        AtomicBoolean targetReached = new AtomicBoolean(false);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/protocol-relative-redirect.txt", exchange -> {
+            int port = this.server.getAddress().getPort();
+            exchange.getResponseHeaders().add("Location", String.format("//127.0.0.1:%d/target.txt?from=protocol#section", port));
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_MOVED_TEMP, redirectBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(redirectBody);
+            }
+        });
+        this.server.createContext("/target.txt", exchange -> {
+            targetReached.set(true);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, targetBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(targetBody);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("protocol-relative-redirect.txt");
+
+        assertEquals(HttpURLConnection.HTTP_MOVED_TEMP, exchange.status);
+        assertEquals("/target.txt?from=protocol#section", exchange.getResponseHeader("Location"));
+        assertArrayEquals(redirectBody, exchange.outputStream.toByteArray());
+        assertFalse(targetReached.get());
+    }
+
+    @Test
+    public void testProxyRewritesLoopbackAliasRedirects() throws Exception {
+        byte[] redirectBody = "loopback alias redirect".getBytes(StandardCharsets.UTF_8);
+        byte[] targetBody = "target reached".getBytes(StandardCharsets.UTF_8);
+        AtomicBoolean targetReached = new AtomicBoolean(false);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/loopback-alias-redirect.txt", exchange -> {
+            int port = this.server.getAddress().getPort();
+            exchange.getResponseHeaders().add("Location", String.format("http://localhost:%d/target.txt?from=alias#section", port));
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_MOVED_TEMP, redirectBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(redirectBody);
+            }
+        });
+        this.server.createContext("/target.txt", exchange -> {
+            targetReached.set(true);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, targetBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(targetBody);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("loopback-alias-redirect.txt");
+
+        assertEquals(HttpURLConnection.HTTP_MOVED_TEMP, exchange.status);
+        assertEquals("/target.txt?from=alias#section", exchange.getResponseHeader("Location"));
+        assertArrayEquals(redirectBody, exchange.outputStream.toByteArray());
+        assertFalse(targetReached.get());
+    }
+
+    @Test
     public void testProxyPreservesExternalAbsoluteRedirects() throws Exception {
         byte[] redirectBody = "external absolute redirect".getBytes(StandardCharsets.UTF_8);
         String externalLocation = "http://example.com/target.txt?from=upstream#section";
@@ -262,6 +344,36 @@ public class DevProxyServerResourceTests {
         setField(resource, "response", exchange.response);
 
         resource.getProxyPath("external-redirect.txt");
+
+        assertEquals(HttpURLConnection.HTTP_MOVED_TEMP, exchange.status);
+        assertEquals(externalLocation, exchange.getResponseHeader("Location"));
+        assertArrayEquals(redirectBody, exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testProxyPreservesExternalProtocolRelativeRedirects() throws Exception {
+        byte[] redirectBody = "external protocol-relative redirect".getBytes(StandardCharsets.UTF_8);
+        String externalLocation = "//example.com/target.txt?from=upstream#section";
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/external-protocol-relative-redirect.txt", exchange -> {
+            exchange.getResponseHeaders().add("Location", externalLocation);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_MOVED_TEMP, redirectBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(redirectBody);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("external-protocol-relative-redirect.txt");
 
         assertEquals(HttpURLConnection.HTTP_MOVED_TEMP, exchange.status);
         assertEquals(externalLocation, exchange.getResponseHeader("Location"));

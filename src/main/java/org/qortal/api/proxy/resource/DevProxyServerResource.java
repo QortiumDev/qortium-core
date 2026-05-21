@@ -242,17 +242,19 @@ public class DevProxyServerResource {
             return location;
         }
 
-        if (!locationUri.isAbsolute() || !"http".equalsIgnoreCase(locationUri.getScheme())) {
+        String locationScheme = locationUri.getScheme();
+        if (locationScheme != null && !"http".equalsIgnoreCase(locationScheme)) {
             return location;
         }
 
-        String locationHost = normalizeLocationHost(locationUri.getHost());
-        String sourceHost = normalizeLocationHost(sourceUri.getHost());
-        if (locationHost == null || sourceHost == null || !locationHost.equals(sourceHost)) {
+        if (locationUri.getHost() == null) {
             return location;
         }
 
-        if (effectiveHttpPort(locationUri) != effectiveHttpPort(sourceUri)) {
+        String locationHost = normalizeLoopbackRedirectHost(locationUri.getHost());
+        String sourceHost = normalizeLoopbackRedirectHost(sourceUri.getHost());
+        if (!"loopback".equals(locationHost) || !locationHost.equals(sourceHost) ||
+                effectiveHttpPort(locationUri) != effectiveHttpPort(sourceUri)) {
             return location;
         }
 
@@ -271,12 +273,21 @@ public class DevProxyServerResource {
         return rewrittenLocation.toString();
     }
 
-    private static String normalizeLocationHost(String host) {
+    private static String normalizeLoopbackRedirectHost(String host) {
         if (host == null) {
             return null;
         }
 
-        return host.toLowerCase(Locale.ROOT);
+        String normalizedHost = host.toLowerCase(Locale.ROOT);
+        if (normalizedHost.startsWith("[") && normalizedHost.endsWith("]")) {
+            normalizedHost = normalizedHost.substring(1, normalizedHost.length() - 1);
+        }
+
+        if ("localhost".equals(normalizedHost) || "127.0.0.1".equals(normalizedHost) || "::1".equals(normalizedHost)) {
+            return "loopback";
+        }
+
+        return normalizedHost;
     }
 
     private static int effectiveHttpPort(URI uri) {

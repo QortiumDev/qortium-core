@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Handle developer proxy loopback redirect aliases
+
+Changed the developer proxy so redirects that point back to the local frontend server through loopback aliases or protocol-relative locations are still kept inside Qortium's proxy. This prevents browser navigation from bypassing the proxy when a dev server uses `localhost`, `127.0.0.1`, IPv6 loopback, or `//` redirect URLs for the same local port.
+
 ### 2026-05-21 - Rewrite developer proxy local redirect locations
 
 Changed the developer proxy so absolute redirects that point back to the local frontend server are returned as proxy-relative locations. This keeps browser navigation inside Qortium's developer proxy while still preserving relative redirects and redirects to external sites.
