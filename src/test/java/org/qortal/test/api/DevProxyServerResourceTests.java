@@ -27,6 +27,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertSame;
 
 public class DevProxyServerResourceTests {
@@ -114,6 +115,46 @@ public class DevProxyServerResourceTests {
         assertArrayEquals(body, exchange.outputStream.toByteArray());
     }
 
+    @Test
+    public void testProxyFiltersManagedRequestHeaders() throws Exception {
+        byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+        Map<String, String> upstreamHeaders = new LinkedHashMap<>();
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/request-headers.txt", exchange -> {
+            upstreamHeaders.put("X-Dev-Proxy-Request", exchange.getRequestHeaders().getFirst("X-Dev-Proxy-Request"));
+            upstreamHeaders.put("Host", exchange.getRequestHeaders().getFirst("Host"));
+            upstreamHeaders.put("Accept-Encoding", exchange.getRequestHeaders().getFirst("Accept-Encoding"));
+            upstreamHeaders.put("Connection", exchange.getRequestHeaders().getFirst("Connection"));
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, body.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(body);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange()
+                .withRequestHeader("X-Dev-Proxy-Request", "forwarded")
+                .withRequestHeader("Host", "caller.example")
+                .withRequestHeader("Accept-Encoding", "gzip")
+                .withRequestHeader("Connection", "close");
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("request-headers.txt");
+
+        assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
+        assertEquals("forwarded", upstreamHeaders.get("X-Dev-Proxy-Request"));
+        assertNotEquals("caller.example", upstreamHeaders.get("Host"));
+        assertNotEquals("gzip", upstreamHeaders.get("Accept-Encoding"));
+        assertNotEquals("close", upstreamHeaders.get("Connection"));
+        assertArrayEquals(body, exchange.outputStream.toByteArray());
+    }
+
     private static void setField(Object target, String fieldName, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
@@ -121,6 +162,7 @@ public class DevProxyServerResourceTests {
     }
 
     private static class Exchange {
+        private final Map<String, String> requestHeaders = new LinkedHashMap<>();
         private final Map<String, String> responseHeaders = new LinkedHashMap<>();
         private final CapturingServletOutputStream outputStream = new CapturingServletOutputStream();
         private int status;
@@ -139,8 +181,9 @@ public class DevProxyServerResourceTests {
                             case "getMethod":
                                 return "GET";
                             case "getHeaderNames":
-                                return Collections.emptyEnumeration();
+                                return Collections.enumeration(this.requestHeaders.keySet());
                             case "getHeader":
+                                return this.requestHeaders.get((String) args[0]);
                             case "getQueryString":
                             case "getParameter":
                                 return null;
@@ -180,6 +223,11 @@ public class DevProxyServerResourceTests {
                                 return defaultValue(method.getReturnType());
                         }
                     });
+        }
+
+        private Exchange withRequestHeader(String headerName, String headerValue) {
+            this.requestHeaders.put(headerName, headerValue);
+            return this;
         }
 
         private String getResponseHeader(String headerName) {

@@ -30,6 +30,20 @@ import java.util.Set;
 @Path("/")
 public class DevProxyServerResource {
 
+    private static final Set<String> PROXY_MANAGED_REQUEST_HEADERS = Set.of(
+            "accept-encoding",
+            "connection",
+            "content-length",
+            "host",
+            "keep-alive",
+            "proxy-authenticate",
+            "proxy-authorization",
+            "te",
+            "trailer",
+            "transfer-encoding",
+            "upgrade"
+    );
+
     private static final Set<String> PROXY_MANAGED_RESPONSE_HEADERS = Set.of(
             "connection",
             "content-length",
@@ -122,10 +136,16 @@ public class DevProxyServerResource {
         while (headerNames.hasMoreElements()) {
             String headerName = headerNames.nextElement();
             String headerValue = request.getHeader(headerName);
-            con.setRequestProperty(headerName, headerValue);
+            if (headerName != null && headerValue != null && !isProxyManagedRequestHeader(headerName)) {
+                con.setRequestProperty(headerName, headerValue);
+            }
         }
 
         // TODO: proxy any POST parameters from "request" to "con"
+    }
+
+    private static boolean isProxyManagedRequestHeader(String headerName) {
+        return PROXY_MANAGED_REQUEST_HEADERS.contains(headerName.toLowerCase(Locale.ROOT));
     }
 
     private static boolean isProxyManagedResponseHeader(String headerName) {

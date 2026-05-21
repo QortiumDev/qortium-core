@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Filter developer proxy request headers safely
+
+Changed the developer proxy so it no longer forwards caller-owned request headers such as host, compression, and connection-control headers to the local frontend server. Safe custom headers still pass through, while the proxy keeps control of headers that could interfere with HTML rewriting or local proxy behavior.
+
 ### 2026-05-21 - Forward developer proxy response headers correctly
 
 Changed the developer proxy so safe response headers from a local frontend server are forwarded reliably instead of being skipped by the old header-copy loop. The proxy still keeps control of content length, content type, content security policy, and connection-level headers so rewritten responses remain consistent.
