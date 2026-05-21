@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Rewrite developer proxy local redirect locations
+
+Changed the developer proxy so absolute redirects that point back to the local frontend server are returned as proxy-relative locations. This keeps browser navigation inside Qortium's developer proxy while still preserving relative redirects and redirects to external sites.
+
 ### 2026-05-21 - Preserve developer proxy redirects
 
 Changed the developer proxy so redirects from a local frontend server are passed back to the browser with their original status and location instead of being followed internally by Qortium. This keeps browser navigation and frontend dev-server routing behavior visible to the app being tested.

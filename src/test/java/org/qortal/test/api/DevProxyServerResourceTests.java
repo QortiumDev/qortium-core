@@ -197,6 +197,77 @@ public class DevProxyServerResourceTests {
         assertFalse(targetReached.get());
     }
 
+    @Test
+    public void testProxyRewritesLocalAbsoluteRedirects() throws Exception {
+        byte[] redirectBody = "local absolute redirect".getBytes(StandardCharsets.UTF_8);
+        byte[] targetBody = "target reached".getBytes(StandardCharsets.UTF_8);
+        AtomicBoolean targetReached = new AtomicBoolean(false);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/absolute-redirect.txt", exchange -> {
+            int port = this.server.getAddress().getPort();
+            exchange.getResponseHeaders().add("Location", String.format("http://127.0.0.1:%d/target.txt?from=upstream#section", port));
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_MOVED_TEMP, redirectBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(redirectBody);
+            }
+        });
+        this.server.createContext("/target.txt", exchange -> {
+            targetReached.set(true);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, targetBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(targetBody);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("absolute-redirect.txt");
+
+        assertEquals(HttpURLConnection.HTTP_MOVED_TEMP, exchange.status);
+        assertEquals("/target.txt?from=upstream#section", exchange.getResponseHeader("Location"));
+        assertArrayEquals(redirectBody, exchange.outputStream.toByteArray());
+        assertFalse(targetReached.get());
+    }
+
+    @Test
+    public void testProxyPreservesExternalAbsoluteRedirects() throws Exception {
+        byte[] redirectBody = "external absolute redirect".getBytes(StandardCharsets.UTF_8);
+        String externalLocation = "http://example.com/target.txt?from=upstream#section";
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/external-redirect.txt", exchange -> {
+            exchange.getResponseHeaders().add("Location", externalLocation);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_MOVED_TEMP, redirectBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(redirectBody);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("external-redirect.txt");
+
+        assertEquals(HttpURLConnection.HTTP_MOVED_TEMP, exchange.status);
+        assertEquals(externalLocation, exchange.getResponseHeader("Location"));
+        assertArrayEquals(redirectBody, exchange.outputStream.toByteArray());
+    }
+
     private static void setField(Object target, String fieldName, Object value) throws Exception {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);

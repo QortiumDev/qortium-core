@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.ProtocolException;
 import java.net.URL;
 import java.util.Enumeration;
@@ -118,7 +119,7 @@ public class DevProxyServerResource {
             response.setStatus(responseCode);
 
             // Proxy the response data back to the caller
-            this.proxyConnectionToResponse(con, response, inPath, responseCode);
+            this.proxyConnectionToResponse(con, response, inPath, responseCode, source);
 
         } catch (IOException e) {
             throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
@@ -158,7 +159,7 @@ public class DevProxyServerResource {
         return PROXY_MANAGED_RESPONSE_HEADERS.contains(headerName.toLowerCase(Locale.ROOT));
     }
 
-    private void proxyConnectionToResponse(HttpURLConnection con, HttpServletResponse response, String inPath, int responseCode) throws IOException {
+    private void proxyConnectionToResponse(HttpURLConnection con, HttpServletResponse response, String inPath, int responseCode, String source) throws IOException {
         // Proxy the response headers
         for (Map.Entry<String, List<String>> header : con.getHeaderFields().entrySet()) {
             String headerName = header.getKey();
@@ -169,6 +170,10 @@ public class DevProxyServerResource {
 
             for (String headerValue : headerValues) {
                 if (headerValue != null) {
+                    if ("location".equals(headerName.toLowerCase(Locale.ROOT))) {
+                        headerValue = rewriteProxyLocation(headerValue, source);
+                    }
+
                     response.addHeader(headerName, headerValue);
                 }
             }
@@ -225,6 +230,57 @@ public class DevProxyServerResource {
             response.setContentLength(data.length);
             response.getOutputStream().write(data);
         }
+    }
+
+    private static String rewriteProxyLocation(String location, String source) {
+        URI locationUri;
+        URI sourceUri;
+        try {
+            locationUri = URI.create(location);
+            sourceUri = URI.create("http://" + source);
+        } catch (IllegalArgumentException e) {
+            return location;
+        }
+
+        if (!locationUri.isAbsolute() || !"http".equalsIgnoreCase(locationUri.getScheme())) {
+            return location;
+        }
+
+        String locationHost = normalizeLocationHost(locationUri.getHost());
+        String sourceHost = normalizeLocationHost(sourceUri.getHost());
+        if (locationHost == null || sourceHost == null || !locationHost.equals(sourceHost)) {
+            return location;
+        }
+
+        if (effectiveHttpPort(locationUri) != effectiveHttpPort(sourceUri)) {
+            return location;
+        }
+
+        StringBuilder rewrittenLocation = new StringBuilder();
+        String rawPath = locationUri.getRawPath();
+        rewrittenLocation.append(rawPath == null || rawPath.isEmpty() ? "/" : rawPath);
+
+        if (locationUri.getRawQuery() != null) {
+            rewrittenLocation.append("?").append(locationUri.getRawQuery());
+        }
+
+        if (locationUri.getRawFragment() != null) {
+            rewrittenLocation.append("#").append(locationUri.getRawFragment());
+        }
+
+        return rewrittenLocation.toString();
+    }
+
+    private static String normalizeLocationHost(String host) {
+        if (host == null) {
+            return null;
+        }
+
+        return host.toLowerCase(Locale.ROOT);
+    }
+
+    private static int effectiveHttpPort(URI uri) {
+        return uri.getPort() >= 0 ? uri.getPort() : 80;
     }
 
 }
