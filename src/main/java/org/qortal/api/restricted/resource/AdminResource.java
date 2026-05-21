@@ -534,7 +534,7 @@ public class AdminResource {
 			)
 		}
 	)
-	@ApiErrors({ApiError.INVALID_CRITERIA})
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.OPERATION_IN_PROGRESS})
 	@SecurityRequirement(name = "apiKey")
 	public String bootstrap(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 		Security.checkApiCallAllowed(request);
@@ -543,17 +543,9 @@ public class AdminResource {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
 		}
 
-		new Thread(() -> {
-			// Short sleep to allow HTTP response body to be emitted
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				// Not important
-			}
-
-			BootstrapNode.attemptToBootstrap();
-
-		}).start();
+		if (!BootstrapNode.scheduleBootstrap())
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.OPERATION_IN_PROGRESS,
+					"Bootstrap apply is already scheduled or running");
 
 		return "true";
 	}

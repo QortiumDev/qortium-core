@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Prevent repeated bootstrap apply attempts
+
+Changed bootstrap apply scheduling so Qortium refuses duplicate bootstrap-apply requests while one is already scheduled or running. This prevents repeated authenticated admin calls from launching multiple bootstrap replacement processes before the node shuts down and restarts.
+
 ### 2026-05-21 - Set developer proxy upstream timeouts
 
 Changed the developer proxy so connections to the local frontend server use fixed connect and read timeouts. This keeps a stalled local dev server from leaving Qortium proxy requests waiting indefinitely while preserving normal successful proxy behavior.

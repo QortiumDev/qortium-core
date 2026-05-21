@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /* NOTE: It is CRITICAL that we use OpenJDK and not Java SE because our uber jar repacks BouncyCastle which, in turn, unsigns BC causing it to be rejected as a security provider by Java SE. */
@@ -27,36 +28,71 @@ public class BootstrapNode {
 	public static final String AGENTLIB_JVM_HOLDER_ARG = "-DQORTIUM_agentlib=";
 
 	private static final Logger LOGGER = LogManager.getLogger(BootstrapNode.class);
+	private static final long BOOTSTRAP_RESPONSE_DELAY = 1000L;
+	private static final AtomicBoolean BOOTSTRAP_APPLY_IN_PROGRESS = new AtomicBoolean(false);
 
-	public static boolean attemptToBootstrap() {
-		LOGGER.info(String.format("Bootstrapping node..."));
-
-		if (!Settings.getInstance().hasBootstrapHostsConfigured()) {
-			LOGGER.warn(Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
+	public static boolean scheduleBootstrap() {
+		if (!tryAcquireBootstrapApply()) {
+			LOGGER.info("Bootstrap apply is already scheduled or running");
 			return false;
 		}
 
-		// Give repository a chance to backup in case things go badly wrong (if enabled)
-		if (Settings.getInstance().getRepositoryBackupInterval() > 0) {
+		new Thread(() -> {
+			// Short sleep to allow HTTP response body to be emitted
 			try {
-				// Timeout if the database isn't ready for backing up after 60 seconds
-				long timeout = 60 * 1000L;
-				RepositoryManager.backup(true, "backup", timeout);
-
-			} catch (TimeoutException e) {
-				LOGGER.info("Attempt to backup repository failed due to timeout: {}", e.getMessage());
-				// Continue with the bootstrap anyway...
+				Thread.sleep(BOOTSTRAP_RESPONSE_DELAY);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				releaseBootstrapApply();
+				return;
 			}
+
+			attemptToBootstrapWithGuardHeld();
+		}).start();
+
+		return true;
+	}
+
+	public static boolean attemptToBootstrap() {
+		if (!tryAcquireBootstrapApply()) {
+			LOGGER.info("Bootstrap apply is already scheduled or running");
+			return false;
 		}
 
-		// Call ApplyBootstrap to end this process
-		String javaHome = System.getProperty("java.home");
-		LOGGER.debug(String.format("Java home: %s", javaHome));
+		return attemptToBootstrapWithGuardHeld();
+	}
 
-		Path javaBinary = Paths.get(javaHome, "bin", "java");
-		LOGGER.debug(String.format("Java binary: %s", javaBinary));
+	private static boolean attemptToBootstrapWithGuardHeld() {
+		boolean applyProcessStarted = false;
+
+		LOGGER.info(String.format("Bootstrapping node..."));
 
 		try {
+			if (!Settings.getInstance().hasBootstrapHostsConfigured()) {
+				LOGGER.warn(Bootstrap.MISSING_BOOTSTRAP_HOSTS_MESSAGE);
+				return false;
+			}
+
+			// Give repository a chance to backup in case things go badly wrong (if enabled)
+			if (Settings.getInstance().getRepositoryBackupInterval() > 0) {
+				try {
+					// Timeout if the database isn't ready for backing up after 60 seconds
+					long timeout = 60 * 1000L;
+					RepositoryManager.backup(true, "backup", timeout);
+
+				} catch (TimeoutException e) {
+					LOGGER.info("Attempt to backup repository failed due to timeout: {}", e.getMessage());
+					// Continue with the bootstrap anyway...
+				}
+			}
+
+			// Call ApplyBootstrap to end this process
+			String javaHome = System.getProperty("java.home");
+			LOGGER.debug(String.format("Java home: %s", javaHome));
+
+			Path javaBinary = Paths.get(javaHome, "bin", "java");
+			LOGGER.debug(String.format("Java binary: %s", javaBinary));
+
 			List<String> javaCmd = new ArrayList<>();
 
 			// Java runtime binary itself
@@ -95,6 +131,7 @@ public class BootstrapNode {
 			processBuilder.redirectError(ProcessBuilder.Redirect.INHERIT);
 
 			Process process = processBuilder.start();
+			applyProcessStarted = true;
 
 			// Nothing to pipe to new process, so close output stream (process's stdin)
 			process.getOutputStream().close();
@@ -104,6 +141,22 @@ public class BootstrapNode {
 			LOGGER.error(String.format("Failed to restart node: %s", e.getMessage()));
 
 			return true; // repo was okay, even if applying bootstrap failed
+		} finally {
+			if (!applyProcessStarted) {
+				releaseBootstrapApply();
+			}
 		}
+	}
+
+	static boolean tryAcquireBootstrapApply() {
+		return BOOTSTRAP_APPLY_IN_PROGRESS.compareAndSet(false, true);
+	}
+
+	static void releaseBootstrapApply() {
+		BOOTSTRAP_APPLY_IN_PROGRESS.set(false);
+	}
+
+	static boolean isBootstrapApplyInProgress() {
+		return BOOTSTRAP_APPLY_IN_PROGRESS.get();
 	}
 }
