@@ -54,7 +54,7 @@ public class SettingsSaveTests extends Common {
 
 	@Test
 	public void testAutoUpdateModeIsSavedAndApplied() throws Exception {
-		Path settingsPath = createSettingsFile("{\"autoUpdateEnabled\":true}");
+		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"INSTALL\"}");
 		Settings.fileInstance(settingsPath.toString());
 
 		assertEquals(AutoUpdateMode.INSTALL, Settings.getInstance().getAutoUpdateMode());
@@ -65,26 +65,25 @@ public class SettingsSaveTests extends Common {
 		assertTrue(result.updated.contains("autoUpdateMode"));
 		assertTrue(result.restartRequired.contains("autoUpdateMode"));
 		assertEquals(AutoUpdateMode.NOTIFY, Settings.getInstance().getAutoUpdateMode());
-		assertFalse(Settings.getInstance().isAutoUpdateEnabled());
 		Map<String, Object> savedSettings = readSettings(settingsPath);
 		assertEquals("NOTIFY", savedSettings.get("autoUpdateMode"));
-		assertEquals(Boolean.FALSE, savedSettings.get("autoUpdateEnabled"));
 	}
 
 	@Test
-	public void testLegacyAutoUpdateEnabledWriteUpdatesMode() throws Exception {
-		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"CHECK_ONLY\",\"autoUpdateEnabled\":false}");
+	public void testAutoUpdateEnabledSettingIsRejectedWithoutChangingFile() throws Exception {
+		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"CHECK_ONLY\"}");
 		Settings.fileInstance(settingsPath.toString());
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
 
-		Settings.SettingsUpdateResult result = Settings.updateAndSave("{\"autoUpdateEnabled\":true}");
+		try {
+			Settings.updateAndSave("{\"autoUpdateEnabled\":true}");
+			fail("Expected autoUpdateEnabled to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("not writable"));
+		}
 
-		assertTrue(result.saved);
-		assertTrue(result.updated.contains("autoUpdateEnabled"));
-		assertTrue(result.updated.contains("autoUpdateMode"));
-		assertEquals(AutoUpdateMode.INSTALL, Settings.getInstance().getAutoUpdateMode());
-		Map<String, Object> savedSettings = readSettings(settingsPath);
-		assertEquals(Boolean.TRUE, savedSettings.get("autoUpdateEnabled"));
-		assertEquals("INSTALL", savedSettings.get("autoUpdateMode"));
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+		assertEquals(AutoUpdateMode.CHECK_ONLY, Settings.getInstance().getAutoUpdateMode());
 	}
 
 	@Test

@@ -155,8 +155,6 @@ public class Settings {
 	/** How long transient chat messages remain available from the dedicated chat store */
 	private long chatMessageRetentionPeriod = 24 * 60 * 60 * 1000L; // milliseconds
 
-	/** Legacy auto-update boolean. Use autoUpdateMode for new settings. */
-	private Boolean autoUpdateEnabled = null;
 	/** Whether and how this node checks, reports, or installs approved auto-updates. */
 	private AutoUpdateMode autoUpdateMode = null;
 	/** Whether we check, restart node without connected peers */
@@ -867,7 +865,6 @@ public class Settings {
 		settings.put("bitcoinyNetworks", new WritableSetting(WritableSettingType.STRING_MAP, true));
 		settings.put("bitcoinyServers", new WritableSetting(WritableSettingType.BITCOINY_SERVERS, true));
 		settings.put("pirateChainNet", new WritableSetting(WritableSettingType.PIRATE_CHAIN_NET, true));
-		settings.put("autoUpdateEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("autoUpdateMode", new WritableSetting(WritableSettingType.AUTO_UPDATE_MODE, true));
 		settings.put("autoRestartEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("bootstrapHosts", new WritableSetting(WritableSettingType.STRING_ARRAY, false));
@@ -1057,17 +1054,6 @@ public class Settings {
 				restartRequired.add(settingName);
 		}
 
-		if (patch.containsKey("autoUpdateMode") && mergedSettings.get("autoUpdateMode") != null) {
-			mergedSettings.put("autoUpdateEnabled", AutoUpdateMode.INSTALL.name().equals(mergedSettings.get("autoUpdateMode")));
-			updated.add("autoUpdateEnabled");
-			restartRequired.add("autoUpdateEnabled");
-		} else if (patch.containsKey("autoUpdateEnabled") && mergedSettings.get("autoUpdateEnabled") != null) {
-			mergedSettings.put("autoUpdateMode", Boolean.TRUE.equals(mergedSettings.get("autoUpdateEnabled"))
-					? AutoUpdateMode.INSTALL.name() : AutoUpdateMode.OFF.name());
-			updated.add("autoUpdateMode");
-			restartRequired.add("autoUpdateMode");
-		}
-
 		Path tempSettingsPath = writeTempSettings(activeSettingsPath, mergedSettings);
 		try {
 			Settings validatedSettings;
@@ -1234,8 +1220,6 @@ public class Settings {
 	private void validate() {
 		normaliseBitcoinyNetworks();
 		normaliseBitcoinyServers();
-		normaliseAutoUpdateMode();
-
 		// Validation goes here
 		if (this.minBlockchainPeers < 1 && !singleNodeTestnet)
 			throwValidationError("minBlockchainPeers must be at least 1");
@@ -1249,11 +1233,6 @@ public class Settings {
 			String possibleValues = EnumUtils.getNames(StoragePolicy.class, ", ");
 			throwValidationError(String.format("storagePolicy must be one of: %s", possibleValues));
 		}
-	}
-
-	private void normaliseAutoUpdateMode() {
-		this.autoUpdateMode = getAutoUpdateMode();
-		this.autoUpdateEnabled = this.autoUpdateMode == AutoUpdateMode.INSTALL;
 	}
 
 	private static Map<String, String> defaultBitcoinyNetworks() {
@@ -1776,15 +1755,11 @@ public class Settings {
 
 	public int getMaxBlocksPerResponse() { return this.maxBlocksPerResponse; }
 
-	public boolean isAutoUpdateEnabled() {
-		return this.getAutoUpdateMode() == AutoUpdateMode.INSTALL;
-	}
-
 	public AutoUpdateMode getAutoUpdateMode() {
 		if (this.autoUpdateMode != null)
 			return this.autoUpdateMode;
 
-		return Boolean.TRUE.equals(this.autoUpdateEnabled) ? AutoUpdateMode.INSTALL : AutoUpdateMode.OFF;
+		return AutoUpdateMode.OFF;
 	}
 
 	public boolean isAutoRestartEnabled() {

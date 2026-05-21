@@ -43,28 +43,24 @@ public class AutoUpdateTests {
 		Settings settings = newSettingsInstance();
 
 		assertEquals(AutoUpdateMode.OFF, settings.getAutoUpdateMode());
-		assertFalse(settings.isAutoUpdateEnabled());
 		assertFalse(settings.hasAutoUpdateReposConfigured());
 		assertArrayEquals(new String[0], settings.getAutoUpdateRepos());
 	}
 
 	@Test
-	public void testLegacyAutoUpdateEnabledMapsToInstallMode() throws ReflectiveOperationException {
+	public void testAutoUpdateModeCanEnableInstallMode() throws ReflectiveOperationException {
 		Settings settings = newSettingsInstance();
-		FieldUtils.writeField(settings, "autoUpdateEnabled", Boolean.TRUE, true);
+		FieldUtils.writeField(settings, "autoUpdateMode", AutoUpdateMode.INSTALL, true);
 
 		assertEquals(AutoUpdateMode.INSTALL, settings.getAutoUpdateMode());
-		assertTrue(settings.isAutoUpdateEnabled());
 	}
 
 	@Test
-	public void testAutoUpdateModeOverridesLegacyBoolean() throws ReflectiveOperationException {
+	public void testAutoUpdateModeCanUseNotifyMode() throws ReflectiveOperationException {
 		Settings settings = newSettingsInstance();
-		FieldUtils.writeField(settings, "autoUpdateEnabled", Boolean.TRUE, true);
 		FieldUtils.writeField(settings, "autoUpdateMode", AutoUpdateMode.NOTIFY, true);
 
 		assertEquals(AutoUpdateMode.NOTIFY, settings.getAutoUpdateMode());
-		assertFalse(settings.isAutoUpdateEnabled());
 	}
 
 	@Test

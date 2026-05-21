@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Remove auto-update boolean setting
+
+Removed the old `autoUpdateEnabled` setting so Qortium uses only `autoUpdateMode` to control update behavior. This keeps the baseline settings model simpler and avoids maintaining two names for the same policy.
+
 ### 2026-05-21 - Keep auto-update guard after apply launch
 
 Changed auto-update install tracking so Qortium keeps the update in-progress flag set after the update helper process has been launched. This prevents repeated manual or automatic update attempts from starting multiple apply-update helper processes during the shutdown and restart handoff.
