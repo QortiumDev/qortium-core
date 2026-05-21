@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Close ForeignFeesManager backup writers safely
+
+Changed foreign-fee backup writing so JSON backup files are written with safe UTF-8 file helpers instead of manually closed writers. This preserves the existing backup file contents while removing another close-on-failure risk.
+
 ### 2026-05-21 - Close ArbitraryResource string temp writer safely
 
 Changed the string-upload path for QDN publishing so temporary files are written with an automatically closed UTF-8 writer. This preserves the existing uploaded-string contents and trailing newline while removing another manual file-close path from the API resource.

@@ -41,8 +41,8 @@ import org.qortal.utils.NamedThreadFactory;
 import org.qortal.utils.Triple;
 
 import java.io.FileNotFoundException;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -1035,10 +1035,8 @@ public class ForeignFeesManager implements Listener {
             currentSignedForeignFeeDataJsonWrapper.put("data", currentSignedForeignFeeDataJson);
 
             // write signed fee data to backup file
-            String fileName = Paths.get(backupDirectory.toString(), SIGNED_FOREIGN_FEES_FILE_NAME).toString();
-            FileWriter writer = new FileWriter(fileName);
-            writer.write(currentSignedForeignFeeDataJsonWrapper.toString(2));
-            writer.close();
+            Path filePath = backupDirectory.resolve(SIGNED_FOREIGN_FEES_FILE_NAME);
+            Files.writeString(filePath, currentSignedForeignFeeDataJsonWrapper.toString(2), StandardCharsets.UTF_8);
 
         }
         catch (DataException e) {
@@ -1089,10 +1087,8 @@ public class ForeignFeesManager implements Listener {
             currentForeignFeeDataJsonWrapper.put("data", currentForeignFeesJson);
 
             // write the JSON to the backup file
-            String fileName = Paths.get(backupDirectory.toString(), filename).toString();
-            FileWriter writer = new FileWriter(fileName);
-            writer.write(currentForeignFeeDataJsonWrapper.toString(2));
-            writer.close();
+            Path filePath = backupDirectory.resolve(filename);
+            Files.writeString(filePath, currentForeignFeeDataJsonWrapper.toString(2), StandardCharsets.UTF_8);
 
         }
         catch (DataException e) {
