@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Close archive compression streams safely
+
+Changed archive compression so ZIP and 7z creation now close file streams and archive entries automatically when compression succeeds or fails. This prevents leaked file handles during interrupted archive creation while keeping the same archive formats and output layout.
+
 ### 2026-05-20 - Close file digest streams safely
 
 Changed file digest handling so Qortium now closes digest input streams automatically even when a file read fails partway through. This prevents leaked file handles during exceptional reads while keeping the same SHA-256 digest behavior for normal file hashing.

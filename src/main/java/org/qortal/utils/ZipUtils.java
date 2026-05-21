@@ -46,14 +46,11 @@ public class ZipUtils {
     public static void zip(String sourcePath, String destFilePath, String enclosingFolderName) throws IOException, InterruptedException {
         File sourceFile = new File(sourcePath);
         boolean isSingleFile = Paths.get(sourcePath).toFile().isFile();
-        FileOutputStream fileOutputStream = new FileOutputStream(destFilePath);
-        
+
         // 🔧 Use best speed compression level
-        ZipOutputStream zipOutputStream = new ZipOutputStream(fileOutputStream);        
-        ZipUtils.zip(sourceFile, enclosingFolderName, zipOutputStream, isSingleFile);
-        
-        zipOutputStream.close();
-        fileOutputStream.close();
+        try (ZipOutputStream zipOutputStream = new ZipOutputStream(new FileOutputStream(destFilePath))) {
+            ZipUtils.zip(sourceFile, enclosingFolderName, zipOutputStream, isSingleFile);
+        }
     }
     
 
@@ -86,15 +83,19 @@ public class ZipUtils {
             }
             return;
         }
-        final FileInputStream fis = new FileInputStream(fileToZip);
         final ZipEntry zipEntry = new ZipEntry(enclosingFolderName);
         zipOut.putNextEntry(zipEntry);
-        final byte[] bytes = new byte[65536];
-        int length;
-        while ((length = fis.read(bytes)) >= 0) {
-            zipOut.write(bytes, 0, length);
+        try {
+            try (FileInputStream fis = new FileInputStream(fileToZip)) {
+                final byte[] bytes = new byte[65536];
+                int length;
+                while ((length = fis.read(bytes)) >= 0) {
+                    zipOut.write(bytes, 0, length);
+                }
+            }
+        } finally {
+            zipOut.closeEntry();
         }
-        fis.close();
     }
 
     /**

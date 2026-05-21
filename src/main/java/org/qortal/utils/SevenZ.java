@@ -86,13 +86,17 @@ public class SevenZ {
             SevenZArchiveEntry entry = out.createArchiveEntry(file, name);
             out.putArchiveEntry(entry);
 
-            FileInputStream in = new FileInputStream(file);
-            byte[] b = new byte[8192];
-            int count = 0;
-            while ((count = in.read(b)) > 0) {
-                out.write(b, 0, count);
+            try {
+                try (FileInputStream in = new FileInputStream(file)) {
+                    byte[] b = new byte[8192];
+                    int count = 0;
+                    while ((count = in.read(b)) > 0) {
+                        out.write(b, 0, count);
+                    }
+                }
+            } finally {
+                out.closeArchiveEntry();
             }
-            out.closeArchiveEntry();
 
         } else if (file.isDirectory()) {
             File[] children = file.listFiles();
