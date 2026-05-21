@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Handle developer proxy HTML content types and encoding
+
+Changed the developer proxy so local frontend routes that return HTML are rewritten even when the URL does not end in `.html`. The proxy now asks upstream servers for uncompressed responses, safely decodes compressed HTML if it is still returned, and keeps rewritten HTML responses internally consistent.
+
 ### 2026-05-21 - Stream developer proxy non-HTML responses
 
 Changed the developer proxy so non-HTML responses from a local frontend server are streamed directly instead of being fully buffered in memory. HTML responses are still buffered for rewriting, while ordinary assets keep their existing proxy headers and content behavior.

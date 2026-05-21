@@ -27,12 +27,15 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.zip.GZIPOutputStream;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 public class DevProxyServerResourceTests {
 
@@ -154,6 +157,107 @@ public class DevProxyServerResourceTests {
     }
 
     @Test
+    public void testProxyRewritesRouteStyleHtmlResponses() throws Exception {
+        byte[] body = "<html><head></head><body>route html</body></html>".getBytes(StandardCharsets.UTF_8);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/dashboard", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/html; charset=UTF-8");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, body.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(body);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("dashboard");
+
+        String rewrittenBody = new String(exchange.outputStream.toByteArray(), StandardCharsets.UTF_8);
+        assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
+        assertEquals("text/html; charset=UTF-8", exchange.contentType);
+        assertEquals(exchange.outputStream.toByteArray().length, exchange.contentLength);
+        assertEquals("default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;", exchange.getResponseHeader("Content-Security-Policy"));
+        assertTrue(rewrittenBody.contains("/apps/q-apps.js?time="));
+        assertTrue(rewrittenBody.contains("route html"));
+    }
+
+    @Test
+    public void testProxyDecodesAndRewritesCompressedHtmlResponses() throws Exception {
+        byte[] body = "<html><head></head><body>compressed html</body></html>".getBytes(StandardCharsets.UTF_8);
+        byte[] compressedBody = gzip(body);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/compressed", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/html");
+            exchange.getResponseHeaders().add("Content-Encoding", "gzip");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, compressedBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(compressedBody);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("compressed");
+
+        String rewrittenBody = new String(exchange.outputStream.toByteArray(), StandardCharsets.UTF_8);
+        assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
+        assertEquals("text/html", exchange.contentType);
+        assertEquals(exchange.outputStream.toByteArray().length, exchange.contentLength);
+        assertNull(exchange.getResponseHeader("Content-Encoding"));
+        assertTrue(rewrittenBody.contains("/apps/q-apps.js?time="));
+        assertTrue(rewrittenBody.contains("compressed html"));
+    }
+
+    @Test
+    public void testProxyPreservesCompressedNonHtmlResponses() throws Exception {
+        byte[] body = "compressed asset".getBytes(StandardCharsets.UTF_8);
+        byte[] compressedBody = gzip(body);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/compressed.bin", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "application/octet-stream");
+            exchange.getResponseHeaders().add("Content-Encoding", "gzip");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, compressedBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(compressedBody);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("compressed.bin");
+
+        assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
+        assertEquals("application/octet-stream", exchange.contentType);
+        assertEquals("gzip", exchange.getResponseHeader("Content-Encoding"));
+        assertEquals(compressedBody.length, exchange.contentLength);
+        assertArrayEquals(compressedBody, exchange.outputStream.toByteArray());
+    }
+
+    @Test
     public void testProxyFiltersManagedRequestHeaders() throws Exception {
         byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
         Map<String, String> upstreamHeaders = new LinkedHashMap<>();
@@ -188,7 +292,7 @@ public class DevProxyServerResourceTests {
         assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
         assertEquals("forwarded", upstreamHeaders.get("X-Dev-Proxy-Request"));
         assertNotEquals("caller.example", upstreamHeaders.get("Host"));
-        assertNotEquals("gzip", upstreamHeaders.get("Accept-Encoding"));
+        assertEquals("identity", upstreamHeaders.get("Accept-Encoding"));
         assertNotEquals("close", upstreamHeaders.get("Connection"));
         assertArrayEquals(body, exchange.outputStream.toByteArray());
     }
@@ -435,6 +539,15 @@ public class DevProxyServerResourceTests {
         Field field = target.getClass().getDeclaredField(fieldName);
         field.setAccessible(true);
         field.set(target, value);
+    }
+
+    private static byte[] gzip(byte[] data) throws Exception {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(outputStream)) {
+            gzipOutputStream.write(data);
+        }
+
+        return outputStream.toByteArray();
     }
 
     private static class Exchange {

@@ -27,6 +27,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.InflaterInputStream;
 
 
 @Path("/")
@@ -52,6 +54,7 @@ public class DevProxyServerResource {
 
     private static final Set<String> PROXY_MANAGED_RESPONSE_HEADERS = Set.of(
             "connection",
+            "content-encoding",
             "content-length",
             "content-security-policy",
             "content-type",
@@ -155,6 +158,8 @@ public class DevProxyServerResource {
             }
         }
 
+        con.setRequestProperty("Accept-Encoding", "identity");
+
         // TODO: proxy any POST parameters from "request" to "con"
     }
 
@@ -195,7 +200,7 @@ public class DevProxyServerResource {
             }
         }
 
-        if (HTMLParser.isHtmlFile(filename)) {
+        if (isProxyHtmlResponse(filename, con.getContentType())) {
             this.proxyHtmlConnectionToResponse(con, response, inPath, responseCode);
         }
         else {
@@ -227,6 +232,9 @@ public class DevProxyServerResource {
     private void proxyNonHtmlConnectionToResponse(HttpURLConnection con, HttpServletResponse response, int responseCode) throws IOException {
         response.addHeader("Content-Security-Policy", "default-src 'self'");
         response.setContentType(con.getContentType());
+        if (con.getContentEncoding() != null) {
+            response.addHeader("Content-Encoding", con.getContentEncoding());
+        }
 
         int contentLength = con.getContentLength();
         if (contentLength >= 0) {
@@ -234,6 +242,14 @@ public class DevProxyServerResource {
         }
 
         streamProxyResponseData(con, response, responseCode);
+    }
+
+    private static boolean isProxyHtmlResponse(String filename, String contentType) {
+        if (HTMLParser.isHtmlFile(filename)) {
+            return true;
+        }
+
+        return contentType != null && contentType.toLowerCase(Locale.ROOT).split(";", 2)[0].trim().equals("text/html");
     }
 
     private static InputStream getProxyResponseStream(HttpURLConnection con, int responseCode) throws IOException {
@@ -248,7 +264,7 @@ public class DevProxyServerResource {
             return new byte[0];
         }
 
-        try (InputStream inputStream = responseStream;
+        try (InputStream inputStream = getDecodedHtmlResponseStream(responseStream, con.getContentEncoding());
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[PROXY_STREAM_BUFFER_SIZE];
             int bytesRead;
@@ -258,6 +274,28 @@ public class DevProxyServerResource {
 
             return outputStream.toByteArray();
         }
+    }
+
+    private static InputStream getDecodedHtmlResponseStream(InputStream inputStream, String contentEncoding) throws IOException {
+        if (contentEncoding == null || contentEncoding.isBlank() || "identity".equalsIgnoreCase(contentEncoding.trim())) {
+            return inputStream;
+        }
+
+        String normalizedEncoding = contentEncoding.toLowerCase(Locale.ROOT).trim();
+        try {
+            if ("gzip".equals(normalizedEncoding) || "x-gzip".equals(normalizedEncoding)) {
+                return new GZIPInputStream(inputStream);
+            }
+            if ("deflate".equals(normalizedEncoding)) {
+                return new InflaterInputStream(inputStream);
+            }
+        } catch (IOException e) {
+            inputStream.close();
+            throw e;
+        }
+
+        inputStream.close();
+        throw new IOException("Unsupported HTML content encoding: " + contentEncoding);
     }
 
     private static void streamProxyResponseData(HttpURLConnection con, HttpServletResponse response, int responseCode) throws IOException {
