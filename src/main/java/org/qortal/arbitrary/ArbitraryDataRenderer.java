@@ -197,17 +197,17 @@ public class ArbitraryDataRenderer {
             else {
                 // Regular file - can be streamed directly
                 File file = filePath.toFile();
-                FileInputStream inputStream = new FileInputStream(file);
-                response.addHeader("Content-Security-Policy", "default-src 'self'");
-                response.setContentType(context.getMimeType(filename));
-                int bytesRead, length = 0;
-                byte[] buffer = new byte[10240];
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    response.getOutputStream().write(buffer, 0, bytesRead);
-                    length += bytesRead;
+                try (FileInputStream inputStream = new FileInputStream(file)) {
+                    response.addHeader("Content-Security-Policy", "default-src 'self'");
+                    response.setContentType(context.getMimeType(filename));
+                    int bytesRead, length = 0;
+                    byte[] buffer = new byte[10240];
+                    while ((bytesRead = inputStream.read(buffer)) != -1) {
+                        response.getOutputStream().write(buffer, 0, bytesRead);
+                        length += bytesRead;
+                    }
+                    response.setContentLength(length);
                 }
-                response.setContentLength(length);
-                inputStream.close();
             }
             return response;
         } catch (FileNotFoundException | NoSuchFileException e) {

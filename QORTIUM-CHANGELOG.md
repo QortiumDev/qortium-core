@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Close QDN renderer file streams safely
+
+Changed QDN file rendering so source files are closed automatically if streaming a regular file to the API response fails. This keeps rendered content behavior the same while avoiding leaked file handles on response I/O errors.
+
 ### 2026-05-21 - Close random-access file reads safely
 
 Changed utility file reads so random-access files are closed automatically if seeking or reading fails. This keeps the existing read behavior while avoiding leaked file handles on I/O errors.
