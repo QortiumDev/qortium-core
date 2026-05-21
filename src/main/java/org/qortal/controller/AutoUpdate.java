@@ -547,7 +547,7 @@ public class AutoUpdate extends Thread {
 		throw new IOException(String.format("QDN update file not found: %s", requestedPath));
 	}
 
-	static boolean writeVerifiedUpdate(InputStream in, byte[] downloadHash, Path newJar, String sourceDescription) {
+	static boolean writeVerifiedUpdate(InputStream in, byte[] expectedJarHash, Path newJar, String sourceDescription) {
 		MessageDigest sha256;
 		try {
 			sha256 = MessageDigest.getInstance("SHA-256");
@@ -565,20 +565,18 @@ public class AutoUpdate extends Thread {
 				if (nread == -1)
 					break;
 
-				// Hash is based on XORed version
-				sha256.update(buffer, 0, nread);
-
-				// ReXOR before writing
+				// Decode the QDN transport bytes before hashing and writing the executable JAR.
 				for (int i = 0; i < nread; ++i)
 					buffer[i] ^= XOR_VALUE;
 
+				sha256.update(buffer, 0, nread);
 				out.write(buffer, 0, nread);
 			} while (true);
 			out.flush();
 
 			byte[] hash = sha256.digest();
-			if (!Arrays.equals(downloadHash, hash)) {
-				LOGGER.warn("Downloaded update hash {} doesn't match {}", HashCode.fromBytes(hash), HashCode.fromBytes(downloadHash));
+			if (!Arrays.equals(expectedJarHash, hash)) {
+				LOGGER.warn("Decoded update JAR hash {} doesn't match {}", HashCode.fromBytes(hash), HashCode.fromBytes(expectedJarHash));
 				deleteUpdateFile(newJar, "download");
 				return false;
 			}

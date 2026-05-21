@@ -19,8 +19,8 @@ The update flow now uses two ARBITRARY transactions:
   file.
 - `AUTO_UPDATE`: a compact on-chain manifest submitted in the configured
   development group. The manifest must pin the exact binary transaction
-  signature, Git commit hash, build timestamp, and SHA-256 of the XORed update
-  bytes.
+  signature, Git commit hash, build timestamp, and SHA-256 of the decoded update
+  JAR.
 
 The network only accepts the manifest after normal development-group approval.
 For the null-owned development group, admin-submitted update manifests still
@@ -83,7 +83,7 @@ python3 tools/auto-update-scripts/publish-auto-update.py \
 The publisher:
 
 - reads the local `qortium.update`;
-- computes its SHA-256 hash;
+- computes the SHA-256 hash of the decoded JAR bytes inside it;
 - publishes it to `AUTO_UPDATE_BINARY/<name>/<full-commit-hash>`;
 - computes and signs the QDN binary transaction;
 - builds a compact `QAU1` manifest that pins that binary signature;
@@ -104,8 +104,8 @@ normal group-approval tools. For example:
 The updater ignores unapproved update manifests and rejects approved manifests
 that do not pin a QDN binary transaction signature. Once approved and confirmed,
 nodes in `INSTALL` mode fetch the pinned QDN binary, verify the SHA-256 hash over
-the XORed bytes, decode it to `new-qortium.jar`, and restart through the standard
-apply-update path.
+the decoded JAR bytes, write it to `new-qortium.jar`, and restart through the
+standard apply-update path.
 
 ## Manual Checks
 

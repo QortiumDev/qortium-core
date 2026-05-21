@@ -20,6 +20,7 @@ QDN_UPDATE_PATH = "qortium.update"
 AUTO_UPDATE_SERVICE_ID = 1
 AUTO_UPDATE_MANIFEST_MAGIC = bytes([0x51, 0x41, 0x55, 0x31])  # QAU1
 SIGNATURE_HEX_LENGTH = 128
+XOR_VALUE = 0x5a
 
 
 def abort(message):
@@ -63,11 +64,15 @@ def resolve_commit(commit_hash):
     return full_hash, timestamp
 
 
-def sha256_hex(path):
+def decoded_update_sha256_hex(path):
     sha256 = hashlib.sha256()
     with path.open("rb") as update_file:
         for chunk in iter(lambda: update_file.read(1024 * 1024), b""):
-            sha256.update(chunk)
+            decoded = bytearray(chunk)
+            for i in range(len(decoded)):
+                decoded[i] ^= XOR_VALUE
+
+            sha256.update(decoded)
     return sha256.hexdigest()
 
 
@@ -154,7 +159,7 @@ def build_manifest_hex(timestamp, commit_hash, update_hash, binary_signature_hex
     if len(commit_hash) != 40:
         abort("Commit hash must be the full 20-byte Git hash")
     if len(update_hash) != 64:
-        abort("Update SHA-256 must be 32 bytes")
+        abort("Decoded update JAR SHA-256 must be 32 bytes")
     if len(binary_signature_hex) != SIGNATURE_HEX_LENGTH:
         abort("Binary transaction signature must be 64 bytes")
 
@@ -259,13 +264,13 @@ def main():
     if not update_file.is_file():
         abort(f"{update_file} not found. Run build-auto-update.sh first.")
 
-    update_hash = sha256_hex(update_file)
+    update_hash = decoded_update_sha256_hex(update_file)
 
     print(f"Project:        {project}")
     print(f"Commit:         {commit_hash}")
     print(f"Build time ms:  {timestamp}")
     print(f"Update file:    {update_file.resolve()}")
-    print(f"Update SHA-256: {update_hash}")
+    print(f"Decoded JAR SHA-256: {update_hash}")
     print(f"QDN binary:     {QDN_UPDATE_SERVICE}/{args.qdn_name}/{identifier}")
     print(f"Manifest group: {args.tx_group_id}")
 

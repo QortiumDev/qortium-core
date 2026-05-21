@@ -53,10 +53,20 @@ public class AutoUpdateQdnTests extends Common {
 		Path newJar = Files.createTempFile("new-qortium", ".jar");
 		Files.deleteIfExists(newJar);
 
-		assertTrue(AutoUpdate.writeVerifiedUpdate(new ByteArrayInputStream(updateBytes), sha256(updateBytes), newJar, "test"));
+		assertTrue(AutoUpdate.writeVerifiedUpdate(new ByteArrayInputStream(updateBytes), sha256(jarBytes), newJar, "test"));
 		assertArrayEquals(jarBytes, Files.readAllBytes(newJar));
 
 		Files.deleteIfExists(newJar);
+	}
+
+	@Test
+	public void testWriteVerifiedUpdateRejectsXoredPayloadHash() throws Exception {
+		byte[] jarBytes = "qortium test jar bytes".getBytes();
+		byte[] updateBytes = xor(jarBytes);
+		Path newJar = Files.createTempFile("new-qortium", ".jar");
+
+		assertFalse(AutoUpdate.writeVerifiedUpdate(new ByteArrayInputStream(updateBytes), sha256(updateBytes), newJar, "test"));
+		assertFalse(Files.exists(newJar));
 	}
 
 	@Test
@@ -77,7 +87,8 @@ public class AutoUpdateQdnTests extends Common {
 			registerName(repository, alice, updateName);
 
 			byte[] commitHash = sequentialBytes(20, 1);
-			byte[] updateBytes = xor("qortium qdn update".getBytes());
+			byte[] jarBytes = "qortium qdn update".getBytes();
+			byte[] updateBytes = xor(jarBytes);
 			Path updateFile = Files.createTempDirectory("qdn-update").resolve(AutoUpdateManifest.QDN_UPDATE_PATH);
 			Files.write(updateFile, updateBytes);
 
@@ -90,13 +101,13 @@ public class AutoUpdateQdnTests extends Common {
 							ArbitraryTransactionData.Method.PUT, hex(commitHash))
 					.getSignature();
 
-			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(1_700_000_000_000L, commitHash, sha256(updateBytes), binarySignature);
+			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(1_700_000_000_000L, commitHash, sha256(jarBytes), binarySignature);
 			Path resolvedPath = AutoUpdate.resolveQdnUpdatePath(manifest);
 			assertArrayEquals(updateBytes, Files.readAllBytes(resolvedPath));
 
 			byte[] wrongSignature = Arrays.copyOf(binarySignature, binarySignature.length);
 			wrongSignature[0] ^= 1;
-			AutoUpdateManifest wrongManifest = AutoUpdateManifest.qdnV1(1_700_000_000_000L, commitHash, sha256(updateBytes), wrongSignature);
+			AutoUpdateManifest wrongManifest = AutoUpdateManifest.qdnV1(1_700_000_000_000L, commitHash, sha256(jarBytes), wrongSignature);
 
 			try {
 				AutoUpdate.resolveQdnUpdatePath(wrongManifest);
@@ -115,7 +126,8 @@ public class AutoUpdateQdnTests extends Common {
 			registerName(repository, alice, updateName);
 
 			byte[] commitHash = sequentialBytes(20, 1);
-			byte[] updateBytes = xor("qortium qdn update".getBytes());
+			byte[] jarBytes = "qortium qdn update".getBytes();
+			byte[] updateBytes = xor(jarBytes);
 			Path updateFile = Files.createTempDirectory("qdn-update").resolve(AutoUpdateManifest.QDN_UPDATE_PATH);
 			Files.write(updateFile, updateBytes);
 
@@ -128,7 +140,7 @@ public class AutoUpdateQdnTests extends Common {
 							ArbitraryTransactionData.Method.PUT, hex(commitHash))
 					.getSignature();
 
-			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(1_700_000_000_000L, commitHash, sha256(updateBytes), binarySignature);
+			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(1_700_000_000_000L, commitHash, sha256(jarBytes), binarySignature);
 
 			try {
 				AutoUpdate.resolveQdnUpdatePath(manifest);
@@ -142,8 +154,8 @@ public class AutoUpdateQdnTests extends Common {
 	@Test
 	public void testResolveQdnUpdatePathRejectsUnpinnedManifest() throws Exception {
 		byte[] commitHash = sequentialBytes(20, 1);
-		byte[] updateBytes = xor("qortium qdn update".getBytes());
-		AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(1_700_000_000_000L, commitHash, sha256(updateBytes), null);
+		byte[] jarBytes = "qortium qdn update".getBytes();
+		AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(1_700_000_000_000L, commitHash, sha256(jarBytes), null);
 
 		try {
 			AutoUpdate.resolveQdnUpdatePath(manifest);
@@ -159,10 +171,11 @@ public class AutoUpdateQdnTests extends Common {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			long updateTimestamp = Controller.getInstance().getBuildTimestamp() * 1000L + 1_000L;
 			byte[] commitHash = sequentialBytes(20, 1);
-			byte[] updateBytes = xor("qortium qdn update".getBytes());
+			byte[] jarBytes = "qortium qdn update".getBytes();
+			byte[] updateBytes = xor(jarBytes);
 			String updateName = "approvedupdates";
 			byte[] binarySignature = createAutoUpdateBinary(repository, alice, updateName, commitHash, updateBytes);
-			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, sha256(updateBytes), binarySignature);
+			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, sha256(jarBytes), binarySignature);
 
 			TransactionData transactionData = createAndApproveAutoUpdateManifest(repository, alice, manifest.toBytes());
 
@@ -203,9 +216,10 @@ public class AutoUpdateQdnTests extends Common {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			long updateTimestamp = Controller.getInstance().getBuildTimestamp() * 1000L;
 			byte[] commitHash = sequentialBytes(20, 1);
-			byte[] updateBytes = xor("qortium qdn update".getBytes());
+			byte[] jarBytes = "qortium qdn update".getBytes();
+			byte[] updateBytes = xor(jarBytes);
 			byte[] binarySignature = createAutoUpdateBinary(repository, alice, "notnewerupdates", commitHash, updateBytes);
-			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, sha256(updateBytes), binarySignature);
+			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, sha256(jarBytes), binarySignature);
 
 			createAndApproveAutoUpdateManifest(repository, alice, manifest.toBytes());
 

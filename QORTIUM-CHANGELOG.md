@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Hash decoded auto-update JARs in manifests
+
+Changed QDN auto-update manifests so their SHA-256 hash now covers the decoded JAR that Qortium writes and runs, instead of the XORed transport file published to QDN. The update file is still stored as `qortium.update`, but the integrity check now describes the executable bytes directly, and the publishing documentation and helper script use the same definition.
+
 ### 2026-05-21 - Clarify developer proxy GET-only request handling
 
 Changed a developer proxy code comment so it no longer presents non-GET request forwarding as an unfinished bug. The comment now explains that the proxy currently exposes GET handlers only, and that future non-GET support would need deliberate request-body forwarding.
