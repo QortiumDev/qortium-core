@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Close ResourceList writers safely
+
+Changed local resource-list saving so the JSON writer is always closed automatically, even if a write fails. This keeps list files using the same UTF-8 encoding used when they are read back and removes another manual file-close path.
+
 ### 2026-05-21 - Remove legacy HTTP auto-update support
 
 Removed the remaining legacy HTTP auto-update settings and manifest handling so Qortium only uses the QDN-based update path. This keeps the update baseline simpler, avoids carrying old repository-list configuration, and makes `autoUpdateMode` the single update policy reported by the admin API.

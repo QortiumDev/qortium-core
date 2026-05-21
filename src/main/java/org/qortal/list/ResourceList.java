@@ -7,7 +7,6 @@ import org.qortal.settings.Settings;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -69,9 +68,9 @@ public class ResourceList {
             throw new IllegalStateException("Unable to create lists directory");
         }
 
-        BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toString()));
-        writer.write(jsonString);
-        writer.close();
+        try (BufferedWriter writer = Files.newBufferedWriter(filePath, StandardCharsets.UTF_8)) {
+            writer.write(jsonString);
+        }
     }
 
     private boolean load() throws IOException {
