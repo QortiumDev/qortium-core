@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Prevent concurrent bootstrap validation
+
+Changed bootstrap validation so only one full-chain validation can run at a time on a node. Additional authenticated requests now fail quickly with a clear conflict response instead of starting another expensive validation pass, reducing the chance that administrative use can overload the node.
+
 ### 2026-05-20 - Close archive compression streams safely
 
 Changed archive compression so ZIP and 7z creation now close file streams and archive entries automatically when compression succeeds or fails. This prevents leaked file handles during interrupted archive creation while keeping the same archive formats and output layout.

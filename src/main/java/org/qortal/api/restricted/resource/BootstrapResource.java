@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.api.ApiError;
+import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.Security;
 import org.qortal.repository.Bootstrap;
@@ -23,6 +24,7 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 @Path("/bootstrap")
@@ -30,6 +32,7 @@ import javax.ws.rs.core.MediaType;
 public class BootstrapResource {
 
 	private static final Logger LOGGER = LogManager.getLogger(BootstrapResource.class);
+	private static final AtomicBoolean BOOTSTRAP_VALIDATION_IN_PROGRESS = new AtomicBoolean(false);
 
 	@Context
 	HttpServletRequest request;
@@ -82,16 +85,37 @@ public class BootstrapResource {
 			}
 	)
 	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.OPERATION_IN_PROGRESS, ApiError.REPOSITORY_ISSUE})
 	public boolean validateBootstrap(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 		Security.checkApiCallAllowed(request);
 
-		try (final Repository repository = RepositoryManager.getRepository()) {
+		if (!tryAcquireBootstrapValidation())
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.OPERATION_IN_PROGRESS,
+					"Bootstrap validation is already running");
 
-			Bootstrap bootstrap = new Bootstrap(repository);
-			return bootstrap.validateCompleteBlockchain();
+		try {
+			try (final Repository repository = RepositoryManager.getRepository()) {
 
-		} catch (DataException e) {
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE);
+				Bootstrap bootstrap = new Bootstrap(repository);
+				return bootstrap.validateCompleteBlockchain();
+
+			} catch (DataException e) {
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE);
+			}
+		} finally {
+			releaseBootstrapValidation();
 		}
+	}
+
+	static boolean tryAcquireBootstrapValidation() {
+		return BOOTSTRAP_VALIDATION_IN_PROGRESS.compareAndSet(false, true);
+	}
+
+	static void releaseBootstrapValidation() {
+		BOOTSTRAP_VALIDATION_IN_PROGRESS.set(false);
+	}
+
+	static boolean isBootstrapValidationInProgress() {
+		return BOOTSTRAP_VALIDATION_IN_PROGRESS.get();
 	}
 }
