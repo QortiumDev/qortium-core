@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Close random-access file reads safely
+
+Changed utility file reads so random-access files are closed automatically if seeking or reading fails. This keeps the existing read behavior while avoiding leaked file handles on I/O errors.
+
 ### 2026-05-21 - Close block archive output streams safely
 
 Changed block archive writing so the archive file output stream is always closed automatically if a write fails partway through. This keeps archive creation behavior the same on success while avoiding leaked file handles on write errors.

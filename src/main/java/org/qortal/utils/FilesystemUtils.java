@@ -345,12 +345,12 @@ public class FilesystemUtils {
     }
 
     public static byte[] readFromFile(String filePath, long position, int size) throws IOException {
-        RandomAccessFile file = new RandomAccessFile(filePath, "r");
-        file.seek(position);
-        byte[] bytes = new byte[size];
-        file.read(bytes);
-        file.close();
-        return bytes;
+        try (RandomAccessFile file = new RandomAccessFile(filePath, "r")) {
+            file.seek(position);
+            byte[] bytes = new byte[size];
+            file.read(bytes);
+            return bytes;
+        }
     }
 
     public static String readUtf8StringFromFile(String filePath, long position, int size) throws IOException {
