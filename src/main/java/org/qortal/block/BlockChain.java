@@ -912,6 +912,7 @@ public class BlockChain {
 		boolean isTopOnly = settings.isTopOnly();
 		boolean archiveEnabled = settings.isArchiveEnabled();
 		boolean isLite = settings.isLite();
+		boolean isSingleNodeTestnet = settings.isSingleNodeTestnet();
 		boolean bootstrapEnabled = settings.getBootstrap();
 		boolean hasBootstrapHostsConfigured = settings.hasBootstrapHostsConfigured();
 		boolean canBootstrap = bootstrapEnabled && hasBootstrapHostsConfigured;
@@ -937,7 +938,7 @@ public class BlockChain {
 				}
 			}
 
-			if (!canBootstrap) {
+			if (!canBootstrap && !isSingleNodeTestnet) {
 				if (checkHeight > 2) {
 					LOGGER.info("Retrieved block 2 from archive. Syncing from genesis block resumed!");
 				} else {

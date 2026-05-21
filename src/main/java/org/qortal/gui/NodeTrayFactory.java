@@ -28,7 +28,7 @@ public final class NodeTrayFactory {
 
 	static NodeTray selectTray(boolean headless, Supplier<NodeTray> linuxTraySupplier, Supplier<NodeTray> awtTraySupplier) {
 		if (headless) {
-			LOGGER.info("System tray disabled in headless mode");
+			LOGGER.debug("System tray disabled in headless mode");
 			return NoOpNodeTray.INSTANCE;
 		}
 

@@ -1,19 +1,25 @@
 package org.qortal.gui;
 
 public enum TrayIconState {
-	SYNCHRONIZING_CLOCK("icons/qortium_ui_tray_syncing_time-alt.png"),
-	MINTING("icons/qortium_ui_tray_minting.png"),
-	SYNCHRONIZING("icons/qortium_ui_tray_syncing.png"),
-	SYNCED("icons/qortium_ui_tray_synced.png");
+	SYNCHRONIZING_CLOCK("icons/qortium_ui_tray_syncing_time-alt.png", "qortium-tray-syncing-time"),
+	MINTING("icons/qortium_ui_tray_minting.png", "qortium-tray-minting"),
+	SYNCHRONIZING("icons/qortium_ui_tray_syncing.png", "qortium-tray-syncing"),
+	SYNCED("icons/qortium_ui_tray_synced.png", "qortium-tray-synced");
 
 	private final String resourceName;
+	private final String iconName;
 
-	TrayIconState(String resourceName) {
+	TrayIconState(String resourceName, String iconName) {
 		this.resourceName = resourceName;
+		this.iconName = iconName;
 	}
 
 	public String getResourceName() {
 		return this.resourceName;
+	}
+
+	public String getIconName() {
+		return this.iconName;
 	}
 
 	static TrayIconState fromLegacyId(int iconId) {

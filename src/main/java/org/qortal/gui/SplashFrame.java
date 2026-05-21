@@ -2,7 +2,6 @@ package org.qortal.gui;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.qortal.controller.Controller;
 import org.qortal.utils.StartupStatus;
 
 import javax.swing.*;
@@ -46,8 +45,7 @@ public class SplashFrame {
 			add(Box.createRigidArea(new Dimension(0, 16)));
 
 			// Add status label
-			String text = String.format("Starting Qortium Core v%s...", Controller.getInstance().getVersionStringWithoutPrefix());
-			statusLabel = new JLabel(text, JLabel.CENTER);
+			statusLabel = new JLabel("Starting Qortium Core...", JLabel.CENTER);
 			statusLabel.setMaximumSize(new Dimension(500, 50));
 			statusLabel.setFont(new Font("Verdana", Font.PLAIN, 20));
 			statusLabel.setBackground(Color.BLACK);

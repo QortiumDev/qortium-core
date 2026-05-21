@@ -720,6 +720,9 @@ public class Controller extends Thread {
 			}
 		}, 10*60*1000, 10*60*1000);
 
+		if (Settings.getInstance().isSingleNodeTestnet())
+			return;
+
 		// Check if we need sync from genesis and start syncing
 		Timer syncFromGenesis = new Timer();
 		syncFromGenesis.schedule(new TimerTask() {

@@ -100,6 +100,21 @@ get_height() {
 	get "${API_URL}/blocks/height" 2>/dev/null || true
 }
 
+latest_log_section() {
+	awk '
+		/Controller:[0-9]+ - Starting up\.\.\./ {
+			latest = ""
+			seen = 1
+		}
+		seen {
+			latest = latest $0 "\n"
+		}
+		END {
+			printf "%s", latest
+		}
+	' "$1"
+}
+
 check_json() {
 	local name="$1"
 	local json="$2"
@@ -197,18 +212,48 @@ else
 fi
 
 if [ -f "${LOG_FILE}" ]; then
-	if grep -E 'ERROR|FATAL|Exception' "${LOG_FILE}" >/dev/null; then
+	log_scope="$(latest_log_section "${LOG_FILE}")"
+	if [ -z "${log_scope}" ]; then
+		fail "application log has startup section"
+		log_scope="$(cat "${LOG_FILE}")"
+	else
+		pass "application log has startup section"
+	fi
+
+	if grep -E 'ERROR|FATAL|Exception' <<< "${log_scope}" >/dev/null; then
 		fail "log has no errors or exceptions"
 	else
 		pass "log has no errors or exceptions"
 	fi
 
-	unexpected_warnings="$(grep ' WARN ' "${LOG_FILE}" || true)"
+	unexpected_warnings="$(grep ' WARN ' <<< "${log_scope}" || true)"
 	if [ -z "${unexpected_warnings}" ]; then
 		pass "log has no unexpected warnings"
 	else
 		fail "log has no unexpected warnings"
 		printf '%s\n' "${unexpected_warnings}" >&2
+	fi
+
+	build_timestamp_count="$(grep -c 'Build timestamp:' <<< "${log_scope}" || true)"
+	build_version_count="$(grep -c 'Build version:' <<< "${log_scope}" || true)"
+	if [ "${build_timestamp_count}" -eq 1 ] && [ "${build_version_count}" -eq 1 ]; then
+		pass "build metadata is logged once"
+	else
+		fail "build metadata is logged once"
+		echo "Build timestamp log count: ${build_timestamp_count}" >&2
+		echo "Build version log count: ${build_version_count}" >&2
+	fi
+
+	if grep -E 'Start syncing from genesis|Syncing from genesis block|No connected peers, will try again later' <<< "${log_scope}" >/dev/null; then
+		fail "single-node log has no peer-sync retry noise"
+	else
+		pass "single-node log has no peer-sync retry noise"
+	fi
+
+	if grep -E 'Linux native system tray is unavailable|system tray failed to initialize|System tray unavailable|System tray disabled in headless mode' <<< "${log_scope}" >/dev/null; then
+		fail "local testnet log has no tray fallback noise"
+	else
+		pass "local testnet log has no tray fallback noise"
 	fi
 else
 	fail "application log exists"

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - testnet: quiet single-node startup logs
+
+Cleaned up local single-node testnet startup behavior so fresh runs report build metadata once and skip peer-sync messages that do not apply to an intentional no-peer node. The Linux tray now publishes a real Qortium icon, tooltip, and context menu through the desktop StatusNotifier path, and the smoke helper checks the latest startup log so those regressions are easier to catch.
+
 ### 2026-05-21 - repository: reboot HSQLDB schema baseline
 
 Replaced the inherited HSQLDB migration replay with a direct Qortium baseline schema for fresh repositories. New databases now initialize to the first Qortium schema version without replaying old Qortal upgrade steps, while inherited repository versions fail with a clear reset/bootstrap message instead of pretending to be supported.

@@ -4,13 +4,14 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.freedesktop.dbus.DBusPath;
 import org.freedesktop.dbus.Struct;
-import org.freedesktop.dbus.Tuple;
 import org.freedesktop.dbus.annotations.DBusInterfaceName;
 import org.freedesktop.dbus.annotations.Position;
 import org.freedesktop.dbus.connections.impl.DBusConnection;
 import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder;
+import org.freedesktop.dbus.exceptions.DBusException;
 import org.freedesktop.dbus.interfaces.DBus;
 import org.freedesktop.dbus.interfaces.DBusInterface;
+import org.freedesktop.dbus.interfaces.DBusSerializable;
 import org.freedesktop.dbus.interfaces.Properties;
 import org.freedesktop.dbus.messages.DBusSignal;
 import org.freedesktop.dbus.types.UInt32;
@@ -18,6 +19,13 @@ import org.freedesktop.dbus.types.Variant;
 
 import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,18 +45,38 @@ final class LinuxStatusNotifierTray implements NodeTray {
 	private static final String NOTIFICATIONS_PATH = "/org/freedesktop/Notifications";
 	private static final String ITEM_PATH = "/StatusNotifierItem";
 	private static final String MENU_PATH = "/StatusNotifierItem/Menu";
+	private static final String ICON_PIXMAP_SIGNATURE = "a(iiay)";
+	private static final String TOOLTIP_SIGNATURE = "(sa(iiay)ss)";
+	private static final String MENU_ITEM_SIGNATURE = "(ia{sv}av)";
+	private static final String ICON_THEME_INDEX = "[Icon Theme]\n"
+			+ "Name=Qortium Tray\n"
+			+ "Comment=Qortium tray icons\n"
+			+ "Directories=32x32/status,32x32/apps\n"
+			+ "\n"
+			+ "[32x32/status]\n"
+			+ "Size=32\n"
+			+ "Context=Status\n"
+			+ "Type=Fixed\n"
+			+ "\n"
+			+ "[32x32/apps]\n"
+			+ "Size=32\n"
+			+ "Context=Applications\n"
+			+ "Type=Fixed\n";
 
 	private final DBusConnection connection;
 	private final String serviceName;
+	private final String iconThemePath;
 	private final StatusNotifierItemObject itemObject;
 	private final DBusMenuObject menuObject;
 	private volatile TrayIconState iconState = TrayIconState.SYNCED;
 	private volatile String tooltip = "Qortium";
+	private volatile boolean menuAvailable;
 	private volatile boolean disposed;
 
-	private LinuxStatusNotifierTray(DBusConnection connection, String serviceName) {
+	private LinuxStatusNotifierTray(DBusConnection connection, String serviceName, String iconThemePath) {
 		this.connection = connection;
 		this.serviceName = serviceName;
+		this.iconThemePath = iconThemePath == null ? "" : iconThemePath;
 		this.itemObject = new StatusNotifierItemObject();
 		this.menuObject = new DBusMenuObject();
 	}
@@ -68,10 +96,16 @@ final class LinuxStatusNotifierTray implements NodeTray {
 			}
 
 			String serviceName = buildServiceName();
-			LinuxStatusNotifierTray tray = new LinuxStatusNotifierTray(connection, serviceName);
+			LinuxStatusNotifierTray tray = new LinuxStatusNotifierTray(connection, serviceName, prepareIconThemePath());
 			connection.requestBusName(serviceName);
 			connection.exportObject(ITEM_PATH, tray.itemObject);
-			connection.exportObject(MENU_PATH, tray.menuObject);
+
+			try {
+				connection.exportObject(MENU_PATH, tray.menuObject);
+				tray.menuAvailable = true;
+			} catch (Throwable e) {
+				LOGGER.debug("Linux native tray menu is unavailable: {}", e.getMessage());
+			}
 
 			StatusNotifierWatcher watcher = connection.getRemoteObject(STATUS_NOTIFIER_WATCHER, STATUS_NOTIFIER_WATCHER_PATH,
 					StatusNotifierWatcher.class);
@@ -104,6 +138,49 @@ final class LinuxStatusNotifierTray implements NodeTray {
 		}
 
 		return "org.freedesktop.StatusNotifierItem.Qortium.Instance" + pid;
+	}
+
+	private static String prepareIconThemePath() {
+		Path iconThemePath = getIconThemePath();
+
+		try {
+			Files.createDirectories(iconThemePath);
+			Files.createDirectories(iconThemePath.resolve("hicolor/32x32/status"));
+			Files.createDirectories(iconThemePath.resolve("hicolor/32x32/apps"));
+			Files.writeString(iconThemePath.resolve("hicolor/index.theme"), ICON_THEME_INDEX, StandardCharsets.UTF_8);
+
+			for (TrayIconState iconState : TrayIconState.values()) {
+				writeIconResource(iconState, iconThemePath.resolve(iconState.getIconName() + ".png"));
+				writeIconResource(iconState, iconThemePath.resolve("hicolor/32x32/status/" + iconState.getIconName() + ".png"));
+				writeIconResource(iconState, iconThemePath.resolve("hicolor/32x32/apps/" + iconState.getIconName() + ".png"));
+			}
+
+			return iconThemePath.toAbsolutePath().toString();
+		} catch (IOException | RuntimeException e) {
+			LOGGER.debug("Unable to prepare Linux native tray icon theme: {}", e.getMessage());
+			return "";
+		}
+	}
+
+	private static Path getIconThemePath() {
+		String xdgCacheHome = System.getenv("XDG_CACHE_HOME");
+		if (xdgCacheHome != null && !xdgCacheHome.isBlank())
+			return Paths.get(xdgCacheHome, "qortium", "tray-icons");
+
+		String userHome = System.getProperty("user.home");
+		if (userHome != null && !userHome.isBlank())
+			return Paths.get(userHome, ".cache", "qortium", "tray-icons");
+
+		return Paths.get(System.getProperty("java.io.tmpdir"), "qortium-tray-icons");
+	}
+
+	private static void writeIconResource(TrayIconState iconState, Path destination) throws IOException {
+		try (InputStream in = Gui.class.getResourceAsStream("/images/" + iconState.getResourceName())) {
+			if (in == null)
+				throw new IOException("Missing tray icon resource: " + iconState.getResourceName());
+
+			Files.copy(in, destination, StandardCopyOption.REPLACE_EXISTING);
+		}
 	}
 
 	@Override
@@ -172,17 +249,18 @@ final class LinuxStatusNotifierTray implements NodeTray {
 		properties.put("Title", variant("Qortium Core"));
 		properties.put("Status", variant("Active"));
 		properties.put("WindowId", variant(new UInt32(0)));
-		properties.put("IconName", variant(""));
-		properties.put("IconPixmap", variant(createIconPixmaps(this.iconState)));
+		properties.put("IconName", variant(this.iconState.getIconName()));
+		properties.put("IconPixmap", variant(createIconPixmaps(this.iconState), ICON_PIXMAP_SIGNATURE));
 		properties.put("OverlayIconName", variant(""));
-		properties.put("OverlayIconPixmap", variant(Collections.emptyList()));
+		properties.put("OverlayIconPixmap", variant(Collections.emptyList(), ICON_PIXMAP_SIGNATURE));
 		properties.put("AttentionIconName", variant(""));
-		properties.put("AttentionIconPixmap", variant(Collections.emptyList()));
+		properties.put("AttentionIconPixmap", variant(Collections.emptyList(), ICON_PIXMAP_SIGNATURE));
 		properties.put("AttentionMovieName", variant(""));
-		properties.put("ToolTip", variant(createToolTip()));
-		properties.put("IconThemePath", variant(""));
-		properties.put("Menu", variant(new DBusPath(MENU_PATH)));
-		properties.put("ItemIsMenu", variant(Boolean.TRUE));
+		properties.put("ToolTip", variant(createToolTip(), TOOLTIP_SIGNATURE));
+		properties.put("IconThemePath", variant(this.iconThemePath));
+		properties.put("ItemIsMenu", variant(this.menuAvailable));
+		if (this.menuAvailable)
+			properties.put("Menu", variant(new DBusPath(MENU_PATH)));
 		return properties;
 	}
 
@@ -209,7 +287,7 @@ final class LinuxStatusNotifierTray implements NodeTray {
 	}
 
 	private ToolTip createToolTip() {
-		return new ToolTip("", Collections.emptyList(), "Qortium", this.tooltip);
+		return new ToolTip(this.iconState.getIconName(), createIconPixmaps(this.iconState), "Qortium", this.tooltip);
 	}
 
 	private void emitStatusNotifierSignal(String signalName) {
@@ -228,6 +306,10 @@ final class LinuxStatusNotifierTray implements NodeTray {
 		return new Variant<>(value);
 	}
 
+	private static Variant<?> variant(Object value, String signature) {
+		return new Variant<>(value, signature);
+	}
+
 	private Map<String, Variant<?>> getMenuProperties() {
 		Map<String, Variant<?>> properties = new LinkedHashMap<>();
 		properties.put("Version", variant(new UInt32(4)));
@@ -244,7 +326,7 @@ final class LinuxStatusNotifierTray implements NodeTray {
 		List<Variant<DBusMenuItem>> children = new ArrayList<>();
 		if (recursionDepth != 0) {
 			for (TrayMenuAction action : TrayActions.createMenuActions(null))
-				children.add(new Variant<>(getMenuItem(action.getId(), Collections.emptyList())));
+				children.add(menuItemVariant(getMenuItem(action.getId(), Collections.emptyList())));
 		}
 
 		Map<String, Variant<?>> properties = new LinkedHashMap<>();
@@ -263,6 +345,11 @@ final class LinuxStatusNotifierTray implements NodeTray {
 		}
 
 		return new DBusMenuItem(id, properties, children);
+	}
+
+	@SuppressWarnings("unchecked")
+	private static Variant<DBusMenuItem> menuItemVariant(DBusMenuItem menuItem) {
+		return (Variant<DBusMenuItem>) variant(menuItem, MENU_ITEM_SIGNATURE);
 	}
 
 	private TrayMenuAction findAction(int id) {
@@ -490,15 +577,26 @@ final class LinuxStatusNotifierTray implements NodeTray {
 		}
 	}
 
-	public static final class DBusMenuLayout extends Tuple {
-		@Position(0)
-		public final UInt32 revision;
-		@Position(1)
-		public final DBusMenuItem layout;
+	public static final class DBusMenuLayout implements DBusSerializable {
+		public UInt32 revision;
+		public DBusMenuItem layout;
+
+		public DBusMenuLayout() {
+		}
 
 		public DBusMenuLayout(UInt32 revision, DBusMenuItem layout) {
 			this.revision = revision;
 			this.layout = layout;
+		}
+
+		public void deserialize(UInt32 revision, DBusMenuItem layout) {
+			this.revision = revision;
+			this.layout = layout;
+		}
+
+		@Override
+		public Object[] serialize() throws DBusException {
+			return new Object[] { this.revision, this.layout };
 		}
 	}
 
@@ -547,15 +645,26 @@ final class LinuxStatusNotifierTray implements NodeTray {
 		}
 	}
 
-	public static final class DBusMenuAboutToShowGroup extends Tuple {
-		@Position(0)
-		public final int[] updatesNeeded;
-		@Position(1)
-		public final int[] idErrors;
+	public static final class DBusMenuAboutToShowGroup implements DBusSerializable {
+		public int[] updatesNeeded;
+		public int[] idErrors;
+
+		public DBusMenuAboutToShowGroup() {
+		}
 
 		public DBusMenuAboutToShowGroup(int[] updatesNeeded, int[] idErrors) {
 			this.updatesNeeded = updatesNeeded;
 			this.idErrors = idErrors;
+		}
+
+		public void deserialize(int[] updatesNeeded, int[] idErrors) {
+			this.updatesNeeded = updatesNeeded;
+			this.idErrors = idErrors;
+		}
+
+		@Override
+		public Object[] serialize() throws DBusException {
+			return new Object[] { this.updatesNeeded, this.idErrors };
 		}
 	}
 }
