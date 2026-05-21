@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - testnet: ignore local data directory
+
+Added the local single-node testnet data directory to git ignore rules so QDN storage and other runtime files created during live testnet runs do not appear as repository changes.
+
 ### 2026-05-21 - tray: show node status in Linux tooltip
 
 Changed the Linux tray tooltip so desktop panels that only display the StatusNotifier title still show the live node status, including minting state, peer count, and height. Panels that support the longer tooltip description still keep the build version detail.

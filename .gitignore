@@ -28,6 +28,7 @@ apikey.txt
 /log4j2-test.properties
 /testnet/settings-test-local.json
 /testnet/testchain-local.json
+/testnet/data/
 /testnet/db-testnet/
 /testnet/qortium-backup-test/
 
