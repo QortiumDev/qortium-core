@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Require auth for API key generation
+
+Changed API key generation so the admin endpoint now requires the current API key before rotating credentials. First-time API keys are created locally during API startup instead of through an unauthenticated HTTP request, which keeps remote callers from bootstrapping their own administrative access.
+
 ### 2026-05-20 - Fix loopback API auth bypass
 
 Changed Qortium's protected API authorization so requests from localhost must provide the same API key as any other caller. The old local auth bypass setting is still accepted in settings files for compatibility, but local network origin is no longer treated as proof that an administrative request is trusted.

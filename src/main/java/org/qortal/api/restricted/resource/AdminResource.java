@@ -1283,9 +1283,8 @@ public class AdminResource {
 	@Path("/apikey/generate")
 	@Operation(
 			summary = "Generate an API key",
-			description = "This request is unauthenticated if no API key has been generated yet. " +
-					"If an API key already exists, it needs to be passed as a header and this endpoint " +
-					"will then generate a new key which replaces the existing one.",
+			description = "Generates a new API key which replaces the existing one. " +
+					"The current API key must be passed as a header.",
 			responses = {
 					@ApiResponse(
 							description = "API key string",
@@ -1295,15 +1294,9 @@ public class AdminResource {
 	)
 	@SecurityRequirement(name = "apiKey")
 	public String generateApiKey(@HeaderParam(Security.API_KEY_HEADER) String apiKeyHeader) {
+		Security.checkApiCallAllowed(request, apiKeyHeader);
+
 		ApiKey apiKey = Security.getApiKey(request);
-
-		// If the API key is already generated, we need to authenticate this request
-		if (apiKey.generated() && apiKey.exists()) {
-			Security.checkApiCallAllowed(request);
-		}
-
-		// Not generated yet - so we are safe to generate one
-		// FUTURE: we may want to restrict this to local/loopback only?
 
 		try {
 			apiKey.generate();

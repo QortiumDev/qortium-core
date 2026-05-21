@@ -28,6 +28,15 @@ public class ApiKey {
         this.save();
     }
 
+    public boolean ensureGenerated() throws IOException {
+        if (this.generated()) {
+            return false;
+        }
+
+        this.generate();
+        return true;
+    }
+
 
     /* Filesystem */
 
@@ -53,17 +62,13 @@ public class ApiKey {
         return true;
     }
 
-    private boolean loadLegacyApiKey() {
+    private boolean loadLegacyApiKey() throws IOException {
         String legacyApiKey = Settings.getInstance().getApiKey();
         if (legacyApiKey != null && !legacyApiKey.isEmpty()) {
             this.apiKey = Settings.getInstance().getApiKey();
 
-            try {
-                // Save it to the apikey file
-                this.save();
-            } catch (IOException e) {
-                // Ignore failures as it will be reloaded from settings next time
-            }
+            // Save it to the apikey file
+            this.save();
             return true;
         }
         return false;
@@ -75,10 +80,14 @@ public class ApiKey {
         }
 
         Path filePath = this.getFilePath();
+        Path parentPath = filePath.getParent();
+        if (parentPath != null) {
+            Files.createDirectories(parentPath);
+        }
 
-        BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toString()));
-        writer.write(this.apiKey);
-        writer.close();
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toString()))) {
+            writer.write(this.apiKey);
+        }
     }
 
     public void delete() throws IOException {

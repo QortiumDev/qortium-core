@@ -31,6 +31,7 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.servlet.http.HttpServletRequest;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -136,6 +137,17 @@ public class ApiService {
 		return this.apiKey;
 	}
 
+	ApiKey initializeApiKey() throws IOException {
+		ApiKey apiKey = new ApiKey();
+		boolean generated = apiKey.ensureGenerated();
+		this.setApiKey(apiKey);
+
+		if (generated) {
+			LOGGER.info("Generated new API key because no local API key was found");
+		}
+
+		return apiKey;
+	}
 
 	public void start() {
 		synchronized (lifecycleLock) {
@@ -147,6 +159,7 @@ public class ApiService {
 		//System.setProperty("javax.net.debug", "ssl,handshake");
 		try {
 			ensureProvidersAdded();
+			initializeApiKey();
 
 			String keystorePathname = Settings.getInstance().getSslKeystorePathname();
 			String keystorePassword = Settings.getInstance().getSslKeystorePassword();
