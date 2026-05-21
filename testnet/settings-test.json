@@ -38,7 +38,6 @@
   "apiRestricted": false,
   "bootstrap": false,
   "maxPeerConnectionTime": 999999999,
-  "localAuthBypassEnabled": true,
   "recoveryModeTimeout": 0,
   "uiLocalServers": [
     "localhost",

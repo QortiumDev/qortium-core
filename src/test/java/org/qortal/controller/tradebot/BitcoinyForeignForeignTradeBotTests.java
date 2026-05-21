@@ -116,6 +116,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	@After
 	public void afterTest() {
 		BitcoinyForeignForeignTradeBot.getInstance().resetTestHooks();
+		ApiCommon.clearTestApiKey();
 	}
 
 	@Test
@@ -188,7 +189,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	@Test
 	public void testApiMakerCreateAcceptsForeignForeignRequest() throws Exception {
 		prepareApiNodeState();
-		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
+		CrossChainTradeBotResource resource = buildAuthenticatedTradeBotResource();
 		PrivateKeyAccount creator = Common.getTestAccount(null, "chloe");
 
 		String encodedUnsignedDeploy = resource.tradeBotCreator(null, createApiRequest(creator));
@@ -209,7 +210,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 	@Test
 	public void testApiMakerCreateRejectsInvalidForeignForeignCriteria() throws Exception {
 		prepareApiNodeState();
-		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
+		CrossChainTradeBotResource resource = buildAuthenticatedTradeBotResource();
 		PrivateKeyAccount creator = Common.getTestAccount(null, "chloe");
 
 		TradeBotCreateRequest sameChain = createApiRequest(creator);
@@ -331,7 +332,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		}
 
 		prepareApiNodeState();
-		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
+		CrossChainTradeBotResource resource = buildAuthenticatedTradeBotResource();
 
 		TradeBotRespondRequest request = createApiRespondRequest(atAddress);
 		assertEquals("true", resource.tradeBotResponder(null, request));
@@ -356,7 +357,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		}
 
 		prepareApiNodeState();
-		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
+		CrossChainTradeBotResource resource = buildAuthenticatedTradeBotResource();
 
 		TradeBotRespondRequest missingKey = createApiRespondRequest(atAddress);
 		missingKey.requestedForeignKey = null;
@@ -1400,7 +1401,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 
 	private static void prepareApiNodeState() throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "singleNodeTestnet", true, true);
-		FieldUtils.writeField(Settings.getInstance(), "localAuthBypassEnabled", true, true);
+		ApiCommon.installTestApiKey();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			BlockUtils.mintBlock(repository);
@@ -1451,7 +1452,7 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 
 	private MakerTradeSetup createAndReserveMakerTradeViaApi() throws Exception {
 		prepareApiNodeState();
-		CrossChainTradeBotResource resource = (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class);
+		CrossChainTradeBotResource resource = buildAuthenticatedTradeBotResource();
 		PrivateKeyAccount apiCreator = Common.getTestAccount(null, "chloe");
 
 		String encodedUnsignedDeploy = resource.tradeBotCreator(null, createApiRequest(apiCreator));
@@ -1484,6 +1485,10 @@ public class BitcoinyForeignForeignTradeBotTests extends Common {
 		}
 
 		return setup;
+	}
+
+	private static CrossChainTradeBotResource buildAuthenticatedTradeBotResource() {
+		return (CrossChainTradeBotResource) ApiCommon.buildResource(CrossChainTradeBotResource.class, ApiCommon.TEST_API_KEY);
 	}
 
 	private MakerTradeSetup setupReservedMakerTrade(Repository repository)

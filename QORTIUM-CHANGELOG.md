@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Remove legacy local auth bypass setting
+
+Removed the unused local-auth bypass setting now that Qortium always requires the admin API key for protected API calls, including loopback requests. This keeps new chain settings cleaner and avoids suggesting that local network origin can still replace administrative authentication.
+
 ### 2026-05-21 - Remove legacy API key setting support
 
 Removed the old settings-file API key migration path so Qortium only uses the dedicated `apikey.txt` file for administrative API credentials. This keeps the unreleased baseline cleaner for new chains and avoids carrying forward legacy credential handling that Qortium does not need.

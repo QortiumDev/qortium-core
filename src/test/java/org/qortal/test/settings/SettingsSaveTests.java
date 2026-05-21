@@ -124,7 +124,7 @@ public class SettingsSaveTests extends Common {
 		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
 
 		try {
-			Settings.updateAndSave("{\"apiKey\":\"abcdefgh\"}");
+			Settings.updateAndSave("{\"apiKeyPath\":\"/tmp/qortium-api-key\"}");
 			fail("Expected disallowed setting to be rejected");
 		} catch (IllegalArgumentException e) {
 			assertTrue(e.getMessage().contains("not writable"));

@@ -72,7 +72,7 @@ public class AdminApiTests extends ApiCommon {
 		Settings.fileInstance(settingsPath.toString());
 
 		assertApiError(org.qortal.api.ApiError.INVALID_CRITERIA,
-				() -> this.adminResource.updateSettings(ApiCommon.TEST_API_KEY, "{\"apiKey\":\"abcdefgh\"}"));
+				() -> this.adminResource.updateSettings(ApiCommon.TEST_API_KEY, "{\"apiKeyPath\":\"/tmp/qortium-api-key\"}"));
 		assertEquals(StoragePolicy.NONE, Settings.getInstance().getStoragePolicy());
 	}
 

@@ -117,8 +117,6 @@ public class Settings {
 
 	/** Storage location for API key file (Nov 2021 onwards) */
 	private String apiKeyPath = System.getProperty("user.dir");
-	/** Retained for legacy settings compatibility. Loopback requests no longer bypass API authentication. */
-	private boolean localAuthBypassEnabled = false;
 	private String ourExternalIpAddress = null;
 	private Boolean apiRestricted;
 	private boolean apiLoggingEnabled = false;
@@ -1433,10 +1431,6 @@ public class Settings {
 
 	public String getApiKeyPath() {
 		return this.apiKeyPath;
-	}
-
-	public boolean isLocalAuthBypassEnabled() {
-		return this.localAuthBypassEnabled;
 	}
 
 	public boolean isApiLoggingEnabled() {

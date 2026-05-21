@@ -1,21 +1,18 @@
 package org.qortal.api;
 
-import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.repository.DataException;
-import org.qortal.settings.Settings;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
 
 public class SecurityTests {
 
 	@Before
-	public void beforeTest() throws DataException, IllegalAccessException {
+	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
 		ApiCommon.installTestApiKey();
-		FieldUtils.writeField(Settings.getInstance(), "localAuthBypassEnabled", true, true);
 	}
 
 	@After
@@ -25,37 +22,37 @@ public class SecurityTests {
 	}
 
 	@Test
-	public void testLoopbackIpv4WithoutApiKeyRejectedWhenBypassEnabled() {
+	public void testLoopbackIpv4WithoutApiKeyRejected() {
 		ApiCommon.assertApiError(ApiError.UNAUTHORIZED,
 				() -> Security.checkApiCallAllowed(ApiCommon.buildRequest("127.0.0.1", null)));
 	}
 
 	@Test
-	public void testLoopbackIpv6WithoutApiKeyRejectedWhenBypassEnabled() {
+	public void testLoopbackIpv6WithoutApiKeyRejected() {
 		ApiCommon.assertApiError(ApiError.UNAUTHORIZED,
 				() -> Security.checkApiCallAllowed(ApiCommon.buildRequest("::1", null)));
 	}
 
 	@Test
-	public void testLoopbackWithApiKeyAllowedWhenBypassEnabled() {
+	public void testLoopbackWithApiKeyAllowed() {
 		ApiCommon.assertNoApiError(
 				() -> Security.checkApiCallAllowed(ApiCommon.buildRequest("127.0.0.1", ApiCommon.TEST_API_KEY)));
 	}
 
 	@Test
-	public void testLoopbackWithQueryApiKeyRejectedWhenBypassEnabled() {
+	public void testLoopbackWithQueryApiKeyRejected() {
 		ApiCommon.assertApiError(ApiError.UNAUTHORIZED,
 				() -> Security.checkApiCallAllowed(ApiCommon.buildRequest("127.0.0.1", null, ApiCommon.TEST_API_KEY)));
 	}
 
 	@Test
-	public void testLoopbackWithInvalidApiKeyRejectedWhenBypassEnabled() {
+	public void testLoopbackWithInvalidApiKeyRejected() {
 		ApiCommon.assertApiError(ApiError.UNAUTHORIZED,
 				() -> Security.checkApiCallAllowed(ApiCommon.buildRequest("127.0.0.1", "wrong-api-key")));
 	}
 
 	@Test
-	public void testNonLoopbackWithApiKeyAllowedWhenBypassEnabled() {
+	public void testNonLoopbackWithApiKeyAllowed() {
 		ApiCommon.assertNoApiError(
 				() -> Security.checkApiCallAllowed(ApiCommon.buildRequest("192.0.2.10", ApiCommon.TEST_API_KEY)));
 	}
