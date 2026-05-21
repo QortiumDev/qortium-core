@@ -7,15 +7,17 @@ import org.qortal.settings.Settings;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.MessageDigest;
 
 public abstract class Security {
 
 	public static final String API_KEY_HEADER = "X-API-KEY";
 
 	/**
-	 * Check API call is allowed, retrieving the API key from the request header or GET/POST parameters where required
+	 * Check API call is allowed, retrieving the API key from the request header where required.
 	 * @param request
 	 */
 	public static void checkApiCallAllowed(HttpServletRequest request) {
@@ -24,7 +26,7 @@ public abstract class Security {
 
 	/**
 	 * Check API call is allowed, retrieving the API key first from the passedApiKey parameter, with a fallback
-	 * to the request header or GET/POST parameters when null.
+	 * to the request header when null.
 	 * @param request
 	 * @param passedApiKey - the API key to test, or null if it should be retrieved from the request headers.
 	 */
@@ -42,17 +44,19 @@ public abstract class Security {
 			passedApiKey = request.getHeader(API_KEY_HEADER);
 		}
 		if (passedApiKey == null) {
-			// Try query string - this is needed to avoid a CORS preflight. See: https://stackoverflow.com/a/43881141
-			passedApiKey = request.getParameter("apiKey");
-		}
-		if (passedApiKey == null) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.UNAUTHORIZED, "Missing 'X-API-KEY' header");
 		}
 
 		// The API keys must match
-		if (!apiKey.toString().equals(passedApiKey)) {
+		if (!apiKeyMatches(apiKey, passedApiKey)) {
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.UNAUTHORIZED, "API key invalid");
 		}
+	}
+
+	private static boolean apiKeyMatches(ApiKey apiKey, String passedApiKey) {
+		return MessageDigest.isEqual(
+				apiKey.toString().getBytes(StandardCharsets.UTF_8),
+				passedApiKey.getBytes(StandardCharsets.UTF_8));
 	}
 
 	public static void disallowLoopbackRequests(HttpServletRequest request) {

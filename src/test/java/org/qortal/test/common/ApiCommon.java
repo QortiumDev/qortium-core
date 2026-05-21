@@ -39,6 +39,10 @@ public class ApiCommon extends Common {
 	private static final HttpServletRequest FAKE_REQUEST = buildRequest("127.0.0.1", null);
 
 	public static HttpServletRequest buildRequest(String remoteAddr, String apiKey) {
+		return buildRequest(remoteAddr, apiKey, null);
+	}
+
+	public static HttpServletRequest buildRequest(String remoteAddr, String apiKey, String apiKeyParameter) {
 		return (HttpServletRequest) Proxy.newProxyInstance(
 			ApiCommon.class.getClassLoader(),
 			new Class[] { HttpServletRequest.class },
@@ -54,6 +58,8 @@ public class ApiCommon extends Common {
 						return apiKey != null
 								? Collections.enumeration(Collections.singletonList(Security.API_KEY_HEADER))
 								: Collections.emptyEnumeration();
+					case "getParameter":
+						return "apiKey".equals(args[0]) ? apiKeyParameter : null;
 					case "getMethod":
 						return "GET";
 					case "getRequestURI":

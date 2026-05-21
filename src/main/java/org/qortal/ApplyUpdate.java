@@ -86,10 +86,10 @@ public class ApplyUpdate {
 			LOGGER.info("Error loading API key: {}", e.getMessage());
 		}
 
-		// Create GET params
-		Map<String, String> params = new HashMap<>();
+		// Create request headers
+		Map<String, String> headers = new HashMap<>();
 		if (apiKey != null) {
-			params.put("apiKey", apiKey.toString());
+			headers.put(org.qortal.api.Security.API_KEY_HEADER, apiKey.toString());
 		}
 
 		// Attempt to stop the node
@@ -97,7 +97,7 @@ public class ApplyUpdate {
 		for (attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
 			final int attemptForLogging = attempt;
 			LOGGER.info(() -> String.format("Attempt #%d out of %d to shutdown node", attemptForLogging + 1, MAX_ATTEMPTS));
-			String response = ApiRequest.perform(baseUri + "admin/stop", params);
+			String response = ApiRequest.perform(baseUri + "admin/stop", Collections.emptyMap(), headers);
 			if (response == null) {
 				// No response - consider node shut down
 				if (apiKeyNewlyGenerated) {

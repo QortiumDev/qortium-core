@@ -39,10 +39,14 @@ public class ApiRequest {
 	}
 
 	public static String perform(String uri, Map<String, String> params) {
+		return perform(uri, params, Collections.emptyMap());
+	}
+
+	public static String perform(String uri, Map<String, String> params, Map<String, String> headers) {
 		if (params != null && !params.isEmpty())
 			uri += "?" + getParamsString(params);
 
-		try (InputStream in = fetchStream(uri); Scanner scanner = new Scanner(in, "UTF8")) {
+		try (InputStream in = fetchStream(uri, headers); Scanner scanner = new Scanner(in, "UTF8")) {
 			scanner.useDelimiter("\\A");
 			return scanner.hasNext() ? scanner.next() : "";
 		} catch (IOException e) {
@@ -51,12 +55,16 @@ public class ApiRequest {
 	}
 
 	public static Object perform(String uri, Class<?> responseClass, Map<String, String> params) {
+		return perform(uri, responseClass, params, Collections.emptyMap());
+	}
+
+	public static Object perform(String uri, Class<?> responseClass, Map<String, String> params, Map<String, String> headers) {
 		Unmarshaller unmarshaller = createUnmarshaller(responseClass);
 
 		if (params != null && !params.isEmpty())
 			uri += "?" + getParamsString(params);
 
-		try (InputStream in = fetchStream(uri)) {
+		try (InputStream in = fetchStream(uri, headers)) {
 			StreamSource json = new StreamSource(in);
 
 			// Attempt to unmarshal JSON stream to Settings
@@ -155,6 +163,10 @@ public class ApiRequest {
 	 * @throws IOException
 	 */
 	public static InputStream fetchStream(String uri) throws IOException {
+		return fetchStream(uri, Collections.emptyMap());
+	}
+
+	public static InputStream fetchStream(String uri, Map<String, String> headers) throws IOException {
 		String ipAddress = null;
 
 		// Check for special proxy form
@@ -170,6 +182,12 @@ public class ApiRequest {
 		con.setRequestMethod("GET");
 		con.setConnectTimeout(30000);
 		con.setReadTimeout(10000);
+		if (headers != null) {
+			for (Map.Entry<String, String> header : headers.entrySet()) {
+				if (header.getKey() != null && header.getValue() != null)
+					con.setRequestProperty(header.getKey(), header.getValue());
+			}
+		}
 		ApiRequest.setConnectionSSL(con, ipAddress);
 
 		int status = con.getResponseCode();

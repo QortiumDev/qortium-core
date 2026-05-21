@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Stop accepting API keys in URLs
+
+Changed API authentication so the admin API key is no longer accepted through `apiKey` URL parameters. Local scripts and restart helpers now send the key in the `X-API-KEY` header instead, reducing the chance that admin credentials appear in shell history, process listings, browser history, or request logs.
+
 ### 2026-05-20 - Restrict API key file permissions
 
 Changed API key storage so the local `apikey.txt` file is created and maintained as owner-readable and owner-writable only where the operating system supports those permissions. Existing key files are tightened when loaded, reducing the chance that another local user can read the admin API key.

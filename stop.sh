@@ -55,7 +55,7 @@ fi
 success=0
 if [ -n "${apikey}" ] && command -v curl >/dev/null 2>&1; then
 	echo "Stopping Qortium via API..."
-	if curl --url "http://localhost:${api_port}/admin/stop?apiKey=${apikey}" >/dev/null 2>&1; then
+	if curl --url "http://localhost:${api_port}/admin/stop" -H "X-API-KEY: ${apikey}" >/dev/null 2>&1; then
 		success=1
 	fi
 fi

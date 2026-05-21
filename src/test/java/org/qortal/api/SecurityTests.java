@@ -43,6 +43,18 @@ public class SecurityTests {
 	}
 
 	@Test
+	public void testLoopbackWithQueryApiKeyRejectedWhenBypassEnabled() {
+		ApiCommon.assertApiError(ApiError.UNAUTHORIZED,
+				() -> Security.checkApiCallAllowed(ApiCommon.buildRequest("127.0.0.1", null, ApiCommon.TEST_API_KEY)));
+	}
+
+	@Test
+	public void testLoopbackWithInvalidApiKeyRejectedWhenBypassEnabled() {
+		ApiCommon.assertApiError(ApiError.UNAUTHORIZED,
+				() -> Security.checkApiCallAllowed(ApiCommon.buildRequest("127.0.0.1", "wrong-api-key")));
+	}
+
+	@Test
 	public void testNonLoopbackWithApiKeyAllowedWhenBypassEnabled() {
 		ApiCommon.assertNoApiError(
 				() -> Security.checkApiCallAllowed(ApiCommon.buildRequest("192.0.2.10", ApiCommon.TEST_API_KEY)));
