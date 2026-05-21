@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Prevent repeated restart apply attempts
+
+Changed restart scheduling so Qortium refuses duplicate restart-apply requests while one is already scheduled or running. This prevents repeated authenticated admin calls or internal restart triggers from launching multiple restart helper processes before the node shuts down and comes back up.
+
 ### 2026-05-21 - Prevent repeated bootstrap apply attempts
 
 Changed bootstrap apply scheduling so Qortium refuses duplicate bootstrap-apply requests while one is already scheduled or running. This prevents repeated authenticated admin calls from launching multiple bootstrap replacement processes before the node shuts down and restarts.

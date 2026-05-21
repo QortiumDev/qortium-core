@@ -6,8 +6,8 @@ import org.junit.Test;
 import org.qortal.api.ApiError;
 import org.qortal.api.restricted.resource.AdminResource;
 import org.qortal.controller.BootstrapNode;
+import org.qortal.controller.RestartNode;
 import org.qortal.controller.arbitrary.ArbitraryDataStorageManager.StoragePolicy;
-import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
@@ -30,6 +30,7 @@ public class AdminApiTests extends ApiCommon {
 		Common.useDefaultSettings();
 		ApiCommon.installTestApiKey();
 		releaseBootstrapApply();
+		releaseRestartApply();
 	}
 
 	@Before
@@ -40,6 +41,7 @@ public class AdminApiTests extends ApiCommon {
 	@After
 	public void afterTest() throws Exception {
 		releaseBootstrapApply();
+		releaseRestartApply();
 		ApiCommon.clearTestApiKey();
 		Common.useDefaultSettings();
 	}
@@ -92,6 +94,15 @@ public class AdminApiTests extends ApiCommon {
 		assertApiError(ApiError.OPERATION_IN_PROGRESS, () -> authenticatedAdminResource.bootstrap(null));
 	}
 
+	@Test
+	public void testRestartRejectsConcurrentApply() throws Exception {
+		AdminResource authenticatedAdminResource = (AdminResource) ApiCommon.buildResource(AdminResource.class, ApiCommon.TEST_API_KEY);
+
+		assertTrue(tryAcquireRestartApply());
+
+		assertApiError(ApiError.OPERATION_IN_PROGRESS, () -> authenticatedAdminResource.restart(null));
+	}
+
 	private static Path createWritableApiSettings(String json) throws Exception {
 		Path directory = Files.createTempDirectory("settings-api-test");
 		Path settingsPath = directory.resolve("settings.json");
@@ -107,6 +118,18 @@ public class AdminApiTests extends ApiCommon {
 
 	private static void releaseBootstrapApply() throws Exception {
 		Method method = BootstrapNode.class.getDeclaredMethod("releaseBootstrapApply");
+		method.setAccessible(true);
+		method.invoke(null);
+	}
+
+	private static boolean tryAcquireRestartApply() throws Exception {
+		Method method = RestartNode.class.getDeclaredMethod("tryAcquireRestartApply");
+		method.setAccessible(true);
+		return (Boolean) method.invoke(null);
+	}
+
+	private static void releaseRestartApply() throws Exception {
+		Method method = RestartNode.class.getDeclaredMethod("releaseRestartApply");
 		method.setAccessible(true);
 		method.invoke(null);
 	}

@@ -457,21 +457,14 @@ public class AdminResource {
 			)
 		}
 	)
+	@ApiErrors({ApiError.OPERATION_IN_PROGRESS})
 	@SecurityRequirement(name = "apiKey")
 	public String restart(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 		Security.checkApiCallAllowed(request);
 
-		new Thread(() -> {
-			// Short sleep to allow HTTP response body to be emitted
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				// Not important
-			}
-
-			RestartNode.attemptToRestart();
-
-		}).start();
+		if (!RestartNode.scheduleRestart())
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.OPERATION_IN_PROGRESS,
+					"Restart apply is already scheduled or running");
 
 		return "true";
 	}

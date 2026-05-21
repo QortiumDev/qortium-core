@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 /* NOTE: It is CRITICAL that we use OpenJDK and not Java SE because our uber jar repacks BouncyCastle which, in turn, unsigns BC causing it to be rejected as a security provider by Java SE. */
@@ -26,31 +27,66 @@ public class RestartNode {
 	public static final String AGENTLIB_JVM_HOLDER_ARG = "-DQORTIUM_agentlib=";
 
 	private static final Logger LOGGER = LogManager.getLogger(RestartNode.class);
+	private static final long RESTART_RESPONSE_DELAY = 1000L;
+	private static final AtomicBoolean RESTART_APPLY_IN_PROGRESS = new AtomicBoolean(false);
 
-	public static boolean attemptToRestart() {
-		LOGGER.info(String.format("Restarting node..."));
-
-		// Give repository a chance to backup in case things go badly wrong (if enabled)
-		if (Settings.getInstance().getRepositoryBackupInterval() > 0) {
-			try {
-				// Timeout if the database isn't ready for backing up after 60 seconds
-				long timeout = 60 * 1000L;
-				RepositoryManager.backup(true, "backup", timeout);
-
-			} catch (TimeoutException e) {
-				LOGGER.info("Attempt to backup repository failed due to timeout: {}", e.getMessage());
-				// Continue with the node restart anyway...
-			}
+	public static boolean scheduleRestart() {
+		if (!tryAcquireRestartApply()) {
+			LOGGER.info("Restart apply is already scheduled or running");
+			return false;
 		}
 
-		// Call ApplyRestart to end this process
-		String javaHome = System.getProperty("java.home");
-		LOGGER.debug(String.format("Java home: %s", javaHome));
+		new Thread(() -> {
+			// Short sleep to allow HTTP response body to be emitted
+			try {
+				Thread.sleep(RESTART_RESPONSE_DELAY);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				releaseRestartApply();
+				return;
+			}
 
-		Path javaBinary = Paths.get(javaHome, "bin", "java");
-		LOGGER.debug(String.format("Java binary: %s", javaBinary));
+			attemptToRestartWithGuardHeld();
+		}).start();
+
+		return true;
+	}
+
+	public static boolean attemptToRestart() {
+		if (!tryAcquireRestartApply()) {
+			LOGGER.info("Restart apply is already scheduled or running");
+			return false;
+		}
+
+		return attemptToRestartWithGuardHeld();
+	}
+
+	private static boolean attemptToRestartWithGuardHeld() {
+		boolean applyProcessStarted = false;
 
 		try {
+			LOGGER.info(String.format("Restarting node..."));
+
+			// Give repository a chance to backup in case things go badly wrong (if enabled)
+			if (Settings.getInstance().getRepositoryBackupInterval() > 0) {
+				try {
+					// Timeout if the database isn't ready for backing up after 60 seconds
+					long timeout = 60 * 1000L;
+					RepositoryManager.backup(true, "backup", timeout);
+
+				} catch (TimeoutException e) {
+					LOGGER.info("Attempt to backup repository failed due to timeout: {}", e.getMessage());
+					// Continue with the node restart anyway...
+				}
+			}
+
+			// Call ApplyRestart to end this process
+			String javaHome = System.getProperty("java.home");
+			LOGGER.debug(String.format("Java home: %s", javaHome));
+
+			Path javaBinary = Paths.get(javaHome, "bin", "java");
+			LOGGER.debug(String.format("Java binary: %s", javaBinary));
+
 			List<String> javaCmd = new ArrayList<>();
 			// Java runtime binary itself
 			javaCmd.add(javaBinary.toString());
@@ -88,6 +124,7 @@ public class RestartNode {
 			processBuilder.redirectError(ProcessBuilder.Redirect.INHERIT);
 
 			Process process = processBuilder.start();
+			applyProcessStarted = true;
 
 			// Nothing to pipe to new process, so close output stream (process's stdin)
 			process.getOutputStream().close();
@@ -97,6 +134,22 @@ public class RestartNode {
 			LOGGER.error(String.format("Failed to restart node: %s", e.getMessage()));
 
 			return true; // repo was okay, even if applying restart failed
+		} finally {
+			if (!applyProcessStarted) {
+				releaseRestartApply();
+			}
 		}
+	}
+
+	static boolean tryAcquireRestartApply() {
+		return RESTART_APPLY_IN_PROGRESS.compareAndSet(false, true);
+	}
+
+	static void releaseRestartApply() {
+		RESTART_APPLY_IN_PROGRESS.set(false);
+	}
+
+	static boolean isRestartApplyInProgress() {
+		return RESTART_APPLY_IN_PROGRESS.get();
 	}
 }
