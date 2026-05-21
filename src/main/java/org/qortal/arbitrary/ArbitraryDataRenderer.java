@@ -18,9 +18,10 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URL;
 
 import java.nio.charset.StandardCharsets;
@@ -196,18 +197,7 @@ public class ArbitraryDataRenderer {
             }
             else {
                 // Regular file - can be streamed directly
-                File file = filePath.toFile();
-                try (FileInputStream inputStream = new FileInputStream(file)) {
-                    response.addHeader("Content-Security-Policy", "default-src 'self'");
-                    response.setContentType(context.getMimeType(filename));
-                    int bytesRead, length = 0;
-                    byte[] buffer = new byte[10240];
-                    while ((bytesRead = inputStream.read(buffer)) != -1) {
-                        response.getOutputStream().write(buffer, 0, bytesRead);
-                        length += bytesRead;
-                    }
-                    response.setContentLength(length);
-                }
+                ArbitraryDataRenderer.streamNonHtmlFileResponse(response, context, filePath, filename);
             }
             return response;
         } catch (FileNotFoundException | NoSuchFileException e) {
@@ -217,6 +207,29 @@ public class ArbitraryDataRenderer {
         }
 
         return ArbitraryDataRenderer.getResponse(response, 404, "Error 404: File Not Found");
+    }
+
+    static void streamNonHtmlFileResponse(HttpServletResponse response, ServletContext context, Path filePath, String filename) throws IOException {
+        response.addHeader("Content-Security-Policy", "default-src 'self'");
+        response.setContentType(context.getMimeType(filename));
+        setResponseContentLength(response, Files.size(filePath));
+
+        try (InputStream inputStream = Files.newInputStream(filePath)) {
+            OutputStream outputStream = response.getOutputStream();
+            int bytesRead;
+            byte[] buffer = new byte[10240];
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+        }
+    }
+
+    private static void setResponseContentLength(HttpServletResponse response, long contentLength) {
+        if (contentLength > Integer.MAX_VALUE) {
+            response.setContentLengthLong(contentLength);
+        } else {
+            response.setContentLength((int) contentLength);
+        }
     }
 
     private String getFilename(String directory, String userPath) {

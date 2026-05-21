@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Set QDN renderer content length before streaming
+
+Changed QDN file rendering so non-HTML file responses declare their content length before bytes are streamed to the browser. This keeps response headers consistent for servlet containers while preserving the existing streamed file contents.
+
 ### 2026-05-21 - Handle developer proxy HTML content types and encoding
 
 Changed the developer proxy so local frontend routes that return HTML are rewritten even when the URL does not end in `.html`. The proxy now asks upstream servers for uncompressed responses, safely decodes compressed HTML if it is still returned, and keeps rewritten HTML responses internally consistent.
