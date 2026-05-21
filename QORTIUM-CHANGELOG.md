@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - testnet: start batch rewards at genesis
+
+Changed the single-node testnet chain setup so batch rewards are active from the beginning of a fresh chain. The testnet keeps the short local batch size of 10 blocks and the 3-block online-account proof window, making the reward behavior easy to observe without waiting for a high activation height.
+
 ### 2026-05-21 - testnet: ignore local data directory
 
 Added the local single-node testnet data directory to git ignore rules so QDN storage and other runtime files created during live testnet runs do not appear as repository changes.
