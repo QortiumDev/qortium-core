@@ -16,9 +16,11 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -33,6 +35,9 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertSame;
 
 public class DevProxyServerResourceTests {
+
+    private static final int PROXY_CONNECT_TIMEOUT_MS = 5000;
+    private static final int PROXY_READ_TIMEOUT_MS = 30000;
 
     private HttpServer server;
 
@@ -155,6 +160,21 @@ public class DevProxyServerResourceTests {
         assertNotEquals("gzip", upstreamHeaders.get("Accept-Encoding"));
         assertNotEquals("close", upstreamHeaders.get("Connection"));
         assertArrayEquals(body, exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testProxyConnectionUsesTimeoutsAndPreservesRedirectHandling() throws Exception {
+        DevProxyServerResource resource = new DevProxyServerResource();
+        Method openProxyConnection = DevProxyServerResource.class.getDeclaredMethod("openProxyConnection", URL.class);
+        openProxyConnection.setAccessible(true);
+
+        HttpURLConnection con = (HttpURLConnection) openProxyConnection.invoke(resource, new URL("http://127.0.0.1:1/timeout-test.txt"));
+
+        assertEquals(PROXY_CONNECT_TIMEOUT_MS, con.getConnectTimeout());
+        assertEquals(PROXY_READ_TIMEOUT_MS, con.getReadTimeout());
+        assertFalse(con.getInstanceFollowRedirects());
+
+        con.disconnect();
     }
 
     @Test

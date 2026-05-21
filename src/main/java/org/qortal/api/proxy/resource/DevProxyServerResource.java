@@ -31,6 +31,9 @@ import java.util.Set;
 @Path("/")
 public class DevProxyServerResource {
 
+    private static final int PROXY_CONNECT_TIMEOUT_MS = 5000;
+    private static final int PROXY_READ_TIMEOUT_MS = 30000;
+
     private static final Set<String> PROXY_MANAGED_REQUEST_HEADERS = Set.of(
             "accept-encoding",
             "connection",
@@ -130,6 +133,8 @@ public class DevProxyServerResource {
 
     private HttpURLConnection openProxyConnection(URL url) throws IOException {
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
+        con.setConnectTimeout(PROXY_CONNECT_TIMEOUT_MS);
+        con.setReadTimeout(PROXY_READ_TIMEOUT_MS);
         con.setInstanceFollowRedirects(false);
         return con;
     }

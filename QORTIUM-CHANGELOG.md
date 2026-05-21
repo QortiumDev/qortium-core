@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Set developer proxy upstream timeouts
+
+Changed the developer proxy so connections to the local frontend server use fixed connect and read timeouts. This keeps a stalled local dev server from leaving Qortium proxy requests waiting indefinitely while preserving normal successful proxy behavior.
+
 ### 2026-05-21 - Handle developer proxy loopback redirect aliases
 
 Changed the developer proxy so redirects that point back to the local frontend server through loopback aliases or protocol-relative locations are still kept inside Qortium's proxy. This prevents browser navigation from bypassing the proxy when a dev server uses `localhost`, `127.0.0.1`, IPv6 loopback, or `//` redirect URLs for the same local port.
