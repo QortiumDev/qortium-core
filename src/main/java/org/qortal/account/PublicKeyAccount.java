@@ -1,19 +1,18 @@
 package org.qortal.account;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountData;
 import org.qortal.repository.Repository;
+import org.qortal.transform.Transformer;
+
 import java.util.Arrays;
 
 public class PublicKeyAccount extends Account {
 
 	protected final byte[] publicKey;
 	protected final Ed25519PublicKeyParameters edPublicKeyParams;
-	private static final Logger LOGGER = LogManager.getLogger(PublicKeyAccount.class);
-	public static final byte[] ALL_ZEROS = new byte[32];
+	public static final byte[] ALL_ZEROS = new byte[Transformer.PUBLIC_KEY_LENGTH];
 
 	/** <p>Constructor for generating a PublicKeyAccount</p>
 	 *
@@ -23,25 +22,16 @@ public class PublicKeyAccount extends Account {
 	 * @since v6.0.0 - Updated for Bouncy Castle v1.73
 	 */
 	public PublicKeyAccount(Repository repository, byte[] publicKey) {
-        super(repository, Crypto.toAddress(publicKey));
+		super(repository, Crypto.toAddress(requireValidPublicKey(publicKey)));
 
 		this.publicKey = publicKey;
 
 		if (Arrays.equals(publicKey, ALL_ZEROS)) {
-			LOGGER.trace("We were passed a null public key");
 			this.edPublicKeyParams = null;
 			return;
 		}
 
-		Ed25519PublicKeyParameters t = null;
-
-		try {
-			t = new Ed25519PublicKeyParameters(publicKey, 0);
-		} catch (Exception e) {
-			LOGGER.error("Failed to generate public key");
-		}
-
-		this.edPublicKeyParams = t;
+		this.edPublicKeyParams = new Ed25519PublicKeyParameters(publicKey, 0);
 	}
 
 	protected PublicKeyAccount(Repository repository, Ed25519PublicKeyParameters edPublicKeyParams) {
@@ -80,6 +70,13 @@ public class PublicKeyAccount extends Account {
 
 	public static String getAddress(byte[] publicKey) {
 		return Crypto.toAddress(publicKey);
+	}
+
+	private static byte[] requireValidPublicKey(byte[] publicKey) {
+		if (publicKey == null || publicKey.length != Transformer.PUBLIC_KEY_LENGTH)
+			throw new IllegalArgumentException("Public key must be 32 bytes");
+
+		return publicKey;
 	}
 
 }

@@ -146,6 +146,7 @@ public class CrossChainTradeBotResource {
 	@SecurityRequirement(name = "apiKey")
 	public String tradeBotCreator(@HeaderParam(Security.API_KEY_HEADER) String apiKey, TradeBotCreateRequest tradeBotCreateRequest) {
 		Security.checkApiCallAllowed(request);
+		validateCreatorPublicKey(tradeBotCreateRequest);
 
 		TradeDirection tradeDirection = tradeBotCreateRequest.getTradeDirection();
 		if (tradeDirection == TradeDirection.SELL_FOREIGN_FOR_FOREIGN)
@@ -430,6 +431,12 @@ public class CrossChainTradeBotResource {
 
 		if (!isValidP2pkhAddress(requestedBitcoiny, tradeBotCreateRequest.requestedForeignReceivingAddress))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+	}
+
+	private void validateCreatorPublicKey(TradeBotCreateRequest tradeBotCreateRequest) {
+		if (tradeBotCreateRequest == null || tradeBotCreateRequest.creatorPublicKey == null
+				|| tradeBotCreateRequest.creatorPublicKey.length != Transformer.PUBLIC_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PUBLIC_KEY);
 	}
 
 	private void validateForeignForeignResponseRequest(CrossChainTradeData tradeData, TradeBotRespondRequest tradeBotRespondRequest) {

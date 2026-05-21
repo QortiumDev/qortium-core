@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Validate public keys before account construction
+
+Changed public-key account construction so malformed public keys are rejected before Qortium derives an address or builds Ed25519 key parameters. Trade-bot create requests now reject missing or wrong-sized creator public keys as invalid request data instead of relying on lower-level account construction to fail later.
+
 ### 2026-05-21 - Validate crypto signature inputs before verification
 
 Changed signature verification so malformed public keys, signatures, and messages are rejected with a clear `false` result before they reach the Ed25519 verifier. This keeps external bad input from becoming a server error while avoiding a broad exception catch around normal cryptographic verification.
