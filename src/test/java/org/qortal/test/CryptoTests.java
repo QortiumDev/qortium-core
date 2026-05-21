@@ -86,6 +86,32 @@ public class CryptoTests extends Common {
 	}
 
 	@Test
+	public void testFileDigestRejectsInvalidBufferSize() throws IOException {
+		byte[] input = HashCode.fromString("00").asBytes();
+
+		Path tempPath = Files.createTempFile("", ".tmp");
+		try {
+			Files.write(tempPath, input, StandardOpenOption.CREATE);
+
+			try {
+				Crypto.digest(tempPath.toFile(), 0);
+				fail("Expected zero buffer size to be rejected");
+			} catch (IllegalArgumentException e) {
+				assertEquals("Buffer size must be positive", e.getMessage());
+			}
+
+			try {
+				Crypto.digest(tempPath.toFile(), -1);
+				fail("Expected negative buffer size to be rejected");
+			} catch (IllegalArgumentException e) {
+				assertEquals("Buffer size must be positive", e.getMessage());
+			}
+		} finally {
+			Files.deleteIfExists(tempPath);
+		}
+	}
+
+	@Test
 	public void testPublicKeyToAddress() {
 		byte[] publicKey = HashCode.fromString("775ada64a48a30b3bfc4f1db16bca512d4088704975a62bde78781ce0cba90d6").asBytes();
 		String expected = "QPc6TvGJ5RjW6LpwUtafx7XRCdRvyN6rsA";

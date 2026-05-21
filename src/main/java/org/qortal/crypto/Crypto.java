@@ -141,21 +141,24 @@ public abstract class Crypto {
 	 * @throws IOException if the file cannot be read
 	 */
 	public static byte[] digest(File file, int bufferSize) throws IOException {
+		if (bufferSize <= 0)
+			throw new IllegalArgumentException("Buffer size must be positive");
+
 		try {
 			MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-			FileInputStream fileInputStream = new FileInputStream(file);
 			byte[] bytes = new byte[bufferSize];
-			int count;
 
-			while ((count = fileInputStream.read(bytes)) != -1) {
-				sha256.update(bytes, 0, count);
+			try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(file), bufferSize)) {
+				int count;
+				while ((count = inputStream.read(bytes)) != -1) {
+					sha256.update(bytes, 0, count);
+				}
 			}
-			fileInputStream.close();
 
 			return sha256.digest();
 
 		} catch (NoSuchAlgorithmException e) {
-			throw new RuntimeException("SHA-256 message digest not available");
+			throw new IOException("SHA-256 algorithm not available", e);
 		}
 	}
 

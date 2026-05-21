@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Close file digest streams safely
+
+Changed file digest handling so Qortium now closes digest input streams automatically even when a file read fails partway through. This prevents leaked file handles during exceptional reads while keeping the same SHA-256 digest behavior for normal file hashing.
+
 ### 2026-05-20 - Stop accepting API keys in URLs
 
 Changed API authentication so the admin API key is no longer accepted through `apiKey` URL parameters. Local scripts and restart helpers now send the key in the `X-API-KEY` header instead, reducing the chance that admin credentials appear in shell history, process listings, browser history, or request logs.
