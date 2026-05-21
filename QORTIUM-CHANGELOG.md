@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Close block archive output streams safely
+
+Changed block archive writing so the archive file output stream is always closed automatically if a write fails partway through. This keeps archive creation behavior the same on success while avoiding leaked file handles on write errors.
+
 ### 2026-05-21 - Remove legacy local auth bypass setting
 
 Removed the unused local-auth bypass setting now that Qortium always requires the admin API key for protected API calls, including loopback requests. This keeps new chain settings cleaner and avoids suggesting that local network origin can still replace administrative authentication.

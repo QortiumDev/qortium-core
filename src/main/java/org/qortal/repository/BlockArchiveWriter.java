@@ -260,25 +260,24 @@ public class BlockArchiveWriter {
         // We have enough blocks to create a new file
         int endHeight = startHeight + i - 1;
         String filePath = String.format("%s/%d-%d.dat", archivePath.toString(), startHeight, endHeight);
-        FileOutputStream fileOutputStream = new FileOutputStream(filePath);
-        // Write version number
-        fileOutputStream.write(Ints.toByteArray(serializationVersion));
-        // Write start height
-        fileOutputStream.write(Ints.toByteArray(startHeight));
-        // Write end height
-        fileOutputStream.write(Ints.toByteArray(endHeight));
-        // Write total count
-        fileOutputStream.write(Ints.toByteArray(i));
-        // Write dynamic header (block indexes) segment length
-        fileOutputStream.write(Ints.toByteArray(headerBytes.size()));
-        // Write dynamic header (block indexes) data
-        headerBytes.writeTo(fileOutputStream);
-        // Write data segment (block data) length
-        fileOutputStream.write(Ints.toByteArray(bytes.size()));
-        // Write data
-        bytes.writeTo(fileOutputStream);
-        // Close the file
-        fileOutputStream.close();
+        try (FileOutputStream fileOutputStream = new FileOutputStream(filePath)) {
+            // Write version number
+            fileOutputStream.write(Ints.toByteArray(serializationVersion));
+            // Write start height
+            fileOutputStream.write(Ints.toByteArray(startHeight));
+            // Write end height
+            fileOutputStream.write(Ints.toByteArray(endHeight));
+            // Write total count
+            fileOutputStream.write(Ints.toByteArray(i));
+            // Write dynamic header (block indexes) segment length
+            fileOutputStream.write(Ints.toByteArray(headerBytes.size()));
+            // Write dynamic header (block indexes) data
+            headerBytes.writeTo(fileOutputStream);
+            // Write data segment (block data) length
+            fileOutputStream.write(Ints.toByteArray(bytes.size()));
+            // Write data
+            bytes.writeTo(fileOutputStream);
+        }
 
         // Invalidate cache so that the rest of the app picks up the new file
         BlockArchiveReader.getInstance().invalidateFileListCache();
