@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Preserve developer proxy redirects
+
+Changed the developer proxy so redirects from a local frontend server are passed back to the browser with their original status and location instead of being followed internally by Qortium. This keeps browser navigation and frontend dev-server routing behavior visible to the app being tested.
+
 ### 2026-05-21 - Filter developer proxy request headers safely
 
 Changed the developer proxy so it no longer forwards caller-owned request headers such as host, compression, and connection-control headers to the local frontend server. Safe custom headers still pass through, while the proxy keeps control of headers that could interfere with HTML rewriting or local proxy behavior.

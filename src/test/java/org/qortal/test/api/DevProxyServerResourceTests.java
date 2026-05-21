@@ -24,9 +24,11 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertSame;
 
@@ -153,6 +155,46 @@ public class DevProxyServerResourceTests {
         assertNotEquals("gzip", upstreamHeaders.get("Accept-Encoding"));
         assertNotEquals("close", upstreamHeaders.get("Connection"));
         assertArrayEquals(body, exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testProxyPreservesUpstreamRedirects() throws Exception {
+        byte[] redirectBody = "redirect preserved".getBytes(StandardCharsets.UTF_8);
+        byte[] targetBody = "target reached".getBytes(StandardCharsets.UTF_8);
+        AtomicBoolean targetReached = new AtomicBoolean(false);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/redirect.txt", exchange -> {
+            exchange.getResponseHeaders().add("Location", "/target.txt");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_MOVED_TEMP, redirectBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(redirectBody);
+            }
+        });
+        this.server.createContext("/target.txt", exchange -> {
+            targetReached.set(true);
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, targetBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(targetBody);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("redirect.txt");
+
+        assertEquals(HttpURLConnection.HTTP_MOVED_TEMP, exchange.status);
+        assertEquals("/target.txt", exchange.getResponseHeader("Location"));
+        assertArrayEquals(redirectBody, exchange.outputStream.toByteArray());
+        assertFalse(targetReached.get());
     }
 
     private static void setField(Object target, String fieldName, Object value) throws Exception {

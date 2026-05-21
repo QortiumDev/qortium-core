@@ -86,7 +86,7 @@ public class DevProxyServerResource {
 
             // Open URL
             URL url = new URL(String.format("http://%s%s%s", source, inPath, queryString));
-            HttpURLConnection con = (HttpURLConnection) url.openConnection();
+            HttpURLConnection con = this.openProxyConnection(url);
 
             // Proxy the request data
             this.proxyRequestToConnection(request, con);
@@ -110,7 +110,7 @@ public class DevProxyServerResource {
 
                 // Retry connection
                 url = new URL(String.format("http://%s%s%s", source, inPath, queryString));
-                con = (HttpURLConnection) url.openConnection();
+                con = this.openProxyConnection(url);
                 this.proxyRequestToConnection(request, con);
                 responseCode = con.getResponseCode();
             }
@@ -125,6 +125,12 @@ public class DevProxyServerResource {
         }
 
         return response;
+    }
+
+    private HttpURLConnection openProxyConnection(URL url) throws IOException {
+        HttpURLConnection con = (HttpURLConnection) url.openConnection();
+        con.setInstanceFollowRedirects(false);
+        return con;
     }
 
     private void proxyRequestToConnection(HttpServletRequest request, HttpURLConnection con) throws ProtocolException {
