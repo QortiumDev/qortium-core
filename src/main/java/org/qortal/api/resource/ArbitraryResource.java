@@ -80,13 +80,13 @@ import javax.ws.rs.core.MediaType;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import javax.crypto.spec.SecretKeySpec;
 import java.net.FileNameMap;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -2033,10 +2033,10 @@ public String finalizeUpload(
 					java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
 					File tempFile = Paths.get(tempDirectory.toString(), filename).toFile();
 					tempFile.deleteOnExit();
-					BufferedWriter writer = new BufferedWriter(new FileWriter(tempFile.toPath().toString()));
-					writer.write(string);
-					writer.newLine();
-					writer.close();
+					try (BufferedWriter writer = Files.newBufferedWriter(tempFile.toPath(), StandardCharsets.UTF_8)) {
+						writer.write(string);
+						writer.newLine();
+					}
 					path = tempFile.toPath().toString();
 				}
 				// ... or base64 encoded raw data

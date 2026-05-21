@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Close ArbitraryResource string temp writer safely
+
+Changed the string-upload path for QDN publishing so temporary files are written with an automatically closed UTF-8 writer. This preserves the existing uploaded-string contents and trailing newline while removing another manual file-close path from the API resource.
+
 ### 2026-05-21 - Close QDN metadata and patch writers safely
 
 Changed QDN metadata and patch-file writing so writers are closed automatically even if a write fails. This keeps generated metadata and patch files using explicit UTF-8 output and removes another set of manual file-close paths.
