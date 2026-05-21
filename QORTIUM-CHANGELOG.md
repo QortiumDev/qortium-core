@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Forward developer proxy response headers correctly
+
+Changed the developer proxy so safe response headers from a local frontend server are forwarded reliably instead of being skipped by the old header-copy loop. The proxy still keeps control of content length, content type, content security policy, and connection-level headers so rewritten responses remain consistent.
+
 ### 2026-05-21 - Proxy developer error responses correctly
 
 Changed the developer proxy so upstream error responses, such as 404 pages from a local frontend server, are returned with their original status and body instead of being converted into a Qortium API error. This makes the developer proxy behave more like a normal local web proxy when a requested file or route is missing.

@@ -21,10 +21,28 @@ import java.net.HttpURLConnection;
 import java.net.ProtocolException;
 import java.net.URL;
 import java.util.Enumeration;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 
 @Path("/")
 public class DevProxyServerResource {
+
+    private static final Set<String> PROXY_MANAGED_RESPONSE_HEADERS = Set.of(
+            "connection",
+            "content-length",
+            "content-security-policy",
+            "content-type",
+            "keep-alive",
+            "proxy-authenticate",
+            "proxy-authorization",
+            "te",
+            "trailer",
+            "transfer-encoding",
+            "upgrade"
+    );
 
     @Context HttpServletRequest request;
     @Context HttpServletResponse response;
@@ -110,16 +128,24 @@ public class DevProxyServerResource {
         // TODO: proxy any POST parameters from "request" to "con"
     }
 
+    private static boolean isProxyManagedResponseHeader(String headerName) {
+        return PROXY_MANAGED_RESPONSE_HEADERS.contains(headerName.toLowerCase(Locale.ROOT));
+    }
+
     private void proxyConnectionToResponse(HttpURLConnection con, HttpServletResponse response, String inPath, int responseCode) throws IOException {
         // Proxy the response headers
-        for (int i = 0; ; i++) {
-            String headerKey = con.getHeaderFieldKey(i);
-            String headerValue = con.getHeaderField(i);
-            if (headerKey != null && headerValue != null) {
-                response.addHeader(headerKey, headerValue);
+        for (Map.Entry<String, List<String>> header : con.getHeaderFields().entrySet()) {
+            String headerName = header.getKey();
+            List<String> headerValues = header.getValue();
+            if (headerName == null || headerValues == null || isProxyManagedResponseHeader(headerName)) {
                 continue;
             }
-            break;
+
+            for (String headerValue : headerValues) {
+                if (headerValue != null) {
+                    response.addHeader(headerName, headerValue);
+                }
+            }
         }
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();

@@ -80,7 +80,38 @@ public class DevProxyServerResourceTests {
         assertEquals("text/plain", exchange.contentType);
         assertEquals(body.length, exchange.contentLength);
         assertArrayEquals(body, exchange.outputStream.toByteArray());
-        assertEquals("default-src 'self'", exchange.responseHeaders.get("Content-Security-Policy"));
+        assertEquals("default-src 'self'", exchange.getResponseHeader("Content-Security-Policy"));
+    }
+
+    @Test
+    public void testProxyForwardsSafeUpstreamResponseHeaders() throws Exception {
+        byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/asset.txt", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/plain");
+            exchange.getResponseHeaders().add("X-Dev-Proxy-Test", "forwarded");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, body.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(body);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("asset.txt");
+
+        assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
+        assertEquals("forwarded", exchange.getResponseHeader("X-Dev-Proxy-Test"));
+        assertEquals("default-src 'self'", exchange.getResponseHeader("Content-Security-Policy"));
+        assertArrayEquals(body, exchange.outputStream.toByteArray());
     }
 
     private static void setField(Object target, String fieldName, Object value) throws Exception {
@@ -149,6 +180,16 @@ public class DevProxyServerResourceTests {
                                 return defaultValue(method.getReturnType());
                         }
                     });
+        }
+
+        private String getResponseHeader(String headerName) {
+            for (Map.Entry<String, String> entry : this.responseHeaders.entrySet()) {
+                if (entry.getKey().equalsIgnoreCase(headerName)) {
+                    return entry.getValue();
+                }
+            }
+
+            return null;
         }
     }
 
