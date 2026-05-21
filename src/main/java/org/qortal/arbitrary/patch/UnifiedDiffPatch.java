@@ -14,12 +14,12 @@ import org.qortal.utils.FilesystemUtils;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
@@ -85,18 +85,17 @@ public class UnifiedDiffPatch {
         List<String> unifiedDiff = UnifiedDiffUtils.generateUnifiedDiff(originalFileName, revisedFileName, original, diff, 0);
 
         // Write the diff to the destination directory
-        FileWriter fileWriter = new FileWriter(destination.toString(), true);
-        BufferedWriter writer = new BufferedWriter(fileWriter);
-        for (int i=0; i<unifiedDiff.size(); i++) {
-            String line = unifiedDiff.get(i);
-            writer.append(line);
-            // Add a newline if this isn't the last line, or the original ended with a newline
-            if (i < unifiedDiff.size()-1 || endsWithNewline) {
-                writer.newLine();
+        try (BufferedWriter writer = Files.newBufferedWriter(destination, StandardCharsets.UTF_8,
+                StandardOpenOption.CREATE, StandardOpenOption.APPEND, StandardOpenOption.WRITE)) {
+            for (int i=0; i<unifiedDiff.size(); i++) {
+                String line = unifiedDiff.get(i);
+                writer.append(line);
+                // Add a newline if this isn't the last line, or the original ended with a newline
+                if (i < unifiedDiff.size()-1 || endsWithNewline) {
+                    writer.newLine();
+                }
             }
         }
-        writer.flush();
-        writer.close();
     }
 
     /**
@@ -192,18 +191,17 @@ public class UnifiedDiffPatch {
             List<String> patchedContents = DiffUtils.patch(originalContents, patch);
 
             // Write the patched file to the merge directory
-            FileWriter fileWriter = new FileWriter(mergePath.toString(), true);
-            BufferedWriter writer = new BufferedWriter(fileWriter);
-            for (int i=0; i<patchedContents.size(); i++) {
-                String line = patchedContents.get(i);
-                writer.append(line);
-                // Add a newline if this isn't the last line, or the original ended with a newline
-                if (i < patchedContents.size()-1 || endsWithNewline) {
-                    writer.newLine();
+            try (BufferedWriter writer = Files.newBufferedWriter(mergePath, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND, StandardOpenOption.WRITE)) {
+                for (int i=0; i<patchedContents.size(); i++) {
+                    String line = patchedContents.get(i);
+                    writer.append(line);
+                    // Add a newline if this isn't the last line, or the original ended with a newline
+                    if (i < patchedContents.size()-1 || endsWithNewline) {
+                        writer.newLine();
+                    }
                 }
             }
-            writer.flush();
-            writer.close();
 
         } catch (PatchFailedException e) {
             throw new DataException(String.format("Failed to apply patch for path %s: %s", pathSuffix, e.getMessage()));

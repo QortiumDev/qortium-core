@@ -7,7 +7,6 @@ import org.qortal.repository.DataException;
 
 import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -59,10 +58,10 @@ public class ArbitraryDataMetadata {
         this.buildJson();
         this.createParentDirectories();
 
-        BufferedWriter writer = new BufferedWriter(new FileWriter(this.filePath.toString()));
-        writer.write(this.jsonString);
-        writer.newLine();
-        writer.close();
+        try (BufferedWriter writer = Files.newBufferedWriter(this.filePath, StandardCharsets.UTF_8)) {
+            writer.write(this.jsonString);
+            writer.newLine();
+        }
     }
 
     public void delete() throws IOException {

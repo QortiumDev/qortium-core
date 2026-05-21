@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Close QDN metadata and patch writers safely
+
+Changed QDN metadata and patch-file writing so writers are closed automatically even if a write fails. This keeps generated metadata and patch files using explicit UTF-8 output and removes another set of manual file-close paths.
+
 ### 2026-05-21 - Close ResourceList writers safely
 
 Changed local resource-list saving so the JSON writer is always closed automatically, even if a write fails. This keeps list files using the same UTF-8 encoding used when they are read back and removes another manual file-close path.
