@@ -80,6 +80,56 @@ public class RepositoryTests extends Common {
 	}
 
 	@Test
+	public void testFreshRepositoryInitializesToQortiumBaseline() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:fresh-qortium-baseline-" + System.nanoTime();
+
+		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
+			connection.setAutoCommit(false);
+
+			assertEquals(0, HSQLDBDatabaseUpdates.fetchDatabaseVersion(connection));
+			assertTrue(HSQLDBDatabaseUpdates.updateDatabase(connection));
+			assertEquals(HSQLDBDatabaseUpdates.CURRENT_SCHEMA_VERSION, HSQLDBDatabaseUpdates.fetchDatabaseVersion(connection));
+
+			assertFalse(HSQLDBDatabaseUpdates.updateDatabase(connection));
+			assertEquals(HSQLDBDatabaseUpdates.CURRENT_SCHEMA_VERSION, HSQLDBDatabaseUpdates.fetchDatabaseVersion(connection));
+
+			try (ResultSet resultSet = connection.getMetaData().getColumns(null, "PUBLIC", "CHATMESSAGES", "PRIVATE_GROUP_ENVELOPE_TYPE")) {
+				assertTrue(resultSet.next());
+			}
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("SHUTDOWN");
+			}
+		}
+	}
+
+	@Test
+	public void testInheritedRepositorySchemaVersionIsUnsupported() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:inherited-schema-version-" + System.nanoTime();
+
+		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
+			connection.setAutoCommit(false);
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("CREATE TABLE DatabaseInfo (version INTEGER NOT NULL)");
+				statement.execute("INSERT INTO DatabaseInfo VALUES (73)");
+			}
+			connection.commit();
+
+			try {
+				HSQLDBDatabaseUpdates.updateDatabase(connection);
+				fail("Inherited repository schema versions should not be upgraded");
+			} catch (SQLException e) {
+				assertTrue(e.getMessage().contains("Unsupported HSQLDB repository schema version 73"));
+			}
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("SHUTDOWN");
+			}
+		}
+	}
+
+	@Test
 	public void testMultipleInstances() throws DataException {
 		int n_instances = 5;
 		Repository[] repositories = new Repository[n_instances];

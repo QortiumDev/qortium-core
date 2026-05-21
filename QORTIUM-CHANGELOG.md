@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - repository: reboot HSQLDB schema baseline
+
+Replaced the inherited HSQLDB migration replay with a direct Qortium baseline schema for fresh repositories. New databases now initialize to the first Qortium schema version without replaying old Qortal upgrade steps, while inherited repository versions fail with a clear reset/bootstrap message instead of pretending to be supported.
+
 ### 2026-05-21 - testnet: add live smoke checks
 
 Added a live smoke-test helper for the disposable single-node testnet so testers can verify more than basic API reachability. The helper checks that the node is running as a local testnet, the default minting account is installed, blocks are being minted, expected empty-startup resources are still empty, default groups exist, no peers are connected, and the startup log has no unexpected errors or warnings.

@@ -10,7 +10,6 @@ import org.qortal.event.EventBus;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
-import org.qortal.repository.hsqldb.HSQLDBDatabaseUpdates;
 import org.qortal.settings.Settings;
 import org.qortal.transaction.ArbitraryTransaction;
 import org.qortal.utils.Base58;
@@ -92,10 +91,7 @@ public class ArbitraryDataCacheManager extends Thread {
     public static void populateLatestSignaturesIfNecessary(Connection connection) throws DataException {
 
         try {
-            int databaseVersion = HSQLDBDatabaseUpdates.fetchDatabaseVersion(connection);
-
-            // if latest signature column is added, but not populated, then populate now
-            if( databaseVersion > 51 && !isLatestSignaturePopulated(connection)) {
+            if (!isLatestSignaturePopulated(connection)) {
 
                 StartupStatus.update("Gathering latest signatures for QDN ...");
                 LOGGER.info("Gathering latest signatures for QDN ...");
