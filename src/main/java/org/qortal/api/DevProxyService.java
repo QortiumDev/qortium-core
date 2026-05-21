@@ -125,8 +125,10 @@ public class DevProxyService {
 				this.server.setRequestLog(requestLog);
 			}
 
-			// Access handler (currently no whitelist is used)
+			// Developer proxy is intended for local app development only.
 			InetAccessHandler accessHandler = new InetAccessHandler();
+			accessHandler.include("127.0.0.1");
+			accessHandler.include("::1");
 			this.server.setHandler(accessHandler);
 
 			// URL rewriting

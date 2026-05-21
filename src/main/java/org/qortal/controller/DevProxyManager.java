@@ -6,6 +6,8 @@ import org.qortal.api.DevProxyService;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
 
+import java.util.Locale;
+
 public class DevProxyManager {
 
     protected static final Logger LOGGER = LogManager.getLogger(DevProxyManager.class);
@@ -55,8 +57,8 @@ public class DevProxyManager {
         }
     }
 
-    public void setSourceHostAndPort(String sourceHostAndPort) {
-        this.sourceHostAndPort = sourceHostAndPort;
+    public void setSourceHostAndPort(String sourceHostAndPort) throws DataException {
+        this.sourceHostAndPort = DevProxyManager.validateSourceHostAndPort(sourceHostAndPort);
     }
 
     public String getSourceHostAndPort() {
@@ -69,6 +71,70 @@ public class DevProxyManager {
 
     public boolean isRunning() {
         return this.running;
+    }
+
+    private static String validateSourceHostAndPort(String sourceHostAndPort) throws DataException {
+        if (sourceHostAndPort == null || sourceHostAndPort.isBlank()) {
+            throw new DataException("Developer proxy source must be a loopback host and port");
+        }
+
+        String source = sourceHostAndPort.trim();
+        if (source.contains("://") || source.contains("/") || source.contains("\\") ||
+                source.contains("?") || source.contains("#") || source.contains("@")) {
+            throw new DataException("Developer proxy source must be a host and port only");
+        }
+
+        String normalizedHost;
+        String portString;
+        if (source.startsWith("[")) {
+            int closingBracketIndex = source.indexOf(']');
+            if (closingBracketIndex < 0 || closingBracketIndex == source.length() - 1 ||
+                    source.charAt(closingBracketIndex + 1) != ':' || source.indexOf('[', 1) >= 0 ||
+                    source.indexOf(']', closingBracketIndex + 1) >= 0) {
+                throw new DataException("Developer proxy source must include a valid host and port");
+            }
+
+            String host = source.substring(1, closingBracketIndex).toLowerCase(Locale.ROOT);
+            if (!"::1".equals(host)) {
+                throw new DataException("Developer proxy source must use a loopback host");
+            }
+
+            normalizedHost = "[::1]";
+            portString = source.substring(closingBracketIndex + 2);
+        }
+        else {
+            int colonIndex = source.indexOf(':');
+            if (colonIndex <= 0 || colonIndex != source.lastIndexOf(':') || colonIndex == source.length() - 1) {
+                throw new DataException("Developer proxy source must include a valid host and port");
+            }
+
+            String host = source.substring(0, colonIndex).toLowerCase(Locale.ROOT);
+            if (!"localhost".equals(host) && !"127.0.0.1".equals(host)) {
+                throw new DataException("Developer proxy source must use a loopback host");
+            }
+
+            normalizedHost = host;
+            portString = source.substring(colonIndex + 1);
+        }
+
+        int port;
+        try {
+            port = Integer.parseInt(portString);
+        } catch (NumberFormatException e) {
+            throw new DataException("Developer proxy source port is invalid");
+        }
+
+        if (port < 1 || port > 65535) {
+            throw new DataException("Developer proxy source port is invalid");
+        }
+        if (port == Settings.getInstance().getApiPort()) {
+            throw new DataException("Developer proxy source cannot target the API port");
+        }
+        if (port == Settings.getInstance().getDevProxyPort()) {
+            throw new DataException("Developer proxy source cannot target the developer proxy port");
+        }
+
+        return String.format("%s:%d", normalizedHost, port);
     }
 
 }

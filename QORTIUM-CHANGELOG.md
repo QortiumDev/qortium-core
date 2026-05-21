@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Fix unauthenticated developer proxy control
+
+Protected Qortium's developer proxy controls with the normal API key check and limited the proxy to local development targets. Remote callers can no longer start, stop, or retarget the proxy without authorization, and authorized use is constrained away from arbitrary hosts and Qortium's own API ports.
+
 ### 2026-05-20 - Fix unsafe QDN patch path handling
 
 Hardened QDN patch merging so patch metadata cannot point added, modified, or removed files outside the intended source and merge folders. Qortium now rejects unsafe patch paths before applying file changes and normalizes internal containment checks used by cleanup safeguards.
