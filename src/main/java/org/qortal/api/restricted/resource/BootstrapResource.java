@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class BootstrapResource {
 
 	private static final Logger LOGGER = LogManager.getLogger(BootstrapResource.class);
-	private static final AtomicBoolean BOOTSTRAP_VALIDATION_IN_PROGRESS = new AtomicBoolean(false);
+	private static final AtomicBoolean BOOTSTRAP_OPERATION_IN_PROGRESS = new AtomicBoolean(false);
 
 	@Context
 	HttpServletRequest request;
@@ -50,24 +50,33 @@ public class BootstrapResource {
 		}
 	)
 	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.OPERATION_IN_PROGRESS, ApiError.REPOSITORY_ISSUE})
 	public String createBootstrap(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 		Security.checkApiCallAllowed(request);
 
-		try (final Repository repository = RepositoryManager.getRepository()) {
+		if (!tryAcquireBootstrapOperation())
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.OPERATION_IN_PROGRESS,
+					"Bootstrap operation is already running");
 
-			Bootstrap bootstrap = new Bootstrap(repository);
-			try {
-				bootstrap.checkRepositoryState();
-			} catch (DataException e) {
-				LOGGER.info("Not ready to create bootstrap: {}", e.getMessage());
+		try {
+			try (final Repository repository = RepositoryManager.getRepository()) {
+
+				Bootstrap bootstrap = new Bootstrap(repository);
+				try {
+					bootstrap.checkRepositoryState();
+				} catch (DataException e) {
+					LOGGER.info("Not ready to create bootstrap: {}", e.getMessage());
+					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, e.getMessage());
+				}
+				bootstrap.validateBlockchain();
+				return bootstrap.create();
+
+			} catch (Exception e) {
+				LOGGER.info("Unable to create bootstrap", e);
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, e.getMessage());
 			}
-			bootstrap.validateBlockchain();
-			return bootstrap.create();
-
-		} catch (Exception e) {
-			LOGGER.info("Unable to create bootstrap", e);
-			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, e.getMessage());
+		} finally {
+			releaseBootstrapOperation();
 		}
 	}
 
@@ -89,9 +98,9 @@ public class BootstrapResource {
 	public boolean validateBootstrap(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 		Security.checkApiCallAllowed(request);
 
-		if (!tryAcquireBootstrapValidation())
+		if (!tryAcquireBootstrapOperation())
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.OPERATION_IN_PROGRESS,
-					"Bootstrap validation is already running");
+					"Bootstrap operation is already running");
 
 		try {
 			try (final Repository repository = RepositoryManager.getRepository()) {
@@ -103,19 +112,19 @@ public class BootstrapResource {
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE);
 			}
 		} finally {
-			releaseBootstrapValidation();
+			releaseBootstrapOperation();
 		}
 	}
 
-	static boolean tryAcquireBootstrapValidation() {
-		return BOOTSTRAP_VALIDATION_IN_PROGRESS.compareAndSet(false, true);
+	static boolean tryAcquireBootstrapOperation() {
+		return BOOTSTRAP_OPERATION_IN_PROGRESS.compareAndSet(false, true);
 	}
 
-	static void releaseBootstrapValidation() {
-		BOOTSTRAP_VALIDATION_IN_PROGRESS.set(false);
+	static void releaseBootstrapOperation() {
+		BOOTSTRAP_OPERATION_IN_PROGRESS.set(false);
 	}
 
-	static boolean isBootstrapValidationInProgress() {
-		return BOOTSTRAP_VALIDATION_IN_PROGRESS.get();
+	static boolean isBootstrapOperationInProgress() {
+		return BOOTSTRAP_OPERATION_IN_PROGRESS.get();
 	}
 }

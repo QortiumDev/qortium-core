@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Prevent overlapping bootstrap operations
+
+Changed bootstrap maintenance so full-chain validation and bootstrap creation share one in-progress guard. Authenticated callers now get a quick conflict response when another bootstrap operation is already running, reducing duplicate heavy work and preventing overlapping access to shared bootstrap temp and output paths.
+
 ### 2026-05-20 - Prevent concurrent bootstrap validation
 
 Changed bootstrap validation so only one full-chain validation can run at a time on a node. Additional authenticated requests now fail quickly with a clear conflict response instead of starting another expensive validation pass, reducing the chance that administrative use can overload the node.

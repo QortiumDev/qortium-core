@@ -17,44 +17,62 @@ public class BootstrapResourceTests {
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
 		ApiCommon.installTestApiKey();
-		BootstrapResource.releaseBootstrapValidation();
+		BootstrapResource.releaseBootstrapOperation();
 	}
 
 	@After
 	public void afterTest() throws DataException {
-		BootstrapResource.releaseBootstrapValidation();
+		BootstrapResource.releaseBootstrapOperation();
 		ApiCommon.clearTestApiKey();
 		Common.useDefaultSettings();
 	}
 
 	@Test
 	public void testConcurrentValidationIsRejected() {
-		assertTrue(BootstrapResource.tryAcquireBootstrapValidation());
+		assertTrue(BootstrapResource.tryAcquireBootstrapOperation());
 
 		BootstrapResource resource = buildBootstrapResource(ApiCommon.TEST_API_KEY);
 
 		ApiCommon.assertApiError(ApiError.OPERATION_IN_PROGRESS, () -> resource.validateBootstrap(null));
-		assertTrue(BootstrapResource.isBootstrapValidationInProgress());
+		assertTrue(BootstrapResource.isBootstrapOperationInProgress());
 	}
 
 	@Test
-	public void testUnauthorizedValidationDoesNotAcquireGuard() {
+	public void testConcurrentCreationIsRejected() {
+		assertTrue(BootstrapResource.tryAcquireBootstrapOperation());
+
+		BootstrapResource resource = buildBootstrapResource(ApiCommon.TEST_API_KEY);
+
+		ApiCommon.assertApiError(ApiError.OPERATION_IN_PROGRESS, () -> resource.createBootstrap(null));
+		assertTrue(BootstrapResource.isBootstrapOperationInProgress());
+	}
+
+	@Test
+	public void testUnauthorizedValidationDoesNotAcquireOperationGuard() {
 		BootstrapResource resource = buildBootstrapResource(null);
 
 		ApiCommon.assertApiError(ApiError.UNAUTHORIZED, () -> resource.validateBootstrap(null));
-		assertFalse(BootstrapResource.isBootstrapValidationInProgress());
+		assertFalse(BootstrapResource.isBootstrapOperationInProgress());
 	}
 
 	@Test
-	public void testBootstrapValidationGuardCanBeReleased() {
-		assertFalse(BootstrapResource.isBootstrapValidationInProgress());
-		assertTrue(BootstrapResource.tryAcquireBootstrapValidation());
-		assertTrue(BootstrapResource.isBootstrapValidationInProgress());
+	public void testUnauthorizedCreationDoesNotAcquireOperationGuard() {
+		BootstrapResource resource = buildBootstrapResource(null);
 
-		BootstrapResource.releaseBootstrapValidation();
+		ApiCommon.assertApiError(ApiError.UNAUTHORIZED, () -> resource.createBootstrap(null));
+		assertFalse(BootstrapResource.isBootstrapOperationInProgress());
+	}
 
-		assertFalse(BootstrapResource.isBootstrapValidationInProgress());
-		assertTrue(BootstrapResource.tryAcquireBootstrapValidation());
+	@Test
+	public void testBootstrapOperationGuardCanBeReleased() {
+		assertFalse(BootstrapResource.isBootstrapOperationInProgress());
+		assertTrue(BootstrapResource.tryAcquireBootstrapOperation());
+		assertTrue(BootstrapResource.isBootstrapOperationInProgress());
+
+		BootstrapResource.releaseBootstrapOperation();
+
+		assertFalse(BootstrapResource.isBootstrapOperationInProgress());
+		assertTrue(BootstrapResource.tryAcquireBootstrapOperation());
 	}
 
 	private static BootstrapResource buildBootstrapResource(String apiKey) {
