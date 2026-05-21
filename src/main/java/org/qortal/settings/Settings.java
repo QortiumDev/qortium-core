@@ -407,7 +407,7 @@ public class Settings {
 	private Long maxStorageCapacity = null;
 
 	/** Whether to serve QDN data without authentication */
-	private boolean qdnAuthBypassEnabled = true;
+	private boolean qdnAuthBypassEnabled = false;
 
 	/** Limit threads per message type */
 	private Set<ThreadLimit> maxThreadsPerMessageType = new HashSet<>();

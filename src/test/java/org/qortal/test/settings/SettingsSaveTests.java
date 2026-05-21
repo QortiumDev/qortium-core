@@ -134,6 +134,30 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testQdnAuthBypassDefaultsToDisabled() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		assertFalse(Settings.getInstance().isQDNAuthBypassEnabled());
+	}
+
+	@Test
+	public void testQdnAuthBypassCanBeExplicitlyEnabled() throws Exception {
+		Path settingsPath = createSettingsFile("{\"qdnAuthBypassEnabled\":true}");
+		Settings.fileInstance(settingsPath.toString());
+
+		assertTrue(Settings.getInstance().isQDNAuthBypassEnabled());
+	}
+
+	@Test
+	public void testGatewayModeForcesQdnAuthBypass() throws Exception {
+		Path settingsPath = createSettingsFile("{\"gatewayEnabled\":true,\"qdnAuthBypassEnabled\":false}");
+		Settings.fileInstance(settingsPath.toString());
+
+		assertTrue(Settings.getInstance().isQDNAuthBypassEnabled());
+	}
+
+	@Test
 	public void testDisallowedSettingIsRejectedWithoutChangingFile() throws Exception {
 		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
 		Settings.fileInstance(settingsPath.toString());

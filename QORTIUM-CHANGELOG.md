@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Disable public QDN auth bypass by default
+
+Changed QDN API defaults so normal nodes require the admin API key before serving raw or rendered QDN data through API routes. Operators can still explicitly enable public QDN serving with `qdnAuthBypassEnabled`, and gateway mode continues to force public access because that is required for gateway operation.
+
 ### 2026-05-21 - Validate public keys before account construction
 
 Changed public-key account construction so malformed public keys are rejected before Qortium derives an address or builds Ed25519 key parameters. Trade-bot create requests now reject missing or wrong-sized creator public keys as invalid request data instead of relying on lower-level account construction to fail later.
