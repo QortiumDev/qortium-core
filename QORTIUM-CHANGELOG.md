@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - api: use Jetty baseResource for docs static files
+
+Changed the API documentation static-file servlet setup to use Jetty's current `baseResource` init parameter instead of the deprecated `resourceBase` name. This removes a startup warning from nodes with API documentation enabled while preserving the existing Swagger UI and disabled-documentation pages.
+
 ### 2026-05-21 - testnet: use admin API key for minting setup
 
 Changed the local testnet startup helper so it reads the generated admin API key before adding the default minting key. This keeps the single-node testnet walkthrough working now that protected admin API calls require the API key even from localhost.

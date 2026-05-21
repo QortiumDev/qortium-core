@@ -293,7 +293,7 @@ public class ApiService {
 				// Swagger-UI static content
 				ClassLoader loader = this.getClass().getClassLoader();
 				ServletHolder swaggerUIServlet = new ServletHolder("static-swagger-ui", DefaultServlet.class);
-				swaggerUIServlet.setInitParameter("resourceBase", loader.getResource("resources/swagger-ui/").toString());
+				swaggerUIServlet.setInitParameter("baseResource", loader.getResource("resources/swagger-ui/").toString());
 				swaggerUIServlet.setInitParameter("dirAllowed", "true");
 				swaggerUIServlet.setInitParameter("pathInfoOnly", "true");
 				context.addServlet(swaggerUIServlet, "/api-documentation/*");
@@ -304,7 +304,7 @@ public class ApiService {
 				// Simple pages that explains that API documentation is disabled
 				ClassLoader loader = this.getClass().getClassLoader();
 				ServletHolder swaggerUIServlet = new ServletHolder("api-docs-disabled", DefaultServlet.class);
-				swaggerUIServlet.setInitParameter("resourceBase", loader.getResource("api-docs-disabled/").toString());
+				swaggerUIServlet.setInitParameter("baseResource", loader.getResource("api-docs-disabled/").toString());
 				swaggerUIServlet.setInitParameter("dirAllowed", "true");
 				swaggerUIServlet.setInitParameter("pathInfoOnly", "true");
 				context.addServlet(swaggerUIServlet, "/api-documentation/*");
