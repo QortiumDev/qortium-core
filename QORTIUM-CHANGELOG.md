@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Restrict API key file permissions
+
+Changed API key storage so the local `apikey.txt` file is created and maintained as owner-readable and owner-writable only where the operating system supports those permissions. Existing key files are tightened when loaded, reducing the chance that another local user can read the admin API key.
+
 ### 2026-05-20 - Require auth for API key generation
 
 Changed API key generation so the admin endpoint now requires the current API key before rotating credentials. First-time API keys are created locally during API startup instead of through an unauthenticated HTTP request, which keeps remote callers from bootstrapping their own administrative access.

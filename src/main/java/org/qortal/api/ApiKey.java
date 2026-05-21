@@ -1,18 +1,30 @@
 package org.qortal.api;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.qortal.settings.Settings;
 import org.qortal.utils.Base58;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.SecureRandom;
+import java.util.Set;
 
 public class ApiKey {
+
+    private static final Logger LOGGER = LogManager.getLogger(ApiKey.class);
+    private static final Set<PosixFilePermission> API_KEY_FILE_PERMISSIONS =
+            PosixFilePermissions.fromString("rw-------");
 
     private String apiKey;
 
@@ -46,17 +58,17 @@ public class ApiKey {
 
     private boolean load() throws IOException {
         Path path = this.getFilePath();
-        File apiKeyFile = new File(path.toString());
-        if (!apiKeyFile.exists()) {
+        if (!Files.exists(path)) {
             // Try settings - to allow legacy API keys to be supported
             return this.loadLegacyApiKey();
         }
 
         try {
-            this.apiKey = new String(Files.readAllBytes(path));
+            this.restrictFilePermissions(path);
+            this.apiKey = Files.readString(path, StandardCharsets.UTF_8);
 
         } catch (IOException e) {
-            throw new IOException(String.format("Couldn't read contents from file %s", path.toString()));
+            throw new IOException(String.format("Couldn't read contents from file %s: %s", path, e.getMessage()), e);
         }
 
         return true;
@@ -85,8 +97,61 @@ public class ApiKey {
             Files.createDirectories(parentPath);
         }
 
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath.toString()))) {
-            writer.write(this.apiKey);
+        this.createApiKeyFileIfMissing(filePath);
+        this.restrictFilePermissions(filePath);
+        Files.writeString(filePath, this.apiKey, StandardCharsets.UTF_8,
+                StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING);
+        this.restrictFilePermissions(filePath);
+    }
+
+    private void createApiKeyFileIfMissing(Path filePath) throws IOException {
+        if (Files.exists(filePath)) {
+            return;
+        }
+
+        try {
+            if (this.supportsPosixFilePermissions(filePath)) {
+                FileAttribute<Set<PosixFilePermission>> permissions =
+                        PosixFilePermissions.asFileAttribute(API_KEY_FILE_PERMISSIONS);
+                Files.createFile(filePath, permissions);
+            } else {
+                Files.createFile(filePath);
+            }
+        } catch (FileAlreadyExistsException e) {
+            // Another thread/process created it after the exists check.
+        }
+    }
+
+    private void restrictFilePermissions(Path filePath) throws IOException {
+        if (this.supportsPosixFilePermissions(filePath)) {
+            Files.setPosixFilePermissions(filePath, API_KEY_FILE_PERMISSIONS);
+            return;
+        }
+
+        this.restrictNonPosixFilePermissions(filePath);
+    }
+
+    private boolean supportsPosixFilePermissions(Path filePath) throws IOException {
+        Path fileStorePath = Files.exists(filePath) ? filePath : filePath.getParent();
+        if (fileStorePath == null) {
+            fileStorePath = Paths.get(".").toAbsolutePath().normalize();
+        }
+
+        return Files.getFileStore(fileStorePath).supportsFileAttributeView(PosixFileAttributeView.class);
+    }
+
+    private void restrictNonPosixFilePermissions(Path filePath) {
+        File apiKeyFile = filePath.toFile();
+        boolean permissionsChanged = true;
+
+        permissionsChanged &= apiKeyFile.setReadable(false, false);
+        permissionsChanged &= apiKeyFile.setWritable(false, false);
+        permissionsChanged &= apiKeyFile.setExecutable(false, false);
+        permissionsChanged &= apiKeyFile.setReadable(true, true);
+        permissionsChanged &= apiKeyFile.setWritable(true, true);
+
+        if (!permissionsChanged) {
+            LOGGER.warn("Unable to confirm owner-only permissions on API key file {}", filePath);
         }
     }
 

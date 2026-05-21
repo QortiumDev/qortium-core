@@ -10,8 +10,13 @@ import org.qortal.settings.Settings;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -20,6 +25,9 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class ApiKeyGenerationTests extends ApiCommon {
+
+	private static final Set<PosixFilePermission> API_KEY_FILE_PERMISSIONS =
+			PosixFilePermissions.fromString("rw-------");
 
 	private Path testRoot;
 	private Path apiKeyPath;
@@ -61,6 +69,7 @@ public class ApiKeyGenerationTests extends ApiCommon {
 		assertSame(apiKey, ApiService.getInstance().getApiKey());
 		assertTrue(Files.exists(this.getApiKeyFile()));
 		assertEquals(apiKey.toString(), Files.readString(this.getApiKeyFile()));
+		assertApiKeyFileHasRestrictivePermissionsIfSupported();
 	}
 
 	@Test
@@ -73,6 +82,25 @@ public class ApiKeyGenerationTests extends ApiCommon {
 		assertTrue(apiKey.generated());
 		assertEquals(legacyApiKey, apiKey.toString());
 		assertEquals(legacyApiKey, Files.readString(this.getApiKeyFile()));
+		assertApiKeyFileHasRestrictivePermissionsIfSupported();
+	}
+
+	@Test
+	public void testExistingApiKeyPermissionsTightenedOnLoad() throws Exception {
+		Files.createDirectories(this.apiKeyPath);
+		Path apiKeyFile = this.getApiKeyFile();
+		Files.writeString(apiKeyFile, ApiCommon.TEST_API_KEY, StandardCharsets.UTF_8);
+
+		if (!this.supportsPosixPermissions(apiKeyFile)) {
+			return;
+		}
+
+		Files.setPosixFilePermissions(apiKeyFile, PosixFilePermissions.fromString("rw-r--r--"));
+
+		ApiKey apiKey = new ApiKey();
+
+		assertEquals(ApiCommon.TEST_API_KEY, apiKey.toString());
+		assertApiKeyFileHasRestrictivePermissionsIfSupported();
 	}
 
 	@Test
@@ -86,6 +114,7 @@ public class ApiKeyGenerationTests extends ApiCommon {
 		assertNotEquals(ApiCommon.TEST_API_KEY, newApiKey);
 		assertEquals(newApiKey, ApiService.getInstance().getApiKey().toString());
 		assertEquals(newApiKey, Files.readString(this.getApiKeyFile()));
+		assertApiKeyFileHasRestrictivePermissionsIfSupported();
 	}
 
 	@Test
@@ -101,6 +130,24 @@ public class ApiKeyGenerationTests extends ApiCommon {
 
 	private Path getApiKeyFile() {
 		return this.apiKeyPath.resolve("apikey.txt");
+	}
+
+	private void assertApiKeyFileHasRestrictivePermissionsIfSupported() throws Exception {
+		Path apiKeyFile = this.getApiKeyFile();
+		if (!this.supportsPosixPermissions(apiKeyFile)) {
+			return;
+		}
+
+		assertEquals(API_KEY_FILE_PERMISSIONS, Files.getPosixFilePermissions(apiKeyFile));
+	}
+
+	private boolean supportsPosixPermissions(Path path) throws Exception {
+		Path fileStorePath = Files.exists(path) ? path : path.getParent();
+		if (fileStorePath == null || !Files.exists(fileStorePath)) {
+			fileStorePath = this.testRoot;
+		}
+
+		return Files.getFileStore(fileStorePath).supportsFileAttributeView(PosixFileAttributeView.class);
 	}
 
 }
