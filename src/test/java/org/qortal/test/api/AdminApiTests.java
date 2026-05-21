@@ -1,6 +1,5 @@
 package org.qortal.test.api;
 
-import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -26,6 +25,7 @@ public class AdminApiTests extends ApiCommon {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
+		ApiCommon.installTestApiKey();
 	}
 
 	@Before
@@ -35,6 +35,7 @@ public class AdminApiTests extends ApiCommon {
 
 	@After
 	public void afterTest() throws DataException {
+		ApiCommon.clearTestApiKey();
 		Common.useDefaultSettings();
 	}
 
@@ -44,10 +45,7 @@ public class AdminApiTests extends ApiCommon {
 	}
 
 	@Test
-	public void testSummary() throws IllegalAccessException {
-		// Set localAuthBypassEnabled to true, since we don't need to test authentication here
-		FieldUtils.writeField(Settings.getInstance(), "localAuthBypassEnabled", true, true);
-
+	public void testSummary() {
 		assertNotNull(this.adminResource.summary());
 	}
 
@@ -58,10 +56,10 @@ public class AdminApiTests extends ApiCommon {
 
 	@Test
 	public void testUpdateSettings() throws Exception {
-		Path settingsPath = createWritableApiSettings("{\"localAuthBypassEnabled\":true,\"storagePolicy\":\"NONE\"}");
+		Path settingsPath = createWritableApiSettings("{\"storagePolicy\":\"NONE\"}");
 		Settings.fileInstance(settingsPath.toString());
 
-		Settings.SettingsUpdateResult result = this.adminResource.updateSettings(null, "{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.SettingsUpdateResult result = this.adminResource.updateSettings(ApiCommon.TEST_API_KEY, "{\"storagePolicy\":\"FOLLOWED\"}");
 
 		assertTrue(result.saved);
 		assertTrue(result.updated.contains("storagePolicy"));
@@ -70,11 +68,11 @@ public class AdminApiTests extends ApiCommon {
 
 	@Test
 	public void testUpdateSettingsRejectsDisallowedSetting() throws Exception {
-		Path settingsPath = createWritableApiSettings("{\"localAuthBypassEnabled\":true,\"storagePolicy\":\"NONE\"}");
+		Path settingsPath = createWritableApiSettings("{\"storagePolicy\":\"NONE\"}");
 		Settings.fileInstance(settingsPath.toString());
 
 		assertApiError(org.qortal.api.ApiError.INVALID_CRITERIA,
-				() -> this.adminResource.updateSettings(null, "{\"apiKey\":\"abcdefgh\"}"));
+				() -> this.adminResource.updateSettings(ApiCommon.TEST_API_KEY, "{\"apiKey\":\"abcdefgh\"}"));
 		assertEquals(StoragePolicy.NONE, Settings.getInstance().getStoragePolicy());
 	}
 

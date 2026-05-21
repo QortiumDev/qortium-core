@@ -4,6 +4,9 @@ import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiException;
+import org.qortal.api.ApiKey;
+import org.qortal.api.ApiService;
+import org.qortal.api.Security;
 import org.qortal.repository.DataException;
 import org.qortal.settings.Settings;
 
@@ -20,6 +23,7 @@ import static org.junit.Assert.fail;
 public class ApiCommon extends Common {
 
 	public static final long MAX_API_RESPONSE_PERIOD = 2_000L; // ms
+	public static final String TEST_API_KEY = "test-api-key";
 
 	public static final Boolean[] ALL_BOOLEAN_VALUES = new Boolean[] { null, true, false };
 	public static final Boolean[] TF_BOOLEAN_VALUES = new Boolean[] { true, false };
@@ -32,17 +36,24 @@ public class ApiCommon extends Common {
 		public abstract void call(Integer limit, Integer offset, Boolean reverse);
 	}
 
-	private static final HttpServletRequest FAKE_REQUEST = (HttpServletRequest) Proxy.newProxyInstance(
+	private static final HttpServletRequest FAKE_REQUEST = buildRequest("127.0.0.1", null);
+
+	public static HttpServletRequest buildRequest(String remoteAddr, String apiKey) {
+		return (HttpServletRequest) Proxy.newProxyInstance(
 			ApiCommon.class.getClassLoader(),
 			new Class[] { HttpServletRequest.class },
 			(proxy, method, args) -> {
 				switch (method.getName()) {
 					case "getRemoteAddr":
-						return "127.0.0.1";
+						return remoteAddr;
 					case "getLocale":
 						return Locale.getDefault();
+					case "getHeader":
+						return Security.API_KEY_HEADER.equals(args[0]) ? apiKey : null;
 					case "getHeaderNames":
-						return Collections.emptyEnumeration();
+						return apiKey != null
+								? Collections.enumeration(Collections.singletonList(Security.API_KEY_HEADER))
+								: Collections.emptyEnumeration();
 					case "getMethod":
 						return "GET";
 					case "getRequestURI":
@@ -62,6 +73,7 @@ public class ApiCommon extends Common {
 						return null;
 				}
 			});
+	}
 
 	public String aliceAddress;
 	public String bobAddress;
@@ -75,17 +87,39 @@ public class ApiCommon extends Common {
 	}
 
 	public static Object buildResource(Class<?> resourceClass) {
+		return buildResource(resourceClass, FAKE_REQUEST);
+	}
+
+	public static Object buildResource(Class<?> resourceClass, String apiKey) {
+		return buildResource(resourceClass, buildRequest("127.0.0.1", apiKey));
+	}
+
+	private static Object buildResource(Class<?> resourceClass, HttpServletRequest request) {
 		try {
 			Object resource = resourceClass.getDeclaredConstructor().newInstance();
 
 			Field requestField = resourceClass.getDeclaredField("request");
 			requestField.setAccessible(true);
-			requestField.set(resource, FAKE_REQUEST);
+			requestField.set(resource, request);
 
 			return resource;
 		} catch (Exception e) {
 			throw new RuntimeException("Failed to build API resource " + resourceClass.getName() + ": " + e.getMessage(), e);
 		}
+	}
+
+	public static void installTestApiKey() {
+		try {
+			ApiKey apiKey = new ApiKey();
+			FieldUtils.writeField(apiKey, "apiKey", TEST_API_KEY, true);
+			ApiService.getInstance().setApiKey(apiKey);
+		} catch (Exception e) {
+			throw new RuntimeException("Failed to install test API key", e);
+		}
+	}
+
+	public static void clearTestApiKey() {
+		ApiService.getInstance().setApiKey(null);
 	}
 
 	public static void assertApiError(ApiError expectedApiError, Runnable apiCall, Long maxResponsePeriod) {

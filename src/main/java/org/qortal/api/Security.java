@@ -29,20 +29,6 @@ public abstract class Security {
 	 * @param passedApiKey - the API key to test, or null if it should be retrieved from the request headers.
 	 */
 	public static void checkApiCallAllowed(HttpServletRequest request, String passedApiKey) {
-		// We may want to allow automatic authentication for local requests, if enabled in settings
-		boolean localAuthBypassEnabled = Settings.getInstance().isLocalAuthBypassEnabled();
-		if (localAuthBypassEnabled) {
-			try {
-				InetAddress remoteAddr = InetAddress.getByName(request.getRemoteAddr());
-				if (remoteAddr.isLoopbackAddress()) {
-					// Request originates from loopback address, so allow it
-					return;
-				}
-			} catch (UnknownHostException e) {
-				// Ignore failure, and fallback to API key authentication
-			}
-		}
-
 		// Retrieve the API key
 		ApiKey apiKey = Security.getApiKey(request);
 		if (!apiKey.generated()) {
@@ -77,19 +63,6 @@ public abstract class Security {
 			}
 		} catch (UnknownHostException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.UNAUTHORIZED);
-		}
-	}
-
-	public static void disallowLoopbackRequestsIfAuthBypassEnabled(HttpServletRequest request) {
-		if (Settings.getInstance().isLocalAuthBypassEnabled()) {
-			try {
-				InetAddress remoteAddr = InetAddress.getByName(request.getRemoteAddr());
-				if (remoteAddr.isLoopbackAddress()) {
-					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.UNAUTHORIZED, "Local requests not allowed when localAuthBypassEnabled is enabled in settings");
-				}
-			} catch (UnknownHostException e) {
-				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.UNAUTHORIZED);
-			}
 		}
 	}
 

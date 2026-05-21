@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-20 - Fix loopback API auth bypass
+
+Changed Qortium's protected API authorization so requests from localhost must provide the same API key as any other caller. The old local auth bypass setting is still accepted in settings files for compatibility, but local network origin is no longer treated as proof that an administrative request is trusted.
+
 ### 2026-05-20 - Fix unauthenticated developer proxy control
 
 Protected Qortium's developer proxy controls with the normal API key check and limited the proxy to local development targets. Remote callers can no longer start, stop, or retarget the proxy without authorization, and authorized use is constrained away from arbitrary hosts and Qortium's own API ports.

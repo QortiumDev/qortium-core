@@ -3,7 +3,6 @@ package org.qortal.test;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.apache.commons.lang3.reflect.FieldUtils;
 import org.qortal.api.resource.ListsResource;
 import org.qortal.list.ResourceList;
 import org.qortal.list.ResourceListManager;
@@ -25,12 +24,14 @@ public class ListTests {
     @Before
     public void beforeTest() throws DataException, IOException {
         Common.useDefaultSettings();
+        ApiCommon.installTestApiKey();
         this.cleanup();
     }
 
     @After
     public void afterTest() throws DataException, IOException {
         this.cleanup();
+        ApiCommon.clearTestApiKey();
     }
 
     private void cleanup() throws IOException {
@@ -64,13 +65,11 @@ public class ListTests {
     }
 
     @Test
-    public void testListNameApi() throws IllegalAccessException {
-        FieldUtils.writeField(Settings.getInstance(), "localAuthBypassEnabled", true, true);
-
+    public void testListNameApi() {
         ResourceListManager.getInstance().addToList("followedNames_test", "testName1", true);
 
-        ListsResource listsResource = (ListsResource) ApiCommon.buildResource(ListsResource.class);
-        List<String> listNames = listsResource.getLists(null);
+        ListsResource listsResource = (ListsResource) ApiCommon.buildResource(ListsResource.class, ApiCommon.TEST_API_KEY);
+        List<String> listNames = listsResource.getLists(ApiCommon.TEST_API_KEY);
 
         assertEquals(1, listNames.size());
         assertEquals("followedNames_test", listNames.get(0));
