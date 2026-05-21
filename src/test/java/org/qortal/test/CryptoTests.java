@@ -133,6 +133,30 @@ public class CryptoTests extends Common {
 		assertEquals(expectedSignature58, Base58.encode(signature));
 
 		assertTrue(account.verify(signature, message));
+		assertTrue(Crypto.verify(account.getPublicKey(), signature, message));
+	}
+
+	@Test
+	public void testVerifyRejectsMalformedInputs() {
+		final String privateKey58 = "A9MNsATgQgruBUjxy2rjWY36Yf19uRioKZbiLFT2P7c6";
+		final String message58 = "111FDmMy7u7ChH3SNLNYoUqE9eQRDVKGzhYTAU7XJRVZ7L966aKdDFBeD5WBQP372Lgpdbt4L8HuPobB1CWbJzdUqa72MYVA8A8pmocQQpzRsC5Kreif94yiScTDnnvCWcNERj9J2sqTH12gVdeeLt9Ery7HZFi6tDyysTLBkWfmDjuLnSfDKc7xeqZFkMSG1oatPedzrsDtrBZ";
+
+		PrivateKeyAccount account = new PrivateKeyAccount(null, Base58.decode(privateKey58));
+		byte[] publicKey = account.getPublicKey();
+		byte[] message = Base58.decode(message58);
+		byte[] signature = account.sign(message);
+
+		byte[] modifiedSignature = signature.clone();
+		modifiedSignature[0] ^= 1;
+
+		assertFalse(Crypto.verify(null, signature, message));
+		assertFalse(Crypto.verify(Arrays.copyOf(publicKey, publicKey.length - 1), signature, message));
+		assertFalse(Crypto.verify(Arrays.copyOf(publicKey, publicKey.length + 1), signature, message));
+		assertFalse(Crypto.verify(publicKey, null, message));
+		assertFalse(Crypto.verify(publicKey, Arrays.copyOf(signature, signature.length - 1), message));
+		assertFalse(Crypto.verify(publicKey, Arrays.copyOf(signature, signature.length + 1), message));
+		assertFalse(Crypto.verify(publicKey, signature, null));
+		assertFalse(Crypto.verify(publicKey, modifiedSignature, message));
 	}
 
 	@Test

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Validate crypto signature inputs before verification
+
+Changed signature verification so malformed public keys, signatures, and messages are rejected with a clear `false` result before they reach the Ed25519 verifier. This keeps external bad input from becoming a server error while avoiding a broad exception catch around normal cryptographic verification.
+
 ### 2026-05-21 - Hash decoded auto-update JARs in manifests
 
 Changed QDN auto-update manifests so their SHA-256 hash now covers the decoded JAR that Qortium writes and runs, instead of the XORed transport file published to QDN. The update file is still stored as `qortium.update`, but the integrity check now describes the executable bytes directly, and the publishing documentation and helper script use the same definition.

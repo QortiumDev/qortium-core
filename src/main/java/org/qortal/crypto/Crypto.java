@@ -279,11 +279,16 @@ public abstract class Crypto {
 	}
 
 	public static boolean verify(byte[] publicKey, byte[] signature, byte[] message) {
-		try {
-			return Ed25519.verify(signature, 0, publicKey, 0, message, 0, message.length);
-		} catch (Exception e) {
+		if (publicKey == null || publicKey.length != Ed25519.PUBLIC_KEY_SIZE)
 			return false;
-		}
+
+		if (signature == null || signature.length != SIGNATURE_LENGTH)
+			return false;
+
+		if (message == null)
+			return false;
+
+		return Ed25519.verify(signature, 0, publicKey, 0, message, 0, message.length);
 	}
 
 	public static byte[] sign(Ed25519PrivateKeyParameters edPrivateKeyParams, byte[] message) {
