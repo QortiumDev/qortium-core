@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Close developer proxy response streams safely
+
+Changed the developer proxy so upstream response streams are closed automatically if reading proxied content fails. This keeps proxy responses the same while avoiding leaked connection streams during developer proxy I/O errors.
+
 ### 2026-05-21 - Close SSL certificate input streams safely
 
 Changed SSL keystore creation so the generated CA and server certificate files are closed automatically if certificate parsing or keystore setup fails. This keeps certificate and keystore behavior unchanged while avoiding leaked file handles on SSL setup errors.

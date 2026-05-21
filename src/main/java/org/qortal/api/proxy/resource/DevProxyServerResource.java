@@ -119,19 +119,15 @@ public class DevProxyServerResource {
             break;
         }
 
-        // Read the response body
-        InputStream inputStream = con.getInputStream();
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        byte[] buffer = new byte[4096];
-        int bytesRead;
-        while ((bytesRead = inputStream.read(buffer)) != -1) {
-            outputStream.write(buffer, 0, bytesRead);
+        try (InputStream inputStream = con.getInputStream()) {
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
         }
         byte[] data = outputStream.toByteArray(); // TODO: limit file size that can be read into memory
-
-        // Close the streams
-        outputStream.close();
-        inputStream.close();
 
         // Extract filename
         String filename = "";
