@@ -115,12 +115,6 @@ public class Settings {
 		"::1", "127.0.0.1"
 	};
 
-	/**
-	 * Legacy API key (deprecated Nov 2021). API keys are stored in apikey.txt
-	 * and rotated with /admin/apikey/generate.
-	 */
-	// @ToDo: Might be able to safely remove this as min version is now past this?
-	private String apiKey = null;
 	/** Storage location for API key file (Nov 2021 onwards) */
 	private String apiKeyPath = System.getProperty("user.dir");
 	/** Retained for legacy settings compatibility. Loopback requests no longer bypass API authentication. */
@@ -1251,9 +1245,6 @@ public class Settings {
 		if (this.topOnly)
 			throwValidationError("topOnly mode is no longer supported");
 
-		if (this.apiKey != null && this.apiKey.trim().length() < 8)
-			throwValidationError("apiKey must be at least 8 characters");
-
 		try {
 			StoragePolicy.valueOf(this.storagePolicy);
 		} catch (IllegalArgumentException ex) {
@@ -1434,10 +1425,6 @@ public class Settings {
 
 		// Not set in config file, so restrict if not testnet
 		return !BlockChain.getInstance().isTestChain();
-	}
-
-	public String getApiKey() {
-		return this.apiKey;
 	}
 
 	public String getOurExternalIpAddress() {

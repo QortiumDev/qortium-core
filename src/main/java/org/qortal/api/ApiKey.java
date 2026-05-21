@@ -59,8 +59,7 @@ public class ApiKey {
     private boolean load() throws IOException {
         Path path = this.getFilePath();
         if (!Files.exists(path)) {
-            // Try settings - to allow legacy API keys to be supported
-            return this.loadLegacyApiKey();
+            return false;
         }
 
         try {
@@ -72,18 +71,6 @@ public class ApiKey {
         }
 
         return true;
-    }
-
-    private boolean loadLegacyApiKey() throws IOException {
-        String legacyApiKey = Settings.getInstance().getApiKey();
-        if (legacyApiKey != null && !legacyApiKey.isEmpty()) {
-            this.apiKey = Settings.getInstance().getApiKey();
-
-            // Save it to the apikey file
-            this.save();
-            return true;
-        }
-        return false;
     }
 
     public void save() throws IOException {

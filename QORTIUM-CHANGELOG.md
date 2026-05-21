@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Remove legacy API key setting support
+
+Removed the old settings-file API key migration path so Qortium only uses the dedicated `apikey.txt` file for administrative API credentials. This keeps the unreleased baseline cleaner for new chains and avoids carrying forward legacy credential handling that Qortium does not need.
+
 ### 2026-05-20 - Prevent overlapping bootstrap operations
 
 Changed bootstrap maintenance so full-chain validation and bootstrap creation share one in-progress guard. Authenticated callers now get a quick conflict response when another bootstrap operation is already running, reducing duplicate heavy work and preventing overlapping access to shared bootstrap temp and output paths.

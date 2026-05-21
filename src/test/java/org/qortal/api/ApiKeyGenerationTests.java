@@ -73,19 +73,6 @@ public class ApiKeyGenerationTests extends ApiCommon {
 	}
 
 	@Test
-	public void testInitializeApiKeyPersistsLegacySettingsKey() throws Exception {
-		String legacyApiKey = "legacy-test-api-key";
-		FieldUtils.writeField(Settings.getInstance(), "apiKey", legacyApiKey, true);
-
-		ApiKey apiKey = ApiService.getInstance().initializeApiKey();
-
-		assertTrue(apiKey.generated());
-		assertEquals(legacyApiKey, apiKey.toString());
-		assertEquals(legacyApiKey, Files.readString(this.getApiKeyFile()));
-		assertApiKeyFileHasRestrictivePermissionsIfSupported();
-	}
-
-	@Test
 	public void testExistingApiKeyPermissionsTightenedOnLoad() throws Exception {
 		Files.createDirectories(this.apiKeyPath);
 		Path apiKeyFile = this.getApiKeyFile();
