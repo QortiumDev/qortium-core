@@ -278,10 +278,13 @@ public class SslUtils {
     private static void createKeystore() throws Exception {
         // Load CA certificate
         CertificateFactory cf = CertificateFactory.getInstance("X.509", "BC");
-        X509Certificate caCert = (X509Certificate) cf.generateCertificate(new FileInputStream(CA_CERT_PATH));
-
-        // Load server certificate
-        X509Certificate serverCert = (X509Certificate) cf.generateCertificate(new FileInputStream(SERVER_CERT_PATH));
+        X509Certificate caCert;
+        X509Certificate serverCert;
+        try (FileInputStream caCertInputStream = new FileInputStream(CA_CERT_PATH);
+             FileInputStream serverCertInputStream = new FileInputStream(SERVER_CERT_PATH)) {
+            caCert = (X509Certificate) cf.generateCertificate(caCertInputStream);
+            serverCert = (X509Certificate) cf.generateCertificate(serverCertInputStream);
+        }
 
         // Load server key
         PrivateKey serverKey;

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Close SSL certificate input streams safely
+
+Changed SSL keystore creation so the generated CA and server certificate files are closed automatically if certificate parsing or keystore setup fails. This keeps certificate and keystore behavior unchanged while avoiding leaked file handles on SSL setup errors.
+
 ### 2026-05-21 - Close QDN renderer file streams safely
 
 Changed QDN file rendering so source files are closed automatically if streaming a regular file to the API response fails. This keeps rendered content behavior the same while avoiding leaked file handles on response I/O errors.
