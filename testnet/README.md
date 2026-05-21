@@ -29,6 +29,16 @@ Confirm that the API is reachable and the node is minting blocks:
 ./testnet/status.sh --wait
 ```
 
+Run the live smoke checks when you want a broader local sanity test:
+
+```sh
+./testnet/smoke-test.sh --wait
+```
+
+The smoke helper uses `curl` and `jq` to check the running testnet's API,
+minting account, current block, local settings, default groups, empty startup
+state, peer summary, and startup log.
+
 The status helper checks the local testnet API at:
 
 ```text

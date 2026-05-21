@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - testnet: add live smoke checks
+
+Added a live smoke-test helper for the disposable single-node testnet so testers can verify more than basic API reachability. The helper checks that the node is running as a local testnet, the default minting account is installed, blocks are being minted, expected empty-startup resources are still empty, default groups exist, no peers are connected, and the startup log has no unexpected errors or warnings.
+
 ### 2026-05-21 - foreign-fees: treat missing backups as normal startup
 
 Changed foreign-fee backup import logging so a fresh node that has no existing foreign-fee backup files reports that state as informational instead of warning-level. This keeps new local testnet logs focused on real problems while preserving visibility that there was nothing to import.
