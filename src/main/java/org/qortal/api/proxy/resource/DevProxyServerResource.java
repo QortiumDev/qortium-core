@@ -59,9 +59,10 @@ public class DevProxyServerResource {
             // Proxy the request data
             this.proxyRequestToConnection(request, con);
 
+            int responseCode;
             try {
                 // Make the request and proxy the response code
-                response.setStatus(con.getResponseCode());
+                responseCode = con.getResponseCode();
             }
             catch (ConnectException e) {
 
@@ -79,11 +80,13 @@ public class DevProxyServerResource {
                 url = new URL(String.format("http://%s%s%s", source, inPath, queryString));
                 con = (HttpURLConnection) url.openConnection();
                 this.proxyRequestToConnection(request, con);
-                response.setStatus(con.getResponseCode());
+                responseCode = con.getResponseCode();
             }
 
+            response.setStatus(responseCode);
+
             // Proxy the response data back to the caller
-            this.proxyConnectionToResponse(con, response, inPath);
+            this.proxyConnectionToResponse(con, response, inPath, responseCode);
 
         } catch (IOException e) {
             throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
@@ -107,7 +110,7 @@ public class DevProxyServerResource {
         // TODO: proxy any POST parameters from "request" to "con"
     }
 
-    private void proxyConnectionToResponse(HttpURLConnection con, HttpServletResponse response, String inPath) throws IOException {
+    private void proxyConnectionToResponse(HttpURLConnection con, HttpServletResponse response, String inPath, int responseCode) throws IOException {
         // Proxy the response headers
         for (int i = 0; ; i++) {
             String headerKey = con.getHeaderFieldKey(i);
@@ -120,11 +123,16 @@ public class DevProxyServerResource {
         }
 
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        try (InputStream inputStream = con.getInputStream()) {
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
+        InputStream responseStream = responseCode >= HttpURLConnection.HTTP_BAD_REQUEST
+                ? con.getErrorStream()
+                : con.getInputStream();
+        if (responseStream != null) {
+            try (InputStream inputStream = responseStream) {
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
             }
         }
         byte[] data = outputStream.toByteArray(); // TODO: limit file size that can be read into memory

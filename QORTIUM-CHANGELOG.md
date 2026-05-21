@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Proxy developer error responses correctly
+
+Changed the developer proxy so upstream error responses, such as 404 pages from a local frontend server, are returned with their original status and body instead of being converted into a Qortium API error. This makes the developer proxy behave more like a normal local web proxy when a requested file or route is missing.
+
 ### 2026-05-21 - Close developer proxy response streams safely
 
 Changed the developer proxy so upstream response streams are closed automatically if reading proxied content fails. This keeps proxy responses the same while avoiding leaked connection streams during developer proxy I/O errors.
