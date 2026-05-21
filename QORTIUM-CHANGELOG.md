@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Clarify developer proxy GET-only request handling
+
+Changed a developer proxy code comment so it no longer presents non-GET request forwarding as an unfinished bug. The comment now explains that the proxy currently exposes GET handlers only, and that future non-GET support would need deliberate request-body forwarding.
+
 ### 2026-05-21 - Limit QDN HTML rewrite buffering
 
 Changed QDN HTML rendering so very large HTML files are rejected before they are loaded into memory for rewriting. This keeps normal HTML rendering behavior while putting a clear memory guard around the parser path.

@@ -160,7 +160,8 @@ public class DevProxyServerResource {
 
         con.setRequestProperty("Accept-Encoding", "identity");
 
-        // TODO: proxy any POST parameters from "request" to "con"
+        // This proxy currently exposes GET handlers only. If non-GET handlers are added,
+        // request bodies and related content headers must be forwarded deliberately.
     }
 
     private static boolean isProxyManagedRequestHeader(String headerName) {
