@@ -188,7 +188,7 @@ public class AutoUpdate extends Thread {
 		if (!lookup.status.updateAvailable)
 			return lookup.status;
 
-		if (!updateInstallInProgress.compareAndSet(false, true)) {
+		if (!tryAcquireUpdateInstall()) {
 			lookup.status.installing = true;
 			lookup.status.status = STATUS_INSTALL_IN_PROGRESS;
 			lookup.status.message = "An update install is already in progress";
@@ -209,7 +209,7 @@ public class AutoUpdate extends Thread {
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 				LOGGER.warn("Manual auto-update attempt was interrupted before it started");
-				updateInstallInProgress.set(false);
+				releaseUpdateInstall();
 			}
 		}, "Manual auto-update").start();
 
@@ -227,7 +227,7 @@ public class AutoUpdate extends Thread {
 		status.autoUpdateMode = autoUpdateMode.name();
 		status.autoUpdateEnabled = autoUpdateMode == AutoUpdateMode.INSTALL;
 		status.qdnEnabled = Settings.getInstance().isQdnEnabled();
-		status.installing = updateInstallInProgress.get();
+		status.installing = isUpdateInstallInProgress();
 
 		if (!status.qdnEnabled)
 			return UpdateLookup.withoutManifest(status, STATUS_QDN_DISABLED,
@@ -371,7 +371,7 @@ public class AutoUpdate extends Thread {
 	}
 
 	private static boolean attemptUpdate(AutoUpdateManifest manifest) {
-		if (!updateInstallInProgress.compareAndSet(false, true)) {
+		if (!tryAcquireUpdateInstall()) {
 			LOGGER.warn("Skipping auto-update because another update install is already in progress");
 			return false;
 		}
@@ -380,10 +380,30 @@ public class AutoUpdate extends Thread {
 	}
 
 	private static boolean attemptUpdateAlreadyMarkedInProgress(AutoUpdateManifest manifest) {
+		boolean applyProcessStarted = false;
 		try {
-			return attemptUpdateInternal(manifest);
+			applyProcessStarted = attemptUpdateInternal(manifest);
+			return applyProcessStarted;
 		} finally {
-			updateInstallInProgress.set(false);
+			finishUpdateInstallAttempt(applyProcessStarted);
+		}
+	}
+
+	static boolean tryAcquireUpdateInstall() {
+		return updateInstallInProgress.compareAndSet(false, true);
+	}
+
+	static void releaseUpdateInstall() {
+		updateInstallInProgress.set(false);
+	}
+
+	static boolean isUpdateInstallInProgress() {
+		return updateInstallInProgress.get();
+	}
+
+	static void finishUpdateInstallAttempt(boolean applyProcessStarted) {
+		if (!applyProcessStarted) {
+			releaseUpdateInstall();
 		}
 	}
 

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Keep auto-update guard after apply launch
+
+Changed auto-update install tracking so Qortium keeps the update in-progress flag set after the update helper process has been launched. This prevents repeated manual or automatic update attempts from starting multiple apply-update helper processes during the shutdown and restart handoff.
+
 ### 2026-05-21 - Prevent repeated restart apply attempts
 
 Changed restart scheduling so Qortium refuses duplicate restart-apply requests while one is already scheduled or running. This prevents repeated authenticated admin calls or internal restart triggers from launching multiple restart helper processes before the node shuts down and comes back up.

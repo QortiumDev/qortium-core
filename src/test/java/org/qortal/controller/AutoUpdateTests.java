@@ -1,6 +1,8 @@
 package org.qortal.controller;
 
 import org.apache.commons.lang3.reflect.FieldUtils;
+import org.junit.After;
+import org.junit.Before;
 import org.junit.Test;
 import org.qortal.ApplyUpdate;
 import org.qortal.settings.Settings;
@@ -19,6 +21,16 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class AutoUpdateTests {
+
+	@Before
+	public void beforeTest() {
+		AutoUpdate.releaseUpdateInstall();
+	}
+
+	@After
+	public void afterTest() {
+		AutoUpdate.releaseUpdateInstall();
+	}
 
 	private Settings newSettingsInstance() throws ReflectiveOperationException {
 		Constructor<Settings> constructor = Settings.class.getDeclaredConstructor();
@@ -190,5 +202,31 @@ public class AutoUpdateTests {
 		assertEquals("qortium.jar", AutoUpdate.JAR_FILENAME);
 		assertEquals("new-qortium.jar", AutoUpdate.NEW_JAR_FILENAME);
 		assertEquals("-DQORTIUM_agentlib=", AutoUpdate.AGENTLIB_JVM_HOLDER_ARG);
+	}
+
+	@Test
+	public void testUpdateInstallGuardRejectsDuplicateAcquisition() {
+		assertTrue(AutoUpdate.tryAcquireUpdateInstall());
+
+		assertFalse(AutoUpdate.tryAcquireUpdateInstall());
+		assertTrue(AutoUpdate.isUpdateInstallInProgress());
+	}
+
+	@Test
+	public void testUpdateInstallGuardIsHeldAfterApplyProcessStarts() {
+		assertTrue(AutoUpdate.tryAcquireUpdateInstall());
+
+		AutoUpdate.finishUpdateInstallAttempt(true);
+
+		assertTrue(AutoUpdate.isUpdateInstallInProgress());
+	}
+
+	@Test
+	public void testUpdateInstallGuardIsReleasedWhenApplyProcessDoesNotStart() {
+		assertTrue(AutoUpdate.tryAcquireUpdateInstall());
+
+		AutoUpdate.finishUpdateInstallAttempt(false);
+
+		assertFalse(AutoUpdate.isUpdateInstallInProgress());
 	}
 }
