@@ -48,6 +48,7 @@ final class LinuxStatusNotifierTray implements NodeTray {
 	private static final String ICON_PIXMAP_SIGNATURE = "a(iiay)";
 	private static final String TOOLTIP_SIGNATURE = "(sa(iiay)ss)";
 	private static final String MENU_ITEM_SIGNATURE = "(ia{sv}av)";
+	private static final String TOOLTIP_TITLE = "Qortium";
 	private static final String ICON_THEME_INDEX = "[Icon Theme]\n"
 			+ "Name=Qortium Tray\n"
 			+ "Comment=Qortium tray icons\n"
@@ -69,7 +70,7 @@ final class LinuxStatusNotifierTray implements NodeTray {
 	private final StatusNotifierItemObject itemObject;
 	private final DBusMenuObject menuObject;
 	private volatile TrayIconState iconState = TrayIconState.SYNCED;
-	private volatile String tooltip = "Qortium";
+	private volatile String tooltip = "";
 	private volatile boolean menuAvailable;
 	private volatile boolean disposed;
 
@@ -287,7 +288,40 @@ final class LinuxStatusNotifierTray implements NodeTray {
 	}
 
 	private ToolTip createToolTip() {
-		return new ToolTip(this.iconState.getIconName(), createIconPixmaps(this.iconState), "Qortium", this.tooltip);
+		return new ToolTip(this.iconState.getIconName(), createIconPixmaps(this.iconState),
+				getToolTipTitle(this.tooltip), getToolTipDescription(this.tooltip));
+	}
+
+	static String getToolTipTitle(String tooltip) {
+		String firstLine = getToolTipLine(tooltip, 0);
+		if (firstLine.isEmpty())
+			return TOOLTIP_TITLE;
+
+		return String.format("%s - %s", TOOLTIP_TITLE, firstLine);
+	}
+
+	static String getToolTipDescription(String tooltip) {
+		String normalizedTooltip = normalizeToolTip(tooltip);
+		if (normalizedTooltip.isEmpty())
+			return "";
+
+		int lineBreakIndex = normalizedTooltip.indexOf('\n');
+		if (lineBreakIndex < 0)
+			return "";
+
+		return normalizedTooltip.substring(lineBreakIndex + 1).trim();
+	}
+
+	private static String getToolTipLine(String tooltip, int lineIndex) {
+		String[] lines = normalizeToolTip(tooltip).split("\\n", -1);
+		if (lineIndex >= lines.length)
+			return "";
+
+		return lines[lineIndex].trim();
+	}
+
+	private static String normalizeToolTip(String tooltip) {
+		return tooltip == null ? "" : tooltip.replace("\r\n", "\n").replace('\r', '\n').trim();
 	}
 
 	private void emitStatusNotifierSignal(String signalName) {

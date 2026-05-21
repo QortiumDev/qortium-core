@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - tray: show node status in Linux tooltip
+
+Changed the Linux tray tooltip so desktop panels that only display the StatusNotifier title still show the live node status, including minting state, peer count, and height. Panels that support the longer tooltip description still keep the build version detail.
+
 ### 2026-05-21 - testnet: quiet single-node startup logs
 
 Cleaned up local single-node testnet startup behavior so fresh runs report build metadata once and skip peer-sync messages that do not apply to an intentional no-peer node. The Linux tray now publishes a real Qortium icon, tooltip, and context menu through the desktop StatusNotifier path, and the smoke helper checks the latest startup log so those regressions are easier to catch.
