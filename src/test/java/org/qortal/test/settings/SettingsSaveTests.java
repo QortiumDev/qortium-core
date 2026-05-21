@@ -87,6 +87,23 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testAutoUpdateReposSettingIsRejectedWithoutChangingFile() throws Exception {
+		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"CHECK_ONLY\"}");
+		Settings.fileInstance(settingsPath.toString());
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
+
+		try {
+			Settings.updateAndSave("{\"autoUpdateRepos\":[\"https://example.com/%s\"]}");
+			fail("Expected autoUpdateRepos to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("not writable"));
+		}
+
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+		assertEquals(AutoUpdateMode.CHECK_ONLY, Settings.getInstance().getAutoUpdateMode());
+	}
+
+	@Test
 	public void testInvalidAutoUpdateModeIsRejectedWithoutChangingFile() throws Exception {
 		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"OFF\"}");
 		Settings.fileInstance(settingsPath.toString());

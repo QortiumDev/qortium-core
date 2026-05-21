@@ -168,7 +168,6 @@ public class AutoUpdateQdnTests extends Common {
 
 			AutoUpdate.UpdateCheckResult status = AutoUpdate.checkLatestUpdate();
 
-			assertFalse(status.autoUpdateEnabled);
 			assertTrue(status.qdnEnabled);
 			assertTrue(status.updateAvailable);
 			assertFalse(status.installing);

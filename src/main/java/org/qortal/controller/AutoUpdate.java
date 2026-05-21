@@ -63,7 +63,6 @@ public class AutoUpdate extends Thread {
 	public static final String STATUS_UNSUPPORTED_TRANSACTION = "UNSUPPORTED_TRANSACTION";
 	public static final String STATUS_MANIFEST_NOT_LOCAL = "MANIFEST_NOT_LOCAL";
 	public static final String STATUS_INVALID_MANIFEST = "INVALID_MANIFEST";
-	public static final String STATUS_LEGACY_MANIFEST = "LEGACY_MANIFEST";
 	public static final String STATUS_UNPINNED_MANIFEST = "UNPINNED_MANIFEST";
 	public static final String STATUS_INVALID_BINARY_TRANSACTION = "INVALID_BINARY_TRANSACTION";
 	public static final String STATUS_NOT_NEWER = "NOT_NEWER";
@@ -225,7 +224,6 @@ public class AutoUpdate extends Thread {
 		AutoUpdateMode autoUpdateMode = Settings.getInstance().getAutoUpdateMode();
 		status.currentBuildTimestamp = buildTimestamp;
 		status.autoUpdateMode = autoUpdateMode.name();
-		status.autoUpdateEnabled = autoUpdateMode == AutoUpdateMode.INSTALL;
 		status.qdnEnabled = Settings.getInstance().isQdnEnabled();
 		status.installing = isUpdateInstallInProgress();
 
@@ -270,10 +268,6 @@ public class AutoUpdate extends Thread {
 			}
 
 			populateManifestStatus(status, manifest);
-
-			if (!manifest.isQdnManifest())
-				return UpdateLookup.withoutManifest(status, STATUS_LEGACY_MANIFEST,
-						"Legacy HTTP auto-update manifests are not supported by this build");
 
 			if (manifest.getBinarySignature() == null)
 				return UpdateLookup.withoutManifest(status, STATUS_UNPINNED_MANIFEST,
@@ -362,9 +356,6 @@ public class AutoUpdate extends Thread {
 			LOGGER.warn("Auto-update is enabled but {}. Skipping update lookup.", status.message);
 		} else if (STATUS_INVALID_MANIFEST.equals(status.status)) {
 			LOGGER.debug("Ignoring invalid auto-update manifest {}: {}", status.manifestSignature, status.message);
-		} else if (STATUS_LEGACY_MANIFEST.equals(status.status)) {
-			LOGGER.warn("Ignoring legacy HTTP auto-update manifest {} because this build only supports QDN auto-update transport",
-					status.manifestSignature);
 		} else if (STATUS_UNPINNED_MANIFEST.equals(status.status) || STATUS_INVALID_BINARY_TRANSACTION.equals(status.status)) {
 			LOGGER.warn("Ignoring approved auto-update manifest {}: {}", status.manifestSignature, status.message);
 		}
@@ -445,7 +436,6 @@ public class AutoUpdate extends Thread {
 	}
 
 	public static class UpdateCheckResult {
-		public boolean autoUpdateEnabled;
 		public String autoUpdateMode;
 		public boolean qdnEnabled;
 		public boolean updateAvailable;

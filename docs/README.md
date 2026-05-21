@@ -25,7 +25,6 @@ history.
 
 - `Developer reference` [Database inspection](development/database.md) - local HSQLDB inspection notes
 - `Developer reference` [Current QDN auto-update scripts](../tools/auto-update-scripts/README.md) - current update publisher flow
-- `Legacy reference` [Legacy GitHub-mirror auto-update notes](legacy/auto-updates-github-mirror.md) - older auto-update reference
 - `Developer reference` [Windows installer notes](../WindowsInstaller/README.md) - installer build notes
 
 ## Chain Design

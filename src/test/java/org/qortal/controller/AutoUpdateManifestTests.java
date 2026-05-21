@@ -2,6 +2,7 @@ package org.qortal.controller;
 
 import org.junit.Test;
 import org.qortal.arbitrary.misc.Service;
+import org.qortal.transform.Transformer;
 import org.qortal.utils.Base58;
 
 import static org.junit.Assert.*;
@@ -17,7 +18,6 @@ public class AutoUpdateManifestTests {
 		AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(1_700_000_000_000L, commitHash, updateHash, binarySignature);
 		AutoUpdateManifest parsed = AutoUpdateManifest.parse(manifest.toBytes());
 
-		assertTrue(parsed.isQdnManifest());
 		assertEquals(1_700_000_000_000L, parsed.getTimestamp());
 		assertArrayEquals(commitHash, parsed.getCommitHash());
 		assertArrayEquals(updateHash, parsed.getUpdateHash());
@@ -36,18 +36,14 @@ public class AutoUpdateManifestTests {
 
 		AutoUpdateManifest parsed = AutoUpdateManifest.parse(AutoUpdateManifest.qdnV1(1L, commitHash, updateHash, null).toBytes());
 
-		assertTrue(parsed.isQdnManifest());
 		assertNull(parsed.getBinarySignature());
 		assertNull(parsed.getBinarySignature58());
 	}
 
-	@Test
-	public void testLegacyManifestParsesButIsNotQdnManifest() {
-		byte[] legacy = new byte[AutoUpdateManifest.LEGACY_LENGTH];
-
-		AutoUpdateManifest parsed = AutoUpdateManifest.parse(legacy);
-
-		assertFalse(parsed.isQdnManifest());
+	@Test(expected = IllegalArgumentException.class)
+	public void testLegacyManifestIsRejected() {
+		int legacyLength = Transformer.TIMESTAMP_LENGTH + AutoUpdateManifest.GIT_COMMIT_HASH_LENGTH + Transformer.SHA256_LENGTH;
+		AutoUpdateManifest.parse(new byte[legacyLength]);
 	}
 
 	@Test(expected = IllegalArgumentException.class)

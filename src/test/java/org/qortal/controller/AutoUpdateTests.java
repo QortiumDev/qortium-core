@@ -15,7 +15,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -39,12 +38,10 @@ public class AutoUpdateTests {
 	}
 
 	@Test
-	public void testDefaultAutoUpdateSettingsAreDisabledAndEmpty() throws ReflectiveOperationException {
+	public void testDefaultAutoUpdateModeIsDisabled() throws ReflectiveOperationException {
 		Settings settings = newSettingsInstance();
 
 		assertEquals(AutoUpdateMode.OFF, settings.getAutoUpdateMode());
-		assertFalse(settings.hasAutoUpdateReposConfigured());
-		assertArrayEquals(new String[0], settings.getAutoUpdateRepos());
 	}
 
 	@Test
@@ -61,24 +58,6 @@ public class AutoUpdateTests {
 		FieldUtils.writeField(settings, "autoUpdateMode", AutoUpdateMode.NOTIFY, true);
 
 		assertEquals(AutoUpdateMode.NOTIFY, settings.getAutoUpdateMode());
-	}
-
-	@Test
-	public void testAutoUpdateReposAreTrimmedAndFiltered() throws ReflectiveOperationException {
-		Settings settings = newSettingsInstance();
-		FieldUtils.writeField(settings, "autoUpdateRepos", new String[] {null, " ", "\t", " https://example.com/%s "}, true);
-
-		assertArrayEquals(new String[] {"https://example.com/%s"}, settings.getAutoUpdateRepos());
-		assertTrue(settings.hasAutoUpdateReposConfigured());
-	}
-
-	@Test
-	public void testAutoUpdateReposRequireAtLeastOneConfiguredValue() throws ReflectiveOperationException {
-		Settings settings = newSettingsInstance();
-		FieldUtils.writeField(settings, "autoUpdateRepos", new String[] {"", "   ", null}, true);
-
-		assertFalse(settings.hasAutoUpdateReposConfigured());
-		assertArrayEquals(new String[0], settings.getAutoUpdateRepos());
 	}
 
 	@Test

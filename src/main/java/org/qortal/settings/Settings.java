@@ -320,9 +320,6 @@ public class Settings {
 	// Bootstrap sources
 	private String[] bootstrapHosts = new String[0];
 
-	// Auto-update sources
-	private String[] autoUpdateRepos = new String[0];
-
 	// Lists
 	private String listsPath = "lists";
 
@@ -1764,27 +1761,6 @@ public class Settings {
 
 	public boolean isAutoRestartEnabled() {
 		return this.autoRestartEnabled;
-	}
-
-	public String[] getAutoUpdateRepos() {
-		if (this.autoUpdateRepos == null)
-			return new String[0];
-
-		List<String> configuredRepos = new ArrayList<>();
-		for (String repo : this.autoUpdateRepos) {
-			if (repo == null)
-				continue;
-
-			String trimmedRepo = repo.trim();
-			if (!trimmedRepo.isEmpty())
-				configuredRepos.add(trimmedRepo);
-		}
-
-		return configuredRepos.toArray(new String[0]);
-	}
-
-	public boolean hasAutoUpdateReposConfigured() {
-		return this.getAutoUpdateRepos().length > 0;
 	}
 
 	public String[] getBootstrapHosts() {

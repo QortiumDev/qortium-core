@@ -15,20 +15,17 @@ public class AutoUpdateManifest {
 	static final int QDN_V1_BASE_LENGTH = QDN_V1_MAGIC.length + Transformer.TIMESTAMP_LENGTH
 			+ GIT_COMMIT_HASH_LENGTH + Transformer.SHA256_LENGTH + 1;
 	static final int QDN_V1_WITH_SIGNATURE_LENGTH = QDN_V1_BASE_LENGTH + SIGNATURE_LENGTH;
-	static final int LEGACY_LENGTH = Transformer.TIMESTAMP_LENGTH + GIT_COMMIT_HASH_LENGTH + Transformer.SHA256_LENGTH;
 
 	public static final String QDN_UPDATE_NAME = "qortium";
 	public static final Service QDN_UPDATE_SERVICE = Service.AUTO_UPDATE_BINARY;
 	public static final String QDN_UPDATE_PATH = "qortium.update";
 
-	private final boolean qdnManifest;
 	private final long timestamp;
 	private final byte[] commitHash;
 	private final byte[] updateHash;
 	private final byte[] binarySignature;
 
-	private AutoUpdateManifest(boolean qdnManifest, long timestamp, byte[] commitHash, byte[] updateHash, byte[] binarySignature) {
-		this.qdnManifest = qdnManifest;
+	private AutoUpdateManifest(long timestamp, byte[] commitHash, byte[] updateHash, byte[] binarySignature) {
 		this.timestamp = timestamp;
 		this.commitHash = commitHash;
 		this.updateHash = updateHash;
@@ -38,9 +35,6 @@ public class AutoUpdateManifest {
 	public static AutoUpdateManifest parse(byte[] data) {
 		if (data == null)
 			throw new IllegalArgumentException("Missing auto-update manifest data");
-
-		if (data.length == LEGACY_LENGTH)
-			return parseLegacy(data);
 
 		if (data.length == QDN_V1_BASE_LENGTH || data.length == QDN_V1_WITH_SIGNATURE_LENGTH)
 			return parseQdnV1(data);
@@ -53,20 +47,8 @@ public class AutoUpdateManifest {
 		validateUpdateHash(updateHash);
 		validateBinarySignature(binarySignature);
 
-		return new AutoUpdateManifest(true, timestamp, commitHash.clone(), updateHash.clone(),
+		return new AutoUpdateManifest(timestamp, commitHash.clone(), updateHash.clone(),
 				binarySignature != null ? binarySignature.clone() : null);
-	}
-
-	private static AutoUpdateManifest parseLegacy(byte[] data) {
-		ByteBuffer byteBuffer = ByteBuffer.wrap(data);
-
-		long timestamp = byteBuffer.getLong();
-		byte[] commitHash = new byte[GIT_COMMIT_HASH_LENGTH];
-		byteBuffer.get(commitHash);
-		byte[] updateHash = new byte[Transformer.SHA256_LENGTH];
-		byteBuffer.get(updateHash);
-
-		return new AutoUpdateManifest(false, timestamp, commitHash, updateHash, null);
 	}
 
 	private static AutoUpdateManifest parseQdnV1(byte[] data) {
@@ -113,10 +95,6 @@ public class AutoUpdateManifest {
 			byteBuffer.put(this.binarySignature);
 
 		return byteBuffer.array();
-	}
-
-	public boolean isQdnManifest() {
-		return this.qdnManifest;
 	}
 
 	public long getTimestamp() {

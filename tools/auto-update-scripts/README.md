@@ -2,9 +2,8 @@
 
 Qortium auto-update is disabled by default. To receive automatic update
 installs, a node must set `"autoUpdateMode": "INSTALL"` and leave QDN enabled.
-The old `autoUpdateRepos` GitHub mirror setting is no longer required by the
-updater, and legacy `"autoUpdateEnabled": true` settings are treated as
-`"autoUpdateMode": "INSTALL"` for compatibility.
+The old `autoUpdateRepos` GitHub mirror setting and `autoUpdateEnabled` boolean
+setting have been removed.
 
 Supported `autoUpdateMode` values are:
 

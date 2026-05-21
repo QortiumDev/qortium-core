@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Remove legacy HTTP auto-update support
+
+Removed the remaining legacy HTTP auto-update settings and manifest handling so Qortium only uses the QDN-based update path. This keeps the update baseline simpler, avoids carrying old repository-list configuration, and makes `autoUpdateMode` the single update policy reported by the admin API.
+
 ### 2026-05-21 - Remove auto-update boolean setting
 
 Removed the old `autoUpdateEnabled` setting so Qortium uses only `autoUpdateMode` to control update behavior. This keeps the baseline settings model simpler and avoids maintaining two names for the same policy.
