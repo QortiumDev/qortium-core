@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - testnet: use admin API key for minting setup
+
+Changed the local testnet startup helper so it reads the generated admin API key before adding the default minting key. This keeps the single-node testnet walkthrough working now that protected admin API calls require the API key even from localhost.
+
 ### 2026-05-21 - Disable public QDN auth bypass by default
 
 Changed QDN API defaults so normal nodes require the admin API key before serving raw or rendered QDN data through API routes. Operators can still explicitly enable public QDN serving with `qdnAuthBypassEnabled`, and gateway mode continues to force public access because that is required for gateway operation.
