@@ -35,6 +35,7 @@ import java.util.List;
 public class ArbitraryDataRenderer {
 
     private static final Logger LOGGER = LogManager.getLogger(ArbitraryDataRenderer.class);
+    static final long MAX_HTML_REWRITE_SIZE = 5L * 1024 * 1024;
 
     private final String resourceId;
     private final ResourceIdType resourceIdType;
@@ -170,7 +171,7 @@ public class ArbitraryDataRenderer {
 
             if (HTMLParser.isHtmlFile(filename)) {
                 // HTML file - needs to be parsed
-                byte[] data = Files.readAllBytes(filePath); // TODO: limit file size that can be read into memory
+                byte[] data = ArbitraryDataRenderer.readHtmlFileForRewrite(filePath);
                 String encodedResourceId;
 
                 if (resourceIdType == ResourceIdType.NAME) {
@@ -200,6 +201,9 @@ public class ArbitraryDataRenderer {
                 ArbitraryDataRenderer.streamNonHtmlFileResponse(response, context, filePath, filename);
             }
             return response;
+        } catch (HtmlFileTooLargeException e) {
+            LOGGER.info("Unable to render HTML file at path {}: {}", inPath, e.getMessage());
+            return ArbitraryDataRenderer.getResponse(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, "Error 413: HTML File Too Large");
         } catch (FileNotFoundException | NoSuchFileException e) {
             LOGGER.info("Unable to serve file: {}", e.getMessage());
         } catch (IOException e) {
@@ -207,6 +211,23 @@ public class ArbitraryDataRenderer {
         }
 
         return ArbitraryDataRenderer.getResponse(response, 404, "Error 404: File Not Found");
+    }
+
+    static byte[] readHtmlFileForRewrite(Path filePath) throws IOException {
+        long fileSize = Files.size(filePath);
+        if (fileSize > MAX_HTML_REWRITE_SIZE) {
+            throw new HtmlFileTooLargeException(fileSize);
+        }
+
+        return Files.readAllBytes(filePath);
+    }
+
+    static class HtmlFileTooLargeException extends IOException {
+
+        private HtmlFileTooLargeException(long fileSize) {
+            super(String.format("HTML file is too large: %d bytes (max size: %d bytes)", fileSize, MAX_HTML_REWRITE_SIZE));
+        }
+
     }
 
     static void streamNonHtmlFileResponse(HttpServletResponse response, ServletContext context, Path filePath, String filename) throws IOException {

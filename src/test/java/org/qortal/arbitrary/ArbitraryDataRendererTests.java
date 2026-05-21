@@ -7,6 +7,7 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.WriteListener;
 import javax.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
+import java.io.RandomAccessFile;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -19,6 +20,7 @@ import java.util.Map;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class ArbitraryDataRendererTests {
 
@@ -39,6 +41,40 @@ public class ArbitraryDataRendererTests {
             assertEquals(body.length, exchange.contentLength);
             assertArrayEquals(body, exchange.outputStream.toByteArray());
             assertTrue(exchange.callIndex("setContentLength") < exchange.callIndex("getOutputStream"));
+        } finally {
+            Files.deleteIfExists(filePath);
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    @Test
+    public void testHtmlFileForRewriteReadsUnderLimitHtml() throws Exception {
+        byte[] body = "<html><head></head><body>small html</body></html>".getBytes(StandardCharsets.UTF_8);
+        Path directory = Files.createTempDirectory("qdn-renderer");
+        Path filePath = directory.resolve("index.html");
+        Files.write(filePath, body);
+
+        try {
+            assertArrayEquals(body, ArbitraryDataRenderer.readHtmlFileForRewrite(filePath));
+        } finally {
+            Files.deleteIfExists(filePath);
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    @Test
+    public void testHtmlFileForRewriteRejectsOversizedHtmlBeforeReading() throws Exception {
+        Path directory = Files.createTempDirectory("qdn-renderer");
+        Path filePath = directory.resolve("index.html");
+        try (RandomAccessFile randomAccessFile = new RandomAccessFile(filePath.toFile(), "rw")) {
+            randomAccessFile.setLength(ArbitraryDataRenderer.MAX_HTML_REWRITE_SIZE + 1);
+        }
+
+        try {
+            ArbitraryDataRenderer.readHtmlFileForRewrite(filePath);
+            fail("Expected oversized HTML file to be rejected");
+        } catch (ArbitraryDataRenderer.HtmlFileTooLargeException e) {
+            assertTrue(e.getMessage().contains(Long.toString(ArbitraryDataRenderer.MAX_HTML_REWRITE_SIZE)));
         } finally {
             Files.deleteIfExists(filePath);
             Files.deleteIfExists(directory);

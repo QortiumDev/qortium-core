@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Limit QDN HTML rewrite buffering
+
+Changed QDN HTML rendering so very large HTML files are rejected before they are loaded into memory for rewriting. This keeps normal HTML rendering behavior while putting a clear memory guard around the parser path.
+
 ### 2026-05-21 - Set QDN renderer content length before streaming
 
 Changed QDN file rendering so non-HTML file responses declare their content length before bytes are streamed to the browser. This keeps response headers consistent for servlet containers while preserving the existing streamed file contents.
