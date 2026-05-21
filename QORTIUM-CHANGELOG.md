@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - Stream developer proxy non-HTML responses
+
+Changed the developer proxy so non-HTML responses from a local frontend server are streamed directly instead of being fully buffered in memory. HTML responses are still buffered for rewriting, while ordinary assets keep their existing proxy headers and content behavior.
+
 ### 2026-05-21 - Close ForeignFeesManager backup writers safely
 
 Changed foreign-fee backup writing so JSON backup files are written with safe UTF-8 file helpers instead of manually closed writers. This preserves the existing backup file contents while removing another close-on-failure risk.

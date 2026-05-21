@@ -16,6 +16,7 @@ import javax.ws.rs.core.Context;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -33,6 +34,7 @@ public class DevProxyServerResource {
 
     private static final int PROXY_CONNECT_TIMEOUT_MS = 5000;
     private static final int PROXY_READ_TIMEOUT_MS = 30000;
+    private static final int PROXY_STREAM_BUFFER_SIZE = 4096;
 
     private static final Set<String> PROXY_MANAGED_REQUEST_HEADERS = Set.of(
             "accept-encoding",
@@ -184,21 +186,6 @@ public class DevProxyServerResource {
             }
         }
 
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        InputStream responseStream = responseCode >= HttpURLConnection.HTTP_BAD_REQUEST
-                ? con.getErrorStream()
-                : con.getInputStream();
-        if (responseStream != null) {
-            try (InputStream inputStream = responseStream) {
-                byte[] buffer = new byte[4096];
-                int bytesRead;
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    outputStream.write(buffer, 0, bytesRead);
-                }
-            }
-        }
-        byte[] data = outputStream.toByteArray(); // TODO: limit file size that can be read into memory
-
         // Extract filename
         String filename = "";
         if (inPath.contains("/")) {
@@ -207,6 +194,17 @@ public class DevProxyServerResource {
                 filename = parts[parts.length - 1];
             }
         }
+
+        if (HTMLParser.isHtmlFile(filename)) {
+            this.proxyHtmlConnectionToResponse(con, response, inPath, responseCode);
+        }
+        else {
+            this.proxyNonHtmlConnectionToResponse(con, response, responseCode);
+        }
+    }
+
+    private void proxyHtmlConnectionToResponse(HttpURLConnection con, HttpServletResponse response, String inPath, int responseCode) throws IOException {
+        byte[] data = readProxyResponseData(con, responseCode);
 
         String lang = request.getParameter("lang");
         if (lang == null || lang.isBlank()) {
@@ -218,22 +216,63 @@ public class DevProxyServerResource {
             theme = "light";
         }
 
-        // Parse and modify output if needed
-        if (HTMLParser.isHtmlFile(filename)) {
-            // HTML file - needs to be parsed
-            HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme , true, lang);
-            htmlParser.addAdditionalHeaderTags();
-            response.addHeader("Content-Security-Policy", "default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;");
-            response.setContentType(con.getContentType());
-            response.setContentLength(htmlParser.getData().length);
-            response.getOutputStream().write(htmlParser.getData());
+        HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme , true, lang);
+        htmlParser.addAdditionalHeaderTags();
+        response.addHeader("Content-Security-Policy", "default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;");
+        response.setContentType(con.getContentType());
+        response.setContentLength(htmlParser.getData().length);
+        response.getOutputStream().write(htmlParser.getData());
+    }
+
+    private void proxyNonHtmlConnectionToResponse(HttpURLConnection con, HttpServletResponse response, int responseCode) throws IOException {
+        response.addHeader("Content-Security-Policy", "default-src 'self'");
+        response.setContentType(con.getContentType());
+
+        int contentLength = con.getContentLength();
+        if (contentLength >= 0) {
+            response.setContentLength(contentLength);
         }
-        else {
-            // Regular file - can be streamed directly
-            response.addHeader("Content-Security-Policy", "default-src 'self'");
-            response.setContentType(con.getContentType());
-            response.setContentLength(data.length);
-            response.getOutputStream().write(data);
+
+        streamProxyResponseData(con, response, responseCode);
+    }
+
+    private static InputStream getProxyResponseStream(HttpURLConnection con, int responseCode) throws IOException {
+        return responseCode >= HttpURLConnection.HTTP_BAD_REQUEST
+                ? con.getErrorStream()
+                : con.getInputStream();
+    }
+
+    private static byte[] readProxyResponseData(HttpURLConnection con, int responseCode) throws IOException {
+        InputStream responseStream = getProxyResponseStream(con, responseCode);
+        if (responseStream == null) {
+            return new byte[0];
+        }
+
+        try (InputStream inputStream = responseStream;
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[PROXY_STREAM_BUFFER_SIZE];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+
+            return outputStream.toByteArray();
+        }
+    }
+
+    private static void streamProxyResponseData(HttpURLConnection con, HttpServletResponse response, int responseCode) throws IOException {
+        InputStream responseStream = getProxyResponseStream(con, responseCode);
+        if (responseStream == null) {
+            return;
+        }
+
+        try (InputStream inputStream = responseStream) {
+            OutputStream outputStream = response.getOutputStream();
+            byte[] buffer = new byte[PROXY_STREAM_BUFFER_SIZE];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
         }
     }
 

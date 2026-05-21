@@ -123,6 +123,37 @@ public class DevProxyServerResourceTests {
     }
 
     @Test
+    public void testProxyStreamsNonHtmlResponsesWithoutContentLength() throws Exception {
+        byte[] body = "chunked asset body".getBytes(StandardCharsets.UTF_8);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/chunked.bin", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "application/octet-stream");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, 0);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(body);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("chunked.bin");
+
+        assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
+        assertEquals("application/octet-stream", exchange.contentType);
+        assertFalse(exchange.contentLengthSet);
+        assertEquals("default-src 'self'", exchange.getResponseHeader("Content-Security-Policy"));
+        assertArrayEquals(body, exchange.outputStream.toByteArray());
+    }
+
+    @Test
     public void testProxyFiltersManagedRequestHeaders() throws Exception {
         byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
         Map<String, String> upstreamHeaders = new LinkedHashMap<>();
@@ -413,6 +444,7 @@ public class DevProxyServerResourceTests {
         private int status;
         private String contentType;
         private int contentLength;
+        private boolean contentLengthSet;
 
         private final HttpServletRequest request;
         private final HttpServletResponse response;
@@ -459,6 +491,7 @@ public class DevProxyServerResourceTests {
                                 return null;
                             case "setContentLength":
                                 this.contentLength = (Integer) args[0];
+                                this.contentLengthSet = true;
                                 return null;
                             case "getOutputStream":
                                 return this.outputStream;
