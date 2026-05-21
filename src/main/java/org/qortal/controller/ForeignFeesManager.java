@@ -144,7 +144,7 @@ public class ForeignFeesManager implements Listener {
                 importDataFromFile(importSignedForeignFeesPath.toString());
             }
             catch (FileNotFoundException e) {
-                LOGGER.warn(e.getMessage());
+                LOGGER.info(e.getMessage());
             }
 
             // import required foreign fees
@@ -153,7 +153,7 @@ public class ForeignFeesManager implements Listener {
                 importDataFromFile(importRequiredForeignFeespath.toString());
             }
             catch (FileNotFoundException e) {
-                LOGGER.warn(e.getMessage());
+                LOGGER.info(e.getMessage());
             }
 
             // import locking foreign fees
@@ -162,7 +162,7 @@ public class ForeignFeesManager implements Listener {
                 importDataFromFile(importLockingForeignFeespath.toString());
             }
             catch (FileNotFoundException e) {
-                LOGGER.warn(e.getMessage());
+                LOGGER.info(e.getMessage());
             }
 
         }

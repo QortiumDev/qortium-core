@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - foreign-fees: treat missing backups as normal startup
+
+Changed foreign-fee backup import logging so a fresh node that has no existing foreign-fee backup files reports that state as informational instead of warning-level. This keeps new local testnet logs focused on real problems while preserving visibility that there was nothing to import.
+
 ### 2026-05-21 - api: use Jetty baseResource for docs static files
 
 Changed the API documentation static-file servlet setup to use Jetty's current `baseResource` init parameter instead of the deprecated `resourceBase` name. This removes a startup warning from nodes with API documentation enabled while preserving the existing Swagger UI and disabled-documentation pages.
