@@ -2376,6 +2376,9 @@ public class Block {
 		}
 
 		Map<Integer, List<ExpandedAccount>> accountsForShareBin = new HashMap<>();
+		int shareBinActivationMinLevel = BlockChain.getInstance().getShareBinActivationMinLevel();
+		int minAccountsToActivateShareBin = BlockChain.getInstance()
+				.getMinAccountsToActivateShareBin(this.repository, this.blockData.getHeight());
 
 		// We might need to combine some share bins if they haven't reached the minimum number of minters yet
 		for (int binIndex = accountLevelShareBins.size()-1; binIndex >= 0; --binIndex) {
@@ -2389,8 +2392,8 @@ public class Block {
 				binnedAccounts.addAll(existingBinnedAccounts);
 
 			// Logic below may only apply to higher levels, and only for share bins with a specific range of online accounts
-			if (accountLevelShareBin.levels.get(0) < BlockChain.getInstance().getShareBinActivationMinLevel() ||
-					binnedAccounts.isEmpty() || binnedAccounts.size() >= BlockChain.getInstance().getMinAccountsToActivateShareBin()) {
+			if (accountLevelShareBin.levels.get(0) < shareBinActivationMinLevel ||
+					binnedAccounts.isEmpty() || binnedAccounts.size() >= minAccountsToActivateShareBin) {
 				// Add all accounts for this share bin to the accountsForShareBin list
 				accountsForShareBin.put(binIndex, binnedAccounts);
 				continue;

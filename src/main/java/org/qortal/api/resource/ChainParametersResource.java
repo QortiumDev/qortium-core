@@ -14,6 +14,7 @@ import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterMetadata;
 import org.qortal.api.model.ChainParameterUpdateSummary;
+import org.qortal.api.model.IntegerChainParameterUpdateRequest;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.block.BlockChain;
 import org.qortal.block.ChainParameter;
@@ -162,6 +163,29 @@ public class ChainParametersResource {
 		}
 	}
 
+	@GET
+	@Path("/share-bin/min-accounts/{height}")
+	@Operation(
+			summary = "Fetch the effective minimum account count required to activate a reward share bin at a height",
+			responses = {
+					@ApiResponse(
+							description = "minimum account count required to activate a reward share bin",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "integer")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public int getMinAccountsToActivateShareBin(@PathParam("height") int height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return BlockChain.getInstance().getMinAccountsToActivateShareBin(repository, height);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
 	@POST
 	@Path("/block-reward/update")
 	@Operation(
@@ -190,17 +214,44 @@ public class ChainParametersResource {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildBlockRewardTransactionData(updateRequest);
-			Transaction transaction = Transaction.fromData(repository, transactionData);
+			return validateAndTransformUpdate(repository, transactionData);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
 
-			if (updateRequest.fee == null)
-				transactionData.setFee(transaction.calcRecommendedFee());
+	@POST
+	@Path("/share-bin/min-accounts/update")
+	@Operation(
+			summary = "Build raw, unsigned, MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN chain-parameter update transaction",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = IntegerChainParameterUpdateRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, CHAIN_PARAMETER_UPDATE transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "string")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String updateMinAccountsToActivateShareBin(IntegerChainParameterUpdateRequest updateRequest) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
-			Transaction.ValidationResult result = transaction.isValidUnconfirmed();
-			if (result != Transaction.ValidationResult.OK)
-				throw TransactionsResource.createTransactionInvalidException(request, result);
-
-			byte[] bytes = ChainParameterUpdateTransactionTransformer.toBytes(transactionData);
-			return Base58.encode(bytes);
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChainParameterUpdateTransactionData transactionData = buildIntegerTransactionData(
+					updateRequest, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN);
+			return validateAndTransformUpdate(repository, transactionData);
 		} catch (TransformationException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
 		} catch (DataException e) {
@@ -214,6 +265,30 @@ public class ChainParametersResource {
 
 		return new ChainParameterUpdateTransactionData(baseTransactionData, ChainParameter.BLOCK_REWARD.id,
 				updateRequest.activationHeight, ChainParameter.BLOCK_REWARD.encodeLongValue(updateRequest.reward));
+	}
+
+	private static ChainParameterUpdateTransactionData buildIntegerTransactionData(
+			IntegerChainParameterUpdateRequest updateRequest, ChainParameter parameter) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
+
+		return new ChainParameterUpdateTransactionData(baseTransactionData, parameter.id,
+				updateRequest.activationHeight, parameter.encodeIntValue(updateRequest.value));
+	}
+
+	private String validateAndTransformUpdate(Repository repository, ChainParameterUpdateTransactionData transactionData)
+			throws DataException, TransformationException {
+		Transaction transaction = Transaction.fromData(repository, transactionData);
+
+		if (transactionData.getFee() == null)
+			transactionData.setFee(transaction.calcRecommendedFee());
+
+		Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+		if (result != Transaction.ValidationResult.OK)
+			throw TransactionsResource.createTransactionInvalidException(request, result);
+
+		byte[] bytes = ChainParameterUpdateTransactionTransformer.toBytes(transactionData);
+		return Base58.encode(bytes);
 	}
 
 	private static List<ChainParameterMetadata> buildParameterMetadata() {
@@ -252,6 +327,7 @@ public class ChainParametersResource {
 			summary.parameterName = parameter.name();
 			summary.valueType = parameter.getValueType();
 			summary.amount = parameter.decodeAmountValue(transactionData.getValue());
+			summary.integerValue = parameter.decodeIntegerValue(transactionData.getValue());
 			summary.displayValue = parameter.formatDisplayValue(transactionData.getValue());
 		}
 

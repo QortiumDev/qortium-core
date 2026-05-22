@@ -12,7 +12,11 @@ public enum ChainParameter {
 	BLOCK_REWARD(1, Long.BYTES, "AMOUNT",
 			"Height-based block reward amount, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
 			"/chain-parameters/block-reward/update",
-			"/chain-parameters/block-reward/{height}");
+			"/chain-parameters/block-reward/{height}"),
+	MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN(2, Integer.BYTES, "INTEGER",
+			"Minimum number of online minters required before a reward share bin is considered active.",
+			"/chain-parameters/share-bin/min-accounts/update",
+			"/chain-parameters/share-bin/min-accounts/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 
@@ -63,6 +67,9 @@ public enum ChainParameter {
 			case BLOCK_REWARD:
 				return decodeLongValue(value) >= 0;
 
+			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
+				return decodeIntValue(value) >= 0;
+
 			default:
 				return false;
 		}
@@ -79,6 +86,17 @@ public enum ChainParameter {
 		return ByteBuffer.allocate(Long.BYTES).putLong(value).array();
 	}
 
+	public int decodeIntValue(byte[] value) {
+		if (value == null || value.length != Integer.BYTES)
+			throw new IllegalArgumentException("Chain parameter value is not an int");
+
+		return ByteBuffer.wrap(value).getInt();
+	}
+
+	public byte[] encodeIntValue(int value) {
+		return ByteBuffer.allocate(Integer.BYTES).putInt(value).array();
+	}
+
 	public Long decodeAmountValue(byte[] value) {
 		if (!isValidValue(value))
 			return null;
@@ -92,14 +110,29 @@ public enum ChainParameter {
 		}
 	}
 
+	public Integer decodeIntegerValue(byte[] value) {
+		if (!isValidValue(value))
+			return null;
+
+		switch (this) {
+			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
+				return decodeIntValue(value);
+
+			default:
+				return null;
+		}
+	}
+
 	public String formatDisplayValue(byte[] value) {
-		Long amount = decodeAmountValue(value);
-		if (amount == null)
+		if (!isValidValue(value))
 			return null;
 
 		switch (this) {
 			case BLOCK_REWARD:
-				return Amounts.prettyAmount(amount);
+				return Amounts.prettyAmount(decodeLongValue(value));
+
+			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
+				return Integer.toString(decodeIntValue(value));
 
 			default:
 				return null;

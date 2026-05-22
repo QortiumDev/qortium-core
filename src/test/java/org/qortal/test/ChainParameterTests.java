@@ -23,12 +23,33 @@ public class ChainParameterTests {
 	}
 
 	@Test
+	public void testMinAccountsToActivateShareBinMetadataAccessors() {
+		ChainParameter parameter = ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN;
+
+		assertEquals(2, parameter.id);
+		assertEquals(Integer.BYTES, parameter.valueLength);
+		assertEquals("INTEGER", parameter.getValueType());
+		assertNotNull(parameter.getDescription());
+		assertEquals("/chain-parameters/share-bin/min-accounts/update", parameter.getBuilderPath());
+		assertEquals("/chain-parameters/share-bin/min-accounts/{height}", parameter.getEffectivePath());
+	}
+
+	@Test
 	public void testBlockRewardAmountDecoding() {
 		long reward = 12L * Amounts.MULTIPLIER + 34_000_000L;
 		byte[] value = ChainParameter.BLOCK_REWARD.encodeLongValue(reward);
 
 		assertEquals(Long.valueOf(reward), ChainParameter.BLOCK_REWARD.decodeAmountValue(value));
 		assertEquals("12.34000000", ChainParameter.BLOCK_REWARD.formatDisplayValue(value));
+	}
+
+	@Test
+	public void testMinAccountsToActivateShareBinIntegerDecoding() {
+		byte[] value = ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.encodeIntValue(30);
+
+		assertEquals(Integer.valueOf(30), ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.decodeIntegerValue(value));
+		assertEquals("30", ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.formatDisplayValue(value));
+		assertNull(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.decodeAmountValue(value));
 	}
 
 	@Test
@@ -41,5 +62,17 @@ public class ChainParameterTests {
 		byte[] negativeValue = ChainParameter.BLOCK_REWARD.encodeLongValue(-1L);
 		assertNull(ChainParameter.BLOCK_REWARD.decodeAmountValue(negativeValue));
 		assertNull(ChainParameter.BLOCK_REWARD.formatDisplayValue(negativeValue));
+	}
+
+	@Test
+	public void testInvalidIntegerValueDoesNotDecodeForDisplay() {
+		assertNull(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.decodeIntegerValue(null));
+		assertNull(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.formatDisplayValue(null));
+		assertNull(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.decodeIntegerValue(new byte[0]));
+		assertNull(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.formatDisplayValue(new byte[0]));
+
+		byte[] negativeValue = ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.encodeIntValue(-1);
+		assertNull(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.decodeIntegerValue(negativeValue));
+		assertNull(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.formatDisplayValue(negativeValue));
 	}
 }

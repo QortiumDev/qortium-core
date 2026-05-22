@@ -19,13 +19,13 @@ public class ChainParameterUpdateTransactionData extends TransactionData {
 	@Schema(description = "update creator's public key", example = "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP")
 	private byte[] updaterPublicKey;
 
-	@Schema(description = "numeric chain parameter ID. Version 1 supports BLOCK_REWARD = 1", example = "1")
+	@Schema(description = "numeric chain parameter ID. Supported IDs are listed by the chain-parameters API", example = "1")
 	private int parameterId;
 
 	@Schema(description = "block height from which the approved parameter value becomes active", example = "10000")
 	private int activationHeight;
 
-	@Schema(description = "canonical binary value for the parameter. For BLOCK_REWARD this is an 8-byte signed long encoded in Base58")
+	@Schema(description = "canonical binary value for the parameter, encoded in Base58")
 	private byte[] value;
 
 	protected ChainParameterUpdateTransactionData() {

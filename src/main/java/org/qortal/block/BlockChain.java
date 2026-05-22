@@ -690,6 +690,15 @@ public class BlockChain {
 		return this.minAccountsToActivateShareBin;
 	}
 
+	public int getMinAccountsToActivateShareBin(Repository repository, int height) throws DataException {
+		ChainParameterData minAccountsUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.id, height);
+		if (minAccountsUpdate != null)
+			return ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.decodeIntValue(minAccountsUpdate.getValue());
+
+		return getMinAccountsToActivateShareBin();
+	}
+
 	public int getShareBinActivationMinLevel() {
 		return this.shareBinActivationMinLevel;
 	}

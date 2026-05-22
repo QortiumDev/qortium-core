@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: add on-chain share-bin activation count
+
+Added the first integer-based chain parameter update for the reward share-bin activation count. Development-group approved proposals can now change the minimum number of online minters required before a reward share bin is treated as active, with the value stored on chain and applied automatically from its activation height while falling back to `blockchain.json` when no approved overlay exists.
+
 ### 2026-05-22 - refactor: centralize chain parameter metadata
 
 Moved chain-parameter metadata and value display decoding into the shared `ChainParameter` definition so future parameters can be added in one place without duplicating API-specific descriptions, paths, or formatting rules. The public API shape and consensus behavior remain unchanged.

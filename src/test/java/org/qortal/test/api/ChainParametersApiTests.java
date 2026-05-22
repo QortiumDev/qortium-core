@@ -8,6 +8,7 @@ import org.qortal.api.ApiError;
 import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterMetadata;
 import org.qortal.api.model.ChainParameterUpdateSummary;
+import org.qortal.api.model.IntegerChainParameterUpdateRequest;
 import org.qortal.api.resource.ChainParametersResource;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.block.BlockChain;
@@ -37,6 +38,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ChainParametersApiTests extends ApiCommon {
@@ -52,17 +54,11 @@ public class ChainParametersApiTests extends ApiCommon {
 	public void testChainParameterMetadataListsBlockReward() {
 		List<ChainParameterMetadata> parameters = this.chainParametersResource.getChainParameters();
 
-		assertEquals(1, parameters.size());
+		assertEquals(2, parameters.size());
 
-		ChainParameterMetadata blockReward = parameters.get(0);
-		assertEquals(ChainParameter.BLOCK_REWARD.id, blockReward.id);
-		assertEquals(ChainParameter.BLOCK_REWARD.name(), blockReward.name);
-		assertEquals(ChainParameter.BLOCK_REWARD.getValueType(), blockReward.valueType);
-		assertEquals(Long.BYTES, blockReward.valueLength);
-		assertEquals(BlockChain.getInstance().getChainParameterUpdateMinActivationDelay(), blockReward.minimumActivationDelay);
-		assertEquals(ChainParameter.BLOCK_REWARD.getDescription(), blockReward.description);
-		assertEquals(ChainParameter.BLOCK_REWARD.getBuilderPath(), blockReward.builderPath);
-		assertEquals(ChainParameter.BLOCK_REWARD.getEffectivePath(), blockReward.effectivePath);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.BLOCK_REWARD), ChainParameter.BLOCK_REWARD);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN),
+				ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN);
 	}
 
 	@Test
@@ -87,6 +83,35 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testBuildMinAccountsToActivateShareBinUpdateUsesIntegerValue() throws DataException, TransformationException {
+		IntegerChainParameterUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildMinAccountsToActivateShareBinUpdateRequest(repository, 12);
+		}
+
+		String rawTransaction = this.chainParametersResource.updateMinAccountsToActivateShareBin(request);
+		ChainParameterUpdateTransactionData transactionData = decodeRawTransaction(rawTransaction);
+
+		assertEquals(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.id, transactionData.getParameterId());
+		assertEquals(request.activationHeight, transactionData.getActivationHeight());
+		assertEquals(request.timestamp, transactionData.getTimestamp());
+		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
+		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
+		assertArrayEquals(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.encodeIntValue(request.value), transactionData.getValue());
+		assertNotNull(transactionData.getFee());
+	}
+
+	@Test
+	public void testGetMinAccountsToActivateShareBinReturnsEffectiveValue() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int height = repository.getBlockRepository().getBlockchainHeight();
+			assertEquals(BlockChain.getInstance().getMinAccountsToActivateShareBin(repository, height),
+					this.chainParametersResource.getMinAccountsToActivateShareBin(height));
+		}
+	}
+
+	@Test
 	public void testBuildBlockRewardUpdateRejectsNegativeReward() throws DataException {
 		BlockRewardUpdateRequest request;
 
@@ -95,6 +120,18 @@ public class ChainParametersApiTests extends ApiCommon {
 		}
 
 		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateBlockReward(request));
+	}
+
+	@Test
+	public void testBuildMinAccountsToActivateShareBinUpdateRejectsNegativeValue() throws DataException {
+		IntegerChainParameterUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildMinAccountsToActivateShareBinUpdateRequest(repository, -1);
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateMinAccountsToActivateShareBin(request));
 	}
 
 	@Test
@@ -148,6 +185,42 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals("AMOUNT", summary.valueType);
 		assertEquals("3.00000000", summary.displayValue);
 		assertEquals(Long.valueOf(reward), summary.amount);
+		assertNull(summary.integerValue);
+		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
+		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
+		assertEquals(0, summary.approvalCount);
+		assertEquals(0, summary.rejectionCount);
+		assertEquals(1, summary.approvalAuthorityCount);
+		assertFalse(summary.effectiveNow);
+	}
+
+	@Test
+	public void testPendingMinAccountsProposalSummaryShowsDecodedValueAndVoteCounts() throws DataException {
+		ChainParameterUpdateTransactionData transactionData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 100;
+
+			transactionData = buildMinAccountsToActivateShareBinUpdateTransaction(repository, alice, activationHeight, 4);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+		}
+
+		List<ChainParameterUpdateSummary> summaries = this.chainParametersResource.getChainParameterUpdates(
+				ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.id, null, null, null, null, null, null, null, null);
+
+		assertEquals(1, summaries.size());
+
+		ChainParameterUpdateSummary summary = summaries.get(0);
+		assertArrayEquals(transactionData.getSignature(), summary.signature);
+		assertEquals(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.id, summary.parameterId);
+		assertEquals(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.name(), summary.parameterName);
+		assertEquals(transactionData.getActivationHeight(), summary.activationHeight);
+		assertArrayEquals(transactionData.getValue(), summary.value);
+		assertEquals("INTEGER", summary.valueType);
+		assertEquals("4", summary.displayValue);
+		assertNull(summary.amount);
+		assertEquals(Integer.valueOf(4), summary.integerValue);
 		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
 		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
 		assertEquals(0, summary.approvalCount);
@@ -265,6 +338,22 @@ public class ChainParametersApiTests extends ApiCommon {
 		return request;
 	}
 
+	private static IntegerChainParameterUpdateRequest buildMinAccountsToActivateShareBinUpdateRequest(
+			Repository repository, int value) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+		IntegerChainParameterUpdateRequest request = new IntegerChainParameterUpdateRequest();
+		request.timestamp = System.currentTimeMillis();
+		request.txGroupId = TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID;
+		request.updaterPublicKey = alice.getPublicKey();
+		request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ 100;
+		request.value = value;
+
+		return request;
+	}
+
 	private static ChainParameterUpdateTransactionData decodeRawTransaction(String rawTransaction) throws TransformationException {
 		byte[] rawBytes = Base58.decode(rawTransaction);
 		byte[] signedLengthBytes = Bytes.concat(rawBytes, new byte[TransactionTransformer.SIGNATURE_LENGTH]);
@@ -277,6 +366,33 @@ public class ChainParametersApiTests extends ApiCommon {
 		return new ChainParameterUpdateTransactionData(
 				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
 				ChainParameter.BLOCK_REWARD.id, activationHeight, ChainParameter.BLOCK_REWARD.encodeLongValue(reward));
+	}
+
+	private static ChainParameterUpdateTransactionData buildMinAccountsToActivateShareBinUpdateTransaction(
+			Repository repository, PrivateKeyAccount updater, int activationHeight, int value) throws DataException {
+		return new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.id, activationHeight,
+				ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.encodeIntValue(value));
+	}
+
+	private static ChainParameterMetadata findMetadata(List<ChainParameterMetadata> metadata, ChainParameter parameter) {
+		for (ChainParameterMetadata entry : metadata)
+			if (entry.id == parameter.id)
+				return entry;
+
+		throw new AssertionError("Missing metadata for " + parameter.name());
+	}
+
+	private static void assertMetadataMatchesParameter(ChainParameterMetadata metadata, ChainParameter parameter) {
+		assertEquals(parameter.id, metadata.id);
+		assertEquals(parameter.name(), metadata.name);
+		assertEquals(parameter.getValueType(), metadata.valueType);
+		assertEquals(parameter.valueLength, metadata.valueLength);
+		assertEquals(BlockChain.getInstance().getChainParameterUpdateMinActivationDelay(), metadata.minimumActivationDelay);
+		assertEquals(parameter.getDescription(), metadata.description);
+		assertEquals(parameter.getBuilderPath(), metadata.builderPath);
+		assertEquals(parameter.getEffectivePath(), metadata.effectivePath);
 	}
 
 	private static int getApprovalSettlementBlockCount(Repository repository) throws DataException {

@@ -48,6 +48,9 @@ public class ChainParameterUpdateSummary {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public Long amount;
 
+	@Schema(description = "decoded integer value for integer-like parameters")
+	public Integer integerValue;
+
 	@Schema(description = "current group-approval status")
 	public ApprovalStatus approvalStatus;
 
