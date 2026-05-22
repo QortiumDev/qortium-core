@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - test: generate valid random test accounts
+
+Changed the shared test helper that creates random accounts so it derives a real account from a random private key instead of inventing raw public-key bytes. This keeps tests compatible with public-key validation when they need a throwaway recipient address, and avoids masking reward-batching behavior behind invalid test data.
+
 ### 2026-05-22 - api: add effective chain parameter state view
 
 Added a read-only chain-parameter state view so operators can see every supported parameter's effective value at a chosen height, whether it comes from the base chain config or an approved on-chain overlay, and whether another approved value is scheduled for a future activation height. This makes voted parameter changes easier to audit without changing consensus behavior.

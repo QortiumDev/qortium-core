@@ -3,7 +3,6 @@ package org.qortal.test.common;
 import com.google.common.primitives.Longs;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
-import org.qortal.account.PublicKeyAccount;
 import org.qortal.block.BlockChain;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.Ed25519Extras;
@@ -111,9 +110,9 @@ public class AccountUtils {
 	}
 
 	public static Account createRandomAccount(Repository repository) {
-		byte[] randomPublicKey = new byte[32];
-		new Random().nextBytes(randomPublicKey);
-		return new PublicKeyAccount(repository, randomPublicKey);
+		byte[] randomPrivateKey = new byte[32];
+		new Random().nextBytes(randomPrivateKey);
+		return new PrivateKeyAccount(repository, randomPrivateKey);
 	}
 
 	public static Transaction.ValidationResult createRandomRewardShare(Repository repository, PrivateKeyAccount account) throws DataException {
