@@ -113,7 +113,7 @@
 		{ "id": 5, "levels": [ 9, 10 ], "share": 0.32 }
 	],
 	"minAccountsToActivateShareBin": 30,
-	"shareBinActivationMinLevel": 7,
+	"shareBinActivationMinLevel": 1,
 	"blocksNeededByLevel": [ 7200, 64800, 129600, 172800, 244000, 345600, 518400, 691200, 864000, 1036800 ],
 	"blockTimingsByHeight": [
 		{ "height": 1, "target": 60000, "deviation": 30000, "power": 0.2 }

@@ -205,8 +205,11 @@ public class RewardTests extends Common {
 
 	/** Test rewards for level 1 and 2 accounts. */
 	@Test
-	public void testLevel1And2Rewards() throws DataException {
+	public void testLevel1And2Rewards() throws DataException, IllegalAccessException {
 		Common.useSettings("test-settings-v2-reward-levels.json");
+
+		// The lowest share bin is the reward floor, so it remains active even below the minimum account count.
+		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 4, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			seedRewardLevelTestAccounts(repository);
@@ -583,12 +586,12 @@ public class RewardTests extends Common {
 		}
 	}
 
-	/** Test rewards for level 7 and 8 accounts, when the tier doesn't yet have enough minters in it */
+	/** Test rewards for level 7 and 8 accounts, when the tier doesn't yet have enough minters in it. */
 	@Test
 	public void testLevel7And8RewardsPreActivation() throws DataException, IllegalAccessException {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
-		// Set minAccountsToActivateShareBin to 4 so that share bins 7-8 and 9-10 are considered inactive
+		// Set minAccountsToActivateShareBin to 4 so populated share bins above the floor are considered inactive.
 		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 4, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
@@ -641,18 +644,18 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
 			 * Alice and Chloe are level 7; Dilbert is level 8.
-			 * Level 7 and 8 is not yet activated, so its rewards are added to the level 5 and 6 share bin.
-			 * There are no level 5 and 6 online.
-			 * Alice, Chloe, and Dilbert should receive equal shares of the normalized levels 5 to 8 reward.
+			 * Level 7 and 8 is not yet activated, so its rewards cascade to the level 1 and 2 floor.
+			 * There are no lower-level online minters.
+			 * Alice, Chloe, and Dilbert should receive equal shares of the normalized levels 1 to 8 reward.
 			 */
 
-			final long expectedLevel5To8Reward = blockReward / 3; // The reward is split between Alice, Chloe, and Dilbert
+			final long expectedLevel1To8Reward = blockReward / 3; // The reward is split between Alice, Chloe, and Dilbert
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel5To8Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel1To8Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5To8Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5To8Reward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel1To8Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel1To8Reward);
 
 			// Orphan and ensure balances return to their previous values
 			BlockUtils.orphanBlocks(repository, 1);
@@ -666,13 +669,12 @@ public class RewardTests extends Common {
 		}
 	}
 
-	/** Test rewards for level 9 and 10 accounts, when the tier doesn't yet have enough minters in it.
-	 * Tier 7-8 isn't activated either, so the rewards and minters are all moved to tier 5-6. */
+	/** Test rewards for level 9 and 10 accounts, when populated upper tiers do not have enough minters. */
 	@Test
 	public void testLevel9And10RewardsPreActivation() throws DataException, IllegalAccessException {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
-		// Set minAccountsToActivateShareBin to 4 so that share bins 7-8 and 9-10 are considered inactive
+		// Set minAccountsToActivateShareBin to 4 so populated share bins above the floor are considered inactive.
 		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 4, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
@@ -713,7 +715,7 @@ public class RewardTests extends Common {
 			assertEquals(9, (int) Common.getTestAccount(repository, "chloe").getLevel());
 			assertEquals(10, (int) Common.getTestAccount(repository, "dilbert").getLevel());
 
-			// Now that everyone is at level 7 or 8 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
+			// Now that everyone is at level 9 or 10 (except Bob who has only just started minting, so is at level 1), we can capture initial balances
 			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
 			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
@@ -730,20 +732,18 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Bob is level 1; Alice and Chloe are level 9; Dilbert is level 10.
-			 * Levels 7+8, and 9+10 are not yet activated, so their rewards are added to the level 5 and 6 share bin.
-			 * There are no levels 5-8 online.
-			 * Bob receives the normalized level 1 and 2 reward.
-			 * Alice, Chloe, and Dilbert share the normalized levels 5 to 10 reward.
+			 * Populated share bins above the floor are under the minimum count, so their rewards and minters
+			 * cascade down to the level 1 and 2 floor.
+			 * Alice, Bob, Chloe, and Dilbert should receive equal shares of the normalized reward.
 			 */
 
-			final long expectedLevel1And2Reward = normalizedRewardShare(blockReward, 6_000000L, 83_000000L);
-			final long expectedLevel5To10Reward = (blockReward - expectedLevel1And2Reward) / 3;
+			final long expectedReward = blockReward / 4;
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel5To10Reward);
-			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1And2Reward);
-			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5To10Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5To10Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedReward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedReward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedReward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedReward);
 
 			// Orphan and ensure balances return to their previous values
 			BlockUtils.orphanBlocks(repository, 1);
@@ -762,7 +762,7 @@ public class RewardTests extends Common {
 	public void testLevel7And8RewardsPreAndPostActivation() throws DataException, IllegalAccessException {
 		Common.useSettings("test-settings-v2-reward-levels.json");
 
-		// Set minAccountsToActivateShareBin to 3 so that share bins 7-8 and 9-10 are considered inactive at first
+		// Set minAccountsToActivateShareBin to 3 so the level 7-8 bin is inactive until three minters reach it.
 		FieldUtils.writeField(BlockChain.getInstance(), "minAccountsToActivateShareBin", 3, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
@@ -816,6 +816,7 @@ public class RewardTests extends Common {
 			 * Alice, Chloe, and Dilbert are 'online'.
 			 * Chloe is level 6; Alice and Dilbert are level 7.
 			 * Level 7 and 8 is not yet activated, so its rewards are added to the level 5 and 6 share bin.
+			 * The combined level 5 to 8 bin reaches the minimum account count.
 			 * Alice, Chloe, and Dilbert should receive equal shares of the normalized levels 5 to 8 reward.
 			 */
 

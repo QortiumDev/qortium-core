@@ -2394,15 +2394,15 @@ public class Block {
 			if (existingBinnedAccounts != null)
 				binnedAccounts.addAll(existingBinnedAccounts);
 
-			// Logic below may only apply to higher levels, and only for share bins with a specific range of online accounts
-			if (accountLevelShareBin.levels.get(0) < shareBinActivationMinLevel ||
+			// Logic below may only apply to configured levels, and only when a lower share bin exists to absorb them.
+			if (binIndex == 0 || accountLevelShareBin.levels.get(0) < shareBinActivationMinLevel ||
 					binnedAccounts.isEmpty() || binnedAccounts.size() >= minAccountsToActivateShareBin) {
 				// Add all accounts for this share bin to the accountsForShareBin list
 				accountsForShareBin.put(binIndex, binnedAccounts);
 				continue;
 			}
 
-			// Share bin contains more than one, but less than the minimum number of minters. We treat this share bin
+			// Share bin contains fewer than the minimum number of minters. We treat this share bin
 			// as not activated yet. In these cases, the rewards and minters are combined and paid out to the previous
 			// share bin, to prevent a single or handful of accounts receiving the entire rewards for a share bin.
 			//

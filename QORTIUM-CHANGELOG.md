@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: start share-bin activation checks at level one
+
+Changed the reward share-bin activation rule so the minimum-online-minter check starts at level one instead of level seven. The level 1-2 bin remains the bottom payout floor, so underpopulated higher bins can safely cascade downward without trying to merge below the configured reward levels. This makes the existing activation-count parameter apply across the reward ladder while keeping the activation start level as a static chain setting.
+
 ### 2026-05-22 - test: align reward tests with level-gated payouts
 
 Updated older reward tests so they wait until the test minter reaches a reward-paying account level before expecting block reward balances to change. This keeps the tests aligned with Qortium's current rule that level zero accounts may mint blocks but are not included in reward share bins.
