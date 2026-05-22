@@ -2306,6 +2306,8 @@ public class Block {
 	protected void distributeBlockReward(long totalAmount) throws DataException {
 		final long totalAmountForLogging = totalAmount;
 		LOGGER.trace(() -> String.format("Distributing: %s", Amounts.prettyAmount(totalAmountForLogging)));
+		boolean isOrphaning = totalAmount < 0;
+		long distributionTotal = isOrphaning ? -totalAmount : totalAmount;
 
 		if (!this.repository.getAssetRepository().assetExists(Asset.NATIVE)) {
 			LOGGER.debug("Skipping native block reward distribution because asset {} does not exist", Asset.NATIVE);
@@ -2320,12 +2322,12 @@ public class Block {
 		// Collate all balance changes and then apply in one final step
 		Map<String, Long> balanceChanges = new HashMap<>();
 
-		long remainingAmount = totalAmount;
+		long remainingAmount = distributionTotal;
 		for (int r = 0; r < rewardCandidates.size(); ++r) {
 			BlockRewardCandidate rewardCandidate = rewardCandidates.get(r);
 
 			// Distribute to these reward candidate accounts
-			final long distributionAmount = Amounts.roundDownScaledMultiply(totalAmount, rewardCandidate.share);
+			final long distributionAmount = Amounts.roundDownScaledMultiply(distributionTotal, rewardCandidate.share);
 
 			long sharedAmount = rewardCandidate.distribute(distributionAmount, balanceChanges);
 			remainingAmount -= sharedAmount;
@@ -2333,7 +2335,7 @@ public class Block {
 			// Reallocate any amount that could not be distributed by this candidate.
 			long undistributedAmount = distributionAmount - sharedAmount;
 			if (undistributedAmount > 0 && rewardCandidate.share < Amounts.MULTIPLIER)
-				totalAmount += Amounts.scaledDivide(undistributedAmount, Amounts.MULTIPLIER - rewardCandidate.share);
+				distributionTotal += Amounts.scaledDivide(undistributedAmount, Amounts.MULTIPLIER - rewardCandidate.share);
 
 			final long remainingAmountForLogging = remainingAmount;
 			LOGGER.trace(() -> String.format("%s share: %s. Actually shared: %s. Remaining: %s",
@@ -2345,7 +2347,8 @@ public class Block {
 
 		// Apply balance changes
 		List<AccountBalanceData> accountBalanceDeltas = balanceChanges.entrySet().stream()
-				.map(entry -> new AccountBalanceData(entry.getKey(), Asset.NATIVE, entry.getValue()))
+				.map(entry -> new AccountBalanceData(entry.getKey(), Asset.NATIVE,
+						isOrphaning ? -entry.getValue() : entry.getValue()))
 				.collect(Collectors.toList());
 		LOGGER.trace("Account Balance Deltas: {}", accountBalanceDeltas);
 		this.repository.getAccountRepository().modifyAssetBalances(accountBalanceDeltas);

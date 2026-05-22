@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: mirror reward distribution when orphaning
+
+Changed reward orphaning so it calculates the same positive reward split used during block processing and then reverses the final balance changes. This keeps tiny rounding remainders from being left behind when reward-bearing blocks are orphaned, making block reward processing and orphaning exact opposites again.
+
 ### 2026-05-22 - consensus: add on-chain share-bin activation count
 
 Added the first integer-based chain parameter update for the reward share-bin activation count. Development-group approved proposals can now change the minimum number of online minters required before a reward share bin is treated as active, with the value stored on chain and applied automatically from its activation height while falling back to `blockchain.json` when no approved overlay exists.
