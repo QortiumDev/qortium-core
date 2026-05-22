@@ -48,7 +48,7 @@ public class BlockUtils {
 	public static Long getNextBlockReward(Repository repository) throws DataException {
 		int currentHeight = repository.getBlockRepository().getBlockchainHeight();
 
-		return BlockChain.getInstance().getRewardAtHeight(currentHeight + 1);
+		return BlockChain.getInstance().getRewardAtHeight(repository, currentHeight + 1);
 	}
 
 	public static void orphanLastBlock(Repository repository) throws DataException {

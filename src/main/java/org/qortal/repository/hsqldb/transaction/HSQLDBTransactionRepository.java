@@ -1216,6 +1216,7 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 		sql.append(ApprovalStatus.PENDING.value);
 
 		sql.append(" AND Transactions.block_height < ? - Groups.min_block_delay");
+		sql.append(" ORDER BY Transactions.block_height, Transactions.created_when, Transactions.signature");
 
 		List<TransactionData> transactions = new ArrayList<>();
 

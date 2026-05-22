@@ -1698,7 +1698,7 @@ public class Block {
 
 	protected void processBlockRewards() throws DataException {
 		// General block reward
-		long reward = BlockChain.getInstance().getRewardAtHeight(this.blockData.getHeight());
+		long reward = BlockChain.getInstance().getRewardAtHeight(this.repository, this.blockData.getHeight());
 
 		if (this.isBatchRewardDistributionActive()) {
 			// Batch distribution is active - so multiply the reward by the batch size
@@ -2093,7 +2093,7 @@ public class Block {
 
 	protected void orphanBlockRewards() throws DataException {
 		// General block reward
-		long reward = BlockChain.getInstance().getRewardAtHeight(this.blockData.getHeight());
+		long reward = BlockChain.getInstance().getRewardAtHeight(this.repository, this.blockData.getHeight());
 
 		if (this.isBatchRewardDistributionActive()) {
 			// Batch distribution is active - so multiply the reward by the batch size

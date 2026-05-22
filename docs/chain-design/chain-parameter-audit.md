@@ -35,6 +35,8 @@ Several earlier fork-cleanup targets are now mostly complete:
   surfaces without legacy Qortal aliases
 - the trust-network launch model is now documented as a trusted-seed model,
   with early Minting group members acting as the practical trust seed set
+- the first on-chain parameter update path exists for development-group
+  approved block reward changes with explicit activation heights
 
 The remaining high-priority work is not the native asset constant. The next
 cleanup target is the production chain configuration and the genesis/governance

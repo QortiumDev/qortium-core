@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: add on-chain chain parameter updates
+
+Added the first development-group approved chain-parameter update path. Qortium can now store approved parameter overlays on chain, require explicit future activation heights, and apply an approved block reward change from that height onward while falling back to `blockchain.json` when no approved overlay exists. The new transaction, schema migration, API builder/query endpoints, tests, and chain-builder documentation create the narrow foundation for later fee, reward-split, and trust-parameter updates without requiring a rebuilt jar for every change.
+
 ### 2026-05-22 - consensus: remove group approval rejection threshold
 
 Changed group approval so no votes no longer reject a pending transaction by meeting the approval threshold. Approval-required transactions now either approve when enough yes votes arrive after the minimum delay or expire at the maximum delay, while no votes remain recorded as visible opposition without acting as vetoes.

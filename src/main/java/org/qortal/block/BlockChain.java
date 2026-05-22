@@ -9,6 +9,7 @@ import org.qortal.controller.Controller;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.block.BlockData;
+import org.qortal.data.blockchain.ChainParameterData;
 import org.qortal.network.Network;
 import org.qortal.repository.*;
 import org.qortal.settings.Settings;
@@ -737,6 +738,15 @@ public class BlockChain {
 				return rewardsByHeight.get(i).reward;
 
 		return 0;
+	}
+
+	public long getRewardAtHeight(Repository repository, int ourHeight) throws DataException {
+		ChainParameterData rewardUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.BLOCK_REWARD.id, ourHeight);
+		if (rewardUpdate != null)
+			return ChainParameter.BLOCK_REWARD.decodeLongValue(rewardUpdate.getValue());
+
+		return getRewardAtHeight(ourHeight);
 	}
 
 	public BlockTimingByHeight getBlockTimingByHeight(int ourHeight) {

@@ -20,6 +20,7 @@ import org.qortal.api.Security;
 			@Tag(name = "Assets"),
 			@Tag(name = "Automated Transactions"),
 			@Tag(name = "Blocks"),
+			@Tag(name = "Chain Parameters"),
 			@Tag(name = "Chat"),
 			@Tag(name = "Cross-Chain"),
 			@Tag(name = "Groups"),

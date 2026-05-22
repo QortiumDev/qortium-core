@@ -1,0 +1,135 @@
+package org.qortal.test;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.qortal.account.PrivateKeyAccount;
+import org.qortal.block.BlockChain;
+import org.qortal.block.ChainParameter;
+import org.qortal.data.blockchain.ChainParameterData;
+import org.qortal.data.group.GroupData;
+import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
+import org.qortal.group.Group;
+import org.qortal.repository.DataException;
+import org.qortal.repository.Repository;
+import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.BlockUtils;
+import org.qortal.test.common.Common;
+import org.qortal.test.common.GroupUtils;
+import org.qortal.test.common.TestChainBootstrapUtils;
+import org.qortal.test.common.TransactionUtils;
+import org.qortal.test.common.transaction.TestTransaction;
+import org.qortal.transaction.ChainParameterUpdateTransaction;
+import org.qortal.transaction.Transaction;
+import org.qortal.utils.Amounts;
+
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+
+public class ChainParameterUpdateTests extends Common {
+
+	@Before
+	public void beforeTest() throws DataException {
+		Common.useDefaultSettings();
+	}
+
+	@After
+	public void afterTest() throws DataException {
+		Common.orphanCheck();
+	}
+
+	@Test
+	public void testApprovedBlockRewardUpdateAppliesAtActivationHeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + getApprovalSettlementBlockCount(repository) + 10;
+			long originalReward = BlockChain.getInstance().getRewardAtHeight(repository, activationHeight);
+			long updatedReward = originalReward + Amounts.MULTIPLIER;
+
+			ChainParameterUpdateTransactionData transactionData = buildBlockRewardUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedReward);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertEquals(originalReward, BlockChain.getInstance().getRewardAtHeight(repository, activationHeight));
+
+			approveAndSettle(repository, transactionData);
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertEquals(originalReward, BlockChain.getInstance().getRewardAtHeight(repository, activationHeight - 1));
+			assertEquals(updatedReward, BlockChain.getInstance().getRewardAtHeight(repository, activationHeight));
+			assertEquals(updatedReward, BlockChain.getInstance().getRewardAtHeight(repository, activationHeight + 100));
+
+			ChainParameterData overlayData = repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.BLOCK_REWARD.id, activationHeight);
+			assertEquals(activationHeight, overlayData.getActivationHeight());
+			assertArrayEquals(transactionData.getValue(), overlayData.getValue());
+
+			int approvalHeight = GroupUtils.getApprovalHeight(repository, transactionData.getSignature());
+			BlockUtils.orphanToBlock(repository, approvalHeight - 1);
+
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertNull(repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.BLOCK_REWARD.id, activationHeight));
+			assertEquals(originalReward, BlockChain.getInstance().getRewardAtHeight(repository, activationHeight));
+		}
+	}
+
+	@Test
+	public void testChainParameterUpdateRequiresActiveDevelopmentGroup() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 20;
+			long updatedReward = Amounts.MULTIPLIER;
+
+			ChainParameterUpdateTransactionData noGroupTransactionData = buildBlockRewardUpdate(repository, alice,
+					Group.NO_GROUP, activationHeight, updatedReward);
+			assertEquals(Transaction.ValidationResult.INVALID_TX_GROUP_ID,
+					new ChainParameterUpdateTransaction(repository, noGroupTransactionData).isValid());
+
+			ChainParameterUpdateTransactionData mintingGroupTransactionData = buildBlockRewardUpdate(repository, alice,
+					TestChainBootstrapUtils.MINTING_GROUP_ID, activationHeight, updatedReward);
+			assertEquals(Transaction.ValidationResult.INVALID_TX_GROUP_ID,
+					new ChainParameterUpdateTransaction(repository, mintingGroupTransactionData).isValid());
+		}
+	}
+
+	@Test
+	public void testApprovalFailsIfActivationHeightIsNoLongerFuture() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 4;
+			long originalReward = BlockChain.getInstance().getRewardAtHeight(repository, activationHeight);
+			long updatedReward = originalReward + Amounts.MULTIPLIER;
+
+			ChainParameterUpdateTransactionData transactionData = buildBlockRewardUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedReward);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+
+			approveAndSettle(repository, transactionData);
+
+			assertEquals(Transaction.ApprovalStatus.INVALID, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertNull(repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.BLOCK_REWARD.id, activationHeight));
+			assertEquals(originalReward, BlockChain.getInstance().getRewardAtHeight(repository, activationHeight));
+		}
+	}
+
+	private static ChainParameterUpdateTransactionData buildBlockRewardUpdate(Repository repository,
+			PrivateKeyAccount updater, int txGroupId, int activationHeight, long reward) throws DataException {
+		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
+				ChainParameter.BLOCK_REWARD.id, activationHeight, ChainParameter.BLOCK_REWARD.encodeLongValue(reward));
+	}
+
+	private static void approveAndSettle(Repository repository, ChainParameterUpdateTransactionData transactionData) throws DataException {
+		GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);
+		BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository));
+	}
+
+	private static int getApprovalSettlementBlockCount(Repository repository) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
+		return Math.max(2, groupData.getMinimumBlockDelay() + 1);
+	}
+}

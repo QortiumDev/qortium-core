@@ -85,7 +85,8 @@ public abstract class Transaction {
 		BUY_ASSET_OWNERSHIP(44, false),
 		RATE_RESOURCE(45, false),
 		RATE_ACCOUNT(46, false),
-		UPDATE_POLL(47, true);
+		UPDATE_POLL(47, true),
+		CHAIN_PARAMETER_UPDATE(48, true);
 
 		public final int value;
 		public final boolean needsApproval;

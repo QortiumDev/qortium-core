@@ -1,0 +1,72 @@
+package org.qortal.repository.hsqldb;
+
+import org.qortal.data.blockchain.ChainParameterData;
+import org.qortal.repository.ChainParameterRepository;
+import org.qortal.repository.DataException;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+public class HSQLDBChainParameterRepository implements ChainParameterRepository {
+
+	private final HSQLDBRepository repository;
+
+	public HSQLDBChainParameterRepository(HSQLDBRepository repository) {
+		this.repository = repository;
+	}
+
+	@Override
+	public ChainParameterData getEffectiveParameter(int parameterId, int height) throws DataException {
+		String sql = "SELECT signature, activation_height, parameter_value FROM ChainParameterUpdates "
+				+ "WHERE parameter_id = ? AND activation_height <= ? "
+				+ "ORDER BY activation_height DESC LIMIT 1";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, parameterId, height)) {
+			if (resultSet == null)
+				return null;
+
+			byte[] signature = resultSet.getBytes(1);
+			int activationHeight = resultSet.getInt(2);
+			byte[] value = resultSet.getBytes(3);
+
+			return new ChainParameterData(signature, parameterId, activationHeight, value);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch effective chain parameter from repository", e);
+		}
+	}
+
+	@Override
+	public boolean hasParameterAtHeight(int parameterId, int activationHeight) throws DataException {
+		try {
+			return this.repository.exists("ChainParameterUpdates",
+					"parameter_id = ? AND activation_height = ?", parameterId, activationHeight);
+		} catch (SQLException e) {
+			throw new DataException("Unable to check chain parameter update in repository", e);
+		}
+	}
+
+	@Override
+	public void save(ChainParameterData chainParameterData) throws DataException {
+		HSQLDBSaver saveHelper = new HSQLDBSaver("ChainParameterUpdates");
+
+		saveHelper.bind("signature", chainParameterData.getSignature())
+				.bind("parameter_id", chainParameterData.getParameterId())
+				.bind("activation_height", chainParameterData.getActivationHeight())
+				.bind("parameter_value", chainParameterData.getValue());
+
+		try {
+			saveHelper.execute(this.repository);
+		} catch (SQLException e) {
+			throw new DataException("Unable to save chain parameter update into repository", e);
+		}
+	}
+
+	@Override
+	public void delete(byte[] signature) throws DataException {
+		try {
+			this.repository.delete("ChainParameterUpdates", "signature = ?", signature);
+		} catch (SQLException e) {
+			throw new DataException("Unable to delete chain parameter update from repository", e);
+		}
+	}
+}

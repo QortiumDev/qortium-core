@@ -24,6 +24,8 @@ public interface Repository extends AutoCloseable {
 
 	public ChatStoreRepository getChatStoreRepository();
 
+	public ChainParameterRepository getChainParameterRepository();
+
 	public CrossChainRepository getCrossChainRepository();
 
 	public GroupRepository getGroupRepository();

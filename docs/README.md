@@ -30,6 +30,7 @@ history.
 ## Chain Design
 
 - `Chain builder reference` [Chain parameter audit](chain-design/chain-parameter-audit.md) - remaining hardcoded chain parameter review
+- `Chain builder reference` [On-chain chain parameters](chain-design/on-chain-chain-parameters.md) - development-group approved runtime parameter updates
 
 ## Trust System
 

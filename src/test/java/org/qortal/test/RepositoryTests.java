@@ -97,6 +97,43 @@ public class RepositoryTests extends Common {
 				assertTrue(resultSet.next());
 			}
 
+			try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", "CHAINPARAMETERUPDATES", null)) {
+				assertTrue(resultSet.next());
+			}
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("SHUTDOWN");
+			}
+		}
+	}
+
+	@Test
+	public void testVersionOneRepositoryMigratesToChainParameterSchema() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:chain-parameter-schema-migration-" + System.nanoTime();
+
+		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
+			connection.setAutoCommit(false);
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("CREATE TYPE PUBLIC.ACCOUNTPUBLICKEY AS VARBINARY(32)");
+				statement.execute("CREATE TYPE PUBLIC.SIGNATURE AS VARBINARY(64)");
+				statement.execute("CREATE TABLE PUBLIC.DATABASEINFO(VERSION INTEGER NOT NULL)");
+				statement.execute("CREATE TABLE PUBLIC.TRANSACTIONS(SIGNATURE PUBLIC.SIGNATURE PRIMARY KEY)");
+				statement.execute("INSERT INTO DATABASEINFO VALUES(1)");
+			}
+			connection.commit();
+
+			assertFalse(HSQLDBDatabaseUpdates.updateDatabase(connection));
+			assertEquals(HSQLDBDatabaseUpdates.CURRENT_SCHEMA_VERSION, HSQLDBDatabaseUpdates.fetchDatabaseVersion(connection));
+
+			try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", "CHAINPARAMETERUPDATETRANSACTIONS", null)) {
+				assertTrue(resultSet.next());
+			}
+
+			try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", "CHAINPARAMETERUPDATES", null)) {
+				assertTrue(resultSet.next());
+			}
+
 			try (Statement statement = connection.createStatement()) {
 				statement.execute("SHUTDOWN");
 			}
