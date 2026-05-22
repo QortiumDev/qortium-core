@@ -44,7 +44,7 @@ public class ChainParameterUpdateTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 
-			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + getApprovalSettlementBlockCount(repository) + 10;
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
 			long originalReward = BlockChain.getInstance().getRewardAtHeight(repository, activationHeight);
 			long updatedReward = originalReward + Amounts.MULTIPLIER;
 
@@ -80,7 +80,7 @@ public class ChainParameterUpdateTests extends Common {
 	public void testChainParameterUpdateRequiresActiveDevelopmentGroup() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
-			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 20;
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
 			long updatedReward = Amounts.MULTIPLIER;
 
 			ChainParameterUpdateTransactionData noGroupTransactionData = buildBlockRewardUpdate(repository, alice,
@@ -96,10 +96,26 @@ public class ChainParameterUpdateTests extends Common {
 	}
 
 	@Test
-	public void testApprovalFailsIfActivationHeightIsNoLongerFuture() throws DataException {
+	public void testChainParameterUpdateRequiresActivationLeadTimeAtSubmission() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
-			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 4;
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight()
+					+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay();
+			long updatedReward = Amounts.MULTIPLIER;
+
+			ChainParameterUpdateTransactionData transactionData = buildBlockRewardUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedReward);
+
+			assertEquals(Transaction.ValidationResult.INVALID_LIFETIME,
+					new ChainParameterUpdateTransaction(repository, transactionData).isValid());
+		}
+	}
+
+	@Test
+	public void testApprovalFailsIfActivationLeadTimeIsConsumed() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + getApprovalSettlementBlockCount(repository) + 3;
 			long originalReward = BlockChain.getInstance().getRewardAtHeight(repository, activationHeight);
 			long updatedReward = originalReward + Amounts.MULTIPLIER;
 
@@ -131,5 +147,12 @@ public class ChainParameterUpdateTests extends Common {
 	private static int getApprovalSettlementBlockCount(Repository repository) throws DataException {
 		GroupData groupData = repository.getGroupRepository().fromGroupId(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
 		return Math.max(2, groupData.getMinimumBlockDelay() + 1);
+	}
+
+	private static int getActivationHeightSafelyAfterApproval(Repository repository, int extraBlocks) throws DataException {
+		return repository.getBlockRepository().getBlockchainHeight()
+				+ getApprovalSettlementBlockCount(repository)
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ extraBlocks;
 	}
 }

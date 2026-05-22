@@ -54,16 +54,6 @@ public class ChainParametersResource {
 	@Context
 	HttpServletRequest request;
 
-	private static final List<ChainParameterMetadata> PARAMETERS = Collections.singletonList(
-			new ChainParameterMetadata(
-					ChainParameter.BLOCK_REWARD.id,
-					ChainParameter.BLOCK_REWARD.name(),
-					"AMOUNT",
-					ChainParameter.BLOCK_REWARD.valueLength,
-					"Height-based block reward amount, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
-					"/chain-parameters/block-reward/update",
-					"/chain-parameters/block-reward/{height}"));
-
 	@GET
 	@Operation(
 			summary = "List supported on-chain chain parameters",
@@ -78,7 +68,7 @@ public class ChainParametersResource {
 			}
 	)
 	public List<ChainParameterMetadata> getChainParameters() {
-		return PARAMETERS;
+		return buildParameterMetadata();
 	}
 
 	@GET
@@ -226,6 +216,19 @@ public class ChainParametersResource {
 
 		return new ChainParameterUpdateTransactionData(baseTransactionData, ChainParameter.BLOCK_REWARD.id,
 				updateRequest.activationHeight, ChainParameter.BLOCK_REWARD.encodeLongValue(updateRequest.reward));
+	}
+
+	private static List<ChainParameterMetadata> buildParameterMetadata() {
+		return Collections.singletonList(
+				new ChainParameterMetadata(
+						ChainParameter.BLOCK_REWARD.id,
+						ChainParameter.BLOCK_REWARD.name(),
+						"AMOUNT",
+						ChainParameter.BLOCK_REWARD.valueLength,
+						BlockChain.getInstance().getChainParameterUpdateMinActivationDelay(),
+						"Height-based block reward amount, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
+						"/chain-parameters/block-reward/update",
+						"/chain-parameters/block-reward/{height}"));
 	}
 
 	private static ChainParameterUpdateSummary buildUpdateSummary(Repository repository,

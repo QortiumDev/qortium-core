@@ -10,6 +10,7 @@ import org.qortal.api.model.ChainParameterMetadata;
 import org.qortal.api.model.ChainParameterUpdateSummary;
 import org.qortal.api.resource.ChainParametersResource;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
+import org.qortal.block.BlockChain;
 import org.qortal.block.ChainParameter;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
@@ -58,6 +59,7 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals(ChainParameter.BLOCK_REWARD.name(), blockReward.name);
 		assertEquals("AMOUNT", blockReward.valueType);
 		assertEquals(Long.BYTES, blockReward.valueLength);
+		assertEquals(BlockChain.getInstance().getChainParameterUpdateMinActivationDelay(), blockReward.minimumActivationDelay);
 		assertEquals("/chain-parameters/block-reward/update", blockReward.builderPath);
 		assertEquals("/chain-parameters/block-reward/{height}", blockReward.effectivePath);
 	}
@@ -89,6 +91,19 @@ public class ChainParametersApiTests extends ApiCommon {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			request = buildBlockRewardUpdateRequest(repository, -1L);
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateBlockReward(request));
+	}
+
+	@Test
+	public void testBuildBlockRewardUpdateRejectsTooCloseActivationHeight() throws DataException {
+		BlockRewardUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildBlockRewardUpdateRequest(repository, Amounts.MULTIPLIER);
+			request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+					+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay();
 		}
 
 		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateBlockReward(request));
@@ -178,7 +193,7 @@ public class ChainParametersApiTests extends ApiCommon {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			int settlementBlockCount = getApprovalSettlementBlockCount(repository);
 
-			approvedActivationHeight = repository.getBlockRepository().getBlockchainHeight() + settlementBlockCount + 20;
+			approvedActivationHeight = getActivationHeightSafelyAfterApproval(repository, 20);
 			approvedTransactionData = buildBlockRewardUpdateTransaction(repository, alice,
 					approvedActivationHeight, 4L * Amounts.MULTIPLIER);
 			TransactionUtils.signAndMint(repository, approvedTransactionData, alice);
@@ -241,7 +256,9 @@ public class ChainParametersApiTests extends ApiCommon {
 		request.timestamp = System.currentTimeMillis();
 		request.txGroupId = TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID;
 		request.updaterPublicKey = alice.getPublicKey();
-		request.activationHeight = repository.getBlockRepository().getBlockchainHeight() + 100;
+		request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ 100;
 		request.reward = reward;
 
 		return request;
@@ -264,5 +281,12 @@ public class ChainParametersApiTests extends ApiCommon {
 	private static int getApprovalSettlementBlockCount(Repository repository) throws DataException {
 		GroupData groupData = repository.getGroupRepository().fromGroupId(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
 		return Math.max(2, groupData.getMinimumBlockDelay() + 1);
+	}
+
+	private static int getActivationHeightSafelyAfterApproval(Repository repository, int extraBlocks) throws DataException {
+		return repository.getBlockRepository().getBlockchainHeight()
+				+ getApprovalSettlementBlockCount(repository)
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ extraBlocks;
 	}
 }

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: add chain parameter activation guardrails
+
+Added a required activation lead time for on-chain chain-parameter updates. Approved proposals must now leave a configured number of blocks before activation, which gives operators time to see and prepare for a voted-in change instead of allowing a parameter update to take effect immediately after approval.
+
 ### 2026-05-22 - api: add chain parameter update visibility
 
 Added a readable chain-parameter proposal view so operators can inspect development-group proposals without manually searching raw transactions. The new endpoint lists block reward update proposals with decoded values, approval status, activation height, current yes and no vote counts, approval-authority count, and whether an approved proposal is currently effective.

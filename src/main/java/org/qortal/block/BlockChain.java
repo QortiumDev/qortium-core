@@ -59,6 +59,9 @@ public class BlockChain {
 	/** Maximum block size, in bytes. */
 	private int maxBlockSize;
 
+	/** Minimum number of blocks between chain-parameter approval and activation. */
+	private int chainParameterUpdateMinActivationDelay;
+
 	/** Whether transactions with txGroupId of NO_GROUP are allowed */
 	private boolean requireGroupForApproval;
 
@@ -632,6 +635,10 @@ public class BlockChain {
 		return this.maxBlockSize;
 	}
 
+	public int getChainParameterUpdateMinActivationDelay() {
+		return this.chainParameterUpdateMinActivationDelay;
+	}
+
 	/* Block reward batching */
 	public long getBlockRewardBatchStartHeight() {
 		return this.blockRewardBatchStartHeight;
@@ -808,6 +815,9 @@ public class BlockChain {
 
 		if (this.maxBlockSize <= 0)
 			Settings.throwValidationError("Invalid \"maxBlockSize\" in blockchain config");
+
+		if (this.chainParameterUpdateMinActivationDelay <= 0)
+			Settings.throwValidationError("Invalid \"chainParameterUpdateMinActivationDelay\" in blockchain config");
 
 		byte[] mainnetMagic = decodeMessageMagic("mainnetMessageMagic", this.mainnetMessageMagic);
 		byte[] testnetMagic = decodeMessageMagic("testnetMessageMagic", this.testnetMessageMagic);

@@ -32,10 +32,13 @@ effective parameter overlay.
 
 Every update carries an `activationHeight`.
 
-The activation height must still be in the future when the development group
-approval decision is applied. If a proposal was valid when submitted but the
-approval takes too long and its activation height has already arrived, the
-approval settles as invalid and the parameter is not applied.
+The activation height must leave a configured number of blocks between group
+approval and activation. The main chain currently requires 1440 blocks; the
+test chain uses 10 blocks so automated and local tests remain practical.
+
+If a proposal is too close to activation when submitted, it is invalid. If it
+was valid when submitted but approval takes long enough to consume the required
+lead time, the approval settles as invalid and the parameter is not applied.
 
 Once approved, the repository stores the update as an overlay keyed by parameter
 ID and activation height. Consensus lookups check the approved overlay first and
@@ -56,7 +59,8 @@ overrides it.
 
 `GET /chain-parameters` lists the chain parameters that this node knows how to
 build and explain through the public API. Version 1 only reports
-`BLOCK_REWARD`.
+`BLOCK_REWARD`. Each metadata entry includes the current minimum activation
+delay that proposals for that parameter must satisfy.
 
 `GET /chain-parameters/updates` lists chain-parameter proposals as readable
 proposal summaries. The endpoint can filter by parameter ID, approval status,
@@ -80,7 +84,7 @@ Example request:
   "timestamp": 1779451200000,
   "txGroupId": 1,
   "updaterPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP",
-  "activationHeight": 250000,
+  "activationHeight": 251440,
   "reward": "5.00000000"
 }
 ```
@@ -88,7 +92,9 @@ Example request:
 The response is the raw unsigned transaction encoded in Base58. It still needs
 to be signed and submitted like other raw transactions. If `fee` is omitted, the
 builder uses the recommended transaction fee. Advanced callers can still provide
-an explicit `fee` and optional `nonce`.
+an explicit `fee` and optional `nonce`. Choose an activation height far enough
+ahead to cover both the expected approval settlement time and the configured
+minimum activation delay.
 
 `GET /chain-parameters/block-reward/{height}` returns the effective block
 reward for a height after applying any approved overlay that is active at that

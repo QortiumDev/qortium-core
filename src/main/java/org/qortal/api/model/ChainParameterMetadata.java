@@ -20,6 +20,9 @@ public class ChainParameterMetadata {
 	@Schema(description = "canonical on-chain value length in bytes")
 	public int valueLength;
 
+	@Schema(description = "minimum number of blocks required between approval and activation")
+	public int minimumActivationDelay;
+
 	@Schema(description = "plain-language description of the parameter")
 	public String description;
 
@@ -32,12 +35,13 @@ public class ChainParameterMetadata {
 	public ChainParameterMetadata() {
 	}
 
-	public ChainParameterMetadata(int id, String name, String valueType, int valueLength, String description,
-			String builderPath, String effectivePath) {
+	public ChainParameterMetadata(int id, String name, String valueType, int valueLength, int minimumActivationDelay,
+			String description, String builderPath, String effectivePath) {
 		this.id = id;
 		this.name = name;
 		this.valueType = valueType;
 		this.valueLength = valueLength;
+		this.minimumActivationDelay = minimumActivationDelay;
 		this.description = description;
 		this.builderPath = builderPath;
 		this.effectivePath = effectivePath;
