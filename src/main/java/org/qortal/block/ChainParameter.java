@@ -24,7 +24,11 @@ public enum ChainParameter {
 	NAME_REGISTRATION_UNIT_FEE(4, Long.BYTES, "AMOUNT",
 			"Name-registration transaction unit fee, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
 			"/chain-parameters/name-registration-unit-fee/update",
-			"/chain-parameters/name-registration-unit-fee/{height}");
+			"/chain-parameters/name-registration-unit-fee/{height}"),
+	REWARD_SHARE_WEIGHTS(5, 10 * Integer.BYTES, "INTEGER_LIST",
+			"Reward share weights for levels 1 through 10, stored as 10 signed integers and normalized into level shares at activation height.",
+			"/chain-parameters/reward-share-weights/update",
+			"/chain-parameters/reward-share-weights/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 
@@ -80,6 +84,18 @@ public enum ChainParameter {
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
 				return decodeIntValue(value) >= 0;
 
+			case REWARD_SHARE_WEIGHTS:
+				int[] weights = decodeIntArrayValue(value);
+				long totalWeight = 0;
+				for (int weight : weights) {
+					if (weight < 0)
+						return false;
+
+					totalWeight += weight;
+				}
+
+				return totalWeight > 0;
+
 			default:
 				return false;
 		}
@@ -105,6 +121,29 @@ public enum ChainParameter {
 
 	public byte[] encodeIntValue(int value) {
 		return ByteBuffer.allocate(Integer.BYTES).putInt(value).array();
+	}
+
+	public int[] decodeIntArrayValue(byte[] value) {
+		if (value == null || value.length % Integer.BYTES != 0)
+			throw new IllegalArgumentException("Chain parameter value is not an int array");
+
+		ByteBuffer byteBuffer = ByteBuffer.wrap(value);
+		int[] values = new int[value.length / Integer.BYTES];
+		for (int i = 0; i < values.length; ++i)
+			values[i] = byteBuffer.getInt();
+
+		return values;
+	}
+
+	public byte[] encodeIntArrayValue(int[] values) {
+		if (values == null)
+			return null;
+
+		ByteBuffer byteBuffer = ByteBuffer.allocate(values.length * Integer.BYTES);
+		for (int value : values)
+			byteBuffer.putInt(value);
+
+		return byteBuffer.array();
 	}
 
 	public Long decodeAmountValue(byte[] value) {
@@ -135,6 +174,19 @@ public enum ChainParameter {
 		}
 	}
 
+	public int[] decodeIntegerListValue(byte[] value) {
+		if (!isValidValue(value))
+			return null;
+
+		switch (this) {
+			case REWARD_SHARE_WEIGHTS:
+				return decodeIntArrayValue(value);
+
+			default:
+				return null;
+		}
+	}
+
 	public String formatDisplayValue(byte[] value) {
 		if (!isValidValue(value))
 			return null;
@@ -147,6 +199,9 @@ public enum ChainParameter {
 
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
 				return Integer.toString(decodeIntValue(value));
+
+			case REWARD_SHARE_WEIGHTS:
+				return Arrays.toString(decodeIntArrayValue(value));
 
 			default:
 				return null;

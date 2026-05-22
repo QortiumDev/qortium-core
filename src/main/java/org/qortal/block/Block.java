@@ -152,8 +152,6 @@ public class Block {
 		private final Account recipientAccount;
 		private final AccountData recipientAccountData;
 
-		final BlockChain blockChain = BlockChain.getInstance();
-
 		ExpandedAccount(Repository repository, RewardShareData rewardShareData, int blockHeight) throws DataException {
 			this.rewardShareData = rewardShareData;
 			this.sharePercent = this.rewardShareData.getSharePercent();
@@ -208,15 +206,13 @@ public class Block {
 		 *
 		 *  @return account-level share "bin" from blockchain config, or null if none found
 		 */
-		public AccountLevelShareBin getShareBin(int blockHeight) {
+		public AccountLevelShareBin getShareBin(AccountLevelShareBin[] shareBinsByLevel) {
 			final int accountLevel = this.mintingAccountData.getLevel();
 			if (accountLevel <= 0)
 				return null; // level 0 isn't included in any share bins
 
 			if (!this.isMinterMember)
 				return null; // not allowed to mint, so not included in any share bins
-
-			final AccountLevelShareBin[] shareBinsByLevel = blockChain.getShareBinsByAccountLevel();
 
 			if (accountLevel > shareBinsByLevel.length)
 				return null;
@@ -226,8 +222,8 @@ public class Block {
 
 		}
 
-		public boolean hasShareBin(AccountLevelShareBin shareBin, int blockHeight) {
-			AccountLevelShareBin ourShareBin = this.getShareBin(blockHeight);
+		public boolean hasShareBin(AccountLevelShareBin shareBin, AccountLevelShareBin[] shareBinsByLevel) {
+			AccountLevelShareBin ourShareBin = this.getShareBin(shareBinsByLevel);
 			return ourShareBin != null && shareBin.id == ourShareBin.id;
 		}
 
@@ -2370,7 +2366,10 @@ public class Block {
 		 * belong to a configured minting group. Active account-level share bins are
 		 * normalized to distribute the full block reward to eligible online minters.
 		 */
-		List<AccountLevelShareBin> accountLevelShareBinsForBlock = BlockChain.getInstance().getAccountLevelShareBins();
+		List<AccountLevelShareBin> accountLevelShareBinsForBlock = BlockChain.getInstance()
+				.getAccountLevelShareBins(this.repository, this.blockData.getHeight());
+		AccountLevelShareBin[] shareBinsByLevel = BlockChain.getInstance()
+				.getShareBinsByAccountLevel(this.repository, this.blockData.getHeight());
 		// Determine reward candidates based on account level
 		// This needs a deep copy, so the shares can be modified when tiers aren't activated yet
 		List<AccountLevelShareBin> accountLevelShareBins = new ArrayList<>();
@@ -2388,7 +2387,9 @@ public class Block {
 			AccountLevelShareBin accountLevelShareBin = accountLevelShareBins.get(binIndex);
 
 			// Find all accounts in share bin.
-			List<ExpandedAccount> binnedAccounts = expandedAccounts.stream().filter(accountInfo -> accountInfo.hasShareBin(accountLevelShareBin, this.blockData.getHeight())).collect(Collectors.toList());
+			List<ExpandedAccount> binnedAccounts = expandedAccounts.stream()
+					.filter(accountInfo -> accountInfo.hasShareBin(accountLevelShareBin, shareBinsByLevel))
+					.collect(Collectors.toList());
 			// Add any accounts that have been moved down from a higher tier
 			List<ExpandedAccount> existingBinnedAccounts = accountsForShareBin.get(binIndex);
 			if (existingBinnedAccounts != null)

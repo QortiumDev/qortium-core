@@ -11,17 +11,26 @@ import org.qortal.asset.Asset;
 import org.qortal.block.BlockChain;
 import org.qortal.block.BlockChain.AccountLevelShareBin;
 import org.qortal.block.BlockChain.RewardByHeight;
+import org.qortal.block.ChainParameter;
 import org.qortal.controller.BlockMinter;
+import org.qortal.data.group.GroupData;
+import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.GroupUtils;
 import org.qortal.test.common.TestAccount;
+import org.qortal.test.common.TestChainBootstrapUtils;
+import org.qortal.test.common.TransactionUtils;
+import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.utils.Amounts;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -76,6 +85,62 @@ public class RewardTests extends Common {
 		}
 
 		assertEquals(Amounts.MULTIPLIER, totalShare);
+	}
+
+	@Test
+	public void testEffectiveRewardShareWeightsChangeDistribution() throws DataException {
+		Common.useSettings("test-settings-v2-reward-levels.json");
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			seedRewardLevelTestAccounts(repository);
+
+			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
+			mintingAndOnlineAccounts.add(Common.getTestAccount(repository, "alice-reward-share"));
+
+			byte[] chloeRewardSharePrivateKey = AccountUtils.rewardShare(repository, "chloe", "chloe", 0);
+			mintingAndOnlineAccounts.add(new PrivateKeyAccount(repository, chloeRewardSharePrivateKey));
+
+			byte[] dilbertRewardSharePrivateKey = AccountUtils.rewardShare(repository, "dilbert", "dilbert", 0);
+			mintingAndOnlineAccounts.add(new PrivateKeyAccount(repository, dilbertRewardSharePrivateKey));
+
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight()
+					+ getApprovalSettlementBlockCount(repository)
+					+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+					+ 20;
+			int[] weights = new int[] { 3, 1, 1, 1, 1, 1, 1, 1, 1, 1 };
+
+			ChainParameterUpdateTransactionData transactionData = new ChainParameterUpdateTransactionData(
+					TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+					ChainParameter.REWARD_SHARE_WEIGHTS.id, activationHeight,
+					ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(weights));
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);
+			BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository));
+
+			int blocksUntilActivation = activationHeight - 1 - repository.getBlockRepository().getBlockchainHeight();
+			assertTrue(blocksUntilActivation >= 0);
+			BlockUtils.mintBlocks(repository, blocksUntilActivation);
+			assertEquals(activationHeight - 1, repository.getBlockRepository().getBlockchainHeight());
+
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			final long aliceInitialBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			final long bobInitialBalance = initialBalances.get("bob").get(Asset.NATIVE);
+			final long chloeInitialBalance = initialBalances.get("chloe").get(Asset.NATIVE);
+			final long dilbertInitialBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
+
+			final long blockReward = BlockUtils.getNextBlockReward(repository);
+			BlockMinter.mintTestingBlock(repository, mintingAndOnlineAccounts.toArray(new PrivateKeyAccount[0]));
+			assertEquals(activationHeight, repository.getBlockRepository().getBlockchainHeight());
+
+			Map<String, Long> expectedRewards = calculateExpectedRewardsByAccount(repository, blockReward,
+					new String[] { "alice", "chloe", "dilbert" }, activationHeight);
+
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance + expectedRewards.get("alice"));
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance + expectedRewards.get("chloe"));
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance + expectedRewards.get("dilbert"));
+		}
 	}
 
 	@Test
@@ -1046,9 +1111,61 @@ public class RewardTests extends Common {
 		AccountUtils.setMintingData(repository, "dilbert", 8);
 	}
 
+	private static int getApprovalSettlementBlockCount(Repository repository) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
+		return Math.max(2, groupData.getMinimumBlockDelay() + 1);
+	}
+
 	private static void mintAliceToLevel(Repository repository, int level) throws DataException {
 		while (Common.getTestAccount(repository, "alice").getLevel() < level)
 			BlockUtils.mintBlock(repository);
+	}
+
+	private static Map<String, Long> calculateExpectedRewardsByAccount(Repository repository, long blockReward,
+			String[] accountNames, int activationHeight) throws DataException {
+		List<AccountLevelShareBin> shareBins = BlockChain.getInstance().getAccountLevelShareBins(repository, activationHeight);
+		AccountLevelShareBin[] shareBinsByLevel = BlockChain.getInstance().getShareBinsByAccountLevel(repository, activationHeight);
+
+		Map<String, Integer> accountBinIds = new HashMap<>();
+		Map<Integer, Integer> accountCountsByBinId = new HashMap<>();
+		for (String accountName : accountNames) {
+			int level = Common.getTestAccount(repository, accountName).getLevel();
+			AccountLevelShareBin shareBin = shareBinsByLevel[level - 1];
+
+			accountBinIds.put(accountName, shareBin.id);
+			accountCountsByBinId.merge(shareBin.id, 1, Integer::sum);
+		}
+
+		List<Integer> orderedBinIds = new ArrayList<>();
+		List<Long> orderedShares = new ArrayList<>();
+		List<Integer> orderedAccountCounts = new ArrayList<>();
+		for (AccountLevelShareBin shareBin : shareBins) {
+			Integer accountCount = accountCountsByBinId.get(shareBin.id);
+			if (accountCount == null)
+				continue;
+
+			orderedBinIds.add(shareBin.id);
+			orderedShares.add(shareBin.share);
+			orderedAccountCounts.add(accountCount);
+		}
+
+		long[] shares = new long[orderedShares.size()];
+		int[] accountCounts = new int[orderedAccountCounts.size()];
+		for (int i = 0; i < orderedShares.size(); ++i) {
+			shares[i] = orderedShares.get(i);
+			accountCounts[i] = orderedAccountCounts.get(i);
+		}
+
+		long[] rewardsByBin = distributeByShareBins(blockReward, shares, accountCounts);
+		Map<Integer, Long> rewardByBinId = new HashMap<>();
+		for (int i = 0; i < orderedBinIds.size(); ++i)
+			rewardByBinId.put(orderedBinIds.get(i), rewardsByBin[i]);
+
+		Map<String, Long> expectedRewards = new LinkedHashMap<>();
+		for (String accountName : accountNames)
+			expectedRewards.put(accountName, rewardByBinId.get(accountBinIds.get(accountName)));
+
+		return expectedRewards;
 	}
 
 	private static long[] distributeByShareBins(long blockReward, long[] shares, int[] accountCounts) {

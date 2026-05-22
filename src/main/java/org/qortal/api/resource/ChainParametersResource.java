@@ -17,6 +17,7 @@ import org.qortal.api.model.ChainParameterMetadata;
 import org.qortal.api.model.ChainParameterUpdateSummary;
 import org.qortal.api.model.IntegerChainParameterUpdateRequest;
 import org.qortal.api.model.NameRegistrationUnitFeeUpdateRequest;
+import org.qortal.api.model.RewardShareWeightsUpdateRequest;
 import org.qortal.api.model.UnitFeeUpdateRequest;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.block.BlockChain;
@@ -215,6 +216,29 @@ public class ChainParametersResource {
 	}
 
 	@GET
+	@Path("/reward-share-weights/{height}")
+	@Operation(
+			summary = "Fetch the effective reward share weights at a height",
+			responses = {
+					@ApiResponse(
+							description = "10 integer weights for reward levels 1 through 10",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									array = @ArraySchema(schema = @Schema(type = "integer"))
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public int[] getRewardShareWeights(@PathParam("height") int height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return BlockChain.getInstance().getRewardShareWeights(repository, height);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
 	@Path("/unit-fee/{height}")
 	@Operation(
 			summary = "Fetch the effective normal transaction unit fee at a height",
@@ -335,6 +359,42 @@ public class ChainParametersResource {
 	}
 
 	@POST
+	@Path("/reward-share-weights/update")
+	@Operation(
+			summary = "Build raw, unsigned, REWARD_SHARE_WEIGHTS chain-parameter update transaction",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = RewardShareWeightsUpdateRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, CHAIN_PARAMETER_UPDATE transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "string")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String updateRewardShareWeights(RewardShareWeightsUpdateRequest updateRequest) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChainParameterUpdateTransactionData transactionData = buildRewardShareWeightsTransactionData(updateRequest);
+			return validateAndTransformUpdate(repository, transactionData);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
 	@Path("/unit-fee/update")
 	@Operation(
 			summary = "Build raw, unsigned, UNIT_FEE chain-parameter update transaction",
@@ -423,6 +483,16 @@ public class ChainParametersResource {
 				updateRequest.activationHeight, parameter.encodeIntValue(updateRequest.value));
 	}
 
+	private static ChainParameterUpdateTransactionData buildRewardShareWeightsTransactionData(
+			RewardShareWeightsUpdateRequest updateRequest) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
+
+		return new ChainParameterUpdateTransactionData(baseTransactionData, ChainParameter.REWARD_SHARE_WEIGHTS.id,
+				updateRequest.activationHeight,
+				ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(updateRequest.weights));
+	}
+
 	private static ChainParameterUpdateTransactionData buildUnitFeeTransactionData(UnitFeeUpdateRequest updateRequest) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
 				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
@@ -505,6 +575,9 @@ public class ChainParametersResource {
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
 				return parameter.encodeIntValue(BlockChain.getInstance().getMinAccountsToActivateShareBin());
 
+			case REWARD_SHARE_WEIGHTS:
+				return parameter.encodeIntArrayValue(BlockChain.getInstance().getRewardShareWeights());
+
 			case UNIT_FEE:
 				return parameter.encodeLongValue(BlockChain.getInstance().getUnitFeeAtTimestamp(fallbackTimestamp));
 
@@ -521,6 +594,7 @@ public class ChainParametersResource {
 		effectiveValue.value = value;
 		effectiveValue.amount = parameter.decodeAmountValue(value);
 		effectiveValue.integerValue = parameter.decodeIntegerValue(value);
+		effectiveValue.integerValues = parameter.decodeIntegerListValue(value);
 		effectiveValue.displayValue = parameter.formatDisplayValue(value);
 	}
 
@@ -529,6 +603,7 @@ public class ChainParametersResource {
 		effectiveValue.nextValue = value;
 		effectiveValue.nextAmount = parameter.decodeAmountValue(value);
 		effectiveValue.nextIntegerValue = parameter.decodeIntegerValue(value);
+		effectiveValue.nextIntegerValues = parameter.decodeIntegerListValue(value);
 		effectiveValue.nextDisplayValue = parameter.formatDisplayValue(value);
 	}
 
@@ -569,6 +644,7 @@ public class ChainParametersResource {
 			summary.valueType = parameter.getValueType();
 			summary.amount = parameter.decodeAmountValue(transactionData.getValue());
 			summary.integerValue = parameter.decodeIntegerValue(transactionData.getValue());
+			summary.integerValues = parameter.decodeIntegerListValue(transactionData.getValue());
 			summary.displayValue = parameter.formatDisplayValue(transactionData.getValue());
 		}
 

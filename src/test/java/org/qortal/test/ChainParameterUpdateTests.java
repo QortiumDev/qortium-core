@@ -5,6 +5,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
+import org.qortal.block.BlockChain.AccountLevelShareBin;
 import org.qortal.block.ChainParameter;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.blockchain.ChainParameterData;
@@ -115,6 +116,44 @@ public class ChainParameterUpdateTests extends Common {
 			assertNull(repository.getChainParameterRepository()
 					.getEffectiveParameter(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.id, activationHeight));
 			assertEquals(originalValue, BlockChain.getInstance().getMinAccountsToActivateShareBin(repository, activationHeight));
+		}
+	}
+
+	@Test
+	public void testApprovedRewardShareWeightsUpdateAppliesAtActivationHeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+			int[] originalWeights = BlockChain.getInstance().getRewardShareWeights(repository, activationHeight);
+			int[] updatedWeights = new int[] { 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 };
+
+			ChainParameterUpdateTransactionData transactionData = buildRewardShareWeightsUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedWeights);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertArrayEquals(originalWeights, BlockChain.getInstance().getRewardShareWeights(repository, activationHeight));
+
+			approveAndSettle(repository, transactionData);
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertArrayEquals(originalWeights, BlockChain.getInstance().getRewardShareWeights(repository, activationHeight - 1));
+			assertArrayEquals(updatedWeights, BlockChain.getInstance().getRewardShareWeights(repository, activationHeight));
+			assertArrayEquals(updatedWeights, BlockChain.getInstance().getRewardShareWeights(repository, activationHeight + 100));
+			assertRewardShareBinsMatchWeights(repository, activationHeight, updatedWeights);
+
+			ChainParameterData overlayData = repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.REWARD_SHARE_WEIGHTS.id, activationHeight);
+			assertEquals(activationHeight, overlayData.getActivationHeight());
+			assertArrayEquals(transactionData.getValue(), overlayData.getValue());
+
+			int approvalHeight = GroupUtils.getApprovalHeight(repository, transactionData.getSignature());
+			BlockUtils.orphanToBlock(repository, approvalHeight - 1);
+
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertNull(repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.REWARD_SHARE_WEIGHTS.id, activationHeight));
+			assertArrayEquals(originalWeights, BlockChain.getInstance().getRewardShareWeights(repository, activationHeight));
 		}
 	}
 
@@ -332,6 +371,31 @@ public class ChainParameterUpdateTests extends Common {
 		}
 	}
 
+	@Test
+	public void testChainParameterUpdateRejectsInvalidRewardShareWeights() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+
+			ChainParameterUpdateTransactionData shortTransactionData = buildRewardShareWeightsUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, new int[] { 1, 2, 3 });
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, shortTransactionData).isValid());
+
+			ChainParameterUpdateTransactionData negativeTransactionData = buildRewardShareWeightsUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight,
+					new int[] { 1, 2, 3, 4, 5, -6, 7, 8, 9, 10 });
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, negativeTransactionData).isValid());
+
+			ChainParameterUpdateTransactionData zeroTransactionData = buildRewardShareWeightsUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight,
+					new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, zeroTransactionData).isValid());
+		}
+	}
+
 	private static ChainParameterUpdateTransactionData buildBlockRewardUpdate(Repository repository,
 			PrivateKeyAccount updater, int txGroupId, int activationHeight, long reward) throws DataException {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
@@ -343,6 +407,13 @@ public class ChainParameterUpdateTests extends Common {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
 				ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.id, activationHeight,
 				ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.encodeIntValue(value));
+	}
+
+	private static ChainParameterUpdateTransactionData buildRewardShareWeightsUpdate(Repository repository,
+			PrivateKeyAccount updater, int txGroupId, int activationHeight, int[] weights) throws DataException {
+		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
+				ChainParameter.REWARD_SHARE_WEIGHTS.id, activationHeight,
+				ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(weights));
 	}
 
 	private static ChainParameterUpdateTransactionData buildUnitFeeUpdate(Repository repository,
@@ -394,5 +465,37 @@ public class ChainParameterUpdateTests extends Common {
 				+ getApprovalSettlementBlockCount(repository)
 				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
 				+ extraBlocks;
+	}
+
+	private static void assertRewardShareBinsMatchWeights(Repository repository, int activationHeight, int[] weights)
+			throws DataException {
+		long totalWeight = 0;
+		int lastPositiveWeightIndex = -1;
+		for (int i = 0; i < weights.length; ++i) {
+			if (weights[i] > 0)
+				lastPositiveWeightIndex = i;
+
+			totalWeight += weights[i];
+		}
+
+		long remainingShare = Amounts.MULTIPLIER;
+		for (int i = 0; i < weights.length; ++i) {
+			AccountLevelShareBin shareBin = BlockChain.getInstance().getAccountLevelShareBins(repository, activationHeight).get(i);
+			assertEquals(i + 1, shareBin.id);
+			assertEquals(1, shareBin.levels.size());
+			assertEquals(Integer.valueOf(i + 1), shareBin.levels.get(0));
+
+			long expectedShare;
+			if (weights[i] == 0) {
+				expectedShare = 0L;
+			} else if (i == lastPositiveWeightIndex) {
+				expectedShare = remainingShare;
+			} else {
+				expectedShare = Amounts.scaledDivide(weights[i], totalWeight);
+				remainingShare -= expectedShare;
+			}
+
+			assertEquals(expectedShare, shareBin.share);
+		}
 	}
 }

@@ -13,6 +13,7 @@ import org.qortal.data.blockchain.ChainParameterData;
 import org.qortal.network.Network;
 import org.qortal.repository.*;
 import org.qortal.settings.Settings;
+import org.qortal.utils.Amounts;
 import org.qortal.utils.Base58;
 import org.qortal.utils.StringLongMapXmlAdapter;
 
@@ -41,6 +42,8 @@ import java.util.concurrent.locks.ReentrantLock;
 public class BlockChain {
 
 	private static final Logger LOGGER = LogManager.getLogger(BlockChain.class);
+
+	public static final int REWARD_SHARE_LEVEL_COUNT = 10;
 
 	private static BlockChain instance = null;
 
@@ -674,8 +677,35 @@ public class BlockChain {
 		return this.sharesByLevel;
 	}
 
+	public List<AccountLevelShareBin> getAccountLevelShareBins(Repository repository, int height) throws DataException {
+		ChainParameterData rewardShareWeightsUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.REWARD_SHARE_WEIGHTS.id, height);
+		if (rewardShareWeightsUpdate != null)
+			return buildAccountLevelShareBinsFromWeights(
+					ChainParameter.REWARD_SHARE_WEIGHTS.decodeIntArrayValue(rewardShareWeightsUpdate.getValue()));
+
+		return getAccountLevelShareBins();
+	}
+
 	public AccountLevelShareBin[] getShareBinsByAccountLevel() {
 		return this.shareBinsByLevel;
+	}
+
+	public AccountLevelShareBin[] getShareBinsByAccountLevel(Repository repository, int height) throws DataException {
+		return buildShareBinsByAccountLevel(getAccountLevelShareBins(repository, height));
+	}
+
+	public int[] getRewardShareWeights() {
+		return getRewardShareWeightsFromShareBins(this.sharesByLevel);
+	}
+
+	public int[] getRewardShareWeights(Repository repository, int height) throws DataException {
+		ChainParameterData rewardShareWeightsUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.REWARD_SHARE_WEIGHTS.id, height);
+		if (rewardShareWeightsUpdate != null)
+			return ChainParameter.REWARD_SHARE_WEIGHTS.decodeIntArrayValue(rewardShareWeightsUpdate.getValue());
+
+		return getRewardShareWeights();
 	}
 
 	public List<Integer> getBlocksNeededByLevel() {
@@ -930,14 +960,7 @@ public class BlockChain {
 		}
 
 		// Generate lookup-array for account-level share bins
-		AccountLevelShareBin lastAccountLevelShareBin = this.sharesByLevel.get(this.sharesByLevel.size() - 1);
-		final int lastLevel = lastAccountLevelShareBin.levels.get(lastAccountLevelShareBin.levels.size() - 1);
-		this.shareBinsByLevel = new AccountLevelShareBin[lastLevel];
-		for (AccountLevelShareBin accountLevelShareBin : this.sharesByLevel)
-			for (int level : accountLevelShareBin.levels)
-				// level 1 stored at index 0, level 2 stored at index 1, etc.
-				// level 0 not allowed
-				this.shareBinsByLevel[level - 1] = accountLevelShareBin;
+		this.shareBinsByLevel = buildShareBinsByAccountLevel(this.sharesByLevel);
 
 		// Convert collections to unmodifiable form
 		this.rewardsByHeight = Collections.unmodifiableList(this.rewardsByHeight);
@@ -946,6 +969,67 @@ public class BlockChain {
 		this.cumulativeBlocksByLevel = Collections.unmodifiableList(this.cumulativeBlocksByLevel);
 		this.blockTimingsByHeight = Collections.unmodifiableList(this.blockTimingsByHeight);
 		this.devGroupIds = this.devGroupIds == null ? Collections.emptyList() : Collections.unmodifiableList(this.devGroupIds);
+	}
+
+	private static List<AccountLevelShareBin> buildAccountLevelShareBinsFromWeights(int[] weights) {
+		long totalWeight = 0;
+		int lastPositiveWeightIndex = -1;
+		for (int i = 0; i < weights.length; ++i) {
+			if (weights[i] > 0)
+				lastPositiveWeightIndex = i;
+
+			totalWeight += weights[i];
+		}
+
+		List<AccountLevelShareBin> shareBins = new ArrayList<>(weights.length);
+		long remainingShare = Amounts.MULTIPLIER;
+		for (int i = 0; i < weights.length; ++i) {
+			AccountLevelShareBin shareBin = new AccountLevelShareBin();
+			shareBin.id = i + 1;
+			shareBin.levels = Collections.singletonList(i + 1);
+
+			if (weights[i] == 0) {
+				shareBin.share = 0L;
+			} else if (i == lastPositiveWeightIndex) {
+				shareBin.share = remainingShare;
+			} else {
+				shareBin.share = Amounts.scaledDivide(weights[i], totalWeight);
+				remainingShare -= shareBin.share;
+			}
+
+			shareBins.add(shareBin);
+		}
+
+		return Collections.unmodifiableList(shareBins);
+	}
+
+	private static AccountLevelShareBin[] buildShareBinsByAccountLevel(List<AccountLevelShareBin> shareBins) {
+		AccountLevelShareBin lastAccountLevelShareBin = shareBins.get(shareBins.size() - 1);
+		final int lastLevel = lastAccountLevelShareBin.levels.get(lastAccountLevelShareBin.levels.size() - 1);
+		AccountLevelShareBin[] shareBinsByLevel = new AccountLevelShareBin[lastLevel];
+
+		for (AccountLevelShareBin accountLevelShareBin : shareBins)
+			for (int level : accountLevelShareBin.levels)
+				// level 1 stored at index 0, level 2 stored at index 1, etc.
+				// level 0 not allowed
+				shareBinsByLevel[level - 1] = accountLevelShareBin;
+
+		return shareBinsByLevel;
+	}
+
+	private static int[] getRewardShareWeightsFromShareBins(List<AccountLevelShareBin> shareBins) {
+		int[] weights = new int[REWARD_SHARE_LEVEL_COUNT];
+
+		for (AccountLevelShareBin shareBin : shareBins) {
+			for (int level : shareBin.levels) {
+				if (level < 1 || level > weights.length)
+					continue;
+
+				weights[level - 1] = (int) shareBin.share;
+			}
+		}
+
+		return weights;
 	}
 
 	/**

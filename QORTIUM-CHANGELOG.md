@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: add on-chain reward share weight updates
+
+Added development-group approved updates for reward share weights across account levels 1 through 10. Qortium can now store a voted 10-weight reward curve on chain, normalize those weights into active reward-share bins from the approved activation height, expose builder and effective-value API helpers, and continue falling back to the configured `blockchain.json` reward curve when no approved overlay exists.
+
 ### 2026-05-22 - test: set NTP offset for no-native bootstrap tests
 
 Pinned the test clock for the no-native asset bootstrap suite after it loads its custom settings. This lets those tests validate native-asset bootstrapping behavior instead of failing early because transactions and online-account timestamps cannot be checked against an unset test clock.

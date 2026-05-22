@@ -48,6 +48,9 @@ public class ChainParameterEffectiveValue {
 	@Schema(description = "decoded current integer value for integer-like parameters")
 	public Integer integerValue;
 
+	@Schema(description = "decoded current integer list value for integer-list parameters")
+	public int[] integerValues;
+
 	@Schema(description = "transaction signature for the next approved future overlay, if one exists")
 	public byte[] nextSignature;
 
@@ -66,6 +69,9 @@ public class ChainParameterEffectiveValue {
 
 	@Schema(description = "decoded next integer value for integer-like parameters")
 	public Integer nextIntegerValue;
+
+	@Schema(description = "decoded next integer list value for integer-list parameters")
+	public int[] nextIntegerValues;
 
 	public ChainParameterEffectiveValue() {
 	}

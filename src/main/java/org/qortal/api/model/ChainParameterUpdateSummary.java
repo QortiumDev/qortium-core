@@ -51,6 +51,9 @@ public class ChainParameterUpdateSummary {
 	@Schema(description = "decoded integer value for integer-like parameters")
 	public Integer integerValue;
 
+	@Schema(description = "decoded integer list value for integer-list parameters")
+	public int[] integerValues;
+
 	@Schema(description = "current group-approval status")
 	public ApprovalStatus approvalStatus;
 
