@@ -42,6 +42,11 @@ public class RegisterNameTransaction extends Transaction {
 		return BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(timestamp);
 	}
 
+	@Override
+	protected long getEffectiveUnitFee(Long timestamp) {
+		return this.getUnitFee(timestamp);
+	}
+
 	// Navigation
 
 	public Account getRegistrant() {

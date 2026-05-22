@@ -35,12 +35,33 @@ public class ChainParameterTests {
 	}
 
 	@Test
+	public void testUnitFeeMetadataAccessors() {
+		ChainParameter parameter = ChainParameter.UNIT_FEE;
+
+		assertEquals(3, parameter.id);
+		assertEquals(Long.BYTES, parameter.valueLength);
+		assertEquals("AMOUNT", parameter.getValueType());
+		assertNotNull(parameter.getDescription());
+		assertEquals("/chain-parameters/unit-fee/update", parameter.getBuilderPath());
+		assertEquals("/chain-parameters/unit-fee/{height}", parameter.getEffectivePath());
+	}
+
+	@Test
 	public void testBlockRewardAmountDecoding() {
 		long reward = 12L * Amounts.MULTIPLIER + 34_000_000L;
 		byte[] value = ChainParameter.BLOCK_REWARD.encodeLongValue(reward);
 
 		assertEquals(Long.valueOf(reward), ChainParameter.BLOCK_REWARD.decodeAmountValue(value));
 		assertEquals("12.34000000", ChainParameter.BLOCK_REWARD.formatDisplayValue(value));
+	}
+
+	@Test
+	public void testUnitFeeAmountDecoding() {
+		long unitFee = 1_234_567L;
+		byte[] value = ChainParameter.UNIT_FEE.encodeLongValue(unitFee);
+
+		assertEquals(Long.valueOf(unitFee), ChainParameter.UNIT_FEE.decodeAmountValue(value));
+		assertEquals("0.01234567", ChainParameter.UNIT_FEE.formatDisplayValue(value));
 	}
 
 	@Test
@@ -62,6 +83,10 @@ public class ChainParameterTests {
 		byte[] negativeValue = ChainParameter.BLOCK_REWARD.encodeLongValue(-1L);
 		assertNull(ChainParameter.BLOCK_REWARD.decodeAmountValue(negativeValue));
 		assertNull(ChainParameter.BLOCK_REWARD.formatDisplayValue(negativeValue));
+
+		negativeValue = ChainParameter.UNIT_FEE.encodeLongValue(-1L);
+		assertNull(ChainParameter.UNIT_FEE.decodeAmountValue(negativeValue));
+		assertNull(ChainParameter.UNIT_FEE.formatDisplayValue(negativeValue));
 	}
 
 	@Test

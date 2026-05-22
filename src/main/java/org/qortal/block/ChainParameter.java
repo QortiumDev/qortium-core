@@ -16,7 +16,11 @@ public enum ChainParameter {
 	MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN(2, Integer.BYTES, "INTEGER",
 			"Minimum number of online minters required before a reward share bin is considered active.",
 			"/chain-parameters/share-bin/min-accounts/update",
-			"/chain-parameters/share-bin/min-accounts/{height}");
+			"/chain-parameters/share-bin/min-accounts/{height}"),
+	UNIT_FEE(3, Long.BYTES, "AMOUNT",
+			"Normal transaction unit fee, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
+			"/chain-parameters/unit-fee/update",
+			"/chain-parameters/unit-fee/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 
@@ -65,6 +69,7 @@ public enum ChainParameter {
 
 		switch (this) {
 			case BLOCK_REWARD:
+			case UNIT_FEE:
 				return decodeLongValue(value) >= 0;
 
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
@@ -103,6 +108,7 @@ public enum ChainParameter {
 
 		switch (this) {
 			case BLOCK_REWARD:
+			case UNIT_FEE:
 				return decodeLongValue(value);
 
 			default:
@@ -129,6 +135,7 @@ public enum ChainParameter {
 
 		switch (this) {
 			case BLOCK_REWARD:
+			case UNIT_FEE:
 				return Amounts.prettyAmount(decodeLongValue(value));
 
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:

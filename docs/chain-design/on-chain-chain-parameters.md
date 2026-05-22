@@ -10,10 +10,12 @@ Qortium can now apply a narrow set of consensus parameter changes from approved
 on-chain transactions instead of requiring every operator to install a newly
 built jar for each change.
 
-This is intentionally small at first. The first supported parameter is the
-height-based block reward. Fee schedules, reward split tables, trust-network
-policy values, timestamp-based settings, and larger structured parameter sets
-should be added only after each format and validation rule is made explicit.
+This is intentionally small at first. The currently supported parameters are
+the height-based block reward, the reward share-bin activation count, and the
+normal transaction unit fee. Name-registration fees, reward split tables,
+trust-network policy values, timestamp-based settings, and larger structured
+parameter sets should be added only after each format and validation rule is
+made explicit.
 
 ## Approval Model
 
@@ -44,7 +46,7 @@ Once approved, the repository stores the update as an overlay keyed by parameter
 ID and activation height. Consensus lookups check the approved overlay first and
 fall back to `blockchain.json` when no approved update applies.
 
-## Version 1 Parameter
+## Supported Parameters
 
 `BLOCK_REWARD` is parameter ID `1`.
 
@@ -55,22 +57,39 @@ The approved block reward applies at its activation height and remains effective
 until another approved `BLOCK_REWARD` update with a later activation height
 overrides it.
 
+`MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN` is parameter ID `2`.
+
+Its value is exactly 4 bytes: a signed integer count of online minters required
+before a reward share bin above the floor is considered active. Negative values
+are invalid.
+
+`UNIT_FEE` is parameter ID `3`.
+
+Its value is exactly 8 bytes: a signed long integer using the same atomic amount
+units as the existing normal transaction fee schedule. Negative values are
+invalid.
+
+The approved unit fee applies to normal transaction fee validation at its
+activation height and remains effective until another approved `UNIT_FEE` update
+with a later activation height overrides it. Name-registration transactions keep
+using their separate fee schedule.
+
 ## Public API
 
 `GET /chain-parameters` lists the chain parameters that this node knows how to
-build and explain through the public API. Version 1 only reports
-`BLOCK_REWARD`. Each metadata entry includes the current minimum activation
-delay that proposals for that parameter must satisfy.
+build and explain through the public API. Each metadata entry includes the
+current minimum activation delay that proposals for that parameter must satisfy.
 
 `GET /chain-parameters/updates` lists chain-parameter proposals as readable
 proposal summaries. The endpoint can filter by parameter ID, approval status,
 approval group ID, activation-height range, confirmation status, limit, offset,
 and reverse order.
 
-For `BLOCK_REWARD`, each proposal summary includes the raw canonical bytes, the
-decoded amount, the current group-approval status, the current yes and no vote
-counts, the current approval-authority count, and whether that approved proposal
-is the effective overlay at the node's current height.
+For amount parameters such as `BLOCK_REWARD` and `UNIT_FEE`, each proposal
+summary includes the raw canonical bytes, the decoded amount, the current
+group-approval status, the current yes and no vote counts, the current
+approval-authority count, and whether that approved proposal is the effective
+overlay at the node's current height.
 
 `POST /chain-parameters/block-reward/update` builds an unsigned
 `CHAIN_PARAMETER_UPDATE` transaction for the block reward. Callers provide the
@@ -100,12 +119,28 @@ minimum activation delay.
 reward for a height after applying any approved overlay that is active at that
 height.
 
+`POST /chain-parameters/share-bin/min-accounts/update` builds an unsigned
+`CHAIN_PARAMETER_UPDATE` transaction for the reward share-bin activation count.
+Callers provide the new integer count directly.
+
+`GET /chain-parameters/share-bin/min-accounts/{height}` returns the effective
+activation count for reward share bins at a height.
+
+`POST /chain-parameters/unit-fee/update` builds an unsigned
+`CHAIN_PARAMETER_UPDATE` transaction for the normal transaction unit fee. Callers
+provide the fee as a normal decimal amount, and the API converts it to the
+canonical 8-byte value used by consensus.
+
+`GET /chain-parameters/unit-fee/{height}` returns the effective normal
+transaction unit fee for a height after applying any approved overlay that is
+active at that height.
+
 `GET /chain-parameters/effective/{parameterId}?height={height}` returns the
 approved overlay record for callers that need the raw canonical value.
 
-Version 1 does not expose a public generic binary-value proposal builder. Each
-new supported parameter should get its own typed builder so humans and tools can
-work with normal values while consensus continues to store deterministic bytes.
+The API does not expose a public generic binary-value proposal builder. Each new
+supported parameter should get its own typed builder so humans and tools can work
+with normal values while consensus continues to store deterministic bytes.
 
 ## Format Policy
 

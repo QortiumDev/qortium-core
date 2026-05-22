@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: add on-chain unit fee updates
+
+Added development-group approved updates for the normal transaction unit fee. Qortium can now store an approved unit-fee overlay on chain, apply it from its activation height during normal transaction fee validation, and expose typed API helpers for building and inspecting unit-fee proposals while leaving the separate name-registration fee schedule unchanged.
+
 ### 2026-05-22 - consensus: start share-bin activation checks at level one
 
 Changed the reward share-bin activation rule so the minimum-online-minter check starts at level one instead of level seven. The level 1-2 bin remains the bottom payout floor, so underpopulated higher bins can safely cascade downward without trying to merge below the configured reward levels. This makes the existing activation-count parameter apply across the reward ladder while keeping the activation start level as a static chain setting.

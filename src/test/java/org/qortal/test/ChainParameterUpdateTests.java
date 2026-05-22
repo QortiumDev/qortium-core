@@ -6,9 +6,11 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
 import org.qortal.block.ChainParameter;
+import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.blockchain.ChainParameterData;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
+import org.qortal.data.transaction.PaymentTransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -20,6 +22,8 @@ import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.ChainParameterUpdateTransaction;
+import org.qortal.transaction.PaymentTransaction;
+import org.qortal.transaction.RegisterNameTransaction;
 import org.qortal.transaction.Transaction;
 import org.qortal.utils.Amounts;
 
@@ -114,6 +118,59 @@ public class ChainParameterUpdateTests extends Common {
 	}
 
 	@Test
+	public void testApprovedUnitFeeUpdateAppliesAtActivationHeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			long timestamp = System.currentTimeMillis();
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+			long originalUnitFee = BlockChain.getInstance().getUnitFeeAtHeight(repository, activationHeight, timestamp);
+			long updatedUnitFee = originalUnitFee + Amounts.MULTIPLIER;
+
+			ChainParameterUpdateTransactionData transactionData = buildUnitFeeUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedUnitFee);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertEquals(originalUnitFee, BlockChain.getInstance().getUnitFeeAtHeight(repository, activationHeight, timestamp));
+
+			approveAndSettle(repository, transactionData);
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertEquals(originalUnitFee, BlockChain.getInstance().getUnitFeeAtHeight(repository, activationHeight - 1, timestamp));
+			assertEquals(updatedUnitFee, BlockChain.getInstance().getUnitFeeAtHeight(repository, activationHeight, timestamp));
+			assertEquals(updatedUnitFee, BlockChain.getInstance().getUnitFeeAtHeight(repository, activationHeight + 100, timestamp));
+
+			PaymentTransaction beforeActivationTransaction = buildPaymentTransaction(repository, alice, originalUnitFee);
+			assertEquals(Transaction.ValidationResult.OK, beforeActivationTransaction.isFeeValid());
+
+			BlockUtils.mintBlocks(repository, activationHeight - 1 - repository.getBlockRepository().getBlockchainHeight());
+
+			PaymentTransaction oldFeeTransaction = buildPaymentTransaction(repository, alice, originalUnitFee);
+			assertEquals(Transaction.ValidationResult.INSUFFICIENT_FEE, oldFeeTransaction.isFeeValid());
+
+			PaymentTransaction updatedFeeTransaction = buildPaymentTransaction(repository, alice, 0L);
+			updatedFeeTransaction.getTransactionData().setFee(updatedFeeTransaction.calcRecommendedFee());
+			assertEquals(Transaction.ValidationResult.OK, updatedFeeTransaction.isFeeValid());
+
+			assertEquals(BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(timestamp),
+					new RegisterNameTransaction(repository, null).getUnitFee(timestamp));
+
+			ChainParameterData overlayData = repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.UNIT_FEE.id, activationHeight);
+			assertEquals(activationHeight, overlayData.getActivationHeight());
+			assertArrayEquals(transactionData.getValue(), overlayData.getValue());
+
+			int approvalHeight = GroupUtils.getApprovalHeight(repository, transactionData.getSignature());
+			BlockUtils.orphanToBlock(repository, approvalHeight - 1);
+
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertNull(repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.UNIT_FEE.id, activationHeight));
+			assertEquals(originalUnitFee, BlockChain.getInstance().getUnitFeeAtHeight(repository, activationHeight, timestamp));
+		}
+	}
+
+	@Test
 	public void testChainParameterUpdateRequiresActiveDevelopmentGroup() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -184,6 +241,20 @@ public class ChainParameterUpdateTests extends Common {
 		}
 	}
 
+	@Test
+	public void testChainParameterUpdateRejectsNegativeUnitFeeValue() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+
+			ChainParameterUpdateTransactionData transactionData = buildUnitFeeUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, -1L);
+
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, transactionData).isValid());
+		}
+	}
+
 	private static ChainParameterUpdateTransactionData buildBlockRewardUpdate(Repository repository,
 			PrivateKeyAccount updater, int txGroupId, int activationHeight, long reward) throws DataException {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
@@ -195,6 +266,23 @@ public class ChainParameterUpdateTests extends Common {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
 				ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.id, activationHeight,
 				ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.encodeIntValue(value));
+	}
+
+	private static ChainParameterUpdateTransactionData buildUnitFeeUpdate(Repository repository,
+			PrivateKeyAccount updater, int txGroupId, int activationHeight, long unitFee) throws DataException {
+		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
+				ChainParameter.UNIT_FEE.id, activationHeight, ChainParameter.UNIT_FEE.encodeLongValue(unitFee));
+	}
+
+	private static PaymentTransaction buildPaymentTransaction(Repository repository, PrivateKeyAccount sender, long fee)
+			throws DataException {
+		PrivateKeyAccount recipient = Common.getTestAccount(repository, "bob");
+		BaseTransactionData baseTransactionData = new BaseTransactionData(System.currentTimeMillis(),
+				Group.NO_GROUP, sender.getPublicKey(), fee, null);
+		PaymentTransactionData paymentTransactionData = new PaymentTransactionData(baseTransactionData,
+				recipient.getAddress(), 1L);
+
+		return new PaymentTransaction(repository, paymentTransactionData);
 	}
 
 	private static void approveAndSettle(Repository repository, ChainParameterUpdateTransactionData transactionData) throws DataException {

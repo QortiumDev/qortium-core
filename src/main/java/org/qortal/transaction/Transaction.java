@@ -374,9 +374,9 @@ public abstract class Transaction {
 		return Transaction.getDeadline(transactionData);
 	}
 
-	/** Returns whether transaction's fee is at least minimum unit fee as specified in blockchain config. */
-	public boolean hasMinimumFee() {
-		return this.transactionData.getFee() >= this.getUnitFee(this.transactionData.getTimestamp());
+	/** Returns whether transaction's fee is at least the effective normal unit fee. */
+	public boolean hasMinimumFee() throws DataException {
+		return this.transactionData.getFee() >= this.getEffectiveUnitFee(this.transactionData.getTimestamp());
 	}
 
 	public long feePerByte() {
@@ -388,8 +388,8 @@ public abstract class Transaction {
 	}
 
 	/** Returns whether transaction's fee is at least amount needed to cover byte-length of transaction. */
-	public boolean hasMinimumFeePerByte() {
-		long unitFee = this.getUnitFee(this.transactionData.getTimestamp());
+	public boolean hasMinimumFeePerByte() throws DataException {
+		long unitFee = this.getEffectiveUnitFee(this.transactionData.getTimestamp());
 		int maxBytePerUnitFee = BlockChain.getInstance().getMaxBytesPerUnitFee();
 
 		// If the unit fee is zero, any fee is enough to cover the byte-length of the transaction
@@ -473,18 +473,30 @@ public abstract class Transaction {
 
 		int unitFeeCount = ((dataLength - 1) / maxBytePerUnitFee) + 1;
 
-		return this.getUnitFee(this.transactionData.getTimestamp()) * unitFeeCount;
+		try {
+			return this.getEffectiveUnitFee(this.transactionData.getTimestamp()) * unitFeeCount;
+		} catch (DataException e) {
+			throw new IllegalStateException("Unable to determine effective transaction unit fee", e);
+		}
 	}
 
 	/**
 	 * Calculate unit fee for a given transaction type
 	 *
 	 * FUTURE: add "accountLevel" parameter if needed - the level of the transaction creator
-	 * @param timestamp - the transaction's timestamp (currently not used)
+	 * @param timestamp - the transaction's timestamp for fallback fee schedules
 	 * @return
 	 */
 	public long getUnitFee(Long timestamp) {
 		return BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp);
+	}
+
+	protected long getEffectiveUnitFee(Long timestamp) throws DataException {
+		if (this.repository == null)
+			return this.getUnitFee(timestamp);
+
+		int nextBlockHeight = this.repository.getBlockRepository().getBlockchainHeight() + 1;
+		return BlockChain.getInstance().getUnitFeeAtHeight(this.repository, nextBlockHeight, timestamp);
 	}
 
 	/**
