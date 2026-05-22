@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: remove group approval rejection threshold
+
+Changed group approval so no votes no longer reject a pending transaction by meeting the approval threshold. Approval-required transactions now either approve when enough yes votes arrive after the minimum delay or expire at the maximum delay, while no votes remain recorded as visible opposition without acting as vetoes.
+
 ### 2026-05-22 - api: default arbitrary search confirmation status
 
 Changed arbitrary transaction search so requests that omit the confirmation status now default to confirmed transactions instead of failing with an internal server error. QDN transaction searches can now use the shorter query form safely, while callers that need unconfirmed or mixed results can still request those statuses explicitly.

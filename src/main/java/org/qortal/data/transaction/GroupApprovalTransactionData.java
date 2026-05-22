@@ -26,13 +26,13 @@ public class GroupApprovalTransactionData extends TransactionData {
 	@Schema(
 		description = "transaction pending approval",
 		example = "transaction_signature"
-	)
-	private byte[] pendingSignature;
-	@Schema(
-		description = "approval decision",
-		example = "true"
-	)
-	private boolean approval;
+		)
+		private byte[] pendingSignature;
+		@Schema(
+			description = "approval vote; false records opposition but does not reject by threshold",
+			example = "true"
+		)
+		private boolean approval;
 	/** Reference to prior GROUP_APPROVAL transaction, used to rebuild approval status during orphaning. */
 	// For internal use when orphaning
 	@XmlTransient

@@ -875,17 +875,12 @@ public abstract class Transaction {
 			return null;
 
 		int approvingAuthorities = countCurrentApprovalAuthorities(groupApprovalData.approvingAdmins, txGroupId);
-		int rejectingAuthorities = countCurrentApprovalAuthorities(groupApprovalData.rejectingAdmins, txGroupId);
 
 		// Are there enough approvals?
 		if (approvalThreshold.meetsTheshold(approvingAuthorities, totalAuthorities))
 			return true;
 
-		// Are there enough rejections?
-		if (approvalThreshold.meetsTheshold(rejectingAuthorities, totalAuthorities))
-			return false;
-
-		// No definitive decision yet
+		// Rejection votes are recorded as opposition, but pending transactions fail by expiry.
 		return null;
 	}
 

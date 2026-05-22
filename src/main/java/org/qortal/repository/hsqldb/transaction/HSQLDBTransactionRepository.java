@@ -1326,7 +1326,7 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 	@Override
 	public GroupApprovalData getApprovalData(byte[] pendingSignature) throws DataException {
 		// Fetch latest approval data for pending transaction's signature
-		// NOT simply number of GROUP_APPROVAL transactions as some may be rejecting transaction, or changed opinions
+		// NOT simply number of GROUP_APPROVAL transactions as some may record opposition, or changed opinions
 		// Also make sure that GROUP_APPROVAL transaction's signer still has approval authority for the group
 
 		// Sub-query SQL to find latest GroupApprovalTransaction relating to passed pending signature

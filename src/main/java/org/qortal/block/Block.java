@@ -1783,21 +1783,13 @@ public class Block {
 		for (TransactionData transactionData : approvalPendingTransactions) {
 			Transaction transaction = Transaction.fromData(this.repository, transactionData);
 
-			// something like:
 			Boolean isApproved = transaction.getApprovalDecision();
 
 			if (isApproved == null)
-				continue; // approve/reject threshold not yet met
+				continue; // approval threshold not yet met
 
 			// Update group-approval decision height for transaction in repository
 			transactionRepository.updateApprovalHeight(transactionData.getSignature(), this.blockData.getHeight());
-
-			if (!isApproved) {
-				// REJECT
-				transactionData.setApprovalStatus(ApprovalStatus.REJECTED);
-				transactionRepository.save(transactionData);
-				continue;
-			}
 
 			// Approved, but check transaction can still be processed
 			if (transaction.isProcessable() != Transaction.ValidationResult.OK) {
