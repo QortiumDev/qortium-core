@@ -7,15 +7,24 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
 import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterMetadata;
+import org.qortal.api.model.ChainParameterUpdateSummary;
 import org.qortal.api.resource.ChainParametersResource;
+import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.block.ChainParameter;
+import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
+import org.qortal.group.Group.ApprovalThreshold;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.ApiCommon;
+import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.GroupUtils;
 import org.qortal.test.common.TestChainBootstrapUtils;
+import org.qortal.test.common.TransactionUtils;
+import org.qortal.test.common.transaction.TestTransaction;
+import org.qortal.transaction.Transaction.ApprovalStatus;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.Amounts;
@@ -25,7 +34,9 @@ import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class ChainParametersApiTests extends ApiCommon {
 
@@ -83,6 +94,146 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateBlockReward(request));
 	}
 
+	@Test
+	public void testChainParameterUpdatesReturnsEmptyListWithoutProposals() {
+		List<ChainParameterUpdateSummary> summaries = this.chainParametersResource.getChainParameterUpdates(
+				null, null, null, null, null, null, null, null, null);
+
+		assertTrue(summaries.isEmpty());
+	}
+
+	@Test
+	public void testPendingBlockRewardProposalSummaryShowsDecodedValueAndVoteCounts() throws DataException {
+		long reward = 3L * Amounts.MULTIPLIER;
+		ChainParameterUpdateTransactionData transactionData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 100;
+
+			transactionData = buildBlockRewardUpdateTransaction(repository, alice, activationHeight, reward);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+		}
+
+		List<ChainParameterUpdateSummary> summaries = this.chainParametersResource.getChainParameterUpdates(
+				null, null, null, null, null, null, null, null, null);
+
+		assertEquals(1, summaries.size());
+
+		ChainParameterUpdateSummary summary = summaries.get(0);
+		assertArrayEquals(transactionData.getSignature(), summary.signature);
+		assertEquals(transactionData.getTimestamp(), summary.timestamp);
+		assertNotNull(summary.blockHeight);
+		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, summary.txGroupId);
+		assertEquals(ChainParameter.BLOCK_REWARD.id, summary.parameterId);
+		assertEquals(ChainParameter.BLOCK_REWARD.name(), summary.parameterName);
+		assertEquals(transactionData.getActivationHeight(), summary.activationHeight);
+		assertArrayEquals(transactionData.getValue(), summary.value);
+		assertEquals("AMOUNT", summary.valueType);
+		assertEquals("3.00000000", summary.displayValue);
+		assertEquals(Long.valueOf(reward), summary.amount);
+		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
+		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
+		assertEquals(0, summary.approvalCount);
+		assertEquals(0, summary.rejectionCount);
+		assertEquals(1, summary.approvalAuthorityCount);
+		assertFalse(summary.effectiveNow);
+	}
+
+	@Test
+	public void testChainParameterUpdatesCanIncludeUnconfirmedProposals() throws DataException {
+		ChainParameterUpdateTransactionData transactionData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 100;
+
+			transactionData = buildBlockRewardUpdateTransaction(repository, alice, activationHeight, 6L * Amounts.MULTIPLIER);
+			TransactionUtils.signAndImportValid(repository, transactionData, alice);
+		}
+
+		List<ChainParameterUpdateSummary> confirmedSummaries = this.chainParametersResource.getChainParameterUpdates(
+				null, null, null, null, null, null, null, null, null);
+		assertTrue(confirmedSummaries.isEmpty());
+
+		List<ChainParameterUpdateSummary> unconfirmedSummaries = this.chainParametersResource.getChainParameterUpdates(
+				null, null, null, null, null, ConfirmationStatus.UNCONFIRMED, null, null, null);
+		assertEquals(1, unconfirmedSummaries.size());
+		assertArrayEquals(transactionData.getSignature(), unconfirmedSummaries.get(0).signature);
+
+		List<ChainParameterUpdateSummary> bothSummaries = this.chainParametersResource.getChainParameterUpdates(
+				null, null, null, null, null, ConfirmationStatus.BOTH, null, null, null);
+		assertEquals(1, bothSummaries.size());
+		assertArrayEquals(transactionData.getSignature(), bothSummaries.get(0).signature);
+	}
+
+	@Test
+	public void testChainParameterUpdateFiltersAndApprovedSummary() throws DataException {
+		ChainParameterUpdateTransactionData approvedTransactionData;
+		ChainParameterUpdateTransactionData pendingTransactionData;
+		int approvedActivationHeight;
+		int pendingActivationHeight;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int settlementBlockCount = getApprovalSettlementBlockCount(repository);
+
+			approvedActivationHeight = repository.getBlockRepository().getBlockchainHeight() + settlementBlockCount + 20;
+			approvedTransactionData = buildBlockRewardUpdateTransaction(repository, alice,
+					approvedActivationHeight, 4L * Amounts.MULTIPLIER);
+			TransactionUtils.signAndMint(repository, approvedTransactionData, alice);
+
+			GroupUtils.approveTransaction(repository, "alice", approvedTransactionData.getSignature(), true);
+			BlockUtils.mintBlocks(repository, settlementBlockCount);
+
+			pendingActivationHeight = repository.getBlockRepository().getBlockchainHeight() + 100;
+			pendingTransactionData = buildBlockRewardUpdateTransaction(repository, alice,
+					pendingActivationHeight, 5L * Amounts.MULTIPLIER);
+			TransactionUtils.signAndMint(repository, pendingTransactionData, alice);
+		}
+
+		List<ChainParameterUpdateSummary> approvedSummaries = this.chainParametersResource.getChainParameterUpdates(
+				ChainParameter.BLOCK_REWARD.id, ApprovalStatus.APPROVED, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID,
+				approvedActivationHeight, approvedActivationHeight, ConfirmationStatus.CONFIRMED, null, null, null);
+		assertEquals(1, approvedSummaries.size());
+
+		ChainParameterUpdateSummary approvedSummary = approvedSummaries.get(0);
+		assertArrayEquals(approvedTransactionData.getSignature(), approvedSummary.signature);
+		assertEquals(ApprovalStatus.APPROVED, approvedSummary.approvalStatus);
+		assertNotNull(approvedSummary.approvalHeight);
+		assertEquals(1, approvedSummary.approvalCount);
+		assertEquals(0, approvedSummary.rejectionCount);
+		assertEquals("4.00000000", approvedSummary.displayValue);
+		assertFalse(approvedSummary.effectiveNow);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int blocksToActivation = approvedActivationHeight - repository.getBlockRepository().getBlockchainHeight();
+			BlockUtils.mintBlocks(repository, blocksToActivation);
+		}
+
+		List<ChainParameterUpdateSummary> effectiveSummaries = this.chainParametersResource.getChainParameterUpdates(
+				ChainParameter.BLOCK_REWARD.id, ApprovalStatus.APPROVED, null, approvedActivationHeight,
+				approvedActivationHeight, null, null, null, null);
+		assertEquals(1, effectiveSummaries.size());
+		assertTrue(effectiveSummaries.get(0).effectiveNow);
+
+		List<ChainParameterUpdateSummary> pendingSummaries = this.chainParametersResource.getChainParameterUpdates(
+				null, ApprovalStatus.PENDING, null, pendingActivationHeight, pendingActivationHeight,
+				null, null, null, null);
+		assertEquals(1, pendingSummaries.size());
+		assertArrayEquals(pendingTransactionData.getSignature(), pendingSummaries.get(0).signature);
+
+		List<ChainParameterUpdateSummary> firstSummary = this.chainParametersResource.getChainParameterUpdates(
+				null, null, null, null, null, null, 1, 0, false);
+		assertEquals(1, firstSummary.size());
+		assertArrayEquals(approvedTransactionData.getSignature(), firstSummary.get(0).signature);
+
+		List<ChainParameterUpdateSummary> newestSummary = this.chainParametersResource.getChainParameterUpdates(
+				null, null, null, null, null, null, 1, 0, true);
+		assertEquals(1, newestSummary.size());
+		assertArrayEquals(pendingTransactionData.getSignature(), newestSummary.get(0).signature);
+	}
+
 	private static BlockRewardUpdateRequest buildBlockRewardUpdateRequest(Repository repository, long reward) throws DataException {
 		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 
@@ -101,5 +252,17 @@ public class ChainParametersApiTests extends ApiCommon {
 		byte[] signedLengthBytes = Bytes.concat(rawBytes, new byte[TransactionTransformer.SIGNATURE_LENGTH]);
 
 		return (ChainParameterUpdateTransactionData) TransactionTransformer.fromBytes(signedLengthBytes);
+	}
+
+	private static ChainParameterUpdateTransactionData buildBlockRewardUpdateTransaction(Repository repository,
+			PrivateKeyAccount updater, int activationHeight, long reward) throws DataException {
+		return new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.BLOCK_REWARD.id, activationHeight, ChainParameter.BLOCK_REWARD.encodeLongValue(reward));
+	}
+
+	private static int getApprovalSettlementBlockCount(Repository repository) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
+		return Math.max(2, groupData.getMinimumBlockDelay() + 1);
 	}
 }

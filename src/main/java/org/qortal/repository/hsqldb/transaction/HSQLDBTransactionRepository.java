@@ -10,6 +10,7 @@ import org.qortal.data.account.AccountData;
 import org.qortal.data.group.GroupApprovalData;
 import org.qortal.data.group.GroupKickSummaryData;
 import org.qortal.data.transaction.BaseTransactionData;
+import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
 import org.qortal.data.transaction.GroupApprovalTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.TransferAssetTransactionData;
@@ -1152,6 +1153,98 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 			return transferAssetCreators;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch transfer asset from repository", e);
+		}
+	}
+
+	@Override
+	public List<ChainParameterUpdateTransactionData> getChainParameterUpdates(Integer parameterId, ApprovalStatus approvalStatus,
+			Integer txGroupId, Integer activationHeightFrom, Integer activationHeightTo, ConfirmationStatus confirmationStatus,
+			Integer limit, Integer offset, Boolean reverse) throws DataException {
+		List<ChainParameterUpdateTransactionData> transactions = new ArrayList<>();
+
+		StringBuilder sql = new StringBuilder(1024);
+		sql.append("SELECT Transactions.signature FROM Transactions ");
+		sql.append("JOIN ChainParameterUpdateTransactions ON ChainParameterUpdateTransactions.signature = Transactions.signature ");
+
+		List<String> whereClauses = new ArrayList<>();
+		List<Object> bindParams = new ArrayList<>();
+
+		whereClauses.add("Transactions.type = ?");
+		bindParams.add(CHAIN_PARAMETER_UPDATE.value);
+
+		if (parameterId != null) {
+			whereClauses.add("ChainParameterUpdateTransactions.parameter_id = ?");
+			bindParams.add(parameterId);
+		}
+
+		if (approvalStatus != null) {
+			whereClauses.add("Transactions.approval_status = ?");
+			bindParams.add(approvalStatus.value);
+		}
+
+		if (txGroupId != null) {
+			whereClauses.add("Transactions.tx_group_id = ?");
+			bindParams.add(txGroupId);
+		}
+
+		if (activationHeightFrom != null) {
+			whereClauses.add("ChainParameterUpdateTransactions.activation_height >= ?");
+			bindParams.add(activationHeightFrom);
+		}
+
+		if (activationHeightTo != null) {
+			whereClauses.add("ChainParameterUpdateTransactions.activation_height <= ?");
+			bindParams.add(activationHeightTo);
+		}
+
+		if (confirmationStatus != null) {
+			switch (confirmationStatus) {
+				case BOTH:
+					break;
+
+				case CONFIRMED:
+					whereClauses.add("Transactions.block_height IS NOT NULL");
+					break;
+
+				case UNCONFIRMED:
+					whereClauses.add("Transactions.block_height IS NULL");
+					break;
+			}
+		}
+
+		sql.append("WHERE ");
+		final int whereClausesSize = whereClauses.size();
+		for (int wci = 0; wci < whereClausesSize; ++wci) {
+			if (wci != 0)
+				sql.append(" AND ");
+
+			sql.append(whereClauses.get(wci));
+		}
+
+		sql.append(" ORDER BY Transactions.created_when");
+		sql.append((reverse == null || !reverse) ? " ASC" : " DESC");
+		sql.append(", Transactions.signature");
+		sql.append((reverse == null || !reverse) ? " ASC" : " DESC");
+
+		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {
+			if (resultSet == null)
+				return transactions;
+
+			do {
+				byte[] signature = resultSet.getBytes(1);
+				TransactionData transactionData = this.fromSignature(signature);
+
+				if (transactionData == null)
+					throw new DataException("Unable to fetch chain-parameter update transaction from repository?");
+
+				transactions.add((ChainParameterUpdateTransactionData) transactionData);
+			} while (resultSet.next());
+
+			return transactions;
+		} catch (SQLException | ClassCastException e) {
+			throw new DataException("Unable to fetch chain-parameter update transactions from repository", e);
 		}
 	}
 

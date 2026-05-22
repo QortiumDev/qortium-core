@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - api: add chain parameter update visibility
+
+Added a readable chain-parameter proposal view so operators can inspect development-group proposals without manually searching raw transactions. The new endpoint lists block reward update proposals with decoded values, approval status, activation height, current yes and no vote counts, approval-authority count, and whether an approved proposal is currently effective.
+
 ### 2026-05-22 - api: add chain parameter metadata and block reward builder
 
 Changed the chain-parameter API from a generic binary update builder to a safer first public surface for supported parameters. Nodes now list the available on-chain parameters and provide a block-reward-specific builder that accepts a normal reward amount, fills in the recommended fee when needed, and still emits the same development-group approved `CHAIN_PARAMETER_UPDATE` transaction bytes for signing and submission.

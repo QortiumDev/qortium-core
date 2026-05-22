@@ -1,6 +1,8 @@
 package org.qortal.api.resource;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
@@ -11,18 +13,25 @@ import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterMetadata;
+import org.qortal.api.model.ChainParameterUpdateSummary;
+import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.block.BlockChain;
 import org.qortal.block.ChainParameter;
 import org.qortal.data.blockchain.ChainParameterData;
+import org.qortal.data.group.GroupApprovalData;
+import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
+import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.settings.Settings;
 import org.qortal.transaction.Transaction;
+import org.qortal.transaction.Transaction.ApprovalStatus;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.ChainParameterUpdateTransactionTransformer;
+import org.qortal.utils.Amounts;
 import org.qortal.utils.Base58;
 
 import javax.servlet.http.HttpServletRequest;
@@ -33,6 +42,8 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -68,6 +79,51 @@ public class ChainParametersResource {
 	)
 	public List<ChainParameterMetadata> getChainParameters() {
 		return PARAMETERS;
+	}
+
+	@GET
+	@Path("/updates")
+	@Operation(
+			summary = "List on-chain chain-parameter update proposals",
+			responses = {
+					@ApiResponse(
+							description = "chain-parameter update proposal summaries",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									array = @ArraySchema(schema = @Schema(implementation = ChainParameterUpdateSummary.class))
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public List<ChainParameterUpdateSummary> getChainParameterUpdates(
+			@QueryParam("parameterId") Integer parameterId,
+			@QueryParam("approvalStatus") ApprovalStatus approvalStatus,
+			@QueryParam("txGroupId") Integer txGroupId,
+			@QueryParam("activationHeightFrom") Integer activationHeightFrom,
+			@QueryParam("activationHeightTo") Integer activationHeightTo,
+			@Parameter(description = "whether to include confirmed, unconfirmed or both; defaults to CONFIRMED")
+			@QueryParam("confirmationStatus") ConfirmationStatus confirmationStatus,
+			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
+			@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
+			@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
+		if (confirmationStatus == null)
+			confirmationStatus = ConfirmationStatus.CONFIRMED;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			List<ChainParameterUpdateTransactionData> transactionDataList = repository.getTransactionRepository()
+					.getChainParameterUpdates(parameterId, approvalStatus, txGroupId, activationHeightFrom,
+							activationHeightTo, confirmationStatus, limit, offset, reverse);
+
+			int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+			List<ChainParameterUpdateSummary> summaries = new ArrayList<>(transactionDataList.size());
+			for (ChainParameterUpdateTransactionData transactionData : transactionDataList)
+				summaries.add(buildUpdateSummary(repository, transactionData, currentHeight));
+
+			return summaries;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
 	}
 
 	@GET
@@ -170,5 +226,66 @@ public class ChainParametersResource {
 
 		return new ChainParameterUpdateTransactionData(baseTransactionData, ChainParameter.BLOCK_REWARD.id,
 				updateRequest.activationHeight, ChainParameter.BLOCK_REWARD.encodeLongValue(updateRequest.reward));
+	}
+
+	private static ChainParameterUpdateSummary buildUpdateSummary(Repository repository,
+			ChainParameterUpdateTransactionData transactionData, int currentHeight) throws DataException {
+		ChainParameterUpdateSummary summary = new ChainParameterUpdateSummary();
+
+		summary.signature = transactionData.getSignature();
+		summary.timestamp = transactionData.getTimestamp();
+		summary.blockHeight = transactionData.getBlockHeight();
+		summary.approvalHeight = transactionData.getApprovalHeight();
+		summary.txGroupId = transactionData.getTxGroupId();
+		summary.parameterId = transactionData.getParameterId();
+		summary.activationHeight = transactionData.getActivationHeight();
+		summary.value = transactionData.getValue();
+		summary.approvalStatus = transactionData.getApprovalStatus();
+
+		ChainParameter parameter = ChainParameter.valueOf(transactionData.getParameterId());
+		if (parameter != null) {
+			summary.parameterName = parameter.name();
+			decodeKnownValue(summary, parameter, transactionData.getValue());
+		}
+
+		GroupData groupData = repository.getGroupRepository().fromGroupId(transactionData.getTxGroupId());
+		if (groupData != null)
+			summary.approvalThreshold = groupData.getApprovalThreshold();
+
+		GroupApprovalData approvalData = repository.getTransactionRepository().getApprovalData(transactionData.getSignature());
+		if (approvalData != null) {
+			summary.approvalCount = approvalData.approvingAdmins.size();
+			summary.rejectionCount = approvalData.rejectingAdmins.size();
+		}
+
+		summary.approvalAuthorityCount = Group.countApprovalAuthorities(repository, transactionData.getTxGroupId());
+		summary.effectiveNow = isEffectiveNow(repository, transactionData, currentHeight);
+
+		return summary;
+	}
+
+	private static void decodeKnownValue(ChainParameterUpdateSummary summary, ChainParameter parameter, byte[] value) {
+		switch (parameter) {
+			case BLOCK_REWARD:
+				summary.valueType = "AMOUNT";
+				if (parameter.isValidValue(value)) {
+					long amount = parameter.decodeLongValue(value);
+					summary.amount = amount;
+					summary.displayValue = Amounts.prettyAmount(amount);
+				}
+				break;
+		}
+	}
+
+	private static boolean isEffectiveNow(Repository repository, ChainParameterUpdateTransactionData transactionData,
+			int currentHeight) throws DataException {
+		if (transactionData.getApprovalStatus() != ApprovalStatus.APPROVED)
+			return false;
+
+		ChainParameterData effectiveParameterData = repository.getChainParameterRepository()
+				.getEffectiveParameter(transactionData.getParameterId(), currentHeight);
+
+		return effectiveParameterData != null
+				&& Arrays.equals(effectiveParameterData.getSignature(), transactionData.getSignature());
 	}
 }

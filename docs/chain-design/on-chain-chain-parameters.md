@@ -58,6 +58,16 @@ overrides it.
 build and explain through the public API. Version 1 only reports
 `BLOCK_REWARD`.
 
+`GET /chain-parameters/updates` lists chain-parameter proposals as readable
+proposal summaries. The endpoint can filter by parameter ID, approval status,
+approval group ID, activation-height range, confirmation status, limit, offset,
+and reverse order.
+
+For `BLOCK_REWARD`, each proposal summary includes the raw canonical bytes, the
+decoded amount, the current group-approval status, the current yes and no vote
+counts, the current approval-authority count, and whether that approved proposal
+is the effective overlay at the node's current height.
+
 `POST /chain-parameters/block-reward/update` builds an unsigned
 `CHAIN_PARAMETER_UPDATE` transaction for the block reward. Callers provide the
 reward as a normal decimal amount, and the API converts it to the canonical

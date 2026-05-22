@@ -4,9 +4,11 @@ import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.data.group.GroupApprovalData;
 import org.qortal.data.group.GroupKickSummaryData;
+import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
 import org.qortal.data.transaction.GroupApprovalTransactionData;
 import org.qortal.data.transaction.TransactionData;
 import org.qortal.data.transaction.TransferAssetTransactionData;
+import org.qortal.transaction.Transaction.ApprovalStatus;
 import org.qortal.transaction.Transaction.TransactionType;
 
 import java.util.EnumSet;
@@ -265,6 +267,24 @@ public interface TransactionRepository {
 	 * {@link #getPaymentsBetweenAddresses} for notification history use.
 	 */
 	public List<String[]> getReceivedPaymentsForNotifications(String recipient, Long after, int limit) throws DataException;
+
+	/**
+	 * Returns chain-parameter update transactions matching proposal visibility filters.
+	 *
+	 * @param parameterId optional chain parameter ID
+	 * @param approvalStatus optional group-approval status
+	 * @param txGroupId optional approval group ID
+	 * @param activationHeightFrom optional minimum activation height, inclusive
+	 * @param activationHeightTo optional maximum activation height, inclusive
+	 * @param confirmationStatus whether to include confirmed, unconfirmed or both
+	 * @param limit maximum number of results
+	 * @param offset result offset for pagination
+	 * @param reverse whether to reverse the sort order
+	 * @return list of chain-parameter update transactions, or empty if none
+	 */
+	public List<ChainParameterUpdateTransactionData> getChainParameterUpdates(Integer parameterId, ApprovalStatus approvalStatus,
+			Integer txGroupId, Integer activationHeightFrom, Integer activationHeightTo, ConfirmationStatus confirmationStatus,
+			Integer limit, Integer offset, Boolean reverse) throws DataException;
 
 	/**
 	 * Returns list of transactions pending approval, with optional txGgroupId filtering.
