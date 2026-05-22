@@ -21,6 +21,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.GroupRepository;
 import org.qortal.repository.Repository;
 import org.qortal.settings.Settings;
+import org.qortal.transform.Transformer;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.TransactionTransformer;
 import org.qortal.utils.NTP;
@@ -624,9 +625,14 @@ public abstract class Transaction {
 			return ValidationResult.OK;
 		}
 
-		PublicKeyAccount creator = this.getCreator();
-		if (creator == null)
+		byte[] creatorPublicKey = this.transactionData.getCreatorPublicKey();
+		if (creatorPublicKey == null)
 			return ValidationResult.MISSING_CREATOR;
+
+		if (creatorPublicKey.length != Transformer.PUBLIC_KEY_LENGTH)
+			return ValidationResult.INVALID_PUBLIC_KEY;
+
+		PublicKeyAccount creator = this.getCreator();
 
 		// Reject if unconfirmed pile already has X transactions from same creator
 		if (countUnconfirmedByCreator(creator) >= Settings.getInstance().getMaxUnconfirmedPerAccount())

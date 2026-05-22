@@ -88,6 +88,38 @@ public class GroupApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testCreateGroupBuildsRawTransaction() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			CreateGroupTransactionData transactionData = createGroupTransactionData(alice, "api-create-group-valid");
+
+			assertFalse(this.groupsResource.createGroup(transactionData).isEmpty());
+		}
+	}
+
+	@Test
+	public void testCreateGroupRejectsMissingCreatorPublicKey() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			CreateGroupTransactionData transactionData = createGroupTransactionData(alice, "api-create-group-missing-creator");
+			transactionData.setGroupCreatorPublicKey(null);
+
+			assertApiError(ApiError.TRANSACTION_INVALID, () -> this.groupsResource.createGroup(transactionData));
+		}
+	}
+
+	@Test
+	public void testCreateGroupRejectsInvalidCreatorPublicKey() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			CreateGroupTransactionData transactionData = createGroupTransactionData(alice, "api-create-group-invalid-creator");
+			transactionData.setGroupCreatorPublicKey(new byte[] { 1, 2, 3 });
+
+			assertApiError(ApiError.TRANSACTION_INVALID, () -> this.groupsResource.createGroup(transactionData));
+		}
+	}
+
+	@Test
 	public void testSearchGroupsByQuery() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -147,11 +179,20 @@ public class GroupApiTests extends ApiCommon {
 	}
 
 	private static int createGroup(Repository repository, PrivateKeyAccount owner, String groupName, String description, boolean isOpen) throws DataException {
-		CreateGroupTransactionData transactionData = new CreateGroupTransactionData(TestTransaction.generateBase(owner),
-				groupName, description, isOpen, ApprovalThreshold.ONE, 10, 1440);
+		CreateGroupTransactionData transactionData = createGroupTransactionData(owner, groupName, description, isOpen);
 		TransactionUtils.signAndMint(repository, transactionData, owner);
 
 		return repository.getGroupRepository().fromGroupName(groupName).getGroupId();
+	}
+
+	private static CreateGroupTransactionData createGroupTransactionData(PrivateKeyAccount owner, String groupName) throws DataException {
+		return createGroupTransactionData(owner, groupName, "api create group", true);
+	}
+
+	private static CreateGroupTransactionData createGroupTransactionData(PrivateKeyAccount owner, String groupName,
+			String description, boolean isOpen) throws DataException {
+		return new CreateGroupTransactionData(TestTransaction.generateBase(owner),
+				groupName, description, isOpen, ApprovalThreshold.ONE, 10, 1440);
 	}
 
 	private static List<String> groupNames(List<GroupData> groups) {

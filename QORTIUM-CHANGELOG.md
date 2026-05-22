@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - api: validate missing transaction creators
+
+Changed transaction API validation so requests with a missing or malformed creator public key fail with a normal transaction validation error instead of an internal server error. This keeps malformed group creation requests, including requests that use the wrong public-key field name, from producing raw Jetty 500 responses.
+
 ### 2026-05-21 - testnet: start batch rewards at genesis
 
 Changed the single-node testnet chain setup so batch rewards are active from the beginning of a fresh chain. The testnet keeps the short local batch size of 10 blocks and the 3-block online-account proof window, making the reward behavior easy to observe without waiting for a high activation height.
