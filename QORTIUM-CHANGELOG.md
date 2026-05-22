@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - rewards: remove admin block reward payouts
+
+Removed the inherited special block reward payouts for minting group admins and development group admins. Block rewards now go only to eligible online minters in the configured minting groups, with active level-share bins normalized so the available reward is fully distributed through normal minter and reward-share rules. The related tests were updated to cover normalized minter payouts, and the old admin-replacement test fixtures were removed.
+
 ### 2026-05-21 - qdn: count resource chunks by transaction
 
 Changed QDN resource status reporting so local chunk counts are based on the files that belong to the specific resource transaction instead of every file in the surrounding storage directory. Tiny on-chain resources now report accurate progress such as one local item out of one expected item, rather than inflated counts from unrelated temporary files.

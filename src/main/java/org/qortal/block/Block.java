@@ -31,7 +31,6 @@ import org.qortal.data.transaction.GroupKickTransactionData;
 import org.qortal.data.transaction.JoinGroupTransactionData;
 import org.qortal.data.transaction.LeaveGroupTransactionData;
 import org.qortal.data.transaction.TransactionData;
-import org.qortal.group.Group;
 import org.qortal.repository.*;
 import org.qortal.settings.Settings;
 import org.qortal.transaction.AtTransaction;
@@ -2340,8 +2339,9 @@ public class Block {
 			remainingAmount -= sharedAmount;
 
 			// Reallocate any amount that could not be distributed by this candidate.
-			if (sharedAmount != distributionAmount)
-				totalAmount += Amounts.scaledDivide(distributionAmount - sharedAmount, 1_00000000 - rewardCandidate.share);
+			long undistributedAmount = distributionAmount - sharedAmount;
+			if (undistributedAmount > 0 && rewardCandidate.share < Amounts.MULTIPLIER)
+				totalAmount += Amounts.scaledDivide(undistributedAmount, Amounts.MULTIPLIER - rewardCandidate.share);
 
 			final long remainingAmountForLogging = remainingAmount;
 			LOGGER.trace(() -> String.format("%s share: %s. Actually shared: %s. Remaining: %s",
@@ -2371,21 +2371,10 @@ public class Block {
 		/*
 		 * Distribution rules:
 		 *
-		 * Distribution is based on the minting account of 'online' reward-shares.
-		 *
-		 * Admins receive the leftover non-distributed reward.
-		 *
-		 * There has to be either at least one 'online' account for blocks to be minted
-		 * so there is always either one account-level-based or admin reward candidate.
-		 *
-		 * Examples:
-		 *
-		 * With account-level rewards:
-		 * Level 1/2 accounts: 6%
-		 * Admins: 94%
+		 * Distribution is based on minting accounts from 'online' reward-shares that
+		 * belong to a configured minting group. Active account-level share bins are
+		 * normalized to distribute the full block reward to eligible online minters.
 		 */
-		long totalShares = 0;
-
 		List<AccountLevelShareBin> accountLevelShareBinsForBlock = BlockChain.getInstance().getAccountLevelShareBins();
 		// Determine reward candidates based on account level
 		// This needs a deep copy, so the shares can be modified when tiers aren't activated yet
@@ -2459,71 +2448,29 @@ public class Block {
 
 			BlockRewardCandidate rewardCandidate = new BlockRewardCandidate(description, accountLevelShareBin.share, accountLevelBinDistributor);
 			rewardCandidates.add(rewardCandidate);
-
-			totalShares += rewardCandidate.share;
 		}
 
-		GroupRepository groupRepository = this.repository.getGroupRepository();
-
-		List<Integer> mintingGroupIds = Groups.getGroupIdsToMint(BlockChain.getInstance(), this.blockData.getHeight());
-
-		// all minter admins
-		List<String> minterAdmins = Groups.getAllAdmins(groupRepository, mintingGroupIds);
-
-		// all minter admins that are online
-		List<ExpandedAccount> onlineMinterAdminAccounts
-			= expandedAccounts.stream()
-				.filter(expandedAccount ->  minterAdmins.contains(expandedAccount.getMintingAccount().getAddress()))
-				.collect(Collectors.toList());
-
-		long minterAdminShare;
-
-		if( onlineMinterAdminAccounts.isEmpty() ) {
-			minterAdminShare = 0;
-		}
-		else {
-			BlockRewardDistributor minterAdminDistributor
-					= (distributionAmount, balanceChanges)
-					->
-					distributeBlockRewardShare(distributionAmount, onlineMinterAdminAccounts, balanceChanges);
-
-			long adminShare = 1_00000000 - totalShares;
-			LOGGER.info("initial total Shares: {}", totalShares);
-			LOGGER.info("logging adminShare before admin split, this is the primary reward that will be split {}", adminShare);
-
-			minterAdminShare = adminShare / 2;
-			BlockRewardCandidate minterAdminRewardCandidate
-					= new BlockRewardCandidate("Minter Admins", minterAdminShare, minterAdminDistributor);
-			rewardCandidates.add(minterAdminRewardCandidate);
-
-			totalShares += minterAdminShare;
-		}
-
-		LOGGER.info("MINTER ADMIN SHARE: {}",minterAdminShare);
-
-		// all dev admins
-		List<Integer> devGroupIds = Groups.getGroupIdsAtHeight(BlockChain.getInstance().getDevGroupIds(), this.blockData.getHeight());
-		List<String> devAdminAddresses
-				= Groups.getAllAdmins(groupRepository, devGroupIds);
-
-		LOGGER.debug("Removing NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
-		devAdminAddresses.removeIf( address -> Group.NULL_OWNER_ADDRESS.equals(address) );
-		LOGGER.debug("Removed NULL Account Address, Dev Admin Count = {}", devAdminAddresses.size());
-
-		long devAdminShare = 1_00000000 - totalShares;
-		if (devAdminAddresses.isEmpty()) {
-			LOGGER.info("DEV ADMIN SHARE: 0");
-		} else {
-			BlockRewardDistributor devAdminDistributor
-					= (distributionAmount, balanceChanges) -> distributeToAccounts(distributionAmount, devAdminAddresses, balanceChanges);
-
-			LOGGER.info("DEV ADMIN SHARE: {}",devAdminShare);
-			BlockRewardCandidate devAdminRewardCandidate
-					= new BlockRewardCandidate("Dev Admins", devAdminShare,devAdminDistributor);
-			rewardCandidates.add(devAdminRewardCandidate);
-		}
-
+		normalizeRewardCandidateShares(rewardCandidates);
 		return rewardCandidates;
+	}
+
+	private static void normalizeRewardCandidateShares(List<BlockRewardCandidate> rewardCandidates) {
+		long totalShares = rewardCandidates.stream().mapToLong(rewardCandidate -> rewardCandidate.share).sum();
+
+		if (totalShares <= 0 || totalShares == Amounts.MULTIPLIER)
+			return;
+
+		long remainingShare = Amounts.MULTIPLIER;
+		for (int i = 0; i < rewardCandidates.size(); ++i) {
+			BlockRewardCandidate rewardCandidate = rewardCandidates.get(i);
+
+			if (i == rewardCandidates.size() - 1) {
+				rewardCandidate.share = remainingShare;
+			} else {
+				rewardCandidate.share = Amounts.scaledDivide(rewardCandidate.share, totalShares);
+				remainingShare -= rewardCandidate.share;
+			}
+		}
 	}
 
 	/**

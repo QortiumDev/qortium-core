@@ -19,7 +19,6 @@ import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
 import org.qortal.utils.Amounts;
-import org.qortal.utils.Base58;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -93,10 +92,8 @@ public class RewardTests extends Common {
 
 			BlockMinter.mintTestingBlock(repository, rewardShareAccount);
 
-			// Alice is the online level-zero minter admin, so Bob receives 12.8% of Alice's admin replacement reward.
-
-			long minterAdminShare = blockReward / 2;
-			long bobShare = (minterAdminShare * share) / 100L / 100L;
+			// Bob receives 12.8% of Alice's normalized minter reward.
+			long bobShare = (blockReward * share) / 100L / 100L;
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, initialBalances.get("bob").get(Asset.NATIVE) + bobShare);
 
 			long aliceShare = blockReward - bobShare;
@@ -133,45 +130,45 @@ public class RewardTests extends Common {
 		}
 	}
 
-	/** Test that admin replacement rewards flow to online minter admins. */
+	/** Test that normalized rewards flow only to eligible online minters. */
 	@Test
-	public void testAdminReplacementReward() throws DataException {
-		Common.useSettings("test-settings-v2-admin-replacement-rewards.json");
+	public void testOnlyOnlineMintersReceiveRewards() throws DataException {
+		Common.useSettings("test-settings-v2-reward-levels.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
-			Long blockReward = BlockUtils.getNextBlockReward(repository);
+			seedRewardLevelTestAccounts(repository);
 
 			List<PrivateKeyAccount> mintingAndOnlineAccounts = new ArrayList<>();
 
-			// Alice to mint, therefore online
+			// Alice self-share online
 			PrivateKeyAccount aliceSelfShare = Common.getTestAccount(repository, "alice-reward-share");
 			mintingAndOnlineAccounts.add(aliceSelfShare);
 
 			// Bob self-share NOT online
 
-			// Chloe self-share and reward-share with Dilbert both online
-			PrivateKeyAccount chloeSelfShare = Common.getTestAccount(repository, "chloe-reward-share");
-			mintingAndOnlineAccounts.add(chloeSelfShare);
+			// Chloe self-share online
+			byte[] chloeRewardSharePrivateKey = AccountUtils.rewardShare(repository, "chloe", "chloe", 0);
+			PrivateKeyAccount chloeRewardShareAccount = new PrivateKeyAccount(repository, chloeRewardSharePrivateKey);
+			mintingAndOnlineAccounts.add(chloeRewardShareAccount);
 
-			PrivateKeyAccount chloeDilbertRewardShare = new PrivateKeyAccount(repository, Base58.decode("HuiyqLipUN1V9p1HZfLhyEwmEA6BTaT2qEfjgkwPViV4"));
-			mintingAndOnlineAccounts.add(chloeDilbertRewardShare);
+			// Dilbert self-share NOT online
 
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			long blockReward = BlockUtils.getNextBlockReward(repository);
 			BlockMinter.mintTestingBlock(repository, mintingAndOnlineAccounts.toArray(new PrivateKeyAccount[0]));
 
-			// Alice is the only group admin, so she receives the full admin replacement share.
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, initialBalances.get("alice").get(Asset.NATIVE) + blockReward);
+			long expectedReward = blockReward / 2;
 
-			// Other accounts are online, but only minter admins receive the admin replacement reward.
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, initialBalances.get("alice").get(Asset.NATIVE) + expectedReward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, initialBalances.get("bob").get(Asset.NATIVE));
-			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, initialBalances.get("chloe").get(Asset.NATIVE));
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, initialBalances.get("chloe").get(Asset.NATIVE) + expectedReward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, initialBalances.get("dilbert").get(Asset.NATIVE));
 		}
 	}
 
-	/** Check admin replacement rewards when no minter admin is online. */
+	/** Check that a single online minter receives the full normalized reward. */
 	@Test
-	public void testAdminReplacementWithoutOnlineMinterAdmin() throws DataException {
+	public void testSingleOnlineMinterReceivesFullReward() throws DataException {
 		Common.useSettings("test-settings-v2-reward-scaling.json");
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
@@ -187,28 +184,20 @@ public class RewardTests extends Common {
 
 			BlockMinter.mintTestingBlock(repository, dilbertSelfShareAccount);
 
-			/*
-			 * Dilbert is only account 'online'.
-			 * Alice is a dev admin but is not online.
-			 * So Dilbert should receive the combined level 5 to 8 share from the inactive
-			 * level 7/8 bin, and Alice should receive the remaining admin replacement share.
-			 */
-
-			final int level5To8SharePercent = 45_00;
-			final long level5To8Share = Amounts.roundDownScaledMultiply(blockReward, level5To8SharePercent * 10000L);
+			// Dilbert is the only eligible online minter, so he receives the full normalized reward.
 
 			long dilbertExpectedBalance = initialBalances.get("dilbert").get(Asset.NATIVE);
-			dilbertExpectedBalance += level5To8Share;
+			dilbertExpectedBalance += blockReward;
 
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertExpectedBalance);
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, initialBalances.get("alice").get(Asset.NATIVE) + blockReward - level5To8Share);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, initialBalances.get("alice").get(Asset.NATIVE));
 
-			// Dilbert should continue receiving the configured share of the block reward
+			// Dilbert should continue receiving the full block reward while he is the only online minter.
 			blockReward = BlockUtils.getNextBlockReward(repository);
 
 			BlockMinter.mintTestingBlock(repository, dilbertSelfShareAccount);
 
-			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertExpectedBalance + Amounts.roundDownScaledMultiply(blockReward, level5To8SharePercent * 10000L));
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertExpectedBalance + blockReward);
 		}
 	}
 
@@ -267,19 +256,13 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'. Bob is offline.
 			 * Alice and Chloe are level 1, Dilbert is level 2.
-			 * Alice, Chloe, and Dilbert should receive equal shares of the 6% block reward for Level 1 and 2.
-			 * Alice should also receive the remaining admin replacement reward.
+			 * Alice, Chloe, and Dilbert should receive equal shares of the normalized level 1 and 2 reward.
 			 */
 
-			// Level 1 and 2 always share the same reward in Qortium.
-			final int level1And2SharePercent = 6_00; // 6%
-			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
-			final long expectedReward = level1And2ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
-			final long expectedAdminReward = blockReward - level1And2ShareAmount; // Alice should receive the remaining admin reward
+			final long expectedReward = blockReward / 3; // The reward is split between Alice, Chloe, and Dilbert
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			assertEquals(600000000, level1And2ShareAmount);
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedReward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedReward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedReward);
@@ -345,18 +328,13 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Alice, Bob, and Chloe are level 3; Dilbert is level 4.
-			 * Alice, Chloe, Bob and Dilbert should receive equal shares of the 13% block reward for level 3 and 4.
-			 * Alice should also receive the remaining admin replacement reward.
+			 * Alice, Chloe, Bob and Dilbert should receive equal shares of the normalized level 3 and 4 reward.
 			 */
 
-			// Level 3 and 4 always share the same reward in Qortium.
-			final int level3And4SharePercent = 13_00; // 13%
-			final long level3And4ShareAmount = (blockReward * level3And4SharePercent) / 100L / 100L;
-			final long expectedReward = level3And4ShareAmount / 4; // The reward is split between Alice, Bob, Chloe, and Dilbert
-			final long expectedAdminReward = blockReward - level3And4ShareAmount; // Alice should receive the remaining admin reward
+			final long expectedReward = blockReward / 4; // The reward is split between Alice, Bob, Chloe, and Dilbert
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedReward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedReward);
 			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedReward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedReward);
@@ -424,22 +402,15 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Bob is level 1; Alice and Chloe are level 5; Dilbert is level 6.
-			 * Alice, Chloe, and Dilbert should receive equal shares of the 19% block reward for level 5 and 6.
-			 * Bob should receive all of the level 1 and 2 reward (6%)
-			 * Alice should also receive the remaining admin replacement reward.
+			 * Alice, Chloe, and Dilbert share the normalized level 5 and 6 reward.
+			 * Bob receives the normalized level 1 and 2 reward.
 			 */
 
-			// Level 5 and 6 always share the same reward in Qortium.
-			final int level1And2SharePercent = 6_00; // 6%
-			final int level5And6SharePercent = 19_00; // 19%
-			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
-			final long level5And6ShareAmount = (blockReward * level5And6SharePercent) / 100L / 100L;
-			final long expectedLevel1And2Reward = level1And2ShareAmount; // The reward is given entirely to Bob
-			final long expectedLevel5And6Reward = level5And6ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
-			final long expectedAdminReward = blockReward - level1And2ShareAmount - level5And6ShareAmount; // Alice should receive the remaining admin reward
+			final long expectedLevel1And2Reward = normalizedRewardShare(blockReward, 6_000000L, 25_000000L);
+			final long expectedLevel5And6Reward = (blockReward - expectedLevel1And2Reward) / 3;
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel5And6Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel5And6Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1And2Reward);
 			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5And6Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5And6Reward);
@@ -502,18 +473,13 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
 			 * Alice and Chloe are level 7; Dilbert is level 8.
-			 * Alice, Chloe, and Dilbert should receive equal shares of the 26% block reward for level 7 and 8.
-			 * Alice should also receive the remaining admin replacement reward.
+			 * Alice, Chloe, and Dilbert should receive equal shares of the normalized level 7 and 8 reward.
 			 */
 
-			// Level 7 and 8 always share the same reward in Qortium.
-			final int level7And8SharePercent = 26_00; // 26%
-			final long level7And8ShareAmount = (blockReward * level7And8SharePercent) / 100L / 100L;
-			final long expectedLevel7And8Reward = level7And8ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
-			final long expectedAdminReward = blockReward - level7And8ShareAmount; // Alice should receive the remaining admin reward
+			final long expectedLevel7And8Reward = blockReward / 3; // The reward is split between Alice, Chloe, and Dilbert
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel7And8Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel7And8Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel7And8Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel7And8Reward);
@@ -590,22 +556,15 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Bob is level 1; Alice and Chloe are level 9; Dilbert is level 10.
-			 * Alice, Chloe, and Dilbert should receive equal shares of the 32% block reward for level 9 and 10.
-			 * Bob should receive all of the level 1 and 2 reward (6%)
-			 * Alice should also receive the remaining admin replacement reward.
+			 * Alice, Chloe, and Dilbert share the normalized level 9 and 10 reward.
+			 * Bob receives the normalized level 1 and 2 reward.
 			 */
 
-			// Level 9 and 10 always share the same reward in Qortium.
-			final int level1And2SharePercent = 6_00; // 6%
-			final int level9And10SharePercent = 32_00; // 32%
-			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
-			final long level9And10ShareAmount = (blockReward * level9And10SharePercent) / 100L / 100L;
-			final long expectedLevel1And2Reward = level1And2ShareAmount; // The reward is given entirely to Bob
-			final long expectedLevel9And10Reward = level9And10ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
-			final long expectedAdminReward = blockReward - level1And2ShareAmount - level9And10ShareAmount; // Alice should receive the remaining admin reward
+			final long expectedLevel1And2Reward = normalizedRewardShare(blockReward, 6_000000L, 38_000000L);
+			final long expectedLevel9And10Reward = (blockReward - expectedLevel1And2Reward) / 3;
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel9And10Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel9And10Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1And2Reward);
 			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel9And10Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel9And10Reward);
@@ -682,17 +641,13 @@ public class RewardTests extends Common {
 			 * Alice and Chloe are level 7; Dilbert is level 8.
 			 * Level 7 and 8 is not yet activated, so its rewards are added to the level 5 and 6 share bin.
 			 * There are no level 5 and 6 online.
-			 * Alice, Chloe, and Dilbert should receive equal shares of the 45% block reward for levels 5 to 8.
-			 * Alice should also receive the remaining admin replacement reward.
+			 * Alice, Chloe, and Dilbert should receive equal shares of the normalized levels 5 to 8 reward.
 			 */
 
-			final int level5To8SharePercent = 45_00; // 45% (combined 19% and 26%)
-			final long level5To8ShareAmount = (blockReward * level5To8SharePercent) / 100L / 100L;
-			final long expectedLevel5To8Reward = level5To8ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
-			final long expectedAdminReward = blockReward - level5To8ShareAmount; // Alice should receive the remaining admin reward
+			final long expectedLevel5To8Reward = blockReward / 3; // The reward is split between Alice, Chloe, and Dilbert
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel5To8Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel5To8Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5To8Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5To8Reward);
@@ -775,21 +730,15 @@ public class RewardTests extends Common {
 			 * Bob is level 1; Alice and Chloe are level 9; Dilbert is level 10.
 			 * Levels 7+8, and 9+10 are not yet activated, so their rewards are added to the level 5 and 6 share bin.
 			 * There are no levels 5-8 online.
-			 * Bob should receive all of the level 1 and 2 reward (6%).
-			 * Alice, Chloe, and Dilbert should receive equal shares of the 77% block reward for levels 5 to 10.
-			 * Alice should also receive the remaining admin replacement reward.
+			 * Bob receives the normalized level 1 and 2 reward.
+			 * Alice, Chloe, and Dilbert share the normalized levels 5 to 10 reward.
 			 */
 
-			final int level1And2SharePercent = 6_00; // 6%
-			final int level5To10SharePercent = 77_00; // 77% (combined 19%, 26%, and 32%)
-			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
-			final long level5To10ShareAmount = (blockReward * level5To10SharePercent) / 100L / 100L;
-			final long expectedLevel1And2Reward = level1And2ShareAmount; // The reward is given entirely to Bob
-			final long expectedLevel5To10Reward = level5To10ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
-			final long expectedAdminReward = blockReward - level1And2ShareAmount - level5To10ShareAmount; // Alice should receive the remaining admin reward
+			final long expectedLevel1And2Reward = normalizedRewardShare(blockReward, 6_000000L, 83_000000L);
+			final long expectedLevel5To10Reward = (blockReward - expectedLevel1And2Reward) / 3;
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel5To10Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel5To10Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1And2Reward);
 			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5To10Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5To10Reward);
@@ -865,17 +814,13 @@ public class RewardTests extends Common {
 			 * Alice, Chloe, and Dilbert are 'online'.
 			 * Chloe is level 6; Alice and Dilbert are level 7.
 			 * Level 7 and 8 is not yet activated, so its rewards are added to the level 5 and 6 share bin.
-			 * Alice, Chloe, and Dilbert should receive equal shares of the 45% block reward for levels 5 to 8.
-			 * Alice should also receive the remaining admin replacement reward.
+			 * Alice, Chloe, and Dilbert should receive equal shares of the normalized levels 5 to 8 reward.
 			 */
 
-			final int level5To8SharePercent = 45_00; // 45% (combined 19% and 26%)
-			final long level5To8ShareAmount = (blockReward * level5To8SharePercent) / 100L / 100L;
-			final long expectedLevel5To8Reward = level5To8ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
-			final long expectedAdminReward = blockReward - level5To8ShareAmount; // Alice should receive the remaining admin reward
+			final long expectedLevel5To8Reward = blockReward / 3; // The reward is split between Alice, Chloe, and Dilbert
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAdminReward+expectedLevel5To8Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel5To8Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5To8Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5To8Reward);
@@ -907,17 +852,13 @@ public class RewardTests extends Common {
 			 * Alice, Chloe, and Dilbert are 'online'.
 			 * Alice, Chloe, and Dilbert are level 7.
 			 * Level 7 and 8 is now activated, so its rewards are paid out in the normal way.
-			 * Alice, Chloe, and Dilbert should receive equal shares of the 26% block reward for levels 7 to 8.
-			 * Alice should also receive the remaining admin replacement reward.
+			 * Alice, Chloe, and Dilbert should receive equal shares of the normalized level 7 and 8 reward.
 			 */
 
-			final int level7To8SharePercent = 26_00; // 26%
-			final long level7To8ShareAmount = (blockReward * level7To8SharePercent) / 100L / 100L;
-			final long expectedLevel7To8Reward = level7To8ShareAmount / 3; // The reward is split between Alice, Chloe, and Dilbert
-			final long expectedSecondAdminReward = blockReward - level7To8ShareAmount; // Alice should receive the remaining admin reward
+			final long expectedLevel7To8Reward = blockReward / 3; // The reward is split between Alice, Chloe, and Dilbert
 
 			// Validate the balances
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, alicePreActivationBalance+expectedSecondAdminReward+expectedLevel7To8Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, alicePreActivationBalance+expectedLevel7To8Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobPreActivationBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloePreActivationBalance+expectedLevel7To8Reward);
 			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertPreActivationBalance+expectedLevel7To8Reward);
@@ -1005,13 +946,11 @@ public class RewardTests extends Common {
 			assertEquals(1000, (int) repository.getBlockRepository().getLastBlock().getHeight());
 			assertEquals(100000000L, blockReward);
 
-			final int level1And2SharePercent = 6_00; // 6%
-			final long level1And2ShareAmount = (blockReward * level1And2SharePercent) / 100L / 100L;
+			final long level1And2ShareAmount = normalizedRewardShare(blockReward, 6_000000L, 38_000000L);
 			final long expectedLevel1And2Reward = level1And2ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedAliceReward = blockReward - level1And2ShareAmount; // Alice receives her high-level bin plus the admin remainder
+			final long expectedAliceReward = blockReward - level1And2ShareAmount;
 
 			// Validate the balances
-			assertEquals(6000000, level1And2ShareAmount);
 			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAliceReward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
 			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel1And2Reward);
@@ -1039,6 +978,10 @@ public class RewardTests extends Common {
 		AccountUtils.setMintingData(repository, "bob", 1);
 		AccountUtils.setMintingData(repository, "chloe", 1);
 		AccountUtils.setMintingData(repository, "dilbert", 8);
+	}
+
+	private static long normalizedRewardShare(long blockReward, long share, long totalActiveShares) {
+		return Amounts.roundDownScaledMultiply(blockReward, Amounts.scaledDivide(share, totalActiveShares));
 	}
 
 }
