@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - api: default arbitrary search confirmation status
+
+Changed arbitrary transaction search so requests that omit the confirmation status now default to confirmed transactions instead of failing with an internal server error. QDN transaction searches can now use the shorter query form safely, while callers that need unconfirmed or mixed results can still request those statuses explicitly.
+
 ### 2026-05-21 - api: default transaction search confirmation status
 
 Changed transaction search so requests that omit the confirmation status now default to confirmed transactions instead of failing with an internal server error. Address-based transaction searches can now use the shorter query form safely, while callers that need unconfirmed or mixed results can still request those statuses explicitly.
