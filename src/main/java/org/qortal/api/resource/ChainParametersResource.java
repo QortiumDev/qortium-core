@@ -9,8 +9,12 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
+import org.qortal.api.model.BlockRewardUpdateRequest;
+import org.qortal.api.model.ChainParameterMetadata;
 import org.qortal.block.BlockChain;
+import org.qortal.block.ChainParameter;
 import org.qortal.data.blockchain.ChainParameterData;
+import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -29,6 +33,8 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import java.util.Collections;
+import java.util.List;
 
 @Path("/chain-parameters")
 @Tag(name = "Chain Parameters")
@@ -36,6 +42,33 @@ public class ChainParametersResource {
 
 	@Context
 	HttpServletRequest request;
+
+	private static final List<ChainParameterMetadata> PARAMETERS = Collections.singletonList(
+			new ChainParameterMetadata(
+					ChainParameter.BLOCK_REWARD.id,
+					ChainParameter.BLOCK_REWARD.name(),
+					"AMOUNT",
+					ChainParameter.BLOCK_REWARD.valueLength,
+					"Height-based block reward amount, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
+					"/chain-parameters/block-reward/update",
+					"/chain-parameters/block-reward/{height}"));
+
+	@GET
+	@Operation(
+			summary = "List supported on-chain chain parameters",
+			responses = {
+					@ApiResponse(
+							description = "supported chain parameter metadata",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = ChainParameterMetadata.class)
+							)
+					)
+			}
+	)
+	public List<ChainParameterMetadata> getChainParameters() {
+		return PARAMETERS;
+	}
 
 	@GET
 	@Path("/effective/{parameterId}")
@@ -86,14 +119,14 @@ public class ChainParametersResource {
 	}
 
 	@POST
-	@Path("/update")
+	@Path("/block-reward/update")
 	@Operation(
-			summary = "Build raw, unsigned, CHAIN_PARAMETER_UPDATE transaction",
+			summary = "Build raw, unsigned, BLOCK_REWARD chain-parameter update transaction",
 			requestBody = @RequestBody(
 					required = true,
 					content = @Content(
 							mediaType = MediaType.APPLICATION_JSON,
-							schema = @Schema(implementation = ChainParameterUpdateTransactionData.class)
+							schema = @Schema(implementation = BlockRewardUpdateRequest.class)
 					)
 			),
 			responses = {
@@ -107,12 +140,16 @@ public class ChainParametersResource {
 			}
 	)
 	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
-	public String updateChainParameter(ChainParameterUpdateTransactionData transactionData) {
+	public String updateBlockReward(BlockRewardUpdateRequest updateRequest) {
 		if (Settings.getInstance().isApiRestricted())
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChainParameterUpdateTransactionData transactionData = buildBlockRewardTransactionData(updateRequest);
 			Transaction transaction = Transaction.fromData(repository, transactionData);
+
+			if (updateRequest.fee == null)
+				transactionData.setFee(transaction.calcRecommendedFee());
 
 			Transaction.ValidationResult result = transaction.isValidUnconfirmed();
 			if (result != Transaction.ValidationResult.OK)
@@ -125,5 +162,13 @@ public class ChainParametersResource {
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
+	}
+
+	private static ChainParameterUpdateTransactionData buildBlockRewardTransactionData(BlockRewardUpdateRequest updateRequest) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
+
+		return new ChainParameterUpdateTransactionData(baseTransactionData, ChainParameter.BLOCK_REWARD.id,
+				updateRequest.activationHeight, ChainParameter.BLOCK_REWARD.encodeLongValue(updateRequest.reward));
 	}
 }

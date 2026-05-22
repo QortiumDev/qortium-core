@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - api: add chain parameter metadata and block reward builder
+
+Changed the chain-parameter API from a generic binary update builder to a safer first public surface for supported parameters. Nodes now list the available on-chain parameters and provide a block-reward-specific builder that accepts a normal reward amount, fills in the recommended fee when needed, and still emits the same development-group approved `CHAIN_PARAMETER_UPDATE` transaction bytes for signing and submission.
+
 ### 2026-05-22 - consensus: add on-chain chain parameter updates
 
 Added the first development-group approved chain-parameter update path. Qortium can now store approved parameter overlays on chain, require explicit future activation heights, and apply an approved block reward change from that height onward while falling back to `blockchain.json` when no approved overlay exists. The new transaction, schema migration, API builder/query endpoints, tests, and chain-builder documentation create the narrow foundation for later fee, reward-split, and trust-parameter updates without requiring a rebuilt jar for every change.

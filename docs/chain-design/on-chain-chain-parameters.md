@@ -52,6 +52,45 @@ The approved block reward applies at its activation height and remains effective
 until another approved `BLOCK_REWARD` update with a later activation height
 overrides it.
 
+## Public API
+
+`GET /chain-parameters` lists the chain parameters that this node knows how to
+build and explain through the public API. Version 1 only reports
+`BLOCK_REWARD`.
+
+`POST /chain-parameters/block-reward/update` builds an unsigned
+`CHAIN_PARAMETER_UPDATE` transaction for the block reward. Callers provide the
+reward as a normal decimal amount, and the API converts it to the canonical
+8-byte value used by consensus.
+
+Example request:
+
+```json
+{
+  "timestamp": 1779451200000,
+  "txGroupId": 1,
+  "updaterPublicKey": "2tiMr5LTpaWCgbRvkPK8TFd7k63DyHJMMFFsz9uBf1ZP",
+  "activationHeight": 250000,
+  "reward": "5.00000000"
+}
+```
+
+The response is the raw unsigned transaction encoded in Base58. It still needs
+to be signed and submitted like other raw transactions. If `fee` is omitted, the
+builder uses the recommended transaction fee. Advanced callers can still provide
+an explicit `fee` and optional `nonce`.
+
+`GET /chain-parameters/block-reward/{height}` returns the effective block
+reward for a height after applying any approved overlay that is active at that
+height.
+
+`GET /chain-parameters/effective/{parameterId}?height={height}` returns the
+approved overlay record for callers that need the raw canonical value.
+
+Version 1 does not expose a public generic binary-value proposal builder. Each
+new supported parameter should get its own typed builder so humans and tools can
+work with normal values while consensus continues to store deterministic bytes.
+
 ## Format Policy
 
 The transaction stores canonical binary values, not JSON.
