@@ -57,11 +57,12 @@ public class ChainParametersApiTests extends ApiCommon {
 		ChainParameterMetadata blockReward = parameters.get(0);
 		assertEquals(ChainParameter.BLOCK_REWARD.id, blockReward.id);
 		assertEquals(ChainParameter.BLOCK_REWARD.name(), blockReward.name);
-		assertEquals("AMOUNT", blockReward.valueType);
+		assertEquals(ChainParameter.BLOCK_REWARD.getValueType(), blockReward.valueType);
 		assertEquals(Long.BYTES, blockReward.valueLength);
 		assertEquals(BlockChain.getInstance().getChainParameterUpdateMinActivationDelay(), blockReward.minimumActivationDelay);
-		assertEquals("/chain-parameters/block-reward/update", blockReward.builderPath);
-		assertEquals("/chain-parameters/block-reward/{height}", blockReward.effectivePath);
+		assertEquals(ChainParameter.BLOCK_REWARD.getDescription(), blockReward.description);
+		assertEquals(ChainParameter.BLOCK_REWARD.getBuilderPath(), blockReward.builderPath);
+		assertEquals(ChainParameter.BLOCK_REWARD.getEffectivePath(), blockReward.effectivePath);
 	}
 
 	@Test

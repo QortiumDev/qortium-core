@@ -1,5 +1,7 @@
 package org.qortal.block;
 
+import org.qortal.utils.Amounts;
+
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Map;
@@ -7,7 +9,10 @@ import java.util.Map;
 import static java.util.stream.Collectors.toMap;
 
 public enum ChainParameter {
-	BLOCK_REWARD(1, Long.BYTES);
+	BLOCK_REWARD(1, Long.BYTES, "AMOUNT",
+			"Height-based block reward amount, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
+			"/chain-parameters/block-reward/update",
+			"/chain-parameters/block-reward/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 
@@ -16,14 +21,38 @@ public enum ChainParameter {
 
 	public final int id;
 	public final int valueLength;
+	private final String valueType;
+	private final String description;
+	private final String builderPath;
+	private final String effectivePath;
 
-	ChainParameter(int id, int valueLength) {
+	ChainParameter(int id, int valueLength, String valueType, String description, String builderPath, String effectivePath) {
 		this.id = id;
 		this.valueLength = valueLength;
+		this.valueType = valueType;
+		this.description = description;
+		this.builderPath = builderPath;
+		this.effectivePath = effectivePath;
 	}
 
 	public static ChainParameter valueOf(int id) {
 		return map.get(id);
+	}
+
+	public String getValueType() {
+		return this.valueType;
+	}
+
+	public String getDescription() {
+		return this.description;
+	}
+
+	public String getBuilderPath() {
+		return this.builderPath;
+	}
+
+	public String getEffectivePath() {
+		return this.effectivePath;
 	}
 
 	public boolean isValidValue(byte[] value) {
@@ -48,5 +77,32 @@ public enum ChainParameter {
 
 	public byte[] encodeLongValue(long value) {
 		return ByteBuffer.allocate(Long.BYTES).putLong(value).array();
+	}
+
+	public Long decodeAmountValue(byte[] value) {
+		if (!isValidValue(value))
+			return null;
+
+		switch (this) {
+			case BLOCK_REWARD:
+				return decodeLongValue(value);
+
+			default:
+				return null;
+		}
+	}
+
+	public String formatDisplayValue(byte[] value) {
+		Long amount = decodeAmountValue(value);
+		if (amount == null)
+			return null;
+
+		switch (this) {
+			case BLOCK_REWARD:
+				return Amounts.prettyAmount(amount);
+
+			default:
+				return null;
+		}
 	}
 }

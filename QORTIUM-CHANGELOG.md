@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - refactor: centralize chain parameter metadata
+
+Moved chain-parameter metadata and value display decoding into the shared `ChainParameter` definition so future parameters can be added in one place without duplicating API-specific descriptions, paths, or formatting rules. The public API shape and consensus behavior remain unchanged.
+
 ### 2026-05-22 - consensus: add chain parameter activation guardrails
 
 Added a required activation lead time for on-chain chain-parameter updates. Approved proposals must now leave a configured number of blocks before activation, which gives operators time to see and prepare for a voted-in change instead of allowing a parameter update to take effect immediately after approval.

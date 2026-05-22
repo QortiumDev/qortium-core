@@ -31,7 +31,6 @@ import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ApprovalStatus;
 import org.qortal.transform.TransformationException;
 import org.qortal.transform.transaction.ChainParameterUpdateTransactionTransformer;
-import org.qortal.utils.Amounts;
 import org.qortal.utils.Base58;
 
 import javax.servlet.http.HttpServletRequest;
@@ -44,7 +43,6 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 @Path("/chain-parameters")
@@ -219,16 +217,20 @@ public class ChainParametersResource {
 	}
 
 	private static List<ChainParameterMetadata> buildParameterMetadata() {
-		return Collections.singletonList(
-				new ChainParameterMetadata(
-						ChainParameter.BLOCK_REWARD.id,
-						ChainParameter.BLOCK_REWARD.name(),
-						"AMOUNT",
-						ChainParameter.BLOCK_REWARD.valueLength,
-						BlockChain.getInstance().getChainParameterUpdateMinActivationDelay(),
-						"Height-based block reward amount, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
-						"/chain-parameters/block-reward/update",
-						"/chain-parameters/block-reward/{height}"));
+		List<ChainParameterMetadata> metadata = new ArrayList<>(ChainParameter.values().length);
+
+		for (ChainParameter parameter : ChainParameter.values())
+			metadata.add(new ChainParameterMetadata(
+					parameter.id,
+					parameter.name(),
+					parameter.getValueType(),
+					parameter.valueLength,
+					BlockChain.getInstance().getChainParameterUpdateMinActivationDelay(),
+					parameter.getDescription(),
+					parameter.getBuilderPath(),
+					parameter.getEffectivePath()));
+
+		return metadata;
 	}
 
 	private static ChainParameterUpdateSummary buildUpdateSummary(Repository repository,
@@ -248,7 +250,9 @@ public class ChainParametersResource {
 		ChainParameter parameter = ChainParameter.valueOf(transactionData.getParameterId());
 		if (parameter != null) {
 			summary.parameterName = parameter.name();
-			decodeKnownValue(summary, parameter, transactionData.getValue());
+			summary.valueType = parameter.getValueType();
+			summary.amount = parameter.decodeAmountValue(transactionData.getValue());
+			summary.displayValue = parameter.formatDisplayValue(transactionData.getValue());
 		}
 
 		GroupData groupData = repository.getGroupRepository().fromGroupId(transactionData.getTxGroupId());
@@ -265,19 +269,6 @@ public class ChainParametersResource {
 		summary.effectiveNow = isEffectiveNow(repository, transactionData, currentHeight);
 
 		return summary;
-	}
-
-	private static void decodeKnownValue(ChainParameterUpdateSummary summary, ChainParameter parameter, byte[] value) {
-		switch (parameter) {
-			case BLOCK_REWARD:
-				summary.valueType = "AMOUNT";
-				if (parameter.isValidValue(value)) {
-					long amount = parameter.decodeLongValue(value);
-					summary.amount = amount;
-					summary.displayValue = Amounts.prettyAmount(amount);
-				}
-				break;
-		}
 	}
 
 	private static boolean isEffectiveNow(Repository repository, ChainParameterUpdateTransactionData transactionData,
