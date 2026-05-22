@@ -12,6 +12,7 @@ import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.model.BlockRewardUpdateRequest;
+import org.qortal.api.model.ChainParameterEffectiveValue;
 import org.qortal.api.model.ChainParameterMetadata;
 import org.qortal.api.model.ChainParameterUpdateSummary;
 import org.qortal.api.model.IntegerChainParameterUpdateRequest;
@@ -113,6 +114,30 @@ public class ChainParametersResource {
 				summaries.add(buildUpdateSummary(repository, transactionData, currentHeight));
 
 			return summaries;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/effective-values")
+	@Operation(
+			summary = "List effective chain parameter values at a height",
+			responses = {
+					@ApiResponse(
+							description = "effective chain parameter values",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									array = @ArraySchema(schema = @Schema(implementation = ChainParameterEffectiveValue.class))
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public List<ChainParameterEffectiveValue> getEffectiveParameterValues(@QueryParam("height") Integer height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int effectiveHeight = height == null ? repository.getBlockRepository().getBlockchainHeight() : height;
+			return buildEffectiveParameterValues(repository, effectiveHeight);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
@@ -429,6 +454,82 @@ public class ChainParametersResource {
 
 		byte[] bytes = ChainParameterUpdateTransactionTransformer.toBytes(transactionData);
 		return Base58.encode(bytes);
+	}
+
+	private static List<ChainParameterEffectiveValue> buildEffectiveParameterValues(Repository repository, int height)
+			throws DataException {
+		List<ChainParameterEffectiveValue> values = new ArrayList<>(ChainParameter.values().length);
+		long fallbackTimestamp = getFallbackTimestampForHeight(repository, height);
+
+		for (ChainParameter parameter : ChainParameter.values())
+			values.add(buildEffectiveParameterValue(repository, parameter, height, fallbackTimestamp));
+
+		return values;
+	}
+
+	private static ChainParameterEffectiveValue buildEffectiveParameterValue(Repository repository, ChainParameter parameter,
+			int height, long fallbackTimestamp) throws DataException {
+		ChainParameterEffectiveValue value = new ChainParameterEffectiveValue();
+		value.id = parameter.id;
+		value.name = parameter.name();
+		value.valueType = parameter.getValueType();
+		value.height = height;
+
+		ChainParameterData activeParameter = repository.getChainParameterRepository()
+				.getEffectiveParameter(parameter.id, height);
+		if (activeParameter == null) {
+			value.source = ChainParameterEffectiveValue.Source.CONFIG;
+			populateCurrentValue(value, parameter, getConfiguredParameterValue(parameter, height, fallbackTimestamp));
+		} else {
+			value.source = ChainParameterEffectiveValue.Source.ON_CHAIN;
+			value.signature = activeParameter.getSignature();
+			value.activationHeight = activeParameter.getActivationHeight();
+			populateCurrentValue(value, parameter, activeParameter.getValue());
+		}
+
+		ChainParameterData nextParameter = repository.getChainParameterRepository().getNextParameter(parameter.id, height);
+		if (nextParameter != null) {
+			value.nextSignature = nextParameter.getSignature();
+			value.nextActivationHeight = nextParameter.getActivationHeight();
+			populateNextValue(value, parameter, nextParameter.getValue());
+		}
+
+		return value;
+	}
+
+	private static byte[] getConfiguredParameterValue(ChainParameter parameter, int height, long fallbackTimestamp) {
+		switch (parameter) {
+			case BLOCK_REWARD:
+				return parameter.encodeLongValue(BlockChain.getInstance().getRewardAtHeight(height));
+
+			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
+				return parameter.encodeIntValue(BlockChain.getInstance().getMinAccountsToActivateShareBin());
+
+			case UNIT_FEE:
+				return parameter.encodeLongValue(BlockChain.getInstance().getUnitFeeAtTimestamp(fallbackTimestamp));
+
+			case NAME_REGISTRATION_UNIT_FEE:
+				return parameter.encodeLongValue(BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(fallbackTimestamp));
+
+			default:
+				throw new IllegalStateException("Unsupported chain parameter: " + parameter);
+		}
+	}
+
+	private static void populateCurrentValue(ChainParameterEffectiveValue effectiveValue, ChainParameter parameter,
+			byte[] value) {
+		effectiveValue.value = value;
+		effectiveValue.amount = parameter.decodeAmountValue(value);
+		effectiveValue.integerValue = parameter.decodeIntegerValue(value);
+		effectiveValue.displayValue = parameter.formatDisplayValue(value);
+	}
+
+	private static void populateNextValue(ChainParameterEffectiveValue effectiveValue, ChainParameter parameter,
+			byte[] value) {
+		effectiveValue.nextValue = value;
+		effectiveValue.nextAmount = parameter.decodeAmountValue(value);
+		effectiveValue.nextIntegerValue = parameter.decodeIntegerValue(value);
+		effectiveValue.nextDisplayValue = parameter.formatDisplayValue(value);
 	}
 
 	private static List<ChainParameterMetadata> buildParameterMetadata() {

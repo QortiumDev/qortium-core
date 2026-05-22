@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
 import org.qortal.api.model.BlockRewardUpdateRequest;
+import org.qortal.api.model.ChainParameterEffectiveValue;
 import org.qortal.api.model.ChainParameterMetadata;
 import org.qortal.api.model.ChainParameterUpdateSummary;
 import org.qortal.api.model.IntegerChainParameterUpdateRequest;
@@ -175,6 +176,84 @@ public class ChainParametersApiTests extends ApiCommon {
 			assertEquals(BlockChain.getInstance().getNameRegistrationUnitFeeAtHeight(repository, height, System.currentTimeMillis()),
 					this.chainParametersResource.getNameRegistrationUnitFee(height));
 		}
+	}
+
+	@Test
+	public void testEffectiveParameterValuesReturnConfigSourcesWithoutProposals() throws DataException {
+		int height;
+		long fallbackTimestamp;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			height = repository.getBlockRepository().getBlockchainHeight();
+			fallbackTimestamp = repository.getBlockRepository().fromHeight(height).getTimestamp();
+		}
+
+		List<ChainParameterEffectiveValue> values = this.chainParametersResource.getEffectiveParameterValues(null);
+
+		assertEquals(4, values.size());
+		assertConfigEffectiveValue(values, ChainParameter.BLOCK_REWARD, height,
+				ChainParameter.BLOCK_REWARD.encodeLongValue(BlockChain.getInstance().getRewardAtHeight(height)));
+		assertConfigEffectiveValue(values, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN, height,
+				ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.encodeIntValue(
+						BlockChain.getInstance().getMinAccountsToActivateShareBin()));
+		assertConfigEffectiveValue(values, ChainParameter.UNIT_FEE, height,
+				ChainParameter.UNIT_FEE.encodeLongValue(BlockChain.getInstance().getUnitFeeAtTimestamp(fallbackTimestamp)));
+		assertConfigEffectiveValue(values, ChainParameter.NAME_REGISTRATION_UNIT_FEE, height,
+				ChainParameter.NAME_REGISTRATION_UNIT_FEE.encodeLongValue(
+						BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(fallbackTimestamp)));
+	}
+
+	@Test
+	public void testEffectiveParameterValuesShowScheduledAndActiveOnChainOverlay() throws DataException {
+		ChainParameterUpdateTransactionData transactionData;
+		int scheduledLookupHeight;
+		int activationHeight;
+		long updatedReward = 4L * Amounts.MULTIPLIER;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			activationHeight = getActivationHeightSafelyAfterApproval(repository, 20);
+			transactionData = buildBlockRewardUpdateTransaction(repository, alice, activationHeight, updatedReward);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);
+			BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository));
+
+			scheduledLookupHeight = repository.getBlockRepository().getBlockchainHeight();
+			assertTrue(scheduledLookupHeight < activationHeight);
+		}
+
+		List<ChainParameterEffectiveValue> scheduledValues = this.chainParametersResource
+				.getEffectiveParameterValues(scheduledLookupHeight);
+		ChainParameterEffectiveValue scheduledReward = findEffectiveValue(scheduledValues, ChainParameter.BLOCK_REWARD);
+
+		assertEquals(ChainParameterEffectiveValue.Source.CONFIG, scheduledReward.source);
+		assertNull(scheduledReward.signature);
+		assertNull(scheduledReward.activationHeight);
+		assertCurrentDecodedValue(scheduledReward, ChainParameter.BLOCK_REWARD,
+				ChainParameter.BLOCK_REWARD.encodeLongValue(BlockChain.getInstance().getRewardAtHeight(scheduledLookupHeight)));
+		assertArrayEquals(transactionData.getSignature(), scheduledReward.nextSignature);
+		assertEquals(Integer.valueOf(activationHeight), scheduledReward.nextActivationHeight);
+		assertNextDecodedValue(scheduledReward, ChainParameter.BLOCK_REWARD,
+				ChainParameter.BLOCK_REWARD.encodeLongValue(updatedReward));
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			BlockUtils.mintBlocks(repository, activationHeight - repository.getBlockRepository().getBlockchainHeight());
+		}
+
+		List<ChainParameterEffectiveValue> activeValues = this.chainParametersResource
+				.getEffectiveParameterValues(activationHeight);
+		ChainParameterEffectiveValue activeReward = findEffectiveValue(activeValues, ChainParameter.BLOCK_REWARD);
+
+		assertEquals(ChainParameterEffectiveValue.Source.ON_CHAIN, activeReward.source);
+		assertArrayEquals(transactionData.getSignature(), activeReward.signature);
+		assertEquals(Integer.valueOf(activationHeight), activeReward.activationHeight);
+		assertCurrentDecodedValue(activeReward, ChainParameter.BLOCK_REWARD,
+				ChainParameter.BLOCK_REWARD.encodeLongValue(updatedReward));
+		assertNull(activeReward.nextSignature);
+		assertNull(activeReward.nextActivationHeight);
+		assertNull(activeReward.nextValue);
+		assertEquals(updatedReward, this.chainParametersResource.getBlockReward(activationHeight));
 	}
 
 	@Test
@@ -591,6 +670,15 @@ public class ChainParametersApiTests extends ApiCommon {
 		throw new AssertionError("Missing metadata for " + parameter.name());
 	}
 
+	private static ChainParameterEffectiveValue findEffectiveValue(List<ChainParameterEffectiveValue> values,
+			ChainParameter parameter) {
+		for (ChainParameterEffectiveValue value : values)
+			if (value.id == parameter.id)
+				return value;
+
+		throw new AssertionError("Missing effective value for " + parameter.name());
+	}
+
 	private static void assertMetadataMatchesParameter(ChainParameterMetadata metadata, ChainParameter parameter) {
 		assertEquals(parameter.id, metadata.id);
 		assertEquals(parameter.name(), metadata.name);
@@ -600,6 +688,39 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals(parameter.getDescription(), metadata.description);
 		assertEquals(parameter.getBuilderPath(), metadata.builderPath);
 		assertEquals(parameter.getEffectivePath(), metadata.effectivePath);
+	}
+
+	private static void assertConfigEffectiveValue(List<ChainParameterEffectiveValue> values, ChainParameter parameter,
+			int height, byte[] expectedValue) {
+		ChainParameterEffectiveValue value = findEffectiveValue(values, parameter);
+
+		assertEquals(parameter.id, value.id);
+		assertEquals(parameter.name(), value.name);
+		assertEquals(parameter.getValueType(), value.valueType);
+		assertEquals(height, value.height);
+		assertEquals(ChainParameterEffectiveValue.Source.CONFIG, value.source);
+		assertNull(value.signature);
+		assertNull(value.activationHeight);
+		assertCurrentDecodedValue(value, parameter, expectedValue);
+		assertNull(value.nextSignature);
+		assertNull(value.nextActivationHeight);
+		assertNull(value.nextValue);
+	}
+
+	private static void assertCurrentDecodedValue(ChainParameterEffectiveValue value, ChainParameter parameter,
+			byte[] expectedValue) {
+		assertArrayEquals(expectedValue, value.value);
+		assertEquals(parameter.decodeAmountValue(expectedValue), value.amount);
+		assertEquals(parameter.decodeIntegerValue(expectedValue), value.integerValue);
+		assertEquals(parameter.formatDisplayValue(expectedValue), value.displayValue);
+	}
+
+	private static void assertNextDecodedValue(ChainParameterEffectiveValue value, ChainParameter parameter,
+			byte[] expectedValue) {
+		assertArrayEquals(expectedValue, value.nextValue);
+		assertEquals(parameter.decodeAmountValue(expectedValue), value.nextAmount);
+		assertEquals(parameter.decodeIntegerValue(expectedValue), value.nextIntegerValue);
+		assertEquals(parameter.formatDisplayValue(expectedValue), value.nextDisplayValue);
 	}
 
 	private static int getApprovalSettlementBlockCount(Repository repository) throws DataException {

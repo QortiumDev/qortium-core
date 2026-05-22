@@ -36,6 +36,26 @@ public class HSQLDBChainParameterRepository implements ChainParameterRepository 
 	}
 
 	@Override
+	public ChainParameterData getNextParameter(int parameterId, int height) throws DataException {
+		String sql = "SELECT signature, activation_height, parameter_value FROM ChainParameterUpdates "
+				+ "WHERE parameter_id = ? AND activation_height > ? "
+				+ "ORDER BY activation_height ASC LIMIT 1";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, parameterId, height)) {
+			if (resultSet == null)
+				return null;
+
+			byte[] signature = resultSet.getBytes(1);
+			int activationHeight = resultSet.getInt(2);
+			byte[] value = resultSet.getBytes(3);
+
+			return new ChainParameterData(signature, parameterId, activationHeight, value);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch next chain parameter from repository", e);
+		}
+	}
+
+	@Override
 	public boolean hasParameterAtHeight(int parameterId, int activationHeight) throws DataException {
 		try {
 			return this.repository.exists("ChainParameterUpdates",

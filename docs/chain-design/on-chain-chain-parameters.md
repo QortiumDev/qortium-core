@@ -103,6 +103,13 @@ bytes, the decoded amount, the current group-approval status, the current yes
 and no vote counts, the current approval-authority count, and whether that
 approved proposal is the effective overlay at the node's current height.
 
+`GET /chain-parameters/effective-values?height={height}` lists every supported
+parameter with the value effective at that height. Each entry says whether the
+current value comes from `blockchain.json` config or from an approved on-chain
+overlay, includes decoded display values, and includes the next approved future
+overlay for that parameter when one is scheduled. If `height` is omitted, the
+node uses its current chain height.
+
 `POST /chain-parameters/block-reward/update` builds an unsigned
 `CHAIN_PARAMETER_UPDATE` transaction for the block reward. Callers provide the
 reward as a normal decimal amount, and the API converts it to the canonical

@@ -6,6 +6,8 @@ public interface ChainParameterRepository {
 
 	public ChainParameterData getEffectiveParameter(int parameterId, int height) throws DataException;
 
+	public ChainParameterData getNextParameter(int parameterId, int height) throws DataException;
+
 	public boolean hasParameterAtHeight(int parameterId, int activationHeight) throws DataException;
 
 	public void save(ChainParameterData chainParameterData) throws DataException;

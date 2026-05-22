@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - api: add effective chain parameter state view
+
+Added a read-only chain-parameter state view so operators can see every supported parameter's effective value at a chosen height, whether it comes from the base chain config or an approved on-chain overlay, and whether another approved value is scheduled for a future activation height. This makes voted parameter changes easier to audit without changing consensus behavior.
+
 ### 2026-05-22 - consensus: add on-chain name registration fee updates
 
 Added development-group approved updates for the name-registration transaction unit fee. Qortium can now store an approved name-registration fee overlay on chain, apply it from its activation height during `REGISTER_NAME` fee validation, and expose typed API helpers for building and inspecting name-registration fee proposals while keeping the normal transaction unit fee separate.
