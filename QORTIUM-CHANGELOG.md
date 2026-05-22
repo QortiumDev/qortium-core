@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - test: set NTP offset for no-native bootstrap tests
+
+Pinned the test clock for the no-native asset bootstrap suite after it loads its custom settings. This lets those tests validate native-asset bootstrapping behavior instead of failing early because transactions and online-account timestamps cannot be checked against an unset test clock.
+
 ### 2026-05-22 - rewards: split reward shares into individual level weights
 
 Changed the baseline reward share table from five two-level bins into ten individual level bins that follow the simple level-weight curve from level 1 through level 10. This gives each account level its own payout step while preserving full reward distribution through the existing normalized reward logic, and it prepares the reward curve for a later on-chain governance parameter that can use human-readable weights.

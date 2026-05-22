@@ -14,6 +14,7 @@ import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.settings.Settings;
 import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
@@ -22,6 +23,7 @@ import org.qortal.test.common.TransactionUtils;
 import org.qortal.transaction.Transaction.ApprovalStatus;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.utils.Amounts;
+import org.qortal.utils.NTP;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -35,6 +37,7 @@ public class NoNativeAssetBootstrapTests extends Common {
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useSettings(NO_NATIVE_SETTINGS);
+		NTP.setFixedOffset(Settings.getInstance().getTestNtpOffset());
 	}
 
 	@Test
