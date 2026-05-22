@@ -219,7 +219,7 @@ public class RewardShareTests extends Common {
 	}
 
 	@Test
-	public void testMintingGroupRulesApplyFromGenesis() throws DataException {
+	public void testRewardShareRecordsDoNotGrantMintingEligibility() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount aliceAccount = Common.getTestAccount(repository, "alice");
 			PrivateKeyAccount bobAccount = Common.getTestAccount(repository, "bob");
@@ -234,12 +234,38 @@ public class RewardShareTests extends Common {
 			Transaction aliceRewardShare = Transaction.fromData(repository, aliceRewardShareData);
 			assertEquals("Minting group member reward-share should be valid", ValidationResult.OK, aliceRewardShare.isValidUnconfirmed());
 
-			AccountUtils.pay(repository, aliceAccount, outsiderAccount.getAddress(), 1_00000000L);
+			assertNull("Random outsider should not exist before publishing a zero-fee self-share",
+					repository.getAccountRepository().getAccount(outsiderAccount.getAddress()));
+
+			TransactionData outsiderSelfShareData = AccountUtils.createRewardShare(repository, outsiderAccount, outsiderAccount, 100_00, 0L);
+			Transaction outsiderSelfShare = Transaction.fromData(repository, outsiderSelfShareData);
+			assertEquals("Non-member zero-fee self-share should be valid", ValidationResult.OK, outsiderSelfShare.isValidUnconfirmed());
+
+			TransactionUtils.signAndMint(repository, outsiderSelfShareData, outsiderAccount);
+
 			assertFalse("Non-member should not be able to mint", outsider.canMint(false));
+
+			RewardShareData outsiderSelfShareRecord = repository.getAccountRepository()
+					.getRewardShare(outsiderAccount.getPublicKey(), outsiderAccount.getAddress());
+			assertNotNull("Non-member self-share should be recorded", outsiderSelfShareRecord);
+			assertFalse("Non-member self-share should not be allowed to mint",
+					Account.canRewardShareMint(repository, outsiderSelfShareRecord.getRewardSharePublicKey()));
+
+			AccountUtils.pay(repository, aliceAccount, outsiderAccount.getAddress(), 2 * AccountUtils.fee);
 
 			TransactionData outsiderRewardShareData = AccountUtils.createRewardShare(repository, outsiderAccount, bobAccount, 0, AccountUtils.fee);
 			Transaction outsiderRewardShare = Transaction.fromData(repository, outsiderRewardShareData);
-			assertEquals("Non-member reward-share should be rejected", ValidationResult.NOT_MINTING_ACCOUNT, outsiderRewardShare.isValid());
+			assertEquals("Non-member reward-share should be valid", ValidationResult.OK, outsiderRewardShare.isValidUnconfirmed());
+
+			TransactionUtils.signAndMint(repository, outsiderRewardShareData, outsiderAccount);
+
+			assertFalse("Non-member should still not be able to mint", outsider.canMint(false));
+
+			RewardShareData outsiderBobShareRecord = repository.getAccountRepository()
+					.getRewardShare(outsiderAccount.getPublicKey(), bobAccount.getAddress());
+			assertNotNull("Non-member reward-share should be recorded", outsiderBobShareRecord);
+			assertFalse("Non-member reward-share should not be allowed to mint",
+					Account.canRewardShareMint(repository, outsiderBobShareRecord.getRewardSharePublicKey()));
 		}
 	}
 

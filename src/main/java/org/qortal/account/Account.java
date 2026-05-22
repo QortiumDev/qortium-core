@@ -219,20 +219,6 @@ public class Account {
 		return this.repository.getAccountRepository().getMintedBlockCount(this.address);
 	}
 
-	/** Returns whether account can build reward-shares.
-	 *
-	 * @return true if the account exists in the repository
-	 * @throws DataException
-	 */
-	public boolean canRewardShare() throws DataException {
-		AccountData accountData = this.repository.getAccountRepository().getAccount(this.address);
-
-		if (accountData == null)
-			return false;
-
-		return true;
-	}
-
 	// Account level
 
 	/** Returns account's level (0+) or null if account not found in repository. */

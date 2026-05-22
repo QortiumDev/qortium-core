@@ -115,13 +115,6 @@ public class RewardShareTransaction extends Transaction {
 		if (!isRecipientAlsoMinter && this.rewardShareTransactionData.getSharePercent() > MAX_SHARE)
 			return ValidationResult.INVALID_REWARD_SHARE_PERCENT;
 
-		// Creator themselves needs to be allowed to mint (unless cancelling)
-		if (!isCancellingSharePercent && !creator.canMint(false))
-			return ValidationResult.NOT_MINTING_ACCOUNT;
-
-		if (!isCancellingSharePercent && !isRecipientAlsoMinter && !creator.canRewardShare())
-			return ValidationResult.ACCOUNT_CANNOT_REWARD_SHARE;
-
 		// Look up any existing reward-share (using transaction's reward-share public key)
 		RewardShareData existingRewardShareData = this.getExistingRewardShare();
 
@@ -138,7 +131,7 @@ public class RewardShareTransaction extends Transaction {
 			if (isCancellingSharePercent)
 				return ValidationResult.REWARD_SHARE_UNKNOWN;
 
-			// Check the minting account hasn't reach maximum number of reward-shares
+			// Check the account hasn't reached the maximum number of reward-shares
 			int rewardShareCount = this.repository.getAccountRepository().countRewardShares(creator.getPublicKey());
 
 			int maxRewardShares = BlockChain.getInstance().getMaxRewardSharesAtTimestamp(this.rewardShareTransactionData.getTimestamp());
@@ -148,7 +141,7 @@ public class RewardShareTransaction extends Transaction {
 		} else {
 			// This transaction intends to modify/terminate an existing reward-share.
 
-			// Modifying an existing self-share/minting authorization is pointless. Deleting one is OK.
+			// Modifying an existing self-share signing-key record is pointless. Deleting one is OK.
 			if (isRecipientAlsoMinter && !isCancellingSharePercent)
 				return ValidationResult.SELF_SHARE_EXISTS;
 		}
@@ -196,7 +189,7 @@ public class RewardShareTransaction extends Transaction {
 			boolean isRecipientAlsoMinter = mintingAccount.getAddress().equals(this.rewardShareTransactionData.getRecipient());
 			int sharePercent = isRecipientAlsoMinter ? 0 : this.rewardShareTransactionData.getSharePercent();
 
-			// Save reward-share info. Self-shares are minting authorization records, so their percentage is ignored.
+			// Save reward-share info. Self-shares are signing-key records, so their percentage is ignored.
 			rewardShareData = new RewardShareData(mintingAccount.getPublicKey(), mintingAccount.getAddress(),
 					this.rewardShareTransactionData.getRecipient(), this.rewardShareTransactionData.getRewardSharePublicKey(),
 					sharePercent);

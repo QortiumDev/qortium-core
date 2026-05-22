@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: remove reward-share creation eligibility gate
+
+Removed the old minting-eligibility check from reward-share creation. Accounts can now publish self-share signing-key records or normal reward-share payout records without already being eligible to mint, while block production and online-account checks still ignore reward-share keys whose minter is not currently allowed to mint. This keeps reward shares focused on payout/signing records instead of using them as the minting permission mechanism.
+
 ### 2026-05-22 - consensus: add on-chain reward share weight updates
 
 Added development-group approved updates for reward share weights across account levels 1 through 10. Qortium can now store a voted 10-weight reward curve on chain, normalize those weights into active reward-share bins from the approved activation height, expose builder and effective-value API helpers, and continue falling back to the configured `blockchain.json` reward curve when no approved overlay exists.

@@ -23,7 +23,7 @@ public class JoinGroupTransactionData extends TransactionData {
 	private int groupId;
 	@Schema(description = "optional minting public key to authorize when joining a minting group")
 	private byte[] mintingPublicKey;
-	/** Whether processing this transaction created a minting authorization self-share. */
+	/** Whether processing this transaction created a minting signing-key self-share record. */
 	// No need to expose this via API
 	@XmlTransient
 	@Schema(hidden = true)

@@ -179,7 +179,6 @@ public class BlockChain {
 
 	private int minAccountLevelToMint;
 	private int minAccountLevelForBlockSubmissions;
-	private int minAccountLevelToRewardShare;
 
 	public static class IdsForHeight {
 		public int height;
@@ -741,10 +740,6 @@ public class BlockChain {
 		return this.minAccountLevelForBlockSubmissions;
 	}
 
-	public int getMinAccountLevelToRewardShare() {
-		return this.minAccountLevelToRewardShare;
-	}
-
 	public long getOnlineAccountSignaturesMinLifetime() {
 		return this.onlineAccountSignaturesMinLifetime;
 	}
@@ -885,9 +880,6 @@ public class BlockChain {
 			Settings.throwValidationError("No \"accountTrustSettings\" entry found in blockchain config");
 
 		this.accountTrustSettings.validate();
-
-		if (this.minAccountLevelToRewardShare < 0)
-			Settings.throwValidationError("Invalid/missing \"minAccountLevelToRewardShare\" in blockchain config");
 
 		if (this.ciyamAtSettings == null)
 			Settings.throwValidationError("No \"ciyamAtSettings\" entry found in blockchain config");
