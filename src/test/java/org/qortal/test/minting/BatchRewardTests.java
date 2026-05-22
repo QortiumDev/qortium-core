@@ -50,6 +50,8 @@ public class BatchRewardTests extends Common {
 		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 3, true);
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			AccountUtils.setMintingData(repository, "alice", 1);
+
 			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 			final int aliceStartingBlocksMinted = AccountUtils.getBlocksMinted(repository, "alice");
 

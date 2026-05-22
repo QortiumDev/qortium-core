@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - rewards: split reward shares into individual level weights
+
+Changed the baseline reward share table from five two-level bins into ten individual level bins that follow the simple level-weight curve from level 1 through level 10. This gives each account level its own payout step while preserving full reward distribution through the existing normalized reward logic, and it prepares the reward curve for a later on-chain governance parameter that can use human-readable weights.
+
 ### 2026-05-22 - test: generate valid random test accounts
 
 Changed the shared test helper that creates random accounts so it derives a real account from a random private key instead of inventing raw public-key bytes. This keeps tests compatible with public-key validation when they need a throwaway recipient address, and avoids masking reward-batching behavior behind invalid test data.

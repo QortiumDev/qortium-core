@@ -96,11 +96,16 @@
 		{ "height": 21, "reward": 1 }
 	],
 	"sharesByLevel": [
-		{ "id": 1, "levels": [ 1, 2 ], "share": 0.06 },
-		{ "id": 2, "levels": [ 3, 4 ], "share": 0.13 },
-		{ "id": 3, "levels": [ 5, 6 ], "share": 0.19 },
-		{ "id": 4, "levels": [ 7, 8 ], "share": 0.26 },
-		{ "id": 5, "levels": [ 9, 10 ], "share": 0.32 }
+		{ "id": 1, "levels": [ 1 ], "share": 0.01818182 },
+		{ "id": 2, "levels": [ 2 ], "share": 0.03636364 },
+		{ "id": 3, "levels": [ 3 ], "share": 0.05454545 },
+		{ "id": 4, "levels": [ 4 ], "share": 0.07272727 },
+		{ "id": 5, "levels": [ 5 ], "share": 0.09090909 },
+		{ "id": 6, "levels": [ 6 ], "share": 0.10909091 },
+		{ "id": 7, "levels": [ 7 ], "share": 0.12727273 },
+		{ "id": 8, "levels": [ 8 ], "share": 0.14545455 },
+		{ "id": 9, "levels": [ 9 ], "share": 0.16363636 },
+		{ "id": 10, "levels": [ 10 ], "share": 0.18181818 }
 	],
 	"minAccountsToActivateShareBin": 30,
 	"shareBinActivationMinLevel": 1,

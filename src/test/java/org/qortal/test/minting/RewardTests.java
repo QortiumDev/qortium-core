@@ -9,6 +9,7 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
 import org.qortal.block.BlockChain;
+import org.qortal.block.BlockChain.AccountLevelShareBin;
 import org.qortal.block.BlockChain.RewardByHeight;
 import org.qortal.controller.BlockMinter;
 import org.qortal.repository.DataException;
@@ -28,6 +29,21 @@ import static org.junit.Assert.*;
 
 public class RewardTests extends Common {
 	private static final Logger LOGGER = LogManager.getLogger(RewardTests.class);
+
+	private static final long[] LEVEL_SHARES = new long[] {
+			0L,
+			1_818_182L,
+			3_636_364L,
+			5_454_545L,
+			7_272_727L,
+			9_090_909L,
+			10_909_091L,
+			12_727_273L,
+			14_545_455L,
+			16_363_636L,
+			18_181_818L
+	};
+
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
@@ -36,6 +52,30 @@ public class RewardTests extends Common {
 	@After
 	public void afterTest() throws DataException {
 		Common.orphanCheck();
+	}
+
+	@Test
+	public void testRewardShareBinsUseIndividualLevelWeights() {
+		List<AccountLevelShareBin> shareBins = BlockChain.getInstance().getAccountLevelShareBins();
+		AccountLevelShareBin[] shareBinsByLevel = BlockChain.getInstance().getShareBinsByAccountLevel();
+
+		assertEquals(10, shareBins.size());
+		assertEquals(10, shareBinsByLevel.length);
+
+		long totalShare = 0;
+		for (int level = 1; level <= 10; ++level) {
+			AccountLevelShareBin shareBin = shareBins.get(level - 1);
+
+			assertEquals(level, shareBin.id);
+			assertEquals(1, shareBin.levels.size());
+			assertEquals(Integer.valueOf(level), shareBin.levels.get(0));
+			assertEquals(LEVEL_SHARES[level], shareBin.share);
+			assertEquals(level, shareBinsByLevel[level - 1].id);
+
+			totalShare += shareBin.share;
+		}
+
+		assertEquals(Amounts.MULTIPLIER, totalShare);
 	}
 
 	@Test
@@ -333,16 +373,21 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Alice, Bob, and Chloe are level 3; Dilbert is level 4.
-			 * Alice, Chloe, Bob and Dilbert should receive equal shares of the normalized level 3 and 4 reward.
+			 * Alice, Chloe, and Bob share the normalized level 3 reward.
+			 * Dilbert receives the normalized level 4 reward.
 			 */
 
-			final long expectedReward = blockReward / 4; // The reward is split between Alice, Bob, Chloe, and Dilbert
+			long[] expectedRewards = distributeByShareBins(blockReward,
+					new long[] { LEVEL_SHARES[3], LEVEL_SHARES[4] },
+					new int[] { 3, 1 });
+			final long expectedLevel3Reward = expectedRewards[0];
+			final long expectedLevel4Reward = expectedRewards[1];
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedReward);
-			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedReward);
-			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedReward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedReward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel3Reward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel3Reward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel3Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel4Reward);
 
 		}
 	}
@@ -407,18 +452,23 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Bob is level 1; Alice and Chloe are level 5; Dilbert is level 6.
-			 * Alice, Chloe, and Dilbert share the normalized level 5 and 6 reward.
-			 * Bob receives the normalized level 1 and 2 reward.
+			 * Alice and Chloe share the normalized level 5 reward.
+			 * Dilbert receives the normalized level 6 reward.
+			 * Bob receives the normalized level 1 reward.
 			 */
 
-			final long expectedLevel1And2Reward = normalizedRewardShare(blockReward, 6_000000L, 25_000000L);
-			final long expectedLevel5And6Reward = (blockReward - expectedLevel1And2Reward) / 3;
+			long[] expectedRewards = distributeByShareBins(blockReward,
+					new long[] { LEVEL_SHARES[1], LEVEL_SHARES[5], LEVEL_SHARES[6] },
+					new int[] { 1, 2, 1 });
+			final long expectedLevel1Reward = expectedRewards[0];
+			final long expectedLevel5Reward = expectedRewards[1];
+			final long expectedLevel6Reward = expectedRewards[2];
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel5And6Reward);
-			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1And2Reward);
-			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5And6Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel5And6Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel5Reward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1Reward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel5Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel6Reward);
 
 		}
 	}
@@ -478,16 +528,21 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Chloe, and Dilbert are 'online'.
 			 * Alice and Chloe are level 7; Dilbert is level 8.
-			 * Alice, Chloe, and Dilbert should receive equal shares of the normalized level 7 and 8 reward.
+			 * Alice and Chloe share the normalized level 7 reward.
+			 * Dilbert receives the normalized level 8 reward.
 			 */
 
-			final long expectedLevel7And8Reward = blockReward / 3; // The reward is split between Alice, Chloe, and Dilbert
+			long[] expectedRewards = distributeByShareBins(blockReward,
+					new long[] { LEVEL_SHARES[7], LEVEL_SHARES[8] },
+					new int[] { 2, 1 });
+			final long expectedLevel7Reward = expectedRewards[0];
+			final long expectedLevel8Reward = expectedRewards[1];
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel7And8Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel7Reward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel7And8Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel7And8Reward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel7Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel8Reward);
 
 			// Orphan and ensure balances return to their previous values
 			BlockUtils.orphanBlocks(repository, 1);
@@ -561,18 +616,23 @@ public class RewardTests extends Common {
 			/*
 			 * Alice, Bob, Chloe, and Dilbert are 'online'.
 			 * Bob is level 1; Alice and Chloe are level 9; Dilbert is level 10.
-			 * Alice, Chloe, and Dilbert share the normalized level 9 and 10 reward.
-			 * Bob receives the normalized level 1 and 2 reward.
+			 * Alice and Chloe share the normalized level 9 reward.
+			 * Dilbert receives the normalized level 10 reward.
+			 * Bob receives the normalized level 1 reward.
 			 */
 
-			final long expectedLevel1And2Reward = normalizedRewardShare(blockReward, 6_000000L, 38_000000L);
-			final long expectedLevel9And10Reward = (blockReward - expectedLevel1And2Reward) / 3;
+			long[] expectedRewards = distributeByShareBins(blockReward,
+					new long[] { LEVEL_SHARES[1], LEVEL_SHARES[9], LEVEL_SHARES[10] },
+					new int[] { 1, 2, 1 });
+			final long expectedLevel1Reward = expectedRewards[0];
+			final long expectedLevel9Reward = expectedRewards[1];
+			final long expectedLevel10Reward = expectedRewards[2];
 
 			// Validate the balances to ensure that the fixed distribution is being applied.
-			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel9And10Reward);
-			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1And2Reward);
-			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel9And10Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel9And10Reward);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedLevel9Reward);
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance+expectedLevel1Reward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel9Reward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel10Reward);
 
 			// Orphan and ensure balances return to their previous values
 			BlockUtils.orphanBlocks(repository, 1);
@@ -949,15 +1009,18 @@ public class RewardTests extends Common {
 			assertEquals(1000, (int) repository.getBlockRepository().getLastBlock().getHeight());
 			assertEquals(100000000L, blockReward);
 
-			final long level1And2ShareAmount = normalizedRewardShare(blockReward, 6_000000L, 38_000000L);
-			final long expectedLevel1And2Reward = level1And2ShareAmount / 2; // The reward is split between Chloe and Dilbert
-			final long expectedAliceReward = blockReward - level1And2ShareAmount;
+			long[] expectedRewards = distributeByShareBins(blockReward,
+					new long[] { LEVEL_SHARES[1], LEVEL_SHARES[2], LEVEL_SHARES[10] },
+					new int[] { 1, 1, 1 });
+			final long expectedChloeReward = expectedRewards[0];
+			final long expectedDilbertReward = expectedRewards[1];
+			final long expectedAliceReward = expectedRewards[2];
 
 			// Validate the balances
 			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, aliceInitialBalance+expectedAliceReward);
 			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE, bobInitialBalance); // Bob not online so his balance remains the same
-			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedLevel1And2Reward);
-			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedLevel1And2Reward);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE, chloeInitialBalance+expectedChloeReward);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE, dilbertInitialBalance+expectedDilbertReward);
 
 			BlockUtils.orphanBlocks(repository, 1);
 			assertEquals(999, (int) repository.getBlockRepository().getLastBlock().getHeight());
@@ -988,8 +1051,35 @@ public class RewardTests extends Common {
 			BlockUtils.mintBlock(repository);
 	}
 
-	private static long normalizedRewardShare(long blockReward, long share, long totalActiveShares) {
-		return Amounts.roundDownScaledMultiply(blockReward, Amounts.scaledDivide(share, totalActiveShares));
+	private static long[] distributeByShareBins(long blockReward, long[] shares, int[] accountCounts) {
+		long totalShares = 0;
+		for (long share : shares)
+			totalShares += share;
+
+		long[] normalizedShares = new long[shares.length];
+		long remainingShare = Amounts.MULTIPLIER;
+		for (int i = 0; i < shares.length; ++i) {
+			if (i == shares.length - 1) {
+				normalizedShares[i] = remainingShare;
+			} else {
+				normalizedShares[i] = Amounts.scaledDivide(shares[i], totalShares);
+				remainingShare -= normalizedShares[i];
+			}
+		}
+
+		long distributionTotal = blockReward;
+		long[] perAccountRewards = new long[shares.length];
+		for (int i = 0; i < shares.length; ++i) {
+			long distributionAmount = Amounts.roundDownScaledMultiply(distributionTotal, normalizedShares[i]);
+			perAccountRewards[i] = distributionAmount / accountCounts[i];
+
+			long sharedAmount = perAccountRewards[i] * accountCounts[i];
+			long undistributedAmount = distributionAmount - sharedAmount;
+			if (undistributedAmount > 0 && normalizedShares[i] < Amounts.MULTIPLIER)
+				distributionTotal += Amounts.scaledDivide(undistributedAmount, Amounts.MULTIPLIER - normalizedShares[i]);
+		}
+
+		return perAccountRewards;
 	}
 
 }
