@@ -47,6 +47,18 @@ public class ChainParameterTests {
 	}
 
 	@Test
+	public void testNameRegistrationUnitFeeMetadataAccessors() {
+		ChainParameter parameter = ChainParameter.NAME_REGISTRATION_UNIT_FEE;
+
+		assertEquals(4, parameter.id);
+		assertEquals(Long.BYTES, parameter.valueLength);
+		assertEquals("AMOUNT", parameter.getValueType());
+		assertNotNull(parameter.getDescription());
+		assertEquals("/chain-parameters/name-registration-unit-fee/update", parameter.getBuilderPath());
+		assertEquals("/chain-parameters/name-registration-unit-fee/{height}", parameter.getEffectivePath());
+	}
+
+	@Test
 	public void testBlockRewardAmountDecoding() {
 		long reward = 12L * Amounts.MULTIPLIER + 34_000_000L;
 		byte[] value = ChainParameter.BLOCK_REWARD.encodeLongValue(reward);
@@ -62,6 +74,15 @@ public class ChainParameterTests {
 
 		assertEquals(Long.valueOf(unitFee), ChainParameter.UNIT_FEE.decodeAmountValue(value));
 		assertEquals("0.01234567", ChainParameter.UNIT_FEE.formatDisplayValue(value));
+	}
+
+	@Test
+	public void testNameRegistrationUnitFeeAmountDecoding() {
+		long nameRegistrationUnitFee = 125L * Amounts.MULTIPLIER;
+		byte[] value = ChainParameter.NAME_REGISTRATION_UNIT_FEE.encodeLongValue(nameRegistrationUnitFee);
+
+		assertEquals(Long.valueOf(nameRegistrationUnitFee), ChainParameter.NAME_REGISTRATION_UNIT_FEE.decodeAmountValue(value));
+		assertEquals("125.00000000", ChainParameter.NAME_REGISTRATION_UNIT_FEE.formatDisplayValue(value));
 	}
 
 	@Test
@@ -87,6 +108,10 @@ public class ChainParameterTests {
 		negativeValue = ChainParameter.UNIT_FEE.encodeLongValue(-1L);
 		assertNull(ChainParameter.UNIT_FEE.decodeAmountValue(negativeValue));
 		assertNull(ChainParameter.UNIT_FEE.formatDisplayValue(negativeValue));
+
+		negativeValue = ChainParameter.NAME_REGISTRATION_UNIT_FEE.encodeLongValue(-1L);
+		assertNull(ChainParameter.NAME_REGISTRATION_UNIT_FEE.decodeAmountValue(negativeValue));
+		assertNull(ChainParameter.NAME_REGISTRATION_UNIT_FEE.formatDisplayValue(negativeValue));
 	}
 
 	@Test

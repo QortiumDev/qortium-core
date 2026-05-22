@@ -9,6 +9,7 @@ import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterMetadata;
 import org.qortal.api.model.ChainParameterUpdateSummary;
 import org.qortal.api.model.IntegerChainParameterUpdateRequest;
+import org.qortal.api.model.NameRegistrationUnitFeeUpdateRequest;
 import org.qortal.api.model.UnitFeeUpdateRequest;
 import org.qortal.api.resource.ChainParametersResource;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
@@ -55,12 +56,14 @@ public class ChainParametersApiTests extends ApiCommon {
 	public void testChainParameterMetadataListsBlockReward() {
 		List<ChainParameterMetadata> parameters = this.chainParametersResource.getChainParameters();
 
-		assertEquals(3, parameters.size());
+		assertEquals(4, parameters.size());
 
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.BLOCK_REWARD), ChainParameter.BLOCK_REWARD);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN),
 				ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.UNIT_FEE), ChainParameter.UNIT_FEE);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.NAME_REGISTRATION_UNIT_FEE),
+				ChainParameter.NAME_REGISTRATION_UNIT_FEE);
 	}
 
 	@Test
@@ -126,6 +129,28 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testBuildNameRegistrationUnitFeeUpdateUsesAmountValue() throws DataException, TransformationException {
+		long nameRegistrationUnitFee = 125L * Amounts.MULTIPLIER;
+		NameRegistrationUnitFeeUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildNameRegistrationUnitFeeUpdateRequest(repository, nameRegistrationUnitFee);
+		}
+
+		String rawTransaction = this.chainParametersResource.updateNameRegistrationUnitFee(request);
+		ChainParameterUpdateTransactionData transactionData = decodeRawTransaction(rawTransaction);
+
+		assertEquals(ChainParameter.NAME_REGISTRATION_UNIT_FEE.id, transactionData.getParameterId());
+		assertEquals(request.activationHeight, transactionData.getActivationHeight());
+		assertEquals(request.timestamp, transactionData.getTimestamp());
+		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
+		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
+		assertArrayEquals(ChainParameter.NAME_REGISTRATION_UNIT_FEE.encodeLongValue(nameRegistrationUnitFee),
+				transactionData.getValue());
+		assertNotNull(transactionData.getFee());
+	}
+
+	@Test
 	public void testGetMinAccountsToActivateShareBinReturnsEffectiveValue() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			int height = repository.getBlockRepository().getBlockchainHeight();
@@ -140,6 +165,15 @@ public class ChainParametersApiTests extends ApiCommon {
 			int height = repository.getBlockRepository().getBlockchainHeight();
 			assertEquals(BlockChain.getInstance().getUnitFeeAtHeight(repository, height, System.currentTimeMillis()),
 					this.chainParametersResource.getUnitFee(height));
+		}
+	}
+
+	@Test
+	public void testGetNameRegistrationUnitFeeReturnsEffectiveValue() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int height = repository.getBlockRepository().getBlockchainHeight();
+			assertEquals(BlockChain.getInstance().getNameRegistrationUnitFeeAtHeight(repository, height, System.currentTimeMillis()),
+					this.chainParametersResource.getNameRegistrationUnitFee(height));
 		}
 	}
 
@@ -175,6 +209,17 @@ public class ChainParametersApiTests extends ApiCommon {
 		}
 
 		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateUnitFee(request));
+	}
+
+	@Test
+	public void testBuildNameRegistrationUnitFeeUpdateRejectsNegativeValue() throws DataException {
+		NameRegistrationUnitFeeUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildNameRegistrationUnitFeeUpdateRequest(repository, -1L);
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateNameRegistrationUnitFee(request));
 	}
 
 	@Test
@@ -299,6 +344,42 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals("AMOUNT", summary.valueType);
 		assertEquals("0.01234567", summary.displayValue);
 		assertEquals(Long.valueOf(unitFee), summary.amount);
+		assertNull(summary.integerValue);
+		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
+		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
+		assertEquals(0, summary.approvalCount);
+		assertEquals(0, summary.rejectionCount);
+		assertEquals(1, summary.approvalAuthorityCount);
+		assertFalse(summary.effectiveNow);
+	}
+
+	@Test
+	public void testPendingNameRegistrationUnitFeeProposalSummaryShowsDecodedValueAndVoteCounts() throws DataException {
+		ChainParameterUpdateTransactionData transactionData;
+		long nameRegistrationUnitFee = 125L * Amounts.MULTIPLIER;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 100;
+
+			transactionData = buildNameRegistrationUnitFeeUpdateTransaction(repository, alice, activationHeight, nameRegistrationUnitFee);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+		}
+
+		List<ChainParameterUpdateSummary> summaries = this.chainParametersResource.getChainParameterUpdates(
+				ChainParameter.NAME_REGISTRATION_UNIT_FEE.id, null, null, null, null, null, null, null, null);
+
+		assertEquals(1, summaries.size());
+
+		ChainParameterUpdateSummary summary = summaries.get(0);
+		assertArrayEquals(transactionData.getSignature(), summary.signature);
+		assertEquals(ChainParameter.NAME_REGISTRATION_UNIT_FEE.id, summary.parameterId);
+		assertEquals(ChainParameter.NAME_REGISTRATION_UNIT_FEE.name(), summary.parameterName);
+		assertEquals(transactionData.getActivationHeight(), summary.activationHeight);
+		assertArrayEquals(transactionData.getValue(), summary.value);
+		assertEquals("AMOUNT", summary.valueType);
+		assertEquals("125.00000000", summary.displayValue);
+		assertEquals(Long.valueOf(nameRegistrationUnitFee), summary.amount);
 		assertNull(summary.integerValue);
 		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
 		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
@@ -448,6 +529,22 @@ public class ChainParametersApiTests extends ApiCommon {
 		return request;
 	}
 
+	private static NameRegistrationUnitFeeUpdateRequest buildNameRegistrationUnitFeeUpdateRequest(
+			Repository repository, long nameRegistrationUnitFee) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+		NameRegistrationUnitFeeUpdateRequest request = new NameRegistrationUnitFeeUpdateRequest();
+		request.timestamp = System.currentTimeMillis();
+		request.txGroupId = TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID;
+		request.updaterPublicKey = alice.getPublicKey();
+		request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ 100;
+		request.nameRegistrationUnitFee = nameRegistrationUnitFee;
+
+		return request;
+	}
+
 	private static ChainParameterUpdateTransactionData decodeRawTransaction(String rawTransaction) throws TransformationException {
 		byte[] rawBytes = Base58.decode(rawTransaction);
 		byte[] signedLengthBytes = Bytes.concat(rawBytes, new byte[TransactionTransformer.SIGNATURE_LENGTH]);
@@ -475,6 +572,15 @@ public class ChainParametersApiTests extends ApiCommon {
 		return new ChainParameterUpdateTransactionData(
 				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
 				ChainParameter.UNIT_FEE.id, activationHeight, ChainParameter.UNIT_FEE.encodeLongValue(unitFee));
+	}
+
+	private static ChainParameterUpdateTransactionData buildNameRegistrationUnitFeeUpdateTransaction(
+			Repository repository, PrivateKeyAccount updater, int activationHeight, long nameRegistrationUnitFee)
+			throws DataException {
+		return new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.NAME_REGISTRATION_UNIT_FEE.id, activationHeight,
+				ChainParameter.NAME_REGISTRATION_UNIT_FEE.encodeLongValue(nameRegistrationUnitFee));
 	}
 
 	private static ChainParameterMetadata findMetadata(List<ChainParameterMetadata> metadata, ChainParameter parameter) {

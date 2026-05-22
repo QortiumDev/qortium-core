@@ -20,7 +20,11 @@ public enum ChainParameter {
 	UNIT_FEE(3, Long.BYTES, "AMOUNT",
 			"Normal transaction unit fee, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
 			"/chain-parameters/unit-fee/update",
-			"/chain-parameters/unit-fee/{height}");
+			"/chain-parameters/unit-fee/{height}"),
+	NAME_REGISTRATION_UNIT_FEE(4, Long.BYTES, "AMOUNT",
+			"Name-registration transaction unit fee, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
+			"/chain-parameters/name-registration-unit-fee/update",
+			"/chain-parameters/name-registration-unit-fee/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 
@@ -70,6 +74,7 @@ public enum ChainParameter {
 		switch (this) {
 			case BLOCK_REWARD:
 			case UNIT_FEE:
+			case NAME_REGISTRATION_UNIT_FEE:
 				return decodeLongValue(value) >= 0;
 
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
@@ -109,6 +114,7 @@ public enum ChainParameter {
 		switch (this) {
 			case BLOCK_REWARD:
 			case UNIT_FEE:
+			case NAME_REGISTRATION_UNIT_FEE:
 				return decodeLongValue(value);
 
 			default:
@@ -136,6 +142,7 @@ public enum ChainParameter {
 		switch (this) {
 			case BLOCK_REWARD:
 			case UNIT_FEE:
+			case NAME_REGISTRATION_UNIT_FEE:
 				return Amounts.prettyAmount(decodeLongValue(value));
 
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:

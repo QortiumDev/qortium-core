@@ -43,8 +43,12 @@ public class RegisterNameTransaction extends Transaction {
 	}
 
 	@Override
-	protected long getEffectiveUnitFee(Long timestamp) {
-		return this.getUnitFee(timestamp);
+	protected long getEffectiveUnitFee(Long timestamp) throws DataException {
+		if (this.repository == null)
+			return this.getUnitFee(timestamp);
+
+		int nextBlockHeight = this.repository.getBlockRepository().getBlockchainHeight() + 1;
+		return BlockChain.getInstance().getNameRegistrationUnitFeeAtHeight(this.repository, nextBlockHeight, timestamp);
 	}
 
 	// Navigation

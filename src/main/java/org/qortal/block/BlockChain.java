@@ -800,6 +800,15 @@ public class BlockChain {
 		return 100000;
 	}
 
+	public long getNameRegistrationUnitFeeAtHeight(Repository repository, int ourHeight, long fallbackTimestamp) throws DataException {
+		ChainParameterData nameRegistrationUnitFeeUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.NAME_REGISTRATION_UNIT_FEE.id, ourHeight);
+		if (nameRegistrationUnitFeeUpdate != null)
+			return ChainParameter.NAME_REGISTRATION_UNIT_FEE.decodeLongValue(nameRegistrationUnitFeeUpdate.getValue());
+
+		return getNameRegistrationUnitFeeAtTimestamp(fallbackTimestamp);
+	}
+
 	public int getMaxRewardSharesAtTimestamp(long ourTimestamp) {
 		for (int i = maxRewardSharesByTimestamp.size() - 1; i >= 0; --i)
 			if (maxRewardSharesByTimestamp.get(i).timestamp <= ourTimestamp)

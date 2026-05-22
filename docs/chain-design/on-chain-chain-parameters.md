@@ -12,7 +12,7 @@ built jar for each change.
 
 This is intentionally small at first. The currently supported parameters are
 the height-based block reward, the reward share-bin activation count, and the
-normal transaction unit fee. Name-registration fees, reward split tables,
+normal and name-registration transaction unit fees. Reward split tables,
 trust-network policy values, timestamp-based settings, and larger structured
 parameter sets should be added only after each format and validation rule is
 made explicit.
@@ -74,6 +74,18 @@ activation height and remains effective until another approved `UNIT_FEE` update
 with a later activation height overrides it. Name-registration transactions keep
 using their separate fee schedule.
 
+`NAME_REGISTRATION_UNIT_FEE` is parameter ID `4`.
+
+Its value is exactly 8 bytes: a signed long integer using the same atomic amount
+units as the existing name-registration transaction fee schedule. Negative
+values are invalid.
+
+The approved name-registration unit fee applies only to `REGISTER_NAME`
+transaction fee validation at its activation height and remains effective until
+another approved `NAME_REGISTRATION_UNIT_FEE` update with a later activation
+height overrides it. Normal transactions keep using their separate unit-fee
+schedule.
+
 ## Public API
 
 `GET /chain-parameters` lists the chain parameters that this node knows how to
@@ -85,11 +97,11 @@ proposal summaries. The endpoint can filter by parameter ID, approval status,
 approval group ID, activation-height range, confirmation status, limit, offset,
 and reverse order.
 
-For amount parameters such as `BLOCK_REWARD` and `UNIT_FEE`, each proposal
-summary includes the raw canonical bytes, the decoded amount, the current
-group-approval status, the current yes and no vote counts, the current
-approval-authority count, and whether that approved proposal is the effective
-overlay at the node's current height.
+For amount parameters such as `BLOCK_REWARD`, `UNIT_FEE`, and
+`NAME_REGISTRATION_UNIT_FEE`, each proposal summary includes the raw canonical
+bytes, the decoded amount, the current group-approval status, the current yes
+and no vote counts, the current approval-authority count, and whether that
+approved proposal is the effective overlay at the node's current height.
 
 `POST /chain-parameters/block-reward/update` builds an unsigned
 `CHAIN_PARAMETER_UPDATE` transaction for the block reward. Callers provide the
@@ -134,6 +146,15 @@ canonical 8-byte value used by consensus.
 `GET /chain-parameters/unit-fee/{height}` returns the effective normal
 transaction unit fee for a height after applying any approved overlay that is
 active at that height.
+
+`POST /chain-parameters/name-registration-unit-fee/update` builds an unsigned
+`CHAIN_PARAMETER_UPDATE` transaction for the name-registration transaction unit
+fee. Callers provide the fee as a normal decimal amount, and the API converts it
+to the canonical 8-byte value used by consensus.
+
+`GET /chain-parameters/name-registration-unit-fee/{height}` returns the
+effective name-registration transaction unit fee for a height after applying any
+approved overlay that is active at that height.
 
 `GET /chain-parameters/effective/{parameterId}?height={height}` returns the
 approved overlay record for callers that need the raw canonical value.

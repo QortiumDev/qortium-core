@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: add on-chain name registration fee updates
+
+Added development-group approved updates for the name-registration transaction unit fee. Qortium can now store an approved name-registration fee overlay on chain, apply it from its activation height during `REGISTER_NAME` fee validation, and expose typed API helpers for building and inspecting name-registration fee proposals while keeping the normal transaction unit fee separate.
+
 ### 2026-05-22 - consensus: add on-chain unit fee updates
 
 Added development-group approved updates for the normal transaction unit fee. Qortium can now store an approved unit-fee overlay on chain, apply it from its activation height during normal transaction fee validation, and expose typed API helpers for building and inspecting unit-fee proposals while leaving the separate name-registration fee schedule unchanged.

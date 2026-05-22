@@ -15,6 +15,7 @@ import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterMetadata;
 import org.qortal.api.model.ChainParameterUpdateSummary;
 import org.qortal.api.model.IntegerChainParameterUpdateRequest;
+import org.qortal.api.model.NameRegistrationUnitFeeUpdateRequest;
 import org.qortal.api.model.UnitFeeUpdateRequest;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortal.block.BlockChain;
@@ -211,6 +212,30 @@ public class ChainParametersResource {
 		}
 	}
 
+	@GET
+	@Path("/name-registration-unit-fee/{height}")
+	@Operation(
+			summary = "Fetch the effective name-registration transaction unit fee at a height",
+			responses = {
+					@ApiResponse(
+							description = "name-registration transaction unit fee amount",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "integer")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public long getNameRegistrationUnitFee(@PathParam("height") int height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return BlockChain.getInstance().getNameRegistrationUnitFeeAtHeight(repository, height,
+					getFallbackTimestampForHeight(repository, height));
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
 	@POST
 	@Path("/block-reward/update")
 	@Operation(
@@ -320,6 +345,42 @@ public class ChainParametersResource {
 		}
 	}
 
+	@POST
+	@Path("/name-registration-unit-fee/update")
+	@Operation(
+			summary = "Build raw, unsigned, NAME_REGISTRATION_UNIT_FEE chain-parameter update transaction",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = NameRegistrationUnitFeeUpdateRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, CHAIN_PARAMETER_UPDATE transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "string")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String updateNameRegistrationUnitFee(NameRegistrationUnitFeeUpdateRequest updateRequest) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChainParameterUpdateTransactionData transactionData = buildNameRegistrationUnitFeeTransactionData(updateRequest);
+			return validateAndTransformUpdate(repository, transactionData);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
 	private static ChainParameterUpdateTransactionData buildBlockRewardTransactionData(BlockRewardUpdateRequest updateRequest) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
 				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
@@ -343,6 +404,16 @@ public class ChainParametersResource {
 
 		return new ChainParameterUpdateTransactionData(baseTransactionData, ChainParameter.UNIT_FEE.id,
 				updateRequest.activationHeight, ChainParameter.UNIT_FEE.encodeLongValue(updateRequest.unitFee));
+	}
+
+	private static ChainParameterUpdateTransactionData buildNameRegistrationUnitFeeTransactionData(
+			NameRegistrationUnitFeeUpdateRequest updateRequest) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
+
+		return new ChainParameterUpdateTransactionData(baseTransactionData, ChainParameter.NAME_REGISTRATION_UNIT_FEE.id,
+				updateRequest.activationHeight,
+				ChainParameter.NAME_REGISTRATION_UNIT_FEE.encodeLongValue(updateRequest.nameRegistrationUnitFee));
 	}
 
 	private String validateAndTransformUpdate(Repository repository, ChainParameterUpdateTransactionData transactionData)
