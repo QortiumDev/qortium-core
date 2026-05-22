@@ -243,6 +243,8 @@ public class TransactionsApiTests extends ApiCommon {
 							assertNotNull(this.transactionsResource.searchTransactions(startBlock, blockLimit, txGroupId, txTypes, address, confirmationStatus, 1, 1, true));
 							assertNotNull(this.transactionsResource.searchTransactions(startBlock, blockLimit, txGroupId, null, address, confirmationStatus, 1, 1, true));
 						}
+
+		assertNotNull(this.transactionsResource.searchTransactions(null, null, null, null, aliceAddress, null, 10, null, true));
 	}
 
 	@Test

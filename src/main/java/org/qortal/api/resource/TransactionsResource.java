@@ -327,8 +327,7 @@ public class TransactionsResource {
 	public List<TransactionData> searchTransactions(@QueryParam("startBlock") Integer startBlock, @QueryParam("blockLimit") Integer blockLimit,
 			@QueryParam("txGroupId") Integer txGroupId,
 			@QueryParam("txType") List<TransactionType> txTypes, @QueryParam("address") String address, @Parameter(
-				description = "whether to include confirmed, unconfirmed or both",
-				required = true
+				description = "whether to include confirmed, unconfirmed or both; defaults to CONFIRMED"
 			) @QueryParam("confirmationStatus") ConfirmationStatus confirmationStatus, @Parameter(
 				ref = "limit"
 			) @QueryParam("limit") Integer limit, @Parameter(
@@ -339,6 +338,9 @@ public class TransactionsResource {
 		// Must have at least one of txType / address / limit <= 20
 		if ((txTypes == null || txTypes.isEmpty()) && (address == null || address.isEmpty()) && (limit == null || limit > 20))
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (confirmationStatus == null)
+			confirmationStatus = ConfirmationStatus.CONFIRMED;
 
 		// You can't ask for unconfirmed and impose a block height range
 		if (confirmationStatus != ConfirmationStatus.CONFIRMED && (startBlock != null || blockLimit != null))
