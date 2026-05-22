@@ -1,6 +1,5 @@
 package org.qortal.utils;
 
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortal.arbitrary.ArbitraryDataFile;
@@ -158,23 +157,35 @@ public class ArbitraryTransactionUtils {
         }
 
         ArbitraryDataFile arbitraryDataFile = ArbitraryDataFile.fromTransactionData(transactionData);
-
-        // Find the folder containing the files
-        Path parentPath = arbitraryDataFile.getFilePath().getParent();
-        String[] files = parentPath.toFile().list();
-        if (files == null) {
+        if (arbitraryDataFile == null) {
             return 0;
         }
 
-        // Remove the original copy indicator file if it exists
-        files = ArrayUtils.removeElement(files, ".original");
+        int totalChunkCount = totalChunkCount(transactionData, arbitraryDataFile);
 
-        int count = files.length;
+        if (transactionData.getDataType() == ArbitraryTransactionData.DataType.RAW_DATA) {
+            // Raw data is stored on-chain, so the data itself is always locally available.
+            int count = 1;
+            if (metadataFileExists(arbitraryDataFile)) {
+                count++;
+            }
 
-        // If the complete file exists (and this transaction has chunks), subtract it from the count
-        if (arbitraryDataFile.chunkCount() > 0 && arbitraryDataFile.exists()) {
-            // We are only measuring the individual chunks, not the joined file
-            count -= 1;
+            return Math.min(count, totalChunkCount);
+        }
+
+        if (arbitraryDataFile.exists()) {
+            return totalChunkCount;
+        }
+
+        int count = 0;
+        if (metadataFileExists(arbitraryDataFile)) {
+            count++;
+        }
+
+        for (ArbitraryDataFileChunk chunk : arbitraryDataFile.getChunks()) {
+            if (chunk.exists()) {
+                count++;
+            }
         }
 
         return count;
@@ -185,15 +196,26 @@ public class ArbitraryTransactionUtils {
             return 0;
         }
 
+        ArbitraryDataFile arbitraryDataFile = ArbitraryDataFile.fromTransactionData(transactionData);
+        if (arbitraryDataFile == null) {
+            return 0;
+        }
+
+        return totalChunkCount(transactionData, arbitraryDataFile);
+    }
+
+    private static int totalChunkCount(ArbitraryTransactionData transactionData, ArbitraryDataFile arbitraryDataFile) {
         if (transactionData.getMetadataHash() == null) {
             // This file doesn't have any metadata, therefore it has a single (complete) chunk
             return 1;
         }
 
-        // Load complete file and chunks
-        ArbitraryDataFile arbitraryDataFile = ArbitraryDataFile.fromTransactionData(transactionData);
-
         return arbitraryDataFile.fileCount();
+    }
+
+    private static boolean metadataFileExists(ArbitraryDataFile arbitraryDataFile) {
+        ArbitraryDataFile metadataFile = arbitraryDataFile.getMetadataFile();
+        return metadataFile != null && metadataFile.exists();
     }
 
     /**

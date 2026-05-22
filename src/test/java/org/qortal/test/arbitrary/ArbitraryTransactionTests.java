@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.arbitrary.ArbitraryDataFile;
 import org.qortal.arbitrary.ArbitraryDataReader;
+import org.qortal.arbitrary.ArbitraryDataResource;
 import org.qortal.arbitrary.ArbitraryDataTransactionBuilder;
 import org.qortal.arbitrary.exception.MissingDataException;
 import org.qortal.arbitrary.misc.Category;
@@ -15,6 +16,7 @@ import org.qortal.controller.arbitrary.ArbitraryDataManager;
 import org.qortal.crypto.AES;
 import org.qortal.crypto.Crypto;
 import org.qortal.data.PaymentData;
+import org.qortal.data.arbitrary.ArbitraryResourceStatus;
 import org.qortal.data.transaction.ArbitraryTransactionData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.RegisterNameTransactionData;
@@ -36,6 +38,7 @@ import org.qortal.utils.NTP;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -369,6 +372,11 @@ public class ArbitraryTransactionTests extends Common {
             // Check the metadata isn't present
             assertNull(arbitraryDataFile.getMetadata());
 
+            createUnrelatedFilesNextTo(arbitraryDataFile, 3);
+            ArbitraryResourceStatus status = getResourceStatus(repository, name, service, identifier);
+            assertEquals(Integer.valueOf(1), status.getLocalChunkCount());
+            assertEquals(Integer.valueOf(1), status.getTotalChunkCount());
+
             // Now build the latest data state for this name
             ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(name, ArbitraryDataFile.ResourceIdType.NAME, service, identifier);
             arbitraryDataReader.loadSynchronously(true);
@@ -433,6 +441,11 @@ public class ArbitraryTransactionTests extends Common {
             assertEquals(category, arbitraryDataFile.getMetadata().getCategory());
             assertEquals("text/plain", arbitraryDataFile.getMetadata().getMimeType());
 
+            createUnrelatedFilesNextTo(arbitraryDataFile, 3);
+            ArbitraryResourceStatus status = getResourceStatus(repository, name, service, identifier);
+            assertEquals(Integer.valueOf(2), status.getLocalChunkCount());
+            assertEquals(Integer.valueOf(2), status.getTotalChunkCount());
+
             // Now build the latest data state for this name
             ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(name, ArbitraryDataFile.ResourceIdType.NAME, service, identifier);
             arbitraryDataReader.loadSynchronously(true);
@@ -441,6 +454,18 @@ public class ArbitraryTransactionTests extends Common {
             File outputFile = Paths.get(arbitraryDataReader.getFilePath().toString(), path1.getFileName().toString()).toFile();
 
             assertArrayEquals(Crypto.digest(outputFile), Crypto.digest(path1.toFile()));
+        }
+    }
+
+    private ArbitraryResourceStatus getResourceStatus(Repository repository, String name, Service service, String identifier) {
+        ArbitraryDataResource resource = new ArbitraryDataResource(name, ArbitraryDataFile.ResourceIdType.NAME, service, identifier);
+        return resource.getStatus(repository);
+    }
+
+    private void createUnrelatedFilesNextTo(ArbitraryDataFile arbitraryDataFile, int count) throws IOException {
+        Path parentPath = arbitraryDataFile.getFilePath().getParent();
+        for (int i = 0; i < count; i++) {
+            Files.createTempFile(parentPath, "unrelated-qdn-status-", ".tmp").toFile().deleteOnExit();
         }
     }
 

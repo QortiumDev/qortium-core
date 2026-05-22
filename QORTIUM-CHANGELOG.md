@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-21 - qdn: count resource chunks by transaction
+
+Changed QDN resource status reporting so local chunk counts are based on the files that belong to the specific resource transaction instead of every file in the surrounding storage directory. Tiny on-chain resources now report accurate progress such as one local item out of one expected item, rather than inflated counts from unrelated temporary files.
+
 ### 2026-05-21 - api: validate missing transaction creators
 
 Changed transaction API validation so requests with a missing or malformed creator public key fail with a normal transaction validation error instead of an internal server error. This keeps malformed group creation requests, including requests that use the wrong public-key field name, from producing raw Jetty 500 responses.

@@ -16,6 +16,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.settings.Settings;
+import org.qortal.utils.ArbitraryTransactionUtils;
 import org.qortal.utils.FilesystemUtils;
 import org.qortal.utils.ListUtils;
 import org.qortal.utils.NTP;
@@ -262,45 +263,8 @@ public class ArbitraryDataResource {
 
             this.exists = true;
 
-            int localChunkCount = 0;
-            int totalChunkCount = 0;
-
-            // Create ArbitraryDataFile once and reuse it for both counts
-            ArbitraryDataFile arbitraryDataFile = ArbitraryDataFile.fromTransactionData(this.transaction);
-            if (arbitraryDataFile != null) {
-                // Calculate local chunk count (files that exist on disk)
-                Path parentPath = arbitraryDataFile.getFilePath().getParent();
-                String[] files = parentPath.toFile().list();
-                if (files != null) {
-                    // Remove the original copy indicator file if it exists
-                    int count = files.length;
-                    for (String file : files) {
-                        if (file.equals(".original")) {
-                            count--;
-                            break;
-                        }
-                    }
-
-                    // If the complete file exists (and this transaction has chunks), subtract it from the count
-                    if (arbitraryDataFile.chunkCount() > 0 && arbitraryDataFile.exists()) {
-                        // We are only measuring the individual chunks, not the joined file
-                        count -= 1;
-                    }
-
-                    localChunkCount += count;
-                }
-
-                // Calculate total chunk count (expected chunks based on metadata)
-                if (this.transaction.getMetadataHash() == null) {
-                    // This file doesn't have any metadata, therefore it has a single (complete) chunk
-                    totalChunkCount += 1;
-                } else {
-                    totalChunkCount += arbitraryDataFile.fileCount();
-                }
-            }
-
-            this.localChunkCount = localChunkCount;
-            this.totalChunkCount = totalChunkCount;
+            this.localChunkCount = ArbitraryTransactionUtils.ourChunkCount(this.transaction);
+            this.totalChunkCount = ArbitraryTransactionUtils.totalChunkCount(this.transaction);
 
         } catch (DataException e) {
             // If there's an error, set counts to 0
