@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - test: align reward tests with level-gated payouts
+
+Updated older reward tests so they wait until the test minter reaches a reward-paying account level before expecting block reward balances to change. This keeps the tests aligned with Qortium's current rule that level zero accounts may mint blocks but are not included in reward share bins.
+
 ### 2026-05-22 - consensus: mirror reward distribution when orphaning
 
 Changed reward orphaning so it calculates the same positive reward split used during block processing and then reverses the final balance changes. This keeps tiny rounding remainders from being left behind when reward-bearing blocks are orphaned, making block reward processing and orphaning exact opposites again.

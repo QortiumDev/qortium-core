@@ -41,6 +41,8 @@ public class RewardTests extends Common {
 	@Test
 	public void testSimpleReward() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			mintAliceToLevel(repository, 1);
+
 			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 
 			Long blockReward = BlockUtils.getNextBlockReward(repository);
@@ -57,22 +59,20 @@ public class RewardTests extends Common {
 		List<RewardByHeight> rewardsByHeight = BlockChain.getInstance().getBlockRewardsByHeight();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			mintAliceToLevel(repository, 1);
+
 			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 
-			int rewardIndex = rewardsByHeight.size() - 1;
-
-			RewardByHeight rewardInfo = rewardsByHeight.get(rewardIndex);
 			Long expectedBalance = initialBalances.get("alice").get(Asset.NATIVE);
+			int targetHeight = rewardsByHeight.get(rewardsByHeight.size() - 1).height;
 
-			for (int height = rewardInfo.height; height > 1; --height) {
-				if (height < rewardInfo.height) {
-					--rewardIndex;
-					rewardInfo = rewardsByHeight.get(rewardIndex);
-				}
+			while (repository.getBlockRepository().getBlockchainHeight() < targetHeight) {
+				int nextHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+				long blockReward = BlockChain.getInstance().getRewardAtHeight(repository, nextHeight);
 
 				BlockUtils.mintBlock(repository);
 
-				expectedBalance += rewardInfo.reward;
+				expectedBalance += blockReward;
 			}
 
 			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, expectedBalance);
@@ -84,6 +84,8 @@ public class RewardTests extends Common {
 		final int share = 12_80; // 12.80%
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
+			mintAliceToLevel(repository, 1);
+
 			byte[] rewardSharePrivateKey = AccountUtils.rewardShare(repository, "alice", "bob", share);
 			PrivateKeyAccount rewardShareAccount = new PrivateKeyAccount(repository, rewardSharePrivateKey);
 
@@ -978,6 +980,11 @@ public class RewardTests extends Common {
 		AccountUtils.setMintingData(repository, "bob", 1);
 		AccountUtils.setMintingData(repository, "chloe", 1);
 		AccountUtils.setMintingData(repository, "dilbert", 8);
+	}
+
+	private static void mintAliceToLevel(Repository repository, int level) throws DataException {
+		while (Common.getTestAccount(repository, "alice").getLevel() < level)
+			BlockUtils.mintBlock(repository);
 	}
 
 	private static long normalizedRewardShare(long blockReward, long share, long totalActiveShares) {
