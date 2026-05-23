@@ -226,7 +226,7 @@ public class ChatServiceTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
-			int groupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-key-announcement", false,
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-svc-key-announce", false,
 					ApprovalThreshold.ONE, 10, 40);
 			addMember(repository, groupId, bob);
 			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
@@ -271,7 +271,7 @@ public class ChatServiceTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
-			int groupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-rotation-request", false,
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-svc-rotation-req", false,
 					ApprovalThreshold.ONE, 10, 40);
 			addMember(repository, groupId, bob);
 			addAdmin(repository, groupId, bob);
@@ -347,9 +347,9 @@ public class ChatServiceTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
-			int firstGroupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-context-first", false,
+			int firstGroupId = GroupUtils.createGroup(repository, alice, "chat-svc-context-one", false,
 					ApprovalThreshold.ONE, 10, 40);
-			int secondGroupId = GroupUtils.createGroup(repository, alice, "chat-service-closed-context-second", false,
+			int secondGroupId = GroupUtils.createGroup(repository, alice, "chat-svc-context-two", false,
 					ApprovalThreshold.ONE, 10, 40);
 			addMember(repository, firstGroupId, bob);
 			PrivateGroupChatMembership.MembershipEpoch firstEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,

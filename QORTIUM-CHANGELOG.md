@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - test: repair chat fixture setup
+
+Repaired chat and private-group test fixtures so they follow the same rules enforced by normal group creation and secured API calls. The affected tests now use group names within the configured limit and provide the expected test API key when calling secured chat endpoints.
+
 ### 2026-05-23 - test: repair chain parameter update coverage
 
 Repaired chain-parameter test coverage so the generic transaction serialization suite knows how to build chain-parameter update transactions, and so account trust tests match the current suspicious-rater validation rules. The tests now explicitly cover that a one-rater suspicious threshold remains invalid under the configured category-policy caps.

@@ -3,6 +3,7 @@ package org.qortal.test.api;
 import com.google.common.primitives.Bytes;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.bouncycastle.util.encoders.Base64;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.api.ApiError;
@@ -77,7 +78,14 @@ public class ChatResourceTests extends ApiCommon {
 
 	@Before
 	public void buildResource() {
-		this.chatResource = (ChatResource) ApiCommon.buildResource(ChatResource.class);
+		ApiCommon.installTestApiKey();
+		this.chatResource = (ChatResource) ApiCommon.buildResource(ChatResource.class, ApiCommon.TEST_API_KEY);
+		PrivateGroupChatKeyCache.getInstance().clear();
+	}
+
+	@After
+	public void cleanupResource() {
+		ApiCommon.clearTestApiKey();
 		PrivateGroupChatKeyCache.getInstance().clear();
 	}
 
@@ -374,7 +382,7 @@ public class ChatResourceTests extends ApiCommon {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
-			groupId = createClosedGroup(repository, alice, "chat-api-private-count-missing-key");
+			groupId = createClosedGroup(repository, alice, "chat-api-count-miss-key");
 			openGroupId = GroupUtils.createGroup(repository, alice, "chat-api-private-count-open", true,
 					ApprovalThreshold.ONE, 10, 40);
 			addMember(repository, groupId, bob);
@@ -634,7 +642,7 @@ public class ChatResourceTests extends ApiCommon {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
-			int groupId = createClosedGroup(repository, alice, "chat-api-private-inbox-missing-key");
+			int groupId = createClosedGroup(repository, alice, "chat-api-inbox-miss-key");
 			addMember(repository, groupId, bob);
 
 			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
@@ -851,7 +859,7 @@ public class ChatResourceTests extends ApiCommon {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
-			groupId = createClosedGroup(repository, alice, "chat-api-private-workflow-recovery");
+			groupId = createClosedGroup(repository, alice, "chat-api-workflow-rec");
 			addMember(repository, groupId, bob);
 
 			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
@@ -959,7 +967,7 @@ public class ChatResourceTests extends ApiCommon {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 			TestAccount chloe = Common.getTestAccount(repository, "chloe");
-			groupId = createClosedGroup(repository, alice, "chat-api-private-historical-request");
+			groupId = createClosedGroup(repository, alice, "chat-api-history-req");
 			addMember(repository, groupId, bob);
 
 			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
@@ -1046,7 +1054,7 @@ public class ChatResourceTests extends ApiCommon {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			TestAccount bob = Common.getTestAccount(repository, "bob");
-			int groupId = createClosedGroup(repository, alice, "chat-api-private-rotation-request");
+			int groupId = createClosedGroup(repository, alice, "chat-api-rotation-req");
 			addMember(repository, groupId, bob);
 
 			rotationRequest.requesterPrivateKey = alice.getPrivateKey();

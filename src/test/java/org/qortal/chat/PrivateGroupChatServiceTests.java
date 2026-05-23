@@ -325,7 +325,7 @@ public class PrivateGroupChatServiceTests extends Common {
 	@Test
 	public void testResolveKeyRequestsDeduplicatesRelayedKeys() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Fixture fixture = createFixture(repository, "private-service-resolve-duplicates");
+			Fixture fixture = createFixture(repository, "priv-resolve-dupes");
 			PrivateGroupChatService.SendResult sendResult = PrivateGroupChatService.getInstance().send(repository,
 					fixture.alice.getPrivateKey(), fixture.groupId, bytes("secret"), true, null);
 			PrivateGroupChatService.getInstance().requestKey(repository, fixture.bob.getPrivateKey(),
@@ -364,7 +364,7 @@ public class PrivateGroupChatServiceTests extends Common {
 	@Test
 	public void testResolveKeyRequestsRecoversHistoricalKeyForCurrentMember() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Fixture fixture = createFixture(repository, "private-service-resolve-historical");
+			Fixture fixture = createFixture(repository, "priv-resolve-history");
 			byte[] plaintext = bytes("old epoch recovery");
 			PrivateGroupChatMembership.MembershipEpoch oldEpoch = PrivateGroupChatMembership.currentClosedGroupEpoch(
 					repository, fixture.groupId);
@@ -484,7 +484,7 @@ public class PrivateGroupChatServiceTests extends Common {
 	@Test
 	public void testRotateKeyRejectsNonMember() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Fixture fixture = createFixture(repository, "private-service-local-rotate-nonmember");
+			Fixture fixture = createFixture(repository, "priv-local-rot-nonmember");
 
 			assertThrows(GeneralSecurityException.class,
 					() -> PrivateGroupChatService.getInstance().rotateKey(repository,
@@ -522,7 +522,7 @@ public class PrivateGroupChatServiceTests extends Common {
 	@Test
 	public void testRequestRotationAllowsAdminAndRejectsOrdinaryMember() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Fixture fixture = createFixture(repository, "private-service-rotation-request-admin");
+			Fixture fixture = createFixture(repository, "priv-rot-req-admin");
 			addAdmin(repository, fixture.groupId, fixture.bob);
 			addMember(repository, fixture.groupId, fixture.chloe);
 
@@ -539,7 +539,7 @@ public class PrivateGroupChatServiceTests extends Common {
 	@Test
 	public void testAcceptedRotationRequestForcesFreshKeyOnNextSend() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Fixture fixture = createFixture(repository, "private-service-rotation-request-fresh-key");
+			Fixture fixture = createFixture(repository, "priv-rot-req-fresh");
 			byte[] oldPlaintext = bytes("before owner request");
 			PrivateGroupChatService.SendResult firstResult = PrivateGroupChatService.getInstance().send(repository,
 					fixture.alice.getPrivateKey(), fixture.groupId, oldPlaintext, true, null);
@@ -569,7 +569,7 @@ public class PrivateGroupChatServiceTests extends Common {
 	@Test
 	public void testOrdinaryMemberRotationRequestDoesNotAffectNextSend() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Fixture fixture = createFixture(repository, "private-service-rotation-request-member-ignored");
+			Fixture fixture = createFixture(repository, "priv-rot-req-member-skip");
 			PrivateGroupChatService.SendResult firstResult = PrivateGroupChatService.getInstance().send(repository,
 					fixture.alice.getPrivateKey(), fixture.groupId, bytes("before member request"), true, null);
 			PrivateGroupChatMembership.MembershipEpoch epoch = PrivateGroupChatMembership.currentClosedGroupEpoch(repository,
@@ -639,7 +639,7 @@ public class PrivateGroupChatServiceTests extends Common {
 	@Test
 	public void testHistoricalMemberCanDecryptOldMessageAfterMembershipChange() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Fixture fixture = createFixture(repository, "private-service-historical-decrypt");
+			Fixture fixture = createFixture(repository, "priv-history-decrypt");
 			byte[] plaintext = bytes("old epoch secret");
 
 			PrivateGroupChatService.SendResult oldResult = PrivateGroupChatService.getInstance().send(repository,
@@ -694,7 +694,7 @@ public class PrivateGroupChatServiceTests extends Common {
 	@Test
 	public void testRehydrateIgnoresUnusableAnnouncementsBeforeValidAnnouncement() throws Exception {
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			Fixture fixture = createFixture(repository, "private-service-noisy-announcements");
+			Fixture fixture = createFixture(repository, "priv-noisy-announce");
 			byte[] plaintext = bytes("secret");
 			PrivateGroupChatService.SendResult sendResult = PrivateGroupChatService.getInstance().send(repository,
 					fixture.alice.getPrivateKey(), fixture.groupId, plaintext, true, null);
