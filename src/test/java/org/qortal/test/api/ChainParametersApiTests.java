@@ -75,6 +75,34 @@ public class ChainParametersApiTests extends ApiCommon {
 				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS),
 				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS);
+
+		assertEquals(Long.valueOf(0L), findMetadata(parameters, ChainParameter.BLOCK_REWARD).validation.minimumLongValue);
+		assertEquals(Long.valueOf(0L), findMetadata(parameters, ChainParameter.UNIT_FEE).validation.minimumLongValue);
+		assertEquals(Long.valueOf(0L),
+				findMetadata(parameters, ChainParameter.NAME_REGISTRATION_UNIT_FEE).validation.minimumLongValue);
+		assertEquals(Integer.valueOf(0),
+				findMetadata(parameters, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN).validation.minimumIntegerValue);
+		assertEquals(Integer.valueOf(0),
+				findMetadata(parameters, ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS).validation.minimumIntegerValue);
+
+		ChainParameterMetadata rewardWeights = findMetadata(parameters, ChainParameter.REWARD_SHARE_WEIGHTS);
+		assertEquals(Integer.valueOf(10), rewardWeights.validation.integerListLength);
+		assertArrayEquals(new String[] {
+				"Level 1", "Level 2", "Level 3", "Level 4", "Level 5",
+				"Level 6", "Level 7", "Level 8", "Level 9", "Level 10"
+		}, rewardWeights.validation.integerListLabels);
+		assertTrue(rewardWeights.validation.requiresPositiveTotal);
+		assertTrue(rewardWeights.validation.requiresPositiveFirstValue);
+		assertFalse(rewardWeights.validation.requiresAnyPositiveValue);
+
+		ChainParameterMetadata trustVoteWeights = findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS);
+		assertEquals(Integer.valueOf(5), trustVoteWeights.validation.integerListLength);
+		assertEquals(Integer.valueOf(100), trustVoteWeights.validation.maximumIntegerListValue);
+		assertArrayEquals(new String[] { "SUSPICIOUS", "UNVERIFIED", "BRONZE", "SILVER", "GOLD" },
+				trustVoteWeights.validation.integerListLabels);
+		assertFalse(trustVoteWeights.validation.requiresPositiveTotal);
+		assertFalse(trustVoteWeights.validation.requiresPositiveFirstValue);
+		assertTrue(trustVoteWeights.validation.requiresAnyPositiveValue);
 	}
 
 	@Test
@@ -1038,6 +1066,16 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals(parameter.getDescription(), metadata.description);
 		assertEquals(parameter.getBuilderPath(), metadata.builderPath);
 		assertEquals(parameter.getEffectivePath(), metadata.effectivePath);
+		assertNotNull(metadata.validation);
+		assertEquals(parameter.getMinimumLongValue(), metadata.validation.minimumLongValue);
+		assertEquals(parameter.getMinimumIntegerValue(), metadata.validation.minimumIntegerValue);
+		assertEquals(parameter.getIntegerListLength(), metadata.validation.integerListLength);
+		assertEquals(parameter.getMinimumIntegerListValue(), metadata.validation.minimumIntegerListValue);
+		assertEquals(parameter.getMaximumIntegerListValue(), metadata.validation.maximumIntegerListValue);
+		assertArrayEquals(parameter.getIntegerListLabels(), metadata.validation.integerListLabels);
+		assertEquals(parameter.requiresPositiveTotal(), metadata.validation.requiresPositiveTotal);
+		assertEquals(parameter.requiresPositiveFirstValue(), metadata.validation.requiresPositiveFirstValue);
+		assertEquals(parameter.requiresAnyPositiveValue(), metadata.validation.requiresAnyPositiveValue);
 	}
 
 	private static void assertConfigEffectiveValue(List<ChainParameterEffectiveValue> values, ChainParameter parameter,

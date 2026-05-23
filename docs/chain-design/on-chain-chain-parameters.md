@@ -128,7 +128,13 @@ update with a later activation height overrides them.
 
 `GET /chain-parameters` lists the chain parameters that this node knows how to
 build and explain through the public API. Each metadata entry includes the
-current minimum activation delay that proposals for that parameter must satisfy.
+current minimum activation delay that proposals for that parameter must satisfy,
+plus structured validation hints for proposal builders.
+
+Validation metadata includes numeric minimums for amount and integer
+parameters. For integer-list parameters, it includes the required list length,
+per-item bounds when known, ordered item labels, and flags for positive-total,
+positive-first-value, or any-positive-value requirements.
 
 `GET /chain-parameters/updates` lists chain-parameter proposals as readable
 proposal summaries. The endpoint can filter by parameter ID, approval status,

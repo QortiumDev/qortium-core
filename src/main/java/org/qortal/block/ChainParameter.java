@@ -1,5 +1,6 @@
 package org.qortal.block;
 
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.utils.Amounts;
 
 import java.nio.ByteBuffer;
@@ -40,6 +41,11 @@ public enum ChainParameter {
 
 	public static final int MAX_VALUE_LENGTH = 256;
 
+	private static final String[] REWARD_SHARE_WEIGHT_LABELS = buildRewardShareWeightLabels();
+	private static final String[] TRUST_STATUS_VOTE_WEIGHT_LABELS = Arrays.stream(AccountTrustStatus.values())
+			.map(AccountTrustStatus::name)
+			.toArray(String[]::new);
+
 	private static final Map<Integer, ChainParameter> map = Arrays.stream(ChainParameter.values())
 			.collect(toMap(parameter -> parameter.id, parameter -> parameter));
 
@@ -77,6 +83,86 @@ public enum ChainParameter {
 
 	public String getEffectivePath() {
 		return this.effectivePath;
+	}
+
+	public Long getMinimumLongValue() {
+		switch (this) {
+			case BLOCK_REWARD:
+			case UNIT_FEE:
+			case NAME_REGISTRATION_UNIT_FEE:
+				return 0L;
+
+			default:
+				return null;
+		}
+	}
+
+	public Integer getMinimumIntegerValue() {
+		switch (this) {
+			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
+			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
+				return 0;
+
+			default:
+				return null;
+		}
+	}
+
+	public Integer getIntegerListLength() {
+		switch (this) {
+			case REWARD_SHARE_WEIGHTS:
+			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
+				return this.valueLength / Integer.BYTES;
+
+			default:
+				return null;
+		}
+	}
+
+	public Integer getMinimumIntegerListValue() {
+		switch (this) {
+			case REWARD_SHARE_WEIGHTS:
+			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
+				return 0;
+
+			default:
+				return null;
+		}
+	}
+
+	public Integer getMaximumIntegerListValue() {
+		switch (this) {
+			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
+				return 100;
+
+			default:
+				return null;
+		}
+	}
+
+	public String[] getIntegerListLabels() {
+		switch (this) {
+			case REWARD_SHARE_WEIGHTS:
+				return REWARD_SHARE_WEIGHT_LABELS.clone();
+
+			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
+				return TRUST_STATUS_VOTE_WEIGHT_LABELS.clone();
+
+			default:
+				return null;
+		}
+	}
+
+	public boolean requiresPositiveTotal() {
+		return this == REWARD_SHARE_WEIGHTS;
+	}
+
+	public boolean requiresPositiveFirstValue() {
+		return this == REWARD_SHARE_WEIGHTS;
+	}
+
+	public boolean requiresAnyPositiveValue() {
+		return this == ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS;
 	}
 
 	public boolean isValidValue(byte[] value) {
@@ -232,5 +318,13 @@ public enum ChainParameter {
 			default:
 				return null;
 		}
+	}
+
+	private static String[] buildRewardShareWeightLabels() {
+		String[] labels = new String[BlockChain.REWARD_SHARE_LEVEL_COUNT];
+		for (int i = 0; i < labels.length; ++i)
+			labels[i] = "Level " + (i + 1);
+
+		return labels;
 	}
 }

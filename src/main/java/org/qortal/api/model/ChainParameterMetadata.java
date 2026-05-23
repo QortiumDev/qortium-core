@@ -32,11 +32,19 @@ public class ChainParameterMetadata {
 	@Schema(description = "API path for reading the effective value for this parameter")
 	public String effectivePath;
 
+	@Schema(description = "structured validation hints for building proposal forms")
+	public ChainParameterValidationMetadata validation;
+
 	public ChainParameterMetadata() {
 	}
 
 	public ChainParameterMetadata(int id, String name, String valueType, int valueLength, int minimumActivationDelay,
 			String description, String builderPath, String effectivePath) {
+		this(id, name, valueType, valueLength, minimumActivationDelay, description, builderPath, effectivePath, null);
+	}
+
+	public ChainParameterMetadata(int id, String name, String valueType, int valueLength, int minimumActivationDelay,
+			String description, String builderPath, String effectivePath, ChainParameterValidationMetadata validation) {
 		this.id = id;
 		this.name = name;
 		this.valueType = valueType;
@@ -45,6 +53,7 @@ public class ChainParameterMetadata {
 		this.description = description;
 		this.builderPath = builderPath;
 		this.effectivePath = effectivePath;
+		this.validation = validation;
 	}
 
 }

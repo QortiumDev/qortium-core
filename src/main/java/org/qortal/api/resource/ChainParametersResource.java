@@ -16,6 +16,7 @@ import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterEffectiveValue;
 import org.qortal.api.model.ChainParameterMetadata;
 import org.qortal.api.model.ChainParameterUpdateSummary;
+import org.qortal.api.model.ChainParameterValidationMetadata;
 import org.qortal.api.model.IntegerChainParameterUpdateRequest;
 import org.qortal.api.model.NameRegistrationUnitFeeUpdateRequest;
 import org.qortal.api.model.RewardShareWeightsUpdateRequest;
@@ -765,9 +766,23 @@ public class ChainParametersResource {
 					BlockChain.getInstance().getChainParameterUpdateMinActivationDelay(),
 					parameter.getDescription(),
 					parameter.getBuilderPath(),
-					parameter.getEffectivePath()));
+					parameter.getEffectivePath(),
+					buildValidationMetadata(parameter)));
 
 		return metadata;
+	}
+
+	private static ChainParameterValidationMetadata buildValidationMetadata(ChainParameter parameter) {
+		return new ChainParameterValidationMetadata(
+				parameter.getMinimumLongValue(),
+				parameter.getMinimumIntegerValue(),
+				parameter.getIntegerListLength(),
+				parameter.getMinimumIntegerListValue(),
+				parameter.getMaximumIntegerListValue(),
+				parameter.getIntegerListLabels(),
+				parameter.requiresPositiveTotal(),
+				parameter.requiresPositiveFirstValue(),
+				parameter.requiresAnyPositiveValue());
 	}
 
 	private static ChainParameterUpdateSummary buildUpdateSummary(Repository repository,
