@@ -86,18 +86,20 @@ public class AccountTrustDerivation {
 		Set<String> seedAddresses = getMintingSeedAddresses(repository, mintingSeedHeight);
 		long startingEnergy = AccountTrustPolicy.getStartingEnergy(repository, mintingSeedHeight);
 		int managerEnergyHops = AccountTrustPolicy.getManagerEnergyHops(repository, mintingSeedHeight);
+		AccountTrustPolicy.DecisionSettings decisionSettings = AccountTrustPolicy.getDecisionSettings(repository,
+				mintingSeedHeight);
 		Map<String, EnergyScore> seedEnergy = buildSeedEnergy(seedAddresses, startingEnergy);
 		Map<String, EnergyScore> managerEnergy = flowManagerEnergy(ratingsByCategory.get(AccountRatingCategory.MANAGER),
 				seedEnergy, seedAddresses, managerEnergyHops);
 
 		Map<String, CategoryScore> managerScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.MANAGER),
-				managerEnergy, AccountRatingCategory.MANAGER);
+				managerEnergy, AccountRatingCategory.MANAGER, decisionSettings);
 		Map<String, CategoryScore> trainerScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.TRAINER),
-				managerScores, AccountRatingCategory.TRAINER);
+				managerScores, AccountRatingCategory.TRAINER, decisionSettings);
 		Map<String, CategoryScore> playerScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.PLAYER),
-				trainerScores, AccountRatingCategory.PLAYER);
+				trainerScores, AccountRatingCategory.PLAYER, decisionSettings);
 		Map<String, CategoryScore> subjectScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.SUBJECT),
-				playerScores, AccountRatingCategory.SUBJECT);
+				playerScores, AccountRatingCategory.SUBJECT, decisionSettings);
 
 		Map<AccountRatingCategory, Map<String, CategoryScore>> scoresByCategory = new EnumMap<>(AccountRatingCategory.class);
 		scoresByCategory.put(AccountRatingCategory.SUBJECT, subjectScores);
@@ -107,7 +109,7 @@ public class AccountTrustDerivation {
 
 		return new DerivedGraph(seedAddresses, collectAccountAddresses(seedAddresses, allRatings, scoresByCategory),
 				buildKnownPublicKeysByAddress(repository, seedAddresses, allRatings),
-				buildInboundCountsByCategory(ratingsByCategory), scoresByCategory);
+				buildInboundCountsByCategory(ratingsByCategory), scoresByCategory, decisionSettings);
 	}
 
 	private static List<AccountRatingData> applyRatingOverlay(List<AccountRatingData> ratings,
@@ -281,7 +283,7 @@ public class AccountTrustDerivation {
 	}
 
 	private static Map<String, CategoryScore> deriveCategory(List<AccountRatingData> ratings, Map<String, ?> evaluatorScores,
-			AccountRatingCategory targetCategory) {
+			AccountRatingCategory targetCategory, AccountTrustPolicy.DecisionSettings decisionSettings) {
 		Map<String, CategoryScore> scores = new HashMap<>();
 
 		for (AccountRatingData rating : ratings) {
@@ -302,7 +304,7 @@ public class AccountTrustDerivation {
 		}
 
 		for (CategoryScore score : scores.values())
-			score.apply(AccountTrustPolicy.decideLevel(targetCategory, score.score, score.impacts));
+			score.apply(AccountTrustPolicy.decideLevel(targetCategory, score.score, score.impacts, decisionSettings));
 
 		return scores;
 	}
@@ -337,11 +339,11 @@ public class AccountTrustDerivation {
 
 	private static AccountTrustCategoryData buildCategoryTrust(AccountRatingCategory category, String targetAddress,
 			Map<String, CategoryScore> scores, Map<String, AccountTrustRatingCountsData> inboundCountsByAddress,
-			Integer maxImpacts) {
+			Integer maxImpacts, AccountTrustPolicy.DecisionSettings decisionSettings) {
 		CategoryScore score = scores.get(targetAddress);
 		if (score == null) {
 			score = new CategoryScore();
-			score.apply(AccountTrustPolicy.decideLevel(category, score.score, score.impacts));
+			score.apply(AccountTrustPolicy.decideLevel(category, score.score, score.impacts, decisionSettings));
 		}
 
 		AccountTrustRatingCountsData inboundCounts = inboundCountsByAddress.get(targetAddress);
@@ -414,34 +416,42 @@ public class AccountTrustDerivation {
 		private final Map<String, byte[]> publicKeysByAddress;
 		private final Map<AccountRatingCategory, Map<String, AccountTrustRatingCountsData>> inboundCountsByCategory;
 		private final Map<AccountRatingCategory, Map<String, CategoryScore>> scoresByCategory;
+		private final AccountTrustPolicy.DecisionSettings decisionSettings;
 
 		private DerivedGraph(Set<String> seedAddresses, Set<String> accountAddresses, Map<String, byte[]> publicKeysByAddress,
 				Map<AccountRatingCategory, Map<String, AccountTrustRatingCountsData>> inboundCountsByCategory,
-				Map<AccountRatingCategory, Map<String, CategoryScore>> scoresByCategory) {
+				Map<AccountRatingCategory, Map<String, CategoryScore>> scoresByCategory,
+				AccountTrustPolicy.DecisionSettings decisionSettings) {
 			this.seedAddresses = seedAddresses;
 			this.accountAddresses = accountAddresses;
 			this.publicKeysByAddress = publicKeysByAddress;
 			this.inboundCountsByCategory = inboundCountsByCategory;
 			this.scoresByCategory = scoresByCategory;
+			this.decisionSettings = decisionSettings;
 		}
 
 		private Result buildResult(String accountAddress, Integer maxImpactsPerCategory) {
 			List<AccountTrustCategoryData> categories = new ArrayList<>();
 			categories.add(buildCategoryTrust(AccountRatingCategory.SUBJECT, accountAddress,
 					this.scoresByCategory.get(AccountRatingCategory.SUBJECT),
-					this.inboundCountsByCategory.get(AccountRatingCategory.SUBJECT), maxImpactsPerCategory));
+					this.inboundCountsByCategory.get(AccountRatingCategory.SUBJECT), maxImpactsPerCategory,
+					this.decisionSettings));
 			categories.add(buildCategoryTrust(AccountRatingCategory.PLAYER, accountAddress,
 					this.scoresByCategory.get(AccountRatingCategory.PLAYER),
-					this.inboundCountsByCategory.get(AccountRatingCategory.PLAYER), maxImpactsPerCategory));
+					this.inboundCountsByCategory.get(AccountRatingCategory.PLAYER), maxImpactsPerCategory,
+					this.decisionSettings));
 			categories.add(buildCategoryTrust(AccountRatingCategory.TRAINER, accountAddress,
 					this.scoresByCategory.get(AccountRatingCategory.TRAINER),
-					this.inboundCountsByCategory.get(AccountRatingCategory.TRAINER), maxImpactsPerCategory));
+					this.inboundCountsByCategory.get(AccountRatingCategory.TRAINER), maxImpactsPerCategory,
+					this.decisionSettings));
 			categories.add(buildCategoryTrust(AccountRatingCategory.MANAGER, accountAddress,
 					this.scoresByCategory.get(AccountRatingCategory.MANAGER),
-					this.inboundCountsByCategory.get(AccountRatingCategory.MANAGER), maxImpactsPerCategory));
+					this.inboundCountsByCategory.get(AccountRatingCategory.MANAGER), maxImpactsPerCategory,
+					this.decisionSettings));
 
 			AccountTrustStatus derivedTrustStatus = categories.get(0).getMappedTrustStatus();
-			return new Result(derivedTrustStatus, this.seedAddresses.contains(accountAddress), categories);
+			return new Result(derivedTrustStatus, this.seedAddresses.contains(accountAddress), categories,
+					this.decisionSettings);
 		}
 	}
 
@@ -449,12 +459,14 @@ public class AccountTrustDerivation {
 		private final AccountTrustStatus derivedTrustStatus;
 		private final boolean mintingSeedMember;
 		private final List<AccountTrustCategoryData> categories;
+		private final AccountTrustPolicy.DecisionSettings decisionSettings;
 
 		private Result(AccountTrustStatus derivedTrustStatus, boolean mintingSeedMember,
-				List<AccountTrustCategoryData> categories) {
+				List<AccountTrustCategoryData> categories, AccountTrustPolicy.DecisionSettings decisionSettings) {
 			this.derivedTrustStatus = derivedTrustStatus;
 			this.mintingSeedMember = mintingSeedMember;
 			this.categories = categories;
+			this.decisionSettings = decisionSettings;
 		}
 
 		public AccountTrustStatus getDerivedTrustStatus() {
@@ -467,6 +479,10 @@ public class AccountTrustDerivation {
 
 		public List<AccountTrustCategoryData> getCategories() {
 			return this.categories;
+		}
+
+		public AccountTrustPolicy.DecisionSettings getDecisionSettings() {
+			return this.decisionSettings;
 		}
 	}
 }

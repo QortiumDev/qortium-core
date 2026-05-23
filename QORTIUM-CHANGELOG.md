@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: make account trust decision settings height-aware
+
+Prepared account trust level decision thresholds for on-chain governance by grouping the positive branch and suspicious decision requirements into one height-aware policy object. Trust derivation and API explanations now carry the decision settings used for that derivation, while existing config defaults and API fields stay unchanged until individual voted parameters are added.
+
 ### 2026-05-23 - consensus: add on-chain account trust manager energy hop updates
 
 Added development-group approved updates for account trust manager energy hops. Qortium can now store a voted manager-hop count on chain, apply it to account trust derivation from the approved activation height, expose typed API helpers for proposing and reading the value, and refresh trust snapshots when the voted value activates.

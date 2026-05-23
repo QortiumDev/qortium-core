@@ -44,6 +44,8 @@ public class AccountTrustPolicyTests extends Common {
 
 	@Test
 	public void testPolicyConstants() {
+		AccountTrustPolicy.DecisionSettings decisionSettings = AccountTrustPolicy.getDecisionSettings();
+
 		assertEquals(1_000_000L, AccountTrustPolicy.getStartingEnergy());
 		assertEquals(4, AccountTrustPolicy.getManagerEnergyHops());
 		assertEquals(AccountRatingCategory.SUBJECT, AccountTrustPolicy.getActiveWeightCategory());
@@ -51,6 +53,10 @@ public class AccountTrustPolicyTests extends Common {
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRaterCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinBranchCount());
 		assertEquals(2, AccountTrustPolicy.getSuspiciousMinRatingConfidence());
+		assertEquals(2, decisionSettings.getPositiveMinBranchCount());
+		assertEquals(2, decisionSettings.getSuspiciousMinRaterCount());
+		assertEquals(2, decisionSettings.getSuspiciousMinBranchCount());
+		assertEquals(2, decisionSettings.getSuspiciousMinRatingConfidence());
 		assertEquals(1440, AccountTrustPolicy.getAccountRatingChangeCooldownBlocks());
 	}
 
@@ -183,6 +189,26 @@ public class AccountTrustPolicyTests extends Common {
 		assertEquals(1_000L, decision.getLevelScore());
 		assertEquals(500L, decision.getLevelScoreCap());
 		assertEquals(AccountTrustStatus.UNVERIFIED, AccountTrustPolicy.mapLevelToStatus(decision.getLevel()));
+	}
+
+	@Test
+	public void testDecisionSettingsOverrideChangesLevelDecision() {
+		AccountTrustPolicy.LevelDecision defaultDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.MANAGER,
+				1_000_000L, Arrays.asList(
+						impact("r1", 0, 1, 500_000L),
+						impact("r2", 0, 1, 500_000L)));
+		assertEquals(2, defaultDecision.getLevel());
+
+		AccountTrustPolicy.DecisionSettings strictSettings = new AccountTrustPolicy.DecisionSettings(3, 2, 2, 2);
+		AccountTrustPolicy.LevelDecision strictDecision = AccountTrustPolicy.decideLevel(AccountRatingCategory.MANAGER,
+				1_000_000L, Arrays.asList(
+						impact("r1", 0, 1, 500_000L),
+						impact("r2", 0, 1, 500_000L)),
+				strictSettings);
+
+		assertEquals(0, strictDecision.getLevel());
+		assertEquals(1_000L, strictDecision.getLevelScore());
+		assertEquals(500L, strictDecision.getLevelScoreCap());
 	}
 
 	@Test
