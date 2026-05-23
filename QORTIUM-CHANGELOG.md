@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: make account trust manager energy hops height-aware
+
+Prepared account trust manager energy hops for on-chain governance by routing trust derivation and trust policy views through height-aware lookup methods. The active value still falls back to `blockchain.json`, but the manager-energy flow now has the same lookup shape as other voted account trust policy settings.
+
 ### 2026-05-23 - consensus: add on-chain account trust starting energy updates
 
 Added development-group approved updates for account trust starting energy. Qortium can now store a voted starting-energy value on chain, apply it to account trust derivation from the approved activation height, expose typed API helpers for proposing and reading the value, and refresh trust snapshots when the voted value activates.

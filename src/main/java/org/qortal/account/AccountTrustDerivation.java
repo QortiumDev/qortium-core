@@ -85,9 +85,10 @@ public class AccountTrustDerivation {
 		Map<AccountRatingCategory, List<AccountRatingData>> ratingsByCategory = groupRatingsByCategory(allRatings);
 		Set<String> seedAddresses = getMintingSeedAddresses(repository, mintingSeedHeight);
 		long startingEnergy = AccountTrustPolicy.getStartingEnergy(repository, mintingSeedHeight);
+		int managerEnergyHops = AccountTrustPolicy.getManagerEnergyHops(repository, mintingSeedHeight);
 		Map<String, EnergyScore> seedEnergy = buildSeedEnergy(seedAddresses, startingEnergy);
 		Map<String, EnergyScore> managerEnergy = flowManagerEnergy(ratingsByCategory.get(AccountRatingCategory.MANAGER),
-				seedEnergy, seedAddresses);
+				seedEnergy, seedAddresses, managerEnergyHops);
 
 		Map<String, CategoryScore> managerScores = deriveCategory(ratingsByCategory.get(AccountRatingCategory.MANAGER),
 				managerEnergy, AccountRatingCategory.MANAGER);
@@ -228,11 +229,11 @@ public class AccountTrustDerivation {
 	}
 
 	private static Map<String, EnergyScore> flowManagerEnergy(List<AccountRatingData> managerRatings,
-			Map<String, EnergyScore> seedEnergy, Set<String> seedAddresses) {
+			Map<String, EnergyScore> seedEnergy, Set<String> seedAddresses, int managerEnergyHops) {
 		Map<String, EnergyScore> energy = new HashMap<>(seedEnergy);
 		Map<String, Integer> positiveRatingScales = calculatePositiveRatingScales(managerRatings);
 
-		for (int hop = 0; hop < AccountTrustPolicy.getManagerEnergyHops(); ++hop) {
+		for (int hop = 0; hop < managerEnergyHops; ++hop) {
 			Map<String, EnergyScore> nextEnergy = new HashMap<>();
 
 			for (AccountRatingData rating : managerRatings) {

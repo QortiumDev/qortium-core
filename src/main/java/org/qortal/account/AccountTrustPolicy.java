@@ -30,6 +30,10 @@ public final class AccountTrustPolicy {
 		return settings().getManagerEnergyHops();
 	}
 
+	public static int getManagerEnergyHops(Repository repository, int height) throws DataException {
+		return BlockChain.getInstance().getAccountTrustManagerEnergyHops(repository, height);
+	}
+
 	public static AccountRatingCategory getActiveWeightCategory() {
 		return settings().getActiveWeightCategory();
 	}
