@@ -10,6 +10,8 @@ import org.qortal.data.account.AccountTrustPolicyData;
 import org.qortal.data.account.AccountTrustCategoryImpactData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.repository.DataException;
+import org.qortal.repository.Repository;
+import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.Common;
 
 import java.net.URL;
@@ -102,6 +104,45 @@ public class AccountTrustPolicyTests extends Common {
 		assertThresholdAndCap(AccountRatingCategory.SUBJECT, 4, 150_000_000L, 75_000_000L);
 		assertEquals(-10_000_000L, AccountTrustPolicy.getSuspiciousThreshold(AccountRatingCategory.SUBJECT));
 		assertEquals(5_000_000L, AccountTrustPolicy.getSuspiciousLevelScoreCap(AccountRatingCategory.SUBJECT));
+	}
+
+	@Test
+	public void testCategoryPolicySettingsExposeConfiguredValues() {
+		AccountTrustPolicy.CategoryPolicySettings categoryPolicySettings =
+				AccountTrustPolicy.getCategoryPolicySettings();
+
+		assertEquals(4, categoryPolicySettings.getMaximumConfiguredLevel(AccountRatingCategory.SUBJECT));
+		assertEquals(3, categoryPolicySettings.getMaximumConfiguredLevel(AccountRatingCategory.PLAYER));
+		assertEquals(2, categoryPolicySettings.getMaximumConfiguredLevel(AccountRatingCategory.TRAINER));
+		assertEquals(2, categoryPolicySettings.getMaximumConfiguredLevel(AccountRatingCategory.MANAGER));
+
+		assertEquals(50_000_000L, categoryPolicySettings.getLevelThreshold(AccountRatingCategory.SUBJECT, 2));
+		assertEquals(25_000_000L, categoryPolicySettings.getLevelScoreCap(AccountRatingCategory.SUBJECT, 2));
+		assertEquals(-10_000_000L, categoryPolicySettings.getSuspiciousThreshold(AccountRatingCategory.SUBJECT));
+		assertEquals(5_000_000L, categoryPolicySettings.getSuspiciousLevelScoreCap(AccountRatingCategory.SUBJECT));
+
+		assertEquals(200_000L, categoryPolicySettings.getLevelThreshold(AccountRatingCategory.MANAGER, 2));
+		assertEquals(100_000L, categoryPolicySettings.getLevelScoreCap(AccountRatingCategory.MANAGER, 2));
+		assertEquals(-1_000L, categoryPolicySettings.getSuspiciousThreshold(AccountRatingCategory.MANAGER));
+		assertEquals(500L, categoryPolicySettings.getSuspiciousLevelScoreCap(AccountRatingCategory.MANAGER));
+	}
+
+	@Test
+	public void testHeightAwareCategoryPolicySettingsFallBackToConfiguredValues() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int height = repository.getBlockRepository().getBlockchainHeight();
+			AccountTrustPolicy.CategoryPolicySettings categoryPolicySettings =
+					AccountTrustPolicy.getCategoryPolicySettings(repository, height);
+
+			assertEquals(AccountTrustPolicy.getLevelThreshold(AccountRatingCategory.PLAYER, 3),
+					categoryPolicySettings.getLevelThreshold(AccountRatingCategory.PLAYER, 3));
+			assertEquals(AccountTrustPolicy.getLevelScoreCap(AccountRatingCategory.PLAYER, 3),
+					categoryPolicySettings.getLevelScoreCap(AccountRatingCategory.PLAYER, 3));
+			assertEquals(AccountTrustPolicy.getSuspiciousThreshold(AccountRatingCategory.TRAINER),
+					categoryPolicySettings.getSuspiciousThreshold(AccountRatingCategory.TRAINER));
+			assertEquals(AccountTrustPolicy.getSuspiciousLevelScoreCap(AccountRatingCategory.TRAINER),
+					categoryPolicySettings.getSuspiciousLevelScoreCap(AccountRatingCategory.TRAINER));
+		}
 	}
 
 	@Test

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: make account trust category policies height-aware
+
+Prepared account trust category policy thresholds and caps for on-chain governance by routing trust derivation and API policy and explanation views through a height-aware category policy settings object. Current behavior still falls back to `blockchain.json`, but the threshold and cap reads now have the same shape needed for the planned full-table chain parameter.
+
 ### 2026-05-23 - docs: define account trust category policy parameter format
 
 Defined the planned on-chain format for account trust category policy updates before implementing it. The design reserves one atomic parameter for the full category-policy table, fixes the category and level ordering, records the validation rules that keep thresholds and caps coherent, and keeps the active trust-weight category config-only for now.

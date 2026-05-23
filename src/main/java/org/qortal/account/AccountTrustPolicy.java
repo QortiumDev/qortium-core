@@ -1,6 +1,8 @@
 package org.qortal.account;
 
 import org.qortal.block.BlockChain;
+import org.qortal.block.BlockChain.AccountTrustCategoryPolicy;
+import org.qortal.block.BlockChain.AccountTrustLevelPolicy;
 import org.qortal.block.BlockChain.AccountTrustSettings;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustCategoryImpactData;
@@ -9,8 +11,11 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 
 import java.util.Collections;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public final class AccountTrustPolicy {
@@ -45,6 +50,15 @@ public final class AccountTrustPolicy {
 				BlockChain.getInstance().getAccountTrustSuspiciousMinRaterCount(repository, height),
 				BlockChain.getInstance().getAccountTrustSuspiciousMinBranchCount(repository, height),
 				BlockChain.getInstance().getAccountTrustSuspiciousMinRatingConfidence(repository, height));
+	}
+
+	public static CategoryPolicySettings getCategoryPolicySettings() {
+		return CategoryPolicySettings.from(settings());
+	}
+
+	public static CategoryPolicySettings getCategoryPolicySettings(Repository repository, int height)
+			throws DataException {
+		return getCategoryPolicySettings();
 	}
 
 	public static AccountRatingCategory getActiveWeightCategory() {
@@ -98,36 +112,44 @@ public final class AccountTrustPolicy {
 
 	public static LevelDecision decideLevel(AccountRatingCategory category, long rawScore,
 			List<AccountTrustCategoryImpactData> impacts) {
-		return decideLevel(category, rawScore, impacts, getDecisionSettings());
+		return decideLevel(category, rawScore, impacts, getDecisionSettings(), getCategoryPolicySettings());
 	}
 
 	public static LevelDecision decideLevel(AccountRatingCategory category, long rawScore,
 			List<AccountTrustCategoryImpactData> impacts, DecisionSettings decisionSettings) {
+		return decideLevel(category, rawScore, impacts, decisionSettings, getCategoryPolicySettings());
+	}
+
+	public static LevelDecision decideLevel(AccountRatingCategory category, long rawScore,
+			List<AccountTrustCategoryImpactData> impacts, DecisionSettings decisionSettings,
+			CategoryPolicySettings categoryPolicySettings) {
 		AccountRatingCategory effectiveCategory = effectiveCategory(category);
 		List<AccountTrustCategoryImpactData> effectiveImpacts = effectiveImpacts(impacts);
 		DecisionSettings effectiveDecisionSettings = effectiveDecisionSettings(decisionSettings);
+		CategoryPolicySettings effectiveCategoryPolicySettings = effectiveCategoryPolicySettings(categoryPolicySettings);
 
-		LevelDecision suspiciousDecision = suspiciousDecisionForCategory(effectiveCategory, effectiveImpacts);
+		LevelDecision suspiciousDecision = suspiciousDecisionForCategory(effectiveCategory, effectiveImpacts,
+				effectiveCategoryPolicySettings);
 		if (meetsSuspiciousRequirements(effectiveCategory, suspiciousDecision, effectiveImpacts,
-				effectiveDecisionSettings))
+				effectiveDecisionSettings, effectiveCategoryPolicySettings))
 			return suspiciousDecision;
 
 		if (rawScore < 0)
-			return zeroLevelDecision(effectiveCategory, effectiveImpacts);
+			return zeroLevelDecision(effectiveCategory, effectiveImpacts, effectiveCategoryPolicySettings);
 
 		switch (effectiveCategory) {
 			case MANAGER:
-				return calculateManagerLevel(effectiveImpacts, effectiveDecisionSettings);
+				return calculateManagerLevel(effectiveImpacts, effectiveDecisionSettings, effectiveCategoryPolicySettings);
 
 			case TRAINER:
-				return calculateTrainerLevel(effectiveImpacts, effectiveDecisionSettings);
+				return calculateTrainerLevel(effectiveImpacts, effectiveDecisionSettings, effectiveCategoryPolicySettings);
 
 			case PLAYER:
-				return calculatePlayerLevel(effectiveImpacts, effectiveDecisionSettings);
+				return calculatePlayerLevel(effectiveImpacts, effectiveDecisionSettings, effectiveCategoryPolicySettings);
 
 			case SUBJECT:
 			default:
-				return calculateSubjectLevel(effectiveImpacts, effectiveDecisionSettings);
+				return calculateSubjectLevel(effectiveImpacts, effectiveDecisionSettings, effectiveCategoryPolicySettings);
 		}
 	}
 
@@ -144,19 +166,19 @@ public final class AccountTrustPolicy {
 	}
 
 	public static long getLevelThreshold(AccountRatingCategory category, int level) {
-		return settings().getLevelThreshold(effectiveCategory(category), level);
+		return getCategoryPolicySettings().getLevelThreshold(category, level);
 	}
 
 	public static long getLevelScoreCap(AccountRatingCategory category, int level) {
-		return settings().getLevelScoreCap(effectiveCategory(category), level);
+		return getCategoryPolicySettings().getLevelScoreCap(category, level);
 	}
 
 	public static long getSuspiciousLevelScoreCap(AccountRatingCategory category) {
-		return settings().getSuspiciousLevelScoreCap(effectiveCategory(category));
+		return getCategoryPolicySettings().getSuspiciousLevelScoreCap(category);
 	}
 
 	public static long getSuspiciousThreshold(AccountRatingCategory category) {
-		return settings().getSuspiciousThreshold(effectiveCategory(category));
+		return getCategoryPolicySettings().getSuspiciousThreshold(category);
 	}
 
 	public static int getSuspiciousMinRaterCount() {
@@ -184,104 +206,105 @@ public final class AccountTrustPolicy {
 	}
 
 	private static LevelDecision calculateManagerLevel(List<AccountTrustCategoryImpactData> impacts,
-			DecisionSettings decisionSettings) {
-		LevelDecision level2 = decisionForLevel(AccountRatingCategory.MANAGER, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.MANAGER, 2)
+			DecisionSettings decisionSettings, CategoryPolicySettings categoryPolicySettings) {
+		LevelDecision level2 = decisionForLevel(AccountRatingCategory.MANAGER, 2, impacts, categoryPolicySettings);
+		if (level2.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.MANAGER, 2)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings))
 			return level2;
 
-		LevelDecision level1 = decisionForLevel(AccountRatingCategory.MANAGER, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.MANAGER, 1)
+		LevelDecision level1 = decisionForLevel(AccountRatingCategory.MANAGER, 1, impacts, categoryPolicySettings);
+		if (level1.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.MANAGER, 1)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings))
 			return level1;
 
-		return zeroLevelDecision(AccountRatingCategory.MANAGER, impacts);
+		return zeroLevelDecision(AccountRatingCategory.MANAGER, impacts, categoryPolicySettings);
 	}
 
 	private static LevelDecision calculateTrainerLevel(List<AccountTrustCategoryImpactData> impacts,
-			DecisionSettings decisionSettings) {
-		LevelDecision level2 = decisionForLevel(AccountRatingCategory.TRAINER, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.TRAINER, 2)
+			DecisionSettings decisionSettings, CategoryPolicySettings categoryPolicySettings) {
+		LevelDecision level2 = decisionForLevel(AccountRatingCategory.TRAINER, 2, impacts, categoryPolicySettings);
+		if (level2.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.TRAINER, 2)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings))
 			return level2;
 
-		LevelDecision level1 = decisionForLevel(AccountRatingCategory.TRAINER, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.TRAINER, 1)
+		LevelDecision level1 = decisionForLevel(AccountRatingCategory.TRAINER, 1, impacts, categoryPolicySettings);
+		if (level1.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.TRAINER, 1)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings))
 			return level1;
 
-		return zeroLevelDecision(AccountRatingCategory.TRAINER, impacts);
+		return zeroLevelDecision(AccountRatingCategory.TRAINER, impacts, categoryPolicySettings);
 	}
 
 	private static LevelDecision calculatePlayerLevel(List<AccountTrustCategoryImpactData> impacts,
-			DecisionSettings decisionSettings) {
-		LevelDecision level3 = decisionForLevel(AccountRatingCategory.PLAYER, 3, impacts);
-		if (level3.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 3)
+			DecisionSettings decisionSettings, CategoryPolicySettings categoryPolicySettings) {
+		LevelDecision level3 = decisionForLevel(AccountRatingCategory.PLAYER, 3, impacts, categoryPolicySettings);
+		if (level3.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.PLAYER, 3)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings)
 				&& (hasImpact(impacts, 2, 3) || countImpacts(impacts, 2, 2) >= 2))
 			return level3;
 
-		LevelDecision level2 = decisionForLevel(AccountRatingCategory.PLAYER, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 2)
+		LevelDecision level2 = decisionForLevel(AccountRatingCategory.PLAYER, 2, impacts, categoryPolicySettings);
+		if (level2.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.PLAYER, 2)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings) && hasImpact(impacts, 1, 2))
 			return level2;
 
-		LevelDecision level1 = decisionForLevel(AccountRatingCategory.PLAYER, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.PLAYER, 1)
+		LevelDecision level1 = decisionForLevel(AccountRatingCategory.PLAYER, 1, impacts, categoryPolicySettings);
+		if (level1.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.PLAYER, 1)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings))
 			return level1;
 
-		return zeroLevelDecision(AccountRatingCategory.PLAYER, impacts);
+		return zeroLevelDecision(AccountRatingCategory.PLAYER, impacts, categoryPolicySettings);
 	}
 
 	private static LevelDecision calculateSubjectLevel(List<AccountTrustCategoryImpactData> impacts,
-			DecisionSettings decisionSettings) {
-		LevelDecision level4 = decisionForLevel(AccountRatingCategory.SUBJECT, 4, impacts);
-		if (level4.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 4)
+			DecisionSettings decisionSettings, CategoryPolicySettings categoryPolicySettings) {
+		LevelDecision level4 = decisionForLevel(AccountRatingCategory.SUBJECT, 4, impacts, categoryPolicySettings);
+		if (level4.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.SUBJECT, 4)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings)
 				&& (hasImpact(impacts, 3, 3) || countImpacts(impacts, 3, 2) >= 2))
 			return level4;
 
-		LevelDecision level3 = decisionForLevel(AccountRatingCategory.SUBJECT, 3, impacts);
-		if (level3.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 3)
+		LevelDecision level3 = decisionForLevel(AccountRatingCategory.SUBJECT, 3, impacts, categoryPolicySettings);
+		if (level3.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.SUBJECT, 3)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings)
 				&& (hasImpact(impacts, 2, 3) || countImpacts(impacts, 2, 2) >= 2))
 			return level3;
 
-		LevelDecision level2 = decisionForLevel(AccountRatingCategory.SUBJECT, 2, impacts);
-		if (level2.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 2)
+		LevelDecision level2 = decisionForLevel(AccountRatingCategory.SUBJECT, 2, impacts, categoryPolicySettings);
+		if (level2.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.SUBJECT, 2)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings) && hasImpact(impacts, 1, 2))
 			return level2;
 
-		LevelDecision level1 = decisionForLevel(AccountRatingCategory.SUBJECT, 1, impacts);
-		if (level1.levelScore >= getLevelThreshold(AccountRatingCategory.SUBJECT, 1)
+		LevelDecision level1 = decisionForLevel(AccountRatingCategory.SUBJECT, 1, impacts, categoryPolicySettings);
+		if (level1.levelScore >= categoryPolicySettings.getLevelThreshold(AccountRatingCategory.SUBJECT, 1)
 				&& meetsPositiveBranchRequirement(impacts, decisionSettings) && hasImpact(impacts, 1, 1))
 			return level1;
 
-		return zeroLevelDecision(AccountRatingCategory.SUBJECT, impacts);
+		return zeroLevelDecision(AccountRatingCategory.SUBJECT, impacts, categoryPolicySettings);
 	}
 
 	private static LevelDecision zeroLevelDecision(AccountRatingCategory category,
-			List<AccountTrustCategoryImpactData> impacts) {
-		long levelScoreCap = getLevelScoreCap(category, 1);
+			List<AccountTrustCategoryImpactData> impacts, CategoryPolicySettings categoryPolicySettings) {
+		long levelScoreCap = categoryPolicySettings.getLevelScoreCap(category, 1);
 		return new LevelDecision(0, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
 	}
 
 	private static LevelDecision decisionForLevel(AccountRatingCategory category, int level,
-			List<AccountTrustCategoryImpactData> impacts) {
-		long levelScoreCap = getLevelScoreCap(category, level);
+			List<AccountTrustCategoryImpactData> impacts, CategoryPolicySettings categoryPolicySettings) {
+		long levelScoreCap = categoryPolicySettings.getLevelScoreCap(category, level);
 		return new LevelDecision(level, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
 	}
 
 	private static LevelDecision suspiciousDecisionForCategory(AccountRatingCategory category,
-			List<AccountTrustCategoryImpactData> impacts) {
-		long levelScoreCap = getSuspiciousLevelScoreCap(category);
+			List<AccountTrustCategoryImpactData> impacts, CategoryPolicySettings categoryPolicySettings) {
+		long levelScoreCap = categoryPolicySettings.getSuspiciousLevelScoreCap(category);
 		return new LevelDecision(-1, calculateCappedLevelScore(impacts, levelScoreCap), levelScoreCap);
 	}
 
 	private static boolean meetsSuspiciousRequirements(AccountRatingCategory category, LevelDecision suspiciousDecision,
-			List<AccountTrustCategoryImpactData> impacts, DecisionSettings decisionSettings) {
-		return suspiciousDecision.levelScore <= getSuspiciousThreshold(category)
+			List<AccountTrustCategoryImpactData> impacts, DecisionSettings decisionSettings,
+			CategoryPolicySettings categoryPolicySettings) {
+		return suspiciousDecision.levelScore <= categoryPolicySettings.getSuspiciousThreshold(category)
 				&& countNegativeRaters(impacts, decisionSettings.getSuspiciousMinRatingConfidence())
 						>= decisionSettings.getSuspiciousMinRaterCount()
 				&& countNegativeTrustBranches(impacts, decisionSettings.getSuspiciousMinRatingConfidence())
@@ -370,12 +393,114 @@ public final class AccountTrustPolicy {
 		return decisionSettings == null ? getDecisionSettings() : decisionSettings;
 	}
 
+	private static CategoryPolicySettings effectiveCategoryPolicySettings(CategoryPolicySettings categoryPolicySettings) {
+		return categoryPolicySettings == null ? getCategoryPolicySettings() : categoryPolicySettings;
+	}
+
 	private static long saturatedAdd(long left, long right) {
 		long result = left + right;
 		if (((left ^ result) & (right ^ result)) < 0)
 			return right < 0 ? Long.MIN_VALUE : Long.MAX_VALUE;
 
 		return result;
+	}
+
+	public static final class CategoryPolicySettings {
+		private final Map<AccountRatingCategory, CategoryPolicy> policiesByCategory;
+
+		private CategoryPolicySettings(Map<AccountRatingCategory, CategoryPolicy> policiesByCategory) {
+			this.policiesByCategory = Collections.unmodifiableMap(new EnumMap<>(policiesByCategory));
+		}
+
+		private static CategoryPolicySettings from(AccountTrustSettings settings) {
+			Map<AccountRatingCategory, CategoryPolicy> policiesByCategory = new EnumMap<>(AccountRatingCategory.class);
+			for (AccountTrustCategoryPolicy categoryPolicy : settings.categoryPolicies)
+				policiesByCategory.put(effectiveCategory(categoryPolicy.category), CategoryPolicy.from(categoryPolicy));
+
+			return new CategoryPolicySettings(policiesByCategory);
+		}
+
+		public long getLevelThreshold(AccountRatingCategory category, int level) {
+			return getCategoryPolicy(category).getLevelThreshold(level);
+		}
+
+		public long getLevelScoreCap(AccountRatingCategory category, int level) {
+			return getCategoryPolicy(category).getLevelScoreCap(level);
+		}
+
+		public long getSuspiciousThreshold(AccountRatingCategory category) {
+			return getCategoryPolicy(category).suspiciousThreshold;
+		}
+
+		public long getSuspiciousLevelScoreCap(AccountRatingCategory category) {
+			return getCategoryPolicy(category).suspiciousLevelScoreCap;
+		}
+
+		public int getMaximumConfiguredLevel(AccountRatingCategory category) {
+			return getCategoryPolicy(category).maximumConfiguredLevel;
+		}
+
+		private CategoryPolicy getCategoryPolicy(AccountRatingCategory category) {
+			CategoryPolicy policy = this.policiesByCategory.get(effectiveCategory(category));
+			if (policy == null)
+				throw new IllegalStateException("Missing account trust category policy");
+
+			return policy;
+		}
+	}
+
+	private static final class CategoryPolicy {
+		private final Map<Integer, LevelPolicy> levelsByLevel;
+		private final long suspiciousThreshold;
+		private final long suspiciousLevelScoreCap;
+		private final int maximumConfiguredLevel;
+
+		private CategoryPolicy(Map<Integer, LevelPolicy> levelsByLevel, long suspiciousThreshold,
+				long suspiciousLevelScoreCap, int maximumConfiguredLevel) {
+			this.levelsByLevel = Collections.unmodifiableMap(new HashMap<>(levelsByLevel));
+			this.suspiciousThreshold = suspiciousThreshold;
+			this.suspiciousLevelScoreCap = suspiciousLevelScoreCap;
+			this.maximumConfiguredLevel = maximumConfiguredLevel;
+		}
+
+		private static CategoryPolicy from(AccountTrustCategoryPolicy categoryPolicy) {
+			Map<Integer, LevelPolicy> levelsByLevel = new HashMap<>();
+			int maximumConfiguredLevel = 0;
+			for (AccountTrustLevelPolicy levelPolicy : categoryPolicy.levels) {
+				levelsByLevel.put(levelPolicy.level, new LevelPolicy(levelPolicy.threshold, levelPolicy.cap));
+				if (levelPolicy.level > maximumConfiguredLevel)
+					maximumConfiguredLevel = levelPolicy.level;
+			}
+
+			return new CategoryPolicy(levelsByLevel, categoryPolicy.suspiciousThreshold, categoryPolicy.suspiciousCap,
+					maximumConfiguredLevel);
+		}
+
+		private long getLevelThreshold(int level) {
+			return getLevelPolicy(level).threshold;
+		}
+
+		private long getLevelScoreCap(int level) {
+			return getLevelPolicy(level).levelScoreCap;
+		}
+
+		private LevelPolicy getLevelPolicy(int level) {
+			LevelPolicy policy = this.levelsByLevel.get(level);
+			if (policy == null)
+				throw new IllegalStateException("Missing account trust level policy");
+
+			return policy;
+		}
+	}
+
+	private static final class LevelPolicy {
+		private final long threshold;
+		private final long levelScoreCap;
+
+		private LevelPolicy(long threshold, long levelScoreCap) {
+			this.threshold = threshold;
+			this.levelScoreCap = levelScoreCap;
+		}
 	}
 
 	public static final class DecisionSettings {

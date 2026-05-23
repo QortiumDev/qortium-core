@@ -566,6 +566,8 @@ public class AccountRatingsResource {
 	private AccountTrustPolicyData buildTrustPolicy(Repository repository, int height) throws DataException {
 		int[] voteWeightPercents = AccountTrustPolicy.getVoteWeightPercents(repository, height);
 		AccountTrustPolicy.DecisionSettings decisionSettings = AccountTrustPolicy.getDecisionSettings(repository, height);
+		AccountTrustPolicy.CategoryPolicySettings categoryPolicySettings =
+				AccountTrustPolicy.getCategoryPolicySettings(repository, height);
 		List<AccountTrustPolicyData.StatusVoteWeight> statusVoteWeights = new ArrayList<>();
 		for (AccountTrustStatus status : AccountTrustStatus.values())
 			statusVoteWeights.add(new AccountTrustPolicyData.StatusVoteWeight(status,
@@ -573,7 +575,7 @@ public class AccountRatingsResource {
 
 		List<AccountTrustPolicyData.CategoryPolicy> categoryPolicies = new ArrayList<>();
 		for (AccountRatingCategory category : AccountRatingCategory.values())
-			categoryPolicies.add(buildTrustCategoryPolicy(category, voteWeightPercents));
+			categoryPolicies.add(buildTrustCategoryPolicy(category, voteWeightPercents, categoryPolicySettings));
 
 		return new AccountTrustPolicyData(AccountTrustPolicy.getActiveWeightCategory(),
 				AccountTrustPolicy.getStartingEnergy(repository, height),
@@ -585,17 +587,19 @@ public class AccountRatingsResource {
 	}
 
 	private AccountTrustPolicyData.CategoryPolicy buildTrustCategoryPolicy(AccountRatingCategory category,
-			int[] voteWeightPercents) {
+			int[] voteWeightPercents, AccountTrustPolicy.CategoryPolicySettings categoryPolicySettings) {
 		List<AccountTrustPolicyData.LevelPolicy> levels = new ArrayList<>();
-		for (int level = 1; level <= getMaximumConfiguredLevel(category); ++level) {
+		for (int level = 1; level <= categoryPolicySettings.getMaximumConfiguredLevel(category); ++level) {
 			AccountTrustStatus mappedStatus = AccountTrustPolicy.mapLevelToStatus(level);
 			levels.add(new AccountTrustPolicyData.LevelPolicy(level, mappedStatus,
 					AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, mappedStatus),
-					AccountTrustPolicy.getLevelThreshold(category, level), AccountTrustPolicy.getLevelScoreCap(category, level)));
+					categoryPolicySettings.getLevelThreshold(category, level),
+					categoryPolicySettings.getLevelScoreCap(category, level)));
 		}
 
-		return new AccountTrustPolicyData.CategoryPolicy(category, levels, AccountTrustPolicy.getSuspiciousThreshold(category),
-				AccountTrustPolicy.getSuspiciousLevelScoreCap(category));
+		return new AccountTrustPolicyData.CategoryPolicy(category, levels,
+				categoryPolicySettings.getSuspiciousThreshold(category),
+				categoryPolicySettings.getSuspiciousLevelScoreCap(category));
 	}
 
 	private int calculateEarliestAllowedHeight(int candidateChangeHeight, Integer latestRatingChangeHeight,
@@ -702,7 +706,7 @@ public class AccountRatingsResource {
 				AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, activeTrustStatus), activeCategory,
 				liveDerivation.isMintingSeedMember(), null, null, true,
 				buildCategoryExplanations(liveDerivation.getCategories(), liveDerivation.getCategories(), voteWeightPercents,
-						liveDerivation.getDecisionSettings()));
+						liveDerivation.getDecisionSettings(), liveDerivation.getCategoryPolicySettings()));
 	}
 
 	private AccountTrustExplanationData buildStoredTrustExplanation(Repository repository, byte[] targetPublicKey,
@@ -728,12 +732,14 @@ public class AccountRatingsResource {
 		int currentHeight = repository.getBlockRepository().getBlockchainHeight();
 		AccountTrustPolicy.DecisionSettings decisionSettings = AccountTrustPolicy.getDecisionSettings(repository,
 				currentHeight);
+		AccountTrustPolicy.CategoryPolicySettings categoryPolicySettings =
+				AccountTrustPolicy.getCategoryPolicySettings(repository, currentHeight);
 
 		return new AccountTrustExplanationData(targetPublicKey, targetAddress, activeTrustStatus,
 				AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, activeTrustStatus), activeCategory,
 				mintingSeedMember, snapshotHeight, snapshotTimestamp, false,
 				buildCategoryExplanations(buildCategoryTrustsFromSnapshots(snapshotsByCategory),
-						liveDerivation.getCategories(), voteWeightPercents, decisionSettings));
+						liveDerivation.getCategories(), voteWeightPercents, decisionSettings, categoryPolicySettings));
 	}
 
 	private List<AccountTrustCategoryData> buildCategoryTrustsFromSnapshots(
@@ -759,7 +765,8 @@ public class AccountRatingsResource {
 	private List<AccountTrustExplanationData.CategoryExplanation> buildCategoryExplanations(
 			List<AccountTrustCategoryData> statusCategories,
 			List<AccountTrustCategoryData> impactCategories,
-			int[] voteWeightPercents, AccountTrustPolicy.DecisionSettings decisionSettings) {
+			int[] voteWeightPercents, AccountTrustPolicy.DecisionSettings decisionSettings,
+			AccountTrustPolicy.CategoryPolicySettings categoryPolicySettings) {
 		List<AccountTrustExplanationData.CategoryExplanation> explanations = new ArrayList<>();
 
 		for (AccountRatingCategory category : AccountRatingCategory.values()) {
@@ -773,7 +780,8 @@ public class AccountRatingsResource {
 				statusCategory = new AccountTrustCategoryData(category, 0L, 0,
 						AccountTrustStatus.UNVERIFIED, new AccountTrustRatingCountsData(), new ArrayList<>());
 
-			explanations.add(buildCategoryExplanation(statusCategory, impacts, voteWeightPercents, decisionSettings));
+			explanations.add(buildCategoryExplanation(statusCategory, impacts, voteWeightPercents, decisionSettings,
+					categoryPolicySettings));
 		}
 
 		return explanations;
@@ -781,39 +789,45 @@ public class AccountRatingsResource {
 
 	private AccountTrustExplanationData.CategoryExplanation buildCategoryExplanation(
 			AccountTrustCategoryData categoryTrust, List<AccountTrustCategoryImpactData> impacts,
-			int[] voteWeightPercents, AccountTrustPolicy.DecisionSettings decisionSettings) {
+			int[] voteWeightPercents, AccountTrustPolicy.DecisionSettings decisionSettings,
+			AccountTrustPolicy.CategoryPolicySettings categoryPolicySettings) {
 		AccountRatingCategory category = categoryTrust.getCategory();
-		List<AccountTrustExplanationData.ConfiguredLevel> configuredLevels = buildConfiguredLevels(category);
+		List<AccountTrustExplanationData.ConfiguredLevel> configuredLevels = buildConfiguredLevels(category,
+				categoryPolicySettings);
 		List<AccountTrustExplanationData.Requirement> requirements = buildTrustRequirements(category, categoryTrust.getScore(),
-				impacts, decisionSettings);
+				impacts, decisionSettings, categoryPolicySettings);
 
 		return new AccountTrustExplanationData.CategoryExplanation(category, categoryTrust.getScore(),
 				categoryTrust.getLevelScore(), categoryTrust.getLevelScoreCap(), categoryTrust.getLevel(),
 				categoryTrust.getMappedTrustStatus(),
 				AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, categoryTrust.getMappedTrustStatus()),
 				categoryTrust.getInboundRatings(), configuredLevels,
-				AccountTrustPolicy.getSuspiciousThreshold(category), AccountTrustPolicy.getSuspiciousLevelScoreCap(category),
+				categoryPolicySettings.getSuspiciousThreshold(category),
+				categoryPolicySettings.getSuspiciousLevelScoreCap(category),
 				decisionSettings.getPositiveMinBranchCount(), decisionSettings.getSuspiciousMinRaterCount(),
 				decisionSettings.getSuspiciousMinBranchCount(), decisionSettings.getSuspiciousMinRatingConfidence(),
 				requirements, getTopImpacts(impacts, true), getTopImpacts(impacts, false));
 	}
 
-	private List<AccountTrustExplanationData.ConfiguredLevel> buildConfiguredLevels(AccountRatingCategory category) {
+	private List<AccountTrustExplanationData.ConfiguredLevel> buildConfiguredLevels(AccountRatingCategory category,
+			AccountTrustPolicy.CategoryPolicySettings categoryPolicySettings) {
 		List<AccountTrustExplanationData.ConfiguredLevel> levels = new ArrayList<>();
 
-		for (int level = 1; level <= getMaximumConfiguredLevel(category); ++level)
+		for (int level = 1; level <= categoryPolicySettings.getMaximumConfiguredLevel(category); ++level)
 			levels.add(new AccountTrustExplanationData.ConfiguredLevel(level,
-					AccountTrustPolicy.getLevelThreshold(category, level), AccountTrustPolicy.getLevelScoreCap(category, level)));
+					categoryPolicySettings.getLevelThreshold(category, level),
+					categoryPolicySettings.getLevelScoreCap(category, level)));
 
 		return levels;
 	}
 
 	private List<AccountTrustExplanationData.Requirement> buildTrustRequirements(AccountRatingCategory category,
 			long rawScore, List<AccountTrustCategoryImpactData> impacts,
-			AccountTrustPolicy.DecisionSettings decisionSettings) {
+			AccountTrustPolicy.DecisionSettings decisionSettings,
+			AccountTrustPolicy.CategoryPolicySettings categoryPolicySettings) {
 		List<AccountTrustExplanationData.Requirement> requirements = new ArrayList<>();
-		long suspiciousScore = calculateCappedScore(impacts, AccountTrustPolicy.getSuspiciousLevelScoreCap(category));
-		long suspiciousThreshold = AccountTrustPolicy.getSuspiciousThreshold(category);
+		long suspiciousScore = calculateCappedScore(impacts, categoryPolicySettings.getSuspiciousLevelScoreCap(category));
+		long suspiciousThreshold = categoryPolicySettings.getSuspiciousThreshold(category);
 		long negativeRaterCount = countNegativeRaters(impacts, decisionSettings.getSuspiciousMinRatingConfidence());
 		long negativeBranchCount = countNegativeTrustBranches(impacts, decisionSettings.getSuspiciousMinRatingConfidence());
 
@@ -832,10 +846,10 @@ public class AccountRatingsResource {
 				rawScore >= 0L, Long.toString(rawScore), ">= 0",
 				"Positive trust levels are only considered when raw score is non-negative."));
 
-		for (int level = 1; level <= getMaximumConfiguredLevel(category); ++level) {
-			long cap = AccountTrustPolicy.getLevelScoreCap(category, level);
+		for (int level = 1; level <= categoryPolicySettings.getMaximumConfiguredLevel(category); ++level) {
+			long cap = categoryPolicySettings.getLevelScoreCap(category, level);
 			long levelScore = calculateCappedScore(impacts, cap);
-			long threshold = AccountTrustPolicy.getLevelThreshold(category, level);
+			long threshold = categoryPolicySettings.getLevelThreshold(category, level);
 			long positiveBranchCount = countPositiveTrustBranches(impacts);
 
 			requirements.add(new AccountTrustExplanationData.Requirement("level." + level + ".threshold",
@@ -899,21 +913,6 @@ public class AccountRatingsResource {
 	private AccountTrustExplanationData.Requirement positiveSupportRequirement(String name, boolean passed, long actual,
 			String required, String description) {
 		return new AccountTrustExplanationData.Requirement(name, passed, Long.toString(actual), required, description);
-	}
-
-	private int getMaximumConfiguredLevel(AccountRatingCategory category) {
-		switch (category) {
-			case MANAGER:
-			case TRAINER:
-				return 2;
-
-			case PLAYER:
-				return 3;
-
-			case SUBJECT:
-			default:
-				return 4;
-		}
 	}
 
 	private long calculateCappedScore(List<AccountTrustCategoryImpactData> impacts, long cap) {
