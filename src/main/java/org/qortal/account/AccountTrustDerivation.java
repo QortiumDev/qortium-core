@@ -51,12 +51,15 @@ public class AccountTrustDerivation {
 
 	public static List<AccountTrustDerivationData> deriveAll(Repository repository, int mintingSeedHeight) throws DataException {
 		DerivedGraph graph = deriveGraph(repository, mintingSeedHeight);
+		int[] voteWeightPercents = AccountTrustPolicy.getVoteWeightPercents(repository, mintingSeedHeight);
 		List<AccountTrustDerivationData> derivedAccounts = new ArrayList<>();
 
 		for (String accountAddress : graph.accountAddresses) {
 			Result result = graph.buildResult(accountAddress, LIST_IMPACT_LIMIT);
 			derivedAccounts.add(new AccountTrustDerivationData(graph.publicKeysByAddress.get(accountAddress), accountAddress,
-					result.getDerivedTrustStatus(), result.isMintingSeedMember(), result.getCategories()));
+					result.getDerivedTrustStatus(),
+					AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, result.getDerivedTrustStatus()),
+					result.isMintingSeedMember(), null, null, true, result.getCategories()));
 		}
 
 		return derivedAccounts;

@@ -8,6 +8,8 @@ import org.qortal.api.ApiError;
 import org.qortal.api.model.SimpleTransactionSignRequest;
 import org.qortal.api.resource.AccountRatingsResource;
 import org.qortal.api.resource.TransactionsResource;
+import org.qortal.block.BlockChain;
+import org.qortal.block.ChainParameter;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.account.AccountRating;
 import org.qortal.data.account.AccountRatingCategory;
@@ -26,6 +28,8 @@ import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.account.AccountTrustStatusChangeData;
 import org.qortal.data.account.AccountTrustSummaryData;
+import org.qortal.data.group.GroupData;
+import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.data.transaction.TransactionConfirmationTimingData;
 import org.qortal.data.transaction.TransactionData;
@@ -37,7 +41,9 @@ import org.qortal.test.common.AccountTrustTestUtils;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.GroupUtils;
 import org.qortal.test.common.TestAccount;
+import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.Transaction;
@@ -265,6 +271,39 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testTrustSummaryEndpointUsesOnChainVoteWeights() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		int[] voteWeights = new int[] { 0, 20, 50, 80, 90 };
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+
+			approveTrustStatusVoteWeightsOverlay(repository, voteWeights);
+			setVoteAccount(repository, alice, 100);
+			setVoteAccount(repository, bob, 100);
+				replaceTrustSnapshots(repository, repository.getBlockRepository().getBlockchainHeight(),
+						repository.getBlockRepository().getLastBlock().getTimestamp(),
+						trustDerivation(alice, true, categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.GOLD)),
+						trustDerivation(bob, true, categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.BRONZE)));
+			}
+
+		AccountTrustSummaryData summary = this.accountRatingsResource.getAccountTrustSummary();
+
+		assertEquals(200L, summary.getRawVoteWeight());
+		assertEquals(140L, summary.getEffectiveVoteWeight());
+
+		AccountTrustSummaryData.StatusSummary gold = findStatusSummary(summary, AccountTrustStatus.GOLD);
+		assertEquals(90, gold.getVoteWeightPercent());
+		assertEquals(90L, gold.getEffectiveVoteWeight());
+
+		AccountTrustSummaryData.StatusSummary bronze = findStatusSummary(summary, AccountTrustStatus.BRONZE);
+		assertEquals(50, bronze.getVoteWeightPercent());
+		assertEquals(50L, bronze.getEffectiveVoteWeight());
+	}
+
+	@Test
 	public void testTrustSummaryEndpointReportsCompleteSnapshotsAndLatestChange() throws DataException {
 		TestAccount alice;
 
@@ -344,6 +383,27 @@ public class AccountRatingsApiTests extends ApiCommon {
 		assertEquals(2, manager.getLevels().size());
 		assertEquals(200_000L, findLevelPolicy(manager, 2).getThreshold());
 		assertEquals(100_000L, findLevelPolicy(manager, 2).getLevelScoreCap());
+	}
+
+	@Test
+	public void testTrustPolicyEndpointUsesOnChainVoteWeights() throws DataException {
+		int[] voteWeights = new int[] { 0, 20, 50, 80, 90 };
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			approveTrustStatusVoteWeightsOverlay(repository, voteWeights);
+		}
+
+		AccountTrustPolicyData policy = this.accountRatingsResource.getAccountTrustPolicy();
+
+		assertEquals(90, findStatusVoteWeight(policy, AccountTrustStatus.GOLD).getVoteWeightPercent());
+		assertEquals(80, findStatusVoteWeight(policy, AccountTrustStatus.SILVER).getVoteWeightPercent());
+		assertEquals(50, findStatusVoteWeight(policy, AccountTrustStatus.BRONZE).getVoteWeightPercent());
+		assertEquals(20, findStatusVoteWeight(policy, AccountTrustStatus.UNVERIFIED).getVoteWeightPercent());
+		assertEquals(0, findStatusVoteWeight(policy, AccountTrustStatus.SUSPICIOUS).getVoteWeightPercent());
+
+		AccountTrustPolicyData.CategoryPolicy subject = findCategoryPolicy(policy, AccountRatingCategory.SUBJECT);
+		assertEquals(80, findLevelPolicy(subject, 2).getMappedTrustWeightPercent());
+		assertEquals(90, findLevelPolicy(subject, 3).getMappedTrustWeightPercent());
 	}
 
 	@Test
@@ -2021,6 +2081,32 @@ public class AccountRatingsApiTests extends ApiCommon {
 			default:
 				return 0;
 		}
+	}
+
+	private void approveTrustStatusVoteWeightsOverlay(Repository repository, int[] voteWeights) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+		int activationHeight = getActivationHeightSafelyAfterApproval(repository, 1);
+			ChainParameterUpdateTransactionData transactionData = new ChainParameterUpdateTransactionData(
+					TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+					ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.id, activationHeight,
+					ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.encodeIntArrayValue(voteWeights));
+
+		TransactionUtils.signAndMint(repository, transactionData, alice);
+		GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);
+		BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository));
+		BlockUtils.mintBlocks(repository, activationHeight - repository.getBlockRepository().getBlockchainHeight());
+	}
+
+	private int getApprovalSettlementBlockCount(Repository repository) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
+		return Math.max(2, groupData.getMinimumBlockDelay() + 1);
+	}
+
+	private int getActivationHeightSafelyAfterApproval(Repository repository, int extraBlocks) throws DataException {
+		return repository.getBlockRepository().getBlockchainHeight()
+				+ getApprovalSettlementBlockCount(repository)
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ extraBlocks;
 	}
 
 	private void setVoteAccount(Repository repository, PrivateKeyAccount account, int blocksMinted) throws DataException {

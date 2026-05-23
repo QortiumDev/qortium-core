@@ -1,5 +1,6 @@
 package org.qortal.repository.hsqldb;
 
+import org.qortal.block.BlockChain;
 import org.qortal.data.voting.PollData;
 import org.qortal.data.voting.PollDataWithVotes;
 import org.qortal.data.voting.PollOptionData;
@@ -242,8 +243,11 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public void freezeClosedPolls(int blockHeight, long blockTimestamp) throws DataException {
-		String effectiveVoteWeightSql = HSQLDBTrustWeightSql.effectiveWeightSql(ACTIVE_TRUST_STATUS_SQL, RAW_VOTE_WEIGHT_SQL);
-		String trustWeightPercentSql = HSQLDBTrustWeightSql.trustWeightPercentSql(ACTIVE_TRUST_STATUS_SQL);
+		int[] voteWeightPercents = BlockChain.getInstance().getAccountTrustStatusVoteWeightPercents(this.repository, blockHeight);
+		String effectiveVoteWeightSql = HSQLDBTrustWeightSql.effectiveWeightSql(ACTIVE_TRUST_STATUS_SQL,
+				RAW_VOTE_WEIGHT_SQL, voteWeightPercents);
+		String trustWeightPercentSql = HSQLDBTrustWeightSql.trustWeightPercentSql(ACTIVE_TRUST_STATUS_SQL,
+				voteWeightPercents);
 		String frozenResultsSql = "INSERT INTO PollFrozenResults "
 				+ "(poll_id, option_index, vote_count, vote_weight, raw_vote_weight, freeze_height, freeze_timestamp) "
 				+ "SELECT p.poll_id, po.option_index, COUNT(pv.voter), "

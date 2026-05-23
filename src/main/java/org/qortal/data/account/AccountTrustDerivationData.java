@@ -30,13 +30,21 @@ public class AccountTrustDerivationData {
 	public AccountTrustDerivationData(byte[] accountPublicKey, String accountAddress, AccountTrustStatus derivedTrustStatus,
 			boolean mintingSeedMember, Integer snapshotHeight, Long snapshotTimestamp, boolean live,
 			List<AccountTrustCategoryData> categories) {
+		this(accountPublicKey, accountAddress, derivedTrustStatus,
+				(derivedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : derivedTrustStatus).getVoteWeightPercent(),
+				mintingSeedMember, snapshotHeight, snapshotTimestamp, live, categories);
+	}
+
+	public AccountTrustDerivationData(byte[] accountPublicKey, String accountAddress, AccountTrustStatus derivedTrustStatus,
+			int derivedTrustWeightPercent, boolean mintingSeedMember, Integer snapshotHeight, Long snapshotTimestamp,
+			boolean live, List<AccountTrustCategoryData> categories) {
 		AccountTrustStatus effectiveDerivedTrustStatus = derivedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : derivedTrustStatus;
 
 		this.accountPublicKey = accountPublicKey;
 		this.accountAddress = accountAddress;
 		this.derivedTrustStatus = effectiveDerivedTrustStatus;
 		this.derivedTrustStatusValue = effectiveDerivedTrustStatus.getValue();
-		this.derivedTrustWeightPercent = effectiveDerivedTrustStatus.getVoteWeightPercent();
+		this.derivedTrustWeightPercent = derivedTrustWeightPercent;
 		this.mintingSeedMember = mintingSeedMember;
 		this.snapshotHeight = snapshotHeight;
 		this.snapshotTimestamp = snapshotTimestamp;

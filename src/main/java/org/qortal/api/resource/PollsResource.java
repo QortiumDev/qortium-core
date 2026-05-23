@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.qortal.account.AccountTrustPolicy;
 import org.qortal.account.AccountTrustWeight;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
@@ -450,6 +451,8 @@ public class PollsResource {
             int totalVotes = 0;
             int totalWeight = 0;
             int rawTotalWeight = 0;
+            int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+            int[] voteWeightPercents = AccountTrustPolicy.getVoteWeightPercents(repository, currentHeight);
             for (VoteOnPollData vote : votes) {
                     String voter = Crypto.toAddress(vote.getVoterPublicKey());
                     AccountData voterData = repository.getAccountRepository().getAccount(voter);
@@ -457,7 +460,9 @@ public class PollsResource {
                     AccountTrustSnapshotData activeTrustSnapshot = repository.getAccountRatingRepository()
                             .getTrustDerivationSnapshot(voter, AccountTrustWeight.getActiveWeightCategory());
                     AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeTrustSnapshot);
-                    int voteWeight = AccountTrustWeight.calculateEffectiveVoteWeight(rawVoteWeight, activeTrustSnapshot);
+                    int trustWeightPercent = AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, activeTrustStatus);
+                    int voteWeight = AccountTrustWeight.calculateEffectiveVoteWeight(voteWeightPercents, rawVoteWeight,
+                            activeTrustSnapshot);
 
                     int optionIndex = vote.getOptionIndex();
                     if (optionIndex <= Poll.NO_VOTE_OPTION_INDEX || optionIndex > pollData.getPollOptions().size())
@@ -479,7 +484,7 @@ public class PollsResource {
                                             rawVoteWeight,
                                             activeTrustStatus.name(),
                                             activeTrustStatus.getValue(),
-                                            activeTrustStatus.getVoteWeightPercent(),
+                                            trustWeightPercent,
                                             voteWeight,
                                             activeTrustSnapshot == null ? null : activeTrustSnapshot.getSnapshotHeight(),
                                             activeTrustSnapshot == null ? null : activeTrustSnapshot.getSnapshotTimestamp()));

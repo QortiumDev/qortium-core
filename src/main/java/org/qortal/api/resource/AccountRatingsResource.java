@@ -230,10 +230,12 @@ public class AccountRatingsResource {
 				previewActiveRating = AccountRating.isActive(rating) ? rating : null;
 			}
 
+			int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+			int[] voteWeightPercents = AccountTrustPolicy.getVoteWeightPercents(repository, currentHeight);
 			AccountTrustDerivationData currentTrust = buildLiveTrustDerivationData(targetPublicKey, targetAddress,
-					currentResult);
+					currentResult, voteWeightPercents);
 			AccountTrustDerivationData previewTrust = buildLiveTrustDerivationData(targetPublicKey, targetAddress,
-					previewResult);
+					previewResult, voteWeightPercents);
 
 			return new AccountRatingImpactPreviewData(targetPublicKey, raterPublicKey, category, rating, activeRating,
 					previewActiveRating, validationResult, cooldown, currentTrust, previewTrust,
@@ -384,10 +386,12 @@ public class AccountRatingsResource {
 			byte[] targetPublicKey = requireKnownPublicKey(repository, targetPublicKey58);
 			String targetAddress = Crypto.toAddress(targetPublicKey);
 			AccountTrustDerivation.Result liveDerivation = AccountTrustDerivation.derive(repository, targetAddress);
+			int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+			int[] voteWeightPercents = AccountTrustPolicy.getVoteWeightPercents(repository, currentHeight);
 
 			return Boolean.TRUE.equals(live)
-					? buildLiveTrustExplanation(targetPublicKey, targetAddress, liveDerivation)
-					: buildStoredTrustExplanation(repository, targetPublicKey, targetAddress, liveDerivation);
+					? buildLiveTrustExplanation(targetPublicKey, targetAddress, liveDerivation, voteWeightPercents)
+					: buildStoredTrustExplanation(repository, targetPublicKey, targetAddress, liveDerivation, voteWeightPercents);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -433,9 +437,12 @@ public class AccountRatingsResource {
 						reverse);
 			}
 
+			int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+			int[] voteWeightPercents = AccountTrustPolicy.getVoteWeightPercents(repository, currentHeight);
+
 			return buildTrustDerivationFromSnapshots(repository.getAccountRatingRepository()
 					.getTrustDerivationSnapshotsForDerivation(status, sortCategory, seedMember, minLevel, limit, offset,
-							reverse));
+							reverse), voteWeightPercents);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -557,14 +564,15 @@ public class AccountRatingsResource {
 	}
 
 	private AccountTrustPolicyData buildTrustPolicy(Repository repository, int height) throws DataException {
+		int[] voteWeightPercents = AccountTrustPolicy.getVoteWeightPercents(repository, height);
 		List<AccountTrustPolicyData.StatusVoteWeight> statusVoteWeights = new ArrayList<>();
 		for (AccountTrustStatus status : AccountTrustStatus.values())
 			statusVoteWeights.add(new AccountTrustPolicyData.StatusVoteWeight(status,
-					AccountTrustPolicy.getVoteWeightPercent(status)));
+					AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, status)));
 
 		List<AccountTrustPolicyData.CategoryPolicy> categoryPolicies = new ArrayList<>();
 		for (AccountRatingCategory category : AccountRatingCategory.values())
-			categoryPolicies.add(buildTrustCategoryPolicy(category));
+			categoryPolicies.add(buildTrustCategoryPolicy(category, voteWeightPercents));
 
 		return new AccountTrustPolicyData(AccountTrustPolicy.getActiveWeightCategory(), AccountTrustPolicy.getStartingEnergy(),
 				AccountTrustPolicy.getManagerEnergyHops(), AccountTrustPolicy.getPositiveMinBranchCount(),
@@ -573,11 +581,15 @@ public class AccountRatingsResource {
 				AccountTrustPolicy.getAccountRatingChangeCooldownBlocks(repository, height), statusVoteWeights, categoryPolicies);
 	}
 
-	private AccountTrustPolicyData.CategoryPolicy buildTrustCategoryPolicy(AccountRatingCategory category) {
+	private AccountTrustPolicyData.CategoryPolicy buildTrustCategoryPolicy(AccountRatingCategory category,
+			int[] voteWeightPercents) {
 		List<AccountTrustPolicyData.LevelPolicy> levels = new ArrayList<>();
-		for (int level = 1; level <= getMaximumConfiguredLevel(category); ++level)
-			levels.add(new AccountTrustPolicyData.LevelPolicy(level, AccountTrustPolicy.mapLevelToStatus(level),
+		for (int level = 1; level <= getMaximumConfiguredLevel(category); ++level) {
+			AccountTrustStatus mappedStatus = AccountTrustPolicy.mapLevelToStatus(level);
+			levels.add(new AccountTrustPolicyData.LevelPolicy(level, mappedStatus,
+					AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, mappedStatus),
 					AccountTrustPolicy.getLevelThreshold(category, level), AccountTrustPolicy.getLevelScoreCap(category, level)));
+		}
 
 		return new AccountTrustPolicyData.CategoryPolicy(category, levels, AccountTrustPolicy.getSuspiciousThreshold(category),
 				AccountTrustPolicy.getSuspiciousLevelScoreCap(category));
@@ -605,7 +617,11 @@ public class AccountRatingsResource {
 		AccountTrustStatus activeTrustStatus = AccountTrustWeight.statusFromSnapshot(activeSnapshot);
 		AccountData targetAccountData = repository.getAccountRepository().getAccount(targetAddress);
 		int blocksMinted = targetAccountData == null ? 0 : targetAccountData.getBlocksMinted();
-		int effectiveVoteWeight = activeTrustStatus.calculateEffectiveVoteWeight(blocksMinted);
+		int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+		int[] voteWeightPercents = AccountTrustPolicy.getVoteWeightPercents(repository, currentHeight);
+		int trustWeightPercent = AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, activeTrustStatus);
+		int effectiveVoteWeight = AccountTrustPolicy.calculateEffectiveVoteWeight(voteWeightPercents, blocksMinted,
+				activeTrustStatus);
 		AccountTrustSnapshotData referenceSnapshot = activeSnapshot == null && !snapshots.isEmpty()
 				? snapshots.get(0)
 				: activeSnapshot;
@@ -615,20 +631,22 @@ public class AccountRatingsResource {
 		Map<AccountRatingCategory, AccountTrustRatingCountsData> outboundCountsByCategory =
 				buildOutboundRatingCountsByCategory(repository, targetPublicKey);
 
-		return new AccountTrustProfileData(targetPublicKey, targetAddress, activeTrustStatus, blocksMinted,
-				effectiveVoteWeight, activeCategory, mintingSeedMember, snapshotHeight, snapshotTimestamp,
-				buildCategoryProfiles(snapshotsByCategory, outboundCountsByCategory));
+		return new AccountTrustProfileData(targetPublicKey, targetAddress, activeTrustStatus, trustWeightPercent,
+				blocksMinted, effectiveVoteWeight, activeCategory, mintingSeedMember, snapshotHeight, snapshotTimestamp,
+				buildCategoryProfiles(snapshotsByCategory, outboundCountsByCategory, voteWeightPercents));
 	}
 
 	private AccountTrustDerivationData buildLiveTrustDerivationData(byte[] targetPublicKey, String targetAddress,
-			AccountTrustDerivation.Result derivation) {
+			AccountTrustDerivation.Result derivation, int[] voteWeightPercents) {
 		return new AccountTrustDerivationData(targetPublicKey, targetAddress, derivation.getDerivedTrustStatus(),
+				AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, derivation.getDerivedTrustStatus()),
 				derivation.isMintingSeedMember(), null, null, true, derivation.getCategories());
 	}
 
 	private List<AccountTrustProfileData.CategoryProfile> buildCategoryProfiles(
 			Map<AccountRatingCategory, AccountTrustSnapshotData> snapshotsByCategory,
-			Map<AccountRatingCategory, AccountTrustRatingCountsData> outboundCountsByCategory) {
+			Map<AccountRatingCategory, AccountTrustRatingCountsData> outboundCountsByCategory,
+			int[] voteWeightPercents) {
 		List<AccountTrustProfileData.CategoryProfile> categories = new ArrayList<>();
 
 		for (AccountRatingCategory category : AccountRatingCategory.values()) {
@@ -637,14 +655,17 @@ public class AccountRatingsResource {
 
 			if (snapshot == null) {
 				categories.add(new AccountTrustProfileData.CategoryProfile(category, 0L, 0L, 0L, 0,
-						AccountTrustStatus.UNVERIFIED, new AccountTrustRatingCountsData(), outboundCounts, null, null));
+						AccountTrustStatus.UNVERIFIED,
+						AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, AccountTrustStatus.UNVERIFIED),
+						new AccountTrustRatingCountsData(), outboundCounts, null, null));
 				continue;
 			}
 
 			categories.add(new AccountTrustProfileData.CategoryProfile(snapshot.getCategory(), snapshot.getScore(),
 					snapshot.getLevelScore(), snapshot.getLevelScoreCap(), snapshot.getLevel(),
-					snapshot.getMappedTrustStatus(), snapshot.getInboundRatings(), outboundCounts, snapshot.getSnapshotHeight(),
-					snapshot.getSnapshotTimestamp()));
+					snapshot.getMappedTrustStatus(),
+					AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, snapshot.getMappedTrustStatus()),
+					snapshot.getInboundRatings(), outboundCounts, snapshot.getSnapshotHeight(), snapshot.getSnapshotTimestamp()));
 		}
 
 		return categories;
@@ -667,20 +688,21 @@ public class AccountRatingsResource {
 	}
 
 	private AccountTrustExplanationData buildLiveTrustExplanation(byte[] targetPublicKey, String targetAddress,
-			AccountTrustDerivation.Result liveDerivation) {
+			AccountTrustDerivation.Result liveDerivation, int[] voteWeightPercents) {
 		AccountRatingCategory activeCategory = AccountTrustWeight.getActiveWeightCategory();
 		AccountTrustCategoryData activeCategoryTrust = getCategoryTrust(liveDerivation.getCategories(), activeCategory);
 		AccountTrustStatus activeTrustStatus = activeCategoryTrust == null
 				? AccountTrustStatus.UNVERIFIED
 				: activeCategoryTrust.getMappedTrustStatus();
 
-		return new AccountTrustExplanationData(targetPublicKey, targetAddress, activeTrustStatus, activeCategory,
+		return new AccountTrustExplanationData(targetPublicKey, targetAddress, activeTrustStatus,
+				AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, activeTrustStatus), activeCategory,
 				liveDerivation.isMintingSeedMember(), null, null, true,
-				buildCategoryExplanations(liveDerivation.getCategories(), liveDerivation.getCategories()));
+				buildCategoryExplanations(liveDerivation.getCategories(), liveDerivation.getCategories(), voteWeightPercents));
 	}
 
 	private AccountTrustExplanationData buildStoredTrustExplanation(Repository repository, byte[] targetPublicKey,
-			String targetAddress, AccountTrustDerivation.Result liveDerivation) throws DataException {
+			String targetAddress, AccountTrustDerivation.Result liveDerivation, int[] voteWeightPercents) throws DataException {
 		AccountRatingCategory activeCategory = AccountTrustWeight.getActiveWeightCategory();
 		List<AccountTrustSnapshotData> snapshots = repository.getAccountRatingRepository()
 				.getTrustDerivationSnapshots(targetAddress);
@@ -700,9 +722,11 @@ public class AccountRatingsResource {
 		Integer snapshotHeight = referenceSnapshot == null ? null : referenceSnapshot.getSnapshotHeight();
 		Long snapshotTimestamp = referenceSnapshot == null ? null : referenceSnapshot.getSnapshotTimestamp();
 
-		return new AccountTrustExplanationData(targetPublicKey, targetAddress, activeTrustStatus, activeCategory,
+		return new AccountTrustExplanationData(targetPublicKey, targetAddress, activeTrustStatus,
+				AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, activeTrustStatus), activeCategory,
 				mintingSeedMember, snapshotHeight, snapshotTimestamp, false,
-				buildCategoryExplanations(buildCategoryTrustsFromSnapshots(snapshotsByCategory), liveDerivation.getCategories()));
+				buildCategoryExplanations(buildCategoryTrustsFromSnapshots(snapshotsByCategory),
+						liveDerivation.getCategories(), voteWeightPercents));
 	}
 
 	private List<AccountTrustCategoryData> buildCategoryTrustsFromSnapshots(
@@ -727,7 +751,8 @@ public class AccountRatingsResource {
 
 	private List<AccountTrustExplanationData.CategoryExplanation> buildCategoryExplanations(
 			List<AccountTrustCategoryData> statusCategories,
-			List<AccountTrustCategoryData> impactCategories) {
+			List<AccountTrustCategoryData> impactCategories,
+			int[] voteWeightPercents) {
 		List<AccountTrustExplanationData.CategoryExplanation> explanations = new ArrayList<>();
 
 		for (AccountRatingCategory category : AccountRatingCategory.values()) {
@@ -741,21 +766,24 @@ public class AccountRatingsResource {
 				statusCategory = new AccountTrustCategoryData(category, 0L, 0,
 						AccountTrustStatus.UNVERIFIED, new AccountTrustRatingCountsData(), new ArrayList<>());
 
-			explanations.add(buildCategoryExplanation(statusCategory, impacts));
+			explanations.add(buildCategoryExplanation(statusCategory, impacts, voteWeightPercents));
 		}
 
 		return explanations;
 	}
 
 	private AccountTrustExplanationData.CategoryExplanation buildCategoryExplanation(
-			AccountTrustCategoryData categoryTrust, List<AccountTrustCategoryImpactData> impacts) {
+			AccountTrustCategoryData categoryTrust, List<AccountTrustCategoryImpactData> impacts,
+			int[] voteWeightPercents) {
 		AccountRatingCategory category = categoryTrust.getCategory();
 		List<AccountTrustExplanationData.ConfiguredLevel> configuredLevels = buildConfiguredLevels(category);
 		List<AccountTrustExplanationData.Requirement> requirements = buildTrustRequirements(category, categoryTrust.getScore(), impacts);
 
 		return new AccountTrustExplanationData.CategoryExplanation(category, categoryTrust.getScore(),
 				categoryTrust.getLevelScore(), categoryTrust.getLevelScoreCap(), categoryTrust.getLevel(),
-				categoryTrust.getMappedTrustStatus(), categoryTrust.getInboundRatings(), configuredLevels,
+				categoryTrust.getMappedTrustStatus(),
+				AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, categoryTrust.getMappedTrustStatus()),
+				categoryTrust.getInboundRatings(), configuredLevels,
 				AccountTrustPolicy.getSuspiciousThreshold(category), AccountTrustPolicy.getSuspiciousLevelScoreCap(category),
 				AccountTrustPolicy.getPositiveMinBranchCount(), AccountTrustPolicy.getSuspiciousMinRaterCount(),
 				AccountTrustPolicy.getSuspiciousMinBranchCount(), AccountTrustPolicy.getSuspiciousMinRatingConfidence(),
@@ -967,7 +995,8 @@ public class AccountRatingsResource {
 		return filteredImpacts;
 	}
 
-	private List<AccountTrustDerivationData> buildTrustDerivationFromSnapshots(List<AccountTrustSnapshotData> snapshots) {
+	private List<AccountTrustDerivationData> buildTrustDerivationFromSnapshots(List<AccountTrustSnapshotData> snapshots,
+			int[] voteWeightPercents) {
 		Map<String, List<AccountTrustSnapshotData>> snapshotsByAccount = new LinkedHashMap<>();
 		for (AccountTrustSnapshotData snapshot : snapshots)
 			snapshotsByAccount.computeIfAbsent(snapshot.getAccountAddress(), ignored -> new ArrayList<>()).add(snapshot);
@@ -997,8 +1026,10 @@ public class AccountRatingsResource {
 			}
 
 			derivedAccounts.add(new AccountTrustDerivationData(firstSnapshot.getAccountPublicKey(),
-					firstSnapshot.getAccountAddress(), derivedTrustStatus, firstSnapshot.isMintingSeedMember(),
-					firstSnapshot.getSnapshotHeight(), firstSnapshot.getSnapshotTimestamp(), false, categories));
+					firstSnapshot.getAccountAddress(), derivedTrustStatus,
+					AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, derivedTrustStatus),
+					firstSnapshot.isMintingSeedMember(), firstSnapshot.getSnapshotHeight(),
+					firstSnapshot.getSnapshotTimestamp(), false, categories));
 		}
 
 		return derivedAccounts;

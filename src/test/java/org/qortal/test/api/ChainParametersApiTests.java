@@ -13,6 +13,7 @@ import org.qortal.api.model.ChainParameterUpdateSummary;
 import org.qortal.api.model.IntegerChainParameterUpdateRequest;
 import org.qortal.api.model.NameRegistrationUnitFeeUpdateRequest;
 import org.qortal.api.model.RewardShareWeightsUpdateRequest;
+import org.qortal.api.model.TrustStatusVoteWeightsUpdateRequest;
 import org.qortal.api.model.UnitFeeUpdateRequest;
 import org.qortal.api.resource.ChainParametersResource;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
@@ -60,7 +61,7 @@ public class ChainParametersApiTests extends ApiCommon {
 	public void testChainParameterMetadataListsBlockReward() {
 		List<ChainParameterMetadata> parameters = this.chainParametersResource.getChainParameters();
 
-		assertEquals(6, parameters.size());
+		assertEquals(7, parameters.size());
 
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.BLOCK_REWARD), ChainParameter.BLOCK_REWARD);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN),
@@ -72,6 +73,8 @@ public class ChainParametersApiTests extends ApiCommon {
 				ChainParameter.REWARD_SHARE_WEIGHTS);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS),
 				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS),
+				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS);
 	}
 
 	@Test
@@ -113,6 +116,29 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
 		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
 		assertArrayEquals(ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(weights), transactionData.getValue());
+		assertNotNull(transactionData.getFee());
+	}
+
+	@Test
+	public void testBuildTrustStatusVoteWeightsUpdateUsesIntegerListValue()
+			throws DataException, TransformationException {
+		int[] weights = new int[] { 0, 5, 45, 75, 100 };
+		TrustStatusVoteWeightsUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildTrustStatusVoteWeightsUpdateRequest(repository, weights);
+		}
+
+		String rawTransaction = this.chainParametersResource.updateTrustStatusVoteWeights(request);
+		ChainParameterUpdateTransactionData transactionData = decodeRawTransaction(rawTransaction);
+
+		assertEquals(ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.id, transactionData.getParameterId());
+		assertEquals(request.activationHeight, transactionData.getActivationHeight());
+		assertEquals(request.timestamp, transactionData.getTimestamp());
+		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
+		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
+		assertArrayEquals(ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.encodeIntArrayValue(weights),
+				transactionData.getValue());
 		assertNotNull(transactionData.getFee());
 	}
 
@@ -246,6 +272,15 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testGetTrustStatusVoteWeightsReturnsEffectiveValue() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int height = repository.getBlockRepository().getBlockchainHeight();
+			assertArrayEquals(BlockChain.getInstance().getAccountTrustStatusVoteWeightPercents(repository, height),
+					this.chainParametersResource.getTrustStatusVoteWeights(height));
+		}
+	}
+
+	@Test
 	public void testEffectiveParameterValuesReturnConfigSourcesWithoutProposals() throws DataException {
 		int height;
 		long fallbackTimestamp;
@@ -257,7 +292,7 @@ public class ChainParametersApiTests extends ApiCommon {
 
 		List<ChainParameterEffectiveValue> values = this.chainParametersResource.getEffectiveParameterValues(null);
 
-		assertEquals(6, values.size());
+		assertEquals(7, values.size());
 		assertConfigEffectiveValue(values, ChainParameter.BLOCK_REWARD, height,
 				ChainParameter.BLOCK_REWARD.encodeLongValue(BlockChain.getInstance().getRewardAtHeight(height)));
 		assertConfigEffectiveValue(values, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN, height,
@@ -273,6 +308,9 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS, height,
 				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.encodeIntValue(
 						BlockChain.getInstance().getAccountRatingChangeCooldownBlocks()));
+		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS, height,
+				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.encodeIntArrayValue(
+						BlockChain.getInstance().getAccountTrustStatusVoteWeightPercents()));
 	}
 
 	@Test
@@ -401,6 +439,26 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateRewardShareWeights(shortRequest));
 		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateRewardShareWeights(negativeRequest));
 		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateRewardShareWeights(zeroRequest));
+	}
+
+	@Test
+	public void testBuildTrustStatusVoteWeightsUpdateRejectsInvalidWeights() throws DataException {
+		TrustStatusVoteWeightsUpdateRequest shortRequest;
+		TrustStatusVoteWeightsUpdateRequest negativeRequest;
+		TrustStatusVoteWeightsUpdateRequest excessiveRequest;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			shortRequest = buildTrustStatusVoteWeightsUpdateRequest(repository, new int[] { 0, 40, 70 });
+			negativeRequest = buildTrustStatusVoteWeightsUpdateRequest(repository, new int[] { 0, -1, 40, 70, 100 });
+			excessiveRequest = buildTrustStatusVoteWeightsUpdateRequest(repository, new int[] { 0, 10, 40, 70, 101 });
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateTrustStatusVoteWeights(shortRequest));
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateTrustStatusVoteWeights(negativeRequest));
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateTrustStatusVoteWeights(excessiveRequest));
 	}
 
 	@Test
@@ -643,6 +701,43 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testPendingTrustStatusVoteWeightsProposalSummaryShowsDecodedValueAndVoteCounts() throws DataException {
+		ChainParameterUpdateTransactionData transactionData;
+		int[] weights = new int[] { 0, 15, 50, 80, 100 };
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 100;
+
+			transactionData = buildTrustStatusVoteWeightsUpdateTransaction(repository, alice, activationHeight, weights);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+		}
+
+		List<ChainParameterUpdateSummary> summaries = this.chainParametersResource.getChainParameterUpdates(
+				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.id, null, null, null, null, null, null, null, null);
+
+		assertEquals(1, summaries.size());
+
+		ChainParameterUpdateSummary summary = summaries.get(0);
+		assertArrayEquals(transactionData.getSignature(), summary.signature);
+		assertEquals(ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.id, summary.parameterId);
+		assertEquals(ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.name(), summary.parameterName);
+		assertEquals(transactionData.getActivationHeight(), summary.activationHeight);
+		assertArrayEquals(transactionData.getValue(), summary.value);
+		assertEquals("INTEGER_LIST", summary.valueType);
+		assertEquals(Arrays.toString(weights), summary.displayValue);
+		assertNull(summary.amount);
+		assertNull(summary.integerValue);
+		assertArrayEquals(weights, summary.integerValues);
+		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
+		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
+		assertEquals(0, summary.approvalCount);
+		assertEquals(0, summary.rejectionCount);
+		assertEquals(1, summary.approvalAuthorityCount);
+		assertFalse(summary.effectiveNow);
+	}
+
+	@Test
 	public void testChainParameterUpdatesCanIncludeUnconfirmedProposals() throws DataException {
 		ChainParameterUpdateTransactionData transactionData;
 
@@ -783,6 +878,22 @@ public class ChainParametersApiTests extends ApiCommon {
 		return request;
 	}
 
+	private static TrustStatusVoteWeightsUpdateRequest buildTrustStatusVoteWeightsUpdateRequest(
+			Repository repository, int[] weights) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+		TrustStatusVoteWeightsUpdateRequest request = new TrustStatusVoteWeightsUpdateRequest();
+		request.timestamp = System.currentTimeMillis();
+		request.txGroupId = TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID;
+		request.updaterPublicKey = alice.getPublicKey();
+		request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ 100;
+		request.weights = weights;
+
+		return request;
+	}
+
 	private static AccountRatingCooldownUpdateRequest buildAccountRatingCooldownUpdateRequest(
 			Repository repository, int cooldownBlocks) throws DataException {
 		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -866,6 +977,14 @@ public class ChainParametersApiTests extends ApiCommon {
 				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
 				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.id, activationHeight,
 				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.encodeIntValue(cooldownBlocks));
+	}
+
+	private static ChainParameterUpdateTransactionData buildTrustStatusVoteWeightsUpdateTransaction(
+			Repository repository, PrivateKeyAccount updater, int activationHeight, int[] weights) throws DataException {
+		return new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.encodeIntArrayValue(weights));
 	}
 
 	private static ChainParameterUpdateTransactionData buildUnitFeeUpdateTransaction(

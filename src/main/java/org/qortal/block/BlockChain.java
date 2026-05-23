@@ -269,6 +269,14 @@ public class BlockChain {
 			return voteWeightPercent == null ? 0 : voteWeightPercent;
 		}
 
+		public int[] getStatusVoteWeightPercents() {
+			int[] voteWeightPercents = new int[AccountTrustStatus.values().length];
+			for (AccountTrustStatus status : AccountTrustStatus.values())
+				voteWeightPercents[status.ordinal()] = getVoteWeightPercent(status);
+
+			return voteWeightPercents;
+		}
+
 		public long getLevelThreshold(AccountRatingCategory category, int level) {
 			return getCategoryPolicy(category).getLevelThreshold(level);
 		}
@@ -771,6 +779,32 @@ public class BlockChain {
 			return ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.decodeIntValue(accountRatingCooldownUpdate.getValue());
 
 		return getAccountRatingChangeCooldownBlocks();
+	}
+
+	public int[] getAccountTrustStatusVoteWeightPercents() {
+		return this.accountTrustSettings.getStatusVoteWeightPercents();
+	}
+
+	public int[] getAccountTrustStatusVoteWeightPercents(Repository repository, int height) throws DataException {
+		ChainParameterData statusVoteWeightUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.id, height);
+		if (statusVoteWeightUpdate != null)
+			return ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.decodeIntArrayValue(statusVoteWeightUpdate.getValue());
+
+		return getAccountTrustStatusVoteWeightPercents();
+	}
+
+	public int getAccountTrustStatusVoteWeightPercent(Repository repository, int height, AccountTrustStatus status)
+			throws DataException {
+		return getAccountTrustStatusVoteWeightPercent(getAccountTrustStatusVoteWeightPercents(repository, height), status);
+	}
+
+	public static int getAccountTrustStatusVoteWeightPercent(int[] voteWeightPercents, AccountTrustStatus status) {
+		AccountTrustStatus effectiveStatus = status == null ? AccountTrustStatus.UNVERIFIED : status;
+		if (voteWeightPercents == null || voteWeightPercents.length <= effectiveStatus.ordinal())
+			return 0;
+
+		return voteWeightPercents[effectiveStatus.ordinal()];
 	}
 
 	public CiyamAtSettings getCiyamAtSettings() {

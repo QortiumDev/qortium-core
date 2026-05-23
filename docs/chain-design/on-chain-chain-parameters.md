@@ -12,10 +12,11 @@ built jar for each change.
 
 This is intentionally small at first. The currently supported parameters are
 the height-based block reward, the reward share-bin activation count, reward
-share weights, the account rating change cooldown, and the normal and
-name-registration transaction unit fees. Broader trust-network policy values,
-timestamp-based settings, and larger structured parameter sets should be added
-only after each format and validation rule is made explicit.
+share weights, the account rating change cooldown, trust status vote-weight
+percentages, and the normal and name-registration transaction unit fees. Broader
+trust-network policy values, timestamp-based settings, and larger structured
+parameter sets should be added only after each format and validation rule is
+made explicit.
 
 ## Approval Model
 
@@ -108,6 +109,19 @@ validation by candidate block height, and remains effective until another
 approved `ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS` update with a later activation
 height overrides it.
 
+`ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS` is parameter ID `7`.
+
+Its value is exactly 20 bytes: five signed integer percentages ordered as
+`SUSPICIOUS`, `UNVERIFIED`, `BRONZE`, `SILVER`, and `GOLD`. Each percentage
+must be between 0 and 100, inclusive.
+
+The approved trust status vote weights apply to trust-weighted voting, resource
+rating weights, account-trust summaries, and account-trust profile/policy API
+views at their activation height. Account-trust derivation and explanation API
+views also report the effective percentages for the current height. The weights
+remain effective until another approved `ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS`
+update with a later activation height overrides them.
+
 ## Public API
 
 `GET /chain-parameters` lists the chain parameters that this node knows how to
@@ -182,6 +196,15 @@ Callers provide the cooldown as a block count.
 `GET /chain-parameters/account-rating/cooldown/{height}` returns the effective
 account rating change cooldown for a height after applying any approved overlay
 that is active at that height.
+
+`POST /chain-parameters/account-trust/status-vote-weights/update` builds an
+unsigned `CHAIN_PARAMETER_UPDATE` transaction for trust status vote-weight
+percentages. Callers provide five integer percentages ordered as `SUSPICIOUS`,
+`UNVERIFIED`, `BRONZE`, `SILVER`, and `GOLD`.
+
+`GET /chain-parameters/account-trust/status-vote-weights/{height}` returns the
+effective trust status vote-weight percentages for a height after applying any
+approved overlay that is active at that height.
 
 `POST /chain-parameters/unit-fee/update` builds an unsigned
 `CHAIN_PARAMETER_UPDATE` transaction for the normal transaction unit fee. Callers

@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortal.account.Account;
+import org.qortal.account.AccountTrustPolicy;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.*;
 import org.qortal.api.model.ApiOnlineAccount;
@@ -100,8 +101,14 @@ public class AddressesResource {
 			if (accountData == null)
 				accountData = new AccountData(address);
 
-			accountData.setTrustSnapshot(repository.getAccountRatingRepository()
-					.getTrustDerivationSnapshot(address, AccountRatingCategory.SUBJECT));
+			int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+			AccountTrustSnapshotData trustSnapshot = repository.getAccountRatingRepository()
+					.getTrustDerivationSnapshot(address, AccountRatingCategory.SUBJECT);
+			AccountTrustStatus trustStatus = trustSnapshot == null
+					? AccountTrustStatus.UNVERIFIED
+					: trustSnapshot.getMappedTrustStatus();
+			accountData.setTrustSnapshot(trustSnapshot,
+					AccountTrustPolicy.getVoteWeightPercent(repository, currentHeight, trustStatus));
 
 			return accountData;
 		} catch (DataException e) {

@@ -32,7 +32,11 @@ public enum ChainParameter {
 	ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS(6, Integer.BYTES, "INTEGER",
 			"Number of blocks before the same rater can change or remove a rating for the same target and category edge.",
 			"/chain-parameters/account-rating/cooldown/update",
-			"/chain-parameters/account-rating/cooldown/{height}");
+			"/chain-parameters/account-rating/cooldown/{height}"),
+	ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS(7, 5 * Integer.BYTES, "INTEGER_LIST",
+			"Trust status vote-weight percentages for SUSPICIOUS, UNVERIFIED, BRONZE, SILVER, and GOLD.",
+			"/chain-parameters/account-trust/status-vote-weights/update",
+			"/chain-parameters/account-trust/status-vote-weights/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 
@@ -100,6 +104,14 @@ public enum ChainParameter {
 				}
 
 				return totalWeight > 0;
+
+			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
+				int[] voteWeightPercents = decodeIntArrayValue(value);
+				for (int voteWeightPercent : voteWeightPercents)
+					if (voteWeightPercent < 0 || voteWeightPercent > 100)
+						return false;
+
+				return true;
 
 			default:
 				return false;
@@ -186,6 +198,7 @@ public enum ChainParameter {
 
 		switch (this) {
 			case REWARD_SHARE_WEIGHTS:
+			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
 				return decodeIntArrayValue(value);
 
 			default:
@@ -208,6 +221,7 @@ public enum ChainParameter {
 				return Integer.toString(decodeIntValue(value));
 
 			case REWARD_SHARE_WEIGHTS:
+			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
 				return Arrays.toString(decodeIntArrayValue(value));
 
 			default:

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: add on-chain trust status vote weight updates
+
+Added development-group approved updates for the trust status vote-weight percentages used by account-trust voting calculations. Qortium can now store voted weights for Suspicious, Unverified, Bronze, Silver, and Gold statuses on chain, apply them automatically from the approved activation height, expose typed API helpers for proposing and reading the values, and keep falling back to `blockchain.json` when no approved overlay exists.
+
 ### 2026-05-22 - consensus: add on-chain account rating cooldown updates
 
 Added development-group approved updates for the account rating change cooldown. Qortium can now store a voted cooldown block count on chain, apply it to future rating changes from the approved activation height, expose typed API helpers for proposing and reading the value, and continue falling back to `blockchain.json` when no approved overlay exists.

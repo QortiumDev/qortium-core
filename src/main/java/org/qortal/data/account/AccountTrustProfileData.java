@@ -32,13 +32,22 @@ public class AccountTrustProfileData {
 	public AccountTrustProfileData(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
 			int blocksMinted, int effectiveVoteWeight, AccountRatingCategory activeWeightCategory,
 			boolean mintingSeedMember, Integer snapshotHeight, Long snapshotTimestamp, List<CategoryProfile> categories) {
+		this(targetPublicKey, targetAddress, trustStatus,
+				(trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus).getVoteWeightPercent(),
+				blocksMinted, effectiveVoteWeight, activeWeightCategory, mintingSeedMember, snapshotHeight,
+				snapshotTimestamp, categories);
+	}
+
+	public AccountTrustProfileData(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
+			int trustWeightPercent, int blocksMinted, int effectiveVoteWeight, AccountRatingCategory activeWeightCategory,
+			boolean mintingSeedMember, Integer snapshotHeight, Long snapshotTimestamp, List<CategoryProfile> categories) {
 		AccountTrustStatus effectiveTrustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
 
 		this.targetPublicKey = targetPublicKey;
 		this.targetAddress = targetAddress;
 		this.trustStatus = effectiveTrustStatus;
 		this.trustStatusValue = effectiveTrustStatus.getValue();
-		this.trustWeightPercent = effectiveTrustStatus.getVoteWeightPercent();
+		this.trustWeightPercent = trustWeightPercent;
 		this.trustAllowsMinting = effectiveTrustStatus.canMint();
 		this.blocksMinted = blocksMinted;
 		this.effectiveVoteWeight = effectiveVoteWeight;
@@ -122,6 +131,15 @@ public class AccountTrustProfileData {
 		public CategoryProfile(AccountRatingCategory category, long score, long levelScore, long levelScoreCap,
 				int level, AccountTrustStatus mappedTrustStatus, AccountTrustRatingCountsData inboundRatings,
 				AccountTrustRatingCountsData outboundRatings, Integer snapshotHeight, Long snapshotTimestamp) {
+			this(category, score, levelScore, levelScoreCap, level, mappedTrustStatus,
+					(mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus).getVoteWeightPercent(),
+					inboundRatings, outboundRatings, snapshotHeight, snapshotTimestamp);
+		}
+
+		public CategoryProfile(AccountRatingCategory category, long score, long levelScore, long levelScoreCap,
+				int level, AccountTrustStatus mappedTrustStatus, int mappedTrustWeightPercent,
+				AccountTrustRatingCountsData inboundRatings, AccountTrustRatingCountsData outboundRatings,
+				Integer snapshotHeight, Long snapshotTimestamp) {
 			AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
 
 			this.category = category == null ? AccountRatingCategory.SUBJECT : category;
@@ -131,7 +149,7 @@ public class AccountTrustProfileData {
 			this.level = level;
 			this.mappedTrustStatus = effectiveMappedStatus;
 			this.mappedTrustStatusValue = effectiveMappedStatus.getValue();
-			this.mappedTrustWeightPercent = effectiveMappedStatus.getVoteWeightPercent();
+			this.mappedTrustWeightPercent = mappedTrustWeightPercent;
 			this.inboundRatings = inboundRatings == null ? new AccountTrustRatingCountsData() : inboundRatings;
 			this.outboundRatings = outboundRatings == null ? new AccountTrustRatingCountsData() : outboundRatings;
 			this.snapshotHeight = snapshotHeight;

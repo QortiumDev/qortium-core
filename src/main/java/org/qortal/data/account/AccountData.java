@@ -1,6 +1,7 @@
 package org.qortal.data.account;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.qortal.account.AccountTrustPolicy;
 import org.qortal.group.Group;
 
 import javax.xml.bind.annotation.XmlAccessType;
@@ -125,13 +126,24 @@ public class AccountData {
 		this.updateTrustFields();
 	}
 
+	public void setTrustSnapshot(AccountTrustSnapshotData snapshotData, int trustWeightPercent) {
+		this.trustStatus = snapshotData == null ? AccountTrustStatus.UNVERIFIED : snapshotData.getMappedTrustStatus();
+		this.trustSnapshotHeight = snapshotData == null ? null : snapshotData.getSnapshotHeight();
+		this.trustSnapshotTimestamp = snapshotData == null ? null : snapshotData.getSnapshotTimestamp();
+		this.updateTrustFields(trustWeightPercent);
+	}
+
 	private void updateTrustFields() {
 		AccountTrustStatus trustStatus = this.getTrustStatus();
+		this.updateTrustFields(trustStatus.getVoteWeightPercent());
+	}
 
+	private void updateTrustFields(int trustWeightPercent) {
+		AccountTrustStatus trustStatus = this.getTrustStatus();
 		this.trustStatusValue = trustStatus.getValue();
-		this.trustWeightPercent = trustStatus.getVoteWeightPercent();
+		this.trustWeightPercent = trustWeightPercent;
 		this.trustAllowsMinting = trustStatus.canMint();
-		this.effectiveVoteWeight = trustStatus.calculateEffectiveVoteWeight(this.blocksMinted);
+		this.effectiveVoteWeight = AccountTrustPolicy.calculateEffectiveVoteWeight(this.blocksMinted, trustWeightPercent);
 	}
 
 	// Comparison

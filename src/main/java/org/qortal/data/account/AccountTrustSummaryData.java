@@ -172,11 +172,17 @@ public class AccountTrustSummaryData {
 
 		public StatusSummary(AccountTrustStatus status, long accountCount, long seedMemberCount, long rawVoteWeight,
 				long effectiveVoteWeight) {
+			this(status, (status == null ? AccountTrustStatus.UNVERIFIED : status).getVoteWeightPercent(),
+					accountCount, seedMemberCount, rawVoteWeight, effectiveVoteWeight);
+		}
+
+		public StatusSummary(AccountTrustStatus status, int voteWeightPercent, long accountCount, long seedMemberCount,
+				long rawVoteWeight, long effectiveVoteWeight) {
 			AccountTrustStatus effectiveStatus = status == null ? AccountTrustStatus.UNVERIFIED : status;
 
 			this.status = effectiveStatus;
 			this.statusValue = effectiveStatus.getValue();
-			this.voteWeightPercent = effectiveStatus.getVoteWeightPercent();
+			this.voteWeightPercent = voteWeightPercent;
 			this.trustAllowsMinting = effectiveStatus.canMint();
 			this.accountCount = accountCount;
 			this.seedMemberCount = seedMemberCount;

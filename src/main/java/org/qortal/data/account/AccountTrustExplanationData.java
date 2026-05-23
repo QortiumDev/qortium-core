@@ -26,13 +26,21 @@ public class AccountTrustExplanationData {
 	public AccountTrustExplanationData(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
 			AccountRatingCategory activeWeightCategory, boolean mintingSeedMember, Integer snapshotHeight,
 			Long snapshotTimestamp, boolean live, List<CategoryExplanation> categories) {
+		this(targetPublicKey, targetAddress, trustStatus,
+				(trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus).getVoteWeightPercent(),
+				activeWeightCategory, mintingSeedMember, snapshotHeight, snapshotTimestamp, live, categories);
+	}
+
+	public AccountTrustExplanationData(byte[] targetPublicKey, String targetAddress, AccountTrustStatus trustStatus,
+			int trustWeightPercent, AccountRatingCategory activeWeightCategory, boolean mintingSeedMember,
+			Integer snapshotHeight, Long snapshotTimestamp, boolean live, List<CategoryExplanation> categories) {
 		AccountTrustStatus effectiveTrustStatus = trustStatus == null ? AccountTrustStatus.UNVERIFIED : trustStatus;
 
 		this.targetPublicKey = targetPublicKey;
 		this.targetAddress = targetAddress;
 		this.trustStatus = effectiveTrustStatus;
 		this.trustStatusValue = effectiveTrustStatus.getValue();
-		this.trustWeightPercent = effectiveTrustStatus.getVoteWeightPercent();
+		this.trustWeightPercent = trustWeightPercent;
 		this.activeWeightCategory = activeWeightCategory == null ? AccountRatingCategory.SUBJECT : activeWeightCategory;
 		this.mintingSeedMember = mintingSeedMember;
 		this.snapshotHeight = snapshotHeight;
@@ -116,6 +124,20 @@ public class AccountTrustExplanationData {
 				int positiveMinBranchCount, int suspiciousMinRaterCount, int suspiciousMinBranchCount,
 				int suspiciousMinRatingConfidence, List<Requirement> requirements,
 				List<AccountTrustCategoryImpactData> topPositiveImpacts, List<AccountTrustCategoryImpactData> topNegativeImpacts) {
+			this(category, score, levelScore, levelScoreCap, level, mappedTrustStatus,
+					(mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus).getVoteWeightPercent(),
+					inboundRatings, configuredLevels, suspiciousThreshold, suspiciousLevelScoreCap, positiveMinBranchCount,
+					suspiciousMinRaterCount, suspiciousMinBranchCount, suspiciousMinRatingConfidence, requirements,
+					topPositiveImpacts, topNegativeImpacts);
+		}
+
+		public CategoryExplanation(AccountRatingCategory category, long score, long levelScore, long levelScoreCap,
+				int level, AccountTrustStatus mappedTrustStatus, int mappedTrustWeightPercent,
+				AccountTrustRatingCountsData inboundRatings, List<ConfiguredLevel> configuredLevels,
+				long suspiciousThreshold, long suspiciousLevelScoreCap, int positiveMinBranchCount,
+				int suspiciousMinRaterCount, int suspiciousMinBranchCount, int suspiciousMinRatingConfidence,
+				List<Requirement> requirements, List<AccountTrustCategoryImpactData> topPositiveImpacts,
+				List<AccountTrustCategoryImpactData> topNegativeImpacts) {
 			AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
 
 			this.category = category == null ? AccountRatingCategory.SUBJECT : category;
@@ -125,7 +147,7 @@ public class AccountTrustExplanationData {
 			this.level = level;
 			this.mappedTrustStatus = effectiveMappedStatus;
 			this.mappedTrustStatusValue = effectiveMappedStatus.getValue();
-			this.mappedTrustWeightPercent = effectiveMappedStatus.getVoteWeightPercent();
+			this.mappedTrustWeightPercent = mappedTrustWeightPercent;
 			this.inboundRatings = inboundRatings == null ? new AccountTrustRatingCountsData() : inboundRatings;
 			this.configuredLevels = configuredLevels == null ? new ArrayList<>() : configuredLevels;
 			this.positiveMinBranchCount = positiveMinBranchCount;

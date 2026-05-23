@@ -1,5 +1,7 @@
 package org.qortal.repository.hsqldb;
 
+import org.qortal.account.AccountTrustPolicy;
+import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountRatingData;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountRatingSummaryData;
@@ -347,10 +349,12 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 		for (AccountTrustStatus status : AccountTrustStatus.values())
 			summaryValuesByStatus.put(status, new TrustStatusSummaryValues());
 
+		int currentHeight = this.repository.getBlockRepository().getBlockchainHeight();
+		int[] voteWeightPercents = BlockChain.getInstance().getAccountTrustStatusVoteWeightPercents(this.repository, currentHeight);
 		String sql = "SELECT ats.mapped_trust_status, COUNT(*), "
 				+ "COALESCE(SUM(CASE WHEN ats.minting_seed_member THEN 1 ELSE 0 END), 0), "
 				+ "COALESCE(SUM(" + TRUST_SUMMARY_BLOCKS_MINTED_SQL + "), 0), "
-				+ "COALESCE(SUM(" + trustSummaryEffectiveVoteWeightSql() + "), 0) "
+				+ "COALESCE(SUM(" + trustSummaryEffectiveVoteWeightSql(voteWeightPercents) + "), 0) "
 				+ "FROM AccountTrustDerivationSnapshots ats "
 				+ "LEFT JOIN Accounts a ON a.account = ats.account "
 				+ "WHERE ats.category = ? "
@@ -374,8 +378,10 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 		List<AccountTrustSummaryData.StatusSummary> statusSummaries = new ArrayList<>();
 		for (AccountTrustStatus status : AccountTrustStatus.values()) {
 			TrustStatusSummaryValues summaryValues = summaryValuesByStatus.get(status);
-			statusSummaries.add(new AccountTrustSummaryData.StatusSummary(status, summaryValues.accountCount,
-					summaryValues.seedMemberCount, summaryValues.rawVoteWeight, summaryValues.effectiveVoteWeight));
+			statusSummaries.add(new AccountTrustSummaryData.StatusSummary(status,
+					AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, status),
+					summaryValues.accountCount, summaryValues.seedMemberCount, summaryValues.rawVoteWeight,
+					summaryValues.effectiveVoteWeight));
 		}
 
 		return statusSummaries;
@@ -481,8 +487,9 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 		}
 	}
 
-	private String trustSummaryEffectiveVoteWeightSql() {
-		return HSQLDBTrustWeightSql.effectiveWeightSql("ats.mapped_trust_status", TRUST_SUMMARY_BLOCKS_MINTED_SQL);
+	private String trustSummaryEffectiveVoteWeightSql(int[] voteWeightPercents) {
+		return HSQLDBTrustWeightSql.effectiveWeightSql("ats.mapped_trust_status", TRUST_SUMMARY_BLOCKS_MINTED_SQL,
+				voteWeightPercents);
 	}
 
 	@Override

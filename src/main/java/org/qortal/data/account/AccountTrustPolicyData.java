@@ -162,12 +162,19 @@ public class AccountTrustPolicyData {
 		}
 
 		public LevelPolicy(int level, AccountTrustStatus mappedTrustStatus, long threshold, long levelScoreCap) {
+			this(level, mappedTrustStatus,
+					(mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus).getVoteWeightPercent(),
+					threshold, levelScoreCap);
+		}
+
+		public LevelPolicy(int level, AccountTrustStatus mappedTrustStatus, int mappedTrustWeightPercent,
+				long threshold, long levelScoreCap) {
 			AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
 
 			this.level = level;
 			this.mappedTrustStatus = effectiveMappedStatus;
 			this.mappedTrustStatusValue = effectiveMappedStatus.getValue();
-			this.mappedTrustWeightPercent = effectiveMappedStatus.getVoteWeightPercent();
+			this.mappedTrustWeightPercent = mappedTrustWeightPercent;
 			this.threshold = threshold;
 			this.levelScoreCap = levelScoreCap;
 		}

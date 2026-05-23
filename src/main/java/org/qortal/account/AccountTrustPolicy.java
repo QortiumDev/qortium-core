@@ -34,8 +34,40 @@ public final class AccountTrustPolicy {
 		return settings().getVoteWeightPercent(status);
 	}
 
+	public static int getVoteWeightPercent(Repository repository, int height, AccountTrustStatus status)
+			throws DataException {
+		return BlockChain.getInstance().getAccountTrustStatusVoteWeightPercent(repository, height, status);
+	}
+
+	public static int getVoteWeightPercent(int[] voteWeightPercents, AccountTrustStatus status) {
+		return BlockChain.getAccountTrustStatusVoteWeightPercent(voteWeightPercents, status);
+	}
+
+	public static int[] getVoteWeightPercents() {
+		return BlockChain.getInstance().getAccountTrustStatusVoteWeightPercents();
+	}
+
+	public static int[] getVoteWeightPercents(Repository repository, int height) throws DataException {
+		return BlockChain.getInstance().getAccountTrustStatusVoteWeightPercents(repository, height);
+	}
+
 	public static int calculateEffectiveVoteWeight(int blocksMinted, AccountTrustStatus status) {
 		int voteWeightPercent = getVoteWeightPercent(status);
+		return calculateEffectiveVoteWeight(blocksMinted, voteWeightPercent);
+	}
+
+	public static int calculateEffectiveVoteWeight(Repository repository, int height, int blocksMinted,
+			AccountTrustStatus status) throws DataException {
+		int voteWeightPercent = getVoteWeightPercent(repository, height, status);
+		return calculateEffectiveVoteWeight(blocksMinted, voteWeightPercent);
+	}
+
+	public static int calculateEffectiveVoteWeight(int[] voteWeightPercents, int blocksMinted, AccountTrustStatus status) {
+		int voteWeightPercent = getVoteWeightPercent(voteWeightPercents, status);
+		return calculateEffectiveVoteWeight(blocksMinted, voteWeightPercent);
+	}
+
+	public static int calculateEffectiveVoteWeight(int blocksMinted, int voteWeightPercent) {
 		if (blocksMinted <= 0 || voteWeightPercent <= 0)
 			return 0;
 

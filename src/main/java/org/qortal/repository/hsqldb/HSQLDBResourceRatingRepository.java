@@ -1,6 +1,7 @@
 package org.qortal.repository.hsqldb;
 
 import org.qortal.arbitrary.misc.Service;
+import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.rating.ResourceRatingData;
 import org.qortal.data.rating.ResourceRatingDistributionData;
@@ -73,7 +74,10 @@ public class HSQLDBResourceRatingRepository implements ResourceRatingRepository 
 
 	@Override
 	public ResourceRatingSummaryData getRatingSummary(Service service, String nameKey, String displayName, String identifier) throws DataException {
-		String effectiveRatingWeightSql = HSQLDBTrustWeightSql.effectiveWeightSql(ACTIVE_TRUST_STATUS_SQL, RAW_RATING_WEIGHT_SQL);
+		int currentHeight = this.repository.getBlockRepository().getBlockchainHeight();
+		int[] voteWeightPercents = BlockChain.getInstance().getAccountTrustStatusVoteWeightPercents(this.repository, currentHeight);
+		String effectiveRatingWeightSql = HSQLDBTrustWeightSql.effectiveWeightSql(ACTIVE_TRUST_STATUS_SQL,
+				RAW_RATING_WEIGHT_SQL, voteWeightPercents);
 		String sql = "SELECT rr.rating, COUNT(rr.rater), "
 				+ "COALESCE(SUM(" + RAW_RATING_WEIGHT_SQL + "), 0), "
 				+ "COALESCE(SUM(" + effectiveRatingWeightSql + "), 0) "
