@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - polls: repair poll id and update behavior
+
+Repaired poll updates so existing polls are changed by their stable numeric poll ID instead of relying on a generic save path that did not reliably handle renames. The poll tests now read assigned create-poll IDs from the confirmed transaction record and keep update-poll serialization checks focused on the optional end-time field.
+
 ### 2026-05-23 - test: use valid synthetic account keys
 
 Changed account and repository performance fixtures to create deterministic accounts from valid private keys instead of treating arbitrary random bytes as public keys. The account balance history test now uses a direct payment for its balance change instead of assuming a newly minted block rewards Alice, keeping the tests stable under current reward and Ed25519 key validation rules.

@@ -178,23 +178,10 @@ public class HSQLDBVotingRepository implements VotingRepository {
 
 	@Override
 	public void save(PollData pollData) throws DataException {
-		HSQLDBSaver saveHelper = new HSQLDBSaver("Polls");
-
-		if (pollData.getPollId() != null)
-			saveHelper.bind("poll_id", pollData.getPollId());
-
-		saveHelper.bind("poll_name", pollData.getPollName()).bind("description", pollData.getDescription()).bind("creator", pollData.getCreatorPublicKey())
-				.bind("owner", pollData.getOwner()).bind("published_when", pollData.getPublished()).bind("end_when", pollData.getEndTime())
-				.bind("reduced_poll_name", Unicode.sanitize(pollData.getPollName()));
-
-		try {
-			saveHelper.execute(this.repository);
-		} catch (SQLException e) {
-			throw new DataException("Unable to save poll into repository", e);
-		}
-
 		if (pollData.getPollId() == null)
-			pollData.setPollId(fetchPollId(pollData.getPollName()));
+			insertPoll(pollData);
+		else
+			updatePoll(pollData);
 
 		try {
 			this.repository.delete("PollOptions", "poll_id = ?", pollData.getPollId());
@@ -216,6 +203,36 @@ public class HSQLDBVotingRepository implements VotingRepository {
 			} catch (SQLException e) {
 				throw new DataException("Unable to save poll option into repository", e);
 			}
+		}
+	}
+
+	private void insertPoll(PollData pollData) throws DataException {
+		HSQLDBSaver saveHelper = new HSQLDBSaver("Polls");
+
+		saveHelper.bind("poll_name", pollData.getPollName()).bind("description", pollData.getDescription()).bind("creator", pollData.getCreatorPublicKey())
+				.bind("owner", pollData.getOwner()).bind("published_when", pollData.getPublished()).bind("end_when", pollData.getEndTime())
+				.bind("reduced_poll_name", Unicode.sanitize(pollData.getPollName()));
+
+		try {
+			saveHelper.execute(this.repository);
+		} catch (SQLException e) {
+			throw new DataException("Unable to save poll into repository", e);
+		}
+
+		pollData.setPollId(fetchPollId(pollData.getPollName()));
+	}
+
+	private void updatePoll(PollData pollData) throws DataException {
+		String sql = "UPDATE Polls SET poll_name = ?, description = ?, creator = ?, owner = ?, published_when = ?, end_when = ?, reduced_poll_name = ? WHERE poll_id = ?";
+
+		try {
+			int modifiedRows = this.repository.executeCheckedUpdate(sql, pollData.getPollName(), pollData.getDescription(), pollData.getCreatorPublicKey(),
+					pollData.getOwner(), pollData.getPublished(), pollData.getEndTime(), Unicode.sanitize(pollData.getPollName()), pollData.getPollId());
+
+			if (modifiedRows == 0 && fromPollId(pollData.getPollId()) == null)
+				throw new DataException("Unable to update missing poll in repository");
+		} catch (SQLException e) {
+			throw new DataException("Unable to update poll in repository", e);
 		}
 	}
 

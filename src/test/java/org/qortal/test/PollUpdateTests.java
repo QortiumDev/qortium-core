@@ -44,7 +44,7 @@ public class PollUpdateTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
 			PollData pollData = createTestPoll(repository, alice, "update-poll-original", "Original description", buildYesNoOptions(), null);
-			Long newEndTime = TransactionUtils.nextTimestamp(repository) + 60_000L;
+			Long newEndTime = System.currentTimeMillis() + 600_000L;
 
 			UpdatePollTransactionData transactionData = buildUpdatePollTransactionData(repository, alice, pollData.getPollId(),
 					"update-poll-renamed", "Updated description", buildThreeOptions(), newEndTime);
@@ -212,7 +212,7 @@ public class PollUpdateTests extends Common {
 			PollData pollData = createTestPoll(repository, alice, "serialized-update-poll", "Original description", buildYesNoOptions(), null);
 
 			UpdatePollTransactionData openEndedData = buildUpdatePollTransactionData(repository, alice, pollData.getPollId(),
-					"serialized-update-open", "Updated description", buildThreeOptions(), null);
+					"serialized-update-case", "Updated description", buildThreeOptions(), null);
 			new UpdatePollTransaction(repository, openEndedData).sign(alice);
 			byte[] openEndedBytes = TransactionTransformer.toBytes(openEndedData);
 			UpdatePollTransactionData openEndedDeserialized = (UpdatePollTransactionData) TransactionTransformer.fromBytes(openEndedBytes);
@@ -222,7 +222,7 @@ public class PollUpdateTests extends Common {
 
 			Long endTime = TransactionUtils.nextTimestamp(repository) + 60_000L;
 			UpdatePollTransactionData endedData = buildUpdatePollTransactionData(repository, alice, pollData.getPollId(),
-					"serialized-update-ended", "Updated description", buildThreeOptions(), endTime);
+					"serialized-update-case", "Updated description", buildThreeOptions(), endTime);
 			new UpdatePollTransaction(repository, endedData).sign(alice);
 			byte[] endedBytes = TransactionTransformer.toBytes(endedData);
 			UpdatePollTransactionData endedDeserialized = (UpdatePollTransactionData) TransactionTransformer.fromBytes(endedBytes);

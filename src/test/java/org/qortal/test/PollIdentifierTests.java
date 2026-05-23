@@ -45,11 +45,11 @@ public class PollIdentifierTests extends Common {
 			PollData pollData = repository.getVotingRepository().fromPollName(transactionData.getPollName());
 			assertNotNull(pollData);
 			assertNotNull(pollData.getPollId());
-			assertEquals(pollData.getPollId(), transactionData.getPollId());
 			assertEquals(pollData.getPollName(), repository.getVotingRepository().fromPollId(pollData.getPollId()).getPollName());
 
 			TransactionData fetchedTransactionData = repository.getTransactionRepository().fromSignature(transactionData.getSignature());
 			CreatePollTransactionData fetchedCreatePollData = (CreatePollTransactionData) fetchedTransactionData;
+			assertNotNull(fetchedCreatePollData);
 			assertEquals(pollData.getPollId(), fetchedCreatePollData.getPollId());
 
 			BlockUtils.orphanLastBlock(repository);
@@ -69,7 +69,11 @@ public class PollIdentifierTests extends Common {
 			CreatePollTransactionData createPollData = buildCreatePollTransactionData(repository, alice, "identified-vote-poll");
 
 			TransactionUtils.signAndMint(repository, createPollData, alice);
-			int pollId = createPollData.getPollId();
+			TransactionData fetchedTransactionData = repository.getTransactionRepository().fromSignature(createPollData.getSignature());
+			CreatePollTransactionData fetchedCreatePollData = (CreatePollTransactionData) fetchedTransactionData;
+			assertNotNull(fetchedCreatePollData);
+			assertNotNull(fetchedCreatePollData.getPollId());
+			int pollId = fetchedCreatePollData.getPollId();
 
 			VoteOnPollTransactionData voteData = buildVoteOnPollTransactionData(repository, bob, pollId, 1);
 			TransactionUtils.signAndMint(repository, voteData, bob);
