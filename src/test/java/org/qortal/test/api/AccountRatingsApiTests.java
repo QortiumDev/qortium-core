@@ -450,6 +450,56 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testTrustPolicyEndpointUsesOnChainSuspiciousDecisionSettings() throws DataException {
+		int suspiciousMinRaterCount = 3;
+		int suspiciousMinRatingConfidence = 3;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			approveAccountTrustSuspiciousMinRaterCountOverlay(repository, suspiciousMinRaterCount);
+			approveAccountTrustSuspiciousMinBranchCountOverlay(repository, 0);
+			approveAccountTrustSuspiciousMinRatingConfidenceOverlay(repository, suspiciousMinRatingConfidence);
+		}
+
+		AccountTrustPolicyData policy = this.accountRatingsResource.getAccountTrustPolicy();
+
+		assertEquals(suspiciousMinRaterCount, policy.getSuspiciousMinRaterCount());
+		assertEquals(suspiciousMinRaterCount, policy.getSuspiciousMinBranchCount());
+		assertEquals(suspiciousMinRatingConfidence, policy.getSuspiciousMinRatingConfidence());
+	}
+
+	@Test
+	public void testTrustExplanationUsesOnChainSuspiciousDecisionSettings() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			approveAccountTrustSuspiciousMinRaterCountOverlay(repository, 1);
+			approveAccountTrustSuspiciousMinBranchCountOverlay(repository, 1);
+			approveAccountTrustSuspiciousMinRatingConfidenceOverlay(repository, 4);
+
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+
+			ensureKnownAccount(repository, alice);
+			ensureKnownAccount(repository, bob);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, bob);
+			refreshTrustSnapshots(repository);
+
+			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingCategory.SUBJECT, -2), bob);
+		}
+
+		AccountTrustExplanationData explanation = this.accountRatingsResource
+				.getAccountTrustExplanation(Base58.encode(alice.getPublicKey()), null);
+		AccountTrustExplanationData.CategoryExplanation subject = findCategory(explanation, AccountRatingCategory.SUBJECT);
+
+		assertEquals(AccountTrustStatus.UNVERIFIED, explanation.getTrustStatus());
+		assertEquals(1, subject.getSuspiciousMinBranchCount());
+		assertEquals("-10000000", findRequirement(subject, "suspicious.threshold").getRequired());
+		assertEquals("1", findRequirement(subject, "suspicious.independent-raters").getRequired());
+		assertEquals("1", findRequirement(subject, "suspicious.independent-branches").getRequired());
+	}
+
+	@Test
 	public void testRatingCooldownEndpointReturnsOpenEdgeStatus() throws DataException {
 		TestAccount alice;
 		TestAccount bob;
@@ -2177,6 +2227,52 @@ public class AccountRatingsApiTests extends ApiCommon {
 				TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
 				ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.id, activationHeight,
 				ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.encodeIntValue(positiveMinBranchCount));
+
+		TransactionUtils.signAndMint(repository, transactionData, alice);
+		GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);
+		BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository));
+		BlockUtils.mintBlocks(repository, activationHeight - repository.getBlockRepository().getBlockchainHeight());
+	}
+
+	private void approveAccountTrustSuspiciousMinRaterCountOverlay(Repository repository, int suspiciousMinRaterCount)
+			throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+		int activationHeight = getActivationHeightSafelyAfterApproval(repository, 1);
+		ChainParameterUpdateTransactionData transactionData = new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.encodeIntValue(suspiciousMinRaterCount));
+
+		TransactionUtils.signAndMint(repository, transactionData, alice);
+		GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);
+		BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository));
+		BlockUtils.mintBlocks(repository, activationHeight - repository.getBlockRepository().getBlockchainHeight());
+	}
+
+	private void approveAccountTrustSuspiciousMinBranchCountOverlay(Repository repository, int suspiciousMinBranchCount)
+			throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+		int activationHeight = getActivationHeightSafelyAfterApproval(repository, 1);
+		ChainParameterUpdateTransactionData transactionData = new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.encodeIntValue(suspiciousMinBranchCount));
+
+		TransactionUtils.signAndMint(repository, transactionData, alice);
+		GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);
+		BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository));
+		BlockUtils.mintBlocks(repository, activationHeight - repository.getBlockRepository().getBlockchainHeight());
+	}
+
+	private void approveAccountTrustSuspiciousMinRatingConfidenceOverlay(Repository repository,
+			int suspiciousMinRatingConfidence) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+		int activationHeight = getActivationHeightSafelyAfterApproval(repository, 1);
+		ChainParameterUpdateTransactionData transactionData = new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.encodeIntValue(
+						suspiciousMinRatingConfidence));
 
 		TransactionUtils.signAndMint(repository, transactionData, alice);
 		GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: add on-chain suspicious trust decision updates
+
+Added development-group approved updates for the suspicious trust decision requirements used by account trust level decisions. Qortium can now store voted suspicious rater, branch, and rating-confidence requirements on chain, apply them to trust derivation from the approved activation height, expose typed API helpers for proposing and reading the values, and refresh trust snapshots when those values activate.
+
 ### 2026-05-23 - consensus: add on-chain positive trust branch count updates
 
 Added development-group approved updates for the positive trust branch count used by account trust level decisions. Qortium can now store a voted independent-branch requirement on chain, apply it to trust derivation from the approved activation height, expose typed API helpers for proposing and reading the value, and refresh trust snapshots when the voted value activates.

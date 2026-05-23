@@ -14,6 +14,9 @@ public class ChainParameterValidationMetadata {
 	@Schema(description = "minimum integer value accepted for integer-like parameters, when applicable")
 	public Integer minimumIntegerValue;
 
+	@Schema(description = "maximum integer value accepted for integer-like parameters, when applicable")
+	public Integer maximumIntegerValue;
+
 	@Schema(description = "required integer-list item count, when applicable")
 	public Integer integerListLength;
 
@@ -39,11 +42,12 @@ public class ChainParameterValidationMetadata {
 	}
 
 	public ChainParameterValidationMetadata(Long minimumLongValue, Integer minimumIntegerValue,
-			Integer integerListLength, Integer minimumIntegerListValue, Integer maximumIntegerListValue,
-			String[] integerListLabels, boolean requiresPositiveTotal, boolean requiresPositiveFirstValue,
-			boolean requiresAnyPositiveValue) {
+			Integer maximumIntegerValue, Integer integerListLength, Integer minimumIntegerListValue,
+			Integer maximumIntegerListValue, String[] integerListLabels, boolean requiresPositiveTotal,
+			boolean requiresPositiveFirstValue, boolean requiresAnyPositiveValue) {
 		this.minimumLongValue = minimumLongValue;
 		this.minimumIntegerValue = minimumIntegerValue;
+		this.maximumIntegerValue = maximumIntegerValue;
 		this.integerListLength = integerListLength;
 		this.minimumIntegerListValue = minimumIntegerListValue;
 		this.maximumIntegerListValue = maximumIntegerListValue;

@@ -808,6 +808,51 @@ public class BlockChain {
 		return getAccountTrustPositiveMinBranchCount();
 	}
 
+	public int getAccountTrustSuspiciousMinRaterCount() {
+		return this.accountTrustSettings.getSuspiciousMinRaterCount();
+	}
+
+	public int getAccountTrustSuspiciousMinRaterCount(Repository repository, int height) throws DataException {
+		ChainParameterData suspiciousMinRaterCountUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.id, height);
+		if (suspiciousMinRaterCountUpdate != null)
+			return ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.decodeIntValue(
+					suspiciousMinRaterCountUpdate.getValue());
+
+		return getAccountTrustSuspiciousMinRaterCount();
+	}
+
+	public int getAccountTrustSuspiciousMinBranchCount() {
+		return this.accountTrustSettings.getSuspiciousMinBranchCount();
+	}
+
+	public int getAccountTrustSuspiciousMinBranchCount(Repository repository, int height) throws DataException {
+		ChainParameterData suspiciousMinBranchCountUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.id, height);
+		if (suspiciousMinBranchCountUpdate == null)
+			return getAccountTrustSuspiciousMinBranchCount();
+
+		int suspiciousMinBranchCount = ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.decodeIntValue(
+				suspiciousMinBranchCountUpdate.getValue());
+		return suspiciousMinBranchCount == 0
+				? getAccountTrustSuspiciousMinRaterCount(repository, height)
+				: suspiciousMinBranchCount;
+	}
+
+	public int getAccountTrustSuspiciousMinRatingConfidence() {
+		return this.accountTrustSettings.getSuspiciousMinRatingConfidence();
+	}
+
+	public int getAccountTrustSuspiciousMinRatingConfidence(Repository repository, int height) throws DataException {
+		ChainParameterData suspiciousMinRatingConfidenceUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.id, height);
+		if (suspiciousMinRatingConfidenceUpdate != null)
+			return ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.decodeIntValue(
+					suspiciousMinRatingConfidenceUpdate.getValue());
+
+		return getAccountTrustSuspiciousMinRatingConfidence();
+	}
+
 	public int getAccountRatingChangeCooldownBlocks() {
 		return this.accountTrustSettings.getAccountRatingChangeCooldownBlocks();
 	}

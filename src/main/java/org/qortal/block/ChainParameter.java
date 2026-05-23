@@ -49,7 +49,19 @@ public enum ChainParameter {
 	ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT(10, Integer.BYTES, "INTEGER",
 			"Minimum number of independent positive trust branches required for positive account trust levels.",
 			"/chain-parameters/account-trust/positive-min-branch-count/update",
-			"/chain-parameters/account-trust/positive-min-branch-count/{height}");
+			"/chain-parameters/account-trust/positive-min-branch-count/{height}"),
+	ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT(11, Integer.BYTES, "INTEGER",
+			"Minimum number of independent negative raters required for suspicious account trust levels.",
+			"/chain-parameters/account-trust/suspicious-min-rater-count/update",
+			"/chain-parameters/account-trust/suspicious-min-rater-count/{height}"),
+	ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT(12, Integer.BYTES, "INTEGER",
+			"Minimum number of independent negative trust branches required for suspicious account trust levels; zero follows the effective suspicious rater count.",
+			"/chain-parameters/account-trust/suspicious-min-branch-count/update",
+			"/chain-parameters/account-trust/suspicious-min-branch-count/{height}"),
+	ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE(13, Integer.BYTES, "INTEGER",
+			"Minimum negative rating confidence required to count toward suspicious account trust levels.",
+			"/chain-parameters/account-trust/suspicious-min-rating-confidence/update",
+			"/chain-parameters/account-trust/suspicious-min-rating-confidence/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 	public static final String VALUE_TYPE_AMOUNT = "AMOUNT";
@@ -120,10 +132,13 @@ public enum ChainParameter {
 		switch (this) {
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
 			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT:
 				return 0;
 
 			case ACCOUNT_TRUST_MANAGER_ENERGY_HOPS:
 			case ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT:
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT:
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE:
 				return 1;
 
 			default:
@@ -136,6 +151,16 @@ public enum ChainParameter {
 			case REWARD_SHARE_WEIGHTS:
 			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
 				return this.valueLength / Integer.BYTES;
+
+			default:
+				return null;
+		}
+	}
+
+	public Integer getMaximumIntegerValue() {
+		switch (this) {
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE:
+				return 4;
 
 			default:
 				return null;
@@ -191,7 +216,10 @@ public enum ChainParameter {
 	public boolean affectsTrustSnapshots() {
 		return this == ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS || this == ACCOUNT_TRUST_STARTING_ENERGY
 				|| this == ACCOUNT_TRUST_MANAGER_ENERGY_HOPS
-				|| this == ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT;
+				|| this == ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT
+				|| this == ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT
+				|| this == ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT
+				|| this == ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE;
 	}
 
 	public boolean isValidValue(byte[] value) {
@@ -211,9 +239,17 @@ public enum ChainParameter {
 			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
 				return decodeIntValue(value) >= 0;
 
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT:
+				return decodeIntValue(value) >= 0;
+
 			case ACCOUNT_TRUST_MANAGER_ENERGY_HOPS:
 			case ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT:
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT:
 				return decodeIntValue(value) > 0;
+
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE:
+				int confidence = decodeIntValue(value);
+				return confidence >= 1 && confidence <= 4;
 
 			case REWARD_SHARE_WEIGHTS:
 				int[] weights = decodeIntArrayValue(value);

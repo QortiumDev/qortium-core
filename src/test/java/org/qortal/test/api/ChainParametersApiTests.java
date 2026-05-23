@@ -9,6 +9,9 @@ import org.qortal.api.model.AccountRatingCooldownUpdateRequest;
 import org.qortal.api.model.AccountTrustManagerEnergyHopsUpdateRequest;
 import org.qortal.api.model.AccountTrustPositiveMinBranchCountUpdateRequest;
 import org.qortal.api.model.AccountTrustStartingEnergyUpdateRequest;
+import org.qortal.api.model.AccountTrustSuspiciousMinBranchCountUpdateRequest;
+import org.qortal.api.model.AccountTrustSuspiciousMinRaterCountUpdateRequest;
+import org.qortal.api.model.AccountTrustSuspiciousMinRatingConfidenceUpdateRequest;
 import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterEffectiveValue;
 import org.qortal.api.model.ChainParameterMetadata;
@@ -64,7 +67,7 @@ public class ChainParametersApiTests extends ApiCommon {
 	public void testChainParameterMetadataListsBlockReward() {
 		List<ChainParameterMetadata> parameters = this.chainParametersResource.getChainParameters();
 
-		assertEquals(10, parameters.size());
+		assertEquals(13, parameters.size());
 
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.BLOCK_REWARD), ChainParameter.BLOCK_REWARD);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN),
@@ -84,6 +87,12 @@ public class ChainParametersApiTests extends ApiCommon {
 				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT),
 				ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT),
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT),
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE),
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE);
 
 		assertEquals(Long.valueOf(0L), findMetadata(parameters, ChainParameter.BLOCK_REWARD).validation.minimumLongValue);
 		assertEquals(Long.valueOf(0L), findMetadata(parameters, ChainParameter.UNIT_FEE).validation.minimumLongValue);
@@ -99,6 +108,15 @@ public class ChainParametersApiTests extends ApiCommon {
 				findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS).validation.minimumIntegerValue);
 		assertEquals(Integer.valueOf(1),
 				findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT).validation.minimumIntegerValue);
+		assertEquals(Integer.valueOf(1),
+				findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT).validation.minimumIntegerValue);
+		assertEquals(Integer.valueOf(0),
+				findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT).validation.minimumIntegerValue);
+		assertEquals(Integer.valueOf(1),
+				findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE).validation.minimumIntegerValue);
+		assertEquals(Integer.valueOf(4),
+				findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE)
+						.validation.maximumIntegerValue);
 
 		ChainParameterMetadata rewardWeights = findMetadata(parameters, ChainParameter.REWARD_SHARE_WEIGHTS);
 		assertEquals(Integer.valueOf(10), rewardWeights.validation.integerListLength);
@@ -250,6 +268,75 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
 		assertArrayEquals(ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.encodeIntValue(positiveMinBranchCount),
 				transactionData.getValue());
+		assertNotNull(transactionData.getFee());
+	}
+
+	@Test
+	public void testBuildAccountTrustSuspiciousMinRaterCountUpdateUsesIntegerValue()
+			throws DataException, TransformationException {
+		int suspiciousMinRaterCount = 3;
+		AccountTrustSuspiciousMinRaterCountUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildAccountTrustSuspiciousMinRaterCountUpdateRequest(repository, suspiciousMinRaterCount);
+		}
+
+		String rawTransaction = this.chainParametersResource.updateAccountTrustSuspiciousMinRaterCount(request);
+		ChainParameterUpdateTransactionData transactionData = decodeRawTransaction(rawTransaction);
+
+		assertEquals(ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.id, transactionData.getParameterId());
+		assertEquals(request.activationHeight, transactionData.getActivationHeight());
+		assertEquals(request.timestamp, transactionData.getTimestamp());
+		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
+		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
+		assertArrayEquals(ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.encodeIntValue(suspiciousMinRaterCount),
+				transactionData.getValue());
+		assertNotNull(transactionData.getFee());
+	}
+
+	@Test
+	public void testBuildAccountTrustSuspiciousMinBranchCountUpdateUsesIntegerValue()
+			throws DataException, TransformationException {
+		int suspiciousMinBranchCount = 0;
+		AccountTrustSuspiciousMinBranchCountUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildAccountTrustSuspiciousMinBranchCountUpdateRequest(repository, suspiciousMinBranchCount);
+		}
+
+		String rawTransaction = this.chainParametersResource.updateAccountTrustSuspiciousMinBranchCount(request);
+		ChainParameterUpdateTransactionData transactionData = decodeRawTransaction(rawTransaction);
+
+		assertEquals(ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.id, transactionData.getParameterId());
+		assertEquals(request.activationHeight, transactionData.getActivationHeight());
+		assertEquals(request.timestamp, transactionData.getTimestamp());
+		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
+		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
+		assertArrayEquals(ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.encodeIntValue(suspiciousMinBranchCount),
+				transactionData.getValue());
+		assertNotNull(transactionData.getFee());
+	}
+
+	@Test
+	public void testBuildAccountTrustSuspiciousMinRatingConfidenceUpdateUsesIntegerValue()
+			throws DataException, TransformationException {
+		int suspiciousMinRatingConfidence = 3;
+		AccountTrustSuspiciousMinRatingConfidenceUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildAccountTrustSuspiciousMinRatingConfidenceUpdateRequest(repository, suspiciousMinRatingConfidence);
+		}
+
+		String rawTransaction = this.chainParametersResource.updateAccountTrustSuspiciousMinRatingConfidence(request);
+		ChainParameterUpdateTransactionData transactionData = decodeRawTransaction(rawTransaction);
+
+		assertEquals(ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.id, transactionData.getParameterId());
+		assertEquals(request.activationHeight, transactionData.getActivationHeight());
+		assertEquals(request.timestamp, transactionData.getTimestamp());
+		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
+		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
+		assertArrayEquals(ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.encodeIntValue(
+				suspiciousMinRatingConfidence), transactionData.getValue());
 		assertNotNull(transactionData.getFee());
 	}
 
@@ -419,6 +506,33 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testGetAccountTrustSuspiciousMinRaterCountReturnsEffectiveValue() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int height = repository.getBlockRepository().getBlockchainHeight();
+			assertEquals(BlockChain.getInstance().getAccountTrustSuspiciousMinRaterCount(repository, height),
+					this.chainParametersResource.getAccountTrustSuspiciousMinRaterCount(height));
+		}
+	}
+
+	@Test
+	public void testGetAccountTrustSuspiciousMinBranchCountReturnsEffectiveValue() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int height = repository.getBlockRepository().getBlockchainHeight();
+			assertEquals(BlockChain.getInstance().getAccountTrustSuspiciousMinBranchCount(repository, height),
+					this.chainParametersResource.getAccountTrustSuspiciousMinBranchCount(height));
+		}
+	}
+
+	@Test
+	public void testGetAccountTrustSuspiciousMinRatingConfidenceReturnsEffectiveValue() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int height = repository.getBlockRepository().getBlockchainHeight();
+			assertEquals(BlockChain.getInstance().getAccountTrustSuspiciousMinRatingConfidence(repository, height),
+					this.chainParametersResource.getAccountTrustSuspiciousMinRatingConfidence(height));
+		}
+	}
+
+	@Test
 	public void testEffectiveParameterValuesReturnConfigSourcesWithoutProposals() throws DataException {
 		int height;
 		long fallbackTimestamp;
@@ -430,7 +544,7 @@ public class ChainParametersApiTests extends ApiCommon {
 
 		List<ChainParameterEffectiveValue> values = this.chainParametersResource.getEffectiveParameterValues(null);
 
-		assertEquals(10, values.size());
+		assertEquals(13, values.size());
 		assertConfigEffectiveValue(values, ChainParameter.BLOCK_REWARD, height,
 				ChainParameter.BLOCK_REWARD.encodeLongValue(BlockChain.getInstance().getRewardAtHeight(height)));
 		assertConfigEffectiveValue(values, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN, height,
@@ -458,6 +572,15 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT, height,
 				ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.encodeIntValue(
 						BlockChain.getInstance().getAccountTrustPositiveMinBranchCount()));
+		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT, height,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.encodeIntValue(
+						BlockChain.getInstance().getAccountTrustSuspiciousMinRaterCount()));
+		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT, height,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.encodeIntValue(
+						BlockChain.getInstance().getAccountTrustSuspiciousMinBranchCount()));
+		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE, height,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.encodeIntValue(
+						BlockChain.getInstance().getAccountTrustSuspiciousMinRatingConfidence()));
 	}
 
 	@Test
@@ -663,6 +786,54 @@ public class ChainParametersApiTests extends ApiCommon {
 				() -> this.chainParametersResource.updateAccountTrustPositiveMinBranchCount(zeroRequest));
 		assertApiError(ApiError.TRANSACTION_INVALID,
 				() -> this.chainParametersResource.updateAccountTrustPositiveMinBranchCount(negativeRequest));
+	}
+
+	@Test
+	public void testBuildAccountTrustSuspiciousMinRaterCountUpdateRejectsNonPositiveValue() throws DataException {
+		AccountTrustSuspiciousMinRaterCountUpdateRequest zeroRequest;
+		AccountTrustSuspiciousMinRaterCountUpdateRequest negativeRequest;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			zeroRequest = buildAccountTrustSuspiciousMinRaterCountUpdateRequest(repository, 0);
+			negativeRequest = buildAccountTrustSuspiciousMinRaterCountUpdateRequest(repository, -1);
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateAccountTrustSuspiciousMinRaterCount(zeroRequest));
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateAccountTrustSuspiciousMinRaterCount(negativeRequest));
+	}
+
+	@Test
+	public void testBuildAccountTrustSuspiciousMinBranchCountUpdateRejectsNegativeValue() throws DataException {
+		AccountTrustSuspiciousMinBranchCountUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildAccountTrustSuspiciousMinBranchCountUpdateRequest(repository, -1);
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateAccountTrustSuspiciousMinBranchCount(request));
+	}
+
+	@Test
+	public void testBuildAccountTrustSuspiciousMinRatingConfidenceUpdateRejectsOutOfRangeValue() throws DataException {
+		AccountTrustSuspiciousMinRatingConfidenceUpdateRequest zeroRequest;
+		AccountTrustSuspiciousMinRatingConfidenceUpdateRequest excessiveRequest;
+		AccountTrustSuspiciousMinRatingConfidenceUpdateRequest negativeRequest;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			zeroRequest = buildAccountTrustSuspiciousMinRatingConfidenceUpdateRequest(repository, 0);
+			excessiveRequest = buildAccountTrustSuspiciousMinRatingConfidenceUpdateRequest(repository, 5);
+			negativeRequest = buildAccountTrustSuspiciousMinRatingConfidenceUpdateRequest(repository, -1);
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateAccountTrustSuspiciousMinRatingConfidence(zeroRequest));
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateAccountTrustSuspiciousMinRatingConfidence(excessiveRequest));
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateAccountTrustSuspiciousMinRatingConfidence(negativeRequest));
 	}
 
 	@Test
@@ -1073,6 +1244,38 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testPendingAccountTrustSuspiciousDecisionProposalSummariesShowDecodedValuesAndVoteCounts()
+			throws DataException {
+		ChainParameterUpdateTransactionData raterCountTransactionData;
+		ChainParameterUpdateTransactionData branchCountTransactionData;
+		ChainParameterUpdateTransactionData ratingConfidenceTransactionData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 100;
+
+			raterCountTransactionData = buildAccountTrustSuspiciousMinRaterCountUpdateTransaction(repository, alice,
+					activationHeight, 3);
+			TransactionUtils.signAndMint(repository, raterCountTransactionData, alice);
+
+			branchCountTransactionData = buildAccountTrustSuspiciousMinBranchCountUpdateTransaction(repository, alice,
+					activationHeight + 1, 0);
+			TransactionUtils.signAndMint(repository, branchCountTransactionData, alice);
+
+			ratingConfidenceTransactionData = buildAccountTrustSuspiciousMinRatingConfidenceUpdateTransaction(repository,
+					alice, activationHeight + 2, 3);
+			TransactionUtils.signAndMint(repository, ratingConfidenceTransactionData, alice);
+		}
+
+		assertPendingIntegerSummary(raterCountTransactionData,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT, 3);
+		assertPendingIntegerSummary(branchCountTransactionData,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT, 0);
+		assertPendingIntegerSummary(ratingConfidenceTransactionData,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE, 3);
+	}
+
+	@Test
 	public void testChainParameterUpdatesCanIncludeUnconfirmedProposals() throws DataException {
 		ChainParameterUpdateTransactionData transactionData;
 
@@ -1278,6 +1481,58 @@ public class ChainParametersApiTests extends ApiCommon {
 		return request;
 	}
 
+	private static AccountTrustSuspiciousMinRaterCountUpdateRequest buildAccountTrustSuspiciousMinRaterCountUpdateRequest(
+			Repository repository, int suspiciousMinRaterCount) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+		AccountTrustSuspiciousMinRaterCountUpdateRequest request =
+				new AccountTrustSuspiciousMinRaterCountUpdateRequest();
+		request.timestamp = System.currentTimeMillis();
+		request.txGroupId = TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID;
+		request.updaterPublicKey = alice.getPublicKey();
+		request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ 100;
+		request.suspiciousMinRaterCount = suspiciousMinRaterCount;
+
+		return request;
+	}
+
+	private static AccountTrustSuspiciousMinBranchCountUpdateRequest buildAccountTrustSuspiciousMinBranchCountUpdateRequest(
+			Repository repository, int suspiciousMinBranchCount) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+		AccountTrustSuspiciousMinBranchCountUpdateRequest request =
+				new AccountTrustSuspiciousMinBranchCountUpdateRequest();
+		request.timestamp = System.currentTimeMillis();
+		request.txGroupId = TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID;
+		request.updaterPublicKey = alice.getPublicKey();
+		request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ 100;
+		request.suspiciousMinBranchCount = suspiciousMinBranchCount;
+
+		return request;
+	}
+
+	private static AccountTrustSuspiciousMinRatingConfidenceUpdateRequest
+			buildAccountTrustSuspiciousMinRatingConfidenceUpdateRequest(Repository repository,
+			int suspiciousMinRatingConfidence) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+		AccountTrustSuspiciousMinRatingConfidenceUpdateRequest request =
+				new AccountTrustSuspiciousMinRatingConfidenceUpdateRequest();
+		request.timestamp = System.currentTimeMillis();
+		request.txGroupId = TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID;
+		request.updaterPublicKey = alice.getPublicKey();
+		request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ 100;
+		request.suspiciousMinRatingConfidence = suspiciousMinRatingConfidence;
+
+		return request;
+	}
+
 	private static AccountRatingCooldownUpdateRequest buildAccountRatingCooldownUpdateRequest(
 			Repository repository, int cooldownBlocks) throws DataException {
 		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -1397,6 +1652,34 @@ public class ChainParametersApiTests extends ApiCommon {
 				ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.encodeIntValue(positiveMinBranchCount));
 	}
 
+	private static ChainParameterUpdateTransactionData buildAccountTrustSuspiciousMinRaterCountUpdateTransaction(
+			Repository repository, PrivateKeyAccount updater, int activationHeight, int suspiciousMinRaterCount)
+			throws DataException {
+		return new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.encodeIntValue(suspiciousMinRaterCount));
+	}
+
+	private static ChainParameterUpdateTransactionData buildAccountTrustSuspiciousMinBranchCountUpdateTransaction(
+			Repository repository, PrivateKeyAccount updater, int activationHeight, int suspiciousMinBranchCount)
+			throws DataException {
+		return new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.encodeIntValue(suspiciousMinBranchCount));
+	}
+
+	private static ChainParameterUpdateTransactionData buildAccountTrustSuspiciousMinRatingConfidenceUpdateTransaction(
+			Repository repository, PrivateKeyAccount updater, int activationHeight, int suspiciousMinRatingConfidence)
+			throws DataException {
+		return new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.encodeIntValue(
+						suspiciousMinRatingConfidence));
+	}
+
 	private static ChainParameterUpdateTransactionData buildUnitFeeUpdateTransaction(
 			Repository repository, PrivateKeyAccount updater, int activationHeight, long unitFee) throws DataException {
 		return new ChainParameterUpdateTransactionData(
@@ -1442,6 +1725,7 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertNotNull(metadata.validation);
 		assertEquals(parameter.getMinimumLongValue(), metadata.validation.minimumLongValue);
 		assertEquals(parameter.getMinimumIntegerValue(), metadata.validation.minimumIntegerValue);
+		assertEquals(parameter.getMaximumIntegerValue(), metadata.validation.maximumIntegerValue);
 		assertEquals(parameter.getIntegerListLength(), metadata.validation.integerListLength);
 		assertEquals(parameter.getMinimumIntegerListValue(), metadata.validation.minimumIntegerListValue);
 		assertEquals(parameter.getMaximumIntegerListValue(), metadata.validation.maximumIntegerListValue);
@@ -1471,6 +1755,33 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertNull(value.nextLongValue);
 		assertNull(value.nextIntegerValue);
 		assertNull(value.nextIntegerValues);
+	}
+
+	private void assertPendingIntegerSummary(ChainParameterUpdateTransactionData transactionData,
+			ChainParameter parameter, int expectedValue) {
+		List<ChainParameterUpdateSummary> summaries = this.chainParametersResource.getChainParameterUpdates(
+				parameter.id, null, null, null, null, null, null, null, null);
+
+		assertEquals(1, summaries.size());
+
+		ChainParameterUpdateSummary summary = summaries.get(0);
+		assertArrayEquals(transactionData.getSignature(), summary.signature);
+		assertEquals(parameter.id, summary.parameterId);
+		assertEquals(parameter.name(), summary.parameterName);
+		assertEquals(transactionData.getActivationHeight(), summary.activationHeight);
+		assertArrayEquals(transactionData.getValue(), summary.value);
+		assertEquals("INTEGER", summary.valueType);
+		assertEquals(Integer.toString(expectedValue), summary.displayValue);
+		assertNull(summary.amount);
+		assertNull(summary.longValue);
+		assertEquals(Integer.valueOf(expectedValue), summary.integerValue);
+		assertNull(summary.integerValues);
+		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
+		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
+		assertEquals(0, summary.approvalCount);
+		assertEquals(0, summary.rejectionCount);
+		assertEquals(1, summary.approvalAuthorityCount);
+		assertFalse(summary.effectiveNow);
 	}
 
 	private static void assertCurrentDecodedValue(ChainParameterEffectiveValue value, ChainParameter parameter,

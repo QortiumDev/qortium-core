@@ -2,7 +2,7 @@
 
 Status: Chain builder reference
 
-Date: 2026-05-22
+Date: 2026-05-23
 
 ## Purpose
 
@@ -14,11 +14,10 @@ This is intentionally small at first. The currently supported parameters are
 the height-based block reward, the reward share-bin activation count, reward
 share weights, the account rating change cooldown, trust status vote-weight
 percentages, account trust starting energy, account trust manager energy hops,
-positive trust branch counts, and the normal and name-registration transaction
-unit fees. Broader
-trust-network policy values, timestamp-based settings, and larger structured
-parameter sets should be added only after each format and validation rule is
-made explicit.
+positive trust branch counts, suspicious trust decision requirements, and the
+normal and name-registration transaction unit fees. Broader trust-network
+policy values, timestamp-based settings, and larger structured parameter sets
+should be added only after each format and validation rule is made explicit.
 
 ## Approval Model
 
@@ -173,36 +172,55 @@ overrides it. Because changing this requirement can change derived account
 trust levels and mapped trust statuses, this parameter refreshes trust
 snapshots at activation height.
 
+`ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT` is parameter ID `11`.
+
+Its value is exactly 4 bytes: a signed integer count of independent negative
+raters required before a negative trust score can map an account to suspicious.
+The value must be greater than zero.
+
+The approved suspicious rater count applies to account trust derivation at its
+activation height and remains effective until another approved
+`ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT` update with a later activation
+height overrides it. Because changing this requirement can change derived
+account trust levels and mapped trust statuses, this parameter refreshes trust
+snapshots at activation height.
+
+`ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT` is parameter ID `12`.
+
+Its value is exactly 4 bytes: a signed integer count of independent negative
+trust branches required before a negative trust score can map an account to
+suspicious. Negative values are invalid. A value of zero is accepted and means
+the effective suspicious branch-count requirement follows the effective
+suspicious rater-count requirement at the same height.
+
+The approved suspicious branch count applies to account trust derivation at its
+activation height and remains effective until another approved
+`ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT` update with a later activation
+height overrides it. Because changing this requirement can change derived
+account trust levels and mapped trust statuses, this parameter refreshes trust
+snapshots at activation height.
+
+`ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE` is parameter ID `13`.
+
+Its value is exactly 4 bytes: a signed integer minimum confidence for negative
+ratings that count toward suspicious account trust decisions. The value must be
+between 1 and 4, inclusive.
+
+The approved suspicious rating-confidence requirement applies to account trust
+derivation at its activation height and remains effective until another
+approved `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE` update with a later
+activation height overrides it. Because changing this requirement can change
+derived account trust levels and mapped trust statuses, this parameter refreshes
+trust snapshots at activation height.
+
 ## Planned Account Trust Policy Parameters
 
-The next trust-policy work should be split into small scalar parameters before
-larger structured policy tables are made votable. The scalar settings are
-simple to encode, validate, explain through metadata, and read through
-height-aware consensus lookups.
-
-The remaining planned scalar parameters are:
-
-| Planned ID | Parameter | Value | Validation |
-| --- | --- | --- | --- |
-| `11` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT` | signed integer | greater than `0` |
-| `12` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT` | signed integer | `0` or greater; `0` keeps the current behavior of matching `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT` |
-| `13` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE` | signed integer | between `1` and `4`, inclusive |
-
-Each scalar parameter should keep the same development-group approval model,
-activation lead time, repository overlay behavior, typed proposal builder, typed
-effective-value endpoint, validation metadata, and `blockchain.json` fallback
-used by the existing supported parameters.
-
-Before each scalar parameter is implemented, every runtime path that reads that
-setting must be made height-aware. That includes trust derivation, trust
-explanation, trust policy views, rating previews, and any consensus path that
-uses the setting while processing or validating blocks.
-
-The category policy tables should be deferred to a later structured-parameter
-phase. Those tables include per-category level thresholds, per-category level
-caps, per-category suspicious thresholds, and per-category suspicious caps. They
-need a separate canonical binary table format and cross-field validation before
-they are accepted on chain.
+The initial scalar trust decision settings are now supported. The category
+policy tables should be deferred to a later structured-parameter phase. Those
+tables include per-category level thresholds, per-category level caps,
+per-category suspicious thresholds, and per-category suspicious caps. They need
+a separate canonical binary table format and cross-field validation before they
+are accepted on chain.
 
 `activeWeightCategory`, category policy tables, and broader trust derivation
 behavior changes remain config-only until that structured format is designed.
@@ -215,7 +233,8 @@ current minimum activation delay that proposals for that parameter must satisfy,
 plus structured validation hints for proposal builders.
 
 Validation metadata includes numeric minimums for amount and integer
-parameters. For integer-list parameters, it includes the required list length,
+parameters, plus integer maximums when a scalar parameter has a known upper
+bound. For integer-list parameters, it includes the required list length,
 per-item bounds when known, ordered item labels, and flags for positive-total,
 positive-first-value, or any-positive-value requirements.
 
@@ -327,6 +346,34 @@ provide the new signed integer value directly.
 `GET /chain-parameters/account-trust/positive-min-branch-count/{height}`
 returns the effective positive branch count for a height after applying any
 approved overlay that is active at that height.
+
+`POST /chain-parameters/account-trust/suspicious-min-rater-count/update` builds
+an unsigned `CHAIN_PARAMETER_UPDATE` transaction for the minimum independent
+negative rater count required for suspicious account trust levels. Callers
+provide the new signed integer value directly.
+
+`GET /chain-parameters/account-trust/suspicious-min-rater-count/{height}`
+returns the effective suspicious rater count for a height after applying any
+approved overlay that is active at that height.
+
+`POST /chain-parameters/account-trust/suspicious-min-branch-count/update` builds
+an unsigned `CHAIN_PARAMETER_UPDATE` transaction for the minimum independent
+negative branch count required for suspicious account trust levels. Callers
+provide the new signed integer value directly. A value of zero follows the
+effective suspicious rater count at the same height.
+
+`GET /chain-parameters/account-trust/suspicious-min-branch-count/{height}`
+returns the effective suspicious branch count for a height after applying any
+approved overlay that is active at that height.
+
+`POST /chain-parameters/account-trust/suspicious-min-rating-confidence/update`
+builds an unsigned `CHAIN_PARAMETER_UPDATE` transaction for the minimum negative
+rating confidence required for suspicious account trust levels. Callers provide
+the new signed integer value directly.
+
+`GET /chain-parameters/account-trust/suspicious-min-rating-confidence/{height}`
+returns the effective suspicious rating-confidence requirement for a height
+after applying any approved overlay that is active at that height.
 
 `POST /chain-parameters/unit-fee/update` builds an unsigned
 `CHAIN_PARAMETER_UPDATE` transaction for the normal transaction unit fee. Callers

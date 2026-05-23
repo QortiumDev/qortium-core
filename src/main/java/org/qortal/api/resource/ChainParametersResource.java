@@ -15,6 +15,9 @@ import org.qortal.api.model.AccountRatingCooldownUpdateRequest;
 import org.qortal.api.model.AccountTrustManagerEnergyHopsUpdateRequest;
 import org.qortal.api.model.AccountTrustPositiveMinBranchCountUpdateRequest;
 import org.qortal.api.model.AccountTrustStartingEnergyUpdateRequest;
+import org.qortal.api.model.AccountTrustSuspiciousMinBranchCountUpdateRequest;
+import org.qortal.api.model.AccountTrustSuspiciousMinRaterCountUpdateRequest;
+import org.qortal.api.model.AccountTrustSuspiciousMinRatingConfidenceUpdateRequest;
 import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterEffectiveValue;
 import org.qortal.api.model.ChainParameterMetadata;
@@ -360,6 +363,75 @@ public class ChainParametersResource {
 	}
 
 	@GET
+	@Path("/account-trust/suspicious-min-rater-count/{height}")
+	@Operation(
+			summary = "Fetch the effective suspicious trust rater count requirement at a height",
+			responses = {
+					@ApiResponse(
+							description = "minimum independent negative rater count",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "integer")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public int getAccountTrustSuspiciousMinRaterCount(@PathParam("height") int height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return BlockChain.getInstance().getAccountTrustSuspiciousMinRaterCount(repository, height);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/account-trust/suspicious-min-branch-count/{height}")
+	@Operation(
+			summary = "Fetch the effective suspicious trust branch count requirement at a height",
+			responses = {
+					@ApiResponse(
+							description = "minimum independent negative trust branch count",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "integer")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public int getAccountTrustSuspiciousMinBranchCount(@PathParam("height") int height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return BlockChain.getInstance().getAccountTrustSuspiciousMinBranchCount(repository, height);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/account-trust/suspicious-min-rating-confidence/{height}")
+	@Operation(
+			summary = "Fetch the effective suspicious trust rating-confidence requirement at a height",
+			responses = {
+					@ApiResponse(
+							description = "minimum negative rating confidence",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "integer")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public int getAccountTrustSuspiciousMinRatingConfidence(@PathParam("height") int height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return BlockChain.getInstance().getAccountTrustSuspiciousMinRatingConfidence(repository, height);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
 	@Path("/unit-fee/{height}")
 	@Operation(
 			summary = "Fetch the effective normal transaction unit fee at a height",
@@ -698,6 +770,120 @@ public class ChainParametersResource {
 	}
 
 	@POST
+	@Path("/account-trust/suspicious-min-rater-count/update")
+	@Operation(
+			summary = "Build raw, unsigned, ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT chain-parameter update transaction",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = AccountTrustSuspiciousMinRaterCountUpdateRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, CHAIN_PARAMETER_UPDATE transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "string")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String updateAccountTrustSuspiciousMinRaterCount(
+			AccountTrustSuspiciousMinRaterCountUpdateRequest updateRequest) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChainParameterUpdateTransactionData transactionData =
+					buildAccountTrustSuspiciousMinRaterCountTransactionData(updateRequest);
+			return validateAndTransformUpdate(repository, transactionData);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/account-trust/suspicious-min-branch-count/update")
+	@Operation(
+			summary = "Build raw, unsigned, ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT chain-parameter update transaction",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = AccountTrustSuspiciousMinBranchCountUpdateRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, CHAIN_PARAMETER_UPDATE transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "string")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String updateAccountTrustSuspiciousMinBranchCount(
+			AccountTrustSuspiciousMinBranchCountUpdateRequest updateRequest) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChainParameterUpdateTransactionData transactionData =
+					buildAccountTrustSuspiciousMinBranchCountTransactionData(updateRequest);
+			return validateAndTransformUpdate(repository, transactionData);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/account-trust/suspicious-min-rating-confidence/update")
+	@Operation(
+			summary = "Build raw, unsigned, ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE chain-parameter update transaction",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = AccountTrustSuspiciousMinRatingConfidenceUpdateRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, CHAIN_PARAMETER_UPDATE transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "string")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String updateAccountTrustSuspiciousMinRatingConfidence(
+			AccountTrustSuspiciousMinRatingConfidenceUpdateRequest updateRequest) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChainParameterUpdateTransactionData transactionData =
+					buildAccountTrustSuspiciousMinRatingConfidenceTransactionData(updateRequest);
+			return validateAndTransformUpdate(repository, transactionData);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
 	@Path("/unit-fee/update")
 	@Operation(
 			summary = "Build raw, unsigned, UNIT_FEE chain-parameter update transaction",
@@ -847,6 +1033,39 @@ public class ChainParametersResource {
 						updateRequest.positiveMinBranchCount));
 	}
 
+	private static ChainParameterUpdateTransactionData buildAccountTrustSuspiciousMinRaterCountTransactionData(
+			AccountTrustSuspiciousMinRaterCountUpdateRequest updateRequest) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
+
+		return new ChainParameterUpdateTransactionData(baseTransactionData,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.id, updateRequest.activationHeight,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT.encodeIntValue(
+						updateRequest.suspiciousMinRaterCount));
+	}
+
+	private static ChainParameterUpdateTransactionData buildAccountTrustSuspiciousMinBranchCountTransactionData(
+			AccountTrustSuspiciousMinBranchCountUpdateRequest updateRequest) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
+
+		return new ChainParameterUpdateTransactionData(baseTransactionData,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.id, updateRequest.activationHeight,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT.encodeIntValue(
+						updateRequest.suspiciousMinBranchCount));
+	}
+
+	private static ChainParameterUpdateTransactionData buildAccountTrustSuspiciousMinRatingConfidenceTransactionData(
+			AccountTrustSuspiciousMinRatingConfidenceUpdateRequest updateRequest) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
+
+		return new ChainParameterUpdateTransactionData(baseTransactionData,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.id, updateRequest.activationHeight,
+				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.encodeIntValue(
+						updateRequest.suspiciousMinRatingConfidence));
+	}
+
 	private static ChainParameterUpdateTransactionData buildUnitFeeTransactionData(UnitFeeUpdateRequest updateRequest) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
 				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
@@ -947,6 +1166,15 @@ public class ChainParametersResource {
 			case ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT:
 				return parameter.encodeIntValue(BlockChain.getInstance().getAccountTrustPositiveMinBranchCount());
 
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT:
+				return parameter.encodeIntValue(BlockChain.getInstance().getAccountTrustSuspiciousMinRaterCount());
+
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT:
+				return parameter.encodeIntValue(BlockChain.getInstance().getAccountTrustSuspiciousMinBranchCount());
+
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE:
+				return parameter.encodeIntValue(BlockChain.getInstance().getAccountTrustSuspiciousMinRatingConfidence());
+
 			case UNIT_FEE:
 				return parameter.encodeLongValue(BlockChain.getInstance().getUnitFeeAtTimestamp(fallbackTimestamp));
 
@@ -1000,6 +1228,7 @@ public class ChainParametersResource {
 		return new ChainParameterValidationMetadata(
 				parameter.getMinimumLongValue(),
 				parameter.getMinimumIntegerValue(),
+				parameter.getMaximumIntegerValue(),
 				parameter.getIntegerListLength(),
 				parameter.getMinimumIntegerListValue(),
 				parameter.getMaximumIntegerListValue(),
