@@ -1,6 +1,7 @@
 package org.qortal.block;
 
 import org.qortal.account.AccountTrustPolicy;
+import org.qortal.data.account.AccountTrustCategoryPoliciesData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -398,6 +399,13 @@ public enum ChainParameter {
 			return null;
 
 		return decodeIntArrayValue(value);
+	}
+
+	public AccountTrustCategoryPoliciesData decodeAccountTrustCategoryPoliciesValue(byte[] value) {
+		if (!isValidValue(value) || !VALUE_TYPE_ACCOUNT_TRUST_CATEGORY_POLICIES.equals(this.valueType))
+			return null;
+
+		return AccountTrustCategoryPolicyCodec.decode(value);
 	}
 
 	public String formatDisplayValue(byte[] value) {

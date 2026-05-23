@@ -1,6 +1,7 @@
 package org.qortal.api.model;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.qortal.data.account.AccountTrustCategoryPoliciesData;
 import org.qortal.group.Group.ApprovalThreshold;
 import org.qortal.transaction.Transaction.ApprovalStatus;
 
@@ -56,6 +57,9 @@ public class ChainParameterUpdateSummary {
 
 	@Schema(description = "decoded integer list value for integer-list parameters")
 	public int[] integerValues;
+
+	@Schema(description = "decoded account trust category policy table for account-trust-category-policy parameters")
+	public AccountTrustCategoryPoliciesData accountTrustCategoryPolicies;
 
 	@Schema(description = "current group-approval status")
 	public ApprovalStatus approvalStatus;

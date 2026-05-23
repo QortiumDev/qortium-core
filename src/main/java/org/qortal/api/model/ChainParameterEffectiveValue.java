@@ -1,6 +1,7 @@
 package org.qortal.api.model;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.qortal.data.account.AccountTrustCategoryPoliciesData;
 
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
@@ -54,6 +55,9 @@ public class ChainParameterEffectiveValue {
 	@Schema(description = "decoded current integer list value for integer-list parameters")
 	public int[] integerValues;
 
+	@Schema(description = "decoded current account trust category policy table for account-trust-category-policy parameters")
+	public AccountTrustCategoryPoliciesData accountTrustCategoryPolicies;
+
 	@Schema(description = "transaction signature for the next approved future overlay, if one exists")
 	public byte[] nextSignature;
 
@@ -78,6 +82,9 @@ public class ChainParameterEffectiveValue {
 
 	@Schema(description = "decoded next integer list value for integer-list parameters")
 	public int[] nextIntegerValues;
+
+	@Schema(description = "decoded next account trust category policy table for account-trust-category-policy parameters")
+	public AccountTrustCategoryPoliciesData nextAccountTrustCategoryPolicies;
 
 	public ChainParameterEffectiveValue() {
 	}

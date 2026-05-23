@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - api: add account trust category policy parameter endpoints
+
+Added typed API support for proposing and reading the account trust category policy table. The API can now build development-group proposals from category-policy objects, return the effective policy table for a block height, and show decoded category policies in chain-parameter effective-value and proposal summaries.
+
 ### 2026-05-23 - consensus: add account trust category policy parameter
 
 Added the account trust category policy table as an approved on-chain chain parameter. Development-group proposals can now carry the canonical category thresholds and score caps, nodes can read the active overlay by block height, and trust derivation knows this parameter affects trust snapshots.

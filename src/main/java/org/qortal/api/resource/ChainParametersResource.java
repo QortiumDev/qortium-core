@@ -12,6 +12,7 @@ import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.model.AccountRatingCooldownUpdateRequest;
+import org.qortal.api.model.AccountTrustCategoryPoliciesUpdateRequest;
 import org.qortal.api.model.AccountTrustManagerEnergyHopsUpdateRequest;
 import org.qortal.api.model.AccountTrustPositiveMinBranchCountUpdateRequest;
 import org.qortal.api.model.AccountTrustStartingEnergyUpdateRequest;
@@ -29,8 +30,10 @@ import org.qortal.api.model.RewardShareWeightsUpdateRequest;
 import org.qortal.api.model.TrustStatusVoteWeightsUpdateRequest;
 import org.qortal.api.model.UnitFeeUpdateRequest;
 import org.qortal.api.resource.TransactionsResource.ConfirmationStatus;
+import org.qortal.block.AccountTrustCategoryPolicyCodec;
 import org.qortal.block.BlockChain;
 import org.qortal.block.ChainParameter;
+import org.qortal.data.account.AccountTrustCategoryPoliciesData;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.blockchain.ChainParameterData;
 import org.qortal.data.group.GroupApprovalData;
@@ -426,6 +429,30 @@ public class ChainParametersResource {
 	public int getAccountTrustSuspiciousMinRatingConfidence(@PathParam("height") int height) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			return BlockChain.getInstance().getAccountTrustSuspiciousMinRatingConfidence(repository, height);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/account-trust/category-policies/{height}")
+	@Operation(
+			summary = "Fetch the effective account trust category policy table at a height",
+			responses = {
+					@ApiResponse(
+							description = "account trust category thresholds and score caps",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = AccountTrustCategoryPoliciesData.class)
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public AccountTrustCategoryPoliciesData getAccountTrustCategoryPolicies(@PathParam("height") int height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			byte[] value = BlockChain.getInstance().getAccountTrustCategoryPoliciesValue(repository, height);
+			return AccountTrustCategoryPolicyCodec.decode(value);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
@@ -884,6 +911,46 @@ public class ChainParametersResource {
 	}
 
 	@POST
+	@Path("/account-trust/category-policies/update")
+	@Operation(
+			summary = "Build raw, unsigned, ACCOUNT_TRUST_CATEGORY_POLICIES chain-parameter update transaction",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = AccountTrustCategoryPoliciesUpdateRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, CHAIN_PARAMETER_UPDATE transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "string")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String updateAccountTrustCategoryPolicies(AccountTrustCategoryPoliciesUpdateRequest updateRequest) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChainParameterUpdateTransactionData transactionData =
+					buildAccountTrustCategoryPoliciesTransactionData(repository, updateRequest);
+			return validateAndTransformUpdate(repository, transactionData);
+		} catch (IllegalArgumentException e) {
+			throw TransactionsResource.createTransactionInvalidException(
+					request, Transaction.ValidationResult.INVALID_VALUE_LENGTH);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
 	@Path("/unit-fee/update")
 	@Operation(
 			summary = "Build raw, unsigned, UNIT_FEE chain-parameter update transaction",
@@ -1066,6 +1133,19 @@ public class ChainParametersResource {
 						updateRequest.suspiciousMinRatingConfidence));
 	}
 
+	private static ChainParameterUpdateTransactionData buildAccountTrustCategoryPoliciesTransactionData(
+			Repository repository, AccountTrustCategoryPoliciesUpdateRequest updateRequest) throws DataException {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
+		int effectiveSuspiciousMinRaterCount = BlockChain.getInstance()
+				.getAccountTrustSuspiciousMinRaterCount(repository, updateRequest.activationHeight);
+		byte[] value = AccountTrustCategoryPolicyCodec.encode(
+				updateRequest.categoryPolicies, effectiveSuspiciousMinRaterCount);
+
+		return new ChainParameterUpdateTransactionData(baseTransactionData,
+				ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES.id, updateRequest.activationHeight, value);
+	}
+
 	private static ChainParameterUpdateTransactionData buildUnitFeeTransactionData(UnitFeeUpdateRequest updateRequest) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
 				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
@@ -1196,6 +1276,7 @@ public class ChainParametersResource {
 		effectiveValue.longValue = parameter.decodeLongParameterValue(value);
 		effectiveValue.integerValue = parameter.decodeIntegerValue(value);
 		effectiveValue.integerValues = parameter.decodeIntegerListValue(value);
+		effectiveValue.accountTrustCategoryPolicies = parameter.decodeAccountTrustCategoryPoliciesValue(value);
 		effectiveValue.displayValue = parameter.formatDisplayValue(value);
 	}
 
@@ -1206,6 +1287,7 @@ public class ChainParametersResource {
 		effectiveValue.nextLongValue = parameter.decodeLongParameterValue(value);
 		effectiveValue.nextIntegerValue = parameter.decodeIntegerValue(value);
 		effectiveValue.nextIntegerValues = parameter.decodeIntegerListValue(value);
+		effectiveValue.nextAccountTrustCategoryPolicies = parameter.decodeAccountTrustCategoryPoliciesValue(value);
 		effectiveValue.nextDisplayValue = parameter.formatDisplayValue(value);
 	}
 
@@ -1263,6 +1345,8 @@ public class ChainParametersResource {
 			summary.longValue = parameter.decodeLongParameterValue(transactionData.getValue());
 			summary.integerValue = parameter.decodeIntegerValue(transactionData.getValue());
 			summary.integerValues = parameter.decodeIntegerListValue(transactionData.getValue());
+			summary.accountTrustCategoryPolicies = parameter.decodeAccountTrustCategoryPoliciesValue(
+					transactionData.getValue());
 			summary.displayValue = parameter.formatDisplayValue(transactionData.getValue());
 		}
 
