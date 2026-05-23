@@ -411,6 +411,19 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testTrustPolicyEndpointUsesOnChainStartingEnergy() throws DataException {
+		long startingEnergy = 1_234_567L;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			approveAccountTrustStartingEnergyOverlay(repository, startingEnergy);
+		}
+
+		AccountTrustPolicyData policy = this.accountRatingsResource.getAccountTrustPolicy();
+
+		assertEquals(startingEnergy, policy.getStartingEnergy());
+	}
+
+	@Test
 	public void testRatingCooldownEndpointReturnsOpenEdgeStatus() throws DataException {
 		TestAccount alice;
 		TestAccount bob;
@@ -2094,6 +2107,20 @@ public class AccountRatingsApiTests extends ApiCommon {
 					TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
 					ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.id, activationHeight,
 					ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.encodeIntArrayValue(voteWeights));
+
+		TransactionUtils.signAndMint(repository, transactionData, alice);
+		GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);
+		BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository));
+		BlockUtils.mintBlocks(repository, activationHeight - repository.getBlockRepository().getBlockchainHeight());
+	}
+
+	private void approveAccountTrustStartingEnergyOverlay(Repository repository, long startingEnergy) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+		int activationHeight = getActivationHeightSafelyAfterApproval(repository, 1);
+		ChainParameterUpdateTransactionData transactionData = new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(startingEnergy));
 
 		TransactionUtils.signAndMint(repository, transactionData, alice);
 		GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);

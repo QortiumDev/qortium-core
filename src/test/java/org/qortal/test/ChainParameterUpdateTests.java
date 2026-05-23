@@ -219,6 +219,48 @@ public class ChainParameterUpdateTests extends Common {
 	}
 
 	@Test
+	public void testApprovedAccountTrustStartingEnergyUpdateAppliesAtActivationHeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+			long originalStartingEnergy = BlockChain.getInstance().getAccountTrustStartingEnergy(repository, activationHeight);
+			long updatedStartingEnergy = originalStartingEnergy + 1_000L;
+
+			ChainParameterUpdateTransactionData transactionData = buildAccountTrustStartingEnergyUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedStartingEnergy);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertEquals(originalStartingEnergy,
+					BlockChain.getInstance().getAccountTrustStartingEnergy(repository, activationHeight));
+
+			approveAndSettle(repository, transactionData);
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertEquals(originalStartingEnergy,
+					BlockChain.getInstance().getAccountTrustStartingEnergy(repository, activationHeight - 1));
+			assertEquals(updatedStartingEnergy,
+					BlockChain.getInstance().getAccountTrustStartingEnergy(repository, activationHeight));
+			assertEquals(updatedStartingEnergy,
+					BlockChain.getInstance().getAccountTrustStartingEnergy(repository, activationHeight + 100));
+
+			ChainParameterData overlayData = repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.id, activationHeight);
+			assertEquals(activationHeight, overlayData.getActivationHeight());
+			assertArrayEquals(transactionData.getValue(), overlayData.getValue());
+
+			int approvalHeight = GroupUtils.getApprovalHeight(repository, transactionData.getSignature());
+			BlockUtils.orphanToBlock(repository, approvalHeight - 1);
+
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertNull(repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.id, activationHeight));
+			assertEquals(originalStartingEnergy,
+					BlockChain.getInstance().getAccountTrustStartingEnergy(repository, activationHeight));
+		}
+	}
+
+	@Test
 	public void testTrustStatusVoteWeightsActivationRefreshesTrustSnapshots() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -252,6 +294,38 @@ public class ChainParameterUpdateTests extends Common {
 			assertEquals(activationHeight - 1, orphanedSnapshot.getSnapshotHeight());
 			assertEquals(AccountTrustStatus.UNVERIFIED, orphanedSnapshot.getMappedTrustStatus());
 			assertEquals(0, orphanedSnapshot.getMappedTrustWeightPercent());
+		}
+	}
+
+	@Test
+	public void testAccountTrustStartingEnergyActivationRefreshesTrustSnapshots() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 5);
+			long updatedStartingEnergy = BlockChain.getInstance().getAccountTrustStartingEnergy(repository, activationHeight)
+					+ 1_000L;
+
+			ChainParameterUpdateTransactionData transactionData = buildAccountTrustStartingEnergyUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedStartingEnergy);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			approveAndSettle(repository, transactionData);
+
+			BlockUtils.mintBlocks(repository, activationHeight - 1 - repository.getBlockRepository().getBlockchainHeight());
+
+			AccountTrustSnapshotData beforeActivationSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertNotNull(beforeActivationSnapshot);
+
+			BlockUtils.mintBlock(repository);
+			assertEquals(activationHeight, repository.getBlockRepository().getBlockchainHeight());
+
+			AccountTrustSnapshotData activationSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertEquals(activationHeight, activationSnapshot.getSnapshotHeight());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			AccountTrustSnapshotData orphanedSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertEquals(activationHeight - 1, orphanedSnapshot.getSnapshotHeight());
 		}
 	}
 
@@ -607,6 +681,24 @@ public class ChainParameterUpdateTests extends Common {
 		}
 	}
 
+	@Test
+	public void testChainParameterUpdateRejectsNonPositiveAccountTrustStartingEnergy() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+
+			ChainParameterUpdateTransactionData zeroTransactionData = buildAccountTrustStartingEnergyUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, 0L);
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, zeroTransactionData).isValid());
+
+			ChainParameterUpdateTransactionData negativeTransactionData = buildAccountTrustStartingEnergyUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, -1L);
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, negativeTransactionData).isValid());
+		}
+	}
+
 	private static ChainParameterUpdateTransactionData buildBlockRewardUpdate(Repository repository,
 			PrivateKeyAccount updater, int txGroupId, int activationHeight, long reward) throws DataException {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
@@ -639,6 +731,13 @@ public class ChainParameterUpdateTests extends Common {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
 				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.id, activationHeight,
 				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.encodeIntArrayValue(weights));
+	}
+
+	private static ChainParameterUpdateTransactionData buildAccountTrustStartingEnergyUpdate(Repository repository,
+			PrivateKeyAccount updater, int txGroupId, int activationHeight, long startingEnergy) throws DataException {
+		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
+				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(startingEnergy));
 	}
 
 	private static ChainParameterUpdateTransactionData buildUnitFeeUpdate(Repository repository,

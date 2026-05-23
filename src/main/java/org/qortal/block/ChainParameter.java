@@ -37,7 +37,11 @@ public enum ChainParameter {
 	ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS(7, 5 * Integer.BYTES, "INTEGER_LIST",
 			"Trust status vote-weight percentages for SUSPICIOUS, UNVERIFIED, BRONZE, SILVER, and GOLD.",
 			"/chain-parameters/account-trust/status-vote-weights/update",
-			"/chain-parameters/account-trust/status-vote-weights/{height}");
+			"/chain-parameters/account-trust/status-vote-weights/{height}"),
+	ACCOUNT_TRUST_STARTING_ENERGY(8, Long.BYTES, "LONG",
+			"Starting energy distributed across minting-group seed accounts during account trust derivation.",
+			"/chain-parameters/account-trust/starting-energy/update",
+			"/chain-parameters/account-trust/starting-energy/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 	public static final String VALUE_TYPE_AMOUNT = "AMOUNT";
@@ -95,6 +99,9 @@ public enum ChainParameter {
 			case UNIT_FEE:
 			case NAME_REGISTRATION_UNIT_FEE:
 				return 0L;
+
+			case ACCOUNT_TRUST_STARTING_ENERGY:
+				return 1L;
 
 			default:
 				return null;
@@ -170,7 +177,7 @@ public enum ChainParameter {
 	}
 
 	public boolean affectsTrustSnapshots() {
-		return this == ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS;
+		return this == ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS || this == ACCOUNT_TRUST_STARTING_ENERGY;
 	}
 
 	public boolean isValidValue(byte[] value) {
@@ -182,6 +189,9 @@ public enum ChainParameter {
 			case UNIT_FEE:
 			case NAME_REGISTRATION_UNIT_FEE:
 				return decodeLongValue(value) >= 0;
+
+			case ACCOUNT_TRUST_STARTING_ENERGY:
+				return decodeLongValue(value) > 0;
 
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
 			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:

@@ -773,6 +773,11 @@ public class BlockChain {
 	}
 
 	public long getAccountTrustStartingEnergy(Repository repository, int height) throws DataException {
+		ChainParameterData startingEnergyUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.id, height);
+		if (startingEnergyUpdate != null)
+			return ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.decodeLongValue(startingEnergyUpdate.getValue());
+
 		return getAccountTrustStartingEnergy();
 	}
 

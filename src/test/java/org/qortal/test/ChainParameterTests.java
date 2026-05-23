@@ -61,6 +61,20 @@ public class ChainParameterTests {
 	}
 
 	@Test
+	public void testAccountTrustStartingEnergyMetadataAccessors() {
+		ChainParameter parameter = ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY;
+
+		assertEquals(8, parameter.id);
+		assertEquals(Long.BYTES, parameter.valueLength);
+		assertEquals("LONG", parameter.getValueType());
+		assertEquals(Long.valueOf(1L), parameter.getMinimumLongValue());
+		assertTrue(parameter.affectsTrustSnapshots());
+		assertNotNull(parameter.getDescription());
+		assertEquals("/chain-parameters/account-trust/starting-energy/update", parameter.getBuilderPath());
+		assertEquals("/chain-parameters/account-trust/starting-energy/{height}", parameter.getEffectivePath());
+	}
+
+	@Test
 	public void testBlockRewardAmountDecoding() {
 		long reward = 12L * Amounts.MULTIPLIER + 34_000_000L;
 		byte[] value = ChainParameter.BLOCK_REWARD.encodeLongValue(reward);
@@ -111,6 +125,19 @@ public class ChainParameterTests {
 
 		assertEquals(Long.valueOf(reward), ChainParameter.BLOCK_REWARD.decodeAmountValue(value));
 		assertNull(ChainParameter.BLOCK_REWARD.decodeLongParameterValue(value));
+	}
+
+	@Test
+	public void testAccountTrustStartingEnergyLongDecoding() {
+		long startingEnergy = 1_234_567L;
+		byte[] value = ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(startingEnergy);
+
+		assertEquals(Long.valueOf(startingEnergy),
+				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.decodeLongParameterValue(value));
+		assertEquals("1234567", ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.formatDisplayValue(value));
+		assertNull(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.decodeAmountValue(value));
+		assertNull(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.decodeIntegerValue(value));
+		assertNull(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.decodeIntegerListValue(value));
 	}
 
 	@Test
@@ -175,5 +202,15 @@ public class ChainParameterTests {
 
 		assertFalse(ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.isValidValue(
 				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.encodeIntArrayValue(new int[] { 0, 0, 0, 0, 0 })));
+	}
+
+	@Test
+	public void testAccountTrustStartingEnergyRequiresPositiveValue() {
+		assertTrue(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.isValidValue(
+				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(1L)));
+		assertFalse(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.isValidValue(
+				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(0L)));
+		assertFalse(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.isValidValue(
+				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(-1L)));
 	}
 }

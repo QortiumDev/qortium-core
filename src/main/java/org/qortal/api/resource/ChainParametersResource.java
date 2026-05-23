@@ -12,6 +12,7 @@ import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
 import org.qortal.api.model.AccountRatingCooldownUpdateRequest;
+import org.qortal.api.model.AccountTrustStartingEnergyUpdateRequest;
 import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterEffectiveValue;
 import org.qortal.api.model.ChainParameterMetadata;
@@ -288,6 +289,29 @@ public class ChainParametersResource {
 	}
 
 	@GET
+	@Path("/account-trust/starting-energy/{height}")
+	@Operation(
+			summary = "Fetch the effective account trust starting energy at a height",
+			responses = {
+					@ApiResponse(
+							description = "account trust starting energy",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "integer")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public long getAccountTrustStartingEnergy(@PathParam("height") int height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return BlockChain.getInstance().getAccountTrustStartingEnergy(repository, height);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
 	@Path("/unit-fee/{height}")
 	@Operation(
 			summary = "Fetch the effective normal transaction unit fee at a height",
@@ -516,6 +540,42 @@ public class ChainParametersResource {
 	}
 
 	@POST
+	@Path("/account-trust/starting-energy/update")
+	@Operation(
+			summary = "Build raw, unsigned, ACCOUNT_TRUST_STARTING_ENERGY chain-parameter update transaction",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = AccountTrustStartingEnergyUpdateRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, CHAIN_PARAMETER_UPDATE transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "string")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String updateAccountTrustStartingEnergy(AccountTrustStartingEnergyUpdateRequest updateRequest) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChainParameterUpdateTransactionData transactionData = buildAccountTrustStartingEnergyTransactionData(updateRequest);
+			return validateAndTransformUpdate(repository, transactionData);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
 	@Path("/unit-fee/update")
 	@Operation(
 			summary = "Build raw, unsigned, UNIT_FEE chain-parameter update transaction",
@@ -634,6 +694,16 @@ public class ChainParametersResource {
 				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.encodeIntArrayValue(updateRequest.weights));
 	}
 
+	private static ChainParameterUpdateTransactionData buildAccountTrustStartingEnergyTransactionData(
+			AccountTrustStartingEnergyUpdateRequest updateRequest) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
+
+		return new ChainParameterUpdateTransactionData(baseTransactionData,
+				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.id, updateRequest.activationHeight,
+				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(updateRequest.startingEnergy));
+	}
+
 	private static ChainParameterUpdateTransactionData buildUnitFeeTransactionData(UnitFeeUpdateRequest updateRequest) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
 				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
@@ -724,6 +794,9 @@ public class ChainParametersResource {
 
 			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
 				return parameter.encodeIntArrayValue(BlockChain.getInstance().getAccountTrustStatusVoteWeightPercents());
+
+			case ACCOUNT_TRUST_STARTING_ENERGY:
+				return parameter.encodeLongValue(BlockChain.getInstance().getAccountTrustStartingEnergy());
 
 			case UNIT_FEE:
 				return parameter.encodeLongValue(BlockChain.getInstance().getUnitFeeAtTimestamp(fallbackTimestamp));
