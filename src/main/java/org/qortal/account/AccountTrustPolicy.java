@@ -10,6 +10,7 @@ import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 
+import java.math.BigInteger;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -440,6 +441,17 @@ public final class AccountTrustPolicy {
 			return getCategoryPolicy(category).maximumConfiguredLevel;
 		}
 
+		public boolean canReachSuspiciousThresholds(int suspiciousMinRaterCount) {
+			if (suspiciousMinRaterCount <= 0)
+				return false;
+
+			for (CategoryPolicy policy : this.policiesByCategory.values())
+				if (!policy.canReachSuspiciousThreshold(suspiciousMinRaterCount))
+					return false;
+
+			return true;
+		}
+
 		private CategoryPolicy getCategoryPolicy(AccountRatingCategory category) {
 			CategoryPolicy policy = this.policiesByCategory.get(effectiveCategory(category));
 			if (policy == null)
@@ -482,6 +494,13 @@ public final class AccountTrustPolicy {
 
 		private long getLevelScoreCap(int level) {
 			return getLevelPolicy(level).levelScoreCap;
+		}
+
+		private boolean canReachSuspiciousThreshold(int suspiciousMinRaterCount) {
+			BigInteger requiredScore = BigInteger.valueOf(this.suspiciousThreshold).negate();
+			BigInteger maximumScore = BigInteger.valueOf(this.suspiciousLevelScoreCap)
+					.multiply(BigInteger.valueOf(suspiciousMinRaterCount));
+			return maximumScore.compareTo(requiredScore) >= 0;
 		}
 
 		private LevelPolicy getLevelPolicy(int level) {

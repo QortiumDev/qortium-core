@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: add contextual chain parameter validation
+
+Added activation-height-aware validation for chain parameter updates that need to compare against other effective policy values. Suspicious account trust rater-count proposals now have to stay high enough for the active category-policy caps to reach their suspicious thresholds, preparing the validator for the full account trust category policy table.
+
 ### 2026-05-23 - consensus: add account trust category policy codec
 
 Added the deterministic encoder, decoder, and validation rules for the planned account trust category policy chain parameter. This prepares the full trust threshold and cap table for a future development-group vote while keeping the parameter inactive until the on-chain registry, API builder, and activation path are added.

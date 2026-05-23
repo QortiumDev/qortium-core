@@ -805,6 +805,19 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testBuildAccountTrustSuspiciousMinRaterCountUpdateRejectsPolicyIncompatibleValue()
+			throws DataException {
+		AccountTrustSuspiciousMinRaterCountUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildAccountTrustSuspiciousMinRaterCountUpdateRequest(repository, 1);
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateAccountTrustSuspiciousMinRaterCount(request));
+	}
+
+	@Test
 	public void testBuildAccountTrustSuspiciousMinBranchCountUpdateRejectsNegativeValue() throws DataException {
 		AccountTrustSuspiciousMinBranchCountUpdateRequest request;
 

@@ -102,6 +102,10 @@ public class ChainParameterUpdateTransaction extends Transaction {
 		if (this.chainParameterUpdateTransactionData.getActivationHeight() < minimumActivationHeight)
 			return ValidationResult.INVALID_LIFETIME;
 
+		if (!parameter.isValidValue(this.repository, this.chainParameterUpdateTransactionData.getActivationHeight(),
+				this.chainParameterUpdateTransactionData.getValue()))
+			return ValidationResult.INVALID_VALUE_LENGTH;
+
 		return ValidationResult.OK;
 	}
 

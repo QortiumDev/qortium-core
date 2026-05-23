@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -143,6 +144,16 @@ public class AccountTrustPolicyTests extends Common {
 			assertEquals(AccountTrustPolicy.getSuspiciousLevelScoreCap(AccountRatingCategory.TRAINER),
 					categoryPolicySettings.getSuspiciousLevelScoreCap(AccountRatingCategory.TRAINER));
 		}
+	}
+
+	@Test
+	public void testCategoryPolicySettingsValidateSuspiciousRaterCapacity() {
+		AccountTrustPolicy.CategoryPolicySettings categoryPolicySettings =
+				AccountTrustPolicy.getCategoryPolicySettings();
+
+		assertFalse(categoryPolicySettings.canReachSuspiciousThresholds(1));
+		assertTrue(categoryPolicySettings.canReachSuspiciousThresholds(2));
+		assertTrue(categoryPolicySettings.canReachSuspiciousThresholds(3));
 	}
 
 	@Test

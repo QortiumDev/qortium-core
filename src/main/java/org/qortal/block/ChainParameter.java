@@ -1,6 +1,9 @@
 package org.qortal.block;
 
+import org.qortal.account.AccountTrustPolicy;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.repository.DataException;
+import org.qortal.repository.Repository;
 import org.qortal.utils.Amounts;
 
 import java.nio.ByteBuffer;
@@ -278,6 +281,21 @@ public enum ChainParameter {
 
 			default:
 				return false;
+		}
+	}
+
+	public boolean isValidValue(Repository repository, int activationHeight, byte[] value) throws DataException {
+		if (!isValidValue(value))
+			return false;
+
+		switch (this) {
+			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT:
+				int suspiciousMinRaterCount = decodeIntValue(value);
+				return AccountTrustPolicy.getCategoryPolicySettings(repository, activationHeight)
+						.canReachSuspiciousThresholds(suspiciousMinRaterCount);
+
+			default:
+				return true;
 		}
 	}
 
