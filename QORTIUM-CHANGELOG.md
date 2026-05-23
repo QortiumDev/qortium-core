@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - docs: define account trust policy parameter roadmap
+
+Documented the proposed path for adding more account trust policy values to the on-chain parameter system. The roadmap keeps the next phase focused on simple scalar settings, reserves planned parameter IDs for those values, and defers larger category policy tables until their binary format and cross-field validation rules are designed.
+
 ### 2026-05-23 - api: expose chain parameter validation metadata
 
 Added structured validation hints to the chain-parameter metadata API so wallets, governance tools, and operators can see the accepted value shape for each voted parameter without hardcoding it separately. The metadata now reports numeric minimums, integer-list lengths, ordered labels, and positive-value requirements for the currently supported on-chain parameters.

@@ -124,6 +124,43 @@ views also report the effective percentages for the current height. The weights
 remain effective until another approved `ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS`
 update with a later activation height overrides them.
 
+## Planned Account Trust Policy Parameters
+
+The next trust-policy work should be split into small scalar parameters before
+larger structured policy tables are made votable. The scalar settings are
+simple to encode, validate, explain through metadata, and read through
+height-aware consensus lookups.
+
+The planned first scalar parameters are:
+
+| Planned ID | Parameter | Value | Validation |
+| --- | --- | --- | --- |
+| `8` | `ACCOUNT_TRUST_STARTING_ENERGY` | signed long | greater than `0` |
+| `9` | `ACCOUNT_TRUST_MANAGER_ENERGY_HOPS` | signed integer | greater than `0` |
+| `10` | `ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT` | signed integer | greater than `0` |
+| `11` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT` | signed integer | greater than `0` |
+| `12` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT` | signed integer | `0` or greater; `0` keeps the current behavior of matching `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT` |
+| `13` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE` | signed integer | between `1` and `4`, inclusive |
+
+Each scalar parameter should keep the same development-group approval model,
+activation lead time, repository overlay behavior, typed proposal builder, typed
+effective-value endpoint, validation metadata, and `blockchain.json` fallback
+used by the first seven supported parameters.
+
+Before each scalar parameter is implemented, every runtime path that reads that
+setting must be made height-aware. That includes trust derivation, trust
+explanation, trust policy views, rating previews, and any consensus path that
+uses the setting while processing or validating blocks.
+
+The category policy tables should be deferred to a later structured-parameter
+phase. Those tables include per-category level thresholds, per-category level
+caps, per-category suspicious thresholds, and per-category suspicious caps. They
+need a separate canonical binary table format and cross-field validation before
+they are accepted on chain.
+
+`activeWeightCategory`, category policy tables, and broader trust derivation
+behavior changes remain config-only until that structured format is designed.
+
 ## Public API
 
 `GET /chain-parameters` lists the chain parameters that this node knows how to
