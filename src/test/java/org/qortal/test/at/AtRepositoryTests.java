@@ -170,16 +170,14 @@ public class AtRepositoryTests extends Common {
 			assertNotNull(atStateData.getStateData());
 
 			// Orphan 1 more block
-			Exception exception = null;
+			DataException exception;
 			try {
-				BlockUtils.orphanBlocks(repository, 1);
-			} catch (DataException e) {
-				exception = e;
+				exception = assertThrows(DataException.class, () -> BlockUtils.orphanBlocks(repository, 1));
+			} finally {
+				repository.discardChanges();
 			}
 
 			// Ensure that a DataException is thrown because there is no more AT states data available
-			assertNotNull(exception);
-			assertEquals(DataException.class, exception.getClass());
 			assertEquals(String.format("Can't find previous AT state data for %s", atAddress), exception.getMessage());
 
 			// FUTURE: we may be able to retain unique AT states when trimming, to avoid this exception
@@ -366,6 +364,7 @@ public class AtRepositoryTests extends Common {
 			assertNotNull(atStateData.getStateData());
 
 			repository.getATRepository().save(atStateData);
+			repository.saveChanges();
 
 			atStateData = repository.getATRepository().getATStateAtHeight(atAddress, testHeight);
 
@@ -405,6 +404,7 @@ public class AtRepositoryTests extends Common {
 					atStateData.isInitial(),
 					atStateData.getSleepUntilMessageTimestamp());
 			repository.getATRepository().save(newAtStateData);
+			repository.saveChanges();
 
 			atStateData = repository.getATRepository().getATStateAtHeight(atAddress, testHeight);
 

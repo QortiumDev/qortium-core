@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - test: close repository transactions in warning cases
+
+Cleaned up repository tests that intentionally trigger failed orphan work or direct database writes so they now explicitly commit or roll back before closing their repository handles. This removes noisy critical transaction warnings from the test reports and makes the remaining test output easier to trust.
+
 ### 2026-05-23 - api: register update-poll transaction JSON fields
 
 Registered update-poll transactions with the shared transaction JSON model so API responses and JSON serialization include the poll update fields, including the owner address, owner public key, poll ID, replacement poll name, and replacement description.

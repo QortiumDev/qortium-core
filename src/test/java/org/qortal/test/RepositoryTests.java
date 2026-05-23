@@ -565,6 +565,7 @@ public class RepositoryTests extends Common {
 
 		try (final HSQLDBRepository hsqldb = (HSQLDBRepository) RepositoryManager.getRepository()) {
 			hsqldb.deleteBatch("AccountBalances", "account = ? AND asset_id = ?", batchedObjects);
+			hsqldb.discardChanges();
 		} catch (DataException | SQLException e) {
 			fail("Batched delete failed: " + e.getMessage());
 		}

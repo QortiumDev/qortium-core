@@ -585,17 +585,15 @@ public class BlockArchiveV1Tests extends Common {
 
 			// Orphan another block, which should fail
 			System.out.println("Attempting to orphan another block, which should fail...");
-			Exception exception = null;
+			DataException exception;
 			try {
-				BlockUtils.orphanBlocks(repository, 1);
-			} catch (DataException e) {
-				exception = e;
-				System.out.println("Caught expected DataException: " + e.getMessage());
+				exception = assertThrows(DataException.class, () -> BlockUtils.orphanBlocks(repository, 1));
+			} finally {
+				repository.discardChanges();
 			}
+			System.out.println("Caught expected DataException: " + exception.getMessage());
 
 			// Ensure that a DataException is thrown because there is no more AT states data available
-			assertNotNull(exception);
-			assertEquals(DataException.class, exception.getClass());
 			System.out.println("DataException confirmed due to lack of AT states data.");
 
 			// FUTURE: we may be able to retain unique AT states when trimming, to avoid this exception
