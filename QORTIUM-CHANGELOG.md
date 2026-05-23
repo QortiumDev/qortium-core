@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - test: repair transaction importer sync setup
+
+Repaired transaction importer tests so local API chat submissions run with the same up-to-date single-node test setup used by transaction API coverage. This keeps the tests focused on chat import, deduplication, and notification behavior instead of failing on missing peer synchronization preconditions.
+
 ### 2026-05-23 - arbitrary: preserve metadata mime type fallback
 
 Repaired arbitrary data metadata creation so single-file uploads still fall back to the filename when content-based MIME detection cannot provide a usable value. This keeps common files such as text documents from losing their MIME type in stored metadata.

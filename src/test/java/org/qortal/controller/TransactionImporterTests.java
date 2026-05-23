@@ -1,5 +1,6 @@
 package org.qortal.controller;
 
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -22,6 +23,7 @@ import org.qortal.network.message.TransactionSignaturesMessage;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.settings.Settings;
 import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
@@ -58,8 +60,10 @@ public class TransactionImporterTests extends Common {
 	private TransactionImporter transactionImporter;
 
 	@Before
-	public void beforeTest() throws DataException {
+	public void beforeTest() throws DataException, IllegalAccessException {
 		Common.useDefaultSettings();
+		FieldUtils.writeField(Settings.getInstance(), "singleNodeTestnet", true, true);
+		Controller.getInstance().refillLatestBlocksCache();
 		this.transactionImporter = new TransactionImporter();
 	}
 
