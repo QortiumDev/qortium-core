@@ -23,7 +23,7 @@ import java.util.Arrays;
 
 @XmlSeeAlso({GenesisTransactionData.class, PaymentTransactionData.class, RegisterNameTransactionData.class, UpdateNameTransactionData.class,
 	SellNameTransactionData.class, CancelSellNameTransactionData.class, BuyNameTransactionData.class,
-	CreatePollTransactionData.class, VoteOnPollTransactionData.class, ArbitraryTransactionData.class,
+	CreatePollTransactionData.class, VoteOnPollTransactionData.class, UpdatePollTransactionData.class, ArbitraryTransactionData.class,
 	PollData.class, VoteOnPollData.class,
 	IssueAssetTransactionData.class, TransferAssetTransactionData.class,
 	CreateAssetOrderTransactionData.class, CancelAssetOrderTransactionData.class,

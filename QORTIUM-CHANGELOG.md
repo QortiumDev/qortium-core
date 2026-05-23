@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - api: register update-poll transaction JSON fields
+
+Registered update-poll transactions with the shared transaction JSON model so API responses and JSON serialization include the poll update fields, including the owner address, owner public key, poll ID, replacement poll name, and replacement description.
+
 ### 2026-05-23 - crosschain: build legacy spends without bitcoinj wallets
 
 Reworked standard Bitcoiny spend creation so legacy wallet spends are built with Qortium's own deterministic key and raw transaction code instead of bitcoinj's wallet parser. This lets Bitcoin test4 and custom altcoin network settings build spend transactions without failing on network identifiers that bitcoinj does not recognize.
