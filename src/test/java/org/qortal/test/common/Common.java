@@ -9,6 +9,7 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
+import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.asset.AssetData;
 import org.qortal.data.group.GroupData;
@@ -24,6 +25,7 @@ import org.qortal.utils.NTP;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.SecureRandom;
@@ -111,6 +113,11 @@ public class Common {
 	public static PrivateKeyAccount generateRandomSeedAccount(Repository repository) {
 		byte[] seed = new byte[32];
 		new SecureRandom().nextBytes(seed);
+		return new PrivateKeyAccount(repository, seed);
+	}
+
+	public static PrivateKeyAccount generateDeterministicSeedAccount(Repository repository, String namespace, int index) {
+		byte[] seed = Crypto.digest((namespace + ":" + index).getBytes(StandardCharsets.UTF_8));
 		return new PrivateKeyAccount(repository, seed);
 	}
 

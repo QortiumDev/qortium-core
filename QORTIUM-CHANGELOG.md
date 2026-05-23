@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - test: use valid synthetic account keys
+
+Changed account and repository performance fixtures to create deterministic accounts from valid private keys instead of treating arbitrary random bytes as public keys. The account balance history test now uses a direct payment for its balance change instead of assuming a newly minted block rewards Alice, keeping the tests stable under current reward and Ed25519 key validation rules.
+
 ### 2026-05-23 - test: repair chat fixture setup
 
 Repaired chat and private-group test fixtures so they follow the same rules enforced by normal group creation and secured API calls. The affected tests now use group names within the configured limit and provide the expected test API key when calling secured chat endpoints.

@@ -4,7 +4,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.Account;
-import org.qortal.account.PublicKeyAccount;
 import org.qortal.asset.Asset;
 import org.qortal.data.account.AccountBalanceData;
 import org.qortal.data.account.AccountData;
@@ -12,6 +11,7 @@ import org.qortal.repository.AccountRepository.BalanceOrdering;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
@@ -52,8 +52,8 @@ public class AccountBalanceTests extends Common {
 		// Grab initial balance
 		long initialBalance = testAccount.getConfirmedBalance(Asset.NATIVE);
 
-		// Mint block to cause newer balance
-		BlockUtils.mintBlock(repository);
+		// Mint a payment so the next block contains a direct balance change.
+		AccountUtils.pay(repository, Common.getTestAccount(repository, "bob"), testAccount.getAddress(), 1L);
 
 		// Grab newer balance
 		long newerBalance = testAccount.getConfirmedBalance(Asset.NATIVE);
@@ -89,15 +89,12 @@ public class AccountBalanceTests extends Common {
 		final long MAX_QUERY_TIME = 80L; // ms
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			System.out.println("Creating random accounts...");
+			System.out.println("Creating deterministic accounts...");
 
-			// Generate some random accounts
+			// Generate some deterministic accounts
 			List<Account> accounts = new ArrayList<>();
 			for (int ai = 0; ai < 20; ++ai) {
-				byte[] publicKey = new byte[32];
-				random.nextBytes(publicKey);
-
-				PublicKeyAccount account = new PublicKeyAccount(repository, publicKey);
+				Account account = Common.generateDeterministicSeedAccount(repository, "account-balance-speed", ai);
 				accounts.add(account);
 
 				AccountData accountData = new AccountData(account.getAddress());
@@ -179,15 +176,12 @@ public class AccountBalanceTests extends Common {
 		int ai;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			System.out.println("Creating random accounts...");
+			System.out.println("Creating deterministic accounts...");
 
-			// Generate some random accounts
+			// Generate some deterministic accounts
 			List<Account> accounts = new ArrayList<>();
 			for (ai = 0; ai < 2000; ++ai) {
-				byte[] publicKey = new byte[32];
-				random.nextBytes(publicKey);
-
-				PublicKeyAccount account = new PublicKeyAccount(repository, publicKey);
+				Account account = Common.generateDeterministicSeedAccount(repository, "account-balance-batch", ai);
 				accounts.add(account);
 			}
 

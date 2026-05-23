@@ -5,7 +5,6 @@ import org.apache.logging.log4j.Logger;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.Account;
-import org.qortal.account.PublicKeyAccount;
 import org.qortal.asset.Asset;
 import org.qortal.controller.arbitrary.ArbitraryDataCacheManager;
 import org.qortal.crosschain.BitcoinyACCTv3;
@@ -650,15 +649,12 @@ public class RepositoryTests extends Common {
 	private void populateWithRandomData(HSQLDBRepository repository) throws DataException {
 		Random random = new Random();
 
-		System.out.println("Creating random accounts...");
+		System.out.println("Creating deterministic accounts...");
 
-		// Generate some random accounts
+		// Generate some deterministic accounts
 		List<Account> accounts = new ArrayList<>();
 		for (int ai = 0; ai < 20; ++ai) {
-			byte[] publicKey = new byte[32];
-			random.nextBytes(publicKey);
-
-			PublicKeyAccount account = new PublicKeyAccount(repository, publicKey);
+			Account account = Common.generateDeterministicSeedAccount(repository, "repository-random-data", ai);
 			accounts.add(account);
 
 			AccountData accountData = new AccountData(account.getAddress());
