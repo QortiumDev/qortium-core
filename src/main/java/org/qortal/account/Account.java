@@ -470,7 +470,7 @@ public class Account {
 	}
 
 	/**
-	 * Returns a reward-share minter's actual level, or null if the reward-share does not exist.
+	 * Returns a self-share minter's actual level, or null if the self-share does not exist.
 	 *
 	 * @param repository
 	 * @param rewardSharePublicKey
@@ -480,6 +480,9 @@ public class Account {
 	public static Integer getRewardShareEffectiveMintingLevelIfPresent(Repository repository, byte[] rewardSharePublicKey) throws DataException {
 		RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(rewardSharePublicKey);
 		if (rewardShareData == null)
+			return null;
+
+		if (!rewardShareData.isSelfShare())
 			return null;
 
 		Account rewardShareMinter = new Account(repository, rewardShareData.getMinter());
@@ -510,11 +513,11 @@ public class Account {
 	}
 
 	/**
-	 * Returns whether the supplied reward-share public key belongs to an account currently allowed to mint.
+	 * Returns whether the supplied self-share public key belongs to an account currently allowed to mint.
 	 *
 	 * @param repository
 	 * @param rewardSharePublicKey
-	 * @return true if the reward-share exists and its minter can mint
+	 * @return true if the self-share exists and its minter can mint
 	 * @throws DataException
 	 */
 	public static boolean canRewardShareMint(Repository repository, byte[] rewardSharePublicKey) throws DataException {

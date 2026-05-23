@@ -156,7 +156,7 @@ public interface AccountRepository {
 
 	public RewardShareData getRewardShare(byte[] rewardSharePublicKey) throws DataException;
 
-	public List<byte[]> getRewardSharePublicKeys() throws DataException;
+	public List<byte[]> getSelfSharePublicKeys() throws DataException;
 
 	public boolean isRewardSharePublicKey(byte[] publicKey) throws DataException;
 
@@ -174,26 +174,26 @@ public interface AccountRepository {
 	public List<RewardShareData> findRewardShares(List<String> mintingAccounts, List<String> recipientAccounts, List<String> involvedAddresses, Integer limit, Integer offset, Boolean reverse) throws DataException;
 
 	/**
-	 * Returns index in list of reward-shares (sorted by reward-share public key).
+	 * Returns index in list of self-shares (sorted by reward-share public key).
 	 * <p>
-	 * @return index (from 0) or null if publicKey not found in repository.
+	 * @return index (from 0) or null if publicKey is not an active self-share.
 	 */
-	public Integer getRewardShareIndex(byte[] rewardSharePublicKey) throws DataException;
+	public Integer getSelfShareIndex(byte[] selfSharePublicKey) throws DataException;
 
 	/**
-	 * Returns reward-share data using index into list of reward-shares (sorted by reward-share public key).
+	 * Returns self-share data using index into list of self-shares (sorted by reward-share public key).
 	 */
-	public RewardShareData getRewardShareByIndex(int index) throws DataException;
+	public RewardShareData getSelfShareByIndex(int index) throws DataException;
 
 	/**
-	 * Returns list of reward-share data using array of indexes into list of reward-shares (sorted by reward-share public key).
+	 * Returns list of self-share data using array of indexes into list of self-shares (sorted by reward-share public key).
 	 * <p>
-	 * This is a one-shot, batch form of the above <tt>getRewardShareByIndex(int)</tt> call.
+	 * This is a one-shot, batch form of the above <tt>getSelfShareByIndex(int)</tt> call.
 	 * 
-	 * @return list of reward-share data, or null if one (or more) index is invalid
+	 * @return list of self-share data, or null if one (or more) index is invalid
 	 * @throws DataException
 	 */
-	public List<RewardShareData> getRewardSharesByIndexes(int[] indexes) throws DataException;
+	public List<RewardShareData> getSelfSharesByIndexes(int[] indexes) throws DataException;
 
 	public boolean rewardShareExists(byte[] rewardSharePublicKey) throws DataException;
 

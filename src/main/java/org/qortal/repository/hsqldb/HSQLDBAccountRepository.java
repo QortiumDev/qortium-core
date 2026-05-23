@@ -574,23 +574,23 @@ public class HSQLDBAccountRepository implements AccountRepository {
 	}
 
 	@Override
-	public List<byte[]> getRewardSharePublicKeys() throws DataException {
-		String sql = "SELECT reward_share_public_key FROM RewardShares ORDER BY reward_share_public_key";
+	public List<byte[]> getSelfSharePublicKeys() throws DataException {
+		String sql = "SELECT reward_share_public_key FROM RewardShares WHERE minter = recipient ORDER BY reward_share_public_key";
 
-		List<byte[]> rewardSharePublicKeys = new ArrayList<>();
+		List<byte[]> selfSharePublicKeys = new ArrayList<>();
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
 			if (resultSet == null)
 				return null;
 
 			do {
-				byte[] rewardSharePublicKey = resultSet.getBytes(1);
-				rewardSharePublicKeys.add(rewardSharePublicKey);
+				byte[] selfSharePublicKey = resultSet.getBytes(1);
+				selfSharePublicKeys.add(selfSharePublicKey);
 			} while (resultSet.next());
 
-			return rewardSharePublicKeys;
+			return selfSharePublicKeys;
 		} catch (SQLException e) {
-			throw new DataException("Unable to fetch reward-share public keys from repository", e);
+			throw new DataException("Unable to fetch self-share public keys from repository", e);
 		}
 	}
 
@@ -766,22 +766,27 @@ public class HSQLDBAccountRepository implements AccountRepository {
 	}
 
 	@Override
-	public Integer getRewardShareIndex(byte[] rewardSharePublicKey) throws DataException {
-		if (!this.rewardShareExists(rewardSharePublicKey))
-			return null;
+	public Integer getSelfShareIndex(byte[] selfSharePublicKey) throws DataException {
+		try {
+			if (!this.repository.exists("RewardShares", "reward_share_public_key = ? AND minter = recipient", selfSharePublicKey))
+				return null;
+		} catch (SQLException e) {
+			throw new DataException("Unable to check for self-share public key in repository", e);
+		}
 
-		String sql = "SELECT COUNT(*) FROM RewardShares WHERE reward_share_public_key < ?";
+		String sql = "SELECT COUNT(*) FROM RewardShares WHERE minter = recipient AND reward_share_public_key < ?";
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql, rewardSharePublicKey)) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, selfSharePublicKey)) {
 			return resultSet.getInt(1);
 		} catch (SQLException e) {
-			throw new DataException("Unable to determine reward-share index in repository", e);
+			throw new DataException("Unable to determine self-share index in repository", e);
 		}
 	}
 
 	@Override
-	public RewardShareData getRewardShareByIndex(int index) throws DataException {
+	public RewardShareData getSelfShareByIndex(int index) throws DataException {
 		String sql = "SELECT minter_public_key, minter, recipient, share_percent, reward_share_public_key FROM RewardShares "
+				+ "WHERE minter = recipient "
 				+ "ORDER BY reward_share_public_key ASC "
 				+ "OFFSET ? LIMIT 1";
 
@@ -797,21 +802,22 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 			return new RewardShareData(minterPublicKey, minter, recipient, rewardSharePublicKey, sharePercent);
 		} catch (SQLException e) {
-			throw new DataException("Unable to fetch indexed reward-share from repository", e);
+			throw new DataException("Unable to fetch indexed self-share from repository", e);
 		}
 	}
 
 	@Override
-	public List<RewardShareData> getRewardSharesByIndexes(int[] indexes) throws DataException {
+	public List<RewardShareData> getSelfSharesByIndexes(int[] indexes) throws DataException {
 		String sql = "SELECT minter_public_key, minter, recipient, share_percent, reward_share_public_key FROM RewardShares "
+				+ "WHERE minter = recipient "
 				+ "ORDER BY reward_share_public_key ASC";
 
 		if (indexes == null)
 			return null;
 
-		List<RewardShareData> rewardShares = new ArrayList<>();
+		List<RewardShareData> selfShares = new ArrayList<>();
 		if (indexes.length == 0)
-			return rewardShares;
+			return selfShares;
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql)) {
 			if (resultSet == null)
@@ -837,12 +843,12 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 				RewardShareData rewardShareData = new RewardShareData(minterPublicKey, minter, recipient, rewardSharePublicKey, sharePercent);
 
-				rewardShares.add(rewardShareData);
+				selfShares.add(rewardShareData);
 			}
 
-			return rewardShares;
+			return selfShares;
 		} catch (SQLException e) {
-			throw new DataException("Unable to fetch indexed reward-shares from repository", e);
+			throw new DataException("Unable to fetch indexed self-shares from repository", e);
 		}
 	}
 

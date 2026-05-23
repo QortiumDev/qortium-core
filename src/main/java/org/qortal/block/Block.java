@@ -447,17 +447,17 @@ public class Block {
 				}
 			}
 
-			// Load sorted list of reward share public keys into memory, so that the indexes can be obtained.
-			// This is up to 100x faster than querying each index separately. For 4150 reward share keys, it
+			// Load sorted list of self-share public keys into memory, so that the indexes can be obtained.
+			// This is up to 100x faster than querying each index separately. For 4150 self-share keys, it
 			// was taking around 5000ms to query individually, vs 50ms using this approach.
-			List<byte[]> allRewardSharePublicKeys = repository.getAccountRepository().getRewardSharePublicKeys();
+			List<byte[]> allSelfSharePublicKeys = repository.getAccountRepository().getSelfSharePublicKeys();
 
-			// Map using index into sorted list of reward-shares as key
+			// Map using index into sorted list of self-shares as key.
 			Map<Integer, OnlineAccountData> indexedOnlineAccounts = new HashMap<>();
 			for (OnlineAccountData onlineAccountData : onlineAccounts) {
-				Integer accountIndex = getRewardShareIndex(onlineAccountData.getPublicKey(), allRewardSharePublicKeys);
+				Integer accountIndex = getSelfShareIndex(onlineAccountData.getPublicKey(), allSelfSharePublicKeys);
 				if (accountIndex == null)
-					// Online account (reward-share) with current timestamp but reward-share cancelled
+					// Online account with current timestamp but self-share cancelled.
 					continue;
 
 				indexedOnlineAccounts.put(accountIndex, onlineAccountData);
@@ -736,10 +736,10 @@ public class Block {
 		if (this.cachedExpandedAccounts != null)
 			return this.cachedExpandedAccounts;
 
-		// We might already have a cache of online, reward-shares thanks to isValid()
+		// We might already have a cache of online self-shares thanks to isValid()
 		if (this.cachedOnlineRewardShares == null) {
 			ConciseSet accountIndexes = BlockTransformer.decodeOnlineAccounts(this.blockData.getEncodedOnlineAccounts());
-			this.cachedOnlineRewardShares = repository.getAccountRepository().getRewardSharesByIndexes(accountIndexes.toArray());
+			this.cachedOnlineRewardShares = repository.getAccountRepository().getSelfSharesByIndexes(accountIndexes.toArray());
 
 			if (this.cachedOnlineRewardShares == null)
 				throw new DataException("Online accounts invalid?");
@@ -1154,7 +1154,7 @@ public class Block {
 			return ValidationResult.OK;
 		}
 
-		List<RewardShareData> onlineRewardShares = repository.getAccountRepository().getRewardSharesByIndexes(accountIndexes.toArray());
+		List<RewardShareData> onlineRewardShares = repository.getAccountRepository().getSelfSharesByIndexes(accountIndexes.toArray());
 		if (onlineRewardShares == null)
 			return ValidationResult.ONLINE_ACCOUNT_UNKNOWN;
 
@@ -1546,6 +1546,9 @@ public class Block {
 		// Block's minter public key must be a known self-share public key.
 		RewardShareData rewardShareData = this.repository.getAccountRepository().getRewardShare(this.blockData.getMinterPublicKey());
 		if (rewardShareData == null)
+			return false;
+
+		if (!rewardShareData.isSelfShare())
 			return false;
 
 		Account mintingAccount = new PublicKeyAccount(this.repository, rewardShareData.getMinterPublicKey());
@@ -2539,16 +2542,16 @@ public class Block {
 	// Utils
 
 	/**
-	 * Find index of rewardSharePublicKey in list of rewardSharePublicKeys
+	 * Find index of selfSharePublicKey in list of selfSharePublicKeys
 	 *
-	 * @param rewardSharePublicKey - the key to query
-	 * @param rewardSharePublicKeys - a sorted list of keys
+	 * @param selfSharePublicKey - the key to query
+	 * @param selfSharePublicKeys - a sorted list of keys
 	 * @return - the index of the key, or null if not found
 	 */
-	private static Integer getRewardShareIndex(byte[] rewardSharePublicKey, List<byte[]> rewardSharePublicKeys) {
+	private static Integer getSelfShareIndex(byte[] selfSharePublicKey, List<byte[]> selfSharePublicKeys) {
 		int index = 0;
-		for (byte[] publicKey : rewardSharePublicKeys) {
-			if (Arrays.equals(rewardSharePublicKey, publicKey)) {
+		for (byte[] publicKey : selfSharePublicKeys) {
+			if (Arrays.equals(selfSharePublicKey, publicKey)) {
 				return index;
 			}
 			index++;

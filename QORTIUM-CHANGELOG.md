@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: index online accounts by self-shares
+
+Changed online-account block indexes so they are built from self-share minting-key records only. Non-self reward shares still record payout allocations, but they no longer occupy online-account index space, shift valid minting keys, or appear in signer lookups as possible block minters.
+
 ### 2026-05-22 - docs: clarify reward-share minting wording
 
 Clarified API wording and code comments around reward shares so operators can distinguish self-share minting-key records from non-self payout records. Self-share private keys are the only reward-share keys that belong in BlockMinter, while non-self reward shares allocate a minter's earned rewards to recipients.

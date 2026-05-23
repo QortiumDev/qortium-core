@@ -239,8 +239,8 @@ public class HSQLDBBlockRepository implements BlockRepository {
 		String directSql = "SELECT COUNT(*) FROM Blocks WHERE minter = ?";
 
 		String rewardShareSql = "SELECT COUNT(*) FROM RewardShares "
-		+ "JOIN Blocks ON minter = reward_share_public_key "
-		+ "WHERE minter_public_key = ?";
+			+ "JOIN Blocks ON Blocks.minter = reward_share_public_key "
+			+ "WHERE minter_public_key = ? AND RewardShares.minter = RewardShares.recipient";
 
 		int totalCount = 0;
 
@@ -266,7 +266,7 @@ public class HSQLDBBlockRepository implements BlockRepository {
 		StringBuilder sql = new StringBuilder(1024);
 		sql.append("SELECT DISTINCT block_minter, n_blocks, minter_public_key, minter, recipient FROM (");
 		sql.append(subquerySql);
-		sql.append(") AS Minters (block_minter, n_blocks) LEFT OUTER JOIN RewardShares ON reward_share_public_key = block_minter ");
+		sql.append(") AS Minters (block_minter, n_blocks) LEFT OUTER JOIN RewardShares ON RewardShares.reward_share_public_key = block_minter AND RewardShares.minter = RewardShares.recipient ");
 
 		if (addresses != null && !addresses.isEmpty()) {
 			sql.append(" LEFT OUTER JOIN Accounts AS BlockMinterAccounts ON BlockMinterAccounts.public_key = block_minter ");
@@ -303,7 +303,7 @@ public class HSQLDBBlockRepository implements BlockRepository {
 				byte[] blockMinterPublicKey = resultSet.getBytes(1);
 				int nBlocks = resultSet.getInt(2);
 
-				// May not be present if no reward-share:
+				// May not be present if no self-share:
 				byte[] mintingAccountPublicKey = resultSet.getBytes(3);
 				String minterAccount = resultSet.getString(4);
 				String recipientAccount = resultSet.getString(5);
@@ -328,8 +328,8 @@ public class HSQLDBBlockRepository implements BlockRepository {
 		StringBuilder sql = new StringBuilder(512);
 		sql.append("SELECT signature, height, Blocks.minter, online_accounts_count, minted_when, transaction_count, Blocks.reference FROM ");
 
-		// List of minter account's public key and reward-share public keys with minter's public key
-		sql.append("(SELECT * FROM (VALUES (CAST(? AS AccountPublicKey))) UNION (SELECT reward_share_public_key FROM RewardShares WHERE minter_public_key = ?)) AS PublicKeys (public_key) ");
+		// List of minter account's public key and self-share public keys with minter's public key.
+		sql.append("(SELECT * FROM (VALUES (CAST(? AS AccountPublicKey))) UNION (SELECT reward_share_public_key FROM RewardShares WHERE minter_public_key = ? AND minter = recipient)) AS PublicKeys (public_key) ");
 
 		// Match Blocks signed with public key from above list
 		sql.append("JOIN Blocks ON Blocks.minter = public_key ");

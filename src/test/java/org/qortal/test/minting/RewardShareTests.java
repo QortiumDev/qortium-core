@@ -20,6 +20,9 @@ import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.utils.Base58;
 
+import java.util.Arrays;
+import java.util.List;
+
 import static org.junit.Assert.*;
 
 public class RewardShareTests extends Common {
@@ -216,6 +219,63 @@ public class RewardShareTests extends Common {
 					.getRewardShare(signingAccount.getPublicKey(), signingAccount.getAddress());
 			assertNotNull(rewardShareData);
 			assertEquals("Self-share percentage should be normalized", 0, rewardShareData.getSharePercent());
+		}
+	}
+
+	@Test
+	public void testPayoutRewardSharesDoNotOccupySelfShareIndexes() throws DataException {
+		final int sharePercent = 12_80;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount aliceAccount = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bobAccount = Common.getTestAccount(repository, "bob");
+
+			RewardShareData aliceSelfShare = repository.getAccountRepository()
+					.getRewardShare(aliceAccount.getPublicKey(), aliceAccount.getAddress());
+			assertNotNull("Alice self-share should exist in the test chain", aliceSelfShare);
+
+			Integer aliceIndexBefore = repository.getAccountRepository()
+					.getSelfShareIndex(aliceSelfShare.getRewardSharePublicKey());
+			assertNotNull("Alice self-share should be indexable", aliceIndexBefore);
+
+			List<byte[]> selfSharePublicKeysBefore = repository.getAccountRepository().getSelfSharePublicKeys();
+			assertNotNull("Self-share public keys should exist", selfSharePublicKeysBefore);
+			int selfShareCountBefore = selfSharePublicKeysBefore.size();
+
+			byte[] payoutRewardSharePrivateKey = AccountUtils.rewardShare(repository, "alice", "bob", sharePercent);
+			PrivateKeyAccount payoutRewardShareAccount = new PrivateKeyAccount(repository, payoutRewardSharePrivateKey);
+			RewardShareData payoutRewardShare = repository.getAccountRepository()
+					.getRewardShare(payoutRewardShareAccount.getPublicKey());
+			assertNotNull("Payout reward-share should exist", payoutRewardShare);
+			assertFalse("Payout reward-share should not be a self-share", payoutRewardShare.isSelfShare());
+
+			assertNull("Payout reward-share should not have a self-share index",
+					repository.getAccountRepository().getSelfShareIndex(payoutRewardShare.getRewardSharePublicKey()));
+			assertEquals("Payout reward-share should not report a minting level",
+					0, Account.getRewardShareEffectiveMintingLevel(repository, payoutRewardShare.getRewardSharePublicKey()));
+
+			List<byte[]> selfSharePublicKeysAfter = repository.getAccountRepository().getSelfSharePublicKeys();
+			assertEquals("Payout reward-share should not change self-share index count",
+					selfShareCountBefore, selfSharePublicKeysAfter.size());
+			assertFalse("Payout reward-share should not appear in self-share public key list",
+					selfSharePublicKeysAfter.stream()
+							.anyMatch(publicKey -> Arrays.equals(publicKey, payoutRewardShare.getRewardSharePublicKey())));
+
+			Integer aliceIndexAfter = repository.getAccountRepository()
+					.getSelfShareIndex(aliceSelfShare.getRewardSharePublicKey());
+			assertEquals("Payout reward-share should not shift Alice self-share index", aliceIndexBefore, aliceIndexAfter);
+
+			RewardShareData indexedAliceSelfShare = repository.getAccountRepository().getSelfShareByIndex(aliceIndexAfter);
+			assertArrayEquals("Alice self-share should still resolve from the same index",
+					aliceSelfShare.getRewardSharePublicKey(), indexedAliceSelfShare.getRewardSharePublicKey());
+
+			List<RewardShareData> indexedSelfShares = repository.getAccountRepository()
+					.getSelfSharesByIndexes(new int[] { aliceIndexAfter });
+			assertEquals(1, indexedSelfShares.size());
+			assertArrayEquals("Batch self-share index lookup should resolve Alice self-share",
+					aliceSelfShare.getRewardSharePublicKey(), indexedSelfShares.get(0).getRewardSharePublicKey());
+
+			assertEquals("Payout recipient should still be recorded", bobAccount.getAddress(), payoutRewardShare.getRecipient());
 		}
 	}
 

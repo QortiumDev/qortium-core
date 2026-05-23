@@ -44,8 +44,8 @@ public class Blocks {
             // get all online account indices from block
             ConciseSet onlineAccountIndices = BlockTransformer.decodeOnlineAccounts(blockData.getEncodedOnlineAccounts());
 
-            // get online reward shares from the online accounts on the block
-            List<RewardShareData> onlineRewardShares = repository.getAccountRepository().getRewardSharesByIndexes(onlineAccountIndices.toArray());
+            // get online self-shares from the online accounts on the block
+            List<RewardShareData> onlineRewardShares = repository.getAccountRepository().getSelfSharesByIndexes(onlineAccountIndices.toArray());
 
             // online timestamp for block
             long onlineTimestamp = blockData.getOnlineAccountsTimestamp();

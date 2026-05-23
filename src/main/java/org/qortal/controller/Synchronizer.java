@@ -1874,6 +1874,9 @@ public class Synchronizer extends Thread {
 
 					if (transactionData != null && Arrays.equals(transactionData.getRewardSharePublicKey(), blockSummary.getMinterPublicKey())) {
 						Account rewardShareMinter = new PublicKeyAccount(repository, transactionData.getMinterPublicKey());
+						if (!rewardShareMinter.getAddress().equals(transactionData.getRecipient()))
+							continue;
+
 						minterLevel = rewardShareMinter.getEffectiveMintingLevel();
 						break;
 					}

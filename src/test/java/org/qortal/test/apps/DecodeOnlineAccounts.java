@@ -83,7 +83,7 @@ public class DecodeOnlineAccounts {
 			while (iterator.hasNext()) {
 				int accountIndex = iterator.next();
 
-				RewardShareData rewardShareData = repository.getAccountRepository().getRewardShareByIndex(accountIndex);
+				RewardShareData rewardShareData = repository.getAccountRepository().getSelfShareByIndex(accountIndex);
 
 				System.out.println(String.format("Reward-share public key: %s, minter: %s, recipient: %s, share: %s",
 						Base58.encode(rewardShareData.getRewardSharePublicKey()),

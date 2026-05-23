@@ -78,7 +78,7 @@ public class Common {
 		testAccountsByName.put("chloe", new TestAccount(null, "chloe", "HqVngdE1AmEyDpfwTZqUdFHB13o4bCmpoTNAKEqki66K", false));
 		testAccountsByName.put("dilbert", new TestAccount(null, "dilbert", "Gakhh6Ln4vtBFM88nE9JmDaLBDtUBg51aVFpWfSkyVw5", false));
 
-		// Alice reward-share with herself. Private key is reward-share private key, derived from Alice's private and public keys.
+		// Alice self-share. Private key is derived from Alice's private and public keys.
 		testAccountsByName.put("alice-reward-share", new TestAccount(null, "alice-reward-share", "1CeDCg9TSdBwJNGVTGG7pCKsvsyyoEcaVXYvDT1Xb9f", true));
 		// Bob self-share
 		testAccountsByName.put("bob-reward-share", new TestAccount(null, "bob-reward-share", "975G6DJX2bhkq2dawxxDbNe5DcT33LbGto5tRueKVRDx", true));

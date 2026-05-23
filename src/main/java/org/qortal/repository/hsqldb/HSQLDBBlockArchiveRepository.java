@@ -119,8 +119,8 @@ public class HSQLDBBlockArchiveRepository implements BlockArchiveRepository {
         StringBuilder sql = new StringBuilder(512);
         sql.append("SELECT signature, height, BlockArchive.minter FROM ");
 
-        // List of minter account's public key and reward-share public keys with minter's public key
-        sql.append("(SELECT * FROM (VALUES (CAST(? AS AccountPublicKey))) UNION (SELECT reward_share_public_key FROM RewardShares WHERE minter_public_key = ?)) AS PublicKeys (public_key) ");
+        // List of minter account's public key and self-share public keys with minter's public key.
+        sql.append("(SELECT * FROM (VALUES (CAST(? AS AccountPublicKey))) UNION (SELECT reward_share_public_key FROM RewardShares WHERE minter_public_key = ? AND minter = recipient)) AS PublicKeys (public_key) ");
 
         // Match BlockArchive blocks signed with public key from above list
         sql.append("JOIN BlockArchive ON BlockArchive.minter = public_key ");
@@ -172,7 +172,7 @@ public class HSQLDBBlockArchiveRepository implements BlockArchiveRepository {
         StringBuilder sql = new StringBuilder(1024);
         sql.append("SELECT DISTINCT block_minter, n_blocks, minter_public_key, minter, recipient FROM (");
         sql.append(subquerySql);
-        sql.append(") AS Minters (block_minter, n_blocks) LEFT OUTER JOIN RewardShares ON reward_share_public_key = block_minter ");
+        sql.append(") AS Minters (block_minter, n_blocks) LEFT OUTER JOIN RewardShares ON RewardShares.reward_share_public_key = block_minter AND RewardShares.minter = RewardShares.recipient ");
 
         if (addresses != null && !addresses.isEmpty()) {
             sql.append(" LEFT OUTER JOIN Accounts AS BlockMinterAccounts ON BlockMinterAccounts.public_key = block_minter ");

@@ -113,7 +113,7 @@ public class DisagreementTests extends Common {
 		while (iterator.hasNext()) {
 			int accountIndex = iterator.next();
 
-			RewardShareData rewardShareData = repository.getAccountRepository().getRewardShareByIndex(accountIndex);
+			RewardShareData rewardShareData = repository.getAccountRepository().getSelfShareByIndex(accountIndex);
 			rewardSharesData.add(rewardShareData);
 		}
 
