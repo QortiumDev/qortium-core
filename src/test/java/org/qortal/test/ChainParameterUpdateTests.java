@@ -3,6 +3,7 @@ package org.qortal.test;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.AccountTrustCategoryPolicyCodec;
 import org.qortal.block.BlockChain;
@@ -10,6 +11,7 @@ import org.qortal.block.BlockChain.AccountLevelShareBin;
 import org.qortal.block.ChainParameter;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustCategoryPoliciesData;
+import org.qortal.data.account.AccountTrustDerivationData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.BaseTransactionData;
@@ -23,6 +25,7 @@ import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.AccountTrustTestUtils;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.GroupUtils;
@@ -36,6 +39,7 @@ import org.qortal.transaction.Transaction;
 import org.qortal.utils.Amounts;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -519,6 +523,119 @@ public class ChainParameterUpdateTests extends Common {
 							activationHeight));
 			assertEquals(originalSuspiciousMinRatingConfidence,
 					BlockChain.getInstance().getAccountTrustSuspiciousMinRatingConfidence(repository, activationHeight));
+		}
+	}
+
+	@Test
+	public void testApprovedAccountTrustCategoryPoliciesUpdateAppliesAtActivationHeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+			byte[] originalValue = BlockChain.getInstance()
+					.getAccountTrustCategoryPoliciesValue(repository, activationHeight);
+			byte[] updatedValue = buildCategoryPoliciesValueWithLevelThreshold(AccountRatingCategory.SUBJECT, 1,
+					BlockChain.getInstance().getAccountTrustSettings()
+							.getLevelThreshold(AccountRatingCategory.SUBJECT, 1) + 1_000_000L);
+
+			ChainParameterUpdateTransactionData transactionData =
+					buildAccountTrustCategoryPoliciesUpdate(repository, alice,
+							TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedValue);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			assertEquals(Transaction.ApprovalStatus.PENDING,
+					GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertArrayEquals(originalValue,
+					BlockChain.getInstance().getAccountTrustCategoryPoliciesValue(repository, activationHeight));
+
+			approveAndSettle(repository, transactionData);
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED,
+					GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertArrayEquals(originalValue,
+					BlockChain.getInstance().getAccountTrustCategoryPoliciesValue(repository, activationHeight - 1));
+			assertArrayEquals(updatedValue,
+					BlockChain.getInstance().getAccountTrustCategoryPoliciesValue(repository, activationHeight));
+			assertArrayEquals(updatedValue,
+					BlockChain.getInstance().getAccountTrustCategoryPoliciesValue(repository, activationHeight + 100));
+
+			ChainParameterData overlayData = repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES.id, activationHeight);
+			assertEquals(activationHeight, overlayData.getActivationHeight());
+			assertArrayEquals(transactionData.getValue(), overlayData.getValue());
+
+			int approvalHeight = GroupUtils.getApprovalHeight(repository, transactionData.getSignature());
+			BlockUtils.orphanToBlock(repository, approvalHeight - 1);
+
+			assertEquals(Transaction.ApprovalStatus.PENDING,
+					GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertNull(repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES.id, activationHeight));
+			assertArrayEquals(originalValue,
+					BlockChain.getInstance().getAccountTrustCategoryPoliciesValue(repository, activationHeight));
+		}
+	}
+
+	@Test
+	public void testAccountTrustCategoryPoliciesChangeDerivedTrustAtActivationHeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			PrivateKeyAccount chloe = Common.getTestAccount(repository, "chloe");
+			PrivateKeyAccount dilbert = Common.getTestAccount(repository, "dilbert");
+
+			AccountTrustTestUtils.saveDerivedSilverSubjectRatings(repository, alice, bob, chloe, dilbert);
+			repository.saveChanges();
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 5);
+			byte[] updatedValue = buildCategoryPoliciesValueWithLevelThreshold(AccountRatingCategory.SUBJECT, 2,
+					BlockChain.getInstance().getAccountTrustSettings()
+							.getLevelThreshold(AccountRatingCategory.SUBJECT, 2) + 10_000_000L);
+			ChainParameterUpdateTransactionData transactionData =
+					buildAccountTrustCategoryPoliciesUpdate(repository, alice,
+							TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedValue);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			approveAndSettle(repository, transactionData);
+
+			AccountTrustDerivationData beforeActivationDerivation =
+					findDerivation(AccountTrustDerivation.deriveAll(repository, activationHeight - 1), alice);
+			AccountTrustDerivationData atActivationDerivation =
+					findDerivation(AccountTrustDerivation.deriveAll(repository, activationHeight), alice);
+
+			assertEquals(AccountTrustStatus.SILVER, beforeActivationDerivation.getDerivedTrustStatus());
+			assertEquals(AccountTrustStatus.BRONZE, atActivationDerivation.getDerivedTrustStatus());
+		}
+	}
+
+	@Test
+	public void testAccountTrustCategoryPoliciesActivationRefreshesTrustSnapshots() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 5);
+			byte[] updatedValue = buildCategoryPoliciesValueWithLevelThreshold(AccountRatingCategory.SUBJECT, 1,
+					BlockChain.getInstance().getAccountTrustSettings()
+							.getLevelThreshold(AccountRatingCategory.SUBJECT, 1) + 1_000_000L);
+			ChainParameterUpdateTransactionData transactionData =
+					buildAccountTrustCategoryPoliciesUpdate(repository, alice,
+							TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedValue);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			approveAndSettle(repository, transactionData);
+
+			BlockUtils.mintBlocks(repository, activationHeight - 1 - repository.getBlockRepository().getBlockchainHeight());
+
+			AccountTrustSnapshotData beforeActivationSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertNotNull(beforeActivationSnapshot);
+
+			BlockUtils.mintBlock(repository);
+			assertEquals(activationHeight, repository.getBlockRepository().getBlockchainHeight());
+
+			AccountTrustSnapshotData activationSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertEquals(activationHeight, activationSnapshot.getSnapshotHeight());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			AccountTrustSnapshotData orphanedSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertEquals(activationHeight - 1, orphanedSnapshot.getSnapshotHeight());
 		}
 	}
 
@@ -1395,6 +1512,15 @@ public class ChainParameterUpdateTests extends Common {
 			throws DataException {
 		return repository.getAccountRatingRepository()
 				.getTrustDerivationSnapshot(account.getAddress(), AccountRatingCategory.SUBJECT);
+	}
+
+	private static AccountTrustDerivationData findDerivation(List<AccountTrustDerivationData> derivations,
+			PrivateKeyAccount account) {
+		for (AccountTrustDerivationData derivation : derivations)
+			if (derivation.getAccountAddress().equals(account.getAddress()))
+				return derivation;
+
+		throw new AssertionError("Missing trust derivation for " + account.getAddress());
 	}
 
 	private static void assertTrustParameterActivationRefreshesTrustSnapshots(Repository repository,

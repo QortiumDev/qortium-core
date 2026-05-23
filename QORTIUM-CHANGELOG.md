@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - test: cover account trust category policy activation
+
+Added activation tests for the account trust category policy chain parameter. The tests show that approved policy tables only affect trust derivation at their activation height, refresh trust snapshots when they activate, and are removed again if the approval-settlement block is orphaned.
+
 ### 2026-05-23 - api: add account trust category policy parameter endpoints
 
 Added typed API support for proposing and reading the account trust category policy table. The API can now build development-group proposals from category-policy objects, return the effective policy table for a block height, and show decoded category policies in chain-parameter effective-value and proposal summaries.
