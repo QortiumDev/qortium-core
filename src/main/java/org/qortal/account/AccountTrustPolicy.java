@@ -22,6 +22,10 @@ public final class AccountTrustPolicy {
 		return settings().getStartingEnergy();
 	}
 
+	public static long getStartingEnergy(Repository repository, int height) throws DataException {
+		return BlockChain.getInstance().getAccountTrustStartingEnergy(repository, height);
+	}
+
 	public static int getManagerEnergyHops() {
 		return settings().getManagerEnergyHops();
 	}

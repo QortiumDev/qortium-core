@@ -574,8 +574,9 @@ public class AccountRatingsResource {
 		for (AccountRatingCategory category : AccountRatingCategory.values())
 			categoryPolicies.add(buildTrustCategoryPolicy(category, voteWeightPercents));
 
-		return new AccountTrustPolicyData(AccountTrustPolicy.getActiveWeightCategory(), AccountTrustPolicy.getStartingEnergy(),
-				AccountTrustPolicy.getManagerEnergyHops(), AccountTrustPolicy.getPositiveMinBranchCount(),
+		return new AccountTrustPolicyData(AccountTrustPolicy.getActiveWeightCategory(),
+				AccountTrustPolicy.getStartingEnergy(repository, height), AccountTrustPolicy.getManagerEnergyHops(),
+				AccountTrustPolicy.getPositiveMinBranchCount(),
 				AccountTrustPolicy.getSuspiciousMinRaterCount(), AccountTrustPolicy.getSuspiciousMinBranchCount(),
 				AccountTrustPolicy.getSuspiciousMinRatingConfidence(),
 				AccountTrustPolicy.getAccountRatingChangeCooldownBlocks(repository, height), statusVoteWeights, categoryPolicies);

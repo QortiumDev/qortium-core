@@ -84,7 +84,8 @@ public class AccountTrustDerivation {
 			List<AccountRatingData> allRatings) throws DataException {
 		Map<AccountRatingCategory, List<AccountRatingData>> ratingsByCategory = groupRatingsByCategory(allRatings);
 		Set<String> seedAddresses = getMintingSeedAddresses(repository, mintingSeedHeight);
-		Map<String, EnergyScore> seedEnergy = buildSeedEnergy(seedAddresses);
+		long startingEnergy = AccountTrustPolicy.getStartingEnergy(repository, mintingSeedHeight);
+		Map<String, EnergyScore> seedEnergy = buildSeedEnergy(seedAddresses, startingEnergy);
 		Map<String, EnergyScore> managerEnergy = flowManagerEnergy(ratingsByCategory.get(AccountRatingCategory.MANAGER),
 				seedEnergy, seedAddresses);
 
@@ -214,12 +215,12 @@ public class AccountTrustDerivation {
 		return seedAddresses;
 	}
 
-	private static Map<String, EnergyScore> buildSeedEnergy(Set<String> seedAddresses) {
+	private static Map<String, EnergyScore> buildSeedEnergy(Set<String> seedAddresses, long startingEnergy) {
 		Map<String, EnergyScore> seedEnergy = new HashMap<>();
 		if (seedAddresses.isEmpty())
 			return seedEnergy;
 
-		long scorePerSeed = AccountTrustPolicy.getStartingEnergy() / seedAddresses.size();
+		long scorePerSeed = startingEnergy / seedAddresses.size();
 		for (String seedAddress : seedAddresses)
 			seedEnergy.put(seedAddress, new EnergyScore(scorePerSeed));
 

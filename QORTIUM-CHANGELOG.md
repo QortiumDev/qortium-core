@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: make account trust starting energy height-aware
+
+Prepared account trust starting energy for on-chain governance by routing trust derivation and trust policy views through height-aware lookup methods. The active value still falls back to `blockchain.json`, but the consensus path now has the same shape as other voted trust policy settings before the starting-energy parameter is added.
+
 ### 2026-05-23 - api: add long chain parameter value support
 
 Added API and decoding support for plain signed-long chain parameter values without adding a new voted parameter yet. Future policy values that are stored as 8-byte integers can now be exposed through plain `longValue` fields and displayed as ordinary base-10 numbers, while amount-style parameters continue to use decimal amount formatting.

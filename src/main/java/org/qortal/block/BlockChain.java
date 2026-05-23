@@ -768,6 +768,14 @@ public class BlockChain {
 		return this.accountTrustSettings;
 	}
 
+	public long getAccountTrustStartingEnergy() {
+		return this.accountTrustSettings.getStartingEnergy();
+	}
+
+	public long getAccountTrustStartingEnergy(Repository repository, int height) throws DataException {
+		return getAccountTrustStartingEnergy();
+	}
+
 	public int getAccountRatingChangeCooldownBlocks() {
 		return this.accountTrustSettings.getAccountRatingChangeCooldownBlocks();
 	}
