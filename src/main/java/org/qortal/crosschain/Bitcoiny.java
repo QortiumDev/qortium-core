@@ -3,15 +3,12 @@ package org.qortal.crosschain;
 import com.google.common.hash.HashCode;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bitcoinj.base.Address;
 import org.bitcoinj.base.Coin;
 import org.bitcoinj.base.Network;
 import org.bitcoinj.base.Sha256Hash;
 import org.bitcoinj.core.*;
-import org.bitcoinj.crypto.DeterministicHierarchy;
 import org.bitcoinj.crypto.ECKey;
 import org.bitcoinj.script.Script;
-import org.bitcoinj.wallet.SendRequest;
 import org.bitcoinj.wallet.Wallet;
 import org.qortal.api.model.SimpleForeignTransaction;
 import org.qortal.crypto.Crypto;
@@ -20,6 +17,7 @@ import org.qortal.utils.Amounts;
 import org.qortal.utils.BitTwiddling;
 import org.qortal.utils.NTP;
 
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -506,8 +504,7 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 	}
 
 	public BitcoinySignedTransaction buildSpendTransaction(String xprv58, String recipient, long amount, Long feePerByte) {
-		Transaction transaction = buildSpend(xprv58, recipient, amount, feePerByte);
-		return transaction == null ? null : BitcoinySignedTransaction.fromBitcoinj(transaction);
+		return LegacyTransactionBuilder.buildSpend(this, xprv58, recipient, amount, feePerByte);
 	}
 
 	public BitcoinySignedTransaction buildSpendTransaction(String xprv58, String recipient, long amount) {
@@ -515,8 +512,7 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 	}
 
 	public BitcoinySignedTransaction buildSpendMultipleTransaction(String xprv58, Map<String, Long> amountByRecipient, Long feePerByte) {
-		Transaction transaction = buildSpendMultiple(xprv58, amountByRecipient, feePerByte);
-		return transaction == null ? null : BitcoinySignedTransaction.fromBitcoinj(transaction);
+		return LegacyTransactionBuilder.buildSpend(this, xprv58, amountByRecipient, feePerByte);
 	}
 
 	public BitcoinySignedTransaction buildHtlcRedeemTransaction(Coin redeemAmount, ECKey redeemKey,
@@ -553,29 +549,8 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 	 * @return transaction, or null if insufficient funds
 	 */
 	public Transaction buildSpend(String xprv58, String recipient, long amount, Long feePerByte) {
-		Context.propagate(bitcoinjContext);
-
-		Wallet wallet = Wallet.fromSpendingKeyB58(this.params, xprv58, DeterministicHierarchy.BIP32_STANDARDISATION_TIME_SECS);
-		SpendableOutputs spendableOutputs = getSpendableOutputs(xprv58, true);
-		primeWalletForSpend(wallet, spendableOutputs);
-		wallet.setUTXOProvider(new PrecomputedUTXOProvider(this, spendableOutputs.outputs));
-
-		Address destination = Address.fromString(this.params, recipient);
-		SendRequest sendRequest = SendRequest.to(destination, Coin.valueOf(amount));
-		configureSpendTransaction(sendRequest.tx);
-
-		if (feePerByte != null)
-			sendRequest.feePerKb = Coin.valueOf(feePerByte * 1000L); // Note: 1000 not 1024
-		else
-			// Allow override of default for TestNet3, etc.
-			sendRequest.feePerKb = this.getFeePerKb();
-
-		try {
-			wallet.completeTx(sendRequest);
-			return sendRequest.tx;
-		} catch (InsufficientMoneyException e) {
-			return null;
-		}
+		BitcoinySignedTransaction transaction = buildSpendTransaction(xprv58, recipient, amount, feePerByte);
+		return transaction == null ? null : toBitcoinjTransaction(transaction);
 	}
 
 	/**
@@ -589,34 +564,15 @@ public abstract class Bitcoiny implements ForeignBlockchain {
 	 * @return the completed transaction, ready to broadcast
 	 */
 	public Transaction buildSpendMultiple(String xprv58, Map<String, Long> amountByRecipient, Long feePerByte) {
-		Context.propagate(bitcoinjContext);
+		BitcoinySignedTransaction transaction = buildSpendMultipleTransaction(xprv58, amountByRecipient, feePerByte);
+		return transaction == null ? null : toBitcoinjTransaction(transaction);
+	}
 
-		Wallet wallet = Wallet.fromSpendingKeyB58(this.params, xprv58, DeterministicHierarchy.BIP32_STANDARDISATION_TIME_SECS);
-		SpendableOutputs spendableOutputs = getSpendableOutputs(xprv58, true);
-		primeWalletForSpend(wallet, spendableOutputs);
-		wallet.setUTXOProvider(new PrecomputedUTXOProvider(this, spendableOutputs.outputs));
-
-		Transaction transaction = new Transaction(this.params);
-		configureSpendTransaction(transaction);
-
-		for(Map.Entry<String, Long> amountForRecipient : amountByRecipient.entrySet()) {
-			Address destination = Address.fromString(this.params, amountForRecipient.getKey());
-			transaction.addOutput(Coin.valueOf(amountForRecipient.getValue()), destination);
-		}
-
-		SendRequest sendRequest = SendRequest.forTx(transaction);
-
-		if (feePerByte != null)
-			sendRequest.feePerKb = Coin.valueOf(feePerByte * 1000L); // Note: 1000 not 1024
-		else
-			// Allow override of default for TestNet3, etc.
-			sendRequest.feePerKb = this.getFeePerKb();
-
+	private Transaction toBitcoinjTransaction(BitcoinySignedTransaction transaction) {
 		try {
-			wallet.completeTx(sendRequest);
-			return sendRequest.tx;
-		} catch (InsufficientMoneyException e) {
-			return null;
+			return Transaction.read(ByteBuffer.wrap(transaction.getRawTransaction()));
+		} catch (ProtocolException e) {
+			throw new IllegalStateException("Unable to parse built legacy transaction", e);
 		}
 	}
 

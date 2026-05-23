@@ -119,7 +119,7 @@ public class RegisteredBitcoinyTests extends BitcoinyTests {
 	}
 
 	@Override
-	protected boolean supportsBitcoinjSpendTests() {
+	protected boolean supportsSpendTransactionTests() {
 		return !"BITCOINCASH".equals(this.fixture.foreignBlockchain.name())
 				&& !"ZCASH".equals(this.fixture.foreignBlockchain.name());
 	}

@@ -13,6 +13,7 @@ import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyBlockchainProvider;
 import org.qortal.crosschain.BitcoinyHTLC;
 import org.qortal.crosschain.BitcoinyScript;
+import org.qortal.crosschain.BitcoinySignedTransaction;
 import org.qortal.crosschain.BitcoinyTransaction;
 import org.qortal.crosschain.ForeignBlockchainException;
 import org.qortal.crosschain.TransactionHash;
@@ -63,7 +64,7 @@ public abstract class BitcoinyTests extends Common {
 		return true;
 	}
 
-	protected boolean supportsBitcoinjSpendTests() {
+	protected boolean supportsSpendTransactionTests() {
 		return true;
 	}
 
@@ -152,38 +153,42 @@ public abstract class BitcoinyTests extends Common {
 
 	@Test
 	public void testBuildSpend() throws ForeignBlockchainException {
-		assumeTrue(supportsBitcoinjSpendTests());
+		assumeTrue(supportsSpendTransactionTests());
 		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
 		String recipient = getSpendRecipient(mockBitcoiny);
 
 		long amount = 1000L;
 
-		Transaction transaction = mockBitcoiny.buildSpend(getDeterministicKey58(), recipient, amount);
+		BitcoinySignedTransaction signedTransaction = mockBitcoiny.buildSpendTransaction(getDeterministicKey58(), recipient, amount);
+		assertNotNull(signedTransaction);
+		BitcoinyTransaction transaction = mockBitcoiny.deserializeRawTransaction(signedTransaction.getTxHash(), signedTransaction.getRawTransaction());
 		assertNotNull(transaction);
-		assertFalse(transaction.getInputs().isEmpty());
-		assertTrue(transaction.getOutputs().stream().anyMatch(output -> output.getValue().value == amount));
+		assertFalse(transaction.inputs.isEmpty());
+		assertTrue(transaction.outputs.stream().anyMatch(output -> output.value == amount));
 
 		// Check repeated spend building doesn't affect outcome
 
-		transaction = mockBitcoiny.buildSpend(getDeterministicKey58(), recipient, amount);
-		assertNotNull(transaction);
+		signedTransaction = mockBitcoiny.buildSpendTransaction(getDeterministicKey58(), recipient, amount);
+		assertNotNull(signedTransaction);
 	}
 
 	@Test
 	public void testBuildSpendMultiple() throws ForeignBlockchainException {
-		assumeTrue(supportsBitcoinjSpendTests());
+		assumeTrue(supportsSpendTransactionTests());
 		TestBitcoiny mockBitcoiny = createMockBitcoinyWithWalletUtxo();
 
 		Map<String, Long> amountByRecipient = new LinkedHashMap<>();
 		amountByRecipient.put(getSpendRecipient(mockBitcoiny), 1000L);
 		amountByRecipient.put(mockBitcoiny.pkhToAddress(HashCode.fromString("03".repeat(20)).asBytes()), 2000L);
 
-		Transaction transaction = mockBitcoiny.buildSpendMultiple(getDeterministicKey58(), amountByRecipient, null);
+		BitcoinySignedTransaction signedTransaction = mockBitcoiny.buildSpendMultipleTransaction(getDeterministicKey58(), amountByRecipient, null);
+		assertNotNull(signedTransaction);
+		BitcoinyTransaction transaction = mockBitcoiny.deserializeRawTransaction(signedTransaction.getTxHash(), signedTransaction.getRawTransaction());
 
 		assertNotNull(transaction);
-		assertFalse(transaction.getInputs().isEmpty());
-		assertTrue(transaction.getOutputs().stream().anyMatch(output -> output.getValue().value == 1000L));
-		assertTrue(transaction.getOutputs().stream().anyMatch(output -> output.getValue().value == 2000L));
+		assertFalse(transaction.inputs.isEmpty());
+		assertTrue(transaction.outputs.stream().anyMatch(output -> output.value == 1000L));
+		assertTrue(transaction.outputs.stream().anyMatch(output -> output.value == 2000L));
 	}
 
 	@Test
@@ -206,7 +211,7 @@ public abstract class BitcoinyTests extends Common {
 	@Test
 	public void testWalletBalanceAndSpendIgnoreFilteredOutputs() throws ForeignBlockchainException {
 		assumeTrue(supportsDeterministicWalletTests());
-		assumeTrue(supportsBitcoinjSpendTests());
+		assumeTrue(supportsSpendTransactionTests());
 
 		MockBitcoinyBlockchainProvider blockchainProvider = new MockBitcoinyBlockchainProvider(getCoinName() + "-mock-filtered-utxo");
 		TestBitcoiny mockBitcoiny = new TestBitcoiny(this.bitcoiny.getNetworkParameters(), blockchainProvider, getCoinSymbol(),
@@ -224,7 +229,7 @@ public abstract class BitcoinyTests extends Common {
 		assertEquals(50_000L, mockBitcoiny.getConfirmedBalance(walletAddress));
 		assertTrue(mockBitcoiny.getWalletAddressInfos(getDeterministicKey58()).stream()
 				.anyMatch(addressInfo -> addressInfo.getAddress().equals(walletAddress) && addressInfo.getValue() == 50_000L));
-		assertNull(mockBitcoiny.buildSpend(getDeterministicKey58(), getSpendRecipient(mockBitcoiny), 90_000L));
+		assertNull(mockBitcoiny.buildSpendTransaction(getDeterministicKey58(), getSpendRecipient(mockBitcoiny), 90_000L));
 	}
 
 	@Test

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - crosschain: build legacy spends without bitcoinj wallets
+
+Reworked standard Bitcoiny spend creation so legacy wallet spends are built with Qortium's own deterministic key and raw transaction code instead of bitcoinj's wallet parser. This lets Bitcoin test4 and custom altcoin network settings build spend transactions without failing on network identifiers that bitcoinj does not recognize.
+
 ### 2026-05-23 - test: parse mock bitcoiny raw transactions
 
 Repaired the mock Bitcoiny blockchain provider so raw transactions registered by tests are also available through the parsed transaction lookup used by HTLC secret discovery. This keeps cross-chain HTLC tests focused on redeem-script behavior instead of failing because the mock provider only stored raw bytes.
