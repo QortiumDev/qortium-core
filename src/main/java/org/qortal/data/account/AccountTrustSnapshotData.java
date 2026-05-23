@@ -35,6 +35,16 @@ public class AccountTrustSnapshotData {
 			long score, long levelScore, long levelScoreCap, int level, AccountTrustStatus mappedTrustStatus,
 			boolean mintingSeedMember, AccountTrustRatingCountsData inboundRatings, int snapshotHeight,
 			long snapshotTimestamp) {
+		this(accountPublicKey, accountAddress, category, score, levelScore, levelScoreCap, level, mappedTrustStatus,
+				mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED.getVoteWeightPercent()
+						: mappedTrustStatus.getVoteWeightPercent(),
+				mintingSeedMember, inboundRatings, snapshotHeight, snapshotTimestamp);
+	}
+
+	public AccountTrustSnapshotData(byte[] accountPublicKey, String accountAddress, AccountRatingCategory category,
+			long score, long levelScore, long levelScoreCap, int level, AccountTrustStatus mappedTrustStatus,
+			int mappedTrustWeightPercent, boolean mintingSeedMember, AccountTrustRatingCountsData inboundRatings,
+			int snapshotHeight, long snapshotTimestamp) {
 		AccountTrustStatus effectiveMappedStatus = mappedTrustStatus == null ? AccountTrustStatus.UNVERIFIED : mappedTrustStatus;
 
 		this.accountPublicKey = accountPublicKey;
@@ -46,7 +56,7 @@ public class AccountTrustSnapshotData {
 		this.level = level;
 		this.mappedTrustStatus = effectiveMappedStatus;
 		this.mappedTrustStatusValue = effectiveMappedStatus.getValue();
-		this.mappedTrustWeightPercent = effectiveMappedStatus.getVoteWeightPercent();
+		this.mappedTrustWeightPercent = mappedTrustWeightPercent;
 		this.mintingSeedMember = mintingSeedMember;
 		this.inboundRatings = inboundRatings == null ? new AccountTrustRatingCountsData() : inboundRatings;
 		this.snapshotHeight = snapshotHeight;

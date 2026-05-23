@@ -23,6 +23,7 @@ import org.qortal.data.at.ATStateData;
 import org.qortal.data.block.BlockData;
 import org.qortal.data.block.BlockSummaryData;
 import org.qortal.data.block.BlockTransactionData;
+import org.qortal.data.blockchain.ChainParameterData;
 import org.qortal.data.network.OnlineAccountData;
 import org.qortal.data.transaction.CreateGroupTransactionData;
 import org.qortal.data.transaction.GroupBanTransactionData;
@@ -1601,6 +1602,7 @@ public class Block {
 		// Group-approval transactions
 		trustInputsChanged |= processGroupApprovalTransactions();
 		trustInputsChanged |= hasMintingGroupIdBoundary(this.blockData.getHeight());
+		trustInputsChanged |= hasTrustSnapshotAffectingParameterActivation(this.blockData.getHeight());
 		trustInputsChanged |= needsInitialTrustDerivationSnapshotRefresh(this.blockData.getHeight());
 
 		// Store current account trust derivation after rating and group state changes in this block.
@@ -1851,6 +1853,16 @@ public class Block {
 				.equals(new HashSet<>(Groups.getGroupIdsToMint(BlockChain.getInstance(), height - 1)));
 	}
 
+	protected boolean hasTrustSnapshotAffectingParameterActivation(int height) throws DataException {
+		for (ChainParameterData chainParameterData : this.repository.getChainParameterRepository().getParametersAtHeight(height)) {
+			ChainParameter parameter = ChainParameter.valueOf(chainParameterData.getParameterId());
+			if (parameter != null && parameter.affectsTrustSnapshots())
+				return true;
+		}
+
+		return false;
+	}
+
 	protected boolean doesTransactionChangeTrustInputs(TransactionData transactionData, int snapshotHeight) {
 		TransactionType transactionType = transactionData.getType();
 		if (transactionType == TransactionType.RATE_ACCOUNT)
@@ -2013,6 +2025,9 @@ public class Block {
 	protected boolean didBlockChangeTrustInputs() throws DataException {
 		int height = this.blockData.getHeight();
 		if (hasMintingGroupIdBoundary(height))
+			return true;
+
+		if (hasTrustSnapshotAffectingParameterActivation(height))
 			return true;
 
 		for (Transaction transaction : this.getTransactions()) {

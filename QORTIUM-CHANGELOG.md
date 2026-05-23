@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: refresh trust snapshots on chain parameter activation
+
+Added the activation hook that refreshes stored account trust snapshots when an approved on-chain parameter affects trust snapshot output. Trust status vote-weight updates now refresh snapshot rows at their activation height and roll back correctly when that activation block is orphaned, while unrelated parameter activations leave snapshots untouched.
+
 ### 2026-05-23 - docs: define account trust policy parameter roadmap
 
 Documented the proposed path for adding more account trust policy values to the on-chain parameter system. The roadmap keeps the next phase focused on simple scalar settings, reserves planned parameter IDs for those values, and defers larger category policy tables until their binary format and cross-field validation rules are designed.

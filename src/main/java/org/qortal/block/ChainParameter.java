@@ -165,6 +165,10 @@ public enum ChainParameter {
 		return this == ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS;
 	}
 
+	public boolean affectsTrustSnapshots() {
+		return this == ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS;
+	}
+
 	public boolean isValidValue(byte[] value) {
 		if (value == null || value.length != this.valueLength)
 			return false;

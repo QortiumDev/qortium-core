@@ -6,6 +6,8 @@ import org.qortal.repository.DataException;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class HSQLDBChainParameterRepository implements ChainParameterRepository {
 
@@ -52,6 +54,32 @@ public class HSQLDBChainParameterRepository implements ChainParameterRepository 
 			return new ChainParameterData(signature, parameterId, activationHeight, value);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch next chain parameter from repository", e);
+		}
+	}
+
+	@Override
+	public List<ChainParameterData> getParametersAtHeight(int activationHeight) throws DataException {
+		String sql = "SELECT signature, parameter_id, parameter_value FROM ChainParameterUpdates "
+				+ "WHERE activation_height = ? "
+				+ "ORDER BY parameter_id ASC";
+
+		List<ChainParameterData> parameters = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, activationHeight)) {
+			if (resultSet == null)
+				return parameters;
+
+			do {
+				byte[] signature = resultSet.getBytes(1);
+				int parameterId = resultSet.getInt(2);
+				byte[] value = resultSet.getBytes(3);
+
+				parameters.add(new ChainParameterData(signature, parameterId, activationHeight, value));
+			} while (resultSet.next());
+
+			return parameters;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch chain parameters activating at height from repository", e);
 		}
 	}
 

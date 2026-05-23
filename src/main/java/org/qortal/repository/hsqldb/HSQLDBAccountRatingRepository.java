@@ -674,10 +674,12 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 						resultSet.getInt(14), resultSet.getInt(15), resultSet.getInt(16), resultSet.getInt(17));
 				int snapshotHeight = resultSet.getInt(18);
 				long snapshotTimestamp = resultSet.getLong(19);
+				int trustWeightPercent = BlockChain.getInstance()
+						.getAccountTrustStatusVoteWeightPercent(this.repository, snapshotHeight, mappedTrustStatus);
 
 				snapshots.add(new AccountTrustSnapshotData(accountPublicKey, accountAddress, defaultCategory(category),
-						score, levelScore, levelScoreCap, level, mappedTrustStatus, mintingSeedMember, inboundRatings,
-						snapshotHeight, snapshotTimestamp));
+						score, levelScore, levelScoreCap, level, mappedTrustStatus, trustWeightPercent,
+						mintingSeedMember, inboundRatings, snapshotHeight, snapshotTimestamp));
 			} while (resultSet.next());
 
 			return snapshots;

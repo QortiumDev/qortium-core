@@ -8,6 +8,8 @@ import org.qortal.block.BlockChain;
 import org.qortal.block.BlockChain.AccountLevelShareBin;
 import org.qortal.block.ChainParameter;
 import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountTrustSnapshotData;
+import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.blockchain.ChainParameterData;
 import org.qortal.data.group.GroupData;
@@ -33,6 +35,7 @@ import org.qortal.utils.Amounts;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 public class ChainParameterUpdateTests extends Common {
@@ -212,6 +215,70 @@ public class ChainParameterUpdateTests extends Common {
 					.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.id, activationHeight));
 			assertArrayEquals(originalWeights,
 					BlockChain.getInstance().getAccountTrustStatusVoteWeightPercents(repository, activationHeight));
+		}
+	}
+
+	@Test
+	public void testTrustStatusVoteWeightsActivationRefreshesTrustSnapshots() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 5);
+			int[] updatedWeights = new int[] { 0, 25, 40, 70, 100 };
+
+			ChainParameterUpdateTransactionData transactionData = buildTrustStatusVoteWeightsUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedWeights);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			approveAndSettle(repository, transactionData);
+
+			BlockUtils.mintBlocks(repository, activationHeight - 1 - repository.getBlockRepository().getBlockchainHeight());
+
+			AccountTrustSnapshotData beforeActivationSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertNotNull(beforeActivationSnapshot);
+			assertEquals(AccountTrustStatus.UNVERIFIED, beforeActivationSnapshot.getMappedTrustStatus());
+			assertEquals(0, beforeActivationSnapshot.getMappedTrustWeightPercent());
+
+			BlockUtils.mintBlock(repository);
+			assertEquals(activationHeight, repository.getBlockRepository().getBlockchainHeight());
+
+			AccountTrustSnapshotData activationSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertEquals(activationHeight, activationSnapshot.getSnapshotHeight());
+			assertEquals(AccountTrustStatus.UNVERIFIED, activationSnapshot.getMappedTrustStatus());
+			assertEquals(25, activationSnapshot.getMappedTrustWeightPercent());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			AccountTrustSnapshotData orphanedSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertEquals(activationHeight - 1, orphanedSnapshot.getSnapshotHeight());
+			assertEquals(AccountTrustStatus.UNVERIFIED, orphanedSnapshot.getMappedTrustStatus());
+			assertEquals(0, orphanedSnapshot.getMappedTrustWeightPercent());
+		}
+	}
+
+	@Test
+	public void testNonTrustParameterActivationDoesNotRefreshTrustSnapshots() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 5);
+			long updatedReward = BlockChain.getInstance().getRewardAtHeight(repository, activationHeight) + Amounts.MULTIPLIER;
+
+			ChainParameterUpdateTransactionData transactionData = buildBlockRewardUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedReward);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			approveAndSettle(repository, transactionData);
+
+			BlockUtils.mintBlocks(repository, activationHeight - 1 - repository.getBlockRepository().getBlockchainHeight());
+
+			AccountTrustSnapshotData beforeActivationSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertNotNull(beforeActivationSnapshot);
+			int snapshotHeightBeforeActivation = beforeActivationSnapshot.getSnapshotHeight();
+
+			BlockUtils.mintBlock(repository);
+			assertEquals(activationHeight, repository.getBlockRepository().getBlockchainHeight());
+
+			AccountTrustSnapshotData activationSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertEquals(snapshotHeightBeforeActivation, activationSnapshot.getSnapshotHeight());
 		}
 	}
 
@@ -611,6 +678,12 @@ public class ChainParameterUpdateTests extends Common {
 	private static RateAccountTransactionData buildRateAccountTransactionData(PrivateKeyAccount rater,
 			PrivateKeyAccount target, AccountRatingCategory category, int rating) throws DataException {
 		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), category, rating);
+	}
+
+	private static AccountTrustSnapshotData getSubjectTrustSnapshot(Repository repository, PrivateKeyAccount account)
+			throws DataException {
+		return repository.getAccountRatingRepository()
+				.getTrustDerivationSnapshot(account.getAddress(), AccountRatingCategory.SUBJECT);
 	}
 
 	private static void approveAndSettle(Repository repository, ChainParameterUpdateTransactionData transactionData) throws DataException {

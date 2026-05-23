@@ -47,6 +47,12 @@ Once approved, the repository stores the update as an overlay keyed by parameter
 ID and activation height. Consensus lookups check the approved overlay first and
 fall back to `blockchain.json` when no approved update applies.
 
+Some parameters also affect stored account trust derivation snapshots. When one
+of those parameters activates, the activation block refreshes the trust
+snapshots even if no rating or minting-group transaction changed in that block.
+Orphaning back across that activation refreshes snapshots to the previous block
+state.
+
 ## Supported Parameters
 
 `BLOCK_REWARD` is parameter ID `1`.
@@ -122,7 +128,9 @@ rating weights, account-trust summaries, and account-trust profile/policy API
 views at their activation height. Account-trust derivation and explanation API
 views also report the effective percentages for the current height. The weights
 remain effective until another approved `ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS`
-update with a later activation height overrides them.
+update with a later activation height overrides them. Because stored trust
+snapshot rows expose mapped vote-weight percentages, this parameter refreshes
+trust snapshots at activation height.
 
 ## Planned Account Trust Policy Parameters
 
