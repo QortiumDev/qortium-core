@@ -14,10 +14,11 @@ This is intentionally small at first. The currently supported parameters are
 the height-based block reward, the reward share-bin activation count, reward
 share weights, the account rating change cooldown, trust status vote-weight
 percentages, account trust starting energy, account trust manager energy hops,
-positive trust branch counts, suspicious trust decision requirements, and the
-normal and name-registration transaction unit fees. Broader trust-network
-policy values, timestamp-based settings, and larger structured parameter sets
-should be added only after each format and validation rule is made explicit.
+positive trust branch counts, suspicious trust decision requirements, account
+trust category policy thresholds and caps, and the normal and name-registration
+transaction unit fees. Broader trust-network behavior changes and timestamp-
+based settings should be added only after each format and validation rule is
+made explicit.
 
 ## Approval Model
 
@@ -213,15 +214,9 @@ activation height overrides it. Because changing this requirement can change
 derived account trust levels and mapped trust statuses, this parameter refreshes
 trust snapshots at activation height.
 
-## Planned Account Trust Policy Parameters
+`ACCOUNT_TRUST_CATEGORY_POLICIES` is parameter ID `14`.
 
-The initial scalar trust decision settings are now supported. The next account
-trust policy parameter should be one atomic category-policy table so thresholds
-and caps cannot be partially mixed across categories.
-
-`ACCOUNT_TRUST_CATEGORY_POLICIES` should be parameter ID `14`.
-
-Its value should be exactly 240 bytes: thirty signed long integers in a fixed
+Its value is exactly 240 bytes: thirty signed long integers in a fixed
 order. The value does not embed category IDs, level IDs, counts, or JSON. The
 category order is `SUBJECT`, `PLAYER`, `TRAINER`, `MANAGER`, matching
 `AccountRatingCategory.value`. Within each category, levels are stored in
@@ -241,7 +236,7 @@ The required rows are:
 That layout is 11 level threshold/cap pairs plus 4 suspicious threshold/cap
 pairs, or 30 signed long values.
 
-Validation should mirror the current `blockchain.json` category-policy rules:
+Validation mirrors the current `blockchain.json` category-policy rules:
 every required category and level must be present in the typed request,
 thresholds must be positive, caps must be positive and lower than their
 threshold, suspicious thresholds must be negative, suspicious caps must be
@@ -249,11 +244,18 @@ positive and lower than the suspicious threshold magnitude, and the suspicious
 cap multiplied by the effective suspicious rater count must be able to reach
 the suspicious threshold magnitude.
 
-The public API should expose this as a typed JSON proposal builder using
-category and level objects, but consensus should still store only the
-deterministic 240-byte value. Effective-value responses and proposal summaries
-should decode the payload back into category-policy objects so governance tools
-do not have to parse opaque binary values.
+The public API exposes this as a typed JSON proposal builder using category and
+level objects, but consensus stores only the deterministic 240-byte value.
+Effective-value responses and proposal summaries decode the payload back into
+category-policy objects so governance tools do not have to parse opaque binary
+values.
+
+The approved category policy table applies to account trust derivation at its
+activation height and remains effective until another approved
+`ACCOUNT_TRUST_CATEGORY_POLICIES` update with a later activation height
+overrides it. Because changing thresholds or caps can change derived account
+trust levels and mapped trust statuses, this parameter refreshes trust
+snapshots at activation height.
 
 `activeWeightCategory` and broader trust derivation behavior changes remain
 config-only until separate explicit parameters are designed.
@@ -408,6 +410,16 @@ the new signed integer value directly.
 returns the effective suspicious rating-confidence requirement for a height
 after applying any approved overlay that is active at that height.
 
+`POST /chain-parameters/account-trust/category-policies/update` builds an
+unsigned `CHAIN_PARAMETER_UPDATE` transaction for the account trust category
+policy table. Callers provide category and level objects; the API validates
+them against the suspicious rater count effective at the target activation
+height and converts them to the deterministic 240-byte consensus value.
+
+`GET /chain-parameters/account-trust/category-policies/{height}` returns the
+effective account trust category policy table for a height after applying any
+approved overlay that is active at that height.
+
 `POST /chain-parameters/unit-fee/update` builds an unsigned
 `CHAIN_PARAMETER_UPDATE` transaction for the normal transaction unit fee. Callers
 provide the fee as a normal decimal amount, and the API converts it to the
@@ -442,5 +454,5 @@ parsing deterministic. Scalar value types should stay explicit: use `AMOUNT`
 only for asset-style atomic amounts that need eight-decimal public formatting,
 use `LONG` for signed 8-byte integer policy values, use `INTEGER` for signed
 4-byte integer policy values, and use `INTEGER_LIST` for fixed-length signed
-integer arrays. Future structured parameters should define their own canonical
-binary layout before they are accepted on chain.
+integer arrays. Structured parameters should define their own canonical binary
+layout before they are accepted on chain.

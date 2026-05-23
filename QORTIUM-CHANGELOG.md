@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - docs: update category policy chain parameter reference
+
+Updated the on-chain chain-parameter design reference so the account trust category policy table is documented as an implemented parameter instead of a planned one. The reference now includes its activation behavior, typed API paths, validation expectations, and trust snapshot impact.
+
 ### 2026-05-23 - test: cover account trust category policy activation
 
 Added activation tests for the account trust category policy chain parameter. The tests show that approved policy tables only affect trust derivation at their activation height, refresh trust snapshots when they activate, and are removed again if the approval-settlement block is orphaned.
