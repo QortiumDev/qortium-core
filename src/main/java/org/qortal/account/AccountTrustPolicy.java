@@ -4,9 +4,13 @@ import org.qortal.block.BlockChain;
 import org.qortal.block.BlockChain.AccountTrustCategoryPolicy;
 import org.qortal.block.BlockChain.AccountTrustLevelPolicy;
 import org.qortal.block.BlockChain.AccountTrustSettings;
+import org.qortal.block.AccountTrustCategoryPolicyCodec;
+import org.qortal.block.ChainParameter;
 import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountTrustCategoryPoliciesData;
 import org.qortal.data.account.AccountTrustCategoryImpactData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.blockchain.ChainParameterData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 
@@ -59,6 +63,11 @@ public final class AccountTrustPolicy {
 
 	public static CategoryPolicySettings getCategoryPolicySettings(Repository repository, int height)
 			throws DataException {
+		ChainParameterData categoryPoliciesUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES.id, height);
+		if (categoryPoliciesUpdate != null)
+			return CategoryPolicySettings.from(AccountTrustCategoryPolicyCodec.decode(categoryPoliciesUpdate.getValue()));
+
 		return getCategoryPolicySettings();
 	}
 
@@ -421,6 +430,14 @@ public final class AccountTrustPolicy {
 			return new CategoryPolicySettings(policiesByCategory);
 		}
 
+		private static CategoryPolicySettings from(AccountTrustCategoryPoliciesData categoryPolicies) {
+			Map<AccountRatingCategory, CategoryPolicy> policiesByCategory = new EnumMap<>(AccountRatingCategory.class);
+			for (AccountTrustCategoryPoliciesData.CategoryPolicy categoryPolicy : categoryPolicies.getCategoryPolicies())
+				policiesByCategory.put(effectiveCategory(categoryPolicy.getCategory()), CategoryPolicy.from(categoryPolicy));
+
+			return new CategoryPolicySettings(policiesByCategory);
+		}
+
 		public long getLevelThreshold(AccountRatingCategory category, int level) {
 			return getCategoryPolicy(category).getLevelThreshold(level);
 		}
@@ -486,6 +503,20 @@ public final class AccountTrustPolicy {
 
 			return new CategoryPolicy(levelsByLevel, categoryPolicy.suspiciousThreshold, categoryPolicy.suspiciousCap,
 					maximumConfiguredLevel);
+		}
+
+		private static CategoryPolicy from(AccountTrustCategoryPoliciesData.CategoryPolicy categoryPolicy) {
+			Map<Integer, LevelPolicy> levelsByLevel = new HashMap<>();
+			int maximumConfiguredLevel = 0;
+			for (AccountTrustCategoryPoliciesData.LevelPolicy levelPolicy : categoryPolicy.getLevels()) {
+				levelsByLevel.put(levelPolicy.getLevel(), new LevelPolicy(levelPolicy.getThreshold(),
+						levelPolicy.getLevelScoreCap()));
+				if (levelPolicy.getLevel() > maximumConfiguredLevel)
+					maximumConfiguredLevel = levelPolicy.getLevel();
+			}
+
+			return new CategoryPolicy(levelsByLevel, categoryPolicy.getSuspiciousThreshold(),
+					categoryPolicy.getSuspiciousLevelScoreCap(), maximumConfiguredLevel);
 		}
 
 		private long getLevelThreshold(int level) {

@@ -4,10 +4,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.block.AccountTrustCategoryPolicyCodec;
 import org.qortal.block.BlockChain;
 import org.qortal.block.BlockChain.AccountLevelShareBin;
 import org.qortal.block.ChainParameter;
 import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountTrustCategoryPoliciesData;
 import org.qortal.data.account.AccountTrustSnapshotData;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.transaction.BaseTransactionData;
@@ -32,6 +34,8 @@ import org.qortal.transaction.PaymentTransaction;
 import org.qortal.transaction.RegisterNameTransaction;
 import org.qortal.transaction.Transaction;
 import org.qortal.utils.Amounts;
+
+import java.util.ArrayList;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -1174,6 +1178,49 @@ public class ChainParameterUpdateTests extends Common {
 		}
 	}
 
+	@Test
+	public void testChainParameterUpdateAcceptsAccountTrustCategoryPolicies() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+			byte[] categoryPoliciesValue = buildCategoryPoliciesValueWithLevelThreshold(
+					AccountRatingCategory.SUBJECT, 1,
+					BlockChain.getInstance().getAccountTrustSettings()
+							.getLevelThreshold(AccountRatingCategory.SUBJECT, 1) + 1_000_000L);
+
+			ChainParameterUpdateTransactionData transactionData = buildAccountTrustCategoryPoliciesUpdate(
+					repository, alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight,
+					categoryPoliciesValue);
+
+			assertEquals(Transaction.ValidationResult.OK,
+					new ChainParameterUpdateTransaction(repository, transactionData).isValid());
+		}
+	}
+
+	@Test
+	public void testChainParameterUpdateRejectsInvalidAccountTrustCategoryPolicies() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+			byte[] validCategoryPoliciesValue = BlockChain.getInstance().getAccountTrustCategoryPoliciesValue();
+
+			ChainParameterUpdateTransactionData shortTransactionData = buildAccountTrustCategoryPoliciesUpdate(
+					repository, alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight,
+					new byte[validCategoryPoliciesValue.length - 1]);
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, shortTransactionData).isValid());
+
+			byte[] policyWithUnreachableSuspiciousThreshold = buildCategoryPoliciesValueWithSuspiciousCap(
+					AccountRatingCategory.SUBJECT, 4_000_000L, 3);
+			ChainParameterUpdateTransactionData unreachableThresholdTransactionData =
+					buildAccountTrustCategoryPoliciesUpdate(repository, alice,
+							TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight,
+							policyWithUnreachableSuspiciousThreshold);
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, unreachableThresholdTransactionData).isValid());
+		}
+	}
+
 	private static ChainParameterUpdateTransactionData buildBlockRewardUpdate(Repository repository,
 			PrivateKeyAccount updater, int txGroupId, int activationHeight, long reward) throws DataException {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
@@ -1255,6 +1302,13 @@ public class ChainParameterUpdateTests extends Common {
 						suspiciousMinRatingConfidence));
 	}
 
+	private static ChainParameterUpdateTransactionData buildAccountTrustCategoryPoliciesUpdate(
+			Repository repository, PrivateKeyAccount updater, int txGroupId, int activationHeight,
+			byte[] categoryPoliciesValue) throws DataException {
+		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
+				ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES.id, activationHeight, categoryPoliciesValue);
+	}
+
 	private static ChainParameterUpdateTransactionData buildUnitFeeUpdate(Repository repository,
 			PrivateKeyAccount updater, int txGroupId, int activationHeight, long unitFee) throws DataException {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
@@ -1266,6 +1320,49 @@ public class ChainParameterUpdateTests extends Common {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
 				ChainParameter.NAME_REGISTRATION_UNIT_FEE.id, activationHeight,
 				ChainParameter.NAME_REGISTRATION_UNIT_FEE.encodeLongValue(nameRegistrationUnitFee));
+	}
+
+	private static byte[] buildCategoryPoliciesValueWithLevelThreshold(AccountRatingCategory updatedCategory,
+			int updatedLevel, long updatedThreshold) {
+		AccountTrustCategoryPoliciesData categoryPolicies = replaceCategoryPolicyValues(updatedCategory, updatedLevel,
+				updatedThreshold, null);
+		return AccountTrustCategoryPolicyCodec.encode(categoryPolicies,
+				BlockChain.getInstance().getAccountTrustSuspiciousMinRaterCount());
+	}
+
+	private static byte[] buildCategoryPoliciesValueWithSuspiciousCap(AccountRatingCategory updatedCategory,
+			long updatedSuspiciousCap, int validationSuspiciousMinRaterCount) {
+		AccountTrustCategoryPoliciesData categoryPolicies = replaceCategoryPolicyValues(updatedCategory, null, null,
+				updatedSuspiciousCap);
+		return AccountTrustCategoryPolicyCodec.encode(categoryPolicies, validationSuspiciousMinRaterCount);
+	}
+
+	private static AccountTrustCategoryPoliciesData replaceCategoryPolicyValues(AccountRatingCategory updatedCategory,
+			Integer updatedLevel, Long updatedThreshold, Long updatedSuspiciousCap) {
+		AccountTrustCategoryPoliciesData categoryPolicies = AccountTrustCategoryPolicyCodec.decode(
+				BlockChain.getInstance().getAccountTrustCategoryPoliciesValue());
+
+		ArrayList<AccountTrustCategoryPoliciesData.CategoryPolicy> updatedPolicies = new ArrayList<>();
+		for (AccountTrustCategoryPoliciesData.CategoryPolicy categoryPolicy : categoryPolicies.getCategoryPolicies()) {
+			ArrayList<AccountTrustCategoryPoliciesData.LevelPolicy> updatedLevels = new ArrayList<>();
+			for (AccountTrustCategoryPoliciesData.LevelPolicy levelPolicy : categoryPolicy.getLevels()) {
+				long threshold = categoryPolicy.getCategory() == updatedCategory
+						&& updatedLevel != null && levelPolicy.getLevel() == updatedLevel
+						? updatedThreshold
+						: levelPolicy.getThreshold();
+				updatedLevels.add(new AccountTrustCategoryPoliciesData.LevelPolicy(levelPolicy.getLevel(), threshold,
+						levelPolicy.getLevelScoreCap()));
+			}
+
+			long suspiciousLevelScoreCap = categoryPolicy.getCategory() == updatedCategory
+					&& updatedSuspiciousCap != null
+					? updatedSuspiciousCap
+					: categoryPolicy.getSuspiciousLevelScoreCap();
+			updatedPolicies.add(new AccountTrustCategoryPoliciesData.CategoryPolicy(categoryPolicy.getCategory(),
+					updatedLevels, categoryPolicy.getSuspiciousThreshold(), suspiciousLevelScoreCap));
+		}
+
+		return new AccountTrustCategoryPoliciesData(updatedPolicies);
 	}
 
 	private static PaymentTransaction buildPaymentTransaction(Repository repository, PrivateKeyAccount sender, long fee)

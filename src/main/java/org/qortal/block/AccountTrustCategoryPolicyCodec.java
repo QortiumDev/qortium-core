@@ -5,10 +5,12 @@ import org.qortal.data.account.AccountTrustCategoryPoliciesData;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -25,6 +27,28 @@ public final class AccountTrustCategoryPolicyCodec {
 	};
 
 	private AccountTrustCategoryPolicyCodec() {
+	}
+
+	public static AccountTrustCategoryPoliciesData fromSettings(BlockChain.AccountTrustSettings settings) {
+		if (settings == null)
+			throw new IllegalArgumentException("Account trust settings are missing");
+
+		List<AccountTrustCategoryPoliciesData.CategoryPolicy> categoryPolicies = new ArrayList<>();
+		for (BlockChain.AccountTrustCategoryPolicy categoryPolicy : settings.categoryPolicies) {
+			List<AccountTrustCategoryPoliciesData.LevelPolicy> levels = new ArrayList<>();
+			for (BlockChain.AccountTrustLevelPolicy levelPolicy : categoryPolicy.levels)
+				levels.add(new AccountTrustCategoryPoliciesData.LevelPolicy(levelPolicy.level,
+						levelPolicy.threshold, levelPolicy.cap));
+
+			categoryPolicies.add(new AccountTrustCategoryPoliciesData.CategoryPolicy(categoryPolicy.category,
+					levels, categoryPolicy.suspiciousThreshold, categoryPolicy.suspiciousCap));
+		}
+
+		return new AccountTrustCategoryPoliciesData(categoryPolicies);
+	}
+
+	public static byte[] encode(BlockChain.AccountTrustSettings settings) {
+		return encode(fromSettings(settings), settings.getSuspiciousMinRaterCount());
 	}
 
 	public static byte[] encode(AccountTrustCategoryPoliciesData categoryPolicies, int suspiciousMinRaterCount) {

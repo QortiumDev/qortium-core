@@ -1,6 +1,7 @@
 package org.qortal.test;
 
 import org.junit.Test;
+import org.qortal.block.AccountTrustCategoryPolicyCodec;
 import org.qortal.block.ChainParameter;
 import org.qortal.utils.Amounts;
 
@@ -86,6 +87,19 @@ public class ChainParameterTests {
 		assertNotNull(parameter.getDescription());
 		assertEquals("/chain-parameters/account-trust/manager-energy-hops/update", parameter.getBuilderPath());
 		assertEquals("/chain-parameters/account-trust/manager-energy-hops/{height}", parameter.getEffectivePath());
+	}
+
+	@Test
+	public void testAccountTrustCategoryPoliciesMetadataAccessors() {
+		ChainParameter parameter = ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES;
+
+		assertEquals(14, parameter.id);
+		assertEquals(AccountTrustCategoryPolicyCodec.ENCODED_LENGTH, parameter.valueLength);
+		assertEquals(ChainParameter.VALUE_TYPE_ACCOUNT_TRUST_CATEGORY_POLICIES, parameter.getValueType());
+		assertTrue(parameter.affectsTrustSnapshots());
+		assertNotNull(parameter.getDescription());
+		assertEquals("/chain-parameters/account-trust/category-policies/update", parameter.getBuilderPath());
+		assertEquals("/chain-parameters/account-trust/category-policies/{height}", parameter.getEffectivePath());
 	}
 
 	@Test

@@ -64,13 +64,19 @@ public enum ChainParameter {
 	ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE(13, Integer.BYTES, "INTEGER",
 			"Minimum negative rating confidence required to count toward suspicious account trust levels.",
 			"/chain-parameters/account-trust/suspicious-min-rating-confidence/update",
-			"/chain-parameters/account-trust/suspicious-min-rating-confidence/{height}");
+			"/chain-parameters/account-trust/suspicious-min-rating-confidence/{height}"),
+	ACCOUNT_TRUST_CATEGORY_POLICIES(14, AccountTrustCategoryPolicyCodec.ENCODED_LENGTH,
+			"ACCOUNT_TRUST_CATEGORY_POLICIES",
+			"Category-specific account trust thresholds and score caps for SUBJECT, PLAYER, TRAINER, and MANAGER trust derivation.",
+			"/chain-parameters/account-trust/category-policies/update",
+			"/chain-parameters/account-trust/category-policies/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 	public static final String VALUE_TYPE_AMOUNT = "AMOUNT";
 	public static final String VALUE_TYPE_LONG = "LONG";
 	public static final String VALUE_TYPE_INTEGER = "INTEGER";
 	public static final String VALUE_TYPE_INTEGER_LIST = "INTEGER_LIST";
+	public static final String VALUE_TYPE_ACCOUNT_TRUST_CATEGORY_POLICIES = "ACCOUNT_TRUST_CATEGORY_POLICIES";
 
 	private static final String[] REWARD_SHARE_WEIGHT_LABELS = buildRewardShareWeightLabels();
 	private static final String[] TRUST_STATUS_VOTE_WEIGHT_LABELS = Arrays.stream(AccountTrustStatus.values())
@@ -222,7 +228,8 @@ public enum ChainParameter {
 				|| this == ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT
 				|| this == ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT
 				|| this == ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT
-				|| this == ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE;
+				|| this == ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE
+				|| this == ACCOUNT_TRUST_CATEGORY_POLICIES;
 	}
 
 	public boolean isValidValue(byte[] value) {
@@ -279,6 +286,9 @@ public enum ChainParameter {
 
 				return hasPositiveVoteWeight;
 
+			case ACCOUNT_TRUST_CATEGORY_POLICIES:
+				return true;
+
 			default:
 				return false;
 		}
@@ -293,6 +303,11 @@ public enum ChainParameter {
 				int suspiciousMinRaterCount = decodeIntValue(value);
 				return AccountTrustPolicy.getCategoryPolicySettings(repository, activationHeight)
 						.canReachSuspiciousThresholds(suspiciousMinRaterCount);
+
+			case ACCOUNT_TRUST_CATEGORY_POLICIES:
+				int effectiveSuspiciousMinRaterCount = BlockChain.getInstance()
+						.getAccountTrustSuspiciousMinRaterCount(repository, activationHeight);
+				return AccountTrustCategoryPolicyCodec.isValid(value, effectiveSuspiciousMinRaterCount);
 
 			default:
 				return true;

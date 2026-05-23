@@ -768,6 +768,19 @@ public class BlockChain {
 		return this.accountTrustSettings;
 	}
 
+	public byte[] getAccountTrustCategoryPoliciesValue() {
+		return AccountTrustCategoryPolicyCodec.encode(this.accountTrustSettings);
+	}
+
+	public byte[] getAccountTrustCategoryPoliciesValue(Repository repository, int height) throws DataException {
+		ChainParameterData categoryPoliciesUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES.id, height);
+		if (categoryPoliciesUpdate != null)
+			return categoryPoliciesUpdate.getValue();
+
+		return getAccountTrustCategoryPoliciesValue();
+	}
+
 	public long getAccountTrustStartingEnergy() {
 		return this.accountTrustSettings.getStartingEnergy();
 	}

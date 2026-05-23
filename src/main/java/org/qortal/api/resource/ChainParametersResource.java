@@ -1175,6 +1175,9 @@ public class ChainParametersResource {
 			case ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE:
 				return parameter.encodeIntValue(BlockChain.getInstance().getAccountTrustSuspiciousMinRatingConfidence());
 
+			case ACCOUNT_TRUST_CATEGORY_POLICIES:
+				return BlockChain.getInstance().getAccountTrustCategoryPoliciesValue();
+
 			case UNIT_FEE:
 				return parameter.encodeLongValue(BlockChain.getInstance().getUnitFeeAtTimestamp(fallbackTimestamp));
 

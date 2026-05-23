@@ -67,7 +67,7 @@ public class ChainParametersApiTests extends ApiCommon {
 	public void testChainParameterMetadataListsBlockReward() {
 		List<ChainParameterMetadata> parameters = this.chainParametersResource.getChainParameters();
 
-		assertEquals(13, parameters.size());
+		assertEquals(14, parameters.size());
 
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.BLOCK_REWARD), ChainParameter.BLOCK_REWARD);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN),
@@ -93,6 +93,8 @@ public class ChainParametersApiTests extends ApiCommon {
 				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE),
 				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES),
+				ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES);
 
 		assertEquals(Long.valueOf(0L), findMetadata(parameters, ChainParameter.BLOCK_REWARD).validation.minimumLongValue);
 		assertEquals(Long.valueOf(0L), findMetadata(parameters, ChainParameter.UNIT_FEE).validation.minimumLongValue);
@@ -544,7 +546,7 @@ public class ChainParametersApiTests extends ApiCommon {
 
 		List<ChainParameterEffectiveValue> values = this.chainParametersResource.getEffectiveParameterValues(null);
 
-		assertEquals(13, values.size());
+		assertEquals(14, values.size());
 		assertConfigEffectiveValue(values, ChainParameter.BLOCK_REWARD, height,
 				ChainParameter.BLOCK_REWARD.encodeLongValue(BlockChain.getInstance().getRewardAtHeight(height)));
 		assertConfigEffectiveValue(values, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN, height,
@@ -581,6 +583,8 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE, height,
 				ChainParameter.ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE.encodeIntValue(
 						BlockChain.getInstance().getAccountTrustSuspiciousMinRatingConfidence()));
+		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES, height,
+				BlockChain.getInstance().getAccountTrustCategoryPoliciesValue());
 	}
 
 	@Test

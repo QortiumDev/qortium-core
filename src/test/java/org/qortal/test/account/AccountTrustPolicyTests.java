@@ -3,22 +3,34 @@ package org.qortal.test.account;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.AccountTrustPolicy;
+import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.resource.AccountRatingsResource;
+import org.qortal.block.AccountTrustCategoryPolicyCodec;
 import org.qortal.block.BlockChain;
+import org.qortal.block.ChainParameter;
 import org.qortal.data.account.AccountRatingCategory;
+import org.qortal.data.account.AccountTrustCategoryPoliciesData;
 import org.qortal.data.account.AccountTrustPolicyData;
 import org.qortal.data.account.AccountTrustCategoryImpactData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.data.group.GroupData;
+import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
+import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.GroupUtils;
+import org.qortal.test.common.TestChainBootstrapUtils;
+import org.qortal.test.common.TransactionUtils;
+import org.qortal.test.common.transaction.TestTransaction;
 
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 
@@ -143,6 +155,41 @@ public class AccountTrustPolicyTests extends Common {
 					categoryPolicySettings.getSuspiciousThreshold(AccountRatingCategory.TRAINER));
 			assertEquals(AccountTrustPolicy.getSuspiciousLevelScoreCap(AccountRatingCategory.TRAINER),
 					categoryPolicySettings.getSuspiciousLevelScoreCap(AccountRatingCategory.TRAINER));
+		}
+	}
+
+	@Test
+	public void testHeightAwareCategoryPolicySettingsReadOnChainOverlay() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int startingHeight = repository.getBlockRepository().getBlockchainHeight();
+			int activationHeight = startingHeight + getApprovalSettlementBlockCount(repository)
+					+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay() + 10;
+			long updatedSubjectThreshold = AccountTrustPolicy.getLevelThreshold(AccountRatingCategory.SUBJECT, 1)
+					+ 1_000_000L;
+			byte[] categoryPoliciesValue = buildCategoryPoliciesValueWithLevelThreshold(
+					AccountRatingCategory.SUBJECT, 1, updatedSubjectThreshold);
+
+			try {
+				ChainParameterUpdateTransactionData transactionData = new ChainParameterUpdateTransactionData(
+						TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+						ChainParameter.ACCOUNT_TRUST_CATEGORY_POLICIES.id, activationHeight, categoryPoliciesValue);
+				TransactionUtils.signAndMint(repository, transactionData, alice);
+				GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);
+				BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository));
+
+				AccountTrustPolicy.CategoryPolicySettings beforeActivation =
+						AccountTrustPolicy.getCategoryPolicySettings(repository, activationHeight - 1);
+				AccountTrustPolicy.CategoryPolicySettings atActivation =
+						AccountTrustPolicy.getCategoryPolicySettings(repository, activationHeight);
+
+				assertEquals(AccountTrustPolicy.getLevelThreshold(AccountRatingCategory.SUBJECT, 1),
+						beforeActivation.getLevelThreshold(AccountRatingCategory.SUBJECT, 1));
+				assertEquals(updatedSubjectThreshold,
+						atActivation.getLevelThreshold(AccountRatingCategory.SUBJECT, 1));
+			} finally {
+				BlockUtils.orphanToBlock(repository, startingHeight);
+			}
 		}
 	}
 
@@ -581,6 +628,36 @@ public class AccountTrustPolicyTests extends Common {
 			long expectedCap) {
 		assertEquals(expectedThreshold, AccountTrustPolicy.getLevelThreshold(category, level));
 		assertEquals(expectedCap, AccountTrustPolicy.getLevelScoreCap(category, level));
+	}
+
+	private static int getApprovalSettlementBlockCount(Repository repository) throws DataException {
+		GroupData groupData = repository.getGroupRepository().fromGroupId(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
+		return Math.max(2, groupData.getMinimumBlockDelay() + 1);
+	}
+
+	private static byte[] buildCategoryPoliciesValueWithLevelThreshold(AccountRatingCategory updatedCategory,
+			int updatedLevel, long updatedThreshold) {
+		AccountTrustCategoryPoliciesData categoryPolicies = AccountTrustCategoryPolicyCodec.decode(
+				BlockChain.getInstance().getAccountTrustCategoryPoliciesValue());
+
+		ArrayList<AccountTrustCategoryPoliciesData.CategoryPolicy> updatedPolicies = new ArrayList<>();
+		for (AccountTrustCategoryPoliciesData.CategoryPolicy categoryPolicy : categoryPolicies.getCategoryPolicies()) {
+			ArrayList<AccountTrustCategoryPoliciesData.LevelPolicy> updatedLevels = new ArrayList<>();
+			for (AccountTrustCategoryPoliciesData.LevelPolicy levelPolicy : categoryPolicy.getLevels()) {
+				long threshold = categoryPolicy.getCategory() == updatedCategory && levelPolicy.getLevel() == updatedLevel
+						? updatedThreshold
+						: levelPolicy.getThreshold();
+				updatedLevels.add(new AccountTrustCategoryPoliciesData.LevelPolicy(levelPolicy.getLevel(), threshold,
+						levelPolicy.getLevelScoreCap()));
+			}
+
+			updatedPolicies.add(new AccountTrustCategoryPoliciesData.CategoryPolicy(categoryPolicy.getCategory(),
+					updatedLevels, categoryPolicy.getSuspiciousThreshold(),
+					categoryPolicy.getSuspiciousLevelScoreCap()));
+		}
+
+		return AccountTrustCategoryPolicyCodec.encode(new AccountTrustCategoryPoliciesData(updatedPolicies),
+				AccountTrustPolicy.getSuspiciousMinRaterCount());
 	}
 
 	private static AccountTrustCategoryImpactData impact(String raterAddress, int evaluatorLevel, int rating,

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: add account trust category policy parameter
+
+Added the account trust category policy table as an approved on-chain chain parameter. Development-group proposals can now carry the canonical category thresholds and score caps, nodes can read the active overlay by block height, and trust derivation knows this parameter affects trust snapshots.
+
 ### 2026-05-23 - consensus: add contextual chain parameter validation
 
 Added activation-height-aware validation for chain parameter updates that need to compare against other effective policy values. Suspicious account trust rater-count proposals now have to stay high enough for the active category-policy caps to reach their suspicious thresholds, preparing the validator for the full account trust category policy table.
