@@ -1862,7 +1862,7 @@ public class Synchronizer extends Thread {
 
 			BlockSummaryData blockSummary = blockSummaries.get(i);
 
-			// Minter is always a reward-share, so find actual minter and get their effective minting level.
+			// Minter is always an online self-share, so find actual minter and get their effective minting level.
 			Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfPresent(repository, blockSummary.getMinterPublicKey());
 			if (minterLevel == null) {
 				// It looks like this block's minter's reward-share has been cancelled.

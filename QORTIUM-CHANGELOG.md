@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - docs: clarify reward-share minting wording
+
+Clarified API wording and code comments around reward shares so operators can distinguish self-share minting-key records from non-self payout records. Self-share private keys are the only reward-share keys that belong in BlockMinter, while non-self reward shares allocate a minter's earned rewards to recipients.
+
 ### 2026-05-22 - consensus: decouple reward-share payouts from minting keys
 
 Changed reward shares so non-self shares are payout allocation records instead of separate minting keys. A minter now earns rewards through their online self-share, then the minter's configured payout shares are applied to that earned amount and recipients can receive rewards without being online or in the minting group. Total external payout shares are capped at 100 percent, and the practical per-minter reward-share limit is raised to 100 records.

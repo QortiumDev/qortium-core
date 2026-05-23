@@ -381,7 +381,7 @@ public class Block {
 		int version = parentBlock.getNextBlockVersion();
 		byte[] reference = parentBlockData.getSignature();
 
-		// Minter is always a reward-share, so find actual minter and get their minting weight.
+		// Minter is always an online self-share, so find actual minter and get their minting weight.
 		Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfMinting(repository, minter.getPublicKey());
 		if (minterLevel == null) {
 			LOGGER.error("Minter reward-share is not currently allowed to mint");
@@ -568,7 +568,7 @@ public class Block {
 		byte[] minterSignature = minter.sign(BlockTransformer.getBytesForMinterSignature(parentBlockData,
 				minter.getPublicKey(), this.blockData.getEncodedOnlineAccounts()));
 
-		// Minter is always a reward-share, so find actual minter and get their minting weight.
+		// Minter is always an online self-share, so find actual minter and get their minting weight.
 		Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfMinting(repository, minter.getPublicKey());
 		if (minterLevel == null) {
 			LOGGER.error("Minter reward-share is not currently allowed to mint");
@@ -1091,7 +1091,7 @@ public class Block {
 		if (this.blockData.getTimestamp() < Block.calcMinimumTimestamp(parentBlockData))
 			return ValidationResult.TIMESTAMP_TOO_SOON;
 
-		// Minter is always a reward-share, so find actual minter and get their minting weight.
+		// Minter is always an online self-share, so find actual minter and get their minting weight.
 		Integer minterLevel = Account.getRewardShareEffectiveMintingLevelIfMinting(repository, this.blockData.getMinterPublicKey());
 		if (minterLevel == null)
 			return ValidationResult.MINTER_NOT_ACCEPTED;
@@ -1543,7 +1543,7 @@ public class Block {
 
 	/** Returns whether block's minter is actually allowed to mint this block. */
 	protected boolean isMinterValid(Block parentBlock) throws DataException {
-		// Block's minter public key must be known reward-share public key
+		// Block's minter public key must be a known self-share public key.
 		RewardShareData rewardShareData = this.repository.getAccountRepository().getRewardShare(this.blockData.getMinterPublicKey());
 		if (rewardShareData == null)
 			return false;

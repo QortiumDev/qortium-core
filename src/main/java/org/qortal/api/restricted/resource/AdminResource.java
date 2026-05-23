@@ -678,7 +678,7 @@ public class AdminResource {
 	@POST
 	@Path("/mintingaccounts")
 	@Operation(
-		summary = "Add private key of account/reward-share for use by BlockMinter to mint blocks",
+		summary = "Add self-share private key for use by BlockMinter to mint blocks",
 		requestBody = @RequestBody(
 			required = true,
 			content = @Content(
@@ -705,12 +705,12 @@ public class AdminResource {
 			// Check seed is valid
 			PrivateKeyAccount mintingAccount = new PrivateKeyAccount(repository, seed);
 
-			// Account must derive to known reward-share public key
+			// Key must derive to a known self-share public key.
 			RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(mintingAccount.getPublicKey());
 			if (rewardShareData == null || !rewardShareData.isSelfShare())
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
-			// Check reward-share's minting account is still allowed to mint
+			// Check self-share's minting account is still allowed to mint.
 			Account rewardShareMintingAccount = new Account(repository, rewardShareData.getMinter());
 			if (!rewardShareMintingAccount.canMint(false))
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.CANNOT_MINT);
@@ -732,7 +732,7 @@ public class AdminResource {
 	@DELETE
 	@Path("/mintingaccounts")
 	@Operation(
-		summary = "Remove account/reward-share from use by BlockMinter, using public or private key",
+		summary = "Remove account/self-share from use by BlockMinter, using public or private key",
 		requestBody = @RequestBody(
 			required = true,
 			content = @Content(

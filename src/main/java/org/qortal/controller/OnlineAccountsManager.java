@@ -337,7 +337,7 @@ public class OnlineAccountsManager {
             return false;
         }
 
-        // Check online account is actually a reward-share
+        // Check online account is actually a self-share.
         RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(rewardSharePublicKey);
         if (rewardShareData == null) {
             // Reward-share doesn't even exist - probably not a good sign
@@ -528,7 +528,7 @@ public class OnlineAccountsManager {
                 if (mintingAccounts.isEmpty())
                     return false;
 
-                // Only active reward-shares allowed
+                // Only active self-shares are allowed to produce online accounts.
                 Iterator<MintingAccountData> iterator = mintingAccounts.iterator();
                 int i = 0;
                 while (iterator.hasNext()) {

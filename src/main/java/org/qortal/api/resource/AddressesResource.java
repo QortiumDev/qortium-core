@@ -349,7 +349,7 @@ public class AddressesResource {
 	@Path("/rewardshares")
 	@Operation(
 		summary = "List reward-share relationships",
-		description = "Returns list of accounts, with reward-share percentage and reward-share public key.",
+		description = "Returns self-share minting-key records and payout reward-share records.",
 		responses = {
 			@ApiResponse(
 				content = @Content(mediaType = MediaType.APPLICATION_JSON, array = @ArraySchema(schema = @Schema(implementation = RewardShareData.class)))
@@ -377,8 +377,8 @@ public class AddressesResource {
 	@POST
 	@Path("/rewardsharekey")
 	@Operation(
-		summary = "Calculate reward-share private key",
-		description = "Calculates reward-share private key using passed minting account's private key and recipient account's public key",
+		summary = "Calculate reward-share record private key",
+		description = "Calculates the private key for a reward-share record. Only self-share keys can be added to BlockMinter; non-self reward shares are payout records.",
 		requestBody = @RequestBody(
 			required = true,
 			content = @Content(
