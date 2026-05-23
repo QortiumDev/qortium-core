@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - cleanup: remove stale reward-share minting leftovers
+
+Removed an unused reward-share validation result and its translations, and cleaned up stale wording that still described payout reward shares as possible minting or online-account keys. This keeps the code comments and validation catalog aligned with the current model where self-shares mint and non-self reward shares only allocate payouts.
+
 ### 2026-05-22 - consensus: index online accounts by self-shares
 
 Changed online-account block indexes so they are built from self-share minting-key records only. Non-self reward shares still record payout allocations, but they no longer occupy online-account index space, shift valid minting keys, or appear in signer lookups as possible block minters.

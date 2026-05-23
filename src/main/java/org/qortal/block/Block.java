@@ -260,7 +260,7 @@ public class Block {
 	/** Always use getExpandedAccounts() to access this, as it's lazy-instantiated. */
 	private List<ExpandedAccount> cachedExpandedAccounts = null;
 
-	/** Opportunistic cache of this block's valid online reward-shares. Only created by call to isValid(). */
+	/** Opportunistic cache of this block's valid online self-shares. Only created by call to isValid(). */
 	private List<RewardShareData> cachedOnlineRewardShares = null;
 
 	// Other useful constants

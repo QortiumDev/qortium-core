@@ -81,7 +81,7 @@ public interface BlockArchiveRepository {
     public long getTimestampFromHeight(int height) throws DataException;
 
     /**
-     * Returns block summaries for blocks signed by passed public key, or reward-share with minter with passed public key.
+     * Returns block summaries for blocks signed by passed public key, or self-share with minter with passed public key.
      */
     public List<BlockSummaryData> getBlockSummariesBySigner(byte[] signerPublicKey, Integer limit, Integer offset, Boolean reverse) throws DataException;
 

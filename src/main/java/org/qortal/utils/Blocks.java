@@ -69,7 +69,7 @@ public class Blocks {
                 = repository.getAccountRepository().getAddressLevelPairings(1).stream()
                     .collect(Collectors.toMap(AddressLevelPairing::getAddress, AddressLevelPairing::getLevel));
 
-            // for each reward share where the minter is online,
+            // for each self-share where the minter is online,
             // construct the data object and add it to the return list
             for (RewardShareData onlineRewardShare : onlineRewardShares) {
                 String minter = onlineRewardShare.getMinter();

@@ -209,7 +209,7 @@ public class HSQLDBBlockArchiveRepository implements BlockArchiveRepository {
                 byte[] blockMinterPublicKey = resultSet.getBytes(1);
                 int nBlocks = resultSet.getInt(2);
 
-                // May not be present if no reward-share:
+                // May not be present if no self-share:
                 byte[] mintingAccountPublicKey = resultSet.getBytes(3);
                 String minterAccount = resultSet.getString(4);
                 String recipientAccount = resultSet.getString(5);

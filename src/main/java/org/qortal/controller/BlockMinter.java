@@ -137,15 +137,15 @@ public class BlockMinter extends Thread {
 						if (mintingAccountsData.isEmpty())
 							continue;
 
-						// Disregard minting accounts that are no longer valid, e.g. by account level or group membership
-						// Note that minting accounts are actually reward-shares
+							// Disregard minting accounts that are no longer valid, e.g. by account level or group membership.
+							// Minting accounts are local self-share signing keys.
 						Iterator<MintingAccountData> madi = mintingAccountsData.iterator();
 						while (madi.hasNext()) {
 							MintingAccountData mintingAccountData = madi.next();
 
 							RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(mintingAccountData.getPublicKey());
 							if (rewardShareData == null) {
-								// Reward-share doesn't exist - probably cancelled but not yet removed from node's list of minting accounts
+									// Self-share doesn't exist - probably cancelled but not yet removed from node's list of minting accounts.
 								madi.remove();
 								continue;
 							}
@@ -157,7 +157,7 @@ public class BlockMinter extends Thread {
 
 							Account mintingAccount = new Account(repository, rewardShareData.getMinter());
 							if (!mintingAccount.canMint(true)) {
-								// Minting-account component of reward-share can no longer mint - disregard
+									// Minting-account component of self-share can no longer mint - disregard.
 								madi.remove();
 								continue;
 							}

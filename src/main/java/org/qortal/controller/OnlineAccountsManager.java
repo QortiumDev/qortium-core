@@ -340,8 +340,8 @@ public class OnlineAccountsManager {
         // Check online account is actually a self-share.
         RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(rewardSharePublicKey);
         if (rewardShareData == null) {
-            // Reward-share doesn't even exist - probably not a good sign
-            LOGGER.trace(() -> String.format("Rejecting unknown online reward-share public key %s", Base58.encode(rewardSharePublicKey)));
+            // Self-share doesn't even exist - probably not a good sign
+            LOGGER.trace(() -> String.format("Rejecting unknown online self-share public key %s", Base58.encode(rewardSharePublicKey)));
             return false;
         }
         else if (!rewardShareData.isSelfShare()) {
@@ -350,20 +350,20 @@ public class OnlineAccountsManager {
         }
         // reject account address that are not in the MINTER Group
         else if( !mintingGroupMemberAddresses.contains(rewardShareData.getMinter())) {
-            LOGGER.trace(() -> String.format("Rejecting online reward-share that is not in MINTER Group, account %s", rewardShareData.getMinter()));
+            LOGGER.trace(() -> String.format("Rejecting online self-share that is not in MINTER Group, account %s", rewardShareData.getMinter()));
             return false;
         }
 
         Account mintingAccount = new Account(repository, rewardShareData.getMinter());
         if (!mintingAccount.canMint(true)) {  // group validation is a few lines above
-            // Minting-account component of reward-share can no longer mint - disregard
-            LOGGER.trace(() -> String.format("Rejecting online reward-share with non-minting account %s", mintingAccount.getAddress()));
+            // Minting-account component of self-share can no longer mint - disregard
+            LOGGER.trace(() -> String.format("Rejecting online self-share with non-minting account %s", mintingAccount.getAddress()));
             return false;
         }
 
         // Validate mempow
         if (!getInstance().verifyMemoryPoW(onlineAccountData, POW_VERIFY_WORK_BUFFER)) {
-            LOGGER.trace(() -> String.format("Rejecting online reward-share for account %s due to invalid PoW nonce", mintingAccount.getAddress()));
+            LOGGER.trace(() -> String.format("Rejecting online self-share for account %s due to invalid PoW nonce", mintingAccount.getAddress()));
             return false;
         }
 

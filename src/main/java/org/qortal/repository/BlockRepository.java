@@ -122,7 +122,7 @@ public interface BlockRepository {
 	}
 
 	/**
-	 * Returns number of blocks signed by account/reward-share with given public key.
+	 * Returns number of blocks signed by account/self-share with given public key.
 	 * 
 	 * @param publicKey
 	 * @return number of blocks
@@ -136,7 +136,7 @@ public interface BlockRepository {
 	public List<BlockSignerSummary> getBlockSigners(List<String> addresses, Integer limit, Integer offset, Boolean reverse) throws DataException;
 
 	/**
-	 * Returns block summaries for blocks signed by passed public key, or reward-share with minter with passed public key.
+	 * Returns block summaries for blocks signed by passed public key, or self-share with minter with passed public key.
 	 */
 	public List<BlockSummaryData> getBlockSummariesBySigner(byte[] signerPublicKey, Integer limit, Integer offset, Boolean reverse) throws DataException;
 
