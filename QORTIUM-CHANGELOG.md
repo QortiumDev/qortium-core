@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - test: repair chain parameter update coverage
+
+Repaired chain-parameter test coverage so the generic transaction serialization suite knows how to build chain-parameter update transactions, and so account trust tests match the current suspicious-rater validation rules. The tests now explicitly cover that a one-rater suspicious threshold remains invalid under the configured category-policy caps.
+
 ### 2026-05-23 - network: keep peer direction as reachability preference
 
 Changed peer direction handling so a working peer connection is not disconnected only because it is not the preferred node-ID direction. Qortium now keeps stable fallback connections until a preferred-direction replacement has actually connected, and it uses a clearer inbound reachability signal for P2P and QDN direct-connect decisions.

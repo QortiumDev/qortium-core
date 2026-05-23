@@ -1244,6 +1244,12 @@ public class ChainParameterUpdateTests extends Common {
 			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
 					new ChainParameterUpdateTransaction(repository, zeroTransactionData).isValid());
 
+			ChainParameterUpdateTransactionData oneRaterTransactionData =
+					buildAccountTrustSuspiciousMinRaterCountUpdate(repository, alice,
+							TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, 1);
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, oneRaterTransactionData).isValid());
+
 			ChainParameterUpdateTransactionData negativeTransactionData = buildAccountTrustSuspiciousMinRaterCountUpdate(
 					repository, alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, -1);
 			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,

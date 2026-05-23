@@ -471,32 +471,38 @@ public class AccountRatingsApiTests extends ApiCommon {
 	public void testTrustExplanationUsesOnChainSuspiciousDecisionSettings() throws DataException {
 		TestAccount alice;
 		TestAccount bob;
+		TestAccount dilbert;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			approveAccountTrustSuspiciousMinRaterCountOverlay(repository, 1);
-			approveAccountTrustSuspiciousMinBranchCountOverlay(repository, 1);
+			approveAccountTrustSuspiciousMinRaterCountOverlay(repository, 2);
+			approveAccountTrustSuspiciousMinBranchCountOverlay(repository, 2);
 			approveAccountTrustSuspiciousMinRatingConfidenceOverlay(repository, 4);
 
 			alice = Common.getTestAccount(repository, "alice");
 			bob = Common.getTestAccount(repository, "bob");
+			dilbert = Common.getTestAccount(repository, "dilbert");
 
 			ensureKnownAccount(repository, alice);
 			ensureKnownAccount(repository, bob);
+			ensureKnownAccount(repository, dilbert);
 			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, bob);
+			AccountTrustTestUtils.saveDerivedPlayerLevelThreeRatings(repository, alice, dilbert);
 			refreshTrustSnapshots(repository);
 
-			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingCategory.SUBJECT, -2), bob);
+			TransactionUtils.signAndMint(repository, ratingData(bob, alice, AccountRatingCategory.SUBJECT, -4), bob);
+			TransactionUtils.signAndMint(repository,
+					ratingData(dilbert, alice, AccountRatingCategory.SUBJECT, -4), dilbert);
 		}
 
 		AccountTrustExplanationData explanation = this.accountRatingsResource
 				.getAccountTrustExplanation(Base58.encode(alice.getPublicKey()), null);
 		AccountTrustExplanationData.CategoryExplanation subject = findCategory(explanation, AccountRatingCategory.SUBJECT);
 
-		assertEquals(AccountTrustStatus.UNVERIFIED, explanation.getTrustStatus());
-		assertEquals(1, subject.getSuspiciousMinBranchCount());
+		assertEquals(AccountTrustStatus.SUSPICIOUS, explanation.getTrustStatus());
+		assertEquals(2, subject.getSuspiciousMinBranchCount());
 		assertEquals("-10000000", findRequirement(subject, "suspicious.threshold").getRequired());
-		assertEquals("1", findRequirement(subject, "suspicious.independent-raters").getRequired());
-		assertEquals("1", findRequirement(subject, "suspicious.independent-branches").getRequired());
+		assertEquals("2", findRequirement(subject, "suspicious.independent-raters").getRequired());
+		assertEquals("2", findRequirement(subject, "suspicious.independent-branches").getRequired());
 	}
 
 	@Test
