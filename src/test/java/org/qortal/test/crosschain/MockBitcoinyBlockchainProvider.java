@@ -4,6 +4,7 @@ import cash.z.wallet.sdk.rpc.CompactFormats.CompactBlock;
 import com.google.common.hash.HashCode;
 import org.qortal.crosschain.Bitcoiny;
 import org.qortal.crosschain.BitcoinyBlockchainProvider;
+import org.qortal.crosschain.BitcoinyRawTransactionParser;
 import org.qortal.crosschain.BitcoinyTransaction;
 import org.qortal.crosschain.ChainableServer;
 import org.qortal.crosschain.ChainableServerConnection;
@@ -49,6 +50,7 @@ class MockBitcoinyBlockchainProvider extends BitcoinyBlockchainProvider {
 
 	void addRawTransaction(String txHash, byte[] rawTransaction) {
 		this.rawTransactionsByHash.put(txHash, rawTransaction);
+		this.transactionsByHash.put(txHash, BitcoinyRawTransactionParser.parse(txHash, rawTransaction));
 	}
 
 	void addTransaction(BitcoinyTransaction transaction) {

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - test: parse mock bitcoiny raw transactions
+
+Repaired the mock Bitcoiny blockchain provider so raw transactions registered by tests are also available through the parsed transaction lookup used by HTLC secret discovery. This keeps cross-chain HTLC tests focused on redeem-script behavior instead of failing because the mock provider only stored raw bytes.
+
 ### 2026-05-23 - test: repair transaction importer sync setup
 
 Repaired transaction importer tests so local API chat submissions run with the same up-to-date single-node test setup used by transaction API coverage. This keeps the tests focused on chat import, deduplication, and notification behavior instead of failing on missing peer synchronization preconditions.
