@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - network: keep peer direction as reachability preference
+
+Changed peer direction handling so a working peer connection is not disconnected only because it is not the preferred node-ID direction. Qortium now keeps stable fallback connections until a preferred-direction replacement has actually connected, and it uses a clearer inbound reachability signal for P2P and QDN direct-connect decisions.
+
 ### 2026-05-23 - docs: update category policy chain parameter reference
 
 Updated the on-chain chain-parameter design reference so the account trust category policy table is documented as an implemented parameter instead of a planned one. The reference now includes its activation behavior, typed API paths, validation expectations, and trust snapshot impact.

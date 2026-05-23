@@ -60,7 +60,7 @@ import java.util.regex.Matcher;
  *        • stale half-open connections (terminates)
  *    - Uses deterministic tie-breaking based on nodeId comparison to prevent
  *      reconnect loops.
- *    - Includes outbound-failure fallback logic to improve reachability.
+ *    - Keeps usable fallback connections until a preferred-direction replacement is proven.
  *
  * 4. RESPONSE
  *    - Proof-of-Work–protected authentication.
@@ -235,59 +235,33 @@ public enum Handshake {
 								existingNetworkPeer.disconnect("stale connection being replaced");
 								Network.getInstance().removeConnectedPeer(existingNetworkPeer);
 								// Continue processing below to allow new connection
-						} else {
-							// Deterministic tie-breaking based on nodeId comparison
-							// Both nodes will compute the same result, eliminating reconnection loops
-							String ourNodeId = Network.getInstance().getOurNodeId();
-							if (ourNodeId == null) {
-								LOGGER.debug("Cannot determine direction (our nodeId unavailable) - keeping existing connection to {}", existingNetworkPeer);
-								return null;
-							}
-							String theirNodeId = Crypto.toNodeAddress(peersPublicKey);
-							
-							// The node with the lower nodeId should be the one making outbound connections
-							boolean weShouldBeOutbound = ourNodeId.compareTo(theirNodeId) < 0;
-							
-							// Determine which connection direction is correct
-							boolean existingDirectionCorrect = (existingNetworkPeer.isOutbound() == weShouldBeOutbound);
-							boolean newDirectionCorrect = (peer.isOutbound() == weShouldBeOutbound);
-							
-						// Check if outbound connections to this peer have been failing (reachability fallback)
-						String peerIP = peer.getResolvedAddress() != null 
-							? peer.getResolvedAddress().getAddress().getHostAddress() 
-							: null;
-						boolean outboundFailing = peerIP != null && 
-							Network.getInstance().hasRecentOutboundFailures(theirNodeId, peerIP);
-							
-							if (existingDirectionCorrect && !outboundFailing) {
-								// Existing connection has the correct direction and outbound is working - reject new
-								LOGGER.debug("Duplicate detected in Network: existing {} connection is correct (ourId={}, theirId={}, weShouldBeOutbound={}), rejecting new {} connection",
+							} else {
+								String ourNodeId = Network.getInstance().getOurNodeId();
+								if (ourNodeId == null) {
+									LOGGER.debug("Cannot determine direction (our nodeId unavailable) - keeping existing connection to {}", existingNetworkPeer);
+									return null;
+								}
+								String theirNodeId = Crypto.toNodeAddress(peersPublicKey);
+								boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound(ourNodeId, theirNodeId);
+								PeerDirectionPolicy.DuplicateConnectionDecision duplicateDecision =
+										PeerDirectionPolicy.decideDuplicate(true, existingNetworkPeer.isOutbound(), peer.isOutbound(),
+												weShouldBeOutbound);
+
+								if (duplicateDecision == PeerDirectionPolicy.DuplicateConnectionDecision.KEEP_EXISTING) {
+									LOGGER.debug("Duplicate detected in Network: keeping existing {} connection (ourId={}, theirId={}, weShouldBeOutbound={}), rejecting new {} connection",
+											existingNetworkPeer.isOutbound() ? "outbound" : "inbound",
+											ourNodeId.substring(0, 8), theirNodeId.substring(0, 8),
+											weShouldBeOutbound, peer.isOutbound() ? "outbound" : "inbound");
+									return null;
+								}
+
+								LOGGER.debug("Duplicate detected in Network: allowing new {} connection to replace existing {} connection (ourId={}, theirId={}, weShouldBeOutbound={})",
+										peer.isOutbound() ? "outbound" : "inbound",
 										existingNetworkPeer.isOutbound() ? "outbound" : "inbound",
 										ourNodeId.substring(0, 8), theirNodeId.substring(0, 8),
-										weShouldBeOutbound, peer.isOutbound() ? "outbound" : "inbound");
-								return null;
-							} else if (existingDirectionCorrect && outboundFailing) {
-								// Existing direction is "correct" but outbound keeps failing - allow inbound as fallback
-								LOGGER.debug("Duplicate detected in Network: allowing {} inbound fallback for peer {} (outbound to {} is failing), replacing existing {} connection",
-										peer.isOutbound() ? "outbound" : "inbound",
-										theirNodeId.substring(0, 8), peerIP,
-										existingNetworkPeer.isOutbound() ? "outbound" : "inbound");
-								// Continue processing below - will replace existing in onHandshakeCompleted
-							} else if (newDirectionCorrect) {
-								// New connection has the correct direction - allow it, existing will be replaced in onHandshakeCompleted
-								LOGGER.debug("Duplicate detected in Network: new {} connection is correct (ourId={}, theirId={}, weShouldBeOutbound={}), allowing to replace existing {}",
-										peer.isOutbound() ? "outbound" : "inbound",
-										ourNodeId.substring(0, 8), theirNodeId.substring(0, 8),
-										weShouldBeOutbound, existingNetworkPeer.isOutbound() ? "outbound" : "inbound");
-								// Continue processing below
-							} else {
-								// Neither has correct direction (shouldn't happen in normal cases)
-								// Keep existing to avoid churn
-								LOGGER.debug("Duplicate detected in Network: neither connection has correct direction (weShouldBeOutbound={}), keeping existing",
 										weShouldBeOutbound);
-								return null;
+								// Continue processing below. onHandshakeCompleted() will replace the existing peer after this connection proves itself.
 							}
-						}
 						}
 					}
 					break;
@@ -308,60 +282,33 @@ public enum Handshake {
 							existingNetworkDataPeer.disconnect("ghost entry - not in connectedPeers");
 							// disconnect() will trigger removeConnectedPeer() which removes from both lists
 							// Continue processing below
-						} else {
-							// Deterministic tie-breaking based on nodeId comparison
-							// Both nodes will compute the same result, eliminating reconnection loops
-							// Note: NetworkData doesn't use pings, so we skip stale detection and rely on tie-breaking
-							String ourNodeId = NetworkData.getInstance().getOurNodeId();
-							if (ourNodeId == null) {
-								LOGGER.debug("Cannot determine direction (our nodeId unavailable) - keeping existing connection to {}", existingNetworkDataPeer);
-								return null;
-							}
-							String theirNodeId = Crypto.toNodeAddress(peersPublicKey);
-							
-							// The node with the lower nodeId should be the one making outbound connections
-							boolean weShouldBeOutbound = ourNodeId.compareTo(theirNodeId) < 0;
-							
-							// Determine which connection direction is correct
-							boolean existingDirectionCorrect = (existingNetworkDataPeer.isOutbound() == weShouldBeOutbound);
-							boolean newDirectionCorrect = (peer.isOutbound() == weShouldBeOutbound);
-							
-						// Check if outbound connections to this peer have been failing (reachability fallback)
-						String dataPeerIP = peer.getResolvedAddress() != null 
-							? peer.getResolvedAddress().getAddress().getHostAddress() 
-							: null;
-						boolean dataOutboundFailing = dataPeerIP != null && 
-							NetworkData.getInstance().hasRecentOutboundFailures(theirNodeId, dataPeerIP);
-							
-							if (existingDirectionCorrect && !dataOutboundFailing) {
-								// Existing connection has the correct direction and outbound is working - reject new
-								LOGGER.debug("Duplicate detected in NetworkData: existing {} connection is correct (ourId={}, theirId={}, weShouldBeOutbound={}), rejecting new {} connection",
+							} else {
+								String ourNodeId = NetworkData.getInstance().getOurNodeId();
+								if (ourNodeId == null) {
+									LOGGER.debug("Cannot determine direction (our nodeId unavailable) - keeping existing connection to {}", existingNetworkDataPeer);
+									return null;
+								}
+								String theirNodeId = Crypto.toNodeAddress(peersPublicKey);
+								boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound(ourNodeId, theirNodeId);
+								PeerDirectionPolicy.DuplicateConnectionDecision duplicateDecision =
+										PeerDirectionPolicy.decideDuplicate(true, existingNetworkDataPeer.isOutbound(), peer.isOutbound(),
+												weShouldBeOutbound);
+
+								if (duplicateDecision == PeerDirectionPolicy.DuplicateConnectionDecision.KEEP_EXISTING) {
+									LOGGER.debug("Duplicate detected in NetworkData: keeping existing {} connection (ourId={}, theirId={}, weShouldBeOutbound={}), rejecting new {} connection",
+											existingNetworkDataPeer.isOutbound() ? "outbound" : "inbound",
+											ourNodeId.substring(0, 8), theirNodeId.substring(0, 8),
+											weShouldBeOutbound, peer.isOutbound() ? "outbound" : "inbound");
+									return null;
+								}
+
+								LOGGER.debug("Duplicate detected in NetworkData: allowing new {} connection to replace existing {} connection (ourId={}, theirId={}, weShouldBeOutbound={})",
+										peer.isOutbound() ? "outbound" : "inbound",
 										existingNetworkDataPeer.isOutbound() ? "outbound" : "inbound",
 										ourNodeId.substring(0, 8), theirNodeId.substring(0, 8),
-										weShouldBeOutbound, peer.isOutbound() ? "outbound" : "inbound");
-								return null;
-							} else if (existingDirectionCorrect && dataOutboundFailing) {
-								// Existing direction is "correct" but outbound keeps failing - allow inbound as fallback
-								LOGGER.debug("Duplicate detected in NetworkData: allowing {} inbound fallback for peer {} (outbound to {} is failing), replacing existing {} connection",
-										peer.isOutbound() ? "outbound" : "inbound",
-										theirNodeId.substring(0, 8), dataPeerIP,
-										existingNetworkDataPeer.isOutbound() ? "outbound" : "inbound");
-								// Continue processing below - will replace existing in onHandshakeCompleted
-							} else if (newDirectionCorrect) {
-								// New connection has the correct direction - allow it, existing will be replaced in onHandshakeCompleted
-								LOGGER.debug("Duplicate detected in NetworkData: new {} connection is correct (ourId={}, theirId={}, weShouldBeOutbound={}), allowing to replace existing {}",
-										peer.isOutbound() ? "outbound" : "inbound",
-										ourNodeId.substring(0, 8), theirNodeId.substring(0, 8),
-										weShouldBeOutbound, existingNetworkDataPeer.isOutbound() ? "outbound" : "inbound");
-								// Continue processing below
-							} else {
-								// Neither has correct direction (shouldn't happen in normal cases)
-								// Keep existing to avoid churn
-								LOGGER.debug("Duplicate detected in NetworkData: neither connection has correct direction (weShouldBeOutbound={}), keeping existing",
 										weShouldBeOutbound);
-								return null;
+								// Continue processing below. onHandshakeCompleted() will replace the existing peer after this connection proves itself.
 							}
-						}
 					}
 					break;
 			}

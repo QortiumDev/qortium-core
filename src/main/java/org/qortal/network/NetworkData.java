@@ -233,7 +233,7 @@ public class NetworkData {
     private final List<String> ourExternalIpAddressHistory = new ArrayList<>();
     private String ourExternalIpAddress = null;
     private int ourExternalPort = Settings.getInstance().getQDNListenPort();
-    private boolean canAcceptInbound = false; 
+    private final InboundReachability inboundReachability = new InboundReachability();
     private volatile boolean isShuttingDown = false;
 
     // Constructors
@@ -285,6 +285,7 @@ public class NetworkData {
                 serverSelectionKey = serverChannel.register(channelSelector, SelectionKey.OP_ACCEPT);
 
                 this.bindAddress = testBindAddress; // Store the selected address, so that it can be used by other parts of the app
+                this.inboundReachability.setListenSocketAvailable(true);
                 LOGGER.trace("Success - Bound to interface: {}:{}", this.bindAddress,listenPort);
                 break; // We don't want to bind to more than one address
             } catch (UnknownHostException | UnsupportedAddressTypeException e) {
@@ -305,14 +306,17 @@ public class NetworkData {
         if (Settings.getInstance().isUPnPEnabled()) {
             PortMappingResult portMappingResult = PortMapperFactory.getInstance().openTcpPort(qdnPort, "Qortium QDN");
             if (portMappingResult.isMapped()) {
+                this.inboundReachability.setPortMapped(true);
                 portMappingResult.getExternalAddress()
                         .ifPresent(externalAddress -> this.ourExternalIpAddress = externalAddress.getHostAddress());
                 LOGGER.info("UPnP Mapped for QDN, port: {}", qdnPort);
             } else {
+                this.inboundReachability.setPortMapped(false);
                 LOGGER.warn("Unable to map QDN port: {} with UPnP, port in use?", qdnPort);
             }
         }
         else {
+            this.inboundReachability.setPortMapped(false);
             PortMapperFactory.getInstance().closeTcpPort(qdnPort);
         }
 
@@ -771,7 +775,7 @@ public class NetworkData {
         } else {
             // Only inbound connections prove we can accept inbound
             // Outbound connections only prove we can reach others, not that they can reach us
-            this.canAcceptInbound = true; 
+            this.inboundReachability.recordInboundHandshake();
         }
     }
 
@@ -1139,12 +1143,11 @@ public class NetworkData {
     }
 
     /**
-     * Enforces the direction invariant: for a given nodeId, exactly one connection
-     * should exist, and its direction must match the deterministic rule (lower nodeId
-     * initiates outbound). This fixes zombies caused by simultaneous outbound connects
-     * where both connections complete handshake before duplicate detection can run.
+     * Applies the direction preference when duplicate connections exist for a nodeId.
+     * Single usable fallback connections are kept until a preferred-direction
+     * replacement has completed handshake.
      */
-    private void enforceDirectionInvariant() {
+    private void enforceDirectionPreference() {
         // Guard against running during shutdown or not nodeId
         if (this.isShuttingDown || this.ourNodeId == null) {
             return;
@@ -1154,11 +1157,6 @@ public class NetworkData {
         Map<String, List<Peer>> byNodeId = getImmutableHandshakedPeers().stream()
                 .filter(p -> p.getPeersNodeId() != null)
                 .collect(Collectors.groupingBy(Peer::getPeersNodeId));
-        
-        // Grace period before enforcing direction on single connections
-        // NetworkData: 30 minutes (much longer than Network's 2 minutes)
-        // QDN data transfer can tolerate asymmetry better than consensus
-        final long DIRECTION_GRACE_PERIOD = 30 * 60 * 1000L; // 30 minutes
         
         // Collect disconnection decisions before executing them
         List<Peer> peersToDisconnect = new ArrayList<>();
@@ -1170,28 +1168,10 @@ public class NetworkData {
             boolean weShouldBeOutbound = ourNodeId.compareTo(theirNodeId) < 0;
             
             if (peers.size() == 1) {
-                // Validate single connection for correct direction
-                // Only enforce after grace period to avoid killing transient connections
                 Peer peer = peers.get(0);
-                if (peer.isOutbound() != weShouldBeOutbound 
-                        && peer.getConnectionAge() > DIRECTION_GRACE_PERIOD) {
-                    LOGGER.debug("[NetworkData: {}] Will disconnect single peer {} with wrong direction (outbound={}, shouldBeOutbound={}, age={}ms)",
-                            peer.getPeerConnectionId(), peer.getPeerData().getAddress(),
-                            peer.isOutbound(), weShouldBeOutbound, peer.getConnectionAge());
-                    
-                    // Record direction mismatch if WE initiated (outbound) - prevents immediate reconnect thrash
-                    if (peer.isOutbound()) {
-                        try {
-                            String peerAddress = peer.getPeerData().getAddress().toString();
-                            recordDirectionMismatch(theirNodeId);
-                            updateAddressToNodeIdCache(peerAddress, theirNodeId);
-                        } catch (Exception e) {
-                            LOGGER.debug("Failed to record direction mismatch: {}", e.getMessage());
-                        }
-                    }
-                    
-                    peersToDisconnect.add(peer);
-                    disconnectReasons.add("direction incorrect - single connection");
+                if (PeerDirectionPolicy.shouldKeepSinglePeerAsFallback(peer.isOutbound(), weShouldBeOutbound)) {
+                    LOGGER.trace("[NetworkData: {}] Keeping single peer {} as direction fallback (outbound={}, preferredOutbound={})",
+                            peer.getPeerConnectionId(), peer.getPeerData().getAddress(), peer.isOutbound(), weShouldBeOutbound);
                 }
             } else if (peers.size() > 1) {
                 // Multiple connections - keep the correctly-directed one
@@ -1228,7 +1208,7 @@ public class NetworkData {
                         }
                         
                         peersToDisconnect.add(p);
-                        disconnectReasons.add("direction invariant violation");
+                        disconnectReasons.add("direction preference duplicate");
                     }
                 }
             }
@@ -1372,16 +1352,31 @@ public class NetworkData {
             if (cachedInfo != null) {
                 // We know this peer's nodeId - check if already connected
                 String candidateNodeId = cachedInfo.nodeId;
-                boolean alreadyConnected = this.getImmutableConnectedPeers().stream()
-                        .anyMatch(peer -> peer.getPeersNodeId() != null 
-                                && peer.getPeersNodeId().equals(candidateNodeId));
-                
-                if (alreadyConnected) {
+                Peer existingPeer = this.getImmutableConnectedPeers().stream()
+                        .filter(peer -> peer.getPeersNodeId() != null
+                                && peer.getPeersNodeId().equals(candidateNodeId))
+                        .findFirst()
+                        .orElse(null);
+
+                if (existingPeer != null) {
+                    // Already connected to this nodeId - check whether a preferred outbound replacement is useful.
+                    String ourNodeId = this.getOurNodeId();
+                    if (ourNodeId != null) {
+                        boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound(ourNodeId, candidateNodeId);
+                        boolean outboundRecentlyFailed = hasRecentOutboundFailures(candidateNodeId, peerData.getAddress().getHost());
+                        if (PeerDirectionPolicy.shouldAttemptPreferredOutboundReplacement(existingPeer.isOutbound(),
+                                weShouldBeOutbound, outboundRecentlyFailed)) {
+                            LOGGER.debug("Data peer {} (nodeId {}) connected in fallback direction, allowing preferred outbound attempt",
+                                    peerAddress, candidateNodeId.substring(0, 8));
+                            return false;
+                        }
+                    }
+
                     LOGGER.debug("Skipping peer {} (nodeId {}) - already connected",
                             peerAddress, candidateNodeId.substring(0, 8));
                     return true;
                 }
-            }    
+            }
             return false;
         });
 
@@ -2064,40 +2059,35 @@ public class NetworkData {
                         disconnectReason = "replaced stale connection";
                         shouldAddPeer = true;
                     } else {
-                        // Existing peer is alive - use deterministic tie-breaking
-                        // Deterministic tie-breaking based on nodeId comparison
-                        // Both nodes will compute the same result, eliminating reconnection loops
+                        // Existing peer is alive - prefer deterministic direction but keep
+                        // usable fallback connections until a preferred replacement completes.
                         String ourNodeId = this.getOurNodeId();
                         String theirNodeId = peer.getPeersNodeId();
-                        
-                        // The node with the lower nodeId should be the one making outbound connections
-                        boolean weShouldBeOutbound = ourNodeId.compareTo(theirNodeId) < 0;
-                        
-                        // Determine which connection direction is correct
-                        boolean existingDirectionCorrect = (existingPeer.isOutbound() == weShouldBeOutbound);
-                        boolean newDirectionCorrect = (peer.isOutbound() == weShouldBeOutbound);
-                        
-                        String winner = existingDirectionCorrect ? "existing" : (newDirectionCorrect ? "new" : "existing");
-                        LOGGER.debug("[NetworkData: {}] Duplicate peer decision: existing={} (outbound={}), new={} (outbound={}), weShouldBeOutbound={}, winner={}",
-                                peer.getPeerConnectionId(),
-                                existingPeer.getPeerConnectionId(), existingPeer.isOutbound(),
-                                peer.getPeerConnectionId(), peer.isOutbound(),
-                                weShouldBeOutbound, winner);
 
-                        if (existingDirectionCorrect) {
-                            // Existing connection has the correct direction - keep existing, reject new
+                        if (ourNodeId == null || theirNodeId == null) {
                             peerToDisconnect = peer;
-                            disconnectReason = "duplicate connection - existing has correct direction";
-                        } else if (newDirectionCorrect) {
-                            // New connection has the correct direction - replace existing with new
-                            peerToDisconnect = existingPeer;
-                            disconnectReason = "replaced by connection with correct direction";
-                            shouldAddPeer = true;  // Continue to add new peer
+                            disconnectReason = "duplicate connection - missing node id";
                         } else {
-                            // Neither has correct direction (shouldn't happen in normal cases)
-                            // Keep existing to avoid churn
-                            peerToDisconnect = peer;
-                            disconnectReason = "duplicate connection - keeping existing";
+                            boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound(ourNodeId, theirNodeId);
+                            PeerDirectionPolicy.DuplicateConnectionDecision duplicateDecision =
+                                    PeerDirectionPolicy.decideDuplicate(true, existingPeer.isOutbound(), peer.isOutbound(),
+                                            weShouldBeOutbound);
+                            String winner = duplicateDecision == PeerDirectionPolicy.DuplicateConnectionDecision.REPLACE_EXISTING
+                                    ? "new" : "existing";
+                            LOGGER.debug("[NetworkData: {}] Duplicate peer decision: existing={} (outbound={}), new={} (outbound={}), weShouldBeOutbound={}, winner={}",
+                                    peer.getPeerConnectionId(),
+                                    existingPeer.getPeerConnectionId(), existingPeer.isOutbound(),
+                                    peer.getPeerConnectionId(), peer.isOutbound(),
+                                    weShouldBeOutbound, winner);
+
+                            if (duplicateDecision == PeerDirectionPolicy.DuplicateConnectionDecision.KEEP_EXISTING) {
+                                peerToDisconnect = peer;
+                                disconnectReason = "duplicate connection - keeping existing";
+                            } else {
+                                peerToDisconnect = existingPeer;
+                                disconnectReason = "replaced by connection with correct direction";
+                                shouldAddPeer = true;  // Continue to add new peer
+                            }
                         }
                     }
                 } else {
@@ -2147,8 +2137,21 @@ public class NetworkData {
     }
 
     public boolean canAcceptInbound() {
-        return this.canAcceptInbound;
+        return this.inboundReachability.canAcceptInbound();
     }
+
+    boolean isListenSocketAvailable() {
+        return this.inboundReachability.isListenSocketAvailable();
+    }
+
+    boolean isPortMapped() {
+        return this.inboundReachability.isPortMapped();
+    }
+
+    long getLastInboundHandshakeTimestamp() {
+        return this.inboundReachability.getLastInboundHandshakeTimestamp();
+    }
+
     // External IP / peerAddress tracking
 
     public synchronized void ourPeerAddressUpdated(String peerAddress) {
@@ -2404,11 +2407,11 @@ public class NetworkData {
             // Continue with other pruning operations - don't let one failure stop the rest
         }
         
-        // Enforce direction invariant (fixes simultaneous outbound connect zombies)
+        // Apply direction preference to duplicate connections
         try {
-            enforceDirectionInvariant();
+            enforceDirectionPreference();
         } catch (Exception e) {
-            LOGGER.error("Error enforcing direction invariant: {}", e.getMessage(), e);
+            LOGGER.error("Error enforcing direction preference: {}", e.getMessage(), e);
             // Continue with other pruning operations - don't let one failure stop the rest
         }
         
@@ -2564,6 +2567,8 @@ public class NetworkData {
     // Shutdown
     public void shutdown() {
         this.isShuttingDown = true;
+        this.inboundReachability.setListenSocketAvailable(false);
+        this.inboundReachability.setPortMapped(false);
 
         // Close listen socket to prevent more incoming connections
         if (this.serverChannel != null && this.serverChannel.isOpen()) {
