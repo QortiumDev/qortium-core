@@ -14,7 +14,8 @@ This is intentionally small at first. The currently supported parameters are
 the height-based block reward, the reward share-bin activation count, reward
 share weights, the account rating change cooldown, trust status vote-weight
 percentages, account trust starting energy, account trust manager energy hops,
-and the normal and name-registration transaction unit fees. Broader
+positive trust branch counts, and the normal and name-registration transaction
+unit fees. Broader
 trust-network policy values, timestamp-based settings, and larger structured
 parameter sets should be added only after each format and validation rule is
 made explicit.
@@ -159,6 +160,19 @@ overrides it. Because changing the hop count can change derived account trust
 scores and mapped trust statuses, this parameter refreshes trust snapshots at
 activation height.
 
+`ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT` is parameter ID `10`.
+
+Its value is exactly 4 bytes: a signed integer count of independent positive
+trust branches required before positive account trust levels can be awarded.
+The value must be greater than zero.
+
+The approved positive branch count applies to account trust derivation at its
+activation height and remains effective until another approved
+`ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT` update with a later activation height
+overrides it. Because changing this requirement can change derived account
+trust levels and mapped trust statuses, this parameter refreshes trust
+snapshots at activation height.
+
 ## Planned Account Trust Policy Parameters
 
 The next trust-policy work should be split into small scalar parameters before
@@ -170,7 +184,6 @@ The remaining planned scalar parameters are:
 
 | Planned ID | Parameter | Value | Validation |
 | --- | --- | --- | --- |
-| `10` | `ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT` | signed integer | greater than `0` |
 | `11` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT` | signed integer | greater than `0` |
 | `12` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT` | signed integer | `0` or greater; `0` keeps the current behavior of matching `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT` |
 | `13` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATING_CONFIDENCE` | signed integer | between `1` and `4`, inclusive |
@@ -178,7 +191,7 @@ The remaining planned scalar parameters are:
 Each scalar parameter should keep the same development-group approval model,
 activation lead time, repository overlay behavior, typed proposal builder, typed
 effective-value endpoint, validation metadata, and `blockchain.json` fallback
-used by the first seven supported parameters.
+used by the existing supported parameters.
 
 Before each scalar parameter is implemented, every runtime path that reads that
 setting must be made height-aware. That includes trust derivation, trust
@@ -304,6 +317,15 @@ hops. Callers provide the new signed integer value directly.
 
 `GET /chain-parameters/account-trust/manager-energy-hops/{height}` returns the
 effective account trust manager energy hops for a height after applying any
+approved overlay that is active at that height.
+
+`POST /chain-parameters/account-trust/positive-min-branch-count/update` builds
+an unsigned `CHAIN_PARAMETER_UPDATE` transaction for the minimum independent
+positive branch count required for positive account trust levels. Callers
+provide the new signed integer value directly.
+
+`GET /chain-parameters/account-trust/positive-min-branch-count/{height}`
+returns the effective positive branch count for a height after applying any
 approved overlay that is active at that height.
 
 `POST /chain-parameters/unit-fee/update` builds an unsigned

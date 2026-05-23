@@ -437,6 +437,19 @@ public class AccountRatingsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testTrustPolicyEndpointUsesOnChainPositiveMinBranchCount() throws DataException {
+		int positiveMinBranchCount = 3;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			approveAccountTrustPositiveMinBranchCountOverlay(repository, positiveMinBranchCount);
+		}
+
+		AccountTrustPolicyData policy = this.accountRatingsResource.getAccountTrustPolicy();
+
+		assertEquals(positiveMinBranchCount, policy.getPositiveMinBranchCount());
+	}
+
+	@Test
 	public void testRatingCooldownEndpointReturnsOpenEdgeStatus() throws DataException {
 		TestAccount alice;
 		TestAccount bob;
@@ -2149,6 +2162,21 @@ public class AccountRatingsApiTests extends ApiCommon {
 				TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
 				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.id, activationHeight,
 				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.encodeIntValue(managerEnergyHops));
+
+		TransactionUtils.signAndMint(repository, transactionData, alice);
+		GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);
+		BlockUtils.mintBlocks(repository, getApprovalSettlementBlockCount(repository));
+		BlockUtils.mintBlocks(repository, activationHeight - repository.getBlockRepository().getBlockchainHeight());
+	}
+
+	private void approveAccountTrustPositiveMinBranchCountOverlay(Repository repository, int positiveMinBranchCount)
+			throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+		int activationHeight = getActivationHeightSafelyAfterApproval(repository, 1);
+		ChainParameterUpdateTransactionData transactionData = new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.encodeIntValue(positiveMinBranchCount));
 
 		TransactionUtils.signAndMint(repository, transactionData, alice);
 		GroupUtils.approveTransaction(repository, "alice", transactionData.getSignature(), true);

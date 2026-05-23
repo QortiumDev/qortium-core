@@ -304,6 +304,50 @@ public class ChainParameterUpdateTests extends Common {
 	}
 
 	@Test
+	public void testApprovedAccountTrustPositiveMinBranchCountUpdateAppliesAtActivationHeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+			int originalPositiveMinBranchCount = BlockChain.getInstance()
+					.getAccountTrustPositiveMinBranchCount(repository, activationHeight);
+			int updatedPositiveMinBranchCount = originalPositiveMinBranchCount + 1;
+
+			ChainParameterUpdateTransactionData transactionData = buildAccountTrustPositiveMinBranchCountUpdate(repository,
+					alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight,
+					updatedPositiveMinBranchCount);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertEquals(originalPositiveMinBranchCount,
+					BlockChain.getInstance().getAccountTrustPositiveMinBranchCount(repository, activationHeight));
+
+			approveAndSettle(repository, transactionData);
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertEquals(originalPositiveMinBranchCount,
+					BlockChain.getInstance().getAccountTrustPositiveMinBranchCount(repository, activationHeight - 1));
+			assertEquals(updatedPositiveMinBranchCount,
+					BlockChain.getInstance().getAccountTrustPositiveMinBranchCount(repository, activationHeight));
+			assertEquals(updatedPositiveMinBranchCount,
+					BlockChain.getInstance().getAccountTrustPositiveMinBranchCount(repository, activationHeight + 100));
+
+			ChainParameterData overlayData = repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.id, activationHeight);
+			assertEquals(activationHeight, overlayData.getActivationHeight());
+			assertArrayEquals(transactionData.getValue(), overlayData.getValue());
+
+			int approvalHeight = GroupUtils.getApprovalHeight(repository, transactionData.getSignature());
+			BlockUtils.orphanToBlock(repository, approvalHeight - 1);
+
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertNull(repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.id, activationHeight));
+			assertEquals(originalPositiveMinBranchCount,
+					BlockChain.getInstance().getAccountTrustPositiveMinBranchCount(repository, activationHeight));
+		}
+	}
+
+	@Test
 	public void testTrustStatusVoteWeightsActivationRefreshesTrustSnapshots() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -383,6 +427,39 @@ public class ChainParameterUpdateTests extends Common {
 
 			ChainParameterUpdateTransactionData transactionData = buildAccountTrustManagerEnergyHopsUpdate(repository, alice,
 					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedManagerEnergyHops);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			approveAndSettle(repository, transactionData);
+
+			BlockUtils.mintBlocks(repository, activationHeight - 1 - repository.getBlockRepository().getBlockchainHeight());
+
+			AccountTrustSnapshotData beforeActivationSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertNotNull(beforeActivationSnapshot);
+
+			BlockUtils.mintBlock(repository);
+			assertEquals(activationHeight, repository.getBlockRepository().getBlockchainHeight());
+
+			AccountTrustSnapshotData activationSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertEquals(activationHeight, activationSnapshot.getSnapshotHeight());
+
+			BlockUtils.orphanLastBlock(repository);
+
+			AccountTrustSnapshotData orphanedSnapshot = getSubjectTrustSnapshot(repository, alice);
+			assertEquals(activationHeight - 1, orphanedSnapshot.getSnapshotHeight());
+		}
+	}
+
+	@Test
+	public void testAccountTrustPositiveMinBranchCountActivationRefreshesTrustSnapshots() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 5);
+			int updatedPositiveMinBranchCount = BlockChain.getInstance()
+					.getAccountTrustPositiveMinBranchCount(repository, activationHeight) + 1;
+
+			ChainParameterUpdateTransactionData transactionData = buildAccountTrustPositiveMinBranchCountUpdate(repository,
+					alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight,
+					updatedPositiveMinBranchCount);
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 			approveAndSettle(repository, transactionData);
 
@@ -792,6 +869,24 @@ public class ChainParameterUpdateTests extends Common {
 		}
 	}
 
+	@Test
+	public void testChainParameterUpdateRejectsNonPositiveAccountTrustPositiveMinBranchCount() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+
+			ChainParameterUpdateTransactionData zeroTransactionData = buildAccountTrustPositiveMinBranchCountUpdate(
+					repository, alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, 0);
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, zeroTransactionData).isValid());
+
+			ChainParameterUpdateTransactionData negativeTransactionData = buildAccountTrustPositiveMinBranchCountUpdate(
+					repository, alice, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, -1);
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, negativeTransactionData).isValid());
+		}
+	}
+
 	private static ChainParameterUpdateTransactionData buildBlockRewardUpdate(Repository repository,
 			PrivateKeyAccount updater, int txGroupId, int activationHeight, long reward) throws DataException {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
@@ -838,6 +933,14 @@ public class ChainParameterUpdateTests extends Common {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
 				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.id, activationHeight,
 				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.encodeIntValue(managerEnergyHops));
+	}
+
+	private static ChainParameterUpdateTransactionData buildAccountTrustPositiveMinBranchCountUpdate(Repository repository,
+			PrivateKeyAccount updater, int txGroupId, int activationHeight, int positiveMinBranchCount)
+			throws DataException {
+		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
+				ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.encodeIntValue(positiveMinBranchCount));
 	}
 
 	private static ChainParameterUpdateTransactionData buildUnitFeeUpdate(Repository repository,

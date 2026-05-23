@@ -794,6 +794,20 @@ public class BlockChain {
 		return getAccountTrustManagerEnergyHops();
 	}
 
+	public int getAccountTrustPositiveMinBranchCount() {
+		return this.accountTrustSettings.getPositiveMinBranchCount();
+	}
+
+	public int getAccountTrustPositiveMinBranchCount(Repository repository, int height) throws DataException {
+		ChainParameterData positiveMinBranchCountUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.id, height);
+		if (positiveMinBranchCountUpdate != null)
+			return ChainParameter.ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT.decodeIntValue(
+					positiveMinBranchCountUpdate.getValue());
+
+		return getAccountTrustPositiveMinBranchCount();
+	}
+
 	public int getAccountRatingChangeCooldownBlocks() {
 		return this.accountTrustSettings.getAccountRatingChangeCooldownBlocks();
 	}

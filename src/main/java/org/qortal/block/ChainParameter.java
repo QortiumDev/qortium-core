@@ -45,7 +45,11 @@ public enum ChainParameter {
 	ACCOUNT_TRUST_MANAGER_ENERGY_HOPS(9, Integer.BYTES, "INTEGER",
 			"Number of manager-rating propagation hops used during account trust derivation.",
 			"/chain-parameters/account-trust/manager-energy-hops/update",
-			"/chain-parameters/account-trust/manager-energy-hops/{height}");
+			"/chain-parameters/account-trust/manager-energy-hops/{height}"),
+	ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT(10, Integer.BYTES, "INTEGER",
+			"Minimum number of independent positive trust branches required for positive account trust levels.",
+			"/chain-parameters/account-trust/positive-min-branch-count/update",
+			"/chain-parameters/account-trust/positive-min-branch-count/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 	public static final String VALUE_TYPE_AMOUNT = "AMOUNT";
@@ -119,6 +123,7 @@ public enum ChainParameter {
 				return 0;
 
 			case ACCOUNT_TRUST_MANAGER_ENERGY_HOPS:
+			case ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT:
 				return 1;
 
 			default:
@@ -185,7 +190,8 @@ public enum ChainParameter {
 
 	public boolean affectsTrustSnapshots() {
 		return this == ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS || this == ACCOUNT_TRUST_STARTING_ENERGY
-				|| this == ACCOUNT_TRUST_MANAGER_ENERGY_HOPS;
+				|| this == ACCOUNT_TRUST_MANAGER_ENERGY_HOPS
+				|| this == ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT;
 	}
 
 	public boolean isValidValue(byte[] value) {
@@ -206,6 +212,7 @@ public enum ChainParameter {
 				return decodeIntValue(value) >= 0;
 
 			case ACCOUNT_TRUST_MANAGER_ENERGY_HOPS:
+			case ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT:
 				return decodeIntValue(value) > 0;
 
 			case REWARD_SHARE_WEIGHTS:

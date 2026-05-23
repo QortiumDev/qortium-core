@@ -41,7 +41,10 @@ public final class AccountTrustPolicy {
 	}
 
 	public static DecisionSettings getDecisionSettings(Repository repository, int height) throws DataException {
-		return getDecisionSettings();
+		AccountTrustSettings settings = settings();
+		return new DecisionSettings(BlockChain.getInstance().getAccountTrustPositiveMinBranchCount(repository, height),
+				settings.getSuspiciousMinRaterCount(), settings.getSuspiciousMinBranchCount(),
+				settings.getSuspiciousMinRatingConfidence());
 	}
 
 	public static AccountRatingCategory getActiveWeightCategory() {
