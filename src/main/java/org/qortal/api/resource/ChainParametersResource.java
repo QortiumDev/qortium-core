@@ -740,6 +740,7 @@ public class ChainParametersResource {
 			byte[] value) {
 		effectiveValue.value = value;
 		effectiveValue.amount = parameter.decodeAmountValue(value);
+		effectiveValue.longValue = parameter.decodeLongParameterValue(value);
 		effectiveValue.integerValue = parameter.decodeIntegerValue(value);
 		effectiveValue.integerValues = parameter.decodeIntegerListValue(value);
 		effectiveValue.displayValue = parameter.formatDisplayValue(value);
@@ -749,6 +750,7 @@ public class ChainParametersResource {
 			byte[] value) {
 		effectiveValue.nextValue = value;
 		effectiveValue.nextAmount = parameter.decodeAmountValue(value);
+		effectiveValue.nextLongValue = parameter.decodeLongParameterValue(value);
 		effectiveValue.nextIntegerValue = parameter.decodeIntegerValue(value);
 		effectiveValue.nextIntegerValues = parameter.decodeIntegerListValue(value);
 		effectiveValue.nextDisplayValue = parameter.formatDisplayValue(value);
@@ -804,6 +806,7 @@ public class ChainParametersResource {
 			summary.parameterName = parameter.name();
 			summary.valueType = parameter.getValueType();
 			summary.amount = parameter.decodeAmountValue(transactionData.getValue());
+			summary.longValue = parameter.decodeLongParameterValue(transactionData.getValue());
 			summary.integerValue = parameter.decodeIntegerValue(transactionData.getValue());
 			summary.integerValues = parameter.decodeIntegerListValue(transactionData.getValue());
 			summary.displayValue = parameter.formatDisplayValue(transactionData.getValue());

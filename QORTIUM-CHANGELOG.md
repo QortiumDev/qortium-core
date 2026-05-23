@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - api: add long chain parameter value support
+
+Added API and decoding support for plain signed-long chain parameter values without adding a new voted parameter yet. Future policy values that are stored as 8-byte integers can now be exposed through plain `longValue` fields and displayed as ordinary base-10 numbers, while amount-style parameters continue to use decimal amount formatting.
+
 ### 2026-05-23 - consensus: refresh trust snapshots on chain parameter activation
 
 Added the activation hook that refreshes stored account trust snapshots when an approved on-chain parameter affects trust snapshot output. Trust status vote-weight updates now refresh snapshot rows at their activation height and roll back correctly when that activation block is orphaned, while unrelated parameter activations leave snapshots untouched.

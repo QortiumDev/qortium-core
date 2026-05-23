@@ -192,6 +192,12 @@ bytes, the decoded amount, the current group-approval status, the current yes
 and no vote counts, the current approval-authority count, and whether that
 approved proposal is the effective overlay at the node's current height.
 
+Amount and plain-long parameters both use signed 8-byte canonical values on
+chain, but the API keeps them separate. `AMOUNT` values are exposed through
+amount fields and displayed with eight decimal places. Future `LONG` values are
+exposed through `longValue` or `nextLongValue` fields and displayed as plain
+base-10 integers, without amount formatting.
+
 `GET /chain-parameters/effective-values?height={height}` lists every supported
 parameter with the value effective at that height. Each entry says whether the
 current value comes from `blockchain.json` config or from an approved on-chain
@@ -289,5 +295,9 @@ with normal values while consensus continues to store deterministic bytes.
 The transaction stores canonical binary values, not JSON.
 
 That keeps byte serialization, signatures, repository storage, and consensus
-parsing deterministic. Future structured parameters should define their own
-canonical binary layout before they are accepted on chain.
+parsing deterministic. Scalar value types should stay explicit: use `AMOUNT`
+only for asset-style atomic amounts that need eight-decimal public formatting,
+use `LONG` for signed 8-byte integer policy values, use `INTEGER` for signed
+4-byte integer policy values, and use `INTEGER_LIST` for fixed-length signed
+integer arrays. Future structured parameters should define their own canonical
+binary layout before they are accepted on chain.

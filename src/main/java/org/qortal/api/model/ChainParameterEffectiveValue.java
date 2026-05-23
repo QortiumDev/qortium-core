@@ -45,6 +45,9 @@ public class ChainParameterEffectiveValue {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public Long amount;
 
+	@Schema(description = "decoded current plain long value for long-like non-amount parameters")
+	public Long longValue;
+
 	@Schema(description = "decoded current integer value for integer-like parameters")
 	public Integer integerValue;
 
@@ -66,6 +69,9 @@ public class ChainParameterEffectiveValue {
 	@Schema(description = "decoded next amount value for amount-like parameters", type = "number")
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public Long nextAmount;
+
+	@Schema(description = "decoded next plain long value for long-like non-amount parameters")
+	public Long nextLongValue;
 
 	@Schema(description = "decoded next integer value for integer-like parameters")
 	public Integer nextIntegerValue;

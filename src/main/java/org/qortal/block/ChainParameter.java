@@ -40,6 +40,10 @@ public enum ChainParameter {
 			"/chain-parameters/account-trust/status-vote-weights/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
+	public static final String VALUE_TYPE_AMOUNT = "AMOUNT";
+	public static final String VALUE_TYPE_LONG = "LONG";
+	public static final String VALUE_TYPE_INTEGER = "INTEGER";
+	public static final String VALUE_TYPE_INTEGER_LIST = "INTEGER_LIST";
 
 	private static final String[] REWARD_SHARE_WEIGHT_LABELS = buildRewardShareWeightLabels();
 	private static final String[] TRUST_STATUS_VOTE_WEIGHT_LABELS = Arrays.stream(AccountTrustStatus.values())
@@ -259,64 +263,61 @@ public enum ChainParameter {
 	}
 
 	public Long decodeAmountValue(byte[] value) {
-		if (!isValidValue(value))
+		if (!isValidValue(value) || !VALUE_TYPE_AMOUNT.equals(this.valueType))
 			return null;
 
-		switch (this) {
-			case BLOCK_REWARD:
-			case UNIT_FEE:
-			case NAME_REGISTRATION_UNIT_FEE:
-				return decodeLongValue(value);
+		return decodeLongValue(value);
+	}
 
-			default:
-				return null;
-		}
+	public Long decodeLongParameterValue(byte[] value) {
+		if (!isValidValue(value) || !VALUE_TYPE_LONG.equals(this.valueType))
+			return null;
+
+		return decodeLongValue(value);
+	}
+
+	public static Long decodeLongParameterValue(String valueType, int valueLength, byte[] value) {
+		if (!VALUE_TYPE_LONG.equals(valueType) || valueLength != Long.BYTES || value == null
+				|| value.length != Long.BYTES)
+			return null;
+
+		return ByteBuffer.wrap(value).getLong();
+	}
+
+	public static String formatLongParameterDisplayValue(String valueType, int valueLength, byte[] value) {
+		Long longValue = decodeLongParameterValue(valueType, valueLength, value);
+		return longValue == null ? null : Long.toString(longValue);
 	}
 
 	public Integer decodeIntegerValue(byte[] value) {
-		if (!isValidValue(value))
+		if (!isValidValue(value) || !VALUE_TYPE_INTEGER.equals(this.valueType))
 			return null;
 
-		switch (this) {
-			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
-			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
-				return decodeIntValue(value);
-
-			default:
-				return null;
-		}
+		return decodeIntValue(value);
 	}
 
 	public int[] decodeIntegerListValue(byte[] value) {
-		if (!isValidValue(value))
+		if (!isValidValue(value) || !VALUE_TYPE_INTEGER_LIST.equals(this.valueType))
 			return null;
 
-		switch (this) {
-			case REWARD_SHARE_WEIGHTS:
-			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
-				return decodeIntArrayValue(value);
-
-			default:
-				return null;
-		}
+		return decodeIntArrayValue(value);
 	}
 
 	public String formatDisplayValue(byte[] value) {
 		if (!isValidValue(value))
 			return null;
 
-		switch (this) {
-			case BLOCK_REWARD:
-			case UNIT_FEE:
-			case NAME_REGISTRATION_UNIT_FEE:
+		switch (this.valueType) {
+			case VALUE_TYPE_AMOUNT:
 				return Amounts.prettyAmount(decodeLongValue(value));
 
-			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
-			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
+			case VALUE_TYPE_LONG:
+				return Long.toString(decodeLongValue(value));
+
+			case VALUE_TYPE_INTEGER:
 				return Integer.toString(decodeIntValue(value));
 
-			case REWARD_SHARE_WEIGHTS:
-			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
+			case VALUE_TYPE_INTEGER_LIST:
 				return Arrays.toString(decodeIntArrayValue(value));
 
 			default:

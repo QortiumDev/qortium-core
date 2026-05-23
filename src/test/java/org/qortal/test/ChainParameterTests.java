@@ -88,6 +88,32 @@ public class ChainParameterTests {
 	}
 
 	@Test
+	public void testPlainLongValueDecoding() {
+		long plainLong = 1_234_567_890L;
+		byte[] value = ChainParameter.BLOCK_REWARD.encodeLongValue(plainLong);
+
+		assertEquals(Long.valueOf(plainLong), ChainParameter.decodeLongParameterValue(
+				ChainParameter.VALUE_TYPE_LONG, Long.BYTES, value));
+		assertEquals("1234567890", ChainParameter.formatLongParameterDisplayValue(
+				ChainParameter.VALUE_TYPE_LONG, Long.BYTES, value));
+
+		assertNull(ChainParameter.decodeLongParameterValue(ChainParameter.VALUE_TYPE_AMOUNT, Long.BYTES, value));
+		assertNull(ChainParameter.decodeLongParameterValue(ChainParameter.VALUE_TYPE_LONG, Integer.BYTES, value));
+		assertNull(ChainParameter.decodeLongParameterValue(ChainParameter.VALUE_TYPE_LONG, Long.BYTES, new byte[0]));
+		assertNull(ChainParameter.formatLongParameterDisplayValue(
+				ChainParameter.VALUE_TYPE_LONG, Long.BYTES, new byte[0]));
+	}
+
+	@Test
+	public void testAmountValuesDoNotDecodeAsPlainLongs() {
+		long reward = 12L * Amounts.MULTIPLIER;
+		byte[] value = ChainParameter.BLOCK_REWARD.encodeLongValue(reward);
+
+		assertEquals(Long.valueOf(reward), ChainParameter.BLOCK_REWARD.decodeAmountValue(value));
+		assertNull(ChainParameter.BLOCK_REWARD.decodeLongParameterValue(value));
+	}
+
+	@Test
 	public void testMinAccountsToActivateShareBinIntegerDecoding() {
 		byte[] value = ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.encodeIntValue(30);
 

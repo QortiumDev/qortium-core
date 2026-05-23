@@ -549,7 +549,9 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals("AMOUNT", summary.valueType);
 		assertEquals("3.00000000", summary.displayValue);
 		assertEquals(Long.valueOf(reward), summary.amount);
+		assertNull(summary.longValue);
 		assertNull(summary.integerValue);
+		assertNull(summary.integerValues);
 		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
 		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
 		assertEquals(0, summary.approvalCount);
@@ -584,7 +586,9 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals("INTEGER", summary.valueType);
 		assertEquals("4", summary.displayValue);
 		assertNull(summary.amount);
+		assertNull(summary.longValue);
 		assertEquals(Integer.valueOf(4), summary.integerValue);
+		assertNull(summary.integerValues);
 		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
 		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
 		assertEquals(0, summary.approvalCount);
@@ -619,7 +623,9 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals("INTEGER", summary.valueType);
 		assertEquals("720", summary.displayValue);
 		assertNull(summary.amount);
+		assertNull(summary.longValue);
 		assertEquals(Integer.valueOf(720), summary.integerValue);
+		assertNull(summary.integerValues);
 		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
 		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
 		assertEquals(0, summary.approvalCount);
@@ -655,7 +661,9 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals("AMOUNT", summary.valueType);
 		assertEquals("0.01234567", summary.displayValue);
 		assertEquals(Long.valueOf(unitFee), summary.amount);
+		assertNull(summary.longValue);
 		assertNull(summary.integerValue);
+		assertNull(summary.integerValues);
 		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
 		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
 		assertEquals(0, summary.approvalCount);
@@ -691,7 +699,9 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals("AMOUNT", summary.valueType);
 		assertEquals("125.00000000", summary.displayValue);
 		assertEquals(Long.valueOf(nameRegistrationUnitFee), summary.amount);
+		assertNull(summary.longValue);
 		assertNull(summary.integerValue);
+		assertNull(summary.integerValues);
 		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
 		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
 		assertEquals(0, summary.approvalCount);
@@ -727,6 +737,7 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals("INTEGER_LIST", summary.valueType);
 		assertEquals(Arrays.toString(weights), summary.displayValue);
 		assertNull(summary.amount);
+		assertNull(summary.longValue);
 		assertNull(summary.integerValue);
 		assertArrayEquals(weights, summary.integerValues);
 		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
@@ -764,6 +775,7 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals("INTEGER_LIST", summary.valueType);
 		assertEquals(Arrays.toString(weights), summary.displayValue);
 		assertNull(summary.amount);
+		assertNull(summary.longValue);
 		assertNull(summary.integerValue);
 		assertArrayEquals(weights, summary.integerValues);
 		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
@@ -1093,6 +1105,10 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertNull(value.nextSignature);
 		assertNull(value.nextActivationHeight);
 		assertNull(value.nextValue);
+		assertNull(value.nextDisplayValue);
+		assertNull(value.nextAmount);
+		assertNull(value.nextLongValue);
+		assertNull(value.nextIntegerValue);
 		assertNull(value.nextIntegerValues);
 	}
 
@@ -1100,6 +1116,7 @@ public class ChainParametersApiTests extends ApiCommon {
 			byte[] expectedValue) {
 		assertArrayEquals(expectedValue, value.value);
 		assertEquals(parameter.decodeAmountValue(expectedValue), value.amount);
+		assertEquals(parameter.decodeLongParameterValue(expectedValue), value.longValue);
 		assertEquals(parameter.decodeIntegerValue(expectedValue), value.integerValue);
 		assertArrayEquals(parameter.decodeIntegerListValue(expectedValue), value.integerValues);
 		assertEquals(parameter.formatDisplayValue(expectedValue), value.displayValue);
@@ -1109,6 +1126,7 @@ public class ChainParametersApiTests extends ApiCommon {
 			byte[] expectedValue) {
 		assertArrayEquals(expectedValue, value.nextValue);
 		assertEquals(parameter.decodeAmountValue(expectedValue), value.nextAmount);
+		assertEquals(parameter.decodeLongParameterValue(expectedValue), value.nextLongValue);
 		assertEquals(parameter.decodeIntegerValue(expectedValue), value.nextIntegerValue);
 		assertArrayEquals(parameter.decodeIntegerListValue(expectedValue), value.nextIntegerValues);
 		assertEquals(parameter.formatDisplayValue(expectedValue), value.nextDisplayValue);

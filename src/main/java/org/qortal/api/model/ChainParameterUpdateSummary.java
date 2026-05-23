@@ -48,6 +48,9 @@ public class ChainParameterUpdateSummary {
 	@XmlJavaTypeAdapter(value = org.qortal.api.AmountTypeAdapter.class)
 	public Long amount;
 
+	@Schema(description = "decoded plain long value for long-like non-amount parameters")
+	public Long longValue;
+
 	@Schema(description = "decoded integer value for integer-like parameters")
 	public Integer integerValue;
 
