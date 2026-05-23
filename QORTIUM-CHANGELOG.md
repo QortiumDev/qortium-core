@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - test: suppress expected negative-path error logs
+
+Added a test-only logging helper and used it around restart and minting checks that intentionally trigger failure paths. The production errors still log normally, but expected negative-path tests no longer make the Surefire reports look like they contain real runtime errors.
+
 ### 2026-05-23 - utils: avoid EPC critical log during shutdown
 
 Changed the execute-produce-consume worker utility so normal shutdown no longer reports the final worker thread exit as a critical error. Unexpected worker-pool death still logs loudly, but clean shutdowns now leave the test and node logs focused on real problems.

@@ -1,10 +1,12 @@
 package org.qortal.test.minting;
 
+import org.apache.logging.log4j.Level;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
+import org.qortal.block.Block;
 import org.qortal.block.BlockChain;
 import org.qortal.controller.BlockMinter;
 import org.qortal.controller.OnlineAccountsManager;
@@ -16,6 +18,7 @@ import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.AccountUtils;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.LogLevelOverride;
 import org.qortal.test.common.TestAccount;
 
 import java.util.List;
@@ -50,8 +53,10 @@ public class BlocksMintedCountTests extends Common {
 					Account.canRewardShareMint(repository, testRewardShareAccount.getPublicKey()));
 
 			OnlineAccountsManager.getInstance().ensureTestingAccountsOnline(testRewardShareAccount);
-			assertNull("Non-self reward-share should not mint blocks",
-					BlockMinter.mintTestingBlockRetainingTimestamps(repository, testRewardShareAccount));
+			try (LogLevelOverride ignored = LogLevelOverride.setLevel(Block.class, Level.FATAL)) {
+				assertNull("Non-self reward-share should not mint blocks",
+						BlockMinter.mintTestingBlockRetainingTimestamps(repository, testRewardShareAccount));
+			}
 		}
 	}
 

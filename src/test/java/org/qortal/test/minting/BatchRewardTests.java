@@ -1,6 +1,7 @@
 package org.qortal.test.minting;
 
 import org.apache.commons.lang3.reflect.FieldUtils;
+import org.apache.logging.log4j.Level;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -374,8 +375,11 @@ public class BatchRewardTests extends Common {
 			}
 
 			// Mint block 7 with no online accounts
-			Block block7 = BlockMinter.mintTestingBlockUnvalidatedWithoutOnlineAccounts(repository, aliceSelfShare);
-			assertNull("Minted block must be null", block7);
+			Block block7;
+			try (LogLevelOverride ignored = LogLevelOverride.setLevel(Block.class, Level.FATAL)) {
+				block7 = BlockMinter.mintTestingBlockUnvalidatedWithoutOnlineAccounts(repository, aliceSelfShare);
+				assertNull("Minted block must be null", block7);
+			}
 
 			// Mint block 7, this time with an online account
 			List<PrivateKeyAccount> onlineAccounts = Arrays.asList(aliceSelfShare);
@@ -384,8 +388,11 @@ public class BatchRewardTests extends Common {
 			assertEquals(1, block7.getBlockData().getOnlineAccountsCount());
 
 			// Mint block 8 with no online accounts
-			Block block8 = BlockMinter.mintTestingBlockUnvalidatedWithoutOnlineAccounts(repository, aliceSelfShare);
-			assertNull("Minted block must be null", block8);
+			Block block8;
+			try (LogLevelOverride ignored = LogLevelOverride.setLevel(Block.class, Level.FATAL)) {
+				block8 = BlockMinter.mintTestingBlockUnvalidatedWithoutOnlineAccounts(repository, aliceSelfShare);
+				assertNull("Minted block must be null", block8);
+			}
 
 			// Mint block 8, this time with an online account
 			block8 = BlockMinter.mintTestingBlock(repository, onlineAccounts.toArray(new PrivateKeyAccount[0]));
@@ -393,8 +400,11 @@ public class BatchRewardTests extends Common {
 			assertEquals(1, block8.getBlockData().getOnlineAccountsCount());
 
 			// Mint block 9 with no online accounts
-			Block block9 = BlockMinter.mintTestingBlockUnvalidatedWithoutOnlineAccounts(repository, aliceSelfShare);
-			assertNull("Minted block must be null", block9);
+			Block block9;
+			try (LogLevelOverride ignored = LogLevelOverride.setLevel(Block.class, Level.FATAL)) {
+				block9 = BlockMinter.mintTestingBlockUnvalidatedWithoutOnlineAccounts(repository, aliceSelfShare);
+				assertNull("Minted block must be null", block9);
+			}
 
 			// Mint block 9, this time with an online account
 			block9 = BlockMinter.mintTestingBlock(repository, onlineAccounts.toArray(new PrivateKeyAccount[0]));

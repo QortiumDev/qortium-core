@@ -1,10 +1,12 @@
 package org.qortal.controller;
 
+import org.apache.logging.log4j.Level;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.repository.DataException;
 import org.qortal.test.common.Common;
+import org.qortal.test.common.LogLevelOverride;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,7 +52,9 @@ public class RestartNodeTests {
 		try {
 			System.setProperty("java.home", missingJavaHome.toString());
 
-			RestartNode.attemptToRestart();
+			try (LogLevelOverride ignored = LogLevelOverride.setLevel(RestartNode.class, Level.FATAL)) {
+				RestartNode.attemptToRestart();
+			}
 			assertFalse(RestartNode.isRestartApplyInProgress());
 
 		} finally {
