@@ -259,8 +259,14 @@ public class AccountRatingsResource {
 					)
 			}
 	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
 	public AccountTrustPolicyData getAccountTrustPolicy() {
-		return buildTrustPolicy();
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+			return buildTrustPolicy(repository, currentHeight);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
 	}
 
 	@GET
@@ -535,11 +541,11 @@ public class AccountRatingsResource {
 		AccountRatingData activeRatingData = repository.getAccountRatingRepository()
 				.getRating(targetPublicKey, raterPublicKey, category);
 		Integer activeRating = activeRatingData == null ? null : activeRatingData.getRating();
-		int cooldownBlocks = AccountTrustPolicy.getAccountRatingChangeCooldownBlocks();
 		Integer latestRatingChangeHeight = repository.getAccountRatingRepository()
 				.getLatestRatingChangeHeight(targetPublicKey, raterPublicKey, category);
 		int currentHeight = repository.getBlockRepository().getBlockchainHeight();
 		int candidateChangeHeight = currentHeight + 1;
+		int cooldownBlocks = AccountTrustPolicy.getAccountRatingChangeCooldownBlocks(repository, candidateChangeHeight);
 		int earliestAllowedHeight = calculateEarliestAllowedHeight(candidateChangeHeight, latestRatingChangeHeight,
 				cooldownBlocks);
 		int blocksRemaining = Math.max(0, earliestAllowedHeight - candidateChangeHeight);
@@ -550,7 +556,7 @@ public class AccountRatingsResource {
 				earliestAllowedHeight, blocksRemaining, canChangeNow);
 	}
 
-	private AccountTrustPolicyData buildTrustPolicy() {
+	private AccountTrustPolicyData buildTrustPolicy(Repository repository, int height) throws DataException {
 		List<AccountTrustPolicyData.StatusVoteWeight> statusVoteWeights = new ArrayList<>();
 		for (AccountTrustStatus status : AccountTrustStatus.values())
 			statusVoteWeights.add(new AccountTrustPolicyData.StatusVoteWeight(status,
@@ -564,7 +570,7 @@ public class AccountRatingsResource {
 				AccountTrustPolicy.getManagerEnergyHops(), AccountTrustPolicy.getPositiveMinBranchCount(),
 				AccountTrustPolicy.getSuspiciousMinRaterCount(), AccountTrustPolicy.getSuspiciousMinBranchCount(),
 				AccountTrustPolicy.getSuspiciousMinRatingConfidence(),
-				AccountTrustPolicy.getAccountRatingChangeCooldownBlocks(), statusVoteWeights, categoryPolicies);
+				AccountTrustPolicy.getAccountRatingChangeCooldownBlocks(repository, height), statusVoteWeights, categoryPolicies);
 	}
 
 	private AccountTrustPolicyData.CategoryPolicy buildTrustCategoryPolicy(AccountRatingCategory category) {

@@ -7,11 +7,13 @@ import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
 import org.qortal.block.BlockChain.AccountLevelShareBin;
 import org.qortal.block.ChainParameter;
+import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.blockchain.ChainParameterData;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.ChainParameterUpdateTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
+import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.data.transaction.RegisterNameTransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
@@ -116,6 +118,58 @@ public class ChainParameterUpdateTests extends Common {
 			assertNull(repository.getChainParameterRepository()
 					.getEffectiveParameter(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.id, activationHeight));
 			assertEquals(originalValue, BlockChain.getInstance().getMinAccountsToActivateShareBin(repository, activationHeight));
+		}
+	}
+
+	@Test
+	public void testApprovedAccountRatingCooldownUpdateAppliesAtActivationHeight() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+
+			TransactionUtils.signAndMint(repository,
+					buildRateAccountTransactionData(alice, bob, AccountRatingCategory.SUBJECT, 4), alice);
+
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+			int originalValue = BlockChain.getInstance().getAccountRatingChangeCooldownBlocks(repository, activationHeight);
+			int updatedValue = 0;
+
+			ChainParameterUpdateTransactionData transactionData = buildAccountRatingCooldownUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, updatedValue);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertEquals(originalValue, BlockChain.getInstance().getAccountRatingChangeCooldownBlocks(repository, activationHeight));
+			assertEquals(Transaction.ValidationResult.ACCOUNT_RATING_CHANGE_TOO_SOON,
+					Transaction.fromData(repository,
+							buildRateAccountTransactionData(alice, bob, AccountRatingCategory.SUBJECT, -2)).isValid());
+
+			approveAndSettle(repository, transactionData);
+
+			assertEquals(Transaction.ApprovalStatus.APPROVED, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertEquals(originalValue, BlockChain.getInstance().getAccountRatingChangeCooldownBlocks(repository, activationHeight - 1));
+			assertEquals(updatedValue, BlockChain.getInstance().getAccountRatingChangeCooldownBlocks(repository, activationHeight));
+			assertEquals(updatedValue, BlockChain.getInstance().getAccountRatingChangeCooldownBlocks(repository, activationHeight + 100));
+			assertEquals(Transaction.ValidationResult.ACCOUNT_RATING_CHANGE_TOO_SOON,
+					Transaction.fromData(repository,
+							buildRateAccountTransactionData(alice, bob, AccountRatingCategory.SUBJECT, -2)).isValid());
+
+			BlockUtils.mintBlocks(repository, activationHeight - 1 - repository.getBlockRepository().getBlockchainHeight());
+			assertEquals(Transaction.ValidationResult.OK,
+					Transaction.fromData(repository,
+							buildRateAccountTransactionData(alice, bob, AccountRatingCategory.SUBJECT, -2)).isValid());
+
+			ChainParameterData overlayData = repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.id, activationHeight);
+			assertEquals(activationHeight, overlayData.getActivationHeight());
+			assertArrayEquals(transactionData.getValue(), overlayData.getValue());
+
+			int approvalHeight = GroupUtils.getApprovalHeight(repository, transactionData.getSignature());
+			BlockUtils.orphanToBlock(repository, approvalHeight - 1);
+
+			assertEquals(Transaction.ApprovalStatus.PENDING, GroupUtils.getApprovalStatus(repository, transactionData.getSignature()));
+			assertNull(repository.getChainParameterRepository()
+					.getEffectiveParameter(ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.id, activationHeight));
+			assertEquals(originalValue, BlockChain.getInstance().getAccountRatingChangeCooldownBlocks(repository, activationHeight));
 		}
 	}
 
@@ -344,6 +398,20 @@ public class ChainParameterUpdateTests extends Common {
 	}
 
 	@Test
+	public void testChainParameterUpdateRejectsNegativeAccountRatingCooldownValue() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = getActivationHeightSafelyAfterApproval(repository, 10);
+
+			ChainParameterUpdateTransactionData transactionData = buildAccountRatingCooldownUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, activationHeight, -1);
+
+			assertEquals(Transaction.ValidationResult.INVALID_VALUE_LENGTH,
+					new ChainParameterUpdateTransaction(repository, transactionData).isValid());
+		}
+	}
+
+	@Test
 	public void testChainParameterUpdateRejectsNegativeUnitFeeValue() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -416,6 +484,13 @@ public class ChainParameterUpdateTests extends Common {
 				ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(weights));
 	}
 
+	private static ChainParameterUpdateTransactionData buildAccountRatingCooldownUpdate(Repository repository,
+			PrivateKeyAccount updater, int txGroupId, int activationHeight, int cooldownBlocks) throws DataException {
+		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
+				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.id, activationHeight,
+				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.encodeIntValue(cooldownBlocks));
+	}
+
 	private static ChainParameterUpdateTransactionData buildUnitFeeUpdate(Repository repository,
 			PrivateKeyAccount updater, int txGroupId, int activationHeight, long unitFee) throws DataException {
 		return new ChainParameterUpdateTransactionData(TestTransaction.generateBase(updater, txGroupId),
@@ -448,6 +523,11 @@ public class ChainParameterUpdateTests extends Common {
 				name, "test data");
 
 		return new RegisterNameTransaction(repository, registerNameTransactionData);
+	}
+
+	private static RateAccountTransactionData buildRateAccountTransactionData(PrivateKeyAccount rater,
+			PrivateKeyAccount target, AccountRatingCategory category, int rating) throws DataException {
+		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), category, rating);
 	}
 
 	private static void approveAndSettle(Repository repository, ChainParameterUpdateTransactionData transactionData) throws DataException {

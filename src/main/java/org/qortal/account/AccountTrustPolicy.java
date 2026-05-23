@@ -5,6 +5,8 @@ import org.qortal.block.BlockChain.AccountTrustSettings;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustCategoryImpactData;
 import org.qortal.data.account.AccountTrustStatus;
+import org.qortal.repository.DataException;
+import org.qortal.repository.Repository;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -114,7 +116,11 @@ public final class AccountTrustPolicy {
 	}
 
 	public static int getAccountRatingChangeCooldownBlocks() {
-		return settings().getAccountRatingChangeCooldownBlocks();
+		return BlockChain.getInstance().getAccountRatingChangeCooldownBlocks();
+	}
+
+	public static int getAccountRatingChangeCooldownBlocks(Repository repository, int height) throws DataException {
+		return BlockChain.getInstance().getAccountRatingChangeCooldownBlocks(repository, height);
 	}
 
 	private static LevelDecision calculateManagerLevel(List<AccountTrustCategoryImpactData> impacts) {

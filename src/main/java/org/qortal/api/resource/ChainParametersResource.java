@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortal.api.ApiError;
 import org.qortal.api.ApiErrors;
 import org.qortal.api.ApiExceptionFactory;
+import org.qortal.api.model.AccountRatingCooldownUpdateRequest;
 import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterEffectiveValue;
 import org.qortal.api.model.ChainParameterMetadata;
@@ -239,6 +240,29 @@ public class ChainParametersResource {
 	}
 
 	@GET
+	@Path("/account-rating/cooldown/{height}")
+	@Operation(
+			summary = "Fetch the effective account rating change cooldown at a height",
+			responses = {
+					@ApiResponse(
+							description = "account rating change cooldown in blocks",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "integer")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	public int getAccountRatingCooldown(@PathParam("height") int height) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return BlockChain.getInstance().getAccountRatingChangeCooldownBlocks(repository, height);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
 	@Path("/unit-fee/{height}")
 	@Operation(
 			summary = "Fetch the effective normal transaction unit fee at a height",
@@ -395,6 +419,42 @@ public class ChainParametersResource {
 	}
 
 	@POST
+	@Path("/account-rating/cooldown/update")
+	@Operation(
+			summary = "Build raw, unsigned, ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS chain-parameter update transaction",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_JSON,
+							schema = @Schema(implementation = AccountRatingCooldownUpdateRequest.class)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, CHAIN_PARAMETER_UPDATE transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(type = "string")
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String updateAccountRatingCooldown(AccountRatingCooldownUpdateRequest updateRequest) {
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChainParameterUpdateTransactionData transactionData = buildAccountRatingCooldownTransactionData(updateRequest);
+			return validateAndTransformUpdate(repository, transactionData);
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
 	@Path("/unit-fee/update")
 	@Operation(
 			summary = "Build raw, unsigned, UNIT_FEE chain-parameter update transaction",
@@ -493,6 +553,16 @@ public class ChainParametersResource {
 				ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(updateRequest.weights));
 	}
 
+	private static ChainParameterUpdateTransactionData buildAccountRatingCooldownTransactionData(
+			AccountRatingCooldownUpdateRequest updateRequest) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
+				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
+
+		return new ChainParameterUpdateTransactionData(baseTransactionData,
+				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.id, updateRequest.activationHeight,
+				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.encodeIntValue(updateRequest.cooldownBlocks));
+	}
+
 	private static ChainParameterUpdateTransactionData buildUnitFeeTransactionData(UnitFeeUpdateRequest updateRequest) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(updateRequest.timestamp,
 				updateRequest.txGroupId, updateRequest.updaterPublicKey, updateRequest.fee, updateRequest.nonce, null);
@@ -577,6 +647,9 @@ public class ChainParametersResource {
 
 			case REWARD_SHARE_WEIGHTS:
 				return parameter.encodeIntArrayValue(BlockChain.getInstance().getRewardShareWeights());
+
+			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
+				return parameter.encodeIntValue(BlockChain.getInstance().getAccountRatingChangeCooldownBlocks());
 
 			case UNIT_FEE:
 				return parameter.encodeLongValue(BlockChain.getInstance().getUnitFeeAtTimestamp(fallbackTimestamp));

@@ -54,7 +54,7 @@ public final class AccountRatingValidation {
 
 	public static boolean isRatingChangeTooSoon(Repository repository, byte[] targetPublicKey, byte[] raterPublicKey,
 			AccountRatingCategory category, int candidateChangeHeight) throws DataException {
-		int cooldownBlocks = AccountTrustPolicy.getAccountRatingChangeCooldownBlocks();
+		int cooldownBlocks = AccountTrustPolicy.getAccountRatingChangeCooldownBlocks(repository, candidateChangeHeight);
 		if (cooldownBlocks <= 0)
 			return false;
 

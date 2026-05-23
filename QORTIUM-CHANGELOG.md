@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: add on-chain account rating cooldown updates
+
+Added development-group approved updates for the account rating change cooldown. Qortium can now store a voted cooldown block count on chain, apply it to future rating changes from the approved activation height, expose typed API helpers for proposing and reading the value, and continue falling back to `blockchain.json` when no approved overlay exists.
+
 ### 2026-05-22 - docs: refresh on-chain parameter reference
 
 Updated the on-chain chain-parameter reference so it lists reward share weights as an already supported voted parameter, documents the canonical weight format, and points chain builders to the typed API endpoints for proposing and reading reward-share weight overlays.

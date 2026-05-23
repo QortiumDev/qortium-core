@@ -760,6 +760,19 @@ public class BlockChain {
 		return this.accountTrustSettings;
 	}
 
+	public int getAccountRatingChangeCooldownBlocks() {
+		return this.accountTrustSettings.getAccountRatingChangeCooldownBlocks();
+	}
+
+	public int getAccountRatingChangeCooldownBlocks(Repository repository, int height) throws DataException {
+		ChainParameterData accountRatingCooldownUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.id, height);
+		if (accountRatingCooldownUpdate != null)
+			return ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.decodeIntValue(accountRatingCooldownUpdate.getValue());
+
+		return getAccountRatingChangeCooldownBlocks();
+	}
+
 	public CiyamAtSettings getCiyamAtSettings() {
 		return this.ciyamAtSettings;
 	}

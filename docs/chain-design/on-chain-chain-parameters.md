@@ -12,10 +12,10 @@ built jar for each change.
 
 This is intentionally small at first. The currently supported parameters are
 the height-based block reward, the reward share-bin activation count, reward
-share weights, and the normal and name-registration transaction unit fees.
-Trust-network policy values, timestamp-based settings, and larger structured
-parameter sets should be added only after each format and validation rule is
-made explicit.
+share weights, the account rating change cooldown, and the normal and
+name-registration transaction unit fees. Broader trust-network policy values,
+timestamp-based settings, and larger structured parameter sets should be added
+only after each format and validation rule is made explicit.
 
 ## Approval Model
 
@@ -97,6 +97,17 @@ normalized into the active reward-share bins, and remain effective until another
 approved `REWARD_SHARE_WEIGHTS` update with a later activation height overrides
 them.
 
+`ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS` is parameter ID `6`.
+
+Its value is exactly 4 bytes: a signed integer count of blocks before the same
+rater can change or remove a rating for the same target and category edge.
+Negative values are invalid. A value of zero disables the cooldown.
+
+The approved account rating cooldown applies to `RATE_ACCOUNT` transaction
+validation by candidate block height, and remains effective until another
+approved `ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS` update with a later activation
+height overrides it.
+
 ## Public API
 
 `GET /chain-parameters` lists the chain parameters that this node knows how to
@@ -163,6 +174,14 @@ provide ten integer weights for account levels 1 through 10.
 `GET /chain-parameters/reward-share-weights/{height}` returns the effective
 reward share weights for a height after applying any approved overlay that is
 active at that height.
+
+`POST /chain-parameters/account-rating/cooldown/update` builds an unsigned
+`CHAIN_PARAMETER_UPDATE` transaction for the account rating change cooldown.
+Callers provide the cooldown as a block count.
+
+`GET /chain-parameters/account-rating/cooldown/{height}` returns the effective
+account rating change cooldown for a height after applying any approved overlay
+that is active at that height.
 
 `POST /chain-parameters/unit-fee/update` builds an unsigned
 `CHAIN_PARAMETER_UPDATE` transaction for the normal transaction unit fee. Callers

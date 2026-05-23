@@ -5,6 +5,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
+import org.qortal.api.model.AccountRatingCooldownUpdateRequest;
 import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterEffectiveValue;
 import org.qortal.api.model.ChainParameterMetadata;
@@ -59,7 +60,7 @@ public class ChainParametersApiTests extends ApiCommon {
 	public void testChainParameterMetadataListsBlockReward() {
 		List<ChainParameterMetadata> parameters = this.chainParametersResource.getChainParameters();
 
-		assertEquals(5, parameters.size());
+		assertEquals(6, parameters.size());
 
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.BLOCK_REWARD), ChainParameter.BLOCK_REWARD);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN),
@@ -69,6 +70,8 @@ public class ChainParametersApiTests extends ApiCommon {
 				ChainParameter.NAME_REGISTRATION_UNIT_FEE);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.REWARD_SHARE_WEIGHTS),
 				ChainParameter.REWARD_SHARE_WEIGHTS);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS),
+				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS);
 	}
 
 	@Test
@@ -130,6 +133,27 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
 		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
 		assertArrayEquals(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.encodeIntValue(request.value), transactionData.getValue());
+		assertNotNull(transactionData.getFee());
+	}
+
+	@Test
+	public void testBuildAccountRatingCooldownUpdateUsesCooldownBlocksValue() throws DataException, TransformationException {
+		AccountRatingCooldownUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildAccountRatingCooldownUpdateRequest(repository, 720);
+		}
+
+		String rawTransaction = this.chainParametersResource.updateAccountRatingCooldown(request);
+		ChainParameterUpdateTransactionData transactionData = decodeRawTransaction(rawTransaction);
+
+		assertEquals(ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.id, transactionData.getParameterId());
+		assertEquals(request.activationHeight, transactionData.getActivationHeight());
+		assertEquals(request.timestamp, transactionData.getTimestamp());
+		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
+		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
+		assertArrayEquals(ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.encodeIntValue(request.cooldownBlocks),
+				transactionData.getValue());
 		assertNotNull(transactionData.getFee());
 	}
 
@@ -213,6 +237,15 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testGetAccountRatingCooldownReturnsEffectiveValue() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int height = repository.getBlockRepository().getBlockchainHeight();
+			assertEquals(BlockChain.getInstance().getAccountRatingChangeCooldownBlocks(repository, height),
+					this.chainParametersResource.getAccountRatingCooldown(height));
+		}
+	}
+
+	@Test
 	public void testEffectiveParameterValuesReturnConfigSourcesWithoutProposals() throws DataException {
 		int height;
 		long fallbackTimestamp;
@@ -224,7 +257,7 @@ public class ChainParametersApiTests extends ApiCommon {
 
 		List<ChainParameterEffectiveValue> values = this.chainParametersResource.getEffectiveParameterValues(null);
 
-		assertEquals(5, values.size());
+		assertEquals(6, values.size());
 		assertConfigEffectiveValue(values, ChainParameter.BLOCK_REWARD, height,
 				ChainParameter.BLOCK_REWARD.encodeLongValue(BlockChain.getInstance().getRewardAtHeight(height)));
 		assertConfigEffectiveValue(values, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN, height,
@@ -237,6 +270,9 @@ public class ChainParametersApiTests extends ApiCommon {
 						BlockChain.getInstance().getNameRegistrationUnitFeeAtTimestamp(fallbackTimestamp)));
 		assertConfigEffectiveValue(values, ChainParameter.REWARD_SHARE_WEIGHTS, height,
 				ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(BlockChain.getInstance().getRewardShareWeights()));
+		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS, height,
+				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.encodeIntValue(
+						BlockChain.getInstance().getAccountRatingChangeCooldownBlocks()));
 	}
 
 	@Test
@@ -313,6 +349,17 @@ public class ChainParametersApiTests extends ApiCommon {
 
 		assertApiError(ApiError.TRANSACTION_INVALID,
 				() -> this.chainParametersResource.updateMinAccountsToActivateShareBin(request));
+	}
+
+	@Test
+	public void testBuildAccountRatingCooldownUpdateRejectsNegativeValue() throws DataException {
+		AccountRatingCooldownUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildAccountRatingCooldownUpdateRequest(repository, -1);
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateAccountRatingCooldown(request));
 	}
 
 	@Test
@@ -443,6 +490,41 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals("4", summary.displayValue);
 		assertNull(summary.amount);
 		assertEquals(Integer.valueOf(4), summary.integerValue);
+		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
+		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
+		assertEquals(0, summary.approvalCount);
+		assertEquals(0, summary.rejectionCount);
+		assertEquals(1, summary.approvalAuthorityCount);
+		assertFalse(summary.effectiveNow);
+	}
+
+	@Test
+	public void testPendingAccountRatingCooldownProposalSummaryShowsDecodedValueAndVoteCounts() throws DataException {
+		ChainParameterUpdateTransactionData transactionData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 100;
+
+			transactionData = buildAccountRatingCooldownUpdateTransaction(repository, alice, activationHeight, 720);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+		}
+
+		List<ChainParameterUpdateSummary> summaries = this.chainParametersResource.getChainParameterUpdates(
+				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.id, null, null, null, null, null, null, null, null);
+
+		assertEquals(1, summaries.size());
+
+		ChainParameterUpdateSummary summary = summaries.get(0);
+		assertArrayEquals(transactionData.getSignature(), summary.signature);
+		assertEquals(ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.id, summary.parameterId);
+		assertEquals(ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.name(), summary.parameterName);
+		assertEquals(transactionData.getActivationHeight(), summary.activationHeight);
+		assertArrayEquals(transactionData.getValue(), summary.value);
+		assertEquals("INTEGER", summary.valueType);
+		assertEquals("720", summary.displayValue);
+		assertNull(summary.amount);
+		assertEquals(Integer.valueOf(720), summary.integerValue);
 		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
 		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
 		assertEquals(0, summary.approvalCount);
@@ -701,6 +783,22 @@ public class ChainParametersApiTests extends ApiCommon {
 		return request;
 	}
 
+	private static AccountRatingCooldownUpdateRequest buildAccountRatingCooldownUpdateRequest(
+			Repository repository, int cooldownBlocks) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+		AccountRatingCooldownUpdateRequest request = new AccountRatingCooldownUpdateRequest();
+		request.timestamp = System.currentTimeMillis();
+		request.txGroupId = TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID;
+		request.updaterPublicKey = alice.getPublicKey();
+		request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ 100;
+		request.cooldownBlocks = cooldownBlocks;
+
+		return request;
+	}
+
 	private static UnitFeeUpdateRequest buildUnitFeeUpdateRequest(Repository repository, long unitFee) throws DataException {
 		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 
@@ -760,6 +858,14 @@ public class ChainParametersApiTests extends ApiCommon {
 				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
 				ChainParameter.REWARD_SHARE_WEIGHTS.id, activationHeight,
 				ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(weights));
+	}
+
+	private static ChainParameterUpdateTransactionData buildAccountRatingCooldownUpdateTransaction(
+			Repository repository, PrivateKeyAccount updater, int activationHeight, int cooldownBlocks) throws DataException {
+		return new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.id, activationHeight,
+				ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS.encodeIntValue(cooldownBlocks));
 	}
 
 	private static ChainParameterUpdateTransactionData buildUnitFeeUpdateTransaction(

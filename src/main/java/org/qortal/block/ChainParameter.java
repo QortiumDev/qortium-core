@@ -28,7 +28,11 @@ public enum ChainParameter {
 	REWARD_SHARE_WEIGHTS(5, 10 * Integer.BYTES, "INTEGER_LIST",
 			"Reward share weights for levels 1 through 10, stored as 10 signed integers and normalized into level shares at activation height.",
 			"/chain-parameters/reward-share-weights/update",
-			"/chain-parameters/reward-share-weights/{height}");
+			"/chain-parameters/reward-share-weights/{height}"),
+	ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS(6, Integer.BYTES, "INTEGER",
+			"Number of blocks before the same rater can change or remove a rating for the same target and category edge.",
+			"/chain-parameters/account-rating/cooldown/update",
+			"/chain-parameters/account-rating/cooldown/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 
@@ -82,6 +86,7 @@ public enum ChainParameter {
 				return decodeLongValue(value) >= 0;
 
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
+			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
 				return decodeIntValue(value) >= 0;
 
 			case REWARD_SHARE_WEIGHTS:
@@ -167,6 +172,7 @@ public enum ChainParameter {
 
 		switch (this) {
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
+			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
 				return decodeIntValue(value);
 
 			default:
@@ -198,6 +204,7 @@ public enum ChainParameter {
 				return Amounts.prettyAmount(decodeLongValue(value));
 
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
+			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
 				return Integer.toString(decodeIntValue(value));
 
 			case REWARD_SHARE_WEIGHTS:
