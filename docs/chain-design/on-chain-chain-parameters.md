@@ -11,9 +11,9 @@ on-chain transactions instead of requiring every operator to install a newly
 built jar for each change.
 
 This is intentionally small at first. The currently supported parameters are
-the height-based block reward, the reward share-bin activation count, and the
-normal and name-registration transaction unit fees. Reward split tables,
-trust-network policy values, timestamp-based settings, and larger structured
+the height-based block reward, the reward share-bin activation count, reward
+share weights, and the normal and name-registration transaction unit fees.
+Trust-network policy values, timestamp-based settings, and larger structured
 parameter sets should be added only after each format and validation rule is
 made explicit.
 
@@ -86,6 +86,17 @@ another approved `NAME_REGISTRATION_UNIT_FEE` update with a later activation
 height overrides it. Normal transactions keep using their separate unit-fee
 schedule.
 
+`REWARD_SHARE_WEIGHTS` is parameter ID `5`.
+
+Its value is exactly 40 bytes: ten signed integer weights for account levels 1
+through 10. Negative weights are invalid, and the total weight must be greater
+than zero.
+
+The approved reward share weights apply at their activation height, are
+normalized into the active reward-share bins, and remain effective until another
+approved `REWARD_SHARE_WEIGHTS` update with a later activation height overrides
+them.
+
 ## Public API
 
 `GET /chain-parameters` lists the chain parameters that this node knows how to
@@ -144,6 +155,14 @@ Callers provide the new integer count directly.
 
 `GET /chain-parameters/share-bin/min-accounts/{height}` returns the effective
 activation count for reward share bins at a height.
+
+`POST /chain-parameters/reward-share-weights/update` builds an unsigned
+`CHAIN_PARAMETER_UPDATE` transaction for the reward share weights. Callers
+provide ten integer weights for account levels 1 through 10.
+
+`GET /chain-parameters/reward-share-weights/{height}` returns the effective
+reward share weights for a height after applying any approved overlay that is
+active at that height.
 
 `POST /chain-parameters/unit-fee/update` builds an unsigned
 `CHAIN_PARAMETER_UPDATE` transaction for the normal transaction unit fee. Callers

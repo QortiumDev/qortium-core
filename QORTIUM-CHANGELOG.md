@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - docs: refresh on-chain parameter reference
+
+Updated the on-chain chain-parameter reference so it lists reward share weights as an already supported voted parameter, documents the canonical weight format, and points chain builders to the typed API endpoints for proposing and reading reward-share weight overlays.
+
 ### 2026-05-22 - cleanup: remove stale reward-share minting leftovers
 
 Removed an unused reward-share validation result and its translations, and cleaned up stale wording that still described payout reward shares as possible minting or online-account keys. This keeps the code comments and validation catalog aligned with the current model where self-shares mint and non-self reward shares only allocate payouts.
