@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: add account trust category policy codec
+
+Added the deterministic encoder, decoder, and validation rules for the planned account trust category policy chain parameter. This prepares the full trust threshold and cap table for a future development-group vote while keeping the parameter inactive until the on-chain registry, API builder, and activation path are added.
+
 ### 2026-05-23 - consensus: make account trust category policies height-aware
 
 Prepared account trust category policy thresholds and caps for on-chain governance by routing trust derivation and API policy and explanation views through a height-aware category policy settings object. Current behavior still falls back to `blockchain.json`, but the threshold and cap reads now have the same shape needed for the planned full-table chain parameter.
