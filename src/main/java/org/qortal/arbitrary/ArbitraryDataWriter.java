@@ -209,14 +209,14 @@ public class ArbitraryDataWriter {
             // Single file resource, so try and determine the MIME type
             ContentInfoUtil util = new ContentInfoUtil();
             ContentInfo info = util.findMatch(singleFilePath.toFile());
-            if (info != null) {
-                // Attempt to extract MIME type from file contents
-                this.mimeType = info.getMimeType();
-            }
-            else {
+            String detectedMimeType = info == null ? null : info.getMimeType();
+            if (detectedMimeType == null || detectedMimeType.isBlank()) {
                 // Fall back to using the filename
                 FileNameMap fileNameMap = URLConnection.getFileNameMap();
                 this.mimeType = fileNameMap.getContentTypeFor(singleFilePath.toFile().getName());
+            } else {
+                // Attempt to extract MIME type from file contents
+                this.mimeType = detectedMimeType;
             }
         }
     }

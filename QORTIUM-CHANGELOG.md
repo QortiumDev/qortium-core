@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - arbitrary: preserve metadata mime type fallback
+
+Repaired arbitrary data metadata creation so single-file uploads still fall back to the filename when content-based MIME detection cannot provide a usable value. This keeps common files such as text documents from losing their MIME type in stored metadata.
+
 ### 2026-05-23 - polls: repair poll id and update behavior
 
 Repaired poll updates so existing polls are changed by their stable numeric poll ID instead of relying on a generic save path that did not reliably handle renames. The poll tests now read assigned create-poll IDs from the confirmed transaction record and keep update-poll serialization checks focused on the optional end-time field.
