@@ -141,8 +141,8 @@ public class Block {
 
 	/** Lazy-instantiated expanded info on block's online accounts. */
 	public static class ExpandedAccount {
+		private final Repository repository;
 		private final RewardShareData rewardShareData;
-		private final int sharePercent;
 		private final boolean isRecipientAlsoMinter;
 
 		private final Account mintingAccount;
@@ -153,19 +153,19 @@ public class Block {
 		private final AccountData recipientAccountData;
 
 		ExpandedAccount(Repository repository, RewardShareData rewardShareData, int blockHeight) throws DataException {
+			this.repository = repository;
 			this.rewardShareData = rewardShareData;
-			this.sharePercent = this.rewardShareData.getSharePercent();
 
 			this.mintingAccount = new Account(repository, this.rewardShareData.getMinter());
 			this.mintingAccountData = repository.getAccountRepository().getAccount(this.mintingAccount.getAddress());
 
-			this.isRecipientAlsoMinter = this.rewardShareData.getRecipient().equals(this.mintingAccount.getAddress());
+			this.isRecipientAlsoMinter = this.rewardShareData.isSelfShare();
 			boolean isMinterGroupMember = Groups.memberExistsInAnyGroup(
 					repository.getGroupRepository(),
 					Groups.getGroupIdsToMint(BlockChain.getInstance(), blockHeight),
 					this.mintingAccount.getAddress()
 			);
-			this.isMinterMember = isMinterGroupMember && this.mintingAccount.canMint(true);
+			this.isMinterMember = this.isRecipientAlsoMinter && isMinterGroupMember && this.mintingAccount.canMint(true);
 
 			if (this.isRecipientAlsoMinter) {
 				// Self-share: minter is also recipient
@@ -227,25 +227,30 @@ public class Block {
 			return ourShareBin != null && shareBin.id == ourShareBin.id;
 		}
 
-		public long distribute(long accountAmount, Map<String, Long> balanceChanges) {
-			if (this.isRecipientAlsoMinter) {
-				// minter & recipient the same - simpler case
-				LOGGER.trace(() -> String.format("Minter/recipient account %s share: %s", this.mintingAccount.getAddress(), Amounts.prettyAmount(accountAmount)));
-				if (accountAmount != 0)
-					balanceChanges.merge(this.mintingAccount.getAddress(), accountAmount, Long::sum);
-			} else {
-				// minter & recipient different - extra work needed
-				long recipientAmount = (accountAmount * this.sharePercent) / 100L / 100L; // because scaled by 2dp and 'percent' means "per 100"
-				long minterAmount = accountAmount - recipientAmount;
+		public long distribute(long accountAmount, Map<String, Long> balanceChanges) throws DataException {
+			List<RewardShareData> rewardShares = this.repository.getAccountRepository()
+					.getRewardShares(this.rewardShareData.getMinterPublicKey());
 
-				LOGGER.trace(() -> String.format("Minter account %s share: %s", this.mintingAccount.getAddress(), Amounts.prettyAmount(minterAmount)));
-				if (minterAmount != 0)
-					balanceChanges.merge(this.mintingAccount.getAddress(), minterAmount, Long::sum);
+			long recipientTotal = 0L;
+			for (RewardShareData rewardShare : rewardShares) {
+				if (rewardShare.isSelfShare() || rewardShare.getSharePercent() <= 0)
+					continue;
 
-				LOGGER.trace(() -> String.format("Recipient account %s share: %s", this.recipientAccount.getAddress(), Amounts.prettyAmount(recipientAmount)));
+				long recipientAmount = (accountAmount * rewardShare.getSharePercent()) / 100L / 100L; // because scaled by 2dp and 'percent' means "per 100"
+				recipientTotal += recipientAmount;
+
+				LOGGER.trace(() -> String.format("Recipient account %s share: %s", rewardShare.getRecipient(), Amounts.prettyAmount(recipientAmount)));
 				if (recipientAmount != 0)
-					balanceChanges.merge(this.recipientAccount.getAddress(), recipientAmount, Long::sum);
+					balanceChanges.merge(rewardShare.getRecipient(), recipientAmount, Long::sum);
 			}
+
+			long minterAmount = accountAmount - recipientTotal;
+			if (minterAmount < 0)
+				throw new DataException("Reward-share payouts exceed minter reward");
+
+			LOGGER.trace(() -> String.format("Minter account %s share: %s", this.mintingAccount.getAddress(), Amounts.prettyAmount(minterAmount)));
+			if (minterAmount != 0)
+				balanceChanges.merge(this.mintingAccount.getAddress(), minterAmount, Long::sum);
 
 			// We always distribute all of the amount
 			return accountAmount;
@@ -2362,9 +2367,10 @@ public class Block {
 		/*
 		 * Distribution rules:
 		 *
-		 * Distribution is based on minting accounts from 'online' reward-shares that
-		 * belong to a configured minting group. Active account-level share bins are
-		 * normalized to distribute the full block reward to eligible online minters.
+		 * Distribution is based on minting accounts from online self-shares that belong
+		 * to a configured minting group. Active account-level share bins are normalized
+		 * to distribute the full block reward to eligible online minters, then each
+		 * minter's payout reward-shares are applied to that minter's earned amount.
 		 */
 		List<AccountLevelShareBin> accountLevelShareBinsForBlock = BlockChain.getInstance()
 				.getAccountLevelShareBins(this.repository, this.blockData.getHeight());
@@ -2496,7 +2502,7 @@ public class Block {
 		return distibutionShare * accountAddressess.size();
 	}
 
-	private static long distributeBlockRewardShare(long distributionAmount, List<ExpandedAccount> accounts, Map<String, Long> balanceChanges) {
+	private static long distributeBlockRewardShare(long distributionAmount, List<ExpandedAccount> accounts, Map<String, Long> balanceChanges) throws DataException {
 		// Collate all expanded accounts by minting account
 		Map<String, List<ExpandedAccount>> accountsByMinter = new HashMap<>();
 

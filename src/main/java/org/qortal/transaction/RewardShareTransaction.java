@@ -63,6 +63,25 @@ public class RewardShareTransaction extends Transaction {
 				&& Arrays.equals(rewardShareData.getRewardSharePublicKey(), this.rewardShareTransactionData.getRewardSharePublicKey());
 	}
 
+	private int calculateResultingExternalSharePercent(RewardShareData existingRewardShareData,
+			boolean isCancellingSharePercent, boolean isRecipientAlsoMinter) throws DataException {
+		int totalSharePercent = 0;
+
+		for (RewardShareData rewardShareData : this.repository.getAccountRepository()
+				.getRewardShares(this.rewardShareTransactionData.getMinterPublicKey())) {
+			if (!rewardShareData.isSelfShare())
+				totalSharePercent += rewardShareData.getSharePercent();
+		}
+
+		if (existingRewardShareData != null && !existingRewardShareData.isSelfShare())
+			totalSharePercent -= existingRewardShareData.getSharePercent();
+
+		if (!isCancellingSharePercent && !isRecipientAlsoMinter)
+			totalSharePercent += this.rewardShareTransactionData.getSharePercent();
+
+		return totalSharePercent;
+	}
+
 	// Navigation
 
 	public PublicKeyAccount getMintingAccount() {
@@ -123,6 +142,11 @@ public class RewardShareTransaction extends Transaction {
 		// or reusing the same reward-share public key for a different minter/recipient pair.
 		if (existingRewardShareData != null && !this.doesRewardShareMatch(existingRewardShareData))
 			return ValidationResult.INVALID_PUBLIC_KEY;
+
+		if (!isCancellingSharePercent && !isRecipientAlsoMinter
+				&& this.calculateResultingExternalSharePercent(existingRewardShareData, isCancellingSharePercent,
+				isRecipientAlsoMinter) > MAX_SHARE)
+			return ValidationResult.INVALID_REWARD_SHARE_PERCENT;
 
 		if (existingRewardShareData == null) {
 			// This is a new reward-share

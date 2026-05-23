@@ -42,15 +42,15 @@ public class DisagreementTests extends Common {
 
 	/**
 	 * Testing minting a block when there is a signed online account timestamp present
-	 * that no longer has a corresponding reward-share in DB.
+	 * for a non-self payout reward-share.
 	 * <p>
 	 * Something like:
 	 * <ul>
 	 * <li>Mint block, with tx to create reward-share R</li>
 	 * <li>Sign current timestamp with R</li>
-	 * <li>Mint block including R as online account</li>
+	 * <li>Mint block and confirm R is not included as an online account</li>
 	 * <li>Mint block, with tx to cancel reward-share R</li>
-	 * <li>Mint another block: R's timestamp should be excluded</li>
+	 * <li>Mint another block: R's timestamp should still be excluded</li>
 	 * </ul>
 	 * 
 	 * @throws DataException
@@ -77,11 +77,11 @@ public class DisagreementTests extends Common {
 			// Mint another block
 			BlockMinter.mintTestingBlockRetainingTimestamps(repository, mintingAccount);
 
-			// Confirm reward-share's signed timestamp is included
+			// Confirm non-self reward-share's signed timestamp is not included
 			BlockData blockData = repository.getBlockRepository().getLastBlock();
 			List<RewardShareData> rewardSharesData = fetchRewardSharesForBlock(repository, blockData);
 			boolean doesContainRewardShare = rewardSharesData.stream().anyMatch(rewardShareData -> Arrays.equals(rewardShareData.getRewardSharePublicKey(), testRewardShareData.getRewardSharePublicKey()));
-			assertTrue(doesContainRewardShare);
+			assertFalse(doesContainRewardShare);
 
 			// Cancel reward-share
 			TransactionData cancelRewardShareTransactionData = AccountUtils.createRewardShare(repository, "alice", "bob", CANCEL_SHARE_PERCENT);

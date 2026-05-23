@@ -25,6 +25,7 @@ import static org.junit.Assert.*;
 public class RewardShareTests extends Common {
 
 	private static final int CANCEL_SHARE_PERCENT = -1;
+	private static final int MAX_REWARD_SHARES = 100;
 
 	@Before
 	public void beforeTest() throws DataException {
@@ -270,18 +271,45 @@ public class RewardShareTests extends Common {
 	}
 
 	@Test
+	public void testExternalShareTotalCannotExceedFullReward() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount aliceAccount = Common.getTestAccount(repository, "alice");
+
+			AccountUtils.rewardShare(repository, "alice", "bob", 60_00);
+			AccountUtils.rewardShare(repository, "alice", "chloe", 40_00);
+
+			TransactionData overTotalTransactionData = AccountUtils.createRewardShare(repository, "alice", "dilbert", 1_00);
+			Transaction overTotalTransaction = Transaction.fromData(repository, overTotalTransactionData);
+			assertEquals("External reward-share total above 100% should be rejected",
+					ValidationResult.INVALID_REWARD_SHARE_PERCENT, overTotalTransaction.isValidUnconfirmed());
+
+			TransactionData overTotalUpdateData = AccountUtils.createRewardShare(repository, "alice", "bob", 61_00);
+			Transaction overTotalUpdate = Transaction.fromData(repository, overTotalUpdateData);
+			assertEquals("Reward-share update above 100% total should be rejected",
+					ValidationResult.INVALID_REWARD_SHARE_PERCENT, overTotalUpdate.isValidUnconfirmed());
+
+			TransactionData cancelChloeData = AccountUtils.createRewardShare(repository, "alice", "chloe", CANCEL_SHARE_PERCENT);
+			TransactionUtils.signAndMint(repository, cancelChloeData, aliceAccount);
+
+			Transaction validUpdate = Transaction.fromData(repository, overTotalUpdateData);
+			assertEquals("Cancelling a share should free external share capacity",
+					ValidationResult.OK, validUpdate.isValidUnconfirmed());
+		}
+	}
+
+	@Test
 	public void testCreateRewardSharesAtBaselineLimit() throws DataException {
 		final int sharePercent = 0;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount dilbertAccount = Common.getTestAccount(repository, "dilbert");
 
-			// Create 6 reward shares
-			for (int i=0; i<6; i++) {
+			// Create reward shares up to the current baseline limit.
+			for (int i=0; i<MAX_REWARD_SHARES; i++) {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
 			}
 
-			// 7th reward share should fail because we've reached the current baseline limit.
+			// Next reward share should fail because we've reached the current baseline limit.
 			AssertionError assertionError = null;
 			try {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
@@ -302,12 +330,12 @@ public class RewardShareTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount dilbertAccount = Common.getTestAccount(repository, "dilbert");
 
-			// Create 6 reward shares
-			for (int i=0; i<6; i++) {
+			// Create reward shares up to the configured fixture limit.
+			for (int i=0; i<MAX_REWARD_SHARES; i++) {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
 			}
 
-			// 7th reward share should fail because we've reached the simple maximum share limit.
+			// Next reward share should fail because we've reached the simple maximum share limit.
 			AssertionError assertionError = null;
 			try {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
@@ -328,15 +356,15 @@ public class RewardShareTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount dilbertAccount = Common.getTestAccount(repository, "dilbert");
 
-			// Create 5 reward shares
-			for (int i=0; i<5; i++) {
+			// Create reward shares up to one below the configured fixture limit.
+			for (int i=0; i<MAX_REWARD_SHARES - 1; i++) {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);
 			}
 
 			// Create a self share, which should succeed as it simply counts toward the same overall share limit
 			AccountUtils.rewardShare(repository, dilbertAccount, dilbertAccount, sharePercent);
 
-			// 7th reward share should fail because we've reached the limit (including the self share).
+			// Next reward share should fail because we've reached the limit (including the self share).
 			AssertionError assertionError = null;
 			try {
 				AccountUtils.rewardShare(repository, dilbertAccount, Common.generateRandomSeedAccount(repository), sharePercent);

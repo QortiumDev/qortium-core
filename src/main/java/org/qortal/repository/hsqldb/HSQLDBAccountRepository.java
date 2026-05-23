@@ -626,6 +626,32 @@ public class HSQLDBAccountRepository implements AccountRepository {
 	}
 
 	@Override
+	public List<RewardShareData> getRewardShares(byte[] minterPublicKey) throws DataException {
+		String sql = "SELECT minter, recipient, share_percent, reward_share_public_key FROM RewardShares "
+				+ "WHERE minter_public_key = ? ORDER BY recipient";
+
+		List<RewardShareData> rewardShares = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, minterPublicKey)) {
+			if (resultSet == null)
+				return rewardShares;
+
+			do {
+				String minter = resultSet.getString(1);
+				String recipient = resultSet.getString(2);
+				int sharePercent = resultSet.getInt(3);
+				byte[] rewardSharePublicKey = resultSet.getBytes(4);
+
+				rewardShares.add(new RewardShareData(minterPublicKey, minter, recipient, rewardSharePublicKey, sharePercent));
+			} while (resultSet.next());
+
+			return rewardShares;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch reward-shares for minter from repository", e);
+		}
+	}
+
+	@Override
 	public List<RewardShareData> getRewardShares() throws DataException {
 		String sql = "SELECT minter_public_key, minter, recipient, share_percent, reward_share_public_key FROM RewardShares";
 

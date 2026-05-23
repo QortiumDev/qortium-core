@@ -191,13 +191,13 @@ public class RewardTests extends Common {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			mintAliceToLevel(repository, 1);
 
-			byte[] rewardSharePrivateKey = AccountUtils.rewardShare(repository, "alice", "bob", share);
-			PrivateKeyAccount rewardShareAccount = new PrivateKeyAccount(repository, rewardSharePrivateKey);
+			AccountUtils.rewardShare(repository, "alice", "bob", share);
+			PrivateKeyAccount aliceSelfShare = Common.getTestAccount(repository, "alice-reward-share");
 
 			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
 			Long blockReward = BlockUtils.getNextBlockReward(repository);
 
-			BlockMinter.mintTestingBlock(repository, rewardShareAccount);
+			BlockMinter.mintTestingBlock(repository, aliceSelfShare);
 
 			// Bob receives 12.8% of Alice's normalized minter reward.
 			long bobShare = (blockReward * share) / 100L / 100L;
@@ -205,6 +205,33 @@ public class RewardTests extends Common {
 
 			long aliceShare = blockReward - bobShare;
 			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE, initialBalances.get("alice").get(Asset.NATIVE) + aliceShare);
+		}
+	}
+
+	@Test
+	public void testMultipleRewardShareRecipientsUseMinterReward() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			mintAliceToLevel(repository, 1);
+
+			AccountUtils.rewardShare(repository, "alice", "bob", 25_00);
+			AccountUtils.rewardShare(repository, "alice", "chloe", 25_00);
+			AccountUtils.rewardShare(repository, "alice", "dilbert", 50_00);
+
+			PrivateKeyAccount aliceSelfShare = Common.getTestAccount(repository, "alice-reward-share");
+
+			Map<String, Map<Long, Long>> initialBalances = AccountUtils.getBalances(repository, Asset.NATIVE);
+			long blockReward = BlockUtils.getNextBlockReward(repository);
+
+			BlockMinter.mintTestingBlock(repository, aliceSelfShare);
+
+			AccountUtils.assertBalance(repository, "bob", Asset.NATIVE,
+					initialBalances.get("bob").get(Asset.NATIVE) + (blockReward * 25L) / 100L);
+			AccountUtils.assertBalance(repository, "chloe", Asset.NATIVE,
+					initialBalances.get("chloe").get(Asset.NATIVE) + (blockReward * 25L) / 100L);
+			AccountUtils.assertBalance(repository, "dilbert", Asset.NATIVE,
+					initialBalances.get("dilbert").get(Asset.NATIVE) + (blockReward * 50L) / 100L);
+			AccountUtils.assertBalance(repository, "alice", Asset.NATIVE,
+					initialBalances.get("alice").get(Asset.NATIVE));
 		}
 	}
 
@@ -219,14 +246,13 @@ public class RewardTests extends Common {
 
 			assertEquals(0, (int) chloe.getLevel());
 
-			// Alice needs to mint block containing REWARD_SHARE BEFORE Alice loses minting privs
-			byte[] aliceChloeRewardSharePrivateKey = AccountUtils.rewardShare(repository, "alice", "chloe", 0); // Block minted by Alice
-			PrivateKeyAccount aliceChloeRewardShareAccount = new PrivateKeyAccount(repository, aliceChloeRewardSharePrivateKey);
+			AccountUtils.rewardShare(repository, "alice", "chloe", 100_00);
+			PrivateKeyAccount aliceSelfShare = Common.getTestAccount(repository, "alice-reward-share");
 
 			final int minterBlocksNeeded = cumulativeBlocksByLevel.get(1);
 			// Mint enough blocks that Chloe would have reached level 1 under the old recipient-credit behavior.
 			for (int bc = 0; bc < minterBlocksNeeded; ++bc)
-				BlockMinter.mintTestingBlock(repository, aliceChloeRewardShareAccount);
+				BlockMinter.mintTestingBlock(repository, aliceSelfShare);
 
 			assertEquals(0, (int) chloe.getLevel());
 

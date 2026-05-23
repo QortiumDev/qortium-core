@@ -450,6 +450,9 @@ public class Account {
 		if (rewardShareData == null)
 			return "Unknown";
 
+		if (!rewardShareData.isSelfShare())
+			return "Unknown";
+
 		return rewardShareData.getMinter();
 	}
 
@@ -494,6 +497,9 @@ public class Account {
 	public static Integer getRewardShareEffectiveMintingLevelIfMinting(Repository repository, byte[] rewardSharePublicKey) throws DataException {
 		RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(rewardSharePublicKey);
 		if (rewardShareData == null)
+			return null;
+
+		if (!rewardShareData.isSelfShare())
 			return null;
 
 		Account rewardShareMinter = new Account(repository, rewardShareData.getMinter());

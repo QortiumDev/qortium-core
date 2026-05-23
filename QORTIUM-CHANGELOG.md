@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-22 - consensus: decouple reward-share payouts from minting keys
+
+Changed reward shares so non-self shares are payout allocation records instead of separate minting keys. A minter now earns rewards through their online self-share, then the minter's configured payout shares are applied to that earned amount and recipients can receive rewards without being online or in the minting group. Total external payout shares are capped at 100 percent, and the practical per-minter reward-share limit is raised to 100 records.
+
 ### 2026-05-22 - consensus: remove reward-share creation eligibility gate
 
 Removed the old minting-eligibility check from reward-share creation. Accounts can now publish self-share signing-key records or normal reward-share payout records without already being eligible to mint, while block production and online-account checks still ignore reward-share keys whose minter is not currently allowed to mint. This keeps reward shares focused on payout/signing records instead of using them as the minting permission mechanism.

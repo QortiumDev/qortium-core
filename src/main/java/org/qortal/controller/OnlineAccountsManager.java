@@ -344,6 +344,10 @@ public class OnlineAccountsManager {
             LOGGER.trace(() -> String.format("Rejecting unknown online reward-share public key %s", Base58.encode(rewardSharePublicKey)));
             return false;
         }
+        else if (!rewardShareData.isSelfShare()) {
+            LOGGER.trace(() -> String.format("Rejecting online payout reward-share public key %s", Base58.encode(rewardSharePublicKey)));
+            return false;
+        }
         // reject account address that are not in the MINTER Group
         else if( !mintingGroupMemberAddresses.contains(rewardShareData.getMinter())) {
             LOGGER.trace(() -> String.format("Rejecting online reward-share that is not in MINTER Group, account %s", rewardShareData.getMinter()));
@@ -533,6 +537,11 @@ public class OnlineAccountsManager {
                     RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(mintingAccountData.getPublicKey());
                     if (rewardShareData == null) {
                         // Reward-share doesn't even exist - probably not a good sign
+                        iterator.remove();
+                        continue;
+                    }
+
+                    if (!rewardShareData.isSelfShare()) {
                         iterator.remove();
                         continue;
                     }

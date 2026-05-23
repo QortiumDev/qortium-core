@@ -707,7 +707,7 @@ public class AdminResource {
 
 			// Account must derive to known reward-share public key
 			RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(mintingAccount.getPublicKey());
-			if (rewardShareData == null)
+			if (rewardShareData == null || !rewardShareData.isSelfShare())
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
 
 			// Check reward-share's minting account is still allowed to mint

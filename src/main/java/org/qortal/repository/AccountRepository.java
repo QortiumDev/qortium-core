@@ -166,6 +166,9 @@ public interface AccountRepository {
 	/** Returns number of active self-shares involving passed public key as the minting account only. */
 	public int countSelfShares(byte[] mintingAccountPublicKey) throws DataException;
 
+	/** Returns active reward-shares involving passed public key as the minting account only. */
+	public List<RewardShareData> getRewardShares(byte[] mintingAccountPublicKey) throws DataException;
+
 	public List<RewardShareData> getRewardShares() throws DataException;
 
 	public List<RewardShareData> findRewardShares(List<String> mintingAccounts, List<String> recipientAccounts, List<String> involvedAddresses, Integer limit, Integer offset, Boolean reverse) throws DataException;

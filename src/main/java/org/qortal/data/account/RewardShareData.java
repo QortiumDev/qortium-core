@@ -61,6 +61,10 @@ public class RewardShareData {
 		return this.rewardSharePublicKey;
 	}
 
+	public boolean isSelfShare() {
+		return this.minter.equals(this.recipient);
+	}
+
 	/** Returns share percent scaled by 100. i.e. 12.34% is represented by 1234 */
 	public int getSharePercent() {
 		return this.sharePercent;

@@ -150,6 +150,11 @@ public class BlockMinter extends Thread {
 								continue;
 							}
 
+							if (!rewardShareData.isSelfShare()) {
+								madi.remove();
+								continue;
+							}
+
 							Account mintingAccount = new Account(repository, rewardShareData.getMinter());
 							if (!mintingAccount.canMint(true)) {
 								// Minting-account component of reward-share can no longer mint - disregard

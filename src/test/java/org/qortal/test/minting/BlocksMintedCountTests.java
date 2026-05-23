@@ -3,6 +3,7 @@ package org.qortal.test.minting;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.block.BlockChain;
 import org.qortal.controller.BlockMinter;
@@ -45,8 +46,12 @@ public class BlocksMintedCountTests extends Common {
 			// Confirm reward-share info set correctly
 			RewardShareData testRewardShareData = repository.getAccountRepository().getRewardShare(testRewardShareAccount.getPublicKey());
 			assertNotNull(testRewardShareData);
+			assertFalse("Non-self reward-share should not be a minting key",
+					Account.canRewardShareMint(repository, testRewardShareAccount.getPublicKey()));
 
-			testRewardShare(repository, testRewardShareAccount, +1, 0);
+			OnlineAccountsManager.getInstance().ensureTestingAccountsOnline(testRewardShareAccount);
+			assertNull("Non-self reward-share should not mint blocks",
+					BlockMinter.mintTestingBlockRetainingTimestamps(repository, testRewardShareAccount));
 		}
 	}
 
@@ -82,9 +87,9 @@ public class BlocksMintedCountTests extends Common {
 			// Create signed timestamps
 			OnlineAccountsManager.getInstance().ensureTestingAccountsOnline(mintingAccount, testRewardShareAccount);
 
-			// Even though Alice features in two online reward-shares, she should only gain +1 blocksMinted
-			// Bob only receives the reward-share payout, so his blocksMinted count should not increase
-			testRewardShareRetainingTimestamps(repository, testRewardShareAccount, +1, 0);
+			// The non-self reward-share is only a payout record, so Alice's self-share remains the minting key.
+			// Bob only receives reward-share payouts, so his blocksMinted count should not increase.
+			testRewardShareRetainingTimestamps(repository, mintingAccount, +1, 0);
 		}
 	}
 

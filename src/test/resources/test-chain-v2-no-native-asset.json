@@ -75,7 +75,7 @@
 	"minAccountLevelToMint": 0,
 	"minAccountLevelForBlockSubmissions": 0,
 	"maxRewardSharesByTimestamp": [
-		{ "timestamp": 0, "maxShares": 6 }
+		{ "timestamp": 0, "maxShares": 100 }
 	],
 	"onlineAccountSignaturesMinLifetime": 3600000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,
