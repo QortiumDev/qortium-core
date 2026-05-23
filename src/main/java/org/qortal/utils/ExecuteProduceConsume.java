@@ -49,6 +49,9 @@ public abstract class ExecuteProduceConsume implements Runnable {
 	/** Whether a new thread has already been spawned and is waiting to start. Used to prevent spawning multiple new threads. */
 	private AtomicBoolean hasThreadPending = new AtomicBoolean(false);
 
+	/** Whether shutdown has been requested. Used to distinguish intentional final-thread exit from unexpected EPC death. */
+	private AtomicBoolean isShuttingDown = new AtomicBoolean(false);
+
 	/**
 	 * Log "stall risk" when spawning a new thread and active count >= this.
 	 * Heuristic: typical pool max is 512 (see Settings.maxNetworkThreadPoolSize); we log when we're
@@ -73,10 +76,12 @@ public abstract class ExecuteProduceConsume implements Runnable {
 	}
 
 	public void shutdown() {
+		this.isShuttingDown.set(true);
 		this.executor.shutdownNow();
 	}
 
 	public boolean shutdown(long timeout) throws InterruptedException {
+		this.isShuttingDown.set(true);
 		this.executor.shutdownNow();
 		return this.executor.awaitTermination(timeout, TimeUnit.MILLISECONDS);
 	}
@@ -252,8 +257,12 @@ public abstract class ExecuteProduceConsume implements Runnable {
 			
 			// CRITICAL WARNING: If this is the last thread, the EPC is now dead!
 			if (finalActiveCount == 0) {
-				this.logger.error("[{}] CRITICAL: Last EPC thread exiting! EPC is now DEAD - no threads left to produce tasks!", 
-						Thread.currentThread().getId());
+				if (this.isShuttingDown.get()) {
+					this.logger.debug("[{}] Last EPC thread exited during shutdown", Thread.currentThread().getId());
+				} else {
+					this.logger.error("[{}] CRITICAL: Last EPC thread exiting! EPC is now DEAD - no threads left to produce tasks!",
+							Thread.currentThread().getId());
+				}
 			}
 			
 			Thread.currentThread().setName(this.className);

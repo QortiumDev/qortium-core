@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - utils: avoid EPC critical log during shutdown
+
+Changed the execute-produce-consume worker utility so normal shutdown no longer reports the final worker thread exit as a critical error. Unexpected worker-pool death still logs loudly, but clean shutdowns now leave the test and node logs focused on real problems.
+
 ### 2026-05-23 - test: close repository transactions in warning cases
 
 Cleaned up repository tests that intentionally trigger failed orphan work or direct database writes so they now explicitly commit or roll back before closing their repository handles. This removes noisy critical transaction warnings from the test reports and makes the remaining test output easier to trust.
