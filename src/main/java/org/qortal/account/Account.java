@@ -211,7 +211,9 @@ public class Account {
 
 		AccountTrustSnapshotData activeTrustSnapshot = this.repository.getAccountRatingRepository()
 				.getTrustDerivationSnapshot(this.address, AccountTrustWeight.getActiveWeightCategory());
-		return AccountTrustWeight.calculateEffectiveVoteWeight(accountData.getBlocksMinted(), activeTrustSnapshot);
+		int blockchainHeight = this.repository.getBlockRepository().getBlockchainHeight();
+		return AccountTrustWeight.calculateEffectiveVoteWeight(this.repository, blockchainHeight,
+				accountData.getBlocksMinted(), activeTrustSnapshot);
 	}
 
 	/** Returns account's blockMinted (0+) or null if account not found in repository. */

@@ -2,6 +2,7 @@ package org.qortal.test.api;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.account.Account;
 import org.qortal.account.AccountTrustDerivation;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
@@ -283,11 +284,14 @@ public class AccountRatingsApiTests extends ApiCommon {
 			approveTrustStatusVoteWeightsOverlay(repository, voteWeights);
 			setVoteAccount(repository, alice, 100);
 			setVoteAccount(repository, bob, 100);
-				replaceTrustSnapshots(repository, repository.getBlockRepository().getBlockchainHeight(),
-						repository.getBlockRepository().getLastBlock().getTimestamp(),
-						trustDerivation(alice, true, categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.GOLD)),
-						trustDerivation(bob, true, categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.BRONZE)));
-			}
+			replaceTrustSnapshots(repository, repository.getBlockRepository().getBlockchainHeight(),
+					repository.getBlockRepository().getLastBlock().getTimestamp(),
+					trustDerivation(alice, true, categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.GOLD)),
+					trustDerivation(bob, true, categoryTrust(AccountRatingCategory.SUBJECT, AccountTrustStatus.BRONZE)));
+
+			assertEquals(90, new Account(repository, alice.getAddress()).getEffectiveVoteWeight());
+			assertEquals(50, new Account(repository, bob.getAddress()).getEffectiveVoteWeight());
+		}
 
 		AccountTrustSummaryData summary = this.accountRatingsResource.getAccountTrustSummary();
 

@@ -91,7 +91,8 @@ schedule.
 
 Its value is exactly 40 bytes: ten signed integer weights for account levels 1
 through 10. Negative weights are invalid, and the total weight must be greater
-than zero.
+than zero. The level 1 weight must also be positive so the reward floor cannot
+be removed by an approved weight table.
 
 The approved reward share weights apply at their activation height, are
 normalized into the active reward-share bins, and remain effective until another
@@ -113,7 +114,8 @@ height overrides it.
 
 Its value is exactly 20 bytes: five signed integer percentages ordered as
 `SUSPICIOUS`, `UNVERIFIED`, `BRONZE`, `SILVER`, and `GOLD`. Each percentage
-must be between 0 and 100, inclusive.
+must be between 0 and 100, inclusive. At least one status must have a positive
+vote-weight percentage.
 
 The approved trust status vote weights apply to trust-weighted voting, resource
 rating weights, account-trust summaries, and account-trust profile/policy API

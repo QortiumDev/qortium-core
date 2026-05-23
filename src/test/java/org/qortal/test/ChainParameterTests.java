@@ -5,8 +5,10 @@ import org.qortal.block.ChainParameter;
 import org.qortal.utils.Amounts;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class ChainParameterTests {
 
@@ -124,5 +126,28 @@ public class ChainParameterTests {
 		byte[] negativeValue = ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.encodeIntValue(-1);
 		assertNull(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.decodeIntegerValue(negativeValue));
 		assertNull(ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN.formatDisplayValue(negativeValue));
+	}
+
+	@Test
+	public void testRewardShareWeightsRequirePositiveLevelOneWeight() {
+		assertTrue(ChainParameter.REWARD_SHARE_WEIGHTS.isValidValue(
+				ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(
+						new int[] { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 })));
+
+		assertFalse(ChainParameter.REWARD_SHARE_WEIGHTS.isValidValue(
+				ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(
+						new int[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 })));
+		assertFalse(ChainParameter.REWARD_SHARE_WEIGHTS.isValidValue(
+				ChainParameter.REWARD_SHARE_WEIGHTS.encodeIntArrayValue(
+						new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 })));
+	}
+
+	@Test
+	public void testTrustStatusVoteWeightsRequireAtLeastOnePositiveWeight() {
+		assertTrue(ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.isValidValue(
+				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.encodeIntArrayValue(new int[] { 0, 0, 0, 0, 100 })));
+
+		assertFalse(ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.isValidValue(
+				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS.encodeIntArrayValue(new int[] { 0, 0, 0, 0, 0 })));
 	}
 }

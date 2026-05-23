@@ -103,15 +103,20 @@ public enum ChainParameter {
 					totalWeight += weight;
 				}
 
-				return totalWeight > 0;
+				return weights[0] > 0 && totalWeight > 0;
 
 			case ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS:
 				int[] voteWeightPercents = decodeIntArrayValue(value);
-				for (int voteWeightPercent : voteWeightPercents)
+				boolean hasPositiveVoteWeight = false;
+				for (int voteWeightPercent : voteWeightPercents) {
 					if (voteWeightPercent < 0 || voteWeightPercent > 100)
 						return false;
 
-				return true;
+					if (voteWeightPercent > 0)
+						hasPositiveVoteWeight = true;
+				}
+
+				return hasPositiveVoteWeight;
 
 			default:
 				return false;

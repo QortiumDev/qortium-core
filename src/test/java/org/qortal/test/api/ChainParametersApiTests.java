@@ -426,18 +426,23 @@ public class ChainParametersApiTests extends ApiCommon {
 	public void testBuildRewardShareWeightsUpdateRejectsInvalidWeights() throws DataException {
 		RewardShareWeightsUpdateRequest shortRequest;
 		RewardShareWeightsUpdateRequest negativeRequest;
+		RewardShareWeightsUpdateRequest zeroLevelOneRequest;
 		RewardShareWeightsUpdateRequest zeroRequest;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			shortRequest = buildRewardShareWeightsUpdateRequest(repository, new int[] { 1, 2, 3 });
 			negativeRequest = buildRewardShareWeightsUpdateRequest(repository,
 					new int[] { 1, 2, 3, 4, 5, -6, 7, 8, 9, 10 });
+			zeroLevelOneRequest = buildRewardShareWeightsUpdateRequest(repository,
+					new int[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 });
 			zeroRequest = buildRewardShareWeightsUpdateRequest(repository,
 					new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 });
 		}
 
 		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateRewardShareWeights(shortRequest));
 		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateRewardShareWeights(negativeRequest));
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateRewardShareWeights(zeroLevelOneRequest));
 		assertApiError(ApiError.TRANSACTION_INVALID, () -> this.chainParametersResource.updateRewardShareWeights(zeroRequest));
 	}
 
@@ -446,11 +451,13 @@ public class ChainParametersApiTests extends ApiCommon {
 		TrustStatusVoteWeightsUpdateRequest shortRequest;
 		TrustStatusVoteWeightsUpdateRequest negativeRequest;
 		TrustStatusVoteWeightsUpdateRequest excessiveRequest;
+		TrustStatusVoteWeightsUpdateRequest zeroRequest;
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			shortRequest = buildTrustStatusVoteWeightsUpdateRequest(repository, new int[] { 0, 40, 70 });
 			negativeRequest = buildTrustStatusVoteWeightsUpdateRequest(repository, new int[] { 0, -1, 40, 70, 100 });
 			excessiveRequest = buildTrustStatusVoteWeightsUpdateRequest(repository, new int[] { 0, 10, 40, 70, 101 });
+			zeroRequest = buildTrustStatusVoteWeightsUpdateRequest(repository, new int[] { 0, 0, 0, 0, 0 });
 		}
 
 		assertApiError(ApiError.TRANSACTION_INVALID,
@@ -459,6 +466,8 @@ public class ChainParametersApiTests extends ApiCommon {
 				() -> this.chainParametersResource.updateTrustStatusVoteWeights(negativeRequest));
 		assertApiError(ApiError.TRANSACTION_INVALID,
 				() -> this.chainParametersResource.updateTrustStatusVoteWeights(excessiveRequest));
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateTrustStatusVoteWeights(zeroRequest));
 	}
 
 	@Test

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - consensus: tighten chain parameter validation guards
+
+Tightened the first on-chain parameter validation rules so approved reward-share weight updates must keep a positive level 1 reward floor, and trust status vote-weight updates cannot set every status to zero weight. Also updated the remaining account vote-weight helper to use the active on-chain trust vote weights, keeping direct account lookups aligned with the API and voting paths.
+
 ### 2026-05-23 - consensus: add on-chain trust status vote weight updates
 
 Added development-group approved updates for the trust status vote-weight percentages used by account-trust voting calculations. Qortium can now store voted weights for Suspicious, Unverified, Bronze, Silver, and Gold statuses on chain, apply them automatically from the approved activation height, expose typed API helpers for proposing and reading the values, and keep falling back to `blockchain.json` when no approved overlay exists.
