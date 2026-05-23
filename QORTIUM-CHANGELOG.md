@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-23 - docs: define account trust category policy parameter format
+
+Defined the planned on-chain format for account trust category policy updates before implementing it. The design reserves one atomic parameter for the full category-policy table, fixes the category and level ordering, records the validation rules that keep thresholds and caps coherent, and keeps the active trust-weight category config-only for now.
+
 ### 2026-05-23 - consensus: add on-chain suspicious trust decision updates
 
 Added development-group approved updates for the suspicious trust decision requirements used by account trust level decisions. Qortium can now store voted suspicious rater, branch, and rating-confidence requirements on chain, apply them to trust derivation from the approved activation height, expose typed API helpers for proposing and reading the values, and refresh trust snapshots when those values activate.

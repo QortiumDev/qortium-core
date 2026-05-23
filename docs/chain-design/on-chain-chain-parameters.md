@@ -215,15 +215,48 @@ trust snapshots at activation height.
 
 ## Planned Account Trust Policy Parameters
 
-The initial scalar trust decision settings are now supported. The category
-policy tables should be deferred to a later structured-parameter phase. Those
-tables include per-category level thresholds, per-category level caps,
-per-category suspicious thresholds, and per-category suspicious caps. They need
-a separate canonical binary table format and cross-field validation before they
-are accepted on chain.
+The initial scalar trust decision settings are now supported. The next account
+trust policy parameter should be one atomic category-policy table so thresholds
+and caps cannot be partially mixed across categories.
 
-`activeWeightCategory`, category policy tables, and broader trust derivation
-behavior changes remain config-only until that structured format is designed.
+`ACCOUNT_TRUST_CATEGORY_POLICIES` should be parameter ID `14`.
+
+Its value should be exactly 240 bytes: thirty signed long integers in a fixed
+order. The value does not embed category IDs, level IDs, counts, or JSON. The
+category order is `SUBJECT`, `PLAYER`, `TRAINER`, `MANAGER`, matching
+`AccountRatingCategory.value`. Within each category, levels are stored in
+ascending level order. Each level stores two signed longs: `threshold`, then
+`cap`. After the levels for that category, the category stores
+`suspiciousThreshold`, then `suspiciousCap`.
+
+The required rows are:
+
+| Category | Stored values |
+| --- | --- |
+| `SUBJECT` | levels 1 through 4, then suspicious threshold and cap |
+| `PLAYER` | levels 1 through 3, then suspicious threshold and cap |
+| `TRAINER` | levels 1 through 2, then suspicious threshold and cap |
+| `MANAGER` | levels 1 through 2, then suspicious threshold and cap |
+
+That layout is 11 level threshold/cap pairs plus 4 suspicious threshold/cap
+pairs, or 30 signed long values.
+
+Validation should mirror the current `blockchain.json` category-policy rules:
+every required category and level must be present in the typed request,
+thresholds must be positive, caps must be positive and lower than their
+threshold, suspicious thresholds must be negative, suspicious caps must be
+positive and lower than the suspicious threshold magnitude, and the suspicious
+cap multiplied by the effective suspicious rater count must be able to reach
+the suspicious threshold magnitude.
+
+The public API should expose this as a typed JSON proposal builder using
+category and level objects, but consensus should still store only the
+deterministic 240-byte value. Effective-value responses and proposal summaries
+should decode the payload back into category-policy objects so governance tools
+do not have to parse opaque binary values.
+
+`activeWeightCategory` and broader trust derivation behavior changes remain
+config-only until separate explicit parameters are designed.
 
 ## Public API
 
