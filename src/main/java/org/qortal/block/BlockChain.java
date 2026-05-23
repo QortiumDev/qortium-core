@@ -786,6 +786,11 @@ public class BlockChain {
 	}
 
 	public int getAccountTrustManagerEnergyHops(Repository repository, int height) throws DataException {
+		ChainParameterData managerEnergyHopsUpdate = repository.getChainParameterRepository()
+				.getEffectiveParameter(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.id, height);
+		if (managerEnergyHopsUpdate != null)
+			return ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.decodeIntValue(managerEnergyHopsUpdate.getValue());
+
 		return getAccountTrustManagerEnergyHops();
 	}
 

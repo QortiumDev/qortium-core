@@ -75,6 +75,20 @@ public class ChainParameterTests {
 	}
 
 	@Test
+	public void testAccountTrustManagerEnergyHopsMetadataAccessors() {
+		ChainParameter parameter = ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS;
+
+		assertEquals(9, parameter.id);
+		assertEquals(Integer.BYTES, parameter.valueLength);
+		assertEquals("INTEGER", parameter.getValueType());
+		assertEquals(Integer.valueOf(1), parameter.getMinimumIntegerValue());
+		assertTrue(parameter.affectsTrustSnapshots());
+		assertNotNull(parameter.getDescription());
+		assertEquals("/chain-parameters/account-trust/manager-energy-hops/update", parameter.getBuilderPath());
+		assertEquals("/chain-parameters/account-trust/manager-energy-hops/{height}", parameter.getEffectivePath());
+	}
+
+	@Test
 	public void testBlockRewardAmountDecoding() {
 		long reward = 12L * Amounts.MULTIPLIER + 34_000_000L;
 		byte[] value = ChainParameter.BLOCK_REWARD.encodeLongValue(reward);
@@ -150,6 +164,17 @@ public class ChainParameterTests {
 	}
 
 	@Test
+	public void testAccountTrustManagerEnergyHopsIntegerDecoding() {
+		byte[] value = ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.encodeIntValue(4);
+
+		assertEquals(Integer.valueOf(4), ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.decodeIntegerValue(value));
+		assertEquals("4", ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.formatDisplayValue(value));
+		assertNull(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.decodeAmountValue(value));
+		assertNull(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.decodeLongParameterValue(value));
+		assertNull(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.decodeIntegerListValue(value));
+	}
+
+	@Test
 	public void testInvalidBlockRewardValueDoesNotDecodeForDisplay() {
 		assertNull(ChainParameter.BLOCK_REWARD.decodeAmountValue(null));
 		assertNull(ChainParameter.BLOCK_REWARD.formatDisplayValue(null));
@@ -212,5 +237,15 @@ public class ChainParameterTests {
 				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(0L)));
 		assertFalse(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.isValidValue(
 				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(-1L)));
+	}
+
+	@Test
+	public void testAccountTrustManagerEnergyHopsRequiresPositiveValue() {
+		assertTrue(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.isValidValue(
+				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.encodeIntValue(1)));
+		assertFalse(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.isValidValue(
+				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.encodeIntValue(0)));
+		assertFalse(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.isValidValue(
+				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.encodeIntValue(-1)));
 	}
 }

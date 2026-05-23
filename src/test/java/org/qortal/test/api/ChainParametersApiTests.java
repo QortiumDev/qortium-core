@@ -6,6 +6,7 @@ import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
 import org.qortal.api.model.AccountRatingCooldownUpdateRequest;
+import org.qortal.api.model.AccountTrustManagerEnergyHopsUpdateRequest;
 import org.qortal.api.model.AccountTrustStartingEnergyUpdateRequest;
 import org.qortal.api.model.BlockRewardUpdateRequest;
 import org.qortal.api.model.ChainParameterEffectiveValue;
@@ -62,7 +63,7 @@ public class ChainParametersApiTests extends ApiCommon {
 	public void testChainParameterMetadataListsBlockReward() {
 		List<ChainParameterMetadata> parameters = this.chainParametersResource.getChainParameters();
 
-		assertEquals(8, parameters.size());
+		assertEquals(9, parameters.size());
 
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.BLOCK_REWARD), ChainParameter.BLOCK_REWARD);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN),
@@ -78,6 +79,8 @@ public class ChainParametersApiTests extends ApiCommon {
 				ChainParameter.ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS);
 		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY),
 				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY);
+		assertMetadataMatchesParameter(findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS),
+				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS);
 
 		assertEquals(Long.valueOf(0L), findMetadata(parameters, ChainParameter.BLOCK_REWARD).validation.minimumLongValue);
 		assertEquals(Long.valueOf(0L), findMetadata(parameters, ChainParameter.UNIT_FEE).validation.minimumLongValue);
@@ -89,6 +92,8 @@ public class ChainParametersApiTests extends ApiCommon {
 				findMetadata(parameters, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN).validation.minimumIntegerValue);
 		assertEquals(Integer.valueOf(0),
 				findMetadata(parameters, ChainParameter.ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS).validation.minimumIntegerValue);
+		assertEquals(Integer.valueOf(1),
+				findMetadata(parameters, ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS).validation.minimumIntegerValue);
 
 		ChainParameterMetadata rewardWeights = findMetadata(parameters, ChainParameter.REWARD_SHARE_WEIGHTS);
 		assertEquals(Integer.valueOf(10), rewardWeights.validation.integerListLength);
@@ -193,6 +198,29 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
 		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
 		assertArrayEquals(ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(startingEnergy),
+				transactionData.getValue());
+		assertNotNull(transactionData.getFee());
+	}
+
+	@Test
+	public void testBuildAccountTrustManagerEnergyHopsUpdateUsesIntegerValue()
+			throws DataException, TransformationException {
+		int managerEnergyHops = 5;
+		AccountTrustManagerEnergyHopsUpdateRequest request;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			request = buildAccountTrustManagerEnergyHopsUpdateRequest(repository, managerEnergyHops);
+		}
+
+		String rawTransaction = this.chainParametersResource.updateAccountTrustManagerEnergyHops(request);
+		ChainParameterUpdateTransactionData transactionData = decodeRawTransaction(rawTransaction);
+
+		assertEquals(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.id, transactionData.getParameterId());
+		assertEquals(request.activationHeight, transactionData.getActivationHeight());
+		assertEquals(request.timestamp, transactionData.getTimestamp());
+		assertEquals(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, transactionData.getTxGroupId());
+		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
+		assertArrayEquals(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.encodeIntValue(managerEnergyHops),
 				transactionData.getValue());
 		assertNotNull(transactionData.getFee());
 	}
@@ -345,6 +373,15 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testGetAccountTrustManagerEnergyHopsReturnsEffectiveValue() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int height = repository.getBlockRepository().getBlockchainHeight();
+			assertEquals(BlockChain.getInstance().getAccountTrustManagerEnergyHops(repository, height),
+					this.chainParametersResource.getAccountTrustManagerEnergyHops(height));
+		}
+	}
+
+	@Test
 	public void testEffectiveParameterValuesReturnConfigSourcesWithoutProposals() throws DataException {
 		int height;
 		long fallbackTimestamp;
@@ -356,7 +393,7 @@ public class ChainParametersApiTests extends ApiCommon {
 
 		List<ChainParameterEffectiveValue> values = this.chainParametersResource.getEffectiveParameterValues(null);
 
-		assertEquals(8, values.size());
+		assertEquals(9, values.size());
 		assertConfigEffectiveValue(values, ChainParameter.BLOCK_REWARD, height,
 				ChainParameter.BLOCK_REWARD.encodeLongValue(BlockChain.getInstance().getRewardAtHeight(height)));
 		assertConfigEffectiveValue(values, ChainParameter.MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN, height,
@@ -378,6 +415,9 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY, height,
 				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(
 						BlockChain.getInstance().getAccountTrustStartingEnergy()));
+		assertConfigEffectiveValue(values, ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS, height,
+				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.encodeIntValue(
+						BlockChain.getInstance().getAccountTrustManagerEnergyHops()));
 	}
 
 	@Test
@@ -551,6 +591,22 @@ public class ChainParametersApiTests extends ApiCommon {
 				() -> this.chainParametersResource.updateAccountTrustStartingEnergy(zeroRequest));
 		assertApiError(ApiError.TRANSACTION_INVALID,
 				() -> this.chainParametersResource.updateAccountTrustStartingEnergy(negativeRequest));
+	}
+
+	@Test
+	public void testBuildAccountTrustManagerEnergyHopsUpdateRejectsNonPositiveValue() throws DataException {
+		AccountTrustManagerEnergyHopsUpdateRequest zeroRequest;
+		AccountTrustManagerEnergyHopsUpdateRequest negativeRequest;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			zeroRequest = buildAccountTrustManagerEnergyHopsUpdateRequest(repository, 0);
+			negativeRequest = buildAccountTrustManagerEnergyHopsUpdateRequest(repository, -1);
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateAccountTrustManagerEnergyHops(zeroRequest));
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chainParametersResource.updateAccountTrustManagerEnergyHops(negativeRequest));
 	}
 
 	@Test
@@ -880,6 +936,46 @@ public class ChainParametersApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testPendingAccountTrustManagerEnergyHopsProposalSummaryShowsDecodedValueAndVoteCounts()
+			throws DataException {
+		ChainParameterUpdateTransactionData transactionData;
+		int managerEnergyHops = 5;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int activationHeight = repository.getBlockRepository().getBlockchainHeight() + 100;
+
+			transactionData = buildAccountTrustManagerEnergyHopsUpdateTransaction(repository, alice, activationHeight,
+					managerEnergyHops);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+		}
+
+		List<ChainParameterUpdateSummary> summaries = this.chainParametersResource.getChainParameterUpdates(
+				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.id, null, null, null, null, null, null, null, null);
+
+		assertEquals(1, summaries.size());
+
+		ChainParameterUpdateSummary summary = summaries.get(0);
+		assertArrayEquals(transactionData.getSignature(), summary.signature);
+		assertEquals(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.id, summary.parameterId);
+		assertEquals(ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.name(), summary.parameterName);
+		assertEquals(transactionData.getActivationHeight(), summary.activationHeight);
+		assertArrayEquals(transactionData.getValue(), summary.value);
+		assertEquals("INTEGER", summary.valueType);
+		assertEquals("5", summary.displayValue);
+		assertNull(summary.amount);
+		assertNull(summary.longValue);
+		assertEquals(Integer.valueOf(managerEnergyHops), summary.integerValue);
+		assertNull(summary.integerValues);
+		assertEquals(ApprovalStatus.PENDING, summary.approvalStatus);
+		assertEquals(ApprovalThreshold.PCT40, summary.approvalThreshold);
+		assertEquals(0, summary.approvalCount);
+		assertEquals(0, summary.rejectionCount);
+		assertEquals(1, summary.approvalAuthorityCount);
+		assertFalse(summary.effectiveNow);
+	}
+
+	@Test
 	public void testChainParameterUpdatesCanIncludeUnconfirmedProposals() throws DataException {
 		ChainParameterUpdateTransactionData transactionData;
 
@@ -1052,6 +1148,22 @@ public class ChainParametersApiTests extends ApiCommon {
 		return request;
 	}
 
+	private static AccountTrustManagerEnergyHopsUpdateRequest buildAccountTrustManagerEnergyHopsUpdateRequest(
+			Repository repository, int managerEnergyHops) throws DataException {
+		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+		AccountTrustManagerEnergyHopsUpdateRequest request = new AccountTrustManagerEnergyHopsUpdateRequest();
+		request.timestamp = System.currentTimeMillis();
+		request.txGroupId = TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID;
+		request.updaterPublicKey = alice.getPublicKey();
+		request.activationHeight = repository.getBlockRepository().getBlockchainHeight()
+				+ BlockChain.getInstance().getChainParameterUpdateMinActivationDelay()
+				+ 100;
+		request.managerEnergyHops = managerEnergyHops;
+
+		return request;
+	}
+
 	private static AccountRatingCooldownUpdateRequest buildAccountRatingCooldownUpdateRequest(
 			Repository repository, int cooldownBlocks) throws DataException {
 		PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -1151,6 +1263,15 @@ public class ChainParametersApiTests extends ApiCommon {
 				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
 				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.id, activationHeight,
 				ChainParameter.ACCOUNT_TRUST_STARTING_ENERGY.encodeLongValue(startingEnergy));
+	}
+
+	private static ChainParameterUpdateTransactionData buildAccountTrustManagerEnergyHopsUpdateTransaction(
+			Repository repository, PrivateKeyAccount updater, int activationHeight, int managerEnergyHops)
+			throws DataException {
+		return new ChainParameterUpdateTransactionData(
+				TestTransaction.generateBase(updater, TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID),
+				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.id, activationHeight,
+				ChainParameter.ACCOUNT_TRUST_MANAGER_ENERGY_HOPS.encodeIntValue(managerEnergyHops));
 	}
 
 	private static ChainParameterUpdateTransactionData buildUnitFeeUpdateTransaction(

@@ -13,10 +13,11 @@ built jar for each change.
 This is intentionally small at first. The currently supported parameters are
 the height-based block reward, the reward share-bin activation count, reward
 share weights, the account rating change cooldown, trust status vote-weight
-percentages, account trust starting energy, and the normal and
-name-registration transaction unit fees. Broader trust-network policy values,
-timestamp-based settings, and larger structured parameter sets should be added
-only after each format and validation rule is made explicit.
+percentages, account trust starting energy, account trust manager energy hops,
+and the normal and name-registration transaction unit fees. Broader
+trust-network policy values, timestamp-based settings, and larger structured
+parameter sets should be added only after each format and validation rule is
+made explicit.
 
 ## Approval Model
 
@@ -145,6 +146,19 @@ it. Because changing the starting energy can change derived account trust
 scores and mapped trust statuses, this parameter refreshes trust snapshots at
 activation height.
 
+`ACCOUNT_TRUST_MANAGER_ENERGY_HOPS` is parameter ID `9`.
+
+Its value is exactly 4 bytes: a signed integer count of manager-rating
+propagation hops used during account trust derivation. The value must be
+greater than zero.
+
+The approved manager energy hops value applies to account trust derivation at
+its activation height and remains effective until another approved
+`ACCOUNT_TRUST_MANAGER_ENERGY_HOPS` update with a later activation height
+overrides it. Because changing the hop count can change derived account trust
+scores and mapped trust statuses, this parameter refreshes trust snapshots at
+activation height.
+
 ## Planned Account Trust Policy Parameters
 
 The next trust-policy work should be split into small scalar parameters before
@@ -156,7 +170,6 @@ The remaining planned scalar parameters are:
 
 | Planned ID | Parameter | Value | Validation |
 | --- | --- | --- | --- |
-| `9` | `ACCOUNT_TRUST_MANAGER_ENERGY_HOPS` | signed integer | greater than `0` |
 | `10` | `ACCOUNT_TRUST_POSITIVE_MIN_BRANCH_COUNT` | signed integer | greater than `0` |
 | `11` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT` | signed integer | greater than `0` |
 | `12` | `ACCOUNT_TRUST_SUSPICIOUS_MIN_BRANCH_COUNT` | signed integer | `0` or greater; `0` keeps the current behavior of matching `ACCOUNT_TRUST_SUSPICIOUS_MIN_RATER_COUNT` |
@@ -284,6 +297,14 @@ Callers provide the new signed long value directly.
 `GET /chain-parameters/account-trust/starting-energy/{height}` returns the
 effective account trust starting energy for a height after applying any approved
 overlay that is active at that height.
+
+`POST /chain-parameters/account-trust/manager-energy-hops/update` builds an
+unsigned `CHAIN_PARAMETER_UPDATE` transaction for account trust manager energy
+hops. Callers provide the new signed integer value directly.
+
+`GET /chain-parameters/account-trust/manager-energy-hops/{height}` returns the
+effective account trust manager energy hops for a height after applying any
+approved overlay that is active at that height.
 
 `POST /chain-parameters/unit-fee/update` builds an unsigned
 `CHAIN_PARAMETER_UPDATE` transaction for the normal transaction unit fee. Callers

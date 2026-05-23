@@ -41,7 +41,11 @@ public enum ChainParameter {
 	ACCOUNT_TRUST_STARTING_ENERGY(8, Long.BYTES, "LONG",
 			"Starting energy distributed across minting-group seed accounts during account trust derivation.",
 			"/chain-parameters/account-trust/starting-energy/update",
-			"/chain-parameters/account-trust/starting-energy/{height}");
+			"/chain-parameters/account-trust/starting-energy/{height}"),
+	ACCOUNT_TRUST_MANAGER_ENERGY_HOPS(9, Integer.BYTES, "INTEGER",
+			"Number of manager-rating propagation hops used during account trust derivation.",
+			"/chain-parameters/account-trust/manager-energy-hops/update",
+			"/chain-parameters/account-trust/manager-energy-hops/{height}");
 
 	public static final int MAX_VALUE_LENGTH = 256;
 	public static final String VALUE_TYPE_AMOUNT = "AMOUNT";
@@ -114,6 +118,9 @@ public enum ChainParameter {
 			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
 				return 0;
 
+			case ACCOUNT_TRUST_MANAGER_ENERGY_HOPS:
+				return 1;
+
 			default:
 				return null;
 		}
@@ -177,7 +184,8 @@ public enum ChainParameter {
 	}
 
 	public boolean affectsTrustSnapshots() {
-		return this == ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS || this == ACCOUNT_TRUST_STARTING_ENERGY;
+		return this == ACCOUNT_TRUST_STATUS_VOTE_WEIGHTS || this == ACCOUNT_TRUST_STARTING_ENERGY
+				|| this == ACCOUNT_TRUST_MANAGER_ENERGY_HOPS;
 	}
 
 	public boolean isValidValue(byte[] value) {
@@ -196,6 +204,9 @@ public enum ChainParameter {
 			case MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN:
 			case ACCOUNT_RATING_CHANGE_COOLDOWN_BLOCKS:
 				return decodeIntValue(value) >= 0;
+
+			case ACCOUNT_TRUST_MANAGER_ENERGY_HOPS:
+				return decodeIntValue(value) > 0;
 
 			case REWARD_SHARE_WEIGHTS:
 				int[] weights = decodeIntArrayValue(value);
