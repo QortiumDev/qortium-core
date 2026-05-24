@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - api: add generic fee MemoryPoW nonce compute
+
+Added a shared transaction API endpoint for computing MemoryPoW fee-alternative nonces on raw unsigned transactions. This gives public preview users a standard way to prepare zero-fee group joins, approvals, native-asset bootstrap proposals, and other normal transactions before the native asset exists, without adding transaction-specific nonce endpoints for every builder.
+
 ### 2026-05-24 - preview: remove native prefunds from genesis
 
 Removed the preview network's genesis native-asset issue and starter account balances so the public preview starts without asset ID `0` and without prefunded accounts. The preview genesis still keeps the initial minting authorizations needed for the seed and local starter nodes to produce blocks, while native rewards remain paused until the development group explicitly bootstraps the native asset later.

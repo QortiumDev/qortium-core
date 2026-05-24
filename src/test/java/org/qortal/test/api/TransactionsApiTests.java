@@ -1,5 +1,6 @@
 package org.qortal.test.api;
 
+import com.google.common.primitives.Bytes;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.junit.Test;
@@ -13,6 +14,7 @@ import org.qortal.controller.ChatNotifier;
 import org.qortal.controller.Controller;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.ChatTransactionData;
+import org.qortal.data.transaction.JoinGroupTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
 import org.qortal.data.transaction.RateAccountTransactionData;
 import org.qortal.data.transaction.RewardShareTransactionData;
@@ -29,6 +31,7 @@ import org.qortal.test.common.ApiCommon;
 import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestAccount;
+import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.ChatTransaction;
@@ -226,6 +229,44 @@ public class TransactionsApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testComputeMempowFeeNonceForOrdinaryTransaction() throws Exception {
+		ApiCommon.installTestApiKey();
+		TransactionsResource authenticatedTransactionsResource =
+				(TransactionsResource) ApiCommon.buildResource(TransactionsResource.class, ApiCommon.TEST_API_KEY);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int previousDifficulty = setFeeAlternativeDifficulty(1);
+
+			try {
+				TestAccount bob = Common.getTestAccount(repository, "bob");
+				BaseTransactionData baseTransactionData = new BaseTransactionData(
+						TransactionUtils.nextTimestamp(repository),
+						Group.NO_GROUP,
+						bob.getPublicKey(),
+						0L,
+						null);
+				JoinGroupTransactionData joinGroupTransactionData = new JoinGroupTransactionData(baseTransactionData,
+						TestChainBootstrapUtils.MINTING_GROUP_ID, null);
+
+				String computedRawTransaction = authenticatedTransactionsResource.computeMempowFeeNonce(
+						ApiCommon.TEST_API_KEY, rawTransaction(joinGroupTransactionData));
+				TransactionData computedTransactionData = unsignedTransaction(computedRawTransaction);
+
+				assertEquals(TransactionType.JOIN_GROUP, computedTransactionData.getType());
+				assertNotNull(computedTransactionData.getNonceOrNull());
+				assertNull(computedTransactionData.getSignature());
+
+				Transaction transaction = Transaction.fromData(repository, computedTransactionData);
+				assertEquals(Transaction.ValidationResult.OK, transaction.isFeeValid());
+			} finally {
+				setFeeAlternativeDifficulty(previousDifficulty);
+			}
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
 	public void testSearchTransactions() {
 		List<TransactionType> txTypes = Arrays.asList(TransactionType.PAYMENT, TransactionType.ISSUE_ASSET);
 
@@ -408,6 +449,20 @@ public class TransactionsApiTests extends ApiCommon {
 		} catch (TransformationException e) {
 			throw new RuntimeException(e);
 		}
+	}
+
+	private static TransactionData unsignedTransaction(String rawBytes58) throws TransformationException {
+		byte[] rawBytes = Bytes.concat(Base58.decode(rawBytes58), new byte[TransactionTransformer.SIGNATURE_LENGTH]);
+		TransactionData transactionData = TransactionTransformer.fromBytes(rawBytes);
+		transactionData.setSignature(null);
+		return transactionData;
+	}
+
+	private static int setFeeAlternativeDifficulty(int difficulty) throws IllegalAccessException {
+		Object mempowSettings = FieldUtils.readField(BlockChain.getInstance(), "mempowSettings", true);
+		Integer previousDifficulty = (Integer) FieldUtils.readField(mempowSettings, "feeAlternativeDifficulty", true);
+		FieldUtils.writeField(mempowSettings, "feeAlternativeDifficulty", difficulty, true);
+		return previousDifficulty;
 	}
 
 	private static ChatTransactionData signedChat(Repository repository, TestAccount sender, String message, long timestamp) throws DataException {

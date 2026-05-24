@@ -402,6 +402,10 @@ public abstract class Transaction {
 		return canUseMempowFeeAlternative(this.transactionData.getType());
 	}
 
+	public boolean supportsMempowFeeAlternative() {
+		return this.canUseMempowFeeAlternative();
+	}
+
 	protected static boolean canUseMempowFeeAlternative(TransactionType transactionType) {
 		return transactionType.supportsMempowFeeAlternative();
 	}
@@ -446,6 +450,25 @@ public abstract class Transaction {
 
 	protected int getMempowFeeAlternativeDifficulty() {
 		return BlockChain.getInstance().getMempowFeeAlternativeDifficulty();
+	}
+
+	public void computeMempowFeeNonce() throws DataException {
+		if (!this.canUseMempowFeeAlternative())
+			throw new DataException(String.format("%s transactions do not support MemoryPoW fee alternatives",
+					this.transactionData.getType()));
+
+		byte[] transactionBytes;
+
+		try {
+			transactionBytes = TransactionTransformer.toBytesForSigning(this.transactionData);
+		} catch (TransformationException e) {
+			throw new DataException("Unable to transform transaction to byte array for MemoryPoW computation", e);
+		}
+
+		TransactionTransformer.clearMempowFeeNonce(transactionBytes);
+
+		this.transactionData.setNonce(MemoryPoW.compute2(transactionBytes,
+				this.getMempowFeeAlternativeBufferSize(), this.getMempowFeeAlternativeDifficulty()));
 	}
 
 	protected ValidationResult validateMempowFeePolicy() throws DataException {

@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.*;
@@ -563,6 +564,92 @@ public class TransactionsResource {
 
 		} catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA, e);
+		}
+	}
+
+	@POST
+	@Path("/mempow/compute")
+	@Operation(
+			summary = "Compute MemoryPoW fee-alternative nonce for raw, unsigned transaction",
+			description = "Returns the same raw, unsigned transaction with its MemoryPoW fee-alternative nonce populated.",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.TEXT_PLAIN,
+							schema = @Schema(
+									type = "string",
+									description = "raw, unsigned transaction in base58 encoding",
+									example = "raw transaction base58"
+							)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	@ApiErrors({
+			ApiError.UNAUTHORIZED, ApiError.TRANSACTION_INVALID, ApiError.INVALID_DATA,
+			ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE
+	})
+	@SecurityRequirement(name = "apiKey")
+	public String computeMempowFeeNonce(@HeaderParam(Security.API_KEY_HEADER) String apiKey, String rawInputBytes58) {
+		Security.checkApiCallAllowed(request, apiKey);
+
+		byte[] rawInputBytes;
+		try {
+			rawInputBytes = Base58.decode(rawInputBytes58);
+		} catch (NumberFormatException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA, e);
+		}
+
+		if (rawInputBytes.length == 0)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.JSON);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			byte[] rawBytes = Bytes.concat(rawInputBytes, new byte[TransactionTransformer.SIGNATURE_LENGTH]);
+
+			TransactionData transactionData = TransactionTransformer.fromBytes(rawBytes);
+			if (transactionData == null)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+			if (!transaction.supportsMempowFeeAlternative())
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+			ValidationResult result = transaction.isValid();
+			if (result != ValidationResult.OK)
+				throw createTransactionInvalidException(request, result);
+
+			Long now = NTP.getTime();
+			if (now != null) {
+				result = transaction.isValidAtTimestamp(now);
+				if (result != ValidationResult.OK)
+					throw createTransactionInvalidException(request, result);
+			}
+
+			transaction.computeMempowFeeNonce();
+
+			result = transaction.isValidUnconfirmed();
+			if (result != ValidationResult.OK)
+				throw createTransactionInvalidException(request, result);
+
+			transactionData.setSignature(null);
+
+			return Base58.encode(TransactionTransformer.toBytes(transactionData));
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
 	}
 

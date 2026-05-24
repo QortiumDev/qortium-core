@@ -1,15 +1,18 @@
 package org.qortal.test.minting;
 
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
+import org.qortal.block.BlockChain;
 import org.qortal.data.account.RewardShareData;
 import org.qortal.data.asset.AssetData;
 import org.qortal.data.group.GroupData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.GroupApprovalTransactionData;
 import org.qortal.data.transaction.IssueAssetTransactionData;
+import org.qortal.data.transaction.JoinGroupTransactionData;
 import org.qortal.group.Group;
 import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
@@ -20,6 +23,7 @@ import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TestChainBootstrapUtils;
 import org.qortal.test.common.TransactionUtils;
+import org.qortal.transaction.Transaction;
 import org.qortal.transaction.Transaction.ApprovalStatus;
 import org.qortal.transaction.Transaction.ValidationResult;
 import org.qortal.utils.Amounts;
@@ -85,6 +89,35 @@ public class NoNativeAssetBootstrapTests extends Common {
 			result = TransactionUtils.signAndImport(repository, transactionData, alice);
 			assertEquals(ValidationResult.INVALID_TX_GROUP_ID, result);
 			assertNativeAssetAbsent(repository);
+		}
+	}
+
+	@Test
+	public void testGroupJoinCanUseMempowBeforeNativeAssetExists() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			bootstrapAliceMinter(repository);
+			assertNativeAssetAbsent(repository);
+
+			int previousDifficulty = setFeeAlternativeDifficulty(1);
+
+			try {
+				PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+				long timestamp = TransactionUtils.nextTimestamp(repository);
+				BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, Group.NO_GROUP,
+						bob.getPublicKey(), 0L, null);
+				JoinGroupTransactionData transactionData = new JoinGroupTransactionData(baseTransactionData,
+						TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, null);
+				Transaction transaction = Transaction.fromData(repository, transactionData);
+				transaction.computeMempowFeeNonce();
+
+				TransactionUtils.signAndMint(repository, transactionData, bob);
+
+				assertTrue(repository.getGroupRepository()
+						.memberExists(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, bob.getAddress()));
+				assertNativeAssetAbsent(repository);
+			} finally {
+				setFeeAlternativeDifficulty(previousDifficulty);
+			}
 		}
 	}
 
@@ -305,6 +338,13 @@ public class NoNativeAssetBootstrapTests extends Common {
 	private static void assertNativeAssetAbsent(Repository repository) throws DataException {
 		assertFalse(repository.getAssetRepository().assetExists(Asset.NATIVE));
 		assertTrue(repository.getAccountRepository().getAssetBalances(Asset.NATIVE, false).isEmpty());
+	}
+
+	private static int setFeeAlternativeDifficulty(int difficulty) throws IllegalAccessException {
+		Object mempowSettings = FieldUtils.readField(BlockChain.getInstance(), "mempowSettings", true);
+		Integer previousDifficulty = (Integer) FieldUtils.readField(mempowSettings, "feeAlternativeDifficulty", true);
+		FieldUtils.writeField(mempowSettings, "feeAlternativeDifficulty", difficulty, true);
+		return previousDifficulty;
 	}
 
 }
