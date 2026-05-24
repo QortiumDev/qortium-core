@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: bootstrap native asset funds
+
+Added the preview network's native asset and initial account balances to genesis so early testers can use normal paid transactions instead of depending on slow memory proof-of-work fallback paths. The seed and local starter minting accounts now begin with preview funds they can use for chat, QDN publishing, minting-group joins, and sending small amounts to new testers during the alpha preview.
+
 ### 2026-05-24 - sync: answer startup block requests promptly
 
 Reduced the initial delay before the queued block and block-summary request processors start handling peer requests. Fresh nodes can be asked for their first minted blocks within seconds of startup, so waiting a full minute before answering `GET_BLOCK` requests caused synchronization retries to time out during preview launch and made peers look unresponsive even though the block existed locally.
