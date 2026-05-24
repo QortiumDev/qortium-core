@@ -3,7 +3,7 @@
 	"transactionExpiryPeriod": 86400000,
 	"maxBlockSize": 2097152,
 	"maxBytesPerUnitFee": 1024,
-	"chainParameterUpdateMinActivationDelay": 1440,
+	"chainParameterUpdateMinActivationDelay": 20,
 	"mainnetMessageMagic": "QRTM",
 	"testnetMessageMagic": "qrtm",
 	"accountTrustSettings": {
@@ -133,7 +133,7 @@
 	},
 	"genesisInfo": {
 		"version": 4,
-		"timestamp": "1779595987000",
+		"timestamp": "1779646597409",
 		"transactions": [
 			{
 				"type": "ISSUE_ASSET",

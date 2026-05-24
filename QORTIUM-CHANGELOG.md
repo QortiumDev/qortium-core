@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: refresh public candidate chain settings
+
+Refreshed the preview-network genesis timestamp for the public-preview candidate reset and shortened the preview-only chain-parameter activation delay to 20 blocks. This keeps the reset chain aligned with the current launch window and lets the governance proposal workflow be tested through activation before inviting public testers.
+
 ### 2026-05-24 - preview: allow local participant transaction builders
 
 Allowed preview participant nodes to use normal local transaction-builder API calls while keeping the public seed node restricted. This lets testers build payments, group joins, governance proposals, and other signed transactions through their own local node without opening the seed API or weakening the local-only API whitelist.

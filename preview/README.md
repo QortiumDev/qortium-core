@@ -28,7 +28,8 @@ Preview uses accelerated chain timing for early testing. Reward schedule
 intervals are compressed by 100 compared with the current Qortium defaults, and
 account level block requirements are divided by 10. Reward share bins need 5
 online accounts before activating so small preview groups can exercise reward
-distribution sooner.
+distribution sooner. Chain-parameter updates use a 20-block activation delay on
+preview so governance changes can be tested within the same session.
 
 ## Start A Preview Participant
 
