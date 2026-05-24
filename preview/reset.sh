@@ -30,6 +30,7 @@ paths=(
 	"${SCRIPT_DIR}/settings-preview-local.json"
 	"${SCRIPT_DIR}/settings-preview-seed-local.json"
 	"${SCRIPT_DIR}/run.log"
+	"${SCRIPT_DIR}/run-error.log"
 	"${SCRIPT_DIR}/run.pid"
 	"${SCRIPT_DIR}/qortium.log"
 	"${SCRIPT_DIR}/QortiumKeyStore.jks"

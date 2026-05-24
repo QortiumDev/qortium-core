@@ -49,6 +49,14 @@ Start a participant node:
 ./preview/start.sh
 ```
 
+On Windows, use the matching batch wrappers:
+
+```bat
+preview\start.bat
+preview\status.bat --wait
+preview\stop.bat
+```
+
 On desktop systems, the preview launcher opens the normal Qortium splash and
 tray UI when a graphical display is available. On VPS or terminal-only systems,
 it automatically starts Java in headless mode. You can override detection with:

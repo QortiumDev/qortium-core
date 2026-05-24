@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: improve cross-platform launch scripts
+
+Improved the preview launcher so Unix-like systems can start without `setsid`, release-zip users get clearer jar-location guidance, and successful starts print the next status/stop/reset commands. Added Windows batch and PowerShell wrappers for starting, checking, stopping, and resetting preview nodes, with reset cleanup covering the separate Windows error log.
+
 ### 2026-05-24 - preview: add public tester guide
 
 Added a simple public preview tester guide with separate download-zip and source-build paths, OS-specific start/status/stop/reset commands, prerequisites, reset notes, and preview expectations. The existing preview README now points testers to the guide while staying focused on technical seed-node and preview-profile details, and the build helper now prints preview commands after a successful source build.

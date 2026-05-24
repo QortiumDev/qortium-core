@@ -33,6 +33,7 @@ apikey.txt
 /testnet/qortium-backup-test/
 /preview/run.pid
 /preview/run.log
+/preview/run-error.log
 /preview/qortium.log
 /preview/QortiumKeyStore.jks
 /preview/apikey.txt

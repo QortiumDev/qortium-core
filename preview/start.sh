@@ -122,7 +122,8 @@ find_qortium_jar() {
 JAR_PATH="$(find_qortium_jar || true)"
 if [ -z "${JAR_PATH}" ]; then
 	echo "Could not find qortium.jar."
-	echo "Build it first with: ./build.sh"
+	echo "For the release zip, make sure qortium.jar is in the extracted folder or preview folder."
+	echo "For a source checkout, build it first with: ./build.sh --yes"
 	exit 1
 fi
 
@@ -150,13 +151,36 @@ case "${HEADLESS_MODE}" in
 		;;
 esac
 
-nohup setsid nice -n 20 java \
+NICE_ARGS=()
+if command -v nice >/dev/null 2>&1; then
+	NICE_ARGS=(nice -n 20)
+fi
+
+if command -v setsid >/dev/null 2>&1; then
+	nohup setsid "${NICE_ARGS[@]}" java \
+		-Djava.net.preferIPv4Stack=false \
+		"${JAVA_DISPLAY_ARGS[@]}" \
+		"${JVM_MEMORY_ARGS[@]}" \
+		-jar "${JAR_PATH}" \
+		"${SETTINGS_LOCAL}" \
+		>"${RUN_LOG}" 2>&1 &
+elif command -v nohup >/dev/null 2>&1; then
+	nohup "${NICE_ARGS[@]}" java \
+		-Djava.net.preferIPv4Stack=false \
+		"${JAVA_DISPLAY_ARGS[@]}" \
+		"${JVM_MEMORY_ARGS[@]}" \
+		-jar "${JAR_PATH}" \
+		"${SETTINGS_LOCAL}" \
+		>"${RUN_LOG}" 2>&1 &
+else
+	"${NICE_ARGS[@]}" java \
 	-Djava.net.preferIPv4Stack=false \
 	"${JAVA_DISPLAY_ARGS[@]}" \
 	"${JVM_MEMORY_ARGS[@]}" \
 	-jar "${JAR_PATH}" \
 	"${SETTINGS_LOCAL}" \
 	>"${RUN_LOG}" 2>&1 &
+fi
 
 echo "$!" > "${RUN_PID}"
 echo "Qortium preview ${MODE} node running as pid $!"
@@ -167,3 +191,8 @@ echo "Console log: ${RUN_LOG}"
 echo "Application log: ${SCRIPT_DIR}/qortium.log"
 echo
 echo "Preview genesis and settings are fixed. No minting key was added automatically."
+echo "Next commands:"
+echo "  ./preview/status.sh --wait"
+echo "  ./preview/stop.sh"
+echo "  ./preview/reset.sh"
+echo "Tester guide: ${SCRIPT_DIR}/TESTER-GUIDE.md"
