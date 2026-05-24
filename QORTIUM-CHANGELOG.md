@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - test: add repeatable MemoryPoW benchmark mode
+
+Added a repeatable benchmark mode to the MemoryPoW test helper so Qortium can measure real transaction proof-of-work costs before changing preview or main chain difficulty settings. The helper now initializes test time correctly for timeout-based runs, reports per-difficulty timing summaries, and keeps the older simple timing mode available for quick manual checks.
+
 ### 2026-05-24 - config: move transaction MemoryPoW difficulties into chain config
 
 Moved the MemoryPoW difficulty values used by transaction fee fallback, arbitrary data publishing, chat, and messages out of hard-coded Java constants and into each chain's blockchain configuration. The default values stay the same, but mainnet, preview, testnet, and test chains can now choose their own transaction proof-of-work difficulty profile without rebuilding the jar.
