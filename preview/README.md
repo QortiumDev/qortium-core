@@ -127,12 +127,32 @@ Generated runtime files include:
 - `data-preview/`
 - `qortium-backup-preview/`
 - `run.log`
+- `run-error.log`
 - `run.pid`
 - `qortium.log`
 - `QortiumKeyStore.jks`
 - `apikey.txt`
 
 These files are ignored by git and can be removed with `./preview/reset.sh`.
+
+## Build A Preview Release Zip
+
+For GitHub pre-releases, create the tester zip from the repository root:
+
+```sh
+./preview/package-release.sh
+```
+
+If the jar has already been built, skip the build step:
+
+```sh
+./preview/package-release.sh --skip-build
+```
+
+The default output is `target/qortium-preview.zip`. The package includes the
+jar, preview configs, Unix shell scripts, Windows wrappers, and the public
+tester guide. It intentionally excludes generated runtime files, local settings,
+databases, logs, API keys, keystores, backups, and ignored preview secrets.
 
 ## Launch Minting
 

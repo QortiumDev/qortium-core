@@ -29,6 +29,12 @@ Linux or macOS:
 ./preview/start.sh
 ```
 
+If your extractor removed script permissions, run this once first:
+
+```sh
+chmod +x preview/*.sh
+```
+
 Windows:
 
 ```bat

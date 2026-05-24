@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: add release package builder
+
+Added a preview release packaging script that builds or reuses the current jar and creates `target/qortium-preview.zip` with the jar, preview configs, Unix scripts, Windows wrappers, and tester guide. The preview README now documents the packaging command and clarifies that generated runtime files, local settings, logs, API keys, keystores, backups, and preview secrets are intentionally excluded from the release zip.
+
 ### 2026-05-24 - preview: improve cross-platform launch scripts
 
 Improved the preview launcher so Unix-like systems can start without `setsid`, release-zip users get clearer jar-location guidance, and successful starts print the next status/stop/reset commands. Added Windows batch and PowerShell wrappers for starting, checking, stopping, and resetting preview nodes, with reset cleanup covering the separate Windows error log.
