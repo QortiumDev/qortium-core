@@ -11,6 +11,10 @@ The preview network intentionally does not use `singleNodeTestnet`. That keeps
 preview behavior closer to the normal node rules while Qortium is still changing
 quickly.
 
+For the public tester walkthrough, start with
+[TESTER-GUIDE.md](TESTER-GUIDE.md). This file is the more detailed technical
+reference for the preview profile and seed-node operation.
+
 ## Current State
 
 The preview scaffold is connection-ready and includes two initial public

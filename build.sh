@@ -149,6 +149,11 @@ else
 fi
 
 echo
+echo "Next preview commands:"
+echo "  ./preview/start.sh"
+echo "  ./preview/status.sh --wait"
+echo "  ./preview/stop.sh"
+echo
 echo "Next testnet commands:"
 echo "  ./testnet/start.sh"
 echo "  ./testnet/stop.sh"

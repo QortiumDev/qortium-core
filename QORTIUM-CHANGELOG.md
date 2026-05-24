@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: add public tester guide
+
+Added a simple public preview tester guide with separate download-zip and source-build paths, OS-specific start/status/stop/reset commands, prerequisites, reset notes, and preview expectations. The existing preview README now points testers to the guide while staying focused on technical seed-node and preview-profile details, and the build helper now prints preview commands after a successful source build.
+
 ### 2026-05-24 - api: add generic fee MemoryPoW nonce compute
 
 Added a shared transaction API endpoint for computing MemoryPoW fee-alternative nonces on raw unsigned transactions. This gives public preview users a standard way to prepare zero-fee group joins, approvals, native-asset bootstrap proposals, and other normal transactions before the native asset exists, without adding transaction-specific nonce endpoints for every builder.
