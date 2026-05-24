@@ -44,6 +44,15 @@ Start a participant node:
 ./preview/start.sh
 ```
 
+On desktop systems, the preview launcher opens the normal Qortium splash and
+tray UI when a graphical display is available. On VPS or terminal-only systems,
+it automatically starts Java in headless mode. You can override detection with:
+
+```sh
+./preview/start.sh --gui
+./preview/start.sh --headless
+```
+
 Check that the local API is reachable:
 
 ```sh

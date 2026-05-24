@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: detect headless launch mode
+
+Changed the preview-network launcher so it only starts Java in headless mode when the local environment appears to have no desktop display. Local desktop participants can now get the normal Qortium splash and tray UI by default, while VPS and terminal-only nodes still avoid graphical startup automatically. The launcher also supports explicit `--headless` and `--gui` overrides for cases where automatic detection is not the desired behavior.
+
 ### 2026-05-24 - preview: harden background launch script
 
 Forced the preview-network launch helper to start Java in headless mode and detach it into its own session. Preview nodes are meant to run as background server processes on local machines and VPS hosts, so avoiding desktop tray initialization and shell-session cleanup makes the launcher more reliable when testing from terminals, SSH sessions, and other automation.

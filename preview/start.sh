@@ -8,13 +8,19 @@ fi
 
 MIN_JAVA_VER=17
 MODE="participant"
+HEADLESS_MODE="auto"
 
 usage() {
-	echo "Usage: ./preview/start.sh [--seed|--participant]"
+	echo "Usage: ./preview/start.sh [--seed|--participant] [--headless|--gui]"
 	echo
 	echo "Starts a Qortium preview-network node."
 	echo "  --participant  connect to the preview seed at 146.103.42.59 (default)"
 	echo "  --seed         use the VPS seed settings"
+	echo "  --headless     force Java headless mode"
+	echo "  --gui          force Java GUI mode"
+	echo
+	echo "By default, the launcher uses headless mode only when no desktop display"
+	echo "is detected."
 }
 
 for arg in "$@"; do
@@ -24,6 +30,12 @@ for arg in "$@"; do
 			;;
 		--participant)
 			MODE="participant"
+			;;
+		--headless)
+			HEADLESS_MODE="true"
+			;;
+		--gui)
+			HEADLESS_MODE="false"
 			;;
 		-h|--help)
 			usage
@@ -36,6 +48,17 @@ for arg in "$@"; do
 			;;
 	esac
 done
+
+detect_headless_environment() {
+	case "$(uname -s)" in
+		Linux|FreeBSD|OpenBSD|NetBSD)
+			[ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY:-}" ]
+			;;
+		*)
+			return 1
+			;;
+	esac
+}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -108,9 +131,28 @@ cp "${SETTINGS_TEMPLATE}" "${SETTINGS_LOCAL}"
 JVM_MEMORY_ARGS_STRING="${QORTIUM_PREVIEW_JVM_MEMORY_ARGS:--XX:MaxRAMPercentage=50 -XX:+UseG1GC -Xss1024k}"
 read -r -a JVM_MEMORY_ARGS <<< "${JVM_MEMORY_ARGS_STRING}"
 
+JAVA_DISPLAY_ARGS=()
+DISPLAY_MODE_DESCRIPTION="GUI auto-detected"
+case "${HEADLESS_MODE}" in
+	true)
+		JAVA_DISPLAY_ARGS=("-Djava.awt.headless=true")
+		DISPLAY_MODE_DESCRIPTION="headless forced"
+		;;
+	false)
+		JAVA_DISPLAY_ARGS=("-Djava.awt.headless=false")
+		DISPLAY_MODE_DESCRIPTION="GUI forced"
+		;;
+	auto)
+		if detect_headless_environment; then
+			JAVA_DISPLAY_ARGS=("-Djava.awt.headless=true")
+			DISPLAY_MODE_DESCRIPTION="headless auto-detected"
+		fi
+		;;
+esac
+
 nohup setsid nice -n 20 java \
 	-Djava.net.preferIPv4Stack=false \
-	-Djava.awt.headless=true \
+	"${JAVA_DISPLAY_ARGS[@]}" \
 	"${JVM_MEMORY_ARGS[@]}" \
 	-jar "${JAR_PATH}" \
 	"${SETTINGS_LOCAL}" \
@@ -120,6 +162,7 @@ echo "$!" > "${RUN_PID}"
 echo "Qortium preview ${MODE} node running as pid $!"
 echo "Settings file: ${SETTINGS_LOCAL}"
 echo "Jar file: ${JAR_PATH}"
+echo "Display mode: ${DISPLAY_MODE_DESCRIPTION}"
 echo "Console log: ${RUN_LOG}"
 echo "Application log: ${SCRIPT_DIR}/qortium.log"
 echo
