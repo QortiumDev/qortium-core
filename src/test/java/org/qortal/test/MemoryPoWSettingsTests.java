@@ -18,11 +18,11 @@ import static org.junit.Assert.fail;
 public class MemoryPoWSettingsTests extends Common {
 
 	private static final String DEFAULT_MEMPOW_SETTINGS = "\t\"mempowSettings\": {\n"
-			+ "\t\t\"feeAlternativeDifficulty\": 16,\n"
-			+ "\t\t\"arbitraryDifficulty\": 14,\n"
+			+ "\t\t\"feeAlternativeDifficulty\": 12,\n"
+			+ "\t\t\"arbitraryDifficulty\": 11,\n"
 			+ "\t\t\"chatDifficulty\": 8,\n"
-			+ "\t\t\"messageConfirmableDifficulty\": 16,\n"
-			+ "\t\t\"messageUnconfirmableDifficulty\": 12\n"
+			+ "\t\t\"messageConfirmableDifficulty\": 12,\n"
+			+ "\t\t\"messageUnconfirmableDifficulty\": 10\n"
 			+ "\t},\n";
 
 	@Test
@@ -30,11 +30,11 @@ public class MemoryPoWSettingsTests extends Common {
 		Common.useDefaultSettings();
 
 		BlockChain blockChain = BlockChain.getInstance();
-		assertEquals(16, blockChain.getMempowFeeAlternativeDifficulty());
-		assertEquals(14, blockChain.getArbitraryTransactionPowDifficulty());
+		assertEquals(12, blockChain.getMempowFeeAlternativeDifficulty());
+		assertEquals(11, blockChain.getArbitraryTransactionPowDifficulty());
 		assertEquals(8, blockChain.getChatPowDifficulty());
-		assertEquals(16, blockChain.getMessagePowDifficultyConfirmable());
-		assertEquals(12, blockChain.getMessagePowDifficultyUnconfirmable());
+		assertEquals(12, blockChain.getMessagePowDifficultyConfirmable());
+		assertEquals(10, blockChain.getMessagePowDifficultyUnconfirmable());
 	}
 
 	@Test
@@ -73,16 +73,16 @@ public class MemoryPoWSettingsTests extends Common {
 		assertInvalidConfig(defaultConfig.replace(DEFAULT_MEMPOW_SETTINGS, ""),
 				"No \"mempowSettings\" entry found");
 
-		assertInvalidConfig(defaultConfig.replace("\"feeAlternativeDifficulty\": 16", "\"feeAlternativeDifficulty\": -1"),
+		assertInvalidConfig(defaultConfig.replace("\"feeAlternativeDifficulty\": 12", "\"feeAlternativeDifficulty\": -1"),
 				"Invalid \"mempowSettings.feeAlternativeDifficulty\"");
 
 		assertInvalidConfig(defaultConfig.replace("\"chatDifficulty\": 8", "\"chatDifficulty\": 32"),
 				"Invalid \"mempowSettings.chatDifficulty\"");
 
-		assertInvalidConfig(defaultConfig.replace("\"messageUnconfirmableDifficulty\": 12", "\"messageUnconfirmableDifficulty\": 32"),
+		assertInvalidConfig(defaultConfig.replace("\"messageUnconfirmableDifficulty\": 10", "\"messageUnconfirmableDifficulty\": 32"),
 				"Invalid \"mempowSettings.messageUnconfirmableDifficulty\"");
 
-		assertInvalidConfig(defaultConfig.replace("\t\t\"arbitraryDifficulty\": 14,\n", ""),
+		assertInvalidConfig(defaultConfig.replace("\t\t\"arbitraryDifficulty\": 11,\n", ""),
 				"No \"mempowSettings.arbitraryDifficulty\" entry found");
 	}
 

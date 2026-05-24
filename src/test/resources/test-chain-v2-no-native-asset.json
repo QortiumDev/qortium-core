@@ -80,11 +80,11 @@
 	"onlineAccountSignaturesMinLifetime": 3600000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,
 	"mempowSettings": {
-		"feeAlternativeDifficulty": 16,
-		"arbitraryDifficulty": 14,
+		"feeAlternativeDifficulty": 12,
+		"arbitraryDifficulty": 11,
 		"chatDifficulty": 8,
-		"messageConfirmableDifficulty": 16,
-		"messageUnconfirmableDifficulty": 12
+		"messageConfirmableDifficulty": 12,
+		"messageUnconfirmableDifficulty": 10
 	},
 	"blockRewardBatchStartHeight": 999999000,
 	"blockRewardBatchSize": 10,

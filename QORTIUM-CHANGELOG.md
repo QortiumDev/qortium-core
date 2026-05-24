@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - config: lower default MemoryPoW difficulties
+
+Lowered the configured MemoryPoW defaults so preview and forked networks can use proof-of-work as a practical spam control without making normal fee-free transactions unnecessarily slow. Fee alternatives and confirmable messages now use difficulty 12, arbitrary transactions use difficulty 11, unconfirmable messages use difficulty 10, and chat remains at difficulty 8.
+
 ### 2026-05-24 - consensus: use one chat proof-of-work difficulty
 
 Removed the native-asset balance threshold from CHAT proof-of-work. Chat messages now use one configured MemoryPoW difficulty whether or not the chain has a native asset and whether or not the sender has any native balance, keeping chat spam prevention predictable across bootstrap and no-native-asset networks.
