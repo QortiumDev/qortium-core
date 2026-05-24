@@ -108,8 +108,9 @@ cp "${SETTINGS_TEMPLATE}" "${SETTINGS_LOCAL}"
 JVM_MEMORY_ARGS_STRING="${QORTIUM_PREVIEW_JVM_MEMORY_ARGS:--XX:MaxRAMPercentage=50 -XX:+UseG1GC -Xss1024k}"
 read -r -a JVM_MEMORY_ARGS <<< "${JVM_MEMORY_ARGS_STRING}"
 
-nohup nice -n 20 java \
+nohup setsid nice -n 20 java \
 	-Djava.net.preferIPv4Stack=false \
+	-Djava.awt.headless=true \
 	"${JVM_MEMORY_ARGS[@]}" \
 	-jar "${JAR_PATH}" \
 	"${SETTINGS_LOCAL}" \

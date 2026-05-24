@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: harden background launch script
+
+Forced the preview-network launch helper to start Java in headless mode and detach it into its own session. Preview nodes are meant to run as background server processes on local machines and VPS hosts, so avoiding desktop tray initialization and shell-session cleanup makes the launcher more reliable when testing from terminals, SSH sessions, and other automation.
+
 ### 2026-05-24 - preview: bootstrap native asset funds
 
 Added the preview network's native asset and initial account balances to genesis so early testers can use normal paid transactions instead of depending on slow memory proof-of-work fallback paths. The seed and local starter minting accounts now begin with preview funds they can use for chat, QDN publishing, minting-group joins, and sending small amounts to new testers during the alpha preview.
