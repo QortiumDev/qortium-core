@@ -6,7 +6,6 @@ import org.junit.Test;
 import org.qortal.account.Account;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
-import org.qortal.block.BlockChain;
 import org.qortal.data.account.AccountData;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.PaymentTransactionData;
@@ -64,10 +63,10 @@ public class PublicizeTransactionTests extends Common {
 	}
 
 	@Test
-	public void testPublicizeAcceptsPaidFeeWithoutNonceAfterOldDisableTrigger() throws DataException {
+	public void testPublicizeAcceptsPaidFeeWithoutNonce() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
-			long timestamp = BlockChain.getInstance().getMemPoWTransactionUpdatesTimestamp();
+			long timestamp = TransactionUtils.nextTimestamp(repository);
 			PublicizeTransactionData transactionData = buildPublicizeTransactionData(timestamp, alice, 0L, null);
 			PublicizeTransaction publicizeTransaction = new PublicizeTransaction(repository, transactionData);
 			transactionData.setFee(publicizeTransaction.calcRecommendedFee());

@@ -79,15 +79,13 @@
 	],
 	"onlineAccountSignaturesMinLifetime": 3600000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,
-	"mempowTransactionUpdatesTimestamp": 0,
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 16,
 		"arbitraryDifficulty": 14,
 		"chatDifficultyAboveNativeThreshold": 8,
 		"chatDifficultyBelowNativeThreshold": 18,
-		"messageDifficultyV1": 14,
-		"messageDifficultyV2Confirmable": 16,
-		"messageDifficultyV2Unconfirmable": 12
+		"messageConfirmableDifficulty": 16,
+		"messageUnconfirmableDifficulty": 12
 	},
 	"blockRewardBatchStartHeight": 999999000,
 	"blockRewardBatchSize": 10,

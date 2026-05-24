@@ -1,12 +1,10 @@
 package org.qortal.test;
 
-import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.asset.Asset;
-import org.qortal.block.BlockChain;
 import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.MessageTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -192,41 +190,6 @@ public class MessageTests extends Common {
 			assertEquals(12, transaction.getPoWDifficulty());
 
 			BlockUtils.orphanLastBlock(repository);
-		}
-	}
-
-	@Test
-	public void atRecipientNoFeeWithNonceLegacyDifficulty() throws DataException, IllegalAccessException {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-
-			// Set mempowTransactionUpdatesTimestamp to a high value, so that it hasn't activated key
-			FieldUtils.writeField(BlockChain.getInstance(), "mempowTransactionUpdatesTimestamp", Long.MAX_VALUE, true);
-
-			String atRecipient = deployAt();
-			MessageTransaction transaction = testFeeNonce(repository, false, true, atRecipient, true);
-
-			// Transaction should be confirmable because all MESSAGE transactions confirmed prior to the feature trigger
-			assertTrue(transaction.isConfirmable());
-			assertTrue(transaction.isSignatureValid());
-			importUnconfirmed(transaction);
-			assertEquals(14, transaction.getPoWDifficulty()); // Legacy difficulty was 14 in all cases
-		}
-	}
-
-	@Test
-	public void regularRecipientNoFeeWithNonceLegacyDifficulty() throws DataException, IllegalAccessException {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-
-			// Set mempowTransactionUpdatesTimestamp to a high value, so that it hasn't activated key
-			FieldUtils.writeField(BlockChain.getInstance(), "mempowTransactionUpdatesTimestamp", Long.MAX_VALUE, true);
-
-			MessageTransaction transaction = testFeeNonce(repository, false, true, recipient, true);
-
-			// Transaction should be confirmable because all MESSAGE transactions confirmed prior to the feature trigger
-			assertTrue(transaction.isConfirmable());
-			assertTrue(transaction.isSignatureValid());
-			importUnconfirmed(transaction);
-			assertEquals(14, transaction.getPoWDifficulty()); // Legacy difficulty was 14 in all cases
 		}
 	}
 

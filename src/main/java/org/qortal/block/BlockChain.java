@@ -194,27 +194,22 @@ public class BlockChain {
 	/** Maximum time to retain online account signatures (ms) for block validity checks, to allow for clock variance. */
 	private long onlineAccountSignaturesMaxLifetime;
 
-	/** Feature-trigger timestamp to modify behaviour of various transactions that support mempow */
-	private long mempowTransactionUpdatesTimestamp;
-
 	/** Transaction-facing MemoryPoW difficulties. */
 	public static class MemoryPoWSettings {
 		public Integer feeAlternativeDifficulty;
 		public Integer arbitraryDifficulty;
 		public Integer chatDifficultyAboveNativeThreshold;
 		public Integer chatDifficultyBelowNativeThreshold;
-		public Integer messageDifficultyV1;
-		public Integer messageDifficultyV2Confirmable;
-		public Integer messageDifficultyV2Unconfirmable;
+		public Integer messageConfirmableDifficulty;
+		public Integer messageUnconfirmableDifficulty;
 
 		private void validate() {
 			validateDifficulty("feeAlternativeDifficulty", this.feeAlternativeDifficulty);
 			validateDifficulty("arbitraryDifficulty", this.arbitraryDifficulty);
 			validateDifficulty("chatDifficultyAboveNativeThreshold", this.chatDifficultyAboveNativeThreshold);
 			validateDifficulty("chatDifficultyBelowNativeThreshold", this.chatDifficultyBelowNativeThreshold);
-			validateDifficulty("messageDifficultyV1", this.messageDifficultyV1);
-			validateDifficulty("messageDifficultyV2Confirmable", this.messageDifficultyV2Confirmable);
-			validateDifficulty("messageDifficultyV2Unconfirmable", this.messageDifficultyV2Unconfirmable);
+			validateDifficulty("messageConfirmableDifficulty", this.messageConfirmableDifficulty);
+			validateDifficulty("messageUnconfirmableDifficulty", this.messageUnconfirmableDifficulty);
 		}
 
 		private static void validateDifficulty(String fieldName, Integer value) {
@@ -694,11 +689,6 @@ public class BlockChain {
 		return this.blockRewardBatchAccountsBlockCount;
 	}
 
-	// Feature-trigger timestamp to modify behaviour of various transactions that support mempow
-	public long getMemPoWTransactionUpdatesTimestamp() {
-		return this.mempowTransactionUpdatesTimestamp;
-	}
-
 	public int getMempowFeeAlternativeDifficulty() {
 		return this.mempowSettings.feeAlternativeDifficulty;
 	}
@@ -715,16 +705,12 @@ public class BlockChain {
 		return this.mempowSettings.chatDifficultyBelowNativeThreshold;
 	}
 
-	public int getMessagePowDifficultyV1() {
-		return this.mempowSettings.messageDifficultyV1;
+	public int getMessagePowDifficultyConfirmable() {
+		return this.mempowSettings.messageConfirmableDifficulty;
 	}
 
-	public int getMessagePowDifficultyV2Confirmable() {
-		return this.mempowSettings.messageDifficultyV2Confirmable;
-	}
-
-	public int getMessagePowDifficultyV2Unconfirmable() {
-		return this.mempowSettings.messageDifficultyV2Unconfirmable;
+	public int getMessagePowDifficultyUnconfirmable() {
+		return this.mempowSettings.messageUnconfirmableDifficulty;
 	}
 
 	/** Returns true if approval-needing transaction types require a txGroupId other than NO_GROUP. */

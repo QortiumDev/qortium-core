@@ -107,16 +107,9 @@ public class MessageTransaction extends Transaction {
 
 	public int getPoWDifficulty() {
 		BlockChain blockChain = BlockChain.getInstance();
-
-		// The difficulty changes at the "mempow transactions updates" timestamp
-		if (this.transactionData.getTimestamp() >= blockChain.getMemPoWTransactionUpdatesTimestamp()) {
-			// If this message is confirmable then require a higher difficulty
-			return this.isConfirmable()
-					? blockChain.getMessagePowDifficultyV2Confirmable()
-					: blockChain.getMessagePowDifficultyV2Unconfirmable();
-		}
-		// Before feature trigger timestamp, so use existing difficulty value
-		return blockChain.getMessagePowDifficultyV1();
+		return this.isConfirmable()
+				? blockChain.getMessagePowDifficultyConfirmable()
+				: blockChain.getMessagePowDifficultyUnconfirmable();
 	}
 
 	protected int getPoWBufferSize() {
@@ -179,14 +172,8 @@ public class MessageTransaction extends Transaction {
 
 	@Override
 	public boolean isConfirmable() {
-		// After feature trigger timestamp, only messages to an AT address can confirm
-		if (this.transactionData.getTimestamp() >= BlockChain.getInstance().getMemPoWTransactionUpdatesTimestamp()) {
-			if (this.messageTransactionData.getRecipient() == null || !this.messageTransactionData.getRecipient().toUpperCase().startsWith("A")) {
-				// Message isn't to an AT address, so this transaction is unconfirmable
-				return false;
-			}
-		}
-		return true;
+		return this.messageTransactionData.getRecipient() != null
+				&& this.messageTransactionData.getRecipient().toUpperCase().startsWith("A");
 	}
 
 	@Override

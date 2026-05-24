@@ -1336,14 +1336,11 @@ public class Block {
 						|| transaction.getDeadline() <= this.blockData.getTimestamp())
 					return ValidationResult.TRANSACTION_TIMESTAMP_INVALID;
 
-				// After feature trigger, check that this transaction is confirmable
-				if (transactionData.getTimestamp() >= BlockChain.getInstance().getMemPoWTransactionUpdatesTimestamp()) {
-					if (!transaction.isConfirmable()) {
-						return ValidationResult.TRANSACTION_NOT_CONFIRMABLE;
-					}
-					if (!transaction.isConfirmableAtHeight(this.blockData.getHeight())) {
-						return ValidationResult.TRANSACTION_NOT_CONFIRMABLE;
-					}
+				if (!transaction.isConfirmable()) {
+					return ValidationResult.TRANSACTION_NOT_CONFIRMABLE;
+				}
+				if (!transaction.isConfirmableAtHeight(this.blockData.getHeight())) {
+					return ValidationResult.TRANSACTION_NOT_CONFIRMABLE;
 				}
 
 				// Check transaction isn't already included in a block

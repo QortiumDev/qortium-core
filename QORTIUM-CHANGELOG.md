@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - consensus: make current message behavior the baseline
+
+Removed the legacy MESSAGE transaction mode that depended on the old MemoryPoW update timestamp. Qortium now always uses the current MESSAGE rules, where only messages to AT addresses can be confirmed in blocks, regular MESSAGE transactions remain unconfirmed coordination records, and the two active message proof-of-work settings use clear confirmable and unconfirmable names instead of v1/v2 labels.
+
 ### 2026-05-24 - test: add repeatable MemoryPoW benchmark mode
 
 Added a repeatable benchmark mode to the MemoryPoW test helper so Qortium can measure real transaction proof-of-work costs before changing preview or main chain difficulty settings. The helper now initializes test time correctly for timeout-based runs, reports per-difficulty timing summaries, and keeps the older simple timing mode available for quick manual checks.

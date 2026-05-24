@@ -22,9 +22,8 @@ public class MemoryPoWSettingsTests extends Common {
 			+ "\t\t\"arbitraryDifficulty\": 14,\n"
 			+ "\t\t\"chatDifficultyAboveNativeThreshold\": 8,\n"
 			+ "\t\t\"chatDifficultyBelowNativeThreshold\": 18,\n"
-			+ "\t\t\"messageDifficultyV1\": 14,\n"
-			+ "\t\t\"messageDifficultyV2Confirmable\": 16,\n"
-			+ "\t\t\"messageDifficultyV2Unconfirmable\": 12\n"
+			+ "\t\t\"messageConfirmableDifficulty\": 16,\n"
+			+ "\t\t\"messageUnconfirmableDifficulty\": 12\n"
 			+ "\t},\n";
 
 	@Test
@@ -36,9 +35,8 @@ public class MemoryPoWSettingsTests extends Common {
 		assertEquals(14, blockChain.getArbitraryTransactionPowDifficulty());
 		assertEquals(8, blockChain.getChatPowDifficultyAboveNativeThreshold());
 		assertEquals(18, blockChain.getChatPowDifficultyBelowNativeThreshold());
-		assertEquals(14, blockChain.getMessagePowDifficultyV1());
-		assertEquals(16, blockChain.getMessagePowDifficultyV2Confirmable());
-		assertEquals(12, blockChain.getMessagePowDifficultyV2Unconfirmable());
+		assertEquals(16, blockChain.getMessagePowDifficultyConfirmable());
+		assertEquals(12, blockChain.getMessagePowDifficultyUnconfirmable());
 	}
 
 	@Test
@@ -51,9 +49,8 @@ public class MemoryPoWSettingsTests extends Common {
 				+ "\t\t\"arbitraryDifficulty\": 4,\n"
 				+ "\t\t\"chatDifficultyAboveNativeThreshold\": 5,\n"
 				+ "\t\t\"chatDifficultyBelowNativeThreshold\": 6,\n"
-				+ "\t\t\"messageDifficultyV1\": 7,\n"
-				+ "\t\t\"messageDifficultyV2Confirmable\": 8,\n"
-				+ "\t\t\"messageDifficultyV2Unconfirmable\": 9\n"
+				+ "\t\t\"messageConfirmableDifficulty\": 8,\n"
+				+ "\t\t\"messageUnconfirmableDifficulty\": 9\n"
 				+ "\t},\n";
 
 		loadConfig(defaultConfig.replace(DEFAULT_MEMPOW_SETTINGS, customSettings));
@@ -64,9 +61,8 @@ public class MemoryPoWSettingsTests extends Common {
 			assertEquals(4, blockChain.getArbitraryTransactionPowDifficulty());
 			assertEquals(5, blockChain.getChatPowDifficultyAboveNativeThreshold());
 			assertEquals(6, blockChain.getChatPowDifficultyBelowNativeThreshold());
-			assertEquals(7, blockChain.getMessagePowDifficultyV1());
-			assertEquals(8, blockChain.getMessagePowDifficultyV2Confirmable());
-			assertEquals(9, blockChain.getMessagePowDifficultyV2Unconfirmable());
+			assertEquals(8, blockChain.getMessagePowDifficultyConfirmable());
+			assertEquals(9, blockChain.getMessagePowDifficultyUnconfirmable());
 		} finally {
 			Common.useDefaultSettings();
 		}
@@ -84,8 +80,8 @@ public class MemoryPoWSettingsTests extends Common {
 		assertInvalidConfig(defaultConfig.replace("\"feeAlternativeDifficulty\": 16", "\"feeAlternativeDifficulty\": -1"),
 				"Invalid \"mempowSettings.feeAlternativeDifficulty\"");
 
-		assertInvalidConfig(defaultConfig.replace("\"messageDifficultyV2Unconfirmable\": 12", "\"messageDifficultyV2Unconfirmable\": 32"),
-				"Invalid \"mempowSettings.messageDifficultyV2Unconfirmable\"");
+		assertInvalidConfig(defaultConfig.replace("\"messageUnconfirmableDifficulty\": 12", "\"messageUnconfirmableDifficulty\": 32"),
+				"Invalid \"mempowSettings.messageUnconfirmableDifficulty\"");
 
 		assertInvalidConfig(defaultConfig.replace("\t\t\"arbitraryDifficulty\": 14,\n", ""),
 				"No \"mempowSettings.arbitraryDifficulty\" entry found");
