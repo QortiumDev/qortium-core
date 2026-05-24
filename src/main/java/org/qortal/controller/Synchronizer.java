@@ -1174,8 +1174,14 @@ public class Synchronizer extends Thread {
 				break;
 
 			// No blocks after genesis block?
-			// We don't get called for a peer at genesis height so this means NO blocks in common
 			if (testHeight == 1) {
+				BlockSummaryData peerChainTipData = peer.getChainTipData();
+				if (peerChainTipData != null
+						&& peerChainTipData.getHeight() == 1
+						&& Arrays.equals(peerChainTipData.getSignature(), testSignature)) {
+					break;
+				}
+
 				LOGGER.info(String.format("Failure to find common block with peer %s", peer));
 				return SynchronizationResult.NO_COMMON_BLOCK;
 			}

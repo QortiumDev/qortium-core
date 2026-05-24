@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - sync: recognize shared genesis-only peers
+
+Fixed a fresh-network synchronization edge case where two nodes that were both still at genesis could misclassify each other as having no common block. Qortium now recognizes a peer reporting the same genesis block as sharing that common block, preventing the peer from being marked as misbehaved before the first post-genesis block is minted.
+
 ### 2026-05-24 - preview: refresh alpha genesis timestamp
 
 Refreshed the preview-network genesis timestamp for the initial two-node launch attempt. Keeping the preview genesis close to the scheduled start time prevents the first post-genesis blocks from looking stale to peer selection and synchronization logic while this alpha chain is still being reset freely.
