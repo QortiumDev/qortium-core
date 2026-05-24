@@ -41,6 +41,7 @@ apikey.txt
 /preview/data-preview/
 /preview/db-preview/
 /preview/qortium-backup-preview/
+/preview/secrets/
 
 # Build output and packaged artifacts
 /bin/

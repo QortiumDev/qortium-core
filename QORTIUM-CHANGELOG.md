@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: add initial minting accounts
+
+Added two initial preview minting accounts so the VPS seed and one local test node can start producing blocks from the fixed preview genesis once each node installs its own private minting key locally. The chain config only includes the public account and minting authorization data, while the generated private keys are kept in an ignored local preview secrets folder.
+
 ### 2026-05-24 - preview: add public alpha network profile
 
 Added a separate preview-network runtime profile for the shared Qortium alpha demo network. The local `testnet/` folder remains a disposable single-node lab, while `preview/` uses fixed shared chain data, accelerated preview reward and account-level timing, a lower share-bin activation count for small preview groups, connects participants to the VPS seed at `146.103.42.59`, keeps generated runtime files out of git, and documents that minting identities still need to be added later before preview blocks can advance.

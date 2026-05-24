@@ -70,9 +70,10 @@ testnet and uses normal multi-node rules.
 ./preview/status.sh --wait
 ```
 
-The preview scaffold is connection-ready, but launch minting identities are not
-committed yet. See [preview/README.md](preview/README.md) before running the
-VPS seed or expecting preview blocks to advance.
+The preview scaffold is connection-ready and includes two public genesis
+minting authorizations for initial seed/local testing. Private minting keys are
+not committed; see [preview/README.md](preview/README.md) before running the
+VPS seed or installing minting keys.
 
 ## Local Node Build And Run
 

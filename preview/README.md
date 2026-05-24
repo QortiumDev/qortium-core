@@ -13,10 +13,10 @@ quickly.
 
 ## Current State
 
-The preview scaffold is connection-ready, but it does not include committed
-minting identities yet. Nodes can start from the fixed preview genesis and
-connect to the seed, but the chain is expected to stay at genesis until launch
-minting keys are added in a later update.
+The preview scaffold is connection-ready and includes two initial public
+minting authorizations in genesis, one for the seed node and one for a local
+test node. The private minting keys are not committed; each node has to install
+its own ignored local key before it can mint.
 
 Preview uses accelerated chain timing for early testing. Reward schedule
 intervals are compressed by 100 compared with the current Qortium defaults, and
@@ -104,7 +104,27 @@ These files are ignored by git and can be removed with `./preview/reset.sh`.
 
 ## Launch Minting
 
-Preview minting requires real launch minting identities to be added later. Do
-not commit private minting keys. The eventual launch update should add only the
-required public chain data, then each minting node should add its own private
-minting key locally through the secured admin API.
+Preview genesis authorizes these initial minting accounts:
+
+| Role | Account Address | Account Public Key | Minting Public Key |
+| --- | --- | --- | --- |
+| seed | `QXhkAy3zNBQwzxxJLLP9u42Ec2XvASyvf3` | `HADRP9cBQ5EM7vkKmJMP3xAjBdNsQjX8hQTK129ZUsiq` | `6Ue5kRXpHbNrQguXjpHuTu6RzPiqZrYLStJ6gmBDobov` |
+| local | `QaLdnApWW3hps1qXM8cpsL1pVgw7RtyJmN` | `BUL1j6C63NJqEfMmopqovRC3NFRsHTHGMwGPS3ut1tNY` | `6DdhEueMEopFphx81ywZ5WWdZHCUDERi9J43rjQDtvMV` |
+
+The corresponding private keys are stored locally in
+`preview/secrets/initial-minting-accounts.json`, which is ignored by git. Do
+not commit private minting keys.
+
+After a node starts and creates `preview/apikey.txt`, install the correct
+minting private key for that node:
+
+```sh
+curl -X POST \
+  -H "X-API-KEY: $(cat preview/apikey.txt)" \
+  -H "Content-Type: text/plain" \
+  --data "MINTING_PRIVATE_KEY_FROM_PREVIEW_SECRETS" \
+  http://127.0.0.1:62391/admin/mintingaccounts
+```
+
+Use the `mintingPrivateKey` value from the ignored secrets file. Do not use the
+account private key as the minting key.
