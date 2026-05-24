@@ -40,7 +40,7 @@
   "networkPoWComputePoolSize": 2,
   "uPnPEnabled": false,
   "apiDocumentationEnabled": false,
-  "apiRestricted": true,
+  "apiRestricted": false,
   "bootstrap": false,
   "maxPeerConnectionTime": 999999999,
   "recoveryModeTimeout": 0,

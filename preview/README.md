@@ -91,8 +91,12 @@ The preview profile reuses the `623xx` test-network port range:
 - P2P: `62392`
 - QDN/data: `62394`
 
-The API is configured as restricted and whitelisted for local access. For a
-public VPS, firewall the API port unless you intentionally need remote
+Participant nodes allow normal local transaction-builder API calls so testers
+can create payments, group joins, chain-parameter proposals, and other signed
+transactions through their own local node. The public seed profile stays API
+restricted. Both profiles keep the API whitelisted for local access only.
+
+For a public VPS, firewall the API port unless you intentionally need remote
 administration. Public preview peers need to reach the P2P port, and QDN/data
 peers need to reach the QDN port.
 

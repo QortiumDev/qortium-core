@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: allow local participant transaction builders
+
+Allowed preview participant nodes to use normal local transaction-builder API calls while keeping the public seed node restricted. This lets testers build payments, group joins, governance proposals, and other signed transactions through their own local node without opening the seed API or weakening the local-only API whitelist.
+
 ### 2026-05-24 - gui: set application taskbar icon
 
 Centralized Qortium's desktop application icons so the startup splash window and supported Java taskbars use the same stable Qortium logo images instead of tray-state artwork or platform defaults. The GUI startup path now sets the Java taskbar icon when the desktop supports it, keeps headless startup as a safe no-op, and has focused tests proving the packaged app icon resources load correctly.
