@@ -58,6 +58,22 @@ Stop it with:
 See [testnet/README.md](testnet/README.md) for the full first-test walkthrough,
 reset instructions, generated runtime files, and multi-node testnet notes.
 
+## Preview Network
+
+The shared Qortium preview network is a public alpha/demo profile for connecting
+to the seed node at `146.103.42.59`. It is separate from the local single-node
+testnet and uses normal multi-node rules.
+
+```sh
+./build.sh
+./preview/start.sh
+./preview/status.sh --wait
+```
+
+The preview scaffold is connection-ready, but launch minting identities are not
+committed yet. See [preview/README.md](preview/README.md) before running the
+VPS seed or expecting preview blocks to advance.
+
 ## Local Node Build And Run
 
 For normal local node operation, build the jar with the helper and use the root

@@ -31,6 +31,16 @@ apikey.txt
 /testnet/data/
 /testnet/db-testnet/
 /testnet/qortium-backup-test/
+/preview/run.pid
+/preview/run.log
+/preview/qortium.log
+/preview/QortiumKeyStore.jks
+/preview/apikey.txt
+/preview/settings-preview-local.json
+/preview/settings-preview-seed-local.json
+/preview/data-preview/
+/preview/db-preview/
+/preview/qortium-backup-preview/
 
 # Build output and packaged artifacts
 /bin/

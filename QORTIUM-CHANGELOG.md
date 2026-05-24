@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: add public alpha network profile
+
+Added a separate preview-network runtime profile for the shared Qortium alpha demo network. The local `testnet/` folder remains a disposable single-node lab, while `preview/` uses fixed shared chain data, accelerated preview reward and account-level timing, a lower share-bin activation count for small preview groups, connects participants to the VPS seed at `146.103.42.59`, keeps generated runtime files out of git, and documents that minting identities still need to be added later before preview blocks can advance.
+
 ### 2026-05-23 - test: suppress expected negative-path error logs
 
 Added a test-only logging helper and used it around restart and minting checks that intentionally trigger failure paths. The production errors still log normally, but expected negative-path tests no longer make the Surefire reports look like they contain real runtime errors.

@@ -1,0 +1,64 @@
+{
+  "listenPort": 62392,
+  "listenDataPort": 62394,
+  "apiPort": 62391,
+  "isTestNet": true,
+  "singleNodeTestnet": false,
+  "minPeerVersion": "6.1.0",
+  "allowConnectionsWithOlderPeerVersions": false,
+  "bitcoinyNetworks": {
+    "BTC": "TEST3",
+    "LTC": "TEST4"
+  },
+  "wallets": {
+    "BTC": false,
+    "BCH": false,
+    "LTC": false,
+    "DOGE": false,
+    "DGB": false,
+    "RVN": false,
+    "DASH": false,
+    "PPC": false,
+    "NMC": false,
+    "FIRO": false,
+    "KMD": false,
+    "VRSC": false,
+    "ZEC": false,
+    "LBC": false,
+    "XVG": false,
+    "ARRR": false
+  },
+  "repositoryPath": "db-preview",
+  "exportPath": "qortium-backup-preview",
+  "dataPath": "data-preview",
+  "blockchainConfig": "previewchain.json",
+  "minBlockchainPeers": 1,
+  "minOutboundPeers": 1,
+  "maxPeers": 32,
+  "maxDataPeers": 32,
+  "maxNetworkThreadPoolSize": 128,
+  "networkPoWComputePoolSize": 2,
+  "uPnPEnabled": false,
+  "apiDocumentationEnabled": false,
+  "apiRestricted": true,
+  "bootstrap": false,
+  "maxPeerConnectionTime": 999999999,
+  "recoveryModeTimeout": 0,
+  "qdnEnabled": true,
+  "relayModeEnabled": true,
+  "maxStorageCapacity": 10737418240,
+  "storagePolicy": "FOLLOWED_OR_VIEWED",
+  "initialPeers": [
+    "146.103.42.59:62392"
+  ],
+  "uiLocalServers": [
+    "localhost",
+    "127.0.0.1",
+    "::1"
+  ],
+  "apiWhitelist": [
+    "localhost",
+    "127.0.0.1",
+    "::1"
+  ]
+}
