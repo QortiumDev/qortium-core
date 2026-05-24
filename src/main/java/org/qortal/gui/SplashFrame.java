@@ -8,8 +8,6 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.List;
 
 public class SplashFrame {
 
@@ -74,16 +72,7 @@ public class SplashFrame {
 
 		try {
 			this.splashDialog = new JFrame(TITLE);
-
-			List<Image> icons = new ArrayList<>();
-			icons.add(Gui.loadImage("icons/icon16.png"));
-			icons.add(Gui.loadImage("icons/qortium_ui_tray_synced.png"));
-			icons.add(Gui.loadImage("icons/qortium_ui_tray_syncing_time-alt.png"));
-			icons.add(Gui.loadImage("icons/qortium_ui_tray_minting.png"));
-			icons.add(Gui.loadImage("icons/qortium_ui_tray_syncing.png"));
-			icons.add(Gui.loadImage("icons/icon64.png"));
-			icons.add(Gui.loadImage("icons/Qlogo_128.png"));
-			this.splashDialog.setIconImages(icons);
+			Gui.applyWindowIcon(this.splashDialog);
 
 			this.splashPanel = new SplashPanel();
 			this.splashDialog.getContentPane().add(this.splashPanel);

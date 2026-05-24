@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - gui: set application taskbar icon
+
+Centralized Qortium's desktop application icons so the startup splash window and supported Java taskbars use the same stable Qortium logo images instead of tray-state artwork or platform defaults. The GUI startup path now sets the Java taskbar icon when the desktop supports it, keeps headless startup as a safe no-op, and has focused tests proving the packaged app icon resources load correctly.
+
 ### 2026-05-24 - preview: detect headless launch mode
 
 Changed the preview-network launcher so it only starts Java in headless mode when the local environment appears to have no desktop display. Local desktop participants can now get the normal Qortium splash and tray UI by default, while VPS and terminal-only nodes still avoid graphical startup automatically. The launcher also supports explicit `--headless` and `--gui` overrides for cases where automatic detection is not the desired behavior.
