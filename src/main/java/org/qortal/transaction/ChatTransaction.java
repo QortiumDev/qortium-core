@@ -3,6 +3,7 @@ package org.qortal.transaction;
 import org.qortal.account.Account;
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.asset.Asset;
+import org.qortal.block.BlockChain;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
 import org.qortal.data.naming.NameData;
@@ -50,8 +51,6 @@ public class ChatTransaction extends Transaction {
 	// Other useful constants
 	public static final int MAX_DATA_SIZE = 4000;
 	public static final int POW_BUFFER_SIZE = 8 * 1024 * 1024; // bytes
-	public static final int POW_DIFFICULTY_ABOVE_NATIVE_THRESHOLD = 8; // leading zero bits
-	public static final int POW_DIFFICULTY_BELOW_NATIVE_THRESHOLD = 18; // leading zero bits
 	public static final long POW_NATIVE_THRESHOLD = 400000000L;
 
 	// Constructors
@@ -101,10 +100,15 @@ public class ChatTransaction extends Transaction {
 		// Clear nonce from transactionBytes
 		ChatTransactionTransformer.clearNonce(transactionBytes);
 
-		int difficulty = this.getSender().getConfirmedBalance(Asset.NATIVE) >= POW_NATIVE_THRESHOLD ? POW_DIFFICULTY_ABOVE_NATIVE_THRESHOLD : POW_DIFFICULTY_BELOW_NATIVE_THRESHOLD;
-
 		// Calculate nonce
-		this.chatTransactionData.setNonce(MemoryPoW.compute2(transactionBytes, POW_BUFFER_SIZE, difficulty));
+		this.chatTransactionData.setNonce(MemoryPoW.compute2(transactionBytes, POW_BUFFER_SIZE, this.getPoWDifficulty()));
+	}
+
+	public int getPoWDifficulty() throws DataException {
+		BlockChain blockChain = BlockChain.getInstance();
+		return this.getSender().getConfirmedBalance(Asset.NATIVE) >= POW_NATIVE_THRESHOLD
+				? blockChain.getChatPowDifficultyAboveNativeThreshold()
+				: blockChain.getChatPowDifficultyBelowNativeThreshold();
 	}
 
 	/**
@@ -236,15 +240,12 @@ public class ChatTransaction extends Transaction {
 		// Clear nonce from transactionBytes
 		ChatTransactionTransformer.clearNonce(transactionBytes);
 
-		int difficulty;
 		try {
-			difficulty = this.getSender().getConfirmedBalance(Asset.NATIVE) >= POW_NATIVE_THRESHOLD ? POW_DIFFICULTY_ABOVE_NATIVE_THRESHOLD : POW_DIFFICULTY_BELOW_NATIVE_THRESHOLD;
+			// Check nonce
+			return MemoryPoW.verify2(transactionBytes, POW_BUFFER_SIZE, this.getPoWDifficulty(), nonce);
 		} catch (DataException e) {
 			return false;
 		}
-
-		// Check nonce
-		return MemoryPoW.verify2(transactionBytes, POW_BUFFER_SIZE, difficulty, nonce);
 	}
 
 	private int countRecentChatTransactionsByCreator(PublicKeyAccount creator) throws DataException {

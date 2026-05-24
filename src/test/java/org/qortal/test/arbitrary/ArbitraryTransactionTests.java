@@ -72,7 +72,7 @@ public class ArbitraryTransactionTests extends Common {
             TransactionUtils.signAndMint(repository, registerNameTransactionData, alice);
 
             // Set difficulty to 1
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             // Create PUT transaction, with a fee
             Path path1 = ArbitraryUtils.generateRandomDataPath(dataLength);
@@ -87,7 +87,7 @@ public class ArbitraryTransactionTests extends Common {
             assertTrue(transaction.isSignatureValid());
 
             // Increase difficulty to 15
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 15, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 15, true);
 
             // Make sure that nonce validation still succeeds, as the fee has allowed us to avoid including a nonce
             assertTrue(transaction.isSignatureValid());
@@ -111,7 +111,7 @@ public class ArbitraryTransactionTests extends Common {
             TransactionUtils.signAndMint(repository, registerNameTransactionData, alice);
 
             // Set difficulty to 1
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             // Create PUT transaction, with a fee that is too low
             Path path1 = ArbitraryUtils.generateRandomDataPath(dataLength);
@@ -149,7 +149,7 @@ public class ArbitraryTransactionTests extends Common {
             TransactionUtils.signAndMint(repository, registerNameTransactionData, alice);
 
             // Set difficulty to 1
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             // Create PUT transaction, with a fee
             Path path1 = ArbitraryUtils.generateRandomDataPath(dataLength);
@@ -164,7 +164,7 @@ public class ArbitraryTransactionTests extends Common {
             assertTrue(transaction.isSignatureValid());
 
             // Increase difficulty to 15
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 15, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 15, true);
 
             // Make sure that nonce validation still succeeds, as the fee has allowed us to avoid including a nonce
             assertTrue(transaction.isSignatureValid());
@@ -188,7 +188,7 @@ public class ArbitraryTransactionTests extends Common {
             TransactionUtils.signAndMint(repository, registerNameTransactionData, alice);
 
             // Set difficulty to 1
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             // Create PUT transaction with an insufficient fee and no nonce.
             Path path1 = ArbitraryUtils.generateRandomDataPath(dataLength);
@@ -224,7 +224,7 @@ public class ArbitraryTransactionTests extends Common {
             TransactionUtils.signAndMint(repository, registerNameTransactionData, alice);
 
             // Set difficulty to 1
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             // Create PUT transaction with zero fee and no nonce.
             Path path1 = ArbitraryUtils.generateRandomDataPath(dataLength);
@@ -260,7 +260,7 @@ public class ArbitraryTransactionTests extends Common {
             TransactionUtils.signAndMint(repository, registerNameTransactionData, alice);
 
             // Set difficulty to 1
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             // Create PUT transaction with zero fee and a nonce.
             Path path1 = ArbitraryUtils.generateRandomDataPath(dataLength);
@@ -278,7 +278,7 @@ public class ArbitraryTransactionTests extends Common {
             assertEquals(Transaction.ValidationResult.OK, transaction.isValidUnconfirmed());
 
             // Increase difficulty to 15
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 15, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 15, true);
 
             // Make sure nonce validation fails once the existing nonce no longer satisfies MemoryPoW.
             // Note: there is a very tiny chance this could succeed due to being extremely lucky
@@ -287,7 +287,7 @@ public class ArbitraryTransactionTests extends Common {
             assertFalse(transaction.isSignatureValid());
 
             // Reduce difficulty back to 1, to double check
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
             assertTrue(transaction.isSignatureValid());
         }
     }
@@ -333,7 +333,7 @@ public class ArbitraryTransactionTests extends Common {
     public void testOnChainData() throws DataException, IOException, MissingDataException, IllegalAccessException {
         try (final Repository repository = RepositoryManager.getRepository()) {
             // Set difficulty to 1 to speed up the tests
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
             String publicKey58 = Base58.encode(alice.getPublicKey());
@@ -393,7 +393,7 @@ public class ArbitraryTransactionTests extends Common {
     public void testOnChainDataWithMetadata() throws DataException, IOException, MissingDataException, IllegalAccessException {
         try (final Repository repository = RepositoryManager.getRepository()) {
             // Set difficulty to 1 to speed up the tests
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
             String publicKey58 = Base58.encode(alice.getPublicKey());
@@ -473,7 +473,7 @@ public class ArbitraryTransactionTests extends Common {
     public void testOffChainData() throws DataException, IOException, MissingDataException, IllegalAccessException {
         try (final Repository repository = RepositoryManager.getRepository()) {
             // Set difficulty to 1 to speed up the tests
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
             String publicKey58 = Base58.encode(alice.getPublicKey());

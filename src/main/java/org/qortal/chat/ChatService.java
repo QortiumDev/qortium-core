@@ -2,6 +2,7 @@ package org.qortal.chat;
 
 import org.qortal.account.PublicKeyAccount;
 import org.qortal.asset.Asset;
+import org.qortal.block.BlockChain;
 import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
 import org.qortal.chat.crypto.PrivateGroupChatMembership;
@@ -279,9 +280,10 @@ public class ChatService {
 
 	private int getPoWDifficulty(Repository repository, byte[] senderPublicKey) throws DataException {
 		PublicKeyAccount sender = new PublicKeyAccount(repository, senderPublicKey);
+		BlockChain blockChain = BlockChain.getInstance();
 		return sender.getConfirmedBalance(Asset.NATIVE) >= ChatTransaction.POW_NATIVE_THRESHOLD
-				? ChatTransaction.POW_DIFFICULTY_ABOVE_NATIVE_THRESHOLD
-				: ChatTransaction.POW_DIFFICULTY_BELOW_NATIVE_THRESHOLD;
+				? blockChain.getChatPowDifficultyAboveNativeThreshold()
+				: blockChain.getChatPowDifficultyBelowNativeThreshold();
 	}
 
 	private static boolean isUsablePublicKey(byte[] publicKey) {

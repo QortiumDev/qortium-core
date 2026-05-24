@@ -32,9 +32,6 @@ public class MessageTransaction extends Transaction {
 
 	public static final int MAX_DATA_SIZE = 4000;
 	public static final int POW_BUFFER_SIZE = 8 * 1024 * 1024; // bytes
-	public static final int POW_DIFFICULTY_V1 = 14; // leading zero bits
-	public static final int POW_DIFFICULTY_V2_CONFIRMABLE = 16; // leading zero bits
-	public static final int POW_DIFFICULTY_V2_UNCONFIRMABLE = 12; // leading zero bits
 
 	// Properties
 
@@ -109,13 +106,17 @@ public class MessageTransaction extends Transaction {
 	}
 
 	public int getPoWDifficulty() {
+		BlockChain blockChain = BlockChain.getInstance();
+
 		// The difficulty changes at the "mempow transactions updates" timestamp
-		if (this.transactionData.getTimestamp() >= BlockChain.getInstance().getMemPoWTransactionUpdatesTimestamp()) {
+		if (this.transactionData.getTimestamp() >= blockChain.getMemPoWTransactionUpdatesTimestamp()) {
 			// If this message is confirmable then require a higher difficulty
-			return this.isConfirmable() ? POW_DIFFICULTY_V2_CONFIRMABLE : POW_DIFFICULTY_V2_UNCONFIRMABLE;
+			return this.isConfirmable()
+					? blockChain.getMessagePowDifficultyV2Confirmable()
+					: blockChain.getMessagePowDifficultyV2Unconfirmable();
 		}
 		// Before feature trigger timestamp, so use existing difficulty value
-		return POW_DIFFICULTY_V1;
+		return blockChain.getMessagePowDifficultyV1();
 	}
 
 	protected int getPoWBufferSize() {

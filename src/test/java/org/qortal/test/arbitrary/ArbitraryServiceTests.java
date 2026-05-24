@@ -279,7 +279,7 @@ public class ArbitraryServiceTests extends Common {
             TransactionUtils.signAndMint(repository, transactionData, alice);
 
             // Set difficulty to 1
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             // Create PUT transaction
             ArbitraryUtils.createAndMintTxn(repository, publicKey58, path, name, identifier, ArbitraryTransactionData.Method.PUT, service, alice);
@@ -420,7 +420,7 @@ public class ArbitraryServiceTests extends Common {
             TransactionUtils.signAndMint(repository, transactionData, alice);
 
             // Set difficulty to 1
-            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+            FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
 
             // Create PUT transaction
             ArbitraryUtils.createAndMintTxn(repository, publicKey58, filePath, name, identifier, ArbitraryTransactionData.Method.PUT, service, alice);

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - config: move transaction MemoryPoW difficulties into chain config
+
+Moved the MemoryPoW difficulty values used by transaction fee fallback, arbitrary data publishing, chat, and messages out of hard-coded Java constants and into each chain's blockchain configuration. The default values stay the same, but mainnet, preview, testnet, and test chains can now choose their own transaction proof-of-work difficulty profile without rebuilding the jar.
+
 ### 2026-05-24 - preview: refresh public candidate chain settings
 
 Refreshed the preview-network genesis timestamp for the public-preview candidate reset and shortened the preview-only chain-parameter activation delay to 20 blocks. This keeps the reset chain aligned with the current launch window and lets the governance proposal workflow be tested through activation before inviting public testers.

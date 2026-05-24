@@ -41,7 +41,7 @@ public class ArbitraryDataTests extends Common {
         Common.useDefaultSettings();
 
         // Set difficulty to 1 to speed up the tests
-        FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficulty", 1, true);
+        FieldUtils.writeField(ArbitraryDataManager.getInstance(), "powDifficultyOverride", 1, true);
     }
 
     @Test

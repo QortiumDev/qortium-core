@@ -197,6 +197,38 @@ public class BlockChain {
 	/** Feature-trigger timestamp to modify behaviour of various transactions that support mempow */
 	private long mempowTransactionUpdatesTimestamp;
 
+	/** Transaction-facing MemoryPoW difficulties. */
+	public static class MemoryPoWSettings {
+		public Integer feeAlternativeDifficulty;
+		public Integer arbitraryDifficulty;
+		public Integer chatDifficultyAboveNativeThreshold;
+		public Integer chatDifficultyBelowNativeThreshold;
+		public Integer messageDifficultyV1;
+		public Integer messageDifficultyV2Confirmable;
+		public Integer messageDifficultyV2Unconfirmable;
+
+		private void validate() {
+			validateDifficulty("feeAlternativeDifficulty", this.feeAlternativeDifficulty);
+			validateDifficulty("arbitraryDifficulty", this.arbitraryDifficulty);
+			validateDifficulty("chatDifficultyAboveNativeThreshold", this.chatDifficultyAboveNativeThreshold);
+			validateDifficulty("chatDifficultyBelowNativeThreshold", this.chatDifficultyBelowNativeThreshold);
+			validateDifficulty("messageDifficultyV1", this.messageDifficultyV1);
+			validateDifficulty("messageDifficultyV2Confirmable", this.messageDifficultyV2Confirmable);
+			validateDifficulty("messageDifficultyV2Unconfirmable", this.messageDifficultyV2Unconfirmable);
+		}
+
+		private static void validateDifficulty(String fieldName, Integer value) {
+			String configName = String.format("mempowSettings.%s", fieldName);
+
+			if (value == null)
+				Settings.throwValidationError(String.format("No \"%s\" entry found in blockchain config", configName));
+
+			if (value < 0 || value > 31)
+				Settings.throwValidationError(String.format("Invalid \"%s\" in blockchain config", configName));
+		}
+	}
+	private MemoryPoWSettings mempowSettings;
+
 	/** Feature trigger block height for batch block reward payouts.
 	 * This MUST be a multiple of blockRewardBatchSize. Can't use
 	 * featureTriggers because unit tests need to set this value via Reflection. */
@@ -667,6 +699,34 @@ public class BlockChain {
 		return this.mempowTransactionUpdatesTimestamp;
 	}
 
+	public int getMempowFeeAlternativeDifficulty() {
+		return this.mempowSettings.feeAlternativeDifficulty;
+	}
+
+	public int getArbitraryTransactionPowDifficulty() {
+		return this.mempowSettings.arbitraryDifficulty;
+	}
+
+	public int getChatPowDifficultyAboveNativeThreshold() {
+		return this.mempowSettings.chatDifficultyAboveNativeThreshold;
+	}
+
+	public int getChatPowDifficultyBelowNativeThreshold() {
+		return this.mempowSettings.chatDifficultyBelowNativeThreshold;
+	}
+
+	public int getMessagePowDifficultyV1() {
+		return this.mempowSettings.messageDifficultyV1;
+	}
+
+	public int getMessagePowDifficultyV2Confirmable() {
+		return this.mempowSettings.messageDifficultyV2Confirmable;
+	}
+
+	public int getMessagePowDifficultyV2Unconfirmable() {
+		return this.mempowSettings.messageDifficultyV2Unconfirmable;
+	}
+
 	/** Returns true if approval-needing transaction types require a txGroupId other than NO_GROUP. */
 	public boolean getRequireGroupForApproval() {
 		return this.requireGroupForApproval;
@@ -1031,6 +1091,11 @@ public class BlockChain {
 
 		if (this.featureTriggers == null)
 			Settings.throwValidationError("No \"featureTriggers\" entry found in blockchain config");
+
+		if (this.mempowSettings == null)
+			Settings.throwValidationError("No \"mempowSettings\" entry found in blockchain config");
+
+		this.mempowSettings.validate();
 
 		// Check all featureTriggers are present
 		for (FeatureTrigger featureTrigger : FeatureTrigger.values())

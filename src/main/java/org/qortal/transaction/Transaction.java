@@ -39,7 +39,6 @@ import static java.util.stream.Collectors.toMap;
 public abstract class Transaction {
 
 	private static final int MEMPOW_FEE_ALTERNATIVE_BUFFER_SIZE = 8 * 1024 * 1024; // bytes
-	private static final int MEMPOW_FEE_ALTERNATIVE_DIFFICULTY = 16; // leading zero bits
 
 	// Transaction types
 	public enum TransactionType {
@@ -446,7 +445,7 @@ public abstract class Transaction {
 	}
 
 	protected int getMempowFeeAlternativeDifficulty() {
-		return MEMPOW_FEE_ALTERNATIVE_DIFFICULTY;
+		return BlockChain.getInstance().getMempowFeeAlternativeDifficulty();
 	}
 
 	protected ValidationResult validateMempowFeePolicy() throws DataException {
