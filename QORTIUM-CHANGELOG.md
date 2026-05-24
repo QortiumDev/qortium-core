@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - consensus: use one chat proof-of-work difficulty
+
+Removed the native-asset balance threshold from CHAT proof-of-work. Chat messages now use one configured MemoryPoW difficulty whether or not the chain has a native asset and whether or not the sender has any native balance, keeping chat spam prevention predictable across bootstrap and no-native-asset networks.
+
 ### 2026-05-24 - consensus: make current message behavior the baseline
 
 Removed the legacy MESSAGE transaction mode that depended on the old MemoryPoW update timestamp. Qortium now always uses the current MESSAGE rules, where only messages to AT addresses can be confirmed in blocks, regular MESSAGE transactions remain unconfirmed coordination records, and the two active message proof-of-work settings use clear confirmable and unconfirmable names instead of v1/v2 labels.

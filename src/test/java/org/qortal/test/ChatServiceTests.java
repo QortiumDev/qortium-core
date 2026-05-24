@@ -3,6 +3,7 @@ package org.qortal.test;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortal.asset.Asset;
 import org.qortal.chat.ChatService;
 import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
@@ -87,6 +88,24 @@ public class ChatServiceTests extends Common {
 			ChatTransactionData incorrectNonceData = unsignedChat(alice, Group.NO_GROUP, null, "incorrect nonce", now(), null);
 			new ChatTransaction(repository, incorrectNonceData).sign(alice);
 			assertFalse(CHAT_SERVICE.isSignatureValid(repository, incorrectNonceData));
+		}
+	}
+
+	@Test
+	public void testChatDifficultyDoesNotDependOnNativeBalance() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			alice.setConfirmedBalance(Asset.NATIVE, 0L);
+			bob.setConfirmedBalance(Asset.NATIVE, 500000000L);
+
+			ChatTransaction zeroBalanceChat = new ChatTransaction(repository,
+					unsignedChat(alice, Group.NO_GROUP, null, "zero balance", now(), null));
+			ChatTransaction fundedChat = new ChatTransaction(repository,
+					unsignedChat(bob, Group.NO_GROUP, null, "funded", now(), null));
+
+			assertEquals(8, zeroBalanceChat.getPoWDifficulty());
+			assertEquals(zeroBalanceChat.getPoWDifficulty(), fundedChat.getPoWDifficulty());
 		}
 	}
 

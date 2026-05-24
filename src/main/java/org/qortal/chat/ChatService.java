@@ -1,7 +1,6 @@
 package org.qortal.chat;
 
 import org.qortal.account.PublicKeyAccount;
-import org.qortal.asset.Asset;
 import org.qortal.block.BlockChain;
 import org.qortal.chat.crypto.PrivateGroupChatEnvelope;
 import org.qortal.chat.crypto.PrivateGroupChatKeyAnnouncement;
@@ -65,13 +64,7 @@ public class ChatService {
 
 		ChatTransactionTransformer.clearNonce(transactionBytes);
 
-		int difficulty;
-		try {
-			difficulty = getPoWDifficulty(repository, senderPublicKey);
-		} catch (DataException e) {
-			return false;
-		}
-
+		int difficulty = getPoWDifficulty();
 		return MemoryPoW.verify2(transactionBytes, ChatTransaction.POW_BUFFER_SIZE, difficulty, chatTransactionData.getNonce());
 	}
 
@@ -149,7 +142,7 @@ public class ChatService {
 
 		ChatTransactionTransformer.clearNonce(transactionBytes);
 
-		int difficulty = getPoWDifficulty(repository, chatTransactionData.getSenderPublicKey());
+		int difficulty = getPoWDifficulty();
 		chatTransactionData.setNonce(MemoryPoW.compute2(transactionBytes, ChatTransaction.POW_BUFFER_SIZE, difficulty));
 	}
 
@@ -278,12 +271,8 @@ public class ChatService {
 		return repository.getGroupRepository().adminExists(groupData.getGroupId(), address);
 	}
 
-	private int getPoWDifficulty(Repository repository, byte[] senderPublicKey) throws DataException {
-		PublicKeyAccount sender = new PublicKeyAccount(repository, senderPublicKey);
-		BlockChain blockChain = BlockChain.getInstance();
-		return sender.getConfirmedBalance(Asset.NATIVE) >= ChatTransaction.POW_NATIVE_THRESHOLD
-				? blockChain.getChatPowDifficultyAboveNativeThreshold()
-				: blockChain.getChatPowDifficultyBelowNativeThreshold();
+	private int getPoWDifficulty() {
+		return BlockChain.getInstance().getChatPowDifficulty();
 	}
 
 	private static boolean isUsablePublicKey(byte[] publicKey) {

@@ -2,7 +2,6 @@ package org.qortal.transaction;
 
 import org.qortal.account.Account;
 import org.qortal.account.PublicKeyAccount;
-import org.qortal.asset.Asset;
 import org.qortal.block.BlockChain;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
@@ -51,7 +50,6 @@ public class ChatTransaction extends Transaction {
 	// Other useful constants
 	public static final int MAX_DATA_SIZE = 4000;
 	public static final int POW_BUFFER_SIZE = 8 * 1024 * 1024; // bytes
-	public static final long POW_NATIVE_THRESHOLD = 400000000L;
 
 	// Constructors
 
@@ -104,11 +102,8 @@ public class ChatTransaction extends Transaction {
 		this.chatTransactionData.setNonce(MemoryPoW.compute2(transactionBytes, POW_BUFFER_SIZE, this.getPoWDifficulty()));
 	}
 
-	public int getPoWDifficulty() throws DataException {
-		BlockChain blockChain = BlockChain.getInstance();
-		return this.getSender().getConfirmedBalance(Asset.NATIVE) >= POW_NATIVE_THRESHOLD
-				? blockChain.getChatPowDifficultyAboveNativeThreshold()
-				: blockChain.getChatPowDifficultyBelowNativeThreshold();
+	public int getPoWDifficulty() {
+		return BlockChain.getInstance().getChatPowDifficulty();
 	}
 
 	/**
@@ -240,12 +235,8 @@ public class ChatTransaction extends Transaction {
 		// Clear nonce from transactionBytes
 		ChatTransactionTransformer.clearNonce(transactionBytes);
 
-		try {
-			// Check nonce
-			return MemoryPoW.verify2(transactionBytes, POW_BUFFER_SIZE, this.getPoWDifficulty(), nonce);
-		} catch (DataException e) {
-			return false;
-		}
+		// Check nonce
+		return MemoryPoW.verify2(transactionBytes, POW_BUFFER_SIZE, this.getPoWDifficulty(), nonce);
 	}
 
 	private int countRecentChatTransactionsByCreator(PublicKeyAccount creator) throws DataException {

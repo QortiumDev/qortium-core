@@ -80,8 +80,7 @@
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 16,
 		"arbitraryDifficulty": 14,
-		"chatDifficultyAboveNativeThreshold": 8,
-		"chatDifficultyBelowNativeThreshold": 18,
+		"chatDifficulty": 8,
 		"messageConfirmableDifficulty": 16,
 		"messageUnconfirmableDifficulty": 12
 	},

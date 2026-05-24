@@ -198,16 +198,14 @@ public class BlockChain {
 	public static class MemoryPoWSettings {
 		public Integer feeAlternativeDifficulty;
 		public Integer arbitraryDifficulty;
-		public Integer chatDifficultyAboveNativeThreshold;
-		public Integer chatDifficultyBelowNativeThreshold;
+		public Integer chatDifficulty;
 		public Integer messageConfirmableDifficulty;
 		public Integer messageUnconfirmableDifficulty;
 
 		private void validate() {
 			validateDifficulty("feeAlternativeDifficulty", this.feeAlternativeDifficulty);
 			validateDifficulty("arbitraryDifficulty", this.arbitraryDifficulty);
-			validateDifficulty("chatDifficultyAboveNativeThreshold", this.chatDifficultyAboveNativeThreshold);
-			validateDifficulty("chatDifficultyBelowNativeThreshold", this.chatDifficultyBelowNativeThreshold);
+			validateDifficulty("chatDifficulty", this.chatDifficulty);
 			validateDifficulty("messageConfirmableDifficulty", this.messageConfirmableDifficulty);
 			validateDifficulty("messageUnconfirmableDifficulty", this.messageUnconfirmableDifficulty);
 		}
@@ -697,12 +695,8 @@ public class BlockChain {
 		return this.mempowSettings.arbitraryDifficulty;
 	}
 
-	public int getChatPowDifficultyAboveNativeThreshold() {
-		return this.mempowSettings.chatDifficultyAboveNativeThreshold;
-	}
-
-	public int getChatPowDifficultyBelowNativeThreshold() {
-		return this.mempowSettings.chatDifficultyBelowNativeThreshold;
+	public int getChatPowDifficulty() {
+		return this.mempowSettings.chatDifficulty;
 	}
 
 	public int getMessagePowDifficultyConfirmable() {
