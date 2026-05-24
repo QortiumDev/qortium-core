@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: remove native prefunds from genesis
+
+Removed the preview network's genesis native-asset issue and starter account balances so the public preview starts without asset ID `0` and without prefunded accounts. The preview genesis still keeps the initial minting authorizations needed for the seed and local starter nodes to produce blocks, while native rewards remain paused until the development group explicitly bootstraps the native asset later.
+
 ### 2026-05-24 - config: lower default MemoryPoW difficulties
 
 Lowered the configured MemoryPoW defaults so preview and forked networks can use proof-of-work as a practical spam control without making normal fee-free transactions unnecessarily slow. Fee alternatives and confirmable messages now use difficulty 12, arbitrary transactions use difficulty 11, unconfirmable messages use difficulty 10, and chat remains at difficulty 8.

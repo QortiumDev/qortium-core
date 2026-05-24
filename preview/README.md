@@ -18,11 +18,11 @@ minting authorizations in genesis, one for the seed node and one for a local
 test node. The private minting keys are not committed; each node has to install
 its own ignored local key before it can mint.
 
-Preview also bootstraps the native asset at asset ID `0` and gives each initial
-minting account `1,000,000` preview native units. This keeps chat, QDN publish,
-minting-group joins, and other normal transactions on the paid-fee path during
-alpha testing. New testers still need an existing funded preview account to
-send them a small amount before they can submit paid transactions.
+Preview does not bootstrap a native asset or prefund any accounts. Blocks can
+be minted before asset ID `0` exists, but native rewards are skipped until the
+development group later approves an explicit native-asset bootstrap. Normal
+fee-bearing transactions should use the configured MemoryPoW fee alternative
+while the preview has no native asset.
 
 Preview uses accelerated chain timing for early testing. Reward schedule
 intervals are compressed by 100 compared with the current Qortium defaults, and
@@ -128,8 +128,8 @@ Preview genesis authorizes these initial minting accounts:
 
 | Role | Account Address | Account Public Key | Minting Public Key | Initial Native Balance |
 | --- | --- | --- | --- | --- |
-| seed | `QXhkAy3zNBQwzxxJLLP9u42Ec2XvASyvf3` | `HADRP9cBQ5EM7vkKmJMP3xAjBdNsQjX8hQTK129ZUsiq` | `6Ue5kRXpHbNrQguXjpHuTu6RzPiqZrYLStJ6gmBDobov` | `1,000,000` |
-| local | `QaLdnApWW3hps1qXM8cpsL1pVgw7RtyJmN` | `BUL1j6C63NJqEfMmopqovRC3NFRsHTHGMwGPS3ut1tNY` | `6DdhEueMEopFphx81ywZ5WWdZHCUDERi9J43rjQDtvMV` | `1,000,000` |
+| seed | `QXhkAy3zNBQwzxxJLLP9u42Ec2XvASyvf3` | `HADRP9cBQ5EM7vkKmJMP3xAjBdNsQjX8hQTK129ZUsiq` | `6Ue5kRXpHbNrQguXjpHuTu6RzPiqZrYLStJ6gmBDobov` | `0` |
+| local | `QaLdnApWW3hps1qXM8cpsL1pVgw7RtyJmN` | `BUL1j6C63NJqEfMmopqovRC3NFRsHTHGMwGPS3ut1tNY` | `6DdhEueMEopFphx81ywZ5WWdZHCUDERi9J43rjQDtvMV` | `0` |
 
 The corresponding private keys are stored locally in
 `preview/secrets/initial-minting-accounts.json`, which is ignored by git. Do

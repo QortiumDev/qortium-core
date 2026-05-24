@@ -141,26 +141,6 @@
 		"version": 4,
 		"timestamp": "1779646597409",
 		"transactions": [
-			{
-				"type": "ISSUE_ASSET",
-				"requestedAssetId": 0,
-				"assetName": "NATIVE",
-				"description": "Qortium preview native asset",
-				"data": "{}",
-				"quantity": 0,
-				"isDivisible": true,
-				"fee": 0
-			},
-			{
-				"type": "GENESIS",
-				"recipient": "QXhkAy3zNBQwzxxJLLP9u42Ec2XvASyvf3",
-				"amount": "1000000"
-			},
-			{
-				"type": "GENESIS",
-				"recipient": "QaLdnApWW3hps1qXM8cpsL1pVgw7RtyJmN",
-				"amount": "1000000"
-			},
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "development", "description": "Qortium Development", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "minting", "description": "Qortium Minting", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
 			{ "type": "JOIN_GROUP", "joinerPublicKey": "HADRP9cBQ5EM7vkKmJMP3xAjBdNsQjX8hQTK129ZUsiq", "groupId": 2, "mintingPublicKey": "6Ue5kRXpHbNrQguXjpHuTu6RzPiqZrYLStJ6gmBDobov" },
