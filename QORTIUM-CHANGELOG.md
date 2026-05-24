@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: refresh alpha genesis timestamp
+
+Refreshed the preview-network genesis timestamp for the initial two-node launch attempt. Keeping the preview genesis close to the scheduled start time prevents the first post-genesis blocks from looking stale to peer selection and synchronization logic while this alpha chain is still being reset freely.
+
 ### 2026-05-24 - preview: add initial minting accounts
 
 Added two initial preview minting accounts so the VPS seed and one local test node can start producing blocks from the fixed preview genesis once each node installs its own private minting key locally. The chain config only includes the public account and minting authorization data, while the generated private keys are kept in an ignored local preview secrets folder.
