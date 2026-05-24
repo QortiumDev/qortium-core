@@ -253,13 +253,26 @@ public class Synchronizer extends Thread {
 					genesisOnlyPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
 		}
 
-		// Disregard peers that don't have a recent block
+		// Disregard peers that don't have a recent block, unless recovery mode is active.
+		// Recovery mode is the path that lets a delayed or stalled network continue from older block timestamps.
 		beforeCount = peers.size();
-		List<Peer> noRecentBlockPeers = peers.stream().filter(Controller.hasNoRecentBlock).collect(Collectors.toList());
-		peers.removeIf(Controller.hasNoRecentBlock);
-		if (!noRecentBlockPeers.isEmpty()) {
-			LOGGER.trace(String.format("Filtered out %d peer(s) without recent block: %s", noRecentBlockPeers.size(),
-					noRecentBlockPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
+		boolean enteredRecoveryFromStalePeers = false;
+		if (!this.recoveryMode) {
+			List<Peer> peersBeforeRecentFilter = new ArrayList<>(peers);
+			List<Peer> noRecentBlockPeers = peers.stream().filter(Controller.hasNoRecentBlock).collect(Collectors.toList());
+			peers.removeIf(Controller.hasNoRecentBlock);
+			if (!noRecentBlockPeers.isEmpty()) {
+				LOGGER.trace(String.format("Filtered out %d peer(s) without recent block: %s", noRecentBlockPeers.size(),
+						noRecentBlockPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
+			}
+
+			if (this.checkRecoveryModeForPeers(peers)) {
+				peers = peersBeforeRecentFilter;
+				enteredRecoveryFromStalePeers = true;
+				LOGGER.debug("Recovery mode active; allowing peers with older chain tips for synchronization");
+			}
+		} else {
+			LOGGER.debug("Recovery mode active; skipping recent-block peer filter");
 		}
 
 		// Disregard peers that are on an old version
@@ -271,7 +284,10 @@ public class Synchronizer extends Thread {
 					oldVersionPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
 		}
 
-		checkRecoveryModeForPeers(peers);
+		if (!enteredRecoveryFromStalePeers) {
+			if (!this.recoveryMode || peers.stream().noneMatch(Controller.hasNoRecentBlock))
+				checkRecoveryModeForPeers(peers);
+		}
 
 		// Check we have enough peers to potentially synchronize
 		final int minBlockchainPeers = Settings.getInstance().getMinBlockchainPeers();
@@ -319,8 +335,9 @@ public class Synchronizer extends Thread {
 		// We may have added more inferior chain tips when comparing peers, so remove any peers that are currently on those chains
 		peers.removeIf(Controller.hasInferiorChainTip);
 
-		// Remove any peers that are no longer on a recent block since the last check
-		peers.removeIf(Controller.hasNoRecentBlock);
+		// Remove any peers that are no longer on a recent block since the last check, unless recovery mode is active.
+		if (!this.recoveryMode)
+			peers.removeIf(Controller.hasNoRecentBlock);
 
 		final int peersRemoved = peersBeforeComparison - peers.size();
 		if (peersRemoved > 0 && !peers.isEmpty())
@@ -526,8 +543,12 @@ public class Synchronizer extends Thread {
 
 				final BlockData ourLatestBlockData = repository.getBlockRepository().getLastBlock();
 				if (ourLatestBlockData.getTimestamp() < minLatestBlockTimestamp) {
-					LOGGER.debug(String.format("Our latest block is very old, so we won't collect common block info from peers"));
-					return SynchronizationResult.NOTHING_TO_DO;
+					if (!this.recoveryMode) {
+						LOGGER.debug(String.format("Our latest block is very old, so we won't collect common block info from peers"));
+						return SynchronizationResult.NOTHING_TO_DO;
+					}
+
+					LOGGER.debug("Recovery mode active; collecting common block info despite older local chain tip");
 				}
 
 				LOGGER.debug(String.format("Searching for common blocks with %d peers...", peers.size()));
@@ -651,8 +672,12 @@ public class Synchronizer extends Thread {
 
 				final BlockData ourLatestBlockData = repository.getBlockRepository().getLastBlock();
 				if (ourLatestBlockData.getTimestamp() < minLatestBlockTimestamp) {
-					LOGGER.debug(String.format("Our latest block is very old, so we won't filter the peers list"));
-					return peers;
+					if (!this.recoveryMode) {
+						LOGGER.debug(String.format("Our latest block is very old, so we won't filter the peers list"));
+						return peers;
+					}
+
+					LOGGER.debug("Recovery mode active; comparing peers despite older local chain tip");
 				}
 
 				LOGGER.debug("Using same-length chain weight consensus algorithm");
@@ -815,9 +840,9 @@ public class Synchronizer extends Thread {
 							continue;
 						}
 
-						// If peer is our of date (since our last check), we should exclude it from this round
+						// If peer is out of date (since our last check), we should exclude it from this round unless recovery mode is active.
 						minLatestBlockTimestamp = Controller.getMinimumLatestBlockTimestamp();
-						if (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp) {
+						if (!this.recoveryMode && (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp)) {
 							LOGGER.debug(String.format("Peer %s is out of date - removing it from this round", peer));
 							peers.remove(peer);
 							continue;
@@ -1408,11 +1433,11 @@ public class Synchronizer extends Thread {
 				return SynchronizationResult.INVALID_DATA;
 			}
 
-			// Final check to make sure the peer isn't out of date
+			// Final check to make sure the peer isn't out of date, unless recovery mode is active.
 			if (peer.getChainTipData() != null) {
 				final Long minLatestBlockTimestamp = Controller.getMinimumLatestBlockTimestamp();
 				final Long peerLastBlockTimestamp = peer.getChainTipData().getTimestamp();
-				if (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp) {
+				if (!this.recoveryMode && (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp)) {
 					LOGGER.info(String.format("Peer %s is out of date, so abandoning sync attempt", peer));
 					return SynchronizationResult.CHAIN_TIP_TOO_OLD;
 				}

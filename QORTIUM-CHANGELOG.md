@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - preview: handle delayed genesis startup
+
+Made fresh preview-network startup tolerate a genesis timestamp that is already outside the normal recent-block window. The minter can now produce the first post-genesis block without waiting for recovery mode, synchronization can use stale peers while recovery mode is active so delayed chains can catch up instead of forking blindly, and the preview stop helper now force-exits an old node after a timeout so reset scripts do not hang during relaunch.
+
 ### 2026-05-24 - preview: refresh alpha launch timestamp
 
 Refreshed the preview-network genesis timestamp for the clean two-node launch after fixing the genesis-only peer synchronization path. This keeps the alpha preview reset aligned with the actual startup window so the seed and local participant can begin from a fresh shared genesis.

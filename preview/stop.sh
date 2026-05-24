@@ -6,14 +6,18 @@ RUN_PID="${SCRIPT_DIR}/run.pid"
 APIKEY_FILE="${SCRIPT_DIR}/apikey.txt"
 
 api_port=62391
+stop_timeout=45
 stale_pid=0
 for arg in "$@"; do
 	case "${arg}" in
 		--api-port=*)
 			api_port="${arg#*=}"
 			;;
+		--timeout=*)
+			stop_timeout="${arg#*=}"
+			;;
 		-h|--help)
-			echo "Usage: ./preview/stop.sh [--api-port=PORT]"
+			echo "Usage: ./preview/stop.sh [--api-port=PORT] [--timeout=SECONDS]"
 			exit 0
 			;;
 	esac
@@ -66,7 +70,15 @@ fi
 
 if [ -n "${pid}" ]; then
 	echo -n "Waiting for Qortium preview node to stop"
+	deadline="$((SECONDS + stop_timeout))"
 	while state="$(ps -p "${pid}" -o stat= 2>/dev/null)" && [ -n "${state}" ] && [ "${state}" != "Z" ]; do
+		if [ "${SECONDS}" -ge "${deadline}" ]; then
+			echo
+			echo "Preview node did not stop within ${stop_timeout}s; forcing process ${pid} to exit."
+			kill -9 "${pid}" >/dev/null 2>&1 || true
+			break
+		fi
+
 		echo -n "."
 		sleep 1
 	done
