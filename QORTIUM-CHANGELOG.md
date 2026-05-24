@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-24 - sync: answer startup block requests promptly
+
+Reduced the initial delay before the queued block and block-summary request processors start handling peer requests. Fresh nodes can be asked for their first minted blocks within seconds of startup, so waiting a full minute before answering `GET_BLOCK` requests caused synchronization retries to time out during preview launch and made peers look unresponsive even though the block existed locally.
+
 ### 2026-05-24 - preview: handle delayed genesis startup
 
 Made fresh preview-network startup tolerate a genesis timestamp that is already outside the normal recent-block window. The minter can now produce the first post-genesis block without waiting for recovery mode, synchronization can use stale peers while recovery mode is active so delayed chains can catch up instead of forking blindly, and the preview stop helper now force-exits an old node after a timeout so reset scripts do not hang during relaunch.
