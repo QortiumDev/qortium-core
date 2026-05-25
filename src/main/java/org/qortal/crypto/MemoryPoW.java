@@ -1,8 +1,7 @@
 package org.qortal.crypto;
 
-import org.qortal.utils.NTP;
-
 import java.nio.ByteBuffer;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 public class MemoryPoW {
@@ -37,7 +36,8 @@ public class MemoryPoW {
 	 * @throws TimeoutException
 	 */
 	public static Integer compute2(byte[] data, int workBufferLength, long difficulty, Long timeout) throws TimeoutException {
-		long startTime = NTP.getTime();
+		final long startNanos = System.nanoTime();
+		final long timeoutNanos = timeout != null ? TimeUnit.MILLISECONDS.toNanos(timeout) : 0L;
 
 		// Hash data with SHA256
 		byte[] hash = Crypto.digest(data);
@@ -68,8 +68,7 @@ public class MemoryPoW {
 				return -1;
 
 			if (timeout != null) {
-				long now = NTP.getTime();
-				if (now > startTime + timeout) {
+				if (System.nanoTime() - startNanos > timeoutNanos) {
 					throw new TimeoutException("Timeout reached");
 				}
 			}

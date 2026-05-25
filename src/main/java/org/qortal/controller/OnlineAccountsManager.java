@@ -675,16 +675,19 @@ public class OnlineAccountsManager {
         long timeUntilNextTimestamp = nextOnlineAccountsTimestamp - startTime;
 
         int difficulty = getPoWDifficulty();
+        long startNanos = System.nanoTime();
         Integer nonce = MemoryPoW.compute2(bytes, getPoWBufferSize(), difficulty, timeUntilNextTimestamp);
 
-        double totalSeconds = (NTP.getTime() - startTime) / 1000.0f;
-        int minutes = (int) ((totalSeconds % 3600) / 60);
-        int seconds = (int) (totalSeconds % 60);
+        long elapsedMillis = Math.max(1L, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
+        double totalSeconds = elapsedMillis / 1000.0d;
+        int minutes = (int) ((elapsedMillis / 1000L) / 60);
+        int seconds = (int) ((elapsedMillis / 1000L) % 60);
+        int millis = (int) (elapsedMillis % 1000L);
         double hashRate = nonce / totalSeconds;
 
         LOGGER.info(String.format("Computed nonce for timestamp %d and account %.8s: %d. Buffer size: %d. Difficulty: %d. " +
-                        "Time taken: %02d:%02d. Hashrate: %f", onlineAccountsTimestamp, Base58.encode(publicKey),
-                nonce, getPoWBufferSize(), difficulty, minutes, seconds, hashRate));
+                        "Time taken: %02d:%02d.%03d. Hashrate: %f", onlineAccountsTimestamp, Base58.encode(publicKey),
+                nonce, getPoWBufferSize(), difficulty, minutes, seconds, millis, hashRate));
 
         return nonce;
     }

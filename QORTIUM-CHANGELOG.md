@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-25 - mempow: use monotonic timing for nonce work
+
+Changed memory proof-of-work timing so online account nonce logs measure elapsed work with a monotonic clock and never divide by a zero-millisecond duration. Fast nonce calculations now report a small finite elapsed time and hashrate instead of `Infinity`, and memory proof-of-work timeouts now use monotonic elapsed time so clock or NTP offset changes cannot distort timeout behavior.
+
 ### 2026-05-25 - network: let stale catch-up synchronize older tips
 
 Extended stale-chain catch-up handling through the inner synchronizer checks that collect common blocks, compare peer chains, and fetch peer blocks. This prevents delayed preview, testnet, or newly launched chains from passing the first peer filters but then quietly refusing to synchronize because their own latest block timestamp is still older than the normal recent-tip window.

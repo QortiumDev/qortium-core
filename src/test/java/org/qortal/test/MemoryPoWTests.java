@@ -8,6 +8,7 @@ import org.qortal.test.common.Common;
 import org.qortal.utils.NTP;
 
 import java.util.Random;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.*;
 import static org.junit.Assume.assumeTrue;
@@ -144,6 +145,11 @@ public class MemoryPoWTests {
 			assertTrue(String.format("Difficulty %d should verify nonce %d", difficulty, expectedNonce),
 					MemoryPoW.verify2(TEST_DATA, FULL_WORK_BUFFER_LENGTH, difficulty, expectedNonce));
 		}
+	}
+
+	@Test(expected = TimeoutException.class)
+	public void testComputeTimeout() throws TimeoutException {
+		MemoryPoW.compute2(TEST_DATA, FULL_WORK_BUFFER_LENGTH, 64, 1L);
 	}
 
 	private void runLongComputeBenchmark(int difficulty) throws DataException {
