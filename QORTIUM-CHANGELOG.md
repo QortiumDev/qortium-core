@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-28 - build(deps): bump io.netty:netty-bom from 4.2.13.Final to 4.2.14.Final
+
+Updated Qortium's Netty networking library bundle from 4.2.13.Final to 4.2.14.Final. This picks up upstream networking fixes while keeping Qortium's own peer protocol, preview ports, and runtime behavior unchanged.
+
 ### 2026-05-28 - security: replace java.util.Random with SecureRandom (Q4 + Q5)
 
 Replaced predictable random number generation in QDN request IDs and online-account nonce setup with shared secure random generators. This makes peer-facing request identifiers and minting-related nonce starting points harder to predict without changing the surrounding transaction, block, or QDN behavior.
