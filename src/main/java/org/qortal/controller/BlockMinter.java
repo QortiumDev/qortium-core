@@ -98,6 +98,7 @@ public class BlockMinter extends Thread {
 		// so we can notify Controller, and further update SysTray, etc.
 		boolean isMintingPossible = false;
 		boolean wasMintingPossible = isMintingPossible;
+		boolean wasStaleChainCatchUpActive = false;
 		try {
 			while (running) {
 				// recreate repository for new loop iteration
@@ -175,6 +176,15 @@ public class BlockMinter extends Thread {
 						List<Peer> peers = new ArrayList<>(Network.getInstance().getImmutableHandshakedPeers());
 						BlockData lastBlockData = blockRepository.getLastBlock();
 						boolean isGenesisBootstrap = lastBlockData.getHeight() == 1;
+						boolean staleChainCatchUpActive = Controller.getInstance().isStaleChainCatchUpActive();
+						if (staleChainCatchUpActive != wasStaleChainCatchUpActive) {
+							if (staleChainCatchUpActive)
+								LOGGER.info("Stale chain catch-up active; allowing minting against older chain-tip timestamps");
+							else
+								LOGGER.info("Stale chain catch-up complete; returning to normal recent-tip minting checks");
+
+							wasStaleChainCatchUpActive = staleChainCatchUpActive;
+						}
 
 						// Disregard peers that have "misbehaved" recently
 						peers.removeIf(Controller.hasMisbehaved);
@@ -182,7 +192,7 @@ public class BlockMinter extends Thread {
 						// Disregard peers that don't have a recent block, but only if we're not in recovery mode.
 						// In that mode, we want to allow minting on top of older blocks, to recover stalled networks.
 						// Also allow the first post-genesis block even if a new network's launch was delayed.
-						if (!Synchronizer.getInstance().getRecoveryMode() && !isGenesisBootstrap)
+						if (!Synchronizer.getInstance().getRecoveryMode() && !staleChainCatchUpActive && !isGenesisBootstrap)
 							peers.removeIf(Controller.hasNoRecentBlock);
 
 						// Don't mint if we don't have enough up-to-date peers as where would the transactions/consensus come from?
@@ -207,7 +217,7 @@ public class BlockMinter extends Thread {
 
 						// If our latest block isn't recent then we need to synchronize instead of minting, unless we're in recovery mode.
 						if (!peers.isEmpty() && lastBlockData.getTimestamp() < minLatestBlockTimestamp)
-							if (!Synchronizer.getInstance().getRecoveryMode() && !recoverInvalidBlock && !isGenesisBootstrap)
+							if (!Synchronizer.getInstance().getRecoveryMode() && !staleChainCatchUpActive && !recoverInvalidBlock && !isGenesisBootstrap)
 								continue;
 
 						// There are enough peers with a recent block and our latest block is recent

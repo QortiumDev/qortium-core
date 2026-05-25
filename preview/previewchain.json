@@ -140,7 +140,7 @@
 	},
 	"genesisInfo": {
 		"version": 4,
-		"timestamp": "1779646597409",
+		"timestamp": "1779693308639",
 		"transactions": [
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "development", "description": "Qortium Development", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "minting", "description": "Qortium Minting", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },

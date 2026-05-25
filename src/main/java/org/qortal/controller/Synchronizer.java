@@ -257,7 +257,8 @@ public class Synchronizer extends Thread {
 		// Recovery mode is the path that lets a delayed or stalled network continue from older block timestamps.
 		beforeCount = peers.size();
 		boolean enteredRecoveryFromStalePeers = false;
-		if (!this.recoveryMode) {
+		boolean staleChainCatchUpActive = Controller.getInstance().isStaleChainCatchUpActive();
+		if (!this.recoveryMode && !staleChainCatchUpActive) {
 			List<Peer> peersBeforeRecentFilter = new ArrayList<>(peers);
 			List<Peer> noRecentBlockPeers = peers.stream().filter(Controller.hasNoRecentBlock).collect(Collectors.toList());
 			peers.removeIf(Controller.hasNoRecentBlock);
@@ -271,6 +272,8 @@ public class Synchronizer extends Thread {
 				enteredRecoveryFromStalePeers = true;
 				LOGGER.debug("Recovery mode active; allowing peers with older chain tips for synchronization");
 			}
+		} else if (staleChainCatchUpActive) {
+			LOGGER.debug("Stale chain catch-up active; skipping recent-block peer filter");
 		} else {
 			LOGGER.debug("Recovery mode active; skipping recent-block peer filter");
 		}
@@ -284,7 +287,7 @@ public class Synchronizer extends Thread {
 					oldVersionPeers.stream().map(Peer::toString).collect(Collectors.joining(", "))));
 		}
 
-		if (!enteredRecoveryFromStalePeers) {
+		if (!enteredRecoveryFromStalePeers && !staleChainCatchUpActive) {
 			if (!this.recoveryMode || peers.stream().noneMatch(Controller.hasNoRecentBlock))
 				checkRecoveryModeForPeers(peers);
 		}

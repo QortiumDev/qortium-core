@@ -500,9 +500,10 @@ public class OnlineAccountsManager {
             return;
         }
 
-        // Don't submit if we're more than 2 hours out of sync (unless we're in recovery mode)
+        // Don't submit if we're more than 2 hours out of sync unless we're explicitly recovering or catching up.
         final Long minLatestBlockTimestamp = now - (2 * 60 * 60 * 1000L);
-        if (!Controller.getInstance().isUpToDate(minLatestBlockTimestamp) && !Synchronizer.getInstance().getRecoveryMode()) {
+        if (!Controller.getInstance().isUpToDate(minLatestBlockTimestamp) && !Synchronizer.getInstance().getRecoveryMode()
+                && !Controller.getInstance().isStaleChainCatchUpActive()) {
             return;
         }
 

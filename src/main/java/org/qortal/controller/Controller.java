@@ -2489,6 +2489,29 @@ public class Controller extends Thread {
 		return this.isUpToDate(minLatestBlockTimestamp);
 	}
 
+	public boolean isStaleChainCatchUpActive() {
+		final Long minLatestBlockTimestamp = getMinimumLatestBlockTimestamp();
+		final Long now = NTP.getTime();
+
+		return isStaleChainCatchUpActive(getChainTip(), minLatestBlockTimestamp, now);
+	}
+
+	/* package */ static boolean isStaleChainCatchUpActive(BlockData latestBlockData, Long minLatestBlockTimestamp, Long now) {
+		if (latestBlockData == null || latestBlockData.getHeight() == null)
+			return false;
+
+		if (minLatestBlockTimestamp == null || now == null)
+			return false;
+
+		if (latestBlockData.getTimestamp() >= minLatestBlockTimestamp)
+			return false;
+
+		long nextMinimumTimestamp = Block.calcMinimumTimestamp(latestBlockData);
+		long latestPermittedTimestamp = now + BlockChain.getInstance().getBlockTimestampMargin();
+
+		return nextMinimumTimestamp <= latestPermittedTimestamp;
+	}
+
 	/** Returns minimum block timestamp for block to be considered 'recent', or <tt>null</tt> if NTP not synced. */
 	public static Long getMinimumLatestBlockTimestamp() {
 		Long now = NTP.getTime();
