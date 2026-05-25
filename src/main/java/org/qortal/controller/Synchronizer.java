@@ -338,8 +338,8 @@ public class Synchronizer extends Thread {
 		// We may have added more inferior chain tips when comparing peers, so remove any peers that are currently on those chains
 		peers.removeIf(Controller.hasInferiorChainTip);
 
-		// Remove any peers that are no longer on a recent block since the last check, unless recovery mode is active.
-		if (!this.recoveryMode)
+		// Remove any peers that are no longer on a recent block since the last check, unless recovery or catch-up mode is active.
+		if (!this.recoveryMode && !staleChainCatchUpActive)
 			peers.removeIf(Controller.hasNoRecentBlock);
 
 		final int peersRemoved = peersBeforeComparison - peers.size();
@@ -545,13 +545,17 @@ public class Synchronizer extends Thread {
 					return SynchronizationResult.REPOSITORY_ISSUE;
 
 				final BlockData ourLatestBlockData = repository.getBlockRepository().getLastBlock();
+				boolean staleChainCatchUpActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
 				if (ourLatestBlockData.getTimestamp() < minLatestBlockTimestamp) {
-					if (!this.recoveryMode) {
+					if (!this.recoveryMode && !staleChainCatchUpActive) {
 						LOGGER.debug(String.format("Our latest block is very old, so we won't collect common block info from peers"));
 						return SynchronizationResult.NOTHING_TO_DO;
 					}
 
-					LOGGER.debug("Recovery mode active; collecting common block info despite older local chain tip");
+					if (this.recoveryMode)
+						LOGGER.debug("Recovery mode active; collecting common block info despite older local chain tip");
+					else
+						LOGGER.debug("Stale chain catch-up active; collecting common block info despite older local chain tip");
 				}
 
 				LOGGER.debug(String.format("Searching for common blocks with %d peers...", peers.size()));
@@ -674,13 +678,17 @@ public class Synchronizer extends Thread {
 					return peers;
 
 				final BlockData ourLatestBlockData = repository.getBlockRepository().getLastBlock();
+				boolean staleChainCatchUpActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
 				if (ourLatestBlockData.getTimestamp() < minLatestBlockTimestamp) {
-					if (!this.recoveryMode) {
+					if (!this.recoveryMode && !staleChainCatchUpActive) {
 						LOGGER.debug(String.format("Our latest block is very old, so we won't filter the peers list"));
 						return peers;
 					}
 
-					LOGGER.debug("Recovery mode active; comparing peers despite older local chain tip");
+					if (this.recoveryMode)
+						LOGGER.debug("Recovery mode active; comparing peers despite older local chain tip");
+					else
+						LOGGER.debug("Stale chain catch-up active; comparing peers despite older local chain tip");
 				}
 
 				LOGGER.debug("Using same-length chain weight consensus algorithm");
@@ -845,7 +853,8 @@ public class Synchronizer extends Thread {
 
 						// If peer is out of date (since our last check), we should exclude it from this round unless recovery mode is active.
 						minLatestBlockTimestamp = Controller.getMinimumLatestBlockTimestamp();
-						if (!this.recoveryMode && (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp)) {
+						staleChainCatchUpActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
+						if (!this.recoveryMode && !staleChainCatchUpActive && (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp)) {
 							LOGGER.debug(String.format("Peer %s is out of date - removing it from this round", peer));
 							peers.remove(peer);
 							continue;
@@ -1440,7 +1449,9 @@ public class Synchronizer extends Thread {
 			if (peer.getChainTipData() != null) {
 				final Long minLatestBlockTimestamp = Controller.getMinimumLatestBlockTimestamp();
 				final Long peerLastBlockTimestamp = peer.getChainTipData().getTimestamp();
-				if (!this.recoveryMode && (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp)) {
+				final BlockData ourLatestBlockData = repository.getBlockRepository().getLastBlock();
+				final boolean staleChainCatchUpActive = Controller.isStaleChainCatchUpActive(ourLatestBlockData, minLatestBlockTimestamp, NTP.getTime());
+				if (!this.recoveryMode && !staleChainCatchUpActive && (peerLastBlockTimestamp == null || peerLastBlockTimestamp < minLatestBlockTimestamp)) {
 					LOGGER.info(String.format("Peer %s is out of date, so abandoning sync attempt", peer));
 					return SynchronizationResult.CHAIN_TIP_TOO_OLD;
 				}

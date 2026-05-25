@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-25 - network: let stale catch-up synchronize older tips
+
+Extended stale-chain catch-up handling through the inner synchronizer checks that collect common blocks, compare peer chains, and fetch peer blocks. This prevents delayed preview, testnet, or newly launched chains from passing the first peer filters but then quietly refusing to synchronize because their own latest block timestamp is still older than the normal recent-tip window.
+
 ### 2026-05-25 - network: allow stale chains to catch up
 
 Added an explicit stale-chain catch-up mode for nodes whose latest block timestamps are older than the normal recent-tip threshold but whose next block can already be minted safely. This lets delayed preview, testnet, or newly launched chains continue syncing, broadcasting online accounts, and minting toward current time without loosening block timestamp validation. The preview genesis timestamp was also refreshed so the next public preview reset starts near normal one-minute block timing.
