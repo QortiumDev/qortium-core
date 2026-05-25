@@ -573,7 +573,7 @@ public class ArbitraryResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -795,7 +795,7 @@ public class ArbitraryResource {
 			arbitraryTransaction.computeNonce();
 
 			// Re-check, but ignores signature
-			result = arbitraryTransaction.isValidUnconfirmed();
+			result = arbitraryTransaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 

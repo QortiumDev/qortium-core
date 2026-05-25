@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-25 - api: allow fee-free builders before mempow nonce
+
+Changed raw unsigned transaction builder validation so MemoryPoW-capable transactions can be built with a zero fee before their fee-alternative nonce has been computed. Normal transaction processing and block validation still require either a paid fee or a valid MemoryPoW nonce, but local API clients can now build transactions such as name registration, pass the raw bytes to the nonce-compute endpoint, and then sign and submit them without needing a native-asset balance first.
+
 ### 2026-05-25 - mempow: use monotonic timing for nonce work
 
 Changed memory proof-of-work timing so online account nonce logs measure elapsed work with a monotonic clock and never divide by a zero-millisecond duration. Fast nonce calculations now report a small finite elapsed time and hashrate instead of `Infinity`, and memory proof-of-work timeouts now use monotonic elapsed time so clock or NTP offset changes cannot distort timeout behavior.

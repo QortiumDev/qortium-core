@@ -812,7 +812,7 @@ public class AssetsResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -860,7 +860,7 @@ public class AssetsResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -908,7 +908,7 @@ public class AssetsResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -956,7 +956,7 @@ public class AssetsResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -1004,7 +1004,7 @@ public class AssetsResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -1052,7 +1052,7 @@ public class AssetsResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -1100,7 +1100,7 @@ public class AssetsResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -1148,7 +1148,7 @@ public class AssetsResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 

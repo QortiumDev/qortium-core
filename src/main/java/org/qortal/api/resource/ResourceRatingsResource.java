@@ -147,7 +147,7 @@ public class ResourceRatingsResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+			Transaction.ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != Transaction.ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 

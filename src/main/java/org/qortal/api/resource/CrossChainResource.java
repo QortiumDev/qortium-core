@@ -1018,7 +1018,7 @@ public class CrossChainResource {
 		MessageTransaction messageTransaction = new MessageTransaction(repository, messageTransactionData);
 		messageTransaction.computeNonce();
 
-		ValidationResult result = messageTransaction.isValidUnconfirmed();
+		ValidationResult result = messageTransaction.isValidUnconfirmedForUnsignedBuild();
 		if (result != ValidationResult.OK)
 			throw TransactionsResource.createTransactionInvalidException(request, result);
 

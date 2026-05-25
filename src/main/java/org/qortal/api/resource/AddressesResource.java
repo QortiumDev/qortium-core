@@ -452,7 +452,7 @@ public class AddressesResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -498,7 +498,7 @@ public class AddressesResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -544,7 +544,7 @@ public class AddressesResource {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 
-			ValidationResult result = transaction.isValidUnconfirmed();
+			ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK && result != ValidationResult.INSUFFICIENT_FEE)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 
@@ -611,7 +611,7 @@ public class AddressesResource {
 			publicizeTransaction.computeNonce();
 
 			// Re-check, but ignores signature
-			result = publicizeTransaction.isValidUnconfirmed();
+			result = publicizeTransaction.isValidUnconfirmedForUnsignedBuild();
 			if (result != ValidationResult.OK)
 				throw TransactionsResource.createTransactionInvalidException(request, result);
 

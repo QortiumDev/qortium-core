@@ -1,11 +1,15 @@
 package org.qortal.test.api;
 
+import com.google.common.primitives.Bytes;
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortal.account.PrivateKeyAccount;
 import org.qortal.api.ApiError;
 import org.qortal.api.model.NameSummary;
 import org.qortal.api.resource.NamesResource;
+import org.qortal.api.resource.TransactionsResource;
+import org.qortal.block.BlockChain;
 import org.qortal.data.transaction.RegisterNameTransactionData;
 import org.qortal.data.transaction.SellNameTransactionData;
 import org.qortal.data.transaction.TransactionData;
@@ -17,6 +21,11 @@ import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
 import org.qortal.transaction.RegisterNameTransaction;
+import org.qortal.transaction.Transaction;
+import org.qortal.transaction.Transaction.TransactionType;
+import org.qortal.transform.TransformationException;
+import org.qortal.transform.transaction.TransactionTransformer;
+import org.qortal.utils.Base58;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -116,6 +125,78 @@ public class NamesApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testRegisterNameBuilderAllowsPendingMempowFeeNonce() throws Exception {
+		ApiCommon.installTestApiKey();
+		TransactionsResource transactionsResource =
+				(TransactionsResource) ApiCommon.buildResource(TransactionsResource.class, ApiCommon.TEST_API_KEY);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			int previousDifficulty = setFeeAlternativeDifficulty(1);
+
+			try {
+				PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+				RegisterNameTransactionData transactionData = new RegisterNameTransactionData(
+						TestTransaction.generateBase(alice), "mempow-api-name", "{}");
+				transactionData.setFee(0L);
+
+				Transaction transaction = Transaction.fromData(repository, transactionData);
+				assertEquals(Transaction.ValidationResult.INSUFFICIENT_FEE, transaction.isValidUnconfirmed());
+				assertEquals(Transaction.ValidationResult.OK, transaction.isValidUnconfirmedForUnsignedBuild());
+
+				String rawTransaction = this.namesResource.registerName(transactionData);
+				TransactionData decodedTransactionData = unsignedTransaction(rawTransaction);
+
+				assertEquals(TransactionType.REGISTER_NAME, decodedTransactionData.getType());
+				assertEquals(Long.valueOf(0L), decodedTransactionData.getFee());
+				assertNull(decodedTransactionData.getNonceOrNull());
+				assertNull(decodedTransactionData.getSignature());
+
+				String computedRawTransaction = transactionsResource.computeMempowFeeNonce(
+						ApiCommon.TEST_API_KEY, rawTransaction);
+				TransactionData computedTransactionData = unsignedTransaction(computedRawTransaction);
+
+				assertEquals(TransactionType.REGISTER_NAME, computedTransactionData.getType());
+				assertEquals(Long.valueOf(0L), computedTransactionData.getFee());
+				assertNotNull(computedTransactionData.getNonceOrNull());
+				assertNull(computedTransactionData.getSignature());
+
+				Transaction computedTransaction = Transaction.fromData(repository, computedTransactionData);
+				assertEquals(Transaction.ValidationResult.OK, computedTransaction.isFeeValid());
+			} finally {
+				setFeeAlternativeDifficulty(previousDifficulty);
+			}
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
+	public void testRegisterNameBuilderRejectsInvalidMempowFeeState() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+
+			RegisterNameTransactionData missingFeeTransactionData = new RegisterNameTransactionData(
+					TestTransaction.generateBase(alice), "mempow-missing-fee", "{}");
+			missingFeeTransactionData.setFee(null);
+			assertApiError(ApiError.TRANSACTION_INVALID,
+					() -> this.namesResource.registerName(missingFeeTransactionData));
+
+			RegisterNameTransactionData negativeFeeTransactionData = new RegisterNameTransactionData(
+					TestTransaction.generateBase(alice), "mempow-negative-fee", "{}");
+			negativeFeeTransactionData.setFee(-1L);
+			assertApiError(ApiError.TRANSACTION_INVALID,
+					() -> this.namesResource.registerName(negativeFeeTransactionData));
+
+			RegisterNameTransactionData invalidNonceTransactionData = new RegisterNameTransactionData(
+					TestTransaction.generateBase(alice), "mempow-invalid-nonce", "{}");
+			invalidNonceTransactionData.setFee(0L);
+			invalidNonceTransactionData.setNonce(-1);
+			assertApiError(ApiError.TRANSACTION_INVALID,
+					() -> this.namesResource.registerName(invalidNonceTransactionData));
+		}
+	}
+
+	@Test
 	public void testLiteGetPrimaryNamesByAddressesFailsClearly() throws Exception {
 		useLiteMode();
 
@@ -157,6 +238,20 @@ public class NamesApiTests extends ApiCommon {
 			assertNotNull(this.namesResource.getNamesForSale(null, null, null));
 			assertNotNull(this.namesResource.getNamesForSale(1, 1, true));
 		}
+	}
+
+	private static TransactionData unsignedTransaction(String rawBytes58) throws TransformationException {
+		byte[] rawBytes = Bytes.concat(Base58.decode(rawBytes58), new byte[TransactionTransformer.SIGNATURE_LENGTH]);
+		TransactionData transactionData = TransactionTransformer.fromBytes(rawBytes);
+		transactionData.setSignature(null);
+		return transactionData;
+	}
+
+	private static int setFeeAlternativeDifficulty(int difficulty) throws IllegalAccessException {
+		Object mempowSettings = FieldUtils.readField(BlockChain.getInstance(), "mempowSettings", true);
+		Integer previousDifficulty = (Integer) FieldUtils.readField(mempowSettings, "feeAlternativeDifficulty", true);
+		FieldUtils.writeField(mempowSettings, "feeAlternativeDifficulty", difficulty, true);
+		return previousDifficulty;
 	}
 
 }

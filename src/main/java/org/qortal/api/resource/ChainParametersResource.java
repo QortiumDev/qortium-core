@@ -1171,7 +1171,7 @@ public class ChainParametersResource {
 		if (transactionData.getFee() == null)
 			transactionData.setFee(transaction.calcRecommendedFee());
 
-		Transaction.ValidationResult result = transaction.isValidUnconfirmed();
+		Transaction.ValidationResult result = transaction.isValidUnconfirmedForUnsignedBuild();
 		if (result != Transaction.ValidationResult.OK)
 			throw TransactionsResource.createTransactionInvalidException(request, result);
 

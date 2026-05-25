@@ -632,6 +632,24 @@ public abstract class Transaction {
 	 * @throws DataException
 	 */
 	public ValidationResult isValidUnconfirmed() throws DataException {
+		return this.isValidUnconfirmed(false);
+	}
+
+	/**
+	 * Returns whether transaction can be built as raw, unsigned API output.
+	 * <p>
+	 * This follows normal unconfirmed validation, but allows a MemoryPoW-capable
+	 * transaction to omit its fee-alternative nonce because API clients may need
+	 * raw unsigned bytes before asking the core to compute that nonce.
+	 *
+	 * @return transaction validation result, e.g. OK
+	 * @throws DataException
+	 */
+	public ValidationResult isValidUnconfirmedForUnsignedBuild() throws DataException {
+		return this.isValidUnconfirmed(true);
+	}
+
+	private ValidationResult isValidUnconfirmed(boolean allowMissingMempowFeeNonce) throws DataException {
 		final Long now = NTP.getTime();
 		if (now == null)
 			return ValidationResult.CLOCK_NOT_SYNCED;
@@ -646,7 +664,9 @@ public abstract class Transaction {
 			return ValidationResult.TIMESTAMP_TOO_NEW;
 
 		// Check fee is sufficient
-		ValidationResult feeValidationResult = isFeeValid();
+		ValidationResult feeValidationResult = allowMissingMempowFeeNonce
+				? isFeeValidForUnsignedBuild()
+				: isFeeValid();
 		if (feeValidationResult != ValidationResult.OK)
 			return feeValidationResult;
 
@@ -695,6 +715,21 @@ public abstract class Transaction {
 		result = this.isProcessable();
 
 		return result;
+	}
+
+	private ValidationResult isFeeValidForUnsignedBuild() throws DataException {
+		ValidationResult result = this.isFeeValid();
+		if (result != ValidationResult.INSUFFICIENT_FEE)
+			return result;
+
+		Long fee = this.transactionData.getFee();
+		if (fee == null || fee < 0)
+			return result;
+
+		if (!this.canUseMempowFeeAlternative())
+			return result;
+
+		return this.transactionData.getNonceOrNull() == null ? ValidationResult.OK : result;
 	}
 
 	/** Returns whether transaction's fee is valid. Might be overriden in transaction subclasses. */
