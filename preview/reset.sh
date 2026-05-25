@@ -30,6 +30,7 @@ paths=(
 	"${SCRIPT_DIR}/qortium-backup-preview"
 	"${SCRIPT_DIR}/settings-preview-local.json"
 	"${SCRIPT_DIR}/settings-preview-seed-local.json"
+	"${SCRIPT_DIR}/settings-preview-seed-netcup-local.json"
 	"${SCRIPT_DIR}/run.log"
 	"${SCRIPT_DIR}/run-error.log"
 	"${SCRIPT_DIR}/run.pid"

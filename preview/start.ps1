@@ -5,18 +5,22 @@ $Mode = "participant"
 $HeadlessMode = "auto"
 
 function Show-Usage {
-    Write-Host "Usage: preview\start.bat [--seed|--participant] [--headless|--gui]"
+    Write-Host "Usage: preview\start.bat [--seed|--seed-regxa|--seed-netcup|--participant] [--headless|--gui]"
     Write-Host ""
     Write-Host "Starts a Qortium preview-network node."
-    Write-Host "  --participant  connect to the preview seed at 146.103.42.59 (default)"
-    Write-Host "  --seed         use the VPS seed settings"
+    Write-Host "  --participant  connect to the preview seeds at 146.103.42.59 and 185.207.104.78 (default)"
+    Write-Host "  --seed         use the Regxa seed settings"
+    Write-Host "  --seed-regxa   advertise the Regxa seed IP 146.103.42.59"
+    Write-Host "  --seed-netcup  advertise the Netcup seed IP 185.207.104.78"
     Write-Host "  --headless     force Java headless mode"
     Write-Host "  --gui          force Java GUI mode"
 }
 
 foreach ($Arg in $args) {
     switch ($Arg) {
-        "--seed" { $Mode = "seed"; continue }
+        "--seed" { $Mode = "seed-regxa"; continue }
+        "--seed-regxa" { $Mode = "seed-regxa"; continue }
+        "--seed-netcup" { $Mode = "seed-netcup"; continue }
         "--participant" { $Mode = "participant"; continue }
         "--headless" { $HeadlessMode = "true"; continue }
         "--gui" { $HeadlessMode = "false"; continue }
@@ -74,9 +78,12 @@ $RunLog = Join-Path $ScriptDir "run.log"
 $RunErrorLog = Join-Path $ScriptDir "run-error.log"
 $RunPid = Join-Path $ScriptDir "run.pid"
 
-if ($Mode -eq "seed") {
+if ($Mode -eq "seed-regxa") {
     $SettingsTemplate = Join-Path $ScriptDir "settings-preview-seed.json"
     $SettingsLocal = Join-Path $ScriptDir "settings-preview-seed-local.json"
+} elseif ($Mode -eq "seed-netcup") {
+    $SettingsTemplate = Join-Path $ScriptDir "settings-preview-seed-netcup.json"
+    $SettingsLocal = Join-Path $ScriptDir "settings-preview-seed-netcup-local.json"
 } else {
     $SettingsTemplate = Join-Path $ScriptDir "settings-preview.json"
     $SettingsLocal = Join-Path $ScriptDir "settings-preview-local.json"

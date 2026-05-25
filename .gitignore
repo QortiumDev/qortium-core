@@ -39,6 +39,7 @@ apikey.txt
 /preview/apikey.txt
 /preview/settings-preview-local.json
 /preview/settings-preview-seed-local.json
+/preview/settings-preview-seed-netcup-local.json
 /preview/data-preview/
 /preview/db-preview/
 /preview/qortium-backup/

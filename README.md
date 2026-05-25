@@ -61,8 +61,8 @@ reset instructions, generated runtime files, and multi-node testnet notes.
 ## Preview Network
 
 The shared Qortium preview network is a public alpha/demo profile for connecting
-to the seed node at `146.103.42.59`. It is separate from the local single-node
-testnet and uses normal multi-node rules.
+to the seed nodes at `146.103.42.59` and `185.207.104.78`. It is separate from
+the local single-node testnet and uses normal multi-node rules.
 
 ```sh
 ./build.sh
@@ -70,7 +70,7 @@ testnet and uses normal multi-node rules.
 ./preview/status.sh --wait
 ```
 
-The preview scaffold is connection-ready and includes two public genesis
+The preview scaffold is connection-ready and includes three public genesis
 minting authorizations for initial seed/local testing. Private minting keys are
 not committed. Public testers should start with
 [preview/TESTER-GUIDE.md](preview/TESTER-GUIDE.md); seed operators and

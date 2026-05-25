@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-25 - preview: add second public seed profile
+
+Added the Netcup preview seed at `185.207.104.78` alongside the existing Regxa seed at `146.103.42.59`. Preview participants now start with both seed nodes in their peer list, seed operators have separate launch profiles for each public IP, the seed profiles know about each other, and preview genesis includes a separate Netcup minting authorization. The preview packaging, reset scripts, docs, and local ignored seed-key notes now include the second seed configuration.
+
 ### 2026-05-25 - api: allow fee-free builders before mempow nonce
 
 Changed raw unsigned transaction builder validation so MemoryPoW-capable transactions can be built with a zero fee before their fee-alternative nonce has been computed. Normal transaction processing and block validation still require either a paid fee or a valid MemoryPoW nonce, but local API clients can now build transactions such as name registration, pass the raw bytes to the nonce-compute endpoint, and then sign and submit them without needing a native-asset balance first.

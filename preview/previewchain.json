@@ -145,6 +145,7 @@
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "development", "description": "Qortium Development", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "minting", "description": "Qortium Minting", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },
 			{ "type": "JOIN_GROUP", "joinerPublicKey": "HADRP9cBQ5EM7vkKmJMP3xAjBdNsQjX8hQTK129ZUsiq", "groupId": 2, "mintingPublicKey": "6Ue5kRXpHbNrQguXjpHuTu6RzPiqZrYLStJ6gmBDobov" },
+			{ "type": "JOIN_GROUP", "joinerPublicKey": "EAv9tuEizRrTwYZtXobfo49sgRDrHvieRrmnGq1PwzQ7", "groupId": 2, "mintingPublicKey": "7cJcjBD9Vpmwugf8jMhnYJB8yFHhrBZGBzJDV8WnSYNz" },
 			{ "type": "JOIN_GROUP", "joinerPublicKey": "BUL1j6C63NJqEfMmopqovRC3NFRsHTHGMwGPS3ut1tNY", "groupId": 2, "mintingPublicKey": "6DdhEueMEopFphx81ywZ5WWdZHCUDERi9J43rjQDtvMV" }
 
 		]

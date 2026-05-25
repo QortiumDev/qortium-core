@@ -122,7 +122,7 @@ preview\reset.bat
 - Preview accounts are not prefunded.
 - Normal fee-bearing transactions can use MemoryPoW instead of a paid native
   fee before asset ID `0` exists.
-- The first useful tests are connecting to the seed, staying synced, sending
+- The first useful tests are connecting to the seed nodes, staying synced, sending
   chat messages, trying QDN features, and reporting issues.
 - The preview network can be reset while it is still an alpha/demo network.
 

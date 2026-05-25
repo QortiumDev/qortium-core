@@ -49,7 +49,8 @@
   "maxStorageCapacity": 10737418240,
   "storagePolicy": "FOLLOWED_OR_VIEWED",
   "initialPeers": [
-    "146.103.42.59:62392"
+    "146.103.42.59:62392",
+    "185.207.104.78:62392"
   ],
   "uiLocalServers": [
     "localhost",

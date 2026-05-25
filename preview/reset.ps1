@@ -31,6 +31,7 @@ $Paths = @(
     "qortium-backup-preview",
     "settings-preview-local.json",
     "settings-preview-seed-local.json",
+    "settings-preview-seed-netcup-local.json",
     "run.log",
     "run-error.log",
     "run.pid",

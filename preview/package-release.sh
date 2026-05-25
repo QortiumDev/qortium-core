@@ -83,6 +83,7 @@ preview_files=(
 	"previewchain.json"
 	"settings-preview.json"
 	"settings-preview-seed.json"
+	"settings-preview-seed-netcup.json"
 	"start.sh"
 	"status.sh"
 	"stop.sh"

@@ -6,7 +6,7 @@
   "singleNodeTestnet": false,
   "minPeerVersion": "6.1.0",
   "allowConnectionsWithOlderPeerVersions": false,
-  "ourExternalIpAddress": "146.103.42.59",
+  "ourExternalIpAddress": "185.207.104.78",
   "bitcoinyNetworks": {
     "BTC": "TEST3",
     "LTC": "TEST4"
@@ -50,7 +50,7 @@
   "maxStorageCapacity": 10737418240,
   "storagePolicy": "FOLLOWED_OR_VIEWED",
   "initialPeers": [
-    "185.207.104.78:62392"
+    "146.103.42.59:62392"
   ],
   "uiLocalServers": [
     "localhost",

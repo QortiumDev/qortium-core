@@ -5,7 +5,7 @@ separate from the disposable local `testnet/` profile:
 
 - `testnet/` is a single-node local lab that can mint blocks by itself.
 - `preview/` is a normal multi-node preview network that connects to the
-  public seed at `146.103.42.59`.
+  public seeds at `146.103.42.59` and `185.207.104.78`.
 
 The preview network intentionally does not use `singleNodeTestnet`. That keeps
 preview behavior closer to the normal node rules while Qortium is still changing
@@ -17,8 +17,8 @@ reference for the preview profile and seed-node operation.
 
 ## Current State
 
-The preview scaffold is connection-ready and includes two initial public
-minting authorizations in genesis, one for the seed node and one for a local
+The preview scaffold is connection-ready and includes three initial public
+minting authorizations in genesis, one for each seed node and one for a local
 test node. The private minting keys are not committed; each node has to install
 its own ignored local key before it can mint.
 
@@ -84,17 +84,25 @@ Reset generated preview runtime files:
 ./preview/reset.sh
 ```
 
-## Start The VPS Seed
+## Start The VPS Seeds
 
-On the seed VPS, use seed mode:
+On the Regxa seed VPS, use the Regxa seed profile:
 
 ```sh
-./preview/start.sh --seed
+./preview/start.sh --seed-regxa
 ```
 
-The seed profile advertises the public seed IP `146.103.42.59` and does not
-try to peer with itself. It uses the same fixed preview genesis and ports as
-participant nodes.
+The shorter `--seed` option is kept as an alias for `--seed-regxa`.
+
+On the Netcup seed VPS, use the Netcup seed profile:
+
+```sh
+./preview/start.sh --seed-netcup
+```
+
+Each seed profile advertises its own public IP and lists the other seed as an
+initial peer. They use the same fixed preview genesis and ports as participant
+nodes.
 
 ## Ports
 
@@ -106,8 +114,8 @@ The preview profile reuses the `623xx` test-network port range:
 
 Participant nodes allow normal local transaction-builder API calls so testers
 can create payments, group joins, chain-parameter proposals, and other signed
-transactions through their own local node. The public seed profile stays API
-restricted. Both profiles keep the API whitelisted for local access only.
+transactions through their own local node. The public seed profiles stay API
+restricted. All preview profiles keep the API whitelisted for local access only.
 
 For a public VPS, firewall the API port unless you intentionally need remote
 administration. Public preview peers need to reach the P2P port, and QDN/data
@@ -123,6 +131,7 @@ Generated runtime files include:
 
 - `settings-preview-local.json`
 - `settings-preview-seed-local.json`
+- `settings-preview-seed-netcup-local.json`
 - `db-preview/`
 - `data-preview/`
 - `qortium-backup/`
@@ -161,7 +170,8 @@ Preview genesis authorizes these initial minting accounts:
 
 | Role | Account Address | Account Public Key | Minting Public Key | Initial Native Balance |
 | --- | --- | --- | --- | --- |
-| seed | `QXhkAy3zNBQwzxxJLLP9u42Ec2XvASyvf3` | `HADRP9cBQ5EM7vkKmJMP3xAjBdNsQjX8hQTK129ZUsiq` | `6Ue5kRXpHbNrQguXjpHuTu6RzPiqZrYLStJ6gmBDobov` | `0` |
+| seed-regxa | `QXhkAy3zNBQwzxxJLLP9u42Ec2XvASyvf3` | `HADRP9cBQ5EM7vkKmJMP3xAjBdNsQjX8hQTK129ZUsiq` | `6Ue5kRXpHbNrQguXjpHuTu6RzPiqZrYLStJ6gmBDobov` | `0` |
+| seed-netcup | `QeMe15hDFKkyubnjYYB6FSkSojNpjub5Bq` | `EAv9tuEizRrTwYZtXobfo49sgRDrHvieRrmnGq1PwzQ7` | `7cJcjBD9Vpmwugf8jMhnYJB8yFHhrBZGBzJDV8WnSYNz` | `0` |
 | local | `QaLdnApWW3hps1qXM8cpsL1pVgw7RtyJmN` | `BUL1j6C63NJqEfMmopqovRC3NFRsHTHGMwGPS3ut1tNY` | `6DdhEueMEopFphx81ywZ5WWdZHCUDERi9J43rjQDtvMV` | `0` |
 
 The corresponding private keys are stored locally in

@@ -11,11 +11,13 @@ MODE="participant"
 HEADLESS_MODE="auto"
 
 usage() {
-	echo "Usage: ./preview/start.sh [--seed|--participant] [--headless|--gui]"
+	echo "Usage: ./preview/start.sh [--seed|--seed-regxa|--seed-netcup|--participant] [--headless|--gui]"
 	echo
 	echo "Starts a Qortium preview-network node."
-	echo "  --participant  connect to the preview seed at 146.103.42.59 (default)"
-	echo "  --seed         use the VPS seed settings"
+	echo "  --participant  connect to the preview seeds at 146.103.42.59 and 185.207.104.78 (default)"
+	echo "  --seed         use the Regxa seed settings"
+	echo "  --seed-regxa   advertise the Regxa seed IP 146.103.42.59"
+	echo "  --seed-netcup  advertise the Netcup seed IP 185.207.104.78"
 	echo "  --headless     force Java headless mode"
 	echo "  --gui          force Java GUI mode"
 	echo
@@ -25,8 +27,11 @@ usage() {
 
 for arg in "$@"; do
 	case "${arg}" in
-		--seed)
-			MODE="seed"
+		--seed|--seed-regxa)
+			MODE="seed-regxa"
+			;;
+		--seed-netcup)
+			MODE="seed-netcup"
 			;;
 		--participant)
 			MODE="participant"
@@ -65,13 +70,20 @@ REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RUN_LOG="${SCRIPT_DIR}/run.log"
 RUN_PID="${SCRIPT_DIR}/run.pid"
 
-if [ "${MODE}" = "seed" ]; then
-	SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-preview-seed.json"
-	SETTINGS_LOCAL="${SCRIPT_DIR}/settings-preview-seed-local.json"
-else
-	SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-preview.json"
-	SETTINGS_LOCAL="${SCRIPT_DIR}/settings-preview-local.json"
-fi
+case "${MODE}" in
+	seed-regxa)
+		SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-preview-seed.json"
+		SETTINGS_LOCAL="${SCRIPT_DIR}/settings-preview-seed-local.json"
+		;;
+	seed-netcup)
+		SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-preview-seed-netcup.json"
+		SETTINGS_LOCAL="${SCRIPT_DIR}/settings-preview-seed-netcup-local.json"
+		;;
+	participant)
+		SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-preview.json"
+		SETTINGS_LOCAL="${SCRIPT_DIR}/settings-preview-local.json"
+		;;
+esac
 
 cd "${SCRIPT_DIR}"
 

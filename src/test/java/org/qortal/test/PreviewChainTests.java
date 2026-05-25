@@ -24,6 +24,8 @@ public class PreviewChainTests extends Common {
 	private static final String PREVIEW_SETTINGS = "test-settings-preview.json";
 	private static final String SEED_ACCOUNT_ADDRESS = "QXhkAy3zNBQwzxxJLLP9u42Ec2XvASyvf3";
 	private static final String SEED_MINTING_PUBLIC_KEY = "6Ue5kRXpHbNrQguXjpHuTu6RzPiqZrYLStJ6gmBDobov";
+	private static final String NETCUP_SEED_ACCOUNT_ADDRESS = "QeMe15hDFKkyubnjYYB6FSkSojNpjub5Bq";
+	private static final String NETCUP_SEED_MINTING_PUBLIC_KEY = "7cJcjBD9Vpmwugf8jMhnYJB8yFHhrBZGBzJDV8WnSYNz";
 	private static final String LOCAL_ACCOUNT_ADDRESS = "QaLdnApWW3hps1qXM8cpsL1pVgw7RtyJmN";
 	private static final String LOCAL_MINTING_PUBLIC_KEY = "6DdhEueMEopFphx81ywZ5WWdZHCUDERi9J43rjQDtvMV";
 
@@ -52,6 +54,7 @@ public class PreviewChainTests extends Common {
 			assertTrue(mintingGroup.isOpen());
 
 			assertPreviewMintingAuthorization(repository, SEED_ACCOUNT_ADDRESS, SEED_MINTING_PUBLIC_KEY);
+			assertPreviewMintingAuthorization(repository, NETCUP_SEED_ACCOUNT_ADDRESS, NETCUP_SEED_MINTING_PUBLIC_KEY);
 			assertPreviewMintingAuthorization(repository, LOCAL_ACCOUNT_ADDRESS, LOCAL_MINTING_PUBLIC_KEY);
 		}
 	}
