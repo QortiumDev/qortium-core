@@ -1,11 +1,15 @@
 package org.qortal.block;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.google.common.hash.HashCode;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.eclipse.persistence.jaxb.UnmarshallerProperties;
 import org.qortal.controller.Controller;
+import org.qortal.crypto.Crypto;
 import org.qortal.data.account.AccountRatingCategory;
 import org.qortal.data.account.AccountTrustStatus;
 import org.qortal.data.block.BlockData;
@@ -25,10 +29,13 @@ import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import javax.xml.transform.stream.StreamSource;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.locks.ReentrantLock;
@@ -50,6 +57,11 @@ public class BlockChain {
 	// Properties
 
 	private boolean isTestChain = false;
+
+	/** Human-readable chain/network identity advertised during peer handshakes. */
+	private String networkId;
+	private transient String chainConfigHash;
+	private transient String genesisSignature;
 
 	/** Transaction expiry period, starting from transaction's timestamp, in milliseconds. */
 	private long transactionExpiryPeriod;
@@ -576,6 +588,7 @@ public class BlockChain {
 
 		BlockChain blockchain = null;
 		StreamSource jsonSource;
+		byte[] jsonBytes;
 
 		if (filename != null) {
 			LOGGER.info(String.format("Using blockchain config file: %s%s", path, filename));
@@ -588,14 +601,33 @@ public class BlockChain {
 				throw new RuntimeException(message, new FileNotFoundException(message));
 			}
 
-			jsonSource = new StreamSource(jsonFile);
+			try {
+				jsonBytes = Files.readAllBytes(jsonFile.toPath());
+			} catch (IOException e) {
+				String message = "Failed to read blockchain config file: " + path + filename;
+				LOGGER.error(message, e);
+				throw new RuntimeException(message, e);
+			}
 		} else {
 			LOGGER.info("Using default, resources-based blockchain config");
 
 			ClassLoader classLoader = BlockChain.class.getClassLoader();
-			InputStream in = classLoader.getResourceAsStream("blockchain.json");
-			jsonSource = new StreamSource(in);
+			try (InputStream in = classLoader.getResourceAsStream("blockchain.json")) {
+				if (in == null) {
+					String message = "Default blockchain config resource not found: blockchain.json";
+					LOGGER.error(message);
+					throw new RuntimeException(message);
+				}
+
+				jsonBytes = in.readAllBytes();
+			} catch (IOException e) {
+				String message = "Failed to read default blockchain config resource";
+				LOGGER.error(message, e);
+				throw new RuntimeException(message, e);
+			}
 		}
+
+		jsonSource = new StreamSource(new ByteArrayInputStream(jsonBytes));
 
 		try  {
 			// Attempt to unmarshal JSON stream to BlockChain config
@@ -636,17 +668,48 @@ public class BlockChain {
 		// Minor fix-up
 		blockchain.fixUp();
 
+		blockchain.chainConfigHash = computeChainConfigHash(jsonBytes);
+
 		// Successfully read config now in effect
 		instance = blockchain;
 
 		// Pass genesis info to GenesisBlock
 		GenesisBlock.newInstance(blockchain.genesisInfo);
+
+		blockchain.genesisSignature = Base58.encode(GenesisBlock.getGenesisSignature());
+	}
+
+	private static String computeChainConfigHash(byte[] jsonBytes) {
+		try {
+			ObjectMapper objectMapper = new ObjectMapper()
+					.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+			Object jsonObject = objectMapper.readValue(jsonBytes, Object.class);
+			byte[] canonicalJsonBytes = objectMapper.writeValueAsBytes(jsonObject);
+
+			return HashCode.fromBytes(Crypto.digest(canonicalJsonBytes)).toString();
+		} catch (IOException e) {
+			String message = "Failed to compute blockchain config hash";
+			LOGGER.error(message, e);
+			throw new RuntimeException(message, e);
+		}
 	}
 
 	// Getters / setters
 
 	public boolean isTestChain() {
 		return this.isTestChain;
+	}
+
+	public String getNetworkId() {
+		return this.networkId;
+	}
+
+	public String getChainConfigHash() {
+		return this.chainConfigHash;
+	}
+
+	public String getGenesisSignature() {
+		return this.genesisSignature;
 	}
 
 	public byte[] getMessageMagic(boolean isTestNet) {
@@ -1109,6 +1172,16 @@ public class BlockChain {
 		// Check that blockRewardBatchSize isn't zero
 		if (this.blockRewardBatchAccountsBlockCount > this.blockRewardBatchSize)
 			Settings.throwValidationError("\"blockRewardBatchAccountsBlockCount\" must be less than or equal to \"blockRewardBatchSize\"");
+
+		if (this.networkId != null) {
+			this.networkId = this.networkId.trim();
+
+			if (this.networkId.isEmpty())
+				Settings.throwValidationError("\"networkId\" must not be blank");
+
+			if (this.networkId.length() > 128)
+				Settings.throwValidationError("\"networkId\" must not be longer than 128 characters");
+		}
 	}
 
 	private static byte[] decodeMessageMagic(String fieldName, String messageMagic) {
@@ -1127,6 +1200,9 @@ public class BlockChain {
 
 	/** Minor normalization, cached value generation, etc. */
 	private void fixUp() {
+		if (this.networkId == null || this.networkId.isBlank())
+			this.networkId = this.isTestChain ? "qortium-test" : "qortium-main";
+
 		this.mainnetMessageMagicBytes = decodeMessageMagic("mainnetMessageMagic", this.mainnetMessageMagic);
 		this.testnetMessageMagicBytes = decodeMessageMagic("testnetMessageMagic", this.testnetMessageMagic);
 		this.accountTrustSettings.fixUp();

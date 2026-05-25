@@ -59,6 +59,11 @@ public class GenesisBlock extends Block {
 		return new GenesisBlock(repository, genesisBlockData, transactionsData);
 	}
 
+	public static byte[] getGenesisSignature() {
+		byte[] signature = genesisBlockData == null ? null : genesisBlockData.getSignature();
+		return signature == null ? null : Arrays.copyOf(signature, signature.length);
+	}
+
 	// Construction from JSON
 
 	/** Construct block data from blockchain config */

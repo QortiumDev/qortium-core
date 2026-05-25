@@ -26,6 +26,7 @@ fi
 paths=(
 	"${SCRIPT_DIR}/db-preview"
 	"${SCRIPT_DIR}/data-preview"
+	"${SCRIPT_DIR}/qortium-backup"
 	"${SCRIPT_DIR}/qortium-backup-preview"
 	"${SCRIPT_DIR}/settings-preview-local.json"
 	"${SCRIPT_DIR}/settings-preview-seed-local.json"

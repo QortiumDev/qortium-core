@@ -1,4 +1,5 @@
 {
+	"networkId": "qortium-preview",
 	"blockTimestampMargin": 2000,
 	"transactionExpiryPeriod": 86400000,
 	"maxBlockSize": 2097152,

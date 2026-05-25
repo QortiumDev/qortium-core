@@ -1,5 +1,6 @@
 {
 	"isTestChain": true,
+	"networkId": "qortium-testnet",
 	"blockTimestampMargin": 500,
 	"transactionExpiryPeriod": 86400000,
 	"maxBlockSize": 2097152,

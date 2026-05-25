@@ -27,6 +27,7 @@ try {
 $Paths = @(
     "db-preview",
     "data-preview",
+    "qortium-backup",
     "qortium-backup-preview",
     "settings-preview-local.json",
     "settings-preview-seed-local.json",

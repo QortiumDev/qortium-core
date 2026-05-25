@@ -125,6 +125,7 @@ Generated runtime files include:
 - `settings-preview-seed-local.json`
 - `db-preview/`
 - `data-preview/`
+- `qortium-backup/`
 - `qortium-backup-preview/`
 - `run.log`
 - `run-error.log`

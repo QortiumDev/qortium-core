@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-25 - network: reject peers with different chain identity
+
+Added a chain identity check to the peer handshake so nodes advertise and compare their network ID, genesis block signature, and base blockchain config hash before they are accepted as compatible peers. This prevents preview, testnet, mainnet, or stale-package nodes from connecting long enough to exchange blocks that only fail later during sync, making reset and public preview setup safer and easier to diagnose. The preview runtime cleanup and ignore rules now also cover the fallback backup folder name that can be created by older or default settings.
+
 ### 2026-05-24 - preview: add release package builder
 
 Added a preview release packaging script that builds or reuses the current jar and creates `target/qortium-preview.zip` with the jar, preview configs, Unix scripts, Windows wrappers, and tester guide. The preview README now documents the packaging command and clarifies that generated runtime files, local settings, logs, API keys, keystores, backups, and preview secrets are intentionally excluded from the release zip.

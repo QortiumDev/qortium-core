@@ -3,10 +3,12 @@ package org.qortal.network;
 import com.google.common.primitives.Bytes;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortal.block.BlockChain;
 import org.qortal.controller.Controller;
 import org.qortal.controller.LiteNode;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
+import org.qortal.network.helper.PeerCapabilities;
 import org.qortal.network.message.*;
 import org.qortal.settings.Settings;
 import org.qortal.utils.DaemonThreadFactory;
@@ -518,6 +520,9 @@ public enum Handshake {
 	private static final long PEER_VERSION_131 = 0x0100030001L;
 
 	private static final String HELLO_V2_MIN_VERSION = "6.0.0";
+	static final String CHAIN_NETWORK_ID_CAPABILITY = "CHAIN_NETWORK_ID";
+	static final String CHAIN_GENESIS_SIGNATURE_CAPABILITY = "CHAIN_GENESIS_SIGNATURE";
+	static final String CHAIN_CONFIG_HASH_CAPABILITY = "CHAIN_CONFIG_HASH";
 
 	private static final int POW_BUFFER_SIZE_PRE_131 = 8 * 1024 * 1024; // bytes
 	private static final int POW_DIFFICULTY_PRE_131 = 8; // leading zero bits
@@ -572,6 +577,11 @@ public enum Handshake {
 
 	static Map<String, Object> buildHelloV2Capabilities() {
 		Map<String, Object> capabilities = new HashMap<>();
+		BlockChain blockChain = BlockChain.getInstance();
+		capabilities.put(CHAIN_NETWORK_ID_CAPABILITY, blockChain.getNetworkId());
+		capabilities.put(CHAIN_GENESIS_SIGNATURE_CAPABILITY, blockChain.getGenesisSignature());
+		capabilities.put(CHAIN_CONFIG_HASH_CAPABILITY, blockChain.getChainConfigHash());
+
 		if (Settings.getInstance().isQdnEnabled()) {
 			capabilities.put("QDN", Settings.getInstance().getQDNListenPort());
 		} else {
@@ -582,6 +592,34 @@ public enum Handshake {
 			capabilities.put(LiteNode.LITE_DATA_CAPABILITY, LiteNode.LITE_DATA_CAPABILITY_VERSION);
 
 		return capabilities;
+	}
+
+	static boolean areChainCapabilitiesCompatible(PeerCapabilities capabilities) {
+		if (capabilities == null)
+			return false;
+
+		BlockChain blockChain = BlockChain.getInstance();
+
+		return capabilityMatches(capabilities, CHAIN_NETWORK_ID_CAPABILITY, blockChain.getNetworkId())
+				&& capabilityMatches(capabilities, CHAIN_GENESIS_SIGNATURE_CAPABILITY, blockChain.getGenesisSignature())
+				&& capabilityMatches(capabilities, CHAIN_CONFIG_HASH_CAPABILITY, blockChain.getChainConfigHash());
+	}
+
+	private static boolean capabilityMatches(PeerCapabilities capabilities, String capabilityName, String expectedValue) {
+		Object value = capabilities.getCapability(capabilityName);
+		return value instanceof String && value.equals(expectedValue);
+	}
+
+	private static String describeChainCapabilityMismatch(PeerCapabilities capabilities) {
+		if (capabilities == null)
+			return "no capabilities";
+
+		BlockChain blockChain = BlockChain.getInstance();
+
+		return String.format("networkId %s/%s, genesis %s/%s, config %s/%s",
+				capabilities.getCapability(CHAIN_NETWORK_ID_CAPABILITY), blockChain.getNetworkId(),
+				capabilities.getCapability(CHAIN_GENESIS_SIGNATURE_CAPABILITY), blockChain.getGenesisSignature(),
+				capabilities.getCapability(CHAIN_CONFIG_HASH_CAPABILITY), blockChain.getChainConfigHash());
 	}
 
 	private static Handshake processHelloMessage(Peer peer, HelloMessage helloMessage) {
@@ -719,6 +757,12 @@ public enum Handshake {
 				LOGGER.debug("Ignoring peer {} because it is on an old version ({})", peer, versionString);
 				return null;
 			}
+		}
+
+		if (!areChainCapabilitiesCompatible(helloMessage.getCapabilities())) {
+			LOGGER.info("Rejecting HELLO_V2 from {} - incompatible chain identity: {}",
+					peer, describeChainCapabilityMismatch(helloMessage.getCapabilities()));
+			return null;
 		}
 
 		if (peer.isOutbound()) {
