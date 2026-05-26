@@ -617,6 +617,9 @@ public class HSQLDBRepository implements Repository {
 
 	@Override
 	public void backup(boolean quick, String name, Long timeout) throws DataException, TimeoutException {
+		if (name == null || !name.matches("[a-zA-Z0-9_-]+"))
+			throw new DataException("Invalid backup name: must be non-null and contain only alphanumeric, underscore, or hyphen characters");
+
 		// Wait for other transactions to drain without holding write lock, so they can commit/rollback
 		this.blockUntilNoOtherTransactions(timeout);
 

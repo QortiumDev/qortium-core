@@ -52,6 +52,31 @@ public class RepositoryTests extends Common {
 	}
 
 	@Test
+	public void testBackupAcceptsSafeNames() throws DataException, TimeoutException {
+		String[] safeBackupNames = new String[] { "backup", "bootstrap", "backup_2026-05-28" };
+
+		for (String safeBackupName : safeBackupNames)
+			try (final HSQLDBRepository hsqldb = (HSQLDBRepository) RepositoryManager.getRepository()) {
+				hsqldb.backup(true, safeBackupName, 10 * 1000L);
+			}
+	}
+
+	@Test
+	public void testBackupRejectsUnsafeNames() throws DataException, TimeoutException {
+		String[] unsafeBackupNames = new String[] { null, "", " ", "../evil", "foo/bar", "foo'bar" };
+
+		for (String unsafeBackupName : unsafeBackupNames)
+			try (final HSQLDBRepository hsqldb = (HSQLDBRepository) RepositoryManager.getRepository()) {
+				try {
+					hsqldb.backup(true, unsafeBackupName, 10 * 1000L);
+					fail("Unsafe backup name should be rejected: " + unsafeBackupName);
+				} catch (DataException e) {
+					assertTrue(e.getMessage().contains("Invalid backup name"));
+				}
+			}
+	}
+
+	@Test
 	public void testPopulateLatestSignaturesOnEmptyRepository() throws Exception {
 		String connectionUrl = "jdbc:hsqldb:mem:empty-qdn-signatures-" + System.nanoTime();
 

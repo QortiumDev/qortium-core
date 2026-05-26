@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-28 - security: validate backup name before SQL string interpolation
+
+Added a strict backup-name check before the repository builds its HSQLDB backup command. Current backup callers already use fixed safe names, but this prevents future code from passing names with quotes, path separators, or other unsafe characters into a database command or backup path.
+
 ### 2026-05-28 - security: require API key for GET /admin/settings/{setting}
 
 Locked down the single-setting admin read endpoint so it now requires the local API key like other admin controls. This prevents callers with basic API access from reading internal node settings through reflection without authentication, while keeping normal authenticated administration unchanged.
