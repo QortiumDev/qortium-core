@@ -19,7 +19,6 @@ import org.qortium.repository.*;
 import org.qortium.settings.Settings;
 import org.qortium.utils.Amounts;
 import org.qortium.utils.Base58;
-import org.qortium.utils.StringLongMapXmlAdapter;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -90,13 +89,6 @@ public class BlockChain {
 
 	private GenesisBlock.GenesisInfo genesisInfo;
 
-	public enum FeatureTrigger {
-		transactionV6Timestamp
-	}
-
-    // V5.5 Default List of Historic Triggers
-    private static final Map<FeatureTrigger, Long> defaultFeatureTriggerHeight = new EnumMap<>(FeatureTrigger.class);
-
 	// Custom transaction fees
 	/** Unit fees by transaction timestamp */
 	public static class UnitFeesByTimestamp {
@@ -106,10 +98,6 @@ public class BlockChain {
 	}
 	private List<UnitFeesByTimestamp> unitFees;
 	private List<UnitFeesByTimestamp> nameRegistrationUnitFees;
-
-	/** Map of which blockchain features are enabled when (height/timestamp) */
-	@XmlJavaTypeAdapter(StringLongMapXmlAdapter.class)
-	private Map<String, Long> featureTriggers;
 
 	/** Checkpoints */
 	public static class Checkpoint {
@@ -235,8 +223,7 @@ public class BlockChain {
 	private MemoryPoWSettings mempowSettings;
 
 	/** Feature trigger block height for batch block reward payouts.
-	 * This MUST be a multiple of blockRewardBatchSize. Can't use
-	 * featureTriggers because unit tests need to set this value via Reflection. */
+	 * This MUST be a multiple of blockRewardBatchSize. */
 	private int blockRewardBatchStartHeight;
 
 	/** Block reward batch size. Must be (significantly) less than block prune size,
@@ -1012,12 +999,6 @@ public class BlockChain {
 		return this.ciyamAtSettings;
 	}
 
-	// Convenience methods for specific blockchain feature triggers
-
-	public long getTransactionV6Timestamp() {
-		return this.featureTriggers.get(FeatureTrigger.transactionV6Timestamp.name()).longValue();
-	}
-
 	// More complex getters for aspects that change by height or timestamp
 
 	public long getRewardAtHeight(int ourHeight) {
@@ -1132,21 +1113,10 @@ public class BlockChain {
 		if (this.ciyamAtSettings == null)
 			Settings.throwValidationError("No \"ciyamAtSettings\" entry found in blockchain config");
 
-		if (this.featureTriggers == null)
-			Settings.throwValidationError("No \"featureTriggers\" entry found in blockchain config");
-
 		if (this.mempowSettings == null)
 			Settings.throwValidationError("No \"mempowSettings\" entry found in blockchain config");
 
 		this.mempowSettings.validate();
-
-		// Check all featureTriggers are present
-		for (FeatureTrigger featureTrigger : FeatureTrigger.values())
-			if (!this.featureTriggers.containsKey(featureTrigger.name()))
-                if(!defaultFeatureTriggerHeight.containsKey(featureTrigger))
-				    Settings.throwValidationError(String.format("Missing feature trigger \"%s\" in blockchain config", featureTrigger.name()));
-                else
-                    featureTriggers.put(featureTrigger.name(), defaultFeatureTriggerHeight.get(featureTrigger));
 
 		// Check block reward share bounds
 		long totalShare = 0;

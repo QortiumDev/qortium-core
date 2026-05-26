@@ -7,7 +7,6 @@ import org.qortium.data.transaction.ATTransactionData;
 import org.qortium.data.transaction.BaseTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.group.Group;
-import org.qortium.transaction.Transaction;
 import org.qortium.transform.TransformationException;
 import org.qortium.utils.Serialization;
 
@@ -28,21 +27,12 @@ public class AtTransactionTransformer extends TransactionTransformer {
 	public static TransactionData fromByteBuffer(ByteBuffer byteBuffer) throws TransformationException {
 		long timestamp = byteBuffer.getLong();
 
-		int version = Transaction.getVersionByTimestamp(timestamp);
 		String atAddress = Serialization.deserializeAddress(byteBuffer);
 
 		String recipient = Serialization.deserializeAddress(byteBuffer);
 
-		// Default to PAYMENT-type, as there were no MESSAGE-type transactions before transaction v6
-		boolean isMessageType = false;
-
-		if (version >= 6) {
-			// Version 6 supports both PAYMENT-type and MESSAGE-type, specified using an integer.
-			// This could be extended to support additional types at a later date, simply by adding
-			// additional integer values.
-			int type = byteBuffer.getInt();
-			isMessageType = (type == 1);
-		}
+		int type = byteBuffer.getInt();
+		boolean isMessageType = (type == 1);
 
 		int messageLength = 0;
 		byte[] message = null;
@@ -56,7 +46,6 @@ public class AtTransactionTransformer extends TransactionTransformer {
 			byteBuffer.get(message);
 		}
 		else {
-			// Assume PAYMENT-type, as there were no MESSAGE-type transactions until this time
 			assetId = byteBuffer.getLong();
 
 			amount = byteBuffer.getLong();
@@ -82,7 +71,6 @@ public class AtTransactionTransformer extends TransactionTransformer {
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
 		ATTransactionData atTransactionData = (ATTransactionData) transactionData;
-		int version = Transaction.getVersionByTimestamp(transactionData.getTimestamp());
 
 		final int baseLength = TYPE_LENGTH + TIMESTAMP_LENGTH + ADDRESS_LENGTH + ADDRESS_LENGTH +
 				FEE_LENGTH + SIGNATURE_LENGTH;
@@ -100,21 +88,13 @@ public class AtTransactionTransformer extends TransactionTransformer {
 			typeSpecificLength = ASSET_ID_LENGTH + AMOUNT_LENGTH;
 		}
 
-		// V6 transactions include an extra integer to denote the type
-		int versionSpecificLength = 0;
-		if (version >= 6) {
-			versionSpecificLength = TYPE_LENGTH;
-		}
-
-		return baseLength + typeSpecificLength + versionSpecificLength;
+		return baseLength + typeSpecificLength + TYPE_LENGTH;
 	}
 
 	// Used for generating fake transaction signatures
 	public static byte[] toBytes(TransactionData transactionData) throws TransformationException {
 		try {
 			ATTransactionData atTransactionData = (ATTransactionData) transactionData;
-
-			int version = Transaction.getVersionByTimestamp(atTransactionData.getTimestamp());
 
 			ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
@@ -130,12 +110,7 @@ public class AtTransactionTransformer extends TransactionTransformer {
 			boolean isMessageType = (message != null);
 			int type = isMessageType ? 1 : 0;
 
-			if (version >= 6) {
-				// Version 6 supports both PAYMENT-type and MESSAGE-type, specified using an integer.
-				// This could be extended to support additional types at a later date, simply by adding
-				// additional integer values.
-				bytes.write(Ints.toByteArray(type));
-			}
+			bytes.write(Ints.toByteArray(type));
 
 			if (isMessageType) {
 				// MESSAGE-type

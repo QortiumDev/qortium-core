@@ -41,7 +41,7 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 
 	private static final int EXTRAS_LENGTH = SERVICE_LENGTH + DATA_TYPE_LENGTH + DATA_SIZE_LENGTH;
 
-	private static final int EXTRAS_V5_LENGTH = NONCE_LENGTH + NAME_SIZE_LENGTH + IDENTIFIER_SIZE_LENGTH +
+	private static final int EXTRAS_BASELINE_LENGTH = NONCE_LENGTH + NAME_SIZE_LENGTH + IDENTIFIER_SIZE_LENGTH +
 			METHOD_LENGTH + SECRET_SIZE_LENGTH + COMPRESSION_LENGTH + RAW_DATA_SIZE_LENGTH + METADATA_HASH_SIZE_LENGTH;
 
 	protected static final TransactionLayout layout;
@@ -52,16 +52,16 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		layout.add("timestamp", TransformationType.TIMESTAMP);
 		layout.add("transaction's groupID", TransformationType.INT);
 		layout.add("sender's public key", TransformationType.PUBLIC_KEY);
-		layout.add("nonce", TransformationType.INT); // Version 5+
+		layout.add("nonce", TransformationType.INT);
 
-		layout.add("name length", TransformationType.INT); // Version 5+
-		layout.add("name", TransformationType.DATA); // Version 5+
-		layout.add("identifier length", TransformationType.INT); // Version 5+
-		layout.add("identifier", TransformationType.DATA); // Version 5+
-		layout.add("method", TransformationType.INT); // Version 5+
-		layout.add("secret length", TransformationType.INT); // Version 5+
-		layout.add("secret", TransformationType.DATA); // Version 5+
-		layout.add("compression", TransformationType.INT); // Version 5+
+		layout.add("name length", TransformationType.INT);
+		layout.add("name", TransformationType.DATA);
+		layout.add("identifier length", TransformationType.INT);
+		layout.add("identifier", TransformationType.DATA);
+		layout.add("method", TransformationType.INT);
+		layout.add("secret length", TransformationType.INT);
+		layout.add("secret", TransformationType.DATA);
+		layout.add("compression", TransformationType.INT);
 
 		layout.add("number of payments", TransformationType.INT);
 		layout.add("* recipient", TransformationType.ADDRESS);
@@ -73,9 +73,9 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		layout.add("data length", TransformationType.INT);
 		layout.add("data", TransformationType.DATA);
 
-		layout.add("raw data size", TransformationType.INT); // Version 5+
-		layout.add("metadata hash length", TransformationType.INT); // Version 5+
-		layout.add("metadata hash", TransformationType.DATA); // Version 5+
+		layout.add("raw data size", TransformationType.INT);
+		layout.add("metadata hash length", TransformationType.INT);
+		layout.add("metadata hash", TransformationType.DATA);
 
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
@@ -109,12 +109,10 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 
 		// Always return a list of payments, even if empty
 		List<PaymentData> payments = new ArrayList<>();
-		if (version != 1) {
-			int paymentsCount = byteBuffer.getInt();
+		int paymentsCount = byteBuffer.getInt();
 
-			for (int i = 0; i < paymentsCount; ++i)
-				payments.add(PaymentTransformer.fromByteBuffer(byteBuffer));
-		}
+		for (int i = 0; i < paymentsCount; ++i)
+			payments.add(PaymentTransformer.fromByteBuffer(byteBuffer));
 
 		int service = byteBuffer.getInt();
 
@@ -161,7 +159,7 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		int dataLength = (arbitraryTransactionData.getData() != null) ? arbitraryTransactionData.getData().length : 0;
 		int metadataHashLength = (arbitraryTransactionData.getMetadataHash() != null) ? arbitraryTransactionData.getMetadataHash().length : 0;
 
-		int length = getBaseLength(transactionData) + EXTRAS_LENGTH + EXTRAS_V5_LENGTH + nameLength + identifierLength + secretLength + dataLength + metadataHashLength;
+		int length = getBaseLength(transactionData) + EXTRAS_LENGTH + EXTRAS_BASELINE_LENGTH + nameLength + identifierLength + secretLength + dataLength + metadataHashLength;
 
 		// Optional payments
 		length += NUMBER_PAYMENTS_LENGTH + arbitraryTransactionData.getPayments().size() * PaymentTransformer.getDataLength();
@@ -262,13 +260,11 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 
 			bytes.write(Ints.toByteArray(arbitraryTransactionData.getCompression().value));
 
-			if (arbitraryTransactionData.getVersion() != 1) {
-				List<PaymentData> payments = arbitraryTransactionData.getPayments();
-				bytes.write(Ints.toByteArray(payments.size()));
+			List<PaymentData> payments = arbitraryTransactionData.getPayments();
+			bytes.write(Ints.toByteArray(payments.size()));
 
-				for (PaymentData paymentData : payments)
-					bytes.write(PaymentTransformer.toBytes(paymentData));
-			}
+			for (PaymentData paymentData : payments)
+				bytes.write(PaymentTransformer.toBytes(paymentData));
 
 			bytes.write(Ints.toByteArray(arbitraryTransactionData.getServiceInt()));
 

@@ -71,8 +71,8 @@ public class AtSerializationTests extends Common {
             Transaction transaction = Transaction.fromData(repository, transactionData);
             transaction.sign(signingAccount);
 
-            // MESSAGE-type AT transactions are only fully supported since transaction V6
-            assertEquals(6, Transaction.getVersionByTimestamp(transactionData.getTimestamp()));
+            // MESSAGE-type AT transactions use Qortium's typed baseline layout
+            assertEquals(Transaction.CURRENT_VERSION, Transaction.getVersionByTimestamp(transactionData.getTimestamp()));
 
             final int claimedLength = TransactionTransformer.getDataLength(transactionData);
             byte[] serializedTransaction = TransactionTransformer.toBytes(transactionData);

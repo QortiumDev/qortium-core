@@ -54,9 +54,7 @@ public class HSQLDBArbitraryTransactionRepository extends HSQLDBTransactionRepos
 	public void save(TransactionData transactionData) throws DataException {
 		ArbitraryTransactionData arbitraryTransactionData = (ArbitraryTransactionData) transactionData;
 
-		// For V4+, we might not store raw data in the repository but elsewhere
-		if (arbitraryTransactionData.getVersion() >= 4)
-			this.repository.getArbitraryRepository().save(arbitraryTransactionData);
+		this.repository.getArbitraryRepository().save(arbitraryTransactionData);
 
 		// method and compression use NOT NULL DEFAULT 0, so fall back to these values if null
 		Integer method = arbitraryTransactionData.getMethod() != null ? arbitraryTransactionData.getMethod().value : 0;
@@ -78,9 +76,8 @@ public class HSQLDBArbitraryTransactionRepository extends HSQLDBTransactionRepos
 			throw new DataException("Unable to save arbitrary transaction into repository", e);
 		}
 
-		if (arbitraryTransactionData.getVersion() != 1)
-			// Save payments. If this fails then it is the caller's responsibility to catch the DataException as the underlying transaction will have been lost.
-			this.savePayments(transactionData.getSignature(), arbitraryTransactionData.getPayments());
+		// Save payments. If this fails then it is the caller's responsibility to catch the DataException as the underlying transaction will have been lost.
+		this.savePayments(transactionData.getSignature(), arbitraryTransactionData.getPayments());
 	}
 
 	@Override

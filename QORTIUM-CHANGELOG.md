@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Reset Qortium transaction version baseline
+
+Reset Qortium's transaction version baseline to version 1 while keeping the current transaction layouts. The old timestamp gate for transaction version 6 was removed, typed AT transactions are now always serialized with their payment-or-message type, and arbitrary transactions now always use the current resource/payment layout under the new baseline.
+
 ### 2026-05-26 - Reset Qortium block version baseline
 
 Reset Qortium's block version baseline from the inherited version 4 marker to version 1. New genesis and minted blocks now use the Qortium baseline version directly, chain configs no longer need to carry a block-version field, and an old pre-version-2 feature gate was removed because version 1 now represents the current Qortium block format.

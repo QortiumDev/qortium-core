@@ -307,6 +307,8 @@ public abstract class Transaction {
 
 	private static final Logger LOGGER = LogManager.getLogger(Transaction.class);
 
+	public static final int CURRENT_VERSION = 1;
+
 	// Properties
 
 	protected Repository repository;
@@ -523,18 +525,13 @@ public abstract class Transaction {
 	/**
 	 * Return the transaction version number that should be used, based on passed timestamp.
 	 * <p>
-	 * Qortium uses transaction version 5 as its baseline and switches to
-	 * version 6 once the configured trigger timestamp is reached.
+	 * Qortium uses version 1 as its baseline transaction version.
 	 * 
 	 * @param timestamp
 	 * @return transaction version number
 	 */
 	public static int getVersionByTimestamp(long timestamp) {
-		if (timestamp >= BlockChain.getInstance().getTransactionV6Timestamp()) {
-			return 6;
-		}
-
-		return 5;
+		return CURRENT_VERSION;
 	}
 
 	/**

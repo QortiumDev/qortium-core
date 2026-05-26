@@ -124,9 +124,6 @@
 		"stepsPerFunctionCall": 10,
 		"minutesPerBlock": 1
 	},
-	"featureTriggers": {
-		"transactionV6Timestamp": 0
-	},
 	"genesisInfo": {
 		"timestamp": 0,
 		"transactions": [
