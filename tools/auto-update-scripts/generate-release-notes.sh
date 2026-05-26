@@ -236,17 +236,17 @@ EOF
     return
   fi
 
-  if [[ "$file" == "qort" ]]; then
+  if [[ "$file" == "qortium" ]]; then
     remote_path="tools/${file}"
   fi
 
   curl -fsSL "https://raw.githubusercontent.com/${REPO}/refs/heads/${BRANCH}/${remote_path}" -o "$target_path"
-  if [[ "$file" == "qort" || "$file" == "start.sh" || "$file" == "stop.sh" ]]; then
+  if [[ "$file" == "qortium" || "$file" == "start.sh" || "$file" == "stop.sh" ]]; then
     chmod +x "$target_path"
   fi
 }
 
-REQUIRED_FILES=("settings.json" "log4j2.properties" "start.sh" "stop.sh" "qort")
+REQUIRED_FILES=("settings.json" "log4j2.properties" "start.sh" "stop.sh" "qortium")
 for file in "${REQUIRED_FILES[@]}"; do
   if [[ ! -f "${WORKING_QORTIUM_DIR}/${file}" ]]; then
     echo "Error: missing ${WORKING_QORTIUM_DIR}/${file}"
@@ -352,7 +352,7 @@ Bare minimum runtime bundle:
 - \`log4j2.properties\`
 - \`start.sh\`
 - \`stop.sh\`
-- \`qort\` helper script
+- \`qortium\` helper script
 - \`settings.json\`
 
 All timestamps set to: \`${LATEST_COMMIT_TS}\`  

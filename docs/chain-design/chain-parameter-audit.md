@@ -133,15 +133,14 @@ Recommendation:
 
 ### Cross-Chain And API Naming
 
-Some cross-chain classes and schemas still use Qortal-era naming, including
-fields such as `supportsQortTrades` and descriptions that refer to QORT. These
-are user-facing or compatibility-facing names, not immediate consensus
-parameters.
+The active cross-chain API schema now uses local-chain wording instead of QORT
+wording for supported trade modes. Some deeper cross-chain classes and ACCT
+names still reflect inherited implementation history, but those are not
+immediate consensus parameters.
 
 Recommendation:
 
-- clean schema descriptions and display text first
-- only rename public API fields after choosing a compatibility strategy
+- keep schema descriptions and display text neutral
 - keep ACCT registry cleanup separate from supported foreign-chain inventory
 
 ### UI, QDN, Documentation, And Branding

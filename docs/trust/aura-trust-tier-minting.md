@@ -283,7 +283,7 @@ closed result.
 
 ## Why This Fits Qortium
 
-This approach reuses the parts of Qortal/Qortium that already exist:
+This approach reuses the inherited core pieces that already exist:
 
 - `Account.canMint(...)` already gates minting through configured minting-group
   membership.

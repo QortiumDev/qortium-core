@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Remove remaining active Qortal branding
+
+Removed several active Qortal-era names from the public-facing Qortium tree. The command-line helper is now named `qortium` instead of `qort`, the remaining `qortal.ico` resource was replaced with a Qortium-named icon, cross-chain API metadata now says `supportsLocalChainTrades` instead of `supportsQortTrades`, and older test strings and active docs were adjusted to use neutral Qortium wording. Historical provenance notes, upstream-reference docs, foreign-coin server defaults, and the deferred `org.qortal` Java package namespace remain unchanged.
+
 ### 2026-05-26 - Move Qortium network ports to Qortium ranges
 
 Changed Qortium's default network ports away from the inherited Qortal ranges. Mainnet now uses the `1489x` range and testnet or preview profiles use the `2489x` range for API, peer, developer proxy, and QDN traffic. The preview and testnet settings, scripts, Docker profiles, helper tools, and setup docs were updated together so new nodes, seed nodes, and local tooling all agree on the Qortium-specific ports.

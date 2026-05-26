@@ -14,7 +14,7 @@ For the current launch checklist, see
 
 ## Why It Exists
 
-The basic Qortal-style model gives more governance weight to accounts that have
+The older blocks-minted-only model gives more governance weight to accounts that have
 minted more blocks. That works best when each minting account represents a real
 participant. It becomes weaker when one operator can run many accounts, earn
 `blocksMinted` on all of them, and then use those accounts as a voting bloc.

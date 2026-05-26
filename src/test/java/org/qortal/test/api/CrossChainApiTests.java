@@ -107,7 +107,7 @@ public class CrossChainApiTests extends ApiCommon {
 		assertEquals(bitcoinConfig.getDecimalPlaces(), bitcoin.decimalPlaces);
 		assertTrue(bitcoin.supportsWallet);
 		assertTrue(bitcoin.supportsHtlc);
-		assertTrue(bitcoin.supportsQortTrades);
+		assertTrue(bitcoin.supportsLocalChainTrades);
 		assertEquals(bitcoinSpec.supportsForeignForeignTrades(), bitcoin.supportsForeignForeignTrades);
 	}
 
@@ -126,7 +126,7 @@ public class CrossChainApiTests extends ApiCommon {
 		assertEquals(8, pirateChain.decimalPlaces);
 		assertTrue(pirateChain.supportsWallet);
 		assertTrue(pirateChain.supportsHtlc);
-		assertTrue(pirateChain.supportsQortTrades);
+		assertTrue(pirateChain.supportsLocalChainTrades);
 		assertFalse(pirateChain.supportsForeignForeignTrades);
 	}
 

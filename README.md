@@ -10,8 +10,8 @@ networking, build tooling, and the early Qortium documentation set.
 ## Current Status
 
 Qortium is active development software for builders and testers. It is not yet
-packaged as a polished end-user application, and some inherited Qortal/QDN
-terminology still appears in older docs and APIs while the fork is cleaned up.
+packaged as a polished end-user application, and some inherited documentation
+and workflows are still being cleaned up.
 
 For a plain-language history of the fork work, start with
 [QORTIUM-CHANGELOG.md](QORTIUM-CHANGELOG.md).

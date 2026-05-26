@@ -41,8 +41,8 @@ public class SupportedBlockchainInfo {
 	@Schema(description = "Whether Qortium supports HTLC trade flow for this blockchain")
 	public boolean supportsHtlc;
 
-	@Schema(description = "Whether this blockchain can be traded against QORT")
-	public boolean supportsQortTrades;
+	@Schema(description = "Whether this blockchain can be traded against the local chain")
+	public boolean supportsLocalChainTrades;
 
 	@Schema(description = "Whether this blockchain can be used in foreign-to-foreign trade flow")
 	public boolean supportsForeignForeignTrades;
@@ -53,7 +53,7 @@ public class SupportedBlockchainInfo {
 
 	public SupportedBlockchainInfo(String name, String currencyCode, String displayName, String type, String apiPath,
 			boolean walletEnabled, String activeNetwork, String chainId, Integer slip44CoinType, int decimalPlaces,
-			boolean supportsWallet, boolean supportsHtlc, boolean supportsQortTrades, boolean supportsForeignForeignTrades) {
+			boolean supportsWallet, boolean supportsHtlc, boolean supportsLocalChainTrades, boolean supportsForeignForeignTrades) {
 		this.name = name;
 		this.currencyCode = currencyCode;
 		this.displayName = displayName;
@@ -66,7 +66,7 @@ public class SupportedBlockchainInfo {
 		this.decimalPlaces = decimalPlaces;
 		this.supportsWallet = supportsWallet;
 		this.supportsHtlc = supportsHtlc;
-		this.supportsQortTrades = supportsQortTrades;
+		this.supportsLocalChainTrades = supportsLocalChainTrades;
 		this.supportsForeignForeignTrades = supportsForeignForeignTrades;
 	}
 
