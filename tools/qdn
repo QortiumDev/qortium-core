@@ -2,7 +2,7 @@
 
 # API defaults
 host="localhost"
-port=12391
+port=14891
 
 if [ -z "$*" ]; then
  	echo "Usage:"
@@ -24,8 +24,8 @@ fi
 
 
 # Default API ports
-mainnet_port=12391
-testnet_port=62391
+mainnet_port=14891
+testnet_port=24891
 
 # Check if the '-t' operator is passed, if so change to utilizing testnet.
 if [[ "$1" == "-t" ]]; then

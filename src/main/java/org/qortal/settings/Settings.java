@@ -66,14 +66,14 @@ public class Settings {
 	}
 
 	// New in v5.1.0 - Dedicated Ports for Data Flows; NetworkData Class
-	private static final int MAINNET_QDN_LISTEN_PORT = 12394;
-	private static final int TESTNET_QDN_LISTEN_PORT = 62394;
+	private static final int MAINNET_QDN_LISTEN_PORT = 14894;
+	private static final int TESTNET_QDN_LISTEN_PORT = 24894;
 
-	private static final int MAINNET_LISTEN_PORT = 12392;
-	private static final int TESTNET_LISTEN_PORT = 62392;
+	private static final int MAINNET_LISTEN_PORT = 14892;
+	private static final int TESTNET_LISTEN_PORT = 24892;
 
-	private static final int MAINNET_API_PORT = 12391;
-	private static final int TESTNET_API_PORT = 62391;
+	private static final int MAINNET_API_PORT = 14891;
+	private static final int TESTNET_API_PORT = 24891;
 
 	private static final int MAINNET_DOMAIN_MAP_PORT = 80;
 	private static final int TESTNET_DOMAIN_MAP_PORT = 8080;
@@ -81,8 +81,8 @@ public class Settings {
 	private static final int MAINNET_GATEWAY_PORT = 80;
 	private static final int TESTNET_GATEWAY_PORT = 8080;
 
-	private static final int MAINNET_DEV_PROXY_PORT = 12393;
-	private static final int TESTNET_DEV_PROXY_PORT = 62393;
+	private static final int MAINNET_DEV_PROXY_PORT = 14893;
+	private static final int TESTNET_DEV_PROXY_PORT = 24893;
 
 	private static final Logger LOGGER = LogManager.getLogger(Settings.class);
 	private static final String SETTINGS_FILENAME = "settings.json";

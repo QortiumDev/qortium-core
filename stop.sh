@@ -17,17 +17,17 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_PID="${SCRIPT_DIR}/run.pid"
 APIKEY_FILE="${SCRIPT_DIR}/apikey.txt"
 
-api_port=12391
+api_port=14891
 for arg in "$@"; do
 	case "${arg}" in
 		--api-port=*)
 			api_port="${arg#*=}"
 			;;
 		--mainnet|-m)
-			api_port=12391
+			api_port=14891
 			;;
 		--testnet|-t)
-			api_port=62391
+			api_port=24891
 			;;
 	esac
 done

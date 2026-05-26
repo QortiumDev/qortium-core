@@ -108,7 +108,7 @@ echo "Application log: ${SCRIPT_DIR}/qortium.log"
 
 if ! command -v curl >/dev/null 2>&1; then
 	echo "curl is not available. Add the default minting key after startup with:"
-	echo "curl -X POST http://localhost:62391/admin/mintingaccounts \\"
+	echo "curl -X POST http://localhost:24891/admin/mintingaccounts \\"
 	echo "  -H \"X-API-KEY: \$(cat ${APIKEY_FILE})\" \\"
 	echo "  -d ${DEFAULT_MINTING_PRIVATE_KEY}"
 	exit 0
@@ -123,7 +123,7 @@ read_api_key() {
 echo -n "Adding default local minting key"
 for _ in $(seq 1 60); do
 	api_key="$(read_api_key)"
-	if [ -n "${api_key}" ] && curl -fsS -X POST "http://localhost:62391/admin/mintingaccounts" \
+	if [ -n "${api_key}" ] && curl -fsS -X POST "http://localhost:24891/admin/mintingaccounts" \
 		-H "X-API-KEY: ${api_key}" \
 		--data "${DEFAULT_MINTING_PRIVATE_KEY}" >/dev/null 2>&1; then
 		echo
@@ -138,6 +138,6 @@ done
 echo
 echo "The node started, but the default minting key was not added automatically."
 echo "Run this after the API is ready:"
-echo "curl -X POST http://localhost:62391/admin/mintingaccounts \\"
+echo "curl -X POST http://localhost:24891/admin/mintingaccounts \\"
 echo "  -H \"X-API-KEY: \$(cat ${APIKEY_FILE})\" \\"
 echo "  -d ${DEFAULT_MINTING_PRIVATE_KEY}"

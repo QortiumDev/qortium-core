@@ -221,7 +221,7 @@ def parse_args():
     parser.add_argument("arg1", nargs="?", help="Private key OR commit hash")
     parser.add_argument("arg2", nargs="?", help="Commit hash if arg1 was the private key")
     parser.add_argument("--host", default="localhost", help="API host")
-    parser.add_argument("--port", type=int, default=12391, help="API port")
+    parser.add_argument("--port", type=int, default=14891, help="API port")
     parser.add_argument("--api-key", default=os.environ.get("QORTIUM_API_KEY"), help="API key for restricted API calls")
     parser.add_argument("--qdn-name", default=QDN_UPDATE_NAME, help="QDN name that owns the update binary resource")
     parser.add_argument("--identifier", help="QDN identifier for the update binary, defaults to full commit hash")

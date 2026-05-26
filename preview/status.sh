@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-API_URL="http://localhost:62391"
+API_URL="http://localhost:24891"
 WAIT=0
 TIMEOUT_SECONDS=120
 SLEEP_SECONDS=2

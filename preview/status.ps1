@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$ApiUrl = "http://localhost:62391"
+$ApiUrl = "http://localhost:24891"
 $Wait = $false
 $TimeoutSeconds = 120
 $SleepSeconds = 2

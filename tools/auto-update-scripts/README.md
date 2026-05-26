@@ -76,7 +76,7 @@ Useful options:
 python3 tools/auto-update-scripts/publish-auto-update.py \
   --qdn-name my-update-name \
   --tx-group-id 1 \
-  --port 12391 \
+  --port 14891 \
   <commit>
 ```
 
@@ -114,7 +114,7 @@ check or install an approved update manually:
 
 ```bash
 curl -H "X-API-KEY: $(cat apikey.txt)" \
-  http://localhost:12391/admin/update
+  http://localhost:14891/admin/update
 ```
 
 To schedule installation of the latest approved update when it is newer than the
@@ -122,7 +122,7 @@ running build:
 
 ```bash
 curl -X POST -H "X-API-KEY: $(cat apikey.txt)" \
-  http://localhost:12391/admin/update
+  http://localhost:14891/admin/update
 ```
 
 Both endpoints use the same approved development-group manifest lookup, pinned

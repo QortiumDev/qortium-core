@@ -106,11 +106,11 @@ nodes.
 
 ## Ports
 
-The preview profile reuses the `623xx` test-network port range:
+The preview profile uses the `248xx` test/preview-network port range:
 
-- API: `62391`
-- P2P: `62392`
-- QDN/data: `62394`
+- API: `24891`
+- P2P: `24892`
+- QDN/data: `24894`
 
 Participant nodes allow normal local transaction-builder API calls so testers
 can create payments, group joins, chain-parameter proposals, and other signed
@@ -186,7 +186,7 @@ curl -X POST \
   -H "X-API-KEY: $(cat preview/apikey.txt)" \
   -H "Content-Type: text/plain" \
   --data "MINTING_PRIVATE_KEY_FROM_PREVIEW_SECRETS" \
-  http://127.0.0.1:62391/admin/mintingaccounts
+  http://127.0.0.1:24891/admin/mintingaccounts
 ```
 
 Use the `mintingPrivateKey` value from the ignored secrets file. Do not use the

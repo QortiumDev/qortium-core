@@ -42,7 +42,7 @@ state, peer summary, and startup log.
 The status helper checks the local testnet API at:
 
 ```text
-http://localhost:62391/blocks/height
+http://localhost:24891/blocks/height
 ```
 
 Stop the local testnet with:
@@ -79,7 +79,7 @@ database and genesis block stay in sync. The script also adds the default local
 minting key with:
 
 ```sh
-curl -X POST http://localhost:62391/admin/mintingaccounts -d 1CeDCg9TSdBwJNGVTGG7pCKsvsyyoEcaVXYvDT1Xb9f
+curl -X POST http://localhost:24891/admin/mintingaccounts -d 1CeDCg9TSdBwJNGVTGG7pCKsvsyyoEcaVXYvDT1Xb9f
 ```
 
 That key is only for this disposable local testnet. The matching account joins

@@ -36,7 +36,7 @@ our @b58 = qw{
 our %b58 = map { $b58[$_] => $_ } 0 .. 57;
 our %reverseb58 = reverse %b58;
 
-our $BASE_URL = $ENV{BASE_URL} || ($opt{t} ? 'http://localhost:62391' : 'http://localhost:12391');
+our $BASE_URL = $ENV{BASE_URL} || ($opt{t} ? 'http://localhost:24891' : 'http://localhost:14891');
 our $DEFAULT_FEE = 0.01;
 
 our %TRANSACTION_TYPES = (

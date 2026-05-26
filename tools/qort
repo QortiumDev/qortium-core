@@ -4,7 +4,7 @@
 postproc=(cat)
 
 # API defaults
-port=12391
+port=14891
 example_host=node.example.org
 
 # called-as name
@@ -45,8 +45,8 @@ while [ -n "$*" ]; do
 	esac
 done
 	
-port=${testnet:+62391}
-port=${port:-12391}
+port=${testnet:+24891}
+port=${port:-14891}
 
 if [ -z "$*" ]; then
 	echo "usage: $name [-l] [-p] [-t] [DELETE] <url> [<post-data>]"

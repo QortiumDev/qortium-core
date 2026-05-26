@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-API_URL="${QORTIUM_TESTNET_API_URL:-http://localhost:62391}"
+API_URL="${QORTIUM_TESTNET_API_URL:-http://localhost:24891}"
 APIKEY_FILE="${QORTIUM_TESTNET_APIKEY_FILE:-${SCRIPT_DIR}/apikey.txt}"
 LOG_FILE="${QORTIUM_TESTNET_LOG_FILE:-${SCRIPT_DIR}/qortium.log}"
 CURL_TIMEOUT=5
@@ -159,7 +159,7 @@ fi
 
 if settings="$(get_auth "${API_URL}/admin/settings" 2>/dev/null)"; then
 	check_json "settings are local single-node testnet" "${settings}" \
-		'.isTestNet == true and .singleNodeTestnet == true and .apiPort == 62391 and .listenPort == 62392 and .minOutboundPeers == 0 and .bootstrap == false'
+		'.isTestNet == true and .singleNodeTestnet == true and .apiPort == 24891 and .listenPort == 24892 and .minOutboundPeers == 0 and .bootstrap == false'
 else
 	fail "admin settings are reachable"
 fi

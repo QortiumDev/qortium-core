@@ -1,6 +1,6 @@
 {
-  "listenPort": 62392,
-  "apiPort": 62391,
+  "listenPort": 24892,
+  "apiPort": 24891,
   "bindAddress": "127.0.0.1",
   "isTestNet": true,
   "singleNodeTestnet": true,

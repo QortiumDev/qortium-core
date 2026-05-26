@@ -46,7 +46,7 @@ Start the local testnet and confirm that it is minting blocks:
 The local testnet API listens at:
 
 ```text
-http://localhost:62391
+http://localhost:24891
 ```
 
 Stop it with:

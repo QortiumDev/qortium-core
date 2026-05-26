@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-port=12391
+port=14891
 if [ $# -gt 0 -a "$1" = "-t" ]; then
-	port=62391
+	port=24891
 fi
 
 printf "Searching for auto-update transactions to approve...\n";

@@ -54,7 +54,7 @@ function fetch_and_process_blocks {
   errors=0
 
   while [ "${height}" -le "${finish_height}" ]; do
-    block_minting_info=$(curl -s "http://localhost:12391/blocks/byheight/${height}/mintinginfo")
+    block_minting_info=$(curl -s "http://localhost:14891/blocks/byheight/${height}/mintinginfo")
     error=$(echo "${block_minting_info}" | jq -r .error)
     if [ "${error}" != "null" ]; then
       echo "Error fetching minting info for block ${height}"

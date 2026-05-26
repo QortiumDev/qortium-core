@@ -1,7 +1,7 @@
 {
-  "listenPort": 62392,
-  "listenDataPort": 62394,
-  "apiPort": 62391,
+  "listenPort": 24892,
+  "listenDataPort": 24894,
+  "apiPort": 24891,
   "isTestNet": true,
   "singleNodeTestnet": false,
   "minPeerVersion": "6.1.0",
@@ -50,7 +50,7 @@
   "maxStorageCapacity": 10737418240,
   "storagePolicy": "FOLLOWED_OR_VIEWED",
   "initialPeers": [
-    "146.103.42.59:62392"
+    "146.103.42.59:24892"
   ],
   "uiLocalServers": [
     "localhost",

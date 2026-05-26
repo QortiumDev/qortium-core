@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$ApiPort = 62391
+$ApiPort = 24891
 $StopTimeout = 45
 
 function Show-Usage {

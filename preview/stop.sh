@@ -5,7 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_PID="${SCRIPT_DIR}/run.pid"
 APIKEY_FILE="${SCRIPT_DIR}/apikey.txt"
 
-api_port=62391
+api_port=24891
 stop_timeout=45
 stale_pid=0
 for arg in "$@"; do

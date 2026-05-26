@@ -18,7 +18,7 @@ public class HelloV2MessageTests {
 		capabilities.put(LiteNode.LITE_DATA_CAPABILITY, LiteNode.LITE_DATA_CAPABILITY_VERSION);
 		capabilities.put("CHAIN_CONFIG_HASH", "abc123");
 
-		HelloV2Message message = new HelloV2Message(123L, "6.1.4", "127.0.0.1:12392", capabilities, Peer.NETWORK);
+		HelloV2Message message = new HelloV2Message(123L, "6.1.4", "127.0.0.1:14892", capabilities, Peer.NETWORK);
 
 		HelloV2Message decodedMessage = (HelloV2Message) HelloV2Message.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
 		Object liteDataCapability = decodedMessage.getCapabilities().getCapability(LiteNode.LITE_DATA_CAPABILITY);

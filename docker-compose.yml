@@ -6,13 +6,13 @@ services:
     container_name: ${QORTIUM_CONTAINER_NAME:-qortium-core}
     restart: unless-stopped
     ports:
-      - "${QORTIUM_API_BIND_HOST:-127.0.0.1}:${QORTIUM_API_PORT:-12391}:${QORTIUM_API_PORT:-12391}"
-      - "${QORTIUM_P2P_BIND_HOST:-0.0.0.0}:${QORTIUM_P2P_PORT:-12392}:${QORTIUM_P2P_PORT:-12392}"
-      - "${QORTIUM_QDN_BIND_HOST:-0.0.0.0}:${QORTIUM_QDN_PORT:-12394}:${QORTIUM_QDN_PORT:-12394}"
+      - "${QORTIUM_API_BIND_HOST:-127.0.0.1}:${QORTIUM_API_PORT:-14891}:${QORTIUM_API_PORT:-14891}"
+      - "${QORTIUM_P2P_BIND_HOST:-0.0.0.0}:${QORTIUM_P2P_PORT:-14892}:${QORTIUM_P2P_PORT:-14892}"
+      - "${QORTIUM_QDN_BIND_HOST:-0.0.0.0}:${QORTIUM_QDN_PORT:-14894}:${QORTIUM_QDN_PORT:-14894}"
     expose:
-      - "${QORTIUM_API_PORT:-12391}"
-      - "${QORTIUM_P2P_PORT:-12392}"
-      - "${QORTIUM_QDN_PORT:-12394}"
+      - "${QORTIUM_API_PORT:-14891}"
+      - "${QORTIUM_P2P_PORT:-14892}"
+      - "${QORTIUM_QDN_PORT:-14894}"
     volumes:
       - ./data/qortium:/qortium
     networks:

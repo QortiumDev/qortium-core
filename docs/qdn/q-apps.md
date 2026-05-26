@@ -191,7 +191,7 @@ Javascript apps allow for much more complex integrations with QDN data.
 
 ## Section 2a: Direct API calls
 
-The standard [Qortium Core API](http://localhost:12391/api-documentation) is available to websites and apps, and can be called directly using a standard AJAX request, such as:
+The standard [Qortium Core API](http://localhost:14891/api-documentation) is available to websites and apps, and can be called directly using a standard AJAX request, such as:
 ```
 async function getNameInfo(name) {
     const response = await fetch("/names/" + name);

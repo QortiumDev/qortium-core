@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Move Qortium network ports to Qortium ranges
+
+Changed Qortium's default network ports away from the inherited Qortal ranges. Mainnet now uses the `1489x` range and testnet or preview profiles use the `2489x` range for API, peer, developer proxy, and QDN traffic. The preview and testnet settings, scripts, Docker profiles, helper tools, and setup docs were updated together so new nodes, seed nodes, and local tooling all agree on the Qortium-specific ports.
+
 ### 2026-05-26 - Add on-chain QDN resource deletion
 
 Added an on-chain delete method for QDN resources so a name owner can publish a deletion record instead of only replacing a resource with empty files. Deleted resources are removed from the searchable resource cache, stay hidden across cache rebuilds, can be restored by orphaning the delete transaction, and can be republished later with a new PUT. The API now has builders for unsigned delete transactions while the existing local delete endpoint remains focused on clearing cached or hosted data from the local node.
