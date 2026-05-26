@@ -40,6 +40,7 @@ import org.qortal.controller.arbitrary.ArbitraryDataRenderManager;
 import org.qortal.controller.arbitrary.ArbitraryDataStorageManager;
 import org.qortal.controller.arbitrary.ArbitraryMetadataManager;
 import org.qortal.data.account.AccountData;
+import org.qortal.data.PaymentData;
 import org.qortal.data.arbitrary.AdvancedStringMatcher;
 import org.qortal.data.arbitrary.ArbitraryCategoryInfo;
 import org.qortal.data.arbitrary.ArbitraryDataIndexDetail;
@@ -55,7 +56,9 @@ import org.qortal.data.network.PeerData;
 import org.qortal.data.transaction.ArbitraryHostedDataInfo;
 import org.qortal.data.transaction.ArbitraryHostedDataItemInfo;
 import org.qortal.data.transaction.ArbitraryTransactionData;
+import org.qortal.data.transaction.BaseTransactionData;
 import org.qortal.data.transaction.TransactionData;
+import org.qortal.group.Group;
 import org.qortal.list.ResourceListManager;
 import org.qortal.network.Peer;
 import org.qortal.repository.DataException;
@@ -716,7 +719,7 @@ public class ArbitraryResource {
 	@DELETE
 	@Path("/resource/{service}/{name}/{identifier}")
 	@Operation(
-			summary = "Delete arbitrary resource with supplied service, name and identifier",
+			summary = "Delete local cached/hosted data for the supplied arbitrary resource",
 			responses = {
 					@ApiResponse(
 							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
@@ -738,6 +741,43 @@ public class ArbitraryResource {
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
+	}
+
+	@POST
+	@Path("/resource/{service}/{name}/delete")
+	@Operation(
+			summary = "Build an unsigned ARBITRARY transaction that deletes the default QDN resource",
+			responses = {
+					@ApiResponse(
+							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
+					)
+			}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public String deleteDefaultResourceOnChain(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+											   @PathParam("service") Service service,
+											   @PathParam("name") String name,
+											   @QueryParam("fee") Long fee) {
+		return this.buildDeleteResourceTransaction(service, name, null, fee);
+	}
+
+	@POST
+	@Path("/resource/{service}/{name}/{identifier}/delete")
+	@Operation(
+			summary = "Build an unsigned ARBITRARY transaction that deletes a QDN resource",
+			responses = {
+					@ApiResponse(
+							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
+					)
+			}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public String deleteResourceOnChain(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+										@PathParam("service") Service service,
+										@PathParam("name") String name,
+										@PathParam("identifier") String identifier,
+										@QueryParam("fee") Long fee) {
+		return this.buildDeleteResourceTransaction(service, name, identifier, fee);
 	}
 
 	@POST
@@ -2106,6 +2146,57 @@ public String finalizeUpload(
 
 		} catch (Exception e) {
 			LOGGER.info("Exception when publishing data: ", e);
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, e.getMessage());
+		}
+	}
+
+	private String buildDeleteResourceTransaction(Service service, String name, String identifier, Long fee) {
+		Security.checkApiCallAllowed(request);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			NameData nameData = repository.getNameRepository().fromName(name);
+			if (nameData == null) {
+				String error = String.format("Name not registered: %s", name);
+				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, error);
+			}
+
+			final Long now = NTP.getTime();
+			if (now == null) {
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NO_TIME_SYNC);
+			}
+
+			AccountData accountData = repository.getAccountRepository().getAccount(nameData.getOwner());
+			if (accountData == null || accountData.getPublicKey() == null) {
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.ADDRESS_UNKNOWN);
+			}
+
+			if (identifier != null && (identifier.isEmpty() || identifier.equals("default"))) {
+				identifier = null;
+			}
+
+			if (fee == null) {
+				fee = 0L;
+			}
+
+			int transactionVersion = Transaction.getVersionByTimestamp(now);
+			BaseTransactionData baseTransactionData = new BaseTransactionData(now, Group.NO_GROUP,
+					accountData.getPublicKey(), fee, null);
+
+			ArbitraryTransactionData transactionData = new ArbitraryTransactionData(baseTransactionData,
+					transactionVersion, service.value, 0, 0, name, identifier,
+					ArbitraryTransactionData.Method.DELETE,
+					null, ArbitraryTransactionData.Compression.NONE, new byte[0],
+					ArbitraryTransactionData.DataType.RAW_DATA, null, new ArrayList<PaymentData>());
+
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+			ValidationResult validationResult = transaction.isValidUnconfirmedForUnsignedBuild();
+			if (validationResult != ValidationResult.OK) {
+				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA, validationResult.name());
+			}
+
+			return Base58.encode(ArbitraryTransactionTransformer.toBytes(transactionData));
+		} catch (DataException | TransformationException e) {
+			LOGGER.info("Unable to build arbitrary delete transaction: {}", e.getMessage());
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, e.getMessage());
 		}
 	}

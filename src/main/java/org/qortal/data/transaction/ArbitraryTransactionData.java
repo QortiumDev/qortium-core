@@ -31,7 +31,8 @@ public class ArbitraryTransactionData extends TransactionData {
 	// Methods
 	public enum Method {
 		PUT(0), // A complete replacement of a resource
-		PATCH(1); // An update / partial replacement of a resource
+		PATCH(1), // An update / partial replacement of a resource
+		DELETE(2); // A tombstone for a resource
 
 		public final int value;
 

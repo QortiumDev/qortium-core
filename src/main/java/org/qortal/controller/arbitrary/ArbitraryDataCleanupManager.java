@@ -167,12 +167,14 @@ public class ArbitraryDataCleanupManager extends Thread {
 							continue;
 						}
 
-						// Raw data doesn't have any associated files to clean up
-						if (arbitraryTransactionData.getDataType() == ArbitraryTransactionData.DataType.RAW_DATA) {
+						boolean mostRecentTransaction = processedTransactions.add(new ArbitraryTransactionDataHashWrapper(arbitraryTransactionData));
+
+						// Raw data and delete tombstones don't have any associated files to clean up, but they still
+						// replace older resource data for cleanup purposes.
+						if (arbitraryTransactionData.getDataType() == ArbitraryTransactionData.DataType.RAW_DATA
+								|| arbitraryTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE) {
 							continue;
 						}
-
-						boolean mostRecentTransaction = processedTransactions.add(new ArbitraryTransactionDataHashWrapper(arbitraryTransactionData));
 
 						// Check if we have the complete file
 						boolean completeFileExists = ArbitraryTransactionUtils.completeFileExists(arbitraryTransactionData);
@@ -209,12 +211,12 @@ public class ArbitraryDataCleanupManager extends Thread {
 							continue;
 						}
 
-						// Check to see if we have had a more recent PUT
+						// Check to see if we have had a more recent replacement
 						if (!mostRecentTransaction) {
-							// There is a more recent PUT transaction than the one we are currently processing.
-							// When a PUT is issued, it replaces any layers that would have been there before.
+							// There is a more recent transaction than the one we are currently processing.
+							// When a PUT or DELETE is issued, it replaces any layers that would have been there before.
 							// Therefore any data relating to this older transaction is no longer needed.
-							LOGGER.debug(String.format("Newer PUT found for %s %s since transaction %s. " +
+							LOGGER.debug(String.format("Newer transaction found for %s %s since transaction %s. " +
 											"Deleting all files associated with the earlier transaction.", arbitraryTransactionData.getService(),
 									arbitraryTransactionData.getName(), Base58.encode(arbitraryTransactionData.getSignature())));
 
@@ -222,7 +224,7 @@ public class ArbitraryDataCleanupManager extends Thread {
 
 							Optional<ArbitraryTransactionDataHashWrapper> moreRecentPutTransaction
 								= processedTransactions.stream()
-									.filter(data -> data.equals(arbitraryTransactionData))
+									.filter(data -> data.equals(new ArbitraryTransactionDataHashWrapper(arbitraryTransactionData)))
 									.findAny();
 
 							if( moreRecentPutTransaction.isPresent() ) {

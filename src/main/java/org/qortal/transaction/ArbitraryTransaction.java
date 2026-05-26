@@ -8,6 +8,7 @@ import org.qortal.arbitrary.ArbitraryDataResource;
 import org.qortal.arbitrary.metadata.ArbitraryDataTransactionMetadata;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.controller.arbitrary.ArbitraryDataManager;
+import org.qortal.controller.arbitrary.ArbitraryDataStorageManager;
 import org.qortal.controller.arbitrary.ArbitraryTransactionDataHashWrapper;
 import org.qortal.crypto.Crypto;
 import org.qortal.crypto.MemoryPoW;
@@ -35,6 +36,7 @@ import org.qortal.utils.Base58;
 import org.qortal.utils.NTP;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -115,37 +117,48 @@ public class ArbitraryTransaction extends Transaction {
 
 	@Override
 	public ValidationResult isValid() throws DataException {
+		ArbitraryTransactionData.Method method = arbitraryTransactionData.getMethod();
+		if (method == null)
+			return ValidationResult.INVALID_DATA_LENGTH;
+
 		// Check that some data - or a data hash - has been supplied
 		if (arbitraryTransactionData.getData() == null) {
 			return ValidationResult.INVALID_DATA_LENGTH;
 		}
 
-		// Check data length
-		if (arbitraryTransactionData.getData().length < 1 || arbitraryTransactionData.getData().length > MAX_DATA_SIZE) {
-			return ValidationResult.INVALID_DATA_LENGTH;
+		if (method == ArbitraryTransactionData.Method.DELETE) {
+			ValidationResult deleteValidationResult = this.isDeleteValid();
+			if (deleteValidationResult != ValidationResult.OK)
+				return deleteValidationResult;
 		}
-
-		// Check hashes and metadata
-		if (arbitraryTransactionData.getDataType() == ArbitraryTransactionData.DataType.DATA_HASH) {
-			// Check length of data hash
-			if (arbitraryTransactionData.getData().length != HASH_LENGTH) {
+		else {
+			// Check data length
+			if (arbitraryTransactionData.getData().length < 1 || arbitraryTransactionData.getData().length > MAX_DATA_SIZE) {
 				return ValidationResult.INVALID_DATA_LENGTH;
 			}
 
-			byte[] metadata = arbitraryTransactionData.getMetadataHash();
+			// Check hashes and metadata
+			if (arbitraryTransactionData.getDataType() == ArbitraryTransactionData.DataType.DATA_HASH) {
+				// Check length of data hash
+				if (arbitraryTransactionData.getData().length != HASH_LENGTH) {
+					return ValidationResult.INVALID_DATA_LENGTH;
+				}
 
-			// Check maximum length of metadata hash
-			if (metadata != null && metadata.length > MAX_METADATA_LENGTH) {
-				return ValidationResult.INVALID_DATA_LENGTH;
+				byte[] metadata = arbitraryTransactionData.getMetadataHash();
+
+				// Check maximum length of metadata hash
+				if (metadata != null && metadata.length > MAX_METADATA_LENGTH) {
+					return ValidationResult.INVALID_DATA_LENGTH;
+				}
 			}
-		}
 
-		// Check raw data
-		if (arbitraryTransactionData.getDataType() == ArbitraryTransactionData.DataType.RAW_DATA) {
-			// Check reported length of the raw data.
-			// We should not download the raw data, so validation of that will be performed later.
-			if (arbitraryTransactionData.getSize() > ArbitraryDataFile.MAX_FILE_SIZE) {
-				return ValidationResult.INVALID_DATA_LENGTH;
+			// Check raw data
+			if (arbitraryTransactionData.getDataType() == ArbitraryTransactionData.DataType.RAW_DATA) {
+				// Check reported length of the raw data.
+				// We should not download the raw data, so validation of that will be performed later.
+				if (arbitraryTransactionData.getSize() > ArbitraryDataFile.MAX_FILE_SIZE) {
+					return ValidationResult.INVALID_DATA_LENGTH;
+				}
 			}
 		}
 
@@ -164,9 +177,48 @@ public class ArbitraryTransaction extends Transaction {
 			}
 		}
 
+		if (method == ArbitraryTransactionData.Method.DELETE) {
+			ArbitraryTransactionData latestTransactionData = this.repository.getArbitraryRepository()
+					.getLatestTransaction(arbitraryTransactionData.getName(), arbitraryTransactionData.getService(), null, arbitraryTransactionData.getIdentifier());
+			if (latestTransactionData == null || latestTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE)
+				return ValidationResult.RESOURCE_DOES_NOT_EXIST;
+		}
+
+		if (method == ArbitraryTransactionData.Method.PATCH) {
+			ArbitraryTransactionData latestTransactionData = this.repository.getArbitraryRepository()
+					.getLatestTransaction(arbitraryTransactionData.getName(), arbitraryTransactionData.getService(), null, arbitraryTransactionData.getIdentifier());
+			if (latestTransactionData == null || latestTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE)
+				return ValidationResult.RESOURCE_DOES_NOT_EXIST;
+		}
+
 		// Wrap and delegate final payment validity checks to Payment class
 		return new Payment(this.repository).isValid(arbitraryTransactionData.getSenderPublicKey(), arbitraryTransactionData.getPayments(),
 				arbitraryTransactionData.getFee());
+	}
+
+	private ValidationResult isDeleteValid() {
+		if (arbitraryTransactionData.getName() == null)
+			return ValidationResult.INVALID_NAME_LENGTH;
+
+		if (arbitraryTransactionData.getService() == null)
+			return ValidationResult.INVALID_RESOURCE;
+
+		if (arbitraryTransactionData.getDataType() != ArbitraryTransactionData.DataType.RAW_DATA)
+			return ValidationResult.INVALID_DATA_LENGTH;
+
+		if (arbitraryTransactionData.getData().length != 0 || arbitraryTransactionData.getSize() != 0)
+			return ValidationResult.INVALID_DATA_LENGTH;
+
+		if (arbitraryTransactionData.getMetadataHash() != null || arbitraryTransactionData.getSecret() != null)
+			return ValidationResult.INVALID_DATA_LENGTH;
+
+		if (arbitraryTransactionData.getCompression() != ArbitraryTransactionData.Compression.NONE)
+			return ValidationResult.INVALID_DATA_LENGTH;
+
+		if (arbitraryTransactionData.getPayments() != null && !arbitraryTransactionData.getPayments().isEmpty())
+			return ValidationResult.INVALID_PAYMENTS_COUNT;
+
+		return ValidationResult.OK;
 	}
 
 	@Override
@@ -277,6 +329,47 @@ public class ArbitraryTransaction extends Transaction {
 	public void orphan() throws DataException {
 		// Wrap and delegate payment processing to Payment class.
 		new Payment(this.repository).orphan(arbitraryTransactionData.getSenderPublicKey(), arbitraryTransactionData.getPayments());
+
+		// Restore the resource cache to the latest transaction that remains on-chain.
+		this.updateCachesAfterOrphan();
+	}
+
+	private void updateCachesAfterOrphan() {
+		if (arbitraryTransactionData.getName() == null || arbitraryTransactionData.getService() == null) {
+			return;
+		}
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String identifier = arbitraryTransactionData.getIdentifier();
+			ArbitraryResourceData arbitraryResourceData = this.createArbitraryResourceData(
+					arbitraryTransactionData.getService(),
+					arbitraryTransactionData.getName(),
+					identifier);
+
+			ArbitraryTransactionData latestTransactionData = repository.getArbitraryRepository()
+					.getLatestTransactionExcludingSignature(
+							arbitraryTransactionData.getName(),
+							arbitraryTransactionData.getService(),
+							null,
+							identifier,
+							arbitraryTransactionData.getSignature());
+
+			if (latestTransactionData == null || latestTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE) {
+				this.deleteArbitraryResourceCache(repository, arbitraryResourceData);
+			}
+			else {
+				ArbitraryTransaction latestTransaction = new ArbitraryTransaction(repository, latestTransactionData);
+				latestTransaction.updateArbitraryResourceCacheIncludingMetadata(
+						repository,
+						Set.of(new ArbitraryTransactionDataHashWrapper(latestTransactionData)),
+						new HashMap<>(0));
+			}
+
+			repository.saveChanges();
+		} catch (Exception e) {
+			// Log and ignore all exceptions. The cache is updated from other places too, and can be rebuilt if needed.
+			LOGGER.info("Unable to update arbitrary caches after orphan", e);
+		}
 	}
 
 	@Override
@@ -330,15 +423,7 @@ public class ArbitraryTransaction extends Transaction {
 			return;
 		}
 
-		// In the cache we store null identifiers as "default", as it is part of the primary key
-		if (identifier == null) {
-			identifier = "default";
-		}
-
-		ArbitraryResourceData arbitraryResourceData = new ArbitraryResourceData();
-		arbitraryResourceData.service = service;
-		arbitraryResourceData.name = name;
-		arbitraryResourceData.identifier = identifier;
+		ArbitraryResourceData arbitraryResourceData = this.createArbitraryResourceData(service, name, identifier);
 
 		final ArbitraryTransactionDataHashWrapper wrapper = new ArbitraryTransactionDataHashWrapper(arbitraryTransactionData);
 
@@ -360,6 +445,16 @@ public class ArbitraryTransaction extends Transaction {
 				return;
 			}
 		}
+
+		if (latestTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE) {
+			this.deleteArbitraryResourceCache(repository, arbitraryResourceData);
+			return;
+		}
+
+		if (this.isBehindDeleteBoundary(repository, latestTransactionData)) {
+			return;
+		}
+
 		arbitraryResourceData.latestSignature = latestTransactionData.getSignature();
 		ArbitraryResourceData existingArbitraryResourceData = resourceByWrapper.get(wrapper);
 
@@ -485,6 +580,62 @@ public class ArbitraryTransaction extends Transaction {
 				LOGGER.debug("Error firing RESOURCE_PUBLISHED notification (metadata first time): {}", e.getMessage());
 			}
 		}
+	}
+
+	private ArbitraryResourceData createArbitraryResourceData(Service service, String name, String identifier) {
+		ArbitraryResourceData arbitraryResourceData = new ArbitraryResourceData();
+		arbitraryResourceData.service = service;
+		arbitraryResourceData.name = name;
+		arbitraryResourceData.identifier = identifier != null ? identifier : "default";
+		return arbitraryResourceData;
+	}
+
+	private boolean isBehindDeleteBoundary(Repository repository, ArbitraryTransactionData latestTransactionData) throws DataException {
+		if (Arrays.equals(arbitraryTransactionData.getSignature(), latestTransactionData.getSignature())) {
+			return false;
+		}
+
+		if (arbitraryTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE) {
+			return true;
+		}
+
+		ArbitraryTransactionData latestDeleteTransactionData = repository.getArbitraryRepository()
+				.getLatestTransaction(
+						arbitraryTransactionData.getName(),
+						arbitraryTransactionData.getService(),
+						ArbitraryTransactionData.Method.DELETE,
+						arbitraryTransactionData.getIdentifier());
+
+		return latestDeleteTransactionData != null
+				&& latestDeleteTransactionData.getTimestamp() > arbitraryTransactionData.getTimestamp()
+				&& latestDeleteTransactionData.getTimestamp() < latestTransactionData.getTimestamp();
+	}
+
+	private void deleteArbitraryResourceCache(Repository repository, ArbitraryResourceData arbitraryResourceData) throws DataException {
+		repository.getArbitraryRepository().delete(arbitraryResourceData);
+
+		if (Settings.getInstance().isDbCacheEnabled()) {
+			ArbitraryResourceCache cache = ArbitraryResourceCache.getInstance();
+			synchronized (cache.getDataByService()) {
+				Map<String, ArbitraryResourceData> resourcesByKey = cache.getDataByService().get(arbitraryResourceData.service.value);
+				if (resourcesByKey != null) {
+					resourcesByKey.remove(ArbitraryResourceCache.resourceKey(arbitraryResourceData.name, arbitraryResourceData.identifier));
+				}
+			}
+		}
+
+		try {
+			ArbitraryDataResource resource = new ArbitraryDataResource(
+					arbitraryResourceData.name,
+					ArbitraryDataFile.ResourceIdType.NAME,
+					arbitraryResourceData.service,
+					arbitraryResourceData.identifier);
+			resource.deleteCache();
+		} catch (IOException e) {
+			LOGGER.info("Unable to delete cache for resource {}: {}", arbitraryResourceData, e.getMessage());
+		}
+
+		ArbitraryDataStorageManager.getInstance().invalidateHostedTransactionsCache();
 	}
 
 	public void updateArbitraryResourceStatus(Repository repository) throws DataException {

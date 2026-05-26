@@ -93,6 +93,9 @@ public class ArbitraryDataResource {
         this.calculateChunkCounts(repository);
 
         if (!this.exists) {
+            if (this.isDeleted(repository)) {
+                return new ArbitraryResourceStatus(Status.DELETED, this.localChunkCount, this.totalChunkCount);
+            }
             return new ArbitraryResourceStatus(Status.NOT_PUBLISHED, this.localChunkCount, this.totalChunkCount);
         }
 
@@ -393,6 +396,18 @@ public class ArbitraryDataResource {
 
         } catch (DataException e) {
             LOGGER.info(String.format("Repository error when fetching latest transaction for resource %s: %s", this, e.getMessage()));
+        }
+    }
+
+    private boolean isDeleted(Repository repository) {
+        try {
+            ArbitraryTransactionData latestTransaction = repository.getArbitraryRepository()
+                    .getLatestTransaction(this.resourceId, this.service, null, this.identifier);
+            return latestTransaction != null
+                    && latestTransaction.getMethod() == ArbitraryTransactionData.Method.DELETE;
+        } catch (DataException e) {
+            LOGGER.info(String.format("Repository error when checking deleted status for resource %s: %s", this, e.getMessage()));
+            return false;
         }
     }
 

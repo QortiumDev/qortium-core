@@ -398,12 +398,17 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 	}
 
 	private ArbitraryTransactionData getSingleTransaction(String name, Service service, Method method, String identifier, boolean firstNotLast) throws DataException {
+		return this.getSingleTransaction(name, service, method, identifier, firstNotLast, null);
+	}
+
+	private ArbitraryTransactionData getSingleTransaction(String name, Service service, Method method, String identifier, boolean firstNotLast, byte[] excludedSignature) throws DataException {
 		if (name == null || service == null) {
 			// Required fields
 			return null;
 		}
 
 		StringBuilder sql = new StringBuilder(1024);
+		List<Object> bindParams = new ArrayList<>();
 
 		sql.append("SELECT type, signature, creator, created_when, fee, " +
 				"tx_group_id, block_height, approval_status, approval_height, " +
@@ -412,10 +417,19 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 				"JOIN Transactions USING (signature) " +
 				"WHERE lower(name) = ? AND service = ? " +
 				"AND (identifier = ? OR (identifier IS NULL AND ? IS NULL))");
+		bindParams.add(name.toLowerCase());
+		bindParams.add(service.value);
+		bindParams.add(identifier);
+		bindParams.add(identifier);
 
 		if (method != null) {
 			sql.append(" AND update_method = ");
 			sql.append(method.value);
+		}
+
+		if (excludedSignature != null) {
+			sql.append(" AND signature != ?");
+			bindParams.add(excludedSignature);
 		}
 
 		sql.append(" ORDER BY created_when");
@@ -429,7 +443,7 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 
 		sql.append(" LIMIT 1");
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), name.toLowerCase(), service.value, identifier, identifier)) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {
 			if (resultSet == null)
 				return null;
 
@@ -549,6 +563,11 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 	@Override
 	public ArbitraryTransactionData getLatestTransaction(String name, Service service, Method method, String identifier) throws DataException {
 		return this.getSingleTransaction(name, service, method, identifier, false);
+	}
+
+	@Override
+	public ArbitraryTransactionData getLatestTransactionExcludingSignature(String name, Service service, Method method, String identifier, byte[] excludedSignature) throws DataException {
+		return this.getSingleTransaction(name, service, method, identifier, false, excludedSignature);
 	}
 
 	public List<ArbitraryTransactionData> getArbitraryTransactions(boolean requireName, Integer limit, Integer offset, Boolean reverse) throws DataException {

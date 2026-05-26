@@ -43,6 +43,8 @@ public interface ArbitraryRepository {
 
 	public ArbitraryTransactionData getLatestTransaction(String name, Service service, Method method, String identifier) throws DataException;
 
+	public ArbitraryTransactionData getLatestTransactionExcludingSignature(String name, Service service, Method method, String identifier, byte[] excludedSignature) throws DataException;
+
 	public List<ArbitraryTransactionData> getArbitraryTransactions(boolean requireName, Integer limit, Integer offset, Boolean reverse) throws DataException;
 
 

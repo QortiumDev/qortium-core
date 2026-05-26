@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Add on-chain QDN resource deletion
+
+Added an on-chain delete method for QDN resources so a name owner can publish a deletion record instead of only replacing a resource with empty files. Deleted resources are removed from the searchable resource cache, stay hidden across cache rebuilds, can be restored by orphaning the delete transaction, and can be republished later with a new PUT. The API now has builders for unsigned delete transactions while the existing local delete endpoint remains focused on clearing cached or hosted data from the local node.
+
 ### 2026-05-25 - preview: add second public seed profile
 
 Added the Netcup preview seed at `185.207.104.78` alongside the existing Regxa seed at `146.103.42.59`. Preview participants now start with both seed nodes in their peer list, seed operators have separate launch profiles for each public IP, the seed profiles know about each other, and preview genesis includes a separate Netcup minting authorization. The preview packaging, reset scripts, docs, and local ignored seed-key notes now include the second seed configuration.

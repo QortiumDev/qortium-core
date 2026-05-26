@@ -12,6 +12,7 @@ import org.qortal.arbitrary.exception.MissingDataException;
 import org.qortal.arbitrary.misc.Category;
 import org.qortal.arbitrary.misc.Service;
 import org.qortal.block.BlockChain;
+import org.qortal.controller.arbitrary.ArbitraryDataCacheManager;
 import org.qortal.controller.arbitrary.ArbitraryDataManager;
 import org.qortal.crypto.AES;
 import org.qortal.crypto.Crypto;
@@ -26,6 +27,7 @@ import org.qortal.repository.DataException;
 import org.qortal.repository.Repository;
 import org.qortal.repository.RepositoryManager;
 import org.qortal.test.common.ArbitraryUtils;
+import org.qortal.test.common.BlockUtils;
 import org.qortal.test.common.Common;
 import org.qortal.test.common.TransactionUtils;
 import org.qortal.test.common.transaction.TestTransaction;
@@ -457,9 +459,146 @@ public class ArbitraryTransactionTests extends Common {
         }
     }
 
+    @Test
+    public void testDeleteRemovesResourceFromCacheAndSurvivesRebuild() throws DataException, IOException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String publicKey58 = Base58.encode(alice.getPublicKey());
+            String name = "TEST-delete";
+            String identifier = "resource";
+            Service service = Service.ARBITRARY_DATA;
+
+            registerName(repository, alice, name);
+
+            Path path = ArbitraryUtils.generateRandomDataPath(240, true);
+            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path, name, identifier,
+                    ArbitraryTransactionData.Method.PUT, service, alice);
+            assertNotNull(repository.getArbitraryRepository().getArbitraryResource(service, name, identifier));
+
+            ArbitraryTransactionData deleteTransactionData = createDeleteTransaction(repository, alice, name, identifier, service);
+            TransactionUtils.signAndMint(repository, deleteTransactionData, alice);
+
+            assertNull(repository.getArbitraryRepository().getArbitraryResource(service, name, identifier));
+            assertEquals(ArbitraryResourceStatus.Status.DELETED, getResourceStatus(repository, name, service, identifier).getStatus());
+
+            ArbitraryDataCacheManager.getInstance().buildArbitraryResourcesCache(repository, true);
+            assertNull(repository.getArbitraryRepository().getArbitraryResource(service, name, identifier));
+            assertEquals(ArbitraryResourceStatus.Status.DELETED, getResourceStatus(repository, name, service, identifier).getStatus());
+        }
+    }
+
+    @Test
+    public void testDeleteOrphanRestoresPreviousResource() throws DataException, IOException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String publicKey58 = Base58.encode(alice.getPublicKey());
+            String name = "TEST-delete-orphan";
+            String identifier = "resource";
+            Service service = Service.ARBITRARY_DATA;
+
+            registerName(repository, alice, name);
+
+            Path path = ArbitraryUtils.generateRandomDataPath(240, true);
+            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path, name, identifier,
+                    ArbitraryTransactionData.Method.PUT, service, alice);
+
+            ArbitraryTransactionData deleteTransactionData = createDeleteTransaction(repository, alice, name, identifier, service);
+            TransactionUtils.signAndMint(repository, deleteTransactionData, alice);
+            assertNull(repository.getArbitraryRepository().getArbitraryResource(service, name, identifier));
+
+            BlockUtils.orphanLastBlock(repository);
+
+            assertNotNull(repository.getArbitraryRepository().getArbitraryResource(service, name, identifier));
+            assertNotEquals(ArbitraryResourceStatus.Status.DELETED, getResourceStatus(repository, name, service, identifier).getStatus());
+        }
+    }
+
+    @Test
+    public void testPutCanRepublishAfterDelete() throws DataException, IOException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String publicKey58 = Base58.encode(alice.getPublicKey());
+            String name = "TEST-delete-republish";
+            String identifier = "resource";
+            Service service = Service.ARBITRARY_DATA;
+
+            registerName(repository, alice, name);
+
+            Path path1 = ArbitraryUtils.generateRandomDataPath(240, true);
+            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path1, name, identifier,
+                    ArbitraryTransactionData.Method.PUT, service, alice);
+
+            ArbitraryTransactionData deleteTransactionData = createDeleteTransaction(repository, alice, name, identifier, service);
+            TransactionUtils.signAndMint(repository, deleteTransactionData, alice);
+            assertEquals(ArbitraryResourceStatus.Status.DELETED, getResourceStatus(repository, name, service, identifier).getStatus());
+
+            Path path2 = ArbitraryUtils.generateRandomDataPath(240, true);
+            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path2, name, identifier,
+                    ArbitraryTransactionData.Method.PUT, service, alice);
+
+            assertNotNull(repository.getArbitraryRepository().getArbitraryResource(service, name, identifier));
+            assertNotEquals(ArbitraryResourceStatus.Status.DELETED, getResourceStatus(repository, name, service, identifier).getStatus());
+
+            ArbitraryDataCacheManager.getInstance().buildArbitraryResourcesCache(repository, true);
+            assertNotNull(repository.getArbitraryRepository().getArbitraryResource(service, name, identifier));
+            assertNotEquals(ArbitraryResourceStatus.Status.DELETED, getResourceStatus(repository, name, service, identifier).getStatus());
+        }
+    }
+
+    @Test
+    public void testDeleteValidation() throws DataException, IOException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+            String publicKey58 = Base58.encode(alice.getPublicKey());
+            String name = "TEST-delete-validation";
+            String identifier = "resource";
+            Service service = Service.ARBITRARY_DATA;
+
+            registerName(repository, alice, name);
+
+            ArbitraryTransactionData deleteBeforePut = createDeleteTransaction(repository, alice, name, identifier, service);
+            assertEquals(Transaction.ValidationResult.RESOURCE_DOES_NOT_EXIST,
+                    TransactionUtils.signAndImport(repository, deleteBeforePut, alice));
+
+            Path path = ArbitraryUtils.generateRandomDataPath(240, true);
+            ArbitraryUtils.createAndMintTxn(repository, publicKey58, path, name, identifier,
+                    ArbitraryTransactionData.Method.PUT, service, alice);
+
+            ArbitraryTransactionData bobDelete = createDeleteTransaction(repository, bob, name, identifier, service);
+            assertEquals(Transaction.ValidationResult.INVALID_NAME_OWNER,
+                    TransactionUtils.signAndImport(repository, bobDelete, bob));
+
+            ArbitraryTransactionData nonEmptyDelete = createDeleteTransaction(repository, alice, name, identifier, service);
+            nonEmptyDelete.setData(new byte[] { 1 });
+            assertEquals(Transaction.ValidationResult.INVALID_DATA_LENGTH,
+                    TransactionUtils.signAndImport(repository, nonEmptyDelete, alice));
+        }
+    }
+
     private ArbitraryResourceStatus getResourceStatus(Repository repository, String name, Service service, String identifier) {
         ArbitraryDataResource resource = new ArbitraryDataResource(name, ArbitraryDataFile.ResourceIdType.NAME, service, identifier);
         return resource.getStatus(repository);
+    }
+
+    private void registerName(Repository repository, PrivateKeyAccount account, String name) throws DataException {
+        RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(account), name, "");
+        transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
+        TransactionUtils.signAndMint(repository, transactionData, account);
+    }
+
+    private ArbitraryTransactionData createDeleteTransaction(Repository repository, PrivateKeyAccount account,
+                                                            String name, String identifier, Service service) throws DataException {
+        Long now = NTP.getTime();
+        long fee = BlockChain.getInstance().getUnitFeeAtTimestamp(now);
+        BaseTransactionData baseTransactionData = new BaseTransactionData(now, Group.NO_GROUP,
+                account.getPublicKey(), fee, null);
+        int version = Transaction.getVersionByTimestamp(now);
+
+        return new ArbitraryTransactionData(baseTransactionData, version, service.value, 0, 0,
+                name, identifier, ArbitraryTransactionData.Method.DELETE, null,
+                ArbitraryTransactionData.Compression.NONE, new byte[0],
+                ArbitraryTransactionData.DataType.RAW_DATA, null, new ArrayList<PaymentData>());
     }
 
     private void createUnrelatedFilesNextTo(ArbitraryDataFile arbitraryDataFile, int count) throws IOException {

@@ -21,7 +21,8 @@ public class ArbitraryResourceStatus {
         MISSING_DATA(7, "Missing data", "Unable to locate all files. Please try again later"),
         BUILD_FAILED(8, "Build failed", "Build failed. Please try again later"),
         UNSUPPORTED(9, "Unsupported", "Unsupported request"),
-        BLOCKED(10, "Blocked", "Name is blocked so content cannot be served");
+        BLOCKED(10, "Blocked", "Name is blocked so content cannot be served"),
+        DELETED(11, "Deleted", "Resource has been deleted by the name owner");
 
         public int value;
         private String title;
