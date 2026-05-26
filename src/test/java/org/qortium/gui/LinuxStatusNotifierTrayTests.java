@@ -8,11 +8,11 @@ public class LinuxStatusNotifierTrayTests {
 
 	@Test
 	public void testMultiLineTooltipUsesStatusAsTitleAndBuildVersionAsDescription() {
-		String tooltip = "Minting - 0 connections - height 13\nBuild version: qortium-6.1.5-test";
+		String tooltip = "Minting - 0 connections - height 13\nBuild version: qortium-1.0.0-test";
 
 		assertEquals("Qortium - Minting - 0 connections - height 13",
 				LinuxStatusNotifierTray.getToolTipTitle(tooltip));
-		assertEquals("Build version: qortium-6.1.5-test",
+		assertEquals("Build version: qortium-1.0.0-test",
 				LinuxStatusNotifierTray.getToolTipDescription(tooltip));
 	}
 

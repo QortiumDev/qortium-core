@@ -4,7 +4,7 @@
   "apiPort": 24891,
   "isTestNet": true,
   "singleNodeTestnet": false,
-  "minPeerVersion": "6.1.0",
+  "minPeerVersion": "1.0.0",
   "allowConnectionsWithOlderPeerVersions": false,
   "ourExternalIpAddress": "146.103.42.59",
   "bitcoinyNetworks": {

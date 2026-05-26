@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Reset Qortium Core version to 1.0.0
+
+Reset Qortium Core's active release version to 1.0.0 for the new Qortium baseline. The Maven build version, default peer compatibility floor, preview and testnet peer-version settings, installer metadata, and active version tests now agree on the 1.0.0 line so freshly rebuilt nodes can connect after the preview chain reset.
+
 ### 2026-05-26 - Standardize Qortium image resources
 
 Standardized the remaining Qortium image resource filenames and locations so app icons, tray icons, and installer artwork are easier to understand and maintain. Runtime icons now live under clear app and tray resource folders, stale runtime ICO references were removed, and the Windows installer banner uses a direct Qortium installer filename.
