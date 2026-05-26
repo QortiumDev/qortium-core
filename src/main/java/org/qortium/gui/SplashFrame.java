@@ -22,7 +22,7 @@ public class SplashFrame {
 	public static class SplashPanel extends JPanel {
 		private BufferedImage image;
 
-		private String defaultSplash = "Qlogo_512.png";
+		private String defaultSplash = "app/qortium-app-500.png";
 
 		private JLabel statusLabel;
 

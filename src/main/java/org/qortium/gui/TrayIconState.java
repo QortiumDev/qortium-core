@@ -1,10 +1,10 @@
 package org.qortium.gui;
 
 public enum TrayIconState {
-	SYNCHRONIZING_CLOCK("icons/qortium_ui_tray_syncing_time-alt.png", "qortium-tray-syncing-time"),
-	MINTING("icons/qortium_ui_tray_minting.png", "qortium-tray-minting"),
-	SYNCHRONIZING("icons/qortium_ui_tray_syncing.png", "qortium-tray-syncing"),
-	SYNCED("icons/qortium_ui_tray_synced.png", "qortium-tray-synced");
+	SYNCHRONIZING_CLOCK("tray/qortium-tray-syncing-time.png", "qortium-tray-syncing-time"),
+	MINTING("tray/qortium-tray-minting.png", "qortium-tray-minting"),
+	SYNCHRONIZING("tray/qortium-tray-syncing.png", "qortium-tray-syncing"),
+	SYNCED("tray/qortium-tray-synced.png", "qortium-tray-synced");
 
 	private final String resourceName;
 	private final String iconName;

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Standardize Qortium image resources
+
+Standardized the remaining Qortium image resource filenames and locations so app icons, tray icons, and installer artwork are easier to understand and maintain. Runtime icons now live under clear app and tray resource folders, stale runtime ICO references were removed, and the Windows installer banner uses a direct Qortium installer filename.
+
 ### 2026-05-26 - Replace Qortium icon assets
 
 Replaced the remaining inherited application, tray, and Windows installer artwork with the prepared Qortium icon set. The stale splash image and unreferenced installer bitmap were removed so packaged resources no longer carry old branding that is not used by the current desktop or installer flows.

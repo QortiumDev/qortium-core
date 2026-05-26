@@ -8,8 +8,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class GuiIconTests {
 
@@ -34,5 +33,16 @@ public class GuiIconTests {
 	public void testIconApplicationHelpersAreSafeWithoutWindows() {
 		Gui.applyWindowIcon(null);
 		Gui.applyTaskbarIcon();
+	}
+
+	@Test
+	public void testTrayIconsLoad() {
+		for (TrayIconState iconState : TrayIconState.values()) {
+			Image image = Gui.loadImage(iconState.getResourceName());
+
+			assertNotNull("Expected tray icon to load: " + iconState.name(), image);
+			assertEquals("Expected 32px tray icon width: " + iconState.name(), 32, image.getWidth(null));
+			assertEquals("Expected 32px tray icon height: " + iconState.name(), 32, image.getHeight(null));
+		}
 	}
 }

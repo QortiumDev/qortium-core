@@ -20,7 +20,7 @@
     <ROW Property="ARPSYSTEMCOMPONENT" Value="1"/>
     <ROW Property="ARPURLINFOABOUT" Value="https://github.com/QuickMythril/qortium"/>
     <ROW Property="AiWinUI" MultiBuildValue="DefaultBuild:1"/>
-    <ROW Property="BannerBitmap" Value="banner.jpg" MultiBuildValue="DefaultBuild:NiceQortiumLogocrop.png" Type="1" MsiKey="BannerBitmap"/>
+    <ROW Property="BannerBitmap" Value="banner.jpg" MultiBuildValue="DefaultBuild:QortiumInstallerBanner.png" Type="1" MsiKey="BannerBitmap"/>
     <ROW Property="DATA_PATH" Value="will-be-overwritten"/>
     <ROW Property="DefaultUIFont" Value="TextStyle" Type="2" Options="65536" MsiKey="DefaultUIFont"/>
     <ROW Property="Magistral" Value="TextStyle" Type="2"/>
@@ -33,7 +33,7 @@
     <ROW Property="ProductVersion" Value="6.1.4"/>
     <ROW Property="RECONFIG_NTP" Value="true"/>
     <ROW Property="SecureCustomProperties" Value="OLDPRODUCTS;AI_NEWERPRODUCTFOUND;AI_SETUPEXEPATH;SETUPEXEDIR"/>
-    <ROW Property="TabBackground" Value="NiceQortiumLogo.png" Type="1" MsiKey="TabBackground"/>
+    <ROW Property="TabBackground" Value="QortiumInstallerBackground.png" Type="1" MsiKey="TabBackground"/>
     <ROW Property="UpgradeCode" Value="{6733900D-8500-41E3-8C06-EC9236C17FC8}"/>
     <ROW Property="WindowsType9X" MultiBuildValue="DefaultBuild:Windows 9x/ME" ValueLocId="-"/>
     <ROW Property="WindowsType9XDisplay" MultiBuildValue="DefaultBuild:Windows 9x/ME" ValueLocId="-"/>
@@ -45,7 +45,7 @@
     <ROW Property="WindowsTypeNT5X" MultiBuildValue="DefaultBuild:Windows XP/2003" ValueLocId="-"/>
     <ROW Property="WindowsTypeNT5XDisplay" MultiBuildValue="DefaultBuild:Windows XP/2003" ValueLocId="-"/>
     <ROW Property="WindowsTypeNTDisplay" MultiBuildValue="DefaultBuild:32-bit Windows versions" ValueLocId="-"/>
-    <ROW Property="test" Value="NiceQortiumLogo.png" Type="1"/>
+    <ROW Property="test" Value="QortiumInstallerBackground.png" Type="1"/>
   </COMPONENT>
   <COMPONENT cid="caphyon.advinst.msicomp.MsiDirsComponent">
     <ROW Directory="APPDIR" Directory_Parent="TARGETDIR" DefaultDir="APPDIR:." IsPseudoRoot="1" DirectoryOptions="15"/>
@@ -973,8 +973,8 @@
   <COMPONENT cid="caphyon.advinst.msicomp.MsiBinaryComponent">
     <ROW Name="ExternalUICleaner.dll" SourcePath="&lt;AI_CUSTACTS&gt;ExternalUICleaner.dll"/>
     <ROW Name="NetFirewall.dll" SourcePath="&lt;AI_CUSTACTS&gt;NetFirewall.dll"/>
-    <ROW Name="NiceQortiumLogo.png" SourcePath="Nice-Qortium-Logo-crop.png"/>
-    <ROW Name="NiceQortiumLogocrop.png" SourcePath="Nice-Qortium-Logo-crop.png"/>
+    <ROW Name="QortiumInstallerBackground.png" SourcePath="qortium-installer-banner.png"/>
+    <ROW Name="QortiumInstallerBanner.png" SourcePath="qortium-installer-banner.png"/>
     <ROW Name="Prereq.dll" SourcePath="&lt;AI_CUSTACTS&gt;Prereq.dll"/>
     <ROW Name="ResourceCleaner.dll" SourcePath="&lt;AI_CUSTACTS&gt;ResourceCleaner.dll"/>
     <ROW Name="SoftwareDetector.dll" SourcePath="&lt;AI_CUSTACTS&gt;SoftwareDetector.dll"/>

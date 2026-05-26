@@ -18,10 +18,10 @@ public class Gui {
 
 	private static final Logger LOGGER = LogManager.getLogger(Gui.class);
 	private static final String[] APP_ICON_RESOURCES = {
-			"icons/icon16.png",
-			"icons/icon64.png",
-			"icons/Qlogo_128.png",
-			"Qlogo_512.png"
+			"app/qortium-app-16.png",
+			"app/qortium-app-64.png",
+			"app/qortium-app-128.png",
+			"app/qortium-app-500.png"
 	};
 	private static Gui instance;
 
