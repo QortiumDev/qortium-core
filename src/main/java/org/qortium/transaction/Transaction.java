@@ -61,6 +61,7 @@ public abstract class Transaction {
 		MESSAGE(17, true),
 		CHAT(18, false),
 		PUBLICIZE(19, false),
+		// 20 reserved: former AIRDROP transaction type.
 		AT(21, false),
 		CREATE_GROUP(22, true),
 		UPDATE_GROUP(23, true),
@@ -76,7 +77,10 @@ public abstract class Transaction {
 		GROUP_APPROVAL(33, false),
 		SET_GROUP(34, false),
 		UPDATE_ASSET(35, true),
+		// 36 reserved: former ACCOUNT_FLAGS transaction type.
+		// 37 reserved: former ENABLE_FORGING transaction type.
 		REWARD_SHARE(38, false),
+		// 39 reserved: former ACCOUNT_LEVEL transaction type.
 		TRANSFER_PRIVS(40, false),
 		PRESENCE(41, false),
 		SELL_ASSET_OWNERSHIP(42, false),
@@ -95,6 +99,11 @@ public abstract class Transaction {
 		public final Constructor<?> constructor;
 
 		private static final Map<Integer, TransactionType> map = stream(TransactionType.values()).collect(toMap(type -> type.value, type -> type));
+		private static final Map<Integer, String> reservedIds = Map.of(
+				20, "former AIRDROP transaction type",
+				36, "former ACCOUNT_FLAGS transaction type",
+				37, "former ENABLE_FORGING transaction type",
+				39, "former ACCOUNT_LEVEL transaction type");
 		private static final int maxValue = stream(TransactionType.values()).mapToInt(type -> type.value).max().orElse(0);
 
 		TransactionType(int value, boolean needsApproval) {
@@ -130,6 +139,14 @@ public abstract class Transaction {
 
 		public static TransactionType valueOf(int value) {
 			return map.get(value);
+		}
+
+		public static boolean isReservedId(int value) {
+			return reservedIds.containsKey(value);
+		}
+
+		public static String getReservedIdDescription(int value) {
+			return reservedIds.get(value);
 		}
 
 		public static int getMaxValue() {

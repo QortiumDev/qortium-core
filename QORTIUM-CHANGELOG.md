@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Document reserved transaction type IDs
+
+Documented the historical transaction type IDs that Qortium is keeping reserved instead of compacting away. Former airdrop, account flag, forging enablement, and account level transaction IDs are now recorded as reserved metadata while remaining inactive, so future work can intentionally revisit those concepts without old or removed transaction IDs being accepted as valid transactions today.
+
 ### 2026-05-26 - Reset Qortium archive format baseline
 
 Reset Qortium's block archive serialization baseline so archive version 1 now uses the current compact block layout with AT state hashes. The old per-AT-state archive layout and version 2 archive default were removed from archive reads, writes, rebuilds, serialized block export, and tests, keeping the archive format versioning system ready for future changes without carrying inherited compatibility paths.
