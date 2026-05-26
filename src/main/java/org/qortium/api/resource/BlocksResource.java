@@ -115,7 +115,7 @@ public class BlocksResource {
 	@Path("/signature/{signature}/data")
 	@Operation(
 			summary = "Fetch serialized, base58 encoded block data using base58 signature",
-			description = "Returns serialized data for the block that matches the given signature, and an optional block serialization version",
+			description = "Returns serialized data for the block that matches the given signature.",
 			responses = {
 					@ApiResponse(
 							description = "the block data",
@@ -124,7 +124,7 @@ public class BlocksResource {
 			}
 	)
 	@ApiErrors({
-			ApiError.INVALID_SIGNATURE, ApiError.BLOCK_UNKNOWN, ApiError.INVALID_DATA, ApiError.REPOSITORY_ISSUE
+			ApiError.INVALID_SIGNATURE, ApiError.BLOCK_UNKNOWN, ApiError.INVALID_CRITERIA, ApiError.INVALID_DATA, ApiError.REPOSITORY_ISSUE
 	})
 	public String getSerializedBlockData(@PathParam("signature") String signature58, @QueryParam("version") Integer version) {
 		// Decode signature
@@ -141,6 +141,9 @@ public class BlocksResource {
 			if (version == null) {
 				version = 1;
 			}
+			if (version != 1) {
+				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Only block serialization version 1 is supported.");
+			}
 
             // Check the database first
 			BlockData blockData = repository.getBlockRepository().fromSignature(signature);
@@ -149,29 +152,17 @@ public class BlocksResource {
                 ByteArrayOutputStream bytes = new ByteArrayOutputStream();
                 bytes.write(Ints.toByteArray(block.getBlockData().getHeight()));
 
-				switch (version) {
-					case 1:
-						bytes.write(BlockTransformer.toBytes(block));
-						break;
-
-					case 2:
-						bytes.write(BlockTransformer.toBytesV2(block));
-						break;
-
-					default:
-						throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
-				}
+				bytes.write(BlockTransformer.toBytesV2(block));
 
                 return Base58.encode(bytes.toByteArray());
             }
 
             // Not found, so try the block archive
-            Triple<byte[], Integer, Integer> serializedBlock = BlockArchiveReader.getInstance().fetchSerializedBlockBytesForSignature(signature, false, repository);
+            Triple<byte[], Integer, Integer> serializedBlock = BlockArchiveReader.getInstance().fetchSerializedBlockBytesForSignature(signature, true, repository);
             if (serializedBlock != null) {
 				byte[] bytes = serializedBlock.getA();
 				Integer serializationVersion = serializedBlock.getB();
 				if (version != serializationVersion) {
-					// TODO: we could quite easily reserialize the block with the requested version
 					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Block is not stored using requested serialization version.");
 				}
 				return Base58.encode(bytes);

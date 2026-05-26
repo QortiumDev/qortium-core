@@ -37,6 +37,7 @@ import org.qortium.data.account.RewardShareData;
 import org.qortium.network.Network;
 import org.qortium.network.Peer;
 import org.qortium.network.PeerAddress;
+import org.qortium.repository.BlockArchiveWriter;
 import org.qortium.repository.Bootstrap;
 import org.qortium.repository.DataException;
 import org.qortium.repository.ReindexManager;
@@ -1094,13 +1095,13 @@ public class AdminResource {
 	@Path("/repository/archive/rebuild")
 	@Operation(
 			summary = "Rebuild archive",
-			description = "Rebuilds archive files, using the specified serialization version",
+			description = "Rebuilds archive files using the current archive serialization version.",
 			requestBody = @RequestBody(
 					required = true,
 					content = @Content(
 							mediaType = MediaType.TEXT_PLAIN,
 							schema = @Schema(
-									type = "number", example = "2"
+									type = "number", example = "1"
 							)
 					)
 			),
@@ -1111,7 +1112,7 @@ public class AdminResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.REPOSITORY_ISSUE})
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
 	@SecurityRequirement(name = "apiKey")
 	public String rebuildArchive(@HeaderParam(Security.API_KEY_HEADER) String apiKey, Integer serializationVersion) {
 		Security.checkApiCallAllowed(request);
@@ -1119,6 +1120,9 @@ public class AdminResource {
 		// Default serialization version to value specified in settings
 		if (serializationVersion == null) {
 			serializationVersion = Settings.getInstance().getDefaultArchiveVersion();
+		}
+		if (serializationVersion != BlockArchiveWriter.SUPPORTED_ARCHIVE_VERSION) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Only archive serialization version 1 is supported.");
 		}
 
 		try {

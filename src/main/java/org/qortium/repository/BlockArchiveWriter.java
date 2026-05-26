@@ -39,8 +39,8 @@ public class BlockArchiveWriter {
 
     private static final Logger LOGGER = LogManager.getLogger(BlockArchiveWriter.class);
 
-    public static final long DEFAULT_FILE_SIZE_TARGET_V1 = 100 * 1024 * 1024; // 100MiB
-    public static final long DEFAULT_FILE_SIZE_TARGET_V2 = 10 * 1024 * 1024; // 10MiB
+    public static final int SUPPORTED_ARCHIVE_VERSION = 1;
+    public static final long DEFAULT_FILE_SIZE_TARGET = 10 * 1024 * 1024; // 10MiB
 
     private int startHeight;
     private final int endHeight;
@@ -48,7 +48,7 @@ public class BlockArchiveWriter {
     private final Path archivePath;
     private final Repository repository;
 
-    private long fileSizeTarget = DEFAULT_FILE_SIZE_TARGET_V1;
+    private long fileSizeTarget = DEFAULT_FILE_SIZE_TARGET;
     private boolean shouldEnforceFileSizeTarget = true;
 
     // Default data source to BLOCK_REPOSITORY; can optionally be overridden
@@ -77,11 +77,6 @@ public class BlockArchiveWriter {
             serializationVersion = this.findSerializationVersion();
         }
 
-        // Reduce default file size target if we're using V2, as the average block size is over 90% smaller
-        if (serializationVersion == 2) {
-            this.setFileSizeTarget(DEFAULT_FILE_SIZE_TARGET_V2);
-        }
-
         this.serializationVersion = serializationVersion;
     }
 
@@ -98,7 +93,7 @@ public class BlockArchiveWriter {
     private int findSerializationVersion() {
         // Attempt to fetch the serialization version from the existing archive
         Integer block2SerializationVersion = BlockArchiveReader.getInstance().fetchSerializationVersionForHeight(2);
-        if (block2SerializationVersion != null) {
+        if (block2SerializationVersion != null && block2SerializationVersion == SUPPORTED_ARCHIVE_VERSION) {
             return block2SerializationVersion;
         }
 
@@ -225,10 +220,6 @@ public class BlockArchiveWriter {
             byte[] blockBytes;
             switch (serializationVersion) {
                 case 1:
-                    blockBytes = BlockTransformer.toBytes(block);
-                    break;
-
-                case 2:
                     blockBytes = BlockTransformer.toBytesV2(block);
                     break;
 

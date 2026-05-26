@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Reset Qortium archive format baseline
+
+Reset Qortium's block archive serialization baseline so archive version 1 now uses the current compact block layout with AT state hashes. The old per-AT-state archive layout and version 2 archive default were removed from archive reads, writes, rebuilds, serialized block export, and tests, keeping the archive format versioning system ready for future changes without carrying inherited compatibility paths.
+
 ### 2026-05-26 - Reset Qortium network protocol baseline
 
 Reset Qortium's peer network protocol baseline so the current capability-aware handshake and compact block, block-summary, peer-list, signature, and online-account messages are the only active formats. The old version-suffixed message classes and peer-version fallback branches were removed or renamed to baseline names, so nodes now rely on Qortium chain identity and minimum-version checks instead of carrying inherited wire-format compatibility paths.

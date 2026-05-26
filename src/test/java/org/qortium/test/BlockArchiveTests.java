@@ -25,6 +25,7 @@ import org.qortium.utils.NTP;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
@@ -32,16 +33,16 @@ import java.util.List;
 
 import static org.junit.Assert.*;
 
-public class BlockArchiveV2Tests extends Common {
+public class BlockArchiveTests extends Common {
 
 	@Before
 	public void beforeTest() throws DataException, IllegalAccessException {
-		Common.useSettings("test-settings-v2-block-archive.json");
+		Common.useSettings("test-settings-block-archive.json");
 		NTP.setFixedOffset(Settings.getInstance().getTestNtpOffset());
 		this.deleteArchiveDirectory();
 
-		// Set default archive version to 2, so that archive builds in these tests use V2
-		FieldUtils.writeField(Settings.getInstance(), "defaultArchiveVersion", 2, true);
+		// Set the archive version explicitly so these tests prove the Qortium baseline format.
+		FieldUtils.writeField(Settings.getInstance(), "defaultArchiveVersion", 1, true);
 	}
 
 	@After
@@ -98,6 +99,15 @@ public class BlockArchiveV2Tests extends Common {
 			File outputFile = writer.getOutputPath().toFile();
 			assertTrue(outputFile.exists());
 			System.out.println("Archive file exists at: " + outputFile.getAbsolutePath());
+
+			BlockArchiveReader reader = BlockArchiveReader.getInstance();
+			assertEquals(Integer.valueOf(1), reader.fetchSerializationVersionForHeight(2));
+
+			try (RandomAccessFile archiveFile = new RandomAccessFile(outputFile, "rw")) {
+				archiveFile.writeInt(2);
+			}
+			reader.invalidateFileListCache();
+			assertNull(reader.fetchSerializationVersionForHeight(2));
 
 			System.out.println("testWriter completed successfully.");
 		}
@@ -581,8 +591,7 @@ public class BlockArchiveV2Tests extends Common {
 			assertEquals(block3DataPreArchive.getHeight(), block3DataPostArchive.getHeight());
 			System.out.println("Block 3 data matches the original.");
 
-			// Orphan 2 more block, which should be the last one that is possible to be orphaned
-			// TODO: figure out why this is 1 block more than in the equivalent block archive V1 test
+			// Orphan 2 more blocks, which should be the last ones possible with the compact archive state.
 			System.out.println("Orphaning 2 more blocks...");
 			BlockUtils.orphanBlocks(repository, 2);
 			System.out.println("Orphaned 2 blocks successfully.");

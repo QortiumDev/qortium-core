@@ -20,6 +20,8 @@ import static org.qortium.transform.Transformer.INT_LENGTH;
 
 public class BlockArchiveReader {
 
+    public static final int SUPPORTED_ARCHIVE_VERSION = 1;
+
     private static BlockArchiveReader instance;
     private Map<String, Triple<Integer, Integer, Integer>> fileListCache;
 
@@ -97,10 +99,6 @@ public class BlockArchiveReader {
         try {
             switch (serializationVersion) {
                 case 1:
-                    blockInfo = BlockTransformer.fromByteBuffer(byteBuffer);
-                    break;
-
-                case 2:
                     blockInfo = BlockTransformer.fromByteBufferV2(byteBuffer);
                     break;
 
@@ -251,7 +249,7 @@ public class BlockArchiveReader {
             // End of fixed length header
 
             // Make sure the version is one we recognize
-            if (version != 1 && version != 2) {
+            if (version != SUPPORTED_ARCHIVE_VERSION) {
                 LOGGER.info("Error: unknown version in file {}: {}", filename, version);
                 return null;
             }

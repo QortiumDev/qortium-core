@@ -70,7 +70,7 @@ public class BlockArchiveRebuilder {
                     // Set data source to BLOCK_ARCHIVE as we are rebuilding
                     writer.setDataSource(BlockArchiveWriter.BlockArchiveDataSource.BLOCK_ARCHIVE);
 
-                    // We can't enforce the 100MB file size target, as the final file needs to contain all blocks
+                    // We can't enforce the normal file size target, as the final file needs to contain all blocks
                     // that exist in the current archive. Otherwise, the final blocks in the archive will be lost.
                     writer.setShouldEnforceFileSizeTarget(false);
 
