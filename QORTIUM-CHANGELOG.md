@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Keep QDN peer ports distinct from blockchain peer ports
+
+Fixed QDN peer discovery so a blockchain peer and QDN data peer on the same host are treated as distinct endpoints when they use different ports. Preview nodes can now learn and connect to seed QDN ports such as `24894` even when the same seed is already known on the blockchain peer port `24892`.
+
 ### 2026-05-26 - Refresh preview genesis timestamp after startup fix
 
 Refreshed the preview genesis timestamp again after the fresh-startup fix was applied. This keeps the final three-node preview reset close to the current clock without changing any other chain settings.

@@ -2310,17 +2310,15 @@ public class NetworkData {
             return;
         }
 
+        String target = remoteHost + ":" + remoteHostQDNPort;
+        PeerAddress pa = PeerAddress.fromString(target);
+
         synchronized (this.allKnownPeers) {
-            // if All Known Peers  already has this host. return;
             boolean alreadyKnown = allKnownPeers.stream()
-                    .anyMatch(pd -> pd.getAddress().getHost().equals(remoteHost));
+                    .anyMatch(pd -> pd.getAddress().equals(pa));
             if (alreadyKnown)
                 return;
 
-            // Clean out values that were passed in
-            String target = remoteHost + ":" + remoteHostQDNPort;
-
-            PeerAddress pa = PeerAddress.fromString(target);
             PeerData pd = new PeerData(
                     pa,
                     0L,
