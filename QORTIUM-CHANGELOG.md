@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Replace Qortium icon assets
+
+Replaced the remaining inherited application, tray, and Windows installer artwork with the prepared Qortium icon set. The stale splash image and unreferenced installer bitmap were removed so packaged resources no longer carry old branding that is not used by the current desktop or installer flows.
+
 ### 2026-05-26 - Document reserved transaction type IDs
 
 Documented the historical transaction type IDs that Qortium is keeping reserved instead of compacting away. Former airdrop, account flag, forging enablement, and account level transaction IDs are now recorded as reserved metadata while remaining inactive, so future work can intentionally revisit those concepts without old or removed transaction IDs being accepted as valid transactions today.
