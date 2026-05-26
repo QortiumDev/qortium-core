@@ -225,7 +225,7 @@ and signed support-removal orphaning.
 There is also an opt-in benchmark for larger generated graphs and rating churn:
 
 ```bash
-mvn test -DskipJUnitTests=false -Dqortium.runLongTrustNetworkTests=true -Dtest=org.qortal.test.rating.AccountTrustScaleTests
+mvn test -DskipJUnitTests=false -Dqortium.runLongTrustNetworkTests=true -Dtest=AccountTrustScaleTests
 ```
 
 A local benchmark run on the current implementation produced these reference

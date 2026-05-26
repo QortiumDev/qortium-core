@@ -59,26 +59,26 @@ for live, display-backed, funded-wallet, or long-running checks.
 mvn test -DskipJUnitTests=false
 
 # Long MemoryPoW benchmarks
-mvn test -DskipJUnitTests=false -Dqortium.runLongMempowTests=true -Dtest=org.qortal.test.MemoryPoWTests
+mvn test -DskipJUnitTests=false -Dqortium.runLongMempowTests=true -Dtest=MemoryPoWTests
 
 # Long trust network derivation and churn benchmarks
-mvn test -DskipJUnitTests=false -Dqortium.runLongTrustNetworkTests=true -Dtest=org.qortal.test.rating.AccountTrustScaleTests
+mvn test -DskipJUnitTests=false -Dqortium.runLongTrustNetworkTests=true -Dtest=AccountTrustScaleTests
 
 # Display-backed GUI checks
-mvn test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false -Dtest=org.qortal.test.GuiTests
+mvn test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false -Dtest=GuiTests
 
 # Display-backed GUI checks under xvfb, matching the manual GitHub Actions workflow
-xvfb-run -a mvn test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false -Dtest=org.qortal.test.GuiTests
+xvfb-run -a mvn test -DskipJUnitTests=false -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false -Dtest=GuiTests
 
 # Live bootstrap host checks
-mvn test -DskipJUnitTests=false -Dqortium.runLiveBootstrapChecks=true -Dtest=org.qortal.test.BootstrapTests
+mvn test -DskipJUnitTests=false -Dqortium.runLiveBootstrapChecks=true -Dtest=BootstrapTests
 
 # Live ElectrumX server checks
-mvn test -DskipJUnitTests=false -Dqortium.runLiveElectrumXTests=true -Dtest=org.qortal.test.crosschain.ElectrumXTests
+mvn test -DskipJUnitTests=false -Dqortium.runLiveElectrumXTests=true -Dtest=ElectrumXTests
 
 # Live crosschain checks
-mvn test -DskipJUnitTests=false -Dqortium.runLiveCrosschainTests=true -Dtest='org.qortal.test.crosschain.*Tests'
+mvn test -DskipJUnitTests=false -Dqortium.runLiveCrosschainTests=true -Dtest=BitcoinyTests,HtlcTests,PirateChainTests
 
 # Live local repository integrity scan
-mvn test -DskipJUnitTests=false -Dqortium.runLiveRepositoryIntegrityChecks=true -Dtest=org.qortal.test.naming.IntegrityTests
+mvn test -DskipJUnitTests=false -Dqortium.runLiveRepositoryIntegrityChecks=true -Dtest=IntegrityTests
 ```

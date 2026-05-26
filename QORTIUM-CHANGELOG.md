@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Remove package namespace from public test commands
+
+Updated public testing docs so Maven examples use simple test class selectors instead of the inherited `org.qortal` Java package path. This keeps the remaining package namespace detail out of normal user-facing verification commands while leaving the actual runtime Java package and main class unchanged for a later, larger refactor.
+
 ### 2026-05-26 - Remove remaining active Qortal branding
 
 Removed several active Qortal-era names from the public-facing Qortium tree. The command-line helper is now named `qortium` instead of `qort`, the remaining `qortal.ico` resource was replaced with a Qortium-named icon, cross-chain API metadata now says `supportsLocalChainTrades` instead of `supportsQortTrades`, and older test strings and active docs were adjusted to use neutral Qortium wording. Historical provenance notes, upstream-reference docs, foreign-coin server defaults, and the deferred `org.qortal` Java package namespace remain unchanged.
