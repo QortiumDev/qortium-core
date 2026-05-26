@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Remove remaining non-image Qortal text
+
+Cleaned up the last active non-image Qortal wording found outside historical and provenance notes. A fresh-database error now refers to inherited upstream database versions, and crypto test messages and temporary paths now use Qortium naming.
+
 ### 2026-05-26 - Rename Java package namespace to Qortium
 
 Renamed the active Java package namespace from `org.qortal` to `org.qortium` across source code, tests, build settings, runtime entrypoints, logging config, tools, and installer metadata. This removes one of the last active Qortal identity markers from normal builds and stack traces while keeping historical fork-provenance notes and foreign-coin server defaults unchanged.

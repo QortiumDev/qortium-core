@@ -192,7 +192,7 @@ public class CryptoTests extends Common {
 
 		String expected58 = publicKey58;
 		String actual58 = Base58.encode(account.getPublicKey());
-		assertEquals("qortal derived public key incorrect", expected58, actual58);
+		assertEquals("Qortium derived public key incorrect", expected58, actual58);
 
 		Ed25519PrivateKeyParameters privateKeyParams = new Ed25519PrivateKeyParameters(privateKey, 0);
 		Ed25519PublicKeyParameters publicKeyParams = privateKeyParams.generatePublicKey();
@@ -356,7 +356,7 @@ public class CryptoTests extends Common {
             InvalidKeyException, BadPaddingException, InvalidAlgorithmParameterException, NoSuchPaddingException, InterruptedException {
 
 		// Create temporary directory and file paths
-		java.nio.file.Path tempDir = Files.createTempDirectory("qortal-tests");
+		java.nio.file.Path tempDir = Files.createTempDirectory("qortium-tests");
 		String inputFilePath = tempDir.toString() + File.separator + "inputFile";
 		String outputFilePath = tempDir.toString() + File.separator + "outputFile";
 		String decryptedFilePath = tempDir.toString() + File.separator + "decryptedFile";
