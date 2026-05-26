@@ -45,7 +45,7 @@ fi
 success=0
 if [ -n "${apikey}" ] && command -v curl >/dev/null 2>&1; then
 	echo "Stopping Qortium preview node via API..."
-	if curl --url "http://localhost:${api_port}/admin/stop" -H "X-API-KEY: ${apikey}" >/dev/null 2>&1; then
+	if curl --connect-timeout 2 --max-time 8 --url "http://localhost:${api_port}/admin/stop" -H "X-API-KEY: ${apikey}" >/dev/null 2>&1; then
 		success=1
 	fi
 fi

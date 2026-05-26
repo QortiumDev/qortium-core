@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Bound preview stop API shutdown requests
+
+Added a timeout to the preview stop script's API shutdown request so a node that accepts the stop command but never closes the HTTP request cannot block the rest of the restart flow. The script can now fall back to process termination and continue with a clean restart instead of hanging indefinitely.
+
 ### 2026-05-26 - Keep QDN peer ports distinct from blockchain peer ports
 
 Fixed QDN peer discovery so a blockchain peer and QDN data peer on the same host are treated as distinct endpoints when they use different ports. Preview nodes can now learn and connect to seed QDN ports such as `24894` even when the same seed is already known on the blockchain peer port `24892`.
