@@ -42,6 +42,7 @@ public class BlockTests extends Common {
 			GenesisBlock block = GenesisBlock.getInstance(repository);
 
 			assertNotNull(block);
+			assertEquals(Block.CURRENT_VERSION, block.getBlockData().getVersion());
 			assertTrue(block.isSignatureValid());
 			// only true if blockchain is empty
 			// assertTrue(block.isValid());
@@ -101,9 +102,9 @@ public class BlockTests extends Common {
 		byte[] parentMinterSignature = Arrays.copyOfRange(parentSignature, 0, Transformer.SIGNATURE_LENGTH);
 		byte[] parentTransactionsSignature = Arrays.copyOfRange(parentSignature, Transformer.SIGNATURE_LENGTH, BlockTransformer.BLOCK_SIGNATURE_LENGTH);
 
-		BlockData parentBlockData = new BlockData(4, new byte[BlockTransformer.BLOCK_SIGNATURE_LENGTH], 0, 0L, parentTransactionsSignature, 123, 456L,
+		BlockData parentBlockData = new BlockData(Block.CURRENT_VERSION, new byte[BlockTransformer.BLOCK_SIGNATURE_LENGTH], 0, 0L, parentTransactionsSignature, 123, 456L,
 				new byte[Transformer.PUBLIC_KEY_LENGTH], parentMinterSignature, 0, 0L);
-		BlockData childBlockData = new BlockData(4, parentSignature, 0, 0L, null, 124, 457L,
+		BlockData childBlockData = new BlockData(Block.CURRENT_VERSION, parentSignature, 0, 0L, null, 124, 457L,
 				nextMinterPublicKey, null, 0, 0L, encodedOnlineAccounts, 0, null, null);
 
 		assertArrayEquals(expected, BlockTransformer.getBytesForMinterSignature(parentBlockData, nextMinterPublicKey, encodedOnlineAccounts));
@@ -114,10 +115,31 @@ public class BlockTests extends Common {
 	public void testBlockSerializationWithoutTransactions() throws DataException, TransformationException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			Block block = BlockUtils.mintBlock(repository);
+			assertEquals(Block.CURRENT_VERSION, block.getBlockData().getVersion());
 			BlockTransformation blockInfo = assertBlockSerializationRoundTrip(block);
 
 			assertEquals("Transaction count differs", 0, blockInfo.getTransactions().size());
 			assertTrue("Unexpected transactions in serialized block", blockInfo.getTransactions().isEmpty());
+		}
+	}
+
+	@Test
+	public void testIncorrectBlockVersionRejected() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			BlockData parentBlockData = repository.getBlockRepository().getLastBlock();
+			PrivateKeyAccount mintingAccount = Common.getTestAccount(repository, "alice-reward-share");
+			Block validBlock = Block.mint(repository, parentBlockData, mintingAccount);
+			assertNotNull(validBlock);
+
+			BlockData validBlockData = validBlock.getBlockData();
+			BlockData wrongVersionBlockData = new BlockData(Block.CURRENT_VERSION + 1, validBlockData.getReference(),
+					validBlockData.getTransactionCount(), validBlockData.getTotalFees(), validBlockData.getTransactionsSignature(),
+					validBlockData.getHeight(), validBlockData.getTimestamp(), validBlockData.getMinterPublicKey(),
+					validBlockData.getMinterSignature(), validBlockData.getATCount(), validBlockData.getATFees(),
+					validBlockData.getEncodedOnlineAccounts(), validBlockData.getOnlineAccountsCount(),
+					validBlockData.getOnlineAccountsTimestamp(), validBlockData.getOnlineAccountsSignatures());
+
+			assertEquals(Block.ValidationResult.VERSION_INCORRECT, new Block(repository, wrongVersionBlockData).isValid());
 		}
 	}
 

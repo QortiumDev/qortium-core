@@ -78,7 +78,7 @@ public class StaleChainCatchUpTests extends Common {
 	}
 
 	private static BlockData blockDataAtTimestamp(long timestamp) {
-		return new BlockData(4, new byte[128], 0, 0L, new byte[64], TEST_PARENT_HEIGHT, timestamp,
+		return new BlockData(Block.CURRENT_VERSION, new byte[128], 0, 0L, new byte[64], TEST_PARENT_HEIGHT, timestamp,
 				new byte[32], new byte[64], 0, 0L);
 	}
 

@@ -128,7 +128,6 @@
 		"transactionV6Timestamp": 0
 	},
 	"genesisInfo": {
-		"version": 4,
 		"timestamp": 0,
 		"transactions": [
 			{ "type": "CREATE_GROUP", "creatorPublicKey": "11111111111111111111111111111111", "groupName": "development", "description": "Qortium Development", "isOpen": true, "approvalThreshold": "PCT40", "minimumBlockDelay": 10, "maximumBlockDelay": 1440 },

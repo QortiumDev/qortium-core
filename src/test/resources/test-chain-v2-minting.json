@@ -126,7 +126,6 @@
 		"transactionV6Timestamp": 0
 	},
 	"genesisInfo": {
-		"version": 4,
 		"timestamp": 0,
 		"transactions": [
 			{ "type": "ISSUE_ASSET", "requestedAssetId": 0, "assetName": "NATIVE", "description": "Native test asset", "data": "", "quantity": 0, "isDivisible": true, "fee": 0 },

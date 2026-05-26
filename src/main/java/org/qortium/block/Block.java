@@ -115,6 +115,8 @@ public class Block {
 	// Other properties
 	private static final Logger LOGGER = LogManager.getLogger(Block.class);
 
+	public static final int CURRENT_VERSION = 1;
+
 	/** Number of left-shifts to apply to block's online accounts count when calculating block's weight. */
 	private static final int ACCOUNTS_COUNT_SHIFT = Transformer.PUBLIC_KEY_LENGTH * 8;
 	/** Number of left-shifts to apply to previous block's weight when calculating a chain's weight. */
@@ -645,15 +647,15 @@ public class Block {
 	/**
 	 * Return the next block's version.
 	 * <p>
-	 * Qortium starts from the inherited version 4 block format.
+	 * Qortium starts from its own baseline block version.
 	 *
-	 * @return 4
+	 * @return current Qortium block version
 	 */
 	public int getNextBlockVersion() {
 		if (this.blockData.getHeight() == null)
 			throw new IllegalStateException("Can't determine next block's version as this block has no height set");
 
-		return 4;
+		return CURRENT_VERSION;
 	}
 
 	/**
@@ -1283,8 +1285,6 @@ public class Block {
 		// Check block version
 		if (this.blockData.getVersion() != parentBlock.getNextBlockVersion())
 			return ValidationResult.VERSION_INCORRECT;
-		if (this.blockData.getVersion() < 2 && this.blockData.getATCount() != 0)
-			return ValidationResult.FEATURE_NOT_YET_RELEASED;
 
 		// Check minter is allowed to mint this block
 		if (!isMinterValid(parentBlock))

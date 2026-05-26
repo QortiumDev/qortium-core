@@ -1,6 +1,7 @@
 package org.qortium.test;
 
 import org.junit.Test;
+import org.qortium.block.Block;
 import org.qortium.controller.Controller;
 import org.qortium.data.block.BlockData;
 import org.qortium.data.block.BlockSummaryData;
@@ -41,7 +42,7 @@ public class StaleCatchUpTests {
 	}
 
 	private static BlockData blockData(Integer height, long timestamp) {
-		return new BlockData(4, null, 0, 0L, null, height, timestamp,
+		return new BlockData(Block.CURRENT_VERSION, null, 0, 0L, null, height, timestamp,
 				new byte[32], null, 0, 0L);
 	}
 

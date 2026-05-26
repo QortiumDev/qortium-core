@@ -35,7 +35,6 @@ public class GenesisBlock extends Block {
 
 	@XmlAccessorType(XmlAccessType.FIELD)
 	public static class GenesisInfo {
-		public int version = 1;
 		public long timestamp;
 
 		public TransactionData[] transactions;
@@ -108,7 +107,7 @@ public class GenesisBlock extends Block {
 		int atCount = 0;
 		long atFees = 0;
 
-		genesisBlockData = new BlockData(info.version, reference, transactionCount, totalFees, transactionsSignature, height, info.timestamp,
+		genesisBlockData = new BlockData(Block.CURRENT_VERSION, reference, transactionCount, totalFees, transactionsSignature, height, info.timestamp,
 				minterPublicKey, minterSignature, atCount, atFees);
 	}
 

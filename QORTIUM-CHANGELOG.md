@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Reset Qortium block version baseline
+
+Reset Qortium's block version baseline from the inherited version 4 marker to version 1. New genesis and minted blocks now use the Qortium baseline version directly, chain configs no longer need to carry a block-version field, and an old pre-version-2 feature gate was removed because version 1 now represents the current Qortium block format.
+
 ### 2026-05-26 - Reset HSQLDB baseline schema version
 
 Reset the fresh Qortium HSQLDB baseline to schema version 1 now that all current tables are part of the baseline schema. Existing repositories that still report the temporary version 2 state are no longer accepted as current, which keeps the new baseline clean while preserving the update system for future database changes after a chain is started.
