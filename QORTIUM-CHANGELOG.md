@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Reset HSQLDB baseline schema version
+
+Reset the fresh Qortium HSQLDB baseline to schema version 1 now that all current tables are part of the baseline schema. Existing repositories that still report the temporary version 2 state are no longer accepted as current, which keeps the new baseline clean while preserving the update system for future database changes after a chain is started.
+
 ### 2026-05-26 - Prefer synchronization during stale chain catch-up
 
 Changed stale chain catch-up so a node that can see a clearly newer peer tip will defer local minting and synchronize first. During stale catch-up, synchronizer peer selection now prefers the highest and newest eligible peer tip instead of picking randomly, reducing the chance that a delayed node creates avoidable local fork blocks while a better seed chain is already reachable.

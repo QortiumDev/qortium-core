@@ -19,7 +19,7 @@ public class HSQLDBDatabaseUpdates {
 
 	private static final Logger LOGGER = LogManager.getLogger(HSQLDBDatabaseUpdates.class);
 
-	public static final int CURRENT_SCHEMA_VERSION = 2;
+	public static final int CURRENT_SCHEMA_VERSION = 1;
 
 	private static final String BASELINE_SCHEMA_RESOURCE = "/repository/hsqldb-baseline.sql";
 
@@ -34,19 +34,6 @@ public class HSQLDBDatabaseUpdates {
 
 		if (databaseVersion == CURRENT_SCHEMA_VERSION) {
 			updateStartupStatus();
-			return false;
-		}
-
-		if (databaseVersion == 1) {
-			StartupStatus.update("Updating Qortium database schema to version 2...");
-
-			upgradeFromVersion1(connection);
-			connection.commit();
-
-			LOGGER.info("Updated Qortium HSQLDB repository schema from version 1 to {}", CURRENT_SCHEMA_VERSION);
-
-			updateStartupStatus();
-
 			return false;
 		}
 
@@ -106,19 +93,6 @@ public class HSQLDBDatabaseUpdates {
 		} catch (IOException e) {
 			throw new SQLException("Unable to read HSQLDB baseline schema resource: " + BASELINE_SCHEMA_RESOURCE, e);
 		}
-	}
-
-	private static void upgradeFromVersion1(Connection connection) throws SQLException {
-		try (Statement stmt = connection.createStatement()) {
-			executeChainParameterSchema(stmt);
-			stmt.execute("UPDATE DatabaseInfo SET version = 2");
-		}
-	}
-
-	private static void executeChainParameterSchema(Statement stmt) throws SQLException {
-		stmt.execute("CREATE TABLE PUBLIC.CHAINPARAMETERUPDATETRANSACTIONS(SIGNATURE PUBLIC.SIGNATURE PRIMARY KEY,UPDATER PUBLIC.ACCOUNTPUBLICKEY NOT NULL,PARAMETER_ID INTEGER NOT NULL,ACTIVATION_HEIGHT INTEGER NOT NULL,PARAMETER_VALUE VARBINARY(256) NOT NULL,FOREIGN KEY(SIGNATURE) REFERENCES PUBLIC.TRANSACTIONS(SIGNATURE) ON DELETE CASCADE)");
-		stmt.execute("CREATE TABLE PUBLIC.CHAINPARAMETERUPDATES(SIGNATURE PUBLIC.SIGNATURE PRIMARY KEY,PARAMETER_ID INTEGER NOT NULL,ACTIVATION_HEIGHT INTEGER NOT NULL,PARAMETER_VALUE VARBINARY(256) NOT NULL,FOREIGN KEY(SIGNATURE) REFERENCES PUBLIC.TRANSACTIONS(SIGNATURE) ON DELETE CASCADE,CONSTRAINT CHAINPARAMETERUPDATEHEIGHTUNIQUE UNIQUE(PARAMETER_ID,ACTIVATION_HEIGHT))");
-		stmt.execute("CREATE INDEX CHAINPARAMETERUPDATESPARAMETERHEIGHTINDEX ON PUBLIC.CHAINPARAMETERUPDATES(PARAMETER_ID,ACTIVATION_HEIGHT)");
 	}
 
 	private static void updateStartupStatus() {

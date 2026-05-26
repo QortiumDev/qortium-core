@@ -107,30 +107,23 @@ public class RepositoryTests extends Common {
 	}
 
 	@Test
-	public void testVersionOneRepositoryMigratesToChainParameterSchema() throws Exception {
-		String connectionUrl = "jdbc:hsqldb:mem:chain-parameter-schema-migration-" + System.nanoTime();
+	public void testVersionTwoRepositorySchemaVersionIsUnsupported() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:unsupported-version-two-schema-" + System.nanoTime();
 
 		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
 			connection.setAutoCommit(false);
 
 			try (Statement statement = connection.createStatement()) {
-				statement.execute("CREATE TYPE PUBLIC.ACCOUNTPUBLICKEY AS VARBINARY(32)");
-				statement.execute("CREATE TYPE PUBLIC.SIGNATURE AS VARBINARY(64)");
-				statement.execute("CREATE TABLE PUBLIC.DATABASEINFO(VERSION INTEGER NOT NULL)");
-				statement.execute("CREATE TABLE PUBLIC.TRANSACTIONS(SIGNATURE PUBLIC.SIGNATURE PRIMARY KEY)");
-				statement.execute("INSERT INTO DATABASEINFO VALUES(1)");
+				statement.execute("CREATE TABLE DatabaseInfo (version INTEGER NOT NULL)");
+				statement.execute("INSERT INTO DatabaseInfo VALUES (2)");
 			}
 			connection.commit();
 
-			assertFalse(HSQLDBDatabaseUpdates.updateDatabase(connection));
-			assertEquals(HSQLDBDatabaseUpdates.CURRENT_SCHEMA_VERSION, HSQLDBDatabaseUpdates.fetchDatabaseVersion(connection));
-
-			try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", "CHAINPARAMETERUPDATETRANSACTIONS", null)) {
-				assertTrue(resultSet.next());
-			}
-
-			try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", "CHAINPARAMETERUPDATES", null)) {
-				assertTrue(resultSet.next());
+			try {
+				HSQLDBDatabaseUpdates.updateDatabase(connection);
+				fail("Schema version 2 should not be treated as the Qortium baseline");
+			} catch (SQLException e) {
+				assertTrue(e.getMessage().contains("Unsupported HSQLDB repository schema version 2"));
 			}
 
 			try (Statement statement = connection.createStatement()) {
