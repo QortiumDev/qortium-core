@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Refresh preview genesis timestamp for public reset
+
+Refreshed the preview network genesis timestamp for the next public reset. This lets the three-node preview setup start from a recent chain origin instead of immediately entering stale catch-up mode, while keeping the rest of the preview chain configuration unchanged.
+
 ### 2026-05-26 - Reset Qortium Core version to 1.0.0
 
 Reset Qortium Core's active release version to 1.0.0 for the new Qortium baseline. The Maven build version, default peer compatibility floor, preview and testnet peer-version settings, installer metadata, and active version tests now agree on the 1.0.0 line so freshly rebuilt nodes can connect after the preview chain reset.
