@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Refresh preview genesis timestamp after startup fix
+
+Refreshed the preview genesis timestamp again after the fresh-startup fix was applied. This keeps the final three-node preview reset close to the current clock without changing any other chain settings.
+
 ### 2026-05-26 - Allow fresh preview startup with no QDN resources
 
 Fixed fresh-node startup when the QDN resource cache has no rows to update. Empty preview chains now skip empty latest-signature update and deletion batches instead of stopping before the API starts, allowing a reset chain to initialize cleanly.
