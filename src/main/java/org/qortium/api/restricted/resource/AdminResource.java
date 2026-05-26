@@ -395,7 +395,9 @@ public class AdminResource {
 					)
 			}
 	)
+	@SecurityRequirement(name = "apiKey")
 	public String setting(@PathParam("setting") String setting) {
+		Security.checkApiCallAllowed(request);
 		try {
 			Object settingValue = FieldUtils.readField(Settings.getInstance(), setting, true);
 			if (settingValue == null) {

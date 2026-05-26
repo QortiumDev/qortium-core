@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-28 - security: require API key for GET /admin/settings/{setting}
+
+Locked down the single-setting admin read endpoint so it now requires the local API key like other admin controls. This prevents callers with basic API access from reading internal node settings through reflection without authentication, while keeping normal authenticated administration unchanged.
+
 ### 2026-05-28 - Give preview stops more time to shut down cleanly
 
 Extended the preview stop helpers so they wait longer for Core to shut down through the API before forcing the Java process to exit. This gives the node more room to finish database, backup, and update-restart cleanup on slower machines or VPS hosts, while still keeping an eventual force-stop fallback for stuck processes.

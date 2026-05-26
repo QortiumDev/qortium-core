@@ -84,6 +84,15 @@ public class AdminApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testSettingRequiresApiKey() {
+		assertApiError(ApiError.UNAUTHORIZED, () -> this.adminResource.setting("repositoryPath"));
+
+		AdminResource authenticatedAdminResource = (AdminResource) ApiCommon.buildResource(AdminResource.class, ApiCommon.TEST_API_KEY);
+
+		assertNoApiError(() -> authenticatedAdminResource.setting("repositoryPath"));
+	}
+
+	@Test
 	public void testBootstrapRejectsConcurrentApply() throws Exception {
 		Path settingsPath = createWritableApiSettings("{\"bootstrapHosts\":[\"https://bootstrap.example\"]}");
 		Settings.fileInstance(settingsPath.toString());
