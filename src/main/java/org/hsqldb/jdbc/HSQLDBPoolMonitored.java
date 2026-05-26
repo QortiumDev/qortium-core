@@ -3,8 +3,8 @@ package org.hsqldb.jdbc;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.hsqldb.jdbc.pool.JDBCPooledConnection;
-import org.qortal.data.system.DbConnectionInfo;
-import org.qortal.repository.hsqldb.HSQLDBRepositoryFactory;
+import org.qortium.data.system.DbConnectionInfo;
+import org.qortium.repository.hsqldb.HSQLDBRepositoryFactory;
 
 import javax.sql.ConnectionEvent;
 import javax.sql.PooledConnection;

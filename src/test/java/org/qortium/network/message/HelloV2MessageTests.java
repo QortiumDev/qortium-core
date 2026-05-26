@@ -1,0 +1,31 @@
+package org.qortium.network.message;
+
+import org.junit.Test;
+import org.qortium.controller.LiteNode;
+import org.qortium.network.Peer;
+
+import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+
+import static org.junit.Assert.assertEquals;
+
+public class HelloV2MessageTests {
+
+	@Test
+	public void testLiteDataCapabilityRoundTrip() throws MessageException {
+		Map<String, Object> capabilities = new HashMap<>();
+		capabilities.put(LiteNode.LITE_DATA_CAPABILITY, LiteNode.LITE_DATA_CAPABILITY_VERSION);
+		capabilities.put("CHAIN_CONFIG_HASH", "abc123");
+
+		HelloV2Message message = new HelloV2Message(123L, "6.1.4", "127.0.0.1:14892", capabilities, Peer.NETWORK);
+
+		HelloV2Message decodedMessage = (HelloV2Message) HelloV2Message.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+		Object liteDataCapability = decodedMessage.getCapabilities().getCapability(LiteNode.LITE_DATA_CAPABILITY);
+		Object chainConfigHash = decodedMessage.getCapabilities().getCapability("CHAIN_CONFIG_HASH");
+
+		assertEquals(LiteNode.LITE_DATA_CAPABILITY_VERSION, ((Number) liteDataCapability).intValue());
+		assertEquals("abc123", chainConfigHash);
+	}
+
+}

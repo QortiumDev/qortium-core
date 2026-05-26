@@ -111,9 +111,8 @@ The remaining native-asset work is mostly display and API wording:
 Network magic, runtime defaults, Docker/startup paths, jar naming, Maven
 artifact identity, and Swagger title are already Qortium-oriented.
 
-The Java package namespace and main class still use `org.qortal`. This is broad
-mechanical work and should remain deferred until chain parameters and genesis
-policy are settled.
+The Java package namespace and main class now use `org.qortium`, matching the
+Maven artifact identity and active Qortium runtime naming.
 
 ### Test Chain Fixtures
 

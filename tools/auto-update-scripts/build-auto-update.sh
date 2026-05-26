@@ -191,7 +191,7 @@ jar_file="${jar_files[0]:-}"
 
 # === XOR Obfuscation ===
 echo "Creating ${project}.update..."
-$DRY_RUN || java -cp "${jar_file}" org.qortal.XorUpdate "${jar_file}" "${project}.update"
+$DRY_RUN || java -cp "${jar_file}" org.qortium.XorUpdate "${jar_file}" "${project}.update"
 
 echo "Done. ${project}.update is ready for QDN publishing."
 

@@ -9,4 +9,4 @@ cd "${repo_dir}"
 mvn -q -DskipTests compile dependency:build-classpath -Dmdep.outputFile=target/electrum-refresh.classpath
 
 classpath="target/classes:$(cat target/electrum-refresh.classpath)"
-java -cp "${classpath}" org.qortal.crosschain.RefreshElectrumServers "$@"
+java -cp "${classpath}" org.qortium.crosschain.RefreshElectrumServers "$@"

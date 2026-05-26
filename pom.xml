@@ -279,12 +279,12 @@
 				<configuration>
 					<packages>
 						<package>
-							<pattern>org.qortal.data.**</pattern>
-							<template>${project.build.sourceDirectory}/org/qortal/data/package-info.java</template>
+							<pattern>org.qortium.data.**</pattern>
+							<template>${project.build.sourceDirectory}/org/qortium/data/package-info.java</template>
 						</package>
 						<package>
-							<pattern>org.qortal.api.model.**</pattern>
-							<template>${project.build.sourceDirectory}/org/qortal/data/package-info.java</template>
+							<pattern>org.qortium.api.model.**</pattern>
+							<template>${project.build.sourceDirectory}/org/qortium/data/package-info.java</template>
 						</package>
 					</packages>
 					<outputDirectory>${project.build.directory}/generated-sources/package-info</outputDirectory>
@@ -423,7 +423,7 @@
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer" />
 								<transformer
 									implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-									<mainClass>org.qortal.controller.Controller</mainClass>
+									<mainClass>org.qortium.controller.Controller</mainClass>
 									<manifestEntries>
 										<Multi-Release>true</Multi-Release>
 										<Class-Path>. ..</Class-Path>
@@ -460,7 +460,7 @@
 				<configuration>
 					<skipTests>${skipJUnitTests}</skipTests>
 					<systemPropertyVariables>
-						<hsqldb.method_class_names>org.qortal.test.RepositoryTests.*</hsqldb.method_class_names>
+						<hsqldb.method_class_names>org.qortium.test.RepositoryTests.*</hsqldb.method_class_names>
 						<java.awt.headless>${test.awt.headless}</java.awt.headless>
 					</systemPropertyVariables>
 				</configuration>
@@ -900,7 +900,7 @@
 						<configuration>
 							<excludes>
 								<!-- Coverage instrumentation makes this performance-sensitive PoW loop too slow for full-suite runs. -->
-								<exclude>org/qortal/crypto/MemoryPoW*</exclude>
+								<exclude>org/qortium/crypto/MemoryPoW*</exclude>
 							</excludes>
 							<rules>
 								<rule>

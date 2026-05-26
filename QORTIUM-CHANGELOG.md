@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Rename Java package namespace to Qortium
+
+Renamed the active Java package namespace from `org.qortal` to `org.qortium` across source code, tests, build settings, runtime entrypoints, logging config, tools, and installer metadata. This removes one of the last active Qortal identity markers from normal builds and stack traces while keeping historical fork-provenance notes and foreign-coin server defaults unchanged.
+
 ### 2026-05-26 - Remove package namespace from public test commands
 
 Updated public testing docs so Maven examples use simple test class selectors instead of the inherited `org.qortal` Java package path. This keeps the remaining package namespace detail out of normal user-facing verification commands while leaving the actual runtime Java package and main class unchanged for a later, larger refactor.

@@ -1,0 +1,268 @@
+package org.qortium.data.transaction;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.Schema.AccessMode;
+import org.eclipse.persistence.oxm.annotations.XmlDiscriminatorNode;
+import org.qortium.crypto.Crypto;
+import org.qortium.data.voting.PollData;
+import org.qortium.data.voting.VoteOnPollData;
+import org.qortium.transaction.Transaction.ApprovalStatus;
+import org.qortium.transaction.Transaction.TransactionType;
+
+import javax.xml.bind.annotation.*;
+import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+import java.util.Arrays;
+
+/*
+ * If you encounter an error like:
+ * 
+ * MessageBodyWriter not found for <some class>
+ * 
+ * then chances are that class is missing a no-argument constructor!
+ */
+
+@XmlSeeAlso({GenesisTransactionData.class, PaymentTransactionData.class, RegisterNameTransactionData.class, UpdateNameTransactionData.class,
+	SellNameTransactionData.class, CancelSellNameTransactionData.class, BuyNameTransactionData.class,
+	CreatePollTransactionData.class, VoteOnPollTransactionData.class, UpdatePollTransactionData.class, ArbitraryTransactionData.class,
+	PollData.class, VoteOnPollData.class,
+	IssueAssetTransactionData.class, TransferAssetTransactionData.class,
+	CreateAssetOrderTransactionData.class, CancelAssetOrderTransactionData.class,
+	SellAssetOwnershipTransactionData.class, CancelSellAssetOwnershipTransactionData.class, BuyAssetOwnershipTransactionData.class,
+	MultiPaymentTransactionData.class, DeployAtTransactionData.class, MessageTransactionData.class, ATTransactionData.class,
+	CreateGroupTransactionData.class, UpdateGroupTransactionData.class,
+	AddGroupAdminTransactionData.class, RemoveGroupAdminTransactionData.class,
+	GroupBanTransactionData.class, CancelGroupBanTransactionData.class,
+	GroupKickTransactionData.class, GroupInviteTransactionData.class,
+	JoinGroupTransactionData.class, LeaveGroupTransactionData.class,
+	GroupApprovalTransactionData.class, SetGroupTransactionData.class,
+	UpdateAssetTransactionData.class,
+	RewardShareTransactionData.class,
+	TransferPrivsTransactionData.class,
+	ChatTransactionData.class, PublicizeTransactionData.class, PresenceTransactionData.class,
+	RateResourceTransactionData.class, RateAccountTransactionData.class,
+	ChainParameterUpdateTransactionData.class
+})
+//All properties to be converted to JSON via JAXB
+@XmlAccessorType(XmlAccessType.FIELD)
+// EclipseLink JAXB (MOXy) specific: use "type" field to determine subclass
+@XmlDiscriminatorNode("type")
+public abstract class TransactionData {
+
+	// Properties shared with all transaction types
+	@Schema(accessMode = AccessMode.READ_ONLY, hidden = true)
+	protected TransactionType type;
+
+	@XmlTransient // represented in transaction-specific properties
+	@Schema(hidden = true)
+	protected byte[] creatorPublicKey;
+
+	@Schema(description = "timestamp when transaction created, in milliseconds since unix epoch", example = "__unix_epoch_time_milliseconds__")
+	protected long timestamp;
+
+	@Schema(description = "fee for processing transaction", example = "0.0001")
+	@XmlJavaTypeAdapter(value = org.qortium.api.AmountTypeAdapter.class)
+	protected Long fee; // can be null if fee not calculated yet
+
+	@Schema(accessMode = AccessMode.READ_ONLY, description = "signature for transaction's raw bytes, using sender's private key", example = "real_transaction_signature_in_base58")
+	protected byte[] signature;
+
+	@Schema(description = "groupID for this transaction")
+	protected int txGroupId;
+
+	@Schema(description = "recipient for this transaction")
+	protected String recipient;
+
+	@Schema(accessMode = AccessMode.READ_ONLY, description = "MemoryPoW nonce used as an alternative to a paid fee")
+	protected Integer nonce;
+
+	// Not always present
+	@Schema(accessMode = AccessMode.READ_ONLY, hidden = true, description = "height of block containing transaction")
+	protected Integer blockHeight;
+
+	// Not always present
+	@Schema(accessMode = AccessMode.READ_ONLY, hidden = true, description = "sequence in block containing transaction")
+	protected Integer blockSequence;
+
+	// Not always present
+	@Schema(accessMode = AccessMode.READ_ONLY, description = "group-approval status")
+	protected ApprovalStatus approvalStatus;
+
+	// Not always present
+	@Schema(accessMode = AccessMode.READ_ONLY, hidden = true, description = "block height when transaction approved")
+	protected Integer approvalHeight;
+
+	// Constructors
+
+	// For JAXB
+	protected TransactionData() {
+	}
+
+	// For JAXB
+	protected TransactionData(TransactionType type) {
+		this.type = type;
+	}
+
+	/** Constructor for use by transaction subclasses. */
+	protected TransactionData(TransactionType type, BaseTransactionData baseTransactionData) {
+		this.type = type;
+		this.recipient = baseTransactionData.recipient;
+		this.timestamp = baseTransactionData.timestamp;
+		this.txGroupId = baseTransactionData.txGroupId;
+		this.creatorPublicKey = baseTransactionData.creatorPublicKey;
+		this.fee = baseTransactionData.fee;
+		this.nonce = baseTransactionData.nonce;
+		this.signature = baseTransactionData.signature;
+		this.blockHeight = baseTransactionData.blockHeight;
+		this.blockSequence = baseTransactionData.blockSequence;
+		this.approvalStatus = baseTransactionData.approvalStatus;
+		this.approvalHeight = baseTransactionData.approvalHeight;
+	}
+
+	// Getters/setters
+
+	public TransactionType getType() {
+		return this.type;
+	}
+
+	public long getTimestamp() {
+		return this.timestamp;
+	}
+
+	public void setTimestamp(long timestamp) {
+		this.timestamp = timestamp;
+	}
+
+	public int getTxGroupId() {
+		return this.txGroupId;
+	}
+
+	public String getRecipient() {
+		return this.recipient;
+	}
+
+	public void setTxGroupId(int txGroupId) {
+		this.txGroupId = txGroupId;
+	}
+
+	public byte[] getCreatorPublicKey() {
+		return this.creatorPublicKey;
+	}
+
+	@XmlTransient
+	public void setCreatorPublicKey(byte[] creatorPublicKey) {
+		this.creatorPublicKey = creatorPublicKey;
+	}
+
+	public Long getFee() {
+		return this.fee;
+	}
+
+	public void setFee(Long fee) {
+		this.fee = fee;
+	}
+
+	public int getNonce() {
+		return this.nonce != null ? this.nonce : 0;
+	}
+
+	@XmlTransient
+	@Schema(hidden = true)
+	public Integer getNonceOrNull() {
+		return this.nonce;
+	}
+
+	public void setNonce(int nonce) {
+		this.nonce = nonce;
+	}
+
+	@XmlTransient
+	public void setNonce(Integer nonce) {
+		this.nonce = nonce;
+	}
+
+	public byte[] getSignature() {
+		return this.signature;
+	}
+
+	public void setSignature(byte[] signature) {
+		this.signature = signature;
+	}
+
+	public Integer getBlockHeight() {
+		return this.blockHeight;
+	}
+
+	@XmlTransient
+	public void setBlockHeight(Integer blockHeight) {
+		this.blockHeight = blockHeight;
+	}
+
+	public Integer getBlockSequence() {
+		return this.blockSequence;
+	}
+
+	@XmlTransient
+	public void setBlockSequence(Integer blockSequence) {
+		this.blockSequence = blockSequence;
+	}
+
+	public ApprovalStatus getApprovalStatus() {
+		return approvalStatus;
+	}
+
+	@XmlTransient
+	public void setApprovalStatus(ApprovalStatus approvalStatus) {
+		this.approvalStatus = approvalStatus;
+	}
+
+	public Integer getApprovalHeight() {
+		return this.approvalHeight;
+	}
+
+	@XmlTransient
+	public void setApprovalHeight(Integer approvalHeight) {
+		this.approvalHeight = approvalHeight;
+	}
+
+	// JAXB special
+
+	@XmlElement(name = "creatorAddress")
+	protected String getCreatorAddress() {
+		return Crypto.toAddress(this.creatorPublicKey);
+	}
+
+	// Comparison
+
+	@Override
+	public int hashCode() {
+		byte[] bytes = this.signature;
+
+		// Unsigned transaction data is only equal to itself.
+		if (bytes == null)
+			return System.identityHashCode(this);
+
+		return Arrays.hashCode(bytes);
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		// Comparing exact same object
+		if (this == other)
+			return true;
+
+		// If we don't have a signature then fail
+		if (this.signature == null)
+			return false;
+
+		if (!(other instanceof TransactionData))
+			return false;
+
+		TransactionData otherTransactionData = (TransactionData) other;
+
+		// If other transactionData has no signature then fail
+		if (otherTransactionData.signature == null)
+			return false;
+
+		return Arrays.equals(this.signature, otherTransactionData.signature);
+	}
+}

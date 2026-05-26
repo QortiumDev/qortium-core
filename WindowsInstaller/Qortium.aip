@@ -1348,7 +1348,7 @@
     <ROW IniFile="FailureCheck" FileName="Qortium.ini" DirProperty="APPDIR" Section="Application" Key="Failure Check" Value="yes" Action="0" Component_="Qortium.exe"/>
     <ROW IniFile="JVMSource" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="JVM Source" Value="favor_JDK" Action="0" Component_="Qortium.exe"/>
     <ROW IniFile="JVMType" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="JVM Type" Value="favor_server" Action="0" Component_="Qortium.exe"/>
-    <ROW IniFile="MainClass" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="Main Class" Value="org.qortal.controller.Controller" Action="0" Component_="Qortium.exe"/>
+    <ROW IniFile="MainClass" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="Main Class" Value="org.qortium.controller.Controller" Action="0" Component_="Qortium.exe"/>
     <ROW IniFile="MaximumVersion" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="Maximum Version" Value="any" Action="0" Component_="Qortium.exe"/>
     <ROW IniFile="MinimumVersion" FileName="Qortium.ini" DirProperty="APPDIR" Section="Java Runtime Environment" Key="Minimum Version" Value="11" Action="0" Component_="Qortium.exe"/>
     <ROW IniFile="OverrideWorkingDir" FileName="Qortium.ini" DirProperty="APPDIR" Section="Application" Key="Override WorkingDir" Value="yes" Action="0" Component_="Qortium.exe"/>

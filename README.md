@@ -130,7 +130,7 @@ mvn -q test
 For IDE runs, use Java 17 and the main class:
 
 ```text
-org.qortal.controller.Controller
+org.qortium.controller.Controller
 ```
 
 Use `settings.json` as the program argument when running a normal local node.
