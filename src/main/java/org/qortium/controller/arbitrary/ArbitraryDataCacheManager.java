@@ -138,6 +138,8 @@ public class ArbitraryDataCacheManager extends Thread {
                         if (!signatureByData.isEmpty()) {
                             String populateSql = "UPDATE ArbitraryResourcesCache SET latest_signature = ? WHERE name = ? AND service = ? AND identifier = ?";
                             try (PreparedStatement preparedStatement = connection.prepareStatement(populateSql)) {
+                                int updateCount = 0;
+
                                 // for each signature by data pairing, prepare a database update statement and add it to a batch
                                 for (Map.Entry<ArbitraryTransactionDataHashWrapper, byte[]> entry : signatureByData.entrySet()) {
                                     if (entry.getValue() == null) {
@@ -154,14 +156,19 @@ public class ArbitraryDataCacheManager extends Thread {
                                     preparedStatement.setString(4, identifier != null ? identifier : "default");
 
                                     preparedStatement.addBatch();
+                                    updateCount++;
                                 }
 
-                                preparedStatement.executeBatch();
+                                if (updateCount > 0) {
+                                    preparedStatement.executeBatch();
+                                }
                             }
                         }
 
                         String deleteSql = "DELETE FROM ArbitraryResourcesCache WHERE name = ? AND service = ? AND identifier = ?";
                         try (PreparedStatement preparedStatement = connection.prepareStatement(deleteSql)) {
+                            int deleteCount = 0;
+
                             for (Map.Entry<ArbitraryTransactionDataHashWrapper, byte[]> entry : signatureByData.entrySet()) {
                                 if (entry.getValue() != null) {
                                     continue;
@@ -175,9 +182,12 @@ public class ArbitraryDataCacheManager extends Thread {
                                 preparedStatement.setString(3, identifier != null ? identifier : "default");
 
                                 preparedStatement.addBatch();
+                                deleteCount++;
                             }
 
-                            preparedStatement.executeBatch();
+                            if (deleteCount > 0) {
+                                preparedStatement.executeBatch();
+                            }
                         }
 
                         LOGGER.info("Updated arbitrary resources with latest signatures");
