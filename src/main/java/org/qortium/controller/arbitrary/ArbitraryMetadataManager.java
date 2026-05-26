@@ -24,6 +24,7 @@ import org.qortium.utils.NTP;
 import org.qortium.utils.Triple;
 
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -37,6 +38,7 @@ import static org.qortium.controller.arbitrary.ArbitraryDataFileListManager.*;
 public class ArbitraryMetadataManager {
 
     private static final Logger LOGGER = LogManager.getLogger(ArbitraryMetadataManager.class);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private static ArbitraryMetadataManager instance;
 
@@ -286,7 +288,7 @@ public class ArbitraryMetadataManager {
         // Assign random ID to this message
         int id;
         do {
-            id = new Random().nextInt(Integer.MAX_VALUE - 1) + 1;
+            id = SECURE_RANDOM.nextInt(Integer.MAX_VALUE - 1) + 1;
 
             // Put queue into map (keyed by message ID) so we can poll for a response
             // If putIfAbsent() doesn't return null, then this ID is already taken

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-28 - security: replace java.util.Random with SecureRandom (Q4 + Q5)
+
+Replaced predictable random number generation in QDN request IDs and online-account nonce setup with shared secure random generators. This makes peer-facing request identifiers and minting-related nonce starting points harder to predict without changing the surrounding transaction, block, or QDN behavior.
+
 ### 2026-05-28 - security: validate backup name before SQL string interpolation
 
 Added a strict backup-name check before the repository builds its HSQLDB backup command. Current backup callers already use fixed safe names, but this prevents future code from passing names with quotes, path separators, or other unsafe characters into a database command or backup path.

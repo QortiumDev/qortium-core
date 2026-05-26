@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -12,7 +13,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -50,6 +50,7 @@ import org.qortium.utils.Triple;
 public class ArbitraryDataFileListManager {
 
     private static final Logger LOGGER = LogManager.getLogger(ArbitraryDataFileListManager.class);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private static ArbitraryDataFileListManager instance;
 
@@ -419,7 +420,7 @@ public class ArbitraryDataFileListManager {
         // Assign random ID to this message
         int id;
         do {
-            id = new Random().nextInt(Integer.MAX_VALUE - 1) + 1;
+            id = SECURE_RANDOM.nextInt(Integer.MAX_VALUE - 1) + 1;
 
             // Put queue into map (keyed by message ID) so we can poll for a response
             // If putIfAbsent() doesn't return null, then this ID is already taken
@@ -477,7 +478,7 @@ public class ArbitraryDataFileListManager {
         // Assign random ID to this message
         int id;
         do {
-            id = new Random().nextInt(Integer.MAX_VALUE - 1) + 1;
+            id = SECURE_RANDOM.nextInt(Integer.MAX_VALUE - 1) + 1;
 
             // Put queue into map (keyed by message ID) so we can poll for a response
             // If putIfAbsent() doesn't return null, then this ID is already taken

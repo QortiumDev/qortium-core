@@ -31,6 +31,7 @@ import org.qortium.utils.NamedThreadFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -38,6 +39,7 @@ import java.util.stream.Collectors;
 public class OnlineAccountsManager {
 
     private static final Logger LOGGER = LogManager.getLogger(OnlineAccountsManager.class);
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     // 'Current' as in 'now'
 
@@ -187,7 +189,7 @@ public class OnlineAccountsManager {
             byte[] signature = Ed25519Extras.signForAggregation(onlineAccount.getPrivateKey(), timestampBytes);
             byte[] publicKey = onlineAccount.getPublicKey();
 
-            Integer nonce = new Random().nextInt(500000);
+            Integer nonce = SECURE_RANDOM.nextInt(500000);
 
             OnlineAccountData ourOnlineAccountData = new OnlineAccountData(onlineAccountsTimestamp, signature, publicKey, nonce);
             replacementAccounts.add(ourOnlineAccountData);
