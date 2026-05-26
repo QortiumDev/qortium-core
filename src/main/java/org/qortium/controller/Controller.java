@@ -185,15 +185,15 @@ public class Controller extends Thread {
 		}
 		public GetBlockSummariesStats getBlockSummariesStats = new GetBlockSummariesStats();
 
-		public static class GetBlockSignaturesV2Stats {
+		public static class GetBlockSignaturesStats {
 			public AtomicLong requests = new AtomicLong();
 			public AtomicLong cacheHits = new AtomicLong();
 			public AtomicLong fullyFromCache = new AtomicLong();
 
-			public GetBlockSignaturesV2Stats() {
+			public GetBlockSignaturesStats() {
 			}
 		}
-		public GetBlockSignaturesV2Stats getBlockSignaturesV2Stats = new GetBlockSignaturesV2Stats();
+		public GetBlockSignaturesStats getBlockSignaturesStats = new GetBlockSignaturesStats();
 
 		public static class GetArbitraryDataFileMessageStats {
 			public AtomicLong requests = new AtomicLong();
@@ -426,7 +426,7 @@ public class Controller extends Thread {
 
 		final Controller controller = Controller.newInstance(args);
 
-		NETWORK_BLOCK_SUMMARIES_V_2_MESSAGE_SCHEDULER.scheduleAtFixedRate(() -> processNetworkBlockSummariesV2Messages(), 1, 1, TimeUnit.SECONDS);
+		NETWORK_BLOCK_SUMMARIES_MESSAGE_SCHEDULER.scheduleAtFixedRate(() -> processNetworkBlockSummariesMessages(), 1, 1, TimeUnit.SECONDS);
 
 		GET_BLOCK_MESSAGE_SCHEDULER.scheduleAtFixedRate( () -> controller.processNetworkGetBlockMessages(), 1, 1, TimeUnit.SECONDS);
 
@@ -1630,16 +1630,12 @@ public class Controller extends Thread {
 				onNetworkGetBlockSummariesMessage(peer, message);
 				break;
 
-			case GET_SIGNATURES_V2:
-				onNetworkGetSignaturesV2Message(peer, message);
+			case GET_SIGNATURES:
+				onNetworkGetSignaturesMessage(peer, message);
 				break;
 
-			case HEIGHT_V2:
-				onNetworkHeightV2Message(peer, message);
-				break;
-
-			case BLOCK_SUMMARIES_V2:
-				onNetworkBlockSummariesV2Message(peer, message);
+			case BLOCK_SUMMARIES:
+				onNetworkBlockSummariesMessage(peer, message);
 				break;
 
 			case GET_TRANSACTION:
@@ -1658,12 +1654,12 @@ public class Controller extends Thread {
 				TransactionImporter.getInstance().onNetworkTransactionSignaturesMessage(peer, message);
 				break;
 
-			case GET_ONLINE_ACCOUNTS_V3:
-				OnlineAccountsManager.getInstance().onNetworkGetOnlineAccountsV3Message(peer, message);
+			case GET_ONLINE_ACCOUNTS:
+				OnlineAccountsManager.getInstance().onNetworkGetOnlineAccountsMessage(peer, message);
 				break;
 
-			case ONLINE_ACCOUNTS_V3:
-				OnlineAccountsManager.getInstance().onNetworkOnlineAccountsV3Message(peer, message);
+			case ONLINE_ACCOUNTS:
+				OnlineAccountsManager.getInstance().onNetworkOnlineAccountsMessage(peer, message);
 				break;
 
 			case GET_FOREIGN_FEES:
@@ -1805,20 +1801,6 @@ public class Controller extends Thread {
 
 					Block block = new Block(repository, blockData);
 
-					// V2 support
-					if (peer.getPeersVersion() >= BlockV2Message.MIN_PEER_VERSION) {
-						Message blockMessage = new BlockV2Message(block);
-						blockMessage.setId(message.getId());
-
-						if (!peer.sendMessage(blockMessage)) {
-							peer.disconnect("failed to send block");
-							// Don't fall-through to caching because failure to send might be from failure to build message
-							continue;
-						}
-
-						continue;
-					}
-
 					CachedBlockMessage blockMessage = new CachedBlockMessage(block);
 					blockMessage.setId(message.getId());
 
@@ -1860,23 +1842,9 @@ public class Controller extends Thread {
 				// If we have no block data, we should check the archive in case it's there
 				if (Settings.getInstance().isArchiveEnabled()) {
 					Triple<byte[], Integer, Integer> serializedBlock = BlockArchiveReader.getInstance().fetchSerializedBlockBytesForSignature(signature, true, repository);
-					if (serializedBlock != null) {
+					if (serializedBlock != null && serializedBlock.getB() == 2) {
 						byte[] bytes = serializedBlock.getA();
-						Integer serializationVersion = serializedBlock.getB();
-
-						Message blockMessage;
-						switch (serializationVersion) {
-							case 1:
-								blockMessage = new CachedBlockMessage(bytes);
-								break;
-
-							case 2:
-								blockMessage = new CachedBlockV2Message(bytes);
-								break;
-
-							default:
-								continue;
-						}
+						Message blockMessage = new CachedBlockMessage(bytes);
 						blockMessage.setId(message.getId());
 
 						// This call also causes the other needed data to be pulled in from repository
@@ -1898,9 +1866,7 @@ public class Controller extends Thread {
 				LOGGER.debug(() -> String.format("Sending 'block unknown' response to peer %s for GET_BLOCK request for unknown block %s", peer, Base58.encode(signature)));
 
 				// Send generic 'unknown' message as it's very short
-				Message blockUnknownMessage = peer.getPeersVersion() >= GenericUnknownMessage.MINIMUM_PEER_VERSION
-						? new GenericUnknownMessage()
-						: new BlockSummariesMessage(Collections.emptyList());
+				Message blockUnknownMessage = new GenericUnknownMessage();
 				blockUnknownMessage.setId(message.getId());
 				if (!peer.sendMessage(blockUnknownMessage))
 					peer.disconnect("failed to send block-unknown response");
@@ -1972,9 +1938,7 @@ public class Controller extends Thread {
 		// then we have no blocks after that and can short-circuit with an empty response
 		BlockData chainTip = getChainTip();
 		if (chainTip != null && Arrays.equals(parentSignature, chainTip.getSignature())) {
-			Message blockSummariesMessage = peer.getPeersVersion() >= BlockSummariesV2Message.MINIMUM_PEER_VERSION
-					? new BlockSummariesV2Message(Collections.emptyList())
-					: new BlockSummariesMessage(Collections.emptyList());
+			Message blockSummariesMessage = new BlockSummariesMessage(Collections.emptyList());
 
 			blockSummariesMessage.setId(message.getId());
 
@@ -2033,18 +1997,16 @@ public class Controller extends Thread {
 				this.stats.getBlockSummariesStats.fullyFromCache.incrementAndGet();
 		}
 
-		Message blockSummariesMessage = peer.getPeersVersion() >= BlockSummariesV2Message.MINIMUM_PEER_VERSION
-				? new BlockSummariesV2Message(blockSummaries)
-				: new BlockSummariesMessage(blockSummaries);
+		Message blockSummariesMessage = new BlockSummariesMessage(blockSummaries);
 		blockSummariesMessage.setId(message.getId());
 		if (!peer.sendMessage(blockSummariesMessage))
 			peer.disconnect("failed to send block summaries");
 	}
 
-	private void onNetworkGetSignaturesV2Message(Peer peer, Message message) {
-		GetSignaturesV2Message getSignaturesMessage = (GetSignaturesV2Message) message;
+	private void onNetworkGetSignaturesMessage(Peer peer, Message message) {
+		GetSignaturesMessage getSignaturesMessage = (GetSignaturesMessage) message;
 		final byte[] parentSignature = getSignaturesMessage.getParentSignature();
-		this.stats.getBlockSignaturesV2Stats.requests.incrementAndGet();
+		this.stats.getBlockSignaturesStats.requests.incrementAndGet();
 
 		// If peer's parent signature matches our latest block signature
 		// then we can short-circuit with an empty response
@@ -2053,7 +2015,7 @@ public class Controller extends Thread {
 			Message signaturesMessage = new SignaturesMessage(Collections.emptyList());
 			signaturesMessage.setId(message.getId());
 			if (!peer.sendMessage(signaturesMessage))
-				peer.disconnect("failed to send signatures (v2)");
+				peer.disconnect("failed to send signatures");
 
 			return;
 		}
@@ -2088,44 +2050,19 @@ public class Controller extends Thread {
 					}
 				}
 			} catch (DataException e) {
-				LOGGER.error(String.format("Repository issue while sending V2 signatures after %s to peer %s", Base58.encode(parentSignature), peer), e);
+				LOGGER.error(String.format("Repository issue while sending signatures after %s to peer %s", Base58.encode(parentSignature), peer), e);
 			}
 		} else {
-			this.stats.getBlockSignaturesV2Stats.cacheHits.incrementAndGet();
+			this.stats.getBlockSignaturesStats.cacheHits.incrementAndGet();
 
 			if (signatures.size() >= getSignaturesMessage.getNumberRequested())
-				this.stats.getBlockSignaturesV2Stats.fullyFromCache.incrementAndGet();
+				this.stats.getBlockSignaturesStats.fullyFromCache.incrementAndGet();
 		}
 
 		Message signaturesMessage = new SignaturesMessage(signatures);
 		signaturesMessage.setId(message.getId());
 		if (!peer.sendMessage(signaturesMessage))
-			peer.disconnect("failed to send signatures (v2)");
-	}
-
-	private void onNetworkHeightV2Message(Peer peer, Message message) {
-		HeightV2Message heightV2Message = (HeightV2Message) message;
-
-		if (!Settings.getInstance().isLite()) {
-			// If peer is inbound and we've not updated their height
-			// then this is probably their initial HEIGHT_V2 message
-			// so they need a corresponding HEIGHT_V2 message from us
-			if (!peer.isOutbound() && peer.getChainTipData() == null) {
-				Message responseMessage = Network.getInstance().buildHeightOrChainTipInfo(peer);
-
-				if (responseMessage == null || !peer.sendMessage(responseMessage)) {
-					peer.disconnect("failed to send our chain tip info");
-					return;
-				}
-			}
-		}
-
-		// Update peer chain tip data
-		BlockSummaryData newChainTipData = new BlockSummaryData(heightV2Message.getHeight(), heightV2Message.getSignature(), heightV2Message.getMinterPublicKey(), heightV2Message.getTimestamp());
-		peer.setChainTipData(newChainTipData);
-
-		// Potentially synchronize
-		Synchronizer.getInstance().requestSync();
+			peer.disconnect("failed to send signatures");
 	}
 
 	// List to collect messages
@@ -2134,9 +2071,9 @@ public class Controller extends Thread {
 	private final static Object SIGNATURE_MESSAGE_LOCK = new Object();
 
 	// Scheduled executor service to process messages every second
-	private static final ScheduledExecutorService NETWORK_BLOCK_SUMMARIES_V_2_MESSAGE_SCHEDULER = Executors.newScheduledThreadPool(1);
+	private static final ScheduledExecutorService NETWORK_BLOCK_SUMMARIES_MESSAGE_SCHEDULER = Executors.newScheduledThreadPool(1);
 
-	private void onNetworkBlockSummariesV2Message(Peer peer, Message message) {
+	private void onNetworkBlockSummariesMessage(Peer peer, Message message) {
 		synchronized (SIGNATURE_MESSAGE_LOCK) {
 			SIGNATURE_MESSAGE_LIST.add(new PeerMessage(peer, message));
 		}
@@ -2147,7 +2084,7 @@ public class Controller extends Thread {
 	 *
 	 * This was extracted for scheduling purposes.
 	 */
-	private static void processNetworkBlockSummariesV2Messages() {
+	private static void processNetworkBlockSummariesMessages() {
 
 		try {
 			List<PeerMessage> messagesToProcess;
@@ -2156,26 +2093,23 @@ public class Controller extends Thread {
 				SIGNATURE_MESSAGE_LIST.clear();
 			}
 
-			Map<Long, Message> messageForVersion = new HashMap<>(2);
+			Message chainTipMessage = null;
 
 			for( PeerMessage peerMessage : messagesToProcess ) {
 				Message message = peerMessage.getMessage();
 				Peer peer = peerMessage.getPeer();
 
-				BlockSummariesV2Message blockSummariesV2Message = (BlockSummariesV2Message) message;
+				BlockSummariesMessage blockSummariesMessage = (BlockSummariesMessage) message;
 
 				if (!Settings.getInstance().isLite()) {
 					// If peer is inbound and we've not updated their height
-					// then this is probably their initial BLOCK_SUMMARIES_V2 message
-					// so they need a corresponding BLOCK_SUMMARIES_V2 message from us
+					// then this is probably their initial BLOCK_SUMMARIES message
+					// so they need a corresponding BLOCK_SUMMARIES message from us
 					if (!peer.isOutbound() && peer.getChainTipData() == null) {
-						Message responseMessage
-							= messageForVersion.computeIfAbsent(
-								peer.getPeersVersion(),
-								version -> Network.getInstance().buildHeightOrChainTipInfoForVersion(version)
-						);
+						if (chainTipMessage == null)
+							chainTipMessage = Network.getInstance().buildHeightOrChainTipInfo();
 
-						if (responseMessage == null || !peer.sendMessage(responseMessage)) {
+						if (chainTipMessage == null || !peer.sendMessage(chainTipMessage)) {
 							peer.disconnect("failed to send our chain tip info");
 							return;
 						}
@@ -2194,7 +2128,7 @@ public class Controller extends Thread {
 				}
 
 				// Update peer chain tip data
-				peer.setChainTipSummaries(blockSummariesV2Message.getBlockSummaries());
+				peer.setChainTipSummaries(blockSummariesMessage.getBlockSummaries());
 
 				// Potentially synchronize
 				Synchronizer.getInstance().requestSync();

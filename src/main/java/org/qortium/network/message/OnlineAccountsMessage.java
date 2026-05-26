@@ -15,17 +15,13 @@ import java.util.Map;
 
 /**
  * For sending online accounts info to remote peer.
- *
- * Same format as V2, but with added support for a mempow nonce.
  */
-public class OnlineAccountsV3Message extends Message {
-
-	public static final long MIN_PEER_VERSION = 0x300060000L; // 3.6.0
+public class OnlineAccountsMessage extends Message {
 
 	private List<OnlineAccountData> onlineAccounts;
 
-	public OnlineAccountsV3Message(List<OnlineAccountData> onlineAccounts) {
-		super(MessageType.ONLINE_ACCOUNTS_V3);
+	public OnlineAccountsMessage(List<OnlineAccountData> onlineAccounts) {
+		super(MessageType.ONLINE_ACCOUNTS);
 
 		// Shortcut in case we have no online accounts
 		if (onlineAccounts.isEmpty()) {
@@ -73,8 +69,8 @@ public class OnlineAccountsV3Message extends Message {
 		this.checksumBytes = Message.generateChecksum(this.dataBytes);
 	}
 
-	private OnlineAccountsV3Message(int id, List<OnlineAccountData> onlineAccounts) {
-		super(id, MessageType.ONLINE_ACCOUNTS_V3);
+	private OnlineAccountsMessage(int id, List<OnlineAccountData> onlineAccounts) {
+		super(id, MessageType.ONLINE_ACCOUNTS);
 
 		this.onlineAccounts = onlineAccounts;
 	}
@@ -116,7 +112,7 @@ public class OnlineAccountsV3Message extends Message {
 			}
 		}
 
-		return new OnlineAccountsV3Message(id, onlineAccounts);
+		return new OnlineAccountsMessage(id, onlineAccounts);
 	}
 
 }

@@ -40,17 +40,17 @@ import java.util.regex.Matcher;
  *    - Initial state when socket connection is initiated or established.
  *    - Immediately transitions to HELLO upon connection.
  *
- * 2. HELLO / HELLO_V2
+ * 2. HELLO
  *    - Exchange basic peer identity:
  *        • node version
  *        • connection timestamp (NTP-validated)
  *        • sender address
- *        • optional capabilities (HELLO_V2)
+ *        • chain/network capabilities
  *    - Rejects peers with:
  *        • excessive clock/ntp offset or skew
  *        • invalid version string
  *        • unsupported / too old version
- *    - HELLO_V2 is conditionally used for peers >= HELLO_V2_MIN_VERSION.
+ *        • incompatible chain identity
  *
  * 3. CHALLENGE
  *    - Mutual authentication phase.
@@ -96,7 +96,7 @@ import java.util.regex.Matcher;
  *
  * - Deterministic behavior (no connection churn or reconnect loops)
  * - Termination handling of stale, duplicate, and half-open connections
- * - Backward compatibility with older peer versions
+ * - Clear chain identity checks before peer authentication completes
  * - Minimal trust: all critical data is cryptographically verified
  *
  * This file is self-contained: the enum states define the
@@ -118,30 +118,15 @@ public enum Handshake {
 	HELLO(MessageType.HELLO) {
 		@Override
 		public Handshake onMessage(Peer peer, Message message) {
-			if (message.getType() == MessageType.HELLO_V2) {
-				return processHelloV2Message(peer, (HelloV2Message) message);
-			}
 			return processHelloMessage(peer, (HelloMessage) message);
 		}
 
 		@Override
 		public void action(Peer peer) {
-			boolean sendHelloV2 = peer.isAwaitingHelloV2Response() && peer.isAtLeastVersion(HELLO_V2_MIN_VERSION);
-			if (!sendHello(peer, sendHelloV2)) {
+			if (!sendHello(peer)) {
 				return;
 			}
-			LOGGER.debug("OUTBOUND - FINISHED sending {}: Network {}", sendHelloV2 ? "HELLO_V2" : "HELLO", peer.getPeerType());
-		}
-	},
-	HELLO_V2(MessageType.HELLO_V2) {
-		@Override
-		public Handshake onMessage(Peer peer, Message message) {
-			return processHelloV2Message(peer, (HelloV2Message) message);
-		}
-
-		@Override
-		public void action(Peer peer) {
-			// No additional messages to send from this state
+			LOGGER.debug("OUTBOUND - FINISHED sending HELLO: Network {}", peer.getPeerType());
 		}
 	},
 	CHALLENGE(MessageType.CHALLENGE) {
@@ -519,7 +504,6 @@ public enum Handshake {
 
 	private static final long PEER_VERSION_131 = 0x0100030001L;
 
-	private static final String HELLO_V2_MIN_VERSION = "6.0.0";
 	static final String CHAIN_NETWORK_ID_CAPABILITY = "CHAIN_NETWORK_ID";
 	static final String CHAIN_GENESIS_SIGNATURE_CAPABILITY = "CHAIN_GENESIS_SIGNATURE";
 	static final String CHAIN_CONFIG_HASH_CAPABILITY = "CHAIN_CONFIG_HASH";
@@ -547,7 +531,7 @@ public enum Handshake {
 
 	public abstract void action(Peer peer);
 
-	private static boolean sendHello(Peer peer, boolean useHelloV2) {
+	private static boolean sendHello(Peer peer) {
 		String versionString = Controller.getInstance().getVersionString();
 		Long timestampObj = NTP.getTime();
 		if (timestampObj == null) {
@@ -557,15 +541,9 @@ public enum Handshake {
 		}
 		long timestamp = timestampObj;
 		String senderPeerAddress = peer.getPeerData().getAddress().toString();
+		Map<String, Object> capabilities = buildHelloCapabilities();
 
-		Map<String, Object> capabilities = null;
-		if (useHelloV2) {
-			capabilities = buildHelloV2Capabilities();
-		}
-
-		Message helloMessage = useHelloV2
-				? new HelloV2Message(timestamp, versionString, senderPeerAddress, capabilities, peer.getPeerType())
-				: new HelloMessage(timestamp, versionString, senderPeerAddress);
+		Message helloMessage = new HelloMessage(timestamp, versionString, senderPeerAddress, capabilities, peer.getPeerType());
 
 		if (!peer.sendMessage(helloMessage)) {
 			peer.disconnect("failed to send HELLO");
@@ -575,7 +553,7 @@ public enum Handshake {
 		return true;
 	}
 
-	static Map<String, Object> buildHelloV2Capabilities() {
+	static Map<String, Object> buildHelloCapabilities() {
 		Map<String, Object> capabilities = new HashMap<>();
 		BlockChain blockChain = BlockChain.getInstance();
 		capabilities.put(CHAIN_NETWORK_ID_CAPABILITY, blockChain.getNetworkId());
@@ -634,78 +612,13 @@ public enum Handshake {
 		long timestampDelta = Math.abs(peersConnectionTimestamp - now);
 		if (timestampDelta > MAX_TIMESTAMP_DELTA) {
 			LOGGER.debug("Peer {} HELLO timestamp {} too divergent (± {} > {}) from ours {}",
-    			peer, peersConnectionTimestamp, timestampDelta, MAX_TIMESTAMP_DELTA, now );
-			return null;
-		}
-
-		switch (peer.getPeerType()) {
-			case Peer.NETWORK:
-				Network.getInstance().ourPeerAddressUpdated(helloMessage.getSenderPeerAddress());
-				break;
-			case Peer.NETWORKDATA:
-				NetworkData.getInstance().ourPeerAddressUpdated(helloMessage.getSenderPeerAddress());
-				break;
-		}
-
-		String versionString = helloMessage.getVersionString();
-
-		Matcher matcher = peer.VERSION_PATTERN.matcher(versionString);
-		if (!matcher.lookingAt()) {
-			LOGGER.debug("Peer {} sent invalid HELLO version string '{}'", peer, versionString);
-			return null;
-		}
-
-		long version = 0;
-		for (int g = 1; g <= 3; ++g) {
-			long value = Long.parseLong(matcher.group(g));
-
-			if (value < 0 || value > Short.MAX_VALUE)
-				return null;
-
-			version <<= 16;
-			version |= value;
-		}
-
-		peer.setPeersConnectionTimestamp(peersConnectionTimestamp);
-		peer.setPeersVersion(versionString, version);
-		peer.setPeersCapabilities(null);
-
-		if (!Settings.getInstance().getAllowConnectionsWithOlderPeerVersions()) {
-			final String minPeerVersion = Settings.getInstance().getMinPeerVersion();
-			if (!peer.isAtLeastVersion(minPeerVersion)) {
-				LOGGER.debug("Ignoring peer {} because it is on an old version ({}})", peer, versionString);
-				return null;
-			}
-		}
-
-		if (peer.isAtLeastVersion(HELLO_V2_MIN_VERSION) && !peer.isOutbound()) {
-			peer.setAwaitingHelloV2Response(true);
-			return HELLO_V2;
-		}
-
-		LOGGER.debug("INBOUND - FINISHED PROCESSING HELLO, ready for CHALLENGE on {}", peer.getPeerType());
-		return CHALLENGE;
-	}
-
-	private static Handshake processHelloV2Message(Peer peer, HelloV2Message helloMessage) {
-		long peersConnectionTimestamp = helloMessage.getTimestamp();
-		Long nowObj = NTP.getTime();
-		if (nowObj == null) {
-			LOGGER.debug("Rejecting HELLO_V2 from {} - NTP unsynchronized", peer);
-			return null;
-		}
-		long now = nowObj;
-
-		long timestampDelta = Math.abs(peersConnectionTimestamp - now);
-		if (timestampDelta > MAX_TIMESTAMP_DELTA) {
-			LOGGER.debug("Peer {} HELLO timestamp {} too divergent (± {} > {}) from ours {}",
 					peer, peersConnectionTimestamp, timestampDelta, MAX_TIMESTAMP_DELTA, now);
 			return null;
 		}
 
 		int remotePeerType = helloMessage.getPeerType();
 		if (remotePeerType != Peer.NETWORK && remotePeerType != Peer.NETWORKDATA) {
-			LOGGER.debug("Peer {} sent invalid peerType {} in HELLO_V2", peer, remotePeerType);
+			LOGGER.debug("Peer {} sent invalid peerType {} in HELLO", peer, remotePeerType);
 			return null;
 		}
 
@@ -713,7 +626,7 @@ public enum Handshake {
 		// network server owns the connection. Reject if the remote claims a different type —
 		// this catches P2P connections accidentally made to QDN ports (and vice versa).
 		if (remotePeerType != peer.getPeerType()) {
-			LOGGER.debug("Rejecting HELLO_V2 from {} - remote claimed peerType {} but connection belongs to peerType {}",
+			LOGGER.debug("Rejecting HELLO from {} - remote claimed peerType {} but connection belongs to peerType {}",
 					peer, remotePeerType, peer.getPeerType());
 			return null;
 		}
@@ -749,7 +662,6 @@ public enum Handshake {
 		peer.setPeersConnectionTimestamp(peersConnectionTimestamp);
 		peer.setPeersVersion(versionString, version);
 		peer.setPeersCapabilities(helloMessage.getCapabilities());
-		peer.setAwaitingHelloV2Response(false);
 
 		if (!Settings.getInstance().getAllowConnectionsWithOlderPeerVersions()) {
 			final String minPeerVersion = Settings.getInstance().getMinPeerVersion();
@@ -760,13 +672,13 @@ public enum Handshake {
 		}
 
 		if (!areChainCapabilitiesCompatible(helloMessage.getCapabilities())) {
-			LOGGER.info("Rejecting HELLO_V2 from {} - incompatible chain identity: {}",
+			LOGGER.info("Rejecting HELLO from {} - incompatible chain identity: {}",
 					peer, describeChainCapabilityMismatch(helloMessage.getCapabilities()));
 			return null;
 		}
 
-		if (peer.isOutbound()) {
-			if (!sendHello(peer, true)) {
+		if (!peer.isOutbound()) {
+			if (!sendHello(peer)) {
 				return null;
 			}
 		}

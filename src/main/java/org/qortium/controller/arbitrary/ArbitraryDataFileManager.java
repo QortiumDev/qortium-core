@@ -1770,9 +1770,7 @@ public class ArbitraryDataFileManager extends Thread {
                 LOGGER.debug("Sending 'file unknown' response to peer {} for GET_FILE request for unknown file {}", peer, arbitraryDataFile);
 
                 // Send generic 'unknown' message as it's very short
-                Message fileUnknownMessage = peer.getPeersVersion() >= GenericUnknownMessage.MINIMUM_PEER_VERSION
-                        ? new GenericUnknownMessage()
-                        : new BlockSummariesMessage(Collections.emptyList());
+                Message fileUnknownMessage = new GenericUnknownMessage();
                 fileUnknownMessage.setId(originalMessage.getId());
                 if (!peer.sendMessage(fileUnknownMessage)) {
                     LOGGER.debug("Couldn't sent file-unknown response");

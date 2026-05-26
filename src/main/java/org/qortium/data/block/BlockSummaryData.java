@@ -27,7 +27,7 @@ public class BlockSummaryData {
 	protected BlockSummaryData() {
 	}
 
-	/** Constructor typically populated with fields from HeightV2Message */
+	/** Constructor typically populated with fields from chain-tip summary messages */
 	public BlockSummaryData(int height, byte[] signature, byte[] minterPublicKey, long timestamp) {
 		this.height = height;
 		this.signature = signature;
@@ -43,7 +43,7 @@ public class BlockSummaryData {
 		this.onlineAccountsCount = onlineAccountsCount;
 	}
 
-	/** Constructor typically populated with fields from BlockSummariesV2Message */
+	/** Constructor typically populated with fields from BlockSummariesMessage */
 	public BlockSummaryData(int height, byte[] signature, byte[] minterPublicKey, Integer onlineAccountsCount,
 							Long timestamp, Integer transactionCount, byte[] reference) {
 		this.height = height;

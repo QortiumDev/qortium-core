@@ -12,23 +12,14 @@ import java.util.Map;
 
 /**
  * For requesting online accounts info from remote peer, given our list of online accounts.
- * <p></p>
- * Different format to V1 and V2:<br>
- * <ul>
- * 	<li>V1 is: number of entries, then timestamp + pubkey for each entry</li>
- * 	<li>V2 is: groups of: number of entries, timestamp, then pubkey for each entry</li>
- * 	<li>V3 is: groups of: timestamp, number of entries (one per leading byte), then hash(pubkeys) for each entry</li>
- * </ul>
- * <p></p>
- * End
  */
-public class GetOnlineAccountsV3Message extends Message {
+public class GetOnlineAccountsMessage extends Message {
 
 	private static final Map<Long, Map<Byte, byte[]>> EMPTY_ONLINE_ACCOUNTS = Collections.emptyMap();
 	private Map<Long, Map<Byte, byte[]>> hashesByTimestampThenByte;
 
-	public GetOnlineAccountsV3Message(Map<Long, Map<Byte, byte[]>> hashesByTimestampThenByte) {
-		super(MessageType.GET_ONLINE_ACCOUNTS_V3);
+	public GetOnlineAccountsMessage(Map<Long, Map<Byte, byte[]>> hashesByTimestampThenByte) {
+		super(MessageType.GET_ONLINE_ACCOUNTS);
 
 		// If we don't have ANY online accounts then it's an easier construction...
 		if (hashesByTimestampThenByte.isEmpty()) {
@@ -69,8 +60,8 @@ public class GetOnlineAccountsV3Message extends Message {
 		this.checksumBytes = Message.generateChecksum(this.dataBytes);
 	}
 
-	private GetOnlineAccountsV3Message(int id, Map<Long, Map<Byte, byte[]>> hashesByTimestampThenByte) {
-		super(id, MessageType.GET_ONLINE_ACCOUNTS_V3);
+	private GetOnlineAccountsMessage(int id, Map<Long, Map<Byte, byte[]>> hashesByTimestampThenByte) {
+		super(id, MessageType.GET_ONLINE_ACCOUNTS);
 
 		this.hashesByTimestampThenByte = hashesByTimestampThenByte;
 	}
@@ -82,7 +73,7 @@ public class GetOnlineAccountsV3Message extends Message {
 	public static Message fromByteBuffer(int id, ByteBuffer bytes) {
 		// 'empty' case
 		if (!bytes.hasRemaining()) {
-			return new GetOnlineAccountsV3Message(id, EMPTY_ONLINE_ACCOUNTS);
+			return new GetOnlineAccountsMessage(id, EMPTY_ONLINE_ACCOUNTS);
 		}
 
 		Map<Long, Map<Byte, byte[]>> hashesByTimestampThenByte = new HashMap<>();
@@ -108,7 +99,7 @@ public class GetOnlineAccountsV3Message extends Message {
 			hashesByTimestampThenByte.put(timestamp, hashesByByte);
 		}
 
-		return new GetOnlineAccountsV3Message(id, hashesByTimestampThenByte);
+		return new GetOnlineAccountsMessage(id, hashesByTimestampThenByte);
 	}
 
 }

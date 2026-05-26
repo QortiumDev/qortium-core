@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * For sending online accounts info to remote peer.
  *
- * Same format as V2, but with added support for a mempow nonce.
+ * Carries current foreign-chain fee and mempow nonce information.
  */
 public class ForeignFeesMessage extends Message {
 

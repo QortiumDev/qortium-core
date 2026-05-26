@@ -182,7 +182,6 @@ public class Peer {
 
     private PeerData peerData = null;
     private PeerCapabilities peerCapabilities;
-    private boolean awaitingHelloV2Response = false;
     /**
      * Peer's value of connectionTimestamp.
      */
@@ -487,18 +486,6 @@ public class Peer {
     protected void setPeersCapabilities(PeerCapabilities capabilities) {
         synchronized (this.peerInfoLock) {
             this.peerCapabilities = capabilities;
-        }
-    }
-
-    public boolean isAwaitingHelloV2Response() {
-        synchronized (this.peerInfoLock) {
-            return this.awaitingHelloV2Response;
-        }
-    }
-
-    public void setAwaitingHelloV2Response(boolean awaitingHelloV2Response) {
-        synchronized (this.peerInfoLock) {
-            this.awaitingHelloV2Response = awaitingHelloV2Response;
         }
     }
 
@@ -1667,4 +1654,3 @@ public class Peer {
         }
     }
 }
-

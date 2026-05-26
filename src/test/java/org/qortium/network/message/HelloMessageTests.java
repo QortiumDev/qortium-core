@@ -10,7 +10,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-public class HelloV2MessageTests {
+public class HelloMessageTests {
 
 	@Test
 	public void testLiteDataCapabilityRoundTrip() throws MessageException {
@@ -18,9 +18,9 @@ public class HelloV2MessageTests {
 		capabilities.put(LiteNode.LITE_DATA_CAPABILITY, LiteNode.LITE_DATA_CAPABILITY_VERSION);
 		capabilities.put("CHAIN_CONFIG_HASH", "abc123");
 
-		HelloV2Message message = new HelloV2Message(123L, "6.1.4", "127.0.0.1:14892", capabilities, Peer.NETWORK);
+		HelloMessage message = new HelloMessage(123L, "6.1.4", "127.0.0.1:14892", capabilities, Peer.NETWORK);
 
-		HelloV2Message decodedMessage = (HelloV2Message) HelloV2Message.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+		HelloMessage decodedMessage = (HelloMessage) HelloMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
 		Object liteDataCapability = decodedMessage.getCapabilities().getCapability(LiteNode.LITE_DATA_CAPABILITY);
 		Object chainConfigHash = decodedMessage.getCapabilities().getCapability("CHAIN_CONFIG_HASH");
 

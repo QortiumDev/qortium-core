@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Reset Qortium network protocol baseline
+
+Reset Qortium's peer network protocol baseline so the current capability-aware handshake and compact block, block-summary, peer-list, signature, and online-account messages are the only active formats. The old version-suffixed message classes and peer-version fallback branches were removed or renamed to baseline names, so nodes now rely on Qortium chain identity and minimum-version checks instead of carrying inherited wire-format compatibility paths.
+
 ### 2026-05-26 - Reset Qortium transaction version baseline
 
 Reset Qortium's transaction version baseline to version 1 while keeping the current transaction layouts. The old timestamp gate for transaction version 6 was removed, typed AT transactions are now always serialized with their payment-or-message type, and arbitrary transactions now always use the current resource/payment layout under the new baseline.

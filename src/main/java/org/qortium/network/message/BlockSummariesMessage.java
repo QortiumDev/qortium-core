@@ -1,6 +1,7 @@
 package org.qortium.network.message;
 
 import com.google.common.primitives.Ints;
+import com.google.common.primitives.Longs;
 import org.qortium.data.block.BlockSummaryData;
 import org.qortium.transform.Transformer;
 import org.qortium.transform.block.BlockTransformer;
@@ -14,23 +15,37 @@ import java.util.List;
 
 public class BlockSummariesMessage extends Message {
 
-	private static final int BLOCK_SUMMARY_LENGTH = BlockTransformer.BLOCK_SIGNATURE_LENGTH + Transformer.INT_LENGTH + Transformer.PUBLIC_KEY_LENGTH + Transformer.INT_LENGTH;
+	private static final int BLOCK_SUMMARY_LENGTH = BlockTransformer.BLOCK_SIGNATURE_LENGTH /* block signature */
+			+ Transformer.PUBLIC_KEY_LENGTH /* minter public key */
+			+ Transformer.INT_LENGTH /* online accounts count */
+			+ Transformer.LONG_LENGTH /* block timestamp */
+			+ Transformer.INT_LENGTH /* transactions count */
+			+ BlockTransformer.BLOCK_SIGNATURE_LENGTH; /* block reference */
 
 	private List<BlockSummaryData> blockSummaries;
 
 	public BlockSummariesMessage(List<BlockSummaryData> blockSummaries) {
 		super(MessageType.BLOCK_SUMMARIES);
 
+		// Shortcut for when there are no summaries
+		if (blockSummaries.isEmpty()) {
+			this.dataBytes = Message.EMPTY_DATA_BYTES;
+			return;
+		}
+
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
 		try {
-			bytes.write(Ints.toByteArray(blockSummaries.size()));
+			// First summary's height
+			bytes.write(Ints.toByteArray(blockSummaries.get(0).getHeight()));
 
 			for (BlockSummaryData blockSummary : blockSummaries) {
-				bytes.write(Ints.toByteArray(blockSummary.getHeight()));
 				bytes.write(blockSummary.getSignature());
 				bytes.write(blockSummary.getMinterPublicKey());
 				bytes.write(Ints.toByteArray(blockSummary.getOnlineAccountsCount()));
+				bytes.write(Longs.toByteArray(blockSummary.getTimestamp()));
+				bytes.write(Ints.toByteArray(blockSummary.getTransactionCount()));
+				bytes.write(blockSummary.getReference());
 			}
 		} catch (IOException e) {
 			throw new AssertionError("IOException shouldn't occur with ByteArrayOutputStream");
@@ -51,15 +66,19 @@ public class BlockSummariesMessage extends Message {
 	}
 
 	public static Message fromByteBuffer(int id, ByteBuffer bytes) {
-		int count = bytes.getInt();
+		List<BlockSummaryData> blockSummaries = new ArrayList<>();
 
-		if (bytes.remaining() < count * BLOCK_SUMMARY_LENGTH)
+		// If there are no bytes remaining then we can treat this as an empty array of summaries
+		if (bytes.remaining() == 0)
+			return new BlockSummariesMessage(id, blockSummaries);
+
+		int height = bytes.getInt();
+
+		// Expecting bytes remaining to be exact multiples of BLOCK_SUMMARY_LENGTH
+		if (bytes.remaining() % BLOCK_SUMMARY_LENGTH != 0)
 			throw new BufferUnderflowException();
 
-		List<BlockSummaryData> blockSummaries = new ArrayList<>();
-		for (int i = 0; i < count; ++i) {
-			int height = bytes.getInt();
-
+		while (bytes.hasRemaining()) {
 			byte[] signature = new byte[BlockTransformer.BLOCK_SIGNATURE_LENGTH];
 			bytes.get(signature);
 
@@ -68,8 +87,18 @@ public class BlockSummariesMessage extends Message {
 
 			int onlineAccountsCount = bytes.getInt();
 
-			BlockSummaryData blockSummary = new BlockSummaryData(height, signature, minterPublicKey, onlineAccountsCount);
+			long timestamp = bytes.getLong();
+
+			int transactionsCount = bytes.getInt();
+
+			byte[] reference = new byte[BlockTransformer.BLOCK_SIGNATURE_LENGTH];
+			bytes.get(reference);
+
+			BlockSummaryData blockSummary = new BlockSummaryData(height, signature, minterPublicKey,
+					onlineAccountsCount, timestamp, transactionsCount, reference);
 			blockSummaries.add(blockSummary);
+
+			height++;
 		}
 
 		return new BlockSummariesMessage(id, blockSummaries);

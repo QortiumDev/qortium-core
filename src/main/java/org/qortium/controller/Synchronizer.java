@@ -423,7 +423,7 @@ public class Synchronizer extends Thread {
 					LOGGER.debug(() -> String.format("Refused to synchronize with peer %s (%s)", peer, syncResult.name()));
 
 					// Notify peer of our superior chain
-					Message message = Network.getInstance().buildHeightOrChainTipInfo(peer);
+					Message message = Network.getInstance().buildHeightOrChainTipInfo();
 					if (message == null || !peer.sendMessage(message))
 						peer.disconnect("failed to notify peer of our superior chain");
 					break;
@@ -1836,16 +1836,12 @@ public class Synchronizer extends Thread {
 			BlockSummariesMessage blockSummariesMessage = (BlockSummariesMessage) message;
 			return blockSummariesMessage.getBlockSummaries();
 		}
-		else if (message.getType() == MessageType.BLOCK_SUMMARIES_V2) {
-			BlockSummariesV2Message blockSummariesMessage = (BlockSummariesV2Message) message;
-			return blockSummariesMessage.getBlockSummaries();
-		}
 
 		return null;
 	}
 
 	private List<byte[]> getBlockSignatures(Peer peer, byte[] parentSignature, int numberRequested) throws InterruptedException {
-		Message getSignaturesMessage = new GetSignaturesV2Message(parentSignature, numberRequested);
+		Message getSignaturesMessage = new GetSignaturesMessage(parentSignature, numberRequested);
 
 		// Use shorter timeout for sync operations to avoid blocking transaction processing
 		Message message = peer.getResponseWithTimeout(getSignaturesMessage, SYNC_RESPONSE_TIMEOUT);
@@ -1880,11 +1876,6 @@ public class Synchronizer extends Thread {
 		switch (message.getType()) {
 			case BLOCK: {
 				BlockMessage blockMessage = (BlockMessage) message;
-				return new Block(repository, blockMessage.getBlockData(), blockMessage.getTransactions(), blockMessage.getAtStates());
-			}
-
-			case BLOCK_V2: {
-				BlockV2Message blockMessage = (BlockV2Message) message;
 				return new Block(repository, blockMessage.getBlockData(), blockMessage.getTransactions(), blockMessage.getAtStatesHash());
 			}
 

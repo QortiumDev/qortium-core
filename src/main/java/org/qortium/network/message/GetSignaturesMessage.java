@@ -7,13 +7,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public class GetSignaturesV2Message extends Message {
+public class GetSignaturesMessage extends Message {
 
 	private byte[] parentSignature;
 	private int numberRequested;
 
-	public GetSignaturesV2Message(byte[] parentSignature, int numberRequested) {
-		super(MessageType.GET_SIGNATURES_V2);
+	public GetSignaturesMessage(byte[] parentSignature, int numberRequested) {
+		super(MessageType.GET_SIGNATURES);
 
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
@@ -29,8 +29,8 @@ public class GetSignaturesV2Message extends Message {
 		this.checksumBytes = Message.generateChecksum(this.dataBytes);
 	}
 
-	private GetSignaturesV2Message(int id, byte[] parentSignature, int numberRequested) {
-		super(id, MessageType.GET_SIGNATURES_V2);
+	private GetSignaturesMessage(int id, byte[] parentSignature, int numberRequested) {
+		super(id, MessageType.GET_SIGNATURES);
 
 		this.parentSignature = parentSignature;
 		this.numberRequested = numberRequested;
@@ -50,7 +50,7 @@ public class GetSignaturesV2Message extends Message {
 
 		int numberRequested = bytes.getInt();
 
-		return new GetSignaturesV2Message(id, parentSignature, numberRequested);
+		return new GetSignaturesMessage(id, parentSignature, numberRequested);
 	}
 
 }

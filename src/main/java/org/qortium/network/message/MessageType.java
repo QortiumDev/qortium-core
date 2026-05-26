@@ -12,20 +12,18 @@ public enum MessageType {
     UNSUPPORTED(-1, UnsupportedMessage::fromByteBuffer),
 
     // Handshaking
-    HELLO(0, HelloMessage::fromByteBuffer),
     GOODBYE(1, GoodbyeMessage::fromByteBuffer),
     CHALLENGE(2, ChallengeMessage::fromByteBuffer),
     RESPONSE(3, ResponseMessage::fromByteBuffer),
-    HELLO_V2(4, HelloV2Message::fromByteBuffer),
+    HELLO(4, HelloMessage::fromByteBuffer),
 
     // Status / notifications
-    HEIGHT_V2(10, HeightV2Message::fromByteBuffer),
     PING(11, PingMessage::fromByteBuffer),
     PONG(12, PongMessage::fromByteBuffer),
     GENERIC_UNKNOWN(13, GenericUnknownMessage::fromByteBuffer),
 
     // Requesting data
-    PEERS_V2(20, PeersV2Message::fromByteBuffer),
+    PEERS(20, PeersMessage::fromByteBuffer),
     GET_PEERS(21, GetPeersMessage::fromByteBuffer),
 
     TRANSACTION(30, TransactionMessage::fromByteBuffer),
@@ -34,19 +32,17 @@ public enum MessageType {
     TRANSACTION_SIGNATURES(40, TransactionSignaturesMessage::fromByteBuffer),
     GET_UNCONFIRMED_TRANSACTIONS(41, GetUnconfirmedTransactionsMessage::fromByteBuffer),
 
-    BLOCK(50, BlockMessage::fromByteBuffer),
     GET_BLOCK(51, GetBlockMessage::fromByteBuffer),
-    BLOCK_V2(52, BlockV2Message::fromByteBuffer),
+    BLOCK(52, BlockMessage::fromByteBuffer),
 
     SIGNATURES(60, SignaturesMessage::fromByteBuffer),
-    GET_SIGNATURES_V2(61, GetSignaturesV2Message::fromByteBuffer),
+    GET_SIGNATURES(61, GetSignaturesMessage::fromByteBuffer),
 
-    BLOCK_SUMMARIES(70, BlockSummariesMessage::fromByteBuffer),
     GET_BLOCK_SUMMARIES(71, GetBlockSummariesMessage::fromByteBuffer),
-    BLOCK_SUMMARIES_V2(72, BlockSummariesV2Message::fromByteBuffer),
+    BLOCK_SUMMARIES(72, BlockSummariesMessage::fromByteBuffer),
     
-    ONLINE_ACCOUNTS_V3(84, OnlineAccountsV3Message::fromByteBuffer),
-    GET_ONLINE_ACCOUNTS_V3(85, GetOnlineAccountsV3Message::fromByteBuffer),
+    ONLINE_ACCOUNTS(84, OnlineAccountsMessage::fromByteBuffer),
+    GET_ONLINE_ACCOUNTS(85, GetOnlineAccountsMessage::fromByteBuffer),
 
     ARBITRARY_DATA(90, ArbitraryDataMessage::fromByteBuffer),
     GET_ARBITRARY_DATA(91, GetArbitraryDataMessage::fromByteBuffer),

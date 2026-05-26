@@ -23,7 +23,7 @@ public class HandshakeTests {
 	public void testNonLiteNodeAdvertisesLiteDataCapability() throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "lite", false, true);
 
-		Map<String, Object> capabilities = Handshake.buildHelloV2Capabilities();
+		Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
 
 		assertEquals(LiteNode.LITE_DATA_CAPABILITY_VERSION, capabilities.get(LiteNode.LITE_DATA_CAPABILITY));
 	}
@@ -32,7 +32,7 @@ public class HandshakeTests {
 	public void testLiteNodeDoesNotAdvertiseLiteDataCapability() throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "lite", true, true);
 
-		Map<String, Object> capabilities = Handshake.buildHelloV2Capabilities();
+		Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
 
 		assertFalse(capabilities.containsKey(LiteNode.LITE_DATA_CAPABILITY));
 	}

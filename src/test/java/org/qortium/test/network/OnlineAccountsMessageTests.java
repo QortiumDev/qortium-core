@@ -5,10 +5,10 @@ import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.junit.Test;
 import org.qortium.controller.OnlineAccountsManager;
 import org.qortium.data.network.OnlineAccountData;
-import org.qortium.network.message.GetOnlineAccountsV3Message;
+import org.qortium.network.message.GetOnlineAccountsMessage;
 import org.qortium.network.message.Message;
 import org.qortium.network.message.MessageException;
-import org.qortium.network.message.OnlineAccountsV3Message;
+import org.qortium.network.message.OnlineAccountsMessage;
 import org.qortium.transform.Transformer;
 
 import java.nio.ByteBuffer;
@@ -17,7 +17,7 @@ import java.util.*;
 
 import static org.junit.Assert.*;
 
-public class OnlineAccountsV3Tests {
+public class OnlineAccountsMessageTests {
 
     private static final Random RANDOM = new Random();
     static {
@@ -45,7 +45,7 @@ public class OnlineAccountsV3Tests {
     }
 
     @Test
-    public void testOnGetOnlineAccountsV3() {
+    public void testOnGetOnlineAccounts() {
         List<OnlineAccountData> ourOnlineAccounts = generateOnlineAccounts(false);
         List<OnlineAccountData> peersOnlineAccounts = generateOnlineAccounts(false);
 
@@ -115,17 +115,17 @@ public class OnlineAccountsV3Tests {
     }
 
     @Test
-    public void testOnlineAccountsV3NonceSerialization() throws MessageException {
+    public void testOnlineAccountsNonceSerialization() throws MessageException {
         List<OnlineAccountData> onlineAccountsOut = Arrays.asList(
                 generateOnlineAccount(123456L, 1),
                 generateOnlineAccount(123456L, 2),
                 generateOnlineAccount(123456L, 3)
         );
 
-        Message messageOut = new OnlineAccountsV3Message(onlineAccountsOut);
+        Message messageOut = new OnlineAccountsMessage(onlineAccountsOut);
         ByteBuffer byteBuffer = ByteBuffer.wrap(messageOut.toBytes()).asReadOnlyBuffer();
 
-        OnlineAccountsV3Message messageIn = (OnlineAccountsV3Message) Message.fromByteBuffer(byteBuffer);
+        OnlineAccountsMessage messageIn = (OnlineAccountsMessage) Message.fromByteBuffer(byteBuffer);
         List<OnlineAccountData> onlineAccountsIn = messageIn.getOnlineAccounts();
 
         assertEquals(onlineAccountsOut.size(), onlineAccountsIn.size());
@@ -135,15 +135,15 @@ public class OnlineAccountsV3Tests {
     }
 
     @Test
-    public void testOnlineAccountsV3SkipsMissingNonce() throws MessageException {
+    public void testOnlineAccountsSkipsMissingNonce() throws MessageException {
         OnlineAccountData missingNonce = generateOnlineAccount(123456L, null);
         OnlineAccountData validNonce = generateOnlineAccount(123456L, 4);
         OnlineAccountData negativeNonce = generateOnlineAccount(123456L, -1);
 
-        Message messageOut = new OnlineAccountsV3Message(Arrays.asList(missingNonce, validNonce, negativeNonce));
+        Message messageOut = new OnlineAccountsMessage(Arrays.asList(missingNonce, validNonce, negativeNonce));
         ByteBuffer byteBuffer = ByteBuffer.wrap(messageOut.toBytes()).asReadOnlyBuffer();
 
-        OnlineAccountsV3Message messageIn = (OnlineAccountsV3Message) Message.fromByteBuffer(byteBuffer);
+        OnlineAccountsMessage messageIn = (OnlineAccountsMessage) Message.fromByteBuffer(byteBuffer);
         List<OnlineAccountData> onlineAccountsIn = messageIn.getOnlineAccounts();
 
         assertEquals(1, onlineAccountsIn.size());
@@ -151,12 +151,12 @@ public class OnlineAccountsV3Tests {
     }
 
     private void validateSerialization(Map<Long, Map<Byte, byte[]>> hashesByTimestampThenByteOut) throws MessageException {
-        Message messageOut = new GetOnlineAccountsV3Message(hashesByTimestampThenByteOut);
+        Message messageOut = new GetOnlineAccountsMessage(hashesByTimestampThenByteOut);
         byte[] messageBytes = messageOut.toBytes();
 
         ByteBuffer byteBuffer = ByteBuffer.wrap(messageBytes).asReadOnlyBuffer();
 
-        GetOnlineAccountsV3Message messageIn = (GetOnlineAccountsV3Message) Message.fromByteBuffer(byteBuffer);
+        GetOnlineAccountsMessage messageIn = (GetOnlineAccountsMessage) Message.fromByteBuffer(byteBuffer);
 
         Map<Long, Map<Byte, byte[]>> hashesByTimestampThenByteIn = messageIn.getHashesByTimestampThenByte();
 

@@ -1,44 +1,59 @@
 package org.qortium.network.message;
 
 import com.google.common.primitives.Longs;
+import org.qortium.network.Peer;
+import org.qortium.network.helper.PeerCapabilities;
 import org.qortium.transform.TransformationException;
 import org.qortium.utils.Serialization;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 public class HelloMessage extends Message {
 
 	private long timestamp;
 	private String versionString;
 	private String senderPeerAddress;
+	private PeerCapabilities capabilities = new PeerCapabilities();
+	private int peerType = Peer.NETWORK;
 
-	public HelloMessage(long timestamp, String versionString, String senderPeerAddress) {
+	public HelloMessage(long timestamp, String versionString, String senderPeerAddress, Map<String, Object> caps, int peerType) {
 		super(MessageType.HELLO);
-
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
 		try {
 			bytes.write(Longs.toByteArray(timestamp));
-
 			Serialization.serializeSizedString(bytes, versionString);
-
 			Serialization.serializeSizedString(bytes, senderPeerAddress);
+			bytes.write(ByteBuffer.allocate(4).putInt(peerType).array());
+
+			if (caps != null) {
+				Serialization.serializeMap(bytes, caps);
+			}
 		} catch (IOException e) {
 			throw new AssertionError("IOException shouldn't occur with ByteArrayOutputStream");
 		}
-
 		this.dataBytes = bytes.toByteArray();
 		this.checksumBytes = Message.generateChecksum(this.dataBytes);
+
+		this.timestamp = timestamp;
+		this.versionString = versionString;
+		this.senderPeerAddress = senderPeerAddress;
+		this.capabilities = new PeerCapabilities(caps != null ? caps : new HashMap<>());
+		this.peerType = peerType;
 	}
 
-	private HelloMessage(int id, long timestamp, String versionString, String senderPeerAddress) {
+	private HelloMessage(int id, long timestamp, String versionString, String senderPeerAddress, PeerCapabilities caps, int peerType) {
 		super(id, MessageType.HELLO);
 
 		this.timestamp = timestamp;
 		this.versionString = versionString;
 		this.senderPeerAddress = senderPeerAddress;
+		this.capabilities = (caps != null ? caps : new PeerCapabilities(new HashMap<>()));
+		this.peerType = peerType;
 	}
 
 	public long getTimestamp() {
@@ -53,23 +68,41 @@ public class HelloMessage extends Message {
 		return this.senderPeerAddress;
 	}
 
+	public PeerCapabilities getCapabilities() {
+		return this.capabilities;
+	}
+
+	public int getPeerType() {
+		return this.peerType;
+	}
+
 	public static Message fromByteBuffer(int id, ByteBuffer byteBuffer) throws MessageException {
 		long timestamp = byteBuffer.getLong();
 
 		String versionString;
 		String senderPeerAddress = null;
+		int peerType = Peer.NETWORK;
+		Map<String, Object> capabilities = new HashMap<>();
 		try {
 			versionString = Serialization.deserializeSizedString(byteBuffer, 255);
 
-			// Sender peer address added in v3.0, so is an optional field. Older versions won't send it.
 			if (byteBuffer.hasRemaining()) {
 				senderPeerAddress = Serialization.deserializeSizedString(byteBuffer, 255);
 			}
+
+			if (byteBuffer.hasRemaining()) {
+				peerType = byteBuffer.getInt();
+			}
+
+			if (byteBuffer.hasRemaining()) {
+				capabilities = Serialization.deserializeMap(byteBuffer);
+			}
 		} catch (TransformationException e) {
 			throw new MessageException(e.getMessage(), e);
+		} catch (IOException e) {
+			throw new RuntimeException(e);
 		}
 
-		return new HelloMessage(id, timestamp, versionString, senderPeerAddress);
+		return new HelloMessage(id, timestamp, versionString, senderPeerAddress, new PeerCapabilities(capabilities), peerType);
 	}
-
 }

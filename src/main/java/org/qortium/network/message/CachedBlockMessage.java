@@ -20,7 +20,7 @@ public class CachedBlockMessage extends Message implements Cloneable {
 		try {
 			bytes.write(Ints.toByteArray(block.getBlockData().getHeight()));
 
-			bytes.write(BlockTransformer.toBytes(block));
+			bytes.write(BlockTransformer.toBytesV2(block));
 		} catch (IOException e) {
 			throw new AssertionError("IOException shouldn't occur with ByteArrayOutputStream");
 		}

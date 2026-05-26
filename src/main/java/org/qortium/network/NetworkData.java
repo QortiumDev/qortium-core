@@ -1789,7 +1789,6 @@ public class NetworkData {
         switch (message.getType()) {
 
             case HELLO:
-            case HELLO_V2:
             case CHALLENGE:
             case RESPONSE:
                 LOGGER.debug("[{}] Unexpected handshaking message {} from peer {}", peer.getPeerConnectionId(),
@@ -1886,46 +1885,32 @@ public class NetworkData {
                 return;
             }
     
-            // HELLO / HELLO_V2 can arrive out-of-order during handshake (side-band updates).
-            // Don't tear down the connection because of them.
-            if (message.getType() == MessageType.HELLO_V2
-                    && handshakeStatus != Handshake.HELLO
-                    && handshakeStatus != Handshake.HELLO_V2) {
-                Handshake.HELLO_V2.onMessage(peer, message);
-                return;
-            }
-    
+            // HELLO can arrive out-of-order during handshake as a side-band peer info update.
             if (message.getType() == MessageType.HELLO
                     && handshakeStatus != Handshake.HELLO) {
-                Handshake.HELLO.onMessage(peer, message);
+                if (Handshake.HELLO.onMessage(peer, message) == null)
+                    peer.disconnect("handshake failure");
                 return;
             }
     
             Handshake effectiveHandshakeStatus = handshakeStatus;
     
-            // If peer sends CHALLENGE early (while we're still in HELLO/HELLO_V2), handle it as CHALLENGE.
-           // If peer sends CHALLENGE early (while we're still in HELLO/HELLO_V2), handle it as CHALLENGE.
-            if ((handshakeStatus == Handshake.HELLO || handshakeStatus == Handshake.HELLO_V2)
+            // If peer sends CHALLENGE early while we're still in HELLO, handle it as CHALLENGE.
+            if (handshakeStatus == Handshake.HELLO
                 && message.getType() == MessageType.CHALLENGE) {
-            effectiveHandshakeStatus = Handshake.CHALLENGE;
+                effectiveHandshakeStatus = Handshake.CHALLENGE;
             }
 
             // If peer sends RESPONSE early (while we're still in CHALLENGE), handle it as RESPONSE.
             if (handshakeStatus == Handshake.CHALLENGE
                 && message.getType() == MessageType.RESPONSE) {
-            effectiveHandshakeStatus = Handshake.RESPONSE;
+                effectiveHandshakeStatus = Handshake.RESPONSE;
             }
 
     
             // Check message type is as expected
             boolean unexpectedMessage = effectiveHandshakeStatus.expectedMessageType != null
                     && message.getType() != effectiveHandshakeStatus.expectedMessageType;
-    
-            // HELLO accepts HELLO or HELLO_V2
-            if (effectiveHandshakeStatus == Handshake.HELLO
-                    && (message.getType() == MessageType.HELLO || message.getType() == MessageType.HELLO_V2)) {
-                unexpectedMessage = false;
-            }
     
             if (unexpectedMessage) {
                 LOGGER.debug("[{}] Unexpected {} message from {}, expected {}",
@@ -1953,15 +1938,8 @@ public class NetworkData {
             if (peer.isOutbound()) {
                 // Outbound: act first for the NEXT state
                 newHandshakeStatus.action(peer);
-            } else {
-                // Inbound: respond "in kind"
-                // Special case: HELLO -> HELLO_V2 transition, call CURRENT state's action
-                // Also skip RESPONDING because it's just a holding state while PoW runs.
-                if (newHandshakeStatus == Handshake.HELLO_V2) {
-                    handshakeStatus.action(peer);
-                } else if (newHandshakeStatus != Handshake.RESPONDING) {
-                    newHandshakeStatus.action(peer);
-                }
+            } else if (newHandshakeStatus != Handshake.RESPONDING) {
+                newHandshakeStatus.action(peer);
             }
     
             // Note: RESPONSE.onMessage() always returns RESPONDING now.

@@ -17,9 +17,9 @@ import org.qortium.data.group.GroupMemberData;
 import org.qortium.data.network.OnlineAccountData;
 import org.qortium.network.Network;
 import org.qortium.network.Peer;
-import org.qortium.network.message.GetOnlineAccountsV3Message;
+import org.qortium.network.message.GetOnlineAccountsMessage;
 import org.qortium.network.message.Message;
-import org.qortium.network.message.OnlineAccountsV3Message;
+import org.qortium.network.message.OnlineAccountsMessage;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -482,8 +482,8 @@ public class OnlineAccountsManager {
         LOGGER.debug("Requesting online accounts via broadcast...");
 
         lastOnlineAccountsRequest = now;
-        Message messageV3 = new GetOnlineAccountsV3Message(currentOnlineAccountsHashes);
-        Network.getInstance().broadcast(peer -> messageV3);
+        Message message = new GetOnlineAccountsMessage(currentOnlineAccountsHashes);
+        Network.getInstance().broadcast(peer -> message);
     }
 
     /**
@@ -642,7 +642,7 @@ public class OnlineAccountsManager {
                 return false;
             }
 
-            Network.getInstance().broadcast(peer -> new OnlineAccountsV3Message(ourOnlineAccounts));
+            Network.getInstance().broadcast(peer -> new OnlineAccountsMessage(ourOnlineAccounts));
 
             LOGGER.debug("Broadcasted {} online account{} with timestamp {}", ourOnlineAccounts.size(), (ourOnlineAccounts.size() != 1 ? "s" : ""), onlineAccountsTimestamp);
 
@@ -829,8 +829,8 @@ public class OnlineAccountsManager {
 
     // Network handlers
 
-    public void onNetworkGetOnlineAccountsV3Message(Peer peer, Message message) {
-        GetOnlineAccountsV3Message getOnlineAccountsMessage = (GetOnlineAccountsV3Message) message;
+    public void onNetworkGetOnlineAccountsMessage(Peer peer, Message message) {
+        GetOnlineAccountsMessage getOnlineAccountsMessage = (GetOnlineAccountsMessage) message;
 
         Map<Long, Map<Byte, byte[]>> peersHashes = getOnlineAccountsMessage.getHashesByTimestampThenByte();
         List<OnlineAccountData> outgoingOnlineAccounts = new ArrayList<>();
@@ -882,13 +882,13 @@ public class OnlineAccountsManager {
             }
         }
 
-        peer.sendMessage(new OnlineAccountsV3Message(outgoingOnlineAccounts));
+        peer.sendMessage(new OnlineAccountsMessage(outgoingOnlineAccounts));
 
         LOGGER.trace("Sent {} online accounts to {}", outgoingOnlineAccounts.size(), peer);
     }
 
-    public void onNetworkOnlineAccountsV3Message(Peer peer, Message message) {
-        OnlineAccountsV3Message onlineAccountsMessage = (OnlineAccountsV3Message) message;
+    public void onNetworkOnlineAccountsMessage(Peer peer, Message message) {
+        OnlineAccountsMessage onlineAccountsMessage = (OnlineAccountsMessage) message;
 
         List<OnlineAccountData> peersOnlineAccounts = onlineAccountsMessage.getOnlineAccounts();
         LOGGER.trace("Received {} online accounts from {}", peersOnlineAccounts.size(), peer);

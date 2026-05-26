@@ -12,12 +12,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 // NOTE: this message supports hostnames, literal IP addresses (IPv4 and IPv6) with port numbers
-public class PeersV2Message extends Message {
+public class PeersMessage extends Message {
 
 	private List<PeerAddress> peerAddresses;
 
-	public PeersV2Message(List<PeerAddress> peerAddresses) {
-		super(MessageType.PEERS_V2);
+	public PeersMessage(List<PeerAddress> peerAddresses) {
+		super(MessageType.PEERS);
 
 		List<byte[]> addresses = new ArrayList<>();
 
@@ -48,8 +48,8 @@ public class PeersV2Message extends Message {
 		this.checksumBytes = Message.generateChecksum(this.dataBytes);
 	}
 
-	private PeersV2Message(int id, List<PeerAddress> peerAddresses) {
-		super(id, MessageType.PEERS_V2);
+	private PeersMessage(int id, List<PeerAddress> peerAddresses) {
+		super(id, MessageType.PEERS);
 
 		this.peerAddresses = peerAddresses;
 	}
@@ -75,11 +75,11 @@ public class PeersV2Message extends Message {
 				PeerAddress peerAddress = PeerAddress.fromString(addressString);
 				peerAddresses.add(peerAddress);
 			} catch (IllegalArgumentException e) {
-				throw new MessageException("Invalid peer address in received PEERS_V2 message");
+				throw new MessageException("Invalid peer address in received PEERS message");
 			}
 		}
 
-		return new PeersV2Message(id, peerAddresses);
+		return new PeersMessage(id, peerAddresses);
 	}
 
 }

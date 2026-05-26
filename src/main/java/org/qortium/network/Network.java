@@ -1891,7 +1891,6 @@ public class Network {
                 break;
 
             case HELLO:
-            case HELLO_V2:
             case CHALLENGE:
             case RESPONSE:
                 LOGGER.debug("[{}] Unexpected handshaking message {} from peer {}", peer.getPeerConnectionId(),
@@ -1899,8 +1898,8 @@ public class Network {
                 peer.disconnect("unexpected handshaking message");
                 return;
 
-            case PEERS_V2:
-                onPeersV2Message(peer, message);
+            case PEERS:
+                onPeersMessage(peer, message);
                 break;
 
             default:
@@ -1948,46 +1947,33 @@ public class Network {
                 return;
             }
     
-            // ---- 2) Allow HELLO / HELLO_V2 side-band updates out-of-order ----
-            // HELLO_V2 can arrive after we've moved past HELLO; treat as capabilities update and keep state.
-            if (message.getType() == MessageType.HELLO_V2
-                    && handshakeStatus != Handshake.HELLO
-                    && handshakeStatus != Handshake.HELLO_V2) {
-                Handshake.HELLO_V2.onMessage(peer, message);
-                return;
-            }
-    
-            // Some peers might resend HELLO; process and keep state.
+            // ---- 2) Allow HELLO side-band updates out-of-order ----
+            // HELLO can arrive after we've moved past HELLO; treat it as a peer info update and keep state.
             if (message.getType() == MessageType.HELLO
                     && handshakeStatus != Handshake.HELLO) {
-                Handshake.HELLO.onMessage(peer, message);
+                if (Handshake.HELLO.onMessage(peer, message) == null)
+                    peer.disconnect("handshake failure");
                 return;
             }
     
             // ---- 3) Early CHALLENGE handling ----
             Handshake effectiveHandshakeStatus = handshakeStatus;
-           // If peer sends CHALLENGE early (while we're still in HELLO/HELLO_V2), handle it as CHALLENGE.
-            if ((handshakeStatus == Handshake.HELLO || handshakeStatus == Handshake.HELLO_V2)
+            // If peer sends CHALLENGE early while we're still in HELLO, handle it as CHALLENGE.
+            if (handshakeStatus == Handshake.HELLO
                 && message.getType() == MessageType.CHALLENGE) {
-            effectiveHandshakeStatus = Handshake.CHALLENGE;
+                effectiveHandshakeStatus = Handshake.CHALLENGE;
             }
 
             // If peer sends RESPONSE early (while we're still in CHALLENGE), handle it as RESPONSE.
             if (handshakeStatus == Handshake.CHALLENGE
                 && message.getType() == MessageType.RESPONSE) {
-            effectiveHandshakeStatus = Handshake.RESPONSE;
+                effectiveHandshakeStatus = Handshake.RESPONSE;
             }
 
     
             // ---- 4) Validate message type (after applying effectiveHandshakeStatus) ----
             boolean unexpectedMessage = effectiveHandshakeStatus.expectedMessageType != null
                     && message.getType() != effectiveHandshakeStatus.expectedMessageType;
-    
-            // HELLO state accepts HELLO or HELLO_V2
-            if (effectiveHandshakeStatus == Handshake.HELLO
-                    && (message.getType() == MessageType.HELLO || message.getType() == MessageType.HELLO_V2)) {
-                unexpectedMessage = false;
-            }
     
             if (unexpectedMessage) {
                 LOGGER.debug("[{}] Unexpected {} message from {}, expected {}",
@@ -2013,26 +1999,8 @@ public class Network {
             if (peer.isOutbound()) {
                 // Outbound: act first for the NEXT state
                 newHandshakeStatus.action(peer);
-            } else {
-                // Inbound: respond "in kind"
-                
-                // For old peers (< 6.0.0), use the old protocol pattern for ALL transitions
-                // Old protocol: always respond with current state's action (alternating pattern)
-                if (!peer.isAtLeastVersion("6.0.0")) {
-                    // Backward compatibility: respond in kind with old state's action
-                    handshakeStatus.action(peer);
-                }
-                // For new peers (>= 6.0.0), use new protocol with HELLO_V2
-                else {
-                    // Special case: HELLO -> HELLO_V2 transition.
-                    // HELLO_V2.action() sends nothing; HELLO.action() is responsible for sending HELLO_V2 when awaiting.
-                    // Also skip RESPONDING because it's just a holding state while PoW runs.
-                    if (newHandshakeStatus == Handshake.HELLO_V2) {
-                        handshakeStatus.action(peer);
-                    } else if (newHandshakeStatus != Handshake.RESPONDING) {
-                        newHandshakeStatus.action(peer);
-                    }
-                }
+            } else if (newHandshakeStatus != Handshake.RESPONDING) {
+                newHandshakeStatus.action(peer);
             }
     
         // ---- 7) Commit state ----
@@ -2070,21 +2038,21 @@ public class Network {
         }
     }
 
-    private void onPeersV2Message(Peer peer, Message message) {
-        PeersV2Message peersV2Message = (PeersV2Message) message;
+    private void onPeersMessage(Peer peer, Message message) {
+        PeersMessage peersMessage = (PeersMessage) message;
 
-        List<PeerAddress> peerV2Addresses = peersV2Message.getPeerAddresses();
+        List<PeerAddress> peerAddresses = peersMessage.getPeerAddresses();
 
         // First entry contains remote peer's listen port but empty address.
-        int peerPort = peerV2Addresses.get(0).getPort();
-        peerV2Addresses.remove(0);
+        int peerPort = peerAddresses.get(0).getPort();
+        peerAddresses.remove(0);
 
         // If inbound peer, use listen port and socket address to recreate first entry
         if (!peer.isOutbound()) {
             String host = peer.getPeerData().getAddress().getHost();
             PeerAddress sendingPeerAddress = PeerAddress.fromString(host + ":" + peerPort);
-            LOGGER.trace("PEERS_V2 sending peer's listen address: {}", sendingPeerAddress.toString());
-            peerV2Addresses.add(0, sendingPeerAddress);
+            LOGGER.trace("PEERS sending peer's listen address: {}", sendingPeerAddress.toString());
+            peerAddresses.add(0, sendingPeerAddress);
             
             // CRITICAL FIX: Update cache with listen address -> nodeId mapping
             // This allows getConnectablePeer() to identify that we're already connected to this peer
@@ -2092,12 +2060,12 @@ public class Network {
             if (peer.getPeersNodeId() != null) {
                 String listenAddress = host + ":" + peerPort;
                 updateAddressToNodeIdCache(listenAddress, peer.getPeersNodeId());
-                LOGGER.debug("Updated cache: listen address {} -> nodeId {} (from PEERS_V2)",
+                LOGGER.debug("Updated cache: listen address {} -> nodeId {} (from PEERS)",
                         listenAddress, peer.getPeersNodeId().substring(0, 8));
             }
         }
 
-        opportunisticMergePeers(peer.toString(), peerV2Addresses);
+        opportunisticMergePeers(peer.toString(), peerAddresses);
     }
 
     protected void onHandshakeCompleted(Peer peer) {
@@ -2280,7 +2248,7 @@ public class Network {
         if (peer.isOutbound()) {
             if (!Settings.getInstance().isLite()) {
                 // Send our height / chain tip info
-                Message message = this.buildHeightOrChainTipInfo(peer);
+                Message message = this.buildHeightOrChainTipInfo();
 
                 if (message == null) {
                     peer.disconnect("Couldn't build our chain tip info");
@@ -2358,68 +2326,40 @@ public class Network {
             }
         }
 
-        // New format PEERS_V2 message that supports hostnames, IPv6 and ports
-        return new PeersV2Message(peerAddresses);
+        // Current PEERS message supports hostnames, IPv6 and ports.
+        return new PeersMessage(peerAddresses);
     }
 
-    /** Builds either (legacy) HeightV2Message or (newer) BlockSummariesV2Message, depending on peer version.
+    /** Builds the current chain-tip summaries message.
      *
      *  @return Message, or null if DataException was thrown.
      */
-    public Message buildHeightOrChainTipInfo(Peer peer) {
-        Long peersVersion = peer.getPeersVersion();
-        return buildHeightOrChainTipInfoForVersion(peersVersion);
-    }
+    public Message buildHeightOrChainTipInfo() {
+        int latestHeight = Controller.getInstance().getChainHeight();
 
-    /**
-     * Build Height or Chain Tip Info For Version
-     *
-     * @param peersVersion the peer version
-     *
-     * @return the height for old versions and the chain tip for new versions
-     */
-    public Message buildHeightOrChainTipInfoForVersion(Long peersVersion) {
-
-        if (peersVersion >= BlockSummariesV2Message.MINIMUM_PEER_VERSION) {
-            int latestHeight = Controller.getInstance().getChainHeight();
-
-            try (final Repository repository = RepositoryManager.getRepository()) {
-                List<BlockSummaryData> latestBlockSummaries = repository.getBlockRepository().getBlockSummaries(latestHeight - BROADCAST_CHAIN_TIP_DEPTH, latestHeight);
-                return new BlockSummariesV2Message(latestBlockSummaries);
-            } catch (DataException e) {
-                return null;
-            }
-        } else {
-            // For older peers
-            BlockData latestBlockData = Controller.getInstance().getChainTip();
-            return new HeightV2Message(latestBlockData.getHeight(), latestBlockData.getSignature(),
-                    latestBlockData.getTimestamp(), latestBlockData.getMinterPublicKey());
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            List<BlockSummaryData> latestBlockSummaries = repository.getBlockRepository().getBlockSummaries(latestHeight - BROADCAST_CHAIN_TIP_DEPTH, latestHeight);
+            return new BlockSummariesMessage(latestBlockSummaries);
+        } catch (DataException e) {
+            return null;
         }
     }
 
     public void broadcastOurChain() {
-        BlockData latestBlockData = Controller.getInstance().getChainTip();
-        int latestHeight = latestBlockData.getHeight();
+        int latestHeight = Controller.getInstance().getChainHeight();
 
         try (final Repository repository = RepositoryManager.getRepository()) {
             List<BlockSummaryData> latestBlockSummaries = repository.getBlockRepository().getBlockSummaries(latestHeight - BROADCAST_CHAIN_TIP_DEPTH, latestHeight);
-            Message latestBlockSummariesMessage = new BlockSummariesV2Message(latestBlockSummaries);
+            Message latestBlockSummariesMessage = new BlockSummariesMessage(latestBlockSummaries);
 
-            // For older peers
-            Message heightMessage = new HeightV2Message(latestBlockData.getHeight(), latestBlockData.getSignature(),
-                    latestBlockData.getTimestamp(), latestBlockData.getMinterPublicKey());
-
-            Network.getInstance().broadcast(broadcastPeer -> broadcastPeer.getPeersVersion() >= BlockSummariesV2Message.MINIMUM_PEER_VERSION
-                    ? latestBlockSummariesMessage
-                    : heightMessage
-            );
+            Network.getInstance().broadcast(broadcastPeer -> latestBlockSummariesMessage);
         } catch (DataException e) {
             LOGGER.warn("Couldn't broadcast our chain tip info", e);
         }
     }
 
     public Message buildNewTransactionMessage(Peer peer, TransactionData transactionData) {
-        // In V2 we send out transaction signature only and peers can decide whether to request the full transaction
+        // Send transaction signatures only so peers can decide whether to request the full transaction.
         return new TransactionSignaturesMessage(Collections.singletonList(transactionData.getSignature()));
     }
 
