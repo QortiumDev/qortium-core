@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Drain queued handshake messages after each handshake task
+
+Fixed a peer-handshake scheduling edge case where multiple handshake messages could be read from a socket at once, but only the first message was scheduled for processing. Follow-up handshake messages that are already queued are now processed after the previous handshake task clears its pending flag, preventing QDN data peers from getting stuck before completion.
+
 ### 2026-05-26 - Treat already-stopped preview nodes as stopped
 
 Improved the preview stop script so it treats a node as successfully stopped if the API shutdown request already caused the process to exit before the script reaches the fallback kill step. This removes confusing restart failures during normal preview maintenance.

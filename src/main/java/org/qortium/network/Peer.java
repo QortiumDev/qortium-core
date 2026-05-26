@@ -993,7 +993,7 @@ public class Peer {
         }
     }
 
-    protected Task getMessageTask(int network) {
+    public Task getMessageTask(int network) {
         /*
          * If we are still handshaking and there is a message yet to be processed then
          * don't produce another message task. This allows us to process handshake
