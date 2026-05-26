@@ -1010,6 +1010,29 @@ public class Controller extends Thread {
 		return peerChainTipData == null || peerChainTipData.getSignature() == null || Arrays.equals(latestBlockData.getSignature(), peerChainTipData.getSignature());
 	};
 
+	public static boolean isPeerTipAheadOf(BlockData latestBlockData, BlockSummaryData peerChainTipData) {
+		if (latestBlockData == null || latestBlockData.getHeight() == null || peerChainTipData == null || peerChainTipData.getTimestamp() == null)
+			return false;
+
+		return peerChainTipData.getHeight() > latestBlockData.getHeight() && peerChainTipData.getTimestamp() > latestBlockData.getTimestamp();
+	}
+
+	public static int compareChainTipsByHeightThenTimestamp(BlockSummaryData left, BlockSummaryData right) {
+		int heightComparison = Integer.compare(getChainTipHeight(left), getChainTipHeight(right));
+		if (heightComparison != 0)
+			return heightComparison;
+
+		return Long.compare(getChainTipTimestamp(left), getChainTipTimestamp(right));
+	}
+
+	private static int getChainTipHeight(BlockSummaryData chainTipData) {
+		return chainTipData != null ? chainTipData.getHeight() : Integer.MIN_VALUE;
+	}
+
+	private static long getChainTipTimestamp(BlockSummaryData chainTipData) {
+		return chainTipData != null && chainTipData.getTimestamp() != null ? chainTipData.getTimestamp() : Long.MIN_VALUE;
+	}
+
 	public static final Predicate<Peer> hasOnlyGenesisBlock = peer -> {
 		final BlockSummaryData peerChainTipData = peer.getChainTipData();
 		return peerChainTipData == null || peerChainTipData.getHeight() == 1;

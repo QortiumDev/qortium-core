@@ -355,12 +355,19 @@ public class Synchronizer extends Thread {
 			StringBuilder finalPeersString = new StringBuilder();
 			for (Peer peer : peers)
 				finalPeersString = finalPeersString.length() > 0 ? finalPeersString.append(", ").append(peer) : finalPeersString.append(peer);
-			LOGGER.debug(String.format("Choosing random peer from: [%s]", finalPeersString.toString()));
+			LOGGER.debug(String.format("Choosing synchronization peer from: [%s]", finalPeersString.toString()));
 		}
 
-		// Pick random peer to sync with
-		int index = new SecureRandom().nextInt(peers.size());
-		Peer peer = peers.get(index);
+		Peer peer;
+		if (staleChainCatchUpActive) {
+			peer = getBestStaleCatchUpPeer(peers);
+			LOGGER.debug("Stale chain catch-up active; selected peer {} with height {}, ts {}", peer,
+					peer.getChainTipData().getHeight(), peer.getChainTipData().getTimestamp());
+		} else {
+			// Pick random peer to sync with
+			int index = new SecureRandom().nextInt(peers.size());
+			peer = peers.get(index);
+		}
 		
 	
 
@@ -517,6 +524,12 @@ public class Synchronizer extends Thread {
 		ByteArray inferiorChainSignature = ByteArray.wrap(inferiorSignature);
 		if (!inferiorChainSignatures.contains(inferiorChainSignature))
 			inferiorChainSignatures.add(inferiorChainSignature);
+	}
+
+	private static Peer getBestStaleCatchUpPeer(List<Peer> peers) {
+		return peers.stream()
+				.max((left, right) -> Controller.compareChainTipsByHeightThenTimestamp(left.getChainTipData(), right.getChainTipData()))
+				.orElseThrow(IllegalArgumentException::new);
 	}
 
 

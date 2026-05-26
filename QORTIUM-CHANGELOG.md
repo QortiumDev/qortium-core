@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Prefer synchronization during stale chain catch-up
+
+Changed stale chain catch-up so a node that can see a clearly newer peer tip will defer local minting and synchronize first. During stale catch-up, synchronizer peer selection now prefers the highest and newest eligible peer tip instead of picking randomly, reducing the chance that a delayed node creates avoidable local fork blocks while a better seed chain is already reachable.
+
 ### 2026-05-26 - Raise preview outbound peer target
 
 Raised the preview network's outbound peer target so tester and seed profiles try to keep two peer connections instead of stopping after one. This gives preview nodes a better chance of staying connected to both public seed paths while keeping the blockchain peer minimum low enough for small-network testing.

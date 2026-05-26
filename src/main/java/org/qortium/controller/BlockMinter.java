@@ -199,6 +199,15 @@ public class BlockMinter extends Thread {
 						if (peers.size() < Settings.getInstance().getMinBlockchainPeers())
 							continue;
 
+						Peer betterStaleCatchUpPeer = staleChainCatchUpActive ? getBetterStaleCatchUpPeer(lastBlockData, peers) : null;
+						if (betterStaleCatchUpPeer != null) {
+							final BlockSummaryData betterPeerChainTipData = betterStaleCatchUpPeer.getChainTipData();
+							moderatedLog(() -> LOGGER.info("Stale chain catch-up is deferring minting because peer {} has a newer chain tip at height {}, ts {}; our height {}, ts {}",
+									betterStaleCatchUpPeer, betterPeerChainTipData.getHeight(), betterPeerChainTipData.getTimestamp(),
+									lastBlockData.getHeight(), lastBlockData.getTimestamp()));
+							continue;
+						}
+
 						// If we are stuck on an invalid block, we should allow an alternative to be minted
 						boolean recoverInvalidBlock = false;
 						if (Synchronizer.getInstance().timeInvalidBlockLastReceived != null) {
@@ -692,6 +701,17 @@ public class BlockMinter extends Thread {
 		}
 		return false;
 	}
+
+	private static Peer getBetterStaleCatchUpPeer(BlockData latestBlockData, List<Peer> peers) {
+		return peers.stream()
+				.filter(peer -> !Controller.hasOldVersion.test(peer))
+				.filter(peer -> !Controller.hasInferiorChainTip.test(peer))
+				.filter(peer -> !Controller.hasInvalidSigner.test(peer))
+				.filter(peer -> Controller.isPeerTipAheadOf(latestBlockData, peer.getChainTipData()))
+				.max((left, right) -> Controller.compareChainTipsByHeightThenTimestamp(left.getChainTipData(), right.getChainTipData()))
+				.orElse(null);
+	}
+
 	private static void moderatedLog(Runnable logFunction) {
 		// We only log if logging at TRACE or previous log timeout has expired
 		if (!LOGGER.isTraceEnabled() && lastLogTimestamp != null && lastLogTimestamp + logTimeout > System.currentTimeMillis())
