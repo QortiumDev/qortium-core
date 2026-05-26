@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Treat already-stopped preview nodes as stopped
+
+Improved the preview stop script so it treats a node as successfully stopped if the API shutdown request already caused the process to exit before the script reaches the fallback kill step. This removes confusing restart failures during normal preview maintenance.
+
 ### 2026-05-26 - Bound preview stop API shutdown requests
 
 Added a timeout to the preview stop script's API shutdown request so a node that accepts the stop command but never closes the HTTP request cannot block the rest of the restart flow. The script can now fall back to process termination and continue with a clean restart instead of hanging indefinitely.

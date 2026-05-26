@@ -51,8 +51,18 @@ if [ -n "${apikey}" ] && command -v curl >/dev/null 2>&1; then
 fi
 
 if [ "${success}" -ne 1 ] && [ -n "${pid}" ]; then
-	echo "Stopping Qortium preview process ${pid}..."
-	if kill -15 "${pid}"; then
+	if ! ps -p "${pid}" >/dev/null 2>&1; then
+		success=1
+	else
+		echo "Stopping Qortium preview process ${pid}..."
+		if kill -15 "${pid}"; then
+			success=1
+		fi
+	fi
+fi
+
+if [ "${success}" -ne 1 ] && [ -n "${pid}" ]; then
+	if ! ps -p "${pid}" >/dev/null 2>&1; then
 		success=1
 	fi
 fi
