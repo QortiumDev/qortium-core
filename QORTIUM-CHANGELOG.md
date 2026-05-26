@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Raise preview outbound peer target
+
+Raised the preview network's outbound peer target so tester and seed profiles try to keep two peer connections instead of stopping after one. This gives preview nodes a better chance of staying connected to both public seed paths while keeping the blockchain peer minimum low enough for small-network testing.
+
 ### 2026-05-26 - Remove remaining non-image Qortal text
 
 Cleaned up the last active non-image Qortal wording found outside historical and provenance notes. A fresh-database error now refers to inherited upstream database versions, and crypto test messages and temporary paths now use Qortium naming.
