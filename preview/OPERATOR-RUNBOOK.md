@@ -112,6 +112,9 @@ two different seed paths:
 - switch the other seed's local settings to `INSTALL`, restart it, and let the
   background updater pick up the approved manifest.
 
+Use a small non-consensus commit as the first update target so the smoke test
+proves the updater path without changing preview chain rules.
+
 Enable automatic install on one seed only:
 
 ```sh

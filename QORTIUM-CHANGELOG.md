@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Record preview auto-update smoke target
+
+Added a small operator-note update that creates a newer non-consensus build for
+the preview network's first QDN auto-update smoke test. This lets the seed nodes
+exercise approved QDN update install paths without changing chain rules,
+genesis data, public API policy, or runtime behavior beyond the build identity.
+
 ### 2026-05-27 - Prepare preview QDN auto-update testing
 
 Prepared the preview network to test approved QDN-based jar updates without
