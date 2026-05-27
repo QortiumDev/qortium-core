@@ -100,26 +100,6 @@ public class MemoryPoWTests {
 	}
 
 	@Test
-	public void testLongComputeDifficulty13() throws DataException {
-		runLongComputeBenchmark(13);
-	}
-
-	@Test
-	public void testLongComputeDifficulty14() throws DataException {
-		runLongComputeBenchmark(14);
-	}
-
-	@Test
-	public void testLongComputeDifficulty15() throws DataException {
-		runLongComputeBenchmark(15);
-	}
-
-	@Test
-	public void testLongComputeDifficulty16() throws DataException {
-		runLongComputeBenchmark(16);
-	}
-
-	@Test
 	public void testKnownCompute2() {
 		int difficulty = 8;
 		int expectedNonce = 55;

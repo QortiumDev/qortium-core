@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Limit long MemoryPoW benchmarks to active difficulties
+
+Reduced the optional long MemoryPoW benchmark tests so they stop at difficulty 12, which is the highest difficulty currently used by Qortium's configured fee-alternative settings. This keeps the benchmark useful for active preview parameters without spending many extra minutes on difficulty levels that are not currently user-facing.
+
 ### 2026-05-26 - Fix transaction and API test regressions
 
 Fixed several regressions uncovered by the broader test run after recent preview and transaction changes. QDN delete transactions now validate and orphan cleanly when the delete transaction is already in the unconfirmed pool, delete tombstones no longer try to relocate missing data files, AT account lookups now handle invalid public-key bytes safely for read-style checks, and the affected API, chat, message, and QDN tests now assert the current configured behavior.
