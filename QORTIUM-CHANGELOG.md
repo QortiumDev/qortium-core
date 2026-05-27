@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Fix CHAT typed JSON builder requests
+
+Fixed the CHAT transaction builder so clients can submit either the existing endpoint-style JSON payload or a full transaction-style JSON payload that includes `"type": "CHAT"`. Malformed JAXB/MOXy request bodies are now reported as bad requests instead of falling through as server errors, which gives clients a clearer failure when a submitted JSON body cannot be parsed.
+
 ### 2026-05-26 - Document public preview readiness checks
 
 Expanded the public preview tester guide with local status, peer, seed-status, and troubleshooting checks, and added a seed-operator runbook for updating, starting, stopping, firewalling, verifying, and resetting public preview seed nodes. The preview release package now includes both tester and operator guidance so public testing can start from the same repeatable instructions used for the current seed-node setup.

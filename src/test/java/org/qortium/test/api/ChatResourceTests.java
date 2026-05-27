@@ -1,8 +1,13 @@
 package org.qortium.test.api;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.primitives.Bytes;
 import org.apache.commons.lang3.reflect.FieldUtils;
 import org.bouncycastle.util.encoders.Base64;
+import org.eclipse.persistence.jaxb.JAXBContextFactory;
+import org.eclipse.persistence.jaxb.MarshallerProperties;
+import org.eclipse.persistence.jaxb.UnmarshallerProperties;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -62,9 +67,17 @@ import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.utils.Base58;
 import org.qortium.utils.NTP;
 
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.bind.Unmarshaller;
+import javax.xml.transform.stream.StreamSource;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -73,6 +86,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ChatResourceTests extends ApiCommon {
+
+	private static final ObjectMapper JSON = new ObjectMapper();
 
 	private ChatResource chatResource;
 
@@ -1107,6 +1122,26 @@ public class ChatResourceTests extends ApiCommon {
 	}
 
 	@Test
+	public void testBuildChatAcceptsTypedAndEndpointJsonPayloads() throws Exception {
+		ChatTransactionData chatData;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			chatData = chat(alice, Group.NO_GROUP, null, "typed build", null, now());
+		}
+
+		String typedJson = marshalChat(chatData);
+		assertTrue(typedJson.contains("\"type\":\"CHAT\""));
+
+		ChatTransactionData typedChatData = unmarshalChat(typedJson);
+		assertBuildChatMatches(chatData, typedChatData);
+
+		String endpointJson = removeType(typedJson);
+		ChatTransactionData endpointChatData = unmarshalChat(endpointJson);
+		assertBuildChatMatches(chatData, endpointChatData);
+	}
+
+	@Test
 	public void testBuildChatUsesChatStoreBackedRateLimit() throws Exception {
 		ChatTransactionData chatData;
 
@@ -1171,6 +1206,47 @@ public class ChatResourceTests extends ApiCommon {
 
 		String rawPayment = rawUnsignedTransaction(paymentData);
 		assertApiError(ApiError.INVALID_DATA, () -> this.chatResource.buildChat(null, rawPayment));
+	}
+
+	private void assertBuildChatMatches(ChatTransactionData expectedChatData, ChatTransactionData requestChatData)
+			throws TransformationException {
+		String rawChat = this.chatResource.buildChat(null, requestChatData);
+		ChatTransactionData decodedChatData = decodeUnsignedChat(rawChat);
+
+		assertEquals(expectedChatData.getTimestamp(), decodedChatData.getTimestamp());
+		assertEquals(expectedChatData.getTxGroupId(), decodedChatData.getTxGroupId());
+		assertArrayEquals(expectedChatData.getSenderPublicKey(), decodedChatData.getSenderPublicKey());
+		assertEquals(expectedChatData.getSender(), decodedChatData.getSender());
+		assertEquals(expectedChatData.getRecipient(), decodedChatData.getRecipient());
+		assertArrayEquals(expectedChatData.getData(), decodedChatData.getData());
+		assertEquals(expectedChatData.getNonce(), decodedChatData.getNonce());
+		assertNull(decodedChatData.getSignature());
+	}
+
+	private static String marshalChat(ChatTransactionData chatData) throws JAXBException {
+		JAXBContext context = JAXBContextFactory.createContext(new Class[] {TransactionData.class}, null);
+		Marshaller marshaller = context.createMarshaller();
+		marshaller.setProperty(MarshallerProperties.MEDIA_TYPE, "application/json");
+		marshaller.setProperty(MarshallerProperties.JSON_INCLUDE_ROOT, false);
+
+		StringWriter writer = new StringWriter();
+		marshaller.marshal(chatData, writer);
+		return writer.toString();
+	}
+
+	private static ChatTransactionData unmarshalChat(String json) throws JAXBException {
+		JAXBContext context = JAXBContextFactory.createContext(new Class[] {ChatTransactionData.class}, null);
+		Unmarshaller unmarshaller = context.createUnmarshaller();
+		unmarshaller.setProperty(UnmarshallerProperties.MEDIA_TYPE, "application/json");
+		unmarshaller.setProperty(UnmarshallerProperties.JSON_INCLUDE_ROOT, false);
+
+		return unmarshaller.unmarshal(new StreamSource(new StringReader(json)), ChatTransactionData.class).getValue();
+	}
+
+	private static String removeType(String json) throws Exception {
+		Map<String, Object> values = JSON.readValue(json, new TypeReference<Map<String, Object>>() {});
+		values.remove("type");
+		return JSON.writeValueAsString(values);
 	}
 
 	private static ChatTransactionData storeChat(Repository repository, TestAccount sender, int groupId, String recipient,
