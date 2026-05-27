@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Improve admin status sync progress
+
+Expanded the node status response with a clearer sync target height, remaining block count, and sync phase so clients can explain first-run catch-up and stale-node states more accurately. The existing sync percentage is still available for compatibility, but active synchronization no longer reports 100 percent complete while the node is still behind its known target height.
+
 ### 2026-05-27 - Fix CHAT typed JSON builder requests
 
 Fixed the CHAT transaction builder so clients can submit either the existing endpoint-style JSON payload or a full transaction-style JSON payload that includes `"type": "CHAT"`. Malformed JAXB/MOXy request bodies are now reported as bad requests instead of falling through as server errors, which gives clients a clearer failure when a submitted JSON body cannot be parsed.

@@ -83,6 +83,8 @@ public class Synchronizer extends Thread {
 	private volatile int syncPercent = 0;
 	/** Temporary estimate of blocks remaining for SysTray use. */
 	private volatile int blocksRemaining = 0;
+	/** Current synchronization target height, if actively synchronizing. */
+	private volatile Integer syncTargetHeight = null;
 
 	private static volatile boolean requestSync = false;
 	private boolean syncRequestPending = false;
@@ -184,9 +186,12 @@ public class Synchronizer extends Thread {
 
 	public Integer getSyncPercent() {
 		synchronized (this.syncLock) {
+			if (this.isSynchronizing)
+				return this.syncPercent;
+
 			final Long now = NTP.getTime();
 			if (now == null)
-				return this.isSynchronizing ? this.syncPercent : null;
+				return null;
 	
 			// Report as 100% synced if the latest block is within the last 60 mins
 			final long minLatestBlockTimestamp = now - (60 * 60 * 1000L);
@@ -194,19 +199,32 @@ public class Synchronizer extends Thread {
 				return 100;
 			}
 	
-			return this.isSynchronizing ? this.syncPercent : null;
+			return null;
 		}
 	}
 
 	public Integer getBlocksRemaining() {
 		synchronized (this.syncLock) {
+			if (this.isSynchronizing)
+				return this.blocksRemaining;
+
+			Long now = NTP.getTime();
+			if (now == null)
+				return null;
+
 			// Report as 0 blocks remaining if the latest block is within the last 60 mins
-			final Long minLatestBlockTimestamp = NTP.getTime() - (60 * 60 * 1000L);
+			final long minLatestBlockTimestamp = now - (60 * 60 * 1000L);
 			if (Controller.getInstance().isUpToDate(minLatestBlockTimestamp)) {
 				return 0;
 			}
 
-			return this.isSynchronizing ? this.blocksRemaining : null;
+			return null;
+		}
+	}
+
+	public Integer getSyncTargetHeight() {
+		synchronized (this.syncLock) {
+			return this.isSynchronizing ? this.syncTargetHeight : null;
 		}
 	}
 
@@ -383,9 +401,11 @@ public class Synchronizer extends Thread {
 	public SynchronizationResult actuallySynchronize(Peer peer, boolean force) throws InterruptedException {
 		boolean hasStatusChanged = false;
 		BlockData priorChainTip = Controller.getInstance().getChainTip();
+		int priorHeight = priorChainTip != null ? priorChainTip.getHeight() : Controller.getInstance().getChainHeight();
+		Integer peerTargetHeight = getPeerTargetHeight(peer);
 
 		synchronized (this.syncLock) {
-			this.syncPercent = (priorChainTip.getHeight() * 100) / peer.getChainTipData().getHeight();
+			updateSyncProgressLocked(priorHeight, peerTargetHeight);
 
 			// Only update SysTray if we're potentially changing height
 			if (this.syncPercent < 100) {
@@ -480,9 +500,42 @@ public class Synchronizer extends Thread {
 
 			return syncResult;
 		} finally {
-			this.isSynchronizing = false;
+			synchronized (this.syncLock) {
+				this.isSynchronizing = false;
+				this.syncTargetHeight = null;
+				this.blocksRemaining = 0;
+			}
 			peer.setSyncInProgress(false);
 		}
+	}
+
+	private static Integer getPeerTargetHeight(Peer peer) {
+		BlockSummaryData chainTipData = peer.getChainTipData();
+		return chainTipData != null ? chainTipData.getHeight() : null;
+	}
+
+	private void updateSyncProgressLocked(int currentHeight, Integer targetHeight) {
+		if (targetHeight == null || targetHeight <= 0) {
+			this.syncTargetHeight = null;
+			this.syncPercent = 0;
+			this.blocksRemaining = 0;
+			return;
+		}
+
+		this.syncTargetHeight = Math.max(currentHeight, targetHeight);
+		this.blocksRemaining = Math.max(0, this.syncTargetHeight - currentHeight);
+		this.syncPercent = calculateSyncPercent(currentHeight, this.syncTargetHeight);
+
+		if (currentHeight < this.syncTargetHeight)
+			this.syncPercent = Math.min(this.syncPercent, 99);
+	}
+
+	private static int calculateSyncPercent(int currentHeight, int targetHeight) {
+		if (targetHeight <= 0)
+			return 0;
+
+		long boundedHeight = Math.max(0, (long) currentHeight);
+		return (int) Math.min(100, (boundedHeight * 100L) / targetHeight);
 	}
 
 	private boolean checkRecoveryModeForPeers(List<Peer> qualifiedPeers) {
@@ -1601,9 +1654,7 @@ public class Synchronizer extends Thread {
 			repository.saveChanges();
 
 			synchronized (this.syncLock) {
-				if (peer.getChainTipData() != null) {
-					this.blocksRemaining = peer.getChainTipData().getHeight() - newBlock.getBlockData().getHeight();
-				}
+				updateSyncProgressLocked(newBlock.getBlockData().getHeight(), getPeerTargetHeight(peer));
 			}
 
 			Controller.getInstance().onNewBlock(newBlock.getBlockData());
