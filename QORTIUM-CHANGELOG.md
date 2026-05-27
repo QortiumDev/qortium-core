@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Expose limited read-only seed API endpoints
+
+Added a public API allowlist for preview seed nodes so external clients can read only `GET /admin/status` and `GET /peers/known` while the normal API remains restricted to local administration. The Regxa and Netcup seed profiles now enable that limited read-only access for public discovery without exposing settings, logs, peer mutation, or other API routes.
+
 ### 2026-05-26 - Limit long MemoryPoW benchmarks to active difficulties
 
 Reduced the optional long MemoryPoW benchmark tests so they stop at difficulty 12, which is the highest difficulty currently used by Qortium's configured fee-alternative settings. This keeps the benchmark useful for active preview parameters without spending many extra minutes on difficulty levels that are not currently user-facing.

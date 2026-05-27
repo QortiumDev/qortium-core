@@ -114,6 +114,9 @@ public class Settings {
 	private String[] apiWhitelist = new String[] {
 		"::1", "127.0.0.1"
 	};
+	private boolean publicApiWhitelistEnabled = false;
+	private String[] publicApiWhitelist = new String[0];
+	private String[] publicApiPaths = new String[0];
 
 	/** Storage location for API key file (Nov 2021 onwards) */
 	private String apiKeyPath = System.getProperty("user.dir");
@@ -1390,6 +1393,18 @@ public class Settings {
 			return new String[] {"0.0.0.0/0", "::/0"};
 		}
 		return this.apiWhitelist;
+	}
+
+	public boolean isPublicApiWhitelistEnabled() {
+		return this.publicApiWhitelistEnabled;
+	}
+
+	public String[] getPublicApiWhitelist() {
+		return this.publicApiWhitelist != null ? this.publicApiWhitelist : new String[0];
+	}
+
+	public String[] getPublicApiPaths() {
+		return this.publicApiPaths != null ? this.publicApiPaths : new String[0];
 	}
 
 	public boolean isApiRestricted() {

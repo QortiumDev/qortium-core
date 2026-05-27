@@ -12,7 +12,6 @@ import org.eclipse.jetty.rewrite.handler.RewriteHandler;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.server.handler.ErrorHandler;
 import org.eclipse.jetty.util.component.LifeCycle;
-import org.eclipse.jetty.server.handler.InetAccessHandler;
 import org.eclipse.jetty.ee8.servlet.DefaultServlet;
 import org.eclipse.jetty.ee8.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee8.servlet.ServletHolder;
@@ -262,11 +261,8 @@ public class ApiService {
 				this.server.setRequestLog(requestLog);
 			}
 
-			// IP address based access control
-			InetAccessHandler accessHandler = new InetAccessHandler();
-			for (String pattern : Settings.getInstance().getApiWhitelist()) {
-				accessHandler.include(pattern);
-			}
+			// IP/path based access control
+			PublicApiAccessHandler accessHandler = new PublicApiAccessHandler();
 			this.server.setHandler(accessHandler);
 
 			// URL rewriting

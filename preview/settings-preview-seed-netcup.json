@@ -42,6 +42,15 @@
   "uPnPEnabled": false,
   "apiDocumentationEnabled": false,
   "apiRestricted": true,
+  "publicApiWhitelistEnabled": true,
+  "publicApiWhitelist": [
+    "0.0.0.0/0",
+    "::/0"
+  ],
+  "publicApiPaths": [
+    "GET /admin/status",
+    "GET /peers/known"
+  ],
   "bootstrap": false,
   "maxPeerConnectionTime": 999999999,
   "recoveryModeTimeout": 0,
