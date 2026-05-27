@@ -1320,7 +1320,11 @@ public class Block {
 			// (they are not in the repository yet during validation)
 			BlockValidationContext.set(this.getTransactions().stream().map(Transaction::getTransactionData).collect(Collectors.toList()));
 
-			for (Transaction transaction : this.getTransactions()) {
+			List<Transaction> transactions = this.getTransactions();
+			for (int transactionIndex = 0; transactionIndex < transactions.size(); ++transactionIndex) {
+				BlockValidationContext.setCurrentTransactionIndex(transactionIndex);
+
+				Transaction transaction = transactions.get(transactionIndex);
 				TransactionData transactionData = transaction.getTransactionData();
 
 				// Skip AT transactions as they are covered by prior call to Block.areAtsValid()
@@ -1350,7 +1354,7 @@ public class Block {
 				// Check transaction fee policy, including MemoryPoW fee alternatives
 				Transaction.ValidationResult validationResult = transaction.isFeeValid();
 				if (validationResult != Transaction.ValidationResult.OK) {
-					LOGGER.debug(String.format("Error during transaction fee validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
+					LOGGER.info(String.format("Error during transaction fee validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
 					return ValidationResult.TRANSACTION_INVALID;
 				}
 
@@ -1358,20 +1362,20 @@ public class Block {
 				// NOTE: in Gen1 there was an extra block height passed to DeployATTransaction.isValid
 				validationResult = transaction.isValid();
 				if (validationResult != Transaction.ValidationResult.OK) {
-					LOGGER.debug(String.format("Error during transaction validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
+					LOGGER.info(String.format("Error during transaction validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
 					return ValidationResult.TRANSACTION_INVALID;
 				}
 
 				validationResult = transaction.isValidAtTimestamp(this.blockData.getTimestamp());
 				if (validationResult != Transaction.ValidationResult.OK) {
-					LOGGER.debug(String.format("Error during transaction timestamp validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
+					LOGGER.info(String.format("Error during transaction timestamp validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
 					return ValidationResult.TRANSACTION_INVALID;
 				}
 
 				// Check transaction can even be processed
 				validationResult = transaction.isProcessable();
 				if (validationResult != Transaction.ValidationResult.OK) {
-					LOGGER.debug(String.format("Error during transaction validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
+					LOGGER.info(String.format("Error during transaction processability validation, tx %s: %s", Base58.encode(transactionData.getSignature()), validationResult.name()));
 					return ValidationResult.TRANSACTION_INVALID;
 				}
 

@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Accept same-block QDN publish and delete
+
+Fixed QDN block validation so a synced node can accept a block that publishes
+and then deletes the same resource in transaction order. This prevents nodes
+that did not already have both unconfirmed transactions from rejecting an
+otherwise valid block, and makes preview sync stalls easier to diagnose by
+logging the exact transaction validation reason at normal info level.
+
 ### 2026-05-27 - Document preview first-sync expectations
 
 Clarified the public preview tester guide so new testers know that `status --wait`

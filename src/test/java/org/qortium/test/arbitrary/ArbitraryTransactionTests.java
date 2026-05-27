@@ -12,6 +12,7 @@ import org.qortium.arbitrary.exception.MissingDataException;
 import org.qortium.arbitrary.misc.Category;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.block.BlockChain;
+import org.qortium.block.BlockValidationContext;
 import org.qortium.controller.arbitrary.ArbitraryDataCacheManager;
 import org.qortium.controller.arbitrary.ArbitraryDataManager;
 import org.qortium.crypto.AES;
@@ -577,6 +578,63 @@ public class ArbitraryTransactionTests extends Common {
         }
     }
 
+    @Test
+    public void testDeleteCanReferenceEarlierPutInSameBlock() throws DataException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String name = "TEST-delete-same-block";
+            String identifier = "resource";
+            Service service = Service.ARBITRARY_DATA;
+
+            registerName(repository, alice, name);
+
+            ArbitraryTransactionData putTransactionData = createPutTransaction(repository, alice, name, identifier, service);
+            ArbitraryTransactionData deleteTransactionData = createDeleteTransaction(repository, alice, name, identifier, service);
+
+            signTransaction(repository, putTransactionData, alice);
+            signTransaction(repository, deleteTransactionData, alice);
+
+            assertEquals(Transaction.ValidationResult.RESOURCE_DOES_NOT_EXIST,
+                    Transaction.fromData(repository, deleteTransactionData).isValid());
+
+            BlockValidationContext.set(Arrays.asList(putTransactionData, deleteTransactionData));
+            BlockValidationContext.setCurrentTransactionIndex(1);
+            try {
+                assertEquals(Transaction.ValidationResult.OK,
+                        Transaction.fromData(repository, deleteTransactionData).isValid());
+            } finally {
+                BlockValidationContext.clear();
+            }
+        }
+    }
+
+    @Test
+    public void testDeleteCannotReferenceLaterPutInSameBlock() throws DataException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String name = "TEST-delete-later-put";
+            String identifier = "resource";
+            Service service = Service.ARBITRARY_DATA;
+
+            registerName(repository, alice, name);
+
+            ArbitraryTransactionData deleteTransactionData = createDeleteTransaction(repository, alice, name, identifier, service);
+            ArbitraryTransactionData putTransactionData = createPutTransaction(repository, alice, name, identifier, service);
+
+            signTransaction(repository, deleteTransactionData, alice);
+            signTransaction(repository, putTransactionData, alice);
+
+            BlockValidationContext.set(Arrays.asList(deleteTransactionData, putTransactionData));
+            BlockValidationContext.setCurrentTransactionIndex(0);
+            try {
+                assertEquals(Transaction.ValidationResult.RESOURCE_DOES_NOT_EXIST,
+                        Transaction.fromData(repository, deleteTransactionData).isValid());
+            } finally {
+                BlockValidationContext.clear();
+            }
+        }
+    }
+
     private ArbitraryResourceStatus getResourceStatus(Repository repository, String name, Service service, String identifier) {
         ArbitraryDataResource resource = new ArbitraryDataResource(name, ArbitraryDataFile.ResourceIdType.NAME, service, identifier);
         return resource.getStatus(repository);
@@ -586,6 +644,26 @@ public class ArbitraryTransactionTests extends Common {
         RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(account), name, "");
         transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
         TransactionUtils.signAndMint(repository, transactionData, account);
+    }
+
+    private void signTransaction(Repository repository, TransactionData transactionData, PrivateKeyAccount signingAccount) throws DataException {
+        Transaction transaction = Transaction.fromData(repository, transactionData);
+        transaction.sign(signingAccount);
+        assertTrue("Transaction's signature should be valid", transaction.isSignatureValid());
+    }
+
+    private ArbitraryTransactionData createPutTransaction(Repository repository, PrivateKeyAccount account,
+            String name, String identifier, Service service) throws DataException {
+        Long now = TransactionUtils.nextTimestamp(repository);
+        long fee = BlockChain.getInstance().getUnitFeeAtTimestamp(now);
+        BaseTransactionData baseTransactionData = new BaseTransactionData(now, Group.NO_GROUP,
+                account.getPublicKey(), fee, null);
+        int version = Transaction.getVersionByTimestamp(now);
+
+        return new ArbitraryTransactionData(baseTransactionData, version, service.value, 0, 1,
+                name, identifier, ArbitraryTransactionData.Method.PUT, null,
+                ArbitraryTransactionData.Compression.NONE, new byte[] { 1 },
+                ArbitraryTransactionData.DataType.RAW_DATA, null, new ArrayList<PaymentData>());
     }
 
 	private ArbitraryTransactionData createDeleteTransaction(Repository repository, PrivateKeyAccount account,

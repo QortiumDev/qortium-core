@@ -3,6 +3,7 @@ package org.qortium.block;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.utils.ByteArray;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +21,8 @@ import java.util.Map;
 public final class BlockValidationContext {
 
 	private static final ThreadLocal<Map<ByteArray, TransactionData>> CURRENT_BLOCK_TRANSACTIONS = new ThreadLocal<>();
+	private static final ThreadLocal<List<TransactionData>> CURRENT_BLOCK_TRANSACTIONS_IN_ORDER = new ThreadLocal<>();
+	private static final ThreadLocal<Integer> CURRENT_TRANSACTION_INDEX = new ThreadLocal<>();
 
 	private BlockValidationContext() {
 	}
@@ -28,11 +31,13 @@ public final class BlockValidationContext {
 	 * Set the current block's transaction data for validation.
 	 * Call this at the start of block transaction validation.
 	 *
-	 * @param transactions list of transaction data in the block (order preserved for iteration elsewhere; we index by signature)
+	 * @param transactions list of transaction data in the block
 	 */
 	public static void set(List<TransactionData> transactions) {
 		if (transactions == null || transactions.isEmpty()) {
 			CURRENT_BLOCK_TRANSACTIONS.set(Collections.emptyMap());
+			CURRENT_BLOCK_TRANSACTIONS_IN_ORDER.set(Collections.emptyList());
+			CURRENT_TRANSACTION_INDEX.remove();
 			return;
 		}
 		Map<ByteArray, TransactionData> bySignature = new HashMap<>(transactions.size());
@@ -42,6 +47,8 @@ public final class BlockValidationContext {
 			}
 		}
 		CURRENT_BLOCK_TRANSACTIONS.set(Collections.unmodifiableMap(bySignature));
+		CURRENT_BLOCK_TRANSACTIONS_IN_ORDER.set(Collections.unmodifiableList(new ArrayList<>(transactions)));
+		CURRENT_TRANSACTION_INDEX.remove();
 	}
 
 	/**
@@ -62,9 +69,36 @@ public final class BlockValidationContext {
 	}
 
 	/**
+	 * Set which transaction in the current block is currently being validated.
+	 *
+	 * @param index zero-based block transaction index
+	 */
+	public static void setCurrentTransactionIndex(int index) {
+		CURRENT_TRANSACTION_INDEX.set(index);
+	}
+
+	/**
+	 * Return earlier transactions from the block currently being validated.
+	 *
+	 * @return transactions before the current transaction, or an empty list outside block validation
+	 */
+	public static List<TransactionData> getPriorTransactions() {
+		List<TransactionData> transactions = CURRENT_BLOCK_TRANSACTIONS_IN_ORDER.get();
+		Integer currentIndex = CURRENT_TRANSACTION_INDEX.get();
+
+		if (transactions == null || transactions.isEmpty() || currentIndex == null || currentIndex <= 0)
+			return Collections.emptyList();
+
+		int boundedIndex = Math.min(currentIndex, transactions.size());
+		return transactions.subList(0, boundedIndex);
+	}
+
+	/**
 	 * Clear the current block context. Must be called in a finally block after validation.
 	 */
 	public static void clear() {
 		CURRENT_BLOCK_TRANSACTIONS.remove();
+		CURRENT_BLOCK_TRANSACTIONS_IN_ORDER.remove();
+		CURRENT_TRANSACTION_INDEX.remove();
 	}
 }

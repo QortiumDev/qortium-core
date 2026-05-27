@@ -7,6 +7,7 @@ import org.qortium.arbitrary.ArbitraryDataFile;
 import org.qortium.arbitrary.ArbitraryDataResource;
 import org.qortium.arbitrary.metadata.ArbitraryDataTransactionMetadata;
 import org.qortium.arbitrary.misc.Service;
+import org.qortium.block.BlockValidationContext;
 import org.qortium.controller.arbitrary.ArbitraryDataManager;
 import org.qortium.controller.arbitrary.ArbitraryDataStorageManager;
 import org.qortium.controller.arbitrary.ArbitraryTransactionDataHashWrapper;
@@ -177,33 +178,53 @@ public class ArbitraryTransaction extends Transaction {
 			}
 		}
 
-		if (method == ArbitraryTransactionData.Method.DELETE) {
-			ArbitraryTransactionData latestTransactionData = this.repository.getArbitraryRepository()
-					.getLatestTransactionExcludingSignature(
-							arbitraryTransactionData.getName(),
-							arbitraryTransactionData.getService(),
-							null,
-							arbitraryTransactionData.getIdentifier(),
-							arbitraryTransactionData.getSignature());
-			if (latestTransactionData == null || latestTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE)
-				return ValidationResult.RESOURCE_DOES_NOT_EXIST;
-		}
-
-		if (method == ArbitraryTransactionData.Method.PATCH) {
-			ArbitraryTransactionData latestTransactionData = this.repository.getArbitraryRepository()
-					.getLatestTransactionExcludingSignature(
-							arbitraryTransactionData.getName(),
-							arbitraryTransactionData.getService(),
-							null,
-							arbitraryTransactionData.getIdentifier(),
-							arbitraryTransactionData.getSignature());
-			if (latestTransactionData == null || latestTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE)
-				return ValidationResult.RESOURCE_DOES_NOT_EXIST;
-		}
+		if ((method == ArbitraryTransactionData.Method.DELETE || method == ArbitraryTransactionData.Method.PATCH)
+				&& !this.resourceExistsBeforeCurrentTransaction())
+			return ValidationResult.RESOURCE_DOES_NOT_EXIST;
 
 		// Wrap and delegate final payment validity checks to Payment class
 		return new Payment(this.repository).isValid(arbitraryTransactionData.getSenderPublicKey(), arbitraryTransactionData.getPayments(),
 				arbitraryTransactionData.getFee());
+	}
+
+	private boolean resourceExistsBeforeCurrentTransaction() throws DataException {
+		ArbitraryTransactionData latestSameBlockTransactionData = this.getLatestPriorSameBlockResourceTransaction();
+		if (latestSameBlockTransactionData != null)
+			return latestSameBlockTransactionData.getMethod() != ArbitraryTransactionData.Method.DELETE;
+
+		ArbitraryTransactionData latestTransactionData = this.repository.getArbitraryRepository()
+				.getLatestTransactionExcludingSignature(
+						arbitraryTransactionData.getName(),
+						arbitraryTransactionData.getService(),
+						null,
+						arbitraryTransactionData.getIdentifier(),
+						arbitraryTransactionData.getSignature());
+
+		return latestTransactionData != null && latestTransactionData.getMethod() != ArbitraryTransactionData.Method.DELETE;
+	}
+
+	private ArbitraryTransactionData getLatestPriorSameBlockResourceTransaction() {
+		List<TransactionData> priorTransactions = BlockValidationContext.getPriorTransactions();
+
+		for (int i = priorTransactions.size() - 1; i >= 0; --i) {
+			TransactionData transactionData = priorTransactions.get(i);
+			if (!(transactionData instanceof ArbitraryTransactionData))
+				continue;
+
+			ArbitraryTransactionData priorArbitraryTransactionData = (ArbitraryTransactionData) transactionData;
+			if (!this.isSameResource(priorArbitraryTransactionData))
+				continue;
+
+			return priorArbitraryTransactionData;
+		}
+
+		return null;
+	}
+
+	private boolean isSameResource(ArbitraryTransactionData otherTransactionData) {
+		return Objects.equals(arbitraryTransactionData.getName(), otherTransactionData.getName())
+				&& Objects.equals(arbitraryTransactionData.getService(), otherTransactionData.getService())
+				&& Objects.equals(arbitraryTransactionData.getIdentifier(), otherTransactionData.getIdentifier());
 	}
 
 	private ValidationResult isDeleteValid() {
