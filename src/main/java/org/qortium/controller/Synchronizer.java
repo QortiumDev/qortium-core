@@ -791,11 +791,13 @@ public class Synchronizer extends Thread {
 								if (blockSummaries != null) {
 									LOGGER.trace(String.format("Peer %s returned %d block summar%s", peer, blockSummaries.size(), (blockSummaries.size() != 1 ? "ies" : "y")));
 
+									boolean fullPeerRangeRequested = summariesRequired == peerAdditionalBlocksAfterCommonBlock;
+
 									if (blockSummaries.size() < summariesRequired)
 										// This could mean that the peer has re-orged. Exclude this peer until they return the summaries we expect.
 										LOGGER.debug(String.format("Peer %s returned %d block summar%s instead of expected %d - excluding them from this round", peer, blockSummaries.size(), (blockSummaries.size() != 1 ? "ies" : "y"), summariesRequired));
-									else if (blockSummaryWithSignature(peerLastBlockSignature, blockSummaries) == null)
-										// We don't have a block summary for the peer's reported chain tip, so should exclude it
+									else if (fullPeerRangeRequested && blockSummaryWithSignature(peerLastBlockSignature, blockSummaries) == null)
+										// We requested the full range, so the peer's reported tip should be present.
 										LOGGER.debug(String.format("Peer %s didn't return a block summary with signature %.8s - excluding them from this round", peer, Base58.encode(peerLastBlockSignature)));
 									else
 										// All looks good, so store the retrieved block summaries in the peer's cache

@@ -705,7 +705,6 @@ public class BlockMinter extends Thread {
 	private static Peer getBetterStaleCatchUpPeer(BlockData latestBlockData, List<Peer> peers) {
 		return peers.stream()
 				.filter(peer -> !Controller.hasOldVersion.test(peer))
-				.filter(peer -> !Controller.hasInferiorChainTip.test(peer))
 				.filter(peer -> !Controller.hasInvalidSigner.test(peer))
 				.filter(peer -> Controller.isPeerTipAheadOf(latestBlockData, peer.getChainTipData()))
 				.max((left, right) -> Controller.compareChainTipsByHeightThenTimestamp(left.getChainTipData(), right.getChainTipData()))

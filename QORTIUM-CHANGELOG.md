@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Fix stale chain catch-up beyond summary batches
+
+Fixed stale chain catch-up when a node is more than one block-summary batch behind reachable peers. Nodes now accept partial peer-summary batches during comparison instead of wrongly expecting the peer's latest tip inside the partial response, and stale catch-up minting now defers to any valid newer peer tip instead of treating a previously filtered tip as permission to mint a local fork.
+
 ### 2026-05-26 - Expose limited read-only seed API endpoints
 
 Added a public API allowlist for preview seed nodes so external clients can read only `GET /admin/status` and `GET /peers/known` while the normal API remains restricted to local administration. The Regxa and Netcup seed profiles now enable that limited read-only access for public discovery without exposing settings, logs, peer mutation, or other API routes.
