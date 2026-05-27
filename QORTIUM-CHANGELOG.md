@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Expose preview node read APIs
+
+Changed the default preview participant and seed profiles so preview nodes can
+serve limited public read-only API and QDN browsing requests while keeping
+write, admin, utility, list-management, and peer mutation routes local-only.
+Public API path matching now supports prefix wildcards, allowing Home and other
+clients to discover usable public nodes from the initial preview network.
+
 ### 2026-05-27 - Accept same-block QDN publish and delete
 
 Fixed QDN block validation so a synced node can accept a block that publishes

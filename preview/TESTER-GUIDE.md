@@ -144,7 +144,17 @@ preview\reset.bat
   genesis, and settle into the current preview height.
 - The first useful tests are connecting to the seed nodes, staying synced, sending
   chat messages, trying QDN features, and reporting issues.
+- Preview participant and seed nodes expose limited public read-only API access
+  by default so Qortium Home can discover useful peers, browse QDN resources,
+  and read common chain data. Your local node still keeps transaction building,
+  signing, admin, and other sensitive actions local-only.
 - The preview network can be reset while it is still an alpha/demo network.
+
+If you want your node to be reachable by other testers, your firewall or router
+needs to allow inbound TCP `24891` for public read API access, `24892` for P2P,
+and `24894` for QDN/data. If you do not open those ports, your node can still
+use the preview network normally, but other users may not be able to use it as a
+public read or QDN peer.
 
 The public seed status endpoints are:
 

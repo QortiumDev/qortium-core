@@ -68,13 +68,20 @@ tail -n 120 preview/qortium.log
 
 ## Public API Contract
 
-Preview seed nodes keep the normal API restricted, but intentionally expose
-these read-only discovery endpoints:
+Preview seed nodes keep the normal API restricted for local transaction-builder
+style endpoints, but intentionally expose public read-only API access for
+discovery, QDN browsing, and common chain-data reads. The minimum discovery
+endpoints are:
 
 ```text
 GET /admin/status
 GET /peers/known
 ```
+
+The seed profiles also expose the same public read-only QDN and chain-data
+allowlist used by default preview participants. Public write, admin, utility,
+list-management, and peer mutation routes remain blocked unless the request
+comes from the local API whitelist and supplies any required API key.
 
 Verify both seeds from outside the VPS network:
 

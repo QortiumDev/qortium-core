@@ -118,14 +118,21 @@ The preview profile uses the `248xx` test/preview-network port range:
 
 Participant nodes allow normal local transaction-builder API calls so testers
 can create payments, group joins, chain-parameter proposals, and other signed
-transactions through their own local node. The public seed profiles stay API
-restricted for normal API use, but expose public read-only access to
-`GET /admin/status` and `GET /peers/known` so clients can discover preview
-seed status and known peers.
+transactions through their own local node. Preview participant and seed nodes
+also expose a public read-only API allowlist by default so Qortium Home and
+other clients can discover useful public nodes, browse QDN resources, and read
+common chain data without needing the local API key. Public write, admin,
+utility, list-management, and peer mutation routes are still blocked unless the
+request comes from the local API whitelist.
 
-For a public VPS, only expose the API port if you want that limited read-only
-seed discovery access. Public preview peers need to reach the P2P port, and
-QDN/data peers need to reach the QDN port.
+The public seed profiles remain API restricted for local transaction-builder
+style endpoints, but also serve the same public read and QDN browsing allowlist
+so the initial preview network has known public API nodes available.
+
+For a public VPS, expose the API port only if you want that public read-only
+access. Public preview peers need to reach the P2P port, and QDN/data peers
+need to reach the QDN port. On a home network, router or firewall forwarding is
+still required before other users can reach ports `24891`, `24892`, or `24894`.
 
 ## Runtime Files
 

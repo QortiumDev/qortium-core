@@ -40,6 +40,26 @@ public class PublicApiAccessHandlerTests extends Common {
 	}
 
 	@Test
+	public void testPublicWildcardPathsAllowBaseAndNestedReadEndpoints() throws Exception {
+		enablePublicApi();
+
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/arbitrary", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/arbitrary/resources/search", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/arbitrary/WEBSITE/QortiumHome", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/arbitrary/WEBSITE/QortiumHome/default", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/names", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/names/search", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/transactions/search", this.settings));
+	}
+
+	@Test
 	public void testPublicRequestsCannotUseOtherReadEndpoints() throws Exception {
 		enablePublicApi();
 
@@ -47,6 +67,12 @@ public class PublicApiAccessHandlerTests extends Common {
 				"203.0.113.10", "GET", "/admin/settings", this.settings));
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/peers", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/admin/info", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/lists/followedNames", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/utils/random", this.settings));
 	}
 
 	@Test
@@ -57,6 +83,10 @@ public class PublicApiAccessHandlerTests extends Common {
 				"203.0.113.10", "POST", "/admin/status", this.settings));
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "DELETE", "/peers/known", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/arbitrary/WEBSITE/QortiumHome", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "DELETE", "/arbitrary/resource/WEBSITE/QortiumHome/default", this.settings));
 	}
 
 	@Test
@@ -84,7 +114,10 @@ public class PublicApiAccessHandlerTests extends Common {
 		FieldUtils.writeField(this.settings, "publicApiWhitelist", new String[] {"0.0.0.0/0", "::/0"}, true);
 		FieldUtils.writeField(this.settings, "publicApiPaths", new String[] {
 				"GET /admin/status",
-				"GET /peers/known"
+				"GET /peers/known",
+				"GET /arbitrary/*",
+				"GET /names/*",
+				"GET /transactions/*"
 		}, true);
 	}
 

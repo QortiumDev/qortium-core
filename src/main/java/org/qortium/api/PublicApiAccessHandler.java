@@ -83,11 +83,20 @@ public class PublicApiAccessHandler extends Handler.Wrapper {
 			if (parts == null)
 				continue;
 
-			if (parts[0].equals(requestMethod) && parts[1].equals(path))
+			if (parts[0].equals(requestMethod) && matchesAllowedPath(parts[1], path))
 				return true;
 		}
 
 		return false;
+	}
+
+	private static boolean matchesAllowedPath(String allowedPath, String requestPath) {
+		if (allowedPath.endsWith("/*")) {
+			String pathPrefix = allowedPath.substring(0, allowedPath.length() - 2);
+			return requestPath.equals(pathPrefix) || requestPath.startsWith(pathPrefix + "/");
+		}
+
+		return allowedPath.equals(requestPath);
 	}
 
 	private static String[] parseAllowedPath(String allowedPath) {
