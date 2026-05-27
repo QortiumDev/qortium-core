@@ -388,6 +388,8 @@ public class ChainATAPI extends API {
 	public void messageAToB(MachineState state) {
 		byte[] message = this.getA(state);
 		Account recipient = getAccountFromB(state);
+		if (recipient == null)
+			throw new IllegalArgumentException("B register does not contain a valid account");
 
 		long timestamp = this.getNextTransactionTimestamp();
 
@@ -774,6 +776,8 @@ public class ChainATAPI extends API {
 
 	private void addPaymentToB(long amount, long assetId, MachineState state) {
 		Account recipient = getAccountFromB(state);
+		if (recipient == null)
+			throw new IllegalArgumentException("B register does not contain a valid account");
 
 		this.addPayment(recipient.getAddress(), amount, assetId);
 	}
@@ -802,6 +806,8 @@ public class ChainATAPI extends API {
 	 * and bytes 26 to 32 are zero, then use as an address, but only if valid.
 	 * <p>
 	 * Otherwise, assume B is a public key.
+	 * <p>
+	 * Returns null if B is neither a valid address nor a valid public key.
 	 */
 	/*package*/ Account getAccountFromB(MachineState state) {
 		byte[] bBytes = this.getB(state);
@@ -816,7 +822,11 @@ public class ChainATAPI extends API {
 				return new Account(this.repository, Base58.encode(addressBytes));
 		}
 
-		return new PublicKeyAccount(this.repository, bBytes);
+		try {
+			return new PublicKeyAccount(this.repository, bBytes);
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
 	}
 
 	/* Convenience methods to allow ChainFunctionCode package-visibility access to A/B-get/set methods. */

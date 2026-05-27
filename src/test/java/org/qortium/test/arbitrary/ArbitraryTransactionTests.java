@@ -504,6 +504,7 @@ public class ArbitraryTransactionTests extends Common {
 
             ArbitraryTransactionData deleteTransactionData = createDeleteTransaction(repository, alice, name, identifier, service);
             TransactionUtils.signAndMint(repository, deleteTransactionData, alice);
+            assertNotNull(repository.getTransactionRepository().fromSignature(deleteTransactionData.getSignature()).getBlockHeight());
             assertNull(repository.getArbitraryRepository().getArbitraryResource(service, name, identifier));
 
             BlockUtils.orphanLastBlock(repository);
@@ -587,13 +588,13 @@ public class ArbitraryTransactionTests extends Common {
         TransactionUtils.signAndMint(repository, transactionData, account);
     }
 
-    private ArbitraryTransactionData createDeleteTransaction(Repository repository, PrivateKeyAccount account,
-                                                            String name, String identifier, Service service) throws DataException {
-        Long now = NTP.getTime();
-        long fee = BlockChain.getInstance().getUnitFeeAtTimestamp(now);
-        BaseTransactionData baseTransactionData = new BaseTransactionData(now, Group.NO_GROUP,
-                account.getPublicKey(), fee, null);
-        int version = Transaction.getVersionByTimestamp(now);
+	private ArbitraryTransactionData createDeleteTransaction(Repository repository, PrivateKeyAccount account,
+			String name, String identifier, Service service) throws DataException {
+		Long now = TransactionUtils.nextTimestamp(repository);
+		long fee = BlockChain.getInstance().getUnitFeeAtTimestamp(now);
+		BaseTransactionData baseTransactionData = new BaseTransactionData(now, Group.NO_GROUP,
+				account.getPublicKey(), fee, null);
+		int version = Transaction.getVersionByTimestamp(now);
 
         return new ArbitraryTransactionData(baseTransactionData, version, service.value, 0, 0,
                 name, identifier, ArbitraryTransactionData.Method.DELETE, null,

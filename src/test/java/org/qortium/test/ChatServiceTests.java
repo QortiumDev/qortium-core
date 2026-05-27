@@ -98,6 +98,7 @@ public class ChatServiceTests extends Common {
 			TestAccount bob = Common.getTestAccount(repository, "bob");
 			alice.setConfirmedBalance(Asset.NATIVE, 0L);
 			bob.setConfirmedBalance(Asset.NATIVE, 500000000L);
+			repository.saveChanges();
 
 			ChatTransaction zeroBalanceChat = new ChatTransaction(repository,
 					unsignedChat(alice, Group.NO_GROUP, null, "zero balance", now(), null));

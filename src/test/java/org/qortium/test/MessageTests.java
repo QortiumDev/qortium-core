@@ -5,6 +5,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
 import org.qortium.asset.Asset;
+import org.qortium.block.BlockChain;
 import org.qortium.data.transaction.BaseTransactionData;
 import org.qortium.data.transaction.MessageTransactionData;
 import org.qortium.data.transaction.TransactionData;
@@ -121,7 +122,7 @@ public class MessageTests extends Common {
 			assertTrue(transaction.isConfirmable());
 			assertTrue(transaction.isSignatureValid());
 			importUnconfirmed(transaction);
-			assertEquals(16, transaction.getPoWDifficulty());
+			assertEquals(BlockChain.getInstance().getMessagePowDifficultyConfirmable(), transaction.getPoWDifficulty());
 		}
 	}
 
@@ -138,7 +139,7 @@ public class MessageTests extends Common {
 			assertFalse(transaction.isConfirmable());
 			assertTrue(transaction.isSignatureValid());
 			importUnconfirmed(transaction);
-			assertEquals(12, transaction.getPoWDifficulty());
+			assertEquals(BlockChain.getInstance().getMessagePowDifficultyUnconfirmable(), transaction.getPoWDifficulty());
 
 			// Transaction should be found when trade bot searches for it
 			messageTransactionsData = repository.getMessageRepository().getMessagesByParticipants(null, recipient, null, null, null);
@@ -155,7 +156,7 @@ public class MessageTests extends Common {
 			assertFalse(transaction.isConfirmable());
 			assertTrue(transaction.isSignatureValid());
 			importUnconfirmed(transaction);
-			assertEquals(12, transaction.getPoWDifficulty());
+			assertEquals(BlockChain.getInstance().getMessagePowDifficultyUnconfirmable(), transaction.getPoWDifficulty());
 		}
 	}
 
@@ -170,7 +171,7 @@ public class MessageTests extends Common {
 			assertTrue(transaction.isConfirmable());
 			TransactionUtils.signAndMint(repository, transaction.getTransactionData(), alice);
 			assertTrue(isTransactionConfirmed(repository, transaction));
-			assertEquals(16, transaction.getPoWDifficulty());
+			assertEquals(BlockChain.getInstance().getMessagePowDifficultyConfirmable(), transaction.getPoWDifficulty());
 
 			BlockUtils.orphanLastBlock(repository);
 		}
@@ -187,7 +188,7 @@ public class MessageTests extends Common {
 			assertFalse(transaction.isConfirmable());
 			TransactionUtils.signAndMint(repository, transaction.getTransactionData(), alice);
 			assertFalse(isTransactionConfirmed(repository, transaction));
-			assertEquals(12, transaction.getPoWDifficulty());
+			assertEquals(BlockChain.getInstance().getMessagePowDifficultyUnconfirmable(), transaction.getPoWDifficulty());
 
 			BlockUtils.orphanLastBlock(repository);
 		}

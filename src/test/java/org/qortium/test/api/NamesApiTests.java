@@ -34,6 +34,7 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class NamesApiTests extends ApiCommon {
 
@@ -148,7 +149,7 @@ public class NamesApiTests extends ApiCommon {
 
 				assertEquals(TransactionType.REGISTER_NAME, decodedTransactionData.getType());
 				assertEquals(Long.valueOf(0L), decodedTransactionData.getFee());
-				assertNull(decodedTransactionData.getNonceOrNull());
+				assertEquals(Integer.valueOf(0), decodedTransactionData.getNonceOrNull());
 				assertNull(decodedTransactionData.getSignature());
 
 				String computedRawTransaction = transactionsResource.computeMempowFeeNonce(
@@ -158,6 +159,7 @@ public class NamesApiTests extends ApiCommon {
 				assertEquals(TransactionType.REGISTER_NAME, computedTransactionData.getType());
 				assertEquals(Long.valueOf(0L), computedTransactionData.getFee());
 				assertNotNull(computedTransactionData.getNonceOrNull());
+				assertTrue(computedTransactionData.getNonceOrNull() >= 0);
 				assertNull(computedTransactionData.getSignature());
 
 				Transaction computedTransaction = Transaction.fromData(repository, computedTransactionData);

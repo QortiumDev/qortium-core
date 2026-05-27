@@ -179,14 +179,24 @@ public class ArbitraryTransaction extends Transaction {
 
 		if (method == ArbitraryTransactionData.Method.DELETE) {
 			ArbitraryTransactionData latestTransactionData = this.repository.getArbitraryRepository()
-					.getLatestTransaction(arbitraryTransactionData.getName(), arbitraryTransactionData.getService(), null, arbitraryTransactionData.getIdentifier());
+					.getLatestTransactionExcludingSignature(
+							arbitraryTransactionData.getName(),
+							arbitraryTransactionData.getService(),
+							null,
+							arbitraryTransactionData.getIdentifier(),
+							arbitraryTransactionData.getSignature());
 			if (latestTransactionData == null || latestTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE)
 				return ValidationResult.RESOURCE_DOES_NOT_EXIST;
 		}
 
 		if (method == ArbitraryTransactionData.Method.PATCH) {
 			ArbitraryTransactionData latestTransactionData = this.repository.getArbitraryRepository()
-					.getLatestTransaction(arbitraryTransactionData.getName(), arbitraryTransactionData.getService(), null, arbitraryTransactionData.getIdentifier());
+					.getLatestTransactionExcludingSignature(
+							arbitraryTransactionData.getName(),
+							arbitraryTransactionData.getService(),
+							null,
+							arbitraryTransactionData.getIdentifier(),
+							arbitraryTransactionData.getSignature());
 			if (latestTransactionData == null || latestTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE)
 				return ValidationResult.RESOURCE_DOES_NOT_EXIST;
 		}
@@ -339,7 +349,8 @@ public class ArbitraryTransaction extends Transaction {
 			return;
 		}
 
-		try (final Repository repository = RepositoryManager.getRepository()) {
+		try {
+			Repository repository = this.repository;
 			String identifier = arbitraryTransactionData.getIdentifier();
 			ArbitraryResourceData arbitraryResourceData = this.createArbitraryResourceData(
 					arbitraryTransactionData.getService(),
@@ -364,8 +375,6 @@ public class ArbitraryTransaction extends Transaction {
 						Set.of(new ArbitraryTransactionDataHashWrapper(latestTransactionData)),
 						new HashMap<>(0));
 			}
-
-			repository.saveChanges();
 		} catch (Exception e) {
 			// Log and ignore all exceptions. The cache is updated from other places too, and can be rebuilt if needed.
 			LOGGER.info("Unable to update arbitrary caches after orphan", e);

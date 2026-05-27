@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Fix transaction and API test regressions
+
+Fixed several regressions uncovered by the broader test run after recent preview and transaction changes. QDN delete transactions now validate and orphan cleanly when the delete transaction is already in the unconfirmed pool, delete tombstones no longer try to relocate missing data files, AT account lookups now handle invalid public-key bytes safely for read-style checks, and the affected API, chat, message, and QDN tests now assert the current configured behavior.
+
 ### 2026-05-26 - Drain queued handshake messages after each handshake task
 
 Fixed a peer-handshake scheduling edge case where multiple handshake messages could be read from a socket at once, but only the first message was scheduled for processing. Follow-up handshake messages that are already queued are now processed after the previous handshake task clears its pending flag, preventing QDN data peers from getting stuck before completion.

@@ -421,10 +421,16 @@ public class ArbitraryTransactionUtils {
     public static int checkAndRelocateMiscFiles(ArbitraryTransactionData arbitraryTransactionData) {
         int filesRelocatedCount = 0;
 
+        if (arbitraryTransactionData.getMethod() == ArbitraryTransactionData.Method.DELETE)
+            return filesRelocatedCount;
+
         try {
             // Load hashes
             byte[] digest = arbitraryTransactionData.getData();
             byte[] metadataHash = arbitraryTransactionData.getMetadataHash();
+
+            if (digest == null || digest.length == 0)
+                return filesRelocatedCount;
 
             // Load signature
             byte[] signature = arbitraryTransactionData.getSignature();
