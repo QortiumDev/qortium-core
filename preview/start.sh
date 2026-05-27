@@ -65,6 +65,29 @@ detect_headless_environment() {
 	esac
 }
 
+read_auto_update_mode() {
+	local settings_file="$1"
+	grep -Eo '"autoUpdateMode"[[:space:]]*:[[:space:]]*"[^"]+"' "${settings_file}" 2>/dev/null \
+		| head -n 1 \
+		| sed -E 's/.*"autoUpdateMode"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/'
+}
+
+apply_auto_update_mode() {
+	local settings_file="$1"
+	local mode="$2"
+
+	case "${mode}" in
+		OFF|CHECK_ONLY|NOTIFY|INSTALL)
+			;;
+		*)
+			echo "Ignoring invalid local autoUpdateMode: ${mode}"
+			return 0
+			;;
+	esac
+
+	sed -i "s/\"autoUpdateMode\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"autoUpdateMode\": \"${mode}\"/" "${settings_file}"
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RUN_LOG="${SCRIPT_DIR}/run.log"
@@ -141,7 +164,16 @@ if [ -z "${JAR_PATH}" ]; then
 	exit 1
 fi
 
+AUTO_UPDATE_MODE_OVERRIDE="${QORTIUM_PREVIEW_AUTO_UPDATE_MODE:-}"
+if [ -z "${AUTO_UPDATE_MODE_OVERRIDE}" ] && [ -f "${SETTINGS_LOCAL}" ]; then
+	AUTO_UPDATE_MODE_OVERRIDE="$(read_auto_update_mode "${SETTINGS_LOCAL}" || true)"
+fi
+
 cp "${SETTINGS_TEMPLATE}" "${SETTINGS_LOCAL}"
+if [ -n "${AUTO_UPDATE_MODE_OVERRIDE}" ]; then
+	apply_auto_update_mode "${SETTINGS_LOCAL}" "${AUTO_UPDATE_MODE_OVERRIDE}"
+fi
+AUTO_UPDATE_MODE_EFFECTIVE="$(read_auto_update_mode "${SETTINGS_LOCAL}" || true)"
 
 JVM_MEMORY_ARGS_STRING="${QORTIUM_PREVIEW_JVM_MEMORY_ARGS:--XX:MaxRAMPercentage=50 -XX:+UseG1GC -Xss1024k}"
 read -r -a JVM_MEMORY_ARGS <<< "${JVM_MEMORY_ARGS_STRING}"
@@ -178,6 +210,7 @@ fi
 	echo "Log4j config: ${LOG4J_CONFIG}"
 	echo "Application log: ${APP_LOG}"
 	echo "Display mode: ${DISPLAY_MODE_DESCRIPTION}"
+	echo "Auto-update mode: ${AUTO_UPDATE_MODE_EFFECTIVE:-OFF}"
 	echo
 } >"${RUN_LOG}"
 
@@ -218,6 +251,7 @@ echo "Qortium preview ${MODE} node running as pid $!"
 echo "Settings file: ${SETTINGS_LOCAL}"
 echo "Jar file: ${JAR_PATH}"
 echo "Display mode: ${DISPLAY_MODE_DESCRIPTION}"
+echo "Auto-update mode: ${AUTO_UPDATE_MODE_EFFECTIVE:-OFF}"
 echo "Console log: ${RUN_LOG}"
 echo "Log4j config: ${LOG4J_CONFIG}"
 echo "Application log: ${APP_LOG}"

@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Prepare preview QDN auto-update testing
+
+Prepared the preview network to test approved QDN-based jar updates without
+making automatic installs the default. Preview settings now explicitly keep
+auto-update off, public API rules are tested to keep update install endpoints
+private, the preview launcher preserves a local seed auto-update mode across
+restarts, the background updater checks soon after startup, and the auto-update
+publishing and approval helpers now have preview-friendly zero-fee MemoryPoW
+paths.
+
 ### 2026-05-27 - Expose preview node read APIs
 
 Changed the default preview participant and seed profiles so preview nodes can

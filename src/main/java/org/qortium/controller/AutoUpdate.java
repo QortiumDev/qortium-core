@@ -52,7 +52,8 @@ public class AutoUpdate extends Thread {
 	public static final String AGENTLIB_JVM_HOLDER_ARG = "-DQORTIUM_agentlib=";
 
 	private static final Logger LOGGER = LogManager.getLogger(AutoUpdate.class);
-	private static final long CHECK_INTERVAL = 20 * 60 * 1000L; // ms
+	static final long INITIAL_CHECK_DELAY = 30 * 1000L; // ms
+	static final long CHECK_INTERVAL = 20 * 60 * 1000L; // ms
 
 	private static final int UPDATE_SERVICE = 1;
 	private static final long MANUAL_UPDATE_DELAY = 1000L;
@@ -109,10 +110,12 @@ public class AutoUpdate extends Thread {
 
 		long buildTimestamp = getCurrentBuildTimestamp();
 		boolean attemptedUpdate = false;
+		long nextCheckDelay = INITIAL_CHECK_DELAY;
 
 		while (!isStopping) {
 			try {
-				Thread.sleep(CHECK_INTERVAL);
+				Thread.sleep(nextCheckDelay);
+				nextCheckDelay = CHECK_INTERVAL;
 			} catch (InterruptedException e) {
 				return;
 			}

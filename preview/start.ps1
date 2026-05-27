@@ -72,6 +72,42 @@ function Find-QortiumJar {
     return $null
 }
 
+function Get-AutoUpdateMode {
+    param([string]$SettingsPath)
+
+    if (-not (Test-Path -LiteralPath $SettingsPath -PathType Leaf)) {
+        return $null
+    }
+
+    try {
+        $Settings = Get-Content -LiteralPath $SettingsPath -Raw | ConvertFrom-Json
+        return $Settings.autoUpdateMode
+    } catch {
+        return $null
+    }
+}
+
+function Set-AutoUpdateMode {
+    param(
+        [string]$SettingsPath,
+        [string]$Mode
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Mode)) {
+        return
+    }
+
+    $Mode = $Mode.ToUpperInvariant()
+    if (@("OFF", "CHECK_ONLY", "NOTIFY", "INSTALL") -notcontains $Mode) {
+        Write-Host "Ignoring invalid local autoUpdateMode: $Mode"
+        return
+    }
+
+    $Settings = Get-Content -LiteralPath $SettingsPath -Raw | ConvertFrom-Json
+    $Settings.autoUpdateMode = $Mode
+    $Settings | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $SettingsPath
+}
+
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoDir = Split-Path -Parent $ScriptDir
 $RunLog = Join-Path $ScriptDir "run.log"
@@ -124,7 +160,14 @@ if ([string]::IsNullOrWhiteSpace($JarPath)) {
     exit 1
 }
 
+$AutoUpdateModeOverride = $env:QORTIUM_PREVIEW_AUTO_UPDATE_MODE
+if ([string]::IsNullOrWhiteSpace($AutoUpdateModeOverride)) {
+    $AutoUpdateModeOverride = Get-AutoUpdateMode -SettingsPath $SettingsLocal
+}
+
 Copy-Item -LiteralPath $SettingsTemplate -Destination $SettingsLocal -Force
+Set-AutoUpdateMode -SettingsPath $SettingsLocal -Mode $AutoUpdateModeOverride
+$AutoUpdateModeEffective = Get-AutoUpdateMode -SettingsPath $SettingsLocal
 
 $JvmMemoryArgString = $env:QORTIUM_PREVIEW_JVM_MEMORY_ARGS
 if ([string]::IsNullOrWhiteSpace($JvmMemoryArgString)) {
@@ -163,6 +206,7 @@ Write-Host "Qortium preview $Mode node running as pid $($Process.Id)"
 Write-Host "Settings file: $SettingsLocal"
 Write-Host "Jar file: $JarPath"
 Write-Host "Display mode: $DisplayModeDescription"
+Write-Host "Auto-update mode: $AutoUpdateModeEffective"
 Write-Host "Console log: $RunLog"
 Write-Host "Error log: $RunErrorLog"
 Write-Host "Log4j config: $Log4jConfig"

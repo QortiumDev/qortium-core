@@ -78,6 +78,7 @@ def decoded_update_sha256_hex(path):
 
 def api_key_from_default_locations():
     candidates = [
+        Path("preview") / "apikey.txt",
         Path("apikey.txt"),
         Path.home() / "qortium" / "apikey.txt",
     ]
@@ -220,17 +221,31 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Publish a Qortium auto-update through QDN")
     parser.add_argument("arg1", nargs="?", help="Private key OR commit hash")
     parser.add_argument("arg2", nargs="?", help="Commit hash if arg1 was the private key")
+    parser.add_argument("--preview", action="store_true", help="Use preview defaults: port 24891, tx group 1, and zero fees")
     parser.add_argument("--host", default="localhost", help="API host")
-    parser.add_argument("--port", type=int, default=14891, help="API port")
+    parser.add_argument("--port", type=int, help="API port")
     parser.add_argument("--api-key", default=os.environ.get("QORTIUM_API_KEY"), help="API key for restricted API calls")
     parser.add_argument("--qdn-name", default=QDN_UPDATE_NAME, help="QDN name that owns the update binary resource")
     parser.add_argument("--identifier", help="QDN identifier for the update binary, defaults to full commit hash")
-    parser.add_argument("--tx-group-id", type=int, default=1, help="Development group transaction group ID")
-    parser.add_argument("--binary-fee", type=int, default=0, help="Fee for the QDN binary transaction in atomic units")
-    parser.add_argument("--manifest-fee", type=int, default=1_000_000, help="Fee for the AUTO_UPDATE manifest transaction in atomic units")
+    parser.add_argument("--tx-group-id", type=int, help="Development group transaction group ID")
+    parser.add_argument("--binary-fee", type=int, help="Fee for the QDN binary transaction in atomic units")
+    parser.add_argument("--manifest-fee", type=int, help="Fee for the AUTO_UPDATE manifest transaction in atomic units")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be published without creating transactions")
     parser.add_argument("--yes", action="store_true", help="Submit without the five second cancellation pause")
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.preview:
+        args.port = 24891 if args.port is None else args.port
+        args.tx_group_id = 1 if args.tx_group_id is None else args.tx_group_id
+        args.binary_fee = 0 if args.binary_fee is None else args.binary_fee
+        args.manifest_fee = 0 if args.manifest_fee is None else args.manifest_fee
+    else:
+        args.port = 14891 if args.port is None else args.port
+        args.tx_group_id = 1 if args.tx_group_id is None else args.tx_group_id
+        args.binary_fee = 0 if args.binary_fee is None else args.binary_fee
+        args.manifest_fee = 0 if args.manifest_fee is None else args.manifest_fee
+
+    return args
 
 
 def resolve_private_key_and_commit(args):
@@ -273,6 +288,8 @@ def main():
     print(f"Decoded JAR SHA-256: {update_hash}")
     print(f"QDN binary:     {QDN_UPDATE_SERVICE}/{args.qdn_name}/{identifier}")
     print(f"Manifest group: {args.tx_group_id}")
+    print(f"API endpoint:   {args.host}:{args.port}")
+    print(f"Fees:           binary={args.binary_fee}, manifest={args.manifest_fee}")
 
     if args.dry_run:
         print("\nDry run: no QDN binary or AUTO_UPDATE manifest transaction was built or submitted.")

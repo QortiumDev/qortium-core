@@ -45,6 +45,13 @@ public class AutoUpdateTests {
 	}
 
 	@Test
+	public void testBackgroundAutoUpdateChecksSoonAfterStartup() {
+		assertEquals(30_000L, AutoUpdate.INITIAL_CHECK_DELAY);
+		assertEquals(20 * 60 * 1000L, AutoUpdate.CHECK_INTERVAL);
+		assertTrue(AutoUpdate.INITIAL_CHECK_DELAY < AutoUpdate.CHECK_INTERVAL);
+	}
+
+	@Test
 	public void testAutoUpdateModeCanEnableInstallMode() throws ReflectiveOperationException {
 		Settings settings = newSettingsInstance();
 		FieldUtils.writeField(settings, "autoUpdateMode", AutoUpdateMode.INSTALL, true);

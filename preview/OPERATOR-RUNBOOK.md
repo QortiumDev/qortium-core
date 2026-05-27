@@ -101,6 +101,60 @@ curl -o /dev/null -sS -w "%{http_code}\n" http://185.207.104.78:24891/admin/sett
 
 The expected response code for restricted endpoints is `403`.
 
+## QDN Auto-Update Testing
+
+The tracked preview settings keep `"autoUpdateMode": "OFF"` so a normal seed
+restart does not automatically install a new jar. For a live update test, use
+two different seed paths:
+
+- keep one seed on `OFF` and trigger the approved update manually with
+  `POST /admin/update`;
+- switch the other seed's local settings to `INSTALL`, restart it, and let the
+  background updater pick up the approved manifest.
+
+Enable automatic install on one seed only:
+
+```sh
+curl -X PATCH \
+  -H "X-API-KEY: $(cat preview/apikey.txt)" \
+  -H "Content-Type: application/json" \
+  --data '{"autoUpdateMode":"INSTALL"}' \
+  http://127.0.0.1:24891/admin/settings
+./preview/stop.sh
+./preview/start.sh --seed-regxa
+```
+
+The preview launcher refreshes the local settings file from the tracked seed
+template on each start, but preserves a locally patched `autoUpdateMode` so this
+operator-only setting survives the restart. To force a one-shot mode without
+patching settings, start with `QORTIUM_PREVIEW_AUTO_UPDATE_MODE=INSTALL`.
+
+Publish a prepared `qortium.update` from a synced preview node that owns the
+chosen QDN name:
+
+```sh
+python3 tools/auto-update-scripts/publish-auto-update.py --preview <private-key> <commit>
+```
+
+Approve the pending manifest with a development-group authority:
+
+```sh
+./tools/approve-auto-update.sh --preview
+```
+
+Check availability or trigger the manual path from localhost on the seed that
+stays in `OFF` mode:
+
+```sh
+curl -H "X-API-KEY: $(cat preview/apikey.txt)" \
+  http://127.0.0.1:24891/admin/update
+curl -X POST -H "X-API-KEY: $(cat preview/apikey.txt)" \
+  http://127.0.0.1:24891/admin/update
+```
+
+Restricted update endpoints must stay private. From outside the VPS, public
+requests to `/admin/update` should return `403`.
+
 ## Firewall Expectations
 
 The seed firewall should allow:

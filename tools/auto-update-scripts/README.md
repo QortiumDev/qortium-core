@@ -80,6 +80,14 @@ python3 tools/auto-update-scripts/publish-auto-update.py \
   <commit>
 ```
 
+For previewnet, use the convenience flag. It selects port `24891`, development
+group `1`, and zero-fee transactions so the no-native-asset preview chain uses
+MemoryPoW instead of requiring spendable native funds:
+
+```bash
+python3 tools/auto-update-scripts/publish-auto-update.py --preview <private-key> <commit>
+```
+
 The publisher:
 
 - reads the local `qortium.update`;
@@ -100,6 +108,15 @@ normal group-approval tools. For example:
 ```bash
 ./tools/approve-auto-update.sh
 ```
+
+For previewnet, approve with:
+
+```bash
+./tools/approve-auto-update.sh --preview
+```
+
+The preview mode computes the zero-fee `GROUP_APPROVAL` MemoryPoW nonce before
+signing and submitting the approval transaction.
 
 The updater ignores unapproved update manifests and rejects approved manifests
 that do not pin a QDN binary transaction signature. Once approved and confirmed,
