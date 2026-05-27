@@ -77,6 +77,8 @@ $RepoDir = Split-Path -Parent $ScriptDir
 $RunLog = Join-Path $ScriptDir "run.log"
 $RunErrorLog = Join-Path $ScriptDir "run-error.log"
 $RunPid = Join-Path $ScriptDir "run.pid"
+$AppLog = Join-Path $ScriptDir "qortium.log"
+$Log4jConfig = Join-Path $ScriptDir "log4j2.properties"
 
 if ($Mode -eq "seed-regxa") {
     $SettingsTemplate = Join-Path $ScriptDir "settings-preview-seed.json"
@@ -143,7 +145,11 @@ switch ($HeadlessMode) {
     }
 }
 
-$JavaArgs = @("-Djava.net.preferIPv4Stack=false") + $JavaDisplayArgs + $JvmMemoryArgs + @("-jar", $JarPath, $SettingsLocal)
+$JavaArgs = @(
+    "-Djava.net.preferIPv4Stack=false",
+    "-Dlog4j.configurationFile=$Log4jConfig",
+    "-Dqortium.log.dir=$ScriptDir"
+) + $JavaDisplayArgs + $JvmMemoryArgs + @("-jar", $JarPath, $SettingsLocal)
 $Process = Start-Process -FilePath "java" `
     -ArgumentList $JavaArgs `
     -WorkingDirectory $ScriptDir `
@@ -159,7 +165,8 @@ Write-Host "Jar file: $JarPath"
 Write-Host "Display mode: $DisplayModeDescription"
 Write-Host "Console log: $RunLog"
 Write-Host "Error log: $RunErrorLog"
-Write-Host "Application log: $(Join-Path $ScriptDir 'qortium.log')"
+Write-Host "Log4j config: $Log4jConfig"
+Write-Host "Application log: $AppLog"
 Write-Host ""
 Write-Host "Preview genesis and settings are fixed. No minting key was added automatically."
 Write-Host "Next commands:"

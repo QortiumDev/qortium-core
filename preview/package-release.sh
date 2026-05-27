@@ -89,6 +89,7 @@ preview_files=(
 	"status.sh"
 	"stop.sh"
 	"reset.sh"
+	"smoke-release-logging.sh"
 	"start.bat"
 	"status.bat"
 	"stop.bat"

@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Fix preview release logging
+
+Fixed the preview launcher and release package so application logs are written
+reliably to `preview/qortium.log` and launcher output is captured in
+`preview/run.log`. The preview package now includes a smoke check that extracts
+the tester zip, starts a temporary headless node, and verifies both logs are
+created before a release is published.
+
 ### 2026-05-27 - Improve admin status sync progress
 
 Expanded the node status response with a clearer sync target height, remaining block count, and sync phase so clients can explain first-run catch-up and stale-node states more accurately. The existing sync percentage is still available for compatibility, but active synchronization no longer reports 100 percent complete while the node is still behind its known target height.

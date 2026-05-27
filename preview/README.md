@@ -143,9 +143,12 @@ Generated runtime files include:
 - `qortium-backup/`
 - `qortium-backup-preview/`
 - `run.log`
+  - Unix launcher details and Java stdout/stderr; Windows Java stdout
 - `run-error.log`
+  - Windows Java stderr capture
 - `run.pid`
 - `qortium.log`
+  - the main application log written by Log4j
 - `QortiumKeyStore.jks`
 - `apikey.txt`
 
@@ -163,6 +166,13 @@ If the jar has already been built, skip the build step:
 
 ```sh
 ./preview/package-release.sh --skip-build
+```
+
+Before uploading the zip, smoke-check that the extracted package creates the
+expected runtime logs:
+
+```sh
+./preview/smoke-release-logging.sh --package=target/qortium-preview.zip
 ```
 
 The default output is `target/qortium-preview.zip`. The package includes the

@@ -63,6 +63,9 @@ tail -n 120 preview/run.log
 tail -n 120 preview/qortium.log
 ```
 
+`preview/run.log` records launcher details and Java stdout/stderr.
+`preview/qortium.log` is the main application log written by Log4j.
+
 ## Public API Contract
 
 Preview seed nodes keep the normal API restricted, but intentionally expose
@@ -149,8 +152,10 @@ Before publishing a tester zip, build the package from the repository root:
 
 ```sh
 ./preview/package-release.sh
+./preview/smoke-release-logging.sh --package=target/qortium-preview.zip
 ```
 
 The package should include the jar, preview scripts, settings templates, tester
-guide, and this operator runbook. It should not include local databases, logs,
-API keys, keystores, backup folders, or ignored preview secrets.
+guide, this operator runbook, and the release logging smoke check. It should not
+include local databases, logs, API keys, keystores, backup folders, or ignored
+preview secrets.

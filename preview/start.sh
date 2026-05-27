@@ -69,6 +69,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RUN_LOG="${SCRIPT_DIR}/run.log"
 RUN_PID="${SCRIPT_DIR}/run.pid"
+APP_LOG="${SCRIPT_DIR}/qortium.log"
+LOG4J_CONFIG="${SCRIPT_DIR}/log4j2.properties"
 
 case "${MODE}" in
 	seed-regxa)
@@ -168,30 +170,47 @@ if command -v nice >/dev/null 2>&1; then
 	NICE_ARGS=(nice -n 20)
 fi
 
+{
+	echo "Qortium preview launcher started at $(date -Is 2>/dev/null || date)"
+	echo "Mode: ${MODE}"
+	echo "Settings file: ${SETTINGS_LOCAL}"
+	echo "Jar file: ${JAR_PATH}"
+	echo "Log4j config: ${LOG4J_CONFIG}"
+	echo "Application log: ${APP_LOG}"
+	echo "Display mode: ${DISPLAY_MODE_DESCRIPTION}"
+	echo
+} >"${RUN_LOG}"
+
 if command -v setsid >/dev/null 2>&1; then
 	nohup setsid "${NICE_ARGS[@]}" java \
 		-Djava.net.preferIPv4Stack=false \
+		-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
+		-Dqortium.log.dir="${SCRIPT_DIR}" \
 		"${JAVA_DISPLAY_ARGS[@]}" \
 		"${JVM_MEMORY_ARGS[@]}" \
 		-jar "${JAR_PATH}" \
 		"${SETTINGS_LOCAL}" \
-		>"${RUN_LOG}" 2>&1 &
+		>>"${RUN_LOG}" 2>&1 &
 elif command -v nohup >/dev/null 2>&1; then
 	nohup "${NICE_ARGS[@]}" java \
 		-Djava.net.preferIPv4Stack=false \
+		-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
+		-Dqortium.log.dir="${SCRIPT_DIR}" \
 		"${JAVA_DISPLAY_ARGS[@]}" \
 		"${JVM_MEMORY_ARGS[@]}" \
 		-jar "${JAR_PATH}" \
 		"${SETTINGS_LOCAL}" \
-		>"${RUN_LOG}" 2>&1 &
+		>>"${RUN_LOG}" 2>&1 &
 else
 	"${NICE_ARGS[@]}" java \
 	-Djava.net.preferIPv4Stack=false \
+	-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
+	-Dqortium.log.dir="${SCRIPT_DIR}" \
 	"${JAVA_DISPLAY_ARGS[@]}" \
 	"${JVM_MEMORY_ARGS[@]}" \
 	-jar "${JAR_PATH}" \
 	"${SETTINGS_LOCAL}" \
-	>"${RUN_LOG}" 2>&1 &
+	>>"${RUN_LOG}" 2>&1 &
 fi
 
 echo "$!" > "${RUN_PID}"
@@ -200,7 +219,8 @@ echo "Settings file: ${SETTINGS_LOCAL}"
 echo "Jar file: ${JAR_PATH}"
 echo "Display mode: ${DISPLAY_MODE_DESCRIPTION}"
 echo "Console log: ${RUN_LOG}"
-echo "Application log: ${SCRIPT_DIR}/qortium.log"
+echo "Log4j config: ${LOG4J_CONFIG}"
+echo "Application log: ${APP_LOG}"
 echo
 echo "Preview genesis and settings are fixed. No minting key was added automatically."
 echo "Next commands:"

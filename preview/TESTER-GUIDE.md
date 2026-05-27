@@ -169,7 +169,8 @@ local preview node.
   terminal before starting again.
 - If the node is already running, `start` will print the existing process ID.
 - If the API is not reachable yet, wait a little longer or check
-  `preview/run.log`.
+  `preview/qortium.log`. If that file was not created, check `preview/run.log`
+  for launcher or Java startup errors.
 - If the node API is reachable but there are no peers, leave the node running
   for a few minutes and then check the known-peer URL above.
 - If the public preview is reset, run the reset command and start again.
