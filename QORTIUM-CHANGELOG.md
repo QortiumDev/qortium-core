@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Fix auto-update helper transaction layouts
+
+Updated the QDN auto-update publishing and approval helper scripts for Qortium's current transaction format. The helpers no longer ask the removed address last-reference API for account references, and the AUTO_UPDATE manifest transaction builder now serializes the current ARBITRARY transaction layout directly. This keeps preview auto-update testing aligned with the cleaned-up baseline transaction model.
+
 ### 2026-05-27 - Record preview auto-update smoke target
 
 Added a small operator-note update that creates a newer non-consensus build for

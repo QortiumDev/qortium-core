@@ -107,14 +107,10 @@ printf "Your public key: %s\n" "${pubkey}"
 address=$(curl --silent --show-error --url "http://localhost:${port}/addresses/convert/${pubkey}")
 printf "Your address: %s\n" "${address}"
 
-lastref=$(curl --silent --show-error --url "http://localhost:${port}/addresses/lastreference/${address}")
-printf "Your last reference: %s\n" "${lastref}"
-
 timestamp=$(date +%s)000
 tx_json=$(cat <<TX_END
 {
   "timestamp": ${timestamp},
-  "reference": "${lastref}",
   "fee": ${approval_fee},
   "txGroupId": 0,
   "adminPublicKey": "${pubkey}",

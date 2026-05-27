@@ -127,9 +127,6 @@ class QortiumApi:
     def address_from_public_key(self, public_key):
         return self.request("GET", f"/addresses/convert/{public_key}")
 
-    def last_reference(self, address):
-        return self.request("GET", f"/addresses/lastreference/{address}")
-
     def build_qdn_upload(self, qdn_name, identifier, update_file, fee):
         service = quote(QDN_UPDATE_SERVICE, safe="")
         name = quote(qdn_name, safe="")
@@ -177,16 +174,12 @@ def build_manifest_hex(timestamp, commit_hash, update_hash, binary_signature_hex
 def build_manifest_transaction_hex(api, private_key, tx_group_id, manifest_hex, fee):
     public_key = api.get_public_key(private_key)
     public_key_hex = api.from_base58(public_key)
-    address = api.address_from_public_key(public_key)
-    reference = api.last_reference(address)
-    reference_hex = api.from_base58(reference)
 
     data_length = len(manifest_hex) // 2
     raw_tx_parts = [
         "0000000a",                              # type 10 ARBITRARY
         f"{int(time.time() * 1000):016x}",       # current timestamp
         f"{tx_group_id:08x}",                    # dev group ID
-        reference_hex,
         public_key_hex,
         "00000000",                              # nonce, filled by /arbitrary/compute
         "00000000",                              # name length
