@@ -56,8 +56,9 @@ preview\status.bat --wait
 ```
 
 The status command only checks that the local node API is reachable and can
-report a block height. A node may still need more time to find peers and catch
-up with the preview chain after the API starts.
+report a block height. A node may still need more time to find peers and sync
+from genesis after the API starts. On the current preview chain, first sync can
+take a few minutes and will take longer as the preview chain grows.
 
 To check the full local node status, open this URL in a browser:
 
@@ -139,8 +140,8 @@ preview\reset.bat
 - Preview accounts are not prefunded.
 - Normal fee-bearing transactions can use MemoryPoW instead of a paid native
   fee before asset ID `0` exists.
-- The first start may take time to find peers, synchronize, and settle into the
-  current preview height.
+- The first start may take a few minutes to find peers, synchronize from
+  genesis, and settle into the current preview height.
 - The first useful tests are connecting to the seed nodes, staying synced, sending
   chat messages, trying QDN features, and reporting issues.
 - The preview network can be reset while it is still an alpha/demo network.

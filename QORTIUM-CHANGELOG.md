@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Document preview first-sync expectations
+
+Clarified the public preview tester guide so new testers know that `status --wait`
+only means the local API is reachable, and that a fresh preview node may still
+need a few minutes to find peers and sync from genesis. This sets expectations
+for the current no-snapshot preview flow without adding bootstrap or snapshot
+support yet.
+
 ### 2026-05-27 - Fix preview release logging
 
 Fixed the preview launcher and release package so application logs are written
