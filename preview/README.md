@@ -12,8 +12,9 @@ preview behavior closer to the normal node rules while Qortium is still changing
 quickly.
 
 For the public tester walkthrough, start with
-[TESTER-GUIDE.md](TESTER-GUIDE.md). This file is the more detailed technical
-reference for the preview profile and seed-node operation.
+[TESTER-GUIDE.md](TESTER-GUIDE.md). Seed operators should use
+[OPERATOR-RUNBOOK.md](OPERATOR-RUNBOOK.md). This file is the more detailed
+technical reference for the preview profile itself.
 
 ## Current State
 
@@ -85,6 +86,9 @@ Reset generated preview runtime files:
 ```
 
 ## Start The VPS Seeds
+
+Seed operators should also read [OPERATOR-RUNBOOK.md](OPERATOR-RUNBOOK.md)
+before updating, restarting, or resetting public seed nodes.
 
 On the Regxa seed VPS, use the Regxa seed profile:
 
@@ -163,8 +167,9 @@ If the jar has already been built, skip the build step:
 
 The default output is `target/qortium-preview.zip`. The package includes the
 jar, preview configs, Unix shell scripts, Windows wrappers, and the public
-tester guide. It intentionally excludes generated runtime files, local settings,
-databases, logs, API keys, keystores, backups, and ignored preview secrets.
+tester and operator guides. It intentionally excludes generated runtime files,
+local settings, databases, logs, API keys, keystores, backups, and ignored
+preview secrets.
 
 ## Launch Minting
 

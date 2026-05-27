@@ -55,6 +55,22 @@ Windows:
 preview\status.bat --wait
 ```
 
+The status command only checks that the local node API is reachable and can
+report a block height. A node may still need more time to find peers and catch
+up with the preview chain after the API starts.
+
+To check the full local node status, open this URL in a browser:
+
+```text
+http://localhost:24891/admin/status
+```
+
+To check known peers:
+
+```text
+http://localhost:24891/peers/known
+```
+
 6. Stop the preview node when finished.
 
 Linux or macOS:
@@ -74,7 +90,7 @@ preview\stop.bat
 1. Clone the repository.
 
 ```sh
-git clone https://github.com/Qortium/qortium.git
+git clone https://github.com/QuickMythril/qortium.git
 cd qortium
 ```
 
@@ -102,7 +118,8 @@ preview\start.bat
 
 Resetting removes local preview runtime files, including the local database,
 API key, logs, and generated settings. Use this when the preview chain is reset
-or when you want to start fresh.
+or when you want to start fresh. The next start will create a new local
+database and API key.
 
 Linux or macOS:
 
@@ -122,9 +139,29 @@ preview\reset.bat
 - Preview accounts are not prefunded.
 - Normal fee-bearing transactions can use MemoryPoW instead of a paid native
   fee before asset ID `0` exists.
+- The first start may take time to find peers, synchronize, and settle into the
+  current preview height.
 - The first useful tests are connecting to the seed nodes, staying synced, sending
   chat messages, trying QDN features, and reporting issues.
 - The preview network can be reset while it is still an alpha/demo network.
+
+The public seed status endpoints are:
+
+```text
+http://146.103.42.59:24891/admin/status
+http://185.207.104.78:24891/admin/status
+```
+
+The public seed known-peer endpoints are:
+
+```text
+http://146.103.42.59:24891/peers/known
+http://185.207.104.78:24891/peers/known
+```
+
+The seed APIs intentionally expose only limited read-only discovery endpoints.
+Normal transaction building and account activity should go through your own
+local preview node.
 
 ## Troubleshooting
 
@@ -133,4 +170,6 @@ preview\reset.bat
 - If the node is already running, `start` will print the existing process ID.
 - If the API is not reachable yet, wait a little longer or check
   `preview/run.log`.
+- If the node API is reachable but there are no peers, leave the node running
+  for a few minutes and then check the known-peer URL above.
 - If the public preview is reset, run the reset command and start again.

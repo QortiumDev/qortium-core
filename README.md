@@ -74,7 +74,8 @@ The preview scaffold is connection-ready and includes three public genesis
 minting authorizations for initial seed/local testing. Private minting keys are
 not committed. Public testers should start with
 [preview/TESTER-GUIDE.md](preview/TESTER-GUIDE.md); seed operators and
-minting-key setup should use [preview/README.md](preview/README.md).
+minting-key setup should use [preview/README.md](preview/README.md) and
+[preview/OPERATOR-RUNBOOK.md](preview/OPERATOR-RUNBOOK.md).
 
 ## Local Node Build And Run
 

@@ -79,6 +79,7 @@ cp "${SCRIPT_DIR}/TESTER-GUIDE.md" "${PACKAGE_ROOT}/README.md"
 preview_files=(
 	"README.md"
 	"TESTER-GUIDE.md"
+	"OPERATOR-RUNBOOK.md"
 	"log4j2.properties"
 	"previewchain.json"
 	"settings-preview.json"

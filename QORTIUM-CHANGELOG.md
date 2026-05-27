@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-26 - Document public preview readiness checks
+
+Expanded the public preview tester guide with local status, peer, seed-status, and troubleshooting checks, and added a seed-operator runbook for updating, starting, stopping, firewalling, verifying, and resetting public preview seed nodes. The preview release package now includes both tester and operator guidance so public testing can start from the same repeatable instructions used for the current seed-node setup.
+
 ### 2026-05-26 - Fix stale chain catch-up beyond summary batches
 
 Fixed stale chain catch-up when a node is more than one block-summary batch behind reachable peers. Nodes now accept partial peer-summary batches during comparison instead of wrongly expecting the peer's latest tip inside the partial response, and stale catch-up minting now defers to any valid newer peer tip instead of treating a previously filtered tip as permission to mint a local fork.
