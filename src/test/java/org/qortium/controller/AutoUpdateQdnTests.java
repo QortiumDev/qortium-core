@@ -203,10 +203,41 @@ public class AutoUpdateQdnTests extends Common {
 			assertEquals(hex(commitHash), status.binaryIdentifier);
 			assertEquals(ArbitraryTransactionData.Method.PUT.name(), status.binaryMethod);
 			assertNotNull(status.binaryBlockHeight);
+			assertNotNull(status.binaryResourceStatus);
+			assertNotNull(status.binaryResourceLocalChunkCount);
+			assertNotNull(status.binaryResourceTotalChunkCount);
+			assertEquals(status.binaryResourceTotalChunkCount, status.binaryResourceLocalChunkCount);
+			assertEquals(100.0f, status.binaryResourcePercentLoaded, 0.0001f);
 			assertEquals(Service.AUTO_UPDATE_BINARY.name(), status.qdnService);
-			assertEquals(AutoUpdateManifest.QDN_UPDATE_NAME, status.qdnName);
+			assertEquals(updateName, status.qdnName);
 			assertEquals(hex(commitHash), status.qdnIdentifier);
 			assertEquals(AutoUpdateManifest.QDN_UPDATE_PATH, status.qdnPath);
+		}
+	}
+
+	@Test
+	public void testManualUpdateDoesNotReportInstallStartedBeforeVerification() throws Exception {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			long updateTimestamp = Controller.getInstance().getBuildTimestamp() * 1000L + 1_000L;
+			byte[] commitHash = sequentialBytes(20, 1);
+			byte[] jarBytes = "qortium qdn update".getBytes();
+			byte[] updateBytes = xor(jarBytes);
+			byte[] binarySignature = createAutoUpdateBinary(repository, alice, "badupdatehash", commitHash, updateBytes);
+			AutoUpdateManifest manifest = AutoUpdateManifest.qdnV1(updateTimestamp, commitHash, sha256("wrong".getBytes()), binarySignature);
+
+			createAndApproveAutoUpdateManifest(repository, alice, manifest.toBytes());
+
+			AutoUpdate.UpdateCheckResult status = AutoUpdate.requestManualUpdate();
+
+			assertTrue(status.updateAvailable);
+			assertFalse(status.installing);
+			assertFalse(status.installStarted);
+			assertFalse(AutoUpdate.isUpdateInstallInProgress());
+			assertEquals(AutoUpdate.STATUS_INSTALL_FAILED, status.status);
+			assertTrue(status.message.contains("hash"));
+			assertEquals("badupdatehash", status.qdnName);
+			assertNotNull(status.binaryResourceStatus);
 		}
 	}
 

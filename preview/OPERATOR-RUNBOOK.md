@@ -139,6 +139,23 @@ chosen QDN name:
 python3 tools/auto-update-scripts/publish-auto-update.py --preview <private-key> <commit>
 ```
 
+For seed-hosted update chunks, stage the unsigned binary transaction on the seed
+that has the built `qortium.update`, then sign and submit it from an
+unrestricted local node:
+
+```sh
+python3 tools/auto-update-scripts/publish-auto-update.py \
+  --preview \
+  --qdn-name QortiumHomeTest \
+  --stage-binary-out /tmp/qortium-update-staged.json \
+  <commit>
+
+python3 tools/auto-update-scripts/publish-auto-update.py \
+  --preview \
+  --staged-binary /tmp/qortium-update-staged.json \
+  <private-key>
+```
+
 Approve the pending manifest with a development-group authority:
 
 ```sh
@@ -154,6 +171,13 @@ curl -H "X-API-KEY: $(cat preview/apikey.txt)" \
 curl -X POST -H "X-API-KEY: $(cat preview/apikey.txt)" \
   http://127.0.0.1:24891/admin/update
 ```
+
+`POST /admin/update` returns `INSTALL_STARTED` only after the pinned binary is
+local, hash verified, and the apply helper is scheduled. If the node still needs
+QDN chunks, it returns `DOWNLOAD_STARTED` plus the pinned binary resource
+progress fields. Repeat the manual request after the resource reaches
+`DOWNLOADED` or `READY`, or leave a node in `INSTALL` mode and let it retry
+soon after the first missing-data result.
 
 Restricted update endpoints must stay private. From outside the VPS, public
 requests to `/admin/update` should return `403`.

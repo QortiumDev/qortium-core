@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Harden QDN auto-update staging and status
+
+Changed QDN auto-update handling so manual install requests only report `INSTALL_STARTED` after the pinned update binary is local, hash verified, and the apply-update helper has been scheduled. If update chunks are still missing, the admin status now reports download preparation and chunk progress instead of pretending the install started, and background install mode retries missing-data updates sooner. The publish helper can also split seed-hosted QDN staging from local signing, letting a restricted seed host update chunks without holding the publishing private key.
+
 ### 2026-05-27 - Fix auto-update helper transaction layouts
 
 Updated the QDN auto-update publishing and approval helper scripts for Qortium's current transaction format. The helpers no longer ask the removed address last-reference API for account references, and the AUTO_UPDATE manifest transaction builder now serializes the current ARBITRARY transaction layout directly. This keeps preview auto-update testing aligned with the cleaned-up baseline transaction model.

@@ -86,4 +86,8 @@ public class ArbitraryResourceStatus {
     public Integer getTotalChunkCount() {
         return this.totalChunkCount;
     }
+
+    public Float getPercentLoaded() {
+        return this.percentLoaded;
+    }
 }

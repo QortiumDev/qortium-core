@@ -8,6 +8,7 @@ import org.qortium.arbitrary.ArbitraryDataFile.ResourceIdType;
 import org.qortium.arbitrary.ArbitraryDataReader;
 import org.qortium.arbitrary.exception.MissingDataException;
 import org.qortium.block.BlockChain;
+import org.qortium.data.arbitrary.ArbitraryResourceStatus;
 import org.qortium.data.group.GroupData;
 import org.qortium.data.transaction.ArbitraryTransactionData;
 import org.qortium.data.transaction.TransactionData;
@@ -22,6 +23,7 @@ import org.qortium.settings.Settings;
 import org.qortium.settings.Settings.AutoUpdateMode;
 import org.qortium.transaction.ArbitraryTransaction;
 import org.qortium.transaction.Transaction.TransactionType;
+import org.qortium.utils.ArbitraryTransactionUtils;
 import org.qortium.utils.Base58;
 import org.qortium.utils.Groups;
 
@@ -54,9 +56,10 @@ public class AutoUpdate extends Thread {
 	private static final Logger LOGGER = LogManager.getLogger(AutoUpdate.class);
 	static final long INITIAL_CHECK_DELAY = 30 * 1000L; // ms
 	static final long CHECK_INTERVAL = 20 * 60 * 1000L; // ms
+	static final long QDN_DOWNLOAD_RETRY_INTERVAL = 60 * 1000L; // ms
 
 	private static final int UPDATE_SERVICE = 1;
-	private static final long MANUAL_UPDATE_DELAY = 1000L;
+	private static final long APPLY_UPDATE_DELAY = 1000L;
 
 	public static final String STATUS_QDN_DISABLED = "QDN_DISABLED";
 	public static final String STATUS_NO_DEV_GROUPS = "NO_DEV_GROUPS";
@@ -70,6 +73,8 @@ public class AutoUpdate extends Thread {
 	public static final String STATUS_UPDATE_AVAILABLE = "UPDATE_AVAILABLE";
 	public static final String STATUS_INSTALL_IN_PROGRESS = "INSTALL_IN_PROGRESS";
 	public static final String STATUS_INSTALL_STARTED = "INSTALL_STARTED";
+	public static final String STATUS_DOWNLOAD_STARTED = "DOWNLOAD_STARTED";
+	public static final String STATUS_INSTALL_FAILED = "INSTALL_FAILED";
 
 	/** This byte value used to hide contents from deep-inspection firewalls in case they block updates. */
 	public static final byte XOR_VALUE = (byte) 0x5a;
@@ -148,10 +153,13 @@ public class AutoUpdate extends Thread {
 				} else if (mode == AutoUpdateMode.NOTIFY) {
 					notifyUpdateAvailable(lookup.status);
 				} else if (mode == AutoUpdateMode.INSTALL) {
-					if (attemptUpdate(lookup.manifest)) {
+					InstallAttemptResult installAttemptResult = attemptUpdateWithResult(lookup.manifest);
+					if (installAttemptResult.applyProcessStarted) {
 						// Consider ourselves updated so don't re-re-re-download
 						buildTimestamp = System.currentTimeMillis();
 						attemptedUpdate = true;
+					} else if (installAttemptResult.retrySoon) {
+						nextCheckDelay = QDN_DOWNLOAD_RETRY_INTERVAL;
 					}
 				}
 			} catch (DataException e) {
@@ -197,23 +205,14 @@ public class AutoUpdate extends Thread {
 			return lookup.status;
 		}
 
-		lookup.status.installing = true;
-		lookup.status.installStarted = true;
-		lookup.status.status = STATUS_INSTALL_STARTED;
-		lookup.status.message = "Update install has been scheduled";
+		InstallAttemptResult installAttemptResult = attemptUpdateAlreadyMarkedInProgress(lookup.manifest);
+		if (lookup.binaryTransactionData != null)
+			populateBinaryResourceStatus(lookup.status, lookup.binaryTransactionData, false);
 
-		AutoUpdateManifest manifest = lookup.manifest;
-		new Thread(() -> {
-			try {
-				Thread.sleep(MANUAL_UPDATE_DELAY);
-				if (!attemptUpdateAlreadyMarkedInProgress(manifest))
-					LOGGER.warn("Manual auto-update attempt failed");
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-				LOGGER.warn("Manual auto-update attempt was interrupted before it started");
-				releaseUpdateInstall();
-			}
-		}, "Manual auto-update").start();
+		lookup.status.installing = isUpdateInstallInProgress();
+		lookup.status.installStarted = installAttemptResult.applyProcessStarted;
+		lookup.status.status = installAttemptResult.statusCode;
+		lookup.status.message = installAttemptResult.message;
 
 		return lookup.status;
 	}
@@ -276,8 +275,11 @@ public class AutoUpdate extends Thread {
 				return UpdateLookup.withoutManifest(status, STATUS_UNPINNED_MANIFEST,
 						"Approved auto-update manifest does not pin a QDN binary transaction");
 
+			ArbitraryTransactionData binaryTransactionData;
 			try {
-				populateBinaryTransactionStatus(status, getPinnedQdnBinaryTransaction(repository, manifest, manifest.getBinarySignature()));
+				binaryTransactionData = getPinnedQdnBinaryTransaction(repository, manifest, manifest.getBinarySignature());
+				populateBinaryTransactionStatus(status, binaryTransactionData);
+				populateBinaryResourceStatus(status, binaryTransactionData, false);
 			} catch (DataException e) {
 				return UpdateLookup.withoutManifest(status, STATUS_INVALID_BINARY_TRANSACTION, e.getMessage());
 			}
@@ -289,7 +291,7 @@ public class AutoUpdate extends Thread {
 			status.updateAvailable = true;
 			status.status = STATUS_UPDATE_AVAILABLE;
 			status.message = "A newer approved auto-update is available";
-			return new UpdateLookup(status, manifest);
+			return new UpdateLookup(status, manifest, binaryTransactionData);
 		}
 	}
 
@@ -298,8 +300,6 @@ public class AutoUpdate extends Thread {
 		status.commitHash = manifest.getCommitHashHex();
 		status.binarySignature = manifest.getBinarySignature58();
 		status.qdnService = manifest.getQdnService().name();
-		status.qdnName = manifest.getQdnName();
-		status.qdnIdentifier = manifest.getQdnIdentifier();
 		status.qdnPath = manifest.getQdnPath();
 	}
 
@@ -324,6 +324,23 @@ public class AutoUpdate extends Thread {
 		status.binaryIdentifier = transactionData.getIdentifier();
 		status.binaryMethod = transactionData.getMethod() == null ? null : transactionData.getMethod().name();
 		status.binaryBlockHeight = transactionData.getBlockHeight();
+		status.qdnName = transactionData.getName();
+		status.qdnIdentifier = transactionData.getIdentifier();
+	}
+
+	private static void populateBinaryResourceStatus(UpdateCheckResult status, ArbitraryTransactionData transactionData, boolean build) {
+		if (transactionData == null || transactionData.getName() == null || transactionData.getService() == null)
+			return;
+
+		ArbitraryResourceStatus resourceStatus = ArbitraryTransactionUtils.getStatus(
+				transactionData.getService(), transactionData.getName(), transactionData.getIdentifier(), build, true);
+		if (resourceStatus == null)
+			return;
+
+		status.binaryResourceStatus = resourceStatus.getStatus() == null ? null : resourceStatus.getStatus().name();
+		status.binaryResourceLocalChunkCount = resourceStatus.getLocalChunkCount();
+		status.binaryResourceTotalChunkCount = resourceStatus.getTotalChunkCount();
+		status.binaryResourcePercentLoaded = resourceStatus.getPercentLoaded();
 	}
 
 	private static void populateDevGroupSummaries(UpdateCheckResult status, Repository repository, List<Integer> devGroupIds) throws DataException {
@@ -364,22 +381,22 @@ public class AutoUpdate extends Thread {
 		}
 	}
 
-	private static boolean attemptUpdate(AutoUpdateManifest manifest) {
+	private static InstallAttemptResult attemptUpdateWithResult(AutoUpdateManifest manifest) {
 		if (!tryAcquireUpdateInstall()) {
 			LOGGER.warn("Skipping auto-update because another update install is already in progress");
-			return false;
+			return InstallAttemptResult.installInProgress();
 		}
 
 		return attemptUpdateAlreadyMarkedInProgress(manifest);
 	}
 
-	private static boolean attemptUpdateAlreadyMarkedInProgress(AutoUpdateManifest manifest) {
-		boolean applyProcessStarted = false;
+	private static InstallAttemptResult attemptUpdateAlreadyMarkedInProgress(AutoUpdateManifest manifest) {
+		InstallAttemptResult result = InstallAttemptResult.installFailed("Update install attempt did not complete");
 		try {
-			applyProcessStarted = attemptUpdateInternal(manifest);
-			return applyProcessStarted;
+			result = attemptUpdateInternal(manifest);
+			return result;
 		} finally {
-			finishUpdateInstallAttempt(applyProcessStarted);
+			finishUpdateInstallAttempt(result.applyProcessStarted);
 		}
 	}
 
@@ -401,7 +418,7 @@ public class AutoUpdate extends Thread {
 		}
 	}
 
-	private static boolean attemptUpdateInternal(AutoUpdateManifest manifest) {
+	private static InstallAttemptResult attemptUpdateInternal(AutoUpdateManifest manifest) {
 		LOGGER.info("Fetching update from pinned QDN {} transaction {} path {}",
 				manifest.getQdnService(), manifest.getBinarySignature58(), manifest.getQdnPath());
 
@@ -411,23 +428,35 @@ public class AutoUpdate extends Thread {
 			Path updatePath = resolveQdnUpdatePath(manifest);
 			try (InputStream in = Files.newInputStream(updatePath)) {
 				if (!writeVerifiedUpdate(in, manifest.getUpdateHash(), newJar, updatePath.toString()))
-					return false;
+					return InstallAttemptResult.installFailed("Downloaded update did not match the approved manifest hash");
 			}
-		} catch (DataException | IOException | MissingDataException e) {
+		} catch (MissingDataException e) {
+			LOGGER.info("QDN update data is not ready yet: {}", e.getMessage());
+			return InstallAttemptResult.downloadStarted(e.getMessage());
+		} catch (DataException | IOException e) {
 			LOGGER.warn("Failed to fetch update from QDN: {}", e.getMessage());
-			return false;
+			return InstallAttemptResult.installFailed(String.format("Failed to fetch update from QDN: %s", e.getMessage()));
 		}
 
-		return applyUpdate(newJar);
+		if (scheduleApplyUpdate(newJar))
+			return InstallAttemptResult.installStarted();
+
+		return InstallAttemptResult.installFailed("Downloaded update was verified, but the apply process could not be scheduled");
 	}
 
 	private static class UpdateLookup {
 		private final UpdateCheckResult status;
 		private final AutoUpdateManifest manifest;
+		private final ArbitraryTransactionData binaryTransactionData;
 
 		private UpdateLookup(UpdateCheckResult status, AutoUpdateManifest manifest) {
+			this(status, manifest, null);
+		}
+
+		private UpdateLookup(UpdateCheckResult status, AutoUpdateManifest manifest, ArbitraryTransactionData binaryTransactionData) {
 			this.status = status;
 			this.manifest = manifest;
+			this.binaryTransactionData = binaryTransactionData;
 		}
 
 		private static UpdateLookup withoutManifest(UpdateCheckResult status, String statusCode, String message) {
@@ -435,6 +464,41 @@ public class AutoUpdate extends Thread {
 			status.message = message;
 			status.updateAvailable = false;
 			return new UpdateLookup(status, null);
+		}
+	}
+
+	private static class InstallAttemptResult {
+		private final boolean applyProcessStarted;
+		private final boolean retrySoon;
+		private final String statusCode;
+		private final String message;
+
+		private InstallAttemptResult(boolean applyProcessStarted, boolean retrySoon, String statusCode, String message) {
+			this.applyProcessStarted = applyProcessStarted;
+			this.retrySoon = retrySoon;
+			this.statusCode = statusCode;
+			this.message = message;
+		}
+
+		private static InstallAttemptResult installStarted() {
+			return new InstallAttemptResult(true, false, STATUS_INSTALL_STARTED, "Update install has been scheduled");
+		}
+
+		private static InstallAttemptResult downloadStarted(String detail) {
+			String message = "QDN update data is not ready yet; download/build has been requested";
+			if (detail != null && !detail.isBlank())
+				message = String.format("%s: %s", message, detail);
+
+			return new InstallAttemptResult(false, true, STATUS_DOWNLOAD_STARTED, message);
+		}
+
+		private static InstallAttemptResult installFailed(String message) {
+			return new InstallAttemptResult(false, false, STATUS_INSTALL_FAILED, message);
+		}
+
+		private static InstallAttemptResult installInProgress() {
+			return new InstallAttemptResult(false, true, STATUS_INSTALL_IN_PROGRESS,
+					"An update install is already in progress");
 		}
 	}
 
@@ -465,6 +529,10 @@ public class AutoUpdate extends Thread {
 		public String binaryIdentifier;
 		public String binaryMethod;
 		public Integer binaryBlockHeight;
+		public String binaryResourceStatus;
+		public Integer binaryResourceLocalChunkCount;
+		public Integer binaryResourceTotalChunkCount;
+		public Float binaryResourcePercentLoaded;
 		public String qdnService;
 		public String qdnName;
 		public String qdnIdentifier;
@@ -590,6 +658,29 @@ public class AutoUpdate extends Thread {
 		}
 
 		return true;
+	}
+
+	private static boolean scheduleApplyUpdate(Path newJar) {
+		try {
+			new Thread(() -> {
+				try {
+					Thread.sleep(APPLY_UPDATE_DELAY);
+					if (!applyUpdate(newJar))
+						releaseUpdateInstall();
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					LOGGER.warn("Auto-update apply was interrupted before it started");
+					releaseUpdateInstall();
+				} catch (RuntimeException e) {
+					LOGGER.warn("Auto-update apply failed before it could hand off restart: {}", e.getMessage(), e);
+					releaseUpdateInstall();
+				}
+			}, "Apply auto-update").start();
+			return true;
+		} catch (RuntimeException e) {
+			LOGGER.warn("Failed to schedule auto-update apply: {}", e.getMessage(), e);
+			return false;
+		}
 	}
 
 	private static boolean applyUpdate(Path newJar) {

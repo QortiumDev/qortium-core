@@ -88,6 +88,32 @@ MemoryPoW instead of requiring spendable native funds:
 python3 tools/auto-update-scripts/publish-auto-update.py --preview <private-key> <commit>
 ```
 
+For a restricted seed that should host the QDN chunks but not sign
+transactions, split the publish into a staging step and a signing step. Run this
+on the seed after `qortium.update` has been built there:
+
+```bash
+python3 tools/auto-update-scripts/publish-auto-update.py \
+  --preview \
+  --qdn-name my-update-name \
+  --stage-binary-out /tmp/qortium-update-staged.json \
+  <commit>
+```
+
+Then move the staged JSON to an unrestricted signing node that has the private
+key for the QDN name owner and submit:
+
+```bash
+python3 tools/auto-update-scripts/publish-auto-update.py \
+  --preview \
+  --staged-binary /tmp/qortium-update-staged.json \
+  <private-key>
+```
+
+The staged JSON contains the unsigned binary transaction and update hash, but
+not the private key. This lets the seed keep serving the update chunks while the
+local signing node submits the binary transaction and the approval manifest.
+
 The publisher:
 
 - reads the local `qortium.update`;
@@ -145,6 +171,10 @@ curl -X POST -H "X-API-KEY: $(cat apikey.txt)" \
 Both endpoints use the same approved development-group manifest lookup, pinned
 QDN binary lookup, and hash verification as automatic background updates. The
 `GET` response includes the active development groups, manifest approval
-metadata, and pinned binary metadata so operators can inspect update authority
-before installing. The `POST` endpoint returns a status response before the node
-begins the apply-update restart flow.
+metadata, pinned binary metadata, and local QDN resource progress so operators
+can inspect update authority and download readiness before installing. The
+`POST` endpoint now returns `INSTALL_STARTED` only after the binary is local,
+hash verified, and the apply-update helper has been scheduled. If QDN
+data is still missing, it returns `DOWNLOAD_STARTED` with the current chunk
+progress and the background updater retries that approved update sooner than
+the normal long polling interval.
