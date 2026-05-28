@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Continue QDN auto-update downloads after stalls
+
+Changed manual QDN auto-update installs so a missing binary download keeps retrying after the first `/admin/update` request instead of requiring another operator call. Update status now reports retry progress, stale download state, next retry timing, and active QDN peer count, while the QDN chunk requester refreshes source discovery when a batch has pending chunks but no useful request path.
+
 ### 2026-05-27 - Document preview runtime jar replacement
 
 Updated the preview seed operator runbook to call out that `preview/qortium.jar` takes priority over the freshly built jar in `target/`. Operators now have an explicit copy step after building, which prevents a seed from restarting on an older release-style runtime jar by accident.

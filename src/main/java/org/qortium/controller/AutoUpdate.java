@@ -8,6 +8,7 @@ import org.qortium.arbitrary.ArbitraryDataFile.ResourceIdType;
 import org.qortium.arbitrary.ArbitraryDataReader;
 import org.qortium.arbitrary.exception.MissingDataException;
 import org.qortium.block.BlockChain;
+import org.qortium.controller.arbitrary.ArbitraryDataFileRequestThread;
 import org.qortium.data.arbitrary.ArbitraryResourceStatus;
 import org.qortium.data.group.GroupData;
 import org.qortium.data.transaction.ArbitraryTransactionData;
@@ -26,6 +27,7 @@ import org.qortium.transaction.Transaction.TransactionType;
 import org.qortium.utils.ArbitraryTransactionUtils;
 import org.qortium.utils.Base58;
 import org.qortium.utils.Groups;
+import org.qortium.utils.NTP;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -57,6 +59,9 @@ public class AutoUpdate extends Thread {
 	static final long INITIAL_CHECK_DELAY = 30 * 1000L; // ms
 	static final long CHECK_INTERVAL = 20 * 60 * 1000L; // ms
 	static final long QDN_DOWNLOAD_RETRY_INTERVAL = 60 * 1000L; // ms
+	static final long MANUAL_QDN_DOWNLOAD_RETRY_INTERVAL = 30 * 1000L; // ms
+	static final long QDN_DOWNLOAD_STALL_INTERVAL = 60 * 1000L; // ms
+	static final int MAX_MANUAL_QDN_DOWNLOAD_RETRIES = 120;
 
 	private static final int UPDATE_SERVICE = 1;
 	private static final long APPLY_UPDATE_DELAY = 1000L;
@@ -81,6 +86,8 @@ public class AutoUpdate extends Thread {
 
 	private static AutoUpdate instance;
 	private static final AtomicBoolean updateInstallInProgress = new AtomicBoolean(false);
+	private static final AtomicBoolean manualRetryWorkerRunning = new AtomicBoolean(false);
+	private static volatile DownloadRetryState downloadRetryState = null;
 
 	private volatile boolean isStopping = false;
 	private String lastNotifiedManifestSignature = null;
@@ -154,6 +161,7 @@ public class AutoUpdate extends Thread {
 					notifyUpdateAvailable(lookup.status);
 				} else if (mode == AutoUpdateMode.INSTALL) {
 					InstallAttemptResult installAttemptResult = attemptUpdateWithResult(lookup.manifest);
+					recordDownloadAttempt(lookup, installAttemptResult);
 					if (installAttemptResult.applyProcessStarted) {
 						// Consider ourselves updated so don't re-re-re-download
 						buildTimestamp = System.currentTimeMillis();
@@ -202,6 +210,7 @@ public class AutoUpdate extends Thread {
 			lookup.status.installing = true;
 			lookup.status.status = STATUS_INSTALL_IN_PROGRESS;
 			lookup.status.message = "An update install is already in progress";
+			populateDownloadRetryStatus(lookup.status);
 			return lookup.status;
 		}
 
@@ -209,10 +218,15 @@ public class AutoUpdate extends Thread {
 		if (lookup.binaryTransactionData != null)
 			populateBinaryResourceStatus(lookup.status, lookup.binaryTransactionData, false);
 
+		recordDownloadAttempt(lookup, installAttemptResult);
+		if (installAttemptResult.retrySoon)
+			startManualRetryWorker();
+
 		lookup.status.installing = isUpdateInstallInProgress();
 		lookup.status.installStarted = installAttemptResult.applyProcessStarted;
 		lookup.status.status = installAttemptResult.statusCode;
 		lookup.status.message = installAttemptResult.message;
+		populateDownloadRetryStatus(lookup.status);
 
 		return lookup.status;
 	}
@@ -291,6 +305,7 @@ public class AutoUpdate extends Thread {
 			status.updateAvailable = true;
 			status.status = STATUS_UPDATE_AVAILABLE;
 			status.message = "A newer approved auto-update is available";
+			populateDownloadRetryStatus(status);
 			return new UpdateLookup(status, manifest, binaryTransactionData);
 		}
 	}
@@ -341,6 +356,144 @@ public class AutoUpdate extends Thread {
 		status.binaryResourceLocalChunkCount = resourceStatus.getLocalChunkCount();
 		status.binaryResourceTotalChunkCount = resourceStatus.getTotalChunkCount();
 		status.binaryResourcePercentLoaded = resourceStatus.getPercentLoaded();
+	}
+
+	private static void recordDownloadAttempt(UpdateLookup lookup, InstallAttemptResult result) {
+		if (lookup == null || lookup.status == null || lookup.manifest == null || result == null)
+			return;
+
+		if (!STATUS_DOWNLOAD_STARTED.equals(result.statusCode)) {
+			if (result.applyProcessStarted) {
+				clearDownloadRetryState(lookup.status.manifestSignature);
+			} else if (!result.retrySoon) {
+				DownloadRetryState state = downloadRetryState;
+				if (state != null && state.matches(lookup.status.manifestSignature))
+					state.stopRetrying(result.message);
+			}
+			return;
+		}
+
+		DownloadRetryState state = getOrCreateDownloadRetryState(lookup.status);
+		if (state == null)
+			return;
+
+		long now = currentTimestamp();
+		state.recordAttempt(now, result.message);
+		state.recordStatus(lookup.status, now);
+		populateDownloadRetryStatus(lookup.status);
+	}
+
+	private static DownloadRetryState getOrCreateDownloadRetryState(UpdateCheckResult status) {
+		if (status == null || status.manifestSignature == null)
+			return null;
+
+		DownloadRetryState existing = downloadRetryState;
+		if (existing != null && existing.matches(status.manifestSignature))
+			return existing;
+
+		DownloadRetryState created = new DownloadRetryState(status.manifestSignature, status.binarySignature, currentTimestamp());
+		downloadRetryState = created;
+		return created;
+	}
+
+	private static void populateDownloadRetryStatus(UpdateCheckResult status) {
+		DownloadRetryState state = downloadRetryState;
+		if (state == null || status == null || !state.matches(status.manifestSignature))
+			return;
+
+		long now = currentTimestamp();
+		state.recordStatus(status, now);
+		state.populate(status, now);
+	}
+
+	private static void clearDownloadRetryState(String manifestSignature) {
+		DownloadRetryState state = downloadRetryState;
+		if (state != null && state.matches(manifestSignature))
+			downloadRetryState = null;
+	}
+
+	private static long currentTimestamp() {
+		Long now = NTP.getTime();
+		return now != null ? now : System.currentTimeMillis();
+	}
+
+	private static void startManualRetryWorker() {
+		if (!manualRetryWorkerRunning.compareAndSet(false, true))
+			return;
+
+		Thread retryThread = new Thread(AutoUpdate::runManualRetryWorker, "Manual auto-update retry");
+		retryThread.setDaemon(true);
+		retryThread.start();
+	}
+
+	private static void runManualRetryWorker() {
+		try {
+			while (!Controller.isStopping()) {
+				DownloadRetryState state = downloadRetryState;
+				if (state == null)
+					return;
+
+				long delay = Math.max(0L, state.nextRetryTimestamp - currentTimestamp());
+				if (delay > 0L)
+					Thread.sleep(delay);
+
+				state = downloadRetryState;
+				if (state == null)
+					return;
+
+				if (state.retryCount >= MAX_MANUAL_QDN_DOWNLOAD_RETRIES) {
+					state.stopRetrying("Manual QDN update download retry limit reached");
+					LOGGER.warn("{} for manifest {}", state.lastMessage, state.manifestSignature);
+					return;
+				}
+
+				UpdateLookup lookup;
+				try {
+					lookup = lookupLatestUpdate(getCurrentBuildTimestamp());
+				} catch (DataException e) {
+					state.scheduleRetry(currentTimestamp(), String.format("Repository issue while checking update: %s", e.getMessage()));
+					LOGGER.warn("Repository issue while retrying manual auto-update", e);
+					continue;
+				}
+
+				if (lookup == null || lookup.status == null || !lookup.status.updateAvailable || lookup.manifest == null) {
+					clearDownloadRetryState(state.manifestSignature);
+					return;
+				}
+
+				if (!state.matches(lookup.status.manifestSignature)) {
+					clearDownloadRetryState(state.manifestSignature);
+					return;
+				}
+
+				if (!tryAcquireUpdateInstall()) {
+					state.scheduleRetry(currentTimestamp(), "An update install is already in progress");
+					continue;
+				}
+
+				InstallAttemptResult result = attemptUpdateAlreadyMarkedInProgress(lookup.manifest);
+				if (lookup.binaryTransactionData != null)
+					populateBinaryResourceStatus(lookup.status, lookup.binaryTransactionData, false);
+
+				recordDownloadAttempt(lookup, result);
+				if (result.applyProcessStarted)
+					return;
+
+				if (!result.retrySoon) {
+					state.stopRetrying(result.message);
+					LOGGER.warn("Manual auto-update retry stopped for manifest {}: {}", state.manifestSignature, result.message);
+					return;
+				}
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+		} finally {
+			manualRetryWorkerRunning.set(false);
+
+			DownloadRetryState state = downloadRetryState;
+			if (state != null && state.retryActive && !Controller.isStopping())
+				startManualRetryWorker();
+		}
 	}
 
 	private static void populateDevGroupSummaries(UpdateCheckResult status, Repository repository, List<Integer> devGroupIds) throws DataException {
@@ -508,6 +661,14 @@ public class AutoUpdate extends Thread {
 		public boolean updateAvailable;
 		public boolean installing;
 		public boolean installStarted;
+		public boolean downloadStarted;
+		public Long downloadStartedTimestamp;
+		public Long downloadLastProgressTimestamp;
+		public Long downloadLastProgressAge;
+		public Integer downloadRetryCount;
+		public Boolean downloadStalled;
+		public Long nextRetryTimestamp;
+		public Integer activeDownloadPeerCount;
 		public String status;
 		public String message;
 		public long currentBuildTimestamp;
@@ -537,6 +698,85 @@ public class AutoUpdate extends Thread {
 		public String qdnName;
 		public String qdnIdentifier;
 		public String qdnPath;
+	}
+
+	private static class DownloadRetryState {
+		private final String manifestSignature;
+		private final String binarySignature;
+		private final long startedTimestamp;
+		private volatile long lastProgressTimestamp;
+		private volatile long nextRetryTimestamp;
+		private volatile int retryCount;
+		private volatile Integer lastLocalChunkCount;
+		private volatile Integer totalChunkCount;
+		private volatile boolean stalled;
+		private volatile boolean retryActive = true;
+		private volatile String lastMessage;
+
+		private DownloadRetryState(String manifestSignature, String binarySignature, long startedTimestamp) {
+			this.manifestSignature = manifestSignature;
+			this.binarySignature = binarySignature;
+			this.startedTimestamp = startedTimestamp;
+			this.lastProgressTimestamp = startedTimestamp;
+			this.nextRetryTimestamp = startedTimestamp;
+		}
+
+		private boolean matches(String manifestSignature) {
+			return this.manifestSignature != null && this.manifestSignature.equals(manifestSignature);
+		}
+
+		private void recordAttempt(long now, String message) {
+			this.retryCount++;
+			this.lastMessage = message;
+			this.nextRetryTimestamp = now + MANUAL_QDN_DOWNLOAD_RETRY_INTERVAL;
+			this.retryActive = true;
+		}
+
+		private void scheduleRetry(long now, String message) {
+			this.lastMessage = message;
+			this.nextRetryTimestamp = now + MANUAL_QDN_DOWNLOAD_RETRY_INTERVAL;
+			this.retryActive = true;
+		}
+
+		private void recordStatus(UpdateCheckResult status, long now) {
+			if (status == null)
+				return;
+
+			Integer localChunkCount = status.binaryResourceLocalChunkCount;
+			if (localChunkCount != null && (this.lastLocalChunkCount == null || localChunkCount > this.lastLocalChunkCount)) {
+				this.lastLocalChunkCount = localChunkCount;
+				this.totalChunkCount = status.binaryResourceTotalChunkCount;
+				this.lastProgressTimestamp = now;
+				this.stalled = false;
+			} else if (this.lastLocalChunkCount == null && localChunkCount != null) {
+				this.lastLocalChunkCount = localChunkCount;
+				this.totalChunkCount = status.binaryResourceTotalChunkCount;
+			}
+
+			if (this.totalChunkCount != null && this.lastLocalChunkCount != null && this.lastLocalChunkCount >= this.totalChunkCount) {
+				this.stalled = false;
+				return;
+			}
+
+			this.stalled = now - this.lastProgressTimestamp >= QDN_DOWNLOAD_STALL_INTERVAL;
+		}
+
+		private void stopRetrying(String message) {
+			this.retryActive = false;
+			this.lastMessage = message;
+		}
+
+		private void populate(UpdateCheckResult status, long now) {
+			status.downloadStarted = true;
+			status.downloadStartedTimestamp = this.startedTimestamp;
+			status.downloadLastProgressTimestamp = this.lastProgressTimestamp;
+			status.downloadLastProgressAge = Math.max(0L, now - this.lastProgressTimestamp);
+			status.downloadRetryCount = this.retryCount;
+			status.downloadStalled = this.stalled;
+			status.nextRetryTimestamp = this.retryActive ? this.nextRetryTimestamp : null;
+			if (this.binarySignature != null)
+				status.activeDownloadPeerCount = ArbitraryDataFileRequestThread.getInstance().getPeerCountForSignature(this.binarySignature);
+		}
 	}
 
 	public static class DevGroupSummary {

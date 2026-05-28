@@ -792,6 +792,21 @@ public class ArbitraryDataFileManager extends Thread {
     }
 
     /**
+     * Returns the number of currently in-flight chunk requests for a signature.
+     */
+    public int getInFlightRequestCountForSignature(String signature58) {
+        if (signature58 == null)
+            return 0;
+
+        int count = 0;
+        for (InFlightRequestInfo info : inFlightRequestsByHash.values()) {
+            if (info != null && signature58.equals(info.signature58))
+                count++;
+        }
+        return count;
+    }
+
+    /**
      * Clears tried-peers state for a signature when its batch is removed (prevents memory leak).
      */
     public void clearTriedPeersForSignature(String signature58) {

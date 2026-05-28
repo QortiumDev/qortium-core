@@ -51,6 +51,7 @@ public class ArbitraryDataFileRequestThread {
     private static final long BATCH_RAMP_UP_MS = 5000L; // Use INITIAL_BATCH_SIZE until this many ms since fetch started
     private static final long BATCH_INTERVAL_MS = 2000L;  // Interval between batches
     private static final long STALE_BATCH_TIMEOUT_MS = 300000L; // 5 minutes - remove batches that haven't completed
+    private static final long SOURCE_REFRESH_INTERVAL_MS = 30_000L; // Refresh file-list discovery for stalled batches
 
     // Inner class to track pending chunks with their available peers
     // Store PeerData instead of Peer to prevent memory leaks from stale Peer objects
@@ -102,11 +103,13 @@ public class ArbitraryDataFileRequestThread {
         AtomicBoolean initialBatchSent = new AtomicBoolean(false);  // Track if initial batch has been sent
         volatile ArbitraryTransactionData transactionData = null;  // Cached transaction data to avoid repeated DB fetches
         volatile long lastUpdatedTime;  // Track when chunks were last added/modified
+        volatile long lastSourceRefreshTime; // Track file-list rediscovery attempts for this signature
 
         SignatureBatch(String signature58, long firstSeenTime) {
             this.signature58 = signature58;
             this.firstSeenTime = firstSeenTime;
             this.lastUpdatedTime = firstSeenTime;  // Initialize to creation time
+            this.lastSourceRefreshTime = 0L;
         }
     }
 
@@ -709,12 +712,35 @@ public class ArbitraryDataFileRequestThread {
                     int batchLimit = (elapsed >= BATCH_RAMP_UP_MS) ? MAX_BATCH_SIZE : INITIAL_BATCH_SIZE;
                     LOGGER.trace("Sending incremental batch for signature {}: limit {} chunks (elapsed {}s)", 
                             batch.signature58, batchLimit, elapsed / 1000);
-                            sendBatchForSignature(batch, batchLimit, ArbitraryDataFileManager.getInstance(), false, connectedPeers);
+                    ArbitraryDataFileManager dataFileManager = ArbitraryDataFileManager.getInstance();
+                    sendBatchForSignature(batch, batchLimit, dataFileManager, false, connectedPeers);
+                    refreshSourceDiscoveryIfNeeded(batch, dataFileManager, now);
                 }
             }
         } catch (Exception e) {
             LOGGER.error("Error in batch processing: {}", e.getMessage(), e);
         }
+    }
+
+    private void refreshSourceDiscoveryIfNeeded(SignatureBatch batch, ArbitraryDataFileManager dataFileManager, Long now) {
+        if (batch == null || dataFileManager == null || now == null)
+            return;
+
+        if (batch.pendingChunks.isEmpty() || batch.transactionData == null)
+            return;
+
+        if (now - batch.lastSourceRefreshTime < SOURCE_REFRESH_INTERVAL_MS)
+            return;
+
+        Integer peerCount = getPeerCountForSignature(batch.signature58);
+        int inFlightCount = dataFileManager.getInFlightRequestCountForSignature(batch.signature58);
+        if (inFlightCount > 0 && peerCount != null && peerCount > 0)
+            return;
+
+        batch.lastSourceRefreshTime = now;
+        LOGGER.debug("Refreshing QDN source discovery for signature {} (pendingChunks={}, inFlight={}, peers={})",
+                batch.signature58, batch.pendingChunks.size(), inFlightCount, peerCount);
+        ArbitraryDataManager.getInstance().fetchData(batch.transactionData);
     }
 
     /**

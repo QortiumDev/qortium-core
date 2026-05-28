@@ -52,6 +52,15 @@ public class AutoUpdateTests {
 	}
 
 	@Test
+	public void testQdnDownloadRetryIntervalsAreOperatorFriendly() {
+		assertEquals(60_000L, AutoUpdate.QDN_DOWNLOAD_RETRY_INTERVAL);
+		assertEquals(30_000L, AutoUpdate.MANUAL_QDN_DOWNLOAD_RETRY_INTERVAL);
+		assertEquals(60_000L, AutoUpdate.QDN_DOWNLOAD_STALL_INTERVAL);
+		assertTrue(AutoUpdate.MANUAL_QDN_DOWNLOAD_RETRY_INTERVAL < AutoUpdate.CHECK_INTERVAL);
+		assertTrue(AutoUpdate.QDN_DOWNLOAD_STALL_INTERVAL >= AutoUpdate.MANUAL_QDN_DOWNLOAD_RETRY_INTERVAL);
+	}
+
+	@Test
 	public void testAutoUpdateModeCanEnableInstallMode() throws ReflectiveOperationException {
 		Settings settings = newSettingsInstance();
 		FieldUtils.writeField(settings, "autoUpdateMode", AutoUpdateMode.INSTALL, true);
