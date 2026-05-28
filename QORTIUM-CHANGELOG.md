@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-28 - Expose preview render reads publicly
+
+Allowed preview network public API users to read QDN render URLs from the bundled preview settings. This lets Qortium Home and other preview browsers load public APP, WEBSITE, and media resources through `/render` while keeping render authorization and other write-style routes private.
+
 ### 2026-05-28 - build(deps): bump io.netty:netty-bom from 4.2.13.Final to 4.2.14.Final
 
 Updated Qortium's Netty networking library bundle from 4.2.13.Final to 4.2.14.Final. This picks up upstream networking fixes while keeping Qortium's own peer protocol, preview ports, and runtime behavior unchanged.

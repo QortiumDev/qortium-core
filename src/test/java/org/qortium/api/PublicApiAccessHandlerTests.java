@@ -1,10 +1,15 @@
 package org.qortium.api;
 
 import org.apache.commons.lang3.reflect.FieldUtils;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.Common;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -52,6 +57,10 @@ public class PublicApiAccessHandlerTests extends Common {
 		assertTrue(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/arbitrary/WEBSITE/QortiumHome/default", this.settings));
 		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/render/APP/QortiumHomeTest", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "GET", "/render/WEBSITE/QortiumHomeTest/index.html", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/names", this.settings));
 		assertTrue(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/names/search", this.settings));
@@ -90,7 +99,16 @@ public class PublicApiAccessHandlerTests extends Common {
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "POST", "/arbitrary/WEBSITE/QortiumHome", this.settings));
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/render/authorize/APP/QortiumHomeTest/home-test", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "DELETE", "/arbitrary/resource/WEBSITE/QortiumHome/default", this.settings));
+	}
+
+	@Test
+	public void testPreviewTemplatesExposeRenderReadsOnly() throws Exception {
+		assertPreviewTemplateExposesRenderReadsOnly(Path.of("preview/settings-preview.json"));
+		assertPreviewTemplateExposesRenderReadsOnly(Path.of("preview/settings-preview-seed.json"));
+		assertPreviewTemplateExposesRenderReadsOnly(Path.of("preview/settings-preview-seed-netcup.json"));
 	}
 
 	@Test
@@ -120,9 +138,30 @@ public class PublicApiAccessHandlerTests extends Common {
 				"GET /admin/status",
 				"GET /peers/known",
 				"GET /arbitrary/*",
+				"GET /render/*",
 				"GET /names/*",
 				"GET /transactions/*"
 		}, true);
+	}
+
+	private static void assertPreviewTemplateExposesRenderReadsOnly(Path settingsPath) throws Exception {
+		JSONObject settingsJson = new JSONObject(Files.readString(settingsPath));
+		JSONArray publicApiPaths = settingsJson.getJSONArray("publicApiPaths");
+
+		assertTrue(settingsPath + " should enable preview QDN auth bypass",
+				settingsJson.getBoolean("qdnAuthBypassEnabled"));
+		assertTrue(settingsPath + " should allow public render reads",
+				jsonArrayContains(publicApiPaths, "GET /render/*"));
+		assertFalse(settingsPath + " should not expose render authorization writes",
+				jsonArrayContains(publicApiPaths, "POST /render/authorize/*"));
+	}
+
+	private static boolean jsonArrayContains(JSONArray array, String value) {
+		for (int i = 0; i < array.length(); ++i)
+			if (value.equals(array.getString(i)))
+				return true;
+
+		return false;
 	}
 
 }

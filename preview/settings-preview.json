@@ -50,6 +50,7 @@
     "GET /admin/status",
     "GET /peers/known",
     "GET /arbitrary/*",
+    "GET /render/*",
     "GET /names/*",
     "GET /addresses/*",
     "GET /blocks/*",
