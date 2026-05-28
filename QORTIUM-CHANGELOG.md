@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Record staged QDN auto-update smoke target
+
+Added a small operator-note update for the next preview auto-update smoke test. This commit is intentionally non-consensus and exists so the preview nodes can test the staged seed-hosted QDN update flow from a newer build without changing chain rules, genesis data, ports, or public API policy.
+
 ### 2026-05-27 - Harden QDN auto-update staging and status
 
 Changed QDN auto-update handling so manual install requests only report `INSTALL_STARTED` after the pinned update binary is local, hash verified, and the apply-update helper has been scheduled. If update chunks are still missing, the admin status now reports download preparation and chunk progress instead of pretending the install started, and background install mode retries missing-data updates sooner. The publish helper can also split seed-hosted QDN staging from local signing, letting a restricted seed host update chunks without holding the publishing private key.

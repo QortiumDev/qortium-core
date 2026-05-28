@@ -115,6 +115,11 @@ two different seed paths:
 Use a small non-consensus commit as the first update target so the smoke test
 proves the updater path without changing preview chain rules.
 
+The staged QDN auto-update smoke target is also a non-consensus operator-note
+commit. It is only meant to prove that a seed can host the update chunks while a
+separate local node signs and submits the pinned binary transaction and update
+manifest.
+
 Enable automatic install on one seed only:
 
 ```sh
