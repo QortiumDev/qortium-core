@@ -6,7 +6,8 @@ RUN_PID="${SCRIPT_DIR}/run.pid"
 APIKEY_FILE="${SCRIPT_DIR}/apikey.txt"
 
 api_port=24891
-stop_timeout=45
+stop_timeout=120
+term_grace_timeout=15
 stale_pid=0
 for arg in "$@"; do
 	case "${arg}" in
@@ -84,8 +85,21 @@ if [ -n "${pid}" ]; then
 	while state="$(ps -p "${pid}" -o stat= 2>/dev/null)" && [ -n "${state}" ] && [ "${state}" != "Z" ]; do
 		if [ "${SECONDS}" -ge "${deadline}" ]; then
 			echo
-			echo "Preview node did not stop within ${stop_timeout}s; forcing process ${pid} to exit."
-			kill -9 "${pid}" >/dev/null 2>&1 || true
+			echo "Preview node did not stop within ${stop_timeout}s; asking process ${pid} to terminate."
+			kill -15 "${pid}" >/dev/null 2>&1 || true
+
+			term_deadline="$((SECONDS + term_grace_timeout))"
+			while state="$(ps -p "${pid}" -o stat= 2>/dev/null)" && [ -n "${state}" ] && [ "${state}" != "Z" ]; do
+				if [ "${SECONDS}" -ge "${term_deadline}" ]; then
+					echo
+					echo "Preview node still running after ${term_grace_timeout}s; forcing process ${pid} to exit."
+					kill -9 "${pid}" >/dev/null 2>&1 || true
+					break
+				fi
+
+				echo -n "."
+				sleep 1
+			done
 			break
 		fi
 

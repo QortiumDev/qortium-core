@@ -1,7 +1,8 @@
 $ErrorActionPreference = "Stop"
 
 $ApiPort = 24891
-$StopTimeout = 45
+$StopTimeout = 120
+$WindowCloseTimeout = 15
 
 function Show-Usage {
     Write-Host "Usage: preview\stop.bat [--api-port=PORT] [--timeout=SECONDS]"
@@ -95,8 +96,19 @@ if ($null -ne $Pid) {
     while ($null -ne (Get-Process -Id $Pid -ErrorAction SilentlyContinue)) {
         if ((Get-Date) -ge $Deadline) {
             Write-Host ""
-            Write-Host "Preview node did not stop within ${StopTimeout}s; forcing process $Pid to exit."
-            Stop-Process -Id $Pid -Force -ErrorAction SilentlyContinue
+            Write-Host "Preview node did not stop within ${StopTimeout}s; asking process $Pid to close."
+            try {
+                $Process = Get-Process -Id $Pid -ErrorAction Stop
+                if ($Process.CloseMainWindow()) {
+                    $Process.WaitForExit($WindowCloseTimeout * 1000) | Out-Null
+                }
+            } catch {
+            }
+
+            if ($null -ne (Get-Process -Id $Pid -ErrorAction SilentlyContinue)) {
+                Write-Host "Preview node still running after ${WindowCloseTimeout}s; forcing process $Pid to exit."
+                Stop-Process -Id $Pid -Force -ErrorAction SilentlyContinue
+            }
             break
         }
 

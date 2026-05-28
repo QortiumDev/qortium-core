@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-28 - Give preview stops more time to shut down cleanly
+
+Extended the preview stop helpers so they wait longer for Core to shut down through the API before forcing the Java process to exit. This gives the node more room to finish database, backup, and update-restart cleanup on slower machines or VPS hosts, while still keeping an eventual force-stop fallback for stuck processes.
+
 ### 2026-05-27 - Record QDN auto-update retry smoke target
 
 Added a small operator-note update for testing the improved QDN auto-update retry path. This commit is intentionally non-consensus and exists so preview nodes can prove that a single manual `/admin/update` request keeps retrying a missing QDN binary until the resource is ready, while another node can still test automatic `INSTALL` mode.
