@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-28 - Gossip inbound peer listen addresses
+
+Changed peer discovery so a node that connects inbound can have its advertised listen address treated as recently reachable in memory. This helps preview participants learn about active outside peers through the seed nodes instead of only seeing the fixed seed list, while leaving long-term peer persistence rules unchanged.
+
 ### 2026-05-28 - Expose preview render reads publicly
 
 Allowed preview network public API users to read QDN render URLs from the bundled preview settings. This lets Qortium Home and other preview browsers load public APP, WEBSITE, and media resources through `/render` while keeping render authorization and other write-style routes private.

@@ -2047,12 +2047,15 @@ public class Network {
         int peerPort = peerAddresses.get(0).getPort();
         peerAddresses.remove(0);
 
+        List<PeerAddress> recentlyConnectedPeerAddresses = Collections.emptyList();
+
         // If inbound peer, use listen port and socket address to recreate first entry
         if (!peer.isOutbound()) {
             String host = peer.getPeerData().getAddress().getHost();
             PeerAddress sendingPeerAddress = PeerAddress.fromString(host + ":" + peerPort);
             LOGGER.trace("PEERS sending peer's listen address: {}", sendingPeerAddress.toString());
             peerAddresses.add(0, sendingPeerAddress);
+            recentlyConnectedPeerAddresses = Collections.singletonList(sendingPeerAddress);
             
             // CRITICAL FIX: Update cache with listen address -> nodeId mapping
             // This allows getConnectablePeer() to identify that we're already connected to this peer
@@ -2065,7 +2068,7 @@ public class Network {
             }
         }
 
-        opportunisticMergePeers(peer.toString(), peerAddresses);
+        opportunisticMergePeers(peer.toString(), peerAddresses, recentlyConnectedPeerAddresses);
     }
 
     protected void onHandshakeCompleted(Peer peer) {
@@ -2689,13 +2692,18 @@ public class Network {
         mergePeersLock.lock();
 
         try{
-            return this.mergePeersUnlocked(addedBy, addedWhen, peerAddresses);
+            return this.mergePeersUnlocked(addedBy, addedWhen, peerAddresses, Collections.emptyList());
         } finally {
             mergePeersLock.unlock();
         }
     }
 
     private void opportunisticMergePeers(String addedBy, List<PeerAddress> peerAddresses) {
+        opportunisticMergePeers(addedBy, peerAddresses, Collections.emptyList());
+    }
+
+    private void opportunisticMergePeers(String addedBy, List<PeerAddress> peerAddresses,
+                                         List<PeerAddress> recentlyConnectedPeerAddresses) {
         final Long addedWhen = NTP.getTime();
         if (addedWhen == null) {
             return;
@@ -2709,7 +2717,7 @@ public class Network {
         try {
             // Merging peers isn't critical so don't block for a repository instance.
 
-            this.mergePeersUnlocked(addedBy, addedWhen, peerAddresses);
+            this.mergePeersUnlocked(addedBy, addedWhen, peerAddresses, recentlyConnectedPeerAddresses);
 
         } catch (DataException e) {
             // Already logged by this.mergePeersUnlocked()
@@ -2718,33 +2726,57 @@ public class Network {
         }
     }
 
-    private boolean mergePeersUnlocked(String addedBy, long addedWhen, List<PeerAddress> peerAddresses)
+    private boolean mergePeersUnlocked(String addedBy, long addedWhen, List<PeerAddress> peerAddresses,
+                                       List<PeerAddress> recentlyConnectedPeerAddresses)
             throws DataException {
         List<String> fixedNetwork = Settings.getInstance().getFixedNetwork();
         if (fixedNetwork != null && !fixedNetwork.isEmpty()) {
             return false;
         }
+        boolean updatedRecentlyConnectedPeer = false;
         List<PeerData> newPeers;
         synchronized (this.allKnownPeers) {
             for (PeerData knownPeerData : this.allKnownPeers) {
+                updatedRecentlyConnectedPeer |= markRecentlyConnectedPeerData(knownPeerData,
+                        addedWhen, recentlyConnectedPeerAddresses);
+
                 // Filter out duplicates, without resolving via DNS
                 Predicate<PeerAddress> isKnownAddress = peerAddress -> knownPeerData.getAddress().equals(peerAddress);
                 peerAddresses.removeIf(isKnownAddress);
             }
 
             if (peerAddresses.isEmpty()) {
-                return false;
+                return updatedRecentlyConnectedPeer;
             }
 
             // Add leftover peer addresses to known peers list
             newPeers = peerAddresses.stream()
-                    .map(peerAddress -> new PeerData(peerAddress, addedWhen, addedBy))
+                    .map(peerAddress -> {
+                        PeerData peerData = new PeerData(peerAddress, addedWhen, addedBy);
+                        markRecentlyConnectedPeerData(peerData, addedWhen, recentlyConnectedPeerAddresses);
+                        return peerData;
+                    })
                     .collect(Collectors.toList());
 
             this.allKnownPeers.addAll(newPeers);
 
             return true;
         }
+    }
+
+    static boolean markRecentlyConnectedPeerData(PeerData peerData, long timestamp,
+                                                 List<PeerAddress> recentlyConnectedPeerAddresses) {
+        if (peerData == null || recentlyConnectedPeerAddresses == null)
+            return false;
+
+        boolean isRecentlyConnected = recentlyConnectedPeerAddresses.stream()
+                .anyMatch(peerAddress -> peerData.getAddress().equals(peerAddress));
+        if (!isRecentlyConnected)
+            return false;
+
+        peerData.setLastAttempted(timestamp);
+        peerData.setLastConnected(timestamp);
+        return true;
     }
 
     public void broadcast(Function<Peer, Message> peerMessageBuilder) {
