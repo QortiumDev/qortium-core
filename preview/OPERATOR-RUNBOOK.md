@@ -132,6 +132,11 @@ commit. It is only meant to retest the normal one-step local publish flow where
 the local node owns the QDN name, publishes the update binary, and submits the
 approval manifest in one run.
 
+The QDN auto-update retry smoke target is another non-consensus operator-note
+commit. It is only meant to prove that a manual `/admin/update` request keeps
+retrying after an initial missing-data result, while a separate node in
+`INSTALL` mode can also test the automatic retry path.
+
 Enable automatic install on one seed only:
 
 ```sh

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Record QDN auto-update retry smoke target
+
+Added a small operator-note update for testing the improved QDN auto-update retry path. This commit is intentionally non-consensus and exists so preview nodes can prove that a single manual `/admin/update` request keeps retrying a missing QDN binary until the resource is ready, while another node can still test automatic `INSTALL` mode.
+
 ### 2026-05-27 - Continue QDN auto-update downloads after stalls
 
 Changed manual QDN auto-update installs so a missing binary download keeps retrying after the first `/admin/update` request instead of requiring another operator call. Update status now reports retry progress, stale download state, next retry timing, and active QDN peer count, while the QDN chunk requester refreshes source discovery when a batch has pending chunks but no useful request path.
