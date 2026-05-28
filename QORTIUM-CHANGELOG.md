@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Document preview runtime jar replacement
+
+Updated the preview seed operator runbook to call out that `preview/qortium.jar` takes priority over the freshly built jar in `target/`. Operators now have an explicit copy step after building, which prevents a seed from restarting on an older release-style runtime jar by accident.
+
 ### 2026-05-27 - Retry stalled QDN chunk downloads
 
 Changed QDN chunk download retry handling so a timed-out chunk request can retry the same source again instead of permanently treating that peer as already tried. Download batches now keep temporarily unavailable chunks pending for another attempt, which matters for preview auto-updates and other QDN resources that may initially have only one reachable holder.

@@ -30,6 +30,13 @@ git pull --ff-only
 The preview launcher will use the built jar under `target/` unless a local
 `qortium.jar` exists in the repository or preview folder.
 
+If the node is using the release-style preview runtime jar, replace it after
+building and before restarting:
+
+```sh
+cp target/qortium-1.0.0.jar preview/qortium.jar
+```
+
 ## Stop, Start, And Check
 
 Stop the current preview node:
