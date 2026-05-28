@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Record local QDN auto-update smoke target
+
+Added a small operator-note update for the preview network's local QDN auto-update publish test. This commit is intentionally non-consensus and exists so the nodes can test the normal one-step local publish flow with a newer build, separate from the staged seed-hosted update flow.
+
 ### 2026-05-27 - Record staged QDN auto-update smoke target
 
 Added a small operator-note update for the next preview auto-update smoke test. This commit is intentionally non-consensus and exists so the preview nodes can test the staged seed-hosted QDN update flow from a newer build without changing chain rules, genesis data, ports, or public API policy.
