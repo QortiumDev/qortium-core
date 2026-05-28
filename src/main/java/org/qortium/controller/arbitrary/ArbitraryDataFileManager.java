@@ -799,6 +799,21 @@ public class ArbitraryDataFileManager extends Thread {
         triedPeersByChunk.keySet().removeIf(k -> k != null && k.startsWith(prefix));
     }
 
+    private void clearTimedOutChunkRequest(String hash58) {
+        InFlightRequestInfo inFlightRequestInfo = inFlightRequestsByHash.remove(hash58);
+        if (inFlightRequestInfo == null)
+            return;
+
+        String key = inFlightRequestInfo.signature58 + "|" + hash58;
+        Set<String> triedPeers = triedPeersByChunk.get(key);
+        if (triedPeers == null)
+            return;
+
+        triedPeers.remove(inFlightRequestInfo.peerAddress);
+        if (triedPeers.isEmpty())
+            triedPeersByChunk.remove(key);
+    }
+
 
     /** Mark a signature as recently completed (all chunks done). Entries expire after 12 seconds and are removed on read or at shutdown. */
     public void markSignatureCompleted(String signature58) {
@@ -827,8 +842,7 @@ public class ArbitraryDataFileManager extends Thread {
         arbitraryDataFileRequests.entrySet().removeIf(entry -> {
             Long value = entry.getValue();
             if (value == null || value < requestMinimumTimestamp) {
-                String hash58 = entry.getKey();
-                inFlightRequestsByHash.remove(hash58);
+                clearTimedOutChunkRequest(entry.getKey());
                 return true;
             }
             return false;

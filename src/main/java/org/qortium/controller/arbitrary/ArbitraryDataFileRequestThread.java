@@ -1058,10 +1058,8 @@ public class ArbitraryDataFileRequestThread {
                 if (selectedPeer != null) {
                     chunksByPeer.computeIfAbsent(selectedPeer, k -> new ArrayList<>()).add(chunk);
                 } else {
-                    // No peer available (e.g. all tried for this chunk) - remove so we don't retry forever
-                    String hash58 = chunk.responseInfo.getHash58();
-                    batch.pendingChunks.remove(hash58);
-                    adfm.clearChunkReceived(hash58, batch.signature58);
+                    LOGGER.trace("No available peer for chunk {} in signature {}; keeping it pending for retry",
+                            chunk.responseInfo.getHash58(), batch.signature58);
                 }
             }
         } else {
@@ -1085,9 +1083,8 @@ public class ArbitraryDataFileRequestThread {
                 if (selectedPeer != null) {
                     chunksByPeer.computeIfAbsent(selectedPeer, k -> new ArrayList<>()).add(chunk);
                 } else {
-                    String hash58 = chunk.responseInfo.getHash58();
-                    batch.pendingChunks.remove(hash58);
-                    adfm.clearChunkReceived(hash58, batch.signature58);
+                    LOGGER.trace("No available peer for chunk {} in signature {}; keeping it pending for retry",
+                            chunk.responseInfo.getHash58(), batch.signature58);
                 }
             }
         }

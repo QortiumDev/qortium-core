@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-27 - Retry stalled QDN chunk downloads
+
+Changed QDN chunk download retry handling so a timed-out chunk request can retry the same source again instead of permanently treating that peer as already tried. Download batches now keep temporarily unavailable chunks pending for another attempt, which matters for preview auto-updates and other QDN resources that may initially have only one reachable holder.
+
 ### 2026-05-27 - Record local QDN auto-update smoke target
 
 Added a small operator-note update for the preview network's local QDN auto-update publish test. This commit is intentionally non-consensus and exists so the nodes can test the normal one-step local publish flow with a newer build, separate from the staged seed-hosted update flow.
