@@ -1,5 +1,6 @@
 package org.qortium.api.model;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import org.qortium.controller.Controller;
 import org.qortium.controller.OnlineAccountsManager;
 import org.qortium.controller.Synchronizer;
@@ -28,10 +29,27 @@ public class NodeStatus {
 	public final boolean isMintingPossible;
 	public final boolean isSynchronizing;
 
-	// Not always present
+	@Schema(
+			description = "Sync progress percentage when Core knows a target height. May be null while the node is connecting or stale and has not learned a peer target height yet.",
+			nullable = true
+	)
 	public final Integer syncPercent;
+
+	@Schema(
+			description = "Target block height used for sync progress. May be null while the node is connecting or stale and has not learned a peer target height yet.",
+			nullable = true
+	)
 	public final Integer syncTargetHeight;
+
+	@Schema(
+			description = "Estimated blocks remaining to the target height. May be null while the node is connecting or stale and has not learned a peer target height yet.",
+			nullable = true
+	)
 	public final Integer syncBlocksRemaining;
+
+	@Schema(
+			description = "Current sync phase. Always present; clients should use this during startup windows where numeric progress fields are not yet known."
+	)
 	public final SyncPhase syncPhase;
 
 	public final int numberOfConnections;

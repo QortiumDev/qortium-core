@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-29 - Document optional status progress fields
+
+Clarified the `/admin/status` response documentation so apps know that the sync phase is always present, while numeric progress fields can be absent during a fresh startup before Core has learned a peer target height. This matches the existing behavior and helps clients handle the short connecting or stale window without treating it as an error.
+
 ### 2026-05-28 - Gossip inbound peer listen addresses
 
 Changed peer discovery so a node that connects inbound can have its advertised listen address treated as recently reachable in memory. This helps preview participants learn about active outside peers through the seed nodes instead of only seeing the fixed seed list, while leaving long-term peer persistence rules unchanged.
