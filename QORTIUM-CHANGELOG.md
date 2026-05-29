@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-05-29 - Tighten the coverage profile baseline
+
+Made the coverage profile easier to use and more meaningful for future checks. Running the coverage profile now turns unit tests on automatically, writes the JaCoCo report during verification, ignores generated Zcash protocol stubs that are not useful coverage targets, and raises the minimum coverage levels to better match the current tested codebase.
+
 ### 2026-05-29 - Document optional status progress fields
 
 Clarified the `/admin/status` response documentation so apps know that the sync phase is always present, while numeric progress fields can be absent during a fresh startup before Core has learned a peer target height. This matches the existing behavior and helps clients handle the short connecting or stale window without treating it as an error.

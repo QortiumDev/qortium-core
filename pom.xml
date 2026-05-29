@@ -32,9 +32,9 @@
 		<icu4j.version>78.3</icu4j.version>
 		<java-diff-utils.version>4.17</java-diff-utils.version>
 		<jacoco-maven-plugin.version>0.8.14</jacoco-maven-plugin.version>
-		<jacoco.minimum.branch.coverage>0.20</jacoco.minimum.branch.coverage>
-		<jacoco.minimum.instruction.coverage>0.30</jacoco.minimum.instruction.coverage>
-		<jacoco.minimum.line.coverage>0.30</jacoco.minimum.line.coverage>
+		<jacoco.minimum.branch.coverage>0.35</jacoco.minimum.branch.coverage>
+		<jacoco.minimum.instruction.coverage>0.50</jacoco.minimum.instruction.coverage>
+		<jacoco.minimum.line.coverage>0.48</jacoco.minimum.line.coverage>
 		<jaxb-runtime.version>2.3.9</jaxb-runtime.version>
 		<jersey.version>2.48</jersey.version>
 		<jetty.version>12.1.9</jetty.version>
@@ -891,6 +891,9 @@
 	<profiles>
 		<profile>
 			<id>coverage</id>
+			<properties>
+				<skipJUnitTests>false</skipJUnitTests>
+			</properties>
 			<build>
 				<plugins>
 					<plugin>
@@ -899,6 +902,8 @@
 						<version>${jacoco-maven-plugin.version}</version>
 						<configuration>
 							<excludes>
+								<!-- Generated Zcash protobuf/grpc protocol stubs should not dilute Qortium's coverage gate. -->
+								<exclude>cash/z/wallet/sdk/rpc/**</exclude>
 								<!-- Coverage instrumentation makes this performance-sensitive PoW loop too slow for full-suite runs. -->
 								<exclude>org/qortium/crypto/MemoryPoW*</exclude>
 							</excludes>
@@ -930,6 +935,12 @@
 								<id>prepare-agent</id>
 								<goals>
 									<goal>prepare-agent</goal>
+								</goals>
+							</execution>
+							<execution>
+								<id>report</id>
+								<goals>
+									<goal>report</goal>
 								</goals>
 							</execution>
 							<execution>
