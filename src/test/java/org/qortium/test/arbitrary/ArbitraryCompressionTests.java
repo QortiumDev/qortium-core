@@ -16,6 +16,7 @@ import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 import static org.junit.Assert.*;
@@ -194,6 +195,27 @@ public class ArbitraryCompressionTests extends Common {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             fail("Unexpected interruption");
+        }
+    }
+
+    @Test
+    public void testZipSanitizesWhitespaceAndInvalidEntryCharacters() throws IOException, InterruptedException {
+        Path inputFile = Files.createTempFile("inputFile", null);
+        Path outputFile = Files.createTempFile("outputFile", ".zip");
+
+        ZipUtils.zip(inputFile.toString(), outputFile.toString(), " data | ");
+
+        try (ZipInputStream zipInputStream = new ZipInputStream(Files.newInputStream(outputFile))) {
+            ZipEntry folderEntry = zipInputStream.getNextEntry();
+            assertNotNull(folderEntry);
+            assertEquals("data/", folderEntry.getName());
+
+            ZipEntry fileEntry = zipInputStream.getNextEntry();
+            assertNotNull(fileEntry);
+            assertTrue(fileEntry.getName().startsWith("data/"));
+            assertFalse(fileEntry.getName().contains("|"));
+
+            assertNull(zipInputStream.getNextEntry());
         }
     }
 
