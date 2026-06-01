@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Guard AT timestamp height arithmetic
+
+Changed automated-transaction timestamp math so block-height additions are done explicitly in `long` values and checked before converting back to the integer height expected by the CIYAM timestamp type. This removes an implicit narrowing conversion flagged by the scanner and makes an impossible overflow fail clearly instead of silently wrapping the target block height.
+
+### 2026-06-01 - Contain upload and list filenames
+
+Added a shared helper for resolving a single filename inside a known base directory, then used it for chunk-upload working files, raw string and base64 upload temp files, and local resource-list JSON files. Upload chunk directories now reject path-like service, name, identifier, filename, and chunk values instead of trimming them down to a leaf name, and resource lists can no longer be created or loaded through traversal-style names. This narrows another set of path-handling security findings while keeping normal chunked QDN uploads and list persistence behavior intact.
+
 ### 2026-06-01 - Harden browser-facing security boundaries
 
 Tightened several browser-facing paths highlighted by the security scan. Q-App fallback navigation now confirms generated resource links stay on the current origin before redirecting, the developer proxy validates its loopback source before building the upstream URL, QDN plain-text responses now declare a plain-text content type while the loading page keeps an HTML content type, loading-page template values are escaped before entering JavaScript strings, and cross-chain ledger downloads reuse the safe attachment filename helper. This reduces the remaining XSS, open-redirect, and SSRF scan surface without changing normal QDN rendering, developer proxy, or ledger download behavior.

@@ -14,6 +14,7 @@ import org.qortium.utils.ListUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
 
@@ -73,6 +74,19 @@ public class ListTests {
 
         assertEquals(1, listNames.size());
         assertEquals("followedNames_test", listNames.get(0));
+    }
+
+    @Test
+    public void testListRejectsTraversalName() throws IOException {
+        try {
+            new ResourceList("../followedNames_escape");
+            fail("Expected traversal list name to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("outside"));
+        }
+
+        assertFalse(ResourceListManager.getInstance().addToList("../followedNames_escape", "testName1", true));
+        assertFalse(Files.exists(Paths.get(Settings.getInstance().getListsPath()).resolve("..").resolve("followedNames_escape.json").normalize()));
     }
 
     @Test

@@ -256,6 +256,30 @@ public class FilesystemUtils {
         }
     }
 
+    public static Path resolveFileNameInsideBase(Path base, String filename) throws IOException {
+        if (filename == null || filename.isBlank()) {
+            throw new IOException("Filename is missing");
+        }
+        if (filename.indexOf('/') >= 0 || filename.indexOf('\\') >= 0) {
+            throw new IOException("Filename is outside of the target dir: " + filename);
+        }
+
+        try {
+            Path filenamePath = Paths.get(filename).normalize();
+            if (filenamePath.isAbsolute() ||
+                    filenamePath.getNameCount() != 1 ||
+                    filenamePath.toString().isEmpty() ||
+                    ".".equals(filenamePath.toString()) ||
+                    "..".equals(filenamePath.toString())) {
+                throw new IOException("Filename is outside of the target dir: " + filename);
+            }
+
+            return FilesystemUtils.resolveInsideBase(base, filenamePath);
+        } catch (InvalidPathException e) {
+            throw new IOException("Filename is invalid", e);
+        }
+    }
+
     public static long getDirectorySize(Path path) throws IOException {
         return getDirectorySize(path, false);
     }
