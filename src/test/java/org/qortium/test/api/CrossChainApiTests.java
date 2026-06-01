@@ -3,8 +3,10 @@ package org.qortium.test.api;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.api.ApiError;
+import org.qortium.api.model.CrossChainTradeLedgerEntry;
 import org.qortium.api.model.crosschain.SupportedBlockchainInfo;
 import org.qortium.api.resource.CrossChainResource;
+import org.qortium.api.resource.CrossChainUtils;
 import org.qortium.crosschain.BitcoinyChainConfig;
 import org.qortium.crosschain.BitcoinyChainSpec;
 import org.qortium.crosschain.BitcoinyChainSpecs;
@@ -14,6 +16,8 @@ import org.qortium.crosschain.PirateChain;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.ApiCommon;
 
+import java.io.IOException;
+import java.io.StringWriter;
 import java.lang.reflect.Field;
 import java.util.List;
 
@@ -85,6 +89,25 @@ public class CrossChainApiTests extends ApiCommon {
 		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(UNKNOWN_BLOCKCHAIN, null, null, null, null, null, null, limit, offset, reverse));
 		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(null, UNKNOWN_BLOCKCHAIN, null, null, null, null, null, limit, offset, reverse));
 		assertApiError(ApiError.INVALID_CRITERIA, () -> this.crossChainResource.getCompletedTrades(null, null, UNKNOWN_BLOCKCHAIN, null, null, null, null, limit, offset, reverse));
+	}
+
+	@Test
+	public void testLedgerCsvEscapesStringFields() throws IOException {
+		CrossChainTradeLedgerEntry entry = new CrossChainTradeLedgerEntry(
+				"BTC,NATIVE",
+				"=BTC",
+				100000000L,
+				5000000L,
+				"F\"EE",
+				250000000L,
+				0L);
+		StringWriter writer = new StringWriter();
+
+		CrossChainUtils.writeToLedger(writer, List.of(entry));
+
+		String expected = "Market,Currency,Quantity,Commission Paid,Commission Currency,Total Price,Date Time,Exchange" + System.lineSeparator()
+				+ "\"BTC,NATIVE\",'=BTC,1.00000000,0.05000000,\"F\"\"EE\",2.50000000,19700101 00:00,Local Chain" + System.lineSeparator();
+		assertEquals(expected, writer.toString());
 	}
 
 	private static void assertSupportedBitcoinInfo(List<SupportedBlockchainInfo> blockchains) {
