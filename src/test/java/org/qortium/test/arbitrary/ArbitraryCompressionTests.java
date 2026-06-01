@@ -15,6 +15,8 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.Assert.*;
 
@@ -177,6 +179,44 @@ public class ArbitraryCompressionTests extends Common {
         ArbitraryDataDigest unzippedDirectoryDigest = new ArbitraryDataDigest(unzippedInnerDirectory);
         unzippedDirectoryDigest.compute();
         assertEquals(inputDirectoryDigest.getHash58(), unzippedDirectoryDigest.getHash58());
+    }
+
+    @Test
+    public void testZipRejectsTraversalEnclosingFolder() throws IOException {
+        Path inputFile = Files.createTempFile("inputFile", null);
+        Path outputFile = Files.createTempFile("outputFile", null);
+
+        try {
+            ZipUtils.zip(inputFile.toString(), outputFile.toString(), "../data");
+            fail("Expected unsafe ZIP enclosing folder to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("outside"));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            fail("Unexpected interruption");
+        }
+    }
+
+    @Test
+    public void testUnzipRejectsTraversalEntry() throws IOException {
+        Path zipFile = Files.createTempFile("traversal", ".zip");
+        Path outputDirectory = Files.createTempDirectory("unzippedDirectory");
+        Path outsideFile = outputDirectory.resolve("..").resolve("outside.txt").normalize();
+
+        try (ZipOutputStream zipOutputStream = new ZipOutputStream(Files.newOutputStream(zipFile))) {
+            zipOutputStream.putNextEntry(new ZipEntry("../outside.txt"));
+            zipOutputStream.write("outside".getBytes());
+            zipOutputStream.closeEntry();
+        }
+
+        try {
+            ZipUtils.unzip(zipFile.toString(), outputDirectory.toString());
+            fail("Expected unsafe ZIP entry to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("outside"));
+        }
+
+        assertFalse(Files.exists(outsideFile));
     }
 
 }
