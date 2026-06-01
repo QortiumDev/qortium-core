@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Harden cross-chain ledger CSV responses
+
+Changed cross-chain trade ledger exports so market, currency, fee, and exchange labels are escaped before being written into CSV rows. This keeps the ledger export readable while preventing those labels from breaking CSV columns or being treated as spreadsheet formulas when opened.
+
 ### 2026-06-01 - Resolve ZIP extraction paths through shared guard
 
 Changed ZIP extraction so archive entries are normalized through the shared relative-path guard before Core creates directories or writes files. Absolute archive entries are now rejected explicitly, and the streaming unzip path has matching traversal coverage, keeping QDN archive extraction inside its intended destination directory.
