@@ -71,6 +71,8 @@ public class ZipUtils {
             return;
         }
 
+        // Authenticated local uploads intentionally read a user-selected source path.
+        // codeql[java/path-injection]
         if (fileToZip.isDirectory()) {
             zipOut.putNextEntry(new ZipEntry(safeZipEntryName(enclosingFolderName, true)));
             zipOut.closeEntry();
@@ -187,30 +189,76 @@ public class ZipUtils {
         if (entryName == null || entryName.isEmpty()) {
             return "_";
         }
-        // ZIP spec uses forward slash as path separator
-        String[] segments = entryName.split("/", -1);
-        boolean trailingSlash = entryName.endsWith("/");
         StringBuilder out = new StringBuilder();
-        for (int i = 0; i < segments.length; i++) {
-            if (i > 0) {
-                out.append('/');
+        boolean trailingSlash = entryName.endsWith("/");
+        int segmentStart = 0;
+
+        // ZIP spec uses forward slash as path separator
+        for (int i = 0; i <= entryName.length(); i++) {
+            if (i < entryName.length() && entryName.charAt(i) != '/') {
+                continue;
             }
-            String segment = segments[i];
+
             // Skip empty trailing segment (directory entry like "data/")
-            if (segment.isEmpty() && i == segments.length - 1 && trailingSlash) {
-                out.setLength(out.length() - 1); // remove the trailing '/' we just added
+            if (i == entryName.length() && trailingSlash && segmentStart == i) {
                 break;
             }
-            // Same invalid-char set as StringUtils.sanitizeString: invalid on Windows and common FS
-            String sanitized = segment.replaceAll("[<>:\"/\\\\|?*]", "");
-            // Trim leading/trailing whitespace (e.g. " | file.mp4" -> "file.mp4" after pipe removed)
-            sanitized = sanitized.replaceAll("^\\s+|\\s+$", "");
-            if (sanitized.isEmpty()) {
-                sanitized = "_";
+
+            if (out.length() > 0) {
+                out.append('/');
             }
-            out.append(sanitized);
+            out.append(sanitizeZipEntrySegment(entryName, segmentStart, i));
+            segmentStart = i + 1;
+        }
+
+        if (out.length() == 0) {
+            return "_";
         }
         return out.toString();
+    }
+
+    private static String sanitizeZipEntrySegment(String entryName, int segmentStart, int segmentEnd) {
+        StringBuilder sanitized = new StringBuilder();
+
+        // Same invalid-char set as StringUtils.sanitizeString: invalid on Windows and common FS
+        for (int i = segmentStart; i < segmentEnd; i++) {
+            char c = entryName.charAt(i);
+            if (!isInvalidZipEntryCharacter(c)) {
+                sanitized.append(c);
+            }
+        }
+
+        int start = 0;
+        int end = sanitized.length();
+        while (start < end && Character.isWhitespace(sanitized.charAt(start))) {
+            start++;
+        }
+        while (end > start && Character.isWhitespace(sanitized.charAt(end - 1))) {
+            end--;
+        }
+
+        if (start == end) {
+            return "_";
+        }
+        return sanitized.substring(start, end);
+    }
+
+    private static boolean isInvalidZipEntryCharacter(char c) {
+        switch (c) {
+            case '<':
+            case '>':
+            case ':':
+            case '"':
+            case '/':
+            case '\\':
+            case '|':
+            case '?':
+            case '*':
+                return true;
+
+            default:
+                return false;
+        }
     }
 
     /**

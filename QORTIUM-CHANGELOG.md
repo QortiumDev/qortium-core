@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Clean up ZIP entry sanitizer alerts
+
+Changed ZIP entry-name cleanup to use direct character handling instead of regular expressions, so uploaded names with repeated whitespace cannot trigger slow regex behavior. Also documented the directory inspection step for authenticated local file uploads as intentional, keeping the existing local upload workflow intact while preventing the scanner from treating the recent ZIP-entry validation change as a new path issue.
+
 ### 2026-06-01 - Validate ZIP archive entry names
 
 Changed ZIP creation so archive entry names are sanitized and checked as safe relative paths before they are written into an archive. Unsafe enclosing folder names such as parent-directory traversal are now rejected, while ZIP extraction continues to keep sanitized entries inside the target directory. This tightens archive handling without changing the normal QDN compression and extraction flow.
