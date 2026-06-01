@@ -8,7 +8,10 @@ import org.qortium.repository.DataException;
 import org.qortium.test.common.Common;
 import org.qortium.utils.ZipUtils;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -225,11 +228,7 @@ public class ArbitraryCompressionTests extends Common {
         Path outputDirectory = Files.createTempDirectory("unzippedDirectory");
         Path outsideFile = outputDirectory.resolve("..").resolve("outside.txt").normalize();
 
-        try (ZipOutputStream zipOutputStream = new ZipOutputStream(Files.newOutputStream(zipFile))) {
-            zipOutputStream.putNextEntry(new ZipEntry("../outside.txt"));
-            zipOutputStream.write("outside".getBytes());
-            zipOutputStream.closeEntry();
-        }
+        Files.write(zipFile, zipBytes("../outside.txt", "outside"));
 
         try {
             ZipUtils.unzip(zipFile.toString(), outputDirectory.toString());
@@ -239,6 +238,49 @@ public class ArbitraryCompressionTests extends Common {
         }
 
         assertFalse(Files.exists(outsideFile));
+    }
+
+    @Test
+    public void testUnzipRejectsAbsoluteEntry() throws IOException {
+        Path zipFile = Files.createTempFile("absolute", ".zip");
+        Path outputDirectory = Files.createTempDirectory("unzippedDirectory");
+        Path outsideFile = outputDirectory.getParent().resolve("absolute-outside.txt").toAbsolutePath().normalize();
+
+        Files.write(zipFile, zipBytes(outsideFile.toString(), "outside"));
+
+        try {
+            ZipUtils.unzip(zipFile.toString(), outputDirectory.toString());
+            fail("Expected absolute ZIP entry to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("outside"));
+        }
+
+        assertFalse(Files.exists(outsideFile));
+    }
+
+    @Test
+    public void testUnzipFromStreamRejectsTraversalEntry() throws IOException {
+        Path outputDirectory = Files.createTempDirectory("unzippedDirectory");
+        Path outsideFile = outputDirectory.resolve("..").resolve("outside-from-stream.txt").normalize();
+
+        try (ZipInputStream zipInputStream = new ZipInputStream(new ByteArrayInputStream(zipBytes("../outside-from-stream.txt", "outside")))) {
+            ZipUtils.unzipFromStream(zipInputStream, outputDirectory.toString());
+            fail("Expected unsafe streamed ZIP entry to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("outside"));
+        }
+
+        assertFalse(Files.exists(outsideFile));
+    }
+
+    private static byte[] zipBytes(String entryName, String contents) throws IOException {
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        try (ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream)) {
+            zipOutputStream.putNextEntry(new ZipEntry(entryName));
+            zipOutputStream.write(contents.getBytes(StandardCharsets.UTF_8));
+            zipOutputStream.closeEntry();
+        }
+        return outputStream.toByteArray();
     }
 
 }
