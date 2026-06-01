@@ -14,6 +14,12 @@ import org.qortium.api.ApiError;
 import org.qortium.api.ApiErrors;
 import org.qortium.api.ApiExceptionFactory;
 import org.qortium.api.Security;
+import org.qortium.api.model.DirectPrivateChatActiveChatResponse;
+import org.qortium.api.model.DirectPrivateChatActiveChatsRequest;
+import org.qortium.api.model.DirectPrivateChatMessageResponse;
+import org.qortium.api.model.DirectPrivateChatMessagesRequest;
+import org.qortium.api.model.DirectPrivateChatSendRequest;
+import org.qortium.api.model.DirectPrivateChatSendResponse;
 import org.qortium.api.model.PrivateGroupChatActiveChatResponse;
 import org.qortium.api.model.PrivateGroupChatActiveChatsRequest;
 import org.qortium.api.model.PrivateGroupChatDecryptRequest;
@@ -34,6 +40,7 @@ import org.qortium.api.model.PrivateGroupChatRotationRequestResponse;
 import org.qortium.api.model.PrivateGroupChatSendRequest;
 import org.qortium.api.model.PrivateGroupChatSendResponse;
 import org.qortium.chat.ChatService;
+import org.qortium.chat.DirectPrivateChatService;
 import org.qortium.chat.PrivateGroupChatService;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.chat.ActiveChats;
@@ -252,6 +259,211 @@ public class ChatResource {
 	
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			return repository.getChatStoreRepository().getActiveChats(address, encoding, hasChatReference);
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/direct/active")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "List active direct private chats",
+		description = "Returns direct chats for the local account with the latest direct message decrypted when it uses Core-managed direct private chat encryption.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = DirectPrivateChatActiveChatsRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "active direct private chats",
+				content = @Content(
+					array = @ArraySchema(
+						schema = @Schema(
+							implementation = DirectPrivateChatActiveChatResponse.class
+						)
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public List<DirectPrivateChatActiveChatResponse> listDirectPrivateActiveChats(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			DirectPrivateChatActiveChatsRequest activeChatsRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (activeChatsRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (activeChatsRequest.accountPrivateKey == null
+				|| activeChatsRequest.accountPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Encoding encoding = activeChatsRequest.encoding != null ? activeChatsRequest.encoding : Encoding.BASE58;
+			List<DirectPrivateChatService.ActiveChatResult> results = DirectPrivateChatService.getInstance()
+					.listActiveChats(repository, activeChatsRequest.accountPrivateKey, encoding,
+							activeChatsRequest.hasChatReference);
+
+			List<DirectPrivateChatActiveChatResponse> response = new ArrayList<>(results.size());
+			for (DirectPrivateChatService.ActiveChatResult result : results)
+				response.add(new DirectPrivateChatActiveChatResponse(result, encoding));
+
+			return response;
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/direct/messages")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "List direct private chat messages",
+		description = "Returns direct chat messages for the local account and selected participant with decrypted data when the message uses Core-managed direct private chat encryption.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = DirectPrivateChatMessagesRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "direct private chat messages",
+				content = @Content(
+					array = @ArraySchema(
+						schema = @Schema(
+							implementation = DirectPrivateChatMessageResponse.class
+						)
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_CRITERIA,
+			ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public List<DirectPrivateChatMessageResponse> listDirectPrivateChatMessages(
+			@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			DirectPrivateChatMessagesRequest messagesRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (messagesRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (messagesRequest.accountPrivateKey == null
+				|| messagesRequest.accountPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		if (messagesRequest.otherAddress == null || !Crypto.isValidAddress(messagesRequest.otherAddress))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+
+		if (messagesRequest.sender != null && !Crypto.isValidAddress(messagesRequest.sender))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+
+		if (messagesRequest.before != null && messagesRequest.before < 1500000000000L)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		if (messagesRequest.after != null && messagesRequest.after < 1500000000000L)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			Encoding encoding = messagesRequest.encoding != null ? messagesRequest.encoding : Encoding.BASE58;
+			List<DirectPrivateChatService.ListMessageResult> results = DirectPrivateChatService.getInstance()
+					.listMessages(repository, messagesRequest.accountPrivateKey, messagesRequest.otherAddress,
+							messagesRequest.before, messagesRequest.after, messagesRequest.chatReference,
+							messagesRequest.hasChatReference, messagesRequest.sender, encoding,
+							messagesRequest.limit, messagesRequest.offset, messagesRequest.reverse);
+
+			List<DirectPrivateChatMessageResponse> response = new ArrayList<>(results.size());
+			for (DirectPrivateChatService.ListMessageResult result : results)
+				response.add(new DirectPrivateChatMessageResponse(result, encoding));
+
+			return response;
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@POST
+	@Path("/private/direct/send")
+	@Consumes(MediaType.APPLICATION_JSON)
+	@Produces(MediaType.APPLICATION_JSON)
+	@Operation(
+		summary = "Send encrypted direct private chat message",
+		description = "Resolves the recipient public key in Core, encrypts message data using Core-managed direct private chat encryption, then signs and stores a direct CHAT transaction.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = DirectPrivateChatSendRequest.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "stored direct private chat transaction signature",
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					schema = @Schema(
+						implementation = DirectPrivateChatSendResponse.class
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_PRIVATE_KEY, ApiError.INVALID_ADDRESS, ApiError.INVALID_DATA,
+			ApiError.INVALID_CRITERIA, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR,
+			ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	public DirectPrivateChatSendResponse sendDirectPrivateChat(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+			DirectPrivateChatSendRequest sendRequest) {
+		Security.checkApiCallAllowed(request);
+
+		if (sendRequest == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+		if (sendRequest.senderPrivateKey == null || sendRequest.senderPrivateKey.length != Transformer.PRIVATE_KEY_LENGTH)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_PRIVATE_KEY);
+
+		if (sendRequest.recipient == null || !Crypto.isValidAddress(sendRequest.recipient))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+
+		if (sendRequest.data == null || sendRequest.data.length == 0)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_DATA);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			DirectPrivateChatService.SendResult result = DirectPrivateChatService.getInstance().send(repository,
+					sendRequest.senderPrivateKey, sendRequest.recipient, sendRequest.data, sendRequest.isText,
+					sendRequest.chatReference);
+
+			DirectPrivateChatSendResponse response = new DirectPrivateChatSendResponse();
+			response.messageSignature = result.getMessageSignature();
+			response.status = result.getStatus();
+			return response;
+		} catch (DirectPrivateChatService.ValidationException e) {
+			throw TransactionsResource.createTransactionInvalidException(request, e.getValidationResult());
+		} catch (DirectPrivateChatService.DirectPrivateChatException | GeneralSecurityException | IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
+		} catch (TransformationException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.TRANSFORMATION_ERROR, e);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}

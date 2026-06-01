@@ -149,6 +149,42 @@ public class ChatStoreRepositoryTests extends Common {
 	}
 
 	@Test
+	public void testDirectMessageRawQuery() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+
+			ChatTransactionData olderBobChatData = chat(repository, alice, Group.NO_GROUP, bob.getAddress(),
+					signature(40), bytes("older bob"), true, false, now(), null);
+			ChatTransactionData newerBobChatData = chat(repository, bob, Group.NO_GROUP, alice.getAddress(),
+					signature(41), bytes("newer bob"), true, false, now() + 1, signature(42));
+			ChatTransactionData chloeChatData = chat(repository, alice, Group.NO_GROUP, chloe.getAddress(),
+					signature(43), bytes("chloe"), true, false, now() + 2, null);
+
+			repository.getChatStoreRepository().save(olderBobChatData);
+			repository.getChatStoreRepository().save(newerBobChatData);
+			repository.getChatStoreRepository().save(chloeChatData);
+			repository.saveChanges();
+
+			List<ChatTransactionData> messages = repository.getChatStoreRepository().getDirectMessagesMatchingCriteria(
+					null, null, null, null, Arrays.asList(alice.getAddress(), bob.getAddress()),
+					null, 1, 0, true);
+
+			assertEquals(1, messages.size());
+			assertArrayEquals(newerBobChatData.getSignature(), messages.get(0).getSignature());
+			assertArrayEquals(signature(42), messages.get(0).getChatReference());
+
+			List<ChatTransactionData> referencedMessages = repository.getChatStoreRepository().getDirectMessagesMatchingCriteria(
+					null, null, null, true, Arrays.asList(alice.getAddress(), bob.getAddress()),
+					null, null, null, null);
+
+			assertEquals(1, referencedMessages.size());
+			assertArrayEquals(newerBobChatData.getSignature(), referencedMessages.get(0).getSignature());
+		}
+	}
+
+	@Test
 	public void testActiveChatsFromStore() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
@@ -184,6 +220,34 @@ public class ChatStoreRepositoryTests extends Common {
 			assertNotNull(directChat);
 			assertEquals(bob.getAddress(), directChat.getAddress());
 			assertEquals(bob.getAddress(), directChat.getSender());
+		}
+	}
+
+	@Test
+	public void testLatestDirectMessagesReturnsNewestPerOtherParty() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			TestAccount chloe = Common.getTestAccount(repository, "chloe");
+
+			ChatTransactionData olderBobChatData = chat(repository, alice, Group.NO_GROUP, bob.getAddress(),
+					signature(44), bytes("older bob"), true, false, now(), null);
+			ChatTransactionData newerBobChatData = chat(repository, bob, Group.NO_GROUP, alice.getAddress(),
+					signature(45), bytes("newer bob"), true, false, now() + 1, null);
+			ChatTransactionData chloeChatData = chat(repository, chloe, Group.NO_GROUP, alice.getAddress(),
+					signature(46), bytes("chloe"), true, false, now() + 2, null);
+
+			repository.getChatStoreRepository().save(olderBobChatData);
+			repository.getChatStoreRepository().save(newerBobChatData);
+			repository.getChatStoreRepository().save(chloeChatData);
+			repository.saveChanges();
+
+			List<ChatTransactionData> latestDirectMessages = repository.getChatStoreRepository()
+					.getLatestDirectMessages(alice.getAddress(), null);
+
+			assertEquals(2, latestDirectMessages.size());
+			assertArrayEquals(chloeChatData.getSignature(), latestDirectMessages.get(0).getSignature());
+			assertArrayEquals(newerBobChatData.getSignature(), latestDirectMessages.get(1).getSignature());
 		}
 	}
 

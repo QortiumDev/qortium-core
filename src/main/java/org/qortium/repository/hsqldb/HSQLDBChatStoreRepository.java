@@ -244,6 +244,40 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 	}
 
 	@Override
+	public List<ChatTransactionData> getDirectMessagesMatchingCriteria(Long before, Long after,
+			byte[] chatReferenceBytes, Boolean hasChatReference, List<String> involving, String senderAddress,
+			Integer limit, Integer offset, Boolean reverse) throws DataException {
+		MessageCriteria criteria = buildMessageCriteria(before, after, null, chatReferenceBytes,
+				hasChatReference, involving, senderAddress);
+
+		StringBuilder sql = new StringBuilder(1024);
+		sql.append("SELECT CM.created_when, CM.tx_group_id, CM.sender_public_key, CM.sender, CM.nonce, ");
+		sql.append("CM.recipient, CM.chat_reference, CM.is_text, CM.is_encrypted, CM.data, CM.signature ");
+		sql.append("FROM ChatMessages CM ");
+		sql.append(criteria.sql);
+		sql.append(" ORDER BY CM.created_when");
+		sql.append((reverse == null || !reverse) ? " ASC" : " DESC");
+		sql.append(", CM.signature");
+		sql.append((reverse == null || !reverse) ? " ASC" : " DESC");
+
+		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+
+		List<ChatTransactionData> chatMessages = new ArrayList<>();
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), criteria.bindParams.toArray())) {
+			if (resultSet == null)
+				return chatMessages;
+
+			do {
+				chatMessages.add(this.toChatTransactionData(resultSet));
+			} while (resultSet.next());
+
+			return chatMessages;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch matching direct chat messages from repository", e);
+		}
+	}
+
+	@Override
 	public int countMessagesMatchingCriteria(Long before, Long after, Integer txGroupId,
 			byte[] chatReferenceBytes, Boolean hasChatReference, List<String> involving, String senderAddress) throws DataException {
 		MessageCriteria criteria = buildMessageCriteria(before, after, txGroupId, chatReferenceBytes,
@@ -267,6 +301,62 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 		List<DirectChat> directChats = getActiveDirectChats(address, hasChatReference);
 
 		return new ActiveChats(groupChats, directChats);
+	}
+
+	@Override
+	public List<ChatTransactionData> getLatestDirectMessages(String address, Boolean hasChatReference) throws DataException {
+		Long now = NTP.getTime();
+		if (now == null)
+			return new ArrayList<>();
+
+		long cutoffTimestamp = now - Settings.getInstance().getChatMessageRetentionPeriod();
+
+		String directSql = "SELECT LatestMessages.created_when, LatestMessages.tx_group_id, "
+				+ "LatestMessages.sender_public_key, LatestMessages.sender, LatestMessages.nonce, "
+				+ "LatestMessages.recipient, LatestMessages.chat_reference, LatestMessages.is_text, "
+				+ "LatestMessages.is_encrypted, LatestMessages.data, LatestMessages.signature "
+				+ "FROM ("
+					+ "SELECT recipient FROM ChatMessages "
+					+ "WHERE sender = ? AND recipient IS NOT NULL AND created_when >= ? "
+					+ "UNION "
+					+ "SELECT sender FROM ChatMessages "
+					+ "WHERE recipient = ? AND created_when >= ?"
+				+ ") AS OtherParties (other_address) "
+				+ "CROSS JOIN LATERAL("
+					+ "SELECT CM.created_when, CM.tx_group_id, CM.sender_public_key, CM.sender, CM.nonce, "
+					+ "CM.recipient, CM.chat_reference, CM.is_text, CM.is_encrypted, CM.data, CM.signature "
+					+ "FROM ChatMessages CM "
+					+ "WHERE ((CM.sender = other_address AND CM.recipient = ?) "
+					+ "OR (CM.sender = ? AND CM.recipient = other_address)) "
+					+ "AND CM.created_when >= ? ";
+
+		if (hasChatReference != null) {
+			if (hasChatReference)
+				directSql += "AND CM.chat_reference IS NOT NULL ";
+			else
+				directSql += "AND CM.chat_reference IS NULL ";
+		}
+
+		directSql += "ORDER BY CM.created_when DESC, CM.signature DESC "
+				+ "LIMIT 1"
+				+ ") AS LatestMessages "
+				+ "ORDER BY LatestMessages.created_when DESC, LatestMessages.signature DESC";
+
+		Object[] bindParams = new Object[] { address, cutoffTimestamp, address, cutoffTimestamp, address, address, cutoffTimestamp };
+
+		List<ChatTransactionData> directMessages = new ArrayList<>();
+		try (ResultSet resultSet = this.repository.checkedExecute(directSql, bindParams)) {
+			if (resultSet == null)
+				return directMessages;
+
+			do {
+				directMessages.add(this.toChatTransactionData(resultSet));
+			} while (resultSet.next());
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch latest direct chat messages from repository", e);
+		}
+
+		return directMessages;
 	}
 
 	@Override

@@ -28,10 +28,16 @@ public interface ChatStoreRepository {
 			byte[] chatReferenceBytes, Boolean hasChatReference, List<String> involving, String senderAddress,
 			Encoding encoding, Integer limit, Integer offset, Boolean reverse) throws DataException;
 
+	public List<ChatTransactionData> getDirectMessagesMatchingCriteria(Long before, Long after,
+			byte[] chatReferenceBytes, Boolean hasChatReference, List<String> involving, String senderAddress,
+			Integer limit, Integer offset, Boolean reverse) throws DataException;
+
 	public int countMessagesMatchingCriteria(Long before, Long after, Integer txGroupId,
 			byte[] chatReferenceBytes, Boolean hasChatReference, List<String> involving, String senderAddress) throws DataException;
 
 	public ActiveChats getActiveChats(String address, Encoding encoding, Boolean hasChatReference) throws DataException;
+
+	public List<ChatTransactionData> getLatestDirectMessages(String address, Boolean hasChatReference) throws DataException;
 
 	public int deleteOlderThan(long cutoffTimestamp) throws DataException;
 

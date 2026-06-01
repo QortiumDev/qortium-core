@@ -11,7 +11,14 @@ import org.eclipse.persistence.jaxb.UnmarshallerProperties;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortium.account.PrivateKeyAccount;
 import org.qortium.api.ApiError;
+import org.qortium.api.model.DirectPrivateChatActiveChatResponse;
+import org.qortium.api.model.DirectPrivateChatActiveChatsRequest;
+import org.qortium.api.model.DirectPrivateChatMessageResponse;
+import org.qortium.api.model.DirectPrivateChatMessagesRequest;
+import org.qortium.api.model.DirectPrivateChatSendRequest;
+import org.qortium.api.model.DirectPrivateChatSendResponse;
 import org.qortium.api.model.PrivateGroupChatActiveChatResponse;
 import org.qortium.api.model.PrivateGroupChatActiveChatsRequest;
 import org.qortium.api.model.PrivateGroupChatDecryptRequest;
@@ -81,6 +88,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -222,6 +230,125 @@ public class ChatResourceTests extends ApiCommon {
 				() -> this.chatResource.searchChat(
 						null, null, null, Arrays.asList(aliceAddress, "not-an-address"), null, null, null,
 						ChatMessage.Encoding.BASE64, null, null, null));
+	}
+
+	@Test
+	public void testDirectPrivateSendMessagesAndActiveChats() throws Exception {
+		byte[] payload = "direct private api message".getBytes(StandardCharsets.UTF_8);
+		DirectPrivateChatSendRequest sendRequest = new DirectPrivateChatSendRequest();
+		DirectPrivateChatMessagesRequest messagesRequest = new DirectPrivateChatMessagesRequest();
+		DirectPrivateChatActiveChatsRequest activeChatsRequest = new DirectPrivateChatActiveChatsRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			bob.ensureAccount();
+			repository.saveChanges();
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.recipient = bob.getAddress();
+			sendRequest.data = payload;
+			sendRequest.isText = true;
+
+			messagesRequest.accountPrivateKey = bob.getPrivateKey();
+			messagesRequest.otherAddress = alice.getAddress();
+			messagesRequest.encoding = ChatMessage.Encoding.BASE64;
+
+			activeChatsRequest.accountPrivateKey = bob.getPrivateKey();
+			activeChatsRequest.encoding = ChatMessage.Encoding.BASE64;
+		}
+
+		DirectPrivateChatSendResponse sendResponse = this.chatResource.sendDirectPrivateChat(null, sendRequest);
+		assertEquals(org.qortium.chat.DirectPrivateChatService.SendStatus.STORED, sendResponse.status);
+		assertNotNull(sendResponse.messageSignature);
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ChatTransactionData stored = repository.getChatStoreRepository().fromSignature(sendResponse.messageSignature);
+			assertNotNull(stored);
+			assertTrue(stored.getIsEncrypted());
+			assertFalse(Arrays.equals(payload, stored.getData()));
+		}
+
+		List<DirectPrivateChatMessageResponse> messages = this.chatResource.listDirectPrivateChatMessages(null,
+				messagesRequest);
+
+		assertEquals(1, messages.size());
+		DirectPrivateChatMessageResponse message = messages.get(0);
+		assertEquals(org.qortium.chat.DirectPrivateChatService.DecryptionStatus.DECRYPTED, message.decryptionStatus);
+		assertEquals(Base64.toBase64String(payload), message.data);
+		assertTrue(message.isText);
+		assertTrue(message.isEncrypted);
+		assertArrayEquals(sendResponse.messageSignature, message.signature);
+
+		List<DirectPrivateChatActiveChatResponse> activeChats = this.chatResource.listDirectPrivateActiveChats(null,
+				activeChatsRequest);
+		DirectPrivateChatActiveChatResponse directChat = activeChats.stream()
+				.filter(chat -> messagesRequest.otherAddress.equals(chat.address))
+				.findFirst()
+				.orElse(null);
+
+		assertNotNull(directChat);
+		assertEquals(org.qortium.chat.DirectPrivateChatService.DecryptionStatus.DECRYPTED, directChat.decryptionStatus);
+		assertEquals(Base64.toBase64String(payload), directChat.data);
+		assertArrayEquals(sendResponse.messageSignature, directChat.signature);
+	}
+
+	@Test
+	public void testDirectPrivateMessagesReportPlainAndUnsupportedRows() throws Exception {
+		byte[] plainPayload = "plain direct row".getBytes(StandardCharsets.UTF_8);
+
+		DirectPrivateChatMessagesRequest messagesRequest = new DirectPrivateChatMessagesRequest();
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+
+			ChatTransactionData plainData = chat(alice, Group.NO_GROUP, bob.getAddress(), plainPayload,
+					true, false, signature(60), now());
+			ChatTransactionData legacyEncryptedData = chat(bob, Group.NO_GROUP, alice.getAddress(),
+					"legacy encrypted direct".getBytes(StandardCharsets.UTF_8), true, true, signature(61),
+					now() + 1);
+
+			repository.getChatStoreRepository().save(plainData);
+			repository.getChatStoreRepository().save(legacyEncryptedData);
+			repository.saveChanges();
+
+			messagesRequest.accountPrivateKey = alice.getPrivateKey();
+			messagesRequest.otherAddress = bob.getAddress();
+			messagesRequest.encoding = ChatMessage.Encoding.BASE64;
+		}
+
+		List<DirectPrivateChatMessageResponse> messages = this.chatResource.listDirectPrivateChatMessages(null,
+				messagesRequest);
+
+		assertEquals(2, messages.size());
+		assertEquals(org.qortium.chat.DirectPrivateChatService.DecryptionStatus.PLAIN,
+				messages.get(0).decryptionStatus);
+		assertEquals(Base64.toBase64String(plainPayload), messages.get(0).data);
+		assertFalse(messages.get(0).isEncrypted);
+
+		assertEquals(org.qortium.chat.DirectPrivateChatService.DecryptionStatus.UNSUPPORTED,
+				messages.get(1).decryptionStatus);
+		assertNull(messages.get(1).data);
+		assertTrue(messages.get(1).isEncrypted);
+	}
+
+	@Test
+	public void testDirectPrivateSendFailsWithoutKnownRecipientPublicKey() throws Exception {
+		DirectPrivateChatSendRequest sendRequest = new DirectPrivateChatSendRequest();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount unknownRecipient = Common.generateDeterministicSeedAccount(repository,
+					"direct-private-api-unknown", 1);
+
+			sendRequest.senderPrivateKey = alice.getPrivateKey();
+			sendRequest.recipient = unknownRecipient.getAddress();
+			sendRequest.data = "unknown public key".getBytes(StandardCharsets.UTF_8);
+			sendRequest.isText = true;
+		}
+
+		assertApiError(ApiError.TRANSACTION_INVALID,
+				() -> this.chatResource.sendDirectPrivateChat(null, sendRequest));
 	}
 
 	@Test
