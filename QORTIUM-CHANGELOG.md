@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Address first CodeQL security findings
+
+Removed an unused API response-unmarshalling path that exposed XML parsing risk, tightened the developer proxy so it only opens loopback HTTP targets, made group approval threshold serialization check the byte range explicitly, sanitized attachment download filenames before building response headers, stopped chunk-upload errors from returning internal exception details, replaced regex-heavy filename cleanup with direct character handling, and changed a local key-storage test page to write private key text without treating it as HTML. This starts reducing the inherited CodeQL alert baseline with narrow fixes that do not change chain rules or QDN storage behavior.
+
 ### 2026-06-01 - Move repository references to QortiumDev main
 
 Updated the current repository links, branch-targeted automation, release helper defaults, preview operator and tester instructions, gateway help links, Windows installer metadata, and proxy test fixture to use `QortiumDev/qortium-core` on the `main` branch. This prepares Qortium Core to live under the project organization with a normal default branch while leaving historical changelog and dependency-provenance references untouched.
