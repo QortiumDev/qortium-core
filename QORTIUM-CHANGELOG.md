@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Parameterize asset balance filters
+
+Changed the asset-balance repository query so asset ID filters are bound as prepared-statement parameters instead of being written directly into the temporary `VALUES` table SQL. The public API already validates those filters as numeric asset IDs, and this keeps the database path consistent with the address filters while reducing the remaining SQL-injection scan surface.
+
 ### 2026-06-01 - Clean up ZIP entry sanitizer alerts
 
 Changed ZIP entry-name cleanup to use direct character handling instead of regular expressions, so uploaded names with repeated whitespace cannot trigger slow regex behavior. Also documented the directory inspection step for authenticated local file uploads as intentional, keeping the existing local upload workflow intact while preventing the scanner from treating the recent ZIP-entry validation change as a new path issue.
