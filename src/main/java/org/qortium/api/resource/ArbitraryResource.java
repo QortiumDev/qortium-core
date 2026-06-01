@@ -2294,7 +2294,7 @@ public String finalizeUpload(
 				}
 			}
 	
-			java.nio.file.Path path = Paths.get(outputPath.toString(), filepath);
+			java.nio.file.Path path = FilesystemUtils.resolveRelativePathInsideBase(outputPath, filepath);
 			if (!Files.exists(path)) {
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No file exists at filepath: " + filepath);
 			}

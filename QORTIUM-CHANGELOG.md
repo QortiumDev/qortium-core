@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Contain arbitrary download file paths
+
+Added a shared filesystem helper for resolving request-style resource paths inside a fixed base directory, including leading-slash paths that should still mean "inside this resource." Raw `/arbitrary` downloads now use that helper for the `filepath` query parameter, and QDN rendering delegates to the same helper, so traversal attempts and invalid path text are rejected consistently before Core reads or streams files.
+
 ### 2026-06-01 - Contain QDN render file paths
 
 Changed QDN rendering so requested file paths are resolved through the existing safe base-directory helper before Core reads or streams content from an extracted resource. Leading slashes are still treated as paths inside the QDN resource, but parent traversal, backslash traversal, and invalid path text are rejected before a filesystem path is used. This keeps render requests inside the extracted QDN directory without changing normal APP, WEBSITE, or single-file resource routing.

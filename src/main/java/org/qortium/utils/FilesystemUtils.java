@@ -239,6 +239,23 @@ public class FilesystemUtils {
         return resolvedPath;
     }
 
+    public static Path resolveRelativePathInsideBase(Path base, String requestedPath) throws IOException {
+        if (requestedPath == null) {
+            throw new IOException("Requested path is null");
+        }
+
+        String resourcePath = requestedPath.replace('\\', '/');
+        while (resourcePath.startsWith("/")) {
+            resourcePath = resourcePath.substring(1);
+        }
+
+        try {
+            return FilesystemUtils.resolveInsideBase(base, Paths.get(resourcePath));
+        } catch (InvalidPathException e) {
+            throw new IOException("Requested path is invalid", e);
+        }
+    }
+
     public static long getDirectorySize(Path path) throws IOException {
         return getDirectorySize(path, false);
     }

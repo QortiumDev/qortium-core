@@ -27,7 +27,6 @@ import java.net.URL;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -256,20 +255,7 @@ public class ArbitraryDataRenderer {
     }
 
     static Path resolveRequestedFilePath(Path baseDirectory, String filename) throws IOException {
-        if (filename == null) {
-            throw new IOException("Requested file path is null");
-        }
-
-        String resourcePath = filename.replace('\\', '/');
-        while (resourcePath.startsWith("/")) {
-            resourcePath = resourcePath.substring(1);
-        }
-
-        try {
-            return FilesystemUtils.resolveInsideBase(baseDirectory, Paths.get(resourcePath));
-        } catch (InvalidPathException e) {
-            throw new IOException("Requested file path is invalid", e);
-        }
+        return FilesystemUtils.resolveRelativePathInsideBase(baseDirectory, filename);
     }
 
     private String getFilename(String directory, String userPath) {
