@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Harden browser-facing security boundaries
+
+Tightened several browser-facing paths highlighted by the security scan. Q-App fallback navigation now confirms generated resource links stay on the current origin before redirecting, the developer proxy validates its loopback source before building the upstream URL, QDN plain-text responses now declare a plain-text content type while the loading page keeps an HTML content type, loading-page template values are escaped before entering JavaScript strings, and cross-chain ledger downloads reuse the safe attachment filename helper. This reduces the remaining XSS, open-redirect, and SSRF scan surface without changing normal QDN rendering, developer proxy, or ledger download behavior.
+
 ### 2026-06-01 - Contain arbitrary download file paths
 
 Added a shared filesystem helper for resolving request-style resource paths inside a fixed base directory, including leading-slash paths that should still mean "inside this resource." Raw `/arbitrary` downloads now use that helper for the `filepath` query parameter, and QDN rendering delegates to the same helper, so traversal attempts and invalid path text are rejected consistently before Core reads or streams files.

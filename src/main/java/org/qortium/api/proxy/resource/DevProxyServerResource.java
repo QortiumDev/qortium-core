@@ -19,8 +19,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ConnectException;
 import java.net.HttpURLConnection;
-import java.net.URI;
 import java.net.ProtocolException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Enumeration;
 import java.util.List;
@@ -91,10 +92,10 @@ public class DevProxyServerResource {
                 inPath = "/" + inPath;
             }
 
-            String queryString = request.getQueryString() != null ? "?" + request.getQueryString() : "";
+            String queryString = request.getQueryString();
 
             // Open URL
-            URL url = new URL(String.format("http://%s%s%s", source, inPath, queryString));
+            URL url = buildProxyUrl(source, inPath, queryString);
             HttpURLConnection con = this.openProxyConnection(url);
 
             // Proxy the request data
@@ -107,18 +108,15 @@ public class DevProxyServerResource {
             }
             catch (ConnectException e) {
 
-                // Tey converting localhost / 127.0.0.1 to IPv6 [::1]
-                if (source.startsWith("localhost") || source.startsWith("127.0.0.1")) {
-                    int port = 80;
-                    String[] parts = source.split(":");
-                    if (parts.length > 1) {
-                        port = Integer.parseInt(parts[1]);
-                    }
-                    source = String.format("[::1]:%d", port);
+                // Try converting localhost / 127.0.0.1 to IPv6 [::1]
+                String fallbackSource = loopbackIpv6FallbackSource(source);
+                if (fallbackSource.equals(source)) {
+                    throw e;
                 }
+                source = fallbackSource;
 
                 // Retry connection
-                url = new URL(String.format("http://%s%s%s", source, inPath, queryString));
+                url = buildProxyUrl(source, inPath, queryString);
                 con = this.openProxyConnection(url);
                 this.proxyRequestToConnection(request, con);
                 responseCode = con.getResponseCode();
@@ -134,6 +132,45 @@ public class DevProxyServerResource {
         }
 
         return response;
+    }
+
+    private static URL buildProxyUrl(String source, String inPath, String queryString) throws IOException {
+        URI sourceUri = parseLoopbackProxySource(source);
+        String safePath = inPath.startsWith("/") ? inPath : "/" + inPath;
+
+        try {
+            return new URI("http", null, sourceUri.getHost(), effectiveHttpPort(sourceUri), safePath, queryString, null).toURL();
+        } catch (IllegalArgumentException | URISyntaxException e) {
+            throw new IOException("Invalid developer proxy URL", e);
+        }
+    }
+
+    private static URI parseLoopbackProxySource(String source) throws IOException {
+        try {
+            URI sourceUri = URI.create("http://" + source);
+            if (sourceUri.getHost() == null ||
+                    sourceUri.getUserInfo() != null ||
+                    (sourceUri.getRawPath() != null && !sourceUri.getRawPath().isEmpty()) ||
+                    sourceUri.getRawQuery() != null ||
+                    sourceUri.getRawFragment() != null ||
+                    !"loopback".equals(normalizeLoopbackRedirectHost(sourceUri.getHost()))) {
+                throw new IOException("Developer proxy source must be a loopback HTTP host and port");
+            }
+
+            return sourceUri;
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Invalid developer proxy source", e);
+        }
+    }
+
+    private static String loopbackIpv6FallbackSource(String source) throws IOException {
+        URI sourceUri = parseLoopbackProxySource(source);
+        String host = sourceUri.getHost();
+        if ("localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host)) {
+            return String.format("[::1]:%d", effectiveHttpPort(sourceUri));
+        }
+
+        return source;
     }
 
     private HttpURLConnection openProxyConnection(URL url) throws IOException {

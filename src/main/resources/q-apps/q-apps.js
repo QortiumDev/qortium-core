@@ -349,6 +349,18 @@ function appendQueryParam(url, key, value) {
   );
 }
 
+function navigateToResource(service, name, identifier, path) {
+  const resourceUrl = buildResourceUrl(service, name, identifier, path, true);
+  const targetUrl = new URL(resourceUrl, window.location.origin);
+  if (targetUrl.origin !== window.location.origin) {
+    throw new Error("QDN navigation must stay on the current origin");
+  }
+
+  window.location.assign(
+    targetUrl.pathname + targetUrl.search + targetUrl.hash,
+  );
+}
+
 function buildResourceUrl(service, name, identifier, path, isLink) {
   const encodedService = encodePathSegment(service || "WEBSITE");
   const encodedName = encodePathSegment(name);
@@ -532,21 +544,19 @@ window.addEventListener(
             })
             .catch(() => {
               console.warn("No response, proceeding with window.location");
-              window.location = buildResourceUrl(
+              navigateToResource(
                 data.service,
                 data.name,
                 data.identifier,
                 data.path,
-                true,
               );
             });
         } else {
-          window.location = buildResourceUrl(
+          navigateToResource(
             data.service,
             data.name,
             data.identifier,
             data.path,
-            true,
           );
         }
         return;
