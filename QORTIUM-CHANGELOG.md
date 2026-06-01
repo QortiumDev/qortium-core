@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Contain QDN render file paths
+
+Changed QDN rendering so requested file paths are resolved through the existing safe base-directory helper before Core reads or streams content from an extracted resource. Leading slashes are still treated as paths inside the QDN resource, but parent traversal, backslash traversal, and invalid path text are rejected before a filesystem path is used. This keeps render requests inside the extracted QDN directory without changing normal APP, WEBSITE, or single-file resource routing.
+
 ### 2026-06-01 - Harden QDN render metadata escaping
 
 Changed the QDN HTML rewrite path so injected render metadata is written as escaped JavaScript string data instead of raw script markup, and so generated script, base, and meta tags are built as DOM elements. Relative render assets now receive encoded identifier query parameters without breaking URL fragments, Q-App navigation URLs encode service, name, identifier, path, and query values before building links, and the gateway modal writes message text without treating it as HTML. This reduces the QDN browser-side XSS alert surface while keeping the existing render, gateway, and proxy flows intact.

@@ -7,6 +7,7 @@ import javax.servlet.ServletOutputStream;
 import javax.servlet.WriteListener;
 import javax.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
@@ -77,6 +78,61 @@ public class ArbitraryDataRendererTests {
             assertTrue(e.getMessage().contains(Long.toString(ArbitraryDataRenderer.MAX_HTML_REWRITE_SIZE)));
         } finally {
             Files.deleteIfExists(filePath);
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    @Test
+    public void testResolveRequestedFilePathTreatsLeadingSlashAsResourceRoot() throws Exception {
+        Path directory = Files.createTempDirectory("qdn-renderer");
+
+        try {
+            Path resolved = ArbitraryDataRenderer.resolveRequestedFilePath(directory, "/nested/index.html");
+
+            assertEquals(directory.resolve("nested/index.html").normalize(), resolved);
+        } finally {
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    @Test
+    public void testResolveRequestedFilePathRejectsParentTraversal() throws Exception {
+        Path directory = Files.createTempDirectory("qdn-renderer");
+
+        try {
+            ArbitraryDataRenderer.resolveRequestedFilePath(directory, "/../outside.txt");
+            fail("Expected parent traversal to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("outside of the target dir"));
+        } finally {
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    @Test
+    public void testResolveRequestedFilePathRejectsBackslashTraversal() throws Exception {
+        Path directory = Files.createTempDirectory("qdn-renderer");
+
+        try {
+            ArbitraryDataRenderer.resolveRequestedFilePath(directory, "..\\outside.txt");
+            fail("Expected backslash parent traversal to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("outside of the target dir"));
+        } finally {
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    @Test
+    public void testResolveRequestedFilePathRejectsInvalidPath() throws Exception {
+        Path directory = Files.createTempDirectory("qdn-renderer");
+
+        try {
+            ArbitraryDataRenderer.resolveRequestedFilePath(directory, "bad\u0000path");
+            fail("Expected invalid path to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("invalid"));
+        } finally {
             Files.deleteIfExists(directory);
         }
     }
