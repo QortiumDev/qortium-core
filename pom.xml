@@ -70,7 +70,7 @@
 		<slf4j.version>1.7.36</slf4j.version>
 		<swagger-api.version>2.2.50</swagger-api.version>
 		<swagger-ui.version>5.32.5</swagger-ui.version>
-		<tika-core.version>3.3.0</tika-core.version>
+		<tika-core.version>3.3.1</tika-core.version>
 		<jupnp.version>3.0.4</jupnp.version>
 		<xz.version>1.12</xz.version>
 	</properties>
