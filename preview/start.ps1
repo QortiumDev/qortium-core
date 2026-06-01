@@ -35,7 +35,27 @@ foreach ($Arg in $args) {
 }
 
 function Get-JavaMajorVersion {
-    $VersionOutput = (& java -version) 2>&1 | ForEach-Object { $_.ToString() }
+    $JavaVersionStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $JavaVersionStartInfo.FileName = "java"
+    $JavaVersionStartInfo.Arguments = "-version"
+    $JavaVersionStartInfo.UseShellExecute = $false
+    $JavaVersionStartInfo.RedirectStandardOutput = $true
+    $JavaVersionStartInfo.RedirectStandardError = $true
+
+    $JavaVersionProcess = [System.Diagnostics.Process]::new()
+    $JavaVersionProcess.StartInfo = $JavaVersionStartInfo
+
+    try {
+        $null = $JavaVersionProcess.Start()
+        $VersionOutput = @(
+            $JavaVersionProcess.StandardOutput.ReadToEnd()
+            $JavaVersionProcess.StandardError.ReadToEnd()
+        ) -split "`r?`n" | Where-Object { $_ -ne "" }
+        $JavaVersionProcess.WaitForExit()
+    } finally {
+        $JavaVersionProcess.Dispose()
+    }
+
     $VersionLine = $VersionOutput | Where-Object { $_ -match "version" } | Select-Object -First 1
     if ($VersionLine -notmatch '"([^"]+)"') {
         return $null

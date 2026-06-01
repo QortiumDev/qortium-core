@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Capture Java version output safely in the Windows preview launcher
+
+Changed the Windows preview launcher so Java version detection reads the `java -version` output through redirected process streams instead of treating Java's stderr output as a PowerShell error. This keeps the Java 17 check working under strict error handling before Core starts.
+
 ### 2026-06-01 - Hide the Windows preview Java process window
 
 Changed the Windows preview launcher so it starts the Java process without leaving a visible command window behind. This keeps Qortium Home's managed Core startup quieter for Windows testers while preserving the same process arguments, working directory, PID file, and preview log files.
