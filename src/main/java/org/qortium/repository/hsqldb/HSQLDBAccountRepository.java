@@ -307,7 +307,7 @@ public class HSQLDBAccountRepository implements AccountRepository {
 			if (haveAddresses)
 				sql.append("CROSS JOIN ");
 
-			HSQLDBRepository.temporaryValuesTableSql(sql, assetIds, "TmpAssetIds", "asset_id");
+			HSQLDBRepository.temporaryValuesTableSql(sql, assetIds.size(), "TmpAssetIds", "asset_id");
 		}
 
 		if (haveAddresses || haveAssetIds) {
@@ -372,10 +372,15 @@ public class HSQLDBAccountRepository implements AccountRepository {
 
 		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
 
-		String[] addressesArray = addresses == null ? new String[0] : addresses.toArray(new String[addresses.size()]);
+		List<Object> bindValues = new ArrayList<>();
+		if (addresses != null)
+			bindValues.addAll(addresses);
+		if (assetIds != null)
+			bindValues.addAll(assetIds);
+
 		List<AccountBalanceData> accountBalances = new ArrayList<>();
 
-		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), (Object[]) addressesArray)) {
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindValues.toArray())) {
 			if (resultSet == null)
 				return accountBalances;
 
