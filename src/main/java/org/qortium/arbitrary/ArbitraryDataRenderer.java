@@ -12,6 +12,7 @@ import org.qortium.arbitrary.exception.MissingDataException;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.Controller;
 import org.qortium.settings.Settings;
+import org.qortium.utils.FilesystemUtils;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
@@ -133,12 +134,12 @@ public class ArbitraryDataRenderer {
 
         try {
             String filename = this.getFilename(unzippedPath, inPath);
-            Path filePath = Paths.get(unzippedPath, filename);
+            Path filePath = ArbitraryDataRenderer.resolveRequestedFilePath(Paths.get(unzippedPath), filename);
             boolean usingCustomRouting = false;
             if (Files.isDirectory(filePath) && (!inPath.endsWith("/"))) {
                 inPath = inPath + "/";
                 filename = this.getFilename(unzippedPath, inPath);
-                filePath = Paths.get(unzippedPath, filename);
+                filePath = ArbitraryDataRenderer.resolveRequestedFilePath(Paths.get(unzippedPath), filename);
             }
             
             // If the file doesn't exist, we may need to route the request elsewhere, or cleanup
@@ -251,6 +252,10 @@ public class ArbitraryDataRenderer {
         } else {
             response.setContentLength((int) contentLength);
         }
+    }
+
+    static Path resolveRequestedFilePath(Path baseDirectory, String filename) throws IOException {
+        return FilesystemUtils.resolveRelativePathInsideBase(baseDirectory, filename);
     }
 
     private String getFilename(String directory, String userPath) {

@@ -61,7 +61,9 @@ function qdnGatewayShowModal(message) {
 
     var modalElement = document.createElement('div');
     modalElement.style.cssText = 'position:fixed; z-index:99999; background:#fff; padding:20px; border-radius:5px; font-family:sans-serif; bottom:20px; right:20px; color:#000; max-width:400px; box-shadow:0 3px 10px rgb(0 0 0 / 0.2); font-family:arial; font-weight:normal; font-size:16px;';
-    modalElement.innerHTML = message + "<br /><br />";
+    modalElement.textContent = message;
+    modalElement.appendChild(document.createElement("br"));
+    modalElement.appendChild(document.createElement("br"));
     modalElement.id = modalElementId;
 
     var closeButton = document.createElement('button');

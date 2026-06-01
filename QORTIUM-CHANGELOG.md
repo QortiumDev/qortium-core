@@ -34,6 +34,22 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Contain arbitrary download file paths
+
+Added a shared filesystem helper for resolving request-style resource paths inside a fixed base directory, including leading-slash paths that should still mean "inside this resource." Raw `/arbitrary` downloads now use that helper for the `filepath` query parameter, and QDN rendering delegates to the same helper, so traversal attempts and invalid path text are rejected consistently before Core reads or streams files.
+
+### 2026-06-01 - Contain QDN render file paths
+
+Changed QDN rendering so requested file paths are resolved through the existing safe base-directory helper before Core reads or streams content from an extracted resource. Leading slashes are still treated as paths inside the QDN resource, but parent traversal, backslash traversal, and invalid path text are rejected before a filesystem path is used. This keeps render requests inside the extracted QDN directory without changing normal APP, WEBSITE, or single-file resource routing.
+
+### 2026-06-01 - Harden QDN render metadata escaping
+
+Changed the QDN HTML rewrite path so injected render metadata is written as escaped JavaScript string data instead of raw script markup, and so generated script, base, and meta tags are built as DOM elements. Relative render assets now receive encoded identifier query parameters without breaking URL fragments, Q-App navigation URLs encode service, name, identifier, path, and query values before building links, and the gateway modal writes message text without treating it as HTML. This reduces the QDN browser-side XSS alert surface while keeping the existing render, gateway, and proxy flows intact.
+
+### 2026-06-01 - Address first CodeQL security findings
+
+Removed an unused API response-unmarshalling path that exposed XML parsing risk, tightened the developer proxy so it only opens loopback HTTP targets, made group approval threshold serialization check the byte range explicitly, sanitized attachment download filenames before building response headers, stopped chunk-upload errors from returning internal exception details, replaced regex-heavy filename cleanup with direct character handling, and changed a local key-storage test page to write private key text without treating it as HTML. This starts reducing the inherited CodeQL alert baseline with narrow fixes that do not change chain rules or QDN storage behavior.
+
 ### 2026-06-01 - Move repository references to QortiumDev main
 
 Updated the current repository links, branch-targeted automation, release helper defaults, preview operator and tester instructions, gateway help links, Windows installer metadata, and proxy test fixture to use `QortiumDev/qortium-core` on the `main` branch. This prepares Qortium Core to live under the project organization with a normal default branch while leaving historical changelog and dependency-provenance references untouched.

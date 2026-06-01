@@ -107,6 +107,7 @@ import java.util.zip.GZIPOutputStream;
 import org.apache.tika.Tika;
 import org.apache.tika.mime.MimeTypeException;
 import org.apache.tika.mime.MimeTypes;
+import org.glassfish.jersey.media.multipart.ContentDisposition;
 
 import javax.ws.rs.core.Response;
 
@@ -1244,7 +1245,7 @@ public Response uploadChunkNoIdentifier(@HeaderParam(Security.API_KEY_HEADER) St
         return Response.ok("Chunk " + index + " received").build();
     } catch (IOException e) {
 		LOGGER.error("Failed to write chunk {} for service '{}' and name '{}'", index, serviceString, name, e);
-        return Response.serverError().entity("Failed to write chunk: " + e.getMessage()).build();
+        return Response.serverError().entity("Failed to write chunk").build();
     }
 }
 
@@ -1446,7 +1447,7 @@ public Response uploadChunk(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
         return Response.ok("Chunk " + index + " received").build();
     } catch (IOException e) {
 		LOGGER.error("Failed to write chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier, e);
-        return Response.serverError().entity("Failed to write chunk: " + e.getMessage()).build();
+        return Response.serverError().entity("Failed to write chunk").build();
     }
 }
 
@@ -2293,37 +2294,25 @@ public String finalizeUpload(
 				}
 			}
 	
-			java.nio.file.Path path = Paths.get(outputPath.toString(), filepath);
+			java.nio.file.Path path = FilesystemUtils.resolveRelativePathInsideBase(outputPath, filepath);
 			if (!Files.exists(path)) {
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No file exists at filepath: " + filepath);
 			}
 	
 			if (attachment) {
 				String rawFilename;
-	
+
 				if (attachmentFilename != null && !attachmentFilename.isEmpty()) {
-					// 1. Sanitize first
-					String safeAttachmentFilename = attachmentFilename.replaceAll("[\\\\/:*?\"<>|]", "_");
-	
-					// 2. Check for a valid extension (3–5 alphanumeric chars)
-					if (!safeAttachmentFilename.matches(".*\\.[a-zA-Z0-9]{2,5}$")) {
-						safeAttachmentFilename += ".bin";
-					}
-	
-					rawFilename = safeAttachmentFilename;
+					rawFilename = attachmentFilename;
 				} else {
 					// Fallback if no filename is provided
 					String baseFilename = (identifier != null && !identifier.isEmpty())
 						? name + "-" + identifier
 						: name;
-					rawFilename = baseFilename.replaceAll("[\\\\/:*?\"<>|]", "_") + ".bin";
+					rawFilename = baseFilename + ".bin";
 				}
-	
-				// Optional: trim length
-				rawFilename = rawFilename.length() > 100 ? rawFilename.substring(0, 100) : rawFilename;
-	
-				// 3. Set Content-Disposition header
-				response.setHeader("Content-Disposition", "attachment; filename=\"" + rawFilename + "\"");
+
+				response.setHeader("Content-Disposition", buildAttachmentContentDisposition(rawFilename));
 			}
 	
 			// Determine the total size of the requested file
@@ -2460,8 +2449,49 @@ public String finalizeUpload(
 			}
 		}
 	}
-	
-	
+
+	static String buildAttachmentContentDisposition(String filename) {
+		String safeFilename = sanitizeAttachmentFilename(filename);
+		return ContentDisposition.type("attachment").fileName(safeFilename).build().toString();
+	}
+
+	static String sanitizeAttachmentFilename(String filename) {
+		String safeFilename = StringUtils.sanitizeString(filename == null ? "" : filename);
+		if (safeFilename.isEmpty()) {
+			safeFilename = "download";
+		}
+
+		if (!hasSafeShortExtension(safeFilename)) {
+			safeFilename += ".bin";
+		}
+
+		if (safeFilename.length() > 100) {
+			safeFilename = safeFilename.substring(0, 100);
+		}
+
+		return safeFilename;
+	}
+
+	private static boolean hasSafeShortExtension(String filename) {
+		int lastDotIndex = filename.lastIndexOf('.');
+		if (lastDotIndex <= 0 || lastDotIndex == filename.length() - 1) {
+			return false;
+		}
+
+		int extensionLength = filename.length() - lastDotIndex - 1;
+		if (extensionLength < 2 || extensionLength > 5) {
+			return false;
+		}
+
+		for (int i = lastDotIndex + 1; i < filename.length(); ++i) {
+			char c = filename.charAt(i);
+			if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) {
+				return false;
+			}
+		}
+
+		return true;
+	}
 
 	private FileProperties getFileProperties(Service service, String name, String identifier) {
 		try {

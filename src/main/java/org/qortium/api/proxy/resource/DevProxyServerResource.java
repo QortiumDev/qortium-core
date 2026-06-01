@@ -137,6 +137,10 @@ public class DevProxyServerResource {
     }
 
     private HttpURLConnection openProxyConnection(URL url) throws IOException {
+        if (!isAllowedLoopbackProxyUrl(url)) {
+            throw new IOException("Developer proxy target must be a loopback HTTP URL");
+        }
+
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
         con.setConnectTimeout(PROXY_CONNECT_TIMEOUT_MS);
         con.setReadTimeout(PROXY_READ_TIMEOUT_MS);
@@ -371,6 +375,14 @@ public class DevProxyServerResource {
         }
 
         return normalizedHost;
+    }
+
+    private static boolean isAllowedLoopbackProxyUrl(URL url) {
+        if (url == null || !"http".equalsIgnoreCase(url.getProtocol())) {
+            return false;
+        }
+
+        return "loopback".equals(normalizeLoopbackRedirectHost(url.getHost()));
     }
 
     private static int effectiveHttpPort(URI uri) {

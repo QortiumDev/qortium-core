@@ -73,6 +73,13 @@ public class Serialization {
 		serializeBigDecimal(bytes, amount, 8);
 	}
 
+	public static void serializeUnsignedByte(ByteArrayOutputStream bytes, int value) throws IOException {
+		if (value < 0 || value > 0xff)
+			throw new IOException("Value outside unsigned byte range");
+
+		bytes.write(value);
+	}
+
 	public static BigDecimal deserializeBigDecimal(ByteBuffer byteBuffer, int length) {
 		byte[] bytes = new byte[length];
 		byteBuffer.get(bytes);
