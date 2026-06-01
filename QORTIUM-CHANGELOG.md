@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Avoid reserved PID variables in the Windows preview stop helper
+
+Renamed the Windows preview stop helper's local process ID variables so they no longer conflict with PowerShell's built-in `$PID` value. This lets the helper read `run.pid`, stop the preview node, and clean up stale PID files without failing before the stop logic runs.
+
 ### 2026-06-01 - Capture Java version output safely in the Windows preview launcher
 
 Changed the Windows preview launcher so Java version detection reads the `java -version` output through redirected process streams instead of treating Java's stderr output as a PowerShell error. This keeps the Java 17 check working under strict error handling before Core starts.

@@ -26,26 +26,26 @@ foreach ($Arg in $args) {
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RunPid = Join-Path $ScriptDir "run.pid"
 $ApiKeyFile = Join-Path $ScriptDir "apikey.txt"
-$Pid = $null
+$NodePid = $null
 $StalePid = $false
 
 if (Test-Path -LiteralPath $RunPid -PathType Leaf) {
-    $PidText = (Get-Content -LiteralPath $RunPid -Raw).Trim()
-    if ($PidText -match '^\d+$') {
-        $Pid = [int]$PidText
-        if ($null -eq (Get-Process -Id $Pid -ErrorAction SilentlyContinue)) {
-            $Pid = $null
+    $NodePidText = (Get-Content -LiteralPath $RunPid -Raw).Trim()
+    if ($NodePidText -match '^\d+$') {
+        $NodePid = [int]$NodePidText
+        if ($null -eq (Get-Process -Id $NodePid -ErrorAction SilentlyContinue)) {
+            $NodePid = $null
             $StalePid = $true
         }
     }
 }
 
-if ($null -eq $Pid) {
+if ($null -eq $NodePid) {
     $Process = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
         Where-Object { $_.CommandLine -match "qortium" -and $_.CommandLine -match "settings-preview-.*local\.json" } |
         Select-Object -First 1
     if ($null -ne $Process) {
-        $Pid = [int]$Process.ProcessId
+        $NodePid = [int]$Process.ProcessId
     }
 }
 
@@ -69,10 +69,10 @@ if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
     }
 }
 
-if (-not $Success -and $null -ne $Pid) {
-    Write-Host "Stopping Qortium preview process $Pid..."
+if (-not $Success -and $null -ne $NodePid) {
+    Write-Host "Stopping Qortium preview process $NodePid..."
     try {
-        Stop-Process -Id $Pid -ErrorAction Stop
+        Stop-Process -Id $NodePid -ErrorAction Stop
         $Success = $true
     } catch {
         $Success = $false
@@ -90,24 +90,24 @@ if (-not $Success) {
     exit 1
 }
 
-if ($null -ne $Pid) {
+if ($null -ne $NodePid) {
     Write-Host -NoNewline "Waiting for Qortium preview node to stop"
     $Deadline = (Get-Date).AddSeconds($StopTimeout)
-    while ($null -ne (Get-Process -Id $Pid -ErrorAction SilentlyContinue)) {
+    while ($null -ne (Get-Process -Id $NodePid -ErrorAction SilentlyContinue)) {
         if ((Get-Date) -ge $Deadline) {
             Write-Host ""
-            Write-Host "Preview node did not stop within ${StopTimeout}s; asking process $Pid to close."
+            Write-Host "Preview node did not stop within ${StopTimeout}s; asking process $NodePid to close."
             try {
-                $Process = Get-Process -Id $Pid -ErrorAction Stop
+                $Process = Get-Process -Id $NodePid -ErrorAction Stop
                 if ($Process.CloseMainWindow()) {
                     $Process.WaitForExit($WindowCloseTimeout * 1000) | Out-Null
                 }
             } catch {
             }
 
-            if ($null -ne (Get-Process -Id $Pid -ErrorAction SilentlyContinue)) {
-                Write-Host "Preview node still running after ${WindowCloseTimeout}s; forcing process $Pid to exit."
-                Stop-Process -Id $Pid -Force -ErrorAction SilentlyContinue
+            if ($null -ne (Get-Process -Id $NodePid -ErrorAction SilentlyContinue)) {
+                Write-Host "Preview node still running after ${WindowCloseTimeout}s; forcing process $NodePid to exit."
+                Stop-Process -Id $NodePid -Force -ErrorAction SilentlyContinue
             }
             break
         }
