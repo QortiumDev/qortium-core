@@ -10,7 +10,6 @@ import org.qortium.data.account.MintingAccountData;
 import org.qortium.data.block.BlockData;
 import org.qortium.data.crosschain.TradeBotData;
 import org.qortium.network.Network;
-import org.qortium.repository.hsqldb.HSQLDBImportExport;
 import org.qortium.repository.hsqldb.HSQLDBRepositoryFactory;
 import org.qortium.settings.Settings;
 import org.qortium.utils.NTP;
@@ -298,9 +297,8 @@ public class Bootstrap {
         finally {
             try {
                 LOGGER.info("Re-importing local data...");
-                Path exportPath = HSQLDBImportExport.getExportDirectory(false);
-                repository.importDataFromFile(Paths.get(exportPath.toString(), "TradeBotStates.json").toString());
-                repository.importDataFromFile(Paths.get(exportPath.toString(), "MintingAccounts.json").toString());
+                repository.importDataFromFile("TradeBotStates.json");
+                repository.importDataFromFile("MintingAccounts.json");
                 repository.saveChanges();
 
             } catch (IOException e) {

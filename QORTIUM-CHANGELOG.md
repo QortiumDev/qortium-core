@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Constrain repository data imports to export files
+
+Changed repository data imports so Core reads only a named file from the configured export directory instead of accepting an arbitrary local filesystem path. Startup recovery, bootstrap re-imports, and the admin import endpoint now pass export filenames directly, which keeps local trade-bot and minting-account restore workflows intact while narrowing the remaining repository import path scan surface.
+
 ### 2026-06-01 - Parameterize asset balance filters
 
 Changed the asset-balance repository query so asset ID filters are bound as prepared-statement parameters instead of being written directly into the temporary `VALUES` table SQL. The public API already validates those filters as numeric asset IDs, and this keeps the database path consistent with the address filters while reducing the remaining SQL-injection scan surface.

@@ -961,17 +961,14 @@ public class Controller extends Thread {
 	private static void importRepositoryData() {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 
-			String exportPath = Settings.getInstance().getExportPath();
 			try {
-				Path importPath = Paths.get(exportPath, "TradeBotStates.json");
-				repository.importDataFromFile(importPath.toString());
+				repository.importDataFromFile("TradeBotStates.json");
 			} catch (FileNotFoundException e) {
 				// Do nothing, as the files will only exist in certain cases
 			}
 
 			try {
-				Path importPath = Paths.get(exportPath, "MintingAccounts.json");
-				repository.importDataFromFile(importPath.toString());
+				repository.importDataFromFile("MintingAccounts.json");
 			} catch (FileNotFoundException e) {
 				// Do nothing, as the files will only exist in certain cases
 			}
