@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Resolve ZIP extraction paths through shared guard
+
+Changed ZIP extraction so archive entries are normalized through the shared relative-path guard before Core creates directories or writes files. Absolute archive entries are now rejected explicitly, and the streaming unzip path has matching traversal coverage, keeping QDN archive extraction inside its intended destination directory.
+
 ### 2026-06-01 - Constrain repository data imports to export files
 
 Changed repository data imports so Core reads only a named file from the configured export directory instead of accepting an arbitrary local filesystem path. Startup recovery, bootstrap re-imports, and the admin import endpoint now pass export filenames directly, which keeps local trade-bot and minting-account restore workflows intact while narrowing the remaining repository import path scan surface.

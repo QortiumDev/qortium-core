@@ -266,8 +266,8 @@ public class ZipUtils {
      * Zip entry names are sanitized so extraction works on all OS/filesystems (e.g. names with | or :).
      */
     public static File newFile(File destinationDir, ZipEntry zipEntry) throws IOException {
-        String safeName = sanitizeZipEntryName(zipEntry.getName());
-        File destFile = new File(destinationDir, safeName);
+        Path safeEntryPath = safeZipEntryPath(zipEntry.getName());
+        File destFile = destinationDir.toPath().toAbsolutePath().normalize().resolve(safeEntryPath).toFile();
 
         String destDirPath = destinationDir.getCanonicalPath();
         String destFilePath = destFile.getCanonicalPath();
@@ -284,13 +284,7 @@ public class ZipUtils {
     }
 
     private static String safeZipEntryName(String entryName, boolean directory) throws IOException {
-        String safeName = sanitizeZipEntryName(entryName);
-        Path safeRelativePath;
-        try {
-            safeRelativePath = FilesystemUtils.safeRelativePath(Paths.get(safeName));
-        } catch (InvalidPathException e) {
-            throw new IOException("Entry is outside of the target dir: " + entryName, e);
-        }
+        Path safeRelativePath = safeZipEntryPath(entryName);
 
         StringBuilder zipEntryName = new StringBuilder();
         for (Path part : safeRelativePath) {
@@ -305,6 +299,32 @@ public class ZipUtils {
         }
 
         return zipEntryName.toString();
+    }
+
+    private static Path safeZipEntryPath(String entryName) throws IOException {
+        if (entryName == null || entryName.isBlank() || isAbsoluteZipEntryName(entryName)) {
+            throw new IOException("Entry is outside of the target dir: " + entryName);
+        }
+
+        String safeName = sanitizeZipEntryName(entryName);
+        try {
+            return FilesystemUtils.safeRelativePath(Paths.get(safeName));
+        } catch (InvalidPathException e) {
+            throw new IOException("Entry is outside of the target dir: " + entryName, e);
+        }
+    }
+
+    private static boolean isAbsoluteZipEntryName(String entryName) {
+        return entryName.startsWith("/") ||
+                entryName.startsWith("\\") ||
+                isWindowsDriveAbsolutePath(entryName);
+    }
+
+    private static boolean isWindowsDriveAbsolutePath(String entryName) {
+        return entryName.length() >= 3 &&
+                Character.isLetter(entryName.charAt(0)) &&
+                entryName.charAt(1) == ':' &&
+                (entryName.charAt(2) == '/' || entryName.charAt(2) == '\\');
     }
 
 }
