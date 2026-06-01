@@ -407,9 +407,12 @@ public class ChainATAPI extends API {
 		int blockHeight = timestamp.blockHeight;
 
 		// At least one block in the future
-		blockHeight += Math.max(minutes / this.ciyamAtSettings.minutesPerBlock, 1);
+		long blocksToAdd = Math.max(minutes / this.ciyamAtSettings.minutesPerBlock, 1L);
+		long targetBlockHeight = (long) blockHeight + blocksToAdd;
+		if (targetBlockHeight > Integer.MAX_VALUE)
+			throw new IllegalArgumentException("Timestamp block height exceeds integer range");
 
-		return new Timestamp(blockHeight, 0).longValue();
+		return new Timestamp((int) targetBlockHeight, 0).longValue();
 	}
 
 	@Override
