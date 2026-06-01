@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Move repository references to QortiumDev main
+
+Updated the current repository links, branch-targeted automation, release helper defaults, preview operator and tester instructions, gateway help links, Windows installer metadata, and proxy test fixture to use `QortiumDev/qortium-core` on the `main` branch. This prepares Qortium Core to live under the project organization with a normal default branch while leaving historical changelog and dependency-provenance references untouched.
+
 ### 2026-06-01 - Add Core-managed direct private chat helpers
 
 Added local API-key-protected helpers for direct private chats so desktop callers can ask Core to resolve recipient public keys, encrypt direct messages, sign and store CHAT transactions, and list direct conversations with decrypted data when the message uses Qortium's new Core-managed direct message format. This keeps private keys inside the trusted local API boundary and gives Qortium Home a safer surface to build direct messaging on without copying QDN app-side crypto.

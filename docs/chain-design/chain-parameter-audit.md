@@ -2,7 +2,7 @@
 
 Date: 2026-05-20
 
-Branch: `qortium-6.1.5`
+Branch: `main`
 
 Review context: current Qortium fork cleanup after the 6.1.5 integration,
 single-node testnet work, documentation reorganization, and trusted-seed launch

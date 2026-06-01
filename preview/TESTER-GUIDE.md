@@ -91,7 +91,7 @@ preview\stop.bat
 1. Clone the repository.
 
 ```sh
-git clone https://github.com/QuickMythril/qortium.git
+git clone https://github.com/QortiumDev/qortium-core.git
 cd qortium
 ```
 

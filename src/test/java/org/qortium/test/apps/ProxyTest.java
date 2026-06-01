@@ -12,7 +12,7 @@ public class ProxyTest {
 	private static final Pattern proxyUrlPattern = Pattern.compile("(https://)([^@:/]+)@([0-9.]{7,15})(/.*)");
 
 	public static void main(String args[]) {
-		String uri = "https://raw.githubusercontent.com@151.101.16.133/QuickMythril/qortium/qortium-6.1.5/pom.xml";
+		String uri = "https://raw.githubusercontent.com@151.101.16.133/QortiumDev/qortium-core/main/pom.xml";
 
 		try (InputStream in = fetchStream(uri)) {
 			int byteCount = 0;

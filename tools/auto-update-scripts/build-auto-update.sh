@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # === Configurable Defaults ===
-BASE_BRANCH="master"
+BASE_BRANCH="main"
 DEFAULT_LOG_DIR="${HOME}/qortium-auto-update-logs"
 LOG_FILE=""
 DRY_RUN=false

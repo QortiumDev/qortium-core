@@ -18,7 +18,7 @@
     <ROW Property="ARPNOREPAIR" MultiBuildValue="DefaultBuild:1"/>
     <ROW Property="ARPPRODUCTICON" Value="qortium.exe" Type="8"/>
     <ROW Property="ARPSYSTEMCOMPONENT" Value="1"/>
-    <ROW Property="ARPURLINFOABOUT" Value="https://github.com/QuickMythril/qortium"/>
+    <ROW Property="ARPURLINFOABOUT" Value="https://github.com/QortiumDev/qortium-core"/>
     <ROW Property="AiWinUI" MultiBuildValue="DefaultBuild:1"/>
     <ROW Property="BannerBitmap" Value="banner.jpg" MultiBuildValue="DefaultBuild:QortiumInstallerBanner.png" Type="1" MsiKey="BannerBitmap"/>
     <ROW Property="DATA_PATH" Value="will-be-overwritten"/>

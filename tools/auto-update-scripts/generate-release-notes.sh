@@ -13,8 +13,8 @@ set -euo pipefail
 #
 # Optional env:
 #   GH_TOKEN=...     # strongly recommended to avoid GitHub API rate limits
-#   REPO=QuickMythril/qortium
-#   BRANCH=master
+#   REPO=QortiumDev/qortium-core
+#   BRANCH=main
 #   WORKING_QORTIUM_DIR=./qortium
 # -----------------------------------------------------------------------------
 
@@ -24,8 +24,8 @@ if [[ -z "${VERSION}" ]]; then
   exit 1
 fi
 
-REPO="${REPO:-QuickMythril/qortium}"
-BRANCH="${BRANCH:-master}"
+REPO="${REPO:-QortiumDev/qortium-core}"
+BRANCH="${BRANCH:-main}"
 WORKING_QORTIUM_DIR="${WORKING_QORTIUM_DIR:-./qortium}"
 
 TAG="v${VERSION}"

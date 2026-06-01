@@ -77,7 +77,7 @@ function qdnGatewayShowModal(message) {
     qdnButton.innerText = "Learn more";
     qdnButton.addEventListener ("click", function() {
         document.body.removeChild(document.getElementById(modalElementId));
-        window.open("https://github.com/QuickMythril/qortium");
+        window.open("https://github.com/QortiumDev/qortium-core");
     });
     modalElement.appendChild(qdnButton);
 
@@ -113,10 +113,10 @@ window.addEventListener("message", async (event) => {
         case "DELETE_LIST_ITEM":
             const isExtInstalledRes = await isExtensionInstalledFunc()
             if(isExtInstalledRes?.version) return;
-            const errorString = "Interactive features were requested, but these are not yet supported when viewing via a gateway. To use interactive features, please access through the QDN desktop app. More info at: https://github.com/QuickMythril/qortium";
+            const errorString = "Interactive features were requested, but these are not yet supported when viewing via a gateway. To use interactive features, please access through the QDN desktop app. More info at: https://github.com/QortiumDev/qortium-core";
             response = "{\"error\": \"" + errorString + "\"}"
 
-            const modalText = "This app is powered by the QDN. You are viewing in read-only mode. To use interactive features, please access through the QDN desktop app. More info at: https://github.com/QuickMythril/qortium";
+            const modalText = "This app is powered by the QDN. You are viewing in read-only mode. To use interactive features, please access through the QDN desktop app. More info at: https://github.com/QortiumDev/qortium-core";
             qdnGatewayShowModal(modalText);
             break;
 

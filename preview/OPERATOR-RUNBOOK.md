@@ -22,7 +22,7 @@ Run seed nodes from a non-root user.
 ```sh
 cd ~/git/qortium
 git fetch --all --prune
-git checkout qortium-6.1.5
+git checkout main
 git pull --ff-only
 ./build.sh --yes
 ```
