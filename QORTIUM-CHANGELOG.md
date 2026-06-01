@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Document remaining code scanning triage
+
+Added a tracked security triage note for the remaining GitHub CodeQL alerts so the project can separate intended QDN, local-file, developer-proxy, and ElectrumX compatibility behavior from findings that still need design work. This gives future alert dismissals and fixes a shared reference instead of treating the remaining scanner count as one generic bug list.
+
 ### 2026-06-01 - Harden cross-chain ledger CSV responses
 
 Changed cross-chain trade ledger exports so market, currency, fee, and exchange labels are escaped before being written into CSV rows. This keeps the ledger export readable while preventing those labels from breaking CSV columns or being treated as spreadsheet formulas when opened.
