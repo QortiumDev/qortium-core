@@ -9,6 +9,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -46,6 +47,27 @@ public class ArbitraryDataRendererTests {
             Files.deleteIfExists(filePath);
             Files.deleteIfExists(directory);
         }
+    }
+
+    @Test
+    public void testPlainTextResponseSetsContentTypeAndUtf8Length() {
+        Exchange exchange = new Exchange("text/plain");
+        String body = "Invalid \u03c0";
+
+        ArbitraryDataRenderer.getResponse(exchange.response, 404, body);
+
+        assertEquals(404, exchange.status);
+        assertEquals("text/plain; charset=UTF-8", exchange.contentType);
+        assertEquals(body.getBytes(StandardCharsets.UTF_8).length, exchange.contentLength);
+        assertArrayEquals(body.getBytes(StandardCharsets.UTF_8), exchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testJavaScriptStringEscaperForLoadingTemplateData() throws Exception {
+        Method escapeJavaScriptStringContents = ArbitraryDataRenderer.class.getDeclaredMethod("escapeJavaScriptStringContents", String.class);
+        escapeJavaScriptStringContents.setAccessible(true);
+
+        assertEquals("\\u003c/script\\u003e\\n\\u0026\\u0027\\\"", escapeJavaScriptStringContents.invoke(null, "</script>\n&'\""));
     }
 
     @Test
@@ -144,6 +166,7 @@ public class ArbitraryDataRendererTests {
         private final CapturingServletOutputStream outputStream = new CapturingServletOutputStream();
         private final ServletContext context;
         private final HttpServletResponse response;
+        private int status;
         private String contentType;
         private long contentLength;
 
@@ -167,6 +190,10 @@ public class ArbitraryDataRendererTests {
                     new Class[] { HttpServletResponse.class },
                     (proxy, method, args) -> {
                         switch (method.getName()) {
+                            case "setStatus":
+                                this.status = (Integer) args[0];
+                                this.responseCalls.add(method.getName());
+                                return null;
                             case "addHeader":
                                 this.responseHeaders.put((String) args[0], (String) args[1]);
                                 this.responseCalls.add(method.getName());

@@ -326,6 +326,30 @@ public class DevProxyServerResourceTests {
     }
 
     @Test
+    public void testProxyUrlBuilderPreservesLoopbackTargetAndQuery() throws Exception {
+        Method buildProxyUrl = DevProxyServerResource.class.getDeclaredMethod("buildProxyUrl", String.class, String.class, String.class);
+        buildProxyUrl.setAccessible(true);
+
+        URL url = (URL) buildProxyUrl.invoke(null, "127.0.0.1:5173", "asset.txt", "q=1");
+
+        assertEquals("http", url.getProtocol());
+        assertEquals("127.0.0.1", url.getHost());
+        assertEquals(5173, url.getPort());
+        assertEquals("/asset.txt", url.getPath());
+        assertEquals("q=1", url.getQuery());
+    }
+
+    @Test
+    public void testProxyUrlBuilderRejectsNonLoopbackSourceBeforeConnection() throws Exception {
+        Method buildProxyUrl = DevProxyServerResource.class.getDeclaredMethod("buildProxyUrl", String.class, String.class, String.class);
+        buildProxyUrl.setAccessible(true);
+
+        assertProxySourceRejected(buildProxyUrl, "example.com:5173");
+        assertProxySourceRejected(buildProxyUrl, "127.0.0.1:5173/path");
+        assertProxySourceRejected(buildProxyUrl, "127.0.0.1:5173?target=example.com");
+    }
+
+    @Test
     public void testProxyPreservesUpstreamRedirects() throws Exception {
         byte[] redirectBody = "redirect preserved".getBytes(StandardCharsets.UTF_8);
         byte[] targetBody = "target reached".getBytes(StandardCharsets.UTF_8);
@@ -570,6 +594,17 @@ public class DevProxyServerResourceTests {
         } catch (InvocationTargetException e) {
             assertTrue(e.getCause() instanceof IOException);
             assertTrue(e.getCause().getMessage().contains("loopback HTTP URL"));
+        }
+    }
+
+    private static void assertProxySourceRejected(Method buildProxyUrl, String source) throws Exception {
+        try {
+            buildProxyUrl.invoke(null, source, "asset.txt", null);
+            fail("Expected developer proxy source to be rejected");
+        } catch (InvocationTargetException e) {
+            assertTrue(e.getCause() instanceof IOException);
+            assertTrue(e.getCause().getMessage().contains("developer proxy") ||
+                    e.getCause().getMessage().contains("Developer proxy"));
         }
     }
 
