@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Hide the Windows preview Java process window
+
+Changed the Windows preview launcher so it starts the Java process without leaving a visible command window behind. This keeps Qortium Home's managed Core startup quieter for Windows testers while preserving the same process arguments, working directory, PID file, and preview log files.
+
 ### 2026-05-29 - Tighten the coverage profile baseline
 
 Made the coverage profile easier to use and more meaningful for future checks. Running the coverage profile now turns unit tests on automatically, writes the JaCoCo report during verification, ignores generated Zcash protocol stubs that are not useful coverage targets, and raises the minimum coverage levels to better match the current tested codebase.

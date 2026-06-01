@@ -193,12 +193,20 @@ $JavaArgs = @(
     "-Dlog4j.configurationFile=$Log4jConfig",
     "-Dqortium.log.dir=$ScriptDir"
 ) + $JavaDisplayArgs + $JvmMemoryArgs + @("-jar", $JarPath, $SettingsLocal)
-$Process = Start-Process -FilePath "java" `
-    -ArgumentList $JavaArgs `
-    -WorkingDirectory $ScriptDir `
-    -RedirectStandardOutput $RunLog `
-    -RedirectStandardError $RunErrorLog `
-    -PassThru
+$StartProcessArgs = @{
+    FilePath = "java"
+    ArgumentList = $JavaArgs
+    WorkingDirectory = $ScriptDir
+    RedirectStandardOutput = $RunLog
+    RedirectStandardError = $RunErrorLog
+    PassThru = $true
+}
+
+if ($IsWindows -or $PSVersionTable.PSEdition -eq "Desktop") {
+    $StartProcessArgs.WindowStyle = "Hidden"
+}
+
+$Process = Start-Process @StartProcessArgs
 
 Set-Content -LiteralPath $RunPid -Value $Process.Id
 
