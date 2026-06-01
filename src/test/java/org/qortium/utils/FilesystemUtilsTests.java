@@ -70,6 +70,34 @@ public class FilesystemUtilsTests {
     }
 
     @Test
+    public void testResolveFileNameInsideBaseAllowsSingleFilename() throws IOException {
+        Path base = Files.createTempDirectory("filesystem-utils-base");
+        Path resolvedPath = FilesystemUtils.resolveFileNameInsideBase(base, "file.txt");
+
+        assertEquals(base.toAbsolutePath().normalize().resolve("file.txt"), resolvedPath);
+    }
+
+    @Test
+    public void testResolveFileNameInsideBaseRejectsNestedPath() throws IOException {
+        assertUnsafeFilename("nested/file.txt");
+    }
+
+    @Test
+    public void testResolveFileNameInsideBaseRejectsBackslashPath() throws IOException {
+        assertUnsafeFilename("nested\\file.txt");
+    }
+
+    @Test
+    public void testResolveFileNameInsideBaseRejectsParentTraversal() throws IOException {
+        assertUnsafeFilename("../outside.txt");
+    }
+
+    @Test
+    public void testResolveFileNameInsideBaseRejectsBlankFilename() throws IOException {
+        assertUnsafeFilename("");
+    }
+
+    @Test
     public void testIsChildRejectsNormalizedEscape() throws IOException {
         Path base = Files.createTempDirectory("filesystem-utils-base");
         Path escapedPath = base.resolve("..").resolve(base.getFileName() + "-outside");
@@ -104,6 +132,19 @@ public class FilesystemUtilsTests {
             fail("Expected unsafe requested path to be rejected");
         } catch (IOException e) {
             assertTrue(e.getMessage().contains("outside") || e.getMessage().contains("invalid"));
+        }
+    }
+
+    private static void assertUnsafeFilename(String filename) throws IOException {
+        Path base = Files.createTempDirectory("filesystem-utils-base");
+
+        try {
+            FilesystemUtils.resolveFileNameInsideBase(base, filename);
+            fail("Expected unsafe filename to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("outside") ||
+                    e.getMessage().contains("invalid") ||
+                    e.getMessage().contains("missing"));
         }
     }
 }

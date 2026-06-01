@@ -7,7 +7,11 @@ import org.qortium.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.test.common.ApiCommon;
 
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
@@ -72,6 +76,53 @@ public class ArbitraryApiTests extends ApiCommon {
 
 		assertEquals("download.bin", method.invoke(null, ""));
 		assertEquals("unsafename.bin", method.invoke(null, "unsafe/name"));
+	}
+
+	@Test
+	public void testUploadChunkDirectoryStaysInsideUploadBase() throws Exception {
+		Method method = ArbitraryResource.class.getDeclaredMethod("resolveUploadChunkDirectory", String.class, String.class, String.class);
+		method.setAccessible(true);
+
+		Path path = (Path) method.invoke(null, "APP", "QortiumHomeTest", "qortium-chat");
+
+		assertEquals(
+				Paths.get("uploads-temp").toAbsolutePath().normalize().resolve("APP").resolve("QortiumHomeTest").resolve("qortium-chat"),
+				path
+		);
+	}
+
+	@Test
+	public void testUploadChunkDirectoryRejectsTraversalSegments() throws Exception {
+		Method method = ArbitraryResource.class.getDeclaredMethod("resolveUploadChunkDirectory", String.class, String.class, String.class);
+		method.setAccessible(true);
+
+		assertInvocationThrowsIOException(method, "APP", "../outside", null);
+		assertInvocationThrowsIOException(method, "APP", "name", "../outside");
+	}
+
+	@Test
+	public void testUploadChunkFileRejectsNegativeIndex() throws Exception {
+		Method method = ArbitraryResource.class.getDeclaredMethod("resolveUploadChunkFile", Path.class, int.class);
+		method.setAccessible(true);
+
+		assertInvocationThrowsIOException(method, Paths.get("uploads-temp"), -1);
+	}
+
+	@Test
+	public void testUploadTempFileRejectsNestedFilename() throws Exception {
+		Method method = ArbitraryResource.class.getDeclaredMethod("resolveUploadTempFile", Path.class, String.class);
+		method.setAccessible(true);
+
+		assertInvocationThrowsIOException(method, Paths.get("uploads-temp"), "nested/file.txt");
+	}
+
+	private static void assertInvocationThrowsIOException(Method method, Object... args) throws Exception {
+		try {
+			method.invoke(null, args);
+			org.junit.Assert.fail("Expected IOException");
+		} catch (InvocationTargetException e) {
+			assertTrue(e.getCause() instanceof IOException);
+		}
 	}
 
 }
