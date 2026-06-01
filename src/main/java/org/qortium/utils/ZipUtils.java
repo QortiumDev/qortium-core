@@ -36,6 +36,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -62,28 +64,23 @@ public class ZipUtils {
         // Handle single file resources slightly differently
         if (isSingleFile) {
             // Create enclosing folder
-            zipOut.putNextEntry(new ZipEntry(enclosingFolderName + "/"));
+            zipOut.putNextEntry(new ZipEntry(safeZipEntryName(enclosingFolderName, true)));
             zipOut.closeEntry();
             // Place the supplied file within the folder
-            ZipUtils.zip(fileToZip, enclosingFolderName + "/" + fileToZip.getName(), zipOut, false);
+            ZipUtils.zip(fileToZip, zipEntryChildName(enclosingFolderName, fileToZip.getName()), zipOut, false);
             return;
         }
 
         if (fileToZip.isDirectory()) {
-            if (enclosingFolderName.endsWith("/")) {
-                zipOut.putNextEntry(new ZipEntry(enclosingFolderName));
-                zipOut.closeEntry();
-            } else {
-                zipOut.putNextEntry(new ZipEntry(enclosingFolderName + "/"));
-                zipOut.closeEntry();
-            }
+            zipOut.putNextEntry(new ZipEntry(safeZipEntryName(enclosingFolderName, true)));
+            zipOut.closeEntry();
             final File[] children = fileToZip.listFiles();
             for (final File childFile : children) {
-                ZipUtils.zip(childFile, enclosingFolderName + "/" + childFile.getName(), zipOut, false);
+                ZipUtils.zip(childFile, zipEntryChildName(enclosingFolderName, childFile.getName()), zipOut, false);
             }
             return;
         }
-        final ZipEntry zipEntry = new ZipEntry(enclosingFolderName);
+        final ZipEntry zipEntry = new ZipEntry(safeZipEntryName(enclosingFolderName, false));
         zipOut.putNextEntry(zipEntry);
         try {
             try (FileInputStream fis = new FileInputStream(fileToZip)) {
@@ -232,6 +229,34 @@ public class ZipUtils {
         }
 
         return destFile;
+    }
+
+    private static String zipEntryChildName(String parentName, String childName) throws IOException {
+        return safeZipEntryName(parentName, false) + "/" + safeZipEntryName(childName, false);
+    }
+
+    private static String safeZipEntryName(String entryName, boolean directory) throws IOException {
+        String safeName = sanitizeZipEntryName(entryName);
+        Path safeRelativePath;
+        try {
+            safeRelativePath = FilesystemUtils.safeRelativePath(Paths.get(safeName));
+        } catch (InvalidPathException e) {
+            throw new IOException("Entry is outside of the target dir: " + entryName, e);
+        }
+
+        StringBuilder zipEntryName = new StringBuilder();
+        for (Path part : safeRelativePath) {
+            if (zipEntryName.length() > 0) {
+                zipEntryName.append('/');
+            }
+            zipEntryName.append(part.toString());
+        }
+
+        if (directory && zipEntryName.charAt(zipEntryName.length() - 1) != '/') {
+            zipEntryName.append('/');
+        }
+
+        return zipEntryName.toString();
     }
 
 }

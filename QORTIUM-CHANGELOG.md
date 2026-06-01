@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Validate ZIP archive entry names
+
+Changed ZIP creation so archive entry names are sanitized and checked as safe relative paths before they are written into an archive. Unsafe enclosing folder names such as parent-directory traversal are now rejected, while ZIP extraction continues to keep sanitized entries inside the target directory. This tightens archive handling without changing the normal QDN compression and extraction flow.
+
 ### 2026-06-01 - Guard AT timestamp height arithmetic
 
 Changed automated-transaction timestamp math so block-height additions are done explicitly in `long` values and checked before converting back to the integer height expected by the CIYAM timestamp type. This removes an implicit narrowing conversion flagged by the scanner and makes an impossible overflow fail clearly instead of silently wrapping the target block height.
