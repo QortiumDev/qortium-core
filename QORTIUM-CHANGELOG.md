@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Harden QDN render metadata escaping
+
+Changed the QDN HTML rewrite path so injected render metadata is written as escaped JavaScript string data instead of raw script markup, and so generated script, base, and meta tags are built as DOM elements. Relative render assets now receive encoded identifier query parameters without breaking URL fragments, Q-App navigation URLs encode service, name, identifier, path, and query values before building links, and the gateway modal writes message text without treating it as HTML. This reduces the QDN browser-side XSS alert surface while keeping the existing render, gateway, and proxy flows intact.
+
 ### 2026-06-01 - Address first CodeQL security findings
 
 Removed an unused API response-unmarshalling path that exposed XML parsing risk, tightened the developer proxy so it only opens loopback HTTP targets, made group approval threshold serialization check the byte range explicitly, sanitized attachment download filenames before building response headers, stopped chunk-upload errors from returning internal exception details, replaced regex-heavy filename cleanup with direct character handling, and changed a local key-storage test page to write private key text without treating it as HTML. This starts reducing the inherited CodeQL alert baseline with narrow fixes that do not change chain rules or QDN storage behavior.

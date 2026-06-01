@@ -1,6 +1,5 @@
 package org.qortium.api;
 
-
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
@@ -8,9 +7,12 @@ import java.util.Objects;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jsoup.Jsoup;
+import org.jsoup.nodes.DataNode;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.qortium.arbitrary.misc.Service;
+
 public class HTMLParser {
 
     private static final Logger LOGGER = LogManager.getLogger(HTMLParser.class);
@@ -48,59 +50,59 @@ public class HTMLParser {
         Document document = Jsoup.parse(fileContents);
         Elements head = document.getElementsByTag("head");
         if (!head.isEmpty()) {
+            Element headElement = head.get(0);
+
             // Add q-apps script tag
-            String qAppsScriptElement = String.format("<script src=\"/apps/q-apps.js?time=%d\">", System.currentTimeMillis());
-            head.get(0).prepend(qAppsScriptElement);
+            Element qAppsScriptElement = new Element("script")
+                    .attr("src", String.format("/apps/q-apps.js?time=%d", System.currentTimeMillis()));
+            headElement.prependChild(qAppsScriptElement);
 
             // Add q-apps gateway script tag if in gateway mode
             if (Objects.equals(this.qdnContext, "gateway")) {
-                String qAppsGatewayScriptElement = String.format("<script src=\"/apps/q-apps-gateway.js?time=%d\">", System.currentTimeMillis());
-                head.get(0).prepend(qAppsGatewayScriptElement);
+                Element qAppsGatewayScriptElement = new Element("script")
+                        .attr("src", String.format("/apps/q-apps-gateway.js?time=%d", System.currentTimeMillis()));
+                headElement.prependChild(qAppsGatewayScriptElement);
             }
 
             // Escape and add vars
-            String qdnContext = this.qdnContext != null ? this.qdnContext.replace("\\", "").replace("\"","\\\"") : "";
-            String service = this.service.toString().replace("\\", "").replace("\"","\\\"");
-            String name = this.resourceId != null ? this.resourceId.replace("\\", "").replace("\"","\\\"") : "";
-            String identifier = this.identifier != null ? this.identifier.replace("\\", "").replace("\"","\\\"") : "";
-            String path = this.path != null ? this.path.replace("\\", "").replace("\"","\\\"") : "";
-            String theme = this.theme != null ? this.theme.replace("\\", "").replace("\"","\\\"") : "";
-            String lang = this.lang != null ? this.lang.replace("\\", "").replace("\"", "\\\"") : "";
-            String qdnBase = this.qdnBase != null ? this.qdnBase.replace("\\", "").replace("\"","\\\"") : "";
-            String qdnBaseWithPath = this.qdnBaseWithPath != null ? this.qdnBaseWithPath.replace("\\", "").replace("\"","\\\"") : "";
             String qdnContextVar = String.format(
-                "<script>var _qdnContext=\"%s\"; var _qdnTheme=\"%s\"; var _qdnLang=\"%s\"; var _qdnService=\"%s\"; var _qdnName=\"%s\"; var _qdnIdentifier=\"%s\"; var _qdnPath=\"%s\"; var _qdnBase=\"%s\"; var _qdnBaseWithPath=\"%s\";</script>",
-                qdnContext, theme, lang, service, name, identifier, path, qdnBase, qdnBaseWithPath
+                "var _qdnContext=%s; var _qdnTheme=%s; var _qdnLang=%s; var _qdnService=%s; var _qdnName=%s; var _qdnIdentifier=%s; var _qdnPath=%s; var _qdnBase=%s; var _qdnBaseWithPath=%s;",
+                javaScriptStringLiteral(this.qdnContext),
+                javaScriptStringLiteral(this.theme),
+                javaScriptStringLiteral(this.lang),
+                javaScriptStringLiteral(this.service.toString()),
+                javaScriptStringLiteral(this.resourceId),
+                javaScriptStringLiteral(this.identifier),
+                javaScriptStringLiteral(this.path),
+                javaScriptStringLiteral(this.qdnBase),
+                javaScriptStringLiteral(this.qdnBaseWithPath)
               );
-            head.get(0).prepend(qdnContextVar);
+            Element qdnContextElement = new Element("script");
+            qdnContextElement.appendChild(new DataNode(qdnContextVar));
+            headElement.prependChild(qdnContextElement);
 
             // Add base href tag
             // Exclude the path if this request was routed back to the index automatically
             String baseHref = this.usingCustomRouting ? this.qdnBase : this.qdnBaseWithPath;
-            String baseElement = String.format("<base href=\"%s/\">", baseHref);
-            head.get(0).prepend(baseElement);
+            Element baseElement = new Element("base").attr("href", baseHref + "/");
+            headElement.prependChild(baseElement);
 
             // Add meta charset tag
-            String metaCharsetElement = "<meta charset=\"UTF-8\">";
-            head.get(0).prepend(metaCharsetElement);
+            Element metaCharsetElement = new Element("meta").attr("charset", "UTF-8");
+            headElement.prependChild(metaCharsetElement);
 
         }
         
         // For render context with non-default identifier, modify all relative script and link tags
         // to include the identifier query parameter (base tag doesn't reliably preserve query params)
         if (Objects.equals(this.qdnContext, "render") && this.identifier != null && !this.identifier.isBlank() && !this.identifier.equals("default")) {
-            String encodedIdentifier = URLEncoder.encode(this.identifier, StandardCharsets.UTF_8);
-            
             // Modify script tags
             Elements scripts = document.select("script[src]");
             scripts.forEach(script -> {
                 String src = script.attr("src");
                 // Only modify relative URLs (not absolute URLs starting with / or http)
                 if (!src.startsWith("/") && !src.startsWith("http")) {
-                    String newSrc = src.contains("?") ? 
-                        src + "&identifier=" + encodedIdentifier : 
-                        src + "?identifier=" + encodedIdentifier;
-                    script.attr("src", newSrc);
+                    script.attr("src", appendQueryParameter(src, "identifier", this.identifier));
                 }
             });
             
@@ -110,10 +112,7 @@ public class HTMLParser {
                 String href = link.attr("href");
                 // Only modify relative URLs
                 if (!href.startsWith("/") && !href.startsWith("http")) {
-                    String newHref = href.contains("?") ? 
-                        href + "&identifier=" + encodedIdentifier : 
-                        href + "?identifier=" + encodedIdentifier;
-                    link.attr("href", newHref);
+                    link.attr("href", appendQueryParameter(href, "identifier", this.identifier));
                 }
             });
         }
@@ -131,5 +130,78 @@ public class HTMLParser {
 
     public byte[] getData() {
         return this.data;
+    }
+
+    private static String javaScriptStringLiteral(String value) {
+        if (value == null) {
+            value = "";
+        }
+
+        StringBuilder output = new StringBuilder(value.length() + 2);
+        output.append('"');
+        for (int i = 0; i < value.length(); ++i) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '\\':
+                    output.append("\\\\");
+                    break;
+                case '"':
+                    output.append("\\\"");
+                    break;
+                case '\b':
+                    output.append("\\b");
+                    break;
+                case '\f':
+                    output.append("\\f");
+                    break;
+                case '\n':
+                    output.append("\\n");
+                    break;
+                case '\r':
+                    output.append("\\r");
+                    break;
+                case '\t':
+                    output.append("\\t");
+                    break;
+                case '<':
+                    output.append("\\u003c");
+                    break;
+                case '>':
+                    output.append("\\u003e");
+                    break;
+                case '&':
+                    output.append("\\u0026");
+                    break;
+                case '\'':
+                    output.append("\\u0027");
+                    break;
+                case '\u2028':
+                    output.append("\\u2028");
+                    break;
+                case '\u2029':
+                    output.append("\\u2029");
+                    break;
+                default:
+                    if (c < 0x20) {
+                        output.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        output.append(c);
+                    }
+            }
+        }
+        output.append('"');
+        return output.toString();
+    }
+
+    private static String appendQueryParameter(String url, String name, String value) {
+        int fragmentIndex = url.indexOf('#');
+        String baseUrl = fragmentIndex >= 0 ? url.substring(0, fragmentIndex) : url;
+        String fragment = fragmentIndex >= 0 ? url.substring(fragmentIndex) : "";
+        String separator = baseUrl.contains("?") ? "&" : "?";
+        return baseUrl + separator + urlEncode(name) + "=" + urlEncode(value) + fragment;
+    }
+
+    private static String urlEncode(String value) {
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 }
