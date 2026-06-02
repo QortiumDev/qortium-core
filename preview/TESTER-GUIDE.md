@@ -144,6 +144,10 @@ preview\reset.bat
   genesis, and settle into the current preview height.
 - The first useful tests are connecting to the seed nodes, staying synced, sending
   chat messages, trying QDN features, and reporting issues.
+- Preview participant nodes try to keep four outbound chain peers when enough
+  reachable peers are available. Nodes behind a firewall or router can still use
+  preview normally, but they may only show outbound peers unless other nodes can
+  connect back to them.
 - Preview participant and seed nodes expose limited public read-only API access
   by default so Qortium Home can discover useful peers, browse QDN resources,
   and read common chain data. Your local node still keeps transaction building,
@@ -155,6 +159,13 @@ needs to allow inbound TCP `24891` for public read API access, `24892` for P2P,
 and `24894` for QDN/data. If you do not open those ports, your node can still
 use the preview network normally, but other users may not be able to use it as a
 public read or QDN peer.
+
+The `/admin/status` response includes directional peer counts and inbound
+reachability fields. If `numberOfOutboundConnections` is healthy but
+`numberOfInboundConnections` stays at `0`, your node is probably connected
+outbound but not publicly reachable for P2P. If `isP2PInboundReachable` or
+`isQDNInboundReachable` is `false`, check firewall or router forwarding for the
+matching preview port.
 
 The public seed status endpoints are:
 

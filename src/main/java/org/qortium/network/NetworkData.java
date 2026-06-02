@@ -2118,15 +2118,15 @@ public class NetworkData {
         return this.inboundReachability.canAcceptInbound();
     }
 
-    boolean isListenSocketAvailable() {
+    public boolean isListenSocketAvailable() {
         return this.inboundReachability.isListenSocketAvailable();
     }
 
-    boolean isPortMapped() {
+    public boolean isPortMapped() {
         return this.inboundReachability.isPortMapped();
     }
 
-    long getLastInboundHandshakeTimestamp() {
+    public long getLastInboundHandshakeTimestamp() {
         return this.inboundReachability.getLastInboundHandshakeTimestamp();
     }
 
