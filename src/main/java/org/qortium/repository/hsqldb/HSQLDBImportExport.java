@@ -13,6 +13,7 @@ import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.settings.Settings;
 import org.qortium.utils.Base58;
+import org.qortium.utils.FilesystemUtils;
 import org.qortium.utils.Triple;
 
 import java.io.File;
@@ -225,30 +226,27 @@ public class HSQLDBImportExport {
     /* Utils */
 
     /**
-     * Imports data from supplied file
+     * Imports data from the supplied export filename
      * Data type is loaded from the file itself, and if missing, TradeBotStates is assumed
      *
-     * @param filename
+     * @param filename file name inside the configured export directory
      * @param repository
      * @throws DataException
      * @throws IOException
      */
     public static void importDataFromFile(String filename, Repository repository) throws DataException, IOException {
-        Path path = Paths.get(filename);
-        if (!path.toFile().exists()) {
-            throw new FileNotFoundException(String.format("File doesn't exist: %s", filename));
-        }
+        Path path = resolveImportFile(filename);
         byte[] fileContents = Files.readAllBytes(path);
         if (fileContents == null) {
             throw new FileNotFoundException(String.format("Unable to read file contents: %s", filename));
         }
 
-        LOGGER.info(String.format("Importing %s into repository ...", filename));
+        LOGGER.info(String.format("Importing %s into repository ...", path));
 
         String jsonString = new String(fileContents);
         Triple<String, String, JSONArray> parsedJSON = HSQLDBImportExport.parseJSONString(jsonString);
         if (parsedJSON.getA() == null || parsedJSON.getC() == null) {
-            throw new DataException(String.format("Missing data when importing %s into repository", filename));
+            throw new DataException(String.format("Missing data when importing %s into repository", path));
         }
         String type = parsedJSON.getA();
         JSONArray data = parsedJSON.getC();
@@ -267,11 +265,20 @@ public class HSQLDBImportExport {
                 HSQLDBImportExport.importMintingAccountDataJSON(dataJsonObject, repository);
             }
             else {
-                throw new DataException(String.format("Unrecognized data type when importing %s into repository", filename));
+                throw new DataException(String.format("Unrecognized data type when importing %s into repository", path));
             }
 
         }
-        LOGGER.info(String.format("Imported %s into repository from %s", type, filename));
+        LOGGER.info(String.format("Imported %s into repository from %s", type, path));
+    }
+
+    static Path resolveImportFile(String filename) throws DataException, IOException {
+        Path importPath = FilesystemUtils.resolveFileNameInsideBase(HSQLDBImportExport.getExportDirectory(false), filename);
+        if (!Files.isRegularFile(importPath)) {
+            throw new FileNotFoundException(String.format("File doesn't exist: %s", filename));
+        }
+
+        return importPath;
     }
 
     private static void importTradeBotDataJSON(JSONObject tradeBotDataJson, Repository repository) throws DataException {

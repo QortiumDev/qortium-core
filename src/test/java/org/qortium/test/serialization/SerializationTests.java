@@ -17,6 +17,7 @@ import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.utils.Base58;
 import org.qortium.utils.Serialization;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
@@ -24,13 +25,36 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class SerializationTests extends Common {
 
 	@Before
 	public void beforeTest() throws DataException {
 		Common.useDefaultSettings();
+	}
+
+	@Test
+	public void testSerializeUnsignedByte() throws IOException {
+		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+
+		Serialization.serializeUnsignedByte(bytes, 0);
+		Serialization.serializeUnsignedByte(bytes, 255);
+
+		assertArrayEquals(new byte[] { 0, (byte) 0xff }, bytes.toByteArray());
+	}
+
+	@Test
+	public void testSerializeUnsignedByteRejectsOutOfRange() {
+		try {
+			Serialization.serializeUnsignedByte(new ByteArrayOutputStream(), 256);
+			fail("Expected unsigned byte serializer to reject values over 255");
+		} catch (IOException e) {
+			assertTrue(e.getMessage().contains("unsigned byte"));
+		}
 	}
 
 	@Test

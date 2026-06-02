@@ -12,6 +12,7 @@ import org.qortium.arbitrary.exception.MissingDataException;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.Controller;
 import org.qortium.settings.Settings;
+import org.qortium.utils.FilesystemUtils;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
@@ -133,12 +134,12 @@ public class ArbitraryDataRenderer {
 
         try {
             String filename = this.getFilename(unzippedPath, inPath);
-            Path filePath = Paths.get(unzippedPath, filename);
+            Path filePath = ArbitraryDataRenderer.resolveRequestedFilePath(Paths.get(unzippedPath), filename);
             boolean usingCustomRouting = false;
             if (Files.isDirectory(filePath) && (!inPath.endsWith("/"))) {
                 inPath = inPath + "/";
                 filename = this.getFilename(unzippedPath, inPath);
-                filePath = Paths.get(unzippedPath, filename);
+                filePath = ArbitraryDataRenderer.resolveRequestedFilePath(Paths.get(unzippedPath), filename);
             }
             
             // If the file doesn't exist, we may need to route the request elsewhere, or cleanup
@@ -253,6 +254,10 @@ public class ArbitraryDataRenderer {
         }
     }
 
+    static Path resolveRequestedFilePath(Path baseDirectory, String filename) throws IOException {
+        return FilesystemUtils.resolveRelativePathInsideBase(baseDirectory, filename);
+    }
+
     private String getFilename(String directory, String userPath) {
         if (userPath == null || userPath.endsWith("/") || userPath.isEmpty()) {
             // Locate index file
@@ -274,27 +279,95 @@ public class ArbitraryDataRenderer {
             responseString = Resources.toString(url, StandardCharsets.UTF_8);
 
             // Replace vars
-            responseString = responseString.replace("%%SERVICE%%", service.toString());
-            responseString = responseString.replace("%%NAME%%", name);
-            responseString = responseString.replace("%%IDENTIFIER%%", identifier);
-            responseString = responseString.replace("%%THEME%%", theme);
+            responseString = responseString.replace("%%SERVICE%%", escapeJavaScriptStringContents(service.toString()));
+            responseString = responseString.replace("%%NAME%%", escapeJavaScriptStringContents(name));
+            responseString = responseString.replace("%%IDENTIFIER%%", escapeJavaScriptStringContents(identifier));
+            responseString = responseString.replace("%%THEME%%", escapeJavaScriptStringContents(theme));
 
         } catch (IOException e) {
             LOGGER.info("Unable to show loading screen: {}", e.getMessage());
         }
-        return ArbitraryDataRenderer.getResponse(response, 503, responseString);
+        return ArbitraryDataRenderer.getHtmlResponse(response, 503, responseString);
     }
 
     public static HttpServletResponse getResponse(HttpServletResponse response, int responseCode, String responseString) {
+        return ArbitraryDataRenderer.writeResponse(response, responseCode, "text/plain; charset=UTF-8", responseString);
+    }
+
+    private static HttpServletResponse getHtmlResponse(HttpServletResponse response, int responseCode, String responseString) {
+        return ArbitraryDataRenderer.writeResponse(response, responseCode, "text/html; charset=UTF-8", responseString);
+    }
+
+    private static HttpServletResponse writeResponse(HttpServletResponse response, int responseCode, String contentType, String responseString) {
         try {
-            byte[] responseData = responseString.getBytes();
+            byte[] responseData = responseString.getBytes(StandardCharsets.UTF_8);
             response.setStatus(responseCode);
+            response.setContentType(contentType);
             response.setContentLength(responseData.length);
             response.getOutputStream().write(responseData);
         } catch (IOException e) {
             LOGGER.info("Error writing {} response", responseCode);
         }
         return response;
+    }
+
+    private static String escapeJavaScriptStringContents(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        StringBuilder output = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); ++i) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '\\':
+                    output.append("\\\\");
+                    break;
+                case '"':
+                    output.append("\\\"");
+                    break;
+                case '\b':
+                    output.append("\\b");
+                    break;
+                case '\f':
+                    output.append("\\f");
+                    break;
+                case '\n':
+                    output.append("\\n");
+                    break;
+                case '\r':
+                    output.append("\\r");
+                    break;
+                case '\t':
+                    output.append("\\t");
+                    break;
+                case '<':
+                    output.append("\\u003c");
+                    break;
+                case '>':
+                    output.append("\\u003e");
+                    break;
+                case '&':
+                    output.append("\\u0026");
+                    break;
+                case '\'':
+                    output.append("\\u0027");
+                    break;
+                case '\u2028':
+                    output.append("\\u2028");
+                    break;
+                case '\u2029':
+                    output.append("\\u2029");
+                    break;
+                default:
+                    if (c < 0x20) {
+                        output.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        output.append(c);
+                    }
+            }
+        }
+        return output.toString();
     }
 
     public static List<String> indexFiles() {

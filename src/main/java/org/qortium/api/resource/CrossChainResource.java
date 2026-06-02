@@ -12,7 +12,6 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.glassfish.jersey.media.multipart.ContentDisposition;
 import org.qortium.api.ApiError;
 import org.qortium.api.ApiErrors;
 import org.qortium.api.ApiExceptionFactory;
@@ -678,11 +677,7 @@ public class CrossChainResource {
 			response.setContentType("text/csv");
 			response.setHeader(
 				HttpHeaders.CONTENT_DISPOSITION,
-				ContentDisposition
-					.type("attachment")
-					.fileName(CrossChainUtils.createLedgerFileName(Crypto.toAddress(publicKey)))
-					.build()
-					.toString()
+				ArbitraryResource.buildAttachmentContentDisposition(CrossChainUtils.createLedgerFileName(Crypto.toAddress(publicKey)))
 			);
 
 			CrossChainUtils.writeToLedger( response.getWriter(), crossChainTradeLedgerEntries);
