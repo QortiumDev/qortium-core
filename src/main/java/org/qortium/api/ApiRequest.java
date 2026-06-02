@@ -1,13 +1,12 @@
 package org.qortium.api;
 
-import org.eclipse.persistence.exceptions.XMLMarshalException;
 import org.eclipse.persistence.jaxb.JAXBContextFactory;
 import org.eclipse.persistence.jaxb.MarshallerProperties;
-import org.eclipse.persistence.jaxb.UnmarshallerProperties;
 
 import javax.net.ssl.*;
-import javax.xml.bind.*;
-import javax.xml.transform.stream.StreamSource;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
@@ -51,56 +50,6 @@ public class ApiRequest {
 			return scanner.hasNext() ? scanner.next() : "";
 		} catch (IOException e) {
 			return null;
-		}
-	}
-
-	public static Object perform(String uri, Class<?> responseClass, Map<String, String> params) {
-		return perform(uri, responseClass, params, Collections.emptyMap());
-	}
-
-	public static Object perform(String uri, Class<?> responseClass, Map<String, String> params, Map<String, String> headers) {
-		Unmarshaller unmarshaller = createUnmarshaller(responseClass);
-
-		if (params != null && !params.isEmpty())
-			uri += "?" + getParamsString(params);
-
-		try (InputStream in = fetchStream(uri, headers)) {
-			StreamSource json = new StreamSource(in);
-
-			// Attempt to unmarshal JSON stream to Settings
-			return unmarshaller.unmarshal(json, responseClass).getValue();
-		} catch (UnmarshalException e) {
-			Throwable linkedException = e.getLinkedException();
-			if (linkedException instanceof XMLMarshalException) {
-				String message = ((XMLMarshalException) linkedException).getInternalException().getLocalizedMessage();
-				throw new RuntimeException(message);
-			}
-
-			throw new RuntimeException("Unable to unmarshall API response", e);
-		} catch (JAXBException e) {
-			throw new RuntimeException("Unable to unmarshall API response", e);
-		} catch (IOException e) {
-			throw new RuntimeException("Unable to unmarshall API response", e);
-		}
-	}
-
-	private static Unmarshaller createUnmarshaller(Class<?> responseClass) {
-		try {
-			// Create JAXB context aware of Settings
-			JAXBContext jc = JAXBContextFactory.createContext(new Class[] { responseClass }, null);
-
-			// Create unmarshaller
-			Unmarshaller unmarshaller = jc.createUnmarshaller();
-
-			// Set the unmarshaller media type to JSON
-			unmarshaller.setProperty(UnmarshallerProperties.MEDIA_TYPE, "application/json");
-
-			// Tell unmarshaller that there's no JSON root element in the JSON input
-			unmarshaller.setProperty(UnmarshallerProperties.JSON_INCLUDE_ROOT, false);
-
-			return unmarshaller;
-		} catch (JAXBException e) {
-			throw new RuntimeException("Unable to create API unmarshaller", e);
 		}
 	}
 

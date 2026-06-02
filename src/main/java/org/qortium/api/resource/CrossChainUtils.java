@@ -733,14 +733,14 @@ public class CrossChainUtils {
         for( CrossChainTradeLedgerEntry entry : entries ) {
             StringJoiner joiner = new StringJoiner(",");
 
-            joiner.add(entry.getMarket());
-            joiner.add(entry.getCurrency());
+            joiner.add(escapeLedgerCsvField(entry.getMarket()));
+            joiner.add(escapeLedgerCsvField(entry.getCurrency()));
             joiner.add(String.valueOf(Amounts.prettyAmount(entry.getQuantity())));
             joiner.add(String.valueOf(Amounts.prettyAmount(entry.getFeeAmount())));
-            joiner.add(entry.getFeeCurrency());
+            joiner.add(escapeLedgerCsvField(entry.getFeeCurrency()));
             joiner.add(String.valueOf(Amounts.prettyAmount(entry.getTotalPrice())));
             joiner.add(dateFormatter.format(new Date(entry.getTradeTimestamp())));
-            joiner.add(LOCAL_CHAIN_EXCHANGE_LABEL);
+            joiner.add(escapeLedgerCsvField(LOCAL_CHAIN_EXCHANGE_LABEL));
 
             bufferedWriter.newLine();
             bufferedWriter.append(joiner.toString());
@@ -748,6 +748,52 @@ public class CrossChainUtils {
 
         bufferedWriter.newLine();
         bufferedWriter.flush();
+    }
+
+    private static String escapeLedgerCsvField(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        String field = value;
+        if (startsWithSpreadsheetFormulaPrefix(field)) {
+            field = "'" + field;
+        }
+
+        boolean needsQuoting = false;
+        StringBuilder escapedField = new StringBuilder(field.length());
+        for (int i = 0; i < field.length(); ++i) {
+            char c = field.charAt(i);
+            if (c == '"') {
+                escapedField.append("\"\"");
+                needsQuoting = true;
+            } else {
+                escapedField.append(c);
+                if (c == ',' || c == '\n' || c == '\r') {
+                    needsQuoting = true;
+                }
+            }
+        }
+
+        if (!needsQuoting) {
+            return escapedField.toString();
+        }
+
+        return "\"" + escapedField + "\"";
+    }
+
+    private static boolean startsWithSpreadsheetFormulaPrefix(String field) {
+        int firstNonWhitespace = 0;
+        while (firstNonWhitespace < field.length() && Character.isWhitespace(field.charAt(firstNonWhitespace))) {
+            firstNonWhitespace++;
+        }
+
+        if (firstNonWhitespace >= field.length()) {
+            return false;
+        }
+
+        char firstCharacter = field.charAt(firstNonWhitespace);
+        return firstCharacter == '=' || firstCharacter == '+' || firstCharacter == '-' || firstCharacter == '@';
     }
 
     /**

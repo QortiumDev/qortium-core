@@ -34,6 +34,62 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - Document remaining code scanning triage
+
+Added a tracked security triage note for the remaining GitHub CodeQL alerts so the project can separate intended QDN, local-file, developer-proxy, and ElectrumX compatibility behavior from findings that still need design work. This gives future alert dismissals and fixes a shared reference instead of treating the remaining scanner count as one generic bug list.
+
+### 2026-06-01 - Harden cross-chain ledger CSV responses
+
+Changed cross-chain trade ledger exports so market, currency, fee, and exchange labels are escaped before being written into CSV rows. This keeps the ledger export readable while preventing those labels from breaking CSV columns or being treated as spreadsheet formulas when opened.
+
+### 2026-06-01 - Resolve ZIP extraction paths through shared guard
+
+Changed ZIP extraction so archive entries are normalized through the shared relative-path guard before Core creates directories or writes files. Absolute archive entries are now rejected explicitly, and the streaming unzip path has matching traversal coverage, keeping QDN archive extraction inside its intended destination directory.
+
+### 2026-06-01 - Constrain repository data imports to export files
+
+Changed repository data imports so Core reads only a named file from the configured export directory instead of accepting an arbitrary local filesystem path. Startup recovery, bootstrap re-imports, and the admin import endpoint now pass export filenames directly, which keeps local trade-bot and minting-account restore workflows intact while narrowing the remaining repository import path scan surface.
+
+### 2026-06-01 - Parameterize asset balance filters
+
+Changed the asset-balance repository query so asset ID filters are bound as prepared-statement parameters instead of being written directly into the temporary `VALUES` table SQL. The public API already validates those filters as numeric asset IDs, and this keeps the database path consistent with the address filters while reducing the remaining SQL-injection scan surface.
+
+### 2026-06-01 - Clean up ZIP entry sanitizer alerts
+
+Changed ZIP entry-name cleanup to use direct character handling instead of regular expressions, so uploaded names with repeated whitespace cannot trigger slow regex behavior. Also documented the directory inspection step for authenticated local file uploads as intentional, keeping the existing local upload workflow intact while preventing the scanner from treating the recent ZIP-entry validation change as a new path issue.
+
+### 2026-06-01 - Validate ZIP archive entry names
+
+Changed ZIP creation so archive entry names are sanitized and checked as safe relative paths before they are written into an archive. Unsafe enclosing folder names such as parent-directory traversal are now rejected, while ZIP extraction continues to keep sanitized entries inside the target directory. This tightens archive handling without changing the normal QDN compression and extraction flow.
+
+### 2026-06-01 - Guard AT timestamp height arithmetic
+
+Changed automated-transaction timestamp math so block-height additions are done explicitly in `long` values and checked before converting back to the integer height expected by the CIYAM timestamp type. This removes an implicit narrowing conversion flagged by the scanner and makes an impossible overflow fail clearly instead of silently wrapping the target block height.
+
+### 2026-06-01 - Contain upload and list filenames
+
+Added a shared helper for resolving a single filename inside a known base directory, then used it for chunk-upload working files, raw string and base64 upload temp files, and local resource-list JSON files. Upload chunk directories now reject path-like service, name, identifier, filename, and chunk values instead of trimming them down to a leaf name, and resource lists can no longer be created or loaded through traversal-style names. This narrows another set of path-handling security findings while keeping normal chunked QDN uploads and list persistence behavior intact.
+
+### 2026-06-01 - Harden browser-facing security boundaries
+
+Tightened several browser-facing paths highlighted by the security scan. Q-App fallback navigation now confirms generated resource links stay on the current origin before redirecting, the developer proxy validates its loopback source before building the upstream URL, QDN plain-text responses now declare a plain-text content type while the loading page keeps an HTML content type, loading-page template values are escaped before entering JavaScript strings, and cross-chain ledger downloads reuse the safe attachment filename helper. This reduces the remaining XSS, open-redirect, and SSRF scan surface without changing normal QDN rendering, developer proxy, or ledger download behavior.
+
+### 2026-06-01 - Contain arbitrary download file paths
+
+Added a shared filesystem helper for resolving request-style resource paths inside a fixed base directory, including leading-slash paths that should still mean "inside this resource." Raw `/arbitrary` downloads now use that helper for the `filepath` query parameter, and QDN rendering delegates to the same helper, so traversal attempts and invalid path text are rejected consistently before Core reads or streams files.
+
+### 2026-06-01 - Contain QDN render file paths
+
+Changed QDN rendering so requested file paths are resolved through the existing safe base-directory helper before Core reads or streams content from an extracted resource. Leading slashes are still treated as paths inside the QDN resource, but parent traversal, backslash traversal, and invalid path text are rejected before a filesystem path is used. This keeps render requests inside the extracted QDN directory without changing normal APP, WEBSITE, or single-file resource routing.
+
+### 2026-06-01 - Harden QDN render metadata escaping
+
+Changed the QDN HTML rewrite path so injected render metadata is written as escaped JavaScript string data instead of raw script markup, and so generated script, base, and meta tags are built as DOM elements. Relative render assets now receive encoded identifier query parameters without breaking URL fragments, Q-App navigation URLs encode service, name, identifier, path, and query values before building links, and the gateway modal writes message text without treating it as HTML. This reduces the QDN browser-side XSS alert surface while keeping the existing render, gateway, and proxy flows intact.
+
+### 2026-06-01 - Address first CodeQL security findings
+
+Removed an unused API response-unmarshalling path that exposed XML parsing risk, tightened the developer proxy so it only opens loopback HTTP targets, made group approval threshold serialization check the byte range explicitly, sanitized attachment download filenames before building response headers, stopped chunk-upload errors from returning internal exception details, replaced regex-heavy filename cleanup with direct character handling, and changed a local key-storage test page to write private key text without treating it as HTML. This starts reducing the inherited CodeQL alert baseline with narrow fixes that do not change chain rules or QDN storage behavior.
+
 ### 2026-06-01 - Move repository references to QortiumDev main
 
 Updated the current repository links, branch-targeted automation, release helper defaults, preview operator and tester instructions, gateway help links, Windows installer metadata, and proxy test fixture to use `QortiumDev/qortium-core` on the `main` branch. This prepares Qortium Core to live under the project organization with a normal default branch while leaving historical changelog and dependency-provenance references untouched.

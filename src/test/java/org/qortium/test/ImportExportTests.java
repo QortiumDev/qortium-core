@@ -84,9 +84,7 @@ public class ImportExportTests extends Common {
             assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
 
             // Import them
-            Path exportPath = HSQLDBImportExport.getExportDirectory(false);
-            Path filePath = Paths.get(exportPath.toString(), "TradeBotStates.json");
-            HSQLDBImportExport.importDataFromFile(filePath.toString(), repository);
+            HSQLDBImportExport.importDataFromFile("TradeBotStates.json", repository);
 
             // Ensure they have been imported
             assertEquals(10, repository.getCrossChainRepository().getAllTradeBotData().size());
@@ -144,9 +142,7 @@ public class ImportExportTests extends Common {
             HSQLDBImportExport.backupTradeBotStates(repository, null);
 
             // Import current states only
-            Path exportPath = HSQLDBImportExport.getExportDirectory(false);
-            Path filePath = Paths.get(exportPath.toString(), "TradeBotStates.json");
-            HSQLDBImportExport.importDataFromFile(filePath.toString(), repository);
+            HSQLDBImportExport.importDataFromFile("TradeBotStates.json", repository);
 
             // Ensure they have been imported
             assertEquals(5, repository.getCrossChainRepository().getAllTradeBotData().size());
@@ -184,9 +180,7 @@ public class ImportExportTests extends Common {
             repository.getCrossChainRepository().delete(tradeBotData.getTradePrivateKey());
             assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
 
-            Path exportPath = HSQLDBImportExport.getExportDirectory(false);
-            Path filePath = Paths.get(exportPath.toString(), "TradeBotStates.json");
-            HSQLDBImportExport.importDataFromFile(filePath.toString(), repository);
+            HSQLDBImportExport.importDataFromFile("TradeBotStates.json", repository);
 
             repositoryTradeBotData = repository.getCrossChainRepository().getTradeBotData(tradeBotData.getTradePrivateKey());
             assertNotNull(repositoryTradeBotData);
@@ -237,9 +231,7 @@ public class ImportExportTests extends Common {
             HSQLDBImportExport.backupTradeBotStates(repository, null);
 
             // Import all states from the archive
-            Path exportPath = HSQLDBImportExport.getExportDirectory(false);
-            Path filePath = Paths.get(exportPath.toString(), "TradeBotStatesArchive.json");
-            HSQLDBImportExport.importDataFromFile(filePath.toString(), repository);
+            HSQLDBImportExport.importDataFromFile("TradeBotStatesArchive.json", repository);
 
             // Ensure they have been imported
             assertEquals(15, repository.getCrossChainRepository().getAllTradeBotData().size());
@@ -297,16 +289,13 @@ public class ImportExportTests extends Common {
             assertEquals(tradeBotData.toJson().toString(), tradeBotDataJsonObject.toString());
 
             // Now try importing local data (to simulate a node startup)
-            String exportPath = Settings.getInstance().getExportPath();
-            Path importPath = Paths.get(exportPath, "TradeBotStates.json");
-            repository.importDataFromFile(importPath.toString());
+            repository.importDataFromFile("TradeBotStates.json");
 
             // The trade should be missing since it's not present in TradeBotStates.json
             assertTrue(repository.getCrossChainRepository().getAllTradeBotData().isEmpty());
 
             // The user now imports TradeBotStatesArchive.json
-            Path archiveImportPath = Paths.get(exportPath, "TradeBotStatesArchive.json");
-            repository.importDataFromFile(archiveImportPath.toString());
+            repository.importDataFromFile("TradeBotStatesArchive.json");
 
             // The trade should be present in the database
             assertEquals(1, repository.getCrossChainRepository().getAllTradeBotData().size());
@@ -351,9 +340,7 @@ public class ImportExportTests extends Common {
             assertTrue(repository.getAccountRepository().getMintingAccounts().isEmpty());
 
             // Import them
-            Path exportPath = HSQLDBImportExport.getExportDirectory(false);
-            Path filePath = Paths.get(exportPath.toString(), "MintingAccounts.json");
-            HSQLDBImportExport.importDataFromFile(filePath.toString(), repository);
+            HSQLDBImportExport.importDataFromFile("MintingAccounts.json", repository);
 
             // Ensure they have been imported
             assertEquals(10, repository.getAccountRepository().getMintingAccounts().size());
@@ -392,10 +379,27 @@ public class ImportExportTests extends Common {
             assertEquals("current", parsedJSON.getB());
             assertEquals(1, parsedJSON.getC().length());
 
-            HSQLDBImportExport.importDataFromFile(filePath.toString(), repository);
+            HSQLDBImportExport.importDataFromFile("TradeBotFills.json", repository);
             assertEquals(1, repository.getCrossChainRepository().getAllTradeBotFillData().size());
 
             repository.saveChanges();
+        }
+    }
+
+    @Test
+    public void testImportRejectsPathsOutsideExportDirectory() throws Exception {
+        Path outsideImportFile = Files.createTempFile("qortium-import-outside", ".json");
+        Files.writeString(outsideImportFile, "{\"type\":\"mintingAccounts\",\"dataset\":\"current\",\"data\":[]}");
+
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            try {
+                HSQLDBImportExport.importDataFromFile(outsideImportFile.toString(), repository);
+                fail("Expected imports outside the export directory to be rejected");
+            } catch (IOException e) {
+                assertTrue(e.getMessage().contains("outside of the target dir"));
+            }
+        } finally {
+            Files.deleteIfExists(outsideImportFile);
         }
     }
 

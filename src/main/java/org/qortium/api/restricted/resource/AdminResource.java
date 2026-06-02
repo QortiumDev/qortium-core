@@ -985,13 +985,13 @@ public class AdminResource {
 	@Path("/repository/data")
 	@Operation(
 		summary = "Import data into repository.",
-		description = "Imports data from file on local machine. Filename is forced to 'qortium-backup/TradeBotStates.json' if apiKey is not set.",
+		description = "Imports data from a file in the configured repository export directory.",
 		requestBody = @RequestBody(
 			required = true,
 			content = @Content(
 				mediaType = MediaType.TEXT_PLAIN,
 				schema = @Schema(
-					type = "string", example = "qortium-backup/TradeBotStates.json"
+					type = "string", example = "TradeBotStates.json"
 				)
 			)
 		),
@@ -1251,7 +1251,7 @@ public class AdminResource {
 			blockchainLock.lockInterruptibly();
 
 			try {
-				repository.importDataFromFile(Paths.get(Settings.getInstance().getExportPath(), "TradeBotStatesArchive.json").toString());
+				repository.importDataFromFile("TradeBotStatesArchive.json");
 				repository.saveChanges();
 
 				return true;

@@ -61,6 +61,7 @@ history.
 ## Dependencies And Upstream
 
 - `Developer reference` [Dependency security review](dependencies/dependency-security-review.md) - current dependency security posture
+- `Developer reference` [Code scanning triage](dependencies/code-scanning-triage.md) - remaining CodeQL alert review and handling guidance
 - `Developer reference` [Dependency provenance](dependencies/dependency-provenance.md) - pinned and vendored dependency rationale
 - `Upstream reference` [Qortal 6.1.5 comparison](upstream/qortal-6.1.5-comparison.md) - upstream comparison and integration notes
 - `Upstream reference` [Qortal v6 network notes](upstream/qortal-v6-network-notes.md) - transitional upstream network-design reference

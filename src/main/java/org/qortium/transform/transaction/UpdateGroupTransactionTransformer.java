@@ -108,7 +108,7 @@ public class UpdateGroupTransactionTransformer extends TransactionTransformer {
 
 			bytes.write((byte) (updateGroupTransactionData.getNewIsOpen() ? 1 : 0));
 
-			bytes.write((byte) updateGroupTransactionData.getNewApprovalThreshold().value);
+			Serialization.serializeUnsignedByte(bytes, updateGroupTransactionData.getNewApprovalThreshold().value);
 
 			bytes.write(Ints.toByteArray(updateGroupTransactionData.getNewMinimumBlockDelay()));
 
