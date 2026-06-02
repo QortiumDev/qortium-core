@@ -219,6 +219,7 @@ if command -v setsid >/dev/null 2>&1; then
 		-Djava.net.preferIPv4Stack=false \
 		-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
 		-Dqortium.log.dir="${SCRIPT_DIR}" \
+		-Dqortium.pid.file="${RUN_PID}" \
 		"${JAVA_DISPLAY_ARGS[@]}" \
 		"${JVM_MEMORY_ARGS[@]}" \
 		-jar "${JAR_PATH}" \
@@ -229,6 +230,7 @@ elif command -v nohup >/dev/null 2>&1; then
 		-Djava.net.preferIPv4Stack=false \
 		-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
 		-Dqortium.log.dir="${SCRIPT_DIR}" \
+		-Dqortium.pid.file="${RUN_PID}" \
 		"${JAVA_DISPLAY_ARGS[@]}" \
 		"${JVM_MEMORY_ARGS[@]}" \
 		-jar "${JAR_PATH}" \
@@ -239,6 +241,7 @@ else
 	-Djava.net.preferIPv4Stack=false \
 	-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
 	-Dqortium.log.dir="${SCRIPT_DIR}" \
+	-Dqortium.pid.file="${RUN_PID}" \
 	"${JAVA_DISPLAY_ARGS[@]}" \
 	"${JVM_MEMORY_ARGS[@]}" \
 	-jar "${JAR_PATH}" \

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-02 - Preserve preview pid files across auto-updates
+
+Changed the preview launchers and auto-update restart path so Core keeps track of the replacement Java process after an approved update restarts the node. Preview `run.pid` files now get refreshed when the updated process starts, including for already-running preview nodes that still have an existing `run.pid`, which keeps operator scripts and status checks pointed at the live process instead of an old pre-update PID.
+
 ### 2026-06-02 - Refresh tray sync progress from peer height
 
 Changed the tray tooltip so its syncing percentage and blocks-remaining count use the same current peer-height progress calculation as the node status API. This keeps the desktop tooltip moving while a preview node catches up, instead of leaving an older remaining-block estimate visible after the local height has advanced.
