@@ -107,6 +107,7 @@ import java.util.zip.GZIPOutputStream;
 import org.apache.tika.Tika;
 import org.apache.tika.mime.MimeTypeException;
 import org.apache.tika.mime.MimeTypes;
+import org.glassfish.jersey.media.multipart.ContentDisposition;
 
 import javax.ws.rs.core.Response;
 
@@ -415,38 +416,38 @@ public class ArbitraryResource {
 			@PathParam("service") Service service,
 			@PathParam("name") String name,
 			@PathParam("identifier") String identifier) {
-		
+
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			// Get the latest transaction for this resource to find its signature
 			ArbitraryTransactionData transactionData = repository.getArbitraryRepository()
 					.getLatestTransaction(name, service, null, identifier);
-			
+
 			if (transactionData == null) {
 				return new PeerCountInfo(0);
 			}
-			
+
 			String signature58 = Base58.encode(transactionData.getSignature());
-			
+
 			// Get detailed peer information
-			Map<PeerData, ArbitraryDataFileRequestThread.PeerDetails> peerDetailsMap = 
+			Map<PeerData, ArbitraryDataFileRequestThread.PeerDetails> peerDetailsMap =
 				ArbitraryDataFileRequestThread.getInstance().getDetailedPeersForSignature(signature58);
-			
+
 			if (peerDetailsMap == null || peerDetailsMap.isEmpty()) {
 				return new PeerCountInfo(0);
 			}
-			
+
 			// Convert to PeerInfo list
 			List<PeerInfo> peerInfoList = new ArrayList<>();
 			for (Map.Entry<PeerData, ArbitraryDataFileRequestThread.PeerDetails> entry : peerDetailsMap.entrySet()) {
 				Peer peer = entry.getValue().peer;
 				boolean isDirect = entry.getValue().isDirect;
-				
+
 				// Get last 10 digits of node ID
 				String nodeId = peer.getPeersNodeId();
-				String id = nodeId != null && nodeId.length() >= 10 
-					? nodeId.substring(nodeId.length() - 10) 
+				String id = nodeId != null && nodeId.length() >= 10
+					? nodeId.substring(nodeId.length() - 10)
 					: (nodeId != null ? nodeId : "unknown");
-				
+
 				// Determine speed from RTT
 				// HIGH = RTT < 5000ms, LOW = RTT 5000-10000ms, IDLE = RTT > 10000ms or no data
 				PeerInfo.Speed speed = PeerInfo.Speed.IDLE;
@@ -460,17 +461,17 @@ public class ArbitraryResource {
 						speed = PeerInfo.Speed.IDLE;
 					}
 				}
-				
+
 				peerInfoList.add(new PeerInfo(id, speed, isDirect, entry.getValue().chunksAvailable));
 			}
-			
+
 			// Sort by speed (HIGH first, then LOW, then IDLE) then by id for consistent ordering
 			peerInfoList.sort((a, b) -> {
 				int speedCompare = a.speed.compareTo(b.speed);
 				if (speedCompare != 0) return speedCompare;
 				return a.id.compareTo(b.id);
 			});
-			
+
 			return new PeerCountInfo(peerInfoList.size(), peerInfoList);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
@@ -684,7 +685,7 @@ public class ArbitraryResource {
 		List<ArbitraryResourceData> resources = new ArrayList<>();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			
+
 			List<ArbitraryTransactionData> transactionDataList;
 
 			if (query == null || query.isEmpty()) {
@@ -1175,12 +1176,12 @@ public class ArbitraryResource {
 	public Response checkUploadSpace(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
 									 @QueryParam("totalSize") Long totalSize) {
 		Security.checkApiCallAllowed(request);
-	
+
 		if (totalSize == null || totalSize <= 0) {
 			return Response.status(Response.Status.BAD_REQUEST)
 					.entity("Missing or invalid totalSize parameter").build();
 		}
-	
+
 		File uploadDir = new File("uploads-temp");
 		if (!uploadDir.exists()) {
 			uploadDir.mkdirs(); // ensure the folder exists
@@ -1196,10 +1197,72 @@ public class ArbitraryResource {
 		return Response.ok("Sufficient disk space").build();
 	}
 
+	static java.nio.file.Path resolveUploadChunkDirectory(String serviceString, String name, String identifier) throws IOException {
+		java.nio.file.Path uploadsDirectory = Paths.get("uploads-temp");
+		java.nio.file.Path serviceDirectory = FilesystemUtils.resolveFileNameInsideBase(uploadsDirectory, serviceString);
+		java.nio.file.Path nameDirectory = FilesystemUtils.resolveFileNameInsideBase(serviceDirectory, name);
+		if (identifier == null) {
+			return nameDirectory;
+		}
+
+		return FilesystemUtils.resolveFileNameInsideBase(nameDirectory, identifier);
+	}
+
+	static java.nio.file.Path resolveUploadChunkFile(java.nio.file.Path chunkDirectory, int index) throws IOException {
+		if (index < 0) {
+			throw new IOException("Chunk index must be non-negative");
+		}
+
+		return FilesystemUtils.resolveFileNameInsideBase(chunkDirectory, "chunk_" + index);
+	}
+
+	static java.nio.file.Path resolveUploadTempFile(java.nio.file.Path tempDirectory, String filename) throws IOException {
+		String uploadFilename = filename;
+		if (uploadFilename == null || uploadFilename.isBlank()) {
+			uploadFilename = String.format("qdn-%d", NTP.getTime());
+		}
+
+		return FilesystemUtils.resolveFileNameInsideBase(tempDirectory, uploadFilename);
+	}
+
+	private static List<java.nio.file.Path> listUploadChunkFiles(java.nio.file.Path chunkDirectory) throws IOException {
+		List<String> chunkFileNames;
+		try (Stream<java.nio.file.Path> chunks = Files.list(chunkDirectory)) {
+			chunkFileNames = chunks
+					.filter(Files::isRegularFile)
+					.map(path -> path.getFileName().toString())
+					.filter(ArbitraryResource::isUploadChunkFileName)
+					.sorted(Comparator.comparingInt(ArbitraryResource::uploadChunkIndex))
+					.collect(Collectors.toList());
+		}
+
+		List<java.nio.file.Path> chunkFiles = new ArrayList<>();
+		for (String chunkFileName : chunkFileNames) {
+			chunkFiles.add(FilesystemUtils.resolveFileNameInsideBase(chunkDirectory, chunkFileName));
+		}
+		return chunkFiles;
+	}
+
+	private static boolean isUploadChunkFileName(String filename) {
+		if (filename == null || !filename.startsWith("chunk_")) {
+			return false;
+		}
+
+		try {
+			return Integer.parseInt(filename.substring("chunk_".length())) >= 0;
+		} catch (NumberFormatException e) {
+			return false;
+		}
+	}
+
+	private static int uploadChunkIndex(String filename) {
+		return Integer.parseInt(filename.substring("chunk_".length()));
+	}
+
 	@POST
-@Path("/{service}/{name}/chunk")
-@Consumes(MediaType.MULTIPART_FORM_DATA)
-@Operation(
+	@Path("/{service}/{name}/chunk")
+	@Consumes(MediaType.MULTIPART_FORM_DATA)
+	@Operation(
     summary = "Upload a single file chunk to be later assembled into a complete arbitrary resource (no identifier)",
     requestBody = @RequestBody(
         required = true,
@@ -1227,24 +1290,19 @@ public Response uploadChunkNoIdentifier(@HeaderParam(Security.API_KEY_HEADER) St
                                         @PathParam("name") String name,
                                         @FormDataParam("chunk") InputStream chunkStream,
                                         @FormDataParam("index") int index) {
-    Security.checkApiCallAllowed(request);
+	    Security.checkApiCallAllowed(request);
 
-    try {
-		String safeService = Paths.get(serviceString).getFileName().toString();
-        String safeName = Paths.get(name).getFileName().toString();
+	    try {
+			java.nio.file.Path tempDir = resolveUploadChunkDirectory(serviceString, name, null);
+			Files.createDirectories(tempDir);
 
-		java.nio.file.Path tempDir = Paths.get("uploads-temp", safeService, safeName);
-		Files.createDirectories(tempDir);
-		
-        
+	        java.nio.file.Path chunkFile = resolveUploadChunkFile(tempDir, index);
+	        Files.copy(chunkStream, chunkFile, StandardCopyOption.REPLACE_EXISTING);
 
-        java.nio.file.Path chunkFile = tempDir.resolve("chunk_" + index);
-        Files.copy(chunkStream, chunkFile, StandardCopyOption.REPLACE_EXISTING);
-
-        return Response.ok("Chunk " + index + " received").build();
+	        return Response.ok("Chunk " + index + " received").build();
     } catch (IOException e) {
 		LOGGER.error("Failed to write chunk {} for service '{}' and name '{}'", index, serviceString, name, e);
-        return Response.serverError().entity("Failed to write chunk: " + e.getMessage()).build();
+        return Response.serverError().entity("Failed to write chunk").build();
     }
 }
 
@@ -1275,38 +1333,26 @@ public String finalizeUploadNoIdentifier(
     @QueryParam("isZip") Boolean isZip
 ) {
     Security.checkApiCallAllowed(request);
-    java.nio.file.Path tempFile = null;
-    java.nio.file.Path tempDir = null;
-	java.nio.file.Path chunkDir = null;
-    String safeService = Paths.get(serviceString).getFileName().toString();
-	String safeName = Paths.get(name).getFileName().toString();
+	    java.nio.file.Path tempFile = null;
+	    java.nio.file.Path tempDir = null;
+		java.nio.file.Path chunkDir = null;
 
+	    try {
+			chunkDir = resolveUploadChunkDirectory(serviceString, name, null);
 
+	        if (!Files.exists(chunkDir) || !Files.isDirectory(chunkDir)) {
+	            throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No chunks found for upload");
+	        }
 
-    try {
-		chunkDir = Paths.get("uploads-temp", safeService, safeName);
+	        tempDir = Files.createTempDirectory("qdn-");
+			tempFile = resolveUploadTempFile(tempDir, filename);
 
-        if (!Files.exists(chunkDir) || !Files.isDirectory(chunkDir)) {
-            throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No chunks found for upload");
-        }
-
-        String safeFilename = (filename == null || filename.isBlank()) ? "qdn-" + NTP.getTime() : filename;
-        tempDir = Files.createTempDirectory("qdn-");
-        String sanitizedFilename = Paths.get(safeFilename).getFileName().toString();
-		tempFile = tempDir.resolve(sanitizedFilename);
-
-        try (OutputStream out = Files.newOutputStream(tempFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            byte[] buffer = new byte[65536];
-            for (java.nio.file.Path chunk : Files.list(chunkDir)
-                    .filter(path -> path.getFileName().toString().startsWith("chunk_"))
-                    .sorted(Comparator.comparingInt(path -> {
-                        String name2 = path.getFileName().toString();
-                        String numberPart = name2.substring("chunk_".length());
-                        return Integer.parseInt(numberPart);
-                    })).collect(Collectors.toList())) {
-                try (InputStream in = Files.newInputStream(chunk)) {
-                    int bytesRead;
-                    while ((bytesRead = in.read(buffer)) != -1) {
+	        try (OutputStream out = Files.newOutputStream(tempFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+	            byte[] buffer = new byte[65536];
+	            for (java.nio.file.Path chunk : listUploadChunkFiles(chunkDir)) {
+	                try (InputStream in = Files.newInputStream(chunk)) {
+	                    int bytesRead;
+	                    while ((bytesRead = in.read(buffer)) != -1) {
                         out.write(buffer, 0, bytesRead);
                     }
                 }
@@ -1350,7 +1396,7 @@ public String finalizeUploadNoIdentifier(
 		if (isZip != null && isZip) {
 			isZipBoolean = true;
 		}
-        
+
 
         // ✅ Call upload with `null` as identifier
         return this.upload(
@@ -1429,24 +1475,20 @@ public Response uploadChunk(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
                             @PathParam("identifier") String identifier,
                             @FormDataParam("chunk") InputStream chunkStream,
                             @FormDataParam("index") int index) {
-    Security.checkApiCallAllowed(request);
+	    Security.checkApiCallAllowed(request);
 
-    try {
-        String safeService = Paths.get(serviceString).getFileName().toString();
-        String safeName = Paths.get(name).getFileName().toString();
-        String safeIdentifier = Paths.get(identifier).getFileName().toString();
+	    try {
+	        java.nio.file.Path tempDir = resolveUploadChunkDirectory(serviceString, name, identifier);
 
-        java.nio.file.Path tempDir = Paths.get("uploads-temp", safeService, safeName, safeIdentifier);
+	        Files.createDirectories(tempDir);
 
-        Files.createDirectories(tempDir);
+	        java.nio.file.Path chunkFile = resolveUploadChunkFile(tempDir, index);
+	        Files.copy(chunkStream, chunkFile, StandardCopyOption.REPLACE_EXISTING);
 
-        java.nio.file.Path chunkFile = tempDir.resolve("chunk_" + index);
-        Files.copy(chunkStream, chunkFile, StandardCopyOption.REPLACE_EXISTING);
-
-        return Response.ok("Chunk " + index + " received").build();
+	        return Response.ok("Chunk " + index + " received").build();
     } catch (IOException e) {
 		LOGGER.error("Failed to write chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier, e);
-        return Response.serverError().entity("Failed to write chunk: " + e.getMessage()).build();
+        return Response.serverError().entity("Failed to write chunk").build();
     }
 }
 
@@ -1478,56 +1520,35 @@ public String finalizeUpload(
 	@QueryParam("isZip") Boolean isZip
 ) {
     Security.checkApiCallAllowed(request);
-    java.nio.file.Path tempFile = null;
-    java.nio.file.Path tempDir = null;
-	java.nio.file.Path chunkDir = null;
+	    java.nio.file.Path tempFile = null;
+	    java.nio.file.Path tempDir = null;
+		java.nio.file.Path chunkDir = null;
 
-	
-	
-	
+	    try {
+			chunkDir = resolveUploadChunkDirectory(serviceString, name, identifier);
 
-    try {
-		String safeService = Paths.get(serviceString).getFileName().toString();
-	String safeName = Paths.get(name).getFileName().toString();
-	String safeIdentifier = Paths.get(identifier).getFileName().toString();
-	java.nio.file.Path baseUploadsDir = Paths.get("uploads-temp"); // relative to the node working dir
-	chunkDir = baseUploadsDir.resolve(safeService).resolve(safeName).resolve(safeIdentifier);
-		
-        if (!Files.exists(chunkDir) || !Files.isDirectory(chunkDir)) {
-            throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No chunks found for upload");
-        }
+	        if (!Files.exists(chunkDir) || !Files.isDirectory(chunkDir)) {
+	            throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No chunks found for upload");
+	        }
 
-        // Step 1: Determine a safe filename for disk temp file (regardless of extension correctness)
-        String safeFilename = filename;
-        if (filename == null || filename.isBlank()) {
-			safeFilename = "qdn-" + NTP.getTime();
-		} 
-
-        tempDir = Files.createTempDirectory("qdn-");
-        String sanitizedFilename = Paths.get(safeFilename).getFileName().toString();
-		tempFile = tempDir.resolve(sanitizedFilename);
+	        tempDir = Files.createTempDirectory("qdn-");
+			tempFile = resolveUploadTempFile(tempDir, filename);
 
 
-        // Step 2: Merge chunks
-  
-        try (OutputStream out = Files.newOutputStream(tempFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-            byte[] buffer = new byte[65536];
-            for (java.nio.file.Path chunk : Files.list(chunkDir)
-                    .filter(path -> path.getFileName().toString().startsWith("chunk_"))
-                    .sorted(Comparator.comparingInt(path -> {
-                        String name2 = path.getFileName().toString();
-                        String numberPart = name2.substring("chunk_".length());
-                        return Integer.parseInt(numberPart);
-                    })).collect(Collectors.toList())) {
-                try (InputStream in = Files.newInputStream(chunk)) {
-                    int bytesRead;
-                    while ((bytesRead = in.read(buffer)) != -1) {
+	        // Step 2: Merge chunks
+
+	        try (OutputStream out = Files.newOutputStream(tempFile, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
+	            byte[] buffer = new byte[65536];
+	            for (java.nio.file.Path chunk : listUploadChunkFiles(chunkDir)) {
+	                try (InputStream in = Files.newInputStream(chunk)) {
+	                    int bytesRead;
+	                    while ((bytesRead = in.read(buffer)) != -1) {
                         out.write(buffer, 0, bytesRead);
                     }
                 }
             }
         }
-       
+
 
         // Step 3: Determine correct extension
         String detectedExtension = "";
@@ -1568,7 +1589,7 @@ public String finalizeUpload(
 		if (isZip != null && isZip) {
 			isZipBoolean = true;
 		}
-        
+
 
         return this.upload(
             Service.valueOf(serviceString),
@@ -2072,12 +2093,12 @@ public String finalizeUpload(
 						// Use current time as filename
 						filename = String.format("qdn-%d", NTP.getTime());
 					}
-					java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
-					File tempFile = Paths.get(tempDirectory.toString(), filename).toFile();
-					tempFile.deleteOnExit();
-					try (BufferedWriter writer = Files.newBufferedWriter(tempFile.toPath(), StandardCharsets.UTF_8)) {
-						writer.write(string);
-						writer.newLine();
+						java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
+						File tempFile = resolveUploadTempFile(tempDirectory, filename).toFile();
+						tempFile.deleteOnExit();
+						try (BufferedWriter writer = Files.newBufferedWriter(tempFile.toPath(), StandardCharsets.UTF_8)) {
+							writer.write(string);
+							writer.newLine();
 					}
 					path = tempFile.toPath().toString();
 				}
@@ -2087,11 +2108,11 @@ public String finalizeUpload(
 						// Use current time as filename
 						filename = String.format("qdn-%d", NTP.getTime());
 					}
-					java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
-					File tempFile = Paths.get(tempDirectory.toString(), filename).toFile();
-					tempFile.deleteOnExit();
-					Files.write(tempFile.toPath(), Base64.decode(base64));
-					path = tempFile.toPath().toString();
+						java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
+						File tempFile = resolveUploadTempFile(tempDirectory, filename).toFile();
+						tempFile.deleteOnExit();
+						Files.write(tempFile.toPath(), Base64.decode(base64));
+						path = tempFile.toPath().toString();
 				}
 				else {
 					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Missing path or data string");
@@ -2202,24 +2223,24 @@ public String finalizeUpload(
 	}
 
 	private void download(Service service, String name, String identifier, String filepath, String encoding, boolean rebuild, boolean async, Integer maxAttempts, boolean attachment, String attachmentFilename) {
-	
-		
+
+
 		try {
 			ArbitraryDataReader arbitraryDataReader = new ArbitraryDataReader(name, ArbitraryDataFile.ResourceIdType.NAME, service, identifier);
-	
+
 			int attempts = 0;
 			if (maxAttempts == null) {
 				maxAttempts = 5;
 			}
-	
+
 			// Loop until we have data
 			if (async) {
 				// Asynchronous
 				arbitraryDataReader.loadAsynchronously(false, 1);
 			} else {
 				// Synchronous
-			
-				
+
+
 				// OPTIMIZATION: Fast-path for serving cached data
 				// Check 3 conditions:
 				// 1. Files exist on disk
@@ -2228,19 +2249,19 @@ public String finalizeUpload(
 				java.nio.file.Path cachedPath = arbitraryDataReader.getUncompressedPath();
 				boolean filesExist = false;
 				boolean isCacheFresh = false;
-				
+
 				try {
-					filesExist = Files.exists(cachedPath) && 
+					filesExist = Files.exists(cachedPath) &&
 								!org.qortium.utils.FilesystemUtils.isDirectoryEmpty(cachedPath);
-					
+
 					// Check if this resource is in the rate-limit cache (meaning it's fresh)
 					// When a new transaction arrives, invalidateCache() removes it from this map
 					if (filesExist) {
 						String resourceId = name.toLowerCase();
 						ArbitraryDataResource resource = new ArbitraryDataResource(
-							resourceId, 
-							ResourceIdType.NAME, 
-							service, 
+							resourceId,
+							ResourceIdType.NAME,
+							service,
 							identifier
 						);
 						isCacheFresh = ArbitraryDataManager.getInstance().isResourceCached(resource);
@@ -2250,10 +2271,10 @@ public String finalizeUpload(
 					filesExist = false;
 					isCacheFresh = false;
 				}
-				
+
 				// Fast path: files exist, no rebuild, and cache is fresh (not invalidated)
 				if (!rebuild && filesExist && isCacheFresh) {
-				
+
 					arbitraryDataReader.setFilePath(cachedPath);
 				} else {
 					// Need to validate or rebuild
@@ -2272,16 +2293,16 @@ public String finalizeUpload(
 						}
 					}
 				}
-				
-				
+
+
 			}
-	
+
 			java.nio.file.Path outputPath = arbitraryDataReader.getFilePath();
 			if (outputPath == null) {
 				// Assume the resource doesn't exist
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FILE_NOT_FOUND, "File not found");
 			}
-	
+
 			if (filepath == null || filepath.isEmpty()) {
 				// No file path supplied - so check if this is a single file resource
 				String[] files = ArrayUtils.removeElement(outputPath.toFile().list(), ".qdn");
@@ -2292,75 +2313,63 @@ public String finalizeUpload(
 					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "filepath is required for resources containing more than one file");
 				}
 			}
-	
-			java.nio.file.Path path = Paths.get(outputPath.toString(), filepath);
+
+			java.nio.file.Path path = FilesystemUtils.resolveRelativePathInsideBase(outputPath, filepath);
 			if (!Files.exists(path)) {
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "No file exists at filepath: " + filepath);
 			}
-	
+
 			if (attachment) {
 				String rawFilename;
-	
+
 				if (attachmentFilename != null && !attachmentFilename.isEmpty()) {
-					// 1. Sanitize first
-					String safeAttachmentFilename = attachmentFilename.replaceAll("[\\\\/:*?\"<>|]", "_");
-	
-					// 2. Check for a valid extension (3–5 alphanumeric chars)
-					if (!safeAttachmentFilename.matches(".*\\.[a-zA-Z0-9]{2,5}$")) {
-						safeAttachmentFilename += ".bin";
-					}
-	
-					rawFilename = safeAttachmentFilename;
+					rawFilename = attachmentFilename;
 				} else {
 					// Fallback if no filename is provided
 					String baseFilename = (identifier != null && !identifier.isEmpty())
 						? name + "-" + identifier
 						: name;
-					rawFilename = baseFilename.replaceAll("[\\\\/:*?\"<>|]", "_") + ".bin";
+					rawFilename = baseFilename + ".bin";
 				}
-	
-				// Optional: trim length
-				rawFilename = rawFilename.length() > 100 ? rawFilename.substring(0, 100) : rawFilename;
-	
-				// 3. Set Content-Disposition header
-				response.setHeader("Content-Disposition", "attachment; filename=\"" + rawFilename + "\"");
+
+				response.setHeader("Content-Disposition", buildAttachmentContentDisposition(rawFilename));
 			}
-	
+
 			// Determine the total size of the requested file
 			long fileSize = Files.size(path);
 			String mimeType = context.getMimeType(path.toString());
-	
+
 			// Attempt to read the "Range" header from the request to support partial content delivery (e.g., for video streaming or resumable downloads)
 			String range = request.getHeader("Range");
-	
+
 			long rangeStart = 0;
 			long rangeEnd = fileSize - 1;
 			boolean isPartial = false;
-	
+
 			// If a Range header is present and no base64 encoding is requested, parse the range values
 			if (range != null && encoding == null) {
 				range = range.replace("bytes=", ""); // Remove the "bytes=" prefix
 				String[] parts = range.split("-"); // Split the range into start and end
-	
+
 				// Parse range start
 				if (parts.length > 0 && !parts[0].isEmpty()) {
 					rangeStart = Long.parseLong(parts[0]);
 				}
-	
+
 				// Parse range end, if present
 				if (parts.length > 1 && !parts[1].isEmpty()) {
 					rangeEnd = Long.parseLong(parts[1]);
 				}
-	
+
 				isPartial = true; // Indicate that this is a partial content request
 			}
-	
+
 			// Calculate how many bytes should be sent in the response
 			long contentLength = rangeEnd - rangeStart + 1;
-	
+
 			// Inform the client that byte ranges are supported
 			response.setHeader("Accept-Ranges", "bytes");
-	
+
 			if (isPartial) {
 				// If partial content was requested, return 206 Partial Content with appropriate headers
 				response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT);
@@ -2369,23 +2378,23 @@ public String finalizeUpload(
 				// Otherwise, return the entire file with status 200 OK
 				response.setStatus(HttpServletResponse.SC_OK);
 			}
-	
+
 			// Initialize output streams for writing the file to the response
 			OutputStream rawOut = null;
 			OutputStream base64Out = null;
 			OutputStream gzipOut = null;
-	
+
 			try {
 				rawOut = response.getOutputStream();
-	
+
 				if (encoding != null && "base64".equalsIgnoreCase(encoding)) {
 					// If base64 encoding is requested, override content type
 					response.setContentType("text/plain");
-	
+
 					// Check if the client accepts gzip encoding
 					String acceptEncoding = request.getHeader("Accept-Encoding");
 					boolean wantsGzip = acceptEncoding != null && acceptEncoding.contains("gzip");
-	
+
 					if (wantsGzip) {
 						// Wrap output in GZIP and Base64 streams if gzip is accepted
 						response.setHeader("Content-Encoding", "gzip");
@@ -2395,18 +2404,18 @@ public String finalizeUpload(
 						// Wrap output in Base64 only
 						base64Out = java.util.Base64.getEncoder().wrap(rawOut);
 					}
-	
+
 					rawOut = base64Out; // Use the wrapped stream for writing
 				} else {
 					// For raw binary output, set the content type and length
 					response.setContentType(mimeType != null ? mimeType : "application/octet-stream");
 					response.setContentLength((int) contentLength);
 				}
-	
+
 			// Stream file content
-	
+
 			try (InputStream inputStream = Files.newInputStream(path)) {
-			
+
 				if (rangeStart > 0) {
 					inputStream.skip(rangeStart);
 				}
@@ -2423,10 +2432,10 @@ public String finalizeUpload(
 					totalBytesWritten += bytesRead;
 					readCount++;
 				}
-				
-			
+
+
 			}
-	
+
 				// Stream finished
 				if (base64Out != null) {
 					base64Out.close(); // Also flushes and closes the wrapped gzipOut
@@ -2435,18 +2444,18 @@ public String finalizeUpload(
 				} else {
 					rawOut.flush(); // Flush only the base output stream if nothing was wrapped
 				}
-	
+
 				if (!response.isCommitted()) {
 					response.setStatus(HttpServletResponse.SC_OK);
 					response.getWriter().write(" ");
 				}
-	
+
 		} catch (IOException e) {
 			// Streaming errors should not rethrow — just log
 			LOGGER.trace(String.format("Streaming error for %s %s: %s", service, name, e.getMessage()));
 		}
-		
-	
+
+
 
 	} catch (IOException | ApiException | DataException e) {
 			LOGGER.debug(String.format("Unable to load %s %s: %s", service, name, e.getMessage()));
@@ -2460,8 +2469,49 @@ public String finalizeUpload(
 			}
 		}
 	}
-	
-	
+
+	static String buildAttachmentContentDisposition(String filename) {
+		String safeFilename = sanitizeAttachmentFilename(filename);
+		return ContentDisposition.type("attachment").fileName(safeFilename).build().toString();
+	}
+
+	static String sanitizeAttachmentFilename(String filename) {
+		String safeFilename = StringUtils.sanitizeString(filename == null ? "" : filename);
+		if (safeFilename.isEmpty()) {
+			safeFilename = "download";
+		}
+
+		if (!hasSafeShortExtension(safeFilename)) {
+			safeFilename += ".bin";
+		}
+
+		if (safeFilename.length() > 100) {
+			safeFilename = safeFilename.substring(0, 100);
+		}
+
+		return safeFilename;
+	}
+
+	private static boolean hasSafeShortExtension(String filename) {
+		int lastDotIndex = filename.lastIndexOf('.');
+		if (lastDotIndex <= 0 || lastDotIndex == filename.length() - 1) {
+			return false;
+		}
+
+		int extensionLength = filename.length() - lastDotIndex - 1;
+		if (extensionLength < 2 || extensionLength > 5) {
+			return false;
+		}
+
+		for (int i = lastDotIndex + 1; i < filename.length(); ++i) {
+			char c = filename.charAt(i);
+			if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))) {
+				return false;
+			}
+		}
+
+		return true;
+	}
 
 	private FileProperties getFileProperties(Service service, String name, String identifier) {
 		try {

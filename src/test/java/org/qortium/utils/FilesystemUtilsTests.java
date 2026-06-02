@@ -47,6 +47,57 @@ public class FilesystemUtilsTests {
     }
 
     @Test
+    public void testResolveRelativePathInsideBaseTreatsLeadingSlashAsRelative() throws IOException {
+        Path base = Files.createTempDirectory("filesystem-utils-base");
+        Path resolvedPath = FilesystemUtils.resolveRelativePathInsideBase(base, "/nested/file.txt");
+
+        assertEquals(base.toAbsolutePath().normalize().resolve("nested/file.txt"), resolvedPath);
+    }
+
+    @Test
+    public void testResolveRelativePathInsideBaseRejectsParentTraversal() throws IOException {
+        assertUnsafeRequestedPath("/../outside.txt");
+    }
+
+    @Test
+    public void testResolveRelativePathInsideBaseRejectsBackslashTraversal() throws IOException {
+        assertUnsafeRequestedPath("..\\outside.txt");
+    }
+
+    @Test
+    public void testResolveRelativePathInsideBaseRejectsInvalidPath() throws IOException {
+        assertUnsafeRequestedPath("bad\u0000path");
+    }
+
+    @Test
+    public void testResolveFileNameInsideBaseAllowsSingleFilename() throws IOException {
+        Path base = Files.createTempDirectory("filesystem-utils-base");
+        Path resolvedPath = FilesystemUtils.resolveFileNameInsideBase(base, "file.txt");
+
+        assertEquals(base.toAbsolutePath().normalize().resolve("file.txt"), resolvedPath);
+    }
+
+    @Test
+    public void testResolveFileNameInsideBaseRejectsNestedPath() throws IOException {
+        assertUnsafeFilename("nested/file.txt");
+    }
+
+    @Test
+    public void testResolveFileNameInsideBaseRejectsBackslashPath() throws IOException {
+        assertUnsafeFilename("nested\\file.txt");
+    }
+
+    @Test
+    public void testResolveFileNameInsideBaseRejectsParentTraversal() throws IOException {
+        assertUnsafeFilename("../outside.txt");
+    }
+
+    @Test
+    public void testResolveFileNameInsideBaseRejectsBlankFilename() throws IOException {
+        assertUnsafeFilename("");
+    }
+
+    @Test
     public void testIsChildRejectsNormalizedEscape() throws IOException {
         Path base = Files.createTempDirectory("filesystem-utils-base");
         Path escapedPath = base.resolve("..").resolve(base.getFileName() + "-outside");
@@ -70,6 +121,30 @@ public class FilesystemUtilsTests {
             fail("Expected unsafe relative path to be rejected");
         } catch (IOException e) {
             assertTrue(e.getMessage().contains("outside"));
+        }
+    }
+
+    private static void assertUnsafeRequestedPath(String requestedPath) throws IOException {
+        Path base = Files.createTempDirectory("filesystem-utils-base");
+
+        try {
+            FilesystemUtils.resolveRelativePathInsideBase(base, requestedPath);
+            fail("Expected unsafe requested path to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("outside") || e.getMessage().contains("invalid"));
+        }
+    }
+
+    private static void assertUnsafeFilename(String filename) throws IOException {
+        Path base = Files.createTempDirectory("filesystem-utils-base");
+
+        try {
+            FilesystemUtils.resolveFileNameInsideBase(base, filename);
+            fail("Expected unsafe filename to be rejected");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("outside") ||
+                    e.getMessage().contains("invalid") ||
+                    e.getMessage().contains("missing"));
         }
     }
 }

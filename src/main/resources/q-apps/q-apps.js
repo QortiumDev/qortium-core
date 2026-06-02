@@ -268,34 +268,129 @@ function handleResponse(event, response) {
   }
 }
 
+function encodePathSegment(value) {
+  return encodeURIComponent(value == null ? "" : String(value));
+}
+
+function encodeResourcePath(path) {
+  return String(path)
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+}
+
+function encodeQueryString(query) {
+  if (query == null || query === "") {
+    return "";
+  }
+
+  return String(query)
+    .split("&")
+    .map((part) => {
+      const equalsIndex = part.indexOf("=");
+      if (equalsIndex === -1) {
+        return encodeURIComponent(part);
+      }
+
+      return (
+        encodeURIComponent(part.slice(0, equalsIndex)) +
+        "=" +
+        encodeURIComponent(part.slice(equalsIndex + 1))
+      );
+    })
+    .join("&");
+}
+
+function appendResourcePath(url, path) {
+  if (path == null || path === "") {
+    return url;
+  }
+
+  const rawPath = String(path);
+  const fragmentIndex = rawPath.indexOf("#");
+  const pathAndQuery =
+    fragmentIndex === -1 ? rawPath : rawPath.slice(0, fragmentIndex);
+  const fragment = fragmentIndex === -1 ? "" : rawPath.slice(fragmentIndex + 1);
+  const queryIndex = pathAndQuery.indexOf("?");
+  const pathname =
+    queryIndex === -1 ? pathAndQuery : pathAndQuery.slice(0, queryIndex);
+  const query = queryIndex === -1 ? "" : pathAndQuery.slice(queryIndex + 1);
+  const encodedPath = encodeResourcePath(pathname);
+
+  if (encodedPath !== "") {
+    url = url.concat((encodedPath.startsWith("/") ? "" : "/") + encodedPath);
+  }
+  if (query !== "") {
+    url = url.concat("?" + encodeQueryString(query));
+  }
+  if (fragment !== "") {
+    url = url.concat("#" + encodeURIComponent(fragment));
+  }
+
+  return url;
+}
+
+function appendQueryParam(url, key, value) {
+  if (value == null) {
+    return url;
+  }
+
+  const fragmentIndex = url.indexOf("#");
+  const baseUrl = fragmentIndex === -1 ? url : url.slice(0, fragmentIndex);
+  const fragment = fragmentIndex === -1 ? "" : url.slice(fragmentIndex);
+  const queryPrefix = baseUrl.includes("?") ? "&" : "?";
+  return (
+    baseUrl +
+    queryPrefix +
+    encodeURIComponent(key) +
+    "=" +
+    encodeURIComponent(String(value)) +
+    fragment
+  );
+}
+
+function navigateToResource(service, name, identifier, path) {
+  const resourceUrl = buildResourceUrl(service, name, identifier, path, true);
+  const targetUrl = new URL(resourceUrl, window.location.origin);
+  if (targetUrl.origin !== window.location.origin) {
+    throw new Error("QDN navigation must stay on the current origin");
+  }
+
+  window.location.assign(
+    targetUrl.pathname + targetUrl.search + targetUrl.hash,
+  );
+}
+
 function buildResourceUrl(service, name, identifier, path, isLink) {
+  const encodedService = encodePathSegment(service || "WEBSITE");
+  const encodedName = encodePathSegment(name);
+  const encodedIdentifier =
+    identifier != null ? encodePathSegment(identifier) : null;
+  let url;
+
   if (isLink == false) {
     // If this URL isn't being used as a link, then we need to fetch the data
     // synchronously, instead of showing the loading screen.
-    url = "/arbitrary/" + service + "/" + name;
-    if (identifier != null) url = url.concat("/" + identifier);
-    if (path != null) url = url.concat("?filepath=" + path);
+    url = "/arbitrary/" + encodedService + "/" + encodedName;
+    if (encodedIdentifier != null) url = url.concat("/" + encodedIdentifier);
+    url = appendQueryParam(url, "filepath", path);
   } else if (_qdnContext == "render") {
-    url = "/render/" + service + "/" + name;
-    if (path != null)
-      url = url.concat((path.startsWith("/") ? "" : "/") + path);
-    if (identifier != null) url = url.concat("?identifier=" + identifier);
+    url = "/render/" + encodedService + "/" + encodedName;
+    url = appendResourcePath(url, path);
+    url = appendQueryParam(url, "identifier", identifier);
   } else if (_qdnContext == "gateway") {
-    url = "/" + service + "/" + name;
-    if (identifier != null) url = url.concat("/" + identifier);
-    if (path != null)
-      url = url.concat((path.startsWith("/") ? "" : "/") + path);
+    url = "/" + encodedService + "/" + encodedName;
+    if (encodedIdentifier != null) url = url.concat("/" + encodedIdentifier);
+    url = appendResourcePath(url, path);
   } else {
     // domainMap only serves websites right now
-    url = "/" + name;
-    if (path != null)
-      url = url.concat((path.startsWith("/") ? "" : "/") + path);
+    url = "/" + encodedName;
+    url = appendResourcePath(url, path);
   }
 
   if (isLink) {
-    const hasQuery = url.includes("?");
-    const queryPrefix = hasQuery ? "&" : "?";
-    url += queryPrefix + "theme=" + _qdnTheme + "&lang=" + _qdnLang;
+    url = appendQueryParam(url, "theme", _qdnTheme);
+    url = appendQueryParam(url, "lang", _qdnLang);
   }
   return url;
 }
@@ -318,7 +413,12 @@ function extractComponents(url) {
       identifier = parts[0]; // Do not shift yet
       // Check if a resource exists with this service, name and identifier combination
       const url =
-        "/arbitrary/resource/status/" + service + "/" + name + "/" + identifier;
+        "/arbitrary/resource/status/" +
+        encodePathSegment(service) +
+        "/" +
+        encodePathSegment(name) +
+        "/" +
+        encodePathSegment(identifier);
       const response = httpGet(url);
       const responseObj = JSON.parse(response);
       if (responseObj.totalChunkCount > 0) {
@@ -444,21 +544,19 @@ window.addEventListener(
             })
             .catch(() => {
               console.warn("No response, proceeding with window.location");
-              window.location = buildResourceUrl(
+              navigateToResource(
                 data.service,
                 data.name,
                 data.identifier,
                 data.path,
-                true,
               );
             });
         } else {
-          window.location = buildResourceUrl(
+          navigateToResource(
             data.service,
             data.name,
             data.identifier,
             data.path,
-            true,
           );
         }
         return;

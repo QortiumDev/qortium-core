@@ -5,12 +5,14 @@ import org.apache.logging.log4j.Logger;
 import org.qortium.settings.Settings;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 public class ResourceListManager {
 
@@ -41,23 +43,26 @@ public class ResourceListManager {
         List<ResourceList> lists = new ArrayList<>();
         Path listsPath = Paths.get(Settings.getInstance().getListsPath());
 
-        if (listsPath.toFile().isDirectory()) {
-            String[] files = listsPath.toFile().list();
+        if (Files.isDirectory(listsPath)) {
+            try (Stream<Path> files = Files.list(listsPath)) {
+                for (Path file : (Iterable<Path>) files.filter(Files::isRegularFile)::iterator) {
+                    String fileName = file.getFileName().toString();
+                    try {
+                        // Remove .json extension
+                        if (fileName.endsWith(".json")) {
+                            fileName = fileName.substring(0, fileName.length() - 5);
+                        }
 
-            for (String fileName : files) {
-                try {
-                    // Remove .json extension
-                    if (fileName.endsWith(".json")) {
-                        fileName = fileName.substring(0, fileName.length() - 5);
+                        ResourceList list = new ResourceList(fileName);
+                        if (list != null) {
+                            lists.add(list);
+                        }
+                    } catch (IOException e) {
+                        // Ignore this list
                     }
-
-                    ResourceList list = new ResourceList(fileName);
-                    if (list != null) {
-                        lists.add(list);
-                    }
-                } catch (IOException e) {
-                    // Ignore this list
                 }
+            } catch (IOException e) {
+                LOGGER.info("Unable to load resource lists: {}", e.getMessage());
             }
         }
         return lists;
