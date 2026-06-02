@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - build(deps-dev): bump org.apache.maven.plugins:maven-surefire-plugin from 3.5.5 to 3.5.6
+
+Updated the Maven Surefire Plugin to the current patch release so Qortium's JUnit test runner stays current. This keeps the existing Maven test workflow and skip flags intact while picking up upstream Surefire maintenance fixes and improvements.
+
 ### 2026-06-01 - build(deps-dev): bump org.apache.maven.plugins:maven-dependency-plugin from 3.10.0 to 3.11.0
 
 Updated the Maven Dependency Plugin to the current minor release so Qortium's build tooling stays current. This keeps the existing Swagger UI unpacking workflow intact while picking up upstream dependency-plugin maintenance fixes and improvements.
