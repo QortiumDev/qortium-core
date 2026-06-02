@@ -179,14 +179,14 @@
 		<div id="passwordContainer" style="display: none">
 			For decrypting stored private key:<br>
 			Password: <input type="password" name="password" id="password"><br>
-			<button onclick="Promise.resolve(getPrivateKey()).then(function() { document.getElementById('privateKey').innerHTML = cachedPrivateKey; }).catch(function() { window.alert('wrong password'); }); return false">Decrypt</button>
+			<button onclick="Promise.resolve(getPrivateKey()).then(function() { document.getElementById('privateKey').textContent = cachedPrivateKey; }).catch(function() { window.alert('wrong password'); }); return false">Decrypt</button>
 		</div>
 
 		<div id="setupContainer" style="display: none">
 			For storing private key:<br>
 			Mnemonic phrase: <input type="text" name="phrase" id="phrase"><br>
 			New password: <input type="password" name="newPassword" id="newPassword"><br>
-			<button onclick="Promise.resolve(savePrivateKey()).then(function() { document.getElementById('privateKey').innerHTML = cachedPrivateKey; }); return false">Save</button>
+			<button onclick="Promise.resolve(savePrivateKey()).then(function() { document.getElementById('privateKey').textContent = cachedPrivateKey; }); return false">Save</button>
 		</div>
 	</body>
 </html>

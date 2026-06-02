@@ -14,8 +14,10 @@ import javax.servlet.WriteListener;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.net.HttpURLConnection;
@@ -36,6 +38,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class DevProxyServerResourceTests {
 
@@ -313,6 +316,40 @@ public class DevProxyServerResourceTests {
     }
 
     @Test
+    public void testProxyConnectionRejectsNonLoopbackTargets() throws Exception {
+        DevProxyServerResource resource = new DevProxyServerResource();
+        Method openProxyConnection = DevProxyServerResource.class.getDeclaredMethod("openProxyConnection", URL.class);
+        openProxyConnection.setAccessible(true);
+
+        assertProxyTargetRejected(openProxyConnection, resource, "http://example.com/asset.txt");
+        assertProxyTargetRejected(openProxyConnection, resource, "https://127.0.0.1:5173/asset.txt");
+    }
+
+    @Test
+    public void testProxyUrlBuilderPreservesLoopbackTargetAndQuery() throws Exception {
+        Method buildProxyUrl = DevProxyServerResource.class.getDeclaredMethod("buildProxyUrl", String.class, String.class, String.class);
+        buildProxyUrl.setAccessible(true);
+
+        URL url = (URL) buildProxyUrl.invoke(null, "127.0.0.1:5173", "asset.txt", "q=1");
+
+        assertEquals("http", url.getProtocol());
+        assertEquals("127.0.0.1", url.getHost());
+        assertEquals(5173, url.getPort());
+        assertEquals("/asset.txt", url.getPath());
+        assertEquals("q=1", url.getQuery());
+    }
+
+    @Test
+    public void testProxyUrlBuilderRejectsNonLoopbackSourceBeforeConnection() throws Exception {
+        Method buildProxyUrl = DevProxyServerResource.class.getDeclaredMethod("buildProxyUrl", String.class, String.class, String.class);
+        buildProxyUrl.setAccessible(true);
+
+        assertProxySourceRejected(buildProxyUrl, "example.com:5173");
+        assertProxySourceRejected(buildProxyUrl, "127.0.0.1:5173/path");
+        assertProxySourceRejected(buildProxyUrl, "127.0.0.1:5173?target=example.com");
+    }
+
+    @Test
     public void testProxyPreservesUpstreamRedirects() throws Exception {
         byte[] redirectBody = "redirect preserved".getBytes(StandardCharsets.UTF_8);
         byte[] targetBody = "target reached".getBytes(StandardCharsets.UTF_8);
@@ -548,6 +585,27 @@ public class DevProxyServerResourceTests {
         }
 
         return outputStream.toByteArray();
+    }
+
+    private static void assertProxyTargetRejected(Method openProxyConnection, DevProxyServerResource resource, String url) throws Exception {
+        try {
+            openProxyConnection.invoke(resource, new URL(url));
+            fail("Expected developer proxy target to be rejected");
+        } catch (InvocationTargetException e) {
+            assertTrue(e.getCause() instanceof IOException);
+            assertTrue(e.getCause().getMessage().contains("loopback HTTP URL"));
+        }
+    }
+
+    private static void assertProxySourceRejected(Method buildProxyUrl, String source) throws Exception {
+        try {
+            buildProxyUrl.invoke(null, source, "asset.txt", null);
+            fail("Expected developer proxy source to be rejected");
+        } catch (InvocationTargetException e) {
+            assertTrue(e.getCause() instanceof IOException);
+            assertTrue(e.getCause().getMessage().contains("developer proxy") ||
+                    e.getCause().getMessage().contains("Developer proxy"));
+        }
     }
 
     private static class Exchange {

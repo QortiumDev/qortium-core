@@ -4,9 +4,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.qortium.settings.Settings;
+import org.qortium.utils.FilesystemUtils;
 
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -33,16 +33,21 @@ public class ResourceList {
      * @throws IOException
      */
     public ResourceList(String name) throws IOException {
-        this.name = name;
+        this.name = validateListName(name);
         this.load();
     }
 
 
     /* Filesystem */
 
-    private Path getFilePath() {
-        String pathString = String.format("%s.json", Paths.get(Settings.getInstance().getListsPath(), this.name));
-        return Paths.get(pathString);
+    private Path getFilePath() throws IOException {
+        return FilesystemUtils.resolveFileNameInsideBase(Paths.get(Settings.getInstance().getListsPath()), this.name + ".json");
+    }
+
+    private static String validateListName(String name) throws IOException {
+        FilesystemUtils.resolveFileNameInsideBase(Paths.get(Settings.getInstance().getListsPath()), name);
+        FilesystemUtils.resolveFileNameInsideBase(Paths.get(Settings.getInstance().getListsPath()), name + ".json");
+        return name;
     }
 
     public void save() throws IOException {
@@ -75,8 +80,7 @@ public class ResourceList {
 
     private boolean load() throws IOException {
         Path path = this.getFilePath();
-        File resourceListFile = new File(path.toString());
-        if (!resourceListFile.exists()) {
+        if (!Files.exists(path)) {
             return false;
         }
 
