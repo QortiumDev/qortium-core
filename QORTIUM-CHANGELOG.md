@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-02 - Expose preview peer reachability diagnostics
+
+Added inbound and outbound peer counts plus P2P and QDN reachability flags to the node status response so preview testers can tell the difference between outbound-only connectivity and public reachability. Preview participants now target four outbound chain peers when enough reachable peers are available, and the preview docs explain how firewall or router forwarding affects peer counts.
+
 ### 2026-06-01 - build(deps-dev): bump org.apache.maven.plugins:maven-surefire-plugin from 3.5.5 to 3.5.6
 
 Updated the Maven Surefire Plugin to the current patch release so Qortium's JUnit test runner stays current. This keeps the existing Maven test workflow and skip flags intact while picking up upstream Surefire maintenance fixes and improvements.

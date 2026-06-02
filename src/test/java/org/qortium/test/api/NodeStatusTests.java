@@ -2,11 +2,14 @@ package org.qortium.test.api;
 
 import org.junit.Test;
 import org.qortium.api.model.NodeStatus;
+import org.qortium.api.model.NodeStatus.PeerConnectionStats;
 import org.qortium.api.model.NodeStatus.SyncPhase;
 import org.qortium.api.model.NodeStatus.SyncProgress;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class NodeStatusTests {
 
@@ -78,6 +81,30 @@ public class NodeStatusTests {
 		assertEquals(Integer.valueOf(0), progress.syncBlocksRemaining);
 		assertEquals(Integer.valueOf(100), progress.syncPercent);
 		assertEquals(SyncPhase.SYNCED, progress.syncPhase);
+	}
+
+	@Test
+	public void testPeerConnectionStatsSplitInboundAndOutbound() {
+		PeerConnectionStats stats = NodeStatus.calculatePeerConnectionStats(5, 2, true, true, false);
+
+		assertEquals(5, stats.totalConnections);
+		assertEquals(3, stats.inboundConnections);
+		assertEquals(2, stats.outboundConnections);
+		assertTrue(stats.inboundReachable);
+		assertTrue(stats.listenSocketAvailable);
+		assertFalse(stats.portMapped);
+	}
+
+	@Test
+	public void testPeerConnectionStatsBoundsInvalidCounts() {
+		PeerConnectionStats stats = NodeStatus.calculatePeerConnectionStats(2, 5, false, true, true);
+
+		assertEquals(2, stats.totalConnections);
+		assertEquals(0, stats.inboundConnections);
+		assertEquals(2, stats.outboundConnections);
+		assertFalse(stats.inboundReachable);
+		assertTrue(stats.listenSocketAvailable);
+		assertTrue(stats.portMapped);
 	}
 
 }

@@ -33,7 +33,7 @@
   "dataPath": "data-preview",
   "blockchainConfig": "previewchain.json",
   "minBlockchainPeers": 1,
-  "minOutboundPeers": 2,
+  "minOutboundPeers": 4,
   "maxPeers": 32,
   "maxDataPeers": 32,
   "maxNetworkThreadPoolSize": 128,

@@ -36,6 +36,12 @@ online accounts before activating so small preview groups can exercise reward
 distribution sooner. Chain-parameter updates use a 20-block activation delay on
 preview so governance changes can be tested within the same session.
 
+Participant nodes target four outbound chain peers when enough reachable peers
+are known. Nodes that do not forward inbound ports can still sync and publish
+outbound, but they may not receive inbound peer connections from other testers.
+The `/admin/status` response reports inbound/outbound peer counts and P2P/QDN
+reachability flags to make that distinction visible during preview testing.
+
 ## Start A Preview Participant
 
 Build Qortium from the repository root:

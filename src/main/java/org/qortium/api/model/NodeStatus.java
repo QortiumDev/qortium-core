@@ -8,6 +8,7 @@ import org.qortium.data.block.BlockSummaryData;
 import org.qortium.network.Network;
 import org.qortium.network.NetworkData;
 import org.qortium.network.Peer;
+import org.qortium.network.PeerList;
 import org.qortium.settings.Settings;
 
 import javax.xml.bind.annotation.XmlAccessType;
@@ -54,7 +55,57 @@ public class NodeStatus {
 
 	public final int numberOfConnections;
 
+	@Schema(
+			description = "Number of handshaked chain peers that connected inbound to this node."
+	)
+	public final int numberOfInboundConnections;
+
+	@Schema(
+			description = "Number of handshaked chain peers this node connected to outbound."
+	)
+	public final int numberOfOutboundConnections;
+
 	public final int numberOfDataConnections;
+
+	@Schema(
+			description = "Number of handshaked QDN/data peers that connected inbound to this node."
+	)
+	public final int numberOfInboundDataConnections;
+
+	@Schema(
+			description = "Number of handshaked QDN/data peers this node connected to outbound."
+	)
+	public final int numberOfOutboundDataConnections;
+
+	@Schema(
+			description = "Whether this node currently appears reachable for inbound chain peer connections."
+	)
+	public final boolean isP2PInboundReachable;
+
+	@Schema(
+			description = "Whether the chain peer listen socket is bound locally."
+	)
+	public final boolean isP2PListenSocketAvailable;
+
+	@Schema(
+			description = "Whether the chain peer listen port was mapped through UPnP."
+	)
+	public final boolean isP2PPortMapped;
+
+	@Schema(
+			description = "Whether this node currently appears reachable for inbound QDN/data peer connections."
+	)
+	public final boolean isQDNInboundReachable;
+
+	@Schema(
+			description = "Whether the QDN/data listen socket is bound locally."
+	)
+	public final boolean isQDNListenSocketAvailable;
+
+	@Schema(
+			description = "Whether the QDN/data listen port was mapped through UPnP."
+	)
+	public final boolean isQDNPortMapped;
 
 	public final int height;
 
@@ -63,12 +114,31 @@ public class NodeStatus {
 
 		Synchronizer synchronizer = Synchronizer.getInstance();
 		Controller controller = Controller.getInstance();
-		List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
+		Network network = Network.getInstance();
+		NetworkData networkData = NetworkData.getInstance();
+		List<Peer> handshakedPeers = network.getImmutableHandshakedPeers();
+		PeerList handshakedDataPeers = networkData.getImmutableHandshakedPeers();
+		PeerConnectionStats chainPeerStats = calculatePeerConnectionStats(handshakedPeers.size(),
+				countOutboundConnections(handshakedPeers), network.canAcceptInbound(), network.isListenSocketAvailable(),
+				network.isPortMapped());
+		PeerConnectionStats dataPeerStats = calculatePeerConnectionStats(handshakedDataPeers.size(),
+				countOutboundConnections(handshakedDataPeers), networkData.canAcceptInbound(),
+				networkData.isListenSocketAvailable(), networkData.isPortMapped());
 
 		this.isSynchronizing = synchronizer.isSynchronizing();
-		this.numberOfConnections = handshakedPeers.size();
+		this.numberOfConnections = chainPeerStats.totalConnections;
+		this.numberOfInboundConnections = chainPeerStats.inboundConnections;
+		this.numberOfOutboundConnections = chainPeerStats.outboundConnections;
 
-		this.numberOfDataConnections = NetworkData.getInstance().getImmutableHandshakedPeers().size();
+		this.numberOfDataConnections = dataPeerStats.totalConnections;
+		this.numberOfInboundDataConnections = dataPeerStats.inboundConnections;
+		this.numberOfOutboundDataConnections = dataPeerStats.outboundConnections;
+		this.isP2PInboundReachable = chainPeerStats.inboundReachable;
+		this.isP2PListenSocketAvailable = chainPeerStats.listenSocketAvailable;
+		this.isP2PPortMapped = chainPeerStats.portMapped;
+		this.isQDNInboundReachable = dataPeerStats.inboundReachable;
+		this.isQDNListenSocketAvailable = dataPeerStats.listenSocketAvailable;
+		this.isQDNPortMapped = dataPeerStats.portMapped;
 
 		this.height = controller.getChainHeight();
 
@@ -125,6 +195,16 @@ public class NodeStatus {
 		return new SyncProgress(syncTargetHeight, syncBlocksRemaining, syncPercent, syncPhase);
 	}
 
+	public static PeerConnectionStats calculatePeerConnectionStats(int totalConnections, int outboundConnections,
+			boolean inboundReachable, boolean listenSocketAvailable, boolean portMapped) {
+		int boundedTotalConnections = Math.max(0, totalConnections);
+		int boundedOutboundConnections = Math.max(0, Math.min(outboundConnections, boundedTotalConnections));
+		int inboundConnections = boundedTotalConnections - boundedOutboundConnections;
+
+		return new PeerConnectionStats(boundedTotalConnections, inboundConnections, boundedOutboundConnections,
+				inboundReachable, listenSocketAvailable, portMapped);
+	}
+
 	private static Integer chooseSyncTargetHeight(int height, Integer activeSyncTargetHeight, Integer bestPeerHeight,
 			boolean isUpToDate) {
 		Integer syncTargetHeight = null;
@@ -161,6 +241,35 @@ public class NodeStatus {
 		}
 
 		return bestPeerHeight;
+	}
+
+	private static int countOutboundConnections(Iterable<Peer> peers) {
+		int outboundConnections = 0;
+
+		for (Peer peer : peers)
+			if (peer.isOutbound())
+				outboundConnections++;
+
+		return outboundConnections;
+	}
+
+	public static class PeerConnectionStats {
+		public final int totalConnections;
+		public final int inboundConnections;
+		public final int outboundConnections;
+		public final boolean inboundReachable;
+		public final boolean listenSocketAvailable;
+		public final boolean portMapped;
+
+		private PeerConnectionStats(int totalConnections, int inboundConnections, int outboundConnections,
+				boolean inboundReachable, boolean listenSocketAvailable, boolean portMapped) {
+			this.totalConnections = totalConnections;
+			this.inboundConnections = inboundConnections;
+			this.outboundConnections = outboundConnections;
+			this.inboundReachable = inboundReachable;
+			this.listenSocketAvailable = listenSocketAvailable;
+			this.portMapped = portMapped;
+		}
 	}
 
 	public static class SyncProgress {
