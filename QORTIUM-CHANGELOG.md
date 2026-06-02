@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-01 - build(deps): bump org.apache.tika:tika-core from 3.3.0 to 3.3.1
+
+Updated Apache Tika Core to the current patch release so Qortium keeps the dependency used for upload MIME and extension detection current. This preserves the existing QDN upload detection path while picking up upstream Tika maintenance fixes and dependency updates.
+
 ### 2026-06-01 - Document remaining code scanning triage
 
 Added a tracked security triage note for the remaining GitHub CodeQL alerts so the project can separate intended QDN, local-file, developer-proxy, and ElectrumX compatibility behavior from findings that still need design work. This gives future alert dismissals and fixes a shared reference instead of treating the remaining scanner count as one generic bug list.
