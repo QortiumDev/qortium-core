@@ -8,6 +8,7 @@ import org.qortium.account.Account;
 import org.qortium.api.ApiService;
 import org.qortium.api.DomainMapService;
 import org.qortium.api.GatewayService;
+import org.qortium.api.model.NodeStatus;
 import org.qortium.api.resource.TransactionsResource;
 import org.qortium.block.Block;
 import org.qortium.block.BlockChain;
@@ -1104,7 +1105,8 @@ public class Controller extends Thread {
 			return;
 		}
 
-		final int numberOfPeers = Network.getInstance().getImmutableHandshakedPeers().size();
+		final List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
+		final int numberOfPeers = handshakedPeers.size();
 
 		final int height = getChainHeight();
 
@@ -1117,9 +1119,14 @@ public class Controller extends Thread {
 		// Any block in the last 2 hours is considered "up to date" for the purposes of displaying statuses.
 		// This also aligns with the time interval required for continued online account submission.
 		final Long minLatestBlockTimestamp = NTP.getTime() - (2 * 60 * 60 * 1000L);
+		final boolean isUpToDate = this.isUpToDate(minLatestBlockTimestamp);
+		final NodeStatus.SyncProgress syncProgress = NodeStatus.calculateSyncProgress(height,
+				Synchronizer.getInstance().getSyncTargetHeight(), Synchronizer.getInstance().isSynchronizing(),
+				getBestPeerHeight(handshakedPeers), isUpToDate, Settings.getInstance().isLite(), numberOfPeers,
+				Settings.getInstance().getMinBlockchainPeers());
 
 		// Only show sync percent if it's less than 100, to avoid confusion
-		final Integer syncPercent = Synchronizer.getInstance().getSyncPercent();
+		final Integer syncPercent = syncProgress.syncPercent;
 		final boolean isSyncing = (syncPercent != null && syncPercent < 100);
 
 		synchronized (Synchronizer.getInstance().syncLock) {
@@ -1131,11 +1138,11 @@ public class Controller extends Thread {
 				actionText = Translator.INSTANCE.translate("SysTray", "CONNECTING");
 				nodeTray.setTrayIcon(TrayIconState.SYNCHRONIZING);
 			}
-			else if (!this.isUpToDate(minLatestBlockTimestamp) && isSyncing) {
-				actionText = String.format("%s - %d%%", Translator.INSTANCE.translate("SysTray", "SYNCHRONIZING_BLOCKCHAIN"), Synchronizer.getInstance().getSyncPercent());
+			else if (!isUpToDate && isSyncing) {
+				actionText = String.format("%s - %d%%", Translator.INSTANCE.translate("SysTray", "SYNCHRONIZING_BLOCKCHAIN"), syncPercent);
 				nodeTray.setTrayIcon(TrayIconState.SYNCHRONIZING);
 			}
-			else if (!this.isUpToDate(minLatestBlockTimestamp)) {
+			else if (!isUpToDate) {
 				actionText = String.format("%s", Translator.INSTANCE.translate("SysTray", "SYNCHRONIZING_BLOCKCHAIN"));
 				nodeTray.setTrayIcon(TrayIconState.SYNCHRONIZING);
 			}
@@ -1153,7 +1160,7 @@ public class Controller extends Thread {
 		if (!Settings.getInstance().isLite()) {
 			tooltip = tooltip.concat(String.format(" - %s %d", heightText, height));
 
-			final Integer blocksRemaining = Synchronizer.getInstance().getBlocksRemaining();
+			final Integer blocksRemaining = syncProgress.syncBlocksRemaining;
 			if (blocksRemaining != null && blocksRemaining > 0) {
 				String blocksRemainingText = Translator.INSTANCE.translate("SysTray", "BLOCKS_REMAINING");
 				tooltip = tooltip.concat(String.format(" - %d %s", blocksRemaining, blocksRemainingText));
@@ -1165,6 +1172,21 @@ public class Controller extends Thread {
 		this.callbackExecutor.execute(() -> {
 			EventBus.INSTANCE.notify(new StatusChangeEvent());
 		});
+	}
+
+	private static Integer getBestPeerHeight(List<Peer> peers) {
+		Integer bestPeerHeight = null;
+
+		for (Peer peer : peers) {
+			BlockSummaryData chainTipData = peer.getChainTipData();
+			if (chainTipData == null)
+				continue;
+
+			if (bestPeerHeight == null || chainTipData.getHeight() > bestPeerHeight)
+				bestPeerHeight = chainTipData.getHeight();
+		}
+
+		return bestPeerHeight;
 	}
 
 	public void deleteExpiredTransactions() {

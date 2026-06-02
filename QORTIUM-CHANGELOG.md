@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-02 - Refresh tray sync progress from peer height
+
+Changed the tray tooltip so its syncing percentage and blocks-remaining count use the same current peer-height progress calculation as the node status API. This keeps the desktop tooltip moving while a preview node catches up, instead of leaving an older remaining-block estimate visible after the local height has advanced.
+
 ### 2026-06-02 - Expose preview peer reachability diagnostics
 
 Added inbound and outbound peer counts plus P2P and QDN reachability flags to the node status response so preview testers can tell the difference between outbound-only connectivity and public reachability. Preview participants now target four outbound chain peers when enough reachable peers are available, and the preview docs explain how firewall or router forwarding affects peer counts.
