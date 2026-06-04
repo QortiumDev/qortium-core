@@ -63,7 +63,10 @@ public class ApplyUpdate {
 			return;
 
 		// Replace JAR
-		replaceJar();
+		if (!replaceJar()) {
+			LOGGER.error("Update JAR replacement failed - not restarting node with existing JAR");
+			return;
+		}
 
 		// Restart node
 		restartNode(args);
@@ -146,24 +149,28 @@ public class ApplyUpdate {
 		}
 	}
 
-	private static void replaceJar() {
+	private static boolean replaceJar() {
+		return replaceJar(Paths.get(""));
+	}
+
+	static boolean replaceJar(Path workingDirectory) {
 		// Assuming current working directory contains the JAR files
-		Path realJar = Paths.get(JAR_FILENAME);
-		Path newJar = Paths.get(NEW_JAR_FILENAME);
+		Path realJar = workingDirectory.resolve(JAR_FILENAME);
+		Path newJar = workingDirectory.resolve(NEW_JAR_FILENAME);
 
 		if (!Files.exists(newJar)) {
 			LOGGER.warn(() -> String.format("Replacement JAR '%s' not found?", newJar));
-			return;
+			return false;
 		}
 
-		int attempt;
-		for (attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
+		for (int attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
 			final int attemptForLogging = attempt;
 			LOGGER.info(() -> String.format("Attempt #%d out of %d to replace JAR", attemptForLogging + 1, MAX_ATTEMPTS));
 
 			try {
 				Files.copy(newJar, realJar, StandardCopyOption.REPLACE_EXISTING);
-				break;
+				LOGGER.info(() -> String.format("Replaced JAR '%s' with '%s'", realJar, newJar));
+				return true;
 			} catch (IOException e) {
 				LOGGER.info(() -> String.format("Unable to replace JAR: %s", e.getMessage()));
 
@@ -178,8 +185,8 @@ public class ApplyUpdate {
 			}
 		}
 
-		if (attempt == MAX_ATTEMPTS)
-			LOGGER.error("Failed to replace JAR - giving up");
+		LOGGER.error("Failed to replace JAR - giving up");
+		return false;
 	}
 
 	private static void restartNode(String[] args) {

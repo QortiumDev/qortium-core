@@ -10,7 +10,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class ApplyUpdateTests {
 
@@ -52,5 +54,29 @@ public class ApplyUpdateTests {
 		Path tempDir = Files.createTempDirectory("qortium-pid-test");
 
 		assertNull(ApplyUpdate.resolvePidFileForRestart(tempDir));
+	}
+
+	@Test
+	public void testReplaceJarCopiesReplacementJar() throws Exception {
+		Path tempDir = Files.createTempDirectory("qortium-apply-update-test");
+		Path realJar = tempDir.resolve(AutoUpdate.JAR_FILENAME);
+		Path newJar = tempDir.resolve(AutoUpdate.NEW_JAR_FILENAME);
+
+		Files.writeString(realJar, "old jar", StandardCharsets.UTF_8);
+		Files.writeString(newJar, "new jar", StandardCharsets.UTF_8);
+
+		assertTrue(ApplyUpdate.replaceJar(tempDir));
+		assertEquals("new jar", Files.readString(realJar, StandardCharsets.UTF_8));
+	}
+
+	@Test
+	public void testReplaceJarFailsWhenReplacementJarIsMissing() throws Exception {
+		Path tempDir = Files.createTempDirectory("qortium-apply-update-test");
+		Path realJar = tempDir.resolve(AutoUpdate.JAR_FILENAME);
+
+		Files.writeString(realJar, "old jar", StandardCharsets.UTF_8);
+
+		assertFalse(ApplyUpdate.replaceJar(tempDir));
+		assertEquals("old jar", Files.readString(realJar, StandardCharsets.UTF_8));
 	}
 }
