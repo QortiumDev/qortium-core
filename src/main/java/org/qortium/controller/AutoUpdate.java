@@ -54,8 +54,10 @@ public class AutoUpdate extends Thread {
 	public static final String JAR_FILENAME = "qortium.jar";
 	public static final String NEW_JAR_FILENAME = "new-" + JAR_FILENAME;
 	public static final String AGENTLIB_JVM_HOLDER_ARG = "-DQORTIUM_agentlib=";
+	public static final String PID_FILE_PROPERTY = "qortium.pid.file";
 
 	private static final Logger LOGGER = LogManager.getLogger(AutoUpdate.class);
+	private static final String PID_FILE_PROPERTY_ARG_PREFIX = "-D" + PID_FILE_PROPERTY + "=";
 	static final long INITIAL_CHECK_DELAY = 30 * 1000L; // ms
 	static final long CHECK_INTERVAL = 20 * 60 * 1000L; // ms
 	static final long QDN_DOWNLOAD_RETRY_INTERVAL = 60 * 1000L; // ms
@@ -1032,6 +1034,8 @@ public class AutoUpdate extends Thread {
 			javaCmd.addAll(sanitizeJvmArguments(runtimeInputArgs));
 		}
 
+		addPidFileProperty(javaCmd);
+
 		// Call ApplyUpdate using new JAR
 		javaCmd.addAll(Arrays.asList("-cp", newJarAbsolute.toString(), ApplyUpdate.class.getCanonicalName()));
 
@@ -1040,6 +1044,18 @@ public class AutoUpdate extends Thread {
 			javaCmd.addAll(Arrays.asList(savedArgs));
 
 		return javaCmd;
+	}
+
+	private static void addPidFileProperty(List<String> javaCmd) {
+		String pidFile = System.getProperty(PID_FILE_PROPERTY);
+		if (pidFile == null || pidFile.isBlank())
+			return;
+
+		for (String arg : javaCmd)
+			if (arg.startsWith(PID_FILE_PROPERTY_ARG_PREFIX))
+				return;
+
+		javaCmd.add(PID_FILE_PROPERTY_ARG_PREFIX + pidFile);
 	}
 
 	private static void startApplyUpdateProcess(List<String> javaCmd) throws IOException {

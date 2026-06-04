@@ -29,6 +29,7 @@ public class AutoUpdateTests {
 	@After
 	public void afterTest() {
 		AutoUpdate.releaseUpdateInstall();
+		System.clearProperty(AutoUpdate.PID_FILE_PROPERTY);
 	}
 
 	private Settings newSettingsInstance() throws ReflectiveOperationException {
@@ -140,6 +141,39 @@ public class AutoUpdateTests {
 		assertTrue(command.contains("-cp"));
 		assertTrue(command.contains("/tmp/new-qortium.jar"));
 		assertTrue(command.contains(ApplyUpdate.class.getCanonicalName()));
+	}
+
+	@Test
+	public void testBuildApplyUpdateCommandPreservesPidFilePropertyWithoutJvmArgs() {
+		System.setProperty(AutoUpdate.PID_FILE_PROPERTY, "/tmp/qortium-run.pid");
+		List<String> runtimeInputArgs = Arrays.asList("-Xmx2g", "-agentlib:test=foo");
+
+		List<String> command = AutoUpdate.buildApplyUpdateCommand(
+				"java",
+				false,
+				runtimeInputArgs,
+				null,
+				Paths.get("/tmp/new-qortium.jar")
+		);
+
+		assertFalse(command.contains("-Xmx2g"));
+		assertTrue(command.contains("-Dqortium.pid.file=/tmp/qortium-run.pid"));
+	}
+
+	@Test
+	public void testBuildApplyUpdateCommandDoesNotDuplicatePidFileProperty() {
+		System.setProperty(AutoUpdate.PID_FILE_PROPERTY, "/tmp/qortium-run.pid");
+		List<String> runtimeInputArgs = Arrays.asList("-Dqortium.pid.file=/tmp/qortium-run.pid");
+
+		List<String> command = AutoUpdate.buildApplyUpdateCommand(
+				"java",
+				true,
+				runtimeInputArgs,
+				null,
+				Paths.get("/tmp/new-qortium.jar")
+		);
+
+		assertEquals(1, command.stream().filter(arg -> arg.startsWith("-Dqortium.pid.file=")).count());
 	}
 
 	@Test

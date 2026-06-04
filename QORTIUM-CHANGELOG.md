@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-04 - Stop auto-update restart after failed jar replacement
+
+Changed the auto-update apply helper so it only restarts Core after the verified replacement JAR has actually been copied into place. If the replacement JAR is missing or cannot be written after the retry window, the helper now stops instead of relaunching the existing old JAR, which prevents an approved update from cycling through the same download, failed apply, and restart path repeatedly.
+
+### 2026-06-02 - Preserve preview pid files across auto-updates
+
+Changed the preview launchers and auto-update restart path so Core keeps track of the replacement Java process after an approved update restarts the node. Preview `run.pid` files now get refreshed when the updated process starts, including for already-running preview nodes that still have an existing `run.pid`, which keeps operator scripts and status checks pointed at the live process instead of an old pre-update PID.
+
 ### 2026-06-02 - Refresh tray sync progress from peer height
 
 Changed the tray tooltip so its syncing percentage and blocks-remaining count use the same current peer-height progress calculation as the node status API. This keeps the desktop tooltip moving while a preview node catches up, instead of leaving an older remaining-block estimate visible after the local height has advanced.

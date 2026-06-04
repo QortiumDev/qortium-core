@@ -211,7 +211,8 @@ switch ($HeadlessMode) {
 $JavaArgs = @(
     "-Djava.net.preferIPv4Stack=false",
     "-Dlog4j.configurationFile=$Log4jConfig",
-    "-Dqortium.log.dir=$ScriptDir"
+    "-Dqortium.log.dir=$ScriptDir",
+    "-Dqortium.pid.file=$RunPid"
 ) + $JavaDisplayArgs + $JvmMemoryArgs + @("-jar", $JarPath, $SettingsLocal)
 $StartProcessArgs = @{
     FilePath = "java"

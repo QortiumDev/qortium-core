@@ -11,7 +11,9 @@ import org.qortium.settings.Settings;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -37,6 +39,7 @@ public class ApplyUpdate {
 	private static final String JAR_FILENAME = AutoUpdate.JAR_FILENAME;
 	private static final String NEW_JAR_FILENAME = AutoUpdate.NEW_JAR_FILENAME;
 	private static final String WINDOWS_EXE_LAUNCHER = "qortium.exe";
+	private static final String RUN_PID_FILENAME = "run.pid";
 	private static final String JAVA_TOOL_OPTIONS_NAME = "JAVA_TOOL_OPTIONS";
 	private static final String JAVA_TOOL_OPTIONS_VALUE = "";
 
@@ -60,7 +63,10 @@ public class ApplyUpdate {
 			return;
 
 		// Replace JAR
-		replaceJar();
+		if (!replaceJar()) {
+			LOGGER.error("Update JAR replacement failed - not restarting node with existing JAR");
+			return;
+		}
 
 		// Restart node
 		restartNode(args);
@@ -143,24 +149,28 @@ public class ApplyUpdate {
 		}
 	}
 
-	private static void replaceJar() {
+	private static boolean replaceJar() {
+		return replaceJar(Paths.get(""));
+	}
+
+	static boolean replaceJar(Path workingDirectory) {
 		// Assuming current working directory contains the JAR files
-		Path realJar = Paths.get(JAR_FILENAME);
-		Path newJar = Paths.get(NEW_JAR_FILENAME);
+		Path realJar = workingDirectory.resolve(JAR_FILENAME);
+		Path newJar = workingDirectory.resolve(NEW_JAR_FILENAME);
 
 		if (!Files.exists(newJar)) {
 			LOGGER.warn(() -> String.format("Replacement JAR '%s' not found?", newJar));
-			return;
+			return false;
 		}
 
-		int attempt;
-		for (attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
+		for (int attempt = 0; attempt < MAX_ATTEMPTS; ++attempt) {
 			final int attemptForLogging = attempt;
 			LOGGER.info(() -> String.format("Attempt #%d out of %d to replace JAR", attemptForLogging + 1, MAX_ATTEMPTS));
 
 			try {
 				Files.copy(newJar, realJar, StandardCopyOption.REPLACE_EXISTING);
-				break;
+				LOGGER.info(() -> String.format("Replaced JAR '%s' with '%s'", realJar, newJar));
+				return true;
 			} catch (IOException e) {
 				LOGGER.info(() -> String.format("Unable to replace JAR: %s", e.getMessage()));
 
@@ -175,8 +185,8 @@ public class ApplyUpdate {
 			}
 		}
 
-		if (attempt == MAX_ATTEMPTS)
-			LOGGER.error("Failed to replace JAR - giving up");
+		LOGGER.error("Failed to replace JAR - giving up");
+		return false;
 	}
 
 	private static void restartNode(String[] args) {
@@ -228,11 +238,46 @@ public class ApplyUpdate {
 
 			Process process = processBuilder.start();
 
+			writePidFileForRestart(process);
+
 			// Nothing to pipe to new process, so close output stream (process's stdin)
 			process.getOutputStream().close();
 		} catch (Exception e) {
 			LOGGER.error(String.format("Failed to restart node (BAD): %s", e.getMessage()));
 		}
+	}
+
+	private static void writePidFileForRestart(Process process) {
+		Path pidFile = null;
+		try {
+			pidFile = resolvePidFileForRestart(Paths.get(""));
+			if (pidFile == null)
+				return;
+
+			writePidFile(pidFile, process.pid());
+		} catch (IOException | InvalidPathException e) {
+			LOGGER.warn("Unable to update pid file {} after auto-update restart: {}", pidFile, e.getMessage());
+		}
+	}
+
+	static Path resolvePidFileForRestart(Path workingDirectory) {
+		String pidFile = System.getProperty(AutoUpdate.PID_FILE_PROPERTY);
+		if (pidFile != null && !pidFile.isBlank())
+			return Paths.get(pidFile);
+
+		Path fallbackPidFile = workingDirectory.resolve(RUN_PID_FILENAME);
+		if (Files.exists(fallbackPidFile))
+			return fallbackPidFile;
+
+		return null;
+	}
+
+	static void writePidFile(Path pidFile, long pid) throws IOException {
+		Path parent = pidFile.getParent();
+		if (parent != null)
+			Files.createDirectories(parent);
+
+		Files.writeString(pidFile, Long.toString(pid) + System.lineSeparator(), StandardCharsets.UTF_8);
 	}
 
 }
