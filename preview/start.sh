@@ -9,9 +9,10 @@ fi
 MIN_JAVA_VER=17
 MODE="participant"
 HEADLESS_MODE="auto"
+RUNTIME_DIR_OPTION=""
 
 usage() {
-	echo "Usage: ./preview/start.sh [--seed|--seed-regxa|--seed-netcup|--participant] [--headless|--gui]"
+	echo "Usage: ./preview/start.sh [--seed|--seed-regxa|--seed-netcup|--participant] [--headless|--gui] [--runtime-dir=PATH]"
 	echo
 	echo "Starts a Qortium preview-network node."
 	echo "  --participant  connect to the preview seeds at 146.103.42.59 and 185.207.104.78 (default)"
@@ -20,9 +21,12 @@ usage() {
 	echo "  --seed-netcup  advertise the Netcup seed IP 185.207.104.78"
 	echo "  --headless     force Java headless mode"
 	echo "  --gui          force Java GUI mode"
+	echo "  --runtime-dir  store generated settings, DB, QDN data, logs, pid, and API key under PATH"
 	echo
 	echo "By default, the launcher uses headless mode only when no desktop display"
 	echo "is detected."
+	echo
+	echo "QORTIUM_PREVIEW_RUNTIME_DIR can also set the runtime directory."
 }
 
 for arg in "$@"; do
@@ -41,6 +45,9 @@ for arg in "$@"; do
 			;;
 		--gui)
 			HEADLESS_MODE="false"
+			;;
+		--runtime-dir=*)
+			RUNTIME_DIR_OPTION="${arg#*=}"
 			;;
 		-h|--help)
 			usage
@@ -88,25 +95,93 @@ apply_auto_update_mode() {
 	sed -i "s/\"autoUpdateMode\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"autoUpdateMode\": \"${mode}\"/" "${settings_file}"
 }
 
+resolve_runtime_dir() {
+	local runtime_dir="$1"
+
+	if [ -z "${runtime_dir}" ]; then
+		runtime_dir="${SCRIPT_DIR}"
+	fi
+
+	case "${runtime_dir}" in
+		*\"*|*$'\n'*|*$'\r'*)
+			echo "Runtime directory cannot contain quotes or control characters." >&2
+			return 1
+			;;
+	esac
+
+	mkdir -p "${runtime_dir}"
+	(
+		cd "${runtime_dir}"
+		pwd -P
+	)
+}
+
+escape_json_string_value() {
+	local value="$1"
+
+	case "${value}" in
+		*\"*|*$'\n'*|*$'\r'*)
+			echo "JSON string setting cannot contain quotes or control characters." >&2
+			return 1
+			;;
+	esac
+
+	printf '%s' "${value}" | sed 's/\\/\\\\/g'
+}
+
+set_json_string_setting() {
+	local settings_file="$1"
+	local key="$2"
+	local value="$3"
+	local escaped_value
+	local sed_value
+	local temp_file
+
+	escaped_value="$(escape_json_string_value "${value}")"
+	sed_value="$(printf '%s' "${escaped_value}" | sed 's/[|&]/\\&/g')"
+	temp_file="${settings_file}.tmp"
+
+	if grep -q "\"${key}\"[[:space:]]*:" "${settings_file}"; then
+		sed "s|\"${key}\"[[:space:]]*:[[:space:]]*\"[^\"]*\"|\"${key}\": \"${sed_value}\"|" "${settings_file}" > "${temp_file}"
+	else
+		awk -v line="  \"${key}\": \"${escaped_value}\"," '
+			NR == 1 && /^[[:space:]]*\{/ { print; print line; next }
+			{ print }
+		' "${settings_file}" > "${temp_file}"
+	fi
+
+	mv "${temp_file}" "${settings_file}"
+}
+
+configure_runtime_settings() {
+	local settings_file="$1"
+
+	set_json_string_setting "${settings_file}" "repositoryPath" "${RUNTIME_DIR}/db-preview"
+	set_json_string_setting "${settings_file}" "exportPath" "${RUNTIME_DIR}/qortium-backup-preview"
+	set_json_string_setting "${settings_file}" "dataPath" "${RUNTIME_DIR}/data-preview"
+	set_json_string_setting "${settings_file}" "apiKeyPath" "${RUNTIME_DIR}"
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-RUN_LOG="${SCRIPT_DIR}/run.log"
-RUN_PID="${SCRIPT_DIR}/run.pid"
-APP_LOG="${SCRIPT_DIR}/qortium.log"
+RUNTIME_DIR="$(resolve_runtime_dir "${RUNTIME_DIR_OPTION:-${QORTIUM_PREVIEW_RUNTIME_DIR:-}}")"
+RUN_LOG="${RUNTIME_DIR}/run.log"
+RUN_PID="${RUNTIME_DIR}/run.pid"
+APP_LOG="${RUNTIME_DIR}/qortium.log"
 LOG4J_CONFIG="${SCRIPT_DIR}/log4j2.properties"
 
 case "${MODE}" in
 	seed-regxa)
 		SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-preview-seed.json"
-		SETTINGS_LOCAL="${SCRIPT_DIR}/settings-preview-seed-local.json"
+		SETTINGS_LOCAL="${RUNTIME_DIR}/settings-preview-seed-local.json"
 		;;
 	seed-netcup)
 		SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-preview-seed-netcup.json"
-		SETTINGS_LOCAL="${SCRIPT_DIR}/settings-preview-seed-netcup-local.json"
+		SETTINGS_LOCAL="${RUNTIME_DIR}/settings-preview-seed-netcup-local.json"
 		;;
 	participant)
 		SETTINGS_TEMPLATE="${SCRIPT_DIR}/settings-preview.json"
-		SETTINGS_LOCAL="${SCRIPT_DIR}/settings-preview-local.json"
+		SETTINGS_LOCAL="${RUNTIME_DIR}/settings-preview-local.json"
 		;;
 esac
 
@@ -170,6 +245,7 @@ if [ -z "${AUTO_UPDATE_MODE_OVERRIDE}" ] && [ -f "${SETTINGS_LOCAL}" ]; then
 fi
 
 cp "${SETTINGS_TEMPLATE}" "${SETTINGS_LOCAL}"
+configure_runtime_settings "${SETTINGS_LOCAL}"
 if [ -n "${AUTO_UPDATE_MODE_OVERRIDE}" ]; then
 	apply_auto_update_mode "${SETTINGS_LOCAL}" "${AUTO_UPDATE_MODE_OVERRIDE}"
 fi
@@ -205,6 +281,7 @@ fi
 {
 	echo "Qortium preview launcher started at $(date -Is 2>/dev/null || date)"
 	echo "Mode: ${MODE}"
+	echo "Runtime directory: ${RUNTIME_DIR}"
 	echo "Settings file: ${SETTINGS_LOCAL}"
 	echo "Jar file: ${JAR_PATH}"
 	echo "Log4j config: ${LOG4J_CONFIG}"
@@ -216,33 +293,33 @@ fi
 
 if command -v setsid >/dev/null 2>&1; then
 	nohup setsid "${NICE_ARGS[@]}" java \
-		-Djava.net.preferIPv4Stack=false \
-		-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
-		-Dqortium.log.dir="${SCRIPT_DIR}" \
-		-Dqortium.pid.file="${RUN_PID}" \
-		"${JAVA_DISPLAY_ARGS[@]}" \
+			-Djava.net.preferIPv4Stack=false \
+			-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
+			-Dqortium.log.dir="${RUNTIME_DIR}" \
+			-Dqortium.pid.file="${RUN_PID}" \
+			"${JAVA_DISPLAY_ARGS[@]}" \
 		"${JVM_MEMORY_ARGS[@]}" \
 		-jar "${JAR_PATH}" \
 		"${SETTINGS_LOCAL}" \
 		>>"${RUN_LOG}" 2>&1 &
 elif command -v nohup >/dev/null 2>&1; then
 	nohup "${NICE_ARGS[@]}" java \
-		-Djava.net.preferIPv4Stack=false \
-		-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
-		-Dqortium.log.dir="${SCRIPT_DIR}" \
-		-Dqortium.pid.file="${RUN_PID}" \
-		"${JAVA_DISPLAY_ARGS[@]}" \
+			-Djava.net.preferIPv4Stack=false \
+			-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
+			-Dqortium.log.dir="${RUNTIME_DIR}" \
+			-Dqortium.pid.file="${RUN_PID}" \
+			"${JAVA_DISPLAY_ARGS[@]}" \
 		"${JVM_MEMORY_ARGS[@]}" \
 		-jar "${JAR_PATH}" \
 		"${SETTINGS_LOCAL}" \
 		>>"${RUN_LOG}" 2>&1 &
 else
 	"${NICE_ARGS[@]}" java \
-	-Djava.net.preferIPv4Stack=false \
-	-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
-	-Dqortium.log.dir="${SCRIPT_DIR}" \
-	-Dqortium.pid.file="${RUN_PID}" \
-	"${JAVA_DISPLAY_ARGS[@]}" \
+		-Djava.net.preferIPv4Stack=false \
+		-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
+		-Dqortium.log.dir="${RUNTIME_DIR}" \
+		-Dqortium.pid.file="${RUN_PID}" \
+		"${JAVA_DISPLAY_ARGS[@]}" \
 	"${JVM_MEMORY_ARGS[@]}" \
 	-jar "${JAR_PATH}" \
 	"${SETTINGS_LOCAL}" \
@@ -251,6 +328,7 @@ fi
 
 echo "$!" > "${RUN_PID}"
 echo "Qortium preview ${MODE} node running as pid $!"
+echo "Runtime directory: ${RUNTIME_DIR}"
 echo "Settings file: ${SETTINGS_LOCAL}"
 echo "Jar file: ${JAR_PATH}"
 echo "Display mode: ${DISPLAY_MODE_DESCRIPTION}"

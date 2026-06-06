@@ -4,9 +4,10 @@ $ApiUrl = "http://localhost:24891"
 $Wait = $false
 $TimeoutSeconds = 120
 $SleepSeconds = 2
+$RuntimeDirOption = ""
 
 function Show-Usage {
-    Write-Host "Usage: preview\status.bat [--wait] [--api-url=URL]"
+    Write-Host "Usage: preview\status.bat [--wait] [--api-url=URL] [--runtime-dir=PATH]"
     Write-Host ""
     Write-Host "Checks the local preview-node API and prints the current block height."
 }
@@ -16,6 +17,8 @@ foreach ($Arg in $args) {
         $Wait = $true
     } elseif ($Arg -like "--api-url=*") {
         $ApiUrl = $Arg.Substring("--api-url=".Length)
+    } elseif ($Arg -like "--runtime-dir=*") {
+        $RuntimeDirOption = $Arg.Substring("--runtime-dir=".Length)
     } elseif ($Arg -eq "-h" -or $Arg -eq "--help") {
         Show-Usage
         exit 0
@@ -27,6 +30,17 @@ foreach ($Arg in $args) {
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RuntimeDirInput = $RuntimeDirOption
+if ([string]::IsNullOrWhiteSpace($RuntimeDirInput)) {
+    $RuntimeDirInput = $env:QORTIUM_PREVIEW_RUNTIME_DIR
+}
+if ([string]::IsNullOrWhiteSpace($RuntimeDirInput)) {
+    $RuntimeDir = $ScriptDir
+} elseif (Test-Path -LiteralPath $RuntimeDirInput -PathType Container) {
+    $RuntimeDir = (Resolve-Path -LiteralPath $RuntimeDirInput).Path
+} else {
+    $RuntimeDir = $RuntimeDirInput
+}
 $HeightUrl = "$ApiUrl/blocks/height"
 
 function Get-PreviewHeight {
@@ -44,7 +58,7 @@ function Show-UnreachableHelp {
     Write-Host "  preview\start.bat"
     Write-Host ""
     Write-Host "If it is already starting, check:"
-    Write-Host "  $(Join-Path $ScriptDir 'run.log')"
+    Write-Host "  $(Join-Path $RuntimeDir 'run.log')"
 }
 
 function Show-Height {

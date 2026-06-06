@@ -5,9 +5,10 @@ API_URL="http://localhost:24891"
 WAIT=0
 TIMEOUT_SECONDS=120
 SLEEP_SECONDS=2
+RUNTIME_DIR_OPTION=""
 
 usage() {
-	echo "Usage: ./preview/status.sh [--wait] [--api-url=URL]"
+	echo "Usage: ./preview/status.sh [--wait] [--api-url=URL] [--runtime-dir=PATH]"
 	echo
 	echo "Checks the local preview-node API and prints the current block height."
 }
@@ -19,6 +20,9 @@ for arg in "$@"; do
 			;;
 		--api-url=*)
 			API_URL="${arg#*=}"
+			;;
+		--runtime-dir=*)
+			RUNTIME_DIR_OPTION="${arg#*=}"
 			;;
 		-h|--help)
 			usage
@@ -33,6 +37,20 @@ for arg in "$@"; do
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+resolve_runtime_dir() {
+	local runtime_dir="$1"
+
+	if [ -z "${runtime_dir}" ]; then
+		runtime_dir="${SCRIPT_DIR}"
+	fi
+
+	(
+		cd "${runtime_dir}" 2>/dev/null
+		pwd -P
+	) || printf '%s\n' "${runtime_dir}"
+}
+
+RUNTIME_DIR="$(resolve_runtime_dir "${RUNTIME_DIR_OPTION:-${QORTIUM_PREVIEW_RUNTIME_DIR:-}}")"
 HEIGHT_URL="${API_URL}/blocks/height"
 
 if ! command -v curl >/dev/null 2>&1; then
@@ -48,7 +66,7 @@ print_unreachable_help() {
 	echo "  ./preview/start.sh"
 	echo
 	echo "If it is already starting, check:"
-	echo "  ${SCRIPT_DIR}/run.log"
+	echo "  ${RUNTIME_DIR}/run.log"
 }
 
 fetch_height() {
