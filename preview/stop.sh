@@ -2,8 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RUN_PID="${SCRIPT_DIR}/run.pid"
-APIKEY_FILE="${SCRIPT_DIR}/apikey.txt"
+RUNTIME_DIR_OPTION=""
 
 api_port=24891
 stop_timeout=120
@@ -17,12 +16,37 @@ for arg in "$@"; do
 		--timeout=*)
 			stop_timeout="${arg#*=}"
 			;;
+		--runtime-dir=*)
+			RUNTIME_DIR_OPTION="${arg#*=}"
+			;;
 		-h|--help)
-			echo "Usage: ./preview/stop.sh [--api-port=PORT] [--timeout=SECONDS]"
+			echo "Usage: ./preview/stop.sh [--api-port=PORT] [--timeout=SECONDS] [--runtime-dir=PATH]"
 			exit 0
+			;;
+		*)
+			echo "Unknown option: ${arg}"
+			echo "Usage: ./preview/stop.sh [--api-port=PORT] [--timeout=SECONDS] [--runtime-dir=PATH]"
+			exit 1
 			;;
 	esac
 done
+
+resolve_runtime_dir() {
+	local runtime_dir="$1"
+
+	if [ -z "${runtime_dir}" ]; then
+		runtime_dir="${SCRIPT_DIR}"
+	fi
+
+	(
+		cd "${runtime_dir}" 2>/dev/null
+		pwd -P
+	) || printf '%s\n' "${runtime_dir}"
+}
+
+RUNTIME_DIR="$(resolve_runtime_dir "${RUNTIME_DIR_OPTION:-${QORTIUM_PREVIEW_RUNTIME_DIR:-}}")"
+RUN_PID="${RUNTIME_DIR}/run.pid"
+APIKEY_FILE="${RUNTIME_DIR}/apikey.txt"
 
 pid=""
 if [ -f "${RUN_PID}" ]; then
@@ -35,7 +59,7 @@ if [ -n "${pid}" ] && ! ps -p "${pid}" >/dev/null 2>&1; then
 fi
 
 if [ -z "${pid}" ]; then
-	pid="$(ps aux | awk '/[q]ortium.*settings-preview-.*local\.json/ { print $2; exit }')"
+	pid="$(ps aux | awk -v runtime="${RUNTIME_DIR}" '/[q]ortium.*settings-preview-.*local\.json/ && index($0, runtime) { print $2; exit }')"
 fi
 
 apikey=""

@@ -3,11 +3,44 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+RUNTIME_DIR_OPTION=""
+
+for arg in "$@"; do
+	case "${arg}" in
+		--runtime-dir=*)
+			RUNTIME_DIR_OPTION="${arg#*=}"
+			;;
+		-h|--help)
+			echo "Usage: ./preview/reset.sh [--runtime-dir=PATH]"
+			exit 0
+			;;
+		*)
+			echo "Unknown option: ${arg}"
+			echo "Usage: ./preview/reset.sh [--runtime-dir=PATH]"
+			exit 1
+			;;
+	esac
+done
+
+resolve_runtime_dir() {
+	local runtime_dir="$1"
+
+	if [ -z "${runtime_dir}" ]; then
+		runtime_dir="${SCRIPT_DIR}"
+	fi
+
+	(
+		cd "${runtime_dir}" 2>/dev/null
+		pwd -P
+	) || printf '%s\n' "${runtime_dir}"
+}
+
+RUNTIME_DIR="$(resolve_runtime_dir "${RUNTIME_DIR_OPTION:-${QORTIUM_PREVIEW_RUNTIME_DIR:-}}")"
 
 cd "${REPO_DIR}"
 
 echo "Stopping preview node if it is running..."
-if stop_output="$("${SCRIPT_DIR}/stop.sh" 2>&1)"; then
+if stop_output="$("${SCRIPT_DIR}/stop.sh" --runtime-dir="${RUNTIME_DIR}" 2>&1)"; then
 	if grep -qi "not running" <<< "${stop_output}"; then
 		echo "Preview node was not running."
 	else
@@ -24,19 +57,19 @@ else
 fi
 
 paths=(
-	"${SCRIPT_DIR}/db-preview"
-	"${SCRIPT_DIR}/data-preview"
-	"${SCRIPT_DIR}/qortium-backup"
-	"${SCRIPT_DIR}/qortium-backup-preview"
-	"${SCRIPT_DIR}/settings-preview-local.json"
-	"${SCRIPT_DIR}/settings-preview-seed-local.json"
-	"${SCRIPT_DIR}/settings-preview-seed-netcup-local.json"
-	"${SCRIPT_DIR}/run.log"
-	"${SCRIPT_DIR}/run-error.log"
-	"${SCRIPT_DIR}/run.pid"
-	"${SCRIPT_DIR}/qortium.log"
-	"${SCRIPT_DIR}/QortiumKeyStore.jks"
-	"${SCRIPT_DIR}/apikey.txt"
+	"${RUNTIME_DIR}/db-preview"
+	"${RUNTIME_DIR}/data-preview"
+	"${RUNTIME_DIR}/qortium-backup"
+	"${RUNTIME_DIR}/qortium-backup-preview"
+	"${RUNTIME_DIR}/settings-preview-local.json"
+	"${RUNTIME_DIR}/settings-preview-seed-local.json"
+	"${RUNTIME_DIR}/settings-preview-seed-netcup-local.json"
+	"${RUNTIME_DIR}/run.log"
+	"${RUNTIME_DIR}/run-error.log"
+	"${RUNTIME_DIR}/run.pid"
+	"${RUNTIME_DIR}/qortium.log"
+	"${RUNTIME_DIR}/QortiumKeyStore.jks"
+	"${RUNTIME_DIR}/apikey.txt"
 )
 
 removed=0
@@ -57,4 +90,4 @@ fi
 
 echo
 echo "Reset complete. Start a fresh preview participant node with:"
-echo "  ./preview/start.sh"
+echo "  ./preview/start.sh --runtime-dir=${RUNTIME_DIR}"

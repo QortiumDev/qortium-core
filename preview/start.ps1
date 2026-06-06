@@ -3,9 +3,10 @@ $ErrorActionPreference = "Stop"
 $MinJavaVersion = 17
 $Mode = "participant"
 $HeadlessMode = "auto"
+$RuntimeDirOption = ""
 
 function Show-Usage {
-    Write-Host "Usage: preview\start.bat [--seed|--seed-regxa|--seed-netcup|--participant] [--headless|--gui]"
+    Write-Host "Usage: preview\start.bat [--seed|--seed-regxa|--seed-netcup|--participant] [--headless|--gui] [--runtime-dir=PATH]"
     Write-Host ""
     Write-Host "Starts a Qortium preview-network node."
     Write-Host "  --participant  connect to the preview seeds at 146.103.42.59 and 185.207.104.78 (default)"
@@ -14,6 +15,9 @@ function Show-Usage {
     Write-Host "  --seed-netcup  advertise the Netcup seed IP 185.207.104.78"
     Write-Host "  --headless     force Java headless mode"
     Write-Host "  --gui          force Java GUI mode"
+    Write-Host "  --runtime-dir  store generated settings, DB, QDN data, logs, pid, and API key under PATH"
+    Write-Host ""
+    Write-Host "QORTIUM_PREVIEW_RUNTIME_DIR can also set the runtime directory."
 }
 
 foreach ($Arg in $args) {
@@ -27,6 +31,11 @@ foreach ($Arg in $args) {
         "-h" { Show-Usage; exit 0 }
         "--help" { Show-Usage; exit 0 }
         default {
+            if ($Arg -like "--runtime-dir=*") {
+                $RuntimeDirOption = $Arg.Substring("--runtime-dir=".Length)
+                continue
+            }
+
             Write-Host "Unknown option: $Arg"
             Show-Usage
             exit 1
@@ -128,23 +137,56 @@ function Set-AutoUpdateMode {
     $Settings | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $SettingsPath
 }
 
+function Resolve-RuntimeDir {
+    param([string]$RuntimeDir)
+
+    if ([string]::IsNullOrWhiteSpace($RuntimeDir)) {
+        $RuntimeDir = $ScriptDir
+    }
+
+    New-Item -ItemType Directory -Force -Path $RuntimeDir | Out-Null
+    return (Resolve-Path -LiteralPath $RuntimeDir).Path
+}
+
+function Set-RuntimeSettingPaths {
+    param([string]$SettingsPath)
+
+    $Settings = Get-Content -LiteralPath $SettingsPath -Raw | ConvertFrom-Json
+    $Settings.repositoryPath = Join-Path $RuntimeDir "db-preview"
+    $Settings.exportPath = Join-Path $RuntimeDir "qortium-backup-preview"
+    $Settings.dataPath = Join-Path $RuntimeDir "data-preview"
+
+    if ($Settings.PSObject.Properties.Name -contains "apiKeyPath") {
+        $Settings.apiKeyPath = $RuntimeDir
+    } else {
+        $Settings | Add-Member -NotePropertyName "apiKeyPath" -NotePropertyValue $RuntimeDir
+    }
+
+    $Settings | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $SettingsPath
+}
+
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoDir = Split-Path -Parent $ScriptDir
-$RunLog = Join-Path $ScriptDir "run.log"
-$RunErrorLog = Join-Path $ScriptDir "run-error.log"
-$RunPid = Join-Path $ScriptDir "run.pid"
-$AppLog = Join-Path $ScriptDir "qortium.log"
+$RuntimeDirInput = $RuntimeDirOption
+if ([string]::IsNullOrWhiteSpace($RuntimeDirInput)) {
+    $RuntimeDirInput = $env:QORTIUM_PREVIEW_RUNTIME_DIR
+}
+$RuntimeDir = Resolve-RuntimeDir -RuntimeDir $RuntimeDirInput
+$RunLog = Join-Path $RuntimeDir "run.log"
+$RunErrorLog = Join-Path $RuntimeDir "run-error.log"
+$RunPid = Join-Path $RuntimeDir "run.pid"
+$AppLog = Join-Path $RuntimeDir "qortium.log"
 $Log4jConfig = Join-Path $ScriptDir "log4j2.properties"
 
 if ($Mode -eq "seed-regxa") {
     $SettingsTemplate = Join-Path $ScriptDir "settings-preview-seed.json"
-    $SettingsLocal = Join-Path $ScriptDir "settings-preview-seed-local.json"
+    $SettingsLocal = Join-Path $RuntimeDir "settings-preview-seed-local.json"
 } elseif ($Mode -eq "seed-netcup") {
     $SettingsTemplate = Join-Path $ScriptDir "settings-preview-seed-netcup.json"
-    $SettingsLocal = Join-Path $ScriptDir "settings-preview-seed-netcup-local.json"
+    $SettingsLocal = Join-Path $RuntimeDir "settings-preview-seed-netcup-local.json"
 } else {
     $SettingsTemplate = Join-Path $ScriptDir "settings-preview.json"
-    $SettingsLocal = Join-Path $ScriptDir "settings-preview-local.json"
+    $SettingsLocal = Join-Path $RuntimeDir "settings-preview-local.json"
 }
 
 if (Test-Path -LiteralPath $RunPid -PathType Leaf) {
@@ -186,6 +228,7 @@ if ([string]::IsNullOrWhiteSpace($AutoUpdateModeOverride)) {
 }
 
 Copy-Item -LiteralPath $SettingsTemplate -Destination $SettingsLocal -Force
+Set-RuntimeSettingPaths -SettingsPath $SettingsLocal
 Set-AutoUpdateMode -SettingsPath $SettingsLocal -Mode $AutoUpdateModeOverride
 $AutoUpdateModeEffective = Get-AutoUpdateMode -SettingsPath $SettingsLocal
 
@@ -211,7 +254,7 @@ switch ($HeadlessMode) {
 $JavaArgs = @(
     "-Djava.net.preferIPv4Stack=false",
     "-Dlog4j.configurationFile=$Log4jConfig",
-    "-Dqortium.log.dir=$ScriptDir",
+    "-Dqortium.log.dir=$RuntimeDir",
     "-Dqortium.pid.file=$RunPid"
 ) + $JavaDisplayArgs + $JvmMemoryArgs + @("-jar", $JarPath, $SettingsLocal)
 $StartProcessArgs = @{
@@ -232,6 +275,7 @@ $Process = Start-Process @StartProcessArgs
 Set-Content -LiteralPath $RunPid -Value $Process.Id
 
 Write-Host "Qortium preview $Mode node running as pid $($Process.Id)"
+Write-Host "Runtime directory: $RuntimeDir"
 Write-Host "Settings file: $SettingsLocal"
 Write-Host "Jar file: $JarPath"
 Write-Host "Display mode: $DisplayModeDescription"

@@ -55,9 +55,10 @@ public class AutoUpdate extends Thread {
 	public static final String NEW_JAR_FILENAME = "new-" + JAR_FILENAME;
 	public static final String AGENTLIB_JVM_HOLDER_ARG = "-DQORTIUM_agentlib=";
 	public static final String PID_FILE_PROPERTY = "qortium.pid.file";
+	public static final String LOG_DIR_PROPERTY = "qortium.log.dir";
+	public static final String LOG4J_CONFIGURATION_PROPERTY = "log4j.configurationFile";
 
 	private static final Logger LOGGER = LogManager.getLogger(AutoUpdate.class);
-	private static final String PID_FILE_PROPERTY_ARG_PREFIX = "-D" + PID_FILE_PROPERTY + "=";
 	static final long INITIAL_CHECK_DELAY = 30 * 1000L; // ms
 	static final long CHECK_INTERVAL = 20 * 60 * 1000L; // ms
 	static final long QDN_DOWNLOAD_RETRY_INTERVAL = 60 * 1000L; // ms
@@ -1034,7 +1035,7 @@ public class AutoUpdate extends Thread {
 			javaCmd.addAll(sanitizeJvmArguments(runtimeInputArgs));
 		}
 
-		addPidFileProperty(javaCmd);
+		addRetainedSystemProperties(javaCmd);
 
 		// Call ApplyUpdate using new JAR
 		javaCmd.addAll(Arrays.asList("-cp", newJarAbsolute.toString(), ApplyUpdate.class.getCanonicalName()));
@@ -1046,16 +1047,23 @@ public class AutoUpdate extends Thread {
 		return javaCmd;
 	}
 
-	private static void addPidFileProperty(List<String> javaCmd) {
-		String pidFile = System.getProperty(PID_FILE_PROPERTY);
-		if (pidFile == null || pidFile.isBlank())
+	private static void addRetainedSystemProperties(List<String> javaCmd) {
+		addSystemPropertyIfPresent(javaCmd, PID_FILE_PROPERTY);
+		addSystemPropertyIfPresent(javaCmd, LOG_DIR_PROPERTY);
+		addSystemPropertyIfPresent(javaCmd, LOG4J_CONFIGURATION_PROPERTY);
+	}
+
+	private static void addSystemPropertyIfPresent(List<String> javaCmd, String propertyName) {
+		String propertyValue = System.getProperty(propertyName);
+		if (propertyValue == null || propertyValue.isBlank())
 			return;
 
+		String propertyArgPrefix = "-D" + propertyName + "=";
 		for (String arg : javaCmd)
-			if (arg.startsWith(PID_FILE_PROPERTY_ARG_PREFIX))
+			if (arg.startsWith(propertyArgPrefix))
 				return;
 
-		javaCmd.add(PID_FILE_PROPERTY_ARG_PREFIX + pidFile);
+		javaCmd.add(propertyArgPrefix + propertyValue);
 	}
 
 	private static void startApplyUpdateProcess(List<String> javaCmd) throws IOException {

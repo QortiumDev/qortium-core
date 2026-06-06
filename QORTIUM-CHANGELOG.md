@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-06 - preview: support persistent runtime directories
+
+Changed the preview launchers so generated settings, database files, QDN data, logs, PID files, and API keys can live in a stable runtime directory outside the release folder. The launchers now rewrite the generated local settings to use that runtime directory, and auto-update restarts keep the PID, log directory, and Log4j settings in the replacement process, which lets managed desktop installs keep the same synced Core data and API key across app updates instead of creating a fresh runtime folder each time.
+
 ### 2026-06-04 - Stop auto-update restart after failed jar replacement
 
 Changed the auto-update apply helper so it only restarts Core after the verified replacement JAR has actually been copied into place. If the replacement JAR is missing or cannot be written after the retry window, the helper now stops instead of relaunching the existing old JAR, which prevents an approved update from cycling through the same download, failed apply, and restart path repeatedly.

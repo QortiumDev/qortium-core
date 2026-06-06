@@ -56,6 +56,15 @@ Start a participant node:
 ./preview/start.sh
 ```
 
+For a managed desktop install, keep the generated Core runtime outside the
+release folder so updates do not force a resync or create a new API key:
+
+```sh
+./preview/start.sh --runtime-dir="$HOME/.config/qortal-core"
+```
+
+The same path can be supplied through `QORTIUM_PREVIEW_RUNTIME_DIR`.
+
 On Windows, use the matching batch wrappers:
 
 ```bat
@@ -90,6 +99,10 @@ Reset generated preview runtime files:
 ```sh
 ./preview/reset.sh
 ```
+
+When using a custom runtime directory, pass the same `--runtime-dir` value to
+`status`, `stop`, and `reset`, or set `QORTIUM_PREVIEW_RUNTIME_DIR` for all of
+the preview commands.
 
 ## Start The VPS Seeds
 
@@ -148,9 +161,17 @@ still required before other users can reach ports `24891`, `24892`, or `24894`.
 
 ## Runtime Files
 
-`start.sh` copies the tracked settings template to a local runtime settings
+`start.sh` copies the tracked settings template to a generated runtime settings
 file before starting the node. This prevents API settings changes from editing
-tracked files.
+tracked files. By default, generated runtime files stay under `preview/` for
+source checkouts and extracted release zips. Supplying `--runtime-dir=PATH` or
+setting `QORTIUM_PREVIEW_RUNTIME_DIR` stores the generated settings, database,
+QDN data, logs, PID file, keystore, and API key under that runtime root instead.
+
+Managed desktop builds should use a stable runtime root such as
+`$HOME/.config/qortal-core`. The Qortium Home desktop app can keep its own data
+under `$HOME/.config/qortal-home` while Core keeps the chain database and
+`apikey.txt` under the Core runtime directory.
 
 Generated runtime files include:
 
@@ -172,6 +193,8 @@ Generated runtime files include:
 - `apikey.txt`
 
 These files are ignored by git and can be removed with `./preview/reset.sh`.
+With a custom runtime directory, reset only removes files from that runtime
+directory when called with the matching `--runtime-dir` value.
 
 ## Build A Preview Release Zip
 
@@ -214,8 +237,8 @@ The corresponding private keys are stored locally in
 `preview/secrets/initial-minting-accounts.json`, which is ignored by git. Do
 not commit private minting keys.
 
-After a node starts and creates `preview/apikey.txt`, install the correct
-minting private key for that node:
+After a node starts and creates `apikey.txt` in the runtime directory, install
+the correct minting private key for that node. For the default runtime location:
 
 ```sh
 curl -X POST \

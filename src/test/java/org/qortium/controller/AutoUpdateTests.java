@@ -30,6 +30,8 @@ public class AutoUpdateTests {
 	public void afterTest() {
 		AutoUpdate.releaseUpdateInstall();
 		System.clearProperty(AutoUpdate.PID_FILE_PROPERTY);
+		System.clearProperty(AutoUpdate.LOG_DIR_PROPERTY);
+		System.clearProperty(AutoUpdate.LOG4J_CONFIGURATION_PROPERTY);
 	}
 
 	private Settings newSettingsInstance() throws ReflectiveOperationException {
@@ -144,8 +146,10 @@ public class AutoUpdateTests {
 	}
 
 	@Test
-	public void testBuildApplyUpdateCommandPreservesPidFilePropertyWithoutJvmArgs() {
+	public void testBuildApplyUpdateCommandPreservesRuntimePropertiesWithoutJvmArgs() {
 		System.setProperty(AutoUpdate.PID_FILE_PROPERTY, "/tmp/qortium-run.pid");
+		System.setProperty(AutoUpdate.LOG_DIR_PROPERTY, "/tmp/qortium-runtime");
+		System.setProperty(AutoUpdate.LOG4J_CONFIGURATION_PROPERTY, "/tmp/qortium-runtime/log4j2.properties");
 		List<String> runtimeInputArgs = Arrays.asList("-Xmx2g", "-agentlib:test=foo");
 
 		List<String> command = AutoUpdate.buildApplyUpdateCommand(
@@ -158,6 +162,8 @@ public class AutoUpdateTests {
 
 		assertFalse(command.contains("-Xmx2g"));
 		assertTrue(command.contains("-Dqortium.pid.file=/tmp/qortium-run.pid"));
+		assertTrue(command.contains("-Dqortium.log.dir=/tmp/qortium-runtime"));
+		assertTrue(command.contains("-Dlog4j.configurationFile=/tmp/qortium-runtime/log4j2.properties"));
 	}
 
 	@Test

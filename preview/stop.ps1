@@ -3,9 +3,10 @@ $ErrorActionPreference = "Stop"
 $ApiPort = 24891
 $StopTimeout = 120
 $WindowCloseTimeout = 15
+$RuntimeDirOption = ""
 
 function Show-Usage {
-    Write-Host "Usage: preview\stop.bat [--api-port=PORT] [--timeout=SECONDS]"
+    Write-Host "Usage: preview\stop.bat [--api-port=PORT] [--timeout=SECONDS] [--runtime-dir=PATH]"
 }
 
 foreach ($Arg in $args) {
@@ -13,6 +14,8 @@ foreach ($Arg in $args) {
         $ApiPort = [int]$Arg.Substring("--api-port=".Length)
     } elseif ($Arg -like "--timeout=*") {
         $StopTimeout = [int]$Arg.Substring("--timeout=".Length)
+    } elseif ($Arg -like "--runtime-dir=*") {
+        $RuntimeDirOption = $Arg.Substring("--runtime-dir=".Length)
     } elseif ($Arg -eq "-h" -or $Arg -eq "--help") {
         Show-Usage
         exit 0
@@ -24,8 +27,19 @@ foreach ($Arg in $args) {
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RunPid = Join-Path $ScriptDir "run.pid"
-$ApiKeyFile = Join-Path $ScriptDir "apikey.txt"
+$RuntimeDirInput = $RuntimeDirOption
+if ([string]::IsNullOrWhiteSpace($RuntimeDirInput)) {
+    $RuntimeDirInput = $env:QORTIUM_PREVIEW_RUNTIME_DIR
+}
+if ([string]::IsNullOrWhiteSpace($RuntimeDirInput)) {
+    $RuntimeDir = $ScriptDir
+} elseif (Test-Path -LiteralPath $RuntimeDirInput -PathType Container) {
+    $RuntimeDir = (Resolve-Path -LiteralPath $RuntimeDirInput).Path
+} else {
+    $RuntimeDir = $RuntimeDirInput
+}
+$RunPid = Join-Path $RuntimeDir "run.pid"
+$ApiKeyFile = Join-Path $RuntimeDir "apikey.txt"
 $NodePid = $null
 $StalePid = $false
 
@@ -42,7 +56,12 @@ if (Test-Path -LiteralPath $RunPid -PathType Leaf) {
 
 if ($null -eq $NodePid) {
     $Process = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
-        Where-Object { $_.CommandLine -match "qortium" -and $_.CommandLine -match "settings-preview-.*local\.json" } |
+        Where-Object {
+            $_.CommandLine -and
+            $_.CommandLine -match "qortium" -and
+            $_.CommandLine -match "settings-preview-.*local\.json" -and
+            $_.CommandLine.Contains($RuntimeDir)
+        } |
         Select-Object -First 1
     if ($null -ne $Process) {
         $NodePid = [int]$Process.ProcessId

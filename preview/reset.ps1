@@ -1,10 +1,40 @@
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RuntimeDirOption = ""
+
+function Show-Usage {
+    Write-Host "Usage: preview\reset.bat [--runtime-dir=PATH]"
+}
+
+foreach ($Arg in $args) {
+    if ($Arg -like "--runtime-dir=*") {
+        $RuntimeDirOption = $Arg.Substring("--runtime-dir=".Length)
+    } elseif ($Arg -eq "-h" -or $Arg -eq "--help") {
+        Show-Usage
+        exit 0
+    } else {
+        Write-Host "Unknown option: $Arg"
+        Show-Usage
+        exit 1
+    }
+}
+
+$RuntimeDirInput = $RuntimeDirOption
+if ([string]::IsNullOrWhiteSpace($RuntimeDirInput)) {
+    $RuntimeDirInput = $env:QORTIUM_PREVIEW_RUNTIME_DIR
+}
+if ([string]::IsNullOrWhiteSpace($RuntimeDirInput)) {
+    $RuntimeDir = $ScriptDir
+} elseif (Test-Path -LiteralPath $RuntimeDirInput -PathType Container) {
+    $RuntimeDir = (Resolve-Path -LiteralPath $RuntimeDirInput).Path
+} else {
+    $RuntimeDir = $RuntimeDirInput
+}
 
 Write-Host "Stopping preview node if it is running..."
 try {
-    $StopOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "stop.ps1") 2>&1
+    $StopOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir "stop.ps1") "--runtime-dir=$RuntimeDir" 2>&1
     $StopExitCode = $LASTEXITCODE
     if ($StopOutput) {
         $StopOutput | ForEach-Object { Write-Host $_ }
@@ -38,7 +68,7 @@ $Paths = @(
     "qortium.log",
     "QortiumKeyStore.jks",
     "apikey.txt"
-) | ForEach-Object { Join-Path $ScriptDir $_ }
+) | ForEach-Object { Join-Path $RuntimeDir $_ }
 
 $Removed = $false
 Write-Host "Removing generated preview files:"
@@ -58,4 +88,4 @@ if (-not $Removed) {
 
 Write-Host ""
 Write-Host "Reset complete. Start a fresh preview participant node with:"
-Write-Host "  preview\start.bat"
+Write-Host "  preview\start.bat --runtime-dir=$RuntimeDir"
