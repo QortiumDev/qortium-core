@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-06 - api: fix group bans response schema
+
+Corrected the API documentation for the group bans endpoint so `/groups/bans/{groupid}` advertises `GroupBanData` responses instead of join-request objects. This matches the endpoint's actual return value and keeps generated API docs from implying that bans and pending join requests share the same response shape.
+
 ### 2026-06-06 - docs: fix preview runtime directory names
 
 Corrected the managed desktop runtime examples in the preview README so they use the Qortium Home and Core app-data folder names. The preview launcher guidance now points managed installs at `qortium-core` for Core runtime files and `qortium-home` for Home data instead of the old typoed `qortal-*` paths.

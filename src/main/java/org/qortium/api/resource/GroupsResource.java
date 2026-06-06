@@ -1061,7 +1061,7 @@ public class GroupsResource {
 				description = "group bans",
 				content = @Content(
 					mediaType = MediaType.APPLICATION_JSON,
-					array = @ArraySchema(schema = @Schema(implementation = GroupJoinRequestData.class))
+					array = @ArraySchema(schema = @Schema(implementation = GroupBanData.class))
 				)
 			)
 		}
