@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-06 - docs: fix preview runtime directory names
+
+Corrected the managed desktop runtime examples in the preview README so they use the Qortium Home and Core app-data folder names. The preview launcher guidance now points managed installs at `qortium-core` for Core runtime files and `qortium-home` for Home data instead of the old typoed `qortal-*` paths.
+
 ### 2026-06-06 - preview: support persistent runtime directories
 
 Changed the preview launchers so generated settings, database files, QDN data, logs, PID files, and API keys can live in a stable runtime directory outside the release folder. The launchers now rewrite the generated local settings to use that runtime directory, and auto-update restarts keep the PID, log directory, and Log4j settings in the replacement process, which lets managed desktop installs keep the same synced Core data and API key across app updates instead of creating a fresh runtime folder each time.
