@@ -60,7 +60,7 @@ For a managed desktop install, keep the generated Core runtime outside the
 release folder so updates do not force a resync or create a new API key:
 
 ```sh
-./preview/start.sh --runtime-dir="$HOME/.config/qortal-core"
+./preview/start.sh --runtime-dir="$HOME/.config/qortium-core"
 ```
 
 The same path can be supplied through `QORTIUM_PREVIEW_RUNTIME_DIR`.
@@ -169,8 +169,8 @@ setting `QORTIUM_PREVIEW_RUNTIME_DIR` stores the generated settings, database,
 QDN data, logs, PID file, keystore, and API key under that runtime root instead.
 
 Managed desktop builds should use a stable runtime root such as
-`$HOME/.config/qortal-core`. The Qortium Home desktop app can keep its own data
-under `$HOME/.config/qortal-home` while Core keeps the chain database and
+`$HOME/.config/qortium-core`. The Qortium Home desktop app can keep its own data
+under `$HOME/.config/qortium-home` while Core keeps the chain database and
 `apikey.txt` under the Core runtime directory.
 
 Generated runtime files include:
