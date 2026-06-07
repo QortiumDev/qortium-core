@@ -64,12 +64,21 @@ public class ArbitraryDataRenderManager extends Thread {
     }
 
     public boolean isAuthorized(ArbitraryDataResource resource) {
+        if (resource == null) {
+            return false;
+        }
+
+        ArbitraryDataResource serviceResource = new ArbitraryDataResource(resource.getResourceId(), null, resource.getService(), null);
         ArbitraryDataResource broadResource = new ArbitraryDataResource(resource.getResourceId(), null, null, null);
 
         for (String authorizedResourceKey : this.authorizedResources.keySet()) {
-            if (authorizedResourceKey != null && resource != null) {
+            if (authorizedResourceKey != null) {
                 // Check for exact match
                 if (Objects.equals(authorizedResourceKey, resource.getUniqueKey())) {
+                    return true;
+                }
+                // Check for a service/name authorization (which applies to all identifiers under an authorized service and name)
+                if (Objects.equals(authorizedResourceKey, serviceResource.getUniqueKey())) {
                     return true;
                 }
                 // Check for a broad authorization (which applies to all services and identifiers under an authorized name)
