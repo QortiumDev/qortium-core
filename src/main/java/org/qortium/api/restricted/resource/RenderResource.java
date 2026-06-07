@@ -118,7 +118,7 @@ public class RenderResource {
                                              @QueryParam("identifier") String identifier,
                                              @QueryParam("theme") String theme, @QueryParam("lang") String lang) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
-            Security.requirePriorAuthorization(request, name, service, null);
+            Security.requirePriorAuthorization(request, name, service, identifier);
 
         String prefix = String.format("/render/%s", service);
         return this.get(name, ResourceIdType.NAME, service, identifier, inPath, null, prefix, true, true, theme, lang);
@@ -132,7 +132,7 @@ public class RenderResource {
                                               @QueryParam("identifier") String identifier,
                                               @QueryParam("theme") String theme, @QueryParam("lang") String lang) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
-            Security.requirePriorAuthorization(request, name, service, null);
+            Security.requirePriorAuthorization(request, name, service, identifier);
 
         String prefix = String.format("/render/%s", service);
         return this.get(name, ResourceIdType.NAME, service, identifier, "/", null, prefix, true, true, theme, lang);

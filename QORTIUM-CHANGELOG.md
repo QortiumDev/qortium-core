@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-07 - api: honor QDN render identifiers in authorization
+
+Updated QDN render authorization so Core checks the identifier that is actually being rendered instead of always checking only the service and publishing name. Identifier-specific authorizations now protect a single resource, while service/name authorizations still intentionally cover all identifiers under that published service when a broader grant is requested.
+
 ### 2026-06-06 - api: fix group bans response schema
 
 Corrected the API documentation for the group bans endpoint so `/groups/bans/{groupid}` advertises `GroupBanData` responses instead of join-request objects. This matches the endpoint's actual return value and keeps generated API docs from implying that bans and pending join requests share the same response shape.
