@@ -7,10 +7,12 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.parameters.RequestBody;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.qortium.api.ApiError;
 import org.qortium.api.ApiErrors;
 import org.qortium.api.ApiExceptionFactory;
+import org.qortium.api.Security;
 import org.qortium.api.model.AccountRatingCooldownUpdateRequest;
 import org.qortium.api.model.AccountTrustCategoryPoliciesUpdateRequest;
 import org.qortium.api.model.AccountTrustManagerEnergyHopsUpdateRequest;
@@ -69,6 +71,13 @@ public class ChainParametersResource {
 
 	@Context
 	HttpServletRequest request;
+
+	private void checkChainParameterBuilderAllowed() {
+		Security.checkApiCallAllowed(request);
+
+		if (Settings.getInstance().isApiRestricted())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+	}
 
 	@GET
 	@Operation(
@@ -526,10 +535,10 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateBlockReward(BlockRewardUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildBlockRewardTransactionData(updateRequest);
@@ -562,10 +571,10 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateMinAccountsToActivateShareBin(IntegerChainParameterUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildIntegerTransactionData(
@@ -599,10 +608,10 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateRewardShareWeights(RewardShareWeightsUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildRewardShareWeightsTransactionData(updateRequest);
@@ -635,10 +644,10 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateAccountRatingCooldown(AccountRatingCooldownUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildAccountRatingCooldownTransactionData(updateRequest);
@@ -671,10 +680,10 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateTrustStatusVoteWeights(TrustStatusVoteWeightsUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildTrustStatusVoteWeightsTransactionData(updateRequest);
@@ -707,10 +716,10 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateAccountTrustStartingEnergy(AccountTrustStartingEnergyUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildAccountTrustStartingEnergyTransactionData(updateRequest);
@@ -743,10 +752,10 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateAccountTrustManagerEnergyHops(AccountTrustManagerEnergyHopsUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildAccountTrustManagerEnergyHopsTransactionData(updateRequest);
@@ -779,11 +788,11 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateAccountTrustPositiveMinBranchCount(
 			AccountTrustPositiveMinBranchCountUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData =
@@ -817,11 +826,11 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateAccountTrustSuspiciousMinRaterCount(
 			AccountTrustSuspiciousMinRaterCountUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData =
@@ -855,11 +864,11 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateAccountTrustSuspiciousMinBranchCount(
 			AccountTrustSuspiciousMinBranchCountUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData =
@@ -893,11 +902,11 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateAccountTrustSuspiciousMinRatingConfidence(
 			AccountTrustSuspiciousMinRatingConfidenceUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData =
@@ -931,10 +940,10 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateAccountTrustCategoryPolicies(AccountTrustCategoryPoliciesUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData =
@@ -971,10 +980,10 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateUnitFee(UnitFeeUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildUnitFeeTransactionData(updateRequest);
@@ -1007,10 +1016,10 @@ public class ChainParametersResource {
 					)
 			}
 	)
-	@ApiErrors({ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	@SecurityRequirement(name = "apiKey")
+	@ApiErrors({ApiError.UNAUTHORIZED, ApiError.NON_PRODUCTION, ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
 	public String updateNameRegistrationUnitFee(NameRegistrationUnitFeeUpdateRequest updateRequest) {
-		if (Settings.getInstance().isApiRestricted())
-			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.NON_PRODUCTION);
+		checkChainParameterBuilderAllowed();
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ChainParameterUpdateTransactionData transactionData = buildNameRegistrationUnitFeeTransactionData(updateRequest);

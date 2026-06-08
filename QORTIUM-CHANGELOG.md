@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: protect chain parameter builders
+
+Changed chain-parameter transaction-builder endpoints so they require the Core API key before constructing unsigned update transactions. The builders now share a single authorization and production-mode guard, advertise `apiKey` security in the generated API docs, and return the existing unauthorized API error when callers omit or send an invalid key.
+
 ### 2026-06-08 - security: downgrade raw QDN HTML downloads
 
 Changed raw QDN file downloads so browser-executable HTML and XHTML MIME types are served as `application/octet-stream` instead of being trusted from the file extension. QDN apps and sites still render through the dedicated render path, while raw download responses no longer encourage browsers to execute stored HTML directly from the download endpoint.
