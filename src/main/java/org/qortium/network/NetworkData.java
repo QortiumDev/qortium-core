@@ -210,7 +210,7 @@ public class NetworkData {
             60L, TimeUnit.SECONDS, // keepAliveTime: idle threads die after 1 minute
             new LinkedBlockingQueue<>(100), // bounded queue to prevent memory bloat
             new NamedThreadFactory("ChunkProcessor", Thread.NORM_PRIORITY),
-            new ThreadPoolExecutor.CallerRunsPolicy() // back-pressure: if queue full, caller processes
+            new ThreadPoolExecutor.AbortPolicy() // reject instead of running chunk disk I/O on the caller
     );
 
      /** Dedicated pool for QDN force-connect so processFileHashes doesn't block on TCP connect. Shut down in shutdown(). */
@@ -1808,13 +1808,19 @@ public class NetworkData {
                 // causing other peers' data to pile up in TCP receive buffers (saw 2.3 MB backlog),
                 // resulting in 50-80 second apparent "RTT" (actually just queue wait time).
                 final Peer finalPeer = peer;
-                chunkProcessorPool.execute(() -> {
-                    try {
-                        ArbitraryDataFileManager.getInstance().receivedArbitraryDataFile(finalPeer, adf);
-                    } catch (Exception e) {
-                        LOGGER.error("Error processing chunk {} from peer {}", adf.getHash58(), finalPeer, e);
-                    }
-                });
+                try {
+                    chunkProcessorPool.execute(() -> {
+                        try {
+                            ArbitraryDataFileManager.getInstance().receivedArbitraryDataFile(finalPeer, adf);
+                        } catch (Exception e) {
+                            LOGGER.error("Error processing chunk {} from peer {}", adf.getHash58(), finalPeer, e);
+                        }
+                    });
+                } catch (RejectedExecutionException e) {
+                    LOGGER.warn("Dropping arbitrary data file chunk {} from peer {} because the chunk processor queue is full",
+                            adf.getHash58(), finalPeer);
+                    finalPeer.disconnect("chunk processor queue full");
+                }
                 break;
 
 			case ARBITRARY_DATA_FILE_LIST:

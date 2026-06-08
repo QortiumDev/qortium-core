@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: reject overloaded QDN chunk processing
+
+Changed QDN chunk processing so a saturated chunk worker pool rejects new chunks instead of running validation and disk I/O on the submitting message worker. When the chunk processor queue is full, Core now logs the dropped chunk and disconnects the sending peer, preserving the dedicated chunk pool boundary during burst load.
+
 ### 2026-06-08 - security: protect chain parameter builders
 
 Changed chain-parameter transaction-builder endpoints so they require the Core API key before constructing unsigned update transactions. The builders now share a single authorization and production-mode guard, advertise `apiKey` security in the generated API docs, and return the existing unauthorized API error when callers omit or send an invalid key.
