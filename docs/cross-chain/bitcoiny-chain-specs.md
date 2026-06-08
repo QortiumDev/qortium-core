@@ -80,7 +80,7 @@ Use `bitcoinyServers` to persist Electrum server overrides for a specific BTC-li
 }
 ```
 
-Generated Electrum server lists remain the default source. `servers` appends user-provided servers, `disabledServers` suppresses generated/default servers, and `replaceDefaults` makes the node use only the configured `servers` for that coin/network. SSL servers are still preferred whenever at least one SSL server is available after merging; TCP servers are only used when no SSL server remains.
+Generated Electrum server lists remain the default source. `servers` appends user-provided servers, `disabledServers` suppresses generated/default servers, and `replaceDefaults` makes the node use only the configured `servers` for that coin/network. SSL servers are preferred whenever at least one SSL server is available after merging, and plaintext TCP Electrum servers are ignored by default. Set `allowPlaintextElectrumServers` to `true` only for explicit compatibility or development use.
 
 ## Adding A Coin
 

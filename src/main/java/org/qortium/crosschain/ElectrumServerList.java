@@ -37,7 +37,18 @@ public final class ElectrumServerList {
 	public static Collection<Server> getServers(String coinCode, String networkName, Collection<Server> fallbackServers) {
 		List<Server> defaultServers = loadDefaultServers(coinCode, networkName, fallbackServers);
 		List<Server> configuredServers = applyConfiguredServers(coinCode, networkName, defaultServers);
-		return preferSslServers(configuredServers);
+		return filterAllowedServers(preferSslServers(configuredServers));
+	}
+
+	public static boolean isAllowedByTransportPolicy(ChainableServer server) {
+		if (server == null)
+			return false;
+
+		if (server.getConnectionType() != ConnectionType.TCP)
+			return true;
+
+		Settings settings = Settings.getLoadedInstance();
+		return settings != null && settings.isPlaintextElectrumServersAllowed();
 	}
 
 	public static boolean isDefaultServer(String coinCode, String networkName, ChainableServer server, Collection<Server> fallbackServers) {
@@ -151,6 +162,15 @@ public final class ElectrumServerList {
 			return secureServers;
 
 		return new ArrayList<>(servers);
+	}
+
+	static <T extends ChainableServer> List<T> filterAllowedServers(Collection<T> servers) {
+		if (servers == null || servers.isEmpty())
+			return Collections.emptyList();
+
+		return servers.stream()
+				.filter(ElectrumServerList::isAllowedByTransportPolicy)
+				.collect(Collectors.toList());
 	}
 
 	static List<Server> applyConfiguredServers(String coinCode, String networkName, Collection<Server> defaultServers) {

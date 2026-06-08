@@ -588,6 +588,9 @@ public class Settings {
 	 */
     private int electrumThreadCount = 12;
 
+	/** Whether Electrum-compatible BTC-like chains may connect to plaintext TCP servers. */
+	private boolean allowPlaintextElectrumServers = false;
+
 	/**
 	 * Host Monitor Enabled
 	 *
@@ -864,6 +867,7 @@ public class Settings {
 		settings.put("wallets", new WritableSetting(WritableSettingType.BOOLEAN_MAP, true));
 		settings.put("bitcoinyNetworks", new WritableSetting(WritableSettingType.STRING_MAP, true));
 		settings.put("bitcoinyServers", new WritableSetting(WritableSettingType.BITCOINY_SERVERS, true));
+		settings.put("allowPlaintextElectrumServers", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("pirateChainNet", new WritableSetting(WritableSettingType.PIRATE_CHAIN_NET, true));
 		settings.put("autoUpdateMode", new WritableSetting(WritableSettingType.AUTO_UPDATE_MODE, true));
 		settings.put("autoRestartEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
@@ -2126,6 +2130,10 @@ public class Settings {
 
 	public int getElectrumThreadCount() {
 		return electrumThreadCount;
+	}
+
+	public boolean isPlaintextElectrumServersAllowed() {
+		return this.allowPlaintextElectrumServers;
 	}
 
 	public boolean isHostMonitorEnabled() {

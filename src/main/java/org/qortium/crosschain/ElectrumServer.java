@@ -36,6 +36,9 @@ public class ElectrumServer {
     }
 
     private void init(ChainableServer server, SocketAddress endpoint, int timeout, ChainableServerConnectionRecorder recorder) throws IOException {
+        if (!ElectrumServerList.isAllowedByTransportPolicy(server))
+            throw new IOException("Plaintext Electrum TCP servers are disabled");
+
         this.server = server;
 
         this.socket = new Socket();

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: require opt-in for plaintext Electrum servers
+
+Changed Electrum-compatible BTC-like server selection so plaintext TCP servers are ignored unless `allowPlaintextElectrumServers` is explicitly enabled. Core now applies that policy to generated defaults, configured server overrides, peer-discovered servers, manual add-server requests, and the final socket creation path, keeping SSL as the normal cross-chain transport while preserving a deliberate compatibility escape hatch.
+
 ### 2026-06-07 - api: add QDN text size render context
 
 Added text-size support to the QDN render context alongside the existing theme and language values. Render and dev-proxy requests can now pass a `textSize` query parameter, Core injects it into rendered app HTML as `_qdnTextSize`, and the QDN app helper preserves it when apps link to other QDN resources.
