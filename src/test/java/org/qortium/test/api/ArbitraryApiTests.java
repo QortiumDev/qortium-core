@@ -184,10 +184,25 @@ public class ArbitraryApiTests extends ApiCommon {
 		assertInvalidHttpRange("bytes=0-0", 0);
 	}
 
+	@Test
+	public void testRawDownloadContentTypeDowngradesExecutableHtml() throws Exception {
+		assertEquals("application/octet-stream", getRawDownloadContentType("text/html"));
+		assertEquals("application/octet-stream", getRawDownloadContentType("text/html; charset=UTF-8"));
+		assertEquals("application/octet-stream", getRawDownloadContentType("application/xhtml+xml"));
+		assertEquals("image/png", getRawDownloadContentType("image/png"));
+		assertEquals("application/octet-stream", getRawDownloadContentType(null));
+	}
+
 	private static long[] parseHttpRange(String rangeHeader, long fileSize) throws Exception {
 		Method method = ArbitraryResource.class.getDeclaredMethod("parseHttpRangeHeader", String.class, long.class);
 		method.setAccessible(true);
 		return (long[]) method.invoke(null, rangeHeader, fileSize);
+	}
+
+	private static String getRawDownloadContentType(String mimeType) throws Exception {
+		Method method = ArbitraryResource.class.getDeclaredMethod("getRawDownloadContentType", String.class);
+		method.setAccessible(true);
+		return (String) method.invoke(null, mimeType);
 	}
 
 	private static void copyUploadChunk(String chunkData, Path chunkFile, long maxTotalSize) throws Exception {

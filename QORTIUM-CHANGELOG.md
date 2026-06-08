@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: downgrade raw QDN HTML downloads
+
+Changed raw QDN file downloads so browser-executable HTML and XHTML MIME types are served as `application/octet-stream` instead of being trusted from the file extension. QDN apps and sites still render through the dedicated render path, while raw download responses no longer encourage browsers to execute stored HTML directly from the download endpoint.
+
 ### 2026-06-08 - security: stop reflecting CORS request headers
 
 Changed API CORS responses so Core no longer echoes arbitrary headers from browser preflight requests. The allowlist is now fixed to the expected API headers, including `X-API-KEY`, which keeps browser compatibility for legitimate calls while removing a header-reflection path from public API responses.
