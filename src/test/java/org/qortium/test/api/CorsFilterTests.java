@@ -29,7 +29,7 @@ public class CorsFilterTests {
 		assertTrue(exchange.chainCalled.get());
 		assertEquals("*", exchange.responseHeaders.get("Access-Control-Allow-Origin"));
 		assertEquals("GET, POST, DELETE", exchange.responseHeaders.get("Access-Control-Allow-Methods"));
-		assertEquals("Origin, X-Requested-With, Content-Type, Accept", exchange.responseHeaders.get("Access-Control-Allow-Headers"));
+		assertEquals("Origin, X-Requested-With, Content-Type, Accept, X-API-KEY", exchange.responseHeaders.get("Access-Control-Allow-Headers"));
 	}
 
 	@Test
@@ -45,7 +45,7 @@ public class CorsFilterTests {
 		assertEquals(HttpServletResponse.SC_OK, exchange.status);
 		assertEquals("*", exchange.responseHeaders.get("Access-Control-Allow-Origin"));
 		assertEquals("GET, POST, DELETE", exchange.responseHeaders.get("Access-Control-Allow-Methods"));
-		assertEquals("X-API-KEY, Content-Type", exchange.responseHeaders.get("Access-Control-Allow-Headers"));
+		assertEquals("Origin, X-Requested-With, Content-Type, Accept, X-API-KEY", exchange.responseHeaders.get("Access-Control-Allow-Headers"));
 	}
 
 	private static class Exchange {
