@@ -122,6 +122,7 @@ public class ArbitraryResource {
 	private static final Logger LOGGER = LogManager.getLogger(ArbitraryResource.class);
 	private static final String RAW_DOWNLOAD_FALLBACK_CONTENT_TYPE = "application/octet-stream";
 	private static final Set<String> RAW_DOWNLOAD_EXECUTABLE_MIME_TYPES = Set.of("text/html", "application/xhtml+xml");
+	private static final String UPLOAD_CHUNK_TOO_LARGE_RESPONSE = "Upload chunk too large";
 
 	@Context HttpServletRequest request;
 	@Context HttpServletResponse response;
@@ -1353,30 +1354,30 @@ public class ArbitraryResource {
         )
     }
 )
-@SecurityRequirement(name = "apiKey")
-public Response uploadChunkNoIdentifier(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
-                                        @PathParam("service") String serviceString,
-                                        @PathParam("name") String name,
-                                        @FormDataParam("chunk") InputStream chunkStream,
-                                        @FormDataParam("index") int index) {
-	    Security.checkApiCallAllowed(request);
+	@SecurityRequirement(name = "apiKey")
+	public Response uploadChunkNoIdentifier(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+											@PathParam("service") String serviceString,
+											@PathParam("name") String name,
+											@FormDataParam("chunk") InputStream chunkStream,
+											@FormDataParam("index") int index) {
+		Security.checkApiCallAllowed(request);
 
-	    try {
+		try {
 			java.nio.file.Path tempDir = resolveUploadChunkDirectory(serviceString, name, null);
 			Files.createDirectories(tempDir);
 
-	        java.nio.file.Path chunkFile = resolveUploadChunkFile(tempDir, index);
-	        copyUploadChunk(chunkStream, chunkFile);
+			java.nio.file.Path chunkFile = resolveUploadChunkFile(tempDir, index);
+			copyUploadChunk(chunkStream, chunkFile);
 
-	        return Response.ok("Chunk " + index + " received").build();
-	    } catch (UploadChunkTooLargeException e) {
-		LOGGER.warn("Rejected oversized upload chunk {} for service '{}' and name '{}'", index, serviceString, name);
-		return Response.status(413).entity(e.getMessage()).build();
-	    } catch (IOException e) {
+			return Response.ok("Chunk " + index + " received").build();
+		} catch (UploadChunkTooLargeException e) {
+			LOGGER.warn("Rejected oversized upload chunk {} for service '{}' and name '{}'", index, serviceString, name);
+			return Response.status(413).entity(UPLOAD_CHUNK_TOO_LARGE_RESPONSE).build();
+		} catch (IOException e) {
 			LOGGER.error("Failed to write chunk {} for service '{}' and name '{}'", index, serviceString, name, e);
-	        return Response.serverError().entity("Failed to write chunk").build();
-    }
-}
+			return Response.serverError().entity("Failed to write chunk").build();
+		}
+	}
 
 @POST
 @Path("/{service}/{name}/finalize")
@@ -1540,32 +1541,31 @@ public String finalizeUploadNoIdentifier(
         )
     }
 )
-@SecurityRequirement(name = "apiKey")
-public Response uploadChunk(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
-                            @PathParam("service") String serviceString,
-                            @PathParam("name") String name,
-                            @PathParam("identifier") String identifier,
-                            @FormDataParam("chunk") InputStream chunkStream,
-                            @FormDataParam("index") int index) {
-	    Security.checkApiCallAllowed(request);
+	@SecurityRequirement(name = "apiKey")
+	public Response uploadChunk(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+								@PathParam("service") String serviceString,
+								@PathParam("name") String name,
+								@PathParam("identifier") String identifier,
+								@FormDataParam("chunk") InputStream chunkStream,
+								@FormDataParam("index") int index) {
+		Security.checkApiCallAllowed(request);
 
-	    try {
-	        java.nio.file.Path tempDir = resolveUploadChunkDirectory(serviceString, name, identifier);
+		try {
+			java.nio.file.Path tempDir = resolveUploadChunkDirectory(serviceString, name, identifier);
+			Files.createDirectories(tempDir);
 
-	        Files.createDirectories(tempDir);
+			java.nio.file.Path chunkFile = resolveUploadChunkFile(tempDir, index);
+			copyUploadChunk(chunkStream, chunkFile);
 
-	        java.nio.file.Path chunkFile = resolveUploadChunkFile(tempDir, index);
-	        copyUploadChunk(chunkStream, chunkFile);
-
-	        return Response.ok("Chunk " + index + " received").build();
-	    } catch (UploadChunkTooLargeException e) {
-		LOGGER.warn("Rejected oversized upload chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier);
-		return Response.status(413).entity(e.getMessage()).build();
-	    } catch (IOException e) {
+			return Response.ok("Chunk " + index + " received").build();
+		} catch (UploadChunkTooLargeException e) {
+			LOGGER.warn("Rejected oversized upload chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier);
+			return Response.status(413).entity(UPLOAD_CHUNK_TOO_LARGE_RESPONSE).build();
+		} catch (IOException e) {
 			LOGGER.error("Failed to write chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier, e);
-	        return Response.serverError().entity("Failed to write chunk").build();
-    }
-}
+			return Response.serverError().entity("Failed to write chunk").build();
+		}
+	}
 
 @POST
 @Path("/{service}/{name}/{identifier}/finalize")

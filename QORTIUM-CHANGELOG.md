@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: avoid exposing upload chunk error details
+
+Changed QDN chunk upload rejection responses so oversized chunks still return `413 Payload Too Large` but no longer include internal exception text in the response body. Core continues to log the rejected chunk context for operators while callers receive a fixed, non-revealing error message.
+
 ### 2026-06-08 - security: reject overloaded QDN chunk processing
 
 Changed QDN chunk processing so a saturated chunk worker pool rejects new chunks instead of running validation and disk I/O on the submitting message worker. When the chunk processor queue is full, Core now logs the dropped chunk and disconnects the sending peer, preserving the dedicated chunk pool boundary during burst load.
