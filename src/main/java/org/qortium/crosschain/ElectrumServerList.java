@@ -73,7 +73,11 @@ public final class ElectrumServerList {
 
 		LinkedHashSet<Server> normalisedFallbackServers = new LinkedHashSet<>();
 		for (Server fallbackServer : fallbackServers)
-			normalisedFallbackServers.add(new Server(normaliseHost(fallbackServer.getHostName()), fallbackServer.getConnectionType(), fallbackServer.getPort()));
+			normalisedFallbackServers.add(new Server(
+					normaliseHost(fallbackServer.getHostName()),
+					fallbackServer.getConnectionType(),
+					fallbackServer.getPort(),
+					fallbackServer.getCertificateSha256Fingerprint()));
 
 		return new ArrayList<>(normalisedFallbackServers);
 	}
@@ -186,8 +190,11 @@ public final class ElectrumServerList {
 		for (Settings.BitcoinyServer disabledServer : serverSettings.getDisabledServers())
 			servers.remove(toServer(disabledServer));
 
-		for (Settings.BitcoinyServer configuredServer : serverSettings.getServers())
-			servers.add(toServer(configuredServer));
+		for (Settings.BitcoinyServer configuredServer : serverSettings.getServers()) {
+			Server server = toServer(configuredServer);
+			servers.remove(server);
+			servers.add(server);
+		}
 
 		return new ArrayList<>(servers);
 	}
@@ -196,7 +203,8 @@ public final class ElectrumServerList {
 		return new Server(
 				normaliseHost(server.getHostName()),
 				ConnectionType.valueOf(server.getConnectionType()),
-				server.getPort());
+				server.getPort(),
+				server.getCertificateSha256Fingerprint());
 	}
 
 	private static Server parseServer(JSONObject serverJson) {
@@ -218,7 +226,11 @@ public final class ElectrumServerList {
 		if (connectionType == null)
 			return null;
 
-		return new Server(normaliseHost(hostName), connectionType, port);
+		String certificateSha256Fingerprint = parseString(serverJson.get("certificateSha256Fingerprint"));
+		if (certificateSha256Fingerprint == null)
+			certificateSha256Fingerprint = parseString(serverJson.get("certSha256Fingerprint"));
+
+		return new Server(normaliseHost(hostName), connectionType, port, certificateSha256Fingerprint);
 	}
 
 	private static String parseString(Object value) {

@@ -191,25 +191,25 @@ can make existing alerts fail pull-request checks without changing the risk.
 
 Alert:
 
-- `TrustlessSSLSocketFactory`: 11
+- `ElectrumSSLSocketFactory`: pinned-certificate trust manager
 
-Triage status: intentional ElectrumX compatibility behavior; needs an explicit
-risk decision.
+Triage status: fixed by default certificate validation with explicit pins for
+self-signed compatibility.
 
-Many ElectrumX servers use self-signed certificates. The current cross-chain
-client uses a trust manager that allows those SSL connections while still
-enabling modern TLS protocol versions. This is compatibility behavior inherited
-from the cross-chain stack, not an accidental use of a permissive trust manager.
+Many ElectrumX servers use self-signed certificates, but Core no longer uses a
+trust-all TLS manager for SSL Electrum connections. SSL servers now use JVM
+certificate validation by default. A configured
+`certificateSha256Fingerprint` pins the server's leaf certificate when a
+self-signed Electrum server must be trusted explicitly.
 
-Future design options include:
+Remaining maintenance:
 
-- keeping the current compatibility behavior and documenting it as accepted
-  risk
-- adding an optional strict-certificate mode
-- adding pinned certificate or fingerprint support for configured servers
+- keep bundled/generated server entries on publicly trusted TLS where possible
+- add pins only for self-signed servers that have been verified out of band
+- refresh stale pins when server operators rotate certificates
 
-Dismissal candidate after review: yes only if Qortium accepts the compatibility
-risk for the current release line.
+Dismissal candidate after review: yes, after confirming the scanner no longer
+finds an all-trusting Electrum TLS manager.
 
 ## Recommended GitHub Alert Handling
 

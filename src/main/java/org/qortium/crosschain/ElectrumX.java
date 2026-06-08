@@ -11,6 +11,7 @@ import org.json.simple.JSONValue;
 import org.qortium.api.resource.CrossChainUtils;
 import org.qortium.controller.Controller;
 import org.qortium.crypto.Crypto;
+import org.qortium.crypto.ElectrumSSLSocketFactory;
 import org.qortium.utils.BitTwiddling;
 
 import java.io.IOException;
@@ -76,12 +77,18 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		ConnectionType connectionType;
 
 		int port;
+		String certificateSha256Fingerprint;
 		private List<Long> responseTimes = new ArrayList<>();
 
 		public Server(String hostname, ConnectionType connectionType, int port) {
+			this(hostname, connectionType, port, null);
+		}
+
+		public Server(String hostname, ConnectionType connectionType, int port, String certificateSha256Fingerprint) {
 			this.hostname = hostname;
 			this.connectionType = connectionType;
 			this.port = port;
+			this.certificateSha256Fingerprint = ElectrumSSLSocketFactory.normalizeSha256Fingerprint(certificateSha256Fingerprint);
 		}
 
 		@Override
@@ -122,6 +129,10 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		@Override
 		public ConnectionType getConnectionType() {
 			return this.connectionType;
+		}
+
+		public String getCertificateSha256Fingerprint() {
+			return this.certificateSha256Fingerprint;
 		}
 
 		@Override

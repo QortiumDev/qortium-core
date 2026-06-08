@@ -1,6 +1,7 @@
 package org.qortium.settings;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.File;
@@ -48,8 +49,10 @@ import org.qortium.crosschain.BitcoinyChainSpec;
 import org.qortium.crosschain.BitcoinyChainSpecs;
 import org.qortium.crosschain.BitcoinyNetwork;
 import org.qortium.crosschain.ChainableServer;
+import org.qortium.crosschain.ElectrumX;
 import org.qortium.crosschain.ForeignBlockchainRegistry;
 import org.qortium.crosschain.PirateChain.PirateChainNet;
+import org.qortium.crypto.ElectrumSSLSocketFactory;
 import org.qortium.network.message.MessageType;
 import org.qortium.utils.EnumUtils;
 
@@ -713,8 +716,15 @@ public class Settings {
 		}
 
 		public boolean addServer(BitcoinyServer server) {
-			if (this.servers.contains(server))
-				return false;
+			int existingIndex = this.servers.indexOf(server);
+			if (existingIndex >= 0) {
+				BitcoinyServer existingServer = this.servers.get(existingIndex);
+				if (Objects.equals(existingServer.getCertificateSha256Fingerprint(), server.getCertificateSha256Fingerprint()))
+					return false;
+
+				this.servers.set(existingIndex, server);
+				return true;
+			}
 
 			return this.servers.add(server);
 		}
@@ -751,14 +761,21 @@ public class Settings {
 		private String hostName;
 		private int port;
 		private String connectionType;
+		@JsonInclude(JsonInclude.Include.NON_NULL)
+		private String certificateSha256Fingerprint;
 
 		public BitcoinyServer() {
 		}
 
 		public BitcoinyServer(String hostName, int port, String connectionType) {
+			this(hostName, port, connectionType, null);
+		}
+
+		public BitcoinyServer(String hostName, int port, String connectionType, String certificateSha256Fingerprint) {
 			this.hostName = hostName;
 			this.port = port;
 			this.connectionType = connectionType;
+			this.certificateSha256Fingerprint = certificateSha256Fingerprint;
 		}
 
 		public BitcoinyServer(BitcoinyServer other) {
@@ -768,13 +785,19 @@ public class Settings {
 			this.hostName = other.hostName;
 			this.port = other.port;
 			this.connectionType = other.connectionType;
+			this.certificateSha256Fingerprint = other.certificateSha256Fingerprint;
 		}
 
 		public static BitcoinyServer from(ChainableServer server) {
+			String certificateSha256Fingerprint = server instanceof ElectrumX.Server
+					? ((ElectrumX.Server) server).getCertificateSha256Fingerprint()
+					: null;
+
 			return normaliseBitcoinyServer(new BitcoinyServer(
 					server.getHostName(),
 					server.getPort(),
-					server.getConnectionType().name()));
+					server.getConnectionType().name(),
+					certificateSha256Fingerprint));
 		}
 
 		public String getHostName() {
@@ -799,6 +822,14 @@ public class Settings {
 
 		public void setConnectionType(String connectionType) {
 			this.connectionType = connectionType;
+		}
+
+		public String getCertificateSha256Fingerprint() {
+			return this.certificateSha256Fingerprint;
+		}
+
+		public void setCertificateSha256Fingerprint(String certificateSha256Fingerprint) {
+			this.certificateSha256Fingerprint = certificateSha256Fingerprint;
 		}
 
 		@Override
@@ -1354,7 +1385,11 @@ public class Settings {
 		if (!"SSL".equals(connectionType) && !"TCP".equals(connectionType))
 			throwValidationError("Bitcoiny server connectionType must be SSL or TCP");
 
-		return new BitcoinyServer(hostName, port, connectionType);
+		String certificateSha256Fingerprint = ElectrumSSLSocketFactory.normalizeSha256Fingerprint(server.getCertificateSha256Fingerprint());
+		if (certificateSha256Fingerprint != null && !certificateSha256Fingerprint.matches("[0-9a-f]{64}"))
+			throwValidationError("Bitcoiny server certificateSha256Fingerprint must be a SHA-256 hex fingerprint");
+
+		return new BitcoinyServer(hostName, port, connectionType, certificateSha256Fingerprint);
 	}
 
 	private void setAdditionalDefaults() {

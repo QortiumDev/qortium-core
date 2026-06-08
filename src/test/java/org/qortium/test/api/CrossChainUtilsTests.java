@@ -171,6 +171,16 @@ public class CrossChainUtilsTests extends ApiCommon {
     }
 
     @Test
+    public void testBuildInfoIncludesElectrumCertificateFingerprint() {
+        String fingerprint = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        ChainableServer server = new ElectrumX.Server("pinned.example.com", ChainableServer.ConnectionType.SSL, 50002, fingerprint);
+
+        ServerInfo info = CrossChainUtils.buildInfo(server, false);
+
+        Assert.assertEquals(fingerprint, info.getCertificateSha256Fingerprint());
+    }
+
+    @Test
     public void testWriteToLedgerHeaderOnly() throws IOException {
         CrossChainUtils.writeToLedger(new PrintWriter(System.out), new ArrayList<>());
     }

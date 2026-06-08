@@ -427,7 +427,11 @@ public final class RefreshElectrumServers {
 		if (connectionType == null)
 			return null;
 
-		CandidateServer candidate = new CandidateServer(new Server(hostName, connectionType, port), parseSources(serverJson.get("source")));
+		String certificateSha256Fingerprint = parseString(serverJson.get("certificateSha256Fingerprint"));
+		if (certificateSha256Fingerprint == null)
+			certificateSha256Fingerprint = parseString(serverJson.get("certSha256Fingerprint"));
+
+		CandidateServer candidate = new CandidateServer(new Server(hostName, connectionType, port, certificateSha256Fingerprint), parseSources(serverJson.get("source")));
 		candidate.setResponseTimeMillis(parseResponseTimeMillis(serverJson.get("responseTimeMillis")));
 
 		return candidate;
@@ -537,6 +541,8 @@ public final class RefreshElectrumServers {
 					builder.append("\"host\": \"").append(JSONValue.escape(server.getHostName())).append("\", ");
 					builder.append("\"port\": ").append(server.getPort()).append(", ");
 					builder.append("\"protocol\": \"").append(server.getConnectionType().name()).append("\"");
+					if (server.getCertificateSha256Fingerprint() != null)
+						builder.append(", \"certificateSha256Fingerprint\": \"").append(JSONValue.escape(server.getCertificateSha256Fingerprint())).append("\"");
 					if (!candidate.getSources().isEmpty())
 						builder.append(", \"source\": \"").append(JSONValue.escape(candidate.getSourceSummary())).append("\"");
 					if (candidate.getResponseTimeMillis() != null)

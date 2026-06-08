@@ -80,11 +80,12 @@ public class ElectrumServerListTests extends Common {
 
 	@Test
 	public void testParseGeneratedResourceAndFallbackBehavior() throws Exception {
+		String fingerprint = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 		String json = "{"
 				+ "\"servers\": {"
 				+ "\"BTC\": {"
 				+ "\"MAIN\": ["
-				+ "{\"host\":\"generated.example.com\",\"port\":50002,\"protocol\":\"SSL\"},"
+				+ "{\"host\":\"generated.example.com\",\"port\":50002,\"protocol\":\"SSL\",\"certificateSha256Fingerprint\":\"" + fingerprint + "\"},"
 				+ "{\"host\":\"generated.example.com\",\"port\":50002,\"protocol\":\"SSL\"},"
 				+ "{\"host\":\"hidden.onion\",\"port\":50002,\"protocol\":\"SSL\"},"
 				+ "{\"host\":\"bad.example.com\",\"port\":0,\"protocol\":\"SSL\"}"
@@ -98,6 +99,7 @@ public class ElectrumServerListTests extends Common {
 
 		assertEquals(1, generated.size());
 		assertEquals(new Server("generated.example.com", ConnectionType.SSL, 50002), generated.get(0));
+		assertEquals(fingerprint, generated.get(0).getCertificateSha256Fingerprint());
 
 		Collection<Server> servers = ElectrumServerList.getServers("NOPE", "MAIN", List.of(
 				new Server("fallback.example.com", ConnectionType.SSL, 50002)
@@ -207,12 +209,13 @@ public class ElectrumServerListTests extends Common {
 		Path directory = Files.createTempDirectory("electrum-server-list-test");
 		Path existingJson = directory.resolve("electrum-servers.json");
 		Path missingJson = directory.resolve("missing.json");
+		String fingerprint = "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
 
 		String json = "{"
 				+ "\"servers\": {"
 				+ "\"BTC\": {"
 				+ "\"MAIN\": ["
-				+ "{\"host\":\"generated.example.com\",\"port\":50002,\"protocol\":\"SSL\",\"source\":\"builtin,1209k\",\"responseTimeMillis\":123}"
+				+ "{\"host\":\"generated.example.com\",\"port\":50002,\"protocol\":\"SSL\",\"certificateSha256Fingerprint\":\"" + fingerprint + "\",\"source\":\"builtin,1209k\",\"responseTimeMillis\":123}"
 				+ "]"
 				+ "}"
 				+ "}"
@@ -223,6 +226,7 @@ public class ElectrumServerListTests extends Common {
 		Map<String, Map<String, List<CandidateServer>>> missing = RefreshElectrumServers.readGeneratedServersIfPresent(missingJson);
 
 		assertEquals(new Server("generated.example.com", ConnectionType.SSL, 50002), generated.get("BTC").get("MAIN").get(0).getServer());
+		assertEquals(fingerprint, generated.get("BTC").get("MAIN").get(0).getServer().getCertificateSha256Fingerprint());
 		assertEquals("builtin,1209k", generated.get("BTC").get("MAIN").get(0).getSourceSummary());
 		assertEquals(Long.valueOf(123L), generated.get("BTC").get("MAIN").get(0).getResponseTimeMillis());
 		assertTrue(missing.isEmpty());

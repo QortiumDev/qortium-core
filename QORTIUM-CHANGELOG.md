@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: validate Electrum TLS certificates
+
+Replaced the all-trusting Electrum TLS socket factory with default certificate validation and optional SHA-256 certificate pins for explicitly trusted self-signed Electrum servers. Electrum server settings, generated server resources, API server info, and the refresh tool now preserve `certificateSha256Fingerprint` metadata so pinned servers can be configured without weakening TLS validation for every SSL connection.
+
 ### 2026-06-08 - security: require explicit developer proxy enablement
 
 Changed the developer proxy so it cannot be started unless `devProxyEnabled` is explicitly set, while keeping start and stop protected by the API key. The proxy now omits `unsafe-eval` from its default HTML content security policy, offers `devProxyUnsafeEvalEnabled` only as a deliberate development compatibility option, and documents that proxied HTML is trusted local development content rather than a production safety boundary.

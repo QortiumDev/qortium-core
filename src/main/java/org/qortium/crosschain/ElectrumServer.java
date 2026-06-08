@@ -1,6 +1,6 @@
 package org.qortium.crosschain;
 
-import org.qortium.crypto.TrustlessSSLSocketFactory;
+import org.qortium.crypto.ElectrumSSLSocketFactory;
 
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
@@ -47,9 +47,9 @@ public class ElectrumServer {
         this.socket.setTcpNoDelay(true);
 
         if (this.server.getConnectionType() == ElectrumX.Server.ConnectionType.SSL) {
-            SSLSocketFactory factory = TrustlessSSLSocketFactory.getSocketFactory();
+            SSLSocketFactory factory = ElectrumSSLSocketFactory.getSocketFactory(this.server);
             SSLSocket sslSocket = (SSLSocket) factory.createSocket(this.socket, server.getHostName(), server.getPort(), true);
-            TrustlessSSLSocketFactory.configureSocket(sslSocket);
+            ElectrumSSLSocketFactory.configureSocket(sslSocket);
             this.socket = sslSocket;
             this.socket.setSoTimeout(timeout);
             this.socket.setTcpNoDelay(true);

@@ -319,7 +319,8 @@ public class CrossChainBitcoinyResource {
 			ElectrumX.Server server = new ElectrumX.Server(
 					serverInfo.getHostName(),
 					ChainableServer.ConnectionType.valueOf(serverInfo.getConnectionType()),
-					serverInfo.getPort()
+					serverInfo.getPort(),
+					serverInfo.getCertificateSha256Fingerprint()
 			);
 
 			return Boolean.toString(CrossChainUtils.addServer(getBitcoiny(blockchain), server));
@@ -352,7 +353,8 @@ public class CrossChainBitcoinyResource {
 			ElectrumX.Server server = new ElectrumX.Server(
 					serverInfo.getHostName(),
 					ChainableServer.ConnectionType.valueOf(serverInfo.getConnectionType()),
-					serverInfo.getPort()
+					serverInfo.getPort(),
+					serverInfo.getCertificateSha256Fingerprint()
 			);
 
 			return Boolean.toString(CrossChainUtils.removeServer(getBitcoiny(blockchain), server));

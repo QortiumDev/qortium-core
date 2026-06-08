@@ -69,7 +69,12 @@ Use `bitcoinyServers` to persist Electrum server overrides for a specific BTC-li
       "MAIN": {
         "replaceDefaults": false,
         "servers": [
-          {"hostName": "electrum.example.org", "port": 50002, "connectionType": "SSL"}
+          {
+            "hostName": "electrum.example.org",
+            "port": 50002,
+            "connectionType": "SSL",
+            "certificateSha256Fingerprint": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+          }
         ],
         "disabledServers": [
           {"hostName": "bad.example.org", "port": 50002, "connectionType": "SSL"}
@@ -81,6 +86,8 @@ Use `bitcoinyServers` to persist Electrum server overrides for a specific BTC-li
 ```
 
 Generated Electrum server lists remain the default source. `servers` appends user-provided servers, `disabledServers` suppresses generated/default servers, and `replaceDefaults` makes the node use only the configured `servers` for that coin/network. SSL servers are preferred whenever at least one SSL server is available after merging, and plaintext TCP Electrum servers are ignored by default. Set `allowPlaintextElectrumServers` to `true` only for explicit compatibility or development use.
+
+SSL Electrum servers use normal JVM certificate validation unless a server entry includes `certificateSha256Fingerprint`. The fingerprint is a SHA-256 hash of the server's leaf certificate encoded as 64 hex characters, with optional colons accepted in settings input. Use certificate pins only for self-signed or otherwise non-publicly trusted Electrum servers that you have verified out of band.
 
 ## Adding A Coin
 
