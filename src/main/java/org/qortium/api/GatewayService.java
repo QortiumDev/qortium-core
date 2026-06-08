@@ -64,6 +64,8 @@ public class GatewayService {
 			String keystorePassword = Settings.getInstance().getSslKeystorePassword();
 
 			if (keystorePathname != null && keystorePassword != null) {
+				keystorePassword = Settings.ensureGeneratedSslKeystorePassword();
+
 				// SSL version
 				if (!Files.isReadable(Path.of(keystorePathname)))
 					throw new RuntimeException("Failed to start SSL API due to broken keystore");

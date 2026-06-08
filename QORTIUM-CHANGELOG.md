@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: generate API SSL keystore passwords
+
+Changed API SSL startup and certificate regeneration so Core no longer creates generated PKCS12 keystores with the inherited static `default` password. When SSL starts with the legacy default still active, Core now generates a random URL-safe keystore password, saves it into the active settings file atomically, updates the live settings instance, and reuses operator-configured passwords unchanged.
+
 ### 2026-06-08 - security: bound QDN chunked uploads
 
 Changed QDN chunk upload handling so Core copies incoming multipart chunks through a bounded temp-file path before replacing stored upload chunks. Chunked uploads now reject requests that would push the assembled upload over the QDN maximum file size with `413 Payload Too Large`, and oversized attempts clean up partial temp files instead of allowing API-key-authenticated callers to grow the upload directory without bound.

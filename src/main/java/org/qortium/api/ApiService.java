@@ -164,6 +164,8 @@ public class ApiService {
 			String keystorePassword = Settings.getInstance().getSslKeystorePassword();
 
 			if (keystorePathname != null && keystorePassword != null) {
+				keystorePassword = Settings.ensureGeneratedSslKeystorePassword();
+
 				if (!Files.isReadable(Path.of(keystorePathname))) {
 					SslUtils.generateSsl();
 				} else {
