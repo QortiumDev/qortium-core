@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - docs: prepare v1.0.0-preview.8 release notes
+
+Added a release-prep note for the next Core prerelease after the security-hardening PR merges. The note records the intended preview tag, release highlights, operator compatibility notes, validation already run on the PR, post-merge packaging steps, and a draft GitHub prerelease body with placeholders for final build hashes and the merged commit.
+
 ### 2026-06-08 - security: avoid exposing upload chunk error details
 
 Changed QDN chunk upload rejection responses so oversized chunks still return `413 Payload Too Large` but no longer include internal exception text in the response body. Core continues to log the rejected chunk context for operators while callers receive a fixed, non-revealing error message.
