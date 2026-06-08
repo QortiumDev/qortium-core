@@ -68,33 +68,39 @@ public class RenderResource {
     @Path("/signature/{signature}")
     @SecurityRequirement(name = "apiKey")
     public HttpServletResponse getIndexBySignature(@PathParam("signature") String signature,
-                                                   @QueryParam("theme") String theme, @QueryParam("lang") String lang) {
+                                                   @QueryParam("theme") String theme,
+                                                   @QueryParam("lang") String lang,
+                                                   @QueryParam("textSize") String textSize) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, signature, Service.WEBSITE, null);
 
-        return this.get(signature, ResourceIdType.SIGNATURE, null, null, "/", null, "/render/signature", true, true, theme, lang);
+        return this.get(signature, ResourceIdType.SIGNATURE, null, null, "/", null, "/render/signature", true, true, theme, lang, textSize);
     }
 
     @GET
     @Path("/signature/{signature}/{path:.*}")
     @SecurityRequirement(name = "apiKey")
     public HttpServletResponse getPathBySignature(@PathParam("signature") String signature, @PathParam("path") String inPath,
-                                                  @QueryParam("theme") String theme, @QueryParam("lang") String lang) {
+                                                  @QueryParam("theme") String theme,
+                                                  @QueryParam("lang") String lang,
+                                                  @QueryParam("textSize") String textSize) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, signature, Service.WEBSITE, null);
 
-        return this.get(signature, ResourceIdType.SIGNATURE, null, null, inPath,null, "/render/signature", true, true, theme, lang);
+        return this.get(signature, ResourceIdType.SIGNATURE, null, null, inPath,null, "/render/signature", true, true, theme, lang, textSize);
     }
 
     @GET
     @Path("/hash/{hash}")
     @SecurityRequirement(name = "apiKey")
     public HttpServletResponse getIndexByHash(@PathParam("hash") String hash58, @QueryParam("secret") String secret58,
-                                              @QueryParam("theme") String theme,  @QueryParam("lang") String lang) {
+                                              @QueryParam("theme") String theme,
+                                              @QueryParam("lang") String lang,
+                                              @QueryParam("textSize") String textSize) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, hash58, Service.WEBSITE, null);
 
-        return this.get(hash58, ResourceIdType.FILE_HASH, Service.ARBITRARY_DATA, null, "/", secret58, "/render/hash", true, false, theme, lang);
+        return this.get(hash58, ResourceIdType.FILE_HASH, Service.ARBITRARY_DATA, null, "/", secret58, "/render/hash", true, false, theme, lang, textSize);
     }
 
     @GET
@@ -102,11 +108,13 @@ public class RenderResource {
     @SecurityRequirement(name = "apiKey")
     public HttpServletResponse getPathByHash(@PathParam("hash") String hash58, @PathParam("path") String inPath,
                                              @QueryParam("secret") String secret58,
-                                             @QueryParam("theme") String theme, @QueryParam("lang") String lang) {
+                                             @QueryParam("theme") String theme,
+                                             @QueryParam("lang") String lang,
+                                             @QueryParam("textSize") String textSize) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, hash58, Service.WEBSITE, null);
 
-        return this.get(hash58, ResourceIdType.FILE_HASH, Service.ARBITRARY_DATA, null, inPath, secret58, "/render/hash", true, false, theme, lang);
+        return this.get(hash58, ResourceIdType.FILE_HASH, Service.ARBITRARY_DATA, null, inPath, secret58, "/render/hash", true, false, theme, lang, textSize);
     }
 
     @GET
@@ -116,12 +124,14 @@ public class RenderResource {
                                              @PathParam("name") String name,
                                              @PathParam("path") String inPath,
                                              @QueryParam("identifier") String identifier,
-                                             @QueryParam("theme") String theme, @QueryParam("lang") String lang) {
+                                             @QueryParam("theme") String theme,
+                                             @QueryParam("lang") String lang,
+                                             @QueryParam("textSize") String textSize) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, name, service, identifier);
 
         String prefix = String.format("/render/%s", service);
-        return this.get(name, ResourceIdType.NAME, service, identifier, inPath, null, prefix, true, true, theme, lang);
+        return this.get(name, ResourceIdType.NAME, service, identifier, inPath, null, prefix, true, true, theme, lang, textSize);
     }
 
     @GET
@@ -130,18 +140,21 @@ public class RenderResource {
     public HttpServletResponse getIndexByName(@PathParam("service") Service service,
                                               @PathParam("name") String name,
                                               @QueryParam("identifier") String identifier,
-                                              @QueryParam("theme") String theme, @QueryParam("lang") String lang) {
+                                              @QueryParam("theme") String theme,
+                                              @QueryParam("lang") String lang,
+                                              @QueryParam("textSize") String textSize) {
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, name, service, identifier);
 
         String prefix = String.format("/render/%s", service);
-        return this.get(name, ResourceIdType.NAME, service, identifier, "/", null, prefix, true, true, theme, lang);
+        return this.get(name, ResourceIdType.NAME, service, identifier, "/", null, prefix, true, true, theme, lang, textSize);
     }
 
 
 
     private HttpServletResponse get(String resourceId, ResourceIdType resourceIdType, Service service, String identifier,
-                                    String inPath, String secret58, String prefix, boolean includeResourceIdInPrefix, boolean async, String theme, String lang) {
+                                    String inPath, String secret58, String prefix, boolean includeResourceIdInPrefix, boolean async,
+                                    String theme, String lang, String textSize) {
 
         ArbitraryDataRenderer renderer = new ArbitraryDataRenderer(resourceId, resourceIdType, service, identifier, inPath,
                 secret58, prefix, includeResourceIdInPrefix, async, "render", request, response, context);
@@ -151,6 +164,9 @@ public class RenderResource {
         }
         if (lang != null) {
             renderer.setLang(lang);
+        }
+        if (textSize != null) {
+            renderer.setTextSize(textSize);
         }
         return renderer.render();
     }
