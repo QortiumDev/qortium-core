@@ -15,7 +15,7 @@ public class CorsFilter implements Filter {
 
 	private static final String ALLOWED_ORIGIN = "*";
 	private static final String ALLOWED_METHODS = "GET, POST, DELETE";
-	private static final String DEFAULT_ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept";
+	private static final String ALLOWED_HEADERS = "Origin, X-Requested-With, Content-Type, Accept, X-API-KEY";
 
 	public static void addTo(ServletContextHandler context) {
 		context.addFilter(CorsFilter.class, "/*", null);
@@ -34,7 +34,7 @@ public class CorsFilter implements Filter {
 
 		response.setHeader("Access-Control-Allow-Origin", ALLOWED_ORIGIN);
 		response.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS);
-		response.setHeader("Access-Control-Allow-Headers", getAllowedHeaders(request));
+		response.setHeader("Access-Control-Allow-Headers", ALLOWED_HEADERS);
 
 		if (isPreflightRequest(request)) {
 			response.setStatus(HttpServletResponse.SC_OK);
@@ -42,11 +42,6 @@ public class CorsFilter implements Filter {
 		}
 
 		chain.doFilter(servletRequest, servletResponse);
-	}
-
-	private static String getAllowedHeaders(HttpServletRequest request) {
-		String requestedHeaders = request.getHeader("Access-Control-Request-Headers");
-		return requestedHeaders == null || requestedHeaders.isBlank() ? DEFAULT_ALLOWED_HEADERS : requestedHeaders;
 	}
 
 	private static boolean isPreflightRequest(HttpServletRequest request) {

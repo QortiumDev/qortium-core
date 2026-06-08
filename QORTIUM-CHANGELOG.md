@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: stop reflecting CORS request headers
+
+Changed API CORS responses so Core no longer echoes arbitrary headers from browser preflight requests. The allowlist is now fixed to the expected API headers, including `X-API-KEY`, which keeps browser compatibility for legitimate calls while removing a header-reflection path from public API responses.
+
 ### 2026-06-08 - security: generate API SSL keystore passwords
 
 Changed API SSL startup and certificate regeneration so Core no longer creates generated PKCS12 keystores with the inherited static `default` password. When SSL starts with the legacy default still active, Core now generates a random URL-safe keystore password, saves it into the active settings file atomically, updates the live settings instance, and reuses operator-configured passwords unchanged.
