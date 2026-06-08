@@ -24,6 +24,7 @@ import java.net.ProtocolException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +40,7 @@ public class DevProxyServerResource {
     private static final int PROXY_CONNECT_TIMEOUT_MS = 5000;
     private static final int PROXY_READ_TIMEOUT_MS = 30000;
     private static final int PROXY_STREAM_BUFFER_SIZE = 4096;
+    private static final int MAX_PROXY_HTML_RESPONSE_BYTES = 5 * 1024 * 1024;
 
     private static final Set<String> PROXY_MANAGED_REQUEST_HEADERS = Set.of(
             "accept-encoding",
@@ -128,6 +130,12 @@ public class DevProxyServerResource {
             // Proxy the response data back to the caller
             this.proxyConnectionToResponse(con, response, inPath, responseCode, source);
 
+        } catch (ProxyResponseTooLargeException e) {
+            try {
+                writePlainTextResponse(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, e.getMessage());
+            } catch (IOException writeException) {
+                throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, writeException.getMessage());
+            }
         } catch (IOException e) {
             throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, e.getMessage());
         }
@@ -326,7 +334,13 @@ public class DevProxyServerResource {
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
             byte[] buffer = new byte[PROXY_STREAM_BUFFER_SIZE];
             int bytesRead;
+            int totalBytesRead = 0;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
+                totalBytesRead += bytesRead;
+                if (totalBytesRead > MAX_PROXY_HTML_RESPONSE_BYTES) {
+                    throw new ProxyResponseTooLargeException();
+                }
+
                 outputStream.write(buffer, 0, bytesRead);
             }
 
@@ -370,6 +384,22 @@ public class DevProxyServerResource {
                 outputStream.write(buffer, 0, bytesRead);
             }
         }
+    }
+
+    private static void writePlainTextResponse(HttpServletResponse response, int status, String message) throws IOException {
+        byte[] data = message.getBytes(StandardCharsets.UTF_8);
+        response.setStatus(status);
+        response.setContentType("text/plain");
+        response.setContentLength(data.length);
+        response.getOutputStream().write(data);
+    }
+
+    private static class ProxyResponseTooLargeException extends IOException {
+
+        private ProxyResponseTooLargeException() {
+            super(String.format("Developer proxy HTML response exceeds %d bytes", MAX_PROXY_HTML_RESPONSE_BYTES));
+        }
+
     }
 
     private static String rewriteProxyLocation(String location, String source) {

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: bound dev proxy HTML buffering
+
+Added a decoded-size limit for developer-proxy HTML responses before Core buffers and rewrites them for local app development. Oversized HTML, including compressed responses that expand beyond the limit, now returns `413 Payload Too Large` instead of allowing an upstream development server to grow Core heap usage without bound, while non-HTML proxy responses continue to stream directly.
+
 ### 2026-06-08 - security: validate QDN download byte ranges
 
 Changed QDN file downloads so HTTP `Range` headers are parsed with strict single-range validation before streaming starts. Malformed or unsatisfiable byte ranges now return `416 Requested Range Not Satisfiable` with the proper `Content-Range` response instead of falling through to unhandled parsing errors or invalid content-length math, and large valid ranges use long content lengths instead of truncating to an integer.
