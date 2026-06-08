@@ -105,6 +105,8 @@ public class AdminResource {
 	public String createCA(@HeaderParam(Security.API_KEY_HEADER) String apiKey) {
 		Security.checkApiCallAllowed(request);
 		try {
+			Settings.ensureGeneratedSslKeystorePassword();
+
 			// Generate new SSL certificate
 			SslUtils.generateSsl();
 			

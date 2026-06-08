@@ -351,6 +351,32 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testGeneratedSslKeystorePasswordIsSavedAndApplied() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		assertEquals("default", Settings.getInstance().getSslKeystorePassword());
+
+		String generatedPassword = Settings.ensureGeneratedSslKeystorePassword();
+
+		assertFalse("default".equals(generatedPassword));
+		assertTrue(generatedPassword.length() >= 40);
+		assertEquals(generatedPassword, Settings.getInstance().getSslKeystorePassword());
+		assertEquals(generatedPassword, readSettings(settingsPath).get("sslKeystorePassword"));
+		assertEquals(generatedPassword, Settings.ensureGeneratedSslKeystorePassword());
+	}
+
+	@Test
+	public void testConfiguredSslKeystorePasswordIsPreserved() throws Exception {
+		Path settingsPath = createSettingsFile("{\"sslKeystorePassword\":\"operator-set\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		assertEquals("operator-set", Settings.ensureGeneratedSslKeystorePassword());
+		assertEquals("operator-set", Settings.getInstance().getSslKeystorePassword());
+		assertEquals("operator-set", readSettings(settingsPath).get("sslKeystorePassword"));
+	}
+
+	@Test
 	public void testUserPathRedirectSavesFinalSettingsFile() throws Exception {
 		Path directory = Files.createTempDirectory("settings-save-test");
 		Path redirectDirectory = Files.createDirectory(directory.resolve("redirected"));

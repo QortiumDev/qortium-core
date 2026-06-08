@@ -15,7 +15,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -88,6 +90,9 @@ public class Settings {
 	private static final int TESTNET_DEV_PROXY_PORT = 24893;
 
 	private static final Logger LOGGER = LogManager.getLogger(Settings.class);
+	private static final String DEFAULT_SSL_KEYSTORE_PASSWORD = "default";
+	private static final int GENERATED_SSL_KEYSTORE_PASSWORD_BYTES = 32;
+	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 	private static final String SETTINGS_FILENAME = "settings.json";
 	private static final ObjectMapper SETTINGS_JSON_MAPPER = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
 	private static final TypeReference<LinkedHashMap<String, Object>> SETTINGS_MAP_TYPE = new TypeReference<LinkedHashMap<String, Object>>() {};
@@ -129,7 +134,7 @@ public class Settings {
 	private boolean apiDocumentationEnabled = false;
 	// Both of these need to be set for API to use SSL
 	private String sslKeystorePathname = "QortiumKeyStore.jks";
-	private String sslKeystorePassword = "default";
+	private String sslKeystorePassword = DEFAULT_SSL_KEYSTORE_PASSWORD;
 
 	// Domain mapping
 	private Integer domainMapPort;
@@ -1123,6 +1128,46 @@ public class Settings {
 			if (tempSettingsPath != null)
 				Files.deleteIfExists(tempSettingsPath);
 		}
+	}
+
+	public static synchronized String ensureGeneratedSslKeystorePassword() throws IOException {
+		Settings settings = getInstance();
+		if (!settings.isUsingDefaultSslKeystorePassword())
+			return settings.getSslKeystorePassword();
+
+		String generatedPassword = generateSslKeystorePassword();
+		if (activeSettingsPath == null) {
+			LOGGER.warn("Generated an API SSL keystore password in memory because the active settings file is unknown");
+			settings.sslKeystorePassword = generatedPassword;
+			return generatedPassword;
+		}
+
+		LinkedHashMap<String, Object> mergedSettings = readSettingsMap(activeSettingsPath);
+		mergedSettings.put("sslKeystorePassword", generatedPassword);
+
+		Path tempSettingsPath = writeTempSettings(activeSettingsPath, mergedSettings);
+		try {
+			Settings validatedSettings = prepareLoadedSettings(unmarshalSettings(tempSettingsPath), settings.userPath);
+			replaceSettingsFile(tempSettingsPath, activeSettingsPath);
+			tempSettingsPath = null;
+
+			instance = validatedSettings;
+			LOGGER.info("Generated and saved a random API SSL keystore password");
+			return generatedPassword;
+		} finally {
+			if (tempSettingsPath != null)
+				Files.deleteIfExists(tempSettingsPath);
+		}
+	}
+
+	private boolean isUsingDefaultSslKeystorePassword() {
+		return DEFAULT_SSL_KEYSTORE_PASSWORD.equals(this.sslKeystorePassword);
+	}
+
+	private static String generateSslKeystorePassword() {
+		byte[] passwordBytes = new byte[GENERATED_SSL_KEYSTORE_PASSWORD_BYTES];
+		SECURE_RANDOM.nextBytes(passwordBytes);
+		return Base64.getUrlEncoder().withoutPadding().encodeToString(passwordBytes);
 	}
 
 	public static synchronized SettingsUpdateResult updateBitcoinyServersAndSave(Map<String, Map<String, BitcoinyServerSettings>> bitcoinyServers) throws IOException {
