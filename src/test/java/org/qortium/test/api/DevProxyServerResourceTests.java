@@ -7,6 +7,7 @@ import org.junit.Test;
 import org.qortium.api.proxy.resource.DevProxyServerResource;
 import org.qortium.controller.DevProxyManager;
 import org.qortium.repository.DataException;
+import org.qortium.settings.Settings;
 import org.qortium.test.common.Common;
 
 import javax.servlet.ServletOutputStream;
@@ -24,6 +25,8 @@ import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -187,9 +190,37 @@ public class DevProxyServerResourceTests {
         assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
         assertEquals("text/html; charset=UTF-8", exchange.contentType);
         assertEquals(exchange.outputStream.toByteArray().length, exchange.contentLength);
-        assertEquals("default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;", exchange.getResponseHeader("Content-Security-Policy"));
+        assertEquals("default-src 'self' 'unsafe-inline'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;", exchange.getResponseHeader("Content-Security-Policy"));
         assertTrue(rewrittenBody.contains("/apps/q-apps.js?time="));
         assertTrue(rewrittenBody.contains("route html"));
+    }
+
+    @Test
+    public void testProxyCanEnableUnsafeEvalForHtmlResponses() throws Exception {
+        useDevProxyUnsafeEvalSettings();
+        byte[] body = "<html><head></head><body>route html</body></html>".getBytes(StandardCharsets.UTF_8);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/dashboard", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/html; charset=UTF-8");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, body.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(body);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("dashboard");
+
+        assertEquals("default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;", exchange.getResponseHeader("Content-Security-Policy"));
     }
 
     @Test
@@ -585,6 +616,13 @@ public class DevProxyServerResourceTests {
         }
 
         return outputStream.toByteArray();
+    }
+
+    private static void useDevProxyUnsafeEvalSettings() throws Exception {
+        Path directory = Files.createTempDirectory("dev-proxy-resource-test");
+        Path settingsPath = directory.resolve("settings.json");
+        Files.write(settingsPath, ("{\"devProxyUnsafeEvalEnabled\":true,\"blockchainConfig\":\"src/test/resources/test-chain-v2.json\"}" + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
+        Settings.fileInstance(settingsPath.toString());
     }
 
     private static void assertProxyTargetRejected(Method openProxyConnection, DevProxyServerResource resource, String url) throws Exception {

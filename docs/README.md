@@ -20,6 +20,7 @@ history.
 - `Tester guide` [Tester build helper](../build.sh) - guided local build with prerequisite checks
 - `Tester guide` [Local testnet guide](../testnet/README.md) - first-test walkthrough and multi-node setup
 - `Developer reference` [Testing notes](development/testing.md) - repository test guidance and opt-in checks
+- `Developer reference` [Developer proxy](development/developer-proxy.md) - local QDN app proxy setup and safety boundary
 
 ## Development And Operations
 
