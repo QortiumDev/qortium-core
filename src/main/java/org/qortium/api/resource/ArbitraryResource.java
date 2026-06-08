@@ -2341,28 +2341,21 @@ public String finalizeUpload(
 
 			// Attempt to read the "Range" header from the request to support partial content delivery (e.g., for video streaming or resumable downloads)
 			String range = request.getHeader("Range");
-
-			long rangeStart = 0;
-			long rangeEnd = fileSize - 1;
-			boolean isPartial = false;
-
-			// If a Range header is present and no base64 encoding is requested, parse the range values
-			if (range != null && encoding == null) {
-				range = range.replace("bytes=", ""); // Remove the "bytes=" prefix
-				String[] parts = range.split("-"); // Split the range into start and end
-
-				// Parse range start
-				if (parts.length > 0 && !parts[0].isEmpty()) {
-					rangeStart = Long.parseLong(parts[0]);
-				}
-
-				// Parse range end, if present
-				if (parts.length > 1 && !parts[1].isEmpty()) {
-					rangeEnd = Long.parseLong(parts[1]);
-				}
-
-				isPartial = true; // Indicate that this is a partial content request
+			long[] requestedRange;
+			try {
+				requestedRange = encoding == null ? parseHttpRangeHeader(range, fileSize) : null;
+			} catch (InvalidHttpRangeException e) {
+				LOGGER.debug(String.format("Invalid range for %s %s: %s", service, name, e.getMessage()));
+				response.setHeader("Accept-Ranges", "bytes");
+				response.setHeader("Content-Range", String.format("bytes */%d", fileSize));
+				response.setStatus(HttpServletResponse.SC_REQUESTED_RANGE_NOT_SATISFIABLE);
+				response.setContentLength(0);
+				return;
 			}
+
+			long rangeStart = requestedRange == null ? 0 : requestedRange[0];
+			long rangeEnd = requestedRange == null ? fileSize - 1 : requestedRange[1];
+			boolean isPartial = requestedRange != null;
 
 			// Calculate how many bytes should be sent in the response
 			long contentLength = rangeEnd - rangeStart + 1;
@@ -2409,7 +2402,7 @@ public String finalizeUpload(
 				} else {
 					// For raw binary output, set the content type and length
 					response.setContentType(mimeType != null ? mimeType : "application/octet-stream");
-					response.setContentLength((int) contentLength);
+					setResponseContentLength(response, contentLength);
 				}
 
 			// Stream file content
@@ -2462,12 +2455,99 @@ public String finalizeUpload(
 			if (!response.isCommitted()) {
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.FILE_NOT_FOUND, e.getMessage());
 			}
-		} catch (NumberFormatException e) {
-			LOGGER.debug(String.format("Invalid range for %s %s: %s", service, name, e.getMessage()));
-			if (!response.isCommitted()) {
-				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA, e.getMessage());
+		}
+	}
+
+	static long[] parseHttpRangeHeader(String rangeHeader, long fileSize) throws InvalidHttpRangeException {
+		if (rangeHeader == null || rangeHeader.isBlank()) {
+			return null;
+		}
+
+		String range = rangeHeader.trim();
+		if (!range.regionMatches(true, 0, "bytes=", 0, "bytes=".length())) {
+			throw new InvalidHttpRangeException("Range unit must be bytes");
+		}
+
+		String rangeValue = range.substring("bytes=".length()).trim();
+		if (rangeValue.isEmpty() || rangeValue.contains(",")) {
+			throw new InvalidHttpRangeException("Only a single byte range is supported");
+		}
+
+		int separatorIndex = rangeValue.indexOf('-');
+		if (separatorIndex < 0 || separatorIndex != rangeValue.lastIndexOf('-')) {
+			throw new InvalidHttpRangeException("Byte range must use start-end syntax");
+		}
+
+		String startValue = rangeValue.substring(0, separatorIndex).trim();
+		String endValue = rangeValue.substring(separatorIndex + 1).trim();
+		if (startValue.isEmpty() && endValue.isEmpty()) {
+			throw new InvalidHttpRangeException("Byte range is empty");
+		}
+
+		if (fileSize <= 0) {
+			throw new InvalidHttpRangeException("Requested range is unsatisfiable for an empty file");
+		}
+
+		long rangeStart;
+		long rangeEnd;
+		if (startValue.isEmpty()) {
+			long suffixLength = parseUnsignedLongRangeValue(endValue);
+			if (suffixLength <= 0) {
+				throw new InvalidHttpRangeException("Suffix range length must be greater than zero");
+			}
+
+			rangeStart = Math.max(fileSize - suffixLength, 0);
+			rangeEnd = fileSize - 1;
+		} else {
+			rangeStart = parseUnsignedLongRangeValue(startValue);
+			if (rangeStart >= fileSize) {
+				throw new InvalidHttpRangeException("Requested range starts after the end of the file");
+			}
+
+			rangeEnd = endValue.isEmpty() ? fileSize - 1 : parseUnsignedLongRangeValue(endValue);
+			if (rangeEnd < rangeStart) {
+				throw new InvalidHttpRangeException("Requested range ends before it starts");
+			}
+
+			rangeEnd = Math.min(rangeEnd, fileSize - 1);
+		}
+
+		return new long[] { rangeStart, rangeEnd };
+	}
+
+	private static long parseUnsignedLongRangeValue(String value) throws InvalidHttpRangeException {
+		if (value == null || value.isBlank()) {
+			throw new InvalidHttpRangeException("Byte range value is empty");
+		}
+
+		for (int i = 0; i < value.length(); ++i) {
+			char c = value.charAt(i);
+			if (c < '0' || c > '9') {
+				throw new InvalidHttpRangeException("Byte range value must contain digits only");
 			}
 		}
+
+		try {
+			return Long.parseLong(value);
+		} catch (NumberFormatException e) {
+			throw new InvalidHttpRangeException("Byte range value is too large");
+		}
+	}
+
+	private static void setResponseContentLength(HttpServletResponse response, long contentLength) {
+		if (contentLength > Integer.MAX_VALUE) {
+			response.setContentLengthLong(contentLength);
+		} else {
+			response.setContentLength((int) contentLength);
+		}
+	}
+
+	static class InvalidHttpRangeException extends Exception {
+
+		private InvalidHttpRangeException(String message) {
+			super(message);
+		}
+
 	}
 
 	static String buildAttachmentContentDisposition(String filename) {
