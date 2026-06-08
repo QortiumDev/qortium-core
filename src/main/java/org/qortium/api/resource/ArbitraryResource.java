@@ -99,7 +99,9 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.zip.GZIPOutputStream;
@@ -118,6 +120,8 @@ import org.glassfish.jersey.media.multipart.FormDataParam;
 public class ArbitraryResource {
 
 	private static final Logger LOGGER = LogManager.getLogger(ArbitraryResource.class);
+	private static final String RAW_DOWNLOAD_FALLBACK_CONTENT_TYPE = "application/octet-stream";
+	private static final Set<String> RAW_DOWNLOAD_EXECUTABLE_MIME_TYPES = Set.of("text/html", "application/xhtml+xml");
 
 	@Context HttpServletRequest request;
 	@Context HttpServletResponse response;
@@ -2472,7 +2476,7 @@ public String finalizeUpload(
 					rawOut = base64Out; // Use the wrapped stream for writing
 				} else {
 					// For raw binary output, set the content type and length
-					response.setContentType(mimeType != null ? mimeType : "application/octet-stream");
+					response.setContentType(getRawDownloadContentType(mimeType));
 					setResponseContentLength(response, contentLength);
 				}
 
@@ -2627,6 +2631,17 @@ public String finalizeUpload(
 			super(String.format("Chunked upload exceeds maximum QDN file size of %d bytes", maxTotalSize));
 		}
 
+	}
+
+	static String getRawDownloadContentType(String mimeType) {
+		if (mimeType == null || mimeType.isBlank())
+			return RAW_DOWNLOAD_FALLBACK_CONTENT_TYPE;
+
+		String baseMimeType = mimeType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+		if (RAW_DOWNLOAD_EXECUTABLE_MIME_TYPES.contains(baseMimeType))
+			return RAW_DOWNLOAD_FALLBACK_CONTENT_TYPE;
+
+		return mimeType;
 	}
 
 	static String buildAttachmentContentDisposition(String filename) {
