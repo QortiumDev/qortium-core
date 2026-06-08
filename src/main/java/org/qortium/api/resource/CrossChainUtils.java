@@ -62,11 +62,16 @@ public class CrossChainUtils {
     }
 
     public static ServerInfo buildInfo(ChainableServer server, boolean isCurrent) {
+        String certificateSha256Fingerprint = server instanceof ElectrumX.Server
+                ? ((ElectrumX.Server) server).getCertificateSha256Fingerprint()
+                : null;
+
         return new ServerInfo(
                 server.averageResponseTime(),
                 server.getHostName(),
                 server.getPort(),
                 server.getConnectionType().toString(),
+                certificateSha256Fingerprint,
                 isCurrent);
 
     }
@@ -270,7 +275,7 @@ public class CrossChainUtils {
 
         boolean changed = serverSettings.removeDisabledServer(configuredServer);
         boolean defaultServer = ElectrumServerList.isDefaultServer(currencyCode, networkName, server, settings.getBitcoinyNetwork(currencyCode).getServers());
-        if (serverSettings.isReplaceDefaults() || !defaultServer)
+        if (serverSettings.isReplaceDefaults() || !defaultServer || configuredServer.getCertificateSha256Fingerprint() != null)
             changed |= serverSettings.addServer(configuredServer);
 
         if (changed)

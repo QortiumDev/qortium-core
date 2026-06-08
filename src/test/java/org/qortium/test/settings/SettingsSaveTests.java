@@ -251,9 +251,11 @@ public class SettingsSaveTests extends Common {
 	public void testBitcoinyServersAreSavedAndNormalised() throws Exception {
 		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
 		Settings.fileInstance(settingsPath.toString());
+		String fingerprint = "01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF";
+		String normalisedFingerprint = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 		Settings.SettingsUpdateResult result = Settings.updateAndSave("{\"bitcoinyServers\":{\"btc\":{\"main\":{\"servers\":["
-				+ "{\"hostName\":\" Custom.EXAMPLE.com \",\"port\":50002,\"connectionType\":\"ssl\"},"
+				+ "{\"hostName\":\" Custom.EXAMPLE.com \",\"port\":50002,\"connectionType\":\"ssl\",\"certificateSha256Fingerprint\":\"" + fingerprint + "\"},"
 				+ "{\"hostName\":\"custom.example.com\",\"port\":50002,\"connectionType\":\"SSL\"}],"
 				+ "\"disabledServers\":[{\"hostName\":\"Disabled.EXAMPLE.com\",\"port\":50001,\"connectionType\":\"tcp\"}]}}}}");
 
@@ -264,6 +266,7 @@ public class SettingsSaveTests extends Common {
 		Settings.BitcoinyServerSettings serverSettings = Settings.getInstance().getBitcoinyServerSettings("BTC", "MAIN");
 		assertEquals(1, serverSettings.getServers().size());
 		assertEquals(new Settings.BitcoinyServer("custom.example.com", 50002, "SSL"), serverSettings.getServers().get(0));
+		assertEquals(normalisedFingerprint, serverSettings.getServers().get(0).getCertificateSha256Fingerprint());
 		assertEquals(1, serverSettings.getDisabledServers().size());
 		assertEquals(new Settings.BitcoinyServer("disabled.example.com", 50001, "TCP"), serverSettings.getDisabledServers().get(0));
 
@@ -331,6 +334,15 @@ public class SettingsSaveTests extends Common {
 		try {
 			Settings.updateAndSave("{\"bitcoinyServers\":{\"BTC\":{\"MAIN\":{\"servers\":[{\"port\":50002,\"connectionType\":\"SSL\"}]}}}}");
 			fail("Expected missing Bitcoiny server host to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("Invalid bitcoinyServers setting"));
+		}
+
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+
+		try {
+			Settings.updateAndSave("{\"bitcoinyServers\":{\"BTC\":{\"MAIN\":{\"servers\":[{\"hostName\":\"bad.example.com\",\"port\":50002,\"connectionType\":\"SSL\",\"certificateSha256Fingerprint\":\"not-a-fingerprint\"}]}}}}");
+			fail("Expected invalid Bitcoiny server certificate fingerprint to be rejected");
 		} catch (IllegalArgumentException e) {
 			assertTrue(e.getMessage().contains("Invalid bitcoinyServers setting"));
 		}

@@ -15,16 +15,23 @@ public class ServerInfo {
 
         private String connectionType;
 
+        private String certificateSha256Fingerprint;
+
         private boolean isCurrent;
 
         public ServerInfo() {
         }
 
         public ServerInfo(long averageResponseTime, String hostName, int port, String connectionType, boolean isCurrent) {
+                this(averageResponseTime, hostName, port, connectionType, null, isCurrent);
+        }
+
+        public ServerInfo(long averageResponseTime, String hostName, int port, String connectionType, String certificateSha256Fingerprint, boolean isCurrent) {
                 this.averageResponseTime = averageResponseTime;
                 this.hostName = hostName;
                 this.port = port;
                 this.connectionType = connectionType;
+                this.certificateSha256Fingerprint = certificateSha256Fingerprint;
                 this.isCurrent = isCurrent;
         }
 
@@ -44,6 +51,10 @@ public class ServerInfo {
                 return connectionType;
         }
 
+        public String getCertificateSha256Fingerprint() {
+                return certificateSha256Fingerprint;
+        }
+
         public boolean isCurrent() {
                 return isCurrent;
         }
@@ -53,12 +64,12 @@ public class ServerInfo {
                 if (this == o) return true;
                 if (o == null || getClass() != o.getClass()) return false;
                 ServerInfo that = (ServerInfo) o;
-                return averageResponseTime == that.averageResponseTime && port == that.port && isCurrent == that.isCurrent && Objects.equals(hostName, that.hostName) && Objects.equals(connectionType, that.connectionType);
+                return averageResponseTime == that.averageResponseTime && port == that.port && isCurrent == that.isCurrent && Objects.equals(hostName, that.hostName) && Objects.equals(connectionType, that.connectionType) && Objects.equals(certificateSha256Fingerprint, that.certificateSha256Fingerprint);
         }
 
         @Override
         public int hashCode() {
-                return Objects.hash(averageResponseTime, hostName, port, connectionType, isCurrent);
+                return Objects.hash(averageResponseTime, hostName, port, connectionType, certificateSha256Fingerprint, isCurrent);
         }
 
         @Override
@@ -68,6 +79,7 @@ public class ServerInfo {
                         ", hostName='" + hostName + '\'' +
                         ", port=" + port +
                         ", connectionType='" + connectionType + '\'' +
+                        ", certificateSha256Fingerprint='" + certificateSha256Fingerprint + '\'' +
                         ", isCurrent=" + isCurrent +
                         '}';
         }
