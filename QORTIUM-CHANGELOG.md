@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: validate QDN download byte ranges
+
+Changed QDN file downloads so HTTP `Range` headers are parsed with strict single-range validation before streaming starts. Malformed or unsatisfiable byte ranges now return `416 Requested Range Not Satisfiable` with the proper `Content-Range` response instead of falling through to unhandled parsing errors or invalid content-length math, and large valid ranges use long content lengths instead of truncating to an integer.
+
 ### 2026-06-08 - security: validate Electrum TLS certificates
 
 Replaced the all-trusting Electrum TLS socket factory with default certificate validation and optional SHA-256 certificate pins for explicitly trusted self-signed Electrum servers. Electrum server settings, generated server resources, API server info, and the refresh tool now preserve `certificateSha256Fingerprint` metadata so pinned servers can be configured without weakening TLS validation for every SSL connection.

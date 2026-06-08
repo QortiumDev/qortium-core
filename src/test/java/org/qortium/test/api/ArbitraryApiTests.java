@@ -13,6 +13,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -114,6 +115,47 @@ public class ArbitraryApiTests extends ApiCommon {
 		method.setAccessible(true);
 
 		assertInvocationThrowsIOException(method, Paths.get("uploads-temp"), "nested/file.txt");
+	}
+
+	@Test
+	public void testHttpRangeParserSupportsStandardForms() throws Exception {
+		assertArrayEquals(new long[] { 100, 200 }, parseHttpRange("bytes=100-200", 1000));
+		assertArrayEquals(new long[] { 100, 999 }, parseHttpRange("bytes=100-", 1000));
+		assertArrayEquals(new long[] { 500, 999 }, parseHttpRange("bytes=-500", 1000));
+		assertArrayEquals(new long[] { 0, 999 }, parseHttpRange("bytes=-5000", 1000));
+		assertArrayEquals(new long[] { 0, 999 }, parseHttpRange("bytes=0-9999", 1000));
+		assertEquals(null, parseHttpRange(null, 1000));
+		assertEquals(null, parseHttpRange(" ", 1000));
+	}
+
+	@Test
+	public void testHttpRangeParserRejectsMalformedAndUnsatisfiableRanges() throws Exception {
+		assertInvalidHttpRange("items=0-1", 1000);
+		assertInvalidHttpRange("bytes=abc-", 1000);
+		assertInvalidHttpRange("bytes=-", 1000);
+		assertInvalidHttpRange("bytes=-0", 1000);
+		assertInvalidHttpRange("bytes=100-99", 1000);
+		assertInvalidHttpRange("bytes=1000-", 1000);
+		assertInvalidHttpRange("bytes=0-1,2-3", 1000);
+		assertInvalidHttpRange("bytes=0-0", 0);
+	}
+
+	private static long[] parseHttpRange(String rangeHeader, long fileSize) throws Exception {
+		Method method = ArbitraryResource.class.getDeclaredMethod("parseHttpRangeHeader", String.class, long.class);
+		method.setAccessible(true);
+		return (long[]) method.invoke(null, rangeHeader, fileSize);
+	}
+
+	private static void assertInvalidHttpRange(String rangeHeader, long fileSize) throws Exception {
+		Method method = ArbitraryResource.class.getDeclaredMethod("parseHttpRangeHeader", String.class, long.class);
+		method.setAccessible(true);
+
+		try {
+			method.invoke(null, rangeHeader, fileSize);
+			org.junit.Assert.fail("Expected invalid HTTP range: " + rangeHeader);
+		} catch (InvocationTargetException e) {
+			assertEquals("InvalidHttpRangeException", e.getCause().getClass().getSimpleName());
+		}
 	}
 
 	private static void assertInvocationThrowsIOException(Method method, Object... args) throws Exception {
