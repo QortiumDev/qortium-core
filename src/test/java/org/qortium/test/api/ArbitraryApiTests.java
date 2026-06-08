@@ -1,5 +1,6 @@
 package org.qortium.test.api;
 
+import org.apache.commons.io.FileUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.api.resource.ArbitraryResource;
@@ -7,11 +8,15 @@ import org.qortium.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.test.common.ApiCommon;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.stream.Stream;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
@@ -118,6 +123,45 @@ public class ArbitraryApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testCopyUploadChunkReplacesExistingChunkWithinLimit() throws Exception {
+		Path uploadDir = Files.createTempDirectory("qortium-upload-chunks");
+		try {
+			Path chunkFile = uploadDir.resolve("chunk_0");
+			Files.write(chunkFile, "old".getBytes(StandardCharsets.UTF_8));
+
+			copyUploadChunk("12345", chunkFile, 5);
+
+			assertEquals("12345", Files.readString(chunkFile));
+			assertNoTemporaryUploadChunks(uploadDir);
+		} finally {
+			FileUtils.deleteDirectory(uploadDir.toFile());
+		}
+	}
+
+	@Test
+	public void testCopyUploadChunkRejectsTotalUploadOverflow() throws Exception {
+		Path uploadDir = Files.createTempDirectory("qortium-upload-chunks");
+		try {
+			Path existingChunkFile = uploadDir.resolve("chunk_0");
+			Path rejectedChunkFile = uploadDir.resolve("chunk_1");
+			Files.write(existingChunkFile, "1234".getBytes(StandardCharsets.UTF_8));
+
+			try {
+				copyUploadChunk("56", rejectedChunkFile, 5);
+				org.junit.Assert.fail("Expected oversized upload chunk to be rejected");
+			} catch (InvocationTargetException e) {
+				assertEquals("UploadChunkTooLargeException", e.getCause().getClass().getSimpleName());
+			}
+
+			assertEquals("1234", Files.readString(existingChunkFile));
+			assertFalse(Files.exists(rejectedChunkFile));
+			assertNoTemporaryUploadChunks(uploadDir);
+		} finally {
+			FileUtils.deleteDirectory(uploadDir.toFile());
+		}
+	}
+
+	@Test
 	public void testHttpRangeParserSupportsStandardForms() throws Exception {
 		assertArrayEquals(new long[] { 100, 200 }, parseHttpRange("bytes=100-200", 1000));
 		assertArrayEquals(new long[] { 100, 999 }, parseHttpRange("bytes=100-", 1000));
@@ -144,6 +188,18 @@ public class ArbitraryApiTests extends ApiCommon {
 		Method method = ArbitraryResource.class.getDeclaredMethod("parseHttpRangeHeader", String.class, long.class);
 		method.setAccessible(true);
 		return (long[]) method.invoke(null, rangeHeader, fileSize);
+	}
+
+	private static void copyUploadChunk(String chunkData, Path chunkFile, long maxTotalSize) throws Exception {
+		Method method = ArbitraryResource.class.getDeclaredMethod("copyUploadChunk", java.io.InputStream.class, Path.class, long.class);
+		method.setAccessible(true);
+		method.invoke(null, new ByteArrayInputStream(chunkData.getBytes(StandardCharsets.UTF_8)), chunkFile, maxTotalSize);
+	}
+
+	private static void assertNoTemporaryUploadChunks(Path uploadDir) throws IOException {
+		try (Stream<Path> paths = Files.list(uploadDir)) {
+			assertFalse(paths.anyMatch(path -> path.getFileName().toString().startsWith(".chunk-upload-")));
+		}
 	}
 
 	private static void assertInvalidHttpRange(String rangeHeader, long fileSize) throws Exception {

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: bound QDN chunked uploads
+
+Changed QDN chunk upload handling so Core copies incoming multipart chunks through a bounded temp-file path before replacing stored upload chunks. Chunked uploads now reject requests that would push the assembled upload over the QDN maximum file size with `413 Payload Too Large`, and oversized attempts clean up partial temp files instead of allowing API-key-authenticated callers to grow the upload directory without bound.
+
 ### 2026-06-08 - security: bound dev proxy HTML buffering
 
 Added a decoded-size limit for developer-proxy HTML responses before Core buffers and rewrites them for local app development. Oversized HTML, including compressed responses that expand beyond the limit, now returns `413 Payload Too Large` instead of allowing an upstream development server to grow Core heap usage without bound, while non-HTML proxy responses continue to stream directly.
