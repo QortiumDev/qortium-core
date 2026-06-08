@@ -1259,6 +1259,71 @@ public class ArbitraryResource {
 		return Integer.parseInt(filename.substring("chunk_".length()));
 	}
 
+	static void copyUploadChunk(InputStream chunkStream, java.nio.file.Path chunkFile) throws IOException, UploadChunkTooLargeException {
+		copyUploadChunk(chunkStream, chunkFile, ArbitraryDataFile.MAX_FILE_SIZE);
+	}
+
+	static void copyUploadChunk(InputStream chunkStream, java.nio.file.Path chunkFile, long maxTotalSize) throws IOException, UploadChunkTooLargeException {
+		if (chunkStream == null) {
+			throw new IOException("Missing chunk data");
+		}
+
+		java.nio.file.Path chunkDirectory = chunkFile.getParent();
+		if (chunkDirectory == null) {
+			throw new IOException("Chunk file must have a parent directory");
+		}
+
+		long existingSize = uploadChunkDirectorySizeExcluding(chunkDirectory, chunkFile);
+		if (existingSize > maxTotalSize) {
+			throw new UploadChunkTooLargeException(maxTotalSize);
+		}
+
+		java.nio.file.Path tempChunkFile = Files.createTempFile(chunkDirectory, ".chunk-upload-", ".tmp");
+		try (OutputStream out = Files.newOutputStream(tempChunkFile, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+			byte[] buffer = new byte[65536];
+			long copiedSize = 0;
+			int bytesRead;
+			while ((bytesRead = chunkStream.read(buffer)) != -1) {
+				if (existingSize + copiedSize + bytesRead > maxTotalSize) {
+					throw new UploadChunkTooLargeException(maxTotalSize);
+				}
+
+				out.write(buffer, 0, bytesRead);
+				copiedSize += bytesRead;
+			}
+		} catch (IOException | UploadChunkTooLargeException e) {
+			Files.deleteIfExists(tempChunkFile);
+			throw e;
+		}
+
+		try {
+			Files.move(tempChunkFile, chunkFile, StandardCopyOption.REPLACE_EXISTING);
+		} catch (IOException e) {
+			Files.deleteIfExists(tempChunkFile);
+			throw e;
+		}
+	}
+
+	private static long uploadChunkDirectorySizeExcluding(java.nio.file.Path chunkDirectory, java.nio.file.Path excludedChunkFile) throws IOException {
+		if (!Files.exists(chunkDirectory)) {
+			return 0;
+		}
+
+		long totalSize = 0;
+		for (java.nio.file.Path chunkFile : listUploadChunkFiles(chunkDirectory)) {
+			if (chunkFile.equals(excludedChunkFile)) {
+				continue;
+			}
+
+			totalSize += Files.size(chunkFile);
+			if (totalSize < 0 || totalSize > ArbitraryDataFile.MAX_FILE_SIZE) {
+				return totalSize;
+			}
+		}
+
+		return totalSize;
+	}
+
 	@POST
 	@Path("/{service}/{name}/chunk")
 	@Consumes(MediaType.MULTIPART_FORM_DATA)
@@ -1297,12 +1362,15 @@ public Response uploadChunkNoIdentifier(@HeaderParam(Security.API_KEY_HEADER) St
 			Files.createDirectories(tempDir);
 
 	        java.nio.file.Path chunkFile = resolveUploadChunkFile(tempDir, index);
-	        Files.copy(chunkStream, chunkFile, StandardCopyOption.REPLACE_EXISTING);
+	        copyUploadChunk(chunkStream, chunkFile);
 
 	        return Response.ok("Chunk " + index + " received").build();
-    } catch (IOException e) {
-		LOGGER.error("Failed to write chunk {} for service '{}' and name '{}'", index, serviceString, name, e);
-        return Response.serverError().entity("Failed to write chunk").build();
+	    } catch (UploadChunkTooLargeException e) {
+		LOGGER.warn("Rejected oversized upload chunk {} for service '{}' and name '{}'", index, serviceString, name);
+		return Response.status(413).entity(e.getMessage()).build();
+	    } catch (IOException e) {
+			LOGGER.error("Failed to write chunk {} for service '{}' and name '{}'", index, serviceString, name, e);
+	        return Response.serverError().entity("Failed to write chunk").build();
     }
 }
 
@@ -1483,12 +1551,15 @@ public Response uploadChunk(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
 	        Files.createDirectories(tempDir);
 
 	        java.nio.file.Path chunkFile = resolveUploadChunkFile(tempDir, index);
-	        Files.copy(chunkStream, chunkFile, StandardCopyOption.REPLACE_EXISTING);
+	        copyUploadChunk(chunkStream, chunkFile);
 
 	        return Response.ok("Chunk " + index + " received").build();
-    } catch (IOException e) {
-		LOGGER.error("Failed to write chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier, e);
-        return Response.serverError().entity("Failed to write chunk").build();
+	    } catch (UploadChunkTooLargeException e) {
+		LOGGER.warn("Rejected oversized upload chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier);
+		return Response.status(413).entity(e.getMessage()).build();
+	    } catch (IOException e) {
+			LOGGER.error("Failed to write chunk {} for service='{}', name='{}', identifier='{}'", index, serviceString, name, identifier, e);
+	        return Response.serverError().entity("Failed to write chunk").build();
     }
 }
 
@@ -2546,6 +2617,14 @@ public String finalizeUpload(
 
 		private InvalidHttpRangeException(String message) {
 			super(message);
+		}
+
+	}
+
+	static class UploadChunkTooLargeException extends Exception {
+
+		private UploadChunkTooLargeException(long maxTotalSize) {
+			super(String.format("Chunked upload exceeds maximum QDN file size of %d bytes", maxTotalSize));
 		}
 
 	}
