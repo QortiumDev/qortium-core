@@ -27,6 +27,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -256,6 +257,99 @@ public class DevProxyServerResourceTests {
         assertNull(exchange.getResponseHeader("Content-Encoding"));
         assertTrue(rewrittenBody.contains("/apps/q-apps.js?time="));
         assertTrue(rewrittenBody.contains("compressed html"));
+    }
+
+    @Test
+    public void testProxyRewritesHtmlResponsesAtSizeLimit() throws Exception {
+        byte[] body = htmlPayloadOfSize(maxProxyHtmlResponseBytes());
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/large-html", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/html");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, body.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(body);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("large-html");
+
+        String rewrittenBody = new String(exchange.outputStream.toByteArray(), StandardCharsets.UTF_8);
+        assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
+        assertEquals("text/html", exchange.contentType);
+        assertTrue(rewrittenBody.contains("/apps/q-apps.js?time="));
+        assertTrue(rewrittenBody.contains("bounded html"));
+    }
+
+    @Test
+    public void testProxyRejectsHtmlResponsesOverSizeLimit() throws Exception {
+        byte[] body = htmlPayloadOfSize(maxProxyHtmlResponseBytes() + 1);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/too-large-html", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/html");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, body.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(body);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("too-large-html");
+
+        String responseBody = new String(exchange.outputStream.toByteArray(), StandardCharsets.UTF_8);
+        assertEquals(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, exchange.status);
+        assertEquals("text/plain", exchange.contentType);
+        assertTrue(responseBody.contains("Developer proxy HTML response exceeds"));
+    }
+
+    @Test
+    public void testProxyRejectsCompressedHtmlResponsesOverDecodedSizeLimit() throws Exception {
+        byte[] body = htmlPayloadOfSize(maxProxyHtmlResponseBytes() + 1);
+        byte[] compressedBody = gzip(body);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/too-large-compressed-html", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/html");
+            exchange.getResponseHeaders().add("Content-Encoding", "gzip");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, compressedBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(compressedBody);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("too-large-compressed-html");
+
+        String responseBody = new String(exchange.outputStream.toByteArray(), StandardCharsets.UTF_8);
+        assertEquals(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, exchange.status);
+        assertEquals("text/plain", exchange.contentType);
+        assertTrue(responseBody.contains("Developer proxy HTML response exceeds"));
     }
 
     @Test
@@ -616,6 +710,26 @@ public class DevProxyServerResourceTests {
         }
 
         return outputStream.toByteArray();
+    }
+
+    private static int maxProxyHtmlResponseBytes() throws Exception {
+        Field field = DevProxyServerResource.class.getDeclaredField("MAX_PROXY_HTML_RESPONSE_BYTES");
+        field.setAccessible(true);
+        return (Integer) field.get(null);
+    }
+
+    private static byte[] htmlPayloadOfSize(int size) {
+        byte[] prefix = "<html><head></head><body>bounded html".getBytes(StandardCharsets.UTF_8);
+        byte[] suffix = "</body></html>".getBytes(StandardCharsets.UTF_8);
+        if (size < prefix.length + suffix.length) {
+            throw new IllegalArgumentException("HTML payload size is too small");
+        }
+
+        byte[] payload = new byte[size];
+        System.arraycopy(prefix, 0, payload, 0, prefix.length);
+        Arrays.fill(payload, prefix.length, payload.length - suffix.length, (byte) 'x');
+        System.arraycopy(suffix, 0, payload, payload.length - suffix.length, suffix.length);
+        return payload;
     }
 
     private static void useDevProxyUnsafeEvalSettings() throws Exception {
