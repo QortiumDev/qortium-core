@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-07 - api: add QDN text size render context
+
+Added text-size support to the QDN render context alongside the existing theme and language values. Render and dev-proxy requests can now pass a `textSize` query parameter, Core injects it into rendered app HTML as `_qdnTextSize`, and the QDN app helper preserves it when apps link to other QDN resources.
+
 ### 2026-06-07 - api: honor QDN render identifiers in authorization
 
 Updated QDN render authorization so Core checks the identifier that is actually being rendered instead of always checking only the service and publishing name. Identifier-specific authorizations now protect a single resource, while service/name authorizations still intentionally cover all identifiers under that published service when a broader grant is requested.

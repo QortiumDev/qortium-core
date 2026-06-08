@@ -263,7 +263,12 @@ public class DevProxyServerResource {
             theme = "light";
         }
 
-        HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme , true, lang);
+        String textSize = request.getParameter("textSize");
+        if (textSize == null || textSize.isBlank()) {
+            textSize = "medium";
+        }
+
+        HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme, true, lang, textSize);
         htmlParser.addAdditionalHeaderTags();
         response.addHeader("Content-Security-Policy", "default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;");
         response.setContentType(con.getContentType());

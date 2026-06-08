@@ -41,9 +41,10 @@ function parseUrl(url) {
       // Optional: handle this condition if needed (e.g., return or adjust the response)
     }
 
-    // Remove theme, identifier, and time queries if they exist
+    // Remove host UI, identifier, and time queries if they exist
     parsedUrl.searchParams.delete("theme");
     parsedUrl.searchParams.delete("lang");
+    parsedUrl.searchParams.delete("textSize");
     parsedUrl.searchParams.delete("identifier");
     parsedUrl.searchParams.delete("time");
     parsedUrl.searchParams.delete("isManualNavigation");
@@ -391,6 +392,7 @@ function buildResourceUrl(service, name, identifier, path, isLink) {
   if (isLink) {
     url = appendQueryParam(url, "theme", _qdnTheme);
     url = appendQueryParam(url, "lang", _qdnLang);
+    url = appendQueryParam(url, "textSize", _qdnTextSize);
   }
   return url;
 }
