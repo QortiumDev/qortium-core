@@ -1,6 +1,7 @@
 package org.qortium.test.api;
 
 import com.google.common.primitives.Bytes;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
@@ -65,7 +66,14 @@ public class ChainParametersApiTests extends ApiCommon {
 
 	@Before
 	public void buildResource() {
-		this.chainParametersResource = (ChainParametersResource) ApiCommon.buildResource(ChainParametersResource.class);
+		ApiCommon.installTestApiKey();
+		this.chainParametersResource = (ChainParametersResource) ApiCommon.buildResource(
+				ChainParametersResource.class, ApiCommon.TEST_API_KEY);
+	}
+
+	@After
+	public void clearApiKey() {
+		ApiCommon.clearTestApiKey();
 	}
 
 	@Test
@@ -164,6 +172,14 @@ public class ChainParametersApiTests extends ApiCommon {
 		assertArrayEquals(request.updaterPublicKey, transactionData.getUpdaterPublicKey());
 		assertArrayEquals(ChainParameter.BLOCK_REWARD.encodeLongValue(reward), transactionData.getValue());
 		assertNotNull(transactionData.getFee());
+	}
+
+	@Test
+	public void testBuildBlockRewardUpdateRequiresApiKey() {
+		ChainParametersResource unauthenticatedResource =
+				(ChainParametersResource) ApiCommon.buildResource(ChainParametersResource.class);
+
+		assertApiError(ApiError.UNAUTHORIZED, () -> unauthenticatedResource.updateBlockReward(null));
 	}
 
 	@Test
