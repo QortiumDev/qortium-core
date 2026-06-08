@@ -87,6 +87,28 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testDevProxySettingsAreSavedAndApplied() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		assertFalse(Settings.getInstance().isDevProxyEnabled());
+		assertFalse(Settings.getInstance().isDevProxyUnsafeEvalEnabled());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave("{\"devProxyEnabled\":true,\"devProxyUnsafeEvalEnabled\":true}");
+
+		assertTrue(result.saved);
+		assertTrue(result.updated.contains("devProxyEnabled"));
+		assertTrue(result.updated.contains("devProxyUnsafeEvalEnabled"));
+		assertTrue(result.applied.contains("devProxyEnabled"));
+		assertTrue(result.applied.contains("devProxyUnsafeEvalEnabled"));
+		assertTrue(Settings.getInstance().isDevProxyEnabled());
+		assertTrue(Settings.getInstance().isDevProxyUnsafeEvalEnabled());
+		Map<String, Object> savedSettings = readSettings(settingsPath);
+		assertEquals(Boolean.TRUE, savedSettings.get("devProxyEnabled"));
+		assertEquals(Boolean.TRUE, savedSettings.get("devProxyUnsafeEvalEnabled"));
+	}
+
+	@Test
 	public void testAutoUpdateEnabledSettingIsRejectedWithoutChangingFile() throws Exception {
 		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"CHECK_ONLY\"}");
 		Settings.fileInstance(settingsPath.toString());

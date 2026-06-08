@@ -31,6 +31,9 @@ public class DevProxyManager {
 
     public void start() throws DataException {
         synchronized(this) {
+            if (!Settings.getInstance().isDevProxyEnabled())
+                throw new DataException("Developer proxy is disabled. Set devProxyEnabled to true before starting it.");
+
             if (this.running) {
                 // Already running
                 return;

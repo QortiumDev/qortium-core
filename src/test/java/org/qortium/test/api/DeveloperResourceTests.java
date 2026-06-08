@@ -33,4 +33,17 @@ public class DeveloperResourceTests extends ApiCommon {
 				() -> this.developerResource.stopProxy(null));
 	}
 
+	@Test
+	public void testStartProxyRejectsDisabledSetting() {
+		ApiCommon.installTestApiKey();
+		try {
+			DeveloperResource authenticatedDeveloperResource = (DeveloperResource) ApiCommon.buildResource(DeveloperResource.class, ApiCommon.TEST_API_KEY);
+
+			assertApiError(ApiError.INVALID_CRITERIA,
+					() -> authenticatedDeveloperResource.startProxy(ApiCommon.TEST_API_KEY, "127.0.0.1:5173"));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
 }

@@ -154,18 +154,19 @@ Alerts:
 
 - `DevProxyServerResource`: 16, 17, 18, 19
 
-Triage status: intended developer-tool behavior, but keep the enablement model
-under review.
+Triage status: intended developer-tool behavior with explicit local enablement.
 
 The developer proxy relays local development server content through the Core
 API environment so Q-App behavior can be tested. It intentionally writes
-proxied HTML and non-HTML responses back to the caller. Prior hardening
-constrained the proxy source and response behavior, but the scanner still sees
-the proxied response body as user-controlled.
+proxied HTML and non-HTML responses back to the caller. The proxy is disabled
+by default behind `devProxyEnabled`, its start/stop endpoints require the API
+key, and its source remains constrained to loopback targets. The default HTML
+CSP no longer allows `unsafe-eval`; `devProxyUnsafeEvalEnabled` is available as
+an explicit development compatibility setting.
 
-Dismissal candidate after review: yes if the proxy is disabled by default or
-otherwise limited to explicit developer use. If the enablement boundary is not
-clear enough, leave these alerts open and improve that boundary first.
+Dismissal candidate after review: yes, with a dismissal comment explaining that
+the proxy is a disabled-by-default local developer tool that intentionally
+forwards trusted local development content.
 
 ### Cross-Chain Ledger CSV
 

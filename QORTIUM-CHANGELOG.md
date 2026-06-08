@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: require explicit developer proxy enablement
+
+Changed the developer proxy so it cannot be started unless `devProxyEnabled` is explicitly set, while keeping start and stop protected by the API key. The proxy now omits `unsafe-eval` from its default HTML content security policy, offers `devProxyUnsafeEvalEnabled` only as a deliberate development compatibility option, and documents that proxied HTML is trusted local development content rather than a production safety boundary.
+
 ### 2026-06-08 - security: require opt-in for plaintext Electrum servers
 
 Changed Electrum-compatible BTC-like server selection so plaintext TCP servers are ignored unless `allowPlaintextElectrumServers` is explicitly enabled. Core now applies that policy to generated defaults, configured server overrides, peer-discovered servers, manual add-server requests, and the final socket creation path, keeping SSL as the normal cross-chain transport while preserving a deliberate compatibility escape hatch.

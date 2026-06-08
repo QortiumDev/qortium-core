@@ -5,6 +5,7 @@ import org.qortium.api.ApiExceptionFactory;
 import org.qortium.api.HTMLParser;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.DevProxyManager;
+import org.qortium.settings.Settings;
 
 import javax.servlet.ServletContext;
 import javax.servlet.http.HttpServletRequest;
@@ -270,10 +271,20 @@ public class DevProxyServerResource {
 
         HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme, true, lang, textSize);
         htmlParser.addAdditionalHeaderTags();
-        response.addHeader("Content-Security-Policy", "default-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;");
+        response.addHeader("Content-Security-Policy", buildHtmlContentSecurityPolicy());
         response.setContentType(con.getContentType());
         response.setContentLength(htmlParser.getData().length);
         response.getOutputStream().write(htmlParser.getData());
+    }
+
+    private static String buildHtmlContentSecurityPolicy() {
+        StringBuilder csp = new StringBuilder("default-src 'self' 'unsafe-inline'");
+        if (Settings.getInstance().isDevProxyUnsafeEvalEnabled()) {
+            csp.append(" 'unsafe-eval'");
+        }
+
+        csp.append("; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;");
+        return csp.toString();
     }
 
     private void proxyNonHtmlConnectionToResponse(HttpURLConnection con, HttpServletResponse response, int responseCode) throws IOException {

@@ -142,7 +142,9 @@ public class Settings {
 
 	// Developer Proxy
 	private Integer devProxyPort;
+	private boolean devProxyEnabled = false;
 	private boolean devProxyLoggingEnabled = false;
+	private boolean devProxyUnsafeEvalEnabled = false;
 
 	// Specific to this node
 	private boolean wipeUnconfirmedOnStart = false;
@@ -879,6 +881,8 @@ public class Settings {
 		settings.put("privateDataEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("apiDocumentationEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("apiLoggingEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+		settings.put("devProxyEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+		settings.put("devProxyUnsafeEvalEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("tradebotSystrayEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 
 		return Collections.unmodifiableMap(settings);
@@ -1500,8 +1504,16 @@ public class Settings {
 		return this.isTestNet ? TESTNET_DEV_PROXY_PORT : MAINNET_DEV_PROXY_PORT;
 	}
 
+	public boolean isDevProxyEnabled() {
+		return this.devProxyEnabled;
+	}
+
 	public boolean isDevProxyLoggingEnabled() {
 		return this.devProxyLoggingEnabled;
+	}
+
+	public boolean isDevProxyUnsafeEvalEnabled() {
+		return this.devProxyUnsafeEvalEnabled;
 	}
 
 	public boolean getWipeUnconfirmedOnStart() {
