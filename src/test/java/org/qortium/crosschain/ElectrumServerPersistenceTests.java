@@ -39,6 +39,19 @@ public class ElectrumServerPersistenceTests extends Common {
 	}
 
 	@Test
+	public void testAddTcpServerIsRejectedWhenPlaintextIsDisabled() throws Exception {
+		useEmptySettings();
+		TestBitcoiny bitcoiny = new TestBitcoiny(List.of());
+		Server server = new Server("custom-tcp.example.com", ConnectionType.TCP, 50001);
+
+		assertFalse(CrossChainUtils.addServer(bitcoiny, server));
+
+		Settings.BitcoinyServerSettings serverSettings = Settings.getInstance().getBitcoinyServerSettings("BTC", "MAIN");
+		assertTrue(serverSettings == null || !serverSettings.getServers().contains(Settings.BitcoinyServer.from(server)));
+		assertFalse(bitcoiny.getBlockchainProvider().getServers().contains(server));
+	}
+
+	@Test
 	public void testRemoveCustomServerRemovesPersistedOverrideAndProviderEntry() throws Exception {
 		useEmptySettings();
 		Server server = new Server("custom.example.com", ConnectionType.SSL, 50002);

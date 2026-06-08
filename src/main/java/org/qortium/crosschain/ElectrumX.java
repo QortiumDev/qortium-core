@@ -202,10 +202,10 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 		this.netId = netId;
 		this.expectedGenesisHash = genesisHash;
 		this.coinDecimalPlaces = coinDecimalPlaces;
-		this.servers.addAll(initialServerList);
+		this.servers.addAll(ElectrumServerList.filterAllowedServers(initialServerList));
 		this.defaultPorts.putAll(defaultPorts);
 
-		updateConnectionTargets(initialServerList.size());
+		updateConnectionTargets(this.servers.size());
 	}
 
 	// Methods for use by other classes
@@ -690,7 +690,8 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 
 				if( !(peersObject instanceof JSONArray) ) continue;
 
-				newServers.addAll(ElectrumServerDiscovery.parsePeerServers(peersObject, this.defaultPorts));
+				Set<Server> peerServers = ElectrumServerDiscovery.parsePeerServers(peersObject, this.defaultPorts);
+				newServers.addAll(ElectrumServerList.filterAllowedServers(peerServers));
 			}
 		} catch (Exception e) {
 			LOGGER.error(e.getMessage(), e);
@@ -843,7 +844,7 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	private List<ChainableServer> selectPreferredServers(int maxServers) {
 		List<ChainableServer> snapshot;
 		synchronized (this.connectionListLock) {
-			snapshot = new ArrayList<>(this.servers);
+			snapshot = ElectrumServerList.filterAllowedServers(this.servers);
 		}
 		if (snapshot.isEmpty() || maxServers <= 0) {
 			return Collections.emptyList();
@@ -1379,6 +1380,9 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 
 	@Override
 	public boolean addServer(ChainableServer server) {
+		if (!ElectrumServerList.isAllowedByTransportPolicy(server))
+			return false;
+
 		return this.servers.add(server);
 	}
 

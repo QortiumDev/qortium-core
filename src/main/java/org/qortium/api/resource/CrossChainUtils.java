@@ -216,6 +216,11 @@ public class CrossChainUtils {
     public static boolean addServer(Bitcoiny bitcoiny, ChainableServer server) {
         BitcoinyBlockchainProvider blockchainProvider = bitcoiny.getBlockchainProvider();
         if (blockchainProvider instanceof ElectrumX) {
+            if (!ElectrumServerList.isAllowedByTransportPolicy(server)) {
+                LOGGER.warn("Rejecting plaintext {} Electrum server {} because allowPlaintextElectrumServers is disabled", bitcoiny.getCurrencyCode(), server);
+                return false;
+            }
+
             try {
                 boolean settingsChanged = persistBitcoinyServerAdd(bitcoiny, server);
                 boolean providerChanged = blockchainProvider.addServer(server);

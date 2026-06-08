@@ -70,6 +70,23 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testPlaintextElectrumSettingIsSaved() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		assertFalse(Settings.getInstance().isPlaintextElectrumServersAllowed());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave("{\"allowPlaintextElectrumServers\":true}");
+
+		assertTrue(result.saved);
+		assertTrue(result.updated.contains("allowPlaintextElectrumServers"));
+		assertTrue(result.restartRequired.contains("allowPlaintextElectrumServers"));
+		assertTrue(Settings.getInstance().isPlaintextElectrumServersAllowed());
+		Map<String, Object> savedSettings = readSettings(settingsPath);
+		assertEquals(Boolean.TRUE, savedSettings.get("allowPlaintextElectrumServers"));
+	}
+
+	@Test
 	public void testAutoUpdateEnabledSettingIsRejectedWithoutChangingFile() throws Exception {
 		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"CHECK_ONLY\"}");
 		Settings.fileInstance(settingsPath.toString());

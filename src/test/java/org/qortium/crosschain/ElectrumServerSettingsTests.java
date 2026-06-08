@@ -81,6 +81,27 @@ public class ElectrumServerSettingsTests extends Common {
 		assertTrue(servers.contains(sslServer));
 	}
 
+	@Test
+	public void testTcpServersAreFilteredByDefault() throws Exception {
+		Server tcpServer = new Server("configured-tcp.example.com", ConnectionType.TCP, 50001);
+		useServerSettings(bitcoinyServersJson("BTC", "REGTEST", true, List.of(tcpServer), List.of()));
+
+		Collection<Server> servers = ElectrumServerList.getServers("BTC", "REGTEST", List.of());
+
+		assertTrue(servers.isEmpty());
+	}
+
+	@Test
+	public void testTcpServersCanBeExplicitlyAllowed() throws Exception {
+		Server tcpServer = new Server("configured-tcp.example.com", ConnectionType.TCP, 50001);
+		useServerSettings(plaintextElectrumServersJson("BTC", "REGTEST", true, List.of(tcpServer), List.of()));
+
+		Collection<Server> servers = ElectrumServerList.getServers("BTC", "REGTEST", List.of());
+
+		assertEquals(1, servers.size());
+		assertTrue(servers.contains(tcpServer));
+	}
+
 	private static void useServerSettings(String json) throws Exception {
 		Path directory = Files.createTempDirectory("electrum-server-settings-test");
 		Path settingsPath = directory.resolve("settings.json");
@@ -90,6 +111,14 @@ public class ElectrumServerSettingsTests extends Common {
 
 	private static String bitcoinyServersJson(String coin, String network, boolean replaceDefaults, List<Server> servers, List<Server> disabledServers) {
 		return "{\"bitcoinyServers\":{\"" + coin + "\":{\"" + network + "\":{"
+				+ "\"replaceDefaults\":" + replaceDefaults + ","
+				+ "\"servers\":" + serverArrayJson(servers) + ","
+				+ "\"disabledServers\":" + serverArrayJson(disabledServers)
+				+ "}}}}";
+	}
+
+	private static String plaintextElectrumServersJson(String coin, String network, boolean replaceDefaults, List<Server> servers, List<Server> disabledServers) {
+		return "{\"allowPlaintextElectrumServers\":true,\"bitcoinyServers\":{\"" + coin + "\":{\"" + network + "\":{"
 				+ "\"replaceDefaults\":" + replaceDefaults + ","
 				+ "\"servers\":" + serverArrayJson(servers) + ","
 				+ "\"disabledServers\":" + serverArrayJson(disabledServers)

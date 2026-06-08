@@ -1,10 +1,13 @@
 package org.qortium.crosschain;
 
 import org.json.simple.JSONArray;
+import org.junit.After;
 import org.junit.Test;
 import org.qortium.crosschain.ChainableServer.ConnectionType;
 import org.qortium.crosschain.ElectrumServerDiscovery.CandidateServer;
 import org.qortium.crosschain.ElectrumX.Server;
+import org.qortium.settings.Settings;
+import org.qortium.test.common.Common;
 
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -23,7 +26,12 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("unchecked")
-public class ElectrumServerListTests {
+public class ElectrumServerListTests extends Common {
+
+	@After
+	public void restoreDefaultSettings() throws Exception {
+		Common.useDefaultSettings();
+	}
 
 	@Test
 	public void testParse1209kHtmlKeepsOnlyOkTcpAndSslServers() {
@@ -135,6 +143,26 @@ public class ElectrumServerListTests {
 		Server tcpServer = new Server("tcp.example.com", ConnectionType.TCP, 50001);
 
 		List<Server> servers = ElectrumServerList.preferSslServers(List.of(tcpServer));
+
+		assertEquals(1, servers.size());
+		assertEquals(tcpServer, servers.get(0));
+	}
+
+	@Test
+	public void testTransportPolicyRejectsTcpByDefault() {
+		Server tcpServer = new Server("tcp.example.com", ConnectionType.TCP, 50001);
+
+		List<Server> servers = ElectrumServerList.filterAllowedServers(List.of(tcpServer));
+
+		assertTrue(servers.isEmpty());
+	}
+
+	@Test
+	public void testTransportPolicyAllowsTcpWhenExplicitlyEnabled() throws Exception {
+		usePlaintextElectrumSettings();
+		Server tcpServer = new Server("tcp.example.com", ConnectionType.TCP, 50001);
+
+		List<Server> servers = ElectrumServerList.filterAllowedServers(List.of(tcpServer));
 
 		assertEquals(1, servers.size());
 		assertEquals(tcpServer, servers.get(0));
@@ -256,5 +284,12 @@ public class ElectrumServerListTests {
 
 	private static String td(String value) {
 		return "<td>" + value + "</td>";
+	}
+
+	private static void usePlaintextElectrumSettings() throws Exception {
+		Path directory = Files.createTempDirectory("electrum-server-list-test");
+		Path settingsPath = directory.resolve("settings.json");
+		Files.write(settingsPath, ("{\"allowPlaintextElectrumServers\":true,\"blockchainConfig\":\"src/test/resources/test-chain-v2.json\"}" + System.lineSeparator()).getBytes(StandardCharsets.UTF_8));
+		Settings.fileInstance(settingsPath.toString());
 	}
 }
