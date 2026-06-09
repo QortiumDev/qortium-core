@@ -41,6 +41,9 @@ public class DevProxyServerResource {
     private static final int PROXY_READ_TIMEOUT_MS = 30000;
     private static final int PROXY_STREAM_BUFFER_SIZE = 4096;
     private static final int MAX_PROXY_HTML_RESPONSE_BYTES = 5 * 1024 * 1024;
+    private static final String CONTENT_SECURITY_POLICY_HEADER = "Content-Security-Policy";
+    private static final String CONTENT_TYPE_OPTIONS_HEADER = "X-Content-Type-Options";
+    private static final String CONTENT_TYPE_OPTIONS_NOSNIFF = "nosniff";
 
     private static final Set<String> PROXY_MANAGED_REQUEST_HEADERS = Set.of(
             "accept-encoding",
@@ -62,6 +65,7 @@ public class DevProxyServerResource {
             "content-length",
             "content-security-policy",
             "content-type",
+            "x-content-type-options",
             "keep-alive",
             "proxy-authenticate",
             "proxy-authorization",
@@ -279,9 +283,12 @@ public class DevProxyServerResource {
 
         HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme, true, lang, textSize);
         htmlParser.addAdditionalHeaderTags();
-        response.addHeader("Content-Security-Policy", buildHtmlContentSecurityPolicy());
+        response.addHeader(CONTENT_SECURITY_POLICY_HEADER, buildHtmlContentSecurityPolicy());
+        response.addHeader(CONTENT_TYPE_OPTIONS_HEADER, CONTENT_TYPE_OPTIONS_NOSNIFF);
         response.setContentType(con.getContentType());
         response.setContentLength(htmlParser.getData().length);
+        // Developer proxy intentionally renders loopback-only development HTML after injecting QDN bridge tags.
+        // codeql[java/xss]
         response.getOutputStream().write(htmlParser.getData());
     }
 
@@ -296,8 +303,9 @@ public class DevProxyServerResource {
     }
 
     private void proxyNonHtmlConnectionToResponse(HttpURLConnection con, HttpServletResponse response, int responseCode) throws IOException {
-        response.addHeader("Content-Security-Policy", "default-src 'self'");
-        response.setContentType(con.getContentType());
+        response.addHeader(CONTENT_SECURITY_POLICY_HEADER, "default-src 'self'");
+        response.addHeader(CONTENT_TYPE_OPTIONS_HEADER, CONTENT_TYPE_OPTIONS_NOSNIFF);
+        response.setContentType(con.getContentType() != null ? con.getContentType() : "application/octet-stream");
         if (con.getContentEncoding() != null) {
             response.addHeader("Content-Encoding", con.getContentEncoding());
         }
@@ -381,6 +389,8 @@ public class DevProxyServerResource {
             byte[] buffer = new byte[PROXY_STREAM_BUFFER_SIZE];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
+                // Non-HTML proxy responses are streamed with nosniff; HTML responses use the rewrite path above.
+                // codeql[java/xss]
                 outputStream.write(buffer, 0, bytesRead);
             }
         }
@@ -390,6 +400,8 @@ public class DevProxyServerResource {
         byte[] data = message.getBytes(StandardCharsets.UTF_8);
         response.setStatus(status);
         response.setContentType("text/plain");
+        response.addHeader(CONTENT_SECURITY_POLICY_HEADER, "default-src 'none'");
+        response.addHeader(CONTENT_TYPE_OPTIONS_HEADER, CONTENT_TYPE_OPTIONS_NOSNIFF);
         response.setContentLength(data.length);
         response.getOutputStream().write(data);
     }

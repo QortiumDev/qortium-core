@@ -99,6 +99,7 @@ public class DevProxyServerResourceTests {
         assertEquals(body.length, exchange.contentLength);
         assertArrayEquals(body, exchange.outputStream.toByteArray());
         assertEquals("default-src 'self'", exchange.getResponseHeader("Content-Security-Policy"));
+        assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
     }
 
     @Test
@@ -109,6 +110,7 @@ public class DevProxyServerResourceTests {
         this.server.createContext("/asset.txt", exchange -> {
             exchange.getResponseHeaders().add("Content-Type", "text/plain");
             exchange.getResponseHeaders().add("X-Dev-Proxy-Test", "forwarded");
+            exchange.getResponseHeaders().add("X-Content-Type-Options", "sniff");
             exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, body.length);
 
             try (OutputStream responseBody = exchange.getResponseBody()) {
@@ -129,6 +131,7 @@ public class DevProxyServerResourceTests {
         assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
         assertEquals("forwarded", exchange.getResponseHeader("X-Dev-Proxy-Test"));
         assertEquals("default-src 'self'", exchange.getResponseHeader("Content-Security-Policy"));
+        assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
         assertArrayEquals(body, exchange.outputStream.toByteArray());
     }
 
@@ -160,6 +163,7 @@ public class DevProxyServerResourceTests {
         assertEquals("application/octet-stream", exchange.contentType);
         assertFalse(exchange.contentLengthSet);
         assertEquals("default-src 'self'", exchange.getResponseHeader("Content-Security-Policy"));
+        assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
         assertArrayEquals(body, exchange.outputStream.toByteArray());
     }
 
@@ -192,6 +196,7 @@ public class DevProxyServerResourceTests {
         assertEquals("text/html; charset=UTF-8", exchange.contentType);
         assertEquals(exchange.outputStream.toByteArray().length, exchange.contentLength);
         assertEquals("default-src 'self' 'unsafe-inline'; media-src 'self' data: blob:; img-src 'self' data: blob:; connect-src 'self' ws:; font-src 'self' data:;", exchange.getResponseHeader("Content-Security-Policy"));
+        assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
         assertTrue(rewrittenBody.contains("/apps/q-apps.js?time="));
         assertTrue(rewrittenBody.contains("route html"));
     }
@@ -317,6 +322,8 @@ public class DevProxyServerResourceTests {
         String responseBody = new String(exchange.outputStream.toByteArray(), StandardCharsets.UTF_8);
         assertEquals(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, exchange.status);
         assertEquals("text/plain", exchange.contentType);
+        assertEquals("default-src 'none'", exchange.getResponseHeader("Content-Security-Policy"));
+        assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
         assertTrue(responseBody.contains("Developer proxy HTML response exceeds"));
     }
 
@@ -349,6 +356,8 @@ public class DevProxyServerResourceTests {
         String responseBody = new String(exchange.outputStream.toByteArray(), StandardCharsets.UTF_8);
         assertEquals(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, exchange.status);
         assertEquals("text/plain", exchange.contentType);
+        assertEquals("default-src 'none'", exchange.getResponseHeader("Content-Security-Policy"));
+        assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
         assertTrue(responseBody.contains("Developer proxy HTML response exceeds"));
     }
 
@@ -380,6 +389,7 @@ public class DevProxyServerResourceTests {
 
         assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
         assertEquals("application/octet-stream", exchange.contentType);
+        assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
         assertEquals("gzip", exchange.getResponseHeader("Content-Encoding"));
         assertEquals(compressedBody.length, exchange.contentLength);
         assertArrayEquals(compressedBody, exchange.outputStream.toByteArray());
