@@ -168,6 +168,83 @@ public class DevProxyServerResourceTests {
     }
 
     @Test
+    public void testProxyAllowsKnownFrontendAssetContentTypes() throws Exception {
+        byte[] cssBody = "body { color: #222; }".getBytes(StandardCharsets.UTF_8);
+        byte[] jsBody = "window.__devProxyAsset = true;".getBytes(StandardCharsets.UTF_8);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/style.css", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "text/css; charset=UTF-8");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, cssBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(cssBody);
+            }
+        });
+        this.server.createContext("/app.js", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "application/javascript");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, jsBody.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(jsBody);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange cssExchange = new Exchange();
+        DevProxyServerResource cssResource = new DevProxyServerResource();
+        setField(cssResource, "request", cssExchange.request);
+        setField(cssResource, "response", cssExchange.response);
+        cssResource.getProxyPath("style.css");
+
+        assertEquals(HttpURLConnection.HTTP_OK, cssExchange.status);
+        assertEquals("text/css", cssExchange.contentType);
+        assertArrayEquals(cssBody, cssExchange.outputStream.toByteArray());
+
+        Exchange jsExchange = new Exchange();
+        DevProxyServerResource jsResource = new DevProxyServerResource();
+        setField(jsResource, "request", jsExchange.request);
+        setField(jsResource, "response", jsExchange.response);
+        jsResource.getProxyPath("app.js");
+
+        assertEquals(HttpURLConnection.HTTP_OK, jsExchange.status);
+        assertEquals("application/javascript", jsExchange.contentType);
+        assertArrayEquals(jsBody, jsExchange.outputStream.toByteArray());
+    }
+
+    @Test
+    public void testProxyDowngradesUnknownDocumentContentTypesToBinary() throws Exception {
+        byte[] body = "<?xml version=\"1.0\"?><root>not an app document</root>".getBytes(StandardCharsets.UTF_8);
+
+        this.server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        this.server.createContext("/data.xml", exchange -> {
+            exchange.getResponseHeaders().add("Content-Type", "application/xml");
+            exchange.sendResponseHeaders(HttpURLConnection.HTTP_OK, body.length);
+
+            try (OutputStream responseBody = exchange.getResponseBody()) {
+                responseBody.write(body);
+            }
+        });
+        this.server.start();
+
+        DevProxyManager.getInstance().setSourceHostAndPort("127.0.0.1:" + this.server.getAddress().getPort());
+
+        Exchange exchange = new Exchange();
+        DevProxyServerResource resource = new DevProxyServerResource();
+        setField(resource, "request", exchange.request);
+        setField(resource, "response", exchange.response);
+
+        resource.getProxyPath("data.xml");
+
+        assertEquals(HttpURLConnection.HTTP_OK, exchange.status);
+        assertEquals("application/octet-stream", exchange.contentType);
+        assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
+        assertArrayEquals(body, exchange.outputStream.toByteArray());
+    }
+
+    @Test
     public void testProxyRewritesRouteStyleHtmlResponses() throws Exception {
         byte[] body = "<html><head></head><body>route html</body></html>".getBytes(StandardCharsets.UTF_8);
 

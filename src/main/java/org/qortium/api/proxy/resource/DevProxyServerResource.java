@@ -59,6 +59,37 @@ public class DevProxyServerResource {
             "upgrade"
     );
 
+    private static final Set<String> PROXY_ASSET_CONTENT_TYPES = Set.of(
+            "application/font-woff",
+            "application/javascript",
+            "application/json",
+            "application/manifest+json",
+            "application/octet-stream",
+            "application/pdf",
+            "application/vnd.ms-fontobject",
+            "application/wasm",
+            "audio/mpeg",
+            "audio/ogg",
+            "audio/wav",
+            "font/otf",
+            "font/ttf",
+            "font/woff",
+            "font/woff2",
+            "image/avif",
+            "image/bmp",
+            "image/gif",
+            "image/jpeg",
+            "image/png",
+            "image/svg+xml",
+            "image/vnd.microsoft.icon",
+            "image/webp",
+            "text/css",
+            "text/javascript",
+            "text/plain",
+            "video/mp4",
+            "video/webm"
+    );
+
     private static final Set<String> PROXY_MANAGED_RESPONSE_HEADERS = Set.of(
             "connection",
             "content-encoding",
@@ -305,7 +336,6 @@ public class DevProxyServerResource {
     private void proxyNonHtmlConnectionToResponse(HttpURLConnection con, HttpServletResponse response, int responseCode) throws IOException {
         response.addHeader(CONTENT_SECURITY_POLICY_HEADER, "default-src 'self'");
         response.addHeader(CONTENT_TYPE_OPTIONS_HEADER, CONTENT_TYPE_OPTIONS_NOSNIFF);
-        response.setContentType(con.getContentType() != null ? con.getContentType() : "application/octet-stream");
         if (con.getContentEncoding() != null) {
             response.addHeader("Content-Encoding", con.getContentEncoding());
         }
@@ -315,7 +345,7 @@ public class DevProxyServerResource {
             response.setContentLength(contentLength);
         }
 
-        streamProxyResponseData(con, response, responseCode);
+        streamProxyResponseData(con, response, responseCode, con.getContentType());
     }
 
     private static boolean isProxyHtmlResponse(String filename, String contentType) {
@@ -378,13 +408,16 @@ public class DevProxyServerResource {
         throw new IOException("Unsupported HTML content encoding: " + contentEncoding);
     }
 
-    private static void streamProxyResponseData(HttpURLConnection con, HttpServletResponse response, int responseCode) throws IOException {
+    private static void streamProxyResponseData(HttpURLConnection con, HttpServletResponse response, int responseCode, String contentType) throws IOException {
         InputStream responseStream = getProxyResponseStream(con, responseCode);
         if (responseStream == null) {
             return;
         }
 
         try (InputStream inputStream = responseStream) {
+            // Keep the streaming path binary-safe by default before allowing known frontend assets.
+            response.setContentType("application/octet-stream");
+            setProxyAssetContentType(response, contentType);
             OutputStream outputStream = response.getOutputStream();
             byte[] buffer = new byte[PROXY_STREAM_BUFFER_SIZE];
             int bytesRead;
@@ -394,6 +427,19 @@ public class DevProxyServerResource {
                 outputStream.write(buffer, 0, bytesRead);
             }
         }
+    }
+
+    private static void setProxyAssetContentType(HttpServletResponse response, String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return;
+        }
+
+        String normalizedContentType = contentType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+        if (!PROXY_ASSET_CONTENT_TYPES.contains(normalizedContentType)) {
+            return;
+        }
+
+        response.setContentType(normalizedContentType);
     }
 
     private static void writePlainTextResponse(HttpServletResponse response, int status, String message) throws IOException {
