@@ -65,6 +65,14 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	private static final long IDLE_DISCONNECT_MS = 2 * 60 * 1000L;
 	private static final long ACQUIRE_SERVER_TIMEOUT_MS = 3000L;
 
+	// Multi-server height corroboration: cross-check the chain tip across connected servers so a single
+	// malicious/lagging server cannot skew height-based refund/locktime decisions.
+	private static final String HEADERS_SUBSCRIBE_METHOD = "blockchain.headers.subscribe";
+	private static final int HEIGHT_CONSENSUS_MIN_READINGS = 2;
+	private static final int HEIGHT_CONSENSUS_SAMPLE_SIZE = 3;
+	private static final int HEIGHT_CONSENSUS_TOLERANCE = 2; // blocks of slack for normal propagation lag
+	private static final long HEIGHT_CONSENSUS_CACHE_MS = 3000L;
+
 	private ChainableServerConnectionRecorder recorder = new ChainableServerConnectionRecorder(100);
 
 	// the minimum number of connections targeted for this foreign blockchain
@@ -200,6 +208,8 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	private final Map<ChainableServer, Long> serverLastProbeTime = new ConcurrentHashMap<>();
 	private volatile boolean initialProbeCompleted = false;
 	private volatile String lastScoreExtremesDigest = "";
+	private volatile long consensusHeightTimeMs = 0L;
+	private volatile int consensusHeightValue = 0;
 	private final int coinDecimalPlaces;
 
 	// Constructors
@@ -238,18 +248,101 @@ public class ElectrumX extends BitcoinyBlockchainProvider {
 	 */
 	@Override
 	public int getCurrentHeight() throws ForeignBlockchainException {
-		Object blockObj = this.rpc("blockchain.headers.subscribe").getResponse();
-		if (!(blockObj instanceof JSONObject))
-			throw new ForeignBlockchainException.NetworkException("Unexpected output from ElectrumX blockchain.headers.subscribe RPC");
+		Integer consensusHeight = getConsensusHeight();
+		if (consensusHeight != null)
+			return consensusHeight;
 
-		JSONObject blockJson = (JSONObject) blockObj;
-
-		Object heightObj = blockJson.get("height");
-
-		if (!(heightObj instanceof Long))
+		// Too few connected servers to corroborate; fall back to a single-server read.
+		int height = extractHeight(this.rpc(HEADERS_SUBSCRIBE_METHOD).getResponse());
+		if (height < 0)
 			throw new ForeignBlockchainException.NetworkException("Missing/invalid 'height' in JSON from ElectrumX blockchain.headers.subscribe RPC");
 
-		return ((Long) heightObj).intValue();
+		return height;
+	}
+
+	/**
+	 * Returns a chain height corroborated across multiple connected ElectrumX servers, or {@code null} when too few
+	 * servers are connected to corroborate.
+	 * <p>
+	 * A bounded subset of connected servers is sampled and the median reading is returned, so a single server lying
+	 * (in either direction) cannot move the result. When at least three readings are available, servers whose height
+	 * disagrees beyond {@link #HEIGHT_CONSENSUS_TOLERANCE} are penalized so the pool drifts away from them. Results
+	 * are briefly cached to bound the extra load. This never throws or stalls on disagreement; it only returns a more
+	 * trustworthy height than a single server could provide.
+	 */
+	private Integer getConsensusHeight() {
+		long now = System.currentTimeMillis();
+		if (this.consensusHeightValue > 0 && now - this.consensusHeightTimeMs < HEIGHT_CONSENSUS_CACHE_MS)
+			return this.consensusHeightValue;
+
+		List<ElectrumServer> snapshot;
+		synchronized (this.connections) {
+			snapshot = new ArrayList<>(this.connections);
+		}
+		if (snapshot.size() < HEIGHT_CONSENSUS_MIN_READINGS)
+			return null;
+
+		Collections.shuffle(snapshot);
+
+		List<ElectrumServer> sampledServers = new ArrayList<>();
+		List<Integer> heights = new ArrayList<>();
+		for (ElectrumServer server : snapshot) {
+			if (heights.size() >= HEIGHT_CONSENSUS_SAMPLE_SIZE)
+				break;
+
+			int height;
+			try {
+				height = extractHeight(connectedRpc(server, HEADERS_SUBSCRIBE_METHOD));
+			} catch (ForeignBlockchainException e) {
+				// Ignore this server's reading; the remaining servers still corroborate.
+				continue;
+			}
+
+			if (height > 0) {
+				sampledServers.add(server);
+				heights.add(height);
+			}
+		}
+
+		if (heights.size() < HEIGHT_CONSENSUS_MIN_READINGS)
+			return null;
+
+		int consensusHeight = medianHeight(heights);
+
+		// Only attribute blame with three or more readings, where the median is robust to a single liar.
+		if (heights.size() >= 3) {
+			for (int i = 0; i < sampledServers.size(); i++) {
+				if (isHeightOutlier(heights.get(i), consensusHeight, HEIGHT_CONSENSUS_TOLERANCE)) {
+					ChainableServer server = sampledServers.get(i).getServer();
+					recordFailure(server);
+					LOGGER.info("{} ElectrumX server {} reported height {} vs consensus {}; penalizing", this.getCurrencyCodeForLogging(), server, heights.get(i), consensusHeight);
+				}
+			}
+		}
+
+		this.consensusHeightValue = consensusHeight;
+		this.consensusHeightTimeMs = now;
+		return consensusHeight;
+	}
+
+	/** Extracts the block height from a blockchain.headers.subscribe response, or -1 if absent/invalid. */
+	private static int extractHeight(Object blockObj) {
+		if (!(blockObj instanceof JSONObject))
+			return -1;
+
+		Object heightObj = ((JSONObject) blockObj).get("height");
+		return (heightObj instanceof Long) ? ((Long) heightObj).intValue() : -1;
+	}
+
+	/** Returns the lower-median of the given non-empty heights (robust to a single outlier in a sample of three). */
+	static int medianHeight(List<Integer> heights) {
+		List<Integer> sorted = new ArrayList<>(heights);
+		Collections.sort(sorted);
+		return sorted.get((sorted.size() - 1) / 2);
+	}
+
+	static boolean isHeightOutlier(int height, int consensusHeight, int tolerance) {
+		return Math.abs(height - consensusHeight) > tolerance;
 	}
 
 	/**

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-09 - security: corroborate ElectrumX chain height across servers
+
+Hardened height-based cross-chain decisions against a single malicious or lagging ElectrumX server. `getCurrentHeight()` now samples a bounded subset of connected servers and returns the median reading, so one server lying in either direction cannot skew the refund/locktime timing that bounds atomic-trade safety, and persistent height outliers are penalized so the pool drifts away from them. The check is fail-safe — it never throws or stalls on disagreement, briefly caches the corroborated height to bound load, and falls back to a single-server read when too few servers are connected to corroborate.
+
 ### 2026-06-09 - crosschain: refresh Electrum server list with TLS pins
 
 Regenerated the bundled Electrum server list with the updated refresh tool so every SSL server now ships a pinned `certificateSha256Fingerprint` captured from its live leaf certificate. All 442 SSL entries across 18 coin/networks were re-verified against their chain's genesis hash and current height during the refresh, restoring pinned connectivity for the many self-signed servers that strict validation had been rejecting — including NMC, which previously had no usable default servers. LBC keeps its single plaintext TCP seed because no public SSL LBC servers verified; it remains gated behind the existing `allowPlaintextElectrumServers` opt-in.
