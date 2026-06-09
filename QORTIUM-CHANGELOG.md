@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: constrain dev proxy asset content types
+
+Changed the developer proxy's non-HTML streaming path so it no longer forwards arbitrary upstream content types directly to the browser. The proxy now defaults streamed assets to `application/octet-stream`, only preserves known frontend asset MIME types, and keeps content-sniffing protection in place so document-like responses such as XML are not rendered through the generic asset stream.
+
 ### 2026-06-08 - security: harden dev proxy response streaming
 
 Changed developer-proxy responses so HTML, non-HTML streams, and proxy error bodies include browser content-sniffing protection, with plain-text proxy errors also receiving a restrictive content security policy. The developer proxy still intentionally renders loopback-only development HTML after injecting the QDN bridge, and that intentional local-development render path is now documented for CodeQL instead of being reported as an unreviewed XSS finding.
