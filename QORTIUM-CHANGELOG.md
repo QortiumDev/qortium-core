@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-09 - crosschain: refresh Electrum server list with TLS pins
+
+Regenerated the bundled Electrum server list with the updated refresh tool so every SSL server now ships a pinned `certificateSha256Fingerprint` captured from its live leaf certificate. All 442 SSL entries across 18 coin/networks were re-verified against their chain's genesis hash and current height during the refresh, restoring pinned connectivity for the many self-signed servers that strict validation had been rejecting — including NMC, which previously had no usable default servers. LBC keeps its single plaintext TCP seed because no public SSL LBC servers verified; it remains gated behind the existing `allowPlaintextElectrumServers` opt-in.
+
 ### 2026-06-09 - security: pin generated Electrum TLS certificates
 
 Taught the Electrum server refresh tool to capture each reachable SSL server's current leaf certificate SHA-256 fingerprint and write it into the generated server list as `certificateSha256Fingerprint`. Fingerprints are captured with a trust manager that records the leaf certificate and then deliberately aborts the handshake, so the generator never trusts an unverified certificate, and self-signed servers are pinned and kept instead of being dropped by strict verification. Regenerating the bundled list now ships explicit pins, giving cross-chain connections certificate-pinned identity for the default servers without a trust-on-first-use exposure window.
