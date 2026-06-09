@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-08 - security: harden dev proxy response streaming
+
+Changed developer-proxy responses so HTML, non-HTML streams, and proxy error bodies include browser content-sniffing protection, with plain-text proxy errors also receiving a restrictive content security policy. The developer proxy still intentionally renders loopback-only development HTML after injecting the QDN bridge, and that intentional local-development render path is now documented for CodeQL instead of being reported as an unreviewed XSS finding.
+
 ### 2026-06-08 - docs: prepare v1.0.0-preview.8 release notes
 
 Added a release-prep note for the next Core prerelease after the security-hardening PR merges. The note records the intended preview tag, release highlights, operator compatibility notes, validation already run on the PR, post-merge packaging steps, and a draft GitHub prerelease body with placeholders for final build hashes and the merged commit.
