@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-09 - security: add Electrum TLS trust modes with first-use pinning
+
+Added an `electrumTlsTrustMode` setting (`STRICT`, `PINNED_ONLY`, `TOFU`) that governs how SSL ElectrumX servers are trusted when they carry no explicit certificate pin, and made trust-on-first-use the default. In `TOFU` mode Core records each server's leaf certificate SHA-256 fingerprint on the first connection into a persistent `lists/electrum-tls-fingerprints.json` store, then pins to it for every later connection, so a changed certificate is rejected instead of silently re-trusted. This restores connectivity to self-signed ElectrumX servers — which strict certificate validation had begun rejecting — while keeping explicit per-server pins authoritative, `STRICT` available for publicly trusted certificates only, and `PINNED_ONLY` available for operators that want to refuse any unpinned server. A new design note documents the trust model and the CodeQL disposition for the remaining pinned trust-manager alert.
+
 ### 2026-06-08 - security: constrain dev proxy asset content types
 
 Changed the developer proxy's non-HTML streaming path so it no longer forwards arbitrary upstream content types directly to the browser. The proxy now defaults streamed assets to `application/octet-stream`, only preserves known frontend asset MIME types, and keeps content-sniffing protection in place so document-like responses such as XML are not rendered through the generic asset stream.

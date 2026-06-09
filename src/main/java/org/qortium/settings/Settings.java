@@ -602,6 +602,12 @@ public class Settings {
 	private boolean allowPlaintextElectrumServers = false;
 
 	/**
+	 * How ElectrumX SSL server certificates are trusted when a server carries no explicit pinned fingerprint.
+	 * One of {@link org.qortium.crypto.ElectrumSSLSocketFactory.TrustMode} (STRICT, PINNED_ONLY, TOFU).
+	 */
+	private String electrumTlsTrustMode = "TOFU";
+
+	/**
 	 * Host Monitor Enabled
 	 *
 	 * The Host Monitor is a thread that runs in the background. It crawls through the QDN data directory to monitor
@@ -1316,6 +1322,15 @@ public class Settings {
 		} catch (IllegalArgumentException ex) {
 			String possibleValues = EnumUtils.getNames(StoragePolicy.class, ", ");
 			throwValidationError(String.format("storagePolicy must be one of: %s", possibleValues));
+		}
+
+		if (this.electrumTlsTrustMode != null) {
+			try {
+				org.qortium.crypto.ElectrumSSLSocketFactory.TrustMode.valueOf(this.electrumTlsTrustMode.trim().toUpperCase(Locale.ROOT));
+			} catch (IllegalArgumentException ex) {
+				String possibleValues = EnumUtils.getNames(org.qortium.crypto.ElectrumSSLSocketFactory.TrustMode.class, ", ");
+				throwValidationError(String.format("electrumTlsTrustMode must be one of: %s", possibleValues));
+			}
 		}
 	}
 
@@ -2226,6 +2241,17 @@ public class Settings {
 
 	public boolean isPlaintextElectrumServersAllowed() {
 		return this.allowPlaintextElectrumServers;
+	}
+
+	public org.qortium.crypto.ElectrumSSLSocketFactory.TrustMode getElectrumTlsTrustMode() {
+		if (this.electrumTlsTrustMode == null)
+			return org.qortium.crypto.ElectrumSSLSocketFactory.TrustMode.TOFU;
+
+		try {
+			return org.qortium.crypto.ElectrumSSLSocketFactory.TrustMode.valueOf(this.electrumTlsTrustMode.trim().toUpperCase(Locale.ROOT));
+		} catch (IllegalArgumentException e) {
+			return org.qortium.crypto.ElectrumSSLSocketFactory.TrustMode.TOFU;
+		}
 	}
 
 	public boolean isHostMonitorEnabled() {
