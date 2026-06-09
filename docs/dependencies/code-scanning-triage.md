@@ -193,23 +193,46 @@ Alert:
 
 - `ElectrumSSLSocketFactory`: pinned-certificate trust manager
 
-Triage status: fixed by default certificate validation with explicit pins for
-self-signed compatibility.
+Triage status: fixed by certificate pinning and an explicit trust-mode policy;
+the remaining alert is a false positive on the pinned trust manager.
 
 Many ElectrumX servers use self-signed certificates, but Core no longer uses a
-trust-all TLS manager for SSL Electrum connections. SSL servers now use JVM
-certificate validation by default. A configured
-`certificateSha256Fingerprint` pins the server's leaf certificate when a
-self-signed Electrum server must be trusted explicitly.
+trust-all TLS manager for SSL Electrum connections. Trust is now governed by the
+`electrumTlsTrustMode` setting (`STRICT`, `PINNED_ONLY`, `TOFU`, default `TOFU`)
+and by explicit per-server `certificateSha256Fingerprint` pins, which are always
+authoritative when present:
+
+- An explicit pin always pins the server's leaf certificate.
+- `STRICT` requires a publicly trusted certificate chain (JVM default trust store).
+- `PINNED_ONLY` refuses any unpinned server.
+- `TOFU` records each server's leaf fingerprint on first use and pins to it
+  afterward, rejecting a changed certificate.
+
+The server refresh tool also captures and writes leaf fingerprints into the
+generated list so the bundled defaults ship pinned. Fingerprint capture (both in
+the tool and on TOFU first use) uses a trust manager that records the leaf
+certificate and then aborts the handshake, so it never trusts an unverified
+certificate and does not introduce a new insecure-trust-manager finding.
+
+The one remaining `java/insecure-trustmanager` alert is on the pinned trust
+manager. This is a false positive: the manager throws on any fingerprint
+mismatch (and on a missing certificate), so it fails closed rather than
+accepting an untrusted certificate. CodeQL flags it only because it does not
+delegate to the platform PKIX validator, which it intentionally cannot do for
+self-signed ElectrumX servers.
+
+See [`docs/cross-chain/electrum-tls-trust.md`](../cross-chain/electrum-tls-trust.md)
+for the full trust model.
 
 Remaining maintenance:
 
-- keep bundled/generated server entries on publicly trusted TLS where possible
-- add pins only for self-signed servers that have been verified out of band
+- keep bundled/generated server entries pinned via the refresh tool
+- prefer publicly trusted TLS where a server offers it
 - refresh stale pins when server operators rotate certificates
 
-Dismissal candidate after review: yes, after confirming the scanner no longer
-finds an all-trusting Electrum TLS manager.
+Dismissal candidate after review: yes. Dismiss the pinned-trust-manager alert as
+a false positive (fails closed on mismatch), referencing this document and the
+trust-model note.
 
 ## Recommended GitHub Alert Handling
 

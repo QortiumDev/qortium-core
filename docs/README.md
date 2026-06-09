@@ -58,6 +58,7 @@ history.
 - `Planning note` [Foreign/foreign trade design](cross-chain/crosschain-foreign-foreign-trades.md) - trade flow design
 - `Planning note` [Reverse ACCT trade design](cross-chain/crosschain-reverse-trades.md) - reverse trade design
 - `Developer reference` [Electrum server refresh](cross-chain/electrum-server-refresh.md) - Electrum server list maintenance
+- `Developer reference` [ElectrumX TLS trust model](cross-chain/electrum-tls-trust.md) - certificate pinning and trust modes
 - `Planning note` [Zcash-family chain support](cross-chain/zcash-family-chain-support.md) - deferred native wallet notes
 
 ## Dependencies And Upstream
