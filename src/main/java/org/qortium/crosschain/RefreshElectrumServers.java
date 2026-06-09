@@ -9,6 +9,7 @@ import org.qortium.api.resource.CrossChainUtils;
 import org.qortium.crosschain.ChainableServer.ConnectionType;
 import org.qortium.crosschain.ElectrumServerDiscovery.CandidateServer;
 import org.qortium.crosschain.ElectrumX.Server;
+import org.qortium.crypto.ElectrumSSLSocketFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -177,7 +178,8 @@ public final class RefreshElectrumServers {
 		ElectrumServer electrumServer = null;
 
 		try {
-			electrumServer = openValidatedConnection(coinConfig, seedServer, options.timeoutMs, false);
+			Server pinnedSeed = pinSslServerIfNeeded(seedServer, options.timeoutMs);
+			electrumServer = openValidatedConnection(coinConfig, pinnedSeed, options.timeoutMs, false);
 			Object peers = rpc(electrumServer, "server.peers.subscribe");
 			Set<Server> peerServers = ElectrumServerDiscovery.parsePeerServers(peers, DEFAULT_ELECTRUMX_PORTS);
 
@@ -199,8 +201,11 @@ public final class RefreshElectrumServers {
 
 			for (CandidateServer candidate : candidates) {
 				Callable<CandidateServer> task = () -> {
-					CandidateServer verified = new CandidateServer(candidate.getServer(), candidate.getSources());
-					long responseTime = validateServer(coinConfig, candidate.getServer(), options.timeoutMs);
+					// Pin SSL servers to their current leaf certificate first, so self-signed servers can be
+					// verified (and shipped) instead of being rejected by strict validation.
+					Server server = pinSslServerIfNeeded(candidate.getServer(), options.timeoutMs);
+					long responseTime = validateServer(coinConfig, server, options.timeoutMs);
+					CandidateServer verified = new CandidateServer(server, candidate.getSources());
 					verified.setResponseTimeMillis(responseTime);
 					return verified;
 				};
@@ -220,6 +225,26 @@ public final class RefreshElectrumServers {
 		} finally {
 			executor.shutdownNow();
 		}
+	}
+
+	/**
+	 * For an SSL server with no pinned fingerprint, capture its current leaf certificate fingerprint and return a
+	 * pinned copy of the server. This lets the generated list ship explicit pins, and lets self-signed servers pass
+	 * the subsequent strict-by-default verification handshake instead of being dropped.
+	 */
+	private static Server pinSslServerIfNeeded(Server server, int timeoutMs) {
+		if (server.getConnectionType() != ConnectionType.SSL || server.getCertificateSha256Fingerprint() != null)
+			return server;
+
+		try {
+			String fingerprint = ElectrumSSLSocketFactory.probeCertificateSha256Fingerprint(server.getHostName(), server.getPort(), timeoutMs);
+			if (fingerprint != null)
+				return new Server(server.getHostName(), server.getConnectionType(), server.getPort(), fingerprint);
+		} catch (IOException e) {
+			// Leave the server unpinned; verification still applies the active trust policy.
+		}
+
+		return server;
 	}
 
 	private static long validateServer(CoinConfig coinConfig, Server server, int timeoutMs) throws Exception {

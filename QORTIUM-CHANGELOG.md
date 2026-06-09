@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-09 - security: pin generated Electrum TLS certificates
+
+Taught the Electrum server refresh tool to capture each reachable SSL server's current leaf certificate SHA-256 fingerprint and write it into the generated server list as `certificateSha256Fingerprint`. Fingerprints are captured with a trust manager that records the leaf certificate and then deliberately aborts the handshake, so the generator never trusts an unverified certificate, and self-signed servers are pinned and kept instead of being dropped by strict verification. Regenerating the bundled list now ships explicit pins, giving cross-chain connections certificate-pinned identity for the default servers without a trust-on-first-use exposure window.
+
 ### 2026-06-09 - security: add Electrum TLS trust modes with first-use pinning
 
 Added an `electrumTlsTrustMode` setting (`STRICT`, `PINNED_ONLY`, `TOFU`) that governs how SSL ElectrumX servers are trusted when they carry no explicit certificate pin, and made trust-on-first-use the default. In `TOFU` mode Core records each server's leaf certificate SHA-256 fingerprint on the first connection into a persistent `lists/electrum-tls-fingerprints.json` store, then pins to it for every later connection, so a changed certificate is rejected instead of silently re-trusted. This restores connectivity to self-signed ElectrumX servers — which strict certificate validation had begun rejecting — while keeping explicit per-server pins authoritative, `STRICT` available for publicly trusted certificates only, and `PINNED_ONLY` available for operators that want to refuse any unpinned server. A new design note documents the trust model and the CodeQL disposition for the remaining pinned trust-manager alert.
