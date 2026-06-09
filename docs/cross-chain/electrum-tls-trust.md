@@ -78,10 +78,21 @@ No trust failure silently downgrades to an unauthenticated connection.
 Pinning binds a connection to a specific server certificate, but a single
 self-signed server is still only as trustworthy as its operator. Core already
 maintains several scored ElectrumX connections per coin and rotates away from
-servers that misbehave or respond slowly. Security-critical reads should continue
-to be corroborated across independent servers rather than trusted from a single
-connection. (Expanding explicit multi-server consistency checks for trade-bot
-reads is tracked as follow-up work.)
+servers that misbehave or respond slowly.
+
+On top of that, the chain tip is corroborated across servers. `getCurrentHeight()`
+samples a bounded subset of connected ElectrumX servers and returns the **median**
+reading, so a single server lying in either direction cannot skew the
+height-based refund/locktime decisions that bound cross-chain trade safety. When
+at least three readings are available, servers whose height disagrees beyond a
+small tolerance are penalized so the pool drifts away from them. This check is
+fail-safe: it never throws or stalls on disagreement, and it falls back to a
+single-server read when too few servers are connected to corroborate.
+
+Other reads are bounded by independent safeguards: revealed HTLC secrets are
+cryptographically verified, and redeem/refund transactions are validated by the
+foreign chain's own consensus on broadcast. Corroborating HTLC funding status
+across servers before acting is a possible future hardening step.
 
 ## Generating pins
 
