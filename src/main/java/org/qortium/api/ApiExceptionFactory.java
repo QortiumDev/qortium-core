@@ -8,7 +8,9 @@ public enum ApiExceptionFactory {
 	INSTANCE;
 
 	public ApiException createException(HttpServletRequest request, ApiError apiError, Throwable throwable, Object... args) {
-		String message = Translator.INSTANCE.translate("ApiError", request.getLocale().getLanguage(), apiError.name(), args);
+		// Full language tag (e.g. "zh-CN") rather than bare language (e.g. "zh"),
+		// otherwise region-specific bundles like zh_CN/zh_TW can never be matched.
+		String message = Translator.INSTANCE.translate("ApiError", request.getLocale().toLanguageTag(), apiError.name(), args);
 		return new ApiException(apiError.getStatus(), apiError.getCode(), message, throwable);
 	}
 

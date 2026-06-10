@@ -109,7 +109,9 @@ public class Settings {
 	private String userPath;
 
 	// General
-	private String localeLang = Locale.getDefault().getLanguage();
+	// Full language tag (e.g. "zh-CN") rather than bare language (e.g. "zh"),
+	// otherwise region-specific bundles like zh_CN/zh_TW can never be matched.
+	private String localeLang = Locale.getDefault().toLanguageTag();
 
 	// Common to all networking (API/P2P)
 	private String bindAddress = "::"; // Use IPv6 wildcard to listen on all local addresses

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-09 - i18n: honor full locale tags for translation lookups
+
+API error translation previously kept only the bare language code from a client's request, so a browser asking for "zh-CN" or "zh-TW" was reduced to "zh" — which has no bundle — and Chinese clients always received English error messages. The API now passes the client's full locale tag through to the translator, so Simplified and Traditional Chinese resolve to their own bundles. The default value of the `localeLang` setting was widened the same way, from the machine's bare language code to its full tag, so nodes on region-specific locales pick the right bundle out of the box; existing explicit `localeLang` values keep working unchanged.
+
 ### 2026-06-09 - i18n: fall back to English when a language has no translations
 
 Previously, when Core was asked for a language it has no translations for — for example a node running on an Arabic- or Turkish-language machine — every translated string rendered as a raw placeholder like `!!ar:SysTray.MINTING_ENABLED!!`, because the lookup had no final fallback. Each translation bundle now ships a root English copy that is served whenever no language-specific bundle matches, and the translator no longer detours through the machine's default language on the way there, so the fallback is always predictable English rather than whatever language the host system happens to use.
