@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-09 - test: enforce translation bundle completeness in CI
+
+Translation completeness used to be checked by a standalone helper program that someone had to remember to run by hand, which is how a missing API error key went unnoticed across all seventeen languages. That helper is now a regular JUnit test that verifies every language carries exactly the keys the code can ask for — API error names, transaction validation results, and system tray labels — and that the root English fallback bundles stay identical to the English bundles. The pull request workflow runs the new test alongside the existing API regression test, so any future bundle drift fails CI instead of shipping silently.
+
 ### 2026-06-09 - i18n: honor full locale tags for translation lookups
 
 API error translation previously kept only the bare language code from a client's request, so a browser asking for "zh-CN" or "zh-TW" was reduced to "zh" — which has no bundle — and Chinese clients always received English error messages. The API now passes the client's full locale tag through to the translator, so Simplified and Traditional Chinese resolve to their own bundles. The default value of the `localeLang` setting was widened the same way, from the machine's bare language code to its full tag, so nodes on region-specific locales pick the right bundle out of the box; existing explicit `localeLang` values keep working unchanged.
