@@ -16,6 +16,7 @@ import org.qortium.api.model.GroupKickInfo;
 import org.qortium.api.model.GroupMembers;
 import org.qortium.api.model.GroupMembers.MemberInfo;
 import org.qortium.api.model.GroupWithJoinRequests;
+import org.qortium.block.BlockChain;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.group.*;
 import org.qortium.data.transaction.*;
@@ -28,6 +29,7 @@ import org.qortium.transaction.Transaction.ValidationResult;
 import org.qortium.transform.TransformationException;
 import org.qortium.transform.transaction.*;
 import org.qortium.utils.Base58;
+import org.qortium.utils.Groups;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.*;
@@ -38,7 +40,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
@@ -88,20 +89,7 @@ public class GroupsResource {
 	) @QueryParam("reverse") Boolean reverse) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			List<GroupData> allGroupData = repository.getGroupRepository().getAllGroups(limit, offset, reverse);
-			allGroupData.forEach(groupData -> {
-				try {
-					groupData.memberCount = repository.getGroupRepository().countGroupMembers(groupData.getGroupId());
-				} catch (DataException e) {
-					// Exclude memberCount for this group
-				}
-			});
-			try {
-				List<String> owners = allGroupData.stream().map(GroupData::getOwner).distinct().collect(Collectors.toList());
-				Map<String, String> primaryNamesByOwner = repository.getNameRepository().getPrimaryNamesByOwners(owners);
-				allGroupData.forEach(g -> g.setOwnerPrimaryName(primaryNamesByOwner.get(g.getOwner())));
-			} catch (DataException e) {
-				// Leave ownerPrimaryName null
-			}
+			populateGroupApiFields(repository, allGroupData);
 			return allGroupData;
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
@@ -172,6 +160,14 @@ public class GroupsResource {
 		} catch (DataException e) {
 			// Leave ownerPrimaryName null
 		}
+
+		try {
+			int nextHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+			List<Integer> mintingGroupIds = Groups.getGroupIdsToMint(BlockChain.getInstance(), nextHeight);
+			groups.forEach(groupData -> groupData.setIsMintingGroup(mintingGroupIds.contains(groupData.getGroupId())));
+		} catch (DataException e) {
+			// Leave isMintingGroup null
+		}
 	}
 
 	@GET
@@ -195,12 +191,7 @@ public class GroupsResource {
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			List<GroupData> groups = repository.getGroupRepository().getGroupsByOwner(owner);
-			try {
-				Map<String, String> primaryNamesByOwner = repository.getNameRepository().getPrimaryNamesByOwners(Collections.singletonList(owner));
-				groups.forEach(g -> g.setOwnerPrimaryName(primaryNamesByOwner.get(g.getOwner())));
-			} catch (DataException e) {
-				// Leave ownerPrimaryName null
-			}
+			populateGroupApiFields(repository, groups);
 			return groups;
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
@@ -239,21 +230,7 @@ public class GroupsResource {
 			} else {
 				allGroupData = repository.getGroupRepository().getGroupsWithMember(member);
 			}
-			allGroupData.forEach(groupData -> {
-				try {
-					groupData.memberCount = repository.getGroupRepository().countGroupMembers(groupData.getGroupId());
-				} catch (DataException e) {
-					// Exclude memberCount for this group
-				}
-			});
-
-			try {
-				List<String> owners = allGroupData.stream().map(GroupData::getOwner).distinct().collect(Collectors.toList());
-				Map<String, String> primaryNamesByOwner = repository.getNameRepository().getPrimaryNamesByOwners(owners);
-				allGroupData.forEach(groupData -> groupData.setOwnerPrimaryName(primaryNamesByOwner.get(groupData.getOwner())));
-			} catch (DataException e) {
-				// Leave ownerPrimaryName null
-			}
+			populateGroupApiFields(repository, allGroupData);
 
 			return allGroupData;
 		} catch (DataException e) {
@@ -324,13 +301,7 @@ public class GroupsResource {
 			if (groupData == null)
 				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.GROUP_UNKNOWN);
 
-			groupData.memberCount = repository.getGroupRepository().countGroupMembers(groupId);
-			try {
-				Optional<String> primaryName = repository.getNameRepository().getPrimaryName(groupData.getOwner());
-				groupData.setOwnerPrimaryName(primaryName.orElse(null));
-			} catch (DataException e) {
-				// Leave ownerPrimaryName null
-			}
+			populateGroupApiFields(repository, Collections.singletonList(groupData));
 			return groupData;
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-10 - api: report minting groups in group lookups
+
+Group API responses now say whether each group is one of the chain's configured minting groups at the current height. The flag appears in the group list, group search, single-group lookup, groups-by-owner, and groups-by-member endpoints, so apps like Home and the chat app can show minting-related options only where they apply. The endpoints also now share one common routine for filling in the extra display fields (member count, owner's primary name, and the new minting flag), so all group lookups report them consistently.
+
 ### 2026-06-10 - i18n: add Portuguese translations
 
 Added Portuguese translations for all three Core message catalogs — API errors, transaction validation results, and the system tray menu — completing Core's language parity with the Home app's twenty languages. Vocabulary follows the Home app's Portuguese catalog (for example nó for node, pares for peers, and cunhagem for minting), written in the same neutral Portuguese readable by both Brazilian and European users. The CI translation test validates the new bundles automatically.

@@ -46,6 +46,9 @@ public class GroupData {
 	/** Owner's primary registered name. API-only, not always present. */
 	private String ownerPrimaryName;
 
+	/** Whether this group is a configured minting group at the current height. API-only, not always present. */
+	private Boolean isMintingGroup;
+
 	// Constructors
 
 	// necessary for JAX-RS serialization
@@ -193,6 +196,14 @@ public class GroupData {
 
 	public void setOwnerPrimaryName(String ownerPrimaryName) {
 		this.ownerPrimaryName = ownerPrimaryName;
+	}
+
+	public Boolean isMintingGroup() {
+		return this.isMintingGroup;
+	}
+
+	public void setIsMintingGroup(boolean isMintingGroup) {
+		this.isMintingGroup = isMintingGroup;
 	}
 
 }
