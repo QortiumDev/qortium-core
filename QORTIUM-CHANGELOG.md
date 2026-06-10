@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-10 - docs: prepare v1.0.0-preview.9 release notes
+
+Added the release-prep notes for the v1.0.0-preview.9 prerelease. This preview packages the new minting-group lookup API used by Qortium Home and the chat app's start-minting flow, the completed translation pass across all twenty Home languages with its CI completeness test, and the remaining Electrum TLS and developer-proxy hardening. The notes also record that both public preview seeds are switching to QDN auto-update for this release.
+
 ### 2026-06-10 - api: report minting groups in group lookups
 
 Group API responses now say whether each group is one of the chain's configured minting groups at the current height. The flag appears in the group list, group search, single-group lookup, groups-by-owner, and groups-by-member endpoints, so apps like Home and the chat app can show minting-related options only where they apply. The endpoints also now share one common routine for filling in the extra display fields (member count, owner's primary name, and the new minting flag), so all group lookups report them consistently.
