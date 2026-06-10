@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-09 - i18n: add Arabic translations
+
+Added Arabic translations for all three Core message catalogs — API errors, transaction validation results, and the system tray menu — bringing Core toward language parity with the Home app, which gained Arabic alongside its other new languages. Vocabulary follows the Home app's Arabic catalog (for example node, peers, height, and minting terms) so users see consistent terminology across the stack. The CI translation test validates the new bundles automatically.
+
 ### 2026-06-09 - test: enforce translation bundle completeness in CI
 
 Translation completeness used to be checked by a standalone helper program that someone had to remember to run by hand, which is how a missing API error key went unnoticed across all seventeen languages. That helper is now a regular JUnit test that verifies every language carries exactly the keys the code can ask for — API error names, transaction validation results, and system tray labels — and that the root English fallback bundles stay identical to the English bundles. The pull request workflow runs the new test alongside the existing API regression test, so any future bundle drift fails CI instead of shipping silently.
