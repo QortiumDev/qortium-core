@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-09 - i18n: rename Japanese translation bundles from jp to ja
+
+Japanese translations were stored under the "jp" suffix, but "jp" is the country code — the language code that Java and browsers actually send is "ja". Because of that mismatch, a node running on a Japanese-language machine, or an API client asking for Japanese, never found the Japanese bundle and saw raw placeholder text like `!!ja:SysTray.MINTING_ENABLED!!` instead. The three Japanese bundles are now named with the correct "ja" code, matching the code the Home app uses, so Japanese systems pick up the translations automatically.
+
 ### 2026-06-09 - i18n: add missing LITE_DATA_CONFLICT API error translations
 
 The API error catalog defines a LITE_DATA_CONFLICT error for lite nodes that receive conflicting answers from different peers, but none of the seventeen translation bundles carried a message for it, so the project's translation checker flagged every language as out of sync. Every ApiError bundle now includes a translated message for this error, and a stray double space in the Romanian transaction-validity bundle was tidied so all bundles parse with identical keys. The translation checker now reports every bundle in sync.
