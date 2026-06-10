@@ -48,7 +48,10 @@ public enum Translator {
 			return resourceBundle;
 
 		try {
-			resourceBundle = ResourceBundle.getBundle("i18n." + className, localeForLang(lang));
+			// No-fallback control stops lookup falling back to the JVM's default locale,
+			// so an unsupported language deterministically resolves to the English root bundle.
+			resourceBundle = ResourceBundle.getBundle("i18n." + className, localeForLang(lang),
+					ResourceBundle.Control.getNoFallbackControl(ResourceBundle.Control.FORMAT_PROPERTIES));
 		} catch (MissingResourceException e) {
 			LOGGER.warn(String.format("Can't locate '%s' translation resource bundle for %s", lang, className));
 			// Set to null then fall-through to storing in map so we don't emit warning more than once

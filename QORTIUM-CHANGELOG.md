@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-09 - i18n: fall back to English when a language has no translations
+
+Previously, when Core was asked for a language it has no translations for — for example a node running on an Arabic- or Turkish-language machine — every translated string rendered as a raw placeholder like `!!ar:SysTray.MINTING_ENABLED!!`, because the lookup had no final fallback. Each translation bundle now ships a root English copy that is served whenever no language-specific bundle matches, and the translator no longer detours through the machine's default language on the way there, so the fallback is always predictable English rather than whatever language the host system happens to use.
+
 ### 2026-06-09 - i18n: rename Japanese translation bundles from jp to ja
 
 Japanese translations were stored under the "jp" suffix, but "jp" is the country code — the language code that Java and browsers actually send is "ja". Because of that mismatch, a node running on a Japanese-language machine, or an API client asking for Japanese, never found the Japanese bundle and saw raw placeholder text like `!!ja:SysTray.MINTING_ENABLED!!` instead. The three Japanese bundles are now named with the correct "ja" code, matching the code the Home app uses, so Japanese systems pick up the translations automatically.
