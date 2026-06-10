@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-10 - i18n: add Portuguese translations
+
+Added Portuguese translations for all three Core message catalogs — API errors, transaction validation results, and the system tray menu — completing Core's language parity with the Home app's twenty languages. Vocabulary follows the Home app's Portuguese catalog (for example nó for node, pares for peers, and cunhagem for minting), written in the same neutral Portuguese readable by both Brazilian and European users. The CI translation test validates the new bundles automatically.
+
 ### 2026-06-09 - i18n: add Estonian translations
 
 Added Estonian translations for all three Core message catalogs — API errors, transaction validation results, and the system tray menu — bringing Core toward language parity with the Home app, which gained Estonian alongside its other new languages. Vocabulary follows the Home app's Estonian catalog (for example sõlm for node, partnerid for peers, and mintimine for minting) so users see consistent terminology across the stack. The CI translation test validates the new bundles automatically.
