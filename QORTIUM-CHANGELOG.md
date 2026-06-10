@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-09 - i18n: add missing LITE_DATA_CONFLICT API error translations
+
+The API error catalog defines a LITE_DATA_CONFLICT error for lite nodes that receive conflicting answers from different peers, but none of the seventeen translation bundles carried a message for it, so the project's translation checker flagged every language as out of sync. Every ApiError bundle now includes a translated message for this error, and a stray double space in the Romanian transaction-validity bundle was tidied so all bundles parse with identical keys. The translation checker now reports every bundle in sync.
+
 ### 2026-06-09 - security: corroborate ElectrumX chain height across servers
 
 Hardened height-based cross-chain decisions against a single malicious or lagging ElectrumX server. `getCurrentHeight()` now samples a bounded subset of connected servers and returns the median reading, so one server lying in either direction cannot skew the refund/locktime timing that bounds atomic-trade safety, and persistent height outliers are penalized so the pool drifts away from them. The check is fail-safe — it never throws or stalls on disagreement, briefly caches the corroborated height to bound load, and falls back to a single-server read when too few servers are connected to corroborate.
