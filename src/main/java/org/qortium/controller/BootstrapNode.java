@@ -111,7 +111,7 @@ public class BootstrapNode {
 			javaCmd.removeAll(Arrays.asList("abort", "exit", "vfprintf"));
 
 			// Call ApplyBootstrap using JAR
-			javaCmd.addAll(Arrays.asList("-cp", JAR_FILENAME, ApplyBootstrap.class.getCanonicalName()));
+			javaCmd.addAll(Arrays.asList("-cp", getCurrentJarPath(), ApplyBootstrap.class.getCanonicalName()));
 
 			// Add command-line args saved from start-up
 			String[] savedArgs = Controller.getInstance().getSavedArgs();
@@ -145,6 +145,16 @@ public class BootstrapNode {
 			if (!applyProcessStarted) {
 				releaseBootstrapApply();
 			}
+		}
+	}
+
+	private static String getCurrentJarPath() {
+		try {
+			Path location = Paths.get(BootstrapNode.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			return location.toAbsolutePath().normalize().toString();
+		} catch (Exception e) {
+			LOGGER.warn("Failed to resolve current jar path for bootstrap helper; falling back to {}", JAR_FILENAME, e);
+			return JAR_FILENAME;
 		}
 	}
 

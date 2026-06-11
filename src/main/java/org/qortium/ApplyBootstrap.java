@@ -8,6 +8,7 @@ import org.qortium.api.ApiKey;
 import org.qortium.api.ApiRequest;
 import org.qortium.controller.BootstrapNode;
 import org.qortium.settings.Settings;
+import org.qortium.utils.RestartTrayAnimator;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -43,6 +44,7 @@ public class ApplyBootstrap {
 
 	private static final long CHECK_INTERVAL = 15 * 1000L; // ms
 	private static final int MAX_ATTEMPTS = 20;
+	private static final long RESTART_API_WAIT_TIMEOUT = 5 * 60 * 1000L; // ms
 
 	public static void main(String[] args) {
 		Security.insertProviderAt(new BouncyCastleProvider(), 0);
@@ -56,17 +58,21 @@ public class ApplyBootstrap {
 
 		LOGGER.info("Applying bootstrap...");
 
-		// Shutdown node using API
-		if (!shutdownNode())
-			return;
+		try (RestartTrayAnimator trayAnimator = RestartTrayAnimator.start("Qortium Core is applying bootstrap...")) {
+			// Shutdown node using API
+			if (!shutdownNode())
+				return;
 
-		// Delete db
-		deleteDB();
+			// Delete db
+			deleteDB();
 
-		// Restart node
-		restartNode(args);
+			// Restart node
+			Process process = restartNode(args);
+			if (process != null)
+				trayAnimator.waitForNodeApi(Settings.getInstance().getApiPort(), RESTART_API_WAIT_TIMEOUT);
 
-		LOGGER.info("Bootstrapping...");
+			LOGGER.info("Bootstrapping...");
+		}
 	}
 
 	private static boolean shutdownNode() {
@@ -169,7 +175,7 @@ public class ApplyBootstrap {
 		}
 	}
 
-	private static void restartNode(String[] args) {
+	private static Process restartNode(String[] args) {
 		String javaHome = System.getProperty("java.home");
 		LOGGER.debug(() -> String.format("Java home: %s", javaHome));
 
@@ -196,7 +202,7 @@ public class ApplyBootstrap {
 					.collect(Collectors.toList());
 
 			// Call mainClass in JAR
-			javaCmd.addAll(Arrays.asList("-jar", JAR_FILENAME));
+			javaCmd.addAll(Arrays.asList("-jar", getCurrentJarPath()));
 
 			// Add saved command-line args
 			javaCmd.addAll(Arrays.asList(args));
@@ -220,8 +226,20 @@ public class ApplyBootstrap {
 
 			// Nothing to pipe to new process, so close output stream (process's stdin)
 			process.getOutputStream().close();
+			return process;
 		} catch (Exception e) {
 			LOGGER.error(String.format("Failed to restart node (BAD): %s", e.getMessage()));
+			return null;
+		}
+	}
+
+	private static String getCurrentJarPath() {
+		try {
+			Path location = Paths.get(ApplyBootstrap.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			return location.toAbsolutePath().normalize().toString();
+		} catch (Exception e) {
+			LOGGER.warn("Failed to resolve current jar path for bootstrap; falling back to {}", JAR_FILENAME, e);
+			return JAR_FILENAME;
 		}
 	}
 }

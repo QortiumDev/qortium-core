@@ -30,11 +30,41 @@ public class NodeTrayFactoryTests {
 	}
 
 	@Test
+	public void testHeadlessStatusTraySelectsNoOpWithoutTryingTrayImplementations() {
+		AtomicBoolean triedLinux = new AtomicBoolean(false);
+		AtomicBoolean triedAwt = new AtomicBoolean(false);
+
+		NodeTray tray = NodeTrayFactory.selectStatusTray(true,
+				() -> {
+					triedLinux.set(true);
+					return new FakeNodeTray(true);
+				},
+				() -> {
+					triedAwt.set(true);
+					return new FakeNodeTray(true);
+				});
+
+		assertSame(NoOpNodeTray.INSTANCE, tray);
+		assertFalse(triedLinux.get());
+		assertFalse(triedAwt.get());
+	}
+
+	@Test
 	public void testLinuxTrayPreferredWhenAvailable() {
 		FakeNodeTray linuxTray = new FakeNodeTray(true);
 		FakeNodeTray awtTray = new FakeNodeTray(true);
 
 		NodeTray tray = NodeTrayFactory.selectTray(false, () -> linuxTray, () -> awtTray);
+
+		assertSame(linuxTray, tray);
+	}
+
+	@Test
+	public void testLinuxStatusTrayPreferredWhenAvailable() {
+		FakeNodeTray linuxTray = new FakeNodeTray(true);
+		FakeNodeTray awtTray = new FakeNodeTray(true);
+
+		NodeTray tray = NodeTrayFactory.selectStatusTray(false, () -> linuxTray, () -> awtTray);
 
 		assertSame(linuxTray, tray);
 	}

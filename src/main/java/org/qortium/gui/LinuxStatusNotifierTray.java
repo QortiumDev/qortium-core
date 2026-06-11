@@ -83,6 +83,14 @@ final class LinuxStatusNotifierTray implements NodeTray {
 	}
 
 	static NodeTray create() {
+		return create(true);
+	}
+
+	static NodeTray createStatusOnly() {
+		return create(false);
+	}
+
+	private static NodeTray create(boolean menuEnabled) {
 		if (GraphicsEnvironment.isHeadless() || !isLinux())
 			return null;
 
@@ -101,11 +109,13 @@ final class LinuxStatusNotifierTray implements NodeTray {
 			connection.requestBusName(serviceName);
 			connection.exportObject(ITEM_PATH, tray.itemObject);
 
-			try {
-				connection.exportObject(MENU_PATH, tray.menuObject);
-				tray.menuAvailable = true;
-			} catch (Throwable e) {
-				LOGGER.debug("Linux native tray menu is unavailable: {}", e.getMessage());
+			if (menuEnabled) {
+				try {
+					connection.exportObject(MENU_PATH, tray.menuObject);
+					tray.menuAvailable = true;
+				} catch (Throwable e) {
+					LOGGER.debug("Linux native tray menu is unavailable: {}", e.getMessage());
+				}
 			}
 
 			StatusNotifierWatcher watcher = connection.getRemoteObject(STATUS_NOTIFIER_WATCHER, STATUS_NOTIFIER_WATCHER_PATH,

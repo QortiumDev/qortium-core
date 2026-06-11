@@ -104,7 +104,7 @@ public class RestartNode {
 			javaCmd.removeAll(Arrays.asList("abort", "exit", "vfprintf"));
 
 			// Call ApplyRestart using JAR
-			javaCmd.addAll(Arrays.asList("-cp", JAR_FILENAME, ApplyRestart.class.getCanonicalName()));
+			javaCmd.addAll(Arrays.asList("-cp", getCurrentJarPath(), ApplyRestart.class.getCanonicalName()));
 
 			// Add command-line args saved from start-up
 			String[] savedArgs = Controller.getInstance().getSavedArgs();
@@ -138,6 +138,16 @@ public class RestartNode {
 			if (!applyProcessStarted) {
 				releaseRestartApply();
 			}
+		}
+	}
+
+	private static String getCurrentJarPath() {
+		try {
+			Path location = Paths.get(RestartNode.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			return location.toAbsolutePath().normalize().toString();
+		} catch (Exception e) {
+			LOGGER.warn("Failed to resolve current jar path for restart helper; falling back to {}", JAR_FILENAME, e);
+			return JAR_FILENAME;
 		}
 	}
 

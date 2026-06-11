@@ -27,11 +27,21 @@ final class AwtSysTray implements NodeTray {
 	private JPopupMenu popupMenu;
 	/** The hidden dialog has 'focus' when menu displayed so closes the menu when user clicks elsewhere. */
 	private JDialog hiddenDialog;
+	private final boolean menuEnabled;
 
-	private AwtSysTray() {
+	private AwtSysTray(boolean menuEnabled) {
+		this.menuEnabled = menuEnabled;
 	}
 
 	static NodeTray create() {
+		return create(true);
+	}
+
+	static NodeTray createStatusOnly() {
+		return create(false);
+	}
+
+	private static NodeTray create(boolean menuEnabled) {
 		if (GraphicsEnvironment.isHeadless())
 			return null;
 
@@ -39,7 +49,7 @@ final class AwtSysTray implements NodeTray {
 			if (!SystemTray.isSupported())
 				return null;
 
-			AwtSysTray tray = new AwtSysTray();
+			AwtSysTray tray = new AwtSysTray(menuEnabled);
 			tray.initialize();
 			return tray.isAvailable() ? tray : null;
 		} catch (Throwable e) {
@@ -51,39 +61,42 @@ final class AwtSysTray implements NodeTray {
 	private void initialize() {
 		LOGGER.info("Launching AWT system tray icon");
 
-		this.popupMenu = createJPopupMenu();
+		if (this.menuEnabled)
+			this.popupMenu = createJPopupMenu();
 
 		this.trayIcon = new TrayIcon(Gui.loadImage(TrayIconState.SYNCED.getResourceName()), "Qortium", null);
-		this.trayIcon.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mousePressed(MouseEvent mouseEvent) {
-				this.maybePopupMenu(mouseEvent);
-			}
-
-			@Override
-			public void mouseReleased(MouseEvent mouseEvent) {
-				this.maybePopupMenu(mouseEvent);
-			}
-
-			private void maybePopupMenu(MouseEvent mouseEvent) {
-				if (!mouseEvent.isPopupTrigger())
-					return;
-
-				try {
-					if (!popupMenu.isVisible())
-						destroyHiddenDialog();
-
-					createHiddenDialog();
-					hiddenDialog.setLocation(mouseEvent.getX() + 1, mouseEvent.getY() - 1);
-					popupMenu.setLocation(mouseEvent.getX() + 1, mouseEvent.getY() - 1);
-					popupMenu.setInvoker(hiddenDialog);
-					hiddenDialog.setVisible(true);
-					popupMenu.setVisible(true);
-				} catch (RuntimeException e) {
-					LOGGER.info("Unable to show AWT tray menu: {}", e.getMessage());
+		if (this.menuEnabled) {
+			this.trayIcon.addMouseListener(new MouseAdapter() {
+				@Override
+				public void mousePressed(MouseEvent mouseEvent) {
+					this.maybePopupMenu(mouseEvent);
 				}
-			}
-		});
+
+				@Override
+				public void mouseReleased(MouseEvent mouseEvent) {
+					this.maybePopupMenu(mouseEvent);
+				}
+
+				private void maybePopupMenu(MouseEvent mouseEvent) {
+					if (!mouseEvent.isPopupTrigger())
+						return;
+
+					try {
+						if (!popupMenu.isVisible())
+							destroyHiddenDialog();
+
+						createHiddenDialog();
+						hiddenDialog.setLocation(mouseEvent.getX() + 1, mouseEvent.getY() - 1);
+						popupMenu.setLocation(mouseEvent.getX() + 1, mouseEvent.getY() - 1);
+						popupMenu.setInvoker(hiddenDialog);
+						hiddenDialog.setVisible(true);
+						popupMenu.setVisible(true);
+					} catch (RuntimeException e) {
+						LOGGER.info("Unable to show AWT tray menu: {}", e.getMessage());
+					}
+				}
+			});
+		}
 
 		this.trayIcon.setImageAutoSize(true);
 

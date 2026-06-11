@@ -8,6 +8,7 @@ import org.qortium.api.ApiKey;
 import org.qortium.api.ApiRequest;
 import org.qortium.controller.AutoUpdate;
 import org.qortium.settings.Settings;
+import org.qortium.utils.RestartTrayAnimator;
 
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
@@ -45,6 +46,7 @@ public class ApplyUpdate {
 
 	private static final long CHECK_INTERVAL = 30 * 1000L; // ms
 	private static final int MAX_ATTEMPTS = 12;
+	private static final long RESTART_API_WAIT_TIMEOUT = 5 * 60 * 1000L; // ms
 
 	public static void main(String[] args) {
 		Security.insertProviderAt(new BouncyCastleProvider(), 0);
@@ -58,20 +60,24 @@ public class ApplyUpdate {
 
 		LOGGER.info("Applying update...");
 
-		// Shutdown node using API
-		if (!shutdownNode())
-			return;
+		try (RestartTrayAnimator trayAnimator = RestartTrayAnimator.start("Qortium Core is applying an update...")) {
+			// Shutdown node using API
+			if (!shutdownNode())
+				return;
 
-		// Replace JAR
-		if (!replaceJar()) {
-			LOGGER.error("Update JAR replacement failed - not restarting node with existing JAR");
-			return;
+			// Replace JAR
+			if (!replaceJar()) {
+				LOGGER.error("Update JAR replacement failed - not restarting node with existing JAR");
+				return;
+			}
+
+			// Restart node
+			Process process = restartNode(args);
+			if (process != null)
+				trayAnimator.waitForNodeApi(Settings.getInstance().getApiPort(), RESTART_API_WAIT_TIMEOUT);
+
+			LOGGER.info("Exiting...");
 		}
-
-		// Restart node
-		restartNode(args);
-
-		LOGGER.info("Exiting...");
 	}
 
 	private static boolean shutdownNode() {
@@ -150,7 +156,7 @@ public class ApplyUpdate {
 	}
 
 	private static boolean replaceJar() {
-		return replaceJar(Paths.get(""));
+		return replaceJar(resolveWorkingDirectoryForUpdate());
 	}
 
 	static boolean replaceJar(Path workingDirectory) {
@@ -189,7 +195,7 @@ public class ApplyUpdate {
 		return false;
 	}
 
-	private static void restartNode(String[] args) {
+	private static Process restartNode(String[] args) {
 		String javaHome = System.getProperty("java.home");
 		LOGGER.debug(() -> String.format("Java home: %s", javaHome));
 
@@ -215,8 +221,8 @@ public class ApplyUpdate {
 					.map(arg -> arg.replace(AGENTLIB_JVM_HOLDER_ARG, "-agentlib"))
 					.collect(Collectors.toList());
 
-			// Call mainClass in JAR
-			javaCmd.addAll(Arrays.asList("-jar", JAR_FILENAME));
+			// Call mainClass in installed JAR
+			javaCmd.addAll(Arrays.asList("-jar", resolveInstalledJarPath(resolveWorkingDirectoryForUpdate()).toString()));
 
 			// Add saved command-line args
 			javaCmd.addAll(Arrays.asList(args));
@@ -242,15 +248,32 @@ public class ApplyUpdate {
 
 			// Nothing to pipe to new process, so close output stream (process's stdin)
 			process.getOutputStream().close();
+			return process;
 		} catch (Exception e) {
 			LOGGER.error(String.format("Failed to restart node (BAD): %s", e.getMessage()));
+			return null;
+		}
+	}
+
+	static Path resolveInstalledJarPath(Path workingDirectory) {
+		return workingDirectory.resolve(JAR_FILENAME).toAbsolutePath().normalize();
+	}
+
+	private static String getCurrentJarPath() {
+		try {
+			Path location = Paths.get(ApplyUpdate.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			return location.toAbsolutePath().normalize().toString();
+		} catch (Exception e) {
+			LOGGER.warn("Failed to resolve current jar path for update; falling back to {}", JAR_FILENAME, e);
+			return JAR_FILENAME;
 		}
 	}
 
 	private static void writePidFileForRestart(Process process) {
 		Path pidFile = null;
 		try {
-			pidFile = resolvePidFileForRestart(Paths.get(""));
+			Path workingDirectory = resolveWorkingDirectoryForUpdate();
+			pidFile = resolvePidFileForRestart(workingDirectory);
 			if (pidFile == null)
 				return;
 
@@ -258,6 +281,21 @@ public class ApplyUpdate {
 		} catch (IOException | InvalidPathException e) {
 			LOGGER.warn("Unable to update pid file {} after auto-update restart: {}", pidFile, e.getMessage());
 		}
+	}
+
+	private static Path resolveWorkingDirectoryForUpdate() {
+		try {
+			Path currentJar = Paths.get(getCurrentJarPath());
+			Path currentDirectory = currentJar.getParent();
+			if (currentDirectory != null)
+				return currentDirectory;
+		} catch (Exception e) {
+			LOGGER.warn("Failed to resolve update working directory from jar path: {}", e.getMessage());
+		}
+
+		Path fallbackDirectory = Paths.get("").toAbsolutePath().normalize();
+		LOGGER.warn("Falling back to process working directory for update operations: {}", fallbackDirectory);
+		return fallbackDirectory;
 	}
 
 	static Path resolvePidFileForRestart(Path workingDirectory) {

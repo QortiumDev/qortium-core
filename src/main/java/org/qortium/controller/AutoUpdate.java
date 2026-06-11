@@ -908,8 +908,9 @@ public class AutoUpdate extends Thread {
 			new Thread(() -> {
 				try {
 					Thread.sleep(APPLY_UPDATE_DELAY);
-					if (!applyUpdate(newJar))
+					if (!applyUpdate(newJar)) {
 						releaseUpdateInstall();
+					}
 				} catch (InterruptedException e) {
 					Thread.currentThread().interrupt();
 					LOGGER.warn("Auto-update apply was interrupted before it started");
