@@ -312,7 +312,12 @@ public class DevProxyServerResource {
             textSize = "medium";
         }
 
-        HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme, true, lang, textSize);
+        String accent = request.getParameter("accent");
+        if (accent == null || accent.isBlank()) {
+            accent = "green";
+        }
+
+        HTMLParser htmlParser = new HTMLParser("", inPath, "", false, data, "proxy", Service.APP, null, theme, true, lang, textSize, accent);
         htmlParser.addAdditionalHeaderTags();
         response.addHeader(CONTENT_SECURITY_POLICY_HEADER, buildHtmlContentSecurityPolicy());
         response.addHeader(CONTENT_TYPE_OPTIONS_HEADER, CONTENT_TYPE_OPTIONS_NOSNIFF);
