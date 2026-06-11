@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-11 - core: keep restart tray visible during handoff
+
+Restart, bootstrap, and auto-update handoffs now keep their flashing tray indicator in the helper process that survives after the old Core shuts down, instead of trying to animate from the Core process that is about to exit. Normal restarts also avoid the old fixed wait sequence by polling for shutdown and repository-lock release, so the node can come back as soon as it is ready while keeping bounded safety waits. Auto-update restarts now launch the installed `qortium.jar` after replacement instead of continuing from the staging update jar.
+
 ### 2026-06-10 - docs: prepare v1.0.0-preview.9 release notes
 
 Added the release-prep notes for the v1.0.0-preview.9 prerelease. This preview packages the new minting-group lookup API used by Qortium Home and the chat app's start-minting flow, the completed translation pass across all twenty Home languages with its CI completeness test, and the remaining Electrum TLS and developer-proxy hardening. The notes also record that both public preview seeds are switching to QDN auto-update for this release.

@@ -22,8 +22,16 @@ public final class NodeTrayFactory {
 		return instance;
 	}
 
+	public static NodeTray createStatusTray() {
+		return selectStatusTray(GraphicsEnvironment.isHeadless(), LinuxStatusNotifierTray::createStatusOnly, AwtSysTray::createStatusOnly);
+	}
+
 	private static NodeTray createTray() {
 		return selectTray(GraphicsEnvironment.isHeadless(), LinuxStatusNotifierTray::create, AwtSysTray::create);
+	}
+
+	static NodeTray selectStatusTray(boolean headless, Supplier<NodeTray> linuxTraySupplier, Supplier<NodeTray> awtTraySupplier) {
+		return selectTray(headless, linuxTraySupplier, awtTraySupplier);
 	}
 
 	static NodeTray selectTray(boolean headless, Supplier<NodeTray> linuxTraySupplier, Supplier<NodeTray> awtTraySupplier) {

@@ -79,4 +79,11 @@ public class ApplyUpdateTests {
 		assertFalse(ApplyUpdate.replaceJar(tempDir));
 		assertEquals("old jar", Files.readString(realJar, StandardCharsets.UTF_8));
 	}
+
+	@Test
+	public void testResolveInstalledJarPathUsesInstalledJarName() throws Exception {
+		Path tempDir = Files.createTempDirectory("qortium-apply-update-test");
+
+		assertEquals(tempDir.resolve(AutoUpdate.JAR_FILENAME).toAbsolutePath().normalize(), ApplyUpdate.resolveInstalledJarPath(tempDir));
+	}
 }

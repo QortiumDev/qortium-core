@@ -7,9 +7,9 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.qortium.api.ApiKey;
 import org.qortium.api.ApiRequest;
-import org.qortium.controller.Controller;
 import org.qortium.controller.RestartNode;
 import org.qortium.settings.Settings;
+import org.qortium.utils.RestartTrayAnimator;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,8 +43,10 @@ public class ApplyRestart {
 	private static final String JAVA_TOOL_OPTIONS_NAME = "JAVA_TOOL_OPTIONS";
 	private static final String JAVA_TOOL_OPTIONS_VALUE = "";
 
-	private static final long CHECK_INTERVAL = 30 * 1000L; // ms
-	private static final int MAX_ATTEMPTS = 12;
+	private static final long CHECK_INTERVAL = 1_000L; // ms
+	private static final int MAX_ATTEMPTS = 300;
+	private static final long REPOSITORY_LOCK_WAIT_TIMEOUT = 2 * 60 * 1000L; // ms
+	private static final long RESTART_API_WAIT_TIMEOUT = 5 * 60 * 1000L; // ms
 
 	public static void main(String[] args) {
 		Security.insertProviderAt(new BouncyCastleProvider(), 0);
@@ -58,29 +60,21 @@ public class ApplyRestart {
 
 		LOGGER.info("Applying restart this can take up to 5 minutes...");
 
-		// Shutdown node using API
-		if (!shutdownNode())
-			return;
+		try (RestartTrayAnimator trayAnimator = RestartTrayAnimator.start("Qortium Core is restarting...")) {
+			// Shutdown node using API
+			if (!shutdownNode())
+				return;
 
-		try {
-			// Give some time for shutdown
-			TimeUnit.SECONDS.sleep(60);
-
-			// Remove blockchain lock if exist
-			ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
-			if (blockchainLock.isLocked())
-				blockchainLock.unlock();
-
-			// Remove blockchain lock file if still exist
-			TimeUnit.SECONDS.sleep(60);
+			waitForRepositoryLockToClear();
 			deleteLock();
 
-			// Restart node
-			TimeUnit.SECONDS.sleep(15);
-			restartNode(args);
+			Process process = restartNode(args);
+			if (process != null)
+				trayAnimator.waitForNodeApi(Settings.getInstance().getApiPort(), RESTART_API_WAIT_TIMEOUT);
 
 			LOGGER.info("Restarting...");
 		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 			LOGGER.error("Unable to restart", e);
 		}
 	}
@@ -117,12 +111,6 @@ public class ApplyRestart {
 			String response = ApiRequest.perform(baseUri + "admin/stop", Collections.emptyMap(), headers);
 			if (response == null) {
 				// No response - consider node shut down
-				try {
-					TimeUnit.SECONDS.sleep(30);
-				} catch (InterruptedException e) {
-					throw new RuntimeException(e);
-				}
-
 				if (apiKeyNewlyGenerated) {
 					// API key was newly generated for restarting node, so we need to remove it
 					ApplyRestart.removeGeneratedApiKey();
@@ -167,6 +155,14 @@ public class ApplyRestart {
 		}
 	}
 
+	private static void waitForRepositoryLockToClear() throws InterruptedException {
+		Path repositoryLock = Paths.get(Settings.getInstance().getRepositoryPath()).resolve("blockchain.lck");
+		long deadline = System.currentTimeMillis() + REPOSITORY_LOCK_WAIT_TIMEOUT;
+
+		while (Files.exists(repositoryLock) && System.currentTimeMillis() < deadline)
+			Thread.sleep(CHECK_INTERVAL);
+	}
+
 	private static void deleteLock() {
 		// Get the repository path from settings
 		String repositoryPath = Settings.getInstance().getRepositoryPath();
@@ -182,7 +178,7 @@ public class ApplyRestart {
 		}
 	}
 
-	private static void restartNode(String[] args) {
+	private static Process restartNode(String[] args) {
 		String javaHome = System.getProperty("java.home");
 		LOGGER.debug(() -> String.format("Java home: %s", javaHome));
 
@@ -210,7 +206,7 @@ public class ApplyRestart {
 					.collect(Collectors.toList());
 
 			// Call mainClass in JAR
-			javaCmd.addAll(Arrays.asList("-jar", JAR_FILENAME));
+			javaCmd.addAll(Arrays.asList("-jar", getCurrentJarPath()));
 
 			// Add saved command-line args
 			javaCmd.addAll(Arrays.asList(args));
@@ -234,8 +230,20 @@ public class ApplyRestart {
 
 			// Nothing to pipe to new process, so close output stream (process's stdin)
 			process.getOutputStream().close();
+			return process;
 		} catch (Exception e) {
 			LOGGER.error(String.format("Failed to restart node (BAD): %s", e.getMessage()));
+			return null;
+		}
+	}
+
+	private static String getCurrentJarPath() {
+		try {
+			Path location = Paths.get(ApplyRestart.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			return location.toAbsolutePath().normalize().toString();
+		} catch (Exception e) {
+			LOGGER.warn("Failed to resolve current jar path for restart; falling back to {}", JAR_FILENAME, e);
+			return JAR_FILENAME;
 		}
 	}
 }
