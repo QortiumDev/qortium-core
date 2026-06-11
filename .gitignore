@@ -21,6 +21,7 @@ apikey.txt
 
 # Local configuration
 /.env
+/CLAUDE.md
 /settings*.json
 /testchain*.json
 /run-testnet*.sh
@@ -52,6 +53,7 @@ apikey.txt
 /src/main/resources/resources
 __pycache__/
 *.py[cod]
+/qortium.update
 /*.jar
 /*.7z
 /Qortium-BTC*

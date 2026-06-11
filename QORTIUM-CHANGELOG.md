@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-11 - chore: ignore local assistant and update artifacts
+
+Local assistant notes and generated update-package artifacts are now ignored by git, keeping `CLAUDE.md` and `qortium.update` out of normal working-tree status while preserving the source, tests, and release files that should be reviewed and committed.
+
 ### 2026-06-11 - qdn: preserve accent setting across app renders
 
 QDN app rendering now carries the selected accent setting through Core-rendered pages, loading screens, development proxy pages, and in-app navigation links, matching the existing theme, language, and text-size propagation. The injected page metadata escapes the accent value before exposing it to app JavaScript, so malformed query values cannot break out of the generated script block.
