@@ -45,6 +45,7 @@ function parseUrl(url) {
     parsedUrl.searchParams.delete("theme");
     parsedUrl.searchParams.delete("lang");
     parsedUrl.searchParams.delete("textSize");
+    parsedUrl.searchParams.delete("accent");
     parsedUrl.searchParams.delete("identifier");
     parsedUrl.searchParams.delete("time");
     parsedUrl.searchParams.delete("isManualNavigation");
@@ -393,6 +394,7 @@ function buildResourceUrl(service, name, identifier, path, isLink) {
     url = appendQueryParam(url, "theme", _qdnTheme);
     url = appendQueryParam(url, "lang", _qdnLang);
     url = appendQueryParam(url, "textSize", _qdnTextSize);
+    url = appendQueryParam(url, "accent", _qdnAccent);
   }
   return url;
 }

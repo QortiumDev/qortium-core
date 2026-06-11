@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-11 - qdn: preserve accent setting across app renders
+
+QDN app rendering now carries the selected accent setting through Core-rendered pages, loading screens, development proxy pages, and in-app navigation links, matching the existing theme, language, and text-size propagation. The injected page metadata escapes the accent value before exposing it to app JavaScript, so malformed query values cannot break out of the generated script block.
+
 ### 2026-06-11 - core: keep restart tray visible during handoff
 
 Restart, bootstrap, and auto-update handoffs now keep their flashing tray indicator in the helper process that survives after the old Core shuts down, instead of trying to animate from the Core process that is about to exit. Normal restarts also avoid the old fixed wait sequence by polling for shutdown and repository-lock release, so the node can come back as soon as it is ready while keeping bounded safety waits. Auto-update restarts now launch the installed `qortium.jar` after replacement instead of continuing from the staging update jar.

@@ -45,6 +45,7 @@ public class ArbitraryDataRenderer {
     private String theme = "light";
     private String lang = "en"; 
     private String textSize = "medium";
+    private String accent = "green";
     private String inPath;
     private final String secret58;
     private final String prefix;
@@ -93,7 +94,7 @@ public class ArbitraryDataRenderer {
                 // If async is requested, show a loading screen whilst build is in progress
                 if (async) {
                     arbitraryDataReader.loadAsynchronously(false, 10);
-                    return this.getLoadingResponse(service, resourceId, identifier, theme);
+                    return this.getLoadingResponse(service, resourceId, identifier, theme, accent);
                 }
 
                 // Otherwise, loop until we have data
@@ -181,7 +182,7 @@ public class ArbitraryDataRenderer {
                 } else {
                     encodedResourceId = resourceId;
                 }
-                HTMLParser htmlParser = new HTMLParser(encodedResourceId, inPath, prefix, includeResourceIdInPrefix, data, qdnContext, service, identifier, theme, usingCustomRouting, lang, textSize);
+                HTMLParser htmlParser = new HTMLParser(encodedResourceId, inPath, prefix, includeResourceIdInPrefix, data, qdnContext, service, identifier, theme, usingCustomRouting, lang, textSize, accent);
                 htmlParser.addAdditionalHeaderTags();
                 response.addHeader(
                     "Content-Security-Policy",
@@ -273,7 +274,7 @@ public class ArbitraryDataRenderer {
         return userPath;
     }
 
-    private HttpServletResponse getLoadingResponse(Service service, String name, String identifier, String theme) {
+    private HttpServletResponse getLoadingResponse(Service service, String name, String identifier, String theme, String accent) {
         String responseString = "";
         URL url = Resources.getResource("loading/index.html");
         try {
@@ -284,6 +285,7 @@ public class ArbitraryDataRenderer {
             responseString = responseString.replace("%%NAME%%", escapeJavaScriptStringContents(name));
             responseString = responseString.replace("%%IDENTIFIER%%", escapeJavaScriptStringContents(identifier));
             responseString = responseString.replace("%%THEME%%", escapeJavaScriptStringContents(theme));
+            responseString = responseString.replace("%%ACCENT%%", escapeJavaScriptStringContents(accent));
 
         } catch (IOException e) {
             LOGGER.info("Unable to show loading screen: {}", e.getMessage());
@@ -390,6 +392,9 @@ public class ArbitraryDataRenderer {
     }    
     public void setTextSize(String textSize) {
         this.textSize = textSize;
+    }
+    public void setAccent(String accent) {
+        this.accent = accent;
     }
 
 }

@@ -30,7 +30,8 @@ public class HTMLParserTests {
 				"dark\"</script>",
 				false,
 				"en\"</script>",
-				"extra-large\"</script>");
+				"extra-large\"</script>",
+				"green\"</script>");
 
 		htmlParser.addAdditionalHeaderTags();
 
@@ -43,6 +44,7 @@ public class HTMLParserTests {
 		assertNotNull(metadataScript);
 		String scriptData = metadataScript.data();
 		assertTrue(scriptData.contains("var _qdnTextSize=\"extra-large\\\"\\u003c/script\\u003e\";"));
+		assertTrue(scriptData.contains("var _qdnAccent=\"green\\\"\\u003c/script\\u003e\";"));
 		assertTrue(scriptData.contains("\\u003c/script\\u003e\\u003cscript\\u003ealert(1)\\u003c/script\\u003e"));
 		assertFalse(scriptData.contains("</script><script>alert(1)</script>"));
 
@@ -68,6 +70,7 @@ public class HTMLParserTests {
 				"id value<&",
 				null,
 				false,
+				null,
 				null,
 				null);
 

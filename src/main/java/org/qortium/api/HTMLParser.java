@@ -28,10 +28,11 @@ public class HTMLParser {
     private String theme;
     private String lang;
     private String textSize;
+    private String accent;
     private boolean usingCustomRouting;
 
     public HTMLParser(String resourceId, String inPath, String prefix, boolean includeResourceIdInPrefix, byte[] data,
-                      String qdnContext, Service service, String identifier, String theme, boolean usingCustomRouting, String lang, String textSize) {
+                      String qdnContext, Service service, String identifier, String theme, boolean usingCustomRouting, String lang, String textSize, String accent) {
         String inPathWithoutFilename = inPath.contains("/") ? inPath.substring(0, inPath.lastIndexOf('/')) : String.format("/%s",inPath);
         this.qdnBase = includeResourceIdInPrefix ? String.format("%s/%s", prefix, resourceId) : prefix;
         this.qdnBaseWithPath = includeResourceIdInPrefix ? String.format("%s/%s%s", prefix, resourceId, inPathWithoutFilename) : String.format("%s%s", prefix, inPathWithoutFilename);
@@ -44,6 +45,7 @@ public class HTMLParser {
         this.theme = theme;
         this.lang = lang;
         this.textSize = textSize;
+        this.accent = accent;
         this.usingCustomRouting = usingCustomRouting;
     }
 
@@ -68,11 +70,12 @@ public class HTMLParser {
 
             // Escape and add vars
             String qdnContextVar = String.format(
-                "var _qdnContext=%s; var _qdnTheme=%s; var _qdnLang=%s; var _qdnTextSize=%s; var _qdnService=%s; var _qdnName=%s; var _qdnIdentifier=%s; var _qdnPath=%s; var _qdnBase=%s; var _qdnBaseWithPath=%s;",
+                "var _qdnContext=%s; var _qdnTheme=%s; var _qdnLang=%s; var _qdnTextSize=%s; var _qdnAccent=%s; var _qdnService=%s; var _qdnName=%s; var _qdnIdentifier=%s; var _qdnPath=%s; var _qdnBase=%s; var _qdnBaseWithPath=%s;",
                 javaScriptStringLiteral(this.qdnContext),
                 javaScriptStringLiteral(this.theme),
                 javaScriptStringLiteral(this.lang),
                 javaScriptStringLiteral(this.textSize),
+                javaScriptStringLiteral(this.accent),
                 javaScriptStringLiteral(this.service.toString()),
                 javaScriptStringLiteral(this.resourceId),
                 javaScriptStringLiteral(this.identifier),
