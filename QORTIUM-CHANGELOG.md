@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-12 - preview: fix relative release package output paths
+
+The preview package builder accepted `--output=target/...` in its usage text and release-prep docs, but it changed into the staging directory before invoking `zip`, so relative output paths were interpreted from the wrong location and failed. The script now resolves caller-relative output paths to absolute paths before packaging, so documented release commands create the preview zip where operators expect.
+
 ### 2026-06-12 - docs: prepare v1.0.0-preview.11 release notes
 
 Added the release-prep notes for the v1.0.0-preview.11 prerelease. This preview packages the launcher merge behavior that preserves local operator settings across restarts, the name-free QDN preview endpoint for apps that need to preview files or folders before an account has a registered name, and the small git hygiene cleanup for local assistant notes and generated update-package artifacts. The docs index now points to the newest Core preview release-prep document.
