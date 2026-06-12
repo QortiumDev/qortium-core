@@ -184,6 +184,7 @@ case "${MODE}" in
 		SETTINGS_LOCAL="${RUNTIME_DIR}/settings-preview-local.json"
 		;;
 esac
+SETTINGS_TEMPLATE_SNAPSHOT="${SETTINGS_LOCAL%.json}.template.json"
 
 cd "${SCRIPT_DIR}"
 
@@ -239,15 +240,15 @@ if [ -z "${JAR_PATH}" ]; then
 	exit 1
 fi
 
-AUTO_UPDATE_MODE_OVERRIDE="${QORTIUM_PREVIEW_AUTO_UPDATE_MODE:-}"
-if [ -z "${AUTO_UPDATE_MODE_OVERRIDE}" ] && [ -f "${SETTINGS_LOCAL}" ]; then
-	AUTO_UPDATE_MODE_OVERRIDE="$(read_auto_update_mode "${SETTINGS_LOCAL}" || true)"
+if ! java -cp "${JAR_PATH}" org.qortium.MergeSettings \
+		"${SETTINGS_TEMPLATE}" "${SETTINGS_TEMPLATE_SNAPSHOT}" "${SETTINGS_LOCAL}"; then
+	echo "Could not merge ${SETTINGS_LOCAL} with the release settings template."
+	echo "Fix the JSON in that file, or delete it to start again from the template."
+	exit 1
 fi
-
-cp "${SETTINGS_TEMPLATE}" "${SETTINGS_LOCAL}"
 configure_runtime_settings "${SETTINGS_LOCAL}"
-if [ -n "${AUTO_UPDATE_MODE_OVERRIDE}" ]; then
-	apply_auto_update_mode "${SETTINGS_LOCAL}" "${AUTO_UPDATE_MODE_OVERRIDE}"
+if [ -n "${QORTIUM_PREVIEW_AUTO_UPDATE_MODE:-}" ]; then
+	apply_auto_update_mode "${SETTINGS_LOCAL}" "${QORTIUM_PREVIEW_AUTO_UPDATE_MODE}"
 fi
 AUTO_UPDATE_MODE_EFFECTIVE="$(read_auto_update_mode "${SETTINGS_LOCAL}" || true)"
 

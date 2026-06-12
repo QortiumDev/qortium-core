@@ -188,6 +188,7 @@ if ($Mode -eq "seed-regxa") {
     $SettingsTemplate = Join-Path $ScriptDir "settings-preview.json"
     $SettingsLocal = Join-Path $RuntimeDir "settings-preview-local.json"
 }
+$SettingsTemplateSnapshot = $SettingsLocal -replace '\.json$', '.template.json'
 
 if (Test-Path -LiteralPath $RunPid -PathType Leaf) {
     $ExistingPid = (Get-Content -LiteralPath $RunPid -Raw).Trim()
@@ -222,14 +223,14 @@ if ([string]::IsNullOrWhiteSpace($JarPath)) {
     exit 1
 }
 
-$AutoUpdateModeOverride = $env:QORTIUM_PREVIEW_AUTO_UPDATE_MODE
-if ([string]::IsNullOrWhiteSpace($AutoUpdateModeOverride)) {
-    $AutoUpdateModeOverride = Get-AutoUpdateMode -SettingsPath $SettingsLocal
+& java -cp $JarPath org.qortium.MergeSettings $SettingsTemplate $SettingsTemplateSnapshot $SettingsLocal
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Could not merge $SettingsLocal with the release settings template."
+    Write-Host "Fix the JSON in that file, or delete it to start again from the template."
+    exit 1
 }
-
-Copy-Item -LiteralPath $SettingsTemplate -Destination $SettingsLocal -Force
 Set-RuntimeSettingPaths -SettingsPath $SettingsLocal
-Set-AutoUpdateMode -SettingsPath $SettingsLocal -Mode $AutoUpdateModeOverride
+Set-AutoUpdateMode -SettingsPath $SettingsLocal -Mode $env:QORTIUM_PREVIEW_AUTO_UPDATE_MODE
 $AutoUpdateModeEffective = Get-AutoUpdateMode -SettingsPath $SettingsLocal
 
 $JvmMemoryArgString = $env:QORTIUM_PREVIEW_JVM_MEMORY_ARGS
