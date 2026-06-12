@@ -40,6 +40,11 @@ PACKAGE_ROOT="${STAGING_DIR}/qortium-preview"
 
 if [ -z "${OUTPUT_PATH}" ]; then
 	OUTPUT_PATH="${TARGET_DIR}/qortium-preview.zip"
+else
+	case "${OUTPUT_PATH}" in
+		/*) ;;
+		*) OUTPUT_PATH="$(pwd)/${OUTPUT_PATH}" ;;
+	esac
 fi
 
 if [ "${SKIP_BUILD}" -ne 1 ]; then
