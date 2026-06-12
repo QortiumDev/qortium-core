@@ -149,9 +149,10 @@ curl -X PATCH \
 ./preview/start.sh --seed-regxa
 ```
 
-The preview launcher refreshes the local settings file from the tracked seed
-template on each start, but preserves a locally patched `autoUpdateMode` so this
-operator-only setting survives the restart. To force a one-shot mode without
+The preview launcher merges the local settings file with the tracked seed
+template on each start, so a locally patched `autoUpdateMode` — like any other
+local settings change — survives the restart, while untouched settings keep
+following the template. To force a mode from the environment instead of
 patching settings, start with `QORTIUM_PREVIEW_AUTO_UPDATE_MODE=INSTALL`.
 
 Publish a prepared `qortium.update` from a synced preview node that owns the

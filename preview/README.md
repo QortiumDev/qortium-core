@@ -151,8 +151,8 @@ so the initial preview network has known public API nodes available.
 Auto-update is explicitly off in the tracked preview settings templates.
 Operators can enable it in a local runtime settings file when testing approved
 QDN update manifests, but public preview defaults do not automatically install
-new jars. The preview launcher preserves a local `autoUpdateMode` override when
-restarting from the tracked template.
+new jars. Like every other local settings change, an `autoUpdateMode` override
+survives restarts and release upgrades.
 
 For a public VPS, expose the API port only if you want that public read-only
 access. Public preview peers need to reach the P2P port, and QDN/data peers
@@ -161,9 +161,15 @@ still required before other users can reach ports `24891`, `24892`, or `24894`.
 
 ## Runtime Files
 
-`start.sh` copies the tracked settings template to a generated runtime settings
-file before starting the node. This prevents API settings changes from editing
-tracked files. By default, generated runtime files stay under `preview/` for
+`start.sh` generates a runtime settings file from the tracked settings template
+before starting the node. This prevents API settings changes from editing
+tracked files. On later starts the launcher merges instead of overwriting:
+settings you changed, added, or removed — by editing the runtime settings file
+or through `PATCH /admin/settings` — are preserved, while settings you never
+touched keep following the template shipped with each release. A
+`*.template.json` snapshot beside the runtime settings file records which
+template generated it; delete both files to start fresh from the template. By
+default, generated runtime files stay under `preview/` for
 source checkouts and extracted release zips. Supplying `--runtime-dir=PATH` or
 setting `QORTIUM_PREVIEW_RUNTIME_DIR` stores the generated settings, database,
 QDN data, logs, PID file, keystore, and API key under that runtime root instead.
@@ -176,8 +182,11 @@ under `$HOME/.config/qortium-home` while Core keeps the chain database and
 Generated runtime files include:
 
 - `settings-preview-local.json`
+- `settings-preview-local.template.json`
 - `settings-preview-seed-local.json`
+- `settings-preview-seed-local.template.json`
 - `settings-preview-seed-netcup-local.json`
+- `settings-preview-seed-netcup-local.template.json`
 - `db-preview/`
 - `data-preview/`
 - `qortium-backup/`

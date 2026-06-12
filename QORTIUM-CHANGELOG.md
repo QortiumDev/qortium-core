@@ -34,7 +34,9 @@ own chain.
 
 ## Change Entries
 
-### 2026-06-11 - chore: ignore local assistant and update artifacts
+### 2026-06-12 - preview: preserve local settings changes across restarts
+
+The preview launcher used to rebuild the runtime settings file from the release template on every start, so any setting changed through the node's settings API or by editing the file by hand — for example enabling the API documentation page — silently reverted to the default on the next stop/start cycle. The launcher now merges instead: a new `MergeSettings` helper inside the node jar compares the runtime settings file against a snapshot of the template that generated it, keeps every setting the operator added, changed, or removed, and lets settings the operator never touched keep following the template shipped with each release. This works the same on Linux/macOS and Windows launchers, existing nodes keep their current changes on first upgrade, and `reset` still returns a node to a clean template state.
 
 Local assistant notes and generated update-package artifacts are now ignored by git, keeping `CLAUDE.md` and `qortium.update` out of normal working-tree status while preserving the source, tests, and release files that should be reviewed and committed.
 
