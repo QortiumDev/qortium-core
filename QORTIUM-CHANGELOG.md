@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-12 - docs: prepare v1.0.0-preview.11 release notes
+
+Added the release-prep notes for the v1.0.0-preview.11 prerelease. This preview packages the launcher merge behavior that preserves local operator settings across restarts, the name-free QDN preview endpoint for apps that need to preview files or folders before an account has a registered name, and the small git hygiene cleanup for local assistant notes and generated update-package artifacts. The docs index now points to the newest Core preview release-prep document.
+
 ### 2026-06-12 - api: add name-free QDN preview endpoint for any service
 
 QDN previews used to be possible only through the publish endpoints, which insist on a registered name, a synced blockchain, and an accurate clock even though a preview never touches the chain — that is why the preview feature in other clients refuses to work for accounts without a name. A new `POST /arbitrary/preview/{service}` endpoint now accepts a local file or directory path and returns a temporary viewing URL for any QDN service — websites and apps, but also videos, audio, images, and documents — so client apps like Qortium Home can let anyone check how content will look and behave before publishing it. The preview endpoint also reports a proper error instead of a success message when a preview cannot be generated.
