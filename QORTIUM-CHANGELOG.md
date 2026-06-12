@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-12 - api: add name-free QDN preview endpoint for any service
+
+QDN previews used to be possible only through the publish endpoints, which insist on a registered name, a synced blockchain, and an accurate clock even though a preview never touches the chain — that is why the preview feature in other clients refuses to work for accounts without a name. A new `POST /arbitrary/preview/{service}` endpoint now accepts a local file or directory path and returns a temporary viewing URL for any QDN service — websites and apps, but also videos, audio, images, and documents — so client apps like Qortium Home can let anyone check how content will look and behave before publishing it. The preview endpoint also reports a proper error instead of a success message when a preview cannot be generated.
+
 ### 2026-06-12 - preview: preserve local settings changes across restarts
 
 The preview launcher used to rebuild the runtime settings file from the release template on every start, so any setting changed through the node's settings API or by editing the file by hand — for example enabling the API documentation page — silently reverted to the default on the next stop/start cycle. The launcher now merges instead: a new `MergeSettings` helper inside the node jar compares the runtime settings file against a snapshot of the template that generated it, keeps every setting the operator added, changed, or removed, and lets settings the operator never touched keep following the template shipped with each release. This works the same on Linux/macOS and Windows launchers, existing nodes keep their current changes on first upgrade, and `reset` still returns a node to a clean template state.

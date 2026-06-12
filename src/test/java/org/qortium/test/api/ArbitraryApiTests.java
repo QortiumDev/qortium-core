@@ -3,9 +3,12 @@ package org.qortium.test.api;
 import org.apache.commons.io.FileUtils;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortium.api.ApiError;
 import org.qortium.api.resource.ArbitraryResource;
 import org.qortium.api.resource.TransactionsResource.ConfirmationStatus;
+import org.qortium.arbitrary.ArbitraryDataResource;
 import org.qortium.arbitrary.misc.Service;
+import org.qortium.controller.arbitrary.ArbitraryDataRenderManager;
 import org.qortium.test.common.ApiCommon;
 
 import java.io.ByteArrayInputStream;
@@ -58,6 +61,45 @@ public class ArbitraryApiTests extends ApiCommon {
 								}
 
 		assertNotNull(this.arbitraryResource.searchTransactions(null, null, null, Service.APP, null, this.aliceAddress, null, 10, null, true));
+	}
+
+	@Test
+	public void testPreviewPathWorksWithoutName() throws Exception {
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+
+			Path previewDir = Files.createTempDirectory("qortium-preview-test");
+			Files.writeString(previewDir.resolve("video.mp4"), "not really a video", StandardCharsets.UTF_8);
+
+			String previewPath = resource.previewPath(ApiCommon.TEST_API_KEY, "VIDEO", previewDir.toString());
+
+			assertTrue(previewPath.startsWith("/render/hash/"));
+			assertTrue(previewPath.contains("?secret="));
+
+			String hash58 = previewPath.substring("/render/hash/".length(), previewPath.indexOf('?'));
+			assertTrue(ArbitraryDataRenderManager.getInstance().isAuthorized(new ArbitraryDataResource(hash58, null, null, null)));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
+	public void testPreviewPathRejectsMissingPathAndInvalidService() {
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+
+			assertApiError(ApiError.INVALID_CRITERIA, () -> resource.previewPath(ApiCommon.TEST_API_KEY, "VIDEO", ""));
+			assertApiError(ApiError.INVALID_CRITERIA, () -> resource.previewPath(ApiCommon.TEST_API_KEY, "NOT_A_SERVICE", "/tmp/preview"));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
+	public void testPreviewPathRequiresApiKey() {
+		assertApiError(ApiError.UNAUTHORIZED, () -> this.arbitraryResource.previewPath(null, "VIDEO", "/tmp/preview"));
 	}
 
 	@Test
