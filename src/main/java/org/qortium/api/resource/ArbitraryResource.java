@@ -1166,6 +1166,54 @@ public class ArbitraryResource {
 				fee, null, title, description, tags, category, preview);
 	}
 
+	@POST
+	@Path("/preview/{service}")
+	@Operation(
+			summary = "Generate a temporary preview of a local file or directory, without publishing",
+			description = "Builds the data file for the requested service from a user-supplied local path, then returns a " +
+					"temporary /render/hash URL for viewing the content exactly as it would appear once published. " +
+					"No registered name is required and nothing is signed or broadcast.",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.TEXT_PLAIN,
+							schema = @Schema(
+									type = "string", example = "/Users/user/Documents/MyDirectoryOrFile"
+							)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "temporary URL path for rendering the preview",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public String previewPath(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+							  @PathParam("service") String serviceString,
+							  String path) {
+		Security.checkApiCallAllowed(request);
+
+		if (path == null || path.isEmpty()) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Path not supplied");
+		}
+
+		Service service;
+		try {
+			service = Service.valueOf(serviceString);
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Invalid service");
+		}
+
+		return this.preview(path, service);
+	}
+
 
 	@GET
 	@Path("/check/tmp")
@@ -2130,7 +2178,7 @@ public String finalizeUpload(
 				return "/render/hash/" + digest58 + "?secret=" + Base58.encode(arbitraryDataFile.getSecret());
 			}
 		}
-		return "Unable to generate preview URL";
+		throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, "Unable to generate preview URL");
 	}
 
 	private String upload(Service service, String name, String identifier,
