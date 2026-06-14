@@ -699,6 +699,16 @@ public class BlockChain {
 			ObjectMapper objectMapper = new ObjectMapper()
 					.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
 			Object jsonObject = objectMapper.readValue(jsonBytes, Object.class);
+
+			// Exclude 'checkpoints' from the chain-config hash. Checkpoints are a client-side
+			// validation aid, not a chain-defining parameter: two nodes with different (or no)
+			// checkpoint lists are still on the same chain and must remain peer-compatible.
+			// Removing the field here lets checkpoints be added or updated later without
+			// changing the hash that gates peer handshakes. This is hash-neutral for any config
+			// that has no checkpoints, so it deploys across the network without splitting it.
+			if (jsonObject instanceof Map)
+				((Map<?, ?>) jsonObject).remove("checkpoints");
+
 			byte[] canonicalJsonBytes = objectMapper.writeValueAsBytes(jsonObject);
 
 			return HashCode.fromBytes(Crypto.digest(canonicalJsonBytes)).toString();

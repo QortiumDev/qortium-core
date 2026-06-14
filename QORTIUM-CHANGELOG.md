@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-13 - core: exclude checkpoints from the chain-config fingerprint
+
+Nodes refuse to connect to peers running a different chain configuration, by comparing a fingerprint computed from the whole config file. That fingerprint is now computed with the optional "checkpoints" list left out.
+
+Checkpoints are a trust aid that lets a node confirm its copy of history matches known-good block signatures at chosen heights; they do not define the chain itself, and two nodes with different checkpoint lists (or none) are still on the very same network. Including them in the fingerprint would have meant that simply adding or updating a checkpoint made existing nodes treat the updated ones as a foreign network and stop talking to them — a forced, all-at-once upgrade every time.
+
+With checkpoints excluded, the fingerprint no longer changes when checkpoints are added or edited, so checkpoint data can be rolled out gradually without splitting the network. This change is deliberately introduced while no network has any checkpoints yet, so it does not alter any current fingerprint: old and new builds compute the same value and keep peering normally. It is the groundwork that lets trusted checkpoints be added in a later, separate step.
+
 ### 2026-06-13 - preview: bundle preview chain config inside the jar
 
 The preview network's chain configuration (previewchain.json) is now packaged inside the release jar, and the node loads it from there. Previously this file only existed as a loose file shipped alongside the jar, which meant the config — and anything we want to ship with it, such as trusted checkpoints — could go missing, get edited by hand, or fall out of step with the running code.
