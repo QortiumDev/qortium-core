@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-13 - api: add upload-based QDN preview for remote clients
+
+The existing preview endpoint builds a temporary, unpublished preview from a file or folder on the node's own machine, so it only works when the app and the node share a computer (the desktop case). This adds a companion endpoint that takes the content in the request body instead — base64-encoded, as a single file or a ZIP of a folder — so the node can build the same preview even when it runs on a different device from the app. That makes local-content preview possible from the mobile app, and from a desktop app pointed at a remote node, where handing the node a local path is impossible. (Base64 is used because that is the body format a mobile app can reliably send to the node.) A single HTML file sent for the website service is wrapped as index.html automatically, matching how the desktop preview stages a standalone page.
+
+The decoded content is staged to a temporary location (bounded in size, and a ZIP is extracted with path-traversal protection), built into the same temporary /render preview URL the existing endpoint returns, and then deleted. The call requires the node's API key, and nothing is signed or published.
+
 ### 2026-06-13 - docs: prepare v1.0.0-preview.12 release notes
 
 Added the release-prep notes for the v1.0.0-preview.12 prerelease. This preview packages the serving-side block-archive distribution groundwork, the new local per-block online-account history used by block online-account lookups, the preview chain configuration now bundled inside the jar, and the checkpoint-safe chain-config fingerprint change needed before trusted checkpoints can be rolled out gradually. The notes also record the tested archive message and manifest coverage, call out that automatic archive downloading remains off, and update the docs index to point at the newest Core preview release-prep document.

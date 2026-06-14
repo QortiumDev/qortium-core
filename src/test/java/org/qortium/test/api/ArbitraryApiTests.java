@@ -12,6 +12,7 @@ import org.qortium.controller.arbitrary.ArbitraryDataRenderManager;
 import org.qortium.test.common.ApiCommon;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -19,7 +20,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Base64;
 import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
@@ -100,6 +104,89 @@ public class ArbitraryApiTests extends ApiCommon {
 	@Test
 	public void testPreviewPathRequiresApiKey() {
 		assertApiError(ApiError.UNAUTHORIZED, () -> this.arbitraryResource.previewPath(null, "VIDEO", "/tmp/preview"));
+	}
+
+	private static String base64(byte[] content) {
+		return Base64.getEncoder().encodeToString(content);
+	}
+
+	@Test
+	public void testPreviewUploadSingleFileWorksWithoutName() throws Exception {
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+
+			byte[] content = "not really a video".getBytes(StandardCharsets.UTF_8);
+			String previewPath = resource.previewUpload(ApiCommon.TEST_API_KEY, "VIDEO", "video.mp4", false, base64(content));
+
+			assertTrue(previewPath.startsWith("/render/hash/"));
+			assertTrue(previewPath.contains("?secret="));
+
+			String hash58 = previewPath.substring("/render/hash/".length(), previewPath.indexOf('?'));
+			assertTrue(ArbitraryDataRenderManager.getInstance().isAuthorized(new ArbitraryDataResource(hash58, null, null, null)));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
+	public void testPreviewUploadSingleHtmlBecomesWebsite() throws Exception {
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+
+			byte[] html = "<html><body>preview</body></html>".getBytes(StandardCharsets.UTF_8);
+			String previewPath = resource.previewUpload(ApiCommon.TEST_API_KEY, "WEBSITE", "page.html", false, base64(html));
+
+			assertTrue(previewPath.startsWith("/render/hash/"));
+			assertTrue(previewPath.contains("?secret="));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
+	public void testPreviewUploadArchiveWorks() throws Exception {
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+
+			// A website is uploaded as a ZIP of its directory.
+			ByteArrayOutputStream zipBytes = new ByteArrayOutputStream();
+			try (ZipOutputStream zip = new ZipOutputStream(zipBytes)) {
+				zip.putNextEntry(new ZipEntry("index.html"));
+				zip.write("<html><body>preview</body></html>".getBytes(StandardCharsets.UTF_8));
+				zip.closeEntry();
+			}
+
+			String previewPath = resource.previewUpload(ApiCommon.TEST_API_KEY, "WEBSITE", null, true, base64(zipBytes.toByteArray()));
+
+			assertTrue(previewPath.startsWith("/render/hash/"));
+			assertTrue(previewPath.contains("?secret="));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
+	public void testPreviewUploadRejectsMissingContentAndInvalidService() {
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class, ApiCommon.TEST_API_KEY);
+
+			assertApiError(ApiError.INVALID_CRITERIA,
+					() -> resource.previewUpload(ApiCommon.TEST_API_KEY, "VIDEO", "video.mp4", false, null));
+			assertApiError(ApiError.INVALID_CRITERIA,
+					() -> resource.previewUpload(ApiCommon.TEST_API_KEY, "NOT_A_SERVICE", "f", false, base64(new byte[] { 1, 2, 3 })));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
+	public void testPreviewUploadRequiresApiKey() {
+		assertApiError(ApiError.UNAUTHORIZED,
+				() -> this.arbitraryResource.previewUpload(null, "VIDEO", "video.mp4", false, base64(new byte[] { 1, 2, 3 })));
 	}
 
 	@Test

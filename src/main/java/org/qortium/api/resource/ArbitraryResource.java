@@ -1214,6 +1214,134 @@ public class ArbitraryResource {
 		return this.preview(path, service);
 	}
 
+	@POST
+	@Path("/preview/{service}/upload")
+	@Consumes(MediaType.TEXT_PLAIN)
+	@Produces(MediaType.TEXT_PLAIN)
+	@Operation(
+			summary = "Generate a temporary preview from uploaded content, without publishing",
+			description = "Builds the data file for the requested service from base64-encoded content supplied in the " +
+					"request body — a single file, or a ZIP archive of a directory when archive=true — then returns a " +
+					"temporary /render/hash URL for viewing the content exactly as it would appear once published. A " +
+					"single HTML file uploaded as the WEBSITE service is wrapped as index.html automatically. Unlike " +
+					"/preview/{service}, the content is uploaded rather than read from a local path, so preview works " +
+					"when the node runs on a different device (for example a mobile app talking to a remote node). " +
+					"No registered name is required and nothing is signed or broadcast.",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.TEXT_PLAIN,
+							schema = @Schema(
+									type = "string", description = "Base64-encoded file or ZIP archive content"
+							)
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "temporary URL path for rendering the preview",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	@SecurityRequirement(name = "apiKey")
+	public String previewUpload(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+								@PathParam("service") String serviceString,
+								@QueryParam("filename") String filename,
+								@QueryParam("archive") Boolean archive,
+								String base64) {
+		Security.checkApiCallAllowed(request);
+
+		if (base64 == null || base64.isBlank()) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Content not supplied");
+		}
+
+		Service service;
+		try {
+			service = Service.valueOf(serviceString);
+		} catch (IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Invalid service");
+		}
+
+		byte[] content;
+		try {
+			content = Base64.decode(base64.trim());
+		} catch (RuntimeException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA, "Content is not valid base64");
+		}
+		if (content.length == 0) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Content not supplied");
+		}
+		if (content.length > ArbitraryDataFile.MAX_FILE_SIZE) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA, "Content exceeds the maximum allowed size");
+		}
+
+		java.nio.file.Path workingDirectory;
+		try {
+			java.nio.file.Path previewUploadsDirectory = Paths.get("uploads-temp", "preview");
+			Files.createDirectories(previewUploadsDirectory);
+			workingDirectory = Files.createTempDirectory(previewUploadsDirectory, "upload-");
+		} catch (IOException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, "Unable to prepare preview upload directory");
+		}
+
+		try {
+			java.nio.file.Path previewSource;
+
+			if (Boolean.TRUE.equals(archive)) {
+				// The content is a ZIP archive of a directory (e.g. a website). Stage it, then extract
+				// it into a content directory. ZipUtils guards against path-traversal (zip-slip).
+				java.nio.file.Path archiveFile = workingDirectory.resolve("upload.zip");
+				Files.write(archiveFile, content);
+
+				java.nio.file.Path contentDirectory = workingDirectory.resolve("content");
+				Files.createDirectories(contentDirectory);
+				ZipUtils.unzip(archiveFile.toString(), contentDirectory.toString());
+
+				previewSource = contentDirectory;
+			} else if (service == Service.WEBSITE && isHtmlPreviewFilename(filename)) {
+				// A standalone HTML page is wrapped as index.html so the Core builds it as a website,
+				// matching how the desktop path-based preview stages a single HTML file.
+				java.nio.file.Path contentDirectory = workingDirectory.resolve("content");
+				Files.createDirectories(contentDirectory);
+				Files.write(contentDirectory.resolve("index.html"), content);
+
+				previewSource = contentDirectory;
+			} else {
+				// A single file; preserve its name (and extension) when supplied.
+				String uploadFilename = (filename == null || filename.isBlank()) ? "preview" : filename;
+				java.nio.file.Path contentFile = FilesystemUtils.resolveFileNameInsideBase(workingDirectory, uploadFilename);
+				Files.write(contentFile, content);
+
+				previewSource = contentFile;
+			}
+
+			return this.preview(previewSource.toString(), service);
+		} catch (IOException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA, e.getMessage());
+		} finally {
+			// preview() has already built and cached the data file by hash, so the uploaded source
+			// is no longer needed.
+			try {
+				FileUtils.deleteDirectory(workingDirectory.toFile());
+			} catch (IOException e) {
+				LOGGER.info("Unable to clean up preview upload directory {}: {}", workingDirectory, e.getMessage());
+			}
+		}
+	}
+
+	private static boolean isHtmlPreviewFilename(String filename) {
+		if (filename == null) {
+			return false;
+		}
+		String lower = filename.toLowerCase(Locale.ROOT);
+		return lower.endsWith(".html") || lower.endsWith(".htm");
+	}
+
 
 	@GET
 	@Path("/check/tmp")
