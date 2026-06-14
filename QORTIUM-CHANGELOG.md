@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-13 - core: track per-block online accounts for historical lookup
+
+Each block records which accounts were online using compact positional numbers — a slot in the constantly-changing list of all minting accounts — rather than the accounts themselves. That works for validating a block as it arrives, but the numbers stop meaning anything once minting accounts join or leave, so asking the node "who was online for block N?" later returned nothing useful (an empty list, even for very recent blocks). This made it impossible for apps to show the online accounts behind a block.
+
+The node now keeps its own local record, written as each block is processed, of the actual reward-share identities that were online for every block — stored as stable keys that stay meaningful no matter how the minting set changes afterwards. The block online-accounts API reads this record first and falls back to the old behavior only for blocks a node processed before this change. This is purely local, node-side data: it does not change the blockchain, block contents, or validation in any way, so nodes can adopt it independently without a coordinated network upgrade. A node that re-syncs from scratch fills in the full history; a freshly bootstrapped node fills in from its bootstrap point onward. The record is removed for any block that gets orphaned.
+
+This also fixes two latent crashes in the same lookup that previously made it silently return an empty list: one when an online account was at level 0, and one when any account owned more than one registered name. With the index in place and those crashes fixed, the block online-accounts lookup returns real data for the first time.
+
 ### 2026-06-12 - preview: fix relative release package output paths
 
 The preview package builder accepted `--output=target/...` in its usage text and release-prep docs, but it changed into the staging directory before invoking `zip`, so relative output paths were interpreted from the wrong location and failed. The script now resolves caller-relative output paths to absolute paths before packaging, so documented release commands create the preview zip where operators expect.

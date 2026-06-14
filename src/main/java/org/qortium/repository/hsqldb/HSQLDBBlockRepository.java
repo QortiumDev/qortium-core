@@ -8,10 +8,12 @@ import org.qortium.data.transaction.TransactionData;
 import org.qortium.repository.BlockRepository;
 import org.qortium.repository.DataException;
 import org.qortium.repository.TransactionRepository;
+import org.qortium.transform.Transformer;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.logging.Logger;
@@ -538,6 +540,79 @@ public class HSQLDBBlockRepository implements BlockRepository {
 		} catch (SQLException e) {
 			throw new DataException("Unable to prune blocks from repository", e);
 		}
+	}
+
+
+	@Override
+	public List<byte[]> getOnlineRewardSharePublicKeys(int height) throws DataException {
+		String sql = "SELECT online_reward_shares FROM BlockOnlineAccounts WHERE height = ?";
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, height)) {
+			if (resultSet == null)
+				// No local index row for this height (block not indexed by this node).
+				return null;
+
+			byte[] encoded = resultSet.getBytes(1);
+
+			return decodeOnlineRewardSharePublicKeys(encoded);
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch block online reward-share public keys from repository", e);
+		}
+	}
+
+	@Override
+	public void saveOnlineRewardSharePublicKeys(int height, List<byte[]> rewardSharePublicKeys) throws DataException {
+		HSQLDBSaver saveHelper = new HSQLDBSaver("BlockOnlineAccounts");
+
+		saveHelper.bind("height", height)
+				.bind("online_reward_shares", encodeOnlineRewardSharePublicKeys(rewardSharePublicKeys));
+
+		try {
+			saveHelper.execute(this.repository);
+		} catch (SQLException e) {
+			throw new DataException("Unable to save block online reward-share public keys into repository", e);
+		}
+	}
+
+	@Override
+	public void deleteOnlineRewardSharePublicKeys(int height) throws DataException {
+		try {
+			this.repository.delete("BlockOnlineAccounts", "height = ?", height);
+		} catch (SQLException e) {
+			throw new DataException("Unable to delete block online reward-share public keys from repository", e);
+		}
+	}
+
+	/** Concatenate fixed-length reward-share public keys into a single blob for local storage. */
+	private static byte[] encodeOnlineRewardSharePublicKeys(List<byte[]> rewardSharePublicKeys) {
+		if (rewardSharePublicKeys == null || rewardSharePublicKeys.isEmpty())
+			return new byte[0];
+
+		byte[] encoded = new byte[rewardSharePublicKeys.size() * Transformer.PUBLIC_KEY_LENGTH];
+		int offset = 0;
+		for (byte[] publicKey : rewardSharePublicKeys) {
+			// Defensive: only fixed-length Ed25519 public keys are stored.
+			if (publicKey == null || publicKey.length != Transformer.PUBLIC_KEY_LENGTH)
+				continue;
+
+			System.arraycopy(publicKey, 0, encoded, offset, Transformer.PUBLIC_KEY_LENGTH);
+			offset += Transformer.PUBLIC_KEY_LENGTH;
+		}
+
+		// Trim if any malformed entries were skipped.
+		return (offset == encoded.length) ? encoded : Arrays.copyOf(encoded, offset);
+	}
+
+	/** Split a stored blob back into fixed-length reward-share public keys. */
+	private static List<byte[]> decodeOnlineRewardSharePublicKeys(byte[] encoded) {
+		List<byte[]> publicKeys = new ArrayList<>();
+		if (encoded == null)
+			return publicKeys;
+
+		for (int offset = 0; offset + Transformer.PUBLIC_KEY_LENGTH <= encoded.length; offset += Transformer.PUBLIC_KEY_LENGTH)
+			publicKeys.add(Arrays.copyOfRange(encoded, offset, offset + Transformer.PUBLIC_KEY_LENGTH));
+
+		return publicKeys;
 	}
 
 

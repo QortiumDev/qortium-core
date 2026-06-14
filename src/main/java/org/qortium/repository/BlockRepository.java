@@ -200,6 +200,37 @@ public interface BlockRepository {
 
 
 	/**
+	 * Returns the reward-share public keys that were online for the block at the given height,
+	 * from the local (non-consensus) per-block online-accounts index, or {@code null} if this
+	 * node has not indexed that height (e.g. blocks processed before the node was upgraded).
+	 * An empty list means the block was indexed but had no online accounts.
+	 *
+	 * @param height block height
+	 * @return list of 32-byte reward-share public keys, or null if not indexed
+	 * @throws DataException
+	 */
+	public List<byte[]> getOnlineRewardSharePublicKeys(int height) throws DataException;
+
+	/**
+	 * Saves (or replaces) the local per-block online-accounts index for the given height.
+	 * This is node-local derived data, not part of chain consensus.
+	 *
+	 * @param height block height
+	 * @param rewardSharePublicKeys 32-byte reward-share public keys that were online for the block
+	 * @throws DataException
+	 */
+	public void saveOnlineRewardSharePublicKeys(int height, List<byte[]> rewardSharePublicKeys) throws DataException;
+
+	/**
+	 * Deletes the local per-block online-accounts index for the given height (used when orphaning).
+	 *
+	 * @param height block height
+	 * @throws DataException
+	 */
+	public void deleteOnlineRewardSharePublicKeys(int height) throws DataException;
+
+
+	/**
 	 * Saves block into repository.
 	 * 
 	 * @param blockData

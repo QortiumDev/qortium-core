@@ -762,6 +762,35 @@ public class Block {
 		return this.cachedExpandedAccounts;
 	}
 
+	/**
+	 * Returns the reward-share public keys of this block's online accounts, resolved from the
+	 * block's positional online-account indices. This resolution is only correct while the
+	 * self-share set matches the one used when the block was minted (i.e. at block-processing
+	 * time), which is exactly why {@link #process()} persists the result into the local
+	 * (non-consensus) per-block index for later, drift-proof lookups.
+	 */
+	private List<byte[]> getOnlineRewardSharePublicKeys() throws DataException {
+		List<byte[]> rewardSharePublicKeys = new ArrayList<>();
+
+		List<RewardShareData> onlineRewardShares = this.cachedOnlineRewardShares;
+		if (onlineRewardShares == null) {
+			// Genesis and any block without online accounts have null encoded accounts.
+			if (this.blockData.getEncodedOnlineAccounts() == null)
+				return rewardSharePublicKeys;
+
+			ConciseSet accountIndexes = BlockTransformer.decodeOnlineAccounts(this.blockData.getEncodedOnlineAccounts());
+			onlineRewardShares = this.repository.getAccountRepository().getSelfSharesByIndexes(accountIndexes.toArray());
+		}
+
+		if (onlineRewardShares == null)
+			return rewardSharePublicKeys;
+
+		for (RewardShareData onlineRewardShare : onlineRewardShares)
+			rewardSharePublicKeys.add(onlineRewardShare.getRewardSharePublicKey());
+
+		return rewardSharePublicKeys;
+	}
+
 	// Navigation
 
 	/**
@@ -1626,6 +1655,13 @@ public class Block {
 		// Save block
 		this.repository.getBlockRepository().save(this.blockData);
 
+		// Persist the local (non-consensus) per-block online-accounts index now, while the block's
+		// positional online-account indices still resolve against the current self-share set. This
+		// stores the absolute reward-share public keys so the set can be fetched historically even
+		// after the self-share set changes. See Blocks.getDecodedOnlineAccountsForBlock.
+		this.repository.getBlockRepository().saveOnlineRewardSharePublicKeys(
+				this.blockData.getHeight(), this.getOnlineRewardSharePublicKeys());
+
 		// Link transactions to this block, thus removing them from unconfirmed transactions list.
 		// Also update "transaction participants" in repository for "transactions involving X" support in API
 		linkTransactionsToBlock();
@@ -2003,6 +2039,9 @@ public class Block {
 
 		if (trustInputsChanged)
 			refreshTrustDerivationSnapshotsAfterOrphan();
+
+		// Remove this block's local (non-consensus) online-accounts index entry.
+		this.repository.getBlockRepository().deleteOnlineRewardSharePublicKeys(this.blockData.getHeight());
 
 		// Delete block from blockchain
 		this.repository.getBlockRepository().delete(this.blockData);

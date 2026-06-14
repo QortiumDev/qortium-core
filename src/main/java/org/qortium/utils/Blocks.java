@@ -14,6 +14,7 @@ import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.transform.block.BlockTransformer;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -41,11 +42,32 @@ public class Blocks {
      */
     public static Set<DecodedOnlineAccountData> getDecodedOnlineAccountsForBlock(Repository repository, BlockData blockData) throws DataException {
         try {
-            // get all online account indices from block
-            ConciseSet onlineAccountIndices = BlockTransformer.decodeOnlineAccounts(blockData.getEncodedOnlineAccounts());
+            // Prefer the local (non-consensus) per-block online-accounts index, captured at
+            // block-processing time. It stores absolute reward-share public keys, which stay
+            // resolvable forever — unlike the block's positional online-account indices, which can
+            // no longer be resolved once the self-share set changes (accounts added/removed).
+            List<byte[]> onlineRewardSharePublicKeys
+                = repository.getBlockRepository().getOnlineRewardSharePublicKeys(blockData.getHeight());
 
-            // get online self-shares from the online accounts on the block
-            List<RewardShareData> onlineRewardShares = repository.getAccountRepository().getSelfSharesByIndexes(onlineAccountIndices.toArray());
+            List<RewardShareData> onlineRewardShares;
+            if (onlineRewardSharePublicKeys != null) {
+                // Indexed locally: resolve each stable public key back to its reward-share.
+                onlineRewardShares = new ArrayList<>(onlineRewardSharePublicKeys.size());
+                for (byte[] rewardSharePublicKey : onlineRewardSharePublicKeys) {
+                    RewardShareData rewardShareData = repository.getAccountRepository().getRewardShare(rewardSharePublicKey);
+                    // Skip reward-shares that have since been cancelled and no longer resolve.
+                    if (rewardShareData != null)
+                        onlineRewardShares.add(rewardShareData);
+                }
+            } else {
+                // Legacy fallback (block not indexed by this node, e.g. processed before upgrade):
+                // positional index decode, only correct while the self-share set is unchanged.
+                ConciseSet onlineAccountIndices = BlockTransformer.decodeOnlineAccounts(blockData.getEncodedOnlineAccounts());
+                onlineRewardShares = repository.getAccountRepository().getSelfSharesByIndexes(onlineAccountIndices.toArray());
+            }
+
+            if (onlineRewardShares == null)
+                return new HashSet<>(0);
 
             // online timestamp for block
             long onlineTimestamp = blockData.getOnlineAccountsTimestamp();
@@ -58,16 +80,18 @@ public class Blocks {
                     Groups.getGroupIdsToMint(BlockChain.getInstance(), blockData.getHeight())
                 );
 
-            // all names, indexed by address
+            // all names, indexed by address. An account may own more than one name, so keep the
+            // first per owner instead of letting Collectors.toMap throw on duplicate keys (which
+            // the catch below would otherwise swallow into an empty result).
             Map<String, String> nameByAddress
                 = repository.getNameRepository()
                     .getAllNames().stream()
-                    .collect(Collectors.toMap(NameData::getOwner, NameData::getName));
+                    .collect(Collectors.toMap(NameData::getOwner, NameData::getName, (existing, ignored) -> existing));
 
-            // all accounts at level 1 or higher, indexed by address
+            // all accounts at level 1 or higher, indexed by address (merge defensively).
             Map<String, Integer> levelByAddress
                 = repository.getAccountRepository().getAddressLevelPairings(1).stream()
-                    .collect(Collectors.toMap(AddressLevelPairing::getAddress, AddressLevelPairing::getLevel));
+                    .collect(Collectors.toMap(AddressLevelPairing::getAddress, AddressLevelPairing::getLevel, (existing, ignored) -> existing));
 
             // for each self-share where the minter is online,
             // construct the data object and add it to the return list
@@ -81,7 +105,10 @@ public class Blocks {
                         onlineRewardShare.getSharePercent(),
                         mintingGroupAddresses.contains(minter),
                         nameByAddress.get(minter),
-                        levelByAddress.get(minter)
+                        // getAddressLevelPairings(1) only returns level >= 1, so a level-0 online
+                        // account is absent; default to 0 rather than unboxing null into an NPE
+                        // (which the catch below would otherwise swallow into an empty result).
+                        levelByAddress.getOrDefault(minter, 0)
                         );
 
                 onlineAccounts.add(onlineAccountData);
