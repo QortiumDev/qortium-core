@@ -3,6 +3,7 @@ package org.qortium.api.proxy.resource;
 import org.qortium.api.ApiError;
 import org.qortium.api.ApiExceptionFactory;
 import org.qortium.api.HTMLParser;
+import org.qortium.arbitrary.ArbitraryDataRenderer;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.DevProxyManager;
 import org.qortium.settings.Settings;
@@ -339,7 +340,9 @@ public class DevProxyServerResource {
     }
 
     private void proxyNonHtmlConnectionToResponse(HttpURLConnection con, HttpServletResponse response, int responseCode) throws IOException {
-        response.addHeader(CONTENT_SECURITY_POLICY_HEADER, "default-src 'self'");
+        // Match Core render: JavaScript/worker assets get a script/worker-aware policy so emulator
+        // runtimes can eval/instantiate WebAssembly; everything else stays locked to its own origin.
+        response.addHeader(CONTENT_SECURITY_POLICY_HEADER, ArbitraryDataRenderer.contentSecurityPolicyForAsset(con.getURL().getPath()));
         response.addHeader(CONTENT_TYPE_OPTIONS_HEADER, CONTENT_TYPE_OPTIONS_NOSNIFF);
         if (con.getContentEncoding() != null) {
             response.addHeader("Content-Encoding", con.getContentEncoding());

@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class ArbitraryDataRenderer {
 
@@ -193,6 +194,10 @@ public class ArbitraryDataRenderer {
                     "media-src 'self' data: blob: http://127.0.0.1:* http://localhost:*; " +
 
                     "img-src 'self' data: blob:; " +
+
+                    // emulator/Emscripten runtimes spawn workers from same-origin or blob URLs
+                    "worker-src 'self' blob:; " +
+
                     "connect-src 'self' wss: blob:;"
                 );
                 response.setContentType(context.getMimeType(filename));
@@ -233,8 +238,34 @@ public class ArbitraryDataRenderer {
 
     }
 
+    /**
+     * Content-Security-Policy for a streamed (non-HTML) render asset. JavaScript assets — including
+     * worker scripts — need to eval and instantiate WebAssembly and to spawn workers (e.g. EmulatorJS
+     * / Emscripten), so they receive a script/worker-aware policy. Every other asset stays locked to
+     * its own origin.
+     */
+    public static String contentSecurityPolicyForAsset(String filename) {
+        if (isExecutableScriptAsset(filename)) {
+            return "default-src 'self'; " +
+                    "script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; " +
+                    "worker-src 'self' blob:; " +
+                    "connect-src 'self' blob:;";
+        }
+
+        return "default-src 'self'";
+    }
+
+    private static boolean isExecutableScriptAsset(String filename) {
+        if (filename == null) {
+            return false;
+        }
+
+        String lower = filename.toLowerCase(Locale.ROOT);
+        return lower.endsWith(".js") || lower.endsWith(".mjs") || lower.endsWith(".cjs");
+    }
+
     static void streamNonHtmlFileResponse(HttpServletResponse response, ServletContext context, Path filePath, String filename) throws IOException {
-        response.addHeader("Content-Security-Policy", "default-src 'self'");
+        response.addHeader("Content-Security-Policy", contentSecurityPolicyForAsset(filename));
         response.setContentType(context.getMimeType(filename));
         setResponseContentLength(response, Files.size(filePath));
 
