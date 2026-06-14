@@ -19,10 +19,12 @@ import org.qortium.crypto.Crypto;
 import org.qortium.data.account.AccountData;
 import org.qortium.data.block.BlockData;
 import org.qortium.data.block.BlockSummaryData;
+import org.qortium.data.block.ArchiveManifest;
 import org.qortium.data.block.DecodedOnlineAccountData;
 import org.qortium.data.network.OnlineAccountData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.repository.BlockArchiveReader;
+import org.qortium.settings.Settings;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -941,5 +943,34 @@ public class BlocksResource {
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE);
 		}
+	}
+
+	@GET
+	@Path("/archive/manifest")
+	@Operation(
+			summary = "Get this node's block-archive manifest",
+			description = "Returns the list of block-archive chunks this node can serve, each with its height range, "
+					+ "SHA-256 and size. Two nodes that archived the same blocks produce an identical manifest, so a "
+					+ "downloaded chunk can be verified against a trusted manifest before use.",
+			responses = {
+					@ApiResponse(
+							description = "the archive manifest",
+							content = @Content(
+									schema = @Schema(
+											implementation = ArchiveManifest.class
+									)
+							)
+					)
+			}
+	)
+	@ApiErrors({
+			ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE
+	})
+	public ArchiveManifest getArchiveManifest() {
+		if (!Settings.getInstance().isArchiveEnabled())
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA,
+					"Block archive is not enabled on this node");
+
+		return BlockArchiveReader.getInstance().buildArchiveManifest();
 	}
 }
