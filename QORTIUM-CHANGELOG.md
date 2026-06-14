@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-13 - api: expose block-archive manifest endpoint
+
+Adds a read-only API call, GET /blocks/archive/manifest, that returns this node's block-archive manifest as JSON: the archive format version and, for each chunk, its height range, SHA-256 and size. This lets tooling (for example a stable node that publishes a canonical manifest for others to verify against) read the manifest without going through the peer-to-peer layer. It returns an error if the node isn't keeping a block archive.
+
 ### 2026-06-13 - network: add block-archive manifest and chunk distribution protocol
 
 Adds the peer-to-peer messages that let nodes share block-archive data directly: one pair to request and return a node's archive manifest, and one pair to request and return a slice of an archive chunk. Chunk files are larger than a single network message may carry, so chunks are transferred in byte-range slices and reassembled by the requester, which can then verify the whole chunk against the manifest. Nodes also now advertise, during the connection handshake, how far they have archived, so a node can later pick peers that hold the ranges it needs.
