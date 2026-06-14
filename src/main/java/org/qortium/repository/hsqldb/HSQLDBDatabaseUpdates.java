@@ -33,6 +33,11 @@ public class HSQLDBDatabaseUpdates {
 		int databaseVersion = fetchDatabaseVersion(connection);
 
 		if (databaseVersion == CURRENT_SCHEMA_VERSION) {
+			// Local-only (non-consensus) tables live outside the schema version counter so an
+			// existing node picks them up on restart without a repository reset.
+			ensureLocalTables(connection);
+			connection.commit();
+
 			updateStartupStatus();
 			return false;
 		}
@@ -45,6 +50,7 @@ public class HSQLDBDatabaseUpdates {
 		StartupStatus.update("Initializing Qortium database, please wait...");
 
 		executeBaselineSchema(connection);
+		ensureLocalTables(connection);
 		connection.commit();
 
 		LOGGER.info("Initialized Qortium HSQLDB repository schema version {}", CURRENT_SCHEMA_VERSION);
@@ -52,6 +58,29 @@ public class HSQLDBDatabaseUpdates {
 		updateStartupStatus();
 
 		return true;
+	}
+
+	/**
+	 * Create local-only (non-consensus) tables if they do not already exist.
+	 * <p>
+	 * These hold node-local derived data that is NOT part of chain consensus, so they are
+	 * created idempotently on every startup and are intentionally decoupled from
+	 * {@link #CURRENT_SCHEMA_VERSION} — a node can be upgraded to populate them without a
+	 * coordinated network update or repository reset.
+	 *
+	 * @throws SQLException
+	 */
+	private static void ensureLocalTables(Connection connection) throws SQLException {
+		try (Statement stmt = connection.createStatement()) {
+			// Per-block online-accounts index. The block's own ONLINE_ACCOUNTS column stores
+			// positional indices into the (mutable) sorted self-share set, so they cannot be
+			// resolved historically once minting accounts are added/removed. This table records
+			// the absolute reward-share public keys that were online for each block (captured at
+			// block-processing time), concatenated as fixed 32-byte keys, so they stay resolvable.
+			stmt.execute("CREATE TABLE IF NOT EXISTS PUBLIC.BLOCKONLINEACCOUNTS ("
+					+ "HEIGHT INTEGER PRIMARY KEY, "
+					+ "ONLINE_REWARD_SHARES VARBINARY(1048576) NOT NULL)");
+		}
 	}
 
 	/**
