@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-14 - api: allow QDN-rendered apps to run workers and WebAssembly
+
+When the node serves a QDN app, it attaches a content-security-policy to each file. The app's main HTML page was already allowed to run the code many apps need, but the app's separate JavaScript and worker files were served under a stricter policy that forbids the in-worker code execution and WebAssembly that engines like EmulatorJS/Emscripten rely on — so those apps failed to start even after their data had downloaded.
+
+JavaScript assets (including worker scripts) are now served with a policy that permits that in-worker execution and WebAssembly, and that allows spawning workers from the app's own origin or from blob URLs; the app's HTML page also now allows creating workers. All other (non-script) assets stay locked to their own origin exactly as before, so the relaxation is limited to executable scripts. The local developer proxy was updated to match, so proxied development testing behaves like the node's render. A test confirms script assets receive the worker/WebAssembly policy while plain assets stay restrictive.
+
 ### 2026-06-13 - api: add upload-based QDN preview for remote clients
 
 The existing preview endpoint builds a temporary, unpublished preview from a file or folder on the node's own machine, so it only works when the app and the node share a computer (the desktop case). This adds a companion endpoint that takes the content in the request body instead — base64-encoded, as a single file or a ZIP of a folder — so the node can build the same preview even when it runs on a different device from the app. That makes local-content preview possible from the mobile app, and from a desktop app pointed at a remote node, where handing the node a local path is impossible. (Base64 is used because that is the body format a mobile app can reliably send to the node.) A single HTML file sent for the website service is wrapped as index.html automatically, matching how the desktop preview stages a standalone page.

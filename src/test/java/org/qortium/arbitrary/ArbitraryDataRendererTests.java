@@ -50,6 +50,31 @@ public class ArbitraryDataRendererTests {
     }
 
     @Test
+    public void testJavaScriptAssetResponseAllowsWorkerEval() throws Exception {
+        byte[] body = "self.postMessage('ok');".getBytes(StandardCharsets.UTF_8);
+        Path directory = Files.createTempDirectory("qdn-renderer");
+        Path filePath = directory.resolve("extractzip.worker.js");
+        Files.write(filePath, body);
+
+        try {
+            Exchange exchange = new Exchange("text/javascript");
+
+            ArbitraryDataRenderer.streamNonHtmlFileResponse(exchange.response, exchange.context, filePath, "extractzip.worker.js");
+
+            String csp = exchange.responseHeaders.get("Content-Security-Policy");
+            assertTrue("script-src should allow unsafe-eval: " + csp,
+                    csp.contains("script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'"));
+            assertTrue("wasm-unsafe-eval should be present: " + csp, csp.contains("'wasm-unsafe-eval'"));
+            assertTrue("workers from blob: should be allowed: " + csp, csp.contains("worker-src 'self' blob:"));
+            assertEquals("text/javascript", exchange.contentType);
+            assertArrayEquals(body, exchange.outputStream.toByteArray());
+        } finally {
+            Files.deleteIfExists(filePath);
+            Files.deleteIfExists(directory);
+        }
+    }
+
+    @Test
     public void testPlainTextResponseSetsContentTypeAndUtf8Length() {
         Exchange exchange = new Exchange("text/plain");
         String body = "Invalid \u03c0";
