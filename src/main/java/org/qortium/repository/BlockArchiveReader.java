@@ -1,8 +1,12 @@
 package org.qortium.repository;
 
+import com.google.common.hash.HashCode;
 import com.google.common.primitives.Ints;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortium.crypto.Crypto;
+import org.qortium.data.block.ArchiveChunkData;
+import org.qortium.data.block.ArchiveManifest;
 import org.qortium.data.block.BlockArchiveData;
 import org.qortium.settings.Settings;
 import org.qortium.transform.TransformationException;
@@ -12,6 +16,7 @@ import org.qortium.utils.Triple;
 
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -24,6 +29,8 @@ public class BlockArchiveReader {
 
     private static BlockArchiveReader instance;
     private Map<String, Triple<Integer, Integer, Integer>> fileListCache;
+    /** Cached manifest, rebuilt lazily and cleared whenever the file list cache is invalidated. */
+    private ArchiveManifest manifestCache;
 
     private static final Logger LOGGER = LogManager.getLogger(BlockArchiveReader.class);
 
@@ -329,8 +336,100 @@ public class BlockArchiveReader {
         return maxEndHeight;
     }
 
+    /**
+     * Returns this node's on-disk archive chunk ranges, sorted ascending by start height.
+     * Each entry is a two-element array {startHeight, endHeight}. These ranges are the
+     * canonical, content-addressable chunks used for archive distribution.
+     */
+    public List<int[]> getArchiveChunkRanges() {
+        if (this.fileListCache == null) {
+            this.fetchFileList();
+        }
+
+        List<int[]> ranges = new ArrayList<>();
+        for (Triple<Integer, Integer, Integer> info : this.fileListCache.values()) {
+            if (info == null || info.getA() == null || info.getB() == null) {
+                continue;
+            }
+            ranges.add(new int[] { info.getA(), info.getB() });
+        }
+        ranges.sort(Comparator.comparingInt(range -> range[0]));
+        return ranges;
+    }
+
+    /**
+     * Reads the raw bytes of the archive chunk file that begins at the given start height, or
+     * null if this node has no chunk starting exactly at that height. The bytes are the complete,
+     * unmodified .dat file, so they hash identically across nodes that archived the same blocks —
+     * the basis for content-addressed, multi-source chunk distribution.
+     */
+    public byte[] fetchRawChunkBytesForStartHeight(int startHeight) {
+        if (this.fileListCache == null) {
+            this.fetchFileList();
+        }
+
+        String filename = null;
+        for (Map.Entry<String, Triple<Integer, Integer, Integer>> entry : this.fileListCache.entrySet()) {
+            Triple<Integer, Integer, Integer> info = entry.getValue();
+            if (info != null && info.getA() != null && info.getA() == startHeight) {
+                filename = entry.getKey();
+                break;
+            }
+        }
+
+        if (filename == null) {
+            // We don't have a chunk starting at this height; the cache may be stale, so refresh next time.
+            this.invalidateFileListCache();
+            return null;
+        }
+
+        Path filePath = Paths.get(Settings.getInstance().getRepositoryPath(), "archive", filename).toAbsolutePath();
+        try {
+            return Files.readAllBytes(filePath);
+        } catch (IOException e) {
+            LOGGER.info("Unable to read archive chunk {}: {}", filename, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Builds the archive manifest for this node's on-disk archive: the canonical list of chunks
+     * (height range, SHA-256 of the chunk file, byte size). Two nodes that archived the same
+     * blocks produce an identical manifest, so a downloaded chunk can be verified against a
+     * trusted (e.g. release-pinned) manifest hash before use.
+     * <p>
+     * This reads and hashes every chunk file, so callers should treat it as an on-demand
+     * operation rather than a per-request hot path.
+     */
+    public ArchiveManifest buildArchiveManifest() {
+        ArchiveManifest cached = this.manifestCache;
+        if (cached != null) {
+            return cached;
+        }
+
+        List<ArchiveChunkData> chunks = new ArrayList<>();
+
+        for (int[] range : this.getArchiveChunkRanges()) {
+            int startHeight = range[0];
+            int endHeight = range[1];
+
+            byte[] chunkBytes = this.fetchRawChunkBytesForStartHeight(startHeight);
+            if (chunkBytes == null) {
+                continue;
+            }
+
+            String sha256 = HashCode.fromBytes(Crypto.digest(chunkBytes)).toString();
+            chunks.add(new ArchiveChunkData(startHeight, endHeight, sha256, chunkBytes.length));
+        }
+
+        ArchiveManifest manifest = new ArchiveManifest(SUPPORTED_ARCHIVE_VERSION, chunks);
+        this.manifestCache = manifest;
+        return manifest;
+    }
+
     public void invalidateFileListCache() {
         this.fileListCache = null;
+        this.manifestCache = null;
     }
 
 }

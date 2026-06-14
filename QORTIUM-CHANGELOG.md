@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-13 - core: add block-archive chunk and manifest read API
+
+A node that keeps a block archive stores it as a series of fixed range files (for example "blocks 2 to 1247"). This adds the ability to read that archive as discrete, shareable chunks: list the chunk ranges, read a chunk's raw bytes, and build a manifest — a list of every chunk with its height range, size, and a SHA-256 fingerprint of the chunk file.
+
+Because archive chunks are byte-identical on any node that archived the same blocks, the manifest is reproducible: two nodes produce the same fingerprints. That is what will later let a node download archive chunks from many peers and verify each one against a trusted manifest before trusting its contents. The manifest is cached and rebuilt only when the archive changes. This is read-only groundwork and changes nothing about how existing nodes behave.
+
 ### 2026-06-13 - core: exclude checkpoints from the chain-config fingerprint
 
 Nodes refuse to connect to peers running a different chain configuration, by comparing a fingerprint computed from the whole config file. That fingerprint is now computed with the optional "checkpoints" list left out.
