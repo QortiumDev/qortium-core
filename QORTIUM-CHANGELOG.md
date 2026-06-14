@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-13 - test: cover block-archive distribution messages and manifest
+
+Adds tests for the new block-archive distribution work: wire round-trip tests for each of the new peer messages (the values survive serialization and decode unchanged), and tests that build a real two-chunk archive and confirm the manifest reports the correct chunk ranges, sizes and SHA-256 fingerprints, that raw chunk bytes match the on-disk files, and that rebuilding the manifest over the same archive produces an identical result.
+
 ### 2026-06-13 - api: expose block-archive manifest endpoint
 
 Adds a read-only API call, GET /blocks/archive/manifest, that returns this node's block-archive manifest as JSON: the archive format version and, for each chunk, its height range, SHA-256 and size. This lets tooling (for example a stable node that publishes a canonical manifest for others to verify against) read the manifest without going through the peer-to-peer layer. It returns an error if the node isn't keeping a block archive.
