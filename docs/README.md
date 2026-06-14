@@ -26,7 +26,7 @@ history.
 
 - `Developer reference` [Database inspection](development/database.md) - local HSQLDB inspection notes
 - `Developer reference` [Current QDN auto-update scripts](../tools/auto-update-scripts/README.md) - current update publisher flow
-- `Developer reference` [Core preview 11 release prep](releases/v1.0.0-preview.11.md) - post-merge prerelease checklist and draft release notes
+- `Developer reference` [Core preview 12 release prep](releases/v1.0.0-preview.12.md) - post-merge prerelease checklist and draft release notes
 - `Developer reference` [Windows installer notes](../WindowsInstaller/README.md) - installer build notes
 
 ## Chain Design

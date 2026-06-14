@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-13 - docs: prepare v1.0.0-preview.12 release notes
+
+Added the release-prep notes for the v1.0.0-preview.12 prerelease. This preview packages the serving-side block-archive distribution groundwork, the new local per-block online-account history used by block online-account lookups, the preview chain configuration now bundled inside the jar, and the checkpoint-safe chain-config fingerprint change needed before trusted checkpoints can be rolled out gradually. The notes also record the tested archive message and manifest coverage, call out that automatic archive downloading remains off, and update the docs index to point at the newest Core preview release-prep document.
+
 ### 2026-06-13 - test: cover block-archive distribution messages and manifest
 
 Adds tests for the new block-archive distribution work: wire round-trip tests for each of the new peer messages (the values survive serialization and decode unchanged), and tests that build a real two-chunk archive and confirm the manifest reports the correct chunk ranges, sizes and SHA-256 fingerprints, that raw chunk bytes match the on-disk files, and that rebuilding the manifest over the same archive produces an identical result.
