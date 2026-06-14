@@ -81,7 +81,14 @@ public enum MessageType {
     GET_ACCOUNT_TRANSACTIONS(191, GetAccountTransactionsMessage::fromByteBuffer),
 
     FOREIGN_FEES( 200, ForeignFeesMessage::fromByteBuffer),
-    GET_FOREIGN_FEES( 201, GetForeignFeesMessage::fromByteBuffer);
+    GET_FOREIGN_FEES( 201, GetForeignFeesMessage::fromByteBuffer),
+
+    // Block-archive distribution
+    ARCHIVE_MANIFEST(210, ArchiveManifestMessage::fromByteBuffer),
+    GET_ARCHIVE_MANIFEST(211, GetArchiveManifestMessage::fromByteBuffer),
+
+    ARCHIVE_CHUNK(212, ArchiveChunkMessage::fromByteBuffer),
+    GET_ARCHIVE_CHUNK(213, GetArchiveChunkMessage::fromByteBuffer);
 
 
 

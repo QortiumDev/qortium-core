@@ -295,6 +295,12 @@ public class Settings {
 	/** Maximum number of blocks this node will serve in a single response */
 	private int maxBlocksPerResponse = 200;
 
+	/** Whether to answer peers' requests for block-archive manifests and chunks (archive distribution). */
+	private boolean archiveServingEnabled = true;
+	/** Whether to rebuild state from downloaded archive chunks using trusted fast-replay during sync.
+	 *  Inert until release-pinned checkpoints exist to act as the trust floor; off by default for now. */
+	private boolean archiveFastReplayEnabled = false;
+
 	// Which blockchains this node is running
 	@XmlJavaTypeAdapter(WalletsMapXmlAdapter.class)
 	private Map<String, Boolean> wallets = new HashMap<>();
@@ -1879,6 +1885,14 @@ public class Settings {
 	public int getMaxBlocksPerRequest() { return this.maxBlocksPerRequest; }
 
 	public int getMaxBlocksPerResponse() { return this.maxBlocksPerResponse; }
+
+	public boolean isArchiveServingEnabled() {
+		return this.archiveServingEnabled;
+	}
+
+	public boolean isArchiveFastReplayEnabled() {
+		return this.archiveFastReplayEnabled;
+	}
 
 	public AutoUpdateMode getAutoUpdateMode() {
 		if (this.autoUpdateMode != null)

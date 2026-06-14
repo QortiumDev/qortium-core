@@ -22,6 +22,7 @@ import org.qortium.controller.repository.PruneManager;
 import org.qortium.controller.tradebot.TradeBot;
 import org.qortium.data.account.AccountBalanceData;
 import org.qortium.data.account.AccountData;
+import org.qortium.data.block.ArchiveManifest;
 import org.qortium.data.block.BlockData;
 import org.qortium.data.block.BlockSummaryData;
 import org.qortium.data.network.LiteDataAnchor;
@@ -1718,10 +1719,66 @@ public class Controller extends Thread {
 				onNetworkGetNameMessage(peer, message);
 				break;
 
+			case GET_ARCHIVE_MANIFEST:
+				onNetworkGetArchiveManifestMessage(peer, message);
+				break;
+
+			case GET_ARCHIVE_CHUNK:
+				onNetworkGetArchiveChunkMessage(peer, message);
+				break;
+
 			default:
 				LOGGER.debug(() -> String.format("Unhandled %s message [ID %d] from peer %s", message.getType().name(), message.getId(), peer));
 				break;
 		}
+	}
+
+	// Block-archive distribution: serve our manifest and chunk slices to peers that ask. Read-only
+	// and consensus-neutral. Requesters gate on the ARCHIVE_HEIGHT capability so older peers, which
+	// don't understand these message types, are never sent them (and would harmlessly ignore them).
+
+	private void onNetworkGetArchiveManifestMessage(Peer peer, Message message) {
+		if (!Settings.getInstance().isArchiveServingEnabled() || !Settings.getInstance().isArchiveEnabled())
+			return;
+
+		ArchiveManifest manifest = BlockArchiveReader.getInstance().buildArchiveManifest();
+
+		Message archiveManifestMessage = new ArchiveManifestMessage(manifest);
+		archiveManifestMessage.setId(message.getId());
+		if (!peer.sendMessage(archiveManifestMessage))
+			peer.disconnect("failed to send archive manifest");
+	}
+
+	private void onNetworkGetArchiveChunkMessage(Peer peer, Message message) {
+		if (!Settings.getInstance().isArchiveServingEnabled() || !Settings.getInstance().isArchiveEnabled())
+			return;
+
+		GetArchiveChunkMessage getArchiveChunkMessage = (GetArchiveChunkMessage) message;
+		int startHeight = getArchiveChunkMessage.getStartHeight();
+		int offset = getArchiveChunkMessage.getOffset();
+		int requestedLength = getArchiveChunkMessage.getLength();
+
+		byte[] chunkBytes = BlockArchiveReader.getInstance().fetchRawChunkBytesForStartHeight(startHeight);
+
+		// If we don't have a chunk starting at this height, or the requested offset is out of range,
+		// tell the peer it's unknown so it can move on to another peer.
+		if (chunkBytes == null || offset < 0 || offset >= chunkBytes.length) {
+			Message archiveChunkUnknownMessage = new GenericUnknownMessage();
+			archiveChunkUnknownMessage.setId(message.getId());
+			if (!peer.sendMessage(archiveChunkUnknownMessage))
+				peer.disconnect("failed to send archive-chunk-unknown response");
+			return;
+		}
+
+		int totalSize = chunkBytes.length;
+		int sliceLength = Math.min(Math.max(requestedLength, 0), ArchiveChunkMessage.MAX_SLICE_LENGTH);
+		sliceLength = Math.min(sliceLength, totalSize - offset);
+		byte[] slice = Arrays.copyOfRange(chunkBytes, offset, offset + sliceLength);
+
+		Message archiveChunkMessage = new ArchiveChunkMessage(startHeight, offset, totalSize, slice);
+		archiveChunkMessage.setId(message.getId());
+		if (!peer.sendMessage(archiveChunkMessage))
+			peer.disconnect("failed to send archive chunk");
 	}
 
 	// List to collect messages
