@@ -1,6 +1,7 @@
 package org.qortium.data.transaction;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.eclipse.persistence.oxm.annotations.XmlDiscriminatorValue;
 import org.qortium.transaction.Transaction.TransactionType;
 
 import javax.xml.bind.Unmarshaller;
@@ -15,6 +16,8 @@ import javax.xml.bind.annotation.XmlTransient;
 		TransactionData.class
 	}
 )
+//JAXB: use this subclass if XmlDiscriminatorNode matches XmlDiscriminatorValue below:
+@XmlDiscriminatorValue("GROUP_APPROVAL")
 public class GroupApprovalTransactionData extends TransactionData {
 
 	// Properties
