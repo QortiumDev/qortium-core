@@ -10,6 +10,7 @@ import org.qortium.crypto.Crypto;
 import org.qortium.crypto.MemoryPoW;
 import org.qortium.network.helper.PeerCapabilities;
 import org.qortium.network.message.*;
+import org.qortium.repository.BlockArchiveReader;
 import org.qortium.settings.Settings;
 import org.qortium.utils.DaemonThreadFactory;
 import org.qortium.utils.NTP;
@@ -507,6 +508,7 @@ public enum Handshake {
 	static final String CHAIN_NETWORK_ID_CAPABILITY = "CHAIN_NETWORK_ID";
 	static final String CHAIN_GENESIS_SIGNATURE_CAPABILITY = "CHAIN_GENESIS_SIGNATURE";
 	static final String CHAIN_CONFIG_HASH_CAPABILITY = "CHAIN_CONFIG_HASH";
+	static final String ARCHIVE_HEIGHT_CAPABILITY = "ARCHIVE_HEIGHT";
 
 	private static final int POW_BUFFER_SIZE_PRE_131 = 8 * 1024 * 1024; // bytes
 	private static final int POW_DIFFICULTY_PRE_131 = 8; // leading zero bits
@@ -568,6 +570,15 @@ public enum Handshake {
 
 		if (!Settings.getInstance().isLite())
 			capabilities.put(LiteNode.LITE_DATA_CAPABILITY, LiteNode.LITE_DATA_CAPABILITY_VERSION);
+
+		// Advertise how far this node has archived (0 if archiving is disabled or nothing is archived
+		// yet) so peers can later fetch archive chunks from nodes that hold the ranges they need.
+		// Informational only: this capability is not part of handshake compatibility, and unknown
+		// capabilities are ignored by older peers, so it propagates without splitting the network.
+		int archiveHeight = Settings.getInstance().isArchiveEnabled()
+				? BlockArchiveReader.getInstance().getHeightOfLastArchivedBlock()
+				: 0;
+		capabilities.put(ARCHIVE_HEIGHT_CAPABILITY, archiveHeight);
 
 		return capabilities;
 	}

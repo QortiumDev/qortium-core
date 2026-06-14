@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-13 - network: add block-archive manifest and chunk distribution protocol
+
+Adds the peer-to-peer messages that let nodes share block-archive data directly: one pair to request and return a node's archive manifest, and one pair to request and return a slice of an archive chunk. Chunk files are larger than a single network message may carry, so chunks are transferred in byte-range slices and reassembled by the requester, which can then verify the whole chunk against the manifest. Nodes also now advertise, during the connection handshake, how far they have archived, so a node can later pick peers that hold the ranges it needs.
+
+For now this is only the serving and advertising side: a node answers these requests (controlled by a new setting, on by default) but nothing yet downloads from peers. A second setting is reserved for the future download-and-replay step and is off. Everything here is additive and backward-compatible: the new advertised capability is not part of the check that decides whether two nodes are on the same network, and a node that doesn't recognise the new message types simply ignores them without dropping the connection. That means this can roll out gradually across the network with no coordinated upgrade, priming peers to serve archive data before the download side is switched on later.
+
 ### 2026-06-13 - core: add block-archive chunk and manifest read API
 
 A node that keeps a block archive stores it as a series of fixed range files (for example "blocks 2 to 1247"). This adds the ability to read that archive as discrete, shareable chunks: list the chunk ranges, read a chunk's raw bytes, and build a manifest — a list of every chunk with its height range, size, and a SHA-256 fingerprint of the chunk file.
