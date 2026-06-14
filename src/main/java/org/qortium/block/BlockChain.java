@@ -578,22 +578,32 @@ public class BlockChain {
 		byte[] jsonBytes;
 
 		if (filename != null) {
-			LOGGER.info(String.format("Using blockchain config file: %s%s", path, filename));
+			// Prefer a config of this name bundled on the classpath (inside the jar), so that
+			// network configs such as previewchain.json travel with the release rather than
+			// depending on a separate external file. Fall back to an external file (e.g. a
+			// custom network or testnet config) when the named config isn't bundled.
+			byte[] bundledBytes = readBundledConfig(filename);
+			if (bundledBytes != null) {
+				LOGGER.info(String.format("Using bundled blockchain config resource: %s", filename));
+				jsonBytes = bundledBytes;
+			} else {
+				LOGGER.info(String.format("Using blockchain config file: %s%s", path, filename));
 
-			File jsonFile = new File(path + filename);
+				File jsonFile = new File(path + filename);
 
-			if (!jsonFile.exists()) {
-				String message = "Blockchain config file not found: " + path + filename;
-				LOGGER.error(message);
-				throw new RuntimeException(message, new FileNotFoundException(message));
-			}
+				if (!jsonFile.exists()) {
+					String message = "Blockchain config file not found: " + path + filename;
+					LOGGER.error(message);
+					throw new RuntimeException(message, new FileNotFoundException(message));
+				}
 
-			try {
-				jsonBytes = Files.readAllBytes(jsonFile.toPath());
-			} catch (IOException e) {
-				String message = "Failed to read blockchain config file: " + path + filename;
-				LOGGER.error(message, e);
-				throw new RuntimeException(message, e);
+				try {
+					jsonBytes = Files.readAllBytes(jsonFile.toPath());
+				} catch (IOException e) {
+					String message = "Failed to read blockchain config file: " + path + filename;
+					LOGGER.error(message, e);
+					throw new RuntimeException(message, e);
+				}
 			}
 		} else {
 			LOGGER.info("Using default, resources-based blockchain config");
@@ -664,6 +674,24 @@ public class BlockChain {
 		GenesisBlock.newInstance(blockchain.genesisInfo);
 
 		blockchain.genesisSignature = Base58.encode(GenesisBlock.getGenesisSignature());
+	}
+
+	/**
+	 * Attempts to read a blockchain config of the given name from the classpath (i.e. bundled
+	 * inside the jar). Returns the file bytes, or null if no such resource is bundled.
+	 */
+	private static byte[] readBundledConfig(String filename) {
+		ClassLoader classLoader = BlockChain.class.getClassLoader();
+		try (InputStream in = classLoader.getResourceAsStream(filename)) {
+			if (in == null)
+				return null;
+
+			return in.readAllBytes();
+		} catch (IOException e) {
+			String message = "Failed to read bundled blockchain config resource: " + filename;
+			LOGGER.error(message, e);
+			throw new RuntimeException(message, e);
+		}
 	}
 
 	private static String computeChainConfigHash(byte[] jsonBytes) {

@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-13 - preview: bundle preview chain config inside the jar
+
+The preview network's chain configuration (previewchain.json) is now packaged inside the release jar, and the node loads it from there. Previously this file only existed as a loose file shipped alongside the jar, which meant the config — and anything we want to ship with it, such as trusted checkpoints — could go missing, get edited by hand, or fall out of step with the running code.
+
+When a node is told to use a named chain config, it now looks for that config bundled inside the jar first and uses it when present; if the name isn't bundled (for example a custom or local testnet config), it falls back to reading an external file exactly as before. The bundled preview config is a byte-for-byte copy of the existing one, so the chain it describes is unchanged: nodes on the old and new builds compute the same chain-config fingerprint and keep peering with each other normally. Mainnet already loaded its bundled config this way; this brings preview into line.
+
 ### 2026-06-13 - core: track per-block online accounts for historical lookup
 
 Each block records which accounts were online using compact positional numbers — a slot in the constantly-changing list of all minting accounts — rather than the accounts themselves. That works for validating a block as it arrives, but the numbers stop meaning anything once minting accounts join or leave, so asking the node "who was online for block N?" later returned nothing useful (an empty list, even for very recent blocks). This made it impossible for apps to show the online accounts behind a block.
