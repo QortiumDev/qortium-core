@@ -271,6 +271,17 @@ public class Settings {
 	/** The number of seconds of no activity before recovery mode begins */
 	public long recoveryModeTimeout = 9999999999999L;
 
+	/** Tier 3 fork-recovery watchdog: when our chain tip is stale and a quorum of fresh, healthy,
+	 * strictly-higher peers exists (i.e. we are wedged behind a live network, e.g. on a short
+	 * self-minted fork the weight comparison refuses to give up), auto-orphan our short top fork so
+	 * normal validated synchronization can adopt the network chain. Default true (intended for
+	 * previewnet; operators can disable until vetted). */
+	public boolean recoveryWatchdogEnabled = true;
+	/** Milliseconds the stuck condition must persist continuously before the watchdog acts. */
+	public long recoveryWatchdogStuckThresholdMillis = 5 * 60 * 1000L;
+	/** Minimum milliseconds between watchdog orphan actions, to prevent thrashing. */
+	public long recoveryWatchdogCooldownMillis = 10 * 60 * 1000L;
+
 	/** Minimum peer version number required in order to sync with them */
 	private String minPeerVersion = "1.0.0";
 
@@ -1724,6 +1735,12 @@ public class Settings {
 	public long getRecoveryModeTimeout() {
 		return recoveryModeTimeout;
 	}
+
+	public boolean isRecoveryWatchdogEnabled() { return this.recoveryWatchdogEnabled; }
+
+	public long getRecoveryWatchdogStuckThresholdMillis() { return this.recoveryWatchdogStuckThresholdMillis; }
+
+	public long getRecoveryWatchdogCooldownMillis() { return this.recoveryWatchdogCooldownMillis; }
 
 	public String getMinPeerVersion() { return this.minPeerVersion; }
 

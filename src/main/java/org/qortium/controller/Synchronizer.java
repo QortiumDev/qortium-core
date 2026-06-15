@@ -103,6 +103,25 @@ public class Synchronizer extends Thread {
 	 */
 	private static final long SYNC_HEARTBEAT_INTERVAL = 60 * 1000L;
 
+	/** Fork-recovery watchdog (Tier 3): how often, at most, the watchdog evaluates, inside the 1s run-loop. */
+	private static final long WATCHDOG_CHECK_INTERVAL = 30 * 1000L;
+	/** Fork-recovery watchdog: minimum number of distinct fresh, healthy, strictly-higher peers required to act. */
+	private static final int RECOVERY_WATCHDOG_MIN_PEERS = 2;
+	/**
+	 * Fork-recovery watchdog: absolute ceiling on how many of our own tip blocks the watchdog will
+	 * discard within one stuck episode (no intervening forward progress). Guarantees the watchdog can
+	 * never approach MAXIMUM_COMMON_DELTA and can never become a deep-reorg tool.
+	 */
+	private static final int RECOVERY_WATCHDOG_MAX_ORPHAN_DEPTH_CEILING = 3;
+
+	/** Fork-recovery watchdog state (all touched only on the Synchronizer thread). */
+	private long lastWatchdogCheckTimestamp = 0L;          // System.currentTimeMillis() pacing
+	private long watchdogStuckSince = 0L;                  // NTP time the current stuck episode began; 0 = not stuck
+	private byte[] watchdogStuckTipSignature = null;       // our tip sig the episode is keyed to
+	private long lastWatchdogOrphanTimestamp = 0L;         // NTP time of last orphan, for cooldown
+	private int watchdogOrphanCount = 0;                   // consecutive orphans without forward progress
+	private int watchdogHighWaterHeight = 0;               // highest tip height seen; forward progress resets the orphan budget
+
 	// Keep track of invalid blocks so that we don't keep trying to sync them
 	private Map<ByteArray, Long> invalidBlockSignatures = Collections.synchronizedMap(new HashMap<>());
 	public Long timeValidBlockLastReceived = null;
@@ -187,6 +206,18 @@ public class Synchronizer extends Thread {
 					// Remember that we have a pending sync request if this attempt failed
 					syncRequestPending = !success;
 				}
+
+				// Fork-recovery watchdog (paced): detect a stale tip wedged behind a fresh higher
+				// peer quorum and auto-orphan our short top fork so normal sync can adopt the chain.
+				// Wrapped defensively so a watchdog fault can never terminate the synchronizer.
+				if (!isSynchronizing && System.currentTimeMillis() - lastWatchdogCheckTimestamp >= WATCHDOG_CHECK_INTERVAL) {
+					lastWatchdogCheckTimestamp = System.currentTimeMillis();
+					try {
+						checkStuckSelfMintedFork();
+					} catch (Exception e) {
+						LOGGER.warn("Fork-recovery watchdog check failed: {}", e.getMessage());
+					}
+				}
 			}
 		} catch (InterruptedException e) {
 			// Clear interrupted flag so we can shutdown trim threads
@@ -200,6 +231,154 @@ public class Synchronizer extends Thread {
 	public void shutdown() {
 		this.running = false;
 		this.interrupt();
+	}
+
+	/**
+	 * Tier 3 fork-recovery watchdog.
+	 *
+	 * Detects the narrow "wedged behind a live network" state — our chain tip is STALE (we are
+	 * behind), a quorum of fresh, healthy, strictly-higher peers exists, and normal synchronization
+	 * has been unable to advance us for a sustained period (e.g. we minted a short fork that wins the
+	 * 1-block weight comparison, so sync refuses the longer network chain) — and recovers by
+	 * orphaning a single one of our own top blocks back toward the common block, then requesting a
+	 * sync. Normal, fully-validated synchronization (preProcess()+isValid()) then adopts the network
+	 * chain; this method NEVER imports peer blocks and NEVER force-syncs.
+	 *
+	 * Safety: only fires when our tip is stale (a healthy node at the network tip never qualifies);
+	 * requires a distinct fresh-higher-peer quorum reusing the same vetted filter as Tier 2's
+	 * hasFreshHigherPeer (so a solo/most-advanced minter of a dead network is never affected — that
+	 * is stale-chain catch-up's job); orphans at most one block per action, hard-capped at
+	 * RECOVERY_WATCHDOG_MAX_ORPHAN_DEPTH_CEILING per stuck episode (forward progress resets the
+	 * budget), far below MAXIMUM_COMMON_DELTA; paced, sustained-gated and cooldown-gated against
+	 * thrash. Because the orphaned-to block is itself stale, the BlockMinter "tip not recent -> sync
+	 * instead" gate plus Tier 2 (no stale-catch-up mint while a fresh higher peer exists) keep
+	 * minting OFF afterwards, so the node syncs rather than re-minting the fork.
+	 */
+	private void checkStuckSelfMintedFork() throws DataException {
+		if (!Settings.getInstance().isRecoveryWatchdogEnabled())
+			return;
+
+		final Long now = NTP.getTime();
+		if (now == null)
+			return; // NTP not synced yet — do nothing this round
+
+		final BlockData tip = Controller.getInstance().getChainTip();
+		if (tip == null || tip.getHeight() == null || tip.getSignature() == null)
+			return;
+
+		final Long minLatestBlockTimestamp = Controller.getMinimumLatestBlockTimestamp();
+		if (minLatestBlockTimestamp == null)
+			return;
+
+		// Only act when our own tip is stale (we are behind). A node at the network tip is never
+		// stale, so a healthy node never proceeds past here.
+		if (tip.getTimestamp() >= minLatestBlockTimestamp) {
+			resetWatchdogStuckState();
+			return;
+		}
+
+		// Require a quorum of distinct, fresh, healthy, strictly-higher peers. If there is none we
+		// are alone or the most-advanced node of a dead network — stale-chain catch-up (Tier 2)
+		// governs that case, not this watchdog.
+		final int higherPeerCount = countFreshHigherPeers(tip.getHeight());
+		if (higherPeerCount < RECOVERY_WATCHDOG_MIN_PEERS) {
+			resetWatchdogStuckState();
+			return;
+		}
+
+		// We are stale AND behind a quorum of fresh higher peers. If normal sync could advance us it
+		// would have (our tip height would rise and reset this timer). Track how long this persists.
+		if (watchdogStuckSince == 0L || !Arrays.equals(watchdogStuckTipSignature, tip.getSignature())) {
+			// Forward progress since the last episode (our height rose) refills the orphan budget.
+			if (tip.getHeight() > watchdogHighWaterHeight) {
+				watchdogOrphanCount = 0;
+				watchdogHighWaterHeight = tip.getHeight();
+			}
+			watchdogStuckSince = now;
+			watchdogStuckTipSignature = tip.getSignature();
+			LOGGER.info("Fork-recovery watchdog: stale tip at height {} behind {} fresh higher peer(s); will recover if it persists {}s",
+					tip.getHeight(), higherPeerCount, Settings.getInstance().getRecoveryWatchdogStuckThresholdMillis() / 1000);
+			return;
+		}
+
+		// Sustained-duration gate.
+		if (now - watchdogStuckSince < Settings.getInstance().getRecoveryWatchdogStuckThresholdMillis())
+			return;
+
+		// Cooldown gate.
+		if (lastWatchdogOrphanTimestamp != 0L && now - lastWatchdogOrphanTimestamp < Settings.getInstance().getRecoveryWatchdogCooldownMillis())
+			return;
+
+		// Hard ceiling on own-block orphans per stuck episode.
+		if (watchdogOrphanCount >= RECOVERY_WATCHDOG_MAX_ORPHAN_DEPTH_CEILING)
+			return;
+
+		// Re-read the tip immediately before acting; abort if it moved so we orphan exactly one
+		// block from the CURRENT tip (never a deeper reorg computed against a stale height).
+		final BlockData freshTip = Controller.getInstance().getChainTip();
+		if (freshTip == null || freshTip.getHeight() == null || freshTip.getSignature() == null
+				|| !Arrays.equals(freshTip.getSignature(), tip.getSignature()))
+			return;
+
+		final int targetHeight = freshTip.getHeight() - 1;
+		if (targetHeight <= 0)
+			return;
+
+		// Respect the archive floor (mirrors AdminResource /orphan). For depth 1 this never trips.
+		if (Settings.getInstance().isTopOnly() || Settings.getInstance().isArchiveEnabled()) {
+			try (final Repository repository = RepositoryManager.getRepository()) {
+				int oldestBlock = repository.getBlockArchiveRepository().getBlockArchiveHeight() + 100;
+				if (targetHeight <= oldestBlock) {
+					LOGGER.warn("Fork-recovery watchdog: not orphaning to {} because it is at/below the archive floor {}", targetHeight, oldestBlock);
+					resetWatchdogStuckState();
+					return;
+				}
+			}
+		}
+
+		// Discard only our own top block back to the common height; BlockChain.orphan uses a
+		// non-blocking tryLock and returns false if minting/sync holds the blockchain lock.
+		boolean orphaned = BlockChain.orphan(targetHeight);
+		if (!orphaned)
+			return; // lock busy — retry next paced tick (stuck condition persists)
+
+		LOGGER.info("Fork-recovery watchdog: orphaned our stale block {} back to height {} (behind {} fresh higher peer(s), stuck {}s); requesting sync to adopt the network chain",
+				freshTip.getHeight(), targetHeight, higherPeerCount, (now - watchdogStuckSince) / 1000);
+
+		watchdogOrphanCount++;
+		lastWatchdogOrphanTimestamp = now;
+		// Restart the sustained timer for any subsequent episode, and prompt an immediate, fully
+		// validated sync to adopt the heavier/longer network chain.
+		watchdogStuckSince = 0L;
+		watchdogStuckTipSignature = null;
+		requestSync = true;
+	}
+
+	private void resetWatchdogStuckState() {
+		this.watchdogStuckSince = 0L;
+		this.watchdogStuckTipSignature = null;
+	}
+
+	/**
+	 * Counts distinct handshaked peers advertising a fresh (recent) chain tip strictly higher than
+	 * the given height, using the same healthy-peer filter set as Controller.hasFreshHigherPeer.
+	 */
+	private int countFreshHigherPeers(int ourHeight) {
+		List<Peer> peers = new ArrayList<>(Network.getInstance().getImmutableHandshakedPeers());
+
+		peers.removeIf(Controller.hasMisbehaved);
+		peers.removeIf(Controller.hasOldVersion);
+		peers.removeIf(Controller.hasInvalidSigner);
+		peers.removeIf(Controller.hasNoRecentBlock);
+
+		int count = 0;
+		for (Peer peer : peers) {
+			final BlockSummaryData peerChainTipData = peer.getChainTipData();
+			if (peerChainTipData != null && peerChainTipData.getSignature() != null && peerChainTipData.getHeight() > ourHeight)
+				count++;
+		}
+
+		return count;
 	}
 
 
