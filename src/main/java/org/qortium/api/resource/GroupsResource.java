@@ -281,6 +281,47 @@ public class GroupsResource {
 	}
 
 	@GET
+	@Path("/kicks/{groupid}")
+	@Operation(
+		summary = "List group kicks by group",
+		description = "Returns all confirmed kick transactions that occurred in the given group. Optionally filter by kicked member address.",
+		responses = {
+			@ApiResponse(
+				description = "list of kick summaries (member, groupId, reason, timestamp)",
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					array = @ArraySchema(schema = @Schema(implementation = GroupKickInfo.class))
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public List<GroupKickInfo> getGroupKicksByGroup(
+			@Parameter(description = "Group ID") @PathParam("groupid") int groupId,
+			@Parameter(description = "Optional address to filter by kicked member") @QueryParam("address") String address,
+			@Parameter(description = "Only return kicks with timestamp strictly before this (ms since epoch)") @QueryParam("before") Long before,
+			@Parameter(description = "Only return kicks with timestamp strictly after this (ms since epoch)") @QueryParam("after") Long after,
+			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
+			@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
+			@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
+		if (before != null && before < 1500000000000L)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		if (after != null && after < 1500000000000L)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+		String memberAddress = (address != null && !address.isEmpty()) ? address : null;
+		if (memberAddress != null && !Crypto.isValidAddress(memberAddress))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			List<GroupKickSummaryData> list = repository.getTransactionRepository().getGroupKicks(memberAddress, groupId, before, after, limit, offset, reverse);
+			return list.stream()
+					.map(k -> new GroupKickInfo(k.getMember(), k.getGroupId(), k.getReason(), k.getTimestamp()))
+					.collect(Collectors.toList());
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
 	@Path("/{groupid}")
 	@Operation(
 		summary = "Info on group",
@@ -1018,6 +1059,38 @@ public class GroupsResource {
 				result.add(new GroupWithJoinRequests(group, joinRequests));
 			}
 			return result;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	@GET
+	@Path("/bans/member")
+	@Operation(
+		summary = "List group bans by member address",
+		description = "Returns all current bans for the given address across all groups.",
+		responses = {
+			@ApiResponse(
+				description = "group bans",
+				content = @Content(
+					mediaType = MediaType.APPLICATION_JSON,
+					array = @ArraySchema(schema = @Schema(implementation = GroupBanData.class))
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.INVALID_ADDRESS, ApiError.REPOSITORY_ISSUE})
+	public List<GroupBanData> getBansByMember(
+			@Parameter(description = "Address of the banned member", required = true) @QueryParam("address") String address,
+			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
+			@Parameter(ref = "offset") @QueryParam("offset") Integer offset,
+			@Parameter(ref = "reverse") @QueryParam("reverse") Boolean reverse) {
+		if (address == null || address.isEmpty())
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+		if (!Crypto.isValidAddress(address))
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_ADDRESS);
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return repository.getGroupRepository().getBansByOffender(address, limit, offset, reverse);
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
