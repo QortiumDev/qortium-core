@@ -34,6 +34,24 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-15 - docs: prepare v1.0.0-preview.14 release notes
+
+Added the release-prep notes for the v1.0.0-preview.14 prerelease. This preview packages the chat-history fix that keeps a group's messages visible after a member leaves, and the minter synchronization-wedge work that stops a node that is merely behind from minting a competing fork, keeps a node retrying synchronization on its own, and automatically recovers a node already stuck on a short self-minted fork. The docs index now points to the newest Core preview release-prep document.
+
+### 2026-06-15 - core: unit-test the fork-recovery watchdog gate logic
+
+Added automated tests covering the decision rules of the new fork-recovery step — confirming it stays inactive for a healthy or legitimately-alone node, waits out its required sustained and cool-down periods, respects its limit on how many blocks it may discard, and only acts once all of its safety conditions are met. The decision logic was separated from the surrounding machinery so it can be tested directly, with no change to how it behaves.
+
+### 2026-06-15 - core: add Tier-3 fork-recovery watchdog (auto-orphan a stale self-fork)
+
+Building on the synchronization-wedge prevention, this adds an automatic recovery step for a node that is already stuck on its own short side-chain. When a node's latest block is old, several distinct healthy peers are clearly ahead of it, and it has been unable to catch up for several minutes, the node now discards its own top block (just the one, with strict limits on how far back it can ever go) and asks to synchronize, so the normal, fully-checked download can take over and rejoin the real chain. It only ever discards its own blocks — it never accepts unverified ones — stays completely inactive on a healthy node or one that is legitimately alone, and can be turned off in settings.
+
+### 2026-06-15 - core: prevent and auto-recover from the stale-catch-up minter sync wedge
+
+A minting node that had fallen behind the network could get permanently stuck on a chain of its own making and stop catching up, even while it still had healthy connections. Two things combined to cause this: when the node's own latest block was old it would start minting new blocks on top of that old block instead of waiting to download the newer ones, and once it had done so it kept its own short side-chain because it briefly looked "heavier" than the real one; separately, the node only ever tried to synchronize in response to a message from another peer, with nothing to make it retry on its own if those messages stopped.
+
+The node no longer mints its own competing block while a healthy, up-to-date peer is visibly ahead of it — it waits and synchronizes instead — and it now retries synchronization on its own on a periodic heartbeat so a node can no longer quietly stall. A peer that is genuinely ahead is now recognized by block height alone, removing a timing quirk that previously let the safeguard miss, and a single late or failed peer message no longer discards the rest of a batch of peer chain-tip updates.
+
 ### 2026-06-15 - chat: keep group messages from members who have left
 
 Previously, when an account left (or was removed from) a group, all of its past messages disappeared from that group's chat history straight away. The node was filtering group messages down to only those sent by people who are members of the group right now, so anything said by someone who later left vanished the instant they left — even though the message itself had not yet expired.
