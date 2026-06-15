@@ -7,7 +7,6 @@ import org.qortium.data.chat.ActiveChats.DirectChat;
 import org.qortium.data.chat.ActiveChats.GroupChat;
 import org.qortium.data.chat.ChatMessage;
 import org.qortium.data.group.GroupData;
-import org.qortium.data.group.GroupMemberData;
 import org.qortium.data.transaction.BaseTransactionData;
 import org.qortium.data.transaction.ChatTransactionData;
 import org.qortium.repository.ChatStoreRepository;
@@ -23,7 +22,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.qortium.data.chat.ChatMessage.Encoding;
 
@@ -423,9 +421,6 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 			whereClauses.add("CM.tx_group_id = ?");
 			bindParams.add(txGroupId);
 			whereClauses.add("CM.recipient IS NULL");
-
-			if (txGroupId > 0)
-				addCurrentGroupMemberFilter(txGroupId, whereClauses, bindParams);
 		} else {
 			String firstAddress = involving.get(0);
 			String secondAddress = involving.get(1);
@@ -450,31 +445,6 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 		}
 
 		return new MessageCriteria(sql.toString(), bindParams);
-	}
-
-	private void addCurrentGroupMemberFilter(int txGroupId, List<String> whereClauses, List<Object> bindParams) throws DataException {
-		List<String> members = this.repository.getGroupRepository()
-				.getGroupMembers(txGroupId).stream()
-				.map(GroupMemberData::getMember)
-				.collect(Collectors.toList());
-
-		if (members.isEmpty()) {
-			whereClauses.add("FALSE");
-			return;
-		}
-
-		StringBuilder sql = new StringBuilder();
-		sql.append("CM.sender IN (");
-		for (int i = 0; i < members.size(); ++i) {
-			if (i != 0)
-				sql.append(", ");
-
-			sql.append("?");
-		}
-		sql.append(")");
-
-		whereClauses.add(sql.toString());
-		bindParams.addAll(members);
 	}
 
 	private List<GroupChat> getActiveGroupChats(String address, Encoding encoding, Boolean hasChatReference) throws DataException {

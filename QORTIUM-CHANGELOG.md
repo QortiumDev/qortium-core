@@ -34,7 +34,11 @@ own chain.
 
 ## Change Entries
 
-### 2026-06-14 - docs: prepare v1.0.0-preview.13 release notes
+### 2026-06-15 - chat: keep group messages from members who have left
+
+Previously, when an account left (or was removed from) a group, all of its past messages disappeared from that group's chat history straight away. The node was filtering group messages down to only those sent by people who are members of the group right now, so anything said by someone who later left vanished the instant they left — even though the message itself had not yet expired.
+
+The node no longer hides a group message based on whether its sender is still a member. Group messages now stay visible to everyone and simply expire naturally on the normal retention schedule, the same way they always did for members who stay. This affects the live `/chat/messages` and message-count endpoints and the chat WebSocket. The same now-unused "must still be a member" filter was also removed from an older, unused copy of the chat-message code so the two stay consistent. A new test publishes a group message from a non-member and confirms it is still returned.
 
 Added the release-prep notes for the v1.0.0-preview.13 prerelease. This preview packages the upload-based QDN preview endpoint that lets mobile and remote-node clients preview local content without sharing the node's machine, the relaxed render content-security-policy that lets QDN-rendered apps run workers and WebAssembly, and the JAXB discriminator fix that restores the group-transaction build endpoints. The docs index now points to the newest Core preview release-prep document.
 
