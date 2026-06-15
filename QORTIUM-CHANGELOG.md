@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-14 - docs: prepare v1.0.0-preview.13 release notes
+
+Added the release-prep notes for the v1.0.0-preview.13 prerelease. This preview packages the upload-based QDN preview endpoint that lets mobile and remote-node clients preview local content without sharing the node's machine, the relaxed render content-security-policy that lets QDN-rendered apps run workers and WebAssembly, and the JAXB discriminator fix that restores the group-transaction build endpoints. The docs index now points to the newest Core preview release-prep document.
+
 ### 2026-06-14 - api: allow QDN-rendered apps to run workers and WebAssembly
 
 When the node serves a QDN app, it attaches a content-security-policy to each file. The app's main HTML page was already allowed to run the code many apps need, but the app's separate JavaScript and worker files were served under a stricter policy that forbids the in-worker code execution and WebAssembly that engines like EmulatorJS/Emscripten rely on — so those apps failed to start even after their data had downloaded.
