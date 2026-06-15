@@ -28,6 +28,27 @@ public class StaleCatchUpTests {
 	}
 
 	@Test
+	public void testPeerHeightAheadIgnoresTimestamp() {
+		BlockData ourTip = blockData(10, 1_000L);
+
+		// Strictly-higher height qualifies regardless of the peer's advertised tip timestamp
+		// (this is the lagging-cached-timestamp race fix used by the stale-catch-up defer brake).
+		assertTrue(Controller.isPeerHeightAheadOf(ourTip, blockSummaryData(11, 1_001L)));
+		assertTrue(Controller.isPeerHeightAheadOf(ourTip, blockSummaryData(11, 1_000L)));
+		assertTrue(Controller.isPeerHeightAheadOf(ourTip, blockSummaryData(11, 999L)));
+		assertTrue(Controller.isPeerHeightAheadOf(ourTip, blockSummaryData(11, null)));
+
+		// Equal or lower height never qualifies.
+		assertFalse(Controller.isPeerHeightAheadOf(ourTip, blockSummaryData(10, 5_000L)));
+		assertFalse(Controller.isPeerHeightAheadOf(ourTip, blockSummaryData(9, 5_000L)));
+
+		// Null guards.
+		assertFalse(Controller.isPeerHeightAheadOf(ourTip, null));
+		assertFalse(Controller.isPeerHeightAheadOf(null, blockSummaryData(11, 1_001L)));
+		assertFalse(Controller.isPeerHeightAheadOf(blockData(null, 1_000L), blockSummaryData(11, 1_001L)));
+	}
+
+	@Test
 	public void testChainTipComparisonPrefersHeightThenTimestamp() {
 		BlockSummaryData lowerHeightNewerTimestamp = blockSummaryData(10, 5_000L);
 		BlockSummaryData higherHeightOlderTimestamp = blockSummaryData(11, 4_000L);
