@@ -7,7 +7,6 @@ import org.qortium.data.chat.ActiveChats;
 import org.qortium.data.chat.ActiveChats.DirectChat;
 import org.qortium.data.chat.ActiveChats.GroupChat;
 import org.qortium.data.chat.ChatMessage;
-import org.qortium.data.group.GroupMemberData;
 import org.qortium.data.transaction.ChatTransactionData;
 import org.qortium.repository.ChatRepository;
 import org.qortium.repository.DataException;
@@ -21,7 +20,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.qortium.data.chat.ChatMessage.Encoding;
 
@@ -140,17 +138,6 @@ public class HSQLDBChatRepository implements ChatRepository {
 
 				chatMessages.add(chatMessage);
 			} while (resultSet.next());
-
-			// if this is a group chat, then ensure that the sender is in the group
-			if( txGroupId != null && txGroupId > 0 ) {
-				List<String> members
-					= this.repository.getGroupRepository()
-						.getGroupMembers(txGroupId).stream()
-						.map(GroupMemberData::getMember)
-						.collect(Collectors.toList());
-
-				chatMessages.removeIf( data -> !members.contains(data.getSender()) );
-			}
 
 			return chatMessages;
 		} catch (SQLException e) {

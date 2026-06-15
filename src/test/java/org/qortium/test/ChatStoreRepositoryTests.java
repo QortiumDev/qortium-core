@@ -312,6 +312,40 @@ public class ChatStoreRepositoryTests extends Common {
 	}
 
 	@Test
+	public void testGroupMessagesFromNonMembersRemainVisible() throws DataException {
+		// A sender who is not a current group member (e.g. has left the group) must still have
+		// their past group messages returned, so they expire naturally rather than vanishing at once.
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			int groupId = GroupUtils.createGroup(repository, alice, "chat-store-non-member-visibility", false);
+			long timestamp = now();
+
+			// alice is the group owner/member; bob is NOT a member of this group
+			ChatTransactionData memberData = chat(repository, alice, groupId, null,
+					signature(50), bytes("from member"), true, false, timestamp, null);
+			ChatTransactionData nonMemberData = chat(repository, bob, groupId, null,
+					signature(51), bytes("from non-member"), true, false, timestamp + 1, null);
+
+			repository.getChatStoreRepository().save(memberData);
+			repository.getChatStoreRepository().save(nonMemberData);
+			repository.saveChanges();
+
+			List<ChatMessage> messages = repository.getChatStoreRepository().getMessagesMatchingCriteria(
+					null, null, groupId, null, null, null, null, ChatMessage.Encoding.BASE64, null, null, null);
+
+			assertEquals(2, messages.size());
+			assertArrayEquals(memberData.getSignature(), messages.get(0).getSignature());
+			assertArrayEquals(nonMemberData.getSignature(), messages.get(1).getSignature());
+
+			int count = repository.getChatStoreRepository().countMessagesMatchingCriteria(
+					null, null, groupId, null, null, null, null);
+
+			assertEquals(2, count);
+		}
+	}
+
+	@Test
 	public void testPrivateGroupControlsHiddenFromNormalQueriesButRawScanRetainsThem() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			TestAccount alice = Common.getTestAccount(repository, "alice");
