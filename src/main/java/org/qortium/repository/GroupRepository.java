@@ -180,6 +180,8 @@ public interface GroupRepository {
 		return getGroupBans(groupId, null, null, null);
 	}
 
+	public List<GroupBanData> getBansByOffender(String offender, Integer limit, Integer offset, Boolean reverse) throws DataException;
+
 	public void save(GroupBanData groupBanData) throws DataException;
 
 	public void deleteBan(int groupId, String offender) throws DataException;

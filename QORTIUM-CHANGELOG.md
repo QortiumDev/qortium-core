@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-15 - api: add group kicks by group and group bans by member endpoints
+
+Two new REST endpoints complete the symmetric read surface for group kicks and bans.
+
+`GET /groups/kicks/{groupId}` returns all confirmed kick transactions that have occurred in a given group, with optional filters for kicked member address, timestamp range, pagination, and sort order. Previously only `GET /groups/kicks/member?address=` existed, which required knowing a specific member address; Q-Apps had no way to fetch the full kicked-member history for a group.
+
+`GET /groups/bans/member?address=` returns all current bans for a given address across all groups. Previously only `GET /groups/bans/{groupId}` existed, requiring callers to probe every group individually to find a member's ban status.
+
+Both endpoints validate their inputs and return the same data shapes as the corresponding existing endpoints (`GroupKickInfo[]` and `GroupBanData[]` respectively). The underlying repository method for kicks was extended to make the member address filter optional, which is required for the by-group query.
+
 ### 2026-06-15 - docs: prepare v1.0.0-preview.14 release notes
 
 Added the release-prep notes for the v1.0.0-preview.14 prerelease. This preview packages the chat-history fix that keeps a group's messages visible after a member leaves, and the minter synchronization-wedge work that stops a node that is merely behind from minting a competing fork, keeps a node retrying synchronization on its own, and automatically recovers a node already stuck on a short self-minted fork. The docs index now points to the newest Core preview release-prep document.

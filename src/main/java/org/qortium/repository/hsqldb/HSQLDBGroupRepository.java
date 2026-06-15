@@ -1113,6 +1113,44 @@ public class HSQLDBGroupRepository implements GroupRepository {
 	}
 
 	@Override
+	public List<GroupBanData> getBansByOffender(String offender, Integer limit, Integer offset, Boolean reverse) throws DataException {
+		StringBuilder sql = new StringBuilder(256);
+
+		sql.append("SELECT group_id, admin, banned_when, reason, expires_when, reference FROM GroupBans WHERE offender = ? ORDER BY group_id");
+
+		if (reverse != null && reverse)
+			sql.append(" DESC");
+
+		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+
+		List<GroupBanData> bans = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), offender)) {
+			if (resultSet == null)
+				return bans;
+
+			do {
+				int groupId = resultSet.getInt(1);
+				String admin = resultSet.getString(2);
+				long banned = resultSet.getLong(3);
+				String reason = resultSet.getString(4);
+
+				Long expiry = resultSet.getLong(5);
+				if (expiry == 0 && resultSet.wasNull())
+					expiry = null;
+
+				byte[] reference = resultSet.getBytes(6);
+
+				bans.add(new GroupBanData(groupId, offender, admin, banned, reason, expiry, reference));
+			} while (resultSet.next());
+
+			return bans;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch group bans by offender from repository", e);
+		}
+	}
+
+	@Override
 	public void save(GroupBanData groupBanData) throws DataException {
 		HSQLDBSaver saveHelper = new HSQLDBSaver("GroupBans");
 

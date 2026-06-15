@@ -203,8 +203,8 @@ public interface TransactionRepository {
 	 * Returns list of group kick transactions where the given address was kicked.
 	 * Only confirmed (block-included) kicks are returned.
 	 *
-	 * @param memberAddress address of the kicked member (required)
-	 * @param groupId optional group ID to filter by
+	 * @param memberAddress address of the kicked member, or null to return kicks across all members in a group
+	 * @param groupId optional group ID to filter by; required when memberAddress is null
 	 * @param before optional: only kicks with timestamp strictly before this (ms)
 	 * @param after optional: only kicks with timestamp strictly after this (ms)
 	 * @param limit maximum number of results

@@ -1062,11 +1062,14 @@ public class HSQLDBTransactionRepository implements TransactionRepository {
 	public List<GroupKickSummaryData> getGroupKicks(String memberAddress, Integer groupId,
 			Long before, Long after, Integer limit, Integer offset, Boolean reverse) throws DataException {
 		List<Object> bindParams = new ArrayList<>(6);
-		bindParams.add(memberAddress);
 		StringBuilder sql = new StringBuilder(320);
 		sql.append("SELECT gk.address, gk.group_id, gk.reason, t.created_when FROM GroupKickTransactions gk ");
 		sql.append("INNER JOIN Transactions t ON gk.signature = t.signature ");
-		sql.append("WHERE gk.address = ? AND t.block_height IS NOT NULL ");
+		sql.append("WHERE t.block_height IS NOT NULL ");
+		if (memberAddress != null) {
+			sql.append("AND gk.address = ? ");
+			bindParams.add(memberAddress);
+		}
 		if (groupId != null) {
 			sql.append("AND gk.group_id = ? ");
 			bindParams.add(groupId);
