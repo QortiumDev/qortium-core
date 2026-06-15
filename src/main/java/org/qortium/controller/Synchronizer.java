@@ -88,6 +88,20 @@ public class Synchronizer extends Thread {
 
 	private static volatile boolean requestSync = false;
 	private boolean syncRequestPending = false;
+	/**
+	 * Wall-clock time (ms) of the last sync attempt, used to pace the heartbeat below.
+	 * Initialised to 0 so the first eligible loop iteration arms one sync attempt at boot.
+	 */
+	private long lastSyncAttemptTimestamp = 0L;
+
+	/**
+	 * How often, at most, the run-loop heartbeat re-arms a sync attempt while we are not up to
+	 * date and no sync is already pending. The only other sync trigger is an inbound peer
+	 * BLOCK_SUMMARIES broadcast (Controller.requestSync()); without this heartbeat, if those
+	 * broadcasts stop being processed — or every attempt completes as a no-op and clears the
+	 * flag — the node would never retry and could sit behind the network indefinitely.
+	 */
+	private static final long SYNC_HEARTBEAT_INTERVAL = 60 * 1000L;
 
 	// Keep track of invalid blocks so that we don't keep trying to sync them
 	private Map<ByteArray, Long> invalidBlockSignatures = Collections.synchronizedMap(new HashMap<>());
@@ -149,8 +163,22 @@ public class Synchronizer extends Thread {
 			while (running && !Controller.isStopping()) {
 				Thread.sleep(1000);
 
+				// Heartbeat: periodically re-arm a sync attempt when we are not up to date and
+				// no sync is already requested/pending/running. This guarantees the node keeps
+				// retrying synchronization even if inbound BLOCK_SUMMARIES broadcasts stop
+				// arriving or every attempt no-ops and clears requestSync. Gating on
+				// !isUpToDate() keeps healthy nodes quiet (no redundant peer round-trips), and
+				// skipping while a request is pending avoids starving transaction import, which
+				// defers on isSyncRequestPending().
+				if (!requestSync && !syncRequestPending && !isSynchronizing
+						&& System.currentTimeMillis() - lastSyncAttemptTimestamp >= SYNC_HEARTBEAT_INTERVAL
+						&& !Controller.getInstance().isUpToDate()) {
+					requestSync = true;
+				}
+
 				if (requestSync) {
 					requestSync = false;
+					lastSyncAttemptTimestamp = System.currentTimeMillis();
 					boolean success = Synchronizer.getInstance().potentiallySynchronize();
 					if (!success) {
 						// Something went wrong, so try again next time

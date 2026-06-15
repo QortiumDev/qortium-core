@@ -706,7 +706,7 @@ public class BlockMinter extends Thread {
 		return peers.stream()
 				.filter(peer -> !Controller.hasOldVersion.test(peer))
 				.filter(peer -> !Controller.hasInvalidSigner.test(peer))
-				.filter(peer -> Controller.isPeerTipAheadOf(latestBlockData, peer.getChainTipData()))
+				.filter(peer -> Controller.isPeerHeightAheadOf(latestBlockData, peer.getChainTipData()))
 				.max((left, right) -> Controller.compareChainTipsByHeightThenTimestamp(left.getChainTipData(), right.getChainTipData()))
 				.orElse(null);
 	}

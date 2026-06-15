@@ -1016,6 +1016,20 @@ public class Controller extends Thread {
 		return peerChainTipData.getHeight() > latestBlockData.getHeight() && peerChainTipData.getTimestamp() > latestBlockData.getTimestamp();
 	}
 
+	/**
+	 * Like {@link #isPeerTipAheadOf} but compares height only, ignoring the peer's advertised
+	 * tip timestamp. A strictly-higher block is by definition later in chain order; requiring a
+	 * strictly-later advertised timestamp is race-prone exactly when our node is behind (peers'
+	 * cached tip timestamps lag), which is how the stale-chain catch-up mint brake previously
+	 * failed to engage and let the node mint a competing fork.
+	 */
+	public static boolean isPeerHeightAheadOf(BlockData latestBlockData, BlockSummaryData peerChainTipData) {
+		if (latestBlockData == null || latestBlockData.getHeight() == null || peerChainTipData == null)
+			return false;
+
+		return peerChainTipData.getHeight() > latestBlockData.getHeight();
+	}
+
 	public static int compareChainTipsByHeightThenTimestamp(BlockSummaryData left, BlockSummaryData right) {
 		int heightComparison = Integer.compare(getChainTipHeight(left), getChainTipHeight(right));
 		if (heightComparison != 0)
@@ -2187,7 +2201,9 @@ public class Controller extends Thread {
 
 						if (chainTipMessage == null || !peer.sendMessage(chainTipMessage)) {
 							peer.disconnect("failed to send our chain tip info");
-							return;
+							// Skip just this peer; don't abort the whole batch (which would
+							// drop the remaining peers' broadcasts and their requestSync()).
+							continue;
 						}
 					}
 				}
@@ -2200,7 +2216,9 @@ public class Controller extends Thread {
 					 * Hence, these are NOT simple "here's my chain tip" broadcasts from other peers.
 					 */
 					LOGGER.debug("Discarding late {} message with ID {} from {}", message.getType().name(), message.getId(), peer);
-					return;
+					// Discard only this late message; continue processing the rest of the
+					// batch so genuine broadcasts behind it still trigger requestSync().
+					continue;
 				}
 
 				// Update peer chain tip data
@@ -2523,10 +2541,53 @@ public class Controller extends Thread {
 	}
 
 	public boolean isStaleChainCatchUpActive() {
+		// Snapshot the chain tip once so the staleness check and the peer-height check below
+		// compare against the same height (a concurrent block commit could otherwise shift it).
+		final BlockData latestBlockData = getChainTip();
 		final Long minLatestBlockTimestamp = getMinimumLatestBlockTimestamp();
 		final Long now = NTP.getTime();
 
-		return isStaleChainCatchUpActive(getChainTip(), minLatestBlockTimestamp, now);
+		if (!isStaleChainCatchUpActive(latestBlockData, minLatestBlockTimestamp, now))
+			return false;
+
+		// Stale-chain catch-up minting exists only to revive a genuinely stalled network.
+		// If any healthy peer advertises a RECENT chain tip higher than ours, we are merely
+		// behind a live chain, so we must defer to synchronization rather than mint a
+		// competing fork (minting one previously wedged the node onto its own short chain).
+		// Requiring the peer's tip to be fresh ensures a departed peer's stale cached tip
+		// cannot indefinitely block legitimate revival of a truly dead network.
+		if (hasFreshHigherPeer(latestBlockData))
+			return false;
+
+		return true;
+	}
+
+	/**
+	 * Returns whether any handshaked, in-version, valid-signer peer advertises a RECENT
+	 * chain tip strictly higher than the given tip. Used to distinguish "the network is alive
+	 * and ahead of me" (defer to sync) from "the network is dead and I am its most-advanced
+	 * node" (stale-chain catch-up may mint).
+	 */
+	private boolean hasFreshHigherPeer(BlockData latestBlockData) {
+		if (latestBlockData == null || latestBlockData.getHeight() == null)
+			return false;
+
+		List<Peer> peers = new ArrayList<>(Network.getInstance().getImmutableHandshakedPeers());
+
+		// Only trust healthy peers with a fresh (recent) chain tip.
+		peers.removeIf(hasMisbehaved);
+		peers.removeIf(hasOldVersion);
+		peers.removeIf(hasInvalidSigner);
+		peers.removeIf(hasNoRecentBlock);
+
+		final int ourHeight = latestBlockData.getHeight();
+		for (Peer peer : peers) {
+			final BlockSummaryData peerChainTipData = peer.getChainTipData();
+			if (peerChainTipData != null && peerChainTipData.getHeight() > ourHeight)
+				return true;
+		}
+
+		return false;
 	}
 
 	/* package */ static boolean isStaleChainCatchUpActive(BlockData latestBlockData, Long minLatestBlockTimestamp, Long now) {
