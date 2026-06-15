@@ -233,6 +233,63 @@ public class Synchronizer extends Thread {
 		this.interrupt();
 	}
 
+	/** Outcome of the Tier-3 fork-recovery watchdog gate logic (see {@link #decideRecoveryWatchdogAction}). */
+	/* package */ enum RecoveryWatchdogAction {
+		/** Not wedged behind a live network (not stale, or no fresh higher-peer quorum) — clear stuck state. */
+		NONE,
+		/** Stuck behind a quorum; (re)start the sustained-stuck timer for the current tip. */
+		ARM,
+		/** Stuck, but the sustained-duration / cooldown / orphan-ceiling gates are not all satisfied yet. */
+		WAIT,
+		/** All gates satisfied — orphan one of our own top blocks and request a sync. */
+		ORPHAN
+	}
+
+	/**
+	 * Pure decision function for the fork-recovery watchdog gates, factored out for unit testing
+	 * (no chain / network / NTP access). Given the observed condition and the watchdog's timers,
+	 * returns what the watchdog should do this tick. The caller performs the side effects.
+	 *
+	 * @param ourTipStale            our chain tip is older than the "recent" threshold (we are behind)
+	 * @param higherPeerCount        number of distinct fresh, healthy, strictly-higher peers
+	 * @param haveActiveEpisodeForTip a stuck-episode timer is already running for the CURRENT tip signature
+	 * @param now                    current NTP time (ms)
+	 * @param watchdogStuckSince     NTP time the current episode began (0 if none)
+	 * @param lastWatchdogOrphanTimestamp NTP time of the last orphan (0 if none)
+	 * @param watchdogOrphanCount    consecutive orphans this episode without forward progress
+	 * @param minPeers               minimum quorum of higher peers required to act
+	 * @param stuckThresholdMillis   how long the condition must persist before acting
+	 * @param cooldownMillis         minimum gap between orphan actions
+	 * @param maxOrphanCeiling       hard cap on orphans per stuck episode
+	 */
+	/* package */ static RecoveryWatchdogAction decideRecoveryWatchdogAction(
+			boolean ourTipStale, int higherPeerCount, boolean haveActiveEpisodeForTip,
+			long now, long watchdogStuckSince, long lastWatchdogOrphanTimestamp, int watchdogOrphanCount,
+			int minPeers, long stuckThresholdMillis, long cooldownMillis, int maxOrphanCeiling) {
+
+		// Only act when we are stale AND behind a quorum of fresh higher peers.
+		if (!ourTipStale || higherPeerCount < minPeers)
+			return RecoveryWatchdogAction.NONE;
+
+		// Start/refresh the sustained-stuck timer when this is a new episode or our tip moved.
+		if (!haveActiveEpisodeForTip)
+			return RecoveryWatchdogAction.ARM;
+
+		// Sustained-duration gate.
+		if (now - watchdogStuckSince < stuckThresholdMillis)
+			return RecoveryWatchdogAction.WAIT;
+
+		// Cooldown gate.
+		if (lastWatchdogOrphanTimestamp != 0L && now - lastWatchdogOrphanTimestamp < cooldownMillis)
+			return RecoveryWatchdogAction.WAIT;
+
+		// Hard ceiling on own-block orphans per stuck episode.
+		if (watchdogOrphanCount >= maxOrphanCeiling)
+			return RecoveryWatchdogAction.WAIT;
+
+		return RecoveryWatchdogAction.ORPHAN;
+	}
+
 	/**
 	 * Tier 3 fork-recovery watchdog.
 	 *
@@ -270,48 +327,48 @@ public class Synchronizer extends Thread {
 		if (minLatestBlockTimestamp == null)
 			return;
 
-		// Only act when our own tip is stale (we are behind). A node at the network tip is never
-		// stale, so a healthy node never proceeds past here.
-		if (tip.getTimestamp() >= minLatestBlockTimestamp) {
-			resetWatchdogStuckState();
-			return;
-		}
-
-		// Require a quorum of distinct, fresh, healthy, strictly-higher peers. If there is none we
-		// are alone or the most-advanced node of a dead network — stale-chain catch-up (Tier 2)
+		// A node at the network tip is never stale, so a healthy node yields NONE here. The quorum
+		// uses the same vetted filter as Tier 2's hasFreshHigherPeer, so a solo / most-advanced
+		// minter of a dead network (no fresh higher peer) also yields NONE — stale-chain catch-up
 		// governs that case, not this watchdog.
-		final int higherPeerCount = countFreshHigherPeers(tip.getHeight());
-		if (higherPeerCount < RECOVERY_WATCHDOG_MIN_PEERS) {
-			resetWatchdogStuckState();
-			return;
+		final boolean ourTipStale = tip.getTimestamp() < minLatestBlockTimestamp;
+		final int higherPeerCount = ourTipStale ? countFreshHigherPeers(tip.getHeight()) : 0;
+		final boolean haveActiveEpisodeForTip =
+				watchdogStuckSince != 0L && Arrays.equals(watchdogStuckTipSignature, tip.getSignature());
+
+		final RecoveryWatchdogAction action = decideRecoveryWatchdogAction(
+				ourTipStale, higherPeerCount, haveActiveEpisodeForTip,
+				now, watchdogStuckSince, lastWatchdogOrphanTimestamp, watchdogOrphanCount,
+				RECOVERY_WATCHDOG_MIN_PEERS,
+				Settings.getInstance().getRecoveryWatchdogStuckThresholdMillis(),
+				Settings.getInstance().getRecoveryWatchdogCooldownMillis(),
+				RECOVERY_WATCHDOG_MAX_ORPHAN_DEPTH_CEILING);
+
+		switch (action) {
+			case NONE:
+				resetWatchdogStuckState();
+				return;
+
+			case ARM:
+				// Begin (or refresh) the sustained-stuck timer for this tip. Forward progress since
+				// the last episode (our height rose past the high-water mark) refills the orphan budget.
+				if (tip.getHeight() > watchdogHighWaterHeight) {
+					watchdogOrphanCount = 0;
+					watchdogHighWaterHeight = tip.getHeight();
+				}
+				watchdogStuckSince = now;
+				watchdogStuckTipSignature = tip.getSignature();
+				LOGGER.info("Fork-recovery watchdog: stale tip at height {} behind {} fresh higher peer(s); will recover if it persists {}s",
+						tip.getHeight(), higherPeerCount, Settings.getInstance().getRecoveryWatchdogStuckThresholdMillis() / 1000);
+				return;
+
+			case WAIT:
+				// Stuck, but the sustained-duration / cooldown / orphan-ceiling gates are not all met yet.
+				return;
+
+			case ORPHAN:
+				break; // perform the bounded orphan below
 		}
-
-		// We are stale AND behind a quorum of fresh higher peers. If normal sync could advance us it
-		// would have (our tip height would rise and reset this timer). Track how long this persists.
-		if (watchdogStuckSince == 0L || !Arrays.equals(watchdogStuckTipSignature, tip.getSignature())) {
-			// Forward progress since the last episode (our height rose) refills the orphan budget.
-			if (tip.getHeight() > watchdogHighWaterHeight) {
-				watchdogOrphanCount = 0;
-				watchdogHighWaterHeight = tip.getHeight();
-			}
-			watchdogStuckSince = now;
-			watchdogStuckTipSignature = tip.getSignature();
-			LOGGER.info("Fork-recovery watchdog: stale tip at height {} behind {} fresh higher peer(s); will recover if it persists {}s",
-					tip.getHeight(), higherPeerCount, Settings.getInstance().getRecoveryWatchdogStuckThresholdMillis() / 1000);
-			return;
-		}
-
-		// Sustained-duration gate.
-		if (now - watchdogStuckSince < Settings.getInstance().getRecoveryWatchdogStuckThresholdMillis())
-			return;
-
-		// Cooldown gate.
-		if (lastWatchdogOrphanTimestamp != 0L && now - lastWatchdogOrphanTimestamp < Settings.getInstance().getRecoveryWatchdogCooldownMillis())
-			return;
-
-		// Hard ceiling on own-block orphans per stuck episode.
-		if (watchdogOrphanCount >= RECOVERY_WATCHDOG_MAX_ORPHAN_DEPTH_CEILING)
-			return;
 
 		// Re-read the tip immediately before acting; abort if it moved so we orphan exactly one
 		// block from the CURRENT tip (never a deeper reorg computed against a stale height).
