@@ -10,6 +10,9 @@ import org.qortium.arbitrary.ArbitraryDataRenderer;
 import org.qortium.arbitrary.ArbitraryDataResource;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.arbitrary.ArbitraryDataRenderManager;
+import org.qortium.data.arbitrary.ArbitraryResourceStatus;
+import org.qortium.repository.Repository;
+import org.qortium.repository.RepositoryManager;
 import org.qortium.settings.Settings;
 
 import javax.servlet.ServletContext;
@@ -132,11 +135,42 @@ public class RenderResource {
                                              @QueryParam("lang") String lang,
                                              @QueryParam("textSize") String textSize,
                                              @QueryParam("accent") String accent) {
+        // If no explicit ?identifier= was supplied, attempt to peel a non-default identifier from the
+        // leading path segment (mirroring the gateway), so /render/{service}/{name}/{identifier}/{path}
+        // works with a clean path-segment identifier. The ?identifier= query is honoured as-is for back-compat.
+        if ((identifier == null || identifier.isBlank()) && inPath != null && !inPath.isEmpty()) {
+            int slashIndex = inPath.indexOf('/');
+            String candidate = slashIndex >= 0 ? inPath.substring(0, slashIndex) : inPath;
+            String rest = slashIndex >= 0 ? inPath.substring(slashIndex + 1) : "";
+
+            if (!candidate.isEmpty() && !candidate.equalsIgnoreCase("default")
+                    && this.isRealIdentifier(service, name, candidate)) {
+                identifier = candidate;
+                inPath = rest;
+            }
+        }
+
         if (!Settings.getInstance().isQDNAuthBypassEnabled())
             Security.requirePriorAuthorization(request, name, service, identifier);
 
         String prefix = String.format("/render/%s", service);
         return this.get(name, ResourceIdType.NAME, service, identifier, inPath, null, prefix, true, true, theme, lang, textSize, accent);
+    }
+
+    /**
+     * Probe whether (service, name, candidate) is a real published resource, using the same mechanism
+     * as {@link org.qortium.api.gateway.resource.GatewayResource}'s path parser (a status lookup with a
+     * positive total chunk count). Used to disambiguate a path-segment identifier from a sub-path.
+     */
+    private boolean isRealIdentifier(Service service, String name, String candidate) {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            ArbitraryDataResource resource = new ArbitraryDataResource(name, ResourceIdType.NAME, service, candidate);
+            ArbitraryResourceStatus status = resource.getStatus(repository);
+            return status != null && status.getTotalChunkCount() != null && status.getTotalChunkCount() > 0;
+        } catch (Exception e) {
+            // On any lookup failure, treat the candidate as a sub-path rather than an identifier
+            return false;
+        }
     }
 
     @GET

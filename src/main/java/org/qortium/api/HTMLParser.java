@@ -1,7 +1,5 @@
 package org.qortium.api;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 import org.apache.logging.log4j.LogManager;
@@ -34,8 +32,20 @@ public class HTMLParser {
     public HTMLParser(String resourceId, String inPath, String prefix, boolean includeResourceIdInPrefix, byte[] data,
                       String qdnContext, Service service, String identifier, String theme, boolean usingCustomRouting, String lang, String textSize, String accent) {
         String inPathWithoutFilename = inPath.contains("/") ? inPath.substring(0, inPath.lastIndexOf('/')) : String.format("/%s",inPath);
-        this.qdnBase = includeResourceIdInPrefix ? String.format("%s/%s", prefix, resourceId) : prefix;
-        this.qdnBaseWithPath = includeResourceIdInPrefix ? String.format("%s/%s%s", prefix, resourceId, inPathWithoutFilename) : String.format("%s%s", prefix, inPathWithoutFilename);
+
+        // For the render context with a non-default identifier, fold the identifier into the base href as a
+        // path segment after the resourceId, so relative links/assets inherit it (matching the path-segment
+        // identifier route). The gateway already folds the identifier into the prefix, and domainMap does not
+        // use a path-segment identifier, so only render appends it here. Encode spaces the same way the caller
+        // encodes resourceId for the URL (space -> %20).
+        String resourceIdInBase = resourceId;
+        if (Objects.equals(qdnContext, "render") && includeResourceIdInPrefix
+                && identifier != null && !identifier.isBlank() && !identifier.equals("default")) {
+            resourceIdInBase = String.format("%s/%s", resourceId, identifier.replace(" ", "%20"));
+        }
+
+        this.qdnBase = includeResourceIdInPrefix ? String.format("%s/%s", prefix, resourceIdInBase) : prefix;
+        this.qdnBaseWithPath = includeResourceIdInPrefix ? String.format("%s/%s%s", prefix, resourceIdInBase, inPathWithoutFilename) : String.format("%s%s", prefix, inPathWithoutFilename);
         this.data = data;
         this.qdnContext = qdnContext;
         this.resourceId = resourceId;
@@ -98,31 +108,7 @@ public class HTMLParser {
             headElement.prependChild(metaCharsetElement);
 
         }
-        
-        // For render context with non-default identifier, modify all relative script and link tags
-        // to include the identifier query parameter (base tag doesn't reliably preserve query params)
-        if (Objects.equals(this.qdnContext, "render") && this.identifier != null && !this.identifier.isBlank() && !this.identifier.equals("default")) {
-            // Modify script tags
-            Elements scripts = document.select("script[src]");
-            scripts.forEach(script -> {
-                String src = script.attr("src");
-                // Only modify relative URLs (not absolute URLs starting with / or http)
-                if (!src.startsWith("/") && !src.startsWith("http")) {
-                    script.attr("src", appendQueryParameter(src, "identifier", this.identifier));
-                }
-            });
-            
-            // Modify link tags (CSS, etc.)
-            Elements links = document.select("link[href]");
-            links.forEach(link -> {
-                String href = link.attr("href");
-                // Only modify relative URLs
-                if (!href.startsWith("/") && !href.startsWith("http")) {
-                    link.attr("href", appendQueryParameter(href, "identifier", this.identifier));
-                }
-            });
-        }
-        
+
         String html = document.html();
         this.data = html.getBytes();
     }
@@ -197,17 +183,5 @@ public class HTMLParser {
         }
         output.append('"');
         return output.toString();
-    }
-
-    private static String appendQueryParameter(String url, String name, String value) {
-        int fragmentIndex = url.indexOf('#');
-        String baseUrl = fragmentIndex >= 0 ? url.substring(0, fragmentIndex) : url;
-        String fragment = fragmentIndex >= 0 ? url.substring(fragmentIndex) : "";
-        String separator = baseUrl.contains("?") ? "&" : "?";
-        return baseUrl + separator + urlEncode(name) + "=" + urlEncode(value) + fragment;
-    }
-
-    private static String urlEncode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 }
