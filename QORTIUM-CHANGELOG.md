@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-16 - gui: match splash screen to system theme
+
+The startup splash screen now checks the desktop's light-or-dark appearance when the graphical Core starts. Dark mode keeps the existing black splash with the current Qortium logo and white status text, while light mode uses a white splash with an inverted black logo and black status text. The detection is best-effort across macOS, Windows, and common Linux desktops, includes a manual `qortium.splash.theme` override for light, dark, or system behavior, and falls back to the existing dark splash when the platform setting cannot be read.
+
 ### 2026-06-15 - api: add group kicks by group and group bans by member endpoints
 
 Two new REST endpoints complete the symmetric read surface for group kicks and bans.

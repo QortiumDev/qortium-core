@@ -22,17 +22,19 @@ public class SplashFrame {
 	public static class SplashPanel extends JPanel {
 		private BufferedImage image;
 
-		private String defaultSplash = "app/qortium-app-500.png";
-
 		private JLabel statusLabel;
 
 		public SplashPanel() {
-			image = Gui.loadImage(defaultSplash);
+			this(SplashTheme.detect());
+		}
+
+		SplashPanel(SplashTheme theme) {
+			image = Gui.loadImage(theme.getSplashImageResource());
 
 			setOpaque(true);
 			setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 			setBorder(new EmptyBorder(10, 10, 10, 10));
-			setBackground(Color.BLACK);
+			setBackground(theme.getBackgroundColor());
 
 			// Add logo
 			JLabel imageLabel = new JLabel(new ImageIcon(image));
@@ -46,8 +48,8 @@ public class SplashFrame {
 			statusLabel = new JLabel("Starting Qortium Core...", JLabel.CENTER);
 			statusLabel.setMaximumSize(new Dimension(500, 50));
 			statusLabel.setFont(new Font("Verdana", Font.PLAIN, 20));
-			statusLabel.setBackground(Color.BLACK);
-			statusLabel.setForeground(new Color(255, 255, 255, 255));
+			statusLabel.setBackground(theme.getBackgroundColor());
+			statusLabel.setForeground(theme.getForegroundColor());
 			statusLabel.setOpaque(true);
 			statusLabel.setBorder(null);
 			add(statusLabel);
@@ -71,16 +73,18 @@ public class SplashFrame {
 		}
 
 		try {
+			SplashTheme theme = SplashTheme.detect();
+
 			this.splashDialog = new JFrame(TITLE);
 			Gui.applyWindowIcon(this.splashDialog);
 
-			this.splashPanel = new SplashPanel();
+			this.splashPanel = new SplashPanel(theme);
 			this.splashDialog.getContentPane().add(this.splashPanel);
 			this.splashDialog.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 			this.splashDialog.setUndecorated(true);
 			this.splashDialog.pack();
 			this.splashDialog.setLocationRelativeTo(null);
-			this.splashDialog.setBackground(Color.BLACK);
+			this.splashDialog.setBackground(theme.getBackgroundColor());
 			this.splashDialog.setVisible(true);
 
 			StartupStatus.setUpdater(this::updateStatus);
