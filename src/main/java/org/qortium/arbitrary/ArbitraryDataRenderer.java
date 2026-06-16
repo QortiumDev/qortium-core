@@ -43,10 +43,16 @@ public class ArbitraryDataRenderer {
     private final ResourceIdType resourceIdType;
     private final Service service;
     private final String identifier;
-    private String theme = "light";
-    private String lang = "en"; 
-    private String textSize = "medium";
-    private String accent = "green";
+    // Display settings default to empty so that, when the caller (host) does not
+    // specify them, Core does NOT clobber the app with a hard-coded default. The
+    // app then keeps the host's setting (e.g. via its own persistence) across
+    // navigations instead of being reset to light/medium/green on every
+    // param-less render request. The loading splash falls back to a cosmetic
+    // default in getLoadingResponse().
+    private String theme = "";
+    private String lang = "en";
+    private String textSize = "";
+    private String accent = "";
     private String inPath;
     private final String secret58;
     private final String prefix;
@@ -315,8 +321,12 @@ public class ArbitraryDataRenderer {
             responseString = responseString.replace("%%SERVICE%%", escapeJavaScriptStringContents(service.toString()));
             responseString = responseString.replace("%%NAME%%", escapeJavaScriptStringContents(name));
             responseString = responseString.replace("%%IDENTIFIER%%", escapeJavaScriptStringContents(identifier));
-            responseString = responseString.replace("%%THEME%%", escapeJavaScriptStringContents(theme));
-            responseString = responseString.replace("%%ACCENT%%", escapeJavaScriptStringContents(accent));
+            // The loading splash needs concrete colours; fall back cosmetically
+            // when the host did not specify a theme/accent (see field defaults).
+            String splashTheme = (theme == null || theme.isEmpty()) ? "light" : theme;
+            String splashAccent = (accent == null || accent.isEmpty()) ? "green" : accent;
+            responseString = responseString.replace("%%THEME%%", escapeJavaScriptStringContents(splashTheme));
+            responseString = responseString.replace("%%ACCENT%%", escapeJavaScriptStringContents(splashAccent));
 
         } catch (IOException e) {
             LOGGER.info("Unable to show loading screen: {}", e.getMessage());
