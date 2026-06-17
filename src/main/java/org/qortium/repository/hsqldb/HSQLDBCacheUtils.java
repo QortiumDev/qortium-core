@@ -5,6 +5,7 @@ import org.apache.logging.log4j.Logger;
 import org.qortium.api.SearchMode;
 import org.qortium.api.resource.TransactionsResource;
 import org.qortium.arbitrary.misc.Category;
+import org.qortium.list.QdnFilter;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.Controller;
 import org.qortium.data.account.AccountBalanceData;
@@ -180,8 +181,8 @@ public class HSQLDBCacheUtils {
             Optional<List<String>> keywords,
             boolean defaultResource,
             Optional<Integer> minLevel,
-            Optional<Supplier<List<String>>> includeOnly,
-            Optional<Supplier<List<String>>> exclude,
+            Optional<QdnFilter> includeOnly,
+            Optional<QdnFilter> exclude,
             Optional<Boolean> includeMetadata,
             Optional<Boolean> includeStatus,
             Optional<Long> before,
@@ -201,11 +202,14 @@ public class HSQLDBCacheUtils {
             stream = stream.filter( candidate -> candidate.created < before.get().longValue() );
         }
 
-        if(exclude.isPresent())
-            stream = stream.filter( candidate -> !exclude.get().get().contains( candidate.name ));
+        if(exclude.isPresent()) {
+            QdnFilter blockedFilter = exclude.get();
+            stream = stream.filter( candidate -> !blockedFilter.matches(candidate.service, candidate.name, isDefaultIdentifier(candidate.identifier) ? null : candidate.identifier) );
+        }
 
         if( includeOnly.isPresent()) {
-            stream = stream.filter( candidate -> includeOnly.get().get().contains( candidate.name ));
+            QdnFilter followedFilter = includeOnly.get();
+            stream = stream.filter( candidate -> followedFilter.matches(candidate.service, candidate.name, isDefaultIdentifier(candidate.identifier) ? null : candidate.identifier) );
         }
 
         // filter by service
@@ -385,7 +389,7 @@ public class HSQLDBCacheUtils {
      * @param limit       stop after this many results
      * @param identifier  optional prefix/contains filter on identifier
      * @param prefixOnly  true for prefix match, false for contains
-     * @param blockedNames names to exclude (e.g. from ListUtils.blockedNames()); null = no exclusion
+     * @param blockedFilter wildcard blockedQdn matcher; resources it matches are excluded; null = no exclusion
      * @param names       optional: exact (case-insensitive) name match — resource name must be one of these; null/empty = pass
      * @param query       optional: match name, identifier, title or description (or name only if defaultResource); null = pass
      * @param defaultResource when true with query, only default identifier and query on name
@@ -393,7 +397,7 @@ public class HSQLDBCacheUtils {
      * @param description optional: prefix/contains on metadata description; null/empty = pass
      * @param keywords    optional: at least one keyword in metadata description; null/empty = pass
      * @param before      optional: only items with created &lt; before; null = no filter
-     * @param followedNames optional: retain only if resource name (case-insensitive) is in this list; null/empty = pass
+     * @param followedFilter optional wildcard followedQdn matcher; retain only resources it matches; null = pass
      * @return at most {@code limit} items, newest first (no metadata/status stripping)
      */
     public static List<ArbitraryResourceData> getRecentForNotificationHistory(
@@ -402,7 +406,7 @@ public class HSQLDBCacheUtils {
             int limit,
             String identifier,
             boolean prefixOnly,
-            List<String> blockedNames,
+            QdnFilter blockedFilter,
             List<String> names,
             String query,
             boolean defaultResource,
@@ -410,7 +414,7 @@ public class HSQLDBCacheUtils {
             String description,
             List<String> keywords,
             Long before,
-            List<String> followedNames) {
+            QdnFilter followedFilter) {
 
         if (candidates == null || candidates.isEmpty() || limit <= 0) {
             return new ArrayList<>();
@@ -429,14 +433,6 @@ public class HSQLDBCacheUtils {
             keywordsLower = keywords.stream().map(String::toLowerCase).collect(Collectors.toList());
         }
 
-        List<String> followedLower = null;
-        if (followedNames != null && !followedNames.isEmpty()) {
-            followedLower = followedNames.stream()
-                    .filter(java.util.Objects::nonNull)
-                    .map(String::toLowerCase)
-                    .collect(Collectors.toList());
-        }
-
         List<ArbitraryResourceData> result = new ArrayList<>(Math.min(limit, sorted.size()));
         for (ArbitraryResourceData r : sorted) {
             if (result.size() >= limit) break;
@@ -444,10 +440,9 @@ public class HSQLDBCacheUtils {
             Long created = r.created;
             if (created == null || created <= after) continue;
             if (before != null && created != null && created >= before) continue;
-            if (blockedNames != null && blockedNames.contains(r.name)) continue;
-            if (followedLower != null) {
-                if (r.name == null || !followedLower.contains(r.name.toLowerCase())) continue;
-            }
+            String resourceIdentifier = isDefaultIdentifier(r.identifier) ? null : r.identifier;
+            if (blockedFilter != null && blockedFilter.matches(r.service, r.name, resourceIdentifier)) continue;
+            if (followedFilter != null && !followedFilter.matches(r.service, r.name, resourceIdentifier)) continue;
 
             if (defaultResource && !isDefaultIdentifier(r.identifier)) continue;
 

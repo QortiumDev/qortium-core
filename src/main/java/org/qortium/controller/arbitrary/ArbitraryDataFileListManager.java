@@ -642,8 +642,8 @@ public class ArbitraryDataFileListManager {
                 if( arbitraryTransactionData == null )
                     continue;
 
-                if (ListUtils.isNameBlocked(arbitraryTransactionData.getName())) {
-                    LOGGER.trace("User is Blocked - Will not fetch data");
+                if (ListUtils.isQdnBlocked(arbitraryTransactionData.getService(), arbitraryTransactionData.getName(), arbitraryTransactionData.getIdentifier())) {
+                    LOGGER.trace("Resource is Blocked - Will not fetch data");
                     continue;  //ToDo: Can this be changed to break to increase performance?
                 }
 
@@ -896,8 +896,8 @@ public class ArbitraryDataFileListManager {
                 if(transactionData == null)
                     continue;
 
-                if (ListUtils.isNameBlocked(transactionData.getName())) {
-                    LOGGER.debug("User is Blocked - Stop processing");
+                if (ListUtils.isQdnBlocked(transactionData.getService(), transactionData.getName(), transactionData.getIdentifier())) {
+                    LOGGER.debug("Resource is Blocked - Stop processing");
                     continue;
                 }
 

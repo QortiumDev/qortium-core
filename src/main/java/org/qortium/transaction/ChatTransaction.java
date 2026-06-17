@@ -5,7 +5,6 @@ import org.qortium.account.PublicKeyAccount;
 import org.qortium.block.BlockChain;
 import org.qortium.crypto.Crypto;
 import org.qortium.crypto.MemoryPoW;
-import org.qortium.data.naming.NameData;
 import org.qortium.data.transaction.ChatTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.group.Group;
@@ -16,7 +15,6 @@ import org.qortium.settings.Settings;
 import org.qortium.transform.TransformationException;
 import org.qortium.transform.transaction.ChatTransactionTransformer;
 import org.qortium.transform.transaction.TransactionTransformer;
-import org.qortium.utils.ListUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortium.utils.NTP;
@@ -169,22 +167,9 @@ public class ChatTransaction extends Transaction {
 			return ValidationResult.TIMESTAMP_TOO_NEW;
 		}
 
-		// Check for blocked author by address
-		if (ListUtils.isAddressBlocked(this.chatTransactionData.getSender())) {
-			return ValidationResult.ADDRESS_BLOCKED;
-		}
-
-		// Check for blocked author by registered name
-		List<NameData> names = this.repository.getNameRepository().getNamesByOwner(this.chatTransactionData.getSender());
-		if (names != null && !names.isEmpty()) {
-			for (NameData nameData : names) {
-				if (nameData != null && nameData.getName() != null) {
-					if (ListUtils.isNameBlocked(nameData.getName())) {
-						return ValidationResult.NAME_BLOCKED;
-					}
-				}
-			}
-		}
+		// Blocked chat senders are no longer rejected here: their messages remain valid so they are
+		// still stored and propagated across the network. Blocking is applied locally at read time
+		// instead, via the blockedChatNames / blockedChatAddresses lists.
 
 		PublicKeyAccount creator = this.getCreator();
 		if (creator == null)

@@ -464,9 +464,9 @@ public class ArbitraryDataReader {
         }
 
         if (!arbitraryDataFile.allFilesExist()) {
-            if (ListUtils.isNameBlocked(transactionData.getName())) {
+            if (ListUtils.isQdnBlocked(transactionData.getService(), transactionData.getName(), transactionData.getIdentifier())) {
                 throw new DataException(
-                        String.format("Unable to request missing data for file %s because the name is blocked", arbitraryDataFile));
+                        String.format("Unable to request missing data for file %s because the resource is blocked", arbitraryDataFile));
             } else {
                 // Ask the arbitrary data manager to fetch data for this transaction
                 String message;

@@ -89,18 +89,6 @@ public class ResourceListManager {
 
     }
 
-    private List<ResourceList> getListsByPrefix(String listNamePrefix) {
-        List<ResourceList> lists = new ArrayList<>();
-
-        for (ResourceList list : this.lists) {
-            if (list != null && list.getName() != null && list.getName().startsWith(listNamePrefix)) {
-                lists.add(list);
-            }
-        }
-
-        return lists;
-    }
-
     public boolean addToList(String listName, String item, boolean save) {
         ResourceList list = this.getList(listName);
         if (list == null) {
@@ -148,16 +136,6 @@ public class ResourceListManager {
         return list.contains(item, caseSensitive);
     }
 
-    public boolean listWithPrefixContains(String listNamePrefix, String item, boolean caseSensitive) {
-        List<ResourceList> lists = getListsByPrefix(listNamePrefix);
-        for (ResourceList list : lists) {
-            if (list.contains(item, caseSensitive)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     public void saveList(String listName) {
         ResourceList list = this.getList(listName);
         if (list == null) {
@@ -194,15 +172,6 @@ public class ResourceListManager {
             return null;
         }
         return list.getList();
-    }
-
-    public List<String> getStringsInListsWithPrefix(String listNamePrefix) {
-        List<String> items = new ArrayList<>();
-        List<ResourceList> lists = getListsByPrefix(listNamePrefix);
-        for (ResourceList list : lists) {
-            items.addAll(list.getList());
-        }
-        return items;
     }
 
     public List<String> getListNames() {

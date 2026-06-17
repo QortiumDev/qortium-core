@@ -13,6 +13,7 @@ import org.qortium.repository.ChatStoreRepository;
 import org.qortium.repository.DataException;
 import org.qortium.settings.Settings;
 import org.qortium.transform.TransformationException;
+import org.qortium.utils.ListUtils;
 import org.qortium.utils.NTP;
 
 import java.sql.ResultSet;
@@ -335,15 +336,24 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 				directSql += "AND CM.chat_reference IS NULL ";
 		}
 
+		List<Object> directParams = new ArrayList<>();
+		directParams.add(address);
+		directParams.add(cutoffTimestamp);
+		directParams.add(address);
+		directParams.add(cutoffTimestamp);
+		directParams.add(address);
+		directParams.add(address);
+		directParams.add(cutoffTimestamp);
+
+		// Hide latest messages from blocked senders so the preview reflects the latest visible one
+		directSql += chatBlockSqlFragment(directParams);
 		directSql += "ORDER BY CM.created_when DESC, CM.signature DESC "
 				+ "LIMIT 1"
 				+ ") AS LatestMessages "
 				+ "ORDER BY LatestMessages.created_when DESC, LatestMessages.signature DESC";
 
-		Object[] bindParams = new Object[] { address, cutoffTimestamp, address, cutoffTimestamp, address, address, cutoffTimestamp };
-
 		List<ChatTransactionData> directMessages = new ArrayList<>();
-		try (ResultSet resultSet = this.repository.checkedExecute(directSql, bindParams)) {
+		try (ResultSet resultSet = this.repository.checkedExecute(directSql, directParams.toArray())) {
 			if (resultSet == null)
 				return directMessages;
 
@@ -432,6 +442,9 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 			bindParams.add(firstAddress);
 		}
 
+		// Hide messages from locally-blocked chat senders (read-time only; the messages are still stored)
+		addChatBlockClauses(whereClauses, bindParams);
+
 		StringBuilder sql = new StringBuilder();
 		if (!whereClauses.isEmpty()) {
 			sql.append(" WHERE ");
@@ -445,6 +458,71 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 		}
 
 		return new MessageCriteria(sql.toString(), bindParams);
+	}
+
+	/**
+	 * Append where-clause conditions (on the {@code CM} alias) that hide chat messages whose sender
+	 * address is in {@code blockedChatAddresses} or whose registered name is in {@code blockedChatNames}.
+	 * Applied at local read time only — blocked senders' messages are still stored and propagated.
+	 * <p>
+	 * The name match is against the sender's <i>primary</i> name (the name shown in chat), matched
+	 * case-insensitively. Blocking a name that the sender owns only as a secondary name will not hide
+	 * them; block their primary name (or their address) instead.
+	 */
+	private void addChatBlockClauses(List<String> whereClauses, List<Object> bindParams) {
+		List<String> blockedAddresses = ListUtils.blockedChatAddresses();
+		if (!blockedAddresses.isEmpty()) {
+			whereClauses.add("CM.sender NOT IN (" + sqlPlaceholders(blockedAddresses.size()) + ")");
+			bindParams.addAll(blockedAddresses);
+		}
+
+		List<String> blockedNames = ListUtils.blockedChatNames();
+		if (!blockedNames.isEmpty()) {
+			whereClauses.add("NOT EXISTS (SELECT 1 FROM " + PRIMARY_NAMES_TABLE
+					+ " BlockPN WHERE BlockPN.owner = CM.sender AND LCASE(BlockPN.name) IN ("
+					+ sqlPlaceholders(blockedNames.size()) + "))");
+			for (String name : blockedNames) {
+				bindParams.add(name.toLowerCase());
+			}
+		}
+	}
+
+	/**
+	 * The same conditions as {@link #addChatBlockClauses} but as a SQL fragment (each prefixed with
+	 * {@code AND }) for queries that build raw SQL with a positional bind-param list. Returns an empty
+	 * string when nothing is blocked. Bind params are appended to {@code bindParams} in SQL order.
+	 */
+	private String chatBlockSqlFragment(List<Object> bindParams) {
+		StringBuilder fragment = new StringBuilder();
+
+		List<String> blockedAddresses = ListUtils.blockedChatAddresses();
+		if (!blockedAddresses.isEmpty()) {
+			fragment.append("AND CM.sender NOT IN (").append(sqlPlaceholders(blockedAddresses.size())).append(") ");
+			bindParams.addAll(blockedAddresses);
+		}
+
+		List<String> blockedNames = ListUtils.blockedChatNames();
+		if (!blockedNames.isEmpty()) {
+			fragment.append("AND NOT EXISTS (SELECT 1 FROM ").append(PRIMARY_NAMES_TABLE)
+					.append(" BlockPN WHERE BlockPN.owner = CM.sender AND LCASE(BlockPN.name) IN (")
+					.append(sqlPlaceholders(blockedNames.size())).append(")) ");
+			for (String name : blockedNames) {
+				bindParams.add(name.toLowerCase());
+			}
+		}
+
+		return fragment.toString();
+	}
+
+	private static String sqlPlaceholders(int count) {
+		StringBuilder placeholders = new StringBuilder();
+		for (int i = 0; i < count; i++) {
+			if (i > 0) {
+				placeholders.append(", ");
+			}
+			placeholders.append("?");
+		}
+		return placeholders.toString();
 	}
 
 	private List<GroupChat> getActiveGroupChats(String address, Encoding encoding, Boolean hasChatReference) throws DataException {
@@ -482,11 +560,15 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 				latestSql += "AND CM.chat_reference IS NULL ";
 		}
 
+		List<Object> latestParams = new ArrayList<>();
+		latestParams.add(cutoffTimestamp);
+		latestParams.add(address);
+		latestParams.add(PrivateGroupChatEnvelope.Type.MESSAGE.name());
+		latestSql += chatBlockSqlFragment(latestParams);
 		latestSql += "ORDER BY CM.created_when DESC";
 
 		Map<Integer, Object[]> latestPerGroup = new HashMap<>();
-		try (ResultSet resultSet = this.repository.checkedExecute(latestSql, cutoffTimestamp, address,
-				PrivateGroupChatEnvelope.Type.MESSAGE.name())) {
+		try (ResultSet resultSet = this.repository.checkedExecute(latestSql, latestParams.toArray())) {
 			if (resultSet != null) {
 				do {
 					int groupId = resultSet.getInt(1);
@@ -533,9 +615,12 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 				grouplessSql += "AND CM.chat_reference IS NULL ";
 		}
 
+		List<Object> grouplessParams = new ArrayList<>();
+		grouplessParams.add(cutoffTimestamp);
+		grouplessSql += chatBlockSqlFragment(grouplessParams);
 		grouplessSql += "ORDER BY CM.created_when DESC LIMIT 1";
 
-		try (ResultSet resultSet = this.repository.checkedExecute(grouplessSql, cutoffTimestamp)) {
+		try (ResultSet resultSet = this.repository.checkedExecute(grouplessSql, grouplessParams.toArray())) {
 			Long timestamp = null;
 			String sender = null;
 			String senderName = null;
@@ -588,15 +673,24 @@ public class HSQLDBChatStoreRepository implements ChatStoreRepository {
 				directSql += "AND CM.chat_reference IS NULL ";
 		}
 
+		List<Object> directParams = new ArrayList<>();
+		directParams.add(address);
+		directParams.add(cutoffTimestamp);
+		directParams.add(address);
+		directParams.add(cutoffTimestamp);
+		directParams.add(address);
+		directParams.add(address);
+		directParams.add(cutoffTimestamp);
+
+		// Hide latest messages from blocked senders so the preview reflects the latest visible one
+		directSql += chatBlockSqlFragment(directParams);
 		directSql += "ORDER BY CM.created_when DESC "
 				+ "LIMIT 1"
 				+ ") AS LatestMessages "
 				+ "LEFT OUTER JOIN " + PRIMARY_NAMES_TABLE + " ON owner = other_address";
 
-		Object[] bindParams = new Object[] { address, cutoffTimestamp, address, cutoffTimestamp, address, address, cutoffTimestamp };
-
 		List<DirectChat> directChats = new ArrayList<>();
-		try (ResultSet resultSet = this.repository.checkedExecute(directSql, bindParams)) {
+		try (ResultSet resultSet = this.repository.checkedExecute(directSql, directParams.toArray())) {
 			if (resultSet == null)
 				return directChats;
 

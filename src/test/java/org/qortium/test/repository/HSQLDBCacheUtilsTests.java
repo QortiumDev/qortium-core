@@ -5,6 +5,7 @@ import org.junit.Test;
 import org.qortium.api.SearchMode;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.data.arbitrary.ArbitraryResourceData;
+import org.qortium.list.QdnFilter;
 import org.qortium.data.arbitrary.ArbitraryResourceMetadata;
 import org.qortium.data.arbitrary.ArbitraryResourceStatus;
 import org.qortium.repository.hsqldb.HSQLDBCacheUtils;
@@ -490,7 +491,7 @@ public class HSQLDBCacheUtilsTests {
         ArbitraryResourceData data = new ArbitraryResourceData();
         data.name = "Joe";
 
-        Supplier<List<String>> supplier = () -> List.of("admin");
+        Supplier<List<String>> supplier = () -> List.of("*/admin");
 
         filterListByMap(
                 List.of(data),
@@ -505,7 +506,7 @@ public class HSQLDBCacheUtilsTests {
         ArbitraryResourceData data = new ArbitraryResourceData();
         data.name = "Joe";
 
-        Supplier<List<String>> supplier = () -> List.of("Joe");
+        Supplier<List<String>> supplier = () -> List.of("*/Joe");
 
         filterListByMap(
                 List.of(data),
@@ -520,7 +521,7 @@ public class HSQLDBCacheUtilsTests {
         ArbitraryResourceData data = new ArbitraryResourceData();
         data.name = "Joe";
 
-        Supplier<List<String>> supplier = () -> List.of("admin");
+        Supplier<List<String>> supplier = () -> List.of("*/admin");
 
         filterListByMap(
                 List.of(data),
@@ -535,7 +536,7 @@ public class HSQLDBCacheUtilsTests {
         ArbitraryResourceData data = new ArbitraryResourceData();
         data.name = "Joe";
 
-        Supplier<List<String>> supplier = () -> List.of("Joe");
+        Supplier<List<String>> supplier = () -> List.of("*/Joe");
 
         filterListByMap(
                 List.of(data),
@@ -735,8 +736,8 @@ public class HSQLDBCacheUtilsTests {
         boolean defaultResource = valueByKey.containsKey(DEFAULT_RESOURCE);
         Optional<SearchMode> mode = Optional.of((SearchMode) valueByKey.getOrDefault(MODE, SearchMode.ALL));
         Optional<Integer> minLevel = Optional.ofNullable((Integer) valueByKey.get(MIN_LEVEL));
-        Optional<Supplier<List<String>>> followedOnly = optionalStringListSupplier(valueByKey.get(FOLLOWED_ONLY));
-        Optional<Supplier<List<String>>> excludeBlocked = optionalStringListSupplier(valueByKey.get(EXCLUDE_BLOCKED));
+        Optional<QdnFilter> followedOnly = optionalQdnFilter(valueByKey.get(FOLLOWED_ONLY));
+        Optional<QdnFilter> excludeBlocked = optionalQdnFilter(valueByKey.get(EXCLUDE_BLOCKED));
         Optional<Boolean> includeMetadata = Optional.ofNullable((Boolean) valueByKey.get(INCLUDE_METADATA));
         Optional<Boolean> includeStatus = Optional.ofNullable((Boolean) valueByKey.get(INCLUDE_STATUS));
         Optional<Long> before = Optional.ofNullable((Long) valueByKey.get(BEFORE));
@@ -785,18 +786,15 @@ public class HSQLDBCacheUtilsTests {
         return Optional.of(toStringList((List<?>) value));
     }
 
-    private static Optional<Supplier<List<String>>> optionalStringListSupplier(Object value) {
+    private static Optional<QdnFilter> optionalQdnFilter(Object value) {
         if (value == null)
             return Optional.empty();
 
         Assert.assertTrue(value instanceof Supplier<?>);
 
-        Supplier<?> supplier = (Supplier<?>) value;
-        return Optional.of(() -> {
-            Object suppliedValue = supplier.get();
-            Assert.assertTrue(suppliedValue instanceof List<?>);
-            return toStringList((List<?>) suppliedValue);
-        });
+        Object suppliedValue = ((Supplier<?>) value).get();
+        Assert.assertTrue(suppliedValue instanceof List<?>);
+        return Optional.of(QdnFilter.ofPatterns(toStringList((List<?>) suppliedValue)));
     }
 
     private static List<String> toStringList(List<?> values) {

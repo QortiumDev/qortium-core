@@ -104,8 +104,8 @@ public class ArbitraryDataResource {
             return new ArbitraryResourceStatus(Status.UNSUPPORTED, this.localChunkCount, this.totalChunkCount);
         }
 
-        // Check if the name is blocked
-        if (ListUtils.isNameBlocked(this.resourceId)) {
+        // Check if the resource is blocked
+        if (ListUtils.isQdnBlocked(this.service, this.resourceId, this.identifier)) {
             return new ArbitraryResourceStatus(Status.BLOCKED, this.localChunkCount, this.totalChunkCount);
         }
 

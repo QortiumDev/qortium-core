@@ -210,16 +210,17 @@ public class ArbitraryDataManager extends Thread {
 	}
 
 	private void processNames() throws InterruptedException {
-		// Fetch latest list of followed names
-		List<String> followedNames = ListUtils.followedNames();
-		if (followedNames == null || followedNames.isEmpty()) {
+		// Follows are now wildcard patterns rather than a fixed set of names. If nothing is
+		// followed there's nothing to pre-fetch.
+		if (ListUtils.followedQdn().isEmpty()) {
 			return;
 		}
 
-		// Loop through the names in the list and fetch transactions for each
-		for (String name : followedNames) {
-			this.fetchAndProcessTransactions(name);
-		}
+		// Scan all candidate (named) transactions; shouldPreFetchData() restricts to followed resources.
+		// Note: the candidate feed only yields named resources, so service-only/identifier follow
+		// patterns are still applied to any named resource but unnamed resources are not swept here
+		// (matching the previous name-driven follower behaviour).
+		this.fetchAndProcessTransactions(null);
 	}
 
 	private void processAll() throws InterruptedException {
@@ -445,7 +446,7 @@ public class ArbitraryDataManager extends Thread {
 					ArbitraryTransactionDataHashWrapper wrapper = iterator.next();
 
 					// Skip transactions that are blocked
-					if (ListUtils.isNameBlocked(wrapper.getName())) {
+					if (ListUtils.isQdnBlocked(Service.valueOf(wrapper.getService()), wrapper.getName(), wrapper.getIdentifier())) {
 						iterator.remove();
 						continue;
 					}

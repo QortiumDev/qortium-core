@@ -472,8 +472,8 @@ public class ArbitraryMetadataManager {
             }
             ArbitraryTransactionData arbitraryTransactionData = (ArbitraryTransactionData) transactionData;
 
-            // Check if the name is blocked
-            boolean isBlocked = (arbitraryTransactionData == null || ListUtils.isNameBlocked(arbitraryTransactionData.getName()));
+            // Check if the resource is blocked
+            boolean isBlocked = (arbitraryTransactionData == null || ListUtils.isQdnBlocked(arbitraryTransactionData.getService(), arbitraryTransactionData.getName(), arbitraryTransactionData.getIdentifier()));
 
             // Save if not blocked
             ArbitraryDataFile arbitraryMetadataFile = arbitraryMetadataMessage.getArbitraryMetadataFile();
@@ -594,11 +594,11 @@ public class ArbitraryMetadataManager {
 
                 try {
 
-                    // For serving metadata we only need to check the name isn't blocked —
+                    // For serving metadata we only need to check the resource isn't blocked —
                     // canStoreData() is a storage-policy check for data files and must NOT gate
                     // metadata serving (it rejects RAW_DATA transactions even when they carry a
-                    // valid metadataHash, and it rejects names not followed under FOLLOWED policy).
-                    boolean isBlocked = ListUtils.isNameBlocked(transactionData.getName());
+                    // valid metadataHash, and it rejects resources not followed under FOLLOWED policy).
+                    boolean isBlocked = ListUtils.isQdnBlocked(transactionData.getService(), transactionData.getName(), transactionData.getIdentifier());
                     if (!isBlocked) {
 
                         byte[] metadataHash = transactionData.getMetadataHash();
@@ -636,7 +636,7 @@ public class ArbitraryMetadataManager {
                 }
 
                 // We may need to forward this request on
-                boolean isBlocked = (transactionDataList == null || ListUtils.isNameBlocked(transactionData.getName()));
+                boolean isBlocked = (transactionDataList == null || ListUtils.isQdnBlocked(transactionData.getService(), transactionData.getName(), transactionData.getIdentifier()));
                 if (Settings.getInstance().isRelayModeEnabled() && !isBlocked) {
                     // In relay mode - so ask our other peers if they have it
 

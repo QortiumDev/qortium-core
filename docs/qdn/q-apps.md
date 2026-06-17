@@ -810,12 +810,26 @@ let res = await qdnRequest({
 });
 ```
 
+### Resource lists
+
+The node consults four lists by exact name:
+
+- `followedQdn` / `blockedQdn` — gitignore-style `SERVICE/NAME/IDENTIFIER` wildcard patterns that
+  drive which QDN resources the node auto-downloads, stores and serves. `*` matches any run of
+  characters within a segment; omitted trailing segments match anything. The NAME segment may also
+  be an address, meaning "any name owned by that address". Examples: `BLOG_POST` (all blog posts),
+  `APP/BOB` (any app from BOB), `VIDEO/*/cat*` (videos whose identifier starts with `cat`),
+  `*/TOM` (anything from TOM), `*/*/*fish*` (anything whose identifier contains `fish`). SERVICE and
+  NAME are matched case-insensitively; IDENTIFIER is case-sensitive.
+- `blockedChatNames` / `blockedChatAddresses` — exact names/addresses whose chat messages are hidden
+  from this node's local chat APIs. The messages are still stored and relayed to the network.
+
 ### Get the contents of a list
 _Requires user approval_
 ```
 let res = await qdnRequest({
     action: "GET_LIST_ITEMS",
-    list_name: "followedNames"
+    list_name: "followedQdn"
 });
 ```
 
@@ -824,8 +838,8 @@ _Requires user approval_
 ```
 let res = await qdnRequest({
     action: "ADD_LIST_ITEMS",
-    list_name: "blockedNames",
-    items: ["QdnDemo"]
+    list_name: "blockedQdn",
+    items: ["APP/QdnDemo"]
 });
 ```
 
@@ -835,8 +849,8 @@ Items must be deleted one at a time.
 ```
 let res = await qdnRequest({
     action: "DELETE_LIST_ITEM",
-    list_name: "blockedNames",
-    item: "QdnDemo"
+    list_name: "blockedQdn",
+    item: "APP/QdnDemo"
 });
 ```
 
