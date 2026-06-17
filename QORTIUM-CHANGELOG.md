@@ -34,7 +34,11 @@ own chain.
 
 ## Change Entries
 
-### 2026-06-17 - polls: add scheduled starts and multi-option voting
+### 2026-06-17 - fast-sync: trusted archive-chunk replay core (verify + checkpoint-gated crypto-skip)
+
+Adds the trust core of the archive-chunk fast-sync — the mechanism that lets a node build its chain state from downloaded block-archive chunks far faster than validating every block from genesis one at a time. This is the consumer half of the chunk-distribution protocol whose serving side already shipped; it is entirely OFF by default and changes nothing until explicitly enabled.
+
+Two pieces: (1) `Block.isValid`/`areOnlineAccountsValid` gain an internal "trusted replay" mode that skips only the expensive per-block signature and memory-proof-of-work checks while still building and locally verifying all derived state — used solely for blocks strictly below a release-pinned checkpoint, whose history the checkpoint already attests. Every existing caller is unchanged (the no-argument methods delegate with trusted-replay off), so behaviour is byte-for-byte identical when the feature is unused. (2) A new `ArchiveChunkImporter` verifies a downloaded chunk against its advertised SHA-256 (content-addressing — a tampered chunk is rejected before it touches disk), sanity-checks its header against the claimed height range, writes it into the local archive, and replays its blocks with the checkpoint-gated crypto-skip. The release-pinned checkpoint is the only trust anchor; the manifest is untrusted and recomputable. New tests cover the integrity gates (genuine chunk accepted, tampered/short/wrong-range chunk rejected). The network requester that fetches chunks from peers, and full replay-to-state integration tests, follow as the next increment.
 
 Upgrades poll creation, editing, voting, storage, and results so polls are more flexible while keeping existing single-option clients working. Poll names and option names now have matching 400-byte validation and database storage, poll descriptions can be omitted and are stored as empty text, and polls may carry an optional `startTime`; scheduled polls cannot be voted on before that time, and the start time can only be changed before the poll has started. The allowed option count rises from 100 to 1000.
 

@@ -1148,6 +1148,17 @@ public class Block {
 	}
 
 	public ValidationResult areOnlineAccountsValid() throws DataException {
+		return areOnlineAccountsValid(false);
+	}
+
+	/**
+	 * As {@link #areOnlineAccountsValid()}, but when {@code trustedReplay} is true the expensive
+	 * online-account signature and memory-PoW verifications are skipped. This is ONLY reached from the
+	 * archive fast-replay path for blocks strictly below a release-pinned checkpoint, whose history the
+	 * checkpoint already attests; every structural check and all derived-state building still runs, and
+	 * the reference chain-linkage in {@link #isValid(boolean)} still binds each block to its parent.
+	 */
+	public ValidationResult areOnlineAccountsValid(boolean trustedReplay) throws DataException {
 		// Doesn't apply for Genesis block!
 		if (this.blockData.getHeight() != null && this.blockData.getHeight() == 1)
 			return ValidationResult.OK;
@@ -1255,7 +1266,8 @@ public class Block {
 		OnlineAccountsManager.getInstance().removeKnown(onlineAccounts, onlineTimestamp);
 
 		// Validate the rest : v5.1.0 Added enhanced speed processing for SingleTestNet Node
-		if(!Settings.getInstance().isSingleNodeTestnet())
+		// (skipped under trusted fast-replay: the checkpoint already attests this sub-checkpoint history)
+		if (!trustedReplay && !Settings.getInstance().isSingleNodeTestnet())
 			for (OnlineAccountData onlineAccount : onlineAccounts)
 				if (!OnlineAccountsManager.getInstance().verifyMemoryPoW(onlineAccount, null))
 					return ValidationResult.ONLINE_ACCOUNT_NONCE_INCORRECT;
@@ -1276,7 +1288,7 @@ public class Block {
 				byte[] publicKey = onlineRewardShares.get(i).getRewardSharePublicKey();
 				byte[] signature = onlineAccountsSignatures.get(i);
 
-				if (!OnlineAccountsManager.getInstance().verifyOrCacheV2OnlineAccountSignature(publicKey, signature, onlineTimestamp))
+				if (!trustedReplay && !OnlineAccountsManager.getInstance().verifyOrCacheV2OnlineAccountSignature(publicKey, signature, onlineTimestamp))
 					return ValidationResult.ONLINE_ACCOUNT_SIGNATURE_INCORRECT;
 			}
 		} else {
@@ -1290,7 +1302,7 @@ public class Block {
 			byte[] aggregateSignature = onlineAccountsSignatures.get(0);
 
 			// One-step verification of aggregate signature using aggregate public key
-			if (!Ed25519Extras.verifyAggregated(aggregatePublicKey, aggregateSignature, onlineTimestampBytes))
+			if (!trustedReplay && !Ed25519Extras.verifyAggregated(aggregatePublicKey, aggregateSignature, onlineTimestampBytes))
 				return ValidationResult.ONLINE_ACCOUNT_SIGNATURE_INCORRECT;
 		}
 
@@ -1316,6 +1328,20 @@ public class Block {
 	 * @throws DataException
 	 */
 	public ValidationResult isValid() throws DataException {
+		return isValid(false);
+	}
+
+	/**
+	 * As {@link #isValid()}, but when {@code trustedReplay} is true the expensive online-account
+	 * signature / memory-PoW crypto is skipped (see {@link #areOnlineAccountsValid(boolean)}). Used ONLY by
+	 * the archive fast-replay path for blocks strictly below a release-pinned checkpoint; the block minter
+	 * and transactions-signature crypto ({@link #isSignatureValid()}) are likewise skipped by that path.
+	 * Every other check here — reference chain-linkage, timestamp, minter eligibility, AT re-execution,
+	 * and transaction validity/processing — still runs, so derived state is built and locally verified.
+	 *
+	 * @throws DataException
+	 */
+	public ValidationResult isValid(boolean trustedReplay) throws DataException {
 		// Check parent block exists
 		if (this.blockData.getReference() == null)
 			return ValidationResult.REFERENCE_MISSING;
@@ -1351,7 +1377,7 @@ public class Block {
 			return ValidationResult.MINTER_NOT_ACCEPTED;
 
 		// Online Accounts
-		ValidationResult onlineAccountsResult = this.areOnlineAccountsValid();
+		ValidationResult onlineAccountsResult = this.areOnlineAccountsValid(trustedReplay);
 		LOGGER.trace("Accounts valid = {}", onlineAccountsResult);
 		if (onlineAccountsResult != ValidationResult.OK)
 			return onlineAccountsResult;
