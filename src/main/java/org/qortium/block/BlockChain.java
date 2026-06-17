@@ -194,6 +194,13 @@ public class BlockChain {
 	/** Maximum time to retain online account signatures (ms) for block validity checks, to allow for clock variance. */
 	private long onlineAccountSignaturesMaxLifetime;
 
+	/** Feature trigger block height from which online-account signatures must use the secure per-account
+	 * Ed25519 scheme (challenge bound to R and A) rather than the legacy, forgeable custom aggregate scheme
+	 * (consensus fix c-01). Below this height behaviour is byte-for-byte the legacy scheme so historic blocks
+	 * replay identically. Defaults to a disabled sentinel so a chain config that omits the key keeps the fix
+	 * OFF (fail-closed, replay-safe). */
+	private long onlineAccountsSignatureV2Height = 9999999999999L;
+
 	/** Transaction-facing MemoryPoW difficulties. */
 	public static class MemoryPoWSettings {
 		public Integer feeAlternativeDifficulty;
@@ -891,6 +898,10 @@ public class BlockChain {
 
 	public long getOnlineAccountSignaturesMaxLifetime() {
 		return this.onlineAccountSignaturesMaxLifetime;
+	}
+
+	public long getOnlineAccountsSignatureV2Height() {
+		return this.onlineAccountsSignatureV2Height;
 	}
 
 	public List<IdsForHeight> getMintingGroupIds() {

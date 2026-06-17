@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - consensus: replace forgeable online-accounts signatures with per-account Ed25519 (c-01)
+
+Fixes a universal-forgery vulnerability in the online-accounts signature scheme (upstream Qortal audit finding "c-01"). Online accounts — which determine minting eligibility and reward distribution — were signed with a custom aggregate scheme whose challenge did not depend on the signature's nonce point, allowing an attacker to forge valid-looking online-account signatures for accounts they do not control.
+
+Once activated, online accounts and blocks use standard per-account Ed25519 signatures (challenge bound to the nonce point and the public key), each verified individually against its own public key. Blocks at and above the trigger store one signature per online account instead of a single aggregate, and block validation derives the signature count from the stored bytes so both layouts are handled. The change is gated behind a new feature-trigger height, `onlineAccountsSignatureV2Height`: below it, behaviour is byte-for-byte the legacy aggregate scheme so historic blocks replay identically; at and above it the secure per-account scheme applies. The field defaults to a disabled sentinel (fail-closed). New crypto tests reproduce the forgery and confirm the secure verify rejects it while the legacy verify accepted it, and a new test mints and validates a block end-to-end with the secure scheme active; the full existing block, minting and online-account test suites pass with the trigger off, confirming the legacy path is unchanged.
+
+This is a hard fork — it changes block serialization at the activation height. The activation height is a PLACEHOLDER (`99999`) in `blockchain.json` and `previewchain.json` and MUST be replaced with a chosen future height, coordinated network-wide, before any release. Ported from upstream Qortal 6.1.6.
+
 ### 2026-06-17 - consensus: bound asset-order amounts behind a feature trigger (c-02)
 
 Fixes a value-minting vulnerability in asset-order processing (upstream Qortal audit finding "c-02"). When an order's committed cost was computed, an intermediate value that exceeded the range of a signed 64-bit integer was silently truncated, which on a refund/credit path could wrap into a negative number and effectively mint asset value out of nothing.
