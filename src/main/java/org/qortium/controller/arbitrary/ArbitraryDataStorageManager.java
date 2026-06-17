@@ -495,7 +495,7 @@ public class ArbitraryDataStorageManager extends Thread {
             this.lastDirectorySizeCheck = now;
             this.storageCapacity = storageCapacity;
 
-            LOGGER.info("Total used: {} bytes, Total capacity: {} bytes", this.totalDirectorySize, this.storageCapacity);
+            LOGGER.info("Total used: {}, Total capacity: {}", StringUtils.formatBytes(this.totalDirectorySize), StringUtils.formatBytes(this.storageCapacity));
         } catch (IOException e) {
             LOGGER.info("Unable to calculate remaining storage capacity: {}", e.getMessage());
         } catch (RuntimeException e) {

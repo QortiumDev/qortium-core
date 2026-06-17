@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - core: log storage and archive sizes in human-readable units
+
+Several status log lines reported sizes as a raw number of bytes — for example "Total used: 55700516352 bytes". A new helper, `StringUtils.formatBytes`, turns a byte count into a compact binary-unit string such as "51.88 GB" or "512 bytes". The QDN storage-capacity log line and the block-archive writer's progress and total-size log lines now use it, so those messages are easier to read at a glance. This is a logging-only change with no effect on behaviour. Ported from upstream Qortal 6.1.6.
+
 ### 2026-06-17 - qdn: track hosted-data folder size incrementally instead of rescanning
 
 To know how much of its storage allowance is in use, the node periodically measured the total size of its hosted-data and temporary folders by walking every file on disk. On a node hosting a large amount of QDN data that full scan is slow and I/O-heavy, and it ran every ten minutes. The node now keeps a running total in memory that is adjusted as files are written, deleted, or cleared to free capacity, and saves that total to a small file (`qortium-backup/ArbitraryDataFolderSizeEstimate.dat`) so it survives a restart. A full rescan still runs, but only on first start when there is no saved total, and then on a configurable schedule — by default once a day at 23:00 local time — to correct any drift. Two new settings, `dataStorageSizeCalculationHour` and `dataStorageSizeCalculationFrequency`, control that schedule. Ported from upstream Qortal 6.1.6, while keeping Qortium's correct temporary-folder measurement (the upstream version mistakenly measures the data folder twice).
