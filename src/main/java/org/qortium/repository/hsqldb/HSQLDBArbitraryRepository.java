@@ -7,6 +7,7 @@ import org.qortium.arbitrary.ArbitraryDataFile;
 import org.qortium.arbitrary.metadata.ArbitraryDataTransactionMetadata;
 import org.qortium.arbitrary.misc.Category;
 import org.qortium.arbitrary.misc.Service;
+import org.qortium.list.QdnFilter;
 import org.qortium.data.arbitrary.ArbitraryResourceCache;
 import org.qortium.data.arbitrary.ArbitraryResourceData;
 import org.qortium.data.arbitrary.ArbitraryResourceMetadata;
@@ -875,6 +876,13 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 		StringBuilder sql = new StringBuilder(512);
 		List<Object> bindParams = new ArrayList<>();
 
+		// Followed/blocked filtering uses wildcard SERVICE/NAME/IDENTIFIER patterns, which cannot be
+		// expressed as a SQL name IN/NOT IN clause. When active we fetch the ordered rows and filter
+		// (and paginate) them in Java further down.
+		QdnFilter followFilter = (followedOnly != null && followedOnly) ? ListUtils.followedQdnFilter() : null;
+		QdnFilter blockFilter = (excludeBlocked != null && excludeBlocked) ? ListUtils.blockedQdnFilter() : null;
+		boolean qdnFilter = (followFilter != null) || (blockFilter != null);
+
 		sql.append("SELECT name, service, identifier, size, status, created_when, updated_when, " +
 				"title, description, category, tag1, tag2, tag3, tag4, tag5, latest_signature " +
 				"FROM ArbitraryResourcesCache " +
@@ -910,43 +918,16 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 			sql.append(")");
 		}
 
-		// Handle "followed only"
-		if (followedOnly != null && followedOnly) {
-			List<String> followedNames = ListUtils.followedNames();
-			if (followedNames != null && !followedNames.isEmpty()) {
-				sql.append(" AND name IN (?");
-				bindParams.add(followedNames.get(0));
-
-				for (int i = 1; i < followedNames.size(); ++i) {
-					sql.append(", ?");
-					bindParams.add(followedNames.get(i));
-				}
-				sql.append(")");
-			}
-		}
-
-		// Handle "exclude blocked"
-		if (excludeBlocked != null && excludeBlocked) {
-			List<String> blockedNames = ListUtils.blockedNames();
-			if (blockedNames != null && !blockedNames.isEmpty()) {
-				sql.append(" AND name NOT IN (?");
-				bindParams.add(blockedNames.get(0));
-
-				for (int i = 1; i < blockedNames.size(); ++i) {
-					sql.append(", ?");
-					bindParams.add(blockedNames.get(i));
-				}
-				sql.append(")");
-			}
-		}
-
 		sql.append(" ORDER BY name COLLATE SQL_TEXT_UCC_NO_PAD");
 
 		if (reverse != null && reverse) {
 			sql.append(" DESC");
 		}
 
-		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+		// When wildcard follow/block filtering is active, paginate in Java (after filtering) instead
+		if (!qdnFilter) {
+			HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+		}
 
 		List<ArbitraryResourceData> arbitraryResources = new ArrayList<>();
 
@@ -1016,10 +997,41 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 				arbitraryResources.add(arbitraryResourceData);
 			} while (resultSet.next());
 
+			if (qdnFilter) {
+				arbitraryResources = applyQdnFilterAndPaging(arbitraryResources, followFilter, blockFilter, limit, offset);
+			}
+
 			return arbitraryResources;
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch arbitrary resources from repository", e);
 		}
+	}
+
+	/**
+	 * Apply wildcard followedQdn/blockedQdn filtering and offset/limit paging to a fetched,
+	 * already-ordered list of resources. Used by the SQL search paths, where the follow/block
+	 * filter cannot be pushed into the query.
+	 */
+	private static List<ArbitraryResourceData> applyQdnFilterAndPaging(
+			List<ArbitraryResourceData> resources, QdnFilter followFilter, QdnFilter blockFilter,
+			Integer limit, Integer offset) {
+		List<ArbitraryResourceData> filtered = new ArrayList<>(resources.size());
+		for (ArbitraryResourceData rd : resources) {
+			if (followFilter != null && !followFilter.matches(rd.service, rd.name, rd.identifier)) {
+				continue;
+			}
+			if (blockFilter != null && blockFilter.matches(rd.service, rd.name, rd.identifier)) {
+				continue;
+			}
+			filtered.add(rd);
+		}
+
+		int from = (offset != null && offset > 0) ? offset : 0;
+		if (from >= filtered.size()) {
+			return new ArrayList<>();
+		}
+		int to = (limit != null && limit > 0) ? Math.min(from + limit, filtered.size()) : filtered.size();
+		return new ArrayList<>(filtered.subList(from, to));
 	}
 
 	@Override
@@ -1052,8 +1064,8 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 						Optional.ofNullable(keywords),
 						defaultResource,
 						Optional.ofNullable(minLevel),
-						(followedOnly != null && followedOnly) ? Optional.ofNullable(() -> ListUtils.followedNames()) : Optional.empty(),
-						(excludeBlocked != null && excludeBlocked) ? Optional.ofNullable(ListUtils::blockedNames) : Optional.empty(),
+						(followedOnly != null && followedOnly) ? Optional.of(ListUtils.followedQdnFilter()) : Optional.<QdnFilter>empty(),
+						(excludeBlocked != null && excludeBlocked) ? Optional.of(ListUtils.blockedQdnFilter()) : Optional.<QdnFilter>empty(),
 						Optional.ofNullable(includeMetadata),
 						Optional.ofNullable(includeStatus),
 						Optional.ofNullable(before),
@@ -1217,35 +1229,12 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 			bindParams.add(after);
 		}
 
-		// Handle "followed only"
-		if (followedOnly != null && followedOnly) {
-			List<String> followedNames = ListUtils.followedNames();
-			if (followedNames != null && !followedNames.isEmpty()) {
-				sql.append(" AND LCASE(name) IN (?");
-				bindParams.add(followedNames.get(0).toLowerCase());
-
-				for (int i = 1; i < followedNames.size(); ++i) {
-					sql.append(", ?");
-					bindParams.add(followedNames.get(i).toLowerCase());
-				}
-				sql.append(")");
-			}
-		}
-
-		// Handle "exclude blocked"
-		if (excludeBlocked != null && excludeBlocked) {
-			List<String> blockedNames = ListUtils.blockedNames();
-			if (blockedNames != null && !blockedNames.isEmpty()) {
-				sql.append(" AND LCASE(name) NOT IN (?");
-				bindParams.add(blockedNames.get(0).toLowerCase());
-
-				for (int i = 1; i < blockedNames.size(); ++i) {
-					sql.append(", ?");
-					bindParams.add(blockedNames.get(i).toLowerCase());
-				}
-				sql.append(")");
-			}
-		}
+		// Followed/blocked filtering uses wildcard SERVICE/NAME/IDENTIFIER patterns, which cannot be
+		// expressed as a SQL name IN/NOT IN clause. When active we fetch the ordered rows and filter
+		// (and paginate) them in Java further down.
+		QdnFilter followFilter = (followedOnly != null && followedOnly) ? ListUtils.followedQdnFilter() : null;
+		QdnFilter blockFilter = (excludeBlocked != null && excludeBlocked) ? ListUtils.blockedQdnFilter() : null;
+		boolean qdnFilter = (followFilter != null) || (blockFilter != null);
 
 		sql.append(" ORDER BY created_when");
 
@@ -1253,7 +1242,10 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 			sql.append(" DESC");
 		}
 
-		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+		// When wildcard follow/block filtering is active, paginate in Java (after filtering) instead
+		if (!qdnFilter) {
+			HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+		}
 
 		List<ArbitraryResourceData> arbitraryResources = new ArrayList<>();
 
@@ -1322,6 +1314,10 @@ public class HSQLDBArbitraryRepository implements ArbitraryRepository {
 
 				arbitraryResources.add(arbitraryResourceData);
 			} while (resultSet.next());
+
+			if (qdnFilter) {
+				arbitraryResources = applyQdnFilterAndPaging(arbitraryResources, followFilter, blockFilter, limit, offset);
+			}
 
 			return arbitraryResources;
 		} catch (SQLException e) {

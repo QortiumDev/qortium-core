@@ -83,7 +83,7 @@ public class PublicApiAccessHandlerTests extends Common {
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/admin/info", this.settings));
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
-				"203.0.113.10", "GET", "/lists/followedNames", this.settings));
+				"203.0.113.10", "GET", "/lists/followedQdn", this.settings));
 		assertFalse(PublicApiAccessHandler.isRequestAllowed(
 				"203.0.113.10", "GET", "/utils/random", this.settings));
 	}

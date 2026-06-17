@@ -57,6 +57,7 @@ import org.qortium.transform.Transformer;
 import org.qortium.transform.transaction.ChatTransactionTransformer;
 import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.utils.Base58;
+import org.qortium.utils.ListUtils;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.*;
@@ -226,7 +227,14 @@ public class ChatResource {
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Message not found");
 			}
 
-			return repository.getChatStoreRepository().toChatMessage(chatTransactionData, encoding);
+			ChatMessage chatMessage = repository.getChatStoreRepository().toChatMessage(chatTransactionData, encoding);
+
+			// Hide locally-blocked chat senders (the message is still stored and propagated)
+			if (ListUtils.isChatAddressBlocked(chatMessage.getSender()) || ListUtils.isChatNameBlocked(chatMessage.getSenderName())) {
+				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Message not found");
+			}
+
+			return chatMessage;
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}

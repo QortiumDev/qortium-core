@@ -721,11 +721,11 @@ public class NotificationManager {
 
         if (candidates.isEmpty()) return;
 
-        List<String> blockedNames = (f.excludeBlocked != null && f.excludeBlocked)
-                ? org.qortium.utils.ListUtils.blockedNames()
+        org.qortium.list.QdnFilter blockedFilter = (f.excludeBlocked != null && f.excludeBlocked)
+                ? org.qortium.utils.ListUtils.blockedQdnFilter()
                 : null;
-        List<String> followedNames = (f.followedOnly != null && f.followedOnly)
-                ? org.qortium.utils.ListUtils.followedNames()
+        org.qortium.list.QdnFilter followedFilter = (f.followedOnly != null && f.followedOnly)
+                ? org.qortium.utils.ListUtils.followedQdnFilter()
                 : null;
 
 
@@ -737,7 +737,7 @@ public class NotificationManager {
                         limit,
                         f.identifier,
                         Boolean.TRUE.equals(f.prefix),
-                        blockedNames,
+                        blockedFilter,
                         f.names,
                         f.query,
                         f.defaultResource,
@@ -745,7 +745,7 @@ public class NotificationManager {
                         f.description,
                         f.keywords,
                         f.before,
-                        followedNames);
+                        followedFilter);
 
 
         for (org.qortium.data.arbitrary.ArbitraryResourceData r : results) {

@@ -105,22 +105,22 @@ public class ArbitraryDataStorageCapacityTests extends Common {
         assertTrue(storageManager.isStorageCapacityCalculated());
 
         // Storage capacity should initially equal the total
-        assertEquals(0, resourceListManager.getItemCountForList("followedNames"));
-        assertEquals(0, ListUtils.followedNamesCount());
+        assertEquals(0, resourceListManager.getItemCountForList("followedQdn"));
+        assertEquals(0, ListUtils.followedQdnCount());
         long totalStorageCapacity = storageManager.getStorageCapacityIncludingThreshold(storageFullThreshold);
         assertEquals(totalStorageCapacity, storageManager.storageCapacityPerName(storageFullThreshold));
 
         // Follow some names
-        assertTrue(resourceListManager.addToList("followedNames", "Test1", false));
-        assertTrue(resourceListManager.addToList("followedNames", "Test2", false));
-        assertTrue(resourceListManager.addToList("followedNames", "Test3", false));
-        assertTrue(resourceListManager.addToList("followedNames", "Test4", false));
-        assertTrue(resourceListManager.addToList("followedNames", "Test5", false));
-        assertTrue(resourceListManager.addToList("followedNames", "Test6", false));
+        assertTrue(resourceListManager.addToList("followedQdn", "Test1", false));
+        assertTrue(resourceListManager.addToList("followedQdn", "Test2", false));
+        assertTrue(resourceListManager.addToList("followedQdn", "Test3", false));
+        assertTrue(resourceListManager.addToList("followedQdn", "Test4", false));
+        assertTrue(resourceListManager.addToList("followedQdn", "Test5", false));
+        assertTrue(resourceListManager.addToList("followedQdn", "Test6", false));
 
         // Ensure the followed name count is correct
-        assertEquals(6, resourceListManager.getItemCountForList("followedNames"));
-        assertEquals(6, ListUtils.followedNamesCount());
+        assertEquals(6, resourceListManager.getItemCountForList("followedQdn"));
+        assertEquals(6, ListUtils.followedQdnCount());
 
         // Storage space per name should be the total storage capacity divided by the number of names
         // then multiplied by 4, to allow for names that don't use much space

@@ -10,7 +10,6 @@ import org.qortium.chat.crypto.PrivateGroupChatRotationRequest;
 import org.qortium.crypto.Crypto;
 import org.qortium.crypto.MemoryPoW;
 import org.qortium.data.group.GroupData;
-import org.qortium.data.naming.NameData;
 import org.qortium.data.transaction.ChatTransactionData;
 import org.qortium.group.Group;
 import org.qortium.repository.DataException;
@@ -23,11 +22,9 @@ import org.qortium.transform.TransformationException;
 import org.qortium.transform.Transformer;
 import org.qortium.transform.transaction.ChatTransactionTransformer;
 import org.qortium.transform.transaction.TransactionTransformer;
-import org.qortium.utils.ListUtils;
 import org.qortium.utils.NTP;
 
 import java.util.Arrays;
-import java.util.List;
 
 public class ChatService {
 
@@ -97,16 +94,9 @@ public class ChatService {
 		if (chatTransactionData.getTimestamp() > now + CHAT_FUTURE_TIMESTAMP_ALLOWANCE)
 			return ValidationResult.TIMESTAMP_TOO_NEW;
 
-		if (ListUtils.isAddressBlocked(senderAddress))
-			return ValidationResult.ADDRESS_BLOCKED;
-
-		List<NameData> names = repository.getNameRepository().getNamesByOwner(senderAddress);
-		if (names != null) {
-			for (NameData nameData : names) {
-				if (nameData != null && nameData.getName() != null && ListUtils.isNameBlocked(nameData.getName()))
-					return ValidationResult.NAME_BLOCKED;
-			}
-		}
+		// Blocked chat senders are no longer rejected here: their messages are still stored and
+		// propagated across the network. Blocking is applied locally at read time instead, via the
+		// blockedChatNames / blockedChatAddresses lists (see HSQLDBChatStoreRepository).
 
 		if (!isValidTxGroupId(repository, chatTransactionData, senderAddress))
 			return ValidationResult.INVALID_TX_GROUP_ID;

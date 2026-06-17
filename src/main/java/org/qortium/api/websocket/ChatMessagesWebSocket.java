@@ -6,6 +6,7 @@ import org.eclipse.jetty.ee8.websocket.api.annotations.*;
 import org.eclipse.jetty.ee8.websocket.server.JettyWebSocketServletFactory;
 import org.qortium.controller.ChatNotifier;
 import org.qortium.data.chat.ChatMessage;
+import org.qortium.utils.ListUtils;
 import org.qortium.data.transaction.ChatTransactionData;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
@@ -178,6 +179,11 @@ public class ChatMessagesWebSocket extends ApiWebSocket {
 			chatMessage = repository.getChatStoreRepository().toChatMessage(chatTransactionData, getTargetEncoding(session));
 		} catch (DataException e) {
 			// No output this time?
+			return;
+		}
+
+		// Don't push live messages from locally-blocked chat senders (still stored and propagated)
+		if (ListUtils.isChatAddressBlocked(chatMessage.getSender()) || ListUtils.isChatNameBlocked(chatMessage.getSenderName())) {
 			return;
 		}
 

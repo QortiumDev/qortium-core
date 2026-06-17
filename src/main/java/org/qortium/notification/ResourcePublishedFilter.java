@@ -1,5 +1,6 @@
 package org.qortium.notification;
 
+import org.qortium.list.QdnFilter;
 import org.qortium.utils.ListUtils;
 
 import java.util.List;
@@ -199,23 +200,16 @@ public class ResourcePublishedFilter {
         if (after != null && ev.created != null && ev.created <= after) return false;
         if (before != null && ev.created != null && ev.created >= before) return false;
 
-        // --- followedOnly ---
+        // --- followedOnly (wildcard SERVICE/NAME/IDENTIFIER patterns) ---
         if (Boolean.TRUE.equals(followedOnly)) {
-            List<String> followed = ListUtils.followedNames();
-            if (followed == null || followed.isEmpty()) return false;
-            String lName = ev.name != null ? ev.name.toLowerCase() : "";
-            boolean isFollowed = followed.stream().anyMatch(f -> f.toLowerCase().equals(lName));
-            if (!isFollowed) return false;
+            QdnFilter followFilter = ListUtils.followedQdnFilter();
+            if (followFilter.isEmpty()) return false;
+            if (!followFilter.matches(ev.service, ev.name, ev.identifier)) return false;
         }
 
-        // --- excludeBlocked ---
+        // --- excludeBlocked (wildcard SERVICE/NAME/IDENTIFIER patterns) ---
         if (Boolean.TRUE.equals(excludeBlocked)) {
-            List<String> blocked = ListUtils.blockedNames();
-            if (blocked != null && !blocked.isEmpty()) {
-                String lName = ev.name != null ? ev.name.toLowerCase() : "";
-                boolean isBlocked = blocked.stream().anyMatch(b -> b.toLowerCase().equals(lName));
-                if (isBlocked) return false;
-            }
+            if (ListUtils.blockedQdnFilter().matches(ev.service, ev.name, ev.identifier)) return false;
         }
 
         return true;

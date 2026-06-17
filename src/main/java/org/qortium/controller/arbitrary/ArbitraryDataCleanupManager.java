@@ -13,6 +13,8 @@ import org.qortium.repository.RepositoryManager;
 import org.qortium.settings.Settings;
 import org.qortium.transaction.Transaction;
 import org.qortium.transaction.Transaction.TransactionType;
+import org.qortium.arbitrary.misc.Service;
+import org.qortium.list.QdnFilter;
 import org.qortium.utils.*;
 
 import java.io.File;
@@ -577,12 +579,14 @@ public class ArbitraryDataCleanupManager extends Thread {
 	}
 
 	private void cleanupReaderCache(Long now) {
-		ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
 		String baseDir = Settings.getInstance().getTempDataPath();
 		Path readerCachePath = Paths.get(baseDir, "reader");
 
 		// Clean up names
 		Path readerCacheNamesPath = Paths.get(readerCachePath.toString(), "NAME");
+
+		// Build the block matcher once for this pass
+		QdnFilter blockFilter = ListUtils.blockedQdnFilter();
 
 		// Loop through the contents and check each one
 		final File[] directories = readerCacheNamesPath.toFile().listFiles();
@@ -592,16 +596,64 @@ public class ArbitraryDataCleanupManager extends Thread {
 					return;
 				}
 
-				// Delete data relating to blocked names
+				// Delete cached reader data for blocked resources. blockedQdn patterns can target a
+				// specific service and/or identifier, and the reader cache is keyed
+				// reader/NAME/<name>/<service>/<identifier>, so we descend far enough to delete only
+				// the blocked subtrees. Anything not deleted here is regenerated on demand only if it
+				// isn't blocked.
 				String name = directory.getName();
-				if (name != null && ListUtils.isNameBlocked(name)) {
-					this.safeDeleteDirectory(directory, "blocked name");
+				if (name != null && !blockFilter.isEmpty()) {
+					final File[] serviceDirectories = directory.listFiles();
+					if (serviceDirectories != null) {
+						for (final File serviceDirectory : serviceDirectories) {
+							Service service = serviceFromDirName(serviceDirectory.getName());
+							if (service == null) {
+								continue;
+							}
+
+							// A service/name-level pattern (no identifier glob) blocks the whole service subtree
+							if (blockFilter.matches(service, name, null)) {
+								this.safeDeleteDirectory(serviceDirectory, "blocked resource");
+								continue;
+							}
+
+							// Otherwise an identifier-specific pattern may match individual identifier subtrees
+							final File[] identifierDirectories = serviceDirectory.listFiles();
+							if (identifierDirectories != null) {
+								for (final File identifierDirectory : identifierDirectories) {
+									String identifier = identifierFromDirName(identifierDirectory.getName());
+									if (blockFilter.matches(service, name, identifier)) {
+										this.safeDeleteDirectory(identifierDirectory, "blocked resource");
+									}
+								}
+							}
+						}
+					}
 				}
 
 				// Delete cached reader data that has reached its expiry
 				this.cleanupReaderCacheForName(name, now);
 			}
 		}
+	}
+
+	private static Service serviceFromDirName(String dirName) {
+		if (dirName == null) {
+			return null;
+		}
+		try {
+			return Service.valueOf(dirName);
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
+	}
+
+	private static String identifierFromDirName(String dirName) {
+		// The reader cache stores the default identifier as the literal directory name "default"
+		if (dirName == null || dirName.equals("default")) {
+			return null;
+		}
+		return dirName;
 	}
 
 	private void cleanupReaderCacheForName(String name, Long now) {

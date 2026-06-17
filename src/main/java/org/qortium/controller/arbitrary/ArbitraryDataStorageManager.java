@@ -180,11 +180,11 @@ public class ArbitraryDataStorageManager extends Thread {
             case ALL:
             case VIEWED:
                 // If the policy includes viewed data, we can host it as long as it's not blocked
-                return !ListUtils.isNameBlocked(name);
+                return !ListUtils.isQdnBlocked(arbitraryTransactionData.getService(), name, arbitraryTransactionData.getIdentifier());
 
             case FOLLOWED:
                 // If the policy is for followed data only, we have to be following it
-                return ListUtils.isFollowingName(name);
+                return ListUtils.isQdnFollowed(arbitraryTransactionData.getService(), name, arbitraryTransactionData.getIdentifier());
 
                 // For NONE or all else, we shouldn't host this data
             case NONE:
@@ -220,47 +220,24 @@ public class ArbitraryDataStorageManager extends Thread {
             return new ArbitraryDataExamination(false, "Don't store data unless it's an allowed type (public/private)");
         }
 
-        // Handle transactions without names differently
-        if (name == null) {
-            return this.shouldPreFetchDataWithoutName();
-        }
-
-        // Never fetch data from blocked names, even if they are followed
-        if (ListUtils.isNameBlocked(name)) {
-            return new ArbitraryDataExamination(false, "blocked name");
+        // Never fetch data from blocked resources, even if they are followed.
+        // Wildcard matching covers unnamed resources too (e.g. service-only or identifier patterns).
+        if (ListUtils.isQdnBlocked(arbitraryTransactionData.getService(), name, arbitraryTransactionData.getIdentifier())) {
+            return new ArbitraryDataExamination(false, "blocked");
         }
 
         switch (Settings.getInstance().getStoragePolicy()) {
             case FOLLOWED:
             case FOLLOWED_OR_VIEWED:
-                return new ArbitraryDataExamination(ListUtils.isFollowingName(name), Settings.getInstance().getStoragePolicy().name());
-                
+                return new ArbitraryDataExamination(
+                        ListUtils.isQdnFollowed(arbitraryTransactionData.getService(), name, arbitraryTransactionData.getIdentifier()),
+                        Settings.getInstance().getStoragePolicy().name());
+
             case ALL:
                 return new ArbitraryDataExamination(true, Settings.getInstance().getStoragePolicy().name());
 
             case NONE:
             case VIEWED:
-            default:
-                return new ArbitraryDataExamination(false, Settings.getInstance().getStoragePolicy().name());
-        }
-    }
-
-    /**
-     * Don't call this method directly.
-     * Use the wrapper method shouldPreFetchData() instead, as it contains
-     * additional checks.
-     *
-     * @return boolean - whether the storage policy allows for unnamed data
-     */
-    private ArbitraryDataExamination shouldPreFetchDataWithoutName() {
-        switch (Settings.getInstance().getStoragePolicy()) {
-            case ALL:
-                return new ArbitraryDataExamination(true, "Fetching all data");
-
-            case NONE:
-            case VIEWED:
-            case FOLLOWED:
-            case FOLLOWED_OR_VIEWED:
             default:
                 return new ArbitraryDataExamination(false, Settings.getInstance().getStoragePolicy().name());
         }
@@ -273,7 +250,7 @@ public class ArbitraryDataStorageManager extends Thread {
      * @return boolean - whether the resource is blocked or not
      */
     public boolean isBlocked(ArbitraryTransactionData arbitraryTransactionData) {
-        return ListUtils.isNameBlocked(arbitraryTransactionData.getName());
+        return ListUtils.isQdnBlocked(arbitraryTransactionData.getService(), arbitraryTransactionData.getName(), arbitraryTransactionData.getIdentifier());
     }
 
     private boolean isDataTypeAllowed(ArbitraryTransactionData arbitraryTransactionData) {
@@ -557,16 +534,18 @@ public class ArbitraryDataStorageManager extends Thread {
     }
 
     public long storageCapacityPerName(double threshold) {
-        int followedNamesCount = ListUtils.followedNamesCount();
-        if (followedNamesCount == 0) {
-            // Not following any names, so we have the total space available
+        // Follows are now wildcard patterns rather than a fixed set of names, so we apportion
+        // follow-mode storage by the number of follow patterns.
+        int followedQdnCount = ListUtils.followedQdnCount();
+        if (followedQdnCount == 0) {
+            // Not following anything, so we have the total space available
             return this.getStorageCapacityIncludingThreshold(threshold);
         }
 
         double maxStorageCapacity = (double)this.storageCapacity * threshold;
 
-        // Some names won't need/use much space, so give all names a 4x multiplier to compensate
-        long maxStoragePerName = (long)(maxStorageCapacity / (double)followedNamesCount) * PER_NAME_STORAGE_MULTIPLIER;
+        // Some patterns won't need/use much space, so give all of them a 4x multiplier to compensate
+        long maxStoragePerName = (long)(maxStorageCapacity / (double)followedQdnCount) * PER_NAME_STORAGE_MULTIPLIER;
 
         return maxStoragePerName;
     }
