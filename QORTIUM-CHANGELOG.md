@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - api: exclude identified resources from default-resource searches
+
+The arbitrary-resource search endpoint (`GET /arbitrary/resources/search`) supports a `default=true` filter that is meant to return only "default" resources — those published without an identifier. When no text query was supplied this filter was not applied at all, so identified (non-default) resources leaked into a default-only search; and when a query was supplied the default case was matched inconsistently. Now `default=true` always restricts results to default resources, a query in default mode searches names only, an empty identifier is treated as no identifier, and asking for `default=true` together with an explicit identifier is rejected as invalid criteria. The correction is applied to both the database query path and the in-memory resource cache, and three new tests cover the no-query, query, and literal-"default"-identifier cases. This brings the search endpoint in line with the `GET /arbitrary/resources` endpoint, which already had the guard. Ported from upstream Qortal 6.1.6.
+
 ### 2026-06-17 - tradebot: back up the full trade-bot batch instead of a single record
 
 When a node takes several cross-chain trade offers at once, it prepares one trade-bot record per offer and then funds them all together. Previously the node wrote its safety backup inside that per-offer loop and saved only the single record it had just prepared, so the on-disk backup never reflected the whole batch being processed and could be left inconsistent if the node stopped partway through. The backup now runs once, after every record in the batch has been prepared, and saves all of them — so the backup matches what the node is actually about to fund. Ported from upstream Qortal 6.1.6.
