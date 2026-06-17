@@ -174,13 +174,18 @@ public class ArbitraryDataStorageManager extends Thread {
 
         // Don't check for storage limits here, as it can cause the cleanup manager to delete existing data
 
-        // Check if our storage policy and and lists allow us to host data for this name
+        // Never host blocked data, regardless of storage policy (consistent with shouldPreFetchData)
+        if (ListUtils.isQdnBlocked(arbitraryTransactionData.getService(), name, arbitraryTransactionData.getIdentifier())) {
+            return false;
+        }
+
+        // Check if our storage policy allows us to host data for this resource
         switch (Settings.getInstance().getStoragePolicy()) {
             case FOLLOWED_OR_VIEWED:
             case ALL:
             case VIEWED:
-                // If the policy includes viewed data, we can host it as long as it's not blocked
-                return !ListUtils.isQdnBlocked(arbitraryTransactionData.getService(), name, arbitraryTransactionData.getIdentifier());
+                // If the policy includes viewed data, we can host it (it isn't blocked)
+                return true;
 
             case FOLLOWED:
                 // If the policy is for followed data only, we have to be following it

@@ -1,7 +1,10 @@
 package org.qortium.test;
 
 import org.junit.Test;
+import org.qortium.list.QdnFilter;
 import org.qortium.list.QdnPattern;
+
+import java.util.List;
 
 import static org.junit.Assert.*;
 
@@ -85,5 +88,43 @@ public class QdnPatternTests {
         assertNull(QdnPattern.parse(""));
         assertNull(QdnPattern.parse("   "));
         assertNull(QdnPattern.parse(null));
+    }
+
+    // --- negation (gitignore-style "!" exceptions, last match wins) ---
+
+    private static boolean filterMatches(List<String> patterns, String service, String name, String identifier) {
+        return QdnFilter.ofPatterns(patterns).matches(service, name, identifier);
+    }
+
+    @Test
+    public void testNegationException() {
+        // Block all VIDEO except BOB's videos
+        List<String> patterns = List.of("VIDEO", "!VIDEO/BOB");
+        assertTrue(filterMatches(patterns, "VIDEO", "alice", "x"));
+        assertFalse(filterMatches(patterns, "VIDEO", "BOB", "x"));
+        // A different service is unaffected (never matched a positive pattern)
+        assertFalse(filterMatches(patterns, "BLOG_POST", "alice", null));
+    }
+
+    @Test
+    public void testNegationLastMatchWins() {
+        // Block all VIDEO, allow BOB, but re-block BOB's "secret*" videos
+        List<String> patterns = List.of("VIDEO", "!VIDEO/BOB", "VIDEO/BOB/secret*");
+        assertTrue(filterMatches(patterns, "VIDEO", "BOB", "secret1"));   // re-blocked by the last pattern
+        assertFalse(filterMatches(patterns, "VIDEO", "BOB", "holiday"));  // still excepted
+        assertTrue(filterMatches(patterns, "VIDEO", "alice", "secret1")); // alice was never excepted
+    }
+
+    @Test
+    public void testNegationOnlyMatchesNothing() {
+        assertFalse(filterMatches(List.of("!VIDEO"), "VIDEO", "alice", null));
+    }
+
+    @Test
+    public void testEscapedLeadingBangIsLiteral() {
+        // "\!APP/BOB" is a literal (non-negated) pattern targeting the service named "!APP",
+        // which no real resource has — so it matches the literal but not real APP resources.
+        assertTrue(filterMatches(List.of("\\!APP/BOB"), "!APP", "BOB", null));
+        assertFalse(filterMatches(List.of("\\!APP/BOB"), "APP", "BOB", null));
     }
 }

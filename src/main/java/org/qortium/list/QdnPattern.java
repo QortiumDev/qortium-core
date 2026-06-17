@@ -21,6 +21,11 @@ import java.util.Locale;
  * owned by that address". Address aliases are resolved to concrete names by {@link QdnFilter};
  * a bare single-segment address (e.g. {@code Qabc...}) is treated as {@code *&#47;<address>}.
  * <p>
+ * An entry beginning with {@code !} is a <i>negation</i> (an exception): within a list, the last
+ * pattern that matches a resource decides the outcome, so a negation can re-admit something an
+ * earlier pattern matched (e.g. {@code VIDEO} then {@code !VIDEO/BOB} blocks all videos except
+ * BOB's). A literal leading {@code !} can be written as {@code \!}.
+ * <p>
  * Matching is case-insensitive for the SERVICE and NAME segments (Qortium names are
  * case-insensitive, service names are upper-snake constants) and case-sensitive for the
  * IDENTIFIER segment.
@@ -31,12 +36,14 @@ public class QdnPattern {
     private final String nameGlob;        // null = match any name
     private final String identifierGlob;  // null = match any identifier
     private final String addressAlias;    // non-null when the NAME segment is an address
+    private final boolean negated;        // true for a "!" exception entry
 
-    private QdnPattern(String serviceGlob, String nameGlob, String identifierGlob, String addressAlias) {
+    private QdnPattern(String serviceGlob, String nameGlob, String identifierGlob, String addressAlias, boolean negated) {
         this.serviceGlob = serviceGlob;
         this.nameGlob = nameGlob;
         this.identifierGlob = identifierGlob;
         this.addressAlias = addressAlias;
+        this.negated = negated;
     }
 
     /**
@@ -51,6 +58,18 @@ public class QdnPattern {
             return null;
         }
 
+        boolean negated = false;
+        if (trimmed.startsWith("!")) {
+            negated = true;
+            trimmed = trimmed.substring(1);
+        } else if (trimmed.startsWith("\\!")) {
+            // Escaped literal leading '!'
+            trimmed = trimmed.substring(1);
+        }
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
         String[] parts = trimmed.split("/", -1);
 
         // Single-segment entry: a bare address means "any name owned by this address";
@@ -58,9 +77,9 @@ public class QdnPattern {
         if (parts.length == 1) {
             String only = parts[0].trim();
             if (Crypto.isValidAddress(only)) {
-                return new QdnPattern(null, null, null, only);
+                return new QdnPattern(null, null, null, only, negated);
             }
-            return new QdnPattern(segmentGlob(only), null, null, null);
+            return new QdnPattern(segmentGlob(only), null, null, null, negated);
         }
 
         String serviceGlob = segmentGlob(parts[0]);
@@ -77,9 +96,9 @@ public class QdnPattern {
         }
 
         if (Crypto.isValidAddress(nameSegment)) {
-            return new QdnPattern(serviceGlob, null, identifierGlob, nameSegment);
+            return new QdnPattern(serviceGlob, null, identifierGlob, nameSegment, negated);
         }
-        return new QdnPattern(serviceGlob, segmentGlob(nameSegment), identifierGlob, null);
+        return new QdnPattern(serviceGlob, segmentGlob(nameSegment), identifierGlob, null, negated);
     }
 
     /**
@@ -90,16 +109,25 @@ public class QdnPattern {
     }
 
     /**
-     * Return a copy of this pattern with its NAME segment bound to a concrete name. Used by
-     * {@link QdnFilter} to expand an address alias into one pattern per owned name.
+     * Whether this is a {@code !} negation (exception) entry.
+     */
+    public boolean isNegated() {
+        return this.negated;
+    }
+
+    /**
+     * Return a copy of this pattern with its NAME segment bound to a concrete name (preserving the
+     * negation flag). Used by {@link QdnFilter} to expand an address alias into one pattern per
+     * owned name.
      */
     public QdnPattern withName(String name) {
-        return new QdnPattern(this.serviceGlob, name, this.identifierGlob, null);
+        return new QdnPattern(this.serviceGlob, name, this.identifierGlob, null, this.negated);
     }
 
     /**
      * Whether this pattern matches the given resource triple. Address-alias patterns never match
-     * directly (they must first be expanded via {@link #withName(String)}).
+     * directly (they must first be expanded via {@link #withName(String)}). The negation flag is
+     * <i>not</i> considered here &mdash; it is applied by {@link QdnFilter} when combining patterns.
      */
     public boolean matches(String serviceName, String name, String identifier) {
         if (this.addressAlias != null) {

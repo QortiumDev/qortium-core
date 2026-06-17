@@ -34,11 +34,31 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - lists: add "!" negation exceptions to QDN lists and make canStoreData block-first
+
+Builds on the four-list rework. The `followedQdn` and `blockedQdn` wildcard lists now support
+gitignore-style negation: an entry beginning with `!` is an exception, and within a list the last
+pattern that matches a resource decides the outcome. This lets a broad rule carry narrow
+exceptions — for example a `blockedQdn` of `["VIDEO", "!VIDEO/BOB"]` blocks every video except those
+published under the name BOB, and the same works for `followedQdn`. (A literal leading `!` can be
+written as `\!`.) Because order now matters, address-alias entries are expanded to their owned-name
+patterns in place rather than appended at the end.
+
+Blocking still always takes precedence over following — a follow never re-admits something the block
+list blocks; use a `!` exception inside the block list instead. To make that precedence consistent,
+`canStoreData` now checks the block list first like the rest of the code (download, serve, status,
+cleanup, search): previously, under the `FOLLOWED` storage policy only, it consulted just the follow
+list and ignored the block list, so a resource that was both followed and blocked could still be
+retained. It is now rejected, matching `shouldPreFetchData`. New tests cover negation/last-match-wins
+in the matcher and block-wins-plus-negation through the storage manager.
+
 ### 2026-06-17 - consensus: add the Previewnet height-24000 checkpoint and validate it on all full nodes
 
 Adds the first trusted checkpoint to the Previewnet chain config — block height 24000 pinned to its block signature (verified identical across both seed nodes, and 180+ blocks deep so it is final). A checkpoint lets a node confirm its copy of history matches a known-good block at that height; it is the trust anchor the planned fast-sync will rely on so a node can accept downloaded history without being steered onto a wrong chain. Because checkpoints were already excluded from the chain-config fingerprint in an earlier update, adding this data does not change the fingerprint and so does not disturb peering.
 
 Two supporting changes: checkpoint validation now runs on all non-lite nodes (it was previously gated to "top-only" nodes, a mode Qortium no longer supports, so the check was effectively dead code and never ran). And the behaviour on a checkpoint mismatch is now deliberate: a near-empty node (still effectively at genesis) resyncs from genesis as before, while an already-synced node logs a prominent error and does NOT wipe and resync. The latter avoids a dangerous failure mode — if a shipped checkpoint were ever wrong, every node carries the same data, so auto-wiping would make the whole network resync in a loop; a loud error lets an operator investigate instead. The checkpoint is Previewnet-only (mainnet and testnet have no chain yet).
+
+### 2026-06-17 - lists: rework follow/block lists into four lists with wildcard QDN patterns and read-time chat blocking
 
 Reworks how the node decides which QDN resources to mirror and which chat messages to show. Previously three lists were consulted by name or address (`followedNames`, `blockedNames`, `blockedAddresses`), and the node also scanned any list whose name *started with* one of those words (so `blockedNames_custom1`, `blockedNames_custom2`, … were all merged together). The node now consults exactly four lists, each by its exact name, and never scans prefixed list groups:
 
