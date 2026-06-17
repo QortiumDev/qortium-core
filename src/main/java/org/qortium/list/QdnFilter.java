@@ -45,40 +45,54 @@ public class QdnFilter {
     }
 
     static QdnFilter build(List<String> rawPatterns) {
+        List<QdnPattern> parsed = new ArrayList<>();
+        boolean hasAddressAlias = false;
+        if (rawPatterns != null) {
+            for (String raw : rawPatterns) {
+                QdnPattern pattern = QdnPattern.parse(raw);
+                if (pattern == null) {
+                    continue;
+                }
+                parsed.add(pattern);
+                if (pattern.getAddressAlias() != null) {
+                    hasAddressAlias = true;
+                }
+            }
+        }
+
+        // Pattern ORDER matters (last match wins), so address aliases are expanded in place rather
+        // than appended at the end.
+        if (!hasAddressAlias) {
+            return new QdnFilter(parsed);
+        }
+
         List<QdnPattern> compiled = new ArrayList<>();
-        if (rawPatterns == null || rawPatterns.isEmpty()) {
-            return new QdnFilter(compiled);
-        }
-
-        List<QdnPattern> addressAliases = new ArrayList<>();
-        for (String raw : rawPatterns) {
-            QdnPattern pattern = QdnPattern.parse(raw);
-            if (pattern == null) {
-                continue;
-            }
-            if (pattern.getAddressAlias() != null) {
-                addressAliases.add(pattern);
-            } else {
-                compiled.add(pattern);
-            }
-        }
-
-        // Expand "any name owned by this address" aliases into one concrete-name pattern each.
-        if (!addressAliases.isEmpty()) {
-            try (final Repository repository = RepositoryManager.getRepository()) {
-                for (QdnPattern alias : addressAliases) {
-                    List<NameData> names = repository.getNameRepository().getNamesByOwner(alias.getAddressAlias());
-                    if (names == null) {
-                        continue;
-                    }
-                    for (NameData nameData : names) {
-                        if (nameData != null && nameData.getName() != null) {
-                            compiled.add(alias.withName(nameData.getName()));
-                        }
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            for (QdnPattern pattern : parsed) {
+                if (pattern.getAddressAlias() == null) {
+                    compiled.add(pattern);
+                    continue;
+                }
+                // Expand "any name owned by this address" into one concrete-name pattern each,
+                // preserving the entry's position (and negation) in the list.
+                List<NameData> names = repository.getNameRepository().getNamesByOwner(pattern.getAddressAlias());
+                if (names == null) {
+                    continue;
+                }
+                for (NameData nameData : names) {
+                    if (nameData != null && nameData.getName() != null) {
+                        compiled.add(pattern.withName(nameData.getName()));
                     }
                 }
-            } catch (DataException e) {
-                LOGGER.info("Unable to resolve address aliases for QDN list: {}", e.getMessage());
+            }
+        } catch (DataException e) {
+            LOGGER.info("Unable to resolve address aliases for QDN list: {}", e.getMessage());
+            // Fall back to the resolvable (non-alias) patterns, keeping their order
+            compiled.clear();
+            for (QdnPattern pattern : parsed) {
+                if (pattern.getAddressAlias() == null) {
+                    compiled.add(pattern);
+                }
             }
         }
 
@@ -94,14 +108,14 @@ public class QdnFilter {
     }
 
     public boolean matches(String serviceName, String name, String identifier) {
-        if (this.patterns.isEmpty()) {
-            return false;
-        }
+        // gitignore-style: the last pattern that matches decides the outcome, so a "!" negation
+        // can re-admit a resource that an earlier pattern matched.
+        boolean matched = false;
         for (QdnPattern pattern : this.patterns) {
             if (pattern.matches(serviceName, name, identifier)) {
-                return true;
+                matched = !pattern.isNegated();
             }
         }
-        return false;
+        return matched;
     }
 }

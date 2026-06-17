@@ -820,7 +820,10 @@ The node consults four lists by exact name:
   be an address, meaning "any name owned by that address". Examples: `BLOG_POST` (all blog posts),
   `APP/BOB` (any app from BOB), `VIDEO/*/cat*` (videos whose identifier starts with `cat`),
   `*/TOM` (anything from TOM), `*/*/*fish*` (anything whose identifier contains `fish`). SERVICE and
-  NAME are matched case-insensitively; IDENTIFIER is case-sensitive.
+  NAME are matched case-insensitively; IDENTIFIER is case-sensitive. An entry beginning with `!` is
+  a negation/exception, and within a list the last matching entry wins — e.g. `blockedQdn` of
+  `["VIDEO", "!VIDEO/BOB"]` blocks all videos except BOB's (write a literal leading `!` as `\!`).
+  Blocking always takes precedence over following.
 - `blockedChatNames` / `blockedChatAddresses` — exact names/addresses whose chat messages are hidden
   from this node's local chat APIs. The messages are still stored and relayed to the network.
 

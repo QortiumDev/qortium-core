@@ -240,6 +240,40 @@ public class ArbitraryDataStoragePolicyTests extends Common {
         }
     }
 
+    @Test
+    public void testBlockedWinsOverFollowedAndNegation() throws DataException, IllegalAccessException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String name = "Test";
+
+            // Set the storage policy to "FOLLOWED"
+            FieldUtils.writeField(Settings.getInstance(), "storagePolicy", "FOLLOWED", true);
+
+            // Register the name to Alice
+            RegisterNameTransactionData transactionData = new RegisterNameTransactionData(TestTransaction.generateBase(alice), name, "");
+            transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
+            TransactionUtils.signAndMint(repository, transactionData, alice);
+
+            // Create transaction
+            ArbitraryTransactionData arbitraryTransactionData = this.createTxnWithName(repository, alice, name);
+
+            // Follow it AND block it — block must win (even under FOLLOWED policy)
+            assertTrue(ResourceListManager.getInstance().addToList("followedQdn", "*/" + name, false));
+            assertTrue(ResourceListManager.getInstance().addToList("blockedQdn", "*/" + name, false));
+
+            assertFalse(storageManager.canStoreData(arbitraryTransactionData));
+            assertFalse(storageManager.shouldPreFetchData(repository, arbitraryTransactionData).isPass());
+
+            // Add a "!" negation exception to the block list — the resource is no longer blocked,
+            // and since it is followed it can be stored/prefetched again
+            assertTrue(ResourceListManager.getInstance().addToList("blockedQdn", "!*/" + name, false));
+
+            assertTrue(storageManager.canStoreData(arbitraryTransactionData));
+            assertTrue(storageManager.shouldPreFetchData(repository, arbitraryTransactionData).isPass());
+        }
+    }
+
     private ArbitraryTransactionData createTxnWithName(Repository repository, PrivateKeyAccount acc, String name) throws DataException {
         String publicKey58 = Base58.encode(acc.getPublicKey());
         Path path = Paths.get("src/test/resources/arbitrary/demo1");
