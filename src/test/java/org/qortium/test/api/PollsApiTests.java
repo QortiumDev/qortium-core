@@ -136,6 +136,7 @@ public class PollsApiTests extends ApiCommon {
 			assertNotNull(countsOnlyResponse);
 			assertNull(countsOnlyResponse.votes);
 			assertEquals(Integer.valueOf(1), countsOnlyResponse.totalVotes);
+			assertEquals(Integer.valueOf(1), countsOnlyResponse.totalVoters);
 		}
 	}
 
@@ -155,8 +156,9 @@ public class PollsApiTests extends ApiCommon {
 		PollVotes byName = this.pollsResource.getPollVotes(pollData.getPollName(), true);
 		PollVotes byId = this.pollsResource.getPollVotesById(pollData.getPollId(), true);
 
-		assertEquals(byName.totalVotes, byId.totalVotes);
-		assertEquals(byName.totalWeight, byId.totalWeight);
+			assertEquals(byName.totalVotes, byId.totalVotes);
+			assertEquals(byName.totalVoters, byId.totalVoters);
+			assertEquals(byName.totalWeight, byId.totalWeight);
 		assertEquals(byName.rawTotalWeight, byId.rawTotalWeight);
 		assertEquals(findOptionWeight(byName.voteWeights, "1"), findOptionWeight(byId.voteWeights, "1"));
 	}
@@ -236,6 +238,7 @@ public class PollsApiTests extends ApiCommon {
 
 			PollVotes pollVotes = this.pollsResource.getPollVotes(pollName, true);
 			assertEquals(Integer.valueOf(5), pollVotes.totalVotes);
+			assertEquals(Integer.valueOf(5), pollVotes.totalVoters);
 			assertEquals(Integer.valueOf(210), pollVotes.totalWeight);
 			assertEquals(Integer.valueOf(500), pollVotes.rawTotalWeight);
 			assertNull(pollVotes.voteDetails);
@@ -256,6 +259,38 @@ public class PollsApiTests extends ApiCommon {
 			assertVoteDetail(fullPollVotes.voteDetails, chloe, 1, AccountTrustStatus.BRONZE, 100, 40, true);
 			assertVoteDetail(fullPollVotes.voteDetails, dilbert, 2, AccountTrustStatus.UNVERIFIED, 100, 0, true);
 			assertVoteDetail(fullPollVotes.voteDetails, suspicious, 2, AccountTrustStatus.SUSPICIOUS, 100, 0, true);
+		}
+	}
+
+	@Test
+	public void testMultiOptionVotesExposeTotalVotersAndSelectedIndexes() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			String pollName = "poll-multi-option-api-test";
+			createTestPoll(repository, pollName);
+
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			AccountTrustTestUtils.setBlocksMinted(repository, alice, 100);
+			AccountTrustTestUtils.setBlocksMinted(repository, bob, 100);
+
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, alice.getPublicKey(), List.of(1, 2)));
+			repository.getVotingRepository().save(new VoteOnPollData(pollName, bob.getPublicKey(), List.of(2, 3)));
+			repository.saveChanges();
+
+			PollVotes pollVotes = this.pollsResource.getPollVotes(pollName, false);
+			assertEquals(Integer.valueOf(4), pollVotes.totalVotes);
+			assertEquals(Integer.valueOf(2), pollVotes.totalVoters);
+			assertEquals(Integer.valueOf(400), pollVotes.rawTotalWeight);
+			assertEquals(100, findOptionRawWeight(pollVotes.voteWeights, "1"));
+			assertEquals(200, findOptionRawWeight(pollVotes.voteWeights, "2"));
+			assertEquals(100, findOptionRawWeight(pollVotes.voteWeights, "3"));
+			assertEquals(2, pollVotes.voteDetails.size());
+
+			PollVotes.VoteDetail aliceDetail = findVoteDetail(pollVotes.voteDetails, alice.getAddress());
+			assertEquals(Integer.valueOf(1), aliceDetail.optionIndex);
+			assertEquals(List.of(1, 2), aliceDetail.optionIndexes);
+			PollVotes.VoteDetail bobDetail = findVoteDetail(pollVotes.voteDetails, bob.getAddress());
+			assertEquals(List.of(2, 3), bobDetail.optionIndexes);
 		}
 	}
 
@@ -297,6 +332,7 @@ public class PollsApiTests extends ApiCommon {
 
 			PollVotes closedPollVotes = this.pollsResource.getPollVotes(pollName, false);
 			assertEquals(Integer.valueOf(5), closedPollVotes.totalVotes);
+			assertEquals(Integer.valueOf(5), closedPollVotes.totalVoters);
 			assertEquals(Integer.valueOf(210), closedPollVotes.totalWeight);
 			assertEquals(Integer.valueOf(500), closedPollVotes.rawTotalWeight);
 			assertEquals(210, findOptionWeight(closedPollVotes.voteWeights, "1"));
@@ -324,6 +360,7 @@ public class PollsApiTests extends ApiCommon {
 
 			PollVotes updatedPollVotes = this.pollsResource.getPollVotes(pollName, false);
 			assertEquals(Integer.valueOf(5), updatedPollVotes.totalVotes);
+			assertEquals(Integer.valueOf(5), updatedPollVotes.totalVoters);
 			assertEquals(Integer.valueOf(210), updatedPollVotes.totalWeight);
 			assertEquals(Integer.valueOf(500), updatedPollVotes.rawTotalWeight);
 			assertEquals(210, findOptionWeight(updatedPollVotes.voteWeights, "1"));
@@ -358,6 +395,7 @@ public class PollsApiTests extends ApiCommon {
 			AccountTrustStatus trustStatus, int rawWeight, int effectiveWeight, boolean hasLiveSnapshotMetadata) {
 		PollVotes.VoteDetail voteDetail = findVoteDetail(voteDetails, voter.getAddress());
 		assertEquals(Integer.valueOf(optionIndex), voteDetail.optionIndex);
+		assertEquals(List.of(optionIndex), voteDetail.optionIndexes);
 		assertEquals(Integer.valueOf(rawWeight), voteDetail.rawVoteWeight);
 		assertEquals(trustStatus.name(), voteDetail.trustStatus);
 		assertEquals(Integer.valueOf(trustStatus.getValue()), voteDetail.trustStatusValue);

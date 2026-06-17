@@ -27,6 +27,8 @@ public class UpdatePollTransactionData extends TransactionData {
 	private String newDescription;
 	@Schema(description = "Replacement poll options as separate array entries; do not submit one comma-separated string")
 	private List<PollOptionData> newPollOptions;
+	@Schema(description = "Replacement poll start time. Null means the poll starts immediately; the start time can only be changed before the poll starts.")
+	private Long newStartTime;
 	@Schema(description = "Replacement poll end time. Full edits are allowed only while there are no active votes; after active votes exist, only extending an existing future end time is allowed")
 	private Long newEndTime;
 
@@ -39,6 +41,9 @@ public class UpdatePollTransactionData extends TransactionData {
 	@XmlTransient
 	@Schema(hidden = true)
 	private List<PollOptionData> previousPollOptions;
+	@XmlTransient
+	@Schema(hidden = true)
+	private Long previousStartTime;
 	@XmlTransient
 	@Schema(hidden = true)
 	private Long previousEndTime;
@@ -55,17 +60,28 @@ public class UpdatePollTransactionData extends TransactionData {
 	public UpdatePollTransactionData(BaseTransactionData baseTransactionData, int pollId, String newPollName,
 			String newDescription, List<PollOptionData> newPollOptions, Long newEndTime, String previousPollName,
 			String previousDescription, List<PollOptionData> previousPollOptions, Long previousEndTime) {
+		this(baseTransactionData, pollId, newPollName, newDescription, newPollOptions, null, newEndTime,
+				previousPollName, previousDescription, previousPollOptions, null, previousEndTime);
+	}
+
+	/** From repository */
+	public UpdatePollTransactionData(BaseTransactionData baseTransactionData, int pollId, String newPollName,
+			String newDescription, List<PollOptionData> newPollOptions, Long newStartTime, Long newEndTime,
+			String previousPollName, String previousDescription, List<PollOptionData> previousPollOptions,
+			Long previousStartTime, Long previousEndTime) {
 		super(TransactionType.UPDATE_POLL, baseTransactionData);
 
 		this.ownerPublicKey = baseTransactionData.creatorPublicKey;
 		this.pollId = pollId;
 		this.newPollName = newPollName;
-		this.newDescription = newDescription;
+		this.newDescription = newDescription == null ? "" : newDescription;
 		this.newPollOptions = newPollOptions;
+		this.newStartTime = newStartTime;
 		this.newEndTime = newEndTime;
 		this.previousPollName = previousPollName;
-		this.previousDescription = previousDescription;
+		this.previousDescription = previousDescription == null && previousPollName != null ? "" : previousDescription;
 		this.previousPollOptions = previousPollOptions;
+		this.previousStartTime = previousStartTime;
 		this.previousEndTime = previousEndTime;
 	}
 
@@ -73,6 +89,13 @@ public class UpdatePollTransactionData extends TransactionData {
 	public UpdatePollTransactionData(BaseTransactionData baseTransactionData, int pollId, String newPollName,
 			String newDescription, List<PollOptionData> newPollOptions, Long newEndTime) {
 		this(baseTransactionData, pollId, newPollName, newDescription, newPollOptions, newEndTime, null, null, null, null);
+	}
+
+	/** From network/API */
+	public UpdatePollTransactionData(BaseTransactionData baseTransactionData, int pollId, String newPollName,
+			String newDescription, List<PollOptionData> newPollOptions, Long newStartTime, Long newEndTime) {
+		this(baseTransactionData, pollId, newPollName, newDescription, newPollOptions, newStartTime, newEndTime,
+				null, null, null, null, null);
 	}
 
 	public byte[] getOwnerPublicKey() {
@@ -94,11 +117,15 @@ public class UpdatePollTransactionData extends TransactionData {
 	}
 
 	public String getNewDescription() {
-		return this.newDescription;
+		return this.newDescription == null ? "" : this.newDescription;
 	}
 
 	public List<PollOptionData> getNewPollOptions() {
 		return this.newPollOptions;
+	}
+
+	public Long getNewStartTime() {
+		return this.newStartTime;
 	}
 
 	public Long getNewEndTime() {
@@ -110,11 +137,15 @@ public class UpdatePollTransactionData extends TransactionData {
 	}
 
 	public String getPreviousDescription() {
-		return this.previousDescription;
+		return this.previousDescription == null && this.previousPollName != null ? "" : this.previousDescription;
 	}
 
 	public List<PollOptionData> getPreviousPollOptions() {
 		return this.previousPollOptions;
+	}
+
+	public Long getPreviousStartTime() {
+		return this.previousStartTime;
 	}
 
 	public Long getPreviousEndTime() {
@@ -125,6 +156,7 @@ public class UpdatePollTransactionData extends TransactionData {
 		this.previousPollName = pollData.getPollName();
 		this.previousDescription = pollData.getDescription();
 		this.previousPollOptions = pollData.getPollOptions();
+		this.previousStartTime = pollData.getStartTime();
 		this.previousEndTime = pollData.getEndTime();
 	}
 
@@ -132,6 +164,7 @@ public class UpdatePollTransactionData extends TransactionData {
 		this.previousPollName = null;
 		this.previousDescription = null;
 		this.previousPollOptions = null;
+		this.previousStartTime = null;
 		this.previousEndTime = null;
 	}
 

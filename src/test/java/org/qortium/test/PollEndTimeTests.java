@@ -55,6 +55,16 @@ public class PollEndTimeTests extends Common {
 			CreatePollTransactionData openEndedData = buildCreatePollTransactionData(alice, "open-ended-poll", timestamp, null);
 			assertEquals(Transaction.ValidationResult.OK, new CreatePollTransaction(repository, openEndedData).isValid());
 
+			BaseTransactionData omittedDescriptionBase = new BaseTransactionData(
+					timestamp,
+					Group.NO_GROUP,
+					alice.getPublicKey(),
+					BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp),
+					null);
+			CreatePollTransactionData omittedDescriptionData = new CreatePollTransactionData(omittedDescriptionBase,
+					alice.getAddress(), "omitted-description-poll", null, buildPollOptions(), null);
+			assertEquals(Transaction.ValidationResult.OK, new CreatePollTransaction(repository, omittedDescriptionData).isValid());
+
 			CreatePollTransactionData validEndData = buildCreatePollTransactionData(alice, "valid-ended-poll", timestamp, timestamp + 1);
 			assertEquals(Transaction.ValidationResult.OK, new CreatePollTransaction(repository, validEndData).isValid());
 
@@ -63,6 +73,24 @@ public class PollEndTimeTests extends Common {
 
 			CreatePollTransactionData pastEndData = buildCreatePollTransactionData(alice, "past-ended-poll", timestamp, timestamp - 1);
 			assertEquals(Transaction.ValidationResult.INVALID_LIFETIME, new CreatePollTransaction(repository, pastEndData).isValid());
+
+			CreatePollTransactionData validStartData = buildCreatePollTransactionData(alice, "valid-start-poll", timestamp, timestamp + 1_000L, timestamp + 2_000L);
+			assertEquals(Transaction.ValidationResult.OK, new CreatePollTransaction(repository, validStartData).isValid());
+
+			CreatePollTransactionData equalStartData = buildCreatePollTransactionData(alice, "equal-start-poll", timestamp, timestamp, null);
+			assertEquals(Transaction.ValidationResult.INVALID_LIFETIME, new CreatePollTransaction(repository, equalStartData).isValid());
+
+			CreatePollTransactionData reversedStartEndData = buildCreatePollTransactionData(alice, "reversed-start-end-poll", timestamp,
+					timestamp + 2_000L, timestamp + 1_000L);
+			assertEquals(Transaction.ValidationResult.INVALID_LIFETIME, new CreatePollTransaction(repository, reversedStartEndData).isValid());
+
+			CreatePollTransactionData thousandOptionsData = createPollData(alice, "thousand-options-poll", timestamp,
+					buildPollOptions(1000), null, null);
+			assertEquals(Transaction.ValidationResult.OK, new CreatePollTransaction(repository, thousandOptionsData).isValid());
+
+			CreatePollTransactionData tooManyOptionsData = createPollData(alice, "too-many-options-poll", timestamp,
+					buildPollOptions(1001), null, null);
+			assertEquals(Transaction.ValidationResult.INVALID_OPTIONS_COUNT, new CreatePollTransaction(repository, tooManyOptionsData).isValid());
 		}
 	}
 
@@ -90,6 +118,27 @@ public class PollEndTimeTests extends Common {
 	}
 
 	@Test
+	public void testVoteValidationUsesPollStartTime() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			PrivateKeyAccount bob = Common.getTestAccount(repository, "bob");
+			long published = TransactionUtils.nextTimestamp(repository);
+			long startTime = published + 1000;
+			String pollName = "scheduled-vote-poll";
+
+			repository.getVotingRepository().save(new PollData(alice.getPublicKey(), alice.getAddress(), pollName,
+					"Test poll", buildPollOptions(), published, startTime, null));
+			repository.saveChanges();
+
+			VoteOnPollTransaction voteTransaction = new VoteOnPollTransaction(repository, buildVoteOnPollTransactionData(repository, bob, pollName, 1));
+			assertEquals(Transaction.ValidationResult.OK, voteTransaction.isValid());
+			assertEquals(Transaction.ValidationResult.POLL_NOT_STARTED, voteTransaction.isValidAtTimestamp(startTime - 1));
+			assertEquals(Transaction.ValidationResult.OK, voteTransaction.isValidAtTimestamp(startTime));
+			assertEquals(Transaction.ValidationResult.OK, voteTransaction.isValidAtTimestamp(startTime + 1));
+		}
+	}
+
+	@Test
 	public void testCreatePollSerializationPreservesOptionalEndTime() throws DataException, TransformationException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
@@ -109,6 +158,16 @@ public class PollEndTimeTests extends Common {
 			assertEquals(endedData.getEndTime(), endedDeserialized.getEndTime());
 			assertEquals(openEndedBytes.length + Transformer.LONG_LENGTH, endedBytes.length);
 			assertArrayEquals(endedBytes, TransactionTransformer.toBytes(endedDeserialized));
+
+			CreatePollTransactionData scheduledData = buildCreatePollTransactionData(alice, "serialized-scheduled-poll", timestamp,
+					timestamp + 30_000L, timestamp + 60_000L);
+			new CreatePollTransaction(repository, scheduledData).sign(alice);
+			byte[] scheduledBytes = TransactionTransformer.toBytes(scheduledData);
+			CreatePollTransactionData scheduledDeserialized = (CreatePollTransactionData) TransactionTransformer.fromBytes(scheduledBytes);
+			assertEquals(scheduledData.getStartTime(), scheduledDeserialized.getStartTime());
+			assertEquals(scheduledData.getEndTime(), scheduledDeserialized.getEndTime());
+			assertEquals(TransactionTransformer.getDataLength(scheduledData), scheduledBytes.length);
+			assertArrayEquals(scheduledBytes, TransactionTransformer.toBytes(scheduledDeserialized));
 		}
 	}
 
@@ -118,15 +177,18 @@ public class PollEndTimeTests extends Common {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
 			long timestamp = TransactionUtils.nextTimestamp(repository);
 			long endTime = timestamp + 60_000L;
-			CreatePollTransactionData transactionData = buildCreatePollTransactionData(alice, "repository-ended-poll", timestamp, endTime);
+			long startTime = timestamp + 30_000L;
+			CreatePollTransactionData transactionData = buildCreatePollTransactionData(alice, "repository-ended-poll", timestamp, startTime, endTime);
 
 			TransactionUtils.signAndMint(repository, transactionData, alice);
 
 			PollData pollData = repository.getVotingRepository().fromPollName(transactionData.getPollName());
+			assertEquals(Long.valueOf(startTime), pollData.getStartTime());
 			assertEquals(Long.valueOf(endTime), pollData.getEndTime());
 
 			TransactionData fetchedTransactionData = repository.getTransactionRepository().fromSignature(transactionData.getSignature());
 			CreatePollTransactionData fetchedCreatePollData = (CreatePollTransactionData) fetchedTransactionData;
+			assertEquals(Long.valueOf(startTime), fetchedCreatePollData.getStartTime());
 			assertEquals(Long.valueOf(endTime), fetchedCreatePollData.getEndTime());
 		}
 	}
@@ -177,6 +239,11 @@ public class PollEndTimeTests extends Common {
 	}
 
 	private CreatePollTransactionData buildCreatePollTransactionData(PrivateKeyAccount creator, String pollName, long timestamp, Long endTime) {
+		return buildCreatePollTransactionData(creator, pollName, timestamp, null, endTime);
+	}
+
+	private CreatePollTransactionData buildCreatePollTransactionData(PrivateKeyAccount creator, String pollName, long timestamp,
+			Long startTime, Long endTime) {
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				timestamp,
 				Group.NO_GROUP,
@@ -184,7 +251,19 @@ public class PollEndTimeTests extends Common {
 				BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp),
 				null);
 
-		return new CreatePollTransactionData(baseTransactionData, creator.getAddress(), pollName, "Test poll", buildPollOptions(), endTime);
+		return new CreatePollTransactionData(baseTransactionData, creator.getAddress(), pollName, "Test poll", buildPollOptions(), startTime, endTime);
+	}
+
+	private CreatePollTransactionData createPollData(PrivateKeyAccount creator, String pollName, long timestamp,
+			List<PollOptionData> pollOptions, Long startTime, Long endTime) {
+		BaseTransactionData baseTransactionData = new BaseTransactionData(
+				timestamp,
+				Group.NO_GROUP,
+				creator.getPublicKey(),
+				BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp),
+				null);
+
+		return new CreatePollTransactionData(baseTransactionData, creator.getAddress(), pollName, "Test poll", pollOptions, startTime, endTime);
 	}
 
 	private VoteOnPollTransactionData buildVoteOnPollTransactionData(Repository repository, PrivateKeyAccount voter, String pollName, int optionIndex) throws DataException {
@@ -223,6 +302,13 @@ public class PollEndTimeTests extends Common {
 		List<PollOptionData> pollOptions = new ArrayList<>();
 		pollOptions.add(new PollOptionData("Yes"));
 		pollOptions.add(new PollOptionData("No"));
+		return pollOptions;
+	}
+
+	private List<PollOptionData> buildPollOptions(int count) {
+		List<PollOptionData> pollOptions = new ArrayList<>();
+		for (int i = 1; i <= count; ++i)
+			pollOptions.add(new PollOptionData("Option " + i));
 		return pollOptions;
 	}
 

@@ -9,6 +9,9 @@ import org.qortium.repository.hsqldb.HSQLDBSaver;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class HSQLDBVoteOnPollTransactionRepository extends HSQLDBTransactionRepository {
 
@@ -31,7 +34,16 @@ public class HSQLDBVoteOnPollTransactionRepository extends HSQLDBTransactionRepo
 			if (previousOptionIndex == 0 && resultSet.wasNull())
 				previousOptionIndex = null;
 
-			return new VoteOnPollTransactionData(baseTransactionData, pollId, optionIndex, previousOptionIndex);
+			List<Integer> optionIndexes = getOptionIndexes("VoteOnPollTransactionOptions", baseTransactionData.getSignature());
+			if (optionIndexes.isEmpty() && optionIndex != 0)
+				optionIndexes = Collections.singletonList(optionIndex);
+
+			List<Integer> previousOptionIndexes = getOptionIndexes("VoteOnPollTransactionPreviousOptions", baseTransactionData.getSignature());
+			if (previousOptionIndexes.isEmpty() && previousOptionIndex != null)
+				previousOptionIndexes = Collections.singletonList(previousOptionIndex);
+
+			return new VoteOnPollTransactionData(baseTransactionData, pollId, optionIndexes,
+					previousOptionIndexes.isEmpty() ? null : previousOptionIndexes);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch vote on poll transaction from repository", e);
 		}
@@ -49,8 +61,41 @@ public class HSQLDBVoteOnPollTransactionRepository extends HSQLDBTransactionRepo
 
 		try {
 			saveHelper.execute(this.repository);
+			saveOptionIndexes("VoteOnPollTransactionOptions", voteOnPollTransactionData.getSignature(),
+					voteOnPollTransactionData.getSelectedOptionIndexes());
+			saveOptionIndexes("VoteOnPollTransactionPreviousOptions", voteOnPollTransactionData.getSignature(),
+					voteOnPollTransactionData.getPreviousOptionIndexes());
 		} catch (SQLException e) {
 			throw new DataException("Unable to save vote on poll transaction into repository", e);
+		}
+	}
+
+	private List<Integer> getOptionIndexes(String tableName, byte[] signature) throws SQLException {
+		String sql = String.format("SELECT option_index FROM %s WHERE signature = ? ORDER BY option_index ASC", tableName);
+		List<Integer> optionIndexes = new ArrayList<>();
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql, signature)) {
+			if (resultSet == null)
+				return optionIndexes;
+
+			do {
+				optionIndexes.add(resultSet.getInt(1));
+			} while (resultSet.next());
+
+			return optionIndexes;
+		}
+	}
+
+	private void saveOptionIndexes(String tableName, byte[] signature, List<Integer> optionIndexes) throws SQLException {
+		this.repository.delete(tableName, "signature = ?", signature);
+
+		if (optionIndexes == null)
+			return;
+
+		for (Integer optionIndex : optionIndexes) {
+			HSQLDBSaver saveHelper = new HSQLDBSaver(tableName);
+			saveHelper.bind("signature", signature).bind("option_index", optionIndex);
+			saveHelper.execute(this.repository);
 		}
 	}
 

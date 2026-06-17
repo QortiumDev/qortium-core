@@ -45,6 +45,7 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -337,7 +338,7 @@ public class PollsResource {
             summary = "Build raw, unsigned, VOTE_ON_POLL transaction",
             requestBody = @RequestBody(
                     required = true,
-                    description = "Vote on a poll by stable pollId. optionIndex 0 removes the active vote; real poll options start at 1.",
+                    description = "Vote on a poll by stable pollId. Use optionIndexes for multi-option votes, or legacy optionIndex for a single option. optionIndex 0, optionIndexes [0], or optionIndexes [] removes the active vote; real poll options start at 1.",
                     content = @Content(
                             mediaType = MediaType.APPLICATION_JSON,
                             schema = @Schema(
@@ -449,6 +450,7 @@ public class PollsResource {
 
             List<PollVotes.VoteDetail> voteDetails = countsOnly ? null : new ArrayList<>();
             int totalVotes = 0;
+            int totalVoters = 0;
             int totalWeight = 0;
             int rawTotalWeight = 0;
             int currentHeight = repository.getBlockRepository().getBlockchainHeight();
@@ -464,23 +466,31 @@ public class PollsResource {
                     int voteWeight = AccountTrustWeight.calculateEffectiveVoteWeight(voteWeightPercents, rawVoteWeight,
                             activeTrustSnapshot);
 
-                    int optionIndex = vote.getOptionIndex();
-                    if (optionIndex <= Poll.NO_VOTE_OPTION_INDEX || optionIndex > pollData.getPollOptions().size())
-                            continue;
+                    List<Integer> selectedOptionIndexes = new ArrayList<>();
+                    for (Integer optionIndex : vote.getOptionIndexes()) {
+                            if (optionIndex == null || optionIndex <= Poll.NO_VOTE_OPTION_INDEX || optionIndex > pollData.getPollOptions().size())
+                                    continue;
 
-                    String selectedOption = pollData.getPollOptions().get(optionIndex - 1).getOptionName();
-                    if (voteCountMap.containsKey(selectedOption)) {
+                            String selectedOption = pollData.getPollOptions().get(optionIndex - 1).getOptionName();
+                            if (!voteCountMap.containsKey(selectedOption))
+                                    continue;
+
+                            selectedOptionIndexes.add(optionIndex);
                             voteCountMap.put(selectedOption, voteCountMap.get(selectedOption) + 1);
                             voteWeightMap.put(selectedOption, voteWeightMap.get(selectedOption) + voteWeight);
                             rawVoteWeightMap.put(selectedOption, rawVoteWeightMap.get(selectedOption) + rawVoteWeight);
                             totalVotes++;
                             totalWeight += voteWeight;
                             rawTotalWeight += rawVoteWeight;
+                    }
+
+                    if (!selectedOptionIndexes.isEmpty()) {
+                            totalVoters++;
 
                             if (voteDetails != null) {
                                     voteDetails.add(new PollVotes.VoteDetail(
                                             voter,
-                                            vote.getOptionIndex(),
+                                            selectedOptionIndexes,
                                             rawVoteWeight,
                                             activeTrustStatus.name(),
                                             activeTrustStatus.getValue(),
@@ -498,9 +508,9 @@ public class PollsResource {
             List<PollVotes.OptionWeight> voteWeights = buildOptionWeights(voteWeightMap, rawVoteWeightMap);
 
             if (countsOnly) {
-                    return new PollVotes(null, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights, null);
+                    return new PollVotes(null, totalVotes, totalVoters, totalWeight, rawTotalWeight, voteCounts, voteWeights, null);
             } else {
-                    return new PollVotes(votes, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights, voteDetails);
+                    return new PollVotes(votes, totalVotes, totalVoters, totalWeight, rawTotalWeight, voteCounts, voteWeights, voteDetails);
             }
     }
     
@@ -517,7 +527,7 @@ public class PollsResource {
             List<VoteOnPollData> votes = countsOnly ? null : repository.getVotingRepository().getVotes(pollData.getPollId());
             List<PollVotes.VoteDetail> voteDetails = countsOnly ? null : buildVoteDetails(repository.getVotingRepository().getFrozenPollVoteWeights(pollData.getPollName()));
 
-            return new PollVotes(votes, frozenPollResults.getTotalVotes(), frozenPollResults.getTotalWeight(),
+            return new PollVotes(votes, frozenPollResults.getTotalVotes(), frozenPollResults.getTotalVoters(), frozenPollResults.getTotalWeight(),
                     frozenPollResults.getRawTotalWeight(), voteCounts, voteWeights, voteDetails);
     }
 
@@ -534,16 +544,47 @@ public class PollsResource {
     }
 
     private List<PollVotes.VoteDetail> buildVoteDetails(List<PollVoteWeightData> voteWeights) {
-            return voteWeights.stream()
-                    .map(voteWeight -> new PollVotes.VoteDetail(
-                            Crypto.toAddress(voteWeight.getVoterPublicKey()),
-                            voteWeight.getOptionIndex(),
-                            voteWeight.getRawVoteWeight(),
-                            voteWeight.getTrustStatus().name(),
-                            voteWeight.getTrustStatus().getValue(),
-                            voteWeight.getTrustWeightPercent(),
-                            voteWeight.getEffectiveVoteWeight()))
+            Map<String, FrozenVoteDetailBuilder> detailBuildersByVoter = new LinkedHashMap<>();
+            for (PollVoteWeightData voteWeight : voteWeights) {
+                    String voterAddress = Crypto.toAddress(voteWeight.getVoterPublicKey());
+                    FrozenVoteDetailBuilder detailBuilder = detailBuildersByVoter.computeIfAbsent(voterAddress,
+                            ignored -> new FrozenVoteDetailBuilder(voterAddress, voteWeight));
+                    detailBuilder.optionIndexes.add(voteWeight.getOptionIndex());
+            }
+
+            return detailBuildersByVoter.values().stream()
+                    .map(FrozenVoteDetailBuilder::build)
                     .collect(Collectors.toList());
+    }
+
+    private static class FrozenVoteDetailBuilder {
+            private final String voterAddress;
+            private final int rawVoteWeight;
+            private final AccountTrustStatus trustStatus;
+            private final int trustWeightPercent;
+            private final int effectiveVoteWeight;
+            private final List<Integer> optionIndexes = new ArrayList<>();
+
+            private FrozenVoteDetailBuilder(String voterAddress, PollVoteWeightData voteWeight) {
+                    this.voterAddress = voterAddress;
+                    this.rawVoteWeight = voteWeight.getRawVoteWeight();
+                    this.trustStatus = voteWeight.getTrustStatus();
+                    this.trustWeightPercent = voteWeight.getTrustWeightPercent();
+                    this.effectiveVoteWeight = voteWeight.getEffectiveVoteWeight();
+            }
+
+            private PollVotes.VoteDetail build() {
+                    return new PollVotes.VoteDetail(
+                            this.voterAddress,
+                            this.optionIndexes,
+                            this.rawVoteWeight,
+                            this.trustStatus.name(),
+                            this.trustStatus.getValue(),
+                            this.trustWeightPercent,
+                            this.effectiveVoteWeight,
+                            null,
+                            null);
+            }
     }
 
 }
