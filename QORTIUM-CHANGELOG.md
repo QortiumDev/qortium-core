@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - docs: add Qortal 6.1.6 upstream comparison
+
+Added an inventory of the upstream Qortal changes between the 6.1.5 and 6.1.6 release points, in the same neutral style as the existing 6.1.5 comparison. It records what changed and which review bucket each change belongs to, highlights the two new consensus feature triggers (the online-accounts signature rework and the asset-order bounds fix) and their activation heights, lists the non-consensus changes, and gives porting notes for Qortium. This guides which of the 6.1.6 changes are adopted into the fork and is the companion document for the safe (non-consensus) fixes ported in the surrounding commits.
+
 ### 2026-06-17 - core: log storage and archive sizes in human-readable units
 
 Several status log lines reported sizes as a raw number of bytes — for example "Total used: 55700516352 bytes". A new helper, `StringUtils.formatBytes`, turns a byte count into a compact binary-unit string such as "51.88 GB" or "512 bytes". The QDN storage-capacity log line and the block-archive writer's progress and total-size log lines now use it, so those messages are easier to read at a glance. This is a logging-only change with no effect on behaviour. Ported from upstream Qortal 6.1.6.
