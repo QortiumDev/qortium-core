@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - core: start the data cache after bootstrap, just before the API
+
+On startup the node builds an in-memory cache of arbitrary (QDN) resources so the resource-search API can answer quickly. That cache was being started early in startup, before the step that can replace the entire database with a downloaded bootstrap. On a node that bootstraps, the cache was therefore built from the empty pre-bootstrap database and then left stale once the real database was swapped in, so resource searches could return nothing until the cache was next refreshed. The cache is now started later — after the bootstrap and chain-validation step, and immediately before the API begins serving requests — so it is always built from the final database. Behaviour is unchanged on a node that does not bootstrap. Ported from upstream Qortal 6.1.6.
+
 ### 2026-06-17 - docs: add Qortal 6.1.6 upstream comparison
 
 Added an inventory of the upstream Qortal changes between the 6.1.5 and 6.1.6 release points, in the same neutral style as the existing 6.1.5 comparison. It records what changed and which review bucket each change belongs to, highlights the two new consensus feature triggers (the online-accounts signature rework and the asset-order bounds fix) and their activation heights, lists the non-consensus changes, and gives porting notes for Qortium. This guides which of the 6.1.6 changes are adopted into the fork and is the companion document for the safe (non-consensus) fixes ported in the surrounding commits.
