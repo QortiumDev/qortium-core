@@ -71,6 +71,9 @@
 	"nameRegistrationUnitFees": [
 		{ "timestamp": 0, "fee": "1.25" }
 	],
+	"checkpoints": [
+		{ "height": 24000, "signature": "SnsdHBz5NCjtnRUTKfCsWfEmLCvm4JsSDMwnHKMURpAaxtHxPi9BrmNheLn7sXrrSNE6hraupCd8FKzLFzrht8vsqZHq1ESwy8HHg9tPUyyMTCSzGgZCxmLdNBbr1GQ7mKzCxJcFkKHAan5gZfwdtdMpUhzLucrp7u2KVfDmWNSAESo" }
+	],
 	"requireGroupForApproval": false,
 	"defaultGroupId": 0,
 	"minAccountLevelToMint": 0,

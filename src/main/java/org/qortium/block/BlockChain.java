@@ -1371,10 +1371,9 @@ public class BlockChain {
 				}
 			}
 
-			// Validate checkpoints
-			// Limited to topOnly nodes for now, in order to reduce risk, and to solve a real-world problem with divergent topOnly nodes
-			// TODO: remove the isTopOnly conditional below once this feature has had more testing time
-			if (isTopOnly && !isLite) {
+			// Validate checkpoints on all non-lite node types. (topOnly mode is no longer supported,
+			// so the previous isTopOnly gate made this dead code; lite nodes hold no blocks to check.)
+			if (!isLite) {
 				List<Checkpoint> checkpoints = BlockChain.getInstance().getCheckpoints();
 				for (Checkpoint checkpoint : checkpoints) {
 					BlockData blockData = repository.getBlockRepository().fromHeight(checkpoint.height);
@@ -1391,8 +1390,17 @@ public class BlockChain {
 
 					byte[] signature = Base58.decode(checkpoint.signature);
 					if (!Arrays.equals(signature, blockData.getSignature())) {
-						LOGGER.info("Error: block at height {} with signature {} doesn't match checkpoint sig: {}. Bootstrapping...", checkpoint.height, Base58.encode(blockData.getSignature()), checkpoint.signature);
-						needsArchiveRebuild = true;
+						if (checkHeight < 3) {
+							// Near-empty chain: safe to resync from genesis (bootstrap is disabled / no hosts),
+							// so fall through to rebuildBlockchain() below.
+							LOGGER.error("Block at height {} with signature {} doesn't match checkpoint sig: {}. Chain is near-empty; resyncing from genesis.", checkpoint.height, Base58.encode(blockData.getSignature()), checkpoint.signature);
+							needsArchiveRebuild = true;
+						} else {
+							// Already-synced chain: do NOT auto-wipe. A wrong/divergent checkpoint must not
+							// trigger a destructive resync loop (any peers would carry the same data). Log
+							// loudly and leave the chain in place for the operator to investigate.
+							LOGGER.error("CHECKPOINT MISMATCH: block at height {} has signature {} but checkpoint expects {}. NOT resyncing automatically; please investigate (your chain may have diverged, or the configured checkpoint may be wrong).", checkpoint.height, Base58.encode(blockData.getSignature()), checkpoint.signature);
+						}
 						break;
 					}
 					LOGGER.info("Block at height {} matches checkpoint signature", blockData.getHeight());
