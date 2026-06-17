@@ -590,24 +590,15 @@ public class BlockChain {
 		byte[] jsonBytes;
 
 		if (filename != null) {
-			// Prefer a config of this name bundled on the classpath (inside the jar), so that
-			// network configs such as previewchain.json travel with the release rather than
-			// depending on a separate external file. Fall back to an external file (e.g. a
-			// custom network or testnet config) when the named config isn't bundled.
-			byte[] bundledBytes = readBundledConfig(filename);
-			if (bundledBytes != null) {
-				LOGGER.info(String.format("Using bundled blockchain config resource: %s", filename));
-				jsonBytes = bundledBytes;
-			} else {
+			// Prefer an external config file explicitly provided at path+filename when it exists, so a
+			// caller-supplied config (custom network, testnet, or a test fixture) is honoured. Fall back
+			// to a config of this name bundled on the classpath (inside the jar) when no external file is
+			// present, so that network configs such as previewchain.json still travel with the release
+			// rather than depending on a separate external file.
+			File jsonFile = new File(path + filename);
+
+			if (jsonFile.exists()) {
 				LOGGER.info(String.format("Using blockchain config file: %s%s", path, filename));
-
-				File jsonFile = new File(path + filename);
-
-				if (!jsonFile.exists()) {
-					String message = "Blockchain config file not found: " + path + filename;
-					LOGGER.error(message);
-					throw new RuntimeException(message, new FileNotFoundException(message));
-				}
 
 				try {
 					jsonBytes = Files.readAllBytes(jsonFile.toPath());
@@ -616,6 +607,16 @@ public class BlockChain {
 					LOGGER.error(message, e);
 					throw new RuntimeException(message, e);
 				}
+			} else {
+				byte[] bundledBytes = readBundledConfig(filename);
+				if (bundledBytes == null) {
+					String message = "Blockchain config file not found: " + path + filename;
+					LOGGER.error(message);
+					throw new RuntimeException(message, new FileNotFoundException(message));
+				}
+
+				LOGGER.info(String.format("Using bundled blockchain config resource: %s", filename));
+				jsonBytes = bundledBytes;
 			}
 		} else {
 			LOGGER.info("Using default, resources-based blockchain config");
