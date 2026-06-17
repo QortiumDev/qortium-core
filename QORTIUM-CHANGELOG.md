@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - tradebot: back up the full trade-bot batch instead of a single record
+
+When a node takes several cross-chain trade offers at once, it prepares one trade-bot record per offer and then funds them all together. Previously the node wrote its safety backup inside that per-offer loop and saved only the single record it had just prepared, so the on-disk backup never reflected the whole batch being processed and could be left inconsistent if the node stopped partway through. The backup now runs once, after every record in the batch has been prepared, and saves all of them — so the backup matches what the node is actually about to fund. Ported from upstream Qortal 6.1.6.
+
 ### 2026-06-16 - gui: match splash screen to system theme
 
 The startup splash screen now checks the desktop's light-or-dark appearance when the graphical Core starts. Dark mode keeps the existing black splash with the current Qortium logo and white status text, while light mode uses a white splash with an inverted black logo and black status text. The detection is best-effort across macOS, Windows, and common Linux desktops, includes a manual `qortium.splash.theme` override for light, dark, or system behavior, and falls back to the existing dark splash when the platform setting cannot be read.
