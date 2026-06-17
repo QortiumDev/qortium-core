@@ -34,7 +34,11 @@ own chain.
 
 ## Change Entries
 
-### 2026-06-17 - lists: rework follow/block lists into four lists with wildcard QDN patterns and read-time chat blocking
+### 2026-06-17 - consensus: add the Previewnet height-24000 checkpoint and validate it on all full nodes
+
+Adds the first trusted checkpoint to the Previewnet chain config — block height 24000 pinned to its block signature (verified identical across both seed nodes, and 180+ blocks deep so it is final). A checkpoint lets a node confirm its copy of history matches a known-good block at that height; it is the trust anchor the planned fast-sync will rely on so a node can accept downloaded history without being steered onto a wrong chain. Because checkpoints were already excluded from the chain-config fingerprint in an earlier update, adding this data does not change the fingerprint and so does not disturb peering.
+
+Two supporting changes: checkpoint validation now runs on all non-lite nodes (it was previously gated to "top-only" nodes, a mode Qortium no longer supports, so the check was effectively dead code and never ran). And the behaviour on a checkpoint mismatch is now deliberate: a near-empty node (still effectively at genesis) resyncs from genesis as before, while an already-synced node logs a prominent error and does NOT wipe and resync. The latter avoids a dangerous failure mode — if a shipped checkpoint were ever wrong, every node carries the same data, so auto-wiping would make the whole network resync in a loop; a loud error lets an operator investigate instead. The checkpoint is Previewnet-only (mainnet and testnet have no chain yet).
 
 Reworks how the node decides which QDN resources to mirror and which chat messages to show. Previously three lists were consulted by name or address (`followedNames`, `blockedNames`, `blockedAddresses`), and the node also scanned any list whose name *started with* one of those words (so `blockedNames_custom1`, `blockedNames_custom2`, … were all merged together). The node now consults exactly four lists, each by its exact name, and never scans prefixed list groups:
 
