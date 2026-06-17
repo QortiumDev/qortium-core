@@ -80,8 +80,8 @@
 	],
 	"onlineAccountSignaturesMinLifetime": 43200000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,
-	"onlineAccountsSignatureV2Height": 99999,
-	"assetOrderBoundsHeight": 99999,
+	"onlineAccountsSignatureV2Height": 0,
+	"assetOrderBoundsHeight": 0,
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,
 		"arbitraryDifficulty": 11,
