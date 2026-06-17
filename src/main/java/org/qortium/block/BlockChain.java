@@ -222,6 +222,11 @@ public class BlockChain {
 	}
 	private MemoryPoWSettings mempowSettings;
 
+	/** Feature trigger block height for asset order amount/price bounds validation (consensus fix c-02).
+	 * Below this height behaviour is byte-for-byte identical to legacy order validation. Defaults to a
+	 * disabled sentinel so a chain config that omits the key keeps the fix OFF (fail-closed, replay-safe). */
+	private long assetOrderBoundsHeight = 9999999999999L;
+
 	/** Feature trigger block height for batch block reward payouts.
 	 * This MUST be a multiple of blockRewardBatchSize. */
 	private int blockRewardBatchStartHeight;
@@ -760,6 +765,10 @@ public class BlockChain {
 
 	public int getChainParameterUpdateMinActivationDelay() {
 		return this.chainParameterUpdateMinActivationDelay;
+	}
+
+	public long getAssetOrderBoundsHeight() {
+		return this.assetOrderBoundsHeight;
 	}
 
 	/* Block reward batching */

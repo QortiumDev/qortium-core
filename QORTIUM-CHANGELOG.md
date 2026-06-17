@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - consensus: bound asset-order amounts behind a feature trigger (c-02)
+
+Fixes a value-minting vulnerability in asset-order processing (upstream Qortal audit finding "c-02"). When an order's committed cost was computed, an intermediate value that exceeded the range of a signed 64-bit integer was silently truncated, which on a refund/credit path could wrap into a negative number and effectively mint asset value out of nothing.
+
+Once activated, the node now rejects any order whose amount or price exceeds the maximum asset quantity, or whose committed cost does not fit in a positive signed long, and on the processing path it fails closed by throwing rather than silently wrapping. The change is gated behind a new feature-trigger height, `assetOrderBoundsHeight`: below that height behaviour is byte-for-byte identical to before, so existing blocks replay unchanged; at and above it the bounds checks apply. The field defaults to a disabled sentinel, so any chain config that omits the key keeps the fix off (fail-closed). New tests cover pre-activation parity, post-activation rejection, the rounded-commitment overflow and divisibility cases, and that the processing path fails closed instead of minting; the full existing asset-order test suite also passes with the trigger active, confirming the change is transparent for normal orders.
+
+The activation height is a PLACEHOLDER (`99999`) in `blockchain.json` and `previewchain.json` and MUST be replaced with a chosen future height, coordinated network-wide, before any release — `99999` may already be below the current chain height. Ported from upstream Qortal 6.1.6.
+
 ### 2026-06-17 - docs: record 6.1.6 upstream triage decisions
 
 Filled in the triage worksheet in the Qortal 6.1.6 comparison with the decisions made during review: which non-consensus fixes were ported (with their commit references), that the two consensus fixes (online-accounts signature rework and asset-order bounds) are deferred to a planned hard fork, and that the chat-analysis API and thread-dump diagnostics were not adopted — the former because Qortium's chat is database-backed rather than the in-memory model the upstream feature depends on, the latter because Qortium has no thread-dump scheduler.
