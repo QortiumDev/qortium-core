@@ -324,14 +324,17 @@ entries added).
 
 ## Triage Worksheet
 
-Decisions recorded during the 2026-06-17 review. The non-consensus "safe" fixes
-were ported on branch `feature/port-qortal-6.1.6-safe-fixes`; the consensus
-fixes remain deferred to a planned hard-fork cycle.
+Decisions recorded during the 2026-06-17 review. All adopted work landed on branch
+`feature/port-qortal-6.1.6-safe-fixes`. The two consensus fixes were ported behind
+feature-trigger heights that default to a disabled sentinel (fail-closed) and carry a
+**placeholder height `99999`** in `blockchain.json`/`previewchain.json` — that placeholder
+MUST be replaced with a coordinated future height before any release (Previewnet tip was
+~24064 on 2026-06-17, so 99999 is ~76k blocks out; do not ship the placeholder).
 
 | Change | Decision | Qortium activation height | Notes |
 |---|---|---|---|
-| c-01 online-accounts signature V2 | Deferred | TBD | Consensus hard fork. Qortium is exposed (uses `signForAggregation`/`verifyAggregated`). Needs re-expressing on Qortium's `ChainParameter` system + a Qortium-chosen height + coordinated upgrade. |
-| c-02 asset-order bounds | Deferred | TBD | Consensus hard fork. Qortium is exposed (`Order.java` uses `roundUpScaledMultiply().longValue()`). Same `ChainParameter` + chosen-height + coordinated-upgrade requirement. |
+| c-01 online-accounts signature V2 | Ported, gated (`0b7e7fbce`) | PLACEHOLDER 99999 — set before release | Per-account Ed25519 behind `onlineAccountsSignatureV2Height`. Adversarially reviewed: pre-activation path byte-for-byte identical (replay-safe); forgery closed (SchnorrTests); V2 block round-trip tested. Hard fork — changes block serialization at activation; coordinate network-wide. |
+| c-02 asset-order bounds | Ported, gated (`8a74e35a1`) | PLACEHOLDER 99999 — set before release | Bounds + fail-closed narrowing behind `assetOrderBoundsHeight`. Reviewed: pre-activation byte-for-byte identical; full asset suite passes with the gate active. Coordinate network-wide. |
 | Trade-bot backup fix | Adopted (`e2c461761`) | n/a | Backs up the whole batch instead of one record. |
 | search `default=true` fix | Adopted (`f514b2939`) | n/a | Response-affecting; SQL path uses `='default'`, cache path uses `NULL OR 'default'` (parity kept with upstream). |
 | QDN folder-size estimator | Adopted (`8dc56fdfa`) | n/a | Uses `qortium-backup/` path; kept Qortium's correct temp-dir measurement (did not port upstream's double-count). |
