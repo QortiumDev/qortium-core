@@ -30,6 +30,8 @@ public class CreatePollTransactionData extends TransactionData {
 	private String description;
 	@Schema(description = "Poll options as separate array entries; do not submit one comma-separated string")
 	private List<PollOptionData> pollOptions;
+	@Schema(description = "Optional poll start time in epoch milliseconds. Null means the poll starts when published.")
+	private Long startTime;
 	private Long endTime;
 
 	// Constructors
@@ -50,19 +52,30 @@ public class CreatePollTransactionData extends TransactionData {
 
 	public CreatePollTransactionData(BaseTransactionData baseTransactionData,
 			String owner, String pollName, String description, List<PollOptionData> pollOptions, Long endTime) {
-		this(baseTransactionData, owner, pollName, description, pollOptions, endTime, null);
+		this(baseTransactionData, owner, pollName, description, pollOptions, null, endTime, null);
+	}
+
+	public CreatePollTransactionData(BaseTransactionData baseTransactionData,
+			String owner, String pollName, String description, List<PollOptionData> pollOptions, Long startTime, Long endTime) {
+		this(baseTransactionData, owner, pollName, description, pollOptions, startTime, endTime, null);
 	}
 
 	public CreatePollTransactionData(BaseTransactionData baseTransactionData,
 			String owner, String pollName, String description, List<PollOptionData> pollOptions, Long endTime, Integer pollId) {
+		this(baseTransactionData, owner, pollName, description, pollOptions, null, endTime, pollId);
+	}
+
+	public CreatePollTransactionData(BaseTransactionData baseTransactionData,
+			String owner, String pollName, String description, List<PollOptionData> pollOptions, Long startTime, Long endTime, Integer pollId) {
 		super(Transaction.TransactionType.CREATE_POLL, baseTransactionData);
 
 		this.creatorPublicKey = baseTransactionData.creatorPublicKey;
 		this.pollId = pollId;
 		this.owner = owner;
 		this.pollName = pollName;
-		this.description = description;
+		this.description = description == null ? "" : description;
 		this.pollOptions = pollOptions;
+		this.startTime = startTime;
 		this.endTime = endTime;
 	}
 
@@ -86,11 +99,15 @@ public class CreatePollTransactionData extends TransactionData {
 	}
 
 	public String getDescription() {
-		return this.description;
+		return this.description == null ? "" : this.description;
 	}
 
 	public List<PollOptionData> getPollOptions() {
 		return this.pollOptions;
+	}
+
+	public Long getStartTime() {
+		return this.startTime;
 	}
 
 	public Long getEndTime() {

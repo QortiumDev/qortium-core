@@ -63,6 +63,7 @@ public class PollUpdateTests extends Common {
 			assertEquals("update-poll-original", fetchedUpdateData.getPreviousPollName());
 			assertEquals("Original description", fetchedUpdateData.getPreviousDescription());
 			assertEquals(List.of("Yes", "No"), optionNames(fetchedUpdateData.getPreviousPollOptions()));
+			assertNull(fetchedUpdateData.getPreviousStartTime());
 			assertNull(fetchedUpdateData.getPreviousEndTime());
 
 			BlockUtils.orphanLastBlock(repository);
@@ -71,6 +72,7 @@ public class PollUpdateTests extends Common {
 			assertEquals("update-poll-original", revertedPollData.getPollName());
 			assertEquals("Original description", revertedPollData.getDescription());
 			assertEquals(List.of("Yes", "No"), pollOptionNames(revertedPollData));
+			assertNull(revertedPollData.getStartTime());
 			assertNull(revertedPollData.getEndTime());
 			assertNull(repository.getVotingRepository().fromPollName("update-poll-renamed"));
 		}
@@ -94,6 +96,47 @@ public class PollUpdateTests extends Common {
 
 			PollData revertedPollData = repository.getVotingRepository().fromPollId(pollData.getPollId());
 			assertEquals(List.of("Yes", "No", "Abstain"), pollOptionNames(revertedPollData));
+		}
+	}
+
+	@Test
+	public void testStartTimeCanBeUpdatedBeforePollStarts() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			long now = repository.getBlockRepository().getLastBlock().getTimestamp();
+			long startTime = now + 600_000L;
+			long newStartTime = startTime + 60_000L;
+			PollData pollData = createTestPoll(repository, alice, "start-time-update-poll", "Original description",
+					buildYesNoOptions(), startTime, null);
+
+			UpdatePollTransactionData transactionData = buildUpdatePollTransactionData(repository, alice, pollData.getPollId(),
+					pollData.getPollName(), pollData.getDescription(), buildYesNoOptions(), newStartTime, null);
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+
+			PollData updatedPollData = repository.getVotingRepository().fromPollId(pollData.getPollId());
+			assertEquals(Long.valueOf(newStartTime), updatedPollData.getStartTime());
+
+			BlockUtils.orphanLastBlock(repository);
+			assertEquals(Long.valueOf(startTime), repository.getVotingRepository().fromPollId(pollData.getPollId()).getStartTime());
+		}
+	}
+
+	@Test
+	public void testStartTimeCannotBeUpdatedAfterPollStarts() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			long startTime = repository.getBlockRepository().getLastBlock().getTimestamp() + 1;
+			PollData pollData = createTestPoll(repository, alice, "started-start-time-update-poll", "Original description",
+					buildYesNoOptions(), startTime, null);
+			BlockUtils.mintBlock(repository);
+
+			long newStartTime = repository.getBlockRepository().getLastBlock().getTimestamp() + 600_000L;
+			UpdatePollTransactionData transactionData = buildUpdatePollTransactionData(repository, alice, pollData.getPollId(),
+					pollData.getPollName(), pollData.getDescription(), buildYesNoOptions(), newStartTime, null);
+			UpdatePollTransaction transaction = new UpdatePollTransaction(repository, transactionData);
+			assertEquals(Transaction.ValidationResult.OK, transaction.isValid());
+			assertEquals(Transaction.ValidationResult.INVALID_LIFETIME,
+					transaction.isValidAtTimestamp(repository.getBlockRepository().getLastBlock().getTimestamp()));
 		}
 	}
 
@@ -234,6 +277,11 @@ public class PollUpdateTests extends Common {
 
 	private PollData createTestPoll(Repository repository, TestAccount owner, String pollName, String description,
 			List<PollOptionData> pollOptions, Long endTime) throws DataException {
+		return createTestPoll(repository, owner, pollName, description, pollOptions, null, endTime);
+	}
+
+	private PollData createTestPoll(Repository repository, TestAccount owner, String pollName, String description,
+			List<PollOptionData> pollOptions, Long startTime, Long endTime) throws DataException {
 		PollData pollData = new PollData(
 				owner.getPublicKey(),
 				owner.getAddress(),
@@ -241,6 +289,7 @@ public class PollUpdateTests extends Common {
 				description,
 				pollOptions,
 				System.currentTimeMillis(),
+				startTime,
 				endTime);
 
 		repository.getVotingRepository().save(pollData);
@@ -251,6 +300,11 @@ public class PollUpdateTests extends Common {
 
 	private UpdatePollTransactionData buildUpdatePollTransactionData(Repository repository, PrivateKeyAccount owner, int pollId,
 			String newPollName, String newDescription, List<PollOptionData> newPollOptions, Long newEndTime) throws DataException {
+		return buildUpdatePollTransactionData(repository, owner, pollId, newPollName, newDescription, newPollOptions, null, newEndTime);
+	}
+
+	private UpdatePollTransactionData buildUpdatePollTransactionData(Repository repository, PrivateKeyAccount owner, int pollId,
+			String newPollName, String newDescription, List<PollOptionData> newPollOptions, Long newStartTime, Long newEndTime) throws DataException {
 		long timestamp = TransactionUtils.nextTimestamp(repository);
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				timestamp,
@@ -259,7 +313,7 @@ public class PollUpdateTests extends Common {
 				BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp),
 				null);
 
-		return new UpdatePollTransactionData(baseTransactionData, pollId, newPollName, newDescription, newPollOptions, newEndTime);
+		return new UpdatePollTransactionData(baseTransactionData, pollId, newPollName, newDescription, newPollOptions, newStartTime, newEndTime);
 	}
 
 	private List<PollOptionData> buildYesNoOptions() {

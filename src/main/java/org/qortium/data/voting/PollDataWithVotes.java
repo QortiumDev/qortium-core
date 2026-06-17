@@ -11,6 +11,7 @@ public class PollDataWithVotes {
 	// Properties
 	private PollData pollData;
 	private Integer totalVotes;
+	private Integer totalVoters;
 	private Integer totalWeight;
 	private Integer rawTotalWeight;
 	private Map<String, Integer> voteCountMap;
@@ -25,13 +26,19 @@ public class PollDataWithVotes {
 
 	public PollDataWithVotes(PollData pollData, Integer totalVotes, Integer totalWeight,
 			Map<String, Integer> voteCountMap, Map<String, Integer> voteWeightMap) {
-		this(pollData, totalVotes, totalWeight, totalWeight, voteCountMap, voteWeightMap, voteWeightMap);
+		this(pollData, totalVotes, totalVotes, totalWeight, totalWeight, voteCountMap, voteWeightMap, voteWeightMap);
 	}
 
 	public PollDataWithVotes(PollData pollData, Integer totalVotes, Integer totalWeight, Integer rawTotalWeight,
 			Map<String, Integer> voteCountMap, Map<String, Integer> voteWeightMap, Map<String, Integer> rawVoteWeightMap) {
+		this(pollData, totalVotes, totalVotes, totalWeight, rawTotalWeight, voteCountMap, voteWeightMap, rawVoteWeightMap);
+	}
+
+	public PollDataWithVotes(PollData pollData, Integer totalVotes, Integer totalVoters, Integer totalWeight, Integer rawTotalWeight,
+			Map<String, Integer> voteCountMap, Map<String, Integer> voteWeightMap, Map<String, Integer> rawVoteWeightMap) {
 		this.pollData = pollData;
 		this.totalVotes = totalVotes;
+		this.totalVoters = totalVoters;
 		this.totalWeight = totalWeight;
 		this.rawTotalWeight = rawTotalWeight;
 		this.voteCountMap = voteCountMap;
@@ -55,6 +62,14 @@ public class PollDataWithVotes {
 
 	public void setTotalVotes(Integer totalVotes) {
 		this.totalVotes = totalVotes;
+	}
+
+	public Integer getTotalVoters() {
+		return this.totalVoters;
+	}
+
+	public void setTotalVoters(Integer totalVoters) {
+		this.totalVoters = totalVoters;
 	}
 
 	public Integer getTotalWeight() {

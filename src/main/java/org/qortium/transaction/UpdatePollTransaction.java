@@ -16,6 +16,7 @@ import org.qortium.voting.Poll;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 public class UpdatePollTransaction extends Transaction {
 
@@ -53,6 +54,12 @@ public class UpdatePollTransaction extends Transaction {
 		if (!owner.getAddress().equals(pollData.getOwner()))
 			return ValidationResult.INVALID_POLL_OWNER;
 
+		Long newStartTime = this.updatePollTransactionData.getNewStartTime();
+		if (!Objects.equals(newStartTime, pollData.getStartTime())
+				&& newStartTime != null
+				&& newStartTime <= this.updatePollTransactionData.getTimestamp())
+			return ValidationResult.INVALID_LIFETIME;
+
 		if (owner.getConfirmedBalance(Asset.NATIVE) < this.updatePollTransactionData.getFee())
 			return ValidationResult.NO_BALANCE;
 
@@ -67,6 +74,14 @@ public class UpdatePollTransaction extends Transaction {
 
 		if (pollData.isClosedAt(timestamp))
 			return ValidationResult.POLL_CLOSED;
+
+		Long newStartTime = this.updatePollTransactionData.getNewStartTime();
+		boolean startTimeChanged = !Objects.equals(newStartTime, pollData.getStartTime());
+		if (startTimeChanged && pollData.isStartedAt(timestamp))
+			return ValidationResult.INVALID_LIFETIME;
+
+		if (startTimeChanged && newStartTime != null && newStartTime <= timestamp)
+			return ValidationResult.INVALID_LIFETIME;
 
 		Long newEndTime = this.updatePollTransactionData.getNewEndTime();
 		if (newEndTime != null && newEndTime <= timestamp)
@@ -136,15 +151,16 @@ public class UpdatePollTransaction extends Transaction {
 			return ValidationResult.NAME_NOT_NORMALIZED;
 
 		String newDescription = this.updatePollTransactionData.getNewDescription();
-		if (newDescription == null)
-			return ValidationResult.INVALID_DESCRIPTION_LENGTH;
-
 		int newDescriptionLength = Utf8.encodedLength(newDescription);
-		if (newDescriptionLength < 1 || newDescriptionLength > Poll.MAX_DESCRIPTION_SIZE)
+		if (newDescriptionLength > Poll.MAX_DESCRIPTION_SIZE)
 			return ValidationResult.INVALID_DESCRIPTION_LENGTH;
 
+		Long newStartTime = this.updatePollTransactionData.getNewStartTime();
 		Long newEndTime = this.updatePollTransactionData.getNewEndTime();
 		if (newEndTime != null && newEndTime <= this.updatePollTransactionData.getTimestamp())
+			return ValidationResult.INVALID_LIFETIME;
+
+		if (newStartTime != null && newEndTime != null && newStartTime >= newEndTime)
 			return ValidationResult.INVALID_LIFETIME;
 
 		List<PollOptionData> pollOptions = this.updatePollTransactionData.getNewPollOptions();
@@ -172,6 +188,7 @@ public class UpdatePollTransaction extends Transaction {
 	private boolean pollMetadataMatches(PollData pollData) {
 		return this.updatePollTransactionData.getNewPollName().equals(pollData.getPollName())
 				&& this.updatePollTransactionData.getNewDescription().equals(pollData.getDescription())
+				&& Objects.equals(this.updatePollTransactionData.getNewStartTime(), pollData.getStartTime())
 				&& pollOptionsMatch(this.updatePollTransactionData.getNewPollOptions(), pollData.getPollOptions());
 	}
 

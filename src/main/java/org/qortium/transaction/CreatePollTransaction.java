@@ -58,15 +58,22 @@ public class CreatePollTransaction extends Transaction {
 
 		// Check description size bounds
 		int pollDescriptionLength = Utf8.encodedLength(this.createPollTransactionData.getDescription());
-		if (pollDescriptionLength < 1 || pollDescriptionLength > Poll.MAX_DESCRIPTION_SIZE)
+		if (pollDescriptionLength > Poll.MAX_DESCRIPTION_SIZE)
 			return ValidationResult.INVALID_DESCRIPTION_LENGTH;
 
 		// Check name is in normalized form (no leading/trailing whitespace, etc.)
 		if (!pollName.equals(Unicode.normalize(pollName)))
 			return ValidationResult.NAME_NOT_NORMALIZED;
 
+		Long startTime = this.createPollTransactionData.getStartTime();
+		if (startTime != null && startTime <= this.createPollTransactionData.getTimestamp())
+			return ValidationResult.INVALID_LIFETIME;
+
 		Long endTime = this.createPollTransactionData.getEndTime();
 		if (endTime != null && endTime <= this.createPollTransactionData.getTimestamp())
+			return ValidationResult.INVALID_LIFETIME;
+
+		if (startTime != null && endTime != null && startTime >= endTime)
 			return ValidationResult.INVALID_LIFETIME;
 
 		// Check number of options

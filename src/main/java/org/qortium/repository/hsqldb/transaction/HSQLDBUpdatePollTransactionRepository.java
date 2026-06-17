@@ -20,7 +20,8 @@ public class HSQLDBUpdatePollTransactionRepository extends HSQLDBTransactionRepo
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT poll_id, new_poll_name, new_description, new_end_when, previous_poll_name, previous_description, previous_end_when "
+		String sql = "SELECT poll_id, new_poll_name, new_description, new_start_when, new_end_when, "
+				+ "previous_poll_name, previous_description, previous_start_when, previous_end_when "
 				+ "FROM UpdatePollTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
@@ -30,17 +31,19 @@ public class HSQLDBUpdatePollTransactionRepository extends HSQLDBTransactionRepo
 			int pollId = resultSet.getInt(1);
 			String newPollName = resultSet.getString(2);
 			String newDescription = resultSet.getString(3);
-			Long newEndTime = getNullableLong(resultSet, 4);
-			String previousPollName = resultSet.getString(5);
-			String previousDescription = resultSet.getString(6);
-			Long previousEndTime = getNullableLong(resultSet, 7);
+			Long newStartTime = getNullableLong(resultSet, 4);
+			Long newEndTime = getNullableLong(resultSet, 5);
+			String previousPollName = resultSet.getString(6);
+			String previousDescription = resultSet.getString(7);
+			Long previousStartTime = getNullableLong(resultSet, 8);
+			Long previousEndTime = getNullableLong(resultSet, 9);
 
 			List<PollOptionData> newPollOptions = getOptions("UpdatePollTransactionOptions", baseTransactionData.getSignature());
 			List<PollOptionData> previousPollOptions = previousPollName == null ? null
 					: getOptions("UpdatePollTransactionPreviousOptions", baseTransactionData.getSignature());
 
-			return new UpdatePollTransactionData(baseTransactionData, pollId, newPollName, newDescription, newPollOptions, newEndTime,
-					previousPollName, previousDescription, previousPollOptions, previousEndTime);
+			return new UpdatePollTransactionData(baseTransactionData, pollId, newPollName, newDescription, newPollOptions,
+					newStartTime, newEndTime, previousPollName, previousDescription, previousPollOptions, previousStartTime, previousEndTime);
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch update poll transaction from repository", e);
 		}
@@ -57,9 +60,11 @@ public class HSQLDBUpdatePollTransactionRepository extends HSQLDBTransactionRepo
 				.bind("poll_id", updatePollTransactionData.getPollId())
 				.bind("new_poll_name", updatePollTransactionData.getNewPollName())
 				.bind("new_description", updatePollTransactionData.getNewDescription())
+				.bind("new_start_when", updatePollTransactionData.getNewStartTime())
 				.bind("new_end_when", updatePollTransactionData.getNewEndTime())
 				.bind("previous_poll_name", updatePollTransactionData.getPreviousPollName())
 				.bind("previous_description", updatePollTransactionData.getPreviousDescription())
+				.bind("previous_start_when", updatePollTransactionData.getPreviousStartTime())
 				.bind("previous_end_when", updatePollTransactionData.getPreviousEndTime());
 
 		try {

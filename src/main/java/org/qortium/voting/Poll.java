@@ -20,7 +20,7 @@ public class Poll {
 	public static final int MIN_NAME_SIZE = 3;
 	public static final int MAX_NAME_SIZE = 400;
 	public static final int MAX_DESCRIPTION_SIZE = 4000;
-	public static final int MAX_OPTIONS = 100;
+	public static final int MAX_OPTIONS = 1000;
 	public static final int NO_VOTE_OPTION_INDEX = 0;
 
 	// Constructors
@@ -46,7 +46,7 @@ public class Poll {
 		this.repository = repository;
 		this.pollData = new PollData(createPollTransactionData.getCreatorPublicKey(), createPollTransactionData.getOwner(),
 				createPollTransactionData.getPollName(), createPollTransactionData.getDescription(), createPollTransactionData.getPollOptions(),
-				createPollTransactionData.getTimestamp(), createPollTransactionData.getEndTime());
+				createPollTransactionData.getTimestamp(), createPollTransactionData.getStartTime(), createPollTransactionData.getEndTime());
 	}
 
 	/**
@@ -105,6 +105,7 @@ public class Poll {
 		this.pollData.setPollName(updatePollTransactionData.getNewPollName());
 		this.pollData.setDescription(updatePollTransactionData.getNewDescription());
 		this.pollData.setPollOptions(copyPollOptions(updatePollTransactionData.getNewPollOptions()));
+		this.pollData.setStartTime(updatePollTransactionData.getNewStartTime());
 		this.pollData.setEndTime(updatePollTransactionData.getNewEndTime());
 
 		this.repository.getVotingRepository().save(this.pollData);
@@ -117,6 +118,7 @@ public class Poll {
 		this.pollData.setPollName(updatePollTransactionData.getPreviousPollName());
 		this.pollData.setDescription(updatePollTransactionData.getPreviousDescription());
 		this.pollData.setPollOptions(copyPollOptions(updatePollTransactionData.getPreviousPollOptions()));
+		this.pollData.setStartTime(updatePollTransactionData.getPreviousStartTime());
 		this.pollData.setEndTime(updatePollTransactionData.getPreviousEndTime());
 
 		this.repository.getVotingRepository().save(this.pollData);
@@ -126,7 +128,8 @@ public class Poll {
 
 	private static PollData copyPollData(PollData pollData) {
 		return new PollData(pollData.getPollId(), pollData.getCreatorPublicKey(), pollData.getOwner(), pollData.getPollName(),
-				pollData.getDescription(), copyPollOptions(pollData.getPollOptions()), pollData.getPublished(), pollData.getEndTime());
+				pollData.getDescription(), copyPollOptions(pollData.getPollOptions()), pollData.getPublished(),
+				pollData.getStartTime(), pollData.getEndTime());
 	}
 
 	private static List<PollOptionData> copyPollOptions(List<PollOptionData> pollOptions) {

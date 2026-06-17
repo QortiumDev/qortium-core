@@ -33,6 +33,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
 public class PollVoteRemovalTests extends ApiCommon {
@@ -42,6 +43,48 @@ public class PollVoteRemovalTests extends ApiCommon {
 	@Before
 	public void buildResource() throws DataException {
 		this.pollsResource = (PollsResource) ApiCommon.buildResource(PollsResource.class);
+	}
+
+	@Test
+	public void testMultiOptionVoteValidationProcessAndOrphan() throws DataException, TransformationException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TestAccount alice = Common.getTestAccount(repository, "alice");
+			TestAccount bob = Common.getTestAccount(repository, "bob");
+			String pollName = "multi-option-vote";
+			createTestPoll(repository, alice, pollName, null);
+
+			assertEquals(Transaction.ValidationResult.OK,
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, List.of(1, 2))).isValid());
+			assertEquals(Transaction.ValidationResult.POLL_OPTION_DOES_NOT_EXIST,
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, List.of(1, 1))).isValid());
+			assertEquals(Transaction.ValidationResult.POLL_OPTION_DOES_NOT_EXIST,
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, List.of(0, 2))).isValid());
+			assertEquals(Transaction.ValidationResult.POLL_OPTION_DOES_NOT_EXIST,
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, List.of(1, 3))).isValid());
+
+			VoteOnPollTransactionData multiVoteData = voteData(repository, bob, pollName, List.of(1, 2));
+			new VoteOnPollTransaction(repository, multiVoteData).sign(bob);
+			byte[] multiVoteBytes = TransactionTransformer.toBytes(multiVoteData);
+			VoteOnPollTransactionData deserializedMultiVoteData = (VoteOnPollTransactionData) TransactionTransformer.fromBytes(multiVoteBytes);
+			assertEquals(List.of(1, 2), deserializedMultiVoteData.getSelectedOptionIndexes());
+			assertArrayEquals(multiVoteBytes, TransactionTransformer.toBytes(deserializedMultiVoteData));
+
+			TransactionUtils.signAndMint(repository, multiVoteData, bob);
+			VoteOnPollData storedVote = repository.getVotingRepository().getVote(pollName, bob.getPublicKey());
+			assertNotNull(storedVote);
+			assertEquals(List.of(1, 2), storedVote.getOptionIndexes());
+			assertEquals(Transaction.ValidationResult.ALREADY_VOTED_FOR_THAT_OPTION,
+					new VoteOnPollTransaction(repository, voteData(repository, bob, pollName, List.of(2, 1))).isValid());
+
+			TransactionUtils.signAndMint(repository, voteData(repository, bob, pollName, List.of(2)), bob);
+			assertEquals(List.of(2), repository.getVotingRepository().getVote(pollName, bob.getPublicKey()).getOptionIndexes());
+
+			BlockUtils.orphanLastBlock(repository);
+			assertEquals(List.of(1, 2), repository.getVotingRepository().getVote(pollName, bob.getPublicKey()).getOptionIndexes());
+
+			TransactionUtils.signAndMint(repository, voteData(repository, bob, pollName, List.of()), bob);
+			assertNull(repository.getVotingRepository().getVote(pollName, bob.getPublicKey()));
+		}
 	}
 
 	@Test
@@ -159,6 +202,10 @@ public class PollVoteRemovalTests extends ApiCommon {
 	}
 
 	private VoteOnPollTransactionData voteData(Repository repository, PrivateKeyAccount voter, String pollName, int optionIndex) throws DataException {
+		return voteData(repository, voter, pollName, List.of(optionIndex));
+	}
+
+	private VoteOnPollTransactionData voteData(Repository repository, PrivateKeyAccount voter, String pollName, List<Integer> optionIndexes) throws DataException {
 		long timestamp = System.currentTimeMillis();
 		BaseTransactionData baseTransactionData = new BaseTransactionData(
 				timestamp,
@@ -167,7 +214,7 @@ public class PollVoteRemovalTests extends ApiCommon {
 				BlockChain.getInstance().getUnitFeeAtTimestamp(timestamp),
 				null);
 
-		return new VoteOnPollTransactionData(baseTransactionData, pollId(repository, pollName), optionIndex);
+		return new VoteOnPollTransactionData(baseTransactionData, pollId(repository, pollName), optionIndexes);
 	}
 
 	private int pollId(Repository repository, String pollName) throws DataException {

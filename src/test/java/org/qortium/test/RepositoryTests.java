@@ -125,6 +125,17 @@ public class RepositoryTests extends Common {
 				assertTrue(resultSet.next());
 			}
 
+			assertColumnSize(connection, "POLLS", "POLL_NAME", 400);
+			assertColumnSize(connection, "POLLOPTIONS", "OPTION_NAME", 400);
+			assertColumnExists(connection, "POLLS", "START_WHEN");
+			assertColumnExists(connection, "CREATEPOLLTRANSACTIONS", "START_WHEN");
+			assertColumnExists(connection, "UPDATEPOLLTRANSACTIONS", "NEW_START_WHEN");
+			assertColumnExists(connection, "UPDATEPOLLTRANSACTIONS", "PREVIOUS_START_WHEN");
+
+			try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", "VOTEONPOLLTRANSACTIONOPTIONS", null)) {
+				assertTrue(resultSet.next());
+			}
+
 			try (Statement statement = connection.createStatement()) {
 				statement.execute("SHUTDOWN");
 			}
@@ -132,23 +143,95 @@ public class RepositoryTests extends Common {
 	}
 
 	@Test
-	public void testVersionTwoRepositorySchemaVersionIsUnsupported() throws Exception {
-		String connectionUrl = "jdbc:hsqldb:mem:unsupported-version-two-schema-" + System.nanoTime();
+	public void testVersionThreeRepositorySchemaVersionIsUnsupported() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:unsupported-version-three-schema-" + System.nanoTime();
 
 		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
 			connection.setAutoCommit(false);
 
 			try (Statement statement = connection.createStatement()) {
 				statement.execute("CREATE TABLE DatabaseInfo (version INTEGER NOT NULL)");
-				statement.execute("INSERT INTO DatabaseInfo VALUES (2)");
+				statement.execute("INSERT INTO DatabaseInfo VALUES (3)");
 			}
 			connection.commit();
 
 			try {
 				HSQLDBDatabaseUpdates.updateDatabase(connection);
-				fail("Schema version 2 should not be treated as the Qortium baseline");
+				fail("Schema version 3 should not be treated as the Qortium baseline");
 			} catch (SQLException e) {
-				assertTrue(e.getMessage().contains("Unsupported HSQLDB repository schema version 2"));
+				assertTrue(e.getMessage().contains("Unsupported HSQLDB repository schema version 3"));
+			}
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("SHUTDOWN");
+			}
+		}
+	}
+
+	@Test
+	public void testQortiumVersionOneRepositoryUpgradesToVersionTwo() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:qortium-v1-schema-upgrade-" + System.nanoTime();
+
+		byte[] signature = new byte[] {1, 2, 3};
+		byte[] voter = new byte[] {4, 5, 6};
+
+		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
+			connection.setAutoCommit(false);
+			createMinimalVersionOnePollSchema(connection);
+
+			try (PreparedStatement preparedStatement = connection.prepareStatement(
+					"INSERT INTO VoteOnPollTransactions(signature, option_index, previous_option_index) VALUES (?, ?, ?)")) {
+				preparedStatement.setBytes(1, signature);
+				preparedStatement.setInt(2, 2);
+				preparedStatement.setInt(3, 1);
+				preparedStatement.executeUpdate();
+			}
+
+			try (PreparedStatement preparedStatement = connection.prepareStatement(
+					"INSERT INTO PollVotes(poll_id, voter, option_index) VALUES (?, ?, ?)")) {
+				preparedStatement.setInt(1, 1);
+				preparedStatement.setBytes(2, voter);
+				preparedStatement.setInt(3, 1);
+				preparedStatement.executeUpdate();
+			}
+			connection.commit();
+
+			assertFalse(HSQLDBDatabaseUpdates.updateDatabase(connection));
+			assertEquals(HSQLDBDatabaseUpdates.CURRENT_SCHEMA_VERSION, HSQLDBDatabaseUpdates.fetchDatabaseVersion(connection));
+
+			assertColumnSize(connection, "POLLS", "POLL_NAME", 400);
+			assertColumnSize(connection, "POLLOPTIONS", "OPTION_NAME", 400);
+			assertColumnExists(connection, "POLLS", "START_WHEN");
+			assertColumnExists(connection, "CREATEPOLLTRANSACTIONS", "START_WHEN");
+			assertColumnExists(connection, "UPDATEPOLLTRANSACTIONS", "NEW_START_WHEN");
+			assertColumnExists(connection, "UPDATEPOLLTRANSACTIONS", "PREVIOUS_START_WHEN");
+
+			try (PreparedStatement preparedStatement = connection.prepareStatement(
+					"SELECT option_index FROM VoteOnPollTransactionOptions WHERE signature = ?")) {
+				preparedStatement.setBytes(1, signature);
+				try (ResultSet resultSet = preparedStatement.executeQuery()) {
+					assertTrue(resultSet.next());
+					assertEquals(2, resultSet.getInt(1));
+					assertFalse(resultSet.next());
+				}
+			}
+
+			try (PreparedStatement preparedStatement = connection.prepareStatement(
+					"SELECT option_index FROM VoteOnPollTransactionPreviousOptions WHERE signature = ?")) {
+				preparedStatement.setBytes(1, signature);
+				try (ResultSet resultSet = preparedStatement.executeQuery()) {
+					assertTrue(resultSet.next());
+					assertEquals(1, resultSet.getInt(1));
+					assertFalse(resultSet.next());
+				}
+			}
+
+			try (PreparedStatement preparedStatement = connection.prepareStatement(
+					"INSERT INTO PollVotes(poll_id, voter, option_index) VALUES (?, ?, ?)")) {
+				preparedStatement.setInt(1, 1);
+				preparedStatement.setBytes(2, voter);
+				preparedStatement.setInt(3, 2);
+				preparedStatement.executeUpdate();
 			}
 
 			try (Statement statement = connection.createStatement()) {
@@ -180,6 +263,39 @@ public class RepositoryTests extends Common {
 			try (Statement statement = connection.createStatement()) {
 				statement.execute("SHUTDOWN");
 			}
+		}
+	}
+
+	private static void createMinimalVersionOnePollSchema(Connection connection) throws SQLException {
+		try (Statement statement = connection.createStatement()) {
+			statement.execute("CREATE TYPE PUBLIC.EPOCHMILLIS AS BIGINT");
+			statement.execute("CREATE TYPE PUBLIC.SIGNATURE AS VARBINARY(64)");
+			statement.execute("CREATE TABLE PUBLIC.DATABASEINFO(VERSION INTEGER NOT NULL)");
+			statement.execute("INSERT INTO PUBLIC.DATABASEINFO VALUES(1)");
+			statement.execute("CREATE TABLE PUBLIC.CREATEPOLLTRANSACTIONS(SIGNATURE VARBINARY(64) PRIMARY KEY,POLL_NAME VARCHAR(128))");
+			statement.execute("CREATE TABLE PUBLIC.CREATEPOLLTRANSACTIONOPTIONS(SIGNATURE VARBINARY(64),OPTION_INDEX TINYINT,OPTION_NAME VARCHAR(80))");
+			statement.execute("CREATE TABLE PUBLIC.POLLS(POLL_ID INTEGER NOT NULL PRIMARY KEY,POLL_NAME VARCHAR(128),REDUCED_POLL_NAME VARCHAR(128))");
+			statement.execute("CREATE TABLE PUBLIC.POLLOPTIONS(POLL_ID INTEGER NOT NULL,OPTION_INDEX TINYINT,OPTION_NAME VARCHAR(80))");
+			statement.execute("CREATE TABLE PUBLIC.POLLVOTES(POLL_ID INTEGER NOT NULL,VOTER VARBINARY(32),OPTION_INDEX TINYINT NOT NULL,PRIMARY KEY(POLL_ID,VOTER))");
+			statement.execute("CREATE TABLE PUBLIC.POLLFROZENRESULTS(POLL_ID INTEGER NOT NULL,OPTION_INDEX TINYINT)");
+			statement.execute("CREATE TABLE PUBLIC.POLLFROZENVOTEDETAILS(POLL_ID INTEGER NOT NULL,VOTER VARBINARY(32),OPTION_INDEX TINYINT NOT NULL,PRIMARY KEY(POLL_ID,VOTER))");
+			statement.execute("CREATE TABLE PUBLIC.UPDATEPOLLTRANSACTIONS(SIGNATURE VARBINARY(64) PRIMARY KEY,NEW_POLL_NAME VARCHAR(128),PREVIOUS_POLL_NAME VARCHAR(128))");
+			statement.execute("CREATE TABLE PUBLIC.UPDATEPOLLTRANSACTIONOPTIONS(SIGNATURE VARBINARY(64),OPTION_INDEX TINYINT,OPTION_NAME VARCHAR(80))");
+			statement.execute("CREATE TABLE PUBLIC.UPDATEPOLLTRANSACTIONPREVIOUSOPTIONS(SIGNATURE VARBINARY(64),OPTION_INDEX TINYINT,OPTION_NAME VARCHAR(80))");
+			statement.execute("CREATE TABLE PUBLIC.VOTEONPOLLTRANSACTIONS(SIGNATURE VARBINARY(64) PRIMARY KEY,OPTION_INDEX TINYINT NOT NULL,PREVIOUS_OPTION_INDEX TINYINT)");
+		}
+	}
+
+	private static void assertColumnExists(Connection connection, String tableName, String columnName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getColumns(null, "PUBLIC", tableName, columnName)) {
+			assertTrue(String.format("Column %s.%s should exist", tableName, columnName), resultSet.next());
+		}
+	}
+
+	private static void assertColumnSize(Connection connection, String tableName, String columnName, int expectedSize) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getColumns(null, "PUBLIC", tableName, columnName)) {
+			assertTrue(String.format("Column %s.%s should exist", tableName, columnName), resultSet.next());
+			assertEquals(expectedSize, resultSet.getInt("COLUMN_SIZE"));
 		}
 	}
 

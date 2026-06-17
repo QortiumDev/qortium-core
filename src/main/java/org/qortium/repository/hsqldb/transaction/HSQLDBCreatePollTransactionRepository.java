@@ -20,7 +20,7 @@ public class HSQLDBCreatePollTransactionRepository extends HSQLDBTransactionRepo
 	}
 
 	TransactionData fromBase(BaseTransactionData baseTransactionData) throws DataException {
-		String sql = "SELECT owner, poll_name, description, end_when, poll_id FROM CreatePollTransactions WHERE signature = ?";
+		String sql = "SELECT owner, poll_name, description, start_when, end_when, poll_id FROM CreatePollTransactions WHERE signature = ?";
 
 		try (ResultSet resultSet = this.repository.checkedExecute(sql, baseTransactionData.getSignature())) {
 			if (resultSet == null)
@@ -29,10 +29,9 @@ public class HSQLDBCreatePollTransactionRepository extends HSQLDBTransactionRepo
 			String owner = resultSet.getString(1);
 			String pollName = resultSet.getString(2);
 			String description = resultSet.getString(3);
-			Long endTime = resultSet.getLong(4);
-			if (endTime == 0 && resultSet.wasNull())
-				endTime = null;
-			Integer pollId = resultSet.getInt(5);
+			Long startTime = getNullableLong(resultSet, 4);
+			Long endTime = getNullableLong(resultSet, 5);
+			Integer pollId = resultSet.getInt(6);
 			if (pollId == 0 && resultSet.wasNull())
 				pollId = null;
 
@@ -51,7 +50,7 @@ public class HSQLDBCreatePollTransactionRepository extends HSQLDBTransactionRepo
 					pollOptions.add(new PollOptionData(optionName));
 				} while (optionsResultSet.next());
 
-				return new CreatePollTransactionData(baseTransactionData, owner, pollName, description, pollOptions, endTime, pollId);
+				return new CreatePollTransactionData(baseTransactionData, owner, pollName, description, pollOptions, startTime, endTime, pollId);
 			}
 		} catch (SQLException e) {
 			throw new DataException("Unable to fetch create poll transaction from repository", e);
@@ -66,7 +65,8 @@ public class HSQLDBCreatePollTransactionRepository extends HSQLDBTransactionRepo
 
 		saveHelper.bind("signature", createPollTransactionData.getSignature()).bind("creator", createPollTransactionData.getCreatorPublicKey())
 				.bind("owner", createPollTransactionData.getOwner()).bind("poll_name", createPollTransactionData.getPollName())
-				.bind("description", createPollTransactionData.getDescription()).bind("end_when", createPollTransactionData.getEndTime())
+				.bind("description", createPollTransactionData.getDescription()).bind("start_when", createPollTransactionData.getStartTime())
+				.bind("end_when", createPollTransactionData.getEndTime())
 				.bind("poll_id", createPollTransactionData.getPollId());
 
 		try {
@@ -91,6 +91,11 @@ public class HSQLDBCreatePollTransactionRepository extends HSQLDBTransactionRepo
 				throw new DataException("Unable to save create poll transaction option into repository", e);
 			}
 		}
+	}
+
+	private static Long getNullableLong(ResultSet resultSet, int columnIndex) throws SQLException {
+		long value = resultSet.getLong(columnIndex);
+		return resultSet.wasNull() ? null : value;
 	}
 
 }

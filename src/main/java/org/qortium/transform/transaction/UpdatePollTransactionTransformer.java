@@ -24,6 +24,9 @@ public class UpdatePollTransactionTransformer extends TransactionTransformer {
 	private static final int NAME_SIZE_LENGTH = INT_LENGTH;
 	private static final int DESCRIPTION_SIZE_LENGTH = INT_LENGTH;
 	private static final int OPTIONS_SIZE_LENGTH = INT_LENGTH;
+	private static final int TIME_FLAGS_LENGTH = BYTE_LENGTH;
+	private static final int START_TIME_FLAG = 1;
+	private static final int END_TIME_FLAG = 2;
 
 	private static final int EXTRAS_LENGTH = POLL_ID_LENGTH + NAME_SIZE_LENGTH + DESCRIPTION_SIZE_LENGTH + OPTIONS_SIZE_LENGTH;
 	private static final int TRAILING_LENGTH = FEE_LENGTH + SIGNATURE_LENGTH;
@@ -45,7 +48,7 @@ public class UpdatePollTransactionTransformer extends TransactionTransformer {
 		layout.add("number of new options", TransformationType.INT);
 		layout.add("* poll option length", TransformationType.INT);
 		layout.add("* poll option", TransformationType.STRING);
-		layout.add("poll end time (optional)", TransformationType.LONG);
+		layout.add("poll start/end time flags plus optional times", TransformationType.BYTE);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
 	}
@@ -70,9 +73,32 @@ public class UpdatePollTransactionTransformer extends TransactionTransformer {
 		for (int optionIndex = 0; optionIndex < optionsCount; ++optionIndex)
 			newPollOptions.add(new PollOptionData(Serialization.deserializeSizedString(byteBuffer, Poll.MAX_NAME_SIZE)));
 
+		Long newStartTime = null;
 		Long newEndTime = null;
-		if (byteBuffer.remaining() > TRAILING_LENGTH)
+		int extraBytes = byteBuffer.remaining() - TRAILING_LENGTH;
+		if (extraBytes == LONG_LENGTH) {
 			newEndTime = byteBuffer.getLong();
+		} else if (extraBytes > 0) {
+			byte timeFlags = byteBuffer.get();
+			extraBytes -= TIME_FLAGS_LENGTH;
+
+			if ((timeFlags & START_TIME_FLAG) != 0) {
+				if (extraBytes < LONG_LENGTH)
+					throw new TransformationException("Missing start time for UpdatePollTransaction");
+				newStartTime = byteBuffer.getLong();
+				extraBytes -= LONG_LENGTH;
+			}
+
+			if ((timeFlags & END_TIME_FLAG) != 0) {
+				if (extraBytes < LONG_LENGTH)
+					throw new TransformationException("Missing end time for UpdatePollTransaction");
+				newEndTime = byteBuffer.getLong();
+				extraBytes -= LONG_LENGTH;
+			}
+
+			if (extraBytes != 0)
+				throw new TransformationException("Unexpected poll time bytes for UpdatePollTransaction");
+		}
 
 		long fee = byteBuffer.getLong();
 
@@ -81,7 +107,7 @@ public class UpdatePollTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, ownerPublicKey, fee, nonce, signature);
 
-		return new UpdatePollTransactionData(baseTransactionData, pollId, newPollName, newDescription, newPollOptions, newEndTime);
+		return new UpdatePollTransactionData(baseTransactionData, pollId, newPollName, newDescription, newPollOptions, newStartTime, newEndTime);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
@@ -94,7 +120,9 @@ public class UpdatePollTransactionTransformer extends TransactionTransformer {
 		for (PollOptionData pollOptionData : updatePollTransactionData.getNewPollOptions())
 			dataLength += INT_LENGTH + Utf8.encodedLength(pollOptionData.getOptionName());
 
-		if (updatePollTransactionData.getNewEndTime() != null)
+		if (updatePollTransactionData.getNewStartTime() != null)
+			dataLength += TIME_FLAGS_LENGTH + LONG_LENGTH + (updatePollTransactionData.getNewEndTime() == null ? 0 : LONG_LENGTH);
+		else if (updatePollTransactionData.getNewEndTime() != null)
 			dataLength += LONG_LENGTH;
 
 		return dataLength;
@@ -117,8 +145,17 @@ public class UpdatePollTransactionTransformer extends TransactionTransformer {
 			for (PollOptionData pollOptionData : newPollOptions)
 				Serialization.serializeSizedString(bytes, pollOptionData.getOptionName());
 
-			if (updatePollTransactionData.getNewEndTime() != null)
+			Long newStartTime = updatePollTransactionData.getNewStartTime();
+			Long newEndTime = updatePollTransactionData.getNewEndTime();
+			if (newStartTime != null) {
+				int timeFlags = START_TIME_FLAG | (newEndTime == null ? 0 : END_TIME_FLAG);
+				bytes.write(timeFlags);
+				bytes.write(Longs.toByteArray(newStartTime));
+				if (newEndTime != null)
+					bytes.write(Longs.toByteArray(newEndTime));
+			} else if (newEndTime != null) {
 				bytes.write(Longs.toByteArray(updatePollTransactionData.getNewEndTime()));
+			}
 
 			bytes.write(Longs.toByteArray(updatePollTransactionData.getFee()));
 

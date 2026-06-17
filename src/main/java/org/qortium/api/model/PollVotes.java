@@ -20,6 +20,9 @@ public class PollVotes {
     @Schema(description = "Total number of votes")
     public Integer totalVotes;
 
+    @Schema(description = "Total number of unique voters")
+    public Integer totalVoters;
+
     @Schema(description = "Total effective vote weight after trust-tier multipliers")
     public Integer totalWeight;
 
@@ -40,13 +43,19 @@ public class PollVotes {
     }
 
     public PollVotes(List<VoteOnPollData> votes, Integer totalVotes, Integer totalWeight, List<OptionCount> voteCounts, List<OptionWeight> voteWeights) {
-        this(votes, totalVotes, totalWeight, totalWeight, voteCounts, voteWeights, null);
+        this(votes, totalVotes, totalVotes, totalWeight, totalWeight, voteCounts, voteWeights, null);
     }
 
     public PollVotes(List<VoteOnPollData> votes, Integer totalVotes, Integer totalWeight, Integer rawTotalWeight,
                      List<OptionCount> voteCounts, List<OptionWeight> voteWeights, List<VoteDetail> voteDetails) {
+        this(votes, totalVotes, totalVotes, totalWeight, rawTotalWeight, voteCounts, voteWeights, voteDetails);
+    }
+
+    public PollVotes(List<VoteOnPollData> votes, Integer totalVotes, Integer totalVoters, Integer totalWeight, Integer rawTotalWeight,
+                     List<OptionCount> voteCounts, List<OptionWeight> voteWeights, List<VoteDetail> voteDetails) {
         this.votes = votes;
         this.totalVotes = totalVotes;
+        this.totalVoters = totalVoters;
         this.totalWeight = totalWeight;
         this.rawTotalWeight = rawTotalWeight;
         this.voteCounts = voteCounts;
@@ -111,6 +120,9 @@ public class PollVotes {
         @Schema(description = "Selected option index")
         public Integer optionIndex;
 
+        @Schema(description = "Selected option indexes")
+        public List<Integer> optionIndexes;
+
         @Schema(description = "Raw blocksMinted vote weight before trust-tier multipliers")
         public Integer rawVoteWeight;
 
@@ -138,15 +150,23 @@ public class PollVotes {
 
         public VoteDetail(String voterAddress, Integer optionIndex, Integer rawVoteWeight, String trustStatus,
                           Integer trustStatusValue, Integer trustWeightPercent, Integer effectiveVoteWeight) {
-            this(voterAddress, optionIndex, rawVoteWeight, trustStatus, trustStatusValue, trustWeightPercent,
+            this(voterAddress, optionIndex == null ? null : List.of(optionIndex), rawVoteWeight, trustStatus, trustStatusValue, trustWeightPercent,
                     effectiveVoteWeight, null, null);
         }
 
         public VoteDetail(String voterAddress, Integer optionIndex, Integer rawVoteWeight, String trustStatus,
                           Integer trustStatusValue, Integer trustWeightPercent, Integer effectiveVoteWeight,
                           Integer trustSnapshotHeight, Long trustSnapshotTimestamp) {
+            this(voterAddress, optionIndex == null ? null : List.of(optionIndex), rawVoteWeight, trustStatus, trustStatusValue,
+                    trustWeightPercent, effectiveVoteWeight, trustSnapshotHeight, trustSnapshotTimestamp);
+        }
+
+        public VoteDetail(String voterAddress, List<Integer> optionIndexes, Integer rawVoteWeight, String trustStatus,
+                          Integer trustStatusValue, Integer trustWeightPercent, Integer effectiveVoteWeight,
+                          Integer trustSnapshotHeight, Long trustSnapshotTimestamp) {
             this.voterAddress = voterAddress;
-            this.optionIndex = optionIndex;
+            this.optionIndexes = optionIndexes;
+            this.optionIndex = optionIndexes == null || optionIndexes.isEmpty() ? null : optionIndexes.get(0);
             this.rawVoteWeight = rawVoteWeight;
             this.trustStatus = trustStatus;
             this.trustStatusValue = trustStatusValue;

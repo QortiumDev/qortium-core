@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - polls: add scheduled starts and multi-option voting
+
+Upgrades poll creation, editing, voting, storage, and results so polls are more flexible while keeping existing single-option clients working. Poll names and option names now have matching 400-byte validation and database storage, poll descriptions can be omitted and are stored as empty text, and polls may carry an optional `startTime`; scheduled polls cannot be voted on before that time, and the start time can only be changed before the poll has started. The allowed option count rises from 100 to 1000.
+
+Voting now supports selecting multiple options in one transaction through `optionIndexes`, while the legacy `optionIndex` field still works for single-choice votes and `0` still clears a vote. Each submitted vote replaces the voter's full active selection set, duplicate or mixed clear/real selections are rejected, and orphaning restores the previous selection set. Poll result APIs continue to report option-level counts and trust-weighted totals, now with `totalVoters` so multi-select polls can distinguish unique voters from total selected-option votes. The HSQLDB schema is bumped to version 2 with a v1 upgrade path that widens poll storage, adds start-time columns, and expands vote storage to one row per selected option.
+
 ### 2026-06-17 - lists: add "!" negation exceptions to QDN lists and make canStoreData block-first
 
 Builds on the four-list rework. The `followedQdn` and `blockedQdn` wildcard lists now support

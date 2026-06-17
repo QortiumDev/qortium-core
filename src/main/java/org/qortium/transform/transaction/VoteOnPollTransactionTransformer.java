@@ -13,12 +13,15 @@ import org.qortium.voting.Poll;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 
 	// Property lengths
 	private static final int POLL_ID_LENGTH = INT_LENGTH;
 	private static final int POLL_OPTION_LENGTH = INT_LENGTH;
+	private static final int TRAILING_LENGTH = FEE_LENGTH + SIGNATURE_LENGTH;
 
 	private static final int EXTRAS_LENGTH = POLL_ID_LENGTH + POLL_OPTION_LENGTH;
 
@@ -32,7 +35,7 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 		layout.add("voter's public key", TransformationType.PUBLIC_KEY);
 		addMempowFeeNonceToLayout(layout, TransactionType.VOTE_ON_POLL);
 		layout.add("poll ID", TransformationType.INT);
-		layout.add("poll option index (0 removes vote, 1+ selects option)", TransformationType.INT);
+		layout.add("poll option index or option-index count followed by indexes", TransformationType.INT);
 		layout.add("fee", TransformationType.AMOUNT);
 		layout.add("signature", TransformationType.SIGNATURE);
 	}
@@ -47,9 +50,34 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 
 		int pollId = byteBuffer.getInt();
 
-		int optionIndex = byteBuffer.getInt();
-		if (optionIndex < Poll.NO_VOTE_OPTION_INDEX || optionIndex > Poll.MAX_OPTIONS)
-			throw new TransformationException("Invalid option number for VoteOnPollTransaction");
+		int optionBytesLength = byteBuffer.remaining() - TRAILING_LENGTH;
+		if (optionBytesLength < INT_LENGTH || optionBytesLength % INT_LENGTH != 0)
+			throw new TransformationException("Invalid option bytes for VoteOnPollTransaction");
+
+		int firstOptionValue = byteBuffer.getInt();
+		List<Integer> optionIndexes = new ArrayList<>();
+		if (optionBytesLength == INT_LENGTH) {
+			if (firstOptionValue < Poll.NO_VOTE_OPTION_INDEX || firstOptionValue > Poll.MAX_OPTIONS)
+				throw new TransformationException("Invalid option number for VoteOnPollTransaction");
+
+			if (firstOptionValue != Poll.NO_VOTE_OPTION_INDEX)
+				optionIndexes.add(firstOptionValue);
+		} else {
+			int optionsCount = firstOptionValue;
+			if (optionsCount < 2 || optionsCount > Poll.MAX_OPTIONS)
+				throw new TransformationException("Invalid number of options for VoteOnPollTransaction");
+
+			if (optionBytesLength != INT_LENGTH + optionsCount * INT_LENGTH)
+				throw new TransformationException("Invalid option count for VoteOnPollTransaction");
+
+			for (int i = 0; i < optionsCount; ++i) {
+				int optionIndex = byteBuffer.getInt();
+				if (optionIndex <= Poll.NO_VOTE_OPTION_INDEX || optionIndex > Poll.MAX_OPTIONS)
+					throw new TransformationException("Invalid option number for VoteOnPollTransaction");
+
+				optionIndexes.add(optionIndex);
+			}
+		}
 
 		long fee = byteBuffer.getLong();
 
@@ -58,11 +86,17 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 
 		BaseTransactionData baseTransactionData = new BaseTransactionData(timestamp, txGroupId, voterPublicKey, fee, nonce, signature);
 
-		return new VoteOnPollTransactionData(baseTransactionData, pollId, optionIndex);
+		return new VoteOnPollTransactionData(baseTransactionData, pollId, optionIndexes);
 	}
 
 	public static int getDataLength(TransactionData transactionData) throws TransformationException {
-		return getBaseLength(transactionData) + EXTRAS_LENGTH;
+		VoteOnPollTransactionData voteOnPollTransactionData = (VoteOnPollTransactionData) transactionData;
+		int selectionsCount = voteOnPollTransactionData.getSelectedOptionIndexes().size();
+
+		if (selectionsCount <= 1)
+			return getBaseLength(transactionData) + EXTRAS_LENGTH;
+
+		return getBaseLength(transactionData) + POLL_ID_LENGTH + POLL_OPTION_LENGTH + selectionsCount * INT_LENGTH;
 	}
 
 	public static byte[] toBytes(TransactionData transactionData) throws TransformationException {
@@ -75,7 +109,14 @@ public class VoteOnPollTransactionTransformer extends TransactionTransformer {
 
 			bytes.write(Ints.toByteArray(voteOnPollTransactionData.getPollId()));
 
-			bytes.write(Ints.toByteArray(voteOnPollTransactionData.getOptionIndex()));
+			List<Integer> optionIndexes = voteOnPollTransactionData.getSelectedOptionIndexes();
+			if (optionIndexes.size() <= 1) {
+				bytes.write(Ints.toByteArray(voteOnPollTransactionData.getOptionIndex()));
+			} else {
+				bytes.write(Ints.toByteArray(optionIndexes.size()));
+				for (Integer optionIndex : optionIndexes)
+					bytes.write(Ints.toByteArray(optionIndex));
+			}
 
 			bytes.write(Longs.toByteArray(voteOnPollTransactionData.getFee()));
 
