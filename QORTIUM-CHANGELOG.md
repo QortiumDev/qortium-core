@@ -34,7 +34,9 @@ own chain.
 
 ## Change Entries
 
-### 2026-06-17 - consensus: replace forgeable online-accounts signatures with per-account Ed25519 (c-01)
+### 2026-06-17 - consensus: set c-01/c-02 activation heights (Previewnet 27000, mainnet/testnet from genesis)
+
+Replaces the placeholder `99999` activation height for both consensus feature triggers (`onlineAccountsSignatureV2Height` and `assetOrderBoundsHeight`) with their chosen values. On **Previewnet** both activate at **block 27000** — roughly 2.5 days ahead of the current chain tip at the network's real ~75-second block rate, giving the node operators time to update before the hard fork engages. On **mainnet** and the **local testnet** both are set to **0**, so the fixes apply from the very first block; neither of those chains has launched yet, so there is no legacy period to preserve and the secure behaviour is in force from genesis. The unit-test chain configurations are unchanged. Previewnet operators must be running this build before their chain reaches block 27000, or they will fork off at that height.
 
 Fixes a universal-forgery vulnerability in the online-accounts signature scheme (upstream Qortal audit finding "c-01"). Online accounts — which determine minting eligibility and reward distribution — were signed with a custom aggregate scheme whose challenge did not depend on the signature's nonce point, allowing an attacker to forge valid-looking online-account signatures for accounts they do not control.
 
