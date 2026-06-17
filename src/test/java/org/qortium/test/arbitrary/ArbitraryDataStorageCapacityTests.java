@@ -7,6 +7,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortium.account.PrivateKeyAccount;
 import org.qortium.arbitrary.ArbitraryDataFile;
+import org.qortium.arbitrary.ArbitraryDataFolderSizeEstimator;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.arbitrary.ArbitraryDataCleanupManager;
 import org.qortium.controller.arbitrary.ArbitraryDataManager;
@@ -69,7 +70,7 @@ public class ArbitraryDataStorageCapacityTests extends Common {
 
         // We need to calculate the directory size because we haven't yet
         assertTrue(storageManager.shouldCalculateDirectorySize(now));
-        storageManager.calculateDirectorySize(now);
+        storageManager.getDataDirectorySize(now);
         assertTrue(storageManager.isStorageCapacityCalculated());
 
         // Storage capacity should equal the value specified in settings
@@ -100,7 +101,7 @@ public class ArbitraryDataStorageCapacityTests extends Common {
 
         // We need to calculate the total directory size because we haven't yet
         assertTrue(storageManager.shouldCalculateDirectorySize(now));
-        storageManager.calculateDirectorySize(now);
+        storageManager.getDataDirectorySize(now);
         assertTrue(storageManager.isStorageCapacityCalculated());
 
         // Storage capacity should initially equal the total
@@ -129,7 +130,8 @@ public class ArbitraryDataStorageCapacityTests extends Common {
 
     @Test
     public void testCalculateDirectorySizeIncludesSeparateTempDirectory() throws IOException, IllegalAccessException {
-        ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
+        // A full scan must count the data directory and the separate temp directory once each (16 + 24 = 40),
+        // not double-count the data directory or omit the temp directory.
         Path testRoot = Files.createTempDirectory("qdn-storage-capacity");
         Path dataPath = testRoot.resolve("data");
         Path tempDataPath = testRoot.resolve("temp");
@@ -143,10 +145,9 @@ public class ArbitraryDataStorageCapacityTests extends Common {
             FieldUtils.writeField(Settings.getInstance(), "dataPath", dataPath.toString(), true);
             FieldUtils.writeField(Settings.getInstance(), "tempDataPath", tempDataPath.toString(), true);
 
-            storageManager.calculateDirectorySize(1000L);
+            ArbitraryDataStorageManager.calculateDirectorySize();
 
-            assertEquals(40L, storageManager.getTotalDirectorySize());
-            assertTrue(storageManager.isStorageCapacityCalculated());
+            assertEquals(40L, ArbitraryDataFolderSizeEstimator.getInstance().get());
         } finally {
             FileUtils.deleteQuietly(testRoot.toFile());
         }
@@ -154,7 +155,7 @@ public class ArbitraryDataStorageCapacityTests extends Common {
 
     @Test
     public void testCalculateDirectorySizeFailurePreservesPreviousValues() throws IOException, IllegalAccessException {
-        ArbitraryDataStorageManager storageManager = ArbitraryDataStorageManager.getInstance();
+        // If a recalculation scan fails part way through, the previously estimated size must be preserved.
         Path testRoot = Files.createTempDirectory("qdn-storage-capacity-failure");
         Path dataPath = testRoot.resolve("data");
         Path tempDataPath = testRoot.resolve("temp");
@@ -170,19 +171,23 @@ public class ArbitraryDataStorageCapacityTests extends Common {
             FieldUtils.writeField(Settings.getInstance(), "dataPath", dataPath.toString(), true);
             FieldUtils.writeField(Settings.getInstance(), "tempDataPath", tempDataPath.toString(), true);
 
-            storageManager.calculateDirectorySize(1000L);
-            long previousTotalDirectorySize = storageManager.getTotalDirectorySize();
-            Long previousStorageCapacity = storageManager.getStorageCapacity();
+            // Establish a known-good estimate
+            ArbitraryDataStorageManager.calculateDirectorySize();
+            long previousSize = ArbitraryDataFolderSizeEstimator.getInstance().get();
+            assertEquals(40L, previousSize);
 
-            assertEquals(40L, previousTotalDirectorySize);
-            assertNotNull(previousStorageCapacity);
-
+            // Point the temp path at a regular file so the next scan fails (a file cannot be sized as a directory)
             FieldUtils.writeField(Settings.getInstance(), "tempDataPath", invalidTempDataPath.toString(), true);
 
-            storageManager.calculateDirectorySize(2000L);
+            try {
+                ArbitraryDataStorageManager.calculateDirectorySize();
+                fail("expected directory size calculation to fail for a non-directory temp path");
+            } catch (RuntimeException expected) {
+                // expected - the estimator is only updated once the scan completes successfully
+            }
 
-            assertEquals(previousTotalDirectorySize, storageManager.getTotalDirectorySize());
-            assertEquals(previousStorageCapacity, storageManager.getStorageCapacity());
+            // The previous estimate must be preserved because the failed scan never updated the estimator
+            assertEquals(previousSize, ArbitraryDataFolderSizeEstimator.getInstance().get());
         } finally {
             FileUtils.deleteQuietly(testRoot.toFile());
         }

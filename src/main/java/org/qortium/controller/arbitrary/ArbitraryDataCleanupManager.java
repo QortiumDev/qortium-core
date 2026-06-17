@@ -2,6 +2,7 @@ package org.qortium.controller.arbitrary;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortium.arbitrary.ArbitraryDataFolderSizeEstimator;
 import org.qortium.data.transaction.ArbitraryTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.event.DataMonitorEvent;
@@ -372,7 +373,7 @@ public class ArbitraryDataCleanupManager extends Thread {
 
 		// Now calculate the used/total storage again, as a safety precaution
 		Long now = NTP.getTime();
-		ArbitraryDataStorageManager.getInstance().calculateDirectorySize(now);
+		ArbitraryDataStorageManager.getInstance().getDataDirectorySize(now);
 		if (ArbitraryDataStorageManager.getInstance().isStorageSpaceAvailable(DELETION_THRESHOLD)) {
 			// We have space available, so don't delete anything
 			return;
@@ -471,8 +472,13 @@ public class ArbitraryDataCleanupManager extends Thread {
 
 				LOGGER.debug("Deleting random file {} because we have reached max storage capacity...", randomItem.toString());
 				fireRandomItemDeletionNotification(randomItem, repository, "Deleting random file, because we have reached max storage capacity");
+
+				long diskUsage = FilesystemUtils.getDiskUsage(randomItem);
+
 				boolean success = randomItem.delete();
 				if (success) {
+
+					ArbitraryDataFolderSizeEstimator.getInstance().subtract(diskUsage);
 					try {
 						FilesystemUtils.safeDeleteEmptyParentDirectories(randomItem.toPath().getParent());
 					} catch (IOException e) {

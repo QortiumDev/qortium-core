@@ -438,6 +438,12 @@ public class Settings {
 	/** Maximum total size of hosted data, in bytes. Unlimited if null */
 	private Long maxStorageCapacity = null;
 
+	/** The local hour in the day to perform a full scan of the data directory size. */
+	private int dataStorageSizeCalculationHour = 23;
+
+	/** The time in days between each full data directory size calculation. */
+	private int dataStorageSizeCalculationFrequency = 1;
+
 	/** Whether to serve QDN data without authentication */
 	private boolean qdnAuthBypassEnabled = false;
 
@@ -2150,6 +2156,14 @@ public class Settings {
 
 	public Long getMaxStorageCapacity() {
 		return this.maxStorageCapacity;
+	}
+
+	public int getDataStorageSizeCalculationHour() {
+		return dataStorageSizeCalculationHour;
+	}
+
+	public int getDataStorageSizeCalculationFrequency() {
+		return dataStorageSizeCalculationFrequency;
 	}
 
 	public boolean isQDNAuthBypassEnabled() {
