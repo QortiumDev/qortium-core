@@ -74,7 +74,7 @@
   "relayModeEnabled": true,
   "qdnAuthBypassEnabled": true,
   "maxStorageCapacity": 10737418240,
-  "storagePolicy": "FOLLOWED_OR_VIEWED",
+  "storagePolicy": "ALL",
   "initialPeers": [
     "185.207.104.78:24892"
   ],
