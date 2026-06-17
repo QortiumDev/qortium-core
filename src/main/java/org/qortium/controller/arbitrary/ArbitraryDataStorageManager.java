@@ -3,6 +3,8 @@ package org.qortium.controller.arbitrary;
 import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortium.arbitrary.ArbitraryDataFolderSizeEstimator;
+import org.qortium.arbitrary.LongFileHandler;
 import org.qortium.data.transaction.ArbitraryTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.repository.DataException;
@@ -11,15 +13,24 @@ import org.qortium.settings.Settings;
 import org.qortium.transaction.Transaction;
 import org.qortium.utils.*;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 public class ArbitraryDataStorageManager extends Thread {
@@ -59,7 +70,28 @@ public class ArbitraryDataStorageManager extends Thread {
 
     private static final long PER_NAME_STORAGE_MULTIPLIER = 4L;
 
+    private static final File DATA_FILE = new File("qortium-backup/ArbitraryDataFolderSizeEstimate.dat");
+
+    private final ScheduledExecutorService scheduler;
+    private final ScheduledFuture<?> scheduledTask;
+
+    /** Set to true to force a full recalculation of the data directory size on the next check. */
+    private final AtomicBoolean recalculate = new AtomicBoolean(false);
+
     public ArbitraryDataStorageManager() {
+        // Calculate initial delay until the next target time
+        long initialDelay = calculateInitialDelay();
+
+        this.scheduler = Executors.newSingleThreadScheduledExecutor();
+
+        // Schedule the task to run initially and then every nth day (the frequency)
+        this.scheduledTask
+            = this.scheduler.scheduleAtFixedRate(
+                () -> this.recalculate.set(true),
+                initialDelay,
+                Settings.getInstance().getDataStorageSizeCalculationFrequency() * 24L,
+                TimeUnit.HOURS
+        );
     }
 
     public static ArbitraryDataStorageManager getInstance() {
@@ -91,7 +123,7 @@ public class ArbitraryDataStorageManager extends Thread {
 
                 // Check the total directory size if we haven't in a while
                 if (this.shouldCalculateDirectorySize(now)) {
-                    this.calculateDirectorySize(now);
+                    this.getDataDirectorySize(now);
                 }
 
                 Thread.sleep(59000);
@@ -105,6 +137,19 @@ public class ArbitraryDataStorageManager extends Thread {
         isStopping = true;
         this.interrupt();
         instance = null;
+
+        if (scheduledTask != null) {
+            scheduledTask.cancel(false);
+        }
+        scheduler.shutdown();
+        try {
+            if (!scheduler.awaitTermination(1, TimeUnit.SECONDS)) {
+                scheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            scheduler.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**
@@ -403,32 +448,39 @@ public class ArbitraryDataStorageManager extends Thread {
         return false;
     }
 
-    public void calculateDirectorySize(Long now) {
+    public void getDataDirectorySize(Long now) {
         if (now == null) {
             return;
         }
 
         try {
-            long totalSize = 0;
-
             // Calculate remaining capacity
             long remainingCapacity = this.getRemainingUsableStorageCapacity();
 
-            // Calculate total size of data directory
-            LOGGER.trace("Calculating data directory size...");
-            Path dataDirectoryPath = Paths.get(Settings.getInstance().getDataPath());
-            if (dataDirectoryPath.toFile().exists()) {
-                totalSize += FileUtils.sizeOfDirectory(dataDirectoryPath.toFile());
+            // if it is time to recalculate
+            if (this.recalculate.getAndSet(false)) {
+                calculateDirectorySize();
             }
+            // if this is the first size check, then look at the data file first
+            else if (lastDirectorySizeCheck == 0) {
+                long savedSize = LongFileHandler.readLongWithDefault(DATA_FILE, -1L);
 
-            // Add total size of temp directory, if it's not already inside the data directory
-            Path tempDirectoryPath = Paths.get(Settings.getInstance().getTempDataPath());
-            if (tempDirectoryPath.toFile().exists()) {
-                if (!FilesystemUtils.isChild(tempDirectoryPath, dataDirectoryPath)) {
-                    LOGGER.trace("Calculating temp directory size...");
-                    totalSize += FileUtils.sizeOfDirectory(tempDirectoryPath.toFile());
+                // if there is no data file, then calculate
+                if (savedSize < 0) {
+                    calculateDirectorySize();
+                }
+                // if there is data, then set it to the estimator
+                else {
+                    ArbitraryDataFolderSizeEstimator.getInstance().set(savedSize);
                 }
             }
+            // otherwise just get it from the estimator
+
+            long totalSize = ArbitraryDataFolderSizeEstimator.getInstance().get();
+
+            // store size in data file to be available after a restart
+            LongFileHandler.createFileIfNotExists(DATA_FILE);
+            LongFileHandler.writeLong(DATA_FILE, totalSize);
 
             // It's essential that used space is included in the storage capacity
             LOGGER.trace("Calculating total storage capacity...");
@@ -449,6 +501,33 @@ public class ArbitraryDataStorageManager extends Thread {
         } catch (RuntimeException e) {
             LOGGER.warn("Unable to calculate QDN storage capacity", e);
         }
+    }
+
+    /**
+     * Calculate Directory Size
+     *
+     * Calculate directory size with a full scan and set it on the estimator.
+     */
+    public static void calculateDirectorySize() {
+        long totalSize = 0;
+
+        // Calculate total size of data directory
+        LOGGER.info("Calculating data directory size...");
+        Path dataDirectoryPath = Paths.get(Settings.getInstance().getDataPath());
+        if (dataDirectoryPath.toFile().exists()) {
+            totalSize += FileUtils.sizeOfDirectory(dataDirectoryPath.toFile());
+        }
+
+        // Add total size of temp directory, if it's not already inside the data directory
+        Path tempDirectoryPath = Paths.get(Settings.getInstance().getTempDataPath());
+        if (tempDirectoryPath.toFile().exists()) {
+            if (!FilesystemUtils.isChild(tempDirectoryPath, dataDirectoryPath)) {
+                LOGGER.info("Calculating temp directory size...");
+                totalSize += FileUtils.sizeOfDirectory(tempDirectoryPath.toFile());
+            }
+        }
+
+        ArbitraryDataFolderSizeEstimator.getInstance().set(totalSize);
     }
 
     private long getRemainingUsableStorageCapacity() throws IOException {
@@ -505,5 +584,32 @@ public class ArbitraryDataStorageManager extends Thread {
             return null;
         }
         return (long)(this.storageCapacity * threshold);
+    }
+
+    /**
+     * Calculate Initial Delay
+     *
+     * Calculate the time to delay the scheduling of the data storage size calculation.
+     *
+     * @return the time in hours
+     */
+    private long calculateInitialDelay() {
+        // Get current time in the system's default timezone
+        ZonedDateTime now = ZonedDateTime.now();
+
+        // Create a target time for today with the specified hour
+        ZonedDateTime targetToday
+            = now.withHour(Settings.getInstance().getDataStorageSizeCalculationHour())
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0);
+
+        // If the target time has already passed today, schedule for tomorrow
+        if (now.isAfter(targetToday)) {
+            targetToday = targetToday.plusDays(1);
+        }
+
+        // Calculate the difference in hours
+        return Duration.between(now, targetToday).get(ChronoUnit.SECONDS) / 3600;
     }
 }
