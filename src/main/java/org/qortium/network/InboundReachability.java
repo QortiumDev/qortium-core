@@ -1,5 +1,7 @@
 package org.qortium.network;
 
+import org.qortium.settings.Settings;
+
 final class InboundReachability {
 
 	private static final long RECENT_INBOUND_HANDSHAKE_WINDOW = 60 * 60 * 1000L;
@@ -24,7 +26,20 @@ final class InboundReachability {
 		if (!this.listenSocketAvailable)
 			return false;
 
-		return this.portMapped || this.hasRecentInboundHandshake(System.currentTimeMillis());
+		return this.portMapped
+				|| hasConfiguredExternalAddress()
+				|| this.hasRecentInboundHandshake(System.currentTimeMillis());
+	}
+
+	/**
+	 * A node with a configured external IP address (e.g. a public-IP seed/VPS with an
+	 * open or forwarded port) is reachable from outside even when UPnP is disabled and
+	 * no inbound handshake has arrived within the recent window, so it should still
+	 * advertise itself as directly connectable.
+	 */
+	private static boolean hasConfiguredExternalAddress() {
+		String externalIpAddress = Settings.getInstance().getOurExternalIpAddress();
+		return externalIpAddress != null && !externalIpAddress.isBlank();
 	}
 
 	boolean hasRecentInboundHandshake(long now) {
