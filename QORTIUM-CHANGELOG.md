@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - docs: record 6.1.6 upstream triage decisions
+
+Filled in the triage worksheet in the Qortal 6.1.6 comparison with the decisions made during review: which non-consensus fixes were ported (with their commit references), that the two consensus fixes (online-accounts signature rework and asset-order bounds) are deferred to a planned hard fork, and that the chat-analysis API and thread-dump diagnostics were not adopted — the former because Qortium's chat is database-backed rather than the in-memory model the upstream feature depends on, the latter because Qortium has no thread-dump scheduler.
+
 ### 2026-06-17 - core: start the data cache after bootstrap, just before the API
 
 On startup the node builds an in-memory cache of arbitrary (QDN) resources so the resource-search API can answer quickly. That cache was being started early in startup, before the step that can replace the entire database with a downloaded bootstrap. On a node that bootstraps, the cache was therefore built from the empty pre-bootstrap database and then left stale once the real database was swapped in, so resource searches could return nothing until the cache was next refreshed. The cache is now started later — after the bootstrap and chain-validation step, and immediately before the API begins serving requests — so it is always built from the final database. Behaviour is unchanged on a node that does not bootstrap. Ported from upstream Qortal 6.1.6.

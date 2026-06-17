@@ -324,16 +324,19 @@ entries added).
 
 ## Triage Worksheet
 
-Fill in during review.
+Decisions recorded during the 2026-06-17 review. The non-consensus "safe" fixes
+were ported on branch `feature/port-qortal-6.1.6-safe-fixes`; the consensus
+fixes remain deferred to a planned hard-fork cycle.
 
-| Change | Adopt? | Qortium activation height | Notes |
+| Change | Decision | Qortium activation height | Notes |
 |---|---|---|---|
-| c-01 online-accounts signature V2 | | | |
-| c-02 asset-order bounds | | | |
-| Chat analysis API | | n/a | retarget to ChatStoreRepository |
-| QDN folder-size estimator | | n/a | rename backup path; fix temp double-count |
-| search `default=true` fix | | n/a | response-affecting |
-| DB-cache start ordering | | n/a | |
-| Thread-dump diagnostics | | n/a | |
-| Trade-bot backup fix | | n/a | |
-| formatBytes / README | | n/a | cosmetic / docs |
+| c-01 online-accounts signature V2 | Deferred | TBD | Consensus hard fork. Qortium is exposed (uses `signForAggregation`/`verifyAggregated`). Needs re-expressing on Qortium's `ChainParameter` system + a Qortium-chosen height + coordinated upgrade. |
+| c-02 asset-order bounds | Deferred | TBD | Consensus hard fork. Qortium is exposed (`Order.java` uses `roundUpScaledMultiply().longValue()`). Same `ChainParameter` + chosen-height + coordinated-upgrade requirement. |
+| Trade-bot backup fix | Adopted (`e2c461761`) | n/a | Backs up the whole batch instead of one record. |
+| search `default=true` fix | Adopted (`f514b2939`) | n/a | Response-affecting; SQL path uses `='default'`, cache path uses `NULL OR 'default'` (parity kept with upstream). |
+| QDN folder-size estimator | Adopted (`8dc56fdfa`) | n/a | Uses `qortium-backup/` path; kept Qortium's correct temp-dir measurement (did not port upstream's double-count). |
+| formatBytes | Adopted (`10fbc93c2`) | n/a | Logging-only. README reword not ported (Qortal-branded). |
+| DB-cache start ordering | Adopted (`06a243191`) | n/a | Real fix: cache now starts after bootstrap (`BlockChain.validate`), just before the API. |
+| Chat analysis API | Not adopted | n/a | Architecture mismatch: upstream streams an in-memory `ChatTransactionDelegate`; Qortium is DB-backed (`ChatStoreRepository`). Unsigned-validation part already handled by `ChatService`; `/chat/memory` meaningless for a DB-backed store. Revisit only if a native SQL-aggregation stats feature is wanted. |
+| Thread-dump diagnostics | Not adopted | n/a | Qortium has no `ThreadDumpScheduler` (stripped); would require re-introducing the feature. |
+| devnet/`set back` (Network) | Not adopted | n/a | Net no-op on source (cosmetic re-indent only). |
