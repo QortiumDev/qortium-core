@@ -20,6 +20,14 @@ public class SplashFrame {
 
 	@SuppressWarnings("serial")
 	public static class SplashPanel extends JPanel {
+		private static final int PANEL_WIDTH = 500;
+		private static final int LOGO_SIZE = 250;
+		private static final int BORDER_SIZE = 10;
+		private static final int LOGO_STATUS_SPACING = 16;
+		private static final int STATUS_HEIGHT = 50;
+		private static final Dimension PANEL_SIZE = new Dimension(PANEL_WIDTH,
+				BORDER_SIZE + LOGO_SIZE + LOGO_STATUS_SPACING + STATUS_HEIGHT + BORDER_SIZE);
+
 		private BufferedImage image;
 
 		private JLabel statusLabel;
@@ -33,20 +41,26 @@ public class SplashFrame {
 
 			setOpaque(true);
 			setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-			setBorder(new EmptyBorder(10, 10, 10, 10));
+			setBorder(new EmptyBorder(BORDER_SIZE, BORDER_SIZE, BORDER_SIZE, BORDER_SIZE));
 			setBackground(theme.getBackgroundColor());
 
 			// Add logo
-			JLabel imageLabel = new JLabel(new ImageIcon(image));
-			imageLabel.setSize(new Dimension(300, 300));
+			ImageIcon imageIcon = image == null ? new ImageIcon()
+					: new ImageIcon(image.getScaledInstance(LOGO_SIZE, LOGO_SIZE, Image.SCALE_SMOOTH));
+			JLabel imageLabel = new JLabel(imageIcon);
+			imageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+			imageLabel.setPreferredSize(new Dimension(LOGO_SIZE, LOGO_SIZE));
+			imageLabel.setMaximumSize(new Dimension(LOGO_SIZE, LOGO_SIZE));
 			add(imageLabel);
 
 			// Add spacing
-			add(Box.createRigidArea(new Dimension(0, 16)));
+			add(Box.createRigidArea(new Dimension(0, LOGO_STATUS_SPACING)));
 
 			// Add status label
 			statusLabel = new JLabel("Starting Qortium Core...", JLabel.CENTER);
-			statusLabel.setMaximumSize(new Dimension(500, 50));
+			statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+			statusLabel.setPreferredSize(new Dimension(PANEL_WIDTH, STATUS_HEIGHT));
+			statusLabel.setMaximumSize(new Dimension(PANEL_WIDTH, STATUS_HEIGHT));
 			statusLabel.setFont(new Font("Verdana", Font.PLAIN, 20));
 			statusLabel.setBackground(theme.getBackgroundColor());
 			statusLabel.setForeground(theme.getForegroundColor());
@@ -57,7 +71,7 @@ public class SplashFrame {
 
 		@Override
 		public Dimension getPreferredSize() {
-			return new Dimension(500, 580);
+			return new Dimension(PANEL_SIZE);
 		}
 
 		public void updateStatus(String text) {
