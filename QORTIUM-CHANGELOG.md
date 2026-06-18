@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - network: refresh I2P SAM sessions during fallback retries
+
+Gives each QDN I2P fallback startup attempt a fresh SAM session nickname while keeping the same persisted I2P destination keys. This prevents a slow or timed-out SAM forward setup from leaving i2pd with a stale session name that blocks later retries with `DUPLICATED_ID`; the node can keep retrying cleanly and still advertise the same stable `.b32.i2p` address once the router finishes building and publishing tunnels.
+
 ### 2026-06-18 - network: remove stale peer-version gates and harden I2P data fallback
 
 Removes several old Qortal-era peer-version gates that blocked Qortium `1.0.0` nodes from using capabilities they already support: QDN data-peer discovery no longer requires a `6.0.0` peer, QDN metadata relay no longer filters peers by an inherited relay minimum, fast-sync no longer requires an old `5.5.0` numeric version threshold, and the unused foreign-fee message minimum is removed. This keeps compatibility decisions tied to Qortium's current protocol and capabilities instead of inherited version numbers. The QDN I2P fallback startup path is also made more resilient: if the SAM data session or inbound forward times out during startup, the node closes that failed attempt, logs the retry, and keeps trying instead of leaving I2P unavailable until restart; outbound I2P data connects now log whether I2P is disabled, not ready, or restarting after a down session.

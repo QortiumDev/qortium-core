@@ -229,6 +229,7 @@ public class NetworkData {
     private volatile ServerSocketChannel i2pServerChannel;
     private final Set<SelectableChannel> channelsPendingWrite = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean i2pStartupInProgress = new AtomicBoolean(false);
+    private final AtomicLong i2pStartupAttemptCounter = new AtomicLong(0L);
     /** Coalesces OP_WRITE wakeups: only the first caller per select-cycle actually wakes the selector. */
     private final java.util.concurrent.atomic.AtomicBoolean selectorWakeupPending = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -376,7 +377,7 @@ public class NetworkData {
 
     private boolean startI2PDataFallbackAttempt(Settings settings) {
         I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
-                "qortium-data-" + this.ourNodeId, settings.getI2PDataKeyPath());
+                nextI2PDataSessionId(), settings.getI2PDataKeyPath());
         ServerSocketChannel forwardServerChannel = null;
 
         try {
@@ -417,6 +418,10 @@ public class NetworkData {
             this.i2pServerChannel = null;
             return false;
         }
+    }
+
+    private String nextI2PDataSessionId() {
+        return "qortium-data-" + this.ourNodeId + "-" + this.i2pStartupAttemptCounter.incrementAndGet();
     }
 
     // Getters / setters
