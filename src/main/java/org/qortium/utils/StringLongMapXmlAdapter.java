@@ -28,10 +28,17 @@ public class StringLongMapXmlAdapter extends XmlAdapter<StringLongMapXmlAdapter.
 
 	@Override
 	public Map<String, Long> unmarshal(StringLongMap stringLongMap) throws Exception {
+		if (stringLongMap == null || stringLongMap.entries == null)
+			return new HashMap<>();
+
 		Map<String, Long> map = new HashMap<>(stringLongMap.entries.size());
 
-		for (MapEntry entry : stringLongMap.entries)
+		for (MapEntry entry : stringLongMap.entries) {
+			if (entry == null || entry.key == null)
+				continue;
+
 			map.put(entry.key, entry.value);
+		}
 
 		return map;
 	}
@@ -39,6 +46,8 @@ public class StringLongMapXmlAdapter extends XmlAdapter<StringLongMapXmlAdapter.
 	@Override
 	public StringLongMap marshal(Map<String, Long> map) throws Exception {
 		StringLongMap output = new StringLongMap();
+		if (map == null)
+			return output;
 
 		for (Entry<String, Long> entry : map.entrySet()) {
 			MapEntry mapEntry = new MapEntry();

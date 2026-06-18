@@ -19,6 +19,7 @@ import org.qortium.repository.*;
 import org.qortium.settings.Settings;
 import org.qortium.utils.Amounts;
 import org.qortium.utils.Base58;
+import org.qortium.utils.StringLongMapXmlAdapter;
 
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -50,12 +51,16 @@ public class BlockChain {
 	private static final Logger LOGGER = LogManager.getLogger(BlockChain.class);
 
 	public static final int REWARD_SHARE_LEVEL_COUNT = 10;
+	public static final long FEATURE_TRIGGER_DISABLED_HEIGHT = 9999999999999L;
 
 	private static BlockChain instance = null;
 	private static final Set<String> CHAIN_CONFIG_HASH_EXCLUDED_FIELDS = Set.of(
 			"checkpoints",
+			"featureTriggers",
 			"onlineAccountsSignatureV2Height",
 			"assetOrderBoundsHeight");
+	private static final String ONLINE_ACCOUNTS_SIGNATURE_V2_TRIGGER = "onlineAccountsSignatureV2Height";
+	private static final String ASSET_ORDER_BOUNDS_TRIGGER = "assetOrderBoundsHeight";
 
 	// Properties
 
@@ -198,12 +203,20 @@ public class BlockChain {
 	/** Maximum time to retain online account signatures (ms) for block validity checks, to allow for clock variance. */
 	private long onlineAccountSignaturesMaxLifetime;
 
+	/**
+	 * Hash-neutral feature-trigger heights, keyed by trigger name. Future triggers should live here
+	 * instead of adding new top-level chain-config fields, so new activation metadata can be rolled
+	 * out without changing the chain-config fingerprint first.
+	 */
+	@XmlJavaTypeAdapter(StringLongMapXmlAdapter.class)
+	private Map<String, Long> featureTriggers = Collections.emptyMap();
+
 	/** Feature trigger block height from which online-account signatures must use the secure per-account
 	 * Ed25519 scheme (challenge bound to R and A) rather than the legacy, forgeable custom aggregate scheme
 	 * (consensus fix c-01). Below this height behaviour is byte-for-byte the legacy scheme so historic blocks
 	 * replay identically. Defaults to a disabled sentinel so a chain config that omits the key keeps the fix
 	 * OFF (fail-closed, replay-safe). */
-	private long onlineAccountsSignatureV2Height = 9999999999999L;
+	private long onlineAccountsSignatureV2Height = FEATURE_TRIGGER_DISABLED_HEIGHT;
 
 	/** Transaction-facing MemoryPoW difficulties. */
 	public static class MemoryPoWSettings {
@@ -236,7 +249,7 @@ public class BlockChain {
 	/** Feature trigger block height for asset order amount/price bounds validation (consensus fix c-02).
 	 * Below this height behaviour is byte-for-byte identical to legacy order validation. Defaults to a
 	 * disabled sentinel so a chain config that omits the key keeps the fix OFF (fail-closed, replay-safe). */
-	private long assetOrderBoundsHeight = 9999999999999L;
+	private long assetOrderBoundsHeight = FEATURE_TRIGGER_DISABLED_HEIGHT;
 
 	/** Feature trigger block height for batch block reward payouts.
 	 * This MUST be a multiple of blockRewardBatchSize. */
@@ -780,7 +793,7 @@ public class BlockChain {
 	}
 
 	public long getAssetOrderBoundsHeight() {
-		return this.assetOrderBoundsHeight;
+		return getFeatureTriggerHeight(ASSET_ORDER_BOUNDS_TRIGGER, this.assetOrderBoundsHeight);
 	}
 
 	/* Block reward batching */
@@ -906,7 +919,19 @@ public class BlockChain {
 	}
 
 	public long getOnlineAccountsSignatureV2Height() {
-		return this.onlineAccountsSignatureV2Height;
+		return getFeatureTriggerHeight(ONLINE_ACCOUNTS_SIGNATURE_V2_TRIGGER, this.onlineAccountsSignatureV2Height);
+	}
+
+	public long getFeatureTriggerHeight(String triggerName) {
+		return getFeatureTriggerHeight(triggerName, FEATURE_TRIGGER_DISABLED_HEIGHT);
+	}
+
+	private long getFeatureTriggerHeight(String triggerName, long fallbackHeight) {
+		if (this.featureTriggers == null)
+			return fallbackHeight;
+
+		Long featureTriggerHeight = this.featureTriggers.get(triggerName);
+		return featureTriggerHeight == null ? fallbackHeight : featureTriggerHeight;
 	}
 
 	public List<IdsForHeight> getMintingGroupIds() {
@@ -1180,6 +1205,7 @@ public class BlockChain {
 			Settings.throwValidationError("No \"mempowSettings\" entry found in blockchain config");
 
 		this.mempowSettings.validate();
+		validateFeatureTriggers();
 
 		// Check block reward share bounds
 		long totalShare = 0;
@@ -1231,6 +1257,21 @@ public class BlockChain {
 		return messageMagic.getBytes(StandardCharsets.US_ASCII);
 	}
 
+	private void validateFeatureTriggers() {
+		if (this.featureTriggers == null)
+			return;
+
+		for (Map.Entry<String, Long> entry : this.featureTriggers.entrySet()) {
+			String triggerName = entry.getKey();
+			if (triggerName == null || triggerName.isBlank())
+				Settings.throwValidationError("Feature trigger names must not be blank");
+
+			Long triggerHeight = entry.getValue();
+			if (triggerHeight == null || triggerHeight < 0)
+				Settings.throwValidationError(String.format("Invalid \"featureTriggers.%s\" in blockchain config", triggerName));
+		}
+	}
+
 	/** Minor normalization, cached value generation, etc. */
 	private void fixUp() {
 		if (this.networkId == null || this.networkId.isBlank())
@@ -1239,6 +1280,9 @@ public class BlockChain {
 		this.mainnetMessageMagicBytes = decodeMessageMagic("mainnetMessageMagic", this.mainnetMessageMagic);
 		this.testnetMessageMagicBytes = decodeMessageMagic("testnetMessageMagic", this.testnetMessageMagic);
 		this.accountTrustSettings.fixUp();
+		this.featureTriggers = this.featureTriggers == null
+				? Collections.emptyMap()
+				: Collections.unmodifiableMap(new LinkedHashMap<>(this.featureTriggers));
 
 		// Calculate cumulative blocks required for each level
 		int cumulativeBlocks = 0;
