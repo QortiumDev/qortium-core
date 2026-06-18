@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - gui: shrink startup splash logo
+
+Reduces the startup splash logo display from 500x500 to 250x250 while keeping the splash width and status text size the same. The splash now uses less vertical space and sizes its window around the smaller logo instead of retaining the older tall frame.
+
 ### 2026-06-18 - api: mark configured development groups in group responses
 
 Group API responses now include an API-only `isDevGroup` flag alongside the existing `isMintingGroup` flag. Both values are derived from the chain configuration active at the next block height, so clients can tell whether a group is currently configured for development authority, minting eligibility, both, or neither without guessing from the group name or ID.
