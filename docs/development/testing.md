@@ -51,6 +51,8 @@ for live, display-backed, funded-wallet, or long-running checks.
   Runs live crosschain checks that depend on public networks and fixture data. Default crosschain tests prefer mock providers, including deterministic HTLC fixtures for BTC-like chains. Live fixture checks fail when the explicitly requested fixture data is unavailable.
 - `-Dqortium.runLiveRepositoryIntegrityChecks=true`
   Scans the repository configured by `settings.json` for reduced-name integrity issues. This intentionally targets live local data and is skipped by default.
+- `-Dqortium.runLiveI2PTests=true`
+  Runs live i2pd SAM checks for the I2P fallback transport. These require a local SAM bridge, defaulting to `127.0.0.1:7656`; override with `-Dqortium.i2pSamHost=...` and `-Dqortium.i2pSamPort=...` when needed.
 
 ## Example Commands
 
@@ -81,4 +83,7 @@ mvn test -DskipJUnitTests=false -Dqortium.runLiveCrosschainTests=true -Dtest=Bit
 
 # Live local repository integrity scan
 mvn test -DskipJUnitTests=false -Dqortium.runLiveRepositoryIntegrityChecks=true -Dtest=IntegrityTests
+
+# Live i2pd SAM checks
+mvn test -DskipJUnitTests=false -Dqortium.runLiveI2PTests=true -Dtest=SamSessionIntegrationTests
 ```
