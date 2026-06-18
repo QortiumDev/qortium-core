@@ -21,11 +21,13 @@ public class HandshakeTests {
 	@Before
 	public void before() throws Exception {
 		Common.useDefaultSettings();
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", null, true);
 		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", null, true);
 	}
 
 	@After
 	public void after() throws Exception {
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", null, true);
 		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", null, true);
 	}
 
@@ -45,6 +47,26 @@ public class HandshakeTests {
 		Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
 
 		assertFalse(capabilities.containsKey(LiteNode.LITE_DATA_CAPABILITY));
+	}
+
+	@Test
+	public void testAdvertisesI2PChainWhenChainSessionIsUp() throws Exception {
+		String b32 = "bcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu.b32.i2p";
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(b32, true), true);
+
+		Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
+
+		assertEquals(b32, capabilities.get(Handshake.I2P_CAPABILITY));
+	}
+
+	@Test
+	public void testDoesNotAdvertiseI2PChainWhenChainSessionIsDown() throws Exception {
+		String b32 = "bcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu.b32.i2p";
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(b32, false), true);
+
+		Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
+
+		assertFalse(capabilities.containsKey(Handshake.I2P_CAPABILITY));
 	}
 
 	@Test
