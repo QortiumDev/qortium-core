@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - consensus: restore Previewnet feature triggers to chain config
+
+Adds the block-27000 Previewnet activation entries for the online-account signature V2 and asset-order bounds fixes back into both bundled Previewnet chain config copies. These keys were temporarily removed while rollout risk was revisited; restoring them now keeps the coordinated Previewnet hard-fork height explicit in the chain config again.
+
+This no longer changes the chain-config fingerprint, because the core now excludes both feature-trigger fields from the hash used during peer handshakes. That means Previewnet can carry the chosen activation metadata without splitting peer compatibility, while mainnet and the local testnet remain active from genesis and normal chain-defining config fields still affect the fingerprint. The upstream 6.1.6 comparison worksheet now matches the restored Previewnet block-27000 activation state.
+
 ### 2026-06-17 - fast-sync: write archive chunks through configured checkpoints
 
 Lets archive nodes write a block-archive chunk that ends at a configured checkpoint even when that chunk has not reached the normal 10 MiB archive-file target yet. This keeps the default chunk size behaviour for ordinary archive progress, but makes checkpoint-backed fast-sync testable on small or young networks like Previewnet, where the whole chain up to the checkpoint can be far smaller than 10 MiB.
