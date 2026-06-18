@@ -569,6 +569,9 @@ public class Controller extends Thread {
 		LOGGER.info("Starting synchronizer");
 		Synchronizer.getInstance().start();
 
+		// Optional one-shot archive-chunk fast-sync bootstrap (off by default; gated on isArchiveFastReplayEnabled).
+		ArchiveFastSyncManager.getInstance().start();
+
 		LOGGER.info("Starting block minter");
 		blockMinter = new BlockMinter();
 		blockMinter.start();
@@ -1273,6 +1276,8 @@ public class Controller extends Thread {
 					// We were interrupted while waiting for thread to join
 				}
 
+				ArchiveFastSyncManager.getInstance().shutdown();
+
 				LOGGER.info("Shutting down API");
 				ApiService.getInstance().stop();
 
@@ -1757,44 +1762,52 @@ public class Controller extends Thread {
 		if (!Settings.getInstance().isArchiveServingEnabled() || !Settings.getInstance().isArchiveEnabled())
 			return;
 
-		ArchiveManifest manifest = BlockArchiveReader.getInstance().buildArchiveManifest();
+		// Guard the whole handler: an unexpected exception here must not escape the network worker, which
+		// decrements the per-message-type thread counter outside a finally — a leak would eventually wedge serving.
+		try {
+			ArchiveManifest manifest = BlockArchiveReader.getInstance().buildArchiveManifest();
 
-		Message archiveManifestMessage = new ArchiveManifestMessage(manifest);
-		archiveManifestMessage.setId(message.getId());
-		if (!peer.sendMessage(archiveManifestMessage))
-			peer.disconnect("failed to send archive manifest");
+			Message archiveManifestMessage = new ArchiveManifestMessage(manifest);
+			archiveManifestMessage.setId(message.getId());
+			if (!peer.sendMessage(archiveManifestMessage))
+				peer.disconnect("failed to send archive manifest");
+		} catch (Exception e) {
+			LOGGER.info("Failed to serve archive manifest to peer {}: {}", peer, e.getMessage());
+		}
 	}
 
 	private void onNetworkGetArchiveChunkMessage(Peer peer, Message message) {
 		if (!Settings.getInstance().isArchiveServingEnabled() || !Settings.getInstance().isArchiveEnabled())
 			return;
 
-		GetArchiveChunkMessage getArchiveChunkMessage = (GetArchiveChunkMessage) message;
-		int startHeight = getArchiveChunkMessage.getStartHeight();
-		int offset = getArchiveChunkMessage.getOffset();
-		int requestedLength = getArchiveChunkMessage.getLength();
+		try {
+			GetArchiveChunkMessage getArchiveChunkMessage = (GetArchiveChunkMessage) message;
+			int startHeight = getArchiveChunkMessage.getStartHeight();
+			int offset = getArchiveChunkMessage.getOffset();
+			int requestedLength = getArchiveChunkMessage.getLength();
 
-		byte[] chunkBytes = BlockArchiveReader.getInstance().fetchRawChunkBytesForStartHeight(startHeight);
+			// Positional read of just the requested slice (bounded by MAX_SLICE_LENGTH) — the whole chunk file is
+			// never loaded into heap, so a peer can't amplify cheap requests into full-file reads.
+			int sliceLength = Math.min(Math.max(requestedLength, 0), ArchiveChunkMessage.MAX_SLICE_LENGTH);
+			BlockArchiveReader.ChunkSlice slice = BlockArchiveReader.getInstance().fetchRawChunkSlice(startHeight, offset, sliceLength);
 
-		// If we don't have a chunk starting at this height, or the requested offset is out of range,
-		// tell the peer it's unknown so it can move on to another peer.
-		if (chunkBytes == null || offset < 0 || offset >= chunkBytes.length) {
-			Message archiveChunkUnknownMessage = new GenericUnknownMessage();
-			archiveChunkUnknownMessage.setId(message.getId());
-			if (!peer.sendMessage(archiveChunkUnknownMessage))
-				peer.disconnect("failed to send archive-chunk-unknown response");
-			return;
+			// If we don't have a chunk starting at this height, or the requested offset is out of range,
+			// tell the peer it's unknown so it can move on to another peer.
+			if (slice == null) {
+				Message archiveChunkUnknownMessage = new GenericUnknownMessage();
+				archiveChunkUnknownMessage.setId(message.getId());
+				if (!peer.sendMessage(archiveChunkUnknownMessage))
+					peer.disconnect("failed to send archive-chunk-unknown response");
+				return;
+			}
+
+			Message archiveChunkMessage = new ArchiveChunkMessage(startHeight, offset, slice.totalSize, slice.data);
+			archiveChunkMessage.setId(message.getId());
+			if (!peer.sendMessage(archiveChunkMessage))
+				peer.disconnect("failed to send archive chunk");
+		} catch (Exception e) {
+			LOGGER.info("Failed to serve archive chunk to peer {}: {}", peer, e.getMessage());
 		}
-
-		int totalSize = chunkBytes.length;
-		int sliceLength = Math.min(Math.max(requestedLength, 0), ArchiveChunkMessage.MAX_SLICE_LENGTH);
-		sliceLength = Math.min(sliceLength, totalSize - offset);
-		byte[] slice = Arrays.copyOfRange(chunkBytes, offset, offset + sliceLength);
-
-		Message archiveChunkMessage = new ArchiveChunkMessage(startHeight, offset, totalSize, slice);
-		archiveChunkMessage.setId(message.getId());
-		if (!peer.sendMessage(archiveChunkMessage))
-			peer.disconnect("failed to send archive chunk");
 	}
 
 	// List to collect messages

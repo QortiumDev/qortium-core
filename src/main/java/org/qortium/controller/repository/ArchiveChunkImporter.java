@@ -29,10 +29,15 @@ import java.nio.file.StandardCopyOption;
  *       {@link BlockArchiveReader#buildArchiveManifest()}) to the value the (untrusted) manifest advertises.
  *       A tampered chunk fails this and is discarded.</li>
  *   <li>The release-pinned <b>checkpoint</b> is the only trust anchor. Blocks strictly below the checkpoint
- *       height may be replayed with the expensive per-signature crypto skipped ("trusted fast-replay"),
- *       because their history is transitively pinned: any altered sub-checkpoint block would change derived
- *       state and therefore the block signature at the checkpoint height, which the caller cross-binds against
- *       the pinned signature before trusting any of it.</li>
+ *       height may be replayed with only the expensive <em>online-account</em> signature + memory-PoW crypto
+ *       skipped ("trusted fast-replay", see {@link Block#areOnlineAccountsValid(boolean)}). The block
+ *       <em>signature</em> — and every transaction's own signature — is STILL verified at every height via
+ *       {@link Block#isSignatureValid()}. This is essential: the block reference/signature chain that the
+ *       checkpoint cross-binds commits only to stored signature bytes and minter/online-account identity, NOT
+ *       to derived state or transaction content, so without per-block signature verification an attacker could
+ *       preserve genuine block signatures up to the checkpoint while substituting forged transactions below it.
+ *       The online-account set itself is committed by the (verified) minter signature, so skipping the
+ *       per-account consent signatures below a checkpoint the real chain already established is safe.</li>
  *   <li>Blocks at and above the checkpoint are <b>fully validated</b>, exactly like normal sync.</li>
  *   <li>Derived state is always recomputed locally via {@link Block#process()}; no state blob is ever trusted.</li>
  * </ul>
@@ -113,9 +118,15 @@ public class ArchiveChunkImporter {
 	 * {@link Block#isSignatureValid()} are not checked, and {@link Block#isValid(boolean)} is called with
 	 * {@code trustedReplay = true} (skipping online-account signature / memory-PoW verification). At and above
 	 * the checkpoint, full validation runs. Pass {@code trustedCheckpointHeight = 0} to fully validate every
-	 * block (no skipping). {@link #replayBlock} commits with {@code repository.saveChanges()} after each block;
-	 * a {@code DataException} is thrown (and changes left for the caller to roll back) on the first invalid
-	 * block.
+	 * block (no skipping).
+	 * <p>
+	 * This method does <b>not</b> commit: it leaves all changes pending in the repository transaction so the
+	 * caller can apply the whole range atomically. The caller <b>must</b> wrap the call in
+	 * {@code repository.setSavepoint()} and then either {@code saveChanges()} on success or
+	 * {@code rollbackToSavepoint()} on the {@code DataException} thrown by the first invalid block. This
+	 * all-or-nothing discipline is what makes the checkpoint cross-bind sound: no sub-checkpoint block is ever
+	 * durably committed unless the (fully validated) checkpoint block in the same range also validates, so a
+	 * forged sub-checkpoint prefix that fails at the checkpoint is rolled back rather than left on disk.
 	 *
 	 * @return the height successfully replayed up to
 	 */
@@ -137,20 +148,29 @@ public class ArchiveChunkImporter {
 
 	/**
 	 * Validates and processes a single archived block, applying the trusted-replay crypto-skip when the block
-	 * is strictly below {@code trustedCheckpointHeight}. Commits via {@code saveChanges()} on success.
+	 * is strictly below {@code trustedCheckpointHeight}. Does <b>not</b> commit — changes are left pending in
+	 * the repository transaction for the caller to commit or roll back atomically (see
+	 * {@link #replayArchivedBlocks}).
 	 */
 	public static void replayBlock(Repository repository, BlockTransformation blockTransformation, int trustedCheckpointHeight) throws DataException {
 		BlockData blockData = blockTransformation.getBlockData();
 		int height = blockData.getHeight();
 
-		// Strictly below the pinned checkpoint -> trusted fast-replay (skip expensive crypto). The checkpoint
-		// block itself and everything above it are fully validated, so the anchor is never trusted on faith.
+		// Strictly below the pinned checkpoint -> trusted fast-replay (skip ONLY the expensive online-account
+		// signature + memory-PoW crypto). Block/transaction signatures are still fully verified at every height.
 		boolean trustedReplay = trustedCheckpointHeight > 0 && height < trustedCheckpointHeight;
 
 		Block block = new Block(repository, blockData, blockTransformation.getTransactions(), blockTransformation.getAtStatesHash());
 
-		// Block minter + transactions-set signatures (expensive). Skipped only under trusted fast-replay.
-		if (!trustedReplay && !block.isSignatureValid())
+		// ALWAYS verify the block signature, at every height — including below the checkpoint. isSignatureValid()
+		// is the only path that re-derives the block's transactions-signature and verifies every transaction's own
+		// signature (BlockTransformer.getBytesForTransactionsSignature -> Transaction.isSignatureValid). The block
+		// reference/signature chain that the checkpoint cross-binds commits only to STORED signature bytes, not to
+		// derived state or transaction content, so skipping this would let an attacker keep genuine block signatures
+		// (preserving the chain up to the pinned checkpoint) while substituting forged transactions below it — which
+		// areTransactionsValid() does not signature-check. It is also cheap (a few Ed25519 verifies per block)
+		// relative to the online-account crypto the trusted replay actually skips.
+		if (!block.isSignatureValid())
 			throw new DataException(String.format("Archive fast-replay: invalid block signature at height %d", height));
 
 		Block.ValidationResult validationResult = block.isValid(trustedReplay);
@@ -158,6 +178,7 @@ public class ArchiveChunkImporter {
 			throw new DataException(String.format("Archive fast-replay: block at height %d failed validation: %s", height, validationResult.name()));
 
 		block.process();
-		repository.saveChanges();
+		// Intentionally no saveChanges() here: the caller commits the whole replayed range atomically so that a
+		// forged sub-checkpoint prefix that fails at the checkpoint block is rolled back, never durably stored.
 	}
 }
