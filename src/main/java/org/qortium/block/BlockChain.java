@@ -52,6 +52,10 @@ public class BlockChain {
 	public static final int REWARD_SHARE_LEVEL_COUNT = 10;
 
 	private static BlockChain instance = null;
+	private static final Set<String> CHAIN_CONFIG_HASH_EXCLUDED_FIELDS = Set.of(
+			"checkpoints",
+			"onlineAccountsSignatureV2Height",
+			"assetOrderBoundsHeight");
 
 	// Properties
 
@@ -707,20 +711,20 @@ public class BlockChain {
 		}
 	}
 
-	private static String computeChainConfigHash(byte[] jsonBytes) {
+	static String computeChainConfigHash(byte[] jsonBytes) {
 		try {
 			ObjectMapper objectMapper = new ObjectMapper()
 					.configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
 			Object jsonObject = objectMapper.readValue(jsonBytes, Object.class);
 
-			// Exclude 'checkpoints' from the chain-config hash. Checkpoints are a client-side
-			// validation aid, not a chain-defining parameter: two nodes with different (or no)
-			// checkpoint lists are still on the same chain and must remain peer-compatible.
-			// Removing the field here lets checkpoints be added or updated later without
-			// changing the hash that gates peer handshakes. This is hash-neutral for any config
-			// that has no checkpoints, so it deploys across the network without splitting it.
-			if (jsonObject instanceof Map)
-				((Map<?, ?>) jsonObject).remove("checkpoints");
+			// Exclude optional rollout metadata from the chain-config hash. These fields can
+			// be added, removed or adjusted in a coordinated release without making otherwise
+			// compatible nodes reject each other at the peer handshake.
+			if (jsonObject instanceof Map) {
+				Map<?, ?> jsonMap = (Map<?, ?>) jsonObject;
+				for (String fieldName : CHAIN_CONFIG_HASH_EXCLUDED_FIELDS)
+					jsonMap.remove(fieldName);
+			}
 
 			byte[] canonicalJsonBytes = objectMapper.writeValueAsBytes(jsonObject);
 
