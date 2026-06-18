@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - consensus: add hash-neutral feature trigger container
+
+Adds a generic `featureTriggers` object for future consensus activation heights and excludes that whole object from the chain-config fingerprint. Future trigger metadata can now be shipped under one hash-neutral container, so adding a new activation key later does not require a separate preparatory release just to teach older nodes another top-level field to ignore.
+
+The two existing top-level trigger fields are still supported for the current configs and remain excluded from the fingerprint for compatibility. When a trigger height is present in `featureTriggers`, the node uses that value first; otherwise it falls back to the existing top-level field or to the disabled sentinel. Tests now cover that the whole container is hash-neutral and that unknown future trigger names can be parsed and carried without adding new feature-trigger code yet.
+
 ### 2026-06-18 - consensus: restore Previewnet feature triggers to chain config
 
 Adds the block-27000 Previewnet activation entries for the online-account signature V2 and asset-order bounds fixes back into both bundled Previewnet chain config copies. These keys were temporarily removed while rollout risk was revisited; restoring them now keeps the coordinated Previewnet hard-fork height explicit in the chain config again.
