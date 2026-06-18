@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - network: add I2P fallback transport groundwork
+
+Adds the first foundation for I2P fallback networking: a small transport seam, a thin SAM v3 session client for external i2pd, persistent `.b32.i2p` destination handling, and opt-in live integration tests that prove two local SAM sessions can exchange bytes over I2P and reject an invalid destination. Peer addresses now carry an IP-or-I2P kind, parse valid `.b32.i2p` hosts without DNS or IP-literal validation, keep I2P ports out of the TCP path, and round-trip through the existing PEERS message format. This keeps direct TCP as the normal path while preparing the data and chain networks to add I2P as a fallback route for nodes that cannot accept inbound TCP connections.
+
 ### 2026-06-18 - gui: shrink startup splash logo
 
 Reduces the startup splash logo display from 500x500 to 250x250 while keeping the splash width and status text size the same. The splash now uses less vertical space and sizes its window around the smaller logo instead of retaining the older tall frame.
