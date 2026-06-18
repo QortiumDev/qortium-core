@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - consensus: unpin Previewnet feature triggers from chain config
+
+Removes the block-27000 Previewnet activation entries for the online-account signature V2 and asset-order bounds fixes from both bundled Previewnet chain config copies. With those keys omitted, Previewnet falls back to the disabled sentinel values already built into the code, so the hard-forking consensus fixes stay off until a new coordinated activation height is chosen.
+
+The chain-config fingerprint now ignores the two feature-trigger fields in the same way it already ignores checkpoints. That means adding, removing, or revising this rollout metadata no longer makes otherwise-compatible nodes reject each other at the peer handshake. Normal chain-defining config fields still affect the fingerprint, and new tests cover both sides of that behavior. The upstream 6.1.6 comparison note now records that the Previewnet block-27000 activation was withdrawn before release.
+
 ### 2026-06-17 - fast-sync: enable archive-chunk fast-replay by default (engages only where a checkpoint is pinned)
 
 Turns the archive-chunk fast-sync on by default, since helping new nodes catch up quickly is the whole point of the feature. The switch that was previously off is now on out of the box, but it stays completely inert unless the network's chain configuration pins a checkpoint to anchor the trust — so in practice this enables fast-sync on previewnet (which pins a checkpoint at height 24000) and changes nothing on mainnet or testnet, neither of which has a checkpoint. It also only ever runs on a genesis-fresh node, so existing nodes keep their chains untouched; a brand-new or reset node with a configured bootstrap still prefers the bootstrap. Previewnet seed nodes already serve chunks by default (serving was never gated behind this switch), so flipping this default lets a fresh previewnet node download and replay those chunks automatically instead of validating every block from genesis.
