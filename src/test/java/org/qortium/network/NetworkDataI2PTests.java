@@ -82,6 +82,16 @@ public class NetworkDataI2PTests extends Common {
 		assertFalse(selectedPeer.getPeerData().getAddress().isI2P());
 	}
 
+	@Test
+	public void testI2PStartupRetriesUseFreshSamSessionIds() throws Exception {
+		String firstSessionId = invokeNextI2PDataSessionId();
+		String secondSessionId = invokeNextI2PDataSessionId();
+
+		assertTrue(firstSessionId.startsWith("qortium-data-"));
+		assertTrue(secondSessionId.startsWith("qortium-data-"));
+		assertFalse(firstSessionId.equals(secondSessionId));
+	}
+
 	private Peer networkPeerWithCapabilities(Map<String, Object> capabilities) {
 		Peer peer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK);
 		peer.setPeersCapabilities(new PeerCapabilities(capabilities));
@@ -108,5 +118,11 @@ public class NetworkDataI2PTests extends Common {
 		java.lang.reflect.Method method = NetworkData.class.getDeclaredMethod("getConnectablePeer", Long.class);
 		method.setAccessible(true);
 		return (Peer) method.invoke(NetworkData.getInstance(), now);
+	}
+
+	private String invokeNextI2PDataSessionId() throws Exception {
+		java.lang.reflect.Method method = NetworkData.class.getDeclaredMethod("nextI2PDataSessionId");
+		method.setAccessible(true);
+		return (String) method.invoke(NetworkData.getInstance());
 	}
 }
