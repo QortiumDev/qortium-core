@@ -2210,11 +2210,10 @@ public class Network {
         // Make a note that we've successfully completed handshake (and when)
         peer.getPeerData().setLastConnected(NTP.getTime());
 
-        // Push to NetworkData for ALL peers (inbound or outbound)
-        // We want to discover all QDN-capable peers regardless of who initiated Network connection
-        // Duplicate detection and direction-preference handling cover any race conditions
-        if (peer.isAtLeastVersion("6.0.0"))
-            NetworkData.getInstance().addPeer(peer);
+        // Push to NetworkData for ALL peers (inbound or outbound).
+        // Qortium reset its version line to 1.0.0, so capability-based QDN discovery
+        // must not depend on old Qortal peer-version thresholds.
+        NetworkData.getInstance().addPeer(peer);
 
         // Update repository for outbound peers only
         // Only peers we successfully connected to are worth persisting for later reconnection

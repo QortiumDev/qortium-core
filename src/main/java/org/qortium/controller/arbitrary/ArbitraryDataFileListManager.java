@@ -87,9 +87,6 @@ public class ArbitraryDataFileListManager {
     /** Maximum number of hops that a file list relay request is allowed to make */
     public static int RELAY_REQUEST_MAX_HOPS = 4; // was 4, this is no longer ArbData, only metaData/Lists
     public static int SEARCH_DEPTH_MAX_HOPS = 6; // Only used to determine if we should forward or terminate a search for QDN data
-    /** Minimum peer version to use relay */
-    public static String RELAY_MIN_PEER_VERSION = "3.4.0";
- 
     private final Boolean isRelayAvailable;
 
     private ArbitraryDataFileListManager() {
