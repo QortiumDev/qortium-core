@@ -13,6 +13,7 @@ import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.test.common.ApiCommon;
 import org.qortium.test.common.Common;
+import org.qortium.test.common.TestChainBootstrapUtils;
 import org.qortium.test.common.TransactionUtils;
 import org.qortium.test.common.transaction.TestTransaction;
 
@@ -60,6 +61,17 @@ public class GroupApiTests extends ApiCommon {
 	@Test
 	public void testGetGroupData() {
 		assertNotNull(this.groupsResource.getGroupData(1));
+	}
+
+	@Test
+	public void testGetGroupDataIncludesConfiguredGroupRoles() {
+		GroupData devGroup = this.groupsResource.getGroupData(TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID);
+		GroupData mintingGroup = this.groupsResource.getGroupData(TestChainBootstrapUtils.MINTING_GROUP_ID);
+
+		assertTrue(devGroup.isDevGroup());
+		assertFalse(devGroup.isMintingGroup());
+		assertFalse(mintingGroup.isDevGroup());
+		assertTrue(mintingGroup.isMintingGroup());
 	}
 
 	@Test

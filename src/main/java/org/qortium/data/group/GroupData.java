@@ -49,6 +49,9 @@ public class GroupData {
 	/** Whether this group is a configured minting group at the current height. API-only, not always present. */
 	private Boolean isMintingGroup;
 
+	/** Whether this group is a configured development group at the current height. API-only, not always present. */
+	private Boolean isDevGroup;
+
 	// Constructors
 
 	// necessary for JAX-RS serialization
@@ -204,6 +207,14 @@ public class GroupData {
 
 	public void setIsMintingGroup(boolean isMintingGroup) {
 		this.isMintingGroup = isMintingGroup;
+	}
+
+	public Boolean isDevGroup() {
+		return this.isDevGroup;
+	}
+
+	public void setIsDevGroup(boolean isDevGroup) {
+		this.isDevGroup = isDevGroup;
 	}
 
 }
