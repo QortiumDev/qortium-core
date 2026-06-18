@@ -569,7 +569,8 @@ public class Controller extends Thread {
 		LOGGER.info("Starting synchronizer");
 		Synchronizer.getInstance().start();
 
-		// Optional one-shot archive-chunk fast-sync bootstrap (off by default; gated on isArchiveFastReplayEnabled).
+		// One-shot archive-chunk fast-sync bootstrap (enabled by default, but inert unless a checkpoint is pinned
+		// and the node is genesis-fresh; gated by ArchiveFastSyncManager.shouldRun()).
 		ArchiveFastSyncManager.getInstance().start();
 
 		LOGGER.info("Starting block minter");

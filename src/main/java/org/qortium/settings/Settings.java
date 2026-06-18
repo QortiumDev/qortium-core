@@ -309,8 +309,9 @@ public class Settings {
 	/** Whether to answer peers' requests for block-archive manifests and chunks (archive distribution). */
 	private boolean archiveServingEnabled = true;
 	/** Whether to rebuild state from downloaded archive chunks using trusted fast-replay during sync.
-	 *  Inert until release-pinned checkpoints exist to act as the trust floor; off by default for now. */
-	private boolean archiveFastReplayEnabled = false;
+	 *  Inert unless the chain config pins a checkpoint to act as the trust floor (so this only engages where a
+	 *  checkpoint exists — currently previewnet; mainnet/testnet have none and are unaffected). */
+	private boolean archiveFastReplayEnabled = true;
 	/** When true (default), archive fast-replay defers to a configured bootstrap: if bootstrap is enabled and
 	 *  has hosts, the node lets bootstrap build initial state instead of fast-replaying (the two are competing
 	 *  ways to skip the slow genesis sync). */

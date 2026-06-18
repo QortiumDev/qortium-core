@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - fast-sync: enable archive-chunk fast-replay by default (engages only where a checkpoint is pinned)
+
+Turns the archive-chunk fast-sync on by default, since helping new nodes catch up quickly is the whole point of the feature. The switch that was previously off is now on out of the box, but it stays completely inert unless the network's chain configuration pins a checkpoint to anchor the trust — so in practice this enables fast-sync on previewnet (which pins a checkpoint at height 24000) and changes nothing on mainnet or testnet, neither of which has a checkpoint. It also only ever runs on a genesis-fresh node, so existing nodes keep their chains untouched; a brand-new or reset node with a configured bootstrap still prefers the bootstrap. Previewnet seed nodes already serve chunks by default (serving was never gated behind this switch), so flipping this default lets a fresh previewnet node download and replay those chunks automatically instead of validating every block from genesis.
+
 ### 2026-06-17 - fast-sync: archive-chunk requester (part 2) with atomic checkpoint-anchored replay and serving-path hardening
 
 Completes the archive-chunk fast-sync by adding the network requester that the trust core was built for, and hardens the whole feature after an adversarial security review. Still entirely OFF by default — a fresh node does nothing differently unless an operator turns it on.

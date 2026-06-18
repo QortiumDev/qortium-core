@@ -41,9 +41,10 @@ import java.util.concurrent.locks.ReentrantLock;
  * with the checkpoint-gated crypto-skip ({@link ArchiveChunkImporter}). It then hands off to normal sync.
  * <p>
  * Trust: the release-pinned checkpoint is the only anchor; the manifest is untrusted/recomputable. The feature
- * is OFF by default ({@link Settings#isArchiveFastReplayEnabled()}); when off this manager's {@link #run()}
- * returns immediately. It is a one-shot startup bootstrap — it never re-arms — and cooperates with the
- * {@link Synchronizer} via the blockchain lock.
+ * is enabled by default ({@link Settings#isArchiveFastReplayEnabled()}) but inert unless the chain config pins a
+ * checkpoint — so it only engages on a net that has one (currently previewnet); when disabled, or with no
+ * checkpoint, this manager's {@link #run()} returns immediately. It is a one-shot startup bootstrap — it never
+ * re-arms — and cooperates with the {@link Synchronizer} via the blockchain lock.
  */
 public class ArchiveFastSyncManager extends Thread {
 
