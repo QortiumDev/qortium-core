@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - network: wire I2P fallback into chain peers
+
+Connects the I2P fallback transport to the main chain network. Nodes now bring up a separate chain-network SAM destination, advertise it as an `I2P` handshake capability, learn peer chain destinations from handshakes, preserve `.b32.i2p` addresses in normal peer exchange, and can accept or dial chain peers through I2P while keeping direct TCP as the default path. The existing `i2pPreferred` setting can force I2P for testing, and focused tests cover chain capability advertisement, peer learning, transport selection, and PEERS-message propagation.
+
 ### 2026-06-18 - network: refresh I2P SAM sessions during fallback retries
 
 Gives each QDN I2P fallback startup attempt a fresh SAM session nickname while keeping the same persisted I2P destination keys. This prevents a slow or timed-out SAM forward setup from leaving i2pd with a stale session name that blocks later retries with `DUPLICATED_ID`; the node can keep retrying cleanly and still advertise the same stable `.b32.i2p` address once the router finishes building and publishing tunnels.

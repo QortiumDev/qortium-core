@@ -723,12 +723,9 @@ public class Peer {
         try {
             PeerAddress peerAddress = this.peerData.getAddress();
             if (peerAddress.isI2P()) {
-                if (network != Peer.NETWORKDATA) {
-                    LOGGER.trace("[{}] I2P chain-network connections are not wired yet: {}", this.peerConnectionId, this);
-                    return null;
-                }
-
-                this.socketChannel = NetworkData.getInstance().connectI2PDataPeer(peerAddress.getHost());
+                this.socketChannel = network == Peer.NETWORKDATA
+                        ? NetworkData.getInstance().connectI2PDataPeer(peerAddress.getHost())
+                        : Network.getInstance().connectI2PChainPeer(peerAddress.getHost());
                 if (this.socketChannel == null)
                     return null;
 

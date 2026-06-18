@@ -509,6 +509,7 @@ public enum Handshake {
 	static final String CHAIN_GENESIS_SIGNATURE_CAPABILITY = "CHAIN_GENESIS_SIGNATURE";
 	static final String CHAIN_CONFIG_HASH_CAPABILITY = "CHAIN_CONFIG_HASH";
 	static final String ARCHIVE_HEIGHT_CAPABILITY = "ARCHIVE_HEIGHT";
+	static final String I2P_CAPABILITY = "I2P";
 	static final String I2P_QDN_CAPABILITY = "I2P_QDN";
 
 	private static final int POW_BUFFER_SIZE_PRE_131 = 8 * 1024 * 1024; // bytes
@@ -562,6 +563,9 @@ public enum Handshake {
 		capabilities.put(CHAIN_NETWORK_ID_CAPABILITY, blockChain.getNetworkId());
 		capabilities.put(CHAIN_GENESIS_SIGNATURE_CAPABILITY, blockChain.getGenesisSignature());
 		capabilities.put(CHAIN_CONFIG_HASH_CAPABILITY, blockChain.getChainConfigHash());
+		String chainI2PDestination = Network.getInstance().getI2PChainDestination();
+		if (chainI2PDestination != null)
+			capabilities.put(I2P_CAPABILITY, chainI2PDestination);
 
 		if (Settings.getInstance().isQdnEnabled()) {
 			capabilities.put("QDN", Settings.getInstance().getQDNListenPort());
