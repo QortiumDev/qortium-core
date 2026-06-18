@@ -2,6 +2,7 @@ package org.qortium.controller.repository;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortium.block.BlockChain;
 import org.qortium.controller.Controller;
 import org.qortium.controller.Synchronizer;
 import org.qortium.data.block.BlockData;
@@ -14,6 +15,7 @@ import org.qortium.transform.TransformationException;
 import org.qortium.utils.NTP;
 
 import java.io.IOException;
+import java.util.List;
 
 import static java.lang.Thread.NORM_PRIORITY;
 
@@ -86,12 +88,19 @@ public class BlockArchiver implements Runnable {
 					// Build cache of blocks
 					try {
 						final int maximumArchiveHeight = BlockArchiveWriter.getMaxArchiveHeight(repository);
-						BlockArchiveWriter writer = new BlockArchiveWriter(startHeight, maximumArchiveHeight, repository);
+						final int checkpointArchiveHeight = selectCheckpointArchiveHeight(
+								BlockChain.getInstance().getCheckpoints(), startHeight, maximumArchiveHeight);
+						final int writerEndHeight = checkpointArchiveHeight > 0 ? checkpointArchiveHeight : maximumArchiveHeight;
+
+						BlockArchiveWriter writer = new BlockArchiveWriter(startHeight, writerEndHeight, repository);
+						if (checkpointArchiveHeight > 0)
+							writer.setShouldEnforceFileSizeTarget(false);
+
 						BlockArchiveWriter.BlockArchiveWriteResult result = writer.write();
 						switch (result) {
 							case OK:
-								// Increment block archive height
-								startHeight += writer.getWrittenCount();
+								// Advance from the height actually written, even if the writer clamped its start.
+								startHeight = writer.getLastWrittenHeight() + 1;
 								repository.getBlockArchiveRepository().setBlockArchiveHeight(startHeight);
 								repository.saveChanges();
 								break;
@@ -134,5 +143,17 @@ public class BlockArchiver implements Runnable {
 				LOGGER.error("Block Archiving is not working! Not trying again. Restart ASAP. Report this error immediately to the developers.", e);
 			}
 		}
+	}
+
+	static int selectCheckpointArchiveHeight(List<BlockChain.Checkpoint> checkpoints, int startHeight, int maximumArchiveHeight) {
+		if (checkpoints == null || checkpoints.isEmpty())
+			return 0;
+
+		int normalizedStartHeight = Math.max(startHeight, 2);
+		return checkpoints.stream()
+				.mapToInt(checkpoint -> checkpoint.height)
+				.filter(height -> height >= normalizedStartHeight && height <= maximumArchiveHeight)
+				.min()
+				.orElse(0);
 	}
 }
