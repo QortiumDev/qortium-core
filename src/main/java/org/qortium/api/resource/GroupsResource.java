@@ -164,9 +164,13 @@ public class GroupsResource {
 		try {
 			int nextHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
 			List<Integer> mintingGroupIds = Groups.getGroupIdsToMint(BlockChain.getInstance(), nextHeight);
-			groups.forEach(groupData -> groupData.setIsMintingGroup(mintingGroupIds.contains(groupData.getGroupId())));
+			List<Integer> devGroupIds = Groups.getGroupIdsAtHeight(BlockChain.getInstance().getDevGroupIds(), nextHeight);
+			groups.forEach(groupData -> {
+				groupData.setIsMintingGroup(mintingGroupIds.contains(groupData.getGroupId()));
+				groupData.setIsDevGroup(devGroupIds.contains(groupData.getGroupId()));
+			});
 		} catch (DataException e) {
-			// Leave isMintingGroup null
+			// Leave isMintingGroup/isDevGroup null
 		}
 	}
 

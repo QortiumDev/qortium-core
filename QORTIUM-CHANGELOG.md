@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - api: mark configured development groups in group responses
+
+Group API responses now include an API-only `isDevGroup` flag alongside the existing `isMintingGroup` flag. Both values are derived from the chain configuration active at the next block height, so clients can tell whether a group is currently configured for development authority, minting eligibility, both, or neither without guessing from the group name or ID.
+
 ### 2026-06-18 - consensus: add hash-neutral feature trigger container
 
 Adds a generic `featureTriggers` object for future consensus activation heights and excludes that whole object from the chain-config fingerprint. Future trigger metadata can now be shipped under one hash-neutral container, so adding a new activation key later does not require a separate preparatory release just to teach older nodes another top-level field to ignore.
