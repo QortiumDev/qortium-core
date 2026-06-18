@@ -311,6 +311,10 @@ public class Settings {
 	/** Whether to rebuild state from downloaded archive chunks using trusted fast-replay during sync.
 	 *  Inert until release-pinned checkpoints exist to act as the trust floor; off by default for now. */
 	private boolean archiveFastReplayEnabled = false;
+	/** When true (default), archive fast-replay defers to a configured bootstrap: if bootstrap is enabled and
+	 *  has hosts, the node lets bootstrap build initial state instead of fast-replaying (the two are competing
+	 *  ways to skip the slow genesis sync). */
+	private boolean archiveFastReplayOnlyWhenBootstrapDisabled = true;
 
 	// Which blockchains this node is running
 	@XmlJavaTypeAdapter(WalletsMapXmlAdapter.class)
@@ -1492,6 +1496,10 @@ public class Settings {
 		maxThreadsPerMessageType.add(new ThreadLimit("GET_TRANSACTION", 50));
 		maxThreadsPerMessageType.add(new ThreadLimit("TRANSACTION_SIGNATURES", 50));
 		maxThreadsPerMessageType.add(new ThreadLimit("TRADE_PRESENCES", 50));
+		// Archive-chunk fast-sync serving handlers: bound them like the other GET_* serving types so a peer can't
+		// pin the network worker pool with concurrent archive manifest/chunk reads.
+		maxThreadsPerMessageType.add(new ThreadLimit("GET_ARCHIVE_MANIFEST", 5));
+		maxThreadsPerMessageType.add(new ThreadLimit("GET_ARCHIVE_CHUNK", 10));
 	}
 
 	// Getters / setters
@@ -1915,6 +1923,10 @@ public class Settings {
 
 	public boolean isArchiveFastReplayEnabled() {
 		return this.archiveFastReplayEnabled;
+	}
+
+	public boolean isArchiveFastReplayOnlyWhenBootstrapDisabled() {
+		return this.archiveFastReplayOnlyWhenBootstrapDisabled;
 	}
 
 	public AutoUpdateMode getAutoUpdateMode() {

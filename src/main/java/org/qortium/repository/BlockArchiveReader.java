@@ -28,9 +28,13 @@ public class BlockArchiveReader {
     public static final int SUPPORTED_ARCHIVE_VERSION = 1;
 
     private static BlockArchiveReader instance;
-    private Map<String, Triple<Integer, Integer, Integer>> fileListCache;
+    // volatile + snapshot-to-local in every reader: these caches are read on network-serving threads while the
+    // archive writer / fast-sync thread null them via invalidateFileListCache(), so a check-then-deref of the
+    // field directly would race into a NullPointerException. Reading the field once into a local makes each
+    // reader immune to a concurrent invalidation (the map itself is never mutated, only the reference replaced).
+    private volatile Map<String, Triple<Integer, Integer, Integer>> fileListCache;
     /** Cached manifest, rebuilt lazily and cleared whenever the file list cache is invalidated. */
-    private ArchiveManifest manifestCache;
+    private volatile ArchiveManifest manifestCache;
 
     private static final Logger LOGGER = LogManager.getLogger(BlockArchiveReader.class);
 
@@ -177,11 +181,16 @@ public class BlockArchiveReader {
     }
 
     private String getFilenameForHeight(int height) {
-        if (this.fileListCache == null) {
+        Map<String, Triple<Integer, Integer, Integer>> cache = this.fileListCache;
+        if (cache == null) {
             this.fetchFileList();
+            cache = this.fileListCache;
+        }
+        if (cache == null) {
+            return null;
         }
 
-        for (Map.Entry<String, Triple<Integer, Integer, Integer>> entry : this.fileListCache.entrySet()) {
+        for (Map.Entry<String, Triple<Integer, Integer, Integer>> entry : cache.entrySet()) {
             if (entry.getKey() == null || entry.getValue() == null) {
                 continue;
             }
@@ -315,13 +324,18 @@ public class BlockArchiveReader {
     }
 
     public int getHeightOfLastArchivedBlock() {
-        if (this.fileListCache == null) {
+        Map<String, Triple<Integer, Integer, Integer>> cache = this.fileListCache;
+        if (cache == null) {
             this.fetchFileList();
+            cache = this.fileListCache;
+        }
+        if (cache == null) {
+            return 0;
         }
 
         int maxEndHeight = 0;
 
-        for (Map.Entry<String, Triple<Integer, Integer, Integer>> entry : this.fileListCache.entrySet()) {
+        for (Map.Entry<String, Triple<Integer, Integer, Integer>> entry : cache.entrySet()) {
             if (entry.getValue() == null) {
                 continue;
             }
@@ -342,12 +356,17 @@ public class BlockArchiveReader {
      * canonical, content-addressable chunks used for archive distribution.
      */
     public List<int[]> getArchiveChunkRanges() {
-        if (this.fileListCache == null) {
+        Map<String, Triple<Integer, Integer, Integer>> cache = this.fileListCache;
+        if (cache == null) {
             this.fetchFileList();
+            cache = this.fileListCache;
         }
 
         List<int[]> ranges = new ArrayList<>();
-        for (Triple<Integer, Integer, Integer> info : this.fileListCache.values()) {
+        if (cache == null) {
+            return ranges;
+        }
+        for (Triple<Integer, Integer, Integer> info : cache.values()) {
             if (info == null || info.getA() == null || info.getB() == null) {
                 continue;
             }
@@ -363,23 +382,37 @@ public class BlockArchiveReader {
      * unmodified .dat file, so they hash identically across nodes that archived the same blocks —
      * the basis for content-addressed, multi-source chunk distribution.
      */
-    public byte[] fetchRawChunkBytesForStartHeight(int startHeight) {
-        if (this.fileListCache == null) {
+    /**
+     * Resolves the archive filename whose chunk begins at {@code startHeight}, or null if we hold no such chunk.
+     * On a miss the (cheap) file-list cache is refreshed next time, but the manifest cache is deliberately NOT
+     * touched: this is reachable by any peer (GET_ARCHIVE_CHUNK), and dropping the manifest cache would let a peer
+     * force a full re-read + SHA-256 of the entire archive by interleaving bogus-height requests with manifest
+     * requests. The manifest cache is invalidated only on the legitimate write paths (BlockArchiveWriter etc.).
+     */
+    private String resolveChunkFilename(int startHeight) {
+        Map<String, Triple<Integer, Integer, Integer>> cache = this.fileListCache;
+        if (cache == null) {
             this.fetchFileList();
+            cache = this.fileListCache;
+        }
+        if (cache == null) {
+            return null;
         }
 
-        String filename = null;
-        for (Map.Entry<String, Triple<Integer, Integer, Integer>> entry : this.fileListCache.entrySet()) {
+        for (Map.Entry<String, Triple<Integer, Integer, Integer>> entry : cache.entrySet()) {
             Triple<Integer, Integer, Integer> info = entry.getValue();
             if (info != null && info.getA() != null && info.getA() == startHeight) {
-                filename = entry.getKey();
-                break;
+                return entry.getKey();
             }
         }
 
+        this.fileListCache = null;
+        return null;
+    }
+
+    public byte[] fetchRawChunkBytesForStartHeight(int startHeight) {
+        String filename = resolveChunkFilename(startHeight);
         if (filename == null) {
-            // We don't have a chunk starting at this height; the cache may be stale, so refresh next time.
-            this.invalidateFileListCache();
             return null;
         }
 
@@ -388,6 +421,52 @@ public class BlockArchiveReader {
             return Files.readAllBytes(filePath);
         } catch (IOException e) {
             LOGGER.info("Unable to read archive chunk {}: {}", filename, e.getMessage());
+            return null;
+        }
+    }
+
+    /** A positional slice of a chunk file together with the file's total size. */
+    public static final class ChunkSlice {
+        public final byte[] data;
+        public final int totalSize;
+
+        public ChunkSlice(byte[] data, int totalSize) {
+            this.data = data;
+            this.totalSize = totalSize;
+        }
+    }
+
+    /**
+     * Reads up to {@code maxLength} bytes from {@code offset} of the chunk file beginning at {@code startHeight},
+     * via a positional read so the whole file is never loaded into heap (the serving hot path). Returns the slice
+     * and the file's total size, or null if no such chunk exists or {@code offset} is out of range.
+     */
+    public ChunkSlice fetchRawChunkSlice(int startHeight, int offset, int maxLength) {
+        String filename = resolveChunkFilename(startHeight);
+        if (filename == null) {
+            return null;
+        }
+
+        Path filePath = Paths.get(Settings.getInstance().getRepositoryPath(), "archive", filename).toAbsolutePath();
+        try {
+            long fileSize = Files.size(filePath);
+            if (fileSize <= 0 || fileSize > Integer.MAX_VALUE) {
+                return null;
+            }
+            int totalSize = (int) fileSize;
+            if (offset < 0 || offset >= totalSize) {
+                return null;
+            }
+
+            int sliceLength = Math.min(Math.max(maxLength, 0), totalSize - offset);
+            byte[] data = new byte[sliceLength];
+            try (RandomAccessFile file = new RandomAccessFile(filePath.toFile(), "r")) {
+                file.seek(offset);
+                file.readFully(data);
+            }
+            return new ChunkSlice(data, totalSize);
+        } catch (IOException e) {
+            LOGGER.info("Unable to read archive chunk slice {} @ {}: {}", filename, offset, e.getMessage());
             return null;
         }
     }
