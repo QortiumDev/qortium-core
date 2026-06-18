@@ -59,9 +59,6 @@ public class Synchronizer extends Thread {
 	/** Maximum number of consecutive failed sync attempts before marking peer as misbehaved */
 	private static final int MAX_CONSECUTIVE_FAILED_SYNC_ATTEMPTS = 3;
 
-    /* Minimum peer version that supports syncing multiple blocks at once via GetBlocksMessage */
-    private static final long PEER_VERSION_550 = 0x0500050000L;
-
 	private boolean running;
 
 	/** Latest block signatures from other peers that we know are on inferior chains. */
@@ -1934,12 +1931,12 @@ public class Synchronizer extends Thread {
         //final BlockData ourLatestBlockData = repository.getBlockRepository().getLastBlock();
 
         int blocksBehind = peerHeight - ourInitialHeight;
-        if (Settings.getInstance().isFastSyncEnabled() && peer.getPeersVersion() >= PEER_VERSION_550 && blocksBehind >= MAXIMUM_REQUEST_SIZE) {
+        if (Settings.getInstance().isFastSyncEnabled() && blocksBehind >= MAXIMUM_REQUEST_SIZE) {
             // This peer supports syncing multiple blocks at once via GetBlocksMessage, and it is enabled in the settings
             return this.applyNewBlocksUsingFastSync(repository, commonBlockData, ourInitialHeight, peer, peerHeight, peerBlockSummaries);
         }
         else {
-            // Older peer version, or fast sync is disabled in the settings - use slow sync
+            // Fast sync is disabled in the settings, or the peer is close enough to use slow sync
             return this.applyNewBlocksUsingSlowSync(repository, commonBlockData, ourInitialHeight, peer, peerHeight, peerBlockSummaries);
         }
     }

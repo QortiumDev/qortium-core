@@ -38,6 +38,7 @@ import java.nio.channels.*;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -63,6 +64,7 @@ public class NetworkData {
     //  Maximum time allowed for handshake to complete, in milliseconds.
     private static final long HANDSHAKE_TIMEOUT = 60 * 1000L; // ms
     private static final int I2P_FORWARD_DESTINATION_TIMEOUT = 5 * 1000; // ms
+    private static final long I2P_DATA_START_RETRY_DELAY = 60 * 1000L; // ms
 
     private static final long NETWORK_EPC_KEEPALIVE = 5L; // seconds
 
@@ -223,9 +225,10 @@ public class NetworkData {
     private Selector channelSelector;
     private ServerSocketChannel serverChannel;
     private SelectionKey serverSelectionKey;
-    private I2PStreamProvider dataI2PStreamProvider;
-    private ServerSocketChannel i2pServerChannel;
+    private volatile I2PStreamProvider dataI2PStreamProvider;
+    private volatile ServerSocketChannel i2pServerChannel;
     private final Set<SelectableChannel> channelsPendingWrite = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean i2pStartupInProgress = new AtomicBoolean(false);
     /** Coalesces OP_WRITE wakeups: only the first caller per select-cycle actually wakes the selector. */
     private final java.util.concurrent.atomic.AtomicBoolean selectorWakeupPending = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -336,21 +339,42 @@ public class NetworkData {
     }
 
     private void startI2PDataFallbackAsync() {
+        if (!this.i2pStartupInProgress.compareAndSet(false, true))
+            return;
+
         Thread i2pStarter = new Thread(this::startI2PDataFallback, "NetworkData-I2P-Startup");
         i2pStarter.setDaemon(true);
         i2pStarter.start();
     }
 
     private void startI2PDataFallback() {
-        Settings settings = Settings.getInstance();
-        if (!settings.isQdnEnabled() || !settings.isI2PEnabled()) {
-            LOGGER.info("I2P data fallback disabled by settings");
-            return;
+        try {
+            while (!this.isShuttingDown && !Thread.currentThread().isInterrupted()) {
+                Settings settings = Settings.getInstance();
+                if (!settings.isQdnEnabled() || !settings.isI2PEnabled()) {
+                    LOGGER.info("I2P data fallback disabled by settings");
+                    return;
+                }
+
+                if (settings.isI2PEmbeddedRouterEnabled())
+                    LOGGER.warn("Embedded I2P router is not implemented yet; using the SAM provider");
+
+                if (startI2PDataFallbackAttempt(settings))
+                    return;
+
+                try {
+                    Thread.sleep(I2P_DATA_START_RETRY_DELAY);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        } finally {
+            this.i2pStartupInProgress.set(false);
         }
+    }
 
-        if (settings.isI2PEmbeddedRouterEnabled())
-            LOGGER.warn("Embedded I2P router is not implemented yet; using the SAM provider");
-
+    private boolean startI2PDataFallbackAttempt(Settings settings) {
         I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
                 "qortium-data-" + this.ourNodeId, settings.getI2PDataKeyPath());
         ServerSocketChannel forwardServerChannel = null;
@@ -377,8 +401,10 @@ public class NetworkData {
             this.dataI2PStreamProvider = provider;
             this.i2pServerChannel = forwardServerChannel;
             LOGGER.info("NetworkData I2P fallback reachable at {}", provider.getLocalB32());
+            return true;
         } catch (IOException | RuntimeException e) {
-            LOGGER.warn("NetworkData I2P fallback unavailable: {}", e.getMessage());
+            LOGGER.warn("NetworkData I2P fallback unavailable: {}; retrying in {} seconds",
+                    e.getMessage(), TimeUnit.MILLISECONDS.toSeconds(I2P_DATA_START_RETRY_DELAY));
             if (forwardServerChannel != null) {
                 try {
                     forwardServerChannel.close();
@@ -389,6 +415,7 @@ public class NetworkData {
             provider.close();
             this.dataI2PStreamProvider = null;
             this.i2pServerChannel = null;
+            return false;
         }
     }
 
@@ -437,14 +464,43 @@ public class NetworkData {
     }
 
     public SocketChannel connectI2PDataPeer(String remoteB32) throws IOException {
-        if (!Settings.getInstance().isI2PEnabled())
+        if (!Settings.getInstance().isI2PEnabled()) {
+            LOGGER.debug("I2P data peer {} not connected because I2P is disabled", remoteB32);
             return null;
+        }
 
         I2PStreamProvider provider = this.dataI2PStreamProvider;
-        if (provider == null || !provider.isSessionUp())
+        if (provider == null) {
+            LOGGER.debug("I2P data peer {} not connected because the data fallback session is not ready", remoteB32);
+            startI2PDataFallbackAsync();
             return null;
+        }
+
+        if (!provider.isSessionUp()) {
+            LOGGER.warn("I2P data peer {} not connected because the data fallback session is down; restarting fallback", remoteB32);
+            closeI2PDataFallback();
+            startI2PDataFallbackAsync();
+            return null;
+        }
 
         return provider.connect(remoteB32);
+    }
+
+    private void closeI2PDataFallback() {
+        ServerSocketChannel serverChannel = this.i2pServerChannel;
+        this.i2pServerChannel = null;
+        if (serverChannel != null && serverChannel.isOpen()) {
+            try {
+                serverChannel.close();
+            } catch (IOException e) {
+                LOGGER.debug("Error closing I2P data forward listener: {}", e.getMessage());
+            }
+        }
+
+        I2PStreamProvider provider = this.dataI2PStreamProvider;
+        this.dataI2PStreamProvider = null;
+        if (provider != null)
+            provider.close();
     }
 
     protected byte[] getOurPublicKey() {
@@ -2743,15 +2799,7 @@ public class NetworkData {
                 // Not important
             }
         }
-        if (this.i2pServerChannel != null && this.i2pServerChannel.isOpen()) {
-            try {
-                this.i2pServerChannel.close();
-            } catch (IOException e) {
-                LOGGER.debug("Error closing I2P data forward listener: {}", e.getMessage());
-            }
-        }
-        if (this.dataI2PStreamProvider != null)
-            this.dataI2PStreamProvider.close();
+        closeI2PDataFallback();
 
         // Shutdown chunk processor pool first (stop accepting new chunk processing tasks)
         LOGGER.info("Shutting down chunk processor pool...");

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - network: remove stale peer-version gates and harden I2P data fallback
+
+Removes several old Qortal-era peer-version gates that blocked Qortium `1.0.0` nodes from using capabilities they already support: QDN data-peer discovery no longer requires a `6.0.0` peer, QDN metadata relay no longer filters peers by an inherited relay minimum, fast-sync no longer requires an old `5.5.0` numeric version threshold, and the unused foreign-fee message minimum is removed. This keeps compatibility decisions tied to Qortium's current protocol and capabilities instead of inherited version numbers. The QDN I2P fallback startup path is also made more resilient: if the SAM data session or inbound forward times out during startup, the node closes that failed attempt, logs the retry, and keeps trying instead of leaving I2P unavailable until restart; outbound I2P data connects now log whether I2P is disabled, not ready, or restarting after a down session.
+
 ### 2026-06-18 - network: wire I2P fallback into QDN data peers
 
 Connects the I2P fallback transport to the QDN data network. Nodes now bring up a separate data-network SAM destination when I2P is enabled, advertise that destination as an `I2P_QDN` handshake capability, learn both direct TCP and I2P QDN routes from chain peers, and keep direct TCP as the primary path while allowing I2P as the fallback route for peers that cannot accept inbound TCP. The data-network listener handles I2P forwarded streams without blocking the selector thread, outbound data-peer connects can use the I2P stream provider, and new settings expose the SAM host, SAM port, separate chain/data key paths, preferred-transport toggle, and future embedded-router toggle. Focused tests cover the new capability round trip, handshake advertisement, disabled-QDN handling, and direct-versus-I2P data-peer learning behavior.

@@ -13,8 +13,6 @@ import java.util.List;
  */
 public class ForeignFeesMessage extends Message {
 
-	public static final long MIN_PEER_VERSION = 0x300060000L; // 3.6.0
-
 	private List<ForeignFeeDecodedData> foreignFees;
 
 	public ForeignFeesMessage(List<ForeignFeeDecodedData> foreignFeeDecodedData) {
