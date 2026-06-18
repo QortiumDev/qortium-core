@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - network: wire I2P fallback into QDN data peers
+
+Connects the I2P fallback transport to the QDN data network. Nodes now bring up a separate data-network SAM destination when I2P is enabled, advertise that destination as an `I2P_QDN` handshake capability, learn both direct TCP and I2P QDN routes from chain peers, and keep direct TCP as the primary path while allowing I2P as the fallback route for peers that cannot accept inbound TCP. The data-network listener handles I2P forwarded streams without blocking the selector thread, outbound data-peer connects can use the I2P stream provider, and new settings expose the SAM host, SAM port, separate chain/data key paths, preferred-transport toggle, and future embedded-router toggle. Focused tests cover the new capability round trip, handshake advertisement, disabled-QDN handling, and direct-versus-I2P data-peer learning behavior.
+
 ### 2026-06-18 - network: add I2P fallback transport groundwork
 
 Adds the first foundation for I2P fallback networking: a small transport seam, a thin SAM v3 session client for external i2pd, persistent `.b32.i2p` destination handling, and opt-in live integration tests that prove two local SAM sessions can exchange bytes over I2P and reject an invalid destination. Peer addresses now carry an IP-or-I2P kind, parse valid `.b32.i2p` hosts without DNS or IP-literal validation, keep I2P ports out of the TCP path, and round-trip through the existing PEERS message format. This keeps direct TCP as the normal path while preparing the data and chain networks to add I2P as a fallback route for nodes that cannot accept inbound TCP connections.

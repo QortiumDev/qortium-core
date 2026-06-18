@@ -28,4 +28,21 @@ public class HelloMessageTests {
 		assertEquals("abc123", chainConfigHash);
 	}
 
+	@Test
+	public void testI2PQdnCapabilityRoundTrip() throws MessageException {
+		String b32 = "abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrst.b32.i2p";
+		Map<String, Object> capabilities = new HashMap<>();
+		capabilities.put("QDN", 24894);
+		capabilities.put("I2P_QDN", b32);
+
+		HelloMessage message = new HelloMessage(123L, "1.0.0", "127.0.0.1:14892", capabilities, Peer.NETWORK);
+
+		HelloMessage decodedMessage = (HelloMessage) HelloMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+		Object qdnCapability = decodedMessage.getCapabilities().getCapability("QDN");
+		Object i2pQdnCapability = decodedMessage.getCapabilities().getCapability("I2P_QDN");
+
+		assertEquals(24894, ((Number) qdnCapability).intValue());
+		assertEquals(b32, i2pQdnCapability);
+	}
+
 }

@@ -243,6 +243,14 @@ public class Peer {
      * Construct Peer using existing, connected socket
      */
     public Peer(SocketChannel socketChannel, int network) throws IOException {
+        this(socketChannel, network, PeerAddress.fromSocket(socketChannel.socket()));
+    }
+
+    /**
+     * Construct Peer using existing, connected socket and an explicit logical peer address.
+     * Used by forwarded transports where the TCP socket endpoint is only a local bridge.
+     */
+    public Peer(SocketChannel socketChannel, int network, PeerAddress peerAddress) throws IOException {
         this(network, false);  // Peer is inbound
 
         this.socketChannel = socketChannel;
@@ -254,9 +262,7 @@ public class Peer {
             sharedSetup(Peer.NETWORK);
 
         this.resolvedAddress = ((InetSocketAddress) socketChannel.socket().getRemoteSocketAddress());
-        this.isLocal = isAddressLocal(this.resolvedAddress.getAddress());
-
-        PeerAddress peerAddress = PeerAddress.fromSocket(socketChannel.socket());
+        this.isLocal = peerAddress.isI2P() ? false : isAddressLocal(this.resolvedAddress.getAddress());
         this.peerData = new PeerData(peerAddress);
 
         this.peerType = network;
@@ -715,13 +721,28 @@ public class Peer {
         LOGGER.trace("[{}] Connecting to peer {}", this.peerConnectionId, this);
 
         try {
-            this.resolvedAddress = this.peerData.getAddress().toSocketAddress();
-            this.isLocal = isAddressLocal(this.resolvedAddress.getAddress());
+            PeerAddress peerAddress = this.peerData.getAddress();
+            if (peerAddress.isI2P()) {
+                if (network != Peer.NETWORKDATA) {
+                    LOGGER.trace("[{}] I2P chain-network connections are not wired yet: {}", this.peerConnectionId, this);
+                    return null;
+                }
 
-            this.socketChannel = SocketChannel.open();
-            InetAddress bindAddr = InetAddress.getByName(Settings.getInstance().getBindAddress());
-            this.socketChannel.socket().bind(new InetSocketAddress(bindAddr, 0));
-            this.socketChannel.socket().connect(resolvedAddress, CONNECT_TIMEOUT);
+                this.socketChannel = NetworkData.getInstance().connectI2PDataPeer(peerAddress.getHost());
+                if (this.socketChannel == null)
+                    return null;
+
+                this.resolvedAddress = (InetSocketAddress) this.socketChannel.getRemoteAddress();
+                this.isLocal = false;
+            } else {
+                this.resolvedAddress = peerAddress.toSocketAddress();
+                this.isLocal = isAddressLocal(this.resolvedAddress.getAddress());
+
+                this.socketChannel = SocketChannel.open();
+                InetAddress bindAddr = InetAddress.getByName(Settings.getInstance().getBindAddress());
+                this.socketChannel.socket().bind(new InetSocketAddress(bindAddr, 0));
+                this.socketChannel.socket().connect(resolvedAddress, CONNECT_TIMEOUT);
+            }
         } catch (SocketTimeoutException e) {
             LOGGER.trace("[{}] Connection timed out to peer {}", this.peerConnectionId, this);
             return null;
