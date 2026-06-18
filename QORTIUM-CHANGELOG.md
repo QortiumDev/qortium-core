@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-17 - fast-sync: write archive chunks through configured checkpoints
+
+Lets archive nodes write a block-archive chunk that ends at a configured checkpoint even when that chunk has not reached the normal 10 MiB archive-file target yet. This keeps the default chunk size behaviour for ordinary archive progress, but makes checkpoint-backed fast-sync testable on small or young networks like Previewnet, where the whole chain up to the checkpoint can be far smaller than 10 MiB.
+
+When the next configured checkpoint is already within the trimmed, archive-eligible block range, the archiver now points the writer at that checkpoint and relaxes the size gate for that checkpoint-ending file only. The writer still stops at the normal size target first if the range grows large enough, so large networks continue producing regular-sized chunks before the final checkpoint-spanning piece. After a successful write, the archiver advances from the last written block height, which keeps the next archive pass moving forward from the correct height. New tests cover checkpoint selection without introducing another runtime setting.
+
 ### 2026-06-17 - consensus: unpin Previewnet feature triggers from chain config
 
 Removes the block-27000 Previewnet activation entries for the online-account signature V2 and asset-order bounds fixes from both bundled Previewnet chain config copies. With those keys omitted, Previewnet falls back to the disabled sentinel values already built into the code, so the hard-forking consensus fixes stay off until a new coordinated activation height is chosen.
