@@ -12,6 +12,8 @@ import org.qortium.controller.arbitrary.ArbitraryDataFileManager;
 import org.qortium.controller.arbitrary.ArbitraryMetadataManager;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.network.PeerData;
+import org.qortium.network.i2p.I2PStreamProvider;
+import org.qortium.network.i2p.SamSession;
 import org.qortium.network.message.*;
 import org.qortium.network.task.*;
 import org.qortium.network.upnp.PortMapperFactory;
@@ -60,6 +62,7 @@ public class NetworkData {
 
     //  Maximum time allowed for handshake to complete, in milliseconds.
     private static final long HANDSHAKE_TIMEOUT = 60 * 1000L; // ms
+    private static final int I2P_FORWARD_DESTINATION_TIMEOUT = 5 * 1000; // ms
 
     private static final long NETWORK_EPC_KEEPALIVE = 5L; // seconds
 
@@ -220,6 +223,8 @@ public class NetworkData {
     private Selector channelSelector;
     private ServerSocketChannel serverChannel;
     private SelectionKey serverSelectionKey;
+    private I2PStreamProvider dataI2PStreamProvider;
+    private ServerSocketChannel i2pServerChannel;
     private final Set<SelectableChannel> channelsPendingWrite = ConcurrentHashMap.newKeySet();
     /** Coalesces OP_WRITE wakeups: only the first caller per select-cycle actually wakes the selector. */
     private final java.util.concurrent.atomic.AtomicBoolean selectorWakeupPending = new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -326,6 +331,65 @@ public class NetworkData {
         this.schedulerThread = new Thread(this::runSchedulerLoop, "NetworkData-Scheduler");
         this.schedulerThread.setDaemon(false);
         this.schedulerThread.start();
+
+        startI2PDataFallbackAsync();
+    }
+
+    private void startI2PDataFallbackAsync() {
+        Thread i2pStarter = new Thread(this::startI2PDataFallback, "NetworkData-I2P-Startup");
+        i2pStarter.setDaemon(true);
+        i2pStarter.start();
+    }
+
+    private void startI2PDataFallback() {
+        Settings settings = Settings.getInstance();
+        if (!settings.isQdnEnabled() || !settings.isI2PEnabled()) {
+            LOGGER.info("I2P data fallback disabled by settings");
+            return;
+        }
+
+        if (settings.isI2PEmbeddedRouterEnabled())
+            LOGGER.warn("Embedded I2P router is not implemented yet; using the SAM provider");
+
+        I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
+                "qortium-data-" + this.ourNodeId, settings.getI2PDataKeyPath());
+        ServerSocketChannel forwardServerChannel = null;
+
+        try {
+            provider.start();
+            if (this.isShuttingDown)
+                throw new IOException("NetworkData is shutting down");
+
+            forwardServerChannel = ServerSocketChannel.open();
+            forwardServerChannel.configureBlocking(false);
+            forwardServerChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+            forwardServerChannel.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), LISTEN_BACKLOG);
+            synchronized (this.channelSelector) {
+                forwardServerChannel.register(this.channelSelector, SelectionKey.OP_ACCEPT);
+                this.channelSelector.wakeup();
+            }
+            int localForwardPort = ((InetSocketAddress) forwardServerChannel.getLocalAddress()).getPort();
+
+            provider.startForward(localForwardPort);
+            if (this.isShuttingDown)
+                throw new IOException("NetworkData is shutting down");
+
+            this.dataI2PStreamProvider = provider;
+            this.i2pServerChannel = forwardServerChannel;
+            LOGGER.info("NetworkData I2P fallback reachable at {}", provider.getLocalB32());
+        } catch (IOException | RuntimeException e) {
+            LOGGER.warn("NetworkData I2P fallback unavailable: {}", e.getMessage());
+            if (forwardServerChannel != null) {
+                try {
+                    forwardServerChannel.close();
+                } catch (IOException closeException) {
+                    LOGGER.debug("Error closing I2P data forward listener: {}", closeException.getMessage());
+                }
+            }
+            provider.close();
+            this.dataI2PStreamProvider = null;
+            this.i2pServerChannel = null;
+        }
     }
 
     // Getters / setters
@@ -362,6 +426,25 @@ public class NetworkData {
 
     public String getOurNodeId() {
         return this.ourNodeId;
+    }
+
+    public String getI2PDataDestination() {
+        I2PStreamProvider provider = this.dataI2PStreamProvider;
+        if (provider == null || !provider.isSessionUp())
+            return null;
+
+        return provider.getLocalB32();
+    }
+
+    public SocketChannel connectI2PDataPeer(String remoteB32) throws IOException {
+        if (!Settings.getInstance().isI2PEnabled())
+            return null;
+
+        I2PStreamProvider provider = this.dataI2PStreamProvider;
+        if (provider == null || !provider.isSessionUp())
+            return null;
+
+        return provider.connect(remoteB32);
     }
 
     protected byte[] getOurPublicKey() {
@@ -845,6 +928,111 @@ public class NetworkData {
         return this.getImmutableConnectedPeers().stream().anyMatch(peer -> peer.getPeerData().getAddress().equals(peerAddress));
     };
 
+    private List<PeerData> buildQdnPeerDataFromNetworkPeer(Peer networkPeer, Long addedWhen, String addedBy) {
+        List<PeerData> qdnPeers = new ArrayList<>(2);
+
+        PeerAddress directAddress = getDirectQdnPeerAddress(networkPeer);
+        if (directAddress != null)
+            qdnPeers.add(new PeerData(directAddress, addedWhen, addedBy));
+
+        PeerAddress i2pAddress = getI2PQdnPeerAddress(networkPeer);
+        if (i2pAddress != null)
+            qdnPeers.add(new PeerData(i2pAddress, addedWhen, addedBy));
+
+        return qdnPeers;
+    }
+
+    private PeerAddress getDirectQdnPeerAddress(Peer networkPeer) {
+        PeerAddress networkAddress = networkPeer.getPeerData().getAddress();
+        if (networkAddress.isI2P())
+            return null;
+
+        Integer qdnPort = getQdnPortCapability(networkPeer);
+        if (qdnPort == null || qdnPort <= 0)
+            return null;
+
+        try {
+            return PeerAddress.fromString(networkAddress.getHost() + ":" + qdnPort);
+        } catch (IllegalArgumentException e) {
+            LOGGER.debug("Peer {} advertised unusable QDN port {}: {}", networkAddress, qdnPort, e.getMessage());
+            return null;
+        }
+    }
+
+    private Integer getQdnPortCapability(Peer networkPeer) {
+        Object qdnCapability = networkPeer.getPeerCapability("QDN");
+        if (qdnCapability == null)
+            return null;
+
+        if (!(qdnCapability instanceof Number)) {
+            LOGGER.warn("Peer {} has invalid QDN capability type: {}, skipping direct QDN address",
+                    networkPeer.getPeerData().getAddress(), qdnCapability.getClass());
+            return null;
+        }
+
+        return ((Number) qdnCapability).intValue();
+    }
+
+    private PeerAddress getI2PQdnPeerAddress(Peer networkPeer) {
+        if (!Settings.getInstance().isI2PEnabled())
+            return null;
+
+        Object i2pCapability = networkPeer.getPeerCapability(Handshake.I2P_QDN_CAPABILITY);
+        if (i2pCapability == null)
+            return null;
+
+        if (!(i2pCapability instanceof String)) {
+            LOGGER.warn("Peer {} has invalid I2P_QDN capability type: {}, skipping I2P QDN address",
+                    networkPeer.getPeerData().getAddress(), i2pCapability.getClass());
+            return null;
+        }
+
+        try {
+            PeerAddress i2pAddress = PeerAddress.fromString(((String) i2pCapability).trim());
+            if (!i2pAddress.isI2P())
+                throw new IllegalArgumentException("I2P_QDN was not an I2P address");
+            return i2pAddress;
+        } catch (IllegalArgumentException e) {
+            LOGGER.debug("Peer {} advertised invalid I2P_QDN capability: {}",
+                    networkPeer.getPeerData().getAddress(), e.getMessage());
+            return null;
+        }
+    }
+
+    private int addKnownPeersIfMissing(List<PeerData> candidatePeers, String nodeId) {
+        int added = 0;
+
+        synchronized (this.allKnownPeers) {
+            for (PeerData candidatePeer : candidatePeers) {
+                String address = candidatePeer.getAddress().toString();
+                if (nodeId != null)
+                    updateAddressToNodeIdCache(address, nodeId);
+
+                boolean alreadyKnown = this.allKnownPeers.stream()
+                        .anyMatch(peerData -> peerData.getAddress().equals(candidatePeer.getAddress()));
+                if (alreadyKnown)
+                    continue;
+
+                this.allKnownPeers.add(candidatePeer);
+                added++;
+            }
+        }
+
+        return added;
+    }
+
+    private List<PeerData> preferConfiguredTransport(List<PeerData> peers) {
+        if (peers.isEmpty())
+            return peers;
+
+        boolean preferI2P = Settings.getInstance().isI2PPreferred();
+        List<PeerData> preferredPeers = peers.stream()
+                .filter(peerData -> peerData.getAddress().isI2P() == preferI2P)
+                .collect(Collectors.toList());
+
+        return preferredPeers.isEmpty() ? peers : preferredPeers;
+    }
+
     // private final Predicate<PeerData> isResolvedAsConnectedPeer = peerData -> {
     //     try {
     //         InetSocketAddress resolvedSocketAddress = peerData.getAddress().toSocketAddress();
@@ -934,13 +1122,18 @@ public class NetworkData {
                             }
                         } else if (key.isAcceptable()) {
                             clearInterestOps(key, SelectionKey.OP_ACCEPT);
+                            ServerSocketChannel readyServerChannel = (ServerSocketChannel) key.channel();
                             try {
-                                new ChannelAcceptTask(serverChannel, Peer.NETWORKDATA).perform();
+                                if (readyServerChannel == this.i2pServerChannel)
+                                    acceptI2PForwardedPeer(readyServerChannel);
+                                else
+                                    new ChannelAcceptTask(readyServerChannel, Peer.NETWORKDATA).perform();
                             } catch (InterruptedException e) {
                                 Thread.currentThread().interrupt();
                                 break;
+                            } finally {
+                                setInterestOps(readyServerChannel, SelectionKey.OP_ACCEPT);
                             }
-                            setInterestOps(serverSelectionKey.channel(), SelectionKey.OP_ACCEPT);
                         }
                     } catch (CancelledKeyException e) {
                     }
@@ -987,6 +1180,72 @@ public class NetworkData {
             }
         }
         LOGGER.debug("NetworkData I/O loop exiting");
+    }
+
+    private void acceptI2PForwardedPeer(ServerSocketChannel forwardServerChannel) {
+        try {
+            SocketChannel socketChannel = forwardServerChannel.accept();
+            if (socketChannel == null)
+                return;
+
+            try {
+                networkDataWorkerPool.execute(() -> processI2PForwardedPeer(socketChannel));
+            } catch (RejectedExecutionException e) {
+                LOGGER.debug("NetworkData worker pool rejected I2P forwarded peer setup");
+                closeQuietly(socketChannel);
+            }
+        } catch (IOException e) {
+            LOGGER.debug("I2P data accept failed: {}", e.getMessage());
+        }
+    }
+
+    private void processI2PForwardedPeer(SocketChannel socketChannel) {
+        PeerAddress peerAddress = null;
+
+        try {
+            Long now = NTP.getTime();
+            if (now == null) {
+                LOGGER.debug("I2P data connection discarded due to lack of NTP sync");
+                socketChannel.close();
+                return;
+            }
+
+            I2PStreamProvider provider = this.dataI2PStreamProvider;
+            if (provider == null || !provider.isSessionUp()) {
+                LOGGER.debug("I2P data connection discarded because the session is not up");
+                socketChannel.close();
+                return;
+            }
+
+            socketChannel.configureBlocking(true);
+            socketChannel.socket().setSoTimeout(I2P_FORWARD_DESTINATION_TIMEOUT);
+            peerAddress = PeerAddress.fromString(provider.readForwardedDestination(socketChannel));
+            socketChannel.socket().setSoTimeout(0);
+            if (!peerAddress.isI2P())
+                throw new IOException("Forwarded destination was not an I2P address");
+
+            LOGGER.debug("I2P data connection accepted from peer {}", peerAddress);
+
+            Peer newPeer = new Peer(socketChannel, Peer.NETWORKDATA, peerAddress);
+            newPeer.setIsDataPeer(true);
+            this.addConnectedPeer(newPeer);
+            this.onPeerReady(newPeer);
+        } catch (IllegalArgumentException | IOException e) {
+            LOGGER.debug("I2P data connection failed from peer {}: {}",
+                    peerAddress != null ? peerAddress : "unknown", e.getMessage());
+            closeQuietly(socketChannel);
+        }
+    }
+
+    private void closeQuietly(SocketChannel socketChannel) {
+        if (socketChannel == null || !socketChannel.isOpen())
+            return;
+
+        try {
+            socketChannel.close();
+        } catch (IOException closeException) {
+            LOGGER.debug("Error closing socket: {}", closeException.getMessage());
+        }
     }
 
     private void runSchedulerLoop() {
@@ -1236,60 +1495,15 @@ public class NetworkData {
                         String addedBy = "Network-fallback";
                         int peersAdded = 0;
                         
-                        // Only use peers that advertise QDN capability
                         for (Peer networkPeer : connectedNetworkPeers) {
-                            Object qdnCapability = networkPeer.getPeerCapability("QDN");
-                            
-                            // Skip peers without QDN capability
-                            if (qdnCapability == null) {
-                                continue;
-                            }
-                            
-                            // Get the actual QDN port from peer's capability
-                            int qdnPort;
-                            try {
-                                if (qdnCapability instanceof Integer) {
-                                    qdnPort = (Integer) qdnCapability;
-                                } else if (qdnCapability instanceof Long) {
-                                    qdnPort = ((Long) qdnCapability).intValue();
-                                } else {
-                                    LOGGER.debug("Peer {} has invalid QDN capability type: {}", 
-                                            networkPeer.getPeerData().getAddress(), qdnCapability.getClass());
-                                    continue;
-                                }
-                            } catch (Exception e) {
-                                LOGGER.debug("Failed to parse QDN port for peer {}: {}", 
-                                        networkPeer.getPeerData().getAddress(), e.getMessage());
-                                continue;
-                            }
-                            
-                            String host = networkPeer.getPeerData().getAddress().getHost();
-                            String qdnAddress = host + ":" + qdnPort;
-                            PeerAddress qdnPeerAddress = PeerAddress.fromString(qdnAddress);
-                            PeerData qdnPeerData = new PeerData(
-                                qdnPeerAddress,
-                                null,  // lastAttempted - not attempted yet
-                                null,  // lastConnected - not connected yet
-                                null,  // lastMisbehaved
-                                addedWhen,
-                                addedBy
-                            );
-                            peers.add(qdnPeerData);
-                            peersAdded++;
+                            List<PeerData> qdnPeerData = buildQdnPeerDataFromNetworkPeer(networkPeer, addedWhen, addedBy);
+                            peers.addAll(qdnPeerData);
+                            peersAdded += qdnPeerData.size();
                         }
                         
                         // Also add to our known peers list for future use
                         if (peersAdded > 0) {
-                            synchronized (this.allKnownPeers) {
-                                for (PeerData qdnPeer : peers) {
-                                    // Check if already exists
-                                    boolean alreadyExists = this.allKnownPeers.stream()
-                                        .anyMatch(pd -> pd.getAddress().equals(qdnPeer.getAddress()));
-                                    if (!alreadyExists) {
-                                        this.allKnownPeers.add(qdnPeer);
-                                    }
-                                }
-                            }
+                            addKnownPeersIfMissing(peers, null);
                             
                             LOGGER.trace("NetworkData had no peers - using {} QDN-capable peer(s) from Network as fallback", peersAdded);
                         } else {
@@ -1380,6 +1594,9 @@ public class NetworkData {
             return false;
         });
 
+        // Don't attempt I2P data peers until our own data I2P session is up.
+        peers.removeIf(peerData -> peerData.getAddress().isI2P() && this.getI2PDataDestination() == null);
+
         // Don't consider peers with recent direction mismatches
         // NetworkData: no fixed peer exemption (QDN doesn't have fixed bootstrap nodes)
         peers.removeIf(peerData -> {
@@ -1427,6 +1644,8 @@ public class NetworkData {
             }
             return null;
         }
+
+        peers = preferConfiguredTransport(peers);
 
         // Pick random peer
         int peerIndex = new Random().nextInt(peers.size());
@@ -1967,15 +2186,23 @@ public class NetworkData {
         // Clear any outbound failure records for this peer's IP since connection succeeded
         // Also update address→nodeId cache and clear direction mismatch for inbound
         try {
-            if (peer.getResolvedAddress() != null && peer.getPeersNodeId() != null) {
+            PeerAddress peerAddress = peer.getPeerData().getAddress();
+            if (peerAddress.isI2P() && peer.getPeersNodeId() != null) {
+                String theirNodeId = peer.getPeersNodeId();
+                updateAddressToNodeIdCache(peerAddress.toString(), theirNodeId);
+                clearOutboundFailures(peerAddress.getHost(), theirNodeId);
+
+                if (!peer.isOutbound())
+                    clearDirectionMismatch(theirNodeId);
+            } else if (peer.getResolvedAddress() != null && peer.getPeersNodeId() != null) {
                 String peerIP = peer.getResolvedAddress().getAddress().getHostAddress();
                 int peerPort = peer.getResolvedAddress().getPort();
-                String peerAddress = peerIP + ":" + peerPort;
+                String resolvedPeerAddress = peerIP + ":" + peerPort;
                 String theirNodeId = peer.getPeersNodeId();
                 
                 // Keep cache updated with latest address for this nodeId
                 // Handles IP changes from DHCP/UPnP/VPN
-                updateAddressToNodeIdCache(peerAddress, theirNodeId);
+                updateAddressToNodeIdCache(resolvedPeerAddress, theirNodeId);
                 
                 clearOutboundFailures(peerIP, theirNodeId);
                 
@@ -2290,60 +2517,16 @@ public class NetworkData {
     public void addPeer(Peer p) {
         LOGGER.trace("Passed a newly connected peer from Network : {}", p);
 
-        // We need the ip address only
-        String remoteHost = p.getPeerData().getAddress().getHost();
-        Object qdnCapability = p.getPeerCapability("QDN");
-        
-        // Skip peers that don't advertise QDN capability
-        if (qdnCapability == null) {
-            LOGGER.debug("Peer {} does not advertise QDN capability, skipping NetworkData registration", remoteHost);
-            return;
-        }
-        
-        // Parse QDN port from capability (handle both Integer and Long types)
-        int remoteHostQDNPort;
-        try {
-            if (qdnCapability instanceof Integer) {
-                remoteHostQDNPort = (Integer) qdnCapability;
-            } else if (qdnCapability instanceof Long) {
-                remoteHostQDNPort = ((Long) qdnCapability).intValue();
-            } else {
-                LOGGER.warn("Peer {} has invalid QDN capability type: {}, skipping", remoteHost, qdnCapability.getClass());
-                return;
-            }
-        } catch (Exception e) {
-            LOGGER.warn("Failed to parse QDN capability for peer {}: {}", remoteHost, e.getMessage());
+        List<PeerData> qdnPeers = buildQdnPeerDataFromNetworkPeer(p, System.currentTimeMillis(), "INIT");
+        if (qdnPeers.isEmpty()) {
+            LOGGER.debug("Peer {} does not advertise a usable QDN or I2P_QDN capability, skipping NetworkData registration",
+                    p.getPeerData().getAddress());
             return;
         }
 
-        String target = remoteHost + ":" + remoteHostQDNPort;
-        PeerAddress pa = PeerAddress.fromString(target);
-
-        synchronized (this.allKnownPeers) {
-            boolean alreadyKnown = allKnownPeers.stream()
-                    .anyMatch(pd -> pd.getAddress().equals(pa));
-            if (alreadyKnown)
-                return;
-
-            PeerData pd = new PeerData(
-                    pa,
-                    0L,
-                    0L,
-                    0L,
-                    System.currentTimeMillis(),
-                    "INIT");
-            allKnownPeers.add(pd);
-            
-            LOGGER.debug("Added QDN peer {} (port {}) from Network connection", remoteHost, remoteHostQDNPort);
-            
-            // CRITICAL FIX: Update cache to map QDN listen address to nodeId
-            // This allows getConnectablePeer() to identify this peer even if we're
-            // connected via a different port (e.g., inbound ephemeral port)
-            if (p.getPeersNodeId() != null) {
-                updateAddressToNodeIdCache(target, p.getPeersNodeId());
-                LOGGER.debug("Cached QDN address {} → nodeId {}", target, p.getPeersNodeId().substring(0, 8));
-            }
-        }
+        int added = addKnownPeersIfMissing(qdnPeers, p.getPeersNodeId());
+        if (added > 0)
+            LOGGER.debug("Added {} QDN peer address(es) from Network connection {}", added, p.getPeerData().getAddress());
     }
 
     public boolean mergePeers(String addedBy, long addedWhen, List<PeerAddress> peerAddresses) throws DataException {
@@ -2560,6 +2743,15 @@ public class NetworkData {
                 // Not important
             }
         }
+        if (this.i2pServerChannel != null && this.i2pServerChannel.isOpen()) {
+            try {
+                this.i2pServerChannel.close();
+            } catch (IOException e) {
+                LOGGER.debug("Error closing I2P data forward listener: {}", e.getMessage());
+            }
+        }
+        if (this.dataI2PStreamProvider != null)
+            this.dataI2PStreamProvider.close();
 
         // Shutdown chunk processor pool first (stop accepting new chunk processing tasks)
         LOGGER.info("Shutting down chunk processor pool...");

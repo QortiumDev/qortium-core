@@ -297,6 +297,21 @@ public class Settings {
 	/** Maximum time (in seconds) that a peer should remain connected when requesting QDN data */
 	private int maxDataPeerConnectionTime = 30 * 60; // seconds
 
+	/** Whether to bring up I2P fallback transports where supported. */
+	private boolean i2pEnabled = true;
+	/** Whether to prefer I2P even when a direct IP path is available. Useful for testing. */
+	private boolean i2pPreferred = false;
+	/** SAM bridge host for the initial external-i2pd provider. */
+	private String i2pSamHost = "127.0.0.1";
+	/** SAM bridge port for the initial external-i2pd provider. */
+	private int i2pSamPort = 7656;
+	/** Persistent I2P key file for the chain-network destination. */
+	private String i2pChainKeyFile = "i2p/chain.keys";
+	/** Persistent I2P key file for the QDN data-network destination. */
+	private String i2pDataKeyFile = "i2p/data.keys";
+	/** Future switch for an embedded Java I2P router behind the same transport seam. */
+	private boolean i2pEmbeddedRouter = false;
+
 	/** Whether to sync multiple blocks at once in normal operation */
 	private boolean fastSyncEnabled = true;
 	/** Whether to sync multiple blocks at once when the peer has a different chain */
@@ -902,6 +917,8 @@ public class Settings {
 
 	private enum WritableSettingType {
 		BOOLEAN,
+		INTEGER,
+		STRING,
 		AUTO_UPDATE_MODE,
 		STRING_ARRAY,
 		STRING_MAP,
@@ -947,6 +964,13 @@ public class Settings {
 		settings.put("autoRestartEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("bootstrapHosts", new WritableSetting(WritableSettingType.STRING_ARRAY, false));
 		settings.put("qdnEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
+		settings.put("i2pEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
+		settings.put("i2pPreferred", new WritableSetting(WritableSettingType.BOOLEAN, true));
+		settings.put("i2pSamHost", new WritableSetting(WritableSettingType.STRING, true));
+		settings.put("i2pSamPort", new WritableSetting(WritableSettingType.INTEGER, true));
+		settings.put("i2pChainKeyFile", new WritableSetting(WritableSettingType.STRING, true));
+		settings.put("i2pDataKeyFile", new WritableSetting(WritableSettingType.STRING, true));
+		settings.put("i2pEmbeddedRouter", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("storagePolicy", new WritableSetting(WritableSettingType.STORAGE_POLICY, false));
 		settings.put("relayModeEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("publicDataEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
@@ -1242,6 +1266,16 @@ public class Settings {
 					throw new IllegalArgumentException("Setting must be a boolean: " + settingName);
 				return value;
 
+			case INTEGER:
+				if (!(value instanceof Number))
+					throw new IllegalArgumentException("Setting must be an integer: " + settingName);
+				return ((Number) value).intValue();
+
+			case STRING:
+				if (!(value instanceof String))
+					throw new IllegalArgumentException("Setting must be a string: " + settingName);
+				return value;
+
 			case AUTO_UPDATE_MODE:
 				if (!(value instanceof String))
 					throw new IllegalArgumentException("Setting must be an auto-update mode name: " + settingName);
@@ -1362,6 +1396,18 @@ public class Settings {
 				throwValidationError(String.format("electrumTlsTrustMode must be one of: %s", possibleValues));
 			}
 		}
+
+		if (this.i2pSamHost == null || this.i2pSamHost.trim().isEmpty())
+			throwValidationError("i2pSamHost must not be blank");
+
+		if (this.i2pSamPort <= 0 || this.i2pSamPort > 65535)
+			throwValidationError("i2pSamPort must be between 1 and 65535");
+
+		if (this.i2pChainKeyFile == null || this.i2pChainKeyFile.trim().isEmpty())
+			throwValidationError("i2pChainKeyFile must not be blank");
+
+		if (this.i2pDataKeyFile == null || this.i2pDataKeyFile.trim().isEmpty())
+			throwValidationError("i2pDataKeyFile must not be blank");
 	}
 
 	private static Map<String, String> defaultBitcoinyNetworks() {
@@ -1735,6 +1781,42 @@ public class Settings {
 
 	public int getMaxDataPeers() {
 		return this.maxDataPeers;
+	}
+
+	public boolean isI2PEnabled() {
+		return this.i2pEnabled;
+	}
+
+	public boolean isI2PPreferred() {
+		return this.i2pPreferred;
+	}
+
+	public String getI2PSamHost() {
+		return this.i2pSamHost;
+	}
+
+	public int getI2PSamPort() {
+		return this.i2pSamPort;
+	}
+
+	public Path getI2PChainKeyPath() {
+		return resolveUserPath(this.i2pChainKeyFile);
+	}
+
+	public Path getI2PDataKeyPath() {
+		return resolveUserPath(this.i2pDataKeyFile);
+	}
+
+	public boolean isI2PEmbeddedRouterEnabled() {
+		return this.i2pEmbeddedRouter;
+	}
+
+	private Path resolveUserPath(String configuredPath) {
+		Path path = Paths.get(configuredPath);
+		if (path.isAbsolute())
+			return path;
+
+		return Paths.get(this.getUserPath()).resolve(path);
 	}
 
 	public int getMaxNetworkThreadPoolSize() {

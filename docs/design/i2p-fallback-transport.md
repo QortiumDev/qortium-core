@@ -364,10 +364,11 @@ Reusable references (reticulum branch): `RNS.java`, `ReticulumPeer.java`,
 ## 13. Implementation status & handoff (2026-06-18)
 
 **Branch:** `i2p-fallback-transport` in `/home/user/git/qortium`, created off
-`work/restore-feature-triggers` — **rebase onto `main` before any PR.** Changes are
-**uncommitted** in the working tree (operator reviews with meld, then commits).
+`work/restore-feature-triggers` — **rebase onto `main` before any PR.** The transport
+groundwork is checkpointed; the data-network wiring below should be reviewed with the
+current working-tree diff before committing.
 
-**Done — Phase 2a pieces 1-2 (seam + SAM client + address parsing):**
+**Done — Phase 2a (SAM fallback seam, address parsing, and data-network wiring):**
 - `src/main/java/org/qortium/network/i2p/I2PStreamProvider.java` — the transport seam (SAM
   now; embedded `net.i2p` possible later behind the same interface).
 - `src/main/java/org/qortium/network/i2p/SamSession.java` — thin SAM v3 client (persistent
@@ -386,6 +387,22 @@ Reusable references (reticulum branch): `RNS.java`, `ReticulumPeer.java`,
   `src/test/java/org/qortium/network/message/PeersMessageTests.java` — cover IP/DNS
   compatibility, `.b32.i2p` normalization/rejection, no-DNS socket conversion, and PEERS
   message round-trip for I2P addresses.
+- `src/main/java/org/qortium/settings/Settings.java` — adds enabled-by-default I2P settings,
+  SAM host/port, separate chain/data key paths, the future embedded-router toggle, writable
+  setting support, and restart-required validation.
+- `src/main/java/org/qortium/network/Handshake.java` — advertises `I2P_QDN` only when the
+  local data I2P session is up while preserving the existing numeric `QDN` capability.
+- `src/main/java/org/qortium/network/NetworkData.java` — starts the data SAM session
+  asynchronously, opens the local loopback `STREAM FORWARD` listener, accepts forwarded I2P
+  peers without blocking the selector thread, learns direct and `I2P_QDN` data addresses from
+  chain handshakes, keeps direct TCP primary, and uses I2P as a fallback (or as preferred only
+  when `i2pPreferred` is enabled).
+- `src/main/java/org/qortium/network/Peer.java` — adds the data-network I2P outbound connect
+  branch while leaving chain-network I2P for Phase 2b.
+- `src/test/java/org/qortium/network/HandshakeTests.java`,
+  `src/test/java/org/qortium/network/message/HelloMessageTests.java`, and
+  `src/test/java/org/qortium/network/NetworkDataI2PTests.java` — cover `I2P_QDN`
+  advertisement/serialization and direct-vs-I2P QDN peer learning/selection behavior.
 
 **Validated:** I2P gives NAT-free cross-NAT reachability — a cross-NAT transfer was received
 intact; throughput ~28 Kbps avg / 72–127 Kbps physical peaks (semi-warm) → **fallback-grade,
@@ -401,12 +418,12 @@ and `~/.reticulum-a|-b`. Reference clones (Java RNS, qortal reticulum branch, ma
 Python) are in `~/reticulum/repos/`.
 
 **Next steps, in order:**
-1. **Wire into `NetworkData`** (§5.3–§5.8): data SAM-session bring-up; advertise `I2P_QDN`
-   capability in `Handshake.buildHelloCapabilities` (`Handshake.java:558-583`); `STREAM
-   FORWARD` listener feeding the data selector; branch `Peer.connect()` (`Peer.java:714`) on
-   `addr.isI2P()`; fix `NetworkData.addPeer`/`getConnectablePeer` to use `I2P_QDN` instead of
-   reusing the chain host.
-2. **Settings** keys (§5.9). 3. **Tests** (§8). Then Phase 2b (chain network), 2c (rollout).
+1. Review the current NetworkData wiring diff and commit it with a matching
+   `QORTIUM-CHANGELOG.md` entry.
+2. Run a two-node QDN validation where one NAT'd node learns and dials another node's
+   `I2P_QDN` capability, confirming direct TCP remains preferred when available.
+3. Continue with Phase 2b (chain network I2P fallback) and Phase 2c (rollout controls and
+   operator guidance).
 
 **Gotchas:** `pkill -f <pattern>` matches the running shell when the pattern is in its own
 command line (kill by filtered `ps` instead). i2pd must be `active` for any I2P test —

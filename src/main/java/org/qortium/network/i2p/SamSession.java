@@ -44,6 +44,9 @@ public class SamSession implements I2PStreamProvider {
     private static final Pattern SESSION_ID = Pattern.compile("[A-Za-z0-9._~-]+");
     private static final Pattern B32_DESTINATION = Pattern.compile("[a-z2-7]{52}\\.b32\\.i2p", Pattern.CASE_INSENSITIVE);
 
+    /** TCP/SAM HELLO should be immediate on a healthy local router. */
+    private static final int SAM_CONNECT_TIMEOUT_MS = 5_000;
+    private static final int SAM_REPLY_TIMEOUT_MS = 10_000;
     /** Tunnel build / lease lookup can be slow; allow plenty of time for session & stream setup. */
     private static final int SETUP_TIMEOUT_MS = 120_000;
 
@@ -81,6 +84,7 @@ public class SamSession implements I2PStreamProvider {
             return;
 
         controlChannel = openSam();
+        controlChannel.socket().setSoTimeout(SAM_REPLY_TIMEOUT_MS);
         InputStream in = controlChannel.socket().getInputStream();
         OutputStream out = controlChannel.socket().getOutputStream();
 
@@ -126,10 +130,11 @@ public class SamSession implements I2PStreamProvider {
         String normalizedRemoteB32 = remoteB32.toLowerCase(Locale.ROOT);
         SocketChannel ch = openSam();
         try {
-            ch.socket().setSoTimeout(SETUP_TIMEOUT_MS);
+            ch.socket().setSoTimeout(SAM_REPLY_TIMEOUT_MS);
             InputStream in = ch.socket().getInputStream();
             OutputStream out = ch.socket().getOutputStream();
             hello(in, out);
+            ch.socket().setSoTimeout(SETUP_TIMEOUT_MS);
             sendLine(out, "STREAM CONNECT ID=" + sessionId + " DESTINATION=" + normalizedRemoteB32 + " SILENT=false");
             String reply = readLine(in);
             if (!"OK".equals(token(reply, "RESULT"))) {
@@ -155,8 +160,9 @@ public class SamSession implements I2PStreamProvider {
         forwardChannel = openSam();
         InputStream in = forwardChannel.socket().getInputStream();
         OutputStream out = forwardChannel.socket().getOutputStream();
-        forwardChannel.socket().setSoTimeout(SETUP_TIMEOUT_MS);
+        forwardChannel.socket().setSoTimeout(SAM_REPLY_TIMEOUT_MS);
         hello(in, out);
+        forwardChannel.socket().setSoTimeout(SETUP_TIMEOUT_MS);
         sendLine(out, "STREAM FORWARD ID=" + sessionId + " PORT=" + localPort + " SILENT=false");
         String reply = readLine(in);
         if (!"OK".equals(token(reply, "RESULT"))) {
@@ -188,7 +194,9 @@ public class SamSession implements I2PStreamProvider {
     // ---- SAM plumbing -----------------------------------------------------------------------
 
     private SocketChannel openSam() throws IOException {
-        return SocketChannel.open(new InetSocketAddress(samHost, samPort)); // blocking
+        SocketChannel channel = SocketChannel.open();
+        channel.socket().connect(new InetSocketAddress(samHost, samPort), SAM_CONNECT_TIMEOUT_MS);
+        return channel; // blocking
     }
 
     private void hello(InputStream in, OutputStream out) throws IOException {
