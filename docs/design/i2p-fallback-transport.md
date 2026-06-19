@@ -316,11 +316,16 @@ deciding factor is *who runs the node*:
   setup now use the longer I2P retry backoff. Live logs showed the stale `q25q...b32.i2p`
   destination retrying after roughly 15 minutes instead of the normal two-minute TCP failure
   backoff.
+- **Completed stale-handshake cleanup:** chain and QDN/data schedulers now disconnect stale
+  non-completed handshakes directly instead of waiting only for the slower controller prune
+  cycle, and outbound I2P handshake timeouts count as outbound failures for backoff. Focused
+  tests cover old outbound I2P `HELLO` peers on both networks. After deployment to Netcup and
+  Regxa, the follow-up seed test did not leave another lingering I2P QDN/data `HELLO`: Netcup
+  restored a direct QDN/data peer to Regxa, and the temporary I2P data lookup failed cleanly at
+  the SAM layer with `LeaseSet not found`.
 - **Remaining integration:** a clean chain-network live proof of direct-primary recovery still
   needs a controlled direct-reachable peer that can first be held on a completed outbound I2P
-  fallback, then have its direct TCP address become eligible without restarting Core. Also
-  investigate the forced Regxa recovery case where Netcup kept an outbound I2P QDN/data attempt
-  in `HELLO` after Regxa had already recreated its data SAM destination.
+  fallback, then have its direct TCP address become eligible without restarting Core.
 - **Cross-NAT:** the two-machine setup from `~/reticulum-spike/CROSS-NAT-SETUP.md`, but with
   Core instead of `rncp`.
 - **Regression:** existing TCP-only tests must pass unchanged with `i2pEnabled:false`.
@@ -486,6 +491,12 @@ Do a final sync/rebase onto `main` before any PR.
 - Live QDN/data direct-primary drop validation succeeded with Regxa and Netcup: both public
   seeds were forced onto completed I2P data peers, then moved back to direct TCP after the fixed
   QDN/data addresses were restored.
+- Stale I2P handshake cleanup has focused test coverage and is deployed on both public seeds.
+  The post-deploy seed test did not reproduce the lingering I2P data `HELLO`; Netcup stayed on
+  direct QDN/data TCP to Regxa while the temporary I2P data lookup failed cleanly at the SAM
+  layer.
+- Local regression validation after the cleanup passed `mvn -q -Dtest=NetworkI2PTests,NetworkDataI2PTests,PeerAddressTests,PeerTests,HandshakeTests test`,
+  `mvn -q -DskipTests package`, and `mvn -q test`.
 - Live chain direct-primary drop validation is still topology-limited: without firewall control
   or a dedicated test hook, the fixed public-seed TCP path reconnects before a completed chain
   I2P fallback can be held.
@@ -505,12 +516,9 @@ Python) are in `~/reticulum/repos/`.
    while TCP is down, the node should move back to direct TCP once the IP path is eligible
    again, even when outbound peer slots are already full. QDN/data has now been proven with
    Regxa/Netcup; chain still needs either firewall control or a dedicated test hook.
-2. Tighten lingering outbound I2P `HELLO` cleanup: after the forced Regxa i2pd-recovery test,
-   Netcup kept an outbound I2P QDN/data connection in `HELLO` until the test peer was explicitly
-   forgotten.
-3. Decide the end-user deployment model before broad release: Qortium Home managed `i2pd`
+2. Decide the end-user deployment model before broad release: Qortium Home managed `i2pd`
    binaries or an embedded Java I2P provider behind `I2PStreamProvider`.
-4. Final PR prep: sync/rebase onto `main`, run the broader test/package suite, review the
+3. Final PR prep: sync/rebase onto `main`, run the broader test/package suite, review the
    total diff for local paths/debug settings/stale docs, then open the PR.
 
 **Gotchas:** `pkill -f <pattern>` matches the running shell when the pattern is in its own
