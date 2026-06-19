@@ -272,6 +272,10 @@ public enum Service {
         return this.isPrivate;
     }
 
+    public boolean isSingle() {
+        return this.single;
+    }
+
     public static Service valueOf(int value) {
         return map.get(value);
     }
