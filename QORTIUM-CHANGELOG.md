@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - build: honor standard skipTests maven flag
+
+Makes the build understand Maven's standard `-DskipTests` flag in addition to the repo's existing `skipJUnitTests` property. Previously a focused run like `mvn -DskipTests=false -Dtest=SomeTest test` would compile the tests but silently skip running them, because only `skipJUnitTests` was wired into the test runner. Now `skipTests` defaults to whatever `skipJUnitTests` is set to, but a command-line `-DskipTests=true/false` takes precedence, so the standard flag works as people expect. The default still skips tests, and all existing `skipJUnitTests` commands and CI steps keep working unchanged.
+
 ### 2026-06-19 - consensus: defer Previewnet feature triggers
 
 Moves the two Previewnet consensus feature triggers from block 27000 to the temporary placeholder height 99999 while rollout is held for more review. The online-account signature V2 and asset-order bounds fixes remain ported and gated, and mainnet plus the local testnet still activate them from genesis. Because feature-trigger metadata is hash-neutral, this delay does not change the chain-config fingerprint used for peer compatibility.
