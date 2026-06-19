@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - docs: record seed I2P fallback validation
+
+Updates the I2P fallback transport notes with the latest two-seed Previewnet validation. Regxa was brought onto the I2P branch with its own user-local `i2pd`, and Regxa/Netcup testing proved that a completed QDN/data I2P fallback connection between direct-reachable public seeds returns to direct TCP once the direct data address is restored. The notes also record that Regxa recovered its data SAM destination after `i2pd` was replaced under a running Core, while calling out the remaining live-test gaps: the chain-network direct-primary proof still needs a way to hold a direct-reachable chain peer on completed I2P without the fixed seed TCP path immediately reconnecting, and Netcup can still leave an outbound I2P data attempt in `HELLO` after this forced recovery scenario.
+
 ### 2026-06-19 - docs: record I2P fallback validation status
 
 Updates the I2P fallback transport design notes with the latest live Previewnet validation. The document now records that Netcup and a NAT'd non-seed node recovered SAM sessions after `i2pd` restarts, that `i2pEnabled:false` kept the remote node cleanly TCP-only, that a real QDN JSON resource was rebuilt while the non-seed I2P data peer was active, and that stale I2P chain destinations now cool down on a longer retry interval. It also clarifies the remaining direct-primary live-test limitation: the current two-node non-seed setup proves fallback behavior, but does not provide a direct-reachable completed outbound I2P peer for a clean live TCP-recovery drop proof.
