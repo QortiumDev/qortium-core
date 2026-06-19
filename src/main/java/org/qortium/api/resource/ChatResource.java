@@ -1128,6 +1128,43 @@ public class ChatResource {
 	public String buildChat(@HeaderParam(Security.API_KEY_HEADER) String apiKey, ChatTransactionData transactionData) {
 		Security.checkApiCallAllowed(request);
 
+		return buildChatBytes(transactionData);
+	}
+
+	@POST
+	@Path("/public/build")
+	@Operation(
+		summary = "Build raw, unsigned, CHAT transaction (public, no API key)",
+		description = "Same as POST /chat but callable without an API key, so public nodes can accept open-group chat. " +
+			"Returns unsigned bytes only; no private key is involved and nothing is broadcast. The caller computes the " +
+			"proof-of-work nonce and signs locally, then submits via POST /transactions/process.",
+		requestBody = @RequestBody(
+			required = true,
+			content = @Content(
+				mediaType = MediaType.APPLICATION_JSON,
+				schema = @Schema(
+					implementation = ChatTransactionData.class
+				)
+			)
+		),
+		responses = {
+			@ApiResponse(
+				description = "raw, unsigned, CHAT transaction encoded in Base58",
+				content = @Content(
+					mediaType = MediaType.TEXT_PLAIN,
+					schema = @Schema(
+						type = "string"
+					)
+				)
+			)
+		}
+	)
+	@ApiErrors({ApiError.TRANSACTION_INVALID, ApiError.TRANSFORMATION_ERROR, ApiError.REPOSITORY_ISSUE})
+	public String buildPublicChat(ChatTransactionData transactionData) {
+		return buildChatBytes(transactionData);
+	}
+
+	private String buildChatBytes(ChatTransactionData transactionData) {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ValidationResult result = ChatService.getInstance().validateForBuild(repository, transactionData);
 			if (result != ValidationResult.OK)

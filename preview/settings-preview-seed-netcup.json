@@ -64,7 +64,10 @@
     "GET /account-ratings/*",
     "GET /resource-ratings/*",
     "GET /at/*",
-    "GET /stats/*"
+    "GET /stats/*",
+    "POST /chat/public/build",
+    "POST /transactions/convert",
+    "POST /transactions/process"
   ],
   "bootstrap": false,
   "maxPeerConnectionTime": 999999999,
