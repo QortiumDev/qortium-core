@@ -21,6 +21,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class NetworkI2PTests extends Common {
@@ -80,6 +81,34 @@ public class NetworkI2PTests extends Common {
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
+
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertEquals("198.51.100.10:24892", selectedPeer.getPeerData().getAddress().toString());
+		assertFalse(selectedPeer.getPeerData().getAddress().isI2P());
+	}
+
+	@Test
+	public void testI2PChainAlternativeSkippedWhenDirectPeerAlreadyConnected() throws Exception {
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		Map<String, Object> capabilities = new HashMap<>();
+		capabilities.put(Handshake.I2P_CAPABILITY, B32);
+		Network.getInstance().addConnectedPeer(networkPeerWithCapabilities(capabilities));
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
+
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertNull(selectedPeer);
+	}
+
+	@Test
+	public void testDirectChainPeerCanReplaceExistingI2PFallback() throws Exception {
+		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORK);
+		i2pPeer.setPeersNodeId(NODE_ID);
+		Network.getInstance().addConnectedPeer(i2pPeer);
+		PeerData directPeerData = new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test");
+		getMutableKnownPeers().add(directPeerData);
+		invokeUpdateAddressToNodeIdCache(directPeerData.getAddress().toString(), NODE_ID);
 
 		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
 
@@ -148,6 +177,8 @@ public class NetworkI2PTests extends Common {
 		getMutableKnownPeers().clear();
 		((List<PeerAddress>) FieldUtils.readField(Network.getInstance(), "selfPeers", true)).clear();
 		((Map<String, ?>) FieldUtils.readField(Network.getInstance(), "addressToNodeIdCache", true)).clear();
+		((List<Peer>) FieldUtils.readField(Network.getInstance(), "connectedPeers", true)).clear();
+		FieldUtils.writeField(Network.getInstance(), "immutableConnectedPeers", List.of(), true);
 		getConnectingI2PPeers().clear();
 	}
 
@@ -171,6 +202,12 @@ public class NetworkI2PTests extends Common {
 		java.lang.reflect.Method method = Network.class.getDeclaredMethod("addI2PChainPeer", Peer.class);
 		method.setAccessible(true);
 		method.invoke(Network.getInstance(), peer);
+	}
+
+	private void invokeUpdateAddressToNodeIdCache(String address, String nodeId) throws Exception {
+		java.lang.reflect.Method method = Network.class.getDeclaredMethod("updateAddressToNodeIdCache", String.class, String.class);
+		method.setAccessible(true);
+		method.invoke(Network.getInstance(), address, nodeId);
 	}
 
 	private static class FakeI2PStreamProvider implements I2PStreamProvider {

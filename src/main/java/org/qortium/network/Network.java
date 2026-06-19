@@ -1094,6 +1094,28 @@ public class Network {
         return localI2PDestination != null && peerAddress.getHost().equalsIgnoreCase(localI2PDestination);
     }
 
+    private final Predicate<PeerData> isI2PAlternativeForConnectedPeer = peerData -> {
+        PeerAddress peerAddress = peerData.getAddress();
+        if (!peerAddress.isI2P() || Settings.getInstance().isI2PPreferred())
+            return false;
+
+        return this.getImmutableConnectedPeers().stream()
+                .filter(peer -> !peer.getPeerData().getAddress().isI2P())
+                .anyMatch(peer -> peerAdvertisesI2PAddress(peer, Handshake.I2P_CAPABILITY, peerAddress));
+    };
+
+    private boolean peerAdvertisesI2PAddress(Peer peer, String capabilityName, PeerAddress peerAddress) {
+        Object capability = peer.getPeerCapability(capabilityName);
+        if (!(capability instanceof String))
+            return false;
+
+        try {
+            return PeerAddress.fromString(((String) capability).trim()).equals(peerAddress);
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
     private final Predicate<PeerData> isResolvedAsConnectedPeer = peerData -> {
         try {
             InetSocketAddress resolvedSocketAddress = peerData.getAddress().toSocketAddress();
@@ -1684,6 +1706,7 @@ public class Network {
             // Don't consider already connected peers (simple address match)
             peers.removeIf(isConnectedPeer);
             peers.removeIf(isConnectingI2PPeer);
+            peers.removeIf(isI2PAlternativeForConnectedPeer);
 
             // CRITICAL FIX: Don't consider peers we're already connected to by nodeId
             // This handles cases where we have an inbound connection on an ephemeral port
@@ -1703,6 +1726,14 @@ public class Network {
                             .orElse(null);
                     
                     if (existingPeer != null) {
+                        if (!Settings.getInstance().isI2PPreferred()
+                                && existingPeer.getPeerData().getAddress().isI2P()
+                                && !peerData.getAddress().isI2P()) {
+                            LOGGER.debug("Peer {} (nodeId {}) is connected over I2P fallback, allowing direct TCP replacement attempt",
+                                    peerAddress, candidateNodeId.substring(0, 8));
+                            return false;
+                        }
+
                         // Already connected to this nodeId - check whether a preferred outbound replacement is useful.
                         // If the preferred direction is outbound from us, allow a replacement
                         // attempt while preserving the current fallback connection.
@@ -1769,6 +1800,7 @@ public class Network {
                 peersInBackoff.removeIf(isLocalI2PPeer);
                 peersInBackoff.removeIf(isConnectedPeer);
                 peersInBackoff.removeIf(isConnectingI2PPeer);
+                peersInBackoff.removeIf(isI2PAlternativeForConnectedPeer);
                 
                 if (!peersInBackoff.isEmpty()) {
                     peers = peersInBackoff;
