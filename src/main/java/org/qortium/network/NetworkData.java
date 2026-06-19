@@ -748,6 +748,21 @@ public class NetworkData {
         addressToNodeIdCache.put(address, new CachedNodeIdInfo(nodeId, System.currentTimeMillis()));
     }
 
+    void noteHandshakePeerAddress(Peer peer, String nodeId) {
+        if (peer == null || nodeId == null || peer.getPeerData() == null || peer.getPeerData().getAddress() == null)
+            return;
+
+        PeerAddress peerAddress = peer.getPeerData().getAddress();
+        updateAddressToNodeIdCache(peerAddress.toString(), nodeId);
+
+        if (peerAddress.isI2P() || peer.getResolvedAddress() == null)
+            return;
+
+        String peerIP = peer.getResolvedAddress().getAddress().getHostAddress();
+        int peerPort = peer.getResolvedAddress().getPort();
+        updateAddressToNodeIdCache(peerIP + ":" + peerPort, nodeId);
+    }
+
     /**
      * Periodically clean up stale direction mismatch records and address cache.
      * Called from prunePeers.

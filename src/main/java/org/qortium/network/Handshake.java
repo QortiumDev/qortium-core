@@ -224,12 +224,13 @@ public enum Handshake {
 								Network.getInstance().removeConnectedPeer(existingNetworkPeer);
 								// Continue processing below to allow new connection
 							} else {
+								String theirNodeId = Crypto.toNodeAddress(peersPublicKey);
+								Network.getInstance().noteHandshakePeerAddress(peer, theirNodeId);
 								String ourNodeId = Network.getInstance().getOurNodeId();
 								if (ourNodeId == null) {
 									LOGGER.debug("Cannot determine direction (our nodeId unavailable) - keeping existing connection to {}", existingNetworkPeer);
 									return null;
 								}
-								String theirNodeId = Crypto.toNodeAddress(peersPublicKey);
 								boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound(ourNodeId, theirNodeId);
 								PeerDirectionPolicy.DuplicateConnectionDecision duplicateDecision =
 										PeerDirectionPolicy.decideDuplicate(true, existingNetworkPeer.isOutbound(), peer.isOutbound(),
@@ -271,12 +272,13 @@ public enum Handshake {
 							// disconnect() will trigger removeConnectedPeer() which removes from both lists
 							// Continue processing below
 							} else {
+								String theirNodeId = Crypto.toNodeAddress(peersPublicKey);
+								NetworkData.getInstance().noteHandshakePeerAddress(peer, theirNodeId);
 								String ourNodeId = NetworkData.getInstance().getOurNodeId();
 								if (ourNodeId == null) {
 									LOGGER.debug("Cannot determine direction (our nodeId unavailable) - keeping existing connection to {}", existingNetworkDataPeer);
 									return null;
 								}
-								String theirNodeId = Crypto.toNodeAddress(peersPublicKey);
 								boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound(ourNodeId, theirNodeId);
 								PeerDirectionPolicy.DuplicateConnectionDecision duplicateDecision =
 										PeerDirectionPolicy.decideDuplicate(true, existingNetworkDataPeer.isOutbound(), peer.isOutbound(),
