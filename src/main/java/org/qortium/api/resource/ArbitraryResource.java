@@ -46,6 +46,7 @@ import org.qortium.data.arbitrary.ArbitraryCategoryInfo;
 import org.qortium.data.arbitrary.ArbitraryDataIndexDetail;
 import org.qortium.data.arbitrary.ArbitraryDataIndexScorecard;
 import org.qortium.data.arbitrary.ArbitraryResourceData;
+import org.qortium.data.arbitrary.ArbitraryServiceInfo;
 import org.qortium.data.arbitrary.ArbitraryResourceDataResponse;
 import org.qortium.data.arbitrary.ArbitraryResourceMetadata;
 import org.qortium.data.arbitrary.ArbitraryResourceRequest;
@@ -642,6 +643,34 @@ public class ArbitraryResource {
 			categories.add(arbitraryCategory);
 		}
 		return categories;
+	}
+
+	@GET
+	@Path("/services")
+	@Operation(
+			summary = "List supported QDN services and their metadata",
+			description = "Reports the size, encryption, and file-count rules for each QDN service, so publishers can build against Core as the source of truth.",
+			responses = {
+					@ApiResponse(
+							content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = ArbitraryServiceInfo.class))
+					)
+			}
+	)
+	public List<ArbitraryServiceInfo> getServices() {
+		List<ArbitraryServiceInfo> services = new ArrayList<>();
+		for (Service service : Service.values()) {
+			ArbitraryServiceInfo serviceInfo = new ArbitraryServiceInfo();
+			serviceInfo.id = service.toString();
+			serviceInfo.value = service.value;
+			serviceInfo.maxSize = service.getMaxSize();
+			serviceInfo.isPrivate = service.isPrivate();
+			serviceInfo.requiresEncryption = service.isPrivate();
+			serviceInfo.singleFile = service.isSingle();
+			serviceInfo.supportsDirectories = !service.isSingle();
+			serviceInfo.requiresValidation = service.isValidationRequired();
+			services.add(serviceInfo);
+		}
+		return services;
 	}
 
 	@GET

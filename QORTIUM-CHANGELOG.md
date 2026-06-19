@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - api: add arbitrary services metadata endpoint
+
+Adds a new read-only `GET /arbitrary/services` endpoint that lists every supported QDN service alongside its rules: numeric id, maximum size, whether it is private/encrypted, whether it is a single file or supports directories, and whether it requires validation. This information already existed inside Core but was not reachable over the API, so apps like Home and the Publish Manager had to hardcode their own copies of these limits. The endpoint lets those apps treat Core as the single source of truth instead. It needs no API key, so public Previewnet seeds can serve it. No existing behavior changes.
+
 ### 2026-06-19 - build: honor standard skipTests maven flag
 
 Makes the build understand Maven's standard `-DskipTests` flag in addition to the repo's existing `skipJUnitTests` property. Previously a focused run like `mvn -DskipTests=false -Dtest=SomeTest test` would compile the tests but silently skip running them, because only `skipJUnitTests` was wired into the test runner. Now `skipTests` defaults to whatever `skipJUnitTests` is set to, but a command-line `-DskipTests=true/false` takes precedence, so the standard flag works as people expect. The default still skips tests, and all existing `skipJUnitTests` commands and CI steps keep working unchanged.
