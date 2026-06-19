@@ -17,6 +17,7 @@ public class ArbitraryResourceMetadata {
     private String categoryName;
     private List<String> files;
     private String mimeType;
+    private String entryPoint;
 
     // Only included when updating database
     private ArbitraryResourceData arbitraryResourceData;
@@ -46,6 +47,7 @@ public class ArbitraryResourceMetadata {
         List<String> tags = transactionMetadata.getTags();
         Category category = transactionMetadata.getCategory();
         String mimeType = transactionMetadata.getMimeType();
+        String entryPoint = transactionMetadata.getEntryPoint();
 
         // We don't always want to include the file list as it can be too verbose
         List<String> files = null;
@@ -53,15 +55,25 @@ public class ArbitraryResourceMetadata {
             files = transactionMetadata.getFiles();
         }
 
-        if (title == null && description == null && tags == null && category == null && files == null && mimeType == null) {
+        if (title == null && description == null && tags == null && category == null && files == null && mimeType == null && entryPoint == null) {
             return null;
         }
 
-        return new ArbitraryResourceMetadata(title, description, tags, category, files, mimeType);
+        ArbitraryResourceMetadata metadata = new ArbitraryResourceMetadata(title, description, tags, category, files, mimeType);
+        metadata.setEntryPoint(entryPoint);
+        return metadata;
     }
 
     public List<String> getFiles() {
         return this.files;
+    }
+
+    public void setEntryPoint(String entryPoint) {
+        this.entryPoint = entryPoint;
+    }
+
+    public String getEntryPoint() {
+        return this.entryPoint;
     }
 
     public void setTitle(String title) {
@@ -102,7 +114,7 @@ public class ArbitraryResourceMetadata {
     }
 
     public boolean hasMetadata() {
-        return title != null || description != null || tags != null || category != null || files != null || mimeType != null;
+        return title != null || description != null || tags != null || category != null || files != null || mimeType != null || entryPoint != null;
     }
 
     public void setArbitraryResourceData(ArbitraryResourceData arbitraryResourceData) {
