@@ -27,6 +27,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.*;
@@ -159,8 +161,34 @@ public class ArbitraryDataEntryPointTests extends Common {
         }
     }
 
+    // (3) Multi-file publishing is deterministic: the metadata file list is sorted regardless of
+    // filesystem walk order, so the same directory publishes reproducibly.
+
+    @Test
+    public void testMultiFilePublishHasSortedFiles() throws DataException, IOException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+            String publicKey58 = Base58.encode(alice.getPublicKey());
+            String name = "TEST";
+            Service service = Service.ARBITRARY_DATA;
+
+            registerName(repository, alice, name);
+
+            // buildMultiFileResource writes index.html before about.html (not alphabetical).
+            // Supply an entryPoint so a metadata file (carrying the file list) is written.
+            Path path = buildMultiFileResource("sortedFiles");
+            ArbitraryDataTransactionMetadata metadata = buildMetadata(repository, publicKey58, path, name, service, "about.html");
+
+            List<String> files = metadata.getFiles();
+            List<String> expected = new ArrayList<>(files);
+            Collections.sort(expected);
+            assertEquals("Metadata file list should be deterministically sorted", expected, files);
+        }
+    }
+
     // Note: the no-filepath resolution logic itself (single file / entryPoint / require-filepath)
-    // is unit-tested directly in org.qortium.api.resource.ArbitraryDefaultFilepathTests.
+    // is unit-tested directly in org.qortium.api.resource.ArbitraryDefaultFilepathTests, and zip
+    // byte-reproducibility in org.qortium.utils.ZipUtilsTests.
 
     // Helpers
 

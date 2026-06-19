@@ -39,11 +39,17 @@ import java.io.IOException;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
 
 public class ZipUtils {
+
+    // Fixed modification time for every zip entry, so that archives of identical content are
+    // byte-reproducible (the default would embed the current time). Value is arbitrary but constant.
+    private static final long FIXED_ENTRY_TIME = 0L;
 
     public static void zip(String sourcePath, String destFilePath, String enclosingFolderName) throws IOException, InterruptedException {
         File sourceFile = new File(sourcePath);
@@ -64,7 +70,7 @@ public class ZipUtils {
         // Handle single file resources slightly differently
         if (isSingleFile) {
             // Create enclosing folder
-            zipOut.putNextEntry(new ZipEntry(safeZipEntryName(enclosingFolderName, true)));
+            zipOut.putNextEntry(fixedTimeEntry(safeZipEntryName(enclosingFolderName, true)));
             zipOut.closeEntry();
             // Place the supplied file within the folder
             ZipUtils.zip(fileToZip, zipEntryChildName(enclosingFolderName, fileToZip.getName()), zipOut, false);
@@ -74,15 +80,20 @@ public class ZipUtils {
         // Authenticated local uploads intentionally read a user-selected source path.
         // codeql[java/path-injection]
         if (fileToZip.isDirectory()) {
-            zipOut.putNextEntry(new ZipEntry(safeZipEntryName(enclosingFolderName, true)));
+            zipOut.putNextEntry(fixedTimeEntry(safeZipEntryName(enclosingFolderName, true)));
             zipOut.closeEntry();
             final File[] children = fileToZip.listFiles();
-            for (final File childFile : children) {
-                ZipUtils.zip(childFile, zipEntryChildName(enclosingFolderName, childFile.getName()), zipOut, false);
+            if (children != null) {
+                // Sort children for a deterministic entry order, so identical content zips identically
+                // regardless of filesystem listing order.
+                Arrays.sort(children, Comparator.comparing(File::getName));
+                for (final File childFile : children) {
+                    ZipUtils.zip(childFile, zipEntryChildName(enclosingFolderName, childFile.getName()), zipOut, false);
+                }
             }
             return;
         }
-        final ZipEntry zipEntry = new ZipEntry(safeZipEntryName(enclosingFolderName, false));
+        final ZipEntry zipEntry = fixedTimeEntry(safeZipEntryName(enclosingFolderName, false));
         zipOut.putNextEntry(zipEntry);
         try {
             try (FileInputStream fis = new FileInputStream(fileToZip)) {
@@ -95,6 +106,13 @@ public class ZipUtils {
         } finally {
             zipOut.closeEntry();
         }
+    }
+
+    /** Create a ZipEntry with a fixed modification time so archives are byte-reproducible. */
+    private static ZipEntry fixedTimeEntry(String name) {
+        ZipEntry entry = new ZipEntry(name);
+        entry.setTime(FIXED_ENTRY_TIME);
+        return entry;
     }
 
     /**

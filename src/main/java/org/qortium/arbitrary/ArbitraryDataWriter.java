@@ -209,6 +209,9 @@ public class ArbitraryDataWriter {
                         .filter(Files::isRegularFile)
                         .map(p -> this.filePath.relativize(p).toString())
                         .filter(s -> !s.isEmpty())
+                        // Sort for a deterministic file order, so publishing the same directory is
+                        // reproducible (stable metadata file list, independent of filesystem walk order).
+                        .sorted()
                         .collect(Collectors.toList());
 
                 if (this.files.size() == 1) {
