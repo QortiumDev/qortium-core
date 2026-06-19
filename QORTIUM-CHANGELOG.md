@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - api: match public chat paths on regular preview nodes
+
+Brings regular Previewnet nodes in line with the seed nodes for public API access, so the "use any public node" option works against ordinary nodes and not just seeds. The same three public endpoints already allowed on the seeds -- POST /chat/public/build, POST /transactions/convert, and POST /transactions/process -- are now also allowed through the public API on the standard Previewnet node config. All three preview configs now expose an identical public path list. As before, the signing endpoint and the proof-of-work compute endpoint are not exposed, so no private keys are handled and there is no public proof-of-work workload. No consensus or database changes.
+
 ### 2026-06-19 - api: allow public open-group chat sends on preview seeds
 
 Lets public Previewnet seed nodes accept open-group chat messages without an API key and without ever receiving a private key. Adds a new keyless POST /chat/public/build endpoint that returns the same raw, unsigned chat-transaction bytes as the existing POST /chat, but does not require an API key; it shares its logic with the existing endpoint, which stays API-key protected. The caller computes the proof-of-work and signs locally, then submits the finished transaction. The two preview seed configs now also allow POST /chat/public/build, POST /transactions/convert, and POST /transactions/process through the public API. The signing endpoint POST /transactions/sign is deliberately left out so private keys are never handled by a public node. No consensus or database changes.
