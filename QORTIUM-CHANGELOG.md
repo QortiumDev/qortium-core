@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - docs: record I2P fallback validation status
+
+Updates the I2P fallback transport design notes with the latest live Previewnet validation. The document now records that Netcup and a NAT'd non-seed node recovered SAM sessions after `i2pd` restarts, that `i2pEnabled:false` kept the remote node cleanly TCP-only, that a real QDN JSON resource was rebuilt while the non-seed I2P data peer was active, and that stale I2P chain destinations now cool down on a longer retry interval. It also clarifies the remaining direct-primary live-test limitation: the current two-node non-seed setup proves fallback behavior, but does not provide a direct-reachable completed outbound I2P peer for a clean live TCP-recovery drop proof.
+
 ### 2026-06-19 - network: refresh I2P peer identity cache
 
 Keeps the direct-primary fallback rules from losing track of a peer after restart or after an I2P handshake attempt. Completed chain I2P connections now update the same address-to-node-ID cache that TCP and QDN/data handshakes use. Direct TCP handshakes also refresh the cache for an advertised `.b32.i2p` chain address even when that I2P address was already known from an earlier run. If an outbound I2P chain or data handshake is rejected as a duplicate of an existing direct peer, the duplicate path now records the current node ID before disconnecting. Chain I2P connection attempts also use a longer failure backoff than direct TCP, because stale fallback destinations can establish at the SAM layer without completing a Core handshake. This lets the peer selector recognize or cool down persisted I2P addresses that are already covered by direct TCP, reducing repeated fallback dials while preserving I2P for peers that still need it.
