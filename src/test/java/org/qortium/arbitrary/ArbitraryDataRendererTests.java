@@ -1,6 +1,7 @@
 package org.qortium.arbitrary;
 
 import org.junit.Test;
+import org.qortium.arbitrary.misc.Service;
 
 import javax.servlet.ServletContext;
 import javax.servlet.ServletOutputStream;
@@ -21,6 +22,8 @@ import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -182,6 +185,93 @@ public class ArbitraryDataRendererTests {
         } finally {
             Files.deleteIfExists(directory);
         }
+    }
+
+    // --- Smart SPA-routing fallback ---
+
+    private static final String HTML_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+
+    @Test
+    public void appAlwaysHasRouting() {
+        assertTrue(ArbitraryDataRenderer.spaRoutingEnabled(Service.APP, null));
+        assertTrue(ArbitraryDataRenderer.spaRoutingEnabled(Service.APP, "index.html"));
+    }
+
+    @Test
+    public void plainWebsiteIsUnaffected() {
+        // A WEBSITE without an entryPoint keeps static behaviour (no route forwarding)
+        assertFalse(ArbitraryDataRenderer.spaRoutingEnabled(Service.WEBSITE, null));
+        assertFalse(ArbitraryDataRenderer.spaRoutingEnabled(Service.WEBSITE, ""));
+    }
+
+    @Test
+    public void websiteWithEntryPointOptsIn() {
+        assertTrue(ArbitraryDataRenderer.spaRoutingEnabled(Service.WEBSITE, "index.html"));
+    }
+
+    @Test
+    public void extensionlessPathsAreRoutes() {
+        assertTrue(ArbitraryDataRenderer.isRouteLikeRequest("/dashboard", null));
+        assertTrue(ArbitraryDataRenderer.isRouteLikeRequest("/users/42", null));
+        assertTrue(ArbitraryDataRenderer.isRouteLikeRequest("/", null));
+    }
+
+    @Test
+    public void missingAssetsAreNotRoutes() {
+        // These must NOT forward, so a missing asset cleanly 404s instead of serving HTML
+        assertFalse(ArbitraryDataRenderer.isRouteLikeRequest("/styles.css", "text/css,*/*;q=0.1"));
+        assertFalse(ArbitraryDataRenderer.isRouteLikeRequest("/app.js", "*/*"));
+        assertFalse(ArbitraryDataRenderer.isRouteLikeRequest("/data.json", null));
+        assertFalse(ArbitraryDataRenderer.isRouteLikeRequest("/logo.png", "image/avif,image/webp,*/*"));
+    }
+
+    @Test
+    public void dottedPathIsRouteOnlyWhenBrowserNavigating() {
+        assertTrue(ArbitraryDataRenderer.isRouteLikeRequest("/report.2024", HTML_ACCEPT));
+        assertFalse(ArbitraryDataRenderer.isRouteLikeRequest("/report.2024", "*/*"));
+    }
+
+    @Test
+    public void forwardsToDeclaredEntryPoint() throws IOException {
+        Path dir = dirWith("index.html", "main.html");
+        // A non-conventional entry file is honoured ahead of the index convention
+        assertEquals("main.html", ArbitraryDataRenderer.resolveFallbackFile(dir, "main.html").getFileName().toString());
+    }
+
+    @Test
+    public void forwardsToIndexWhenNoEntryPoint() throws IOException {
+        Path dir = dirWith("index.html", "about.html");
+        assertEquals("index.html", ArbitraryDataRenderer.resolveFallbackFile(dir, null).getFileName().toString());
+    }
+
+    @Test
+    public void fallsBackToIndexWhenEntryPointMissing() throws IOException {
+        Path dir = dirWith("index.html");
+        assertEquals("index.html", ArbitraryDataRenderer.resolveFallbackFile(dir, "does-not-exist.html").getFileName().toString());
+    }
+
+    @Test
+    public void unsafeEntryPointDoesNotEscape() throws IOException {
+        Path dir = dirWith("index.html");
+        // A traversal entryPoint must be ignored and fall back to the index, never serve outside the base
+        assertEquals("index.html", ArbitraryDataRenderer.resolveFallbackFile(dir, "../secret").getFileName().toString());
+    }
+
+    @Test
+    public void noFallbackWhenNothingAvailable() throws IOException {
+        Path dir = dirWith("about.html", "contact.html"); // no index, no entryPoint
+        assertNull(ArbitraryDataRenderer.resolveFallbackFile(dir, null));
+    }
+
+    private static Path dirWith(String... fileNames) throws IOException {
+        Path dir = Files.createTempDirectory("renderer-fallback-test");
+        dir.toFile().deleteOnExit();
+        for (String fileName : fileNames) {
+            Path file = dir.resolve(fileName);
+            Files.write(file, "<html></html>".getBytes(StandardCharsets.UTF_8));
+            file.toFile().deleteOnExit();
+        }
+        return dir;
     }
 
     private static class Exchange {

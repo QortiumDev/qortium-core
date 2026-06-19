@@ -9,8 +9,10 @@ import org.apache.logging.log4j.Logger;
 import org.qortium.api.HTMLParser;
 import org.qortium.arbitrary.ArbitraryDataFile.ResourceIdType;
 import org.qortium.arbitrary.exception.MissingDataException;
+import org.qortium.arbitrary.metadata.ArbitraryDataTransactionMetadata;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.controller.Controller;
+import org.qortium.controller.arbitrary.ArbitraryMetadataManager;
 import org.qortium.settings.Settings;
 import org.qortium.utils.FilesystemUtils;
 
@@ -62,6 +64,9 @@ public class ArbitraryDataRenderer {
     private final HttpServletRequest request;
     private final HttpServletResponse response;
     private final ServletContext context;
+    // Metadata entryPoint, loaded lazily and cached for the lifetime of this render.
+    private boolean entryPointLoaded = false;
+    private String cachedEntryPoint = null;
 
     public ArbitraryDataRenderer(String resourceId, ResourceIdType resourceIdType, Service service, String identifier,
                                  String inPath, String secret58, String prefix, boolean includeResourceIdInPrefix, boolean async, String qdnContext,
@@ -151,30 +156,31 @@ public class ArbitraryDataRenderer {
                 filePath = ArbitraryDataRenderer.resolveRequestedFilePath(Paths.get(unzippedPath), filename);
             }
             
-            // If the file doesn't exist, we may need to route the request elsewhere, or cleanup
+            // If the file doesn't exist, we may be able to route the request elsewhere (SPA-style), or cleanup
             if (!Files.exists(filePath)) {
-                if (inPath.equals("/")) {
-                    // Delete the unzipped folder if no index file was found
+                // SPA-style routing: forward an unhandled *route* request (not a missing asset) to a
+                // fallback file, so a client-side router can handle it. Opt-in: APP always; any other
+                // service when it declares a metadata entryPoint. Missing assets still 404, so static
+                // sites are unaffected.
+                String entryPoint = this.getMetadataEntryPoint();
+                String acceptHeader = this.request != null ? this.request.getHeader("Accept") : null;
+                if (spaRoutingEnabled(this.service, entryPoint) && isRouteLikeRequest(inPath, acceptHeader)) {
+                    // Forward to the declared entryPoint, else the index-file convention.
+                    Path fallbackPath = resolveFallbackFile(Paths.get(unzippedPath), entryPoint);
+                    if (fallbackPath != null) {
+                        filePath = fallbackPath;
+                        filename = fallbackPath.getFileName().toString();
+                        usingCustomRouting = true;
+                    }
+                }
+
+                // Still nothing and this was the root request: the resource has no renderable entry,
+                // so delete the unzipped cache.
+                if (!Files.exists(filePath) && inPath.equals("/")) {
                     try {
                         FileUtils.deleteDirectory(new File(unzippedPath));
                     } catch (IOException e) {
                         LOGGER.debug("Unable to delete directory: {}", unzippedPath, e);
-                    }
-                }
-
-                // If this is an app, then forward all unhandled requests to the index, to give the app the option to route it
-                if (this.service == Service.APP) {
-                    // Locate index file
-                    List<String> indexFiles = ArbitraryDataRenderer.indexFiles();
-                    for (String indexFile : indexFiles) {
-                        Path indexPath = Paths.get(unzippedPath, indexFile);
-                        if (Files.exists(indexPath)) {
-                            // Forward request to index file
-                            filePath = indexPath;
-                            filename = indexFile;
-                            usingCustomRouting = true;
-                            break;
-                        }
                     }
                 }
             }
@@ -295,6 +301,77 @@ public class ArbitraryDataRenderer {
 
     static Path resolveRequestedFilePath(Path baseDirectory, String filename) throws IOException {
         return FilesystemUtils.resolveRelativePathInsideBase(baseDirectory, filename);
+    }
+
+    /**
+     * The declared metadata entryPoint for this resource, or null. Loaded lazily and cached for the
+     * lifetime of this render, so the metadata lookup happens at most once and only when needed.
+     */
+    private String getMetadataEntryPoint() {
+        if (this.entryPointLoaded) {
+            return this.cachedEntryPoint;
+        }
+        this.entryPointLoaded = true;
+        try {
+            ArbitraryDataResource resource = new ArbitraryDataResource(resourceId, resourceIdType, service, identifier);
+            ArbitraryDataTransactionMetadata metadata = ArbitraryMetadataManager.getInstance().fetchMetadata(resource, true);
+            this.cachedEntryPoint = (metadata != null) ? metadata.getEntryPoint() : null;
+        } catch (Exception e) {
+            LOGGER.debug("Unable to load metadata entryPoint for {}: {}", resourceId, e.getMessage());
+            this.cachedEntryPoint = null;
+        }
+        return this.cachedEntryPoint;
+    }
+
+    /**
+     * Whether SPA-style route forwarding applies to this resource: always for APP (back-compat), and
+     * for any other service that declares an entryPoint (opt-in). A service without an entryPoint
+     * (e.g. a plain WEBSITE) is unaffected and serves files as-is.
+     */
+    static boolean spaRoutingEnabled(Service service, String entryPoint) {
+        return service == Service.APP || (entryPoint != null && !entryPoint.isEmpty());
+    }
+
+    /**
+     * Whether a request looks like a client-side route (so it may fall back to an entry file) rather
+     * than a missing asset (which should 404). True when the last path segment has no file extension,
+     * or when the client is navigating (Accept: text/html).
+     */
+    static boolean isRouteLikeRequest(String requestPath, String acceptHeader) {
+        String lastSegment = requestPath == null ? "" : requestPath;
+        int slash = lastSegment.lastIndexOf('/');
+        if (slash >= 0) {
+            lastSegment = lastSegment.substring(slash + 1);
+        }
+        if (!lastSegment.contains(".")) {
+            return true;
+        }
+        // A dotted path may still be a route if the browser is navigating to it.
+        return acceptHeader != null && acceptHeader.contains("text/html");
+    }
+
+    /**
+     * The file an unhandled route should forward to: the declared entryPoint if it exists, otherwise
+     * the first existing index-convention file. Returns null if none is available.
+     */
+    static Path resolveFallbackFile(Path baseDirectory, String entryPoint) {
+        if (entryPoint != null && !entryPoint.isEmpty()) {
+            try {
+                Path entryPointPath = resolveRequestedFilePath(baseDirectory, entryPoint);
+                if (Files.exists(entryPointPath)) {
+                    return entryPointPath;
+                }
+            } catch (IOException e) {
+                // Unsafe/escaping entryPoint - ignore and fall through to the index convention.
+            }
+        }
+        for (String indexFile : ArbitraryDataRenderer.indexFiles()) {
+            Path indexPath = baseDirectory.resolve(indexFile);
+            if (Files.exists(indexPath)) {
+                return indexPath;
+            }
+        }
+        return null;
     }
 
     private String getFilename(String directory, String userPath) {
