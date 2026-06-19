@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - docs: record I2P fallback validation results
+
+Records the live fallback-mode test results in the I2P transport design notes. The document now says that non-seed chain and QDN/data peers can connect over I2P with `i2pPreferred` disabled while active public seed paths stay on direct TCP, and it captures the remaining direct-primary polish found during restart testing: temporary I2P seed paths need to move back to TCP once the direct path is eligible again.
+
 ### 2026-06-18 - network: suppress I2P fallback for connected TCP peers
 
 Stops normal fallback mode from repeatedly dialing a peer's advertised I2P destination when that same peer is already connected over direct TCP. The chain and QDN/data peer selectors now treat I2P destinations advertised by an active IP peer as already covered, while still allowing `i2pPreferred` to force I2P for testing or privacy. Focused tests cover both chain and data selection so public seeds stay on the fast TCP path and I2P remains reserved for peers that need it.
