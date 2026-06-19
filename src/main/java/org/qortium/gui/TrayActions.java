@@ -2,10 +2,12 @@ package org.qortium.gui;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortium.controller.AutoUpdate;
 import org.qortium.controller.BootstrapNode;
 import org.qortium.controller.Controller;
 import org.qortium.controller.RestartNode;
 import org.qortium.globalization.Translator;
+import org.qortium.repository.DataException;
 import org.qortium.settings.Settings;
 import org.qortium.utils.URLViewer;
 
@@ -18,8 +20,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 
 final class TrayActions {
@@ -43,6 +47,12 @@ final class TrayActions {
 
 		actions.add(new TrayMenuAction(3, Translator.INSTANCE.translate("SysTray", "BUILD_VERSION"),
 				() -> runAction(beforeAction, TrayActions::showAboutDialog)));
+
+		// Offer a manual update check unless the node already installs updates automatically.
+		if (Settings.getInstance().getAutoUpdateMode() != Settings.AutoUpdateMode.INSTALL) {
+			actions.add(new TrayMenuAction(7, Translator.INSTANCE.translate("SysTray", "CHECK_FOR_UPDATE"),
+					() -> runAction(beforeAction, TrayActions::checkForUpdates)));
+		}
 
 		// Only offer Bootstrap when hosts are configured; without them the action would just fail.
 		if (Settings.getInstance().hasBootstrapHostsConfigured()) {
@@ -109,6 +119,70 @@ final class TrayActions {
 						+ Controller.getInstance().getVersionStringWithoutPrefix(),
 				"Qortium Core",
 				JOptionPane.INFORMATION_MESSAGE));
+	}
+
+	private static void checkForUpdates() {
+		// checkLatestUpdate() does network/repository work and can throw, so run it off the EDT.
+		Thread thread = new Thread(() -> {
+			AutoUpdate.UpdateCheckResult result;
+			try {
+				result = AutoUpdate.checkLatestUpdate();
+			} catch (DataException e) {
+				LOGGER.warn("Tray update check failed: {}", e.getMessage());
+				showUpdateInfo(Translator.INSTANCE.translate("SysTray", "UPDATE_CHECK_FAILED"));
+				return;
+			}
+
+			if (result == null || !result.updateAvailable) {
+				showUpdateInfo(Translator.INSTANCE.translate("SysTray", "UP_TO_DATE"));
+				return;
+			}
+
+			// An update is available: offer to install it (which restarts the node).
+			final String prompt = String.format(
+					Translator.INSTANCE.translate("SysTray", "UPDATE_AVAILABLE_PROMPT"), describeUpdate(result));
+			SwingUtilities.invokeLater(() -> {
+				int choice = JOptionPane.showConfirmDialog(null, prompt,
+						Translator.INSTANCE.translate("SysTray", "CHECK_FOR_UPDATE"),
+						JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+				if (choice == JOptionPane.YES_OPTION)
+					installUpdate();
+			});
+		}, "Tray update check");
+		thread.setDaemon(true);
+		thread.start();
+	}
+
+	private static void installUpdate() {
+		// requestManualUpdate() schedules the download + install + restart; it can throw, so run off the EDT.
+		Thread thread = new Thread(() -> {
+			try {
+				AutoUpdate.requestManualUpdate();
+			} catch (DataException e) {
+				LOGGER.warn("Tray update install failed: {}", e.getMessage());
+				showUpdateInfo(Translator.INSTANCE.translate("SysTray", "UPDATE_CHECK_FAILED"));
+			}
+		}, "Tray update install");
+		thread.setDaemon(true);
+		thread.start();
+	}
+
+	/** Short, factual descriptor of the available build (commit and/or build date) for the prompt. */
+	private static String describeUpdate(AutoUpdate.UpdateCheckResult result) {
+		StringBuilder sb = new StringBuilder();
+		if (result.commitHash != null && !result.commitHash.isEmpty())
+			sb.append(result.commitHash.length() > 8 ? result.commitHash.substring(0, 8) : result.commitHash);
+		if (result.updateTimestamp != null) {
+			if (sb.length() > 0)
+				sb.append(", ");
+			sb.append(new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date(result.updateTimestamp)));
+		}
+		return sb.length() > 0 ? sb.toString() : Translator.INSTANCE.translate("SysTray", "AUTO_UPDATE");
+	}
+
+	private static void showUpdateInfo(String message) {
+		SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, message,
+				Translator.INSTANCE.translate("SysTray", "CHECK_FOR_UPDATE"), JOptionPane.INFORMATION_MESSAGE));
 	}
 
 	private static void bootstrap() {

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - gui: add check-for-updates action to system tray menu
+
+Adds a "Check for updates" item to the desktop system-tray menu. Selecting it asks the node to look for the latest approved update, then either reports that the node is already up to date or, when a newer build is available, offers to install it right away (which restarts the node). This combines checking and installing into one flow so a check always has a clear next step. The item is hidden when the node is set to install updates automatically, since it would be redundant. The menu label, prompts, and result messages are translated into all supported languages.
+
 ### 2026-06-19 - gui: add bootstrap action to system tray menu
 
 Adds a "Bootstrap" item to the desktop system-tray menu, shown just above "Restart". Selecting it asks for confirmation -- because bootstrapping deletes the local database and downloads a fresh copy -- and then runs the same bootstrap mechanism as the existing admin bootstrap. The item only appears when bootstrap hosts are configured, and quietly does nothing if a bootstrap or restart is already underway. The menu label and the confirmation prompt are translated into all supported languages.
