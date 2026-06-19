@@ -194,6 +194,7 @@ public class SamSession implements I2PStreamProvider {
     @Override
     public synchronized void close() {
         sessionUp.set(false);
+        localB32 = null;
         if (controlReader != null)
             controlReader.interrupt();
         closeQuietly(forwardChannel);
