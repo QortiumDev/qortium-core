@@ -666,25 +666,29 @@ public class Peer {
 
         Peer otherPeer = (Peer) other;
 
-        // Compare based on the host and port combination from peerData
-        // Peer.toString() returns this.peerData.getAddress().toString(),
-        // which represents the HostAndPort for comparison.
+        PeerAddress thisPeerAddress = this.peerData.getAddress();
+        PeerAddress otherPeerAddress = otherPeer.peerData.getAddress();
+
+        // I2P addresses are not DNS/socket addresses, so compare them directly
+        // by kind, host and port.
+        if (thisPeerAddress.isI2P() || otherPeerAddress.isI2P())
+            return thisPeerAddress.equals(otherPeerAddress);
 
         // Retrieve InetSocketAddress from this Peer's PeerData
         InetSocketAddress thisAddress;
         try {
-            thisAddress = this.peerData.getAddress().toSocketAddress();
+            thisAddress = thisPeerAddress.toSocketAddress();
         } catch (UnknownHostException e) {
-            LOGGER.error("Could not resolve own address for equals comparison: {}", this.peerData.getAddress().toString());
+            LOGGER.error("Could not resolve own address for equals comparison: {}", thisPeerAddress.toString());
             return false;
         }
 
         // Retrieve InetSocketAddress from the other Peer's PeerData
         InetSocketAddress otherAddress;
         try {
-            otherAddress = otherPeer.peerData.getAddress().toSocketAddress();
+            otherAddress = otherPeerAddress.toSocketAddress();
         } catch (UnknownHostException e) {
-            LOGGER.error("Could not resolve other peer's address for equals comparison: {}", otherPeer.peerData.getAddress().toString());
+            LOGGER.error("Could not resolve other peer's address for equals comparison: {}", otherPeerAddress.toString());
             return false;
         }
 
