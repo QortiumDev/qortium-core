@@ -2,9 +2,11 @@ package org.qortium.gui;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortium.controller.BootstrapNode;
 import org.qortium.controller.Controller;
 import org.qortium.controller.RestartNode;
 import org.qortium.globalization.Translator;
+import org.qortium.settings.Settings;
 import org.qortium.utils.URLViewer;
 
 import javax.swing.JOptionPane;
@@ -41,6 +43,13 @@ final class TrayActions {
 
 		actions.add(new TrayMenuAction(3, Translator.INSTANCE.translate("SysTray", "BUILD_VERSION"),
 				() -> runAction(beforeAction, TrayActions::showAboutDialog)));
+
+		// Only offer Bootstrap when hosts are configured; without them the action would just fail.
+		if (Settings.getInstance().hasBootstrapHostsConfigured()) {
+			actions.add(new TrayMenuAction(6, Translator.INSTANCE.translate("SysTray", "BOOTSTRAP"),
+					() -> runAction(beforeAction, TrayActions::bootstrap)));
+		}
+
 		actions.add(new TrayMenuAction(5, Translator.INSTANCE.translate("SysTray", "RESTART"),
 				() -> runAction(beforeAction, TrayActions::restart)));
 		actions.add(new TrayMenuAction(4, Translator.INSTANCE.translate("SysTray", "EXIT"),
@@ -100,6 +109,25 @@ final class TrayActions {
 						+ Controller.getInstance().getVersionStringWithoutPrefix(),
 				"Qortium Core",
 				JOptionPane.INFORMATION_MESSAGE));
+	}
+
+	private static void bootstrap() {
+		// Bootstrapping is destructive: it deletes the local database and downloads a fresh
+		// copy, so confirm before scheduling. The dialog/scheduling run on the EDT to stay
+		// safe regardless of which tray backend invoked the action.
+		SwingUtilities.invokeLater(() -> {
+			int choice = JOptionPane.showConfirmDialog(null,
+					Translator.INSTANCE.translate("SysTray", "BOOTSTRAP_CONFIRM"),
+					Translator.INSTANCE.translate("SysTray", "BOOTSTRAP"),
+					JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+			if (choice != JOptionPane.YES_OPTION)
+				return;
+
+			// scheduleBootstrap() spawns its own worker and returns false if a bootstrap or
+			// restart apply is already scheduled or running.
+			if (!BootstrapNode.scheduleBootstrap())
+				LOGGER.info("Ignoring tray bootstrap request: a bootstrap or restart is already scheduled or running");
+		});
 	}
 
 	private static void restart() {

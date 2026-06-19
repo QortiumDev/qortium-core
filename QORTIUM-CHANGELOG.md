@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - gui: add bootstrap action to system tray menu
+
+Adds a "Bootstrap" item to the desktop system-tray menu, shown just above "Restart". Selecting it asks for confirmation -- because bootstrapping deletes the local database and downloads a fresh copy -- and then runs the same bootstrap mechanism as the existing admin bootstrap. The item only appears when bootstrap hosts are configured, and quietly does nothing if a bootstrap or restart is already underway. The menu label and the confirmation prompt are translated into all supported languages.
+
 ### 2026-06-19 - gui: add restart action to system tray menu
 
 Adds a "Restart" item to the desktop system-tray menu, between "Build version" and "Exit". Selecting it restarts the node in place using the same mechanism as the existing admin restart, and quietly does nothing if a restart or bootstrap is already underway. The menu label is translated into all supported languages. This is the first of several planned tray-menu additions; update, check-for-update, and bootstrap actions will follow.
