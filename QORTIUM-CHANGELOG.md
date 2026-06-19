@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - docs: record I2P handshake cleanup validation
+
+Updates the I2P fallback transport notes after deploying the stale-handshake cleanup to both public seeds. The notes now record that Netcup and Regxa are both running the cleanup builds, that the focused and full Maven test suites passed, and that the latest seed test did not leave another lingering I2P `HELLO`: Netcup restored a direct QDN/data peer to Regxa and the temporary I2P lookup failed cleanly at the SAM layer. The remaining pre-bundling gap is now narrowed to a clean chain-network live proof of direct-primary recovery, which still needs firewall control or a dedicated test hook.
+
 ### 2026-06-19 - network: clean up stale I2P handshakes
 
 Disconnects chain and QDN/data peers that stay stuck in a pre-completed handshake state from the network schedulers instead of waiting only for the slower controller prune cycle. Outbound I2P handshake timeouts now also count as outbound failures, so a stale `.b32.i2p` fallback destination cools down before it is retried. This tightens the lingering I2P `HELLO` case found during live seed recovery testing while keeping direct TCP peers and completed I2P fallback peers on their existing paths.
