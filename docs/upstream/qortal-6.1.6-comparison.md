@@ -325,19 +325,19 @@ entries added).
 ## Triage Worksheet
 
 Decisions recorded during the 2026-06-17 review. Both consensus fixes were ported behind
-feature-trigger heights that default to a disabled sentinel (fail-closed). Activation heights
-were chosen on 2026-06-17: **Previewnet = block 27000** (~2.5 days out at the then-current
-~75s/block real rate, height ~24080, allowing time for the dozen-node network to update), and
-**mainnet + local testnet = 0** (active from genesis, since neither chain has launched yet, so
-the fixes apply from the first block with no legacy period). Both consensus triggers share the
-same height per chain (one coordinated activation). Previewnet temporarily omitted these keys
-while rollout risk was revisited; they are restored now that the chain-config fingerprint ignores
-feature-trigger metadata and can carry this activation without changing peer compatibility.
+feature-trigger heights that default to a disabled sentinel (fail-closed). The original
+Previewnet activation target was block 27000, but rollout is being held while the I2P branch is
+reviewed and tested. Previewnet now carries both triggers at block 99999 as a temporary
+placeholder. Mainnet and the local testnet remain active from genesis at height 0, since neither
+chain has launched yet and there is no legacy period to preserve. Both consensus triggers share
+the same height per chain (one coordinated activation). The chain-config fingerprint ignores
+feature-trigger metadata, so carrying or revising this placeholder does not change peer
+compatibility.
 
 | Change | Decision | Qortium activation height | Notes |
 |---|---|---|---|
-| c-01 online-accounts signature V2 | Ported, gated | Previewnet 27000; mainnet+testnet 0 | Per-account Ed25519 behind `onlineAccountsSignatureV2Height`. Adversarially reviewed: pre-activation path byte-for-byte identical (replay-safe); forgery closed (SchnorrTests); V2 block round-trip tested. Hard fork — changes block serialization at activation; Previewnet operators must update before block 27000. |
-| c-02 asset-order bounds | Ported, gated | Previewnet 27000; mainnet+testnet 0 | Bounds + fail-closed narrowing behind `assetOrderBoundsHeight`. Reviewed: pre-activation byte-for-byte identical; full asset suite passes with the gate active. |
+| c-01 online-accounts signature V2 | Ported, gated | Previewnet 99999 for now; mainnet+testnet 0 | Per-account Ed25519 behind `onlineAccountsSignatureV2Height`. Adversarially reviewed: pre-activation path byte-for-byte identical (replay-safe); forgery closed (SchnorrTests); V2 block round-trip tested. Hard fork — changes block serialization at activation; Previewnet operators must update before the final activation height. |
+| c-02 asset-order bounds | Ported, gated | Previewnet 99999 for now; mainnet+testnet 0 | Bounds + fail-closed narrowing behind `assetOrderBoundsHeight`. Reviewed: pre-activation byte-for-byte identical; full asset suite passes with the gate active. |
 | Trade-bot backup fix | Adopted (`e2c461761`) | n/a | Backs up the whole batch instead of one record. |
 | search `default=true` fix | Adopted (`f514b2939`) | n/a | Response-affecting; SQL path uses `='default'`, cache path uses `NULL OR 'default'` (parity kept with upstream). |
 | QDN folder-size estimator | Adopted (`8dc56fdfa`) | n/a | Uses `qortium-backup/` path; kept Qortium's correct temp-dir measurement (did not port upstream's double-count). |
