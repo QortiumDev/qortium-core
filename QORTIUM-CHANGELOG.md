@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - qdn: add image gallery service and multi-file media
+
+Adds a new IMAGE_GALLERY service for publishing a collection of images as one resource (it accepts only image files -- png, jpg, jpeg, gif, webp, bmp, avif, tif -- with a 50 MB cap, mirroring how the existing GIF repository works but for any image type). This keeps single images on the IMAGE service while giving galleries their own clearly-typed home, instead of overloading IMAGE or using a generic file bundle. Also switches the public VIDEO, AUDIO, DOCUMENT, and PODCAST services to allow multiple files, so a media resource can carry sidecar files (subtitles, cover art, show notes) alongside the main file, with the entry point picking the primary one.
+
+The private variants (VIDEO_PRIVATE, AUDIO_PRIVATE, DOCUMENT_PRIVATE) and a private gallery are intentionally left single-file for now: privacy currently depends on single-file pre-encryption validation that does not safely extend to multi-file resources, so multi-file private support needs a separate design. Existing resources are unaffected, and there are no consensus or database changes (the published service id is opaque to the chain).
+
 ### 2026-06-19 - api: expose entry point in resource metadata
 
 Lets apps read a resource's declared entry point. The resource-metadata response returned by GET /arbitrary/metadata/... now includes the optional entryPoint field, so publishing tools and viewers can show or use the main file without downloading the resource. It is included only when the resource declares one, and a resource whose only metadata is an entry point now returns metadata instead of "not found". This is a read-only mapping change with no consensus or database changes. (The bulk resource-search listings and the local preview endpoint do not yet surface entryPoint; those remain follow-ups.)

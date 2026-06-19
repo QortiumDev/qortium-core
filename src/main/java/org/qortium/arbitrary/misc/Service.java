@@ -90,19 +90,56 @@ public enum Service {
     IMAGE_PRIVATE(401, true, 10*1024*1024L, true, true, null),
     THUMBNAIL(410, true, 500*1024L, true, false, null),
     QCHAT_IMAGE(420, true, 500*1024L, true, false, null),
-    VIDEO(500, false, null, true, false, null),
+    IMAGE_GALLERY(430, true, 50*1024*1024L, false, false, null) {
+        @Override
+        public ValidationResult validate(Path path) throws IOException {
+            ValidationResult superclassResult = super.validate(path);
+            if (superclassResult != ValidationResult.OK) {
+                return superclassResult;
+            }
+
+            // Custom validation function to require image files only, and at least 1
+            final List<String> allowedExtensions = Arrays.asList("png", "jpg", "jpeg", "gif", "webp", "bmp", "avif", "tif", "tiff");
+            int imageCount = 0;
+            File[] files = path.toFile().listFiles();
+            // If already a single file, replace the list with one that contains that file only
+            if (files == null && path.toFile().isFile()) {
+                files = new File[] { path.toFile() };
+            }
+            if (files != null) {
+                for (File file : files) {
+                    if (file.getName().equals(".qdn")) {
+                        continue;
+                    }
+                    if (file.isDirectory()) {
+                        return ValidationResult.DIRECTORIES_NOT_ALLOWED;
+                    }
+                    String extension = FilenameUtils.getExtension(file.getName()).toLowerCase();
+                    if (!allowedExtensions.contains(extension)) {
+                        return ValidationResult.INVALID_FILE_EXTENSION;
+                    }
+                    imageCount++;
+                }
+            }
+            if (imageCount == 0) {
+                return ValidationResult.MISSING_DATA;
+            }
+            return ValidationResult.OK;
+        }
+    },
+    VIDEO(500, false, null, false, false, null),
     VIDEO_PRIVATE(501, true, null, true, true, null),
-    AUDIO(600, false, null, true, false, null),
+    AUDIO(600, false, null, false, false, null),
     AUDIO_PRIVATE(601, true, null, true, true, null),
     QCHAT_AUDIO(610, true, 10*1024*1024L, true, false, null),
     QCHAT_VOICE(620, true, 10*1024*1024L, true, false, null),
     VOICE(630, true, 10*1024*1024L, true, false, null),
     VOICE_PRIVATE(631, true, 10*1024*1024L, true, true, null),
-    PODCAST(640, false, null, true, false, null),
+    PODCAST(640, false, null, false, false, null),
     BLOG(700, false, null, false, false, null),
     BLOG_POST(777, false, null, true, false, null),
     BLOG_COMMENT(778, true, 500*1024L, true, false, null),
-    DOCUMENT(800, false, null, true, false, null),
+    DOCUMENT(800, false, null, false, false, null),
     DOCUMENT_PRIVATE(801, true, null, true, true, null),
     LIST(900, true, null, true, false, null),
     PLAYLIST(910, true, null, true, false, null),
