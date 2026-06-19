@@ -965,7 +965,7 @@ public class Settings {
 		settings.put("bootstrapHosts", new WritableSetting(WritableSettingType.STRING_ARRAY, false));
 		settings.put("qdnEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("i2pEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
-		settings.put("i2pPreferred", new WritableSetting(WritableSettingType.BOOLEAN, true));
+		settings.put("i2pPreferred", new WritableSetting(WritableSettingType.BOOLEAN, false)); // read live; no restart needed
 		settings.put("i2pSamHost", new WritableSetting(WritableSettingType.STRING, true));
 		settings.put("i2pSamPort", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("i2pChainKeyFile", new WritableSetting(WritableSettingType.STRING, true));
