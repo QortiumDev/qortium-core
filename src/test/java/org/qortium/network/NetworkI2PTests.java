@@ -22,6 +22,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 public class NetworkI2PTests extends Common {
@@ -117,6 +118,21 @@ public class NetworkI2PTests extends Common {
 	}
 
 	@Test
+	public void testFullChainSlotsSelectI2PFallbackForDirectReplacement() throws Exception {
+		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORK);
+		i2pPeer.setPeersNodeId(NODE_ID);
+		Network.getInstance().addConnectedPeer(i2pPeer);
+		Network.getInstance().addHandshakedPeer(i2pPeer);
+		PeerData directPeerData = new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test");
+		getMutableKnownPeers().add(directPeerData);
+		invokeUpdateAddressToNodeIdCache(directPeerData.getAddress().toString(), NODE_ID);
+
+		Peer fallbackPeer = invokeFindI2PFallbackPeerWithDirectReplacement(System.currentTimeMillis());
+
+		assertSame(i2pPeer, fallbackPeer);
+	}
+
+	@Test
 	public void testPreferredI2PSelectsI2PChainPeerWhenSessionIsUp() throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "i2pPreferred", true, true);
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
@@ -178,7 +194,11 @@ public class NetworkI2PTests extends Common {
 		((List<PeerAddress>) FieldUtils.readField(Network.getInstance(), "selfPeers", true)).clear();
 		((Map<String, ?>) FieldUtils.readField(Network.getInstance(), "addressToNodeIdCache", true)).clear();
 		((List<Peer>) FieldUtils.readField(Network.getInstance(), "connectedPeers", true)).clear();
+		((List<Peer>) FieldUtils.readField(Network.getInstance(), "handshakedPeers", true)).clear();
+		((List<Peer>) FieldUtils.readField(Network.getInstance(), "outboundHandshakedPeers", true)).clear();
 		FieldUtils.writeField(Network.getInstance(), "immutableConnectedPeers", List.of(), true);
+		FieldUtils.writeField(Network.getInstance(), "immutableHandshakedPeers", List.of(), true);
+		FieldUtils.writeField(Network.getInstance(), "immutableOutboundHandshakedPeers", List.of(), true);
 		getConnectingI2PPeers().clear();
 	}
 
@@ -208,6 +228,12 @@ public class NetworkI2PTests extends Common {
 		java.lang.reflect.Method method = Network.class.getDeclaredMethod("updateAddressToNodeIdCache", String.class, String.class);
 		method.setAccessible(true);
 		method.invoke(Network.getInstance(), address, nodeId);
+	}
+
+	private Peer invokeFindI2PFallbackPeerWithDirectReplacement(long now) throws Exception {
+		java.lang.reflect.Method method = Network.class.getDeclaredMethod("findI2PFallbackPeerWithDirectReplacement", Long.class);
+		method.setAccessible(true);
+		return (Peer) method.invoke(Network.getInstance(), now);
 	}
 
 	private static class FakeI2PStreamProvider implements I2PStreamProvider {

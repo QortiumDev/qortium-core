@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - network: restore TCP after temporary I2P fallback
+
+Keeps direct TCP primary after a peer temporarily falls back to I2P during restart or connection-backoff windows. When I2P is not preferred and an outbound I2P fallback peer has a known direct address that the normal dialer would allow, the chain and QDN/data networks now drop the fallback connection so the existing TCP reconnect path can retry it. This prevents full outbound slots from leaving a reachable public seed or direct peer stuck on I2P after TCP becomes eligible again, while preserving I2P as the fallback for peers that still have no direct path.
+
 ### 2026-06-18 - docs: record I2P fallback validation results
 
 Records the live fallback-mode test results in the I2P transport design notes. The document now says that non-seed chain and QDN/data peers can connect over I2P with `i2pPreferred` disabled while active public seed paths stay on direct TCP, and it captures the remaining direct-primary polish found during restart testing: temporary I2P seed paths need to move back to TCP once the direct path is eligible again.
