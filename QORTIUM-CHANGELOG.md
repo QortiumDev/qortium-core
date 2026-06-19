@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - network: clean up stale I2P handshakes
+
+Disconnects chain and QDN/data peers that stay stuck in a pre-completed handshake state from the network schedulers instead of waiting only for the slower controller prune cycle. Outbound I2P handshake timeouts now also count as outbound failures, so a stale `.b32.i2p` fallback destination cools down before it is retried. This tightens the lingering I2P `HELLO` case found during live seed recovery testing while keeping direct TCP peers and completed I2P fallback peers on their existing paths.
+
 ### 2026-06-19 - docs: record seed I2P fallback validation
 
 Updates the I2P fallback transport notes with the latest two-seed Previewnet validation. Regxa was brought onto the I2P branch with its own user-local `i2pd`, and Regxa/Netcup testing proved that a completed QDN/data I2P fallback connection between direct-reachable public seeds returns to direct TCP once the direct data address is restored. The notes also record that Regxa recovered its data SAM destination after `i2pd` was replaced under a running Core, while calling out the remaining live-test gaps: the chain-network direct-primary proof still needs a way to hold a direct-reachable chain peer on completed I2P without the fixed seed TCP path immediately reconnecting, and Netcup can still leave an outbound I2P data attempt in `HELLO` after this forced recovery scenario.
