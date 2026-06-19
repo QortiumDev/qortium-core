@@ -231,6 +231,48 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testI2PSettingsRoundTripAndApplyLiveVsRestart() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave(
+				"{\"i2pPreferred\":true,\"i2pSamHost\":\"127.0.0.2\",\"i2pSamPort\":7000}");
+
+		assertTrue(result.saved);
+		// i2pPreferred is read live -> applied immediately; SAM host/port need a restart.
+		assertTrue(result.applied.contains("i2pPreferred"));
+		assertFalse(result.applied.contains("i2pSamPort"));
+		assertTrue(result.restartRequired.contains("i2pSamHost"));
+		assertTrue(result.restartRequired.contains("i2pSamPort"));
+
+		assertTrue(Settings.getInstance().isI2PPreferred());
+		assertEquals("127.0.0.2", Settings.getInstance().getI2PSamHost());
+		assertEquals(7000, Settings.getInstance().getI2PSamPort());
+
+		Map<String, Object> saved = readSettings(settingsPath);
+		assertEquals(Boolean.TRUE, saved.get("i2pPreferred"));
+		assertEquals(7000, ((Number) saved.get("i2pSamPort")).intValue());
+		assertEquals("127.0.0.2", saved.get("i2pSamHost"));
+	}
+
+	@Test
+	public void testInvalidI2PSamPortIsRejectedWithoutChangingFile() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
+
+		try {
+			Settings.updateAndSave("{\"i2pSamPort\":70000}");
+			fail("Expected out-of-range i2pSamPort to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("i2pSamPort"));
+		}
+
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+		assertEquals(7656, Settings.getInstance().getI2PSamPort()); // unchanged default
+	}
+
+	@Test
 	public void testInvalidMergedSettingsAreRejectedWithoutChangingFile() throws Exception {
 		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
 		Settings.fileInstance(settingsPath.toString());
