@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - network: quiet optional I2P fallback setup
+
+Makes the I2P fallback startup path friendlier for standalone Core operators who do not run `i2pd`. Missing SAM now logs one clear informational message for the chain network and one for QDN/data, then moves repeated retry messages to debug while direct TCP continues normally. The root README and documentation index now point manual operators to a new I2P fallback guide that explains the optional `i2pd` setup, safe defaults, verification checks, and how to disable I2P attempts. The preview operator runbook also links to the general guide.
+
 ### 2026-06-19 - docs: record final I2P direct-primary proof
 
 Updates the I2P fallback transport notes with the final non-loopback chain-network proof. A disposable local node and a temporary Netcup proof node showed the complete recovery path: the local node learned Netcup over direct TCP, forced a completed outbound I2P chain fallback to the same node ID, then returned to direct TCP once preferred-I2P testing was disabled and the direct address was available again. The notes also record that Regxa stayed online during the test and that Netcup's normal seed service was restored afterward.

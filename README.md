@@ -98,6 +98,18 @@ The root scripts look for `qortium.jar` first and otherwise use a built
 the database directory is local to the repository working directory unless
 configured otherwise.
 
+### Optional I2P Fallback
+
+Qortium Core can use I2P as a fallback transport for peers that cannot accept
+inbound TCP. Direct TCP remains primary, and Core runs normally without I2P.
+
+Qortium Home is expected to manage `i2pd` for normal desktop users. Standalone
+Core operators who want I2P fallback can run a local `i2pd` SAM bridge on
+`127.0.0.1:7656`; see
+[docs/networking/i2p-fallback-operator-guide.md](docs/networking/i2p-fallback-operator-guide.md).
+Operators who do not want I2P attempts can set `"i2pEnabled": false` in
+`settings.json`.
+
 ## Docker
 
 Docker support is available for developers who prefer a containerized node.

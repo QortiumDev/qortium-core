@@ -132,6 +132,9 @@ file = /var/lib/i2pd/i2pseeds.su3
 Then restart `i2pd` and wait for the router count to climb before restarting
 Core or judging I2P fallback connectivity.
 
+Standalone node operators can also use the general
+[I2P fallback operator guide](../docs/networking/i2p-fallback-operator-guide.md).
+
 ## Public API Contract
 
 Preview seed nodes keep the normal API restricted for local transaction-builder
