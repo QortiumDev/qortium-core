@@ -145,6 +145,9 @@ final class AwtSysTray implements NodeTray {
 		menu.addPopupMenuListener(new PopupMenuListener() {
 			@Override
 			public void popupMenuWillBecomeVisible(PopupMenuEvent event) {
+				// Rebuild on each open so dynamic items (e.g. an available-update install entry)
+				// reflect current state rather than whatever was true at startup.
+				rebuildMenuItems(menu);
 			}
 
 			@Override
@@ -157,14 +160,20 @@ final class AwtSysTray implements NodeTray {
 			}
 		});
 
+		rebuildMenuItems(menu);
+
+		return menu;
+	}
+
+	private void rebuildMenuItems(JPopupMenu menu) {
+		menu.removeAll();
+
 		List<TrayMenuAction> actions = TrayActions.createMenuActions(this::destroyHiddenDialog);
 		for (TrayMenuAction action : actions) {
 			JMenuItem item = new JMenuItem(action.getLabel());
 			item.addActionListener(actionEvent -> action.run());
 			menu.add(item);
 		}
-
-		return menu;
 	}
 
 	@Override

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - gui: show available update in system tray menu
+
+Makes the system-tray menu remember when an update has been found so the user can act on it later. The node already notifies when an approved update is available, but that notice is easy to miss or dismiss. Now every update check -- whether the automatic periodic check or a manual one from the menu -- records the result, and while an update is known to be available the menu shows a persistent "Install update" entry alongside "Check for updates". Selecting it confirms and installs as before. The tray menu is now rebuilt each time it opens so this entry appears and disappears in step with the actual update state. The new label is translated into all supported languages.
+
 ### 2026-06-19 - gui: add check-for-updates action to system tray menu
 
 Adds a "Check for updates" item to the desktop system-tray menu. Selecting it asks the node to look for the latest approved update, then either reports that the node is already up to date or, when a newer build is available, offers to install it right away (which restarts the node). This combines checking and installing into one flow so a check always has a clear next step. The item is hidden when the node is set to install updates automatically, since it would be redundant. The menu label, prompts, and result messages are translated into all supported languages.

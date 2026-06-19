@@ -91,6 +91,10 @@ public class AutoUpdate extends Thread {
 	private static final AtomicBoolean updateInstallInProgress = new AtomicBoolean(false);
 	private static final AtomicBoolean manualRetryWorkerRunning = new AtomicBoolean(false);
 	private static volatile DownloadRetryState downloadRetryState = null;
+	/** Last known "an approved newer update is available" result, refreshed by every check
+	 *  (periodic or manual). Null means no update is currently known to be available. Read by
+	 *  the system-tray menu so it can offer an install even if a notification was missed. */
+	private static volatile CachedUpdateStatus cachedUpdateStatus = null;
 
 	private volatile boolean isStopping = false;
 	private String lastNotifiedManifestSignature = null;
@@ -111,6 +115,18 @@ public class AutoUpdate extends Thread {
 
 	public static boolean shouldStartBackgroundService() {
 		return Settings.getInstance().getAutoUpdateMode() != AutoUpdateMode.OFF;
+	}
+
+	/** Returns the last known available-update snapshot, or null if none is currently known. */
+	public static CachedUpdateStatus getCachedUpdateStatus() {
+		return cachedUpdateStatus;
+	}
+
+	/** Refresh the cached available-update snapshot from a check result (null-safe). */
+	private static void cacheUpdateStatus(UpdateCheckResult status) {
+		cachedUpdateStatus = (status != null && status.updateAvailable)
+				? new CachedUpdateStatus(status.commitHash, status.updateTimestamp)
+				: null;
 	}
 
 	@Override
@@ -147,6 +163,8 @@ public class AutoUpdate extends Thread {
 			try {
 				UpdateLookup lookup = lookupLatestUpdate(buildTimestamp);
 				logSkippedLookup(lookup.status);
+				// Record availability for the tray menu, whether or not we go on to install.
+				cacheUpdateStatus(lookup.status);
 				if (!lookup.status.updateAvailable)
 					continue;
 
@@ -201,11 +219,14 @@ public class AutoUpdate extends Thread {
 	}
 
 	public static UpdateCheckResult checkLatestUpdate() throws DataException {
-		return lookupLatestUpdate(getCurrentBuildTimestamp()).status;
+		UpdateCheckResult status = lookupLatestUpdate(getCurrentBuildTimestamp()).status;
+		cacheUpdateStatus(status);
+		return status;
 	}
 
 	public static UpdateCheckResult requestManualUpdate() throws DataException {
 		UpdateLookup lookup = lookupLatestUpdate(getCurrentBuildTimestamp());
+		cacheUpdateStatus(lookup.status);
 		if (!lookup.status.updateAvailable)
 			return lookup.status;
 
@@ -701,6 +722,17 @@ public class AutoUpdate extends Thread {
 		public String qdnName;
 		public String qdnIdentifier;
 		public String qdnPath;
+	}
+
+	/** Minimal immutable snapshot of an available update, shared with the system-tray menu. */
+	public static class CachedUpdateStatus {
+		public final String commitHash;
+		public final Long updateTimestamp;
+
+		CachedUpdateStatus(String commitHash, Long updateTimestamp) {
+			this.commitHash = commitHash;
+			this.updateTimestamp = updateTimestamp;
+		}
 	}
 
 	private static class DownloadRetryState {
