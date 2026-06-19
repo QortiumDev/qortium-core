@@ -8,6 +8,7 @@ import org.qortium.arbitrary.ArbitraryDataFile;
 import org.qortium.arbitrary.ArbitraryDataTransactionBuilder;
 import org.qortium.arbitrary.metadata.ArbitraryDataTransactionMetadata;
 import org.qortium.arbitrary.misc.Service;
+import org.qortium.data.arbitrary.ArbitraryResourceMetadata;
 import org.qortium.controller.arbitrary.ArbitraryDataManager;
 import org.qortium.data.transaction.ArbitraryTransactionData;
 import org.qortium.data.transaction.RegisterNameTransactionData;
@@ -84,6 +85,37 @@ public class ArbitraryDataEntryPointTests extends Common {
         ArbitraryDataTransactionMetadata readBack = new ArbitraryDataTransactionMetadata(metadataPath);
         readBack.read();
         assertNull(readBack.getEntryPoint());
+    }
+
+    // (1b) Read API: the ArbitraryResourceMetadata DTO (behind GET /arbitrary/metadata) exposes entryPoint
+
+    @Test
+    public void testResourceMetadataDtoExposesEntryPoint() throws IOException, DataException {
+        // entryPoint is carried through the transaction-metadata -> DTO mapping
+        ArbitraryDataTransactionMetadata withEntry = new ArbitraryDataTransactionMetadata(
+                Files.createTempFile("dtoWithEntry", ".json"));
+        withEntry.setFiles(List.of("index.html", "about.html"));
+        withEntry.setEntryPoint("about.html");
+
+        ArbitraryResourceMetadata dto = ArbitraryResourceMetadata.fromTransactionMetadata(withEntry, true);
+        assertNotNull(dto);
+        assertEquals("about.html", dto.getEntryPoint());
+
+        // Absent entryPoint -> null on the DTO (no spurious value)
+        ArbitraryDataTransactionMetadata withoutEntry = new ArbitraryDataTransactionMetadata(
+                Files.createTempFile("dtoNoEntry", ".json"));
+        withoutEntry.setFiles(List.of("a.html"));
+        ArbitraryResourceMetadata dtoNoEntry = ArbitraryResourceMetadata.fromTransactionMetadata(withoutEntry, true);
+        assertNotNull(dtoNoEntry);
+        assertNull(dtoNoEntry.getEntryPoint());
+
+        // A resource whose only metadata is an entryPoint still produces a DTO (not treated as "no metadata")
+        ArbitraryDataTransactionMetadata onlyEntry = new ArbitraryDataTransactionMetadata(
+                Files.createTempFile("dtoOnlyEntry", ".json"));
+        onlyEntry.setEntryPoint("main.html");
+        ArbitraryResourceMetadata dtoOnlyEntry = ArbitraryResourceMetadata.fromTransactionMetadata(onlyEntry, false);
+        assertNotNull("entryPoint-only metadata should still produce a DTO", dtoOnlyEntry);
+        assertEquals("main.html", dtoOnlyEntry.getEntryPoint());
     }
 
     // (2) Publish-time validation: a valid entryPoint (present in file list) is accepted
