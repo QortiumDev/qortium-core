@@ -232,9 +232,6 @@ public enum Service {
     // For JSON validation
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    private static final String encryptedDataPrefix = "qdnEncryptedData";
-    private static final String encryptedGroupDataPrefix = "qdnGroupEncryptedData";
-
     Service(int value, boolean requiresValidation, Long maxSize, boolean single, boolean isPrivate, List<String> requiredKeys) {
         this.value = value;
         this.requiresValidation = requiresValidation;
@@ -268,13 +265,15 @@ public enum Service {
             return ValidationResult.INVALID_FILE_COUNT;
         }
 
-        // Validate private data for single file resources
+        // Validate private data for single file resources. Accept either the v1 encrypted envelope
+        // or a legacy encryption prefix; reject plaintext for private services (and reject encrypted
+        // data for public services).
         if (this.single) {
-            String dataString = new String(data, StandardCharsets.UTF_8);
-            if (this.isPrivate && !dataString.startsWith(encryptedDataPrefix) && !dataString.startsWith(encryptedGroupDataPrefix)) {
+            boolean encrypted = EncryptedDataEnvelope.isEncrypted(data);
+            if (this.isPrivate && !encrypted) {
                 return ValidationResult.DATA_NOT_ENCRYPTED;
             }
-            if (!this.isPrivate && (dataString.startsWith(encryptedDataPrefix) || dataString.startsWith(encryptedGroupDataPrefix))) {
+            if (!this.isPrivate && encrypted) {
                 return ValidationResult.DATA_ENCRYPTED;
             }
         }

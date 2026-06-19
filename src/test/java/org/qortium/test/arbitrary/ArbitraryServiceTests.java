@@ -7,6 +7,7 @@ import org.qortium.account.PrivateKeyAccount;
 import org.qortium.arbitrary.ArbitraryDataFile;
 import org.qortium.arbitrary.ArbitraryDataReader;
 import org.qortium.arbitrary.exception.MissingDataException;
+import org.qortium.arbitrary.misc.EncryptedDataEnvelope;
 import org.qortium.arbitrary.misc.Service;
 import org.qortium.arbitrary.misc.Service.ValidationResult;
 import org.qortium.controller.arbitrary.ArbitraryDataManager;
@@ -344,6 +345,53 @@ public class ArbitraryServiceTests extends Common {
         assertTrue(Service.VIDEO_PRIVATE.isSingle());
         assertTrue(Service.AUDIO_PRIVATE.isSingle());
         assertTrue(Service.DOCUMENT_PRIVATE.isSingle());
+    }
+
+    /** A minimal structurally-valid v1 encrypted envelope. */
+    private static byte[] encryptedEnvelope() {
+        byte[] out = new byte[EncryptedDataEnvelope.FIXED_HEADER_LENGTH + 44 + 64];
+        out[0] = 'Q'; out[1] = 'E'; out[2] = 'N'; out[3] = 'C';
+        out[4] = EncryptedDataEnvelope.VERSION_1;
+        out[5] = EncryptedDataEnvelope.MODE_SINGLE_RECIPIENT;
+        out[6] = EncryptedDataEnvelope.CIPHER_AES_256_GCM;
+        out[8] = 0; out[9] = 44; // headerLen = 44
+        return out;
+    }
+
+    private static Path singleFileResource(String prefix, byte[] content) throws IOException {
+        Path dir = Files.createTempDirectory(prefix);
+        dir.toFile().deleteOnExit();
+        Path file = Paths.get(dir.toString(), "data");
+        Files.write(file, content, StandardOpenOption.CREATE);
+        file.toFile().deleteOnExit();
+        return file;
+    }
+
+    @Test
+    public void testPrivateServiceAcceptsEncryptedEnvelope() throws IOException {
+        Path file = singleFileResource("privEnvelope", encryptedEnvelope());
+        assertEquals(ValidationResult.OK, Service.IMAGE_PRIVATE.validate(file));
+    }
+
+    @Test
+    public void testPrivateServiceAcceptsLegacyPrefix() throws IOException {
+        byte[] legacy = (EncryptedDataEnvelope.LEGACY_PREFIX + "base64ciphertexthere")
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        Path file = singleFileResource("privLegacy", legacy);
+        assertEquals(ValidationResult.OK, Service.IMAGE_PRIVATE.validate(file));
+    }
+
+    @Test
+    public void testPrivateServiceRejectsPlaintext() throws IOException {
+        byte[] plaintext = "definitely not encrypted".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        Path file = singleFileResource("privPlaintext", plaintext);
+        assertEquals(ValidationResult.DATA_NOT_ENCRYPTED, Service.IMAGE_PRIVATE.validate(file));
+    }
+
+    @Test
+    public void testPublicServiceRejectsEncryptedData() throws IOException {
+        Path file = singleFileResource("pubEncrypted", encryptedEnvelope());
+        assertEquals(ValidationResult.DATA_ENCRYPTED, Service.IMAGE.validate(file));
     }
 
     @Test
