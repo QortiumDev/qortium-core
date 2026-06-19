@@ -63,6 +63,7 @@ public class NetworkData {
 
     //  Maximum time allowed for handshake to complete, in milliseconds.
     private static final long HANDSHAKE_TIMEOUT = 60 * 1000L; // ms
+    private static final long HANDSHAKE_CLEANUP_INTERVAL = 5 * 1000L; // ms
     private static final int I2P_FORWARD_DESTINATION_TIMEOUT = 5 * 1000; // ms
     private static final long I2P_DATA_START_RETRY_DELAY = 60 * 1000L; // ms
 
@@ -81,6 +82,7 @@ public class NetworkData {
     private final int maxPeers;
 
     private long nextDisconnectionCheck = 0L;
+    private long nextHandshakeCleanup = 0L;
 
     private final List<PeerData> allKnownPeers = new ArrayList<>();
     
@@ -1412,6 +1414,8 @@ public class NetworkData {
     }
 
     private ExecuteProduceConsume.Task maybeProduceConnectPeerTask(Long now) throws InterruptedException {
+        cleanupStaleHandshakingPeers(now);
+
         if (now == null || now < nextConnectTaskTimestamp.get()) {
             return null;
         }
@@ -1948,6 +1952,29 @@ public class NetworkData {
         PeerAddress peerAddress = peer.getPeerData().getAddress();
         if (peerAddress.isI2P())
             this.connectingI2PPeers.remove(peerAddress);
+    }
+
+    private void cleanupStaleHandshakingPeers(Long now) {
+        if (now == null || now < this.nextHandshakeCleanup)
+            return;
+
+        this.nextHandshakeCleanup = now + HANDSHAKE_CLEANUP_INTERVAL;
+
+        List<Peer> stalePeers = this.getImmutableConnectedPeers().stream()
+                .filter(peer -> peer.getHandshakeStatus() != Handshake.COMPLETED)
+                .filter(peer -> peer.getConnectionTimestamp() != null)
+                .filter(peer -> peer.getConnectionTimestamp() <= now - HANDSHAKE_TIMEOUT)
+                .collect(Collectors.toList());
+
+        for (Peer peer : stalePeers) {
+            if (peer.isOutbound() && peer.getPeerData().getAddress().isI2P())
+                recordOutboundFailure(peer.getPeerData().getAddress().toString(), peer.getPeersNodeId());
+
+            LOGGER.debug("Disconnecting stale data handshaking peer {} at {} after {} ms",
+                    peer.getPeerData().getAddress(), peer.getHandshakeStatus().name(),
+                    now - peer.getConnectionTimestamp());
+            peer.disconnect(String.format("handshake timeout at %s", peer.getHandshakeStatus().name()));
+        }
     }
 
       /**

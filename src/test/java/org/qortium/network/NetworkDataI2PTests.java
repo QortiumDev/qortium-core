@@ -166,6 +166,21 @@ public class NetworkDataI2PTests extends Common {
 	}
 
 	@Test
+	public void testStaleOutboundI2PDataHandshakeIsDisconnectedAndBackedOff() throws Exception {
+		long now = System.currentTimeMillis();
+		Peer peer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORKDATA);
+		peer.setIsDataPeer(true);
+		peer.setHandshakeStatus(Handshake.HELLO);
+		FieldUtils.writeField(peer, "connectionTimestamp", now - 61_000L, true);
+		NetworkData.getInstance().addConnectedPeer(peer);
+
+		invokeCleanupStaleHandshakingPeers(now);
+
+		assertFalse(NetworkData.getInstance().getImmutableConnectedPeers().stream().anyMatch(connectedPeer -> connectedPeer == peer));
+		assertTrue(getOutboundFailures().containsKey(PeerAddress.fromString(B32).getHost()));
+	}
+
+	@Test
 	public void testPreferredI2PSkipsDataPeerAlreadyConnecting() throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "i2pPreferred", true, true);
 		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
@@ -215,9 +230,12 @@ public class NetworkDataI2PTests extends Common {
 		getMutableKnownPeers().clear();
 		((List<PeerAddress>) FieldUtils.readField(NetworkData.getInstance(), "selfPeers", true)).clear();
 		((Map<String, ?>) FieldUtils.readField(NetworkData.getInstance(), "addressToNodeIdCache", true)).clear();
+		((Map<String, ?>) FieldUtils.readField(NetworkData.getInstance(), "outboundFailures", true)).clear();
+		((Map<String, ?>) FieldUtils.readField(NetworkData.getInstance(), "outboundFailuresByNodeId", true)).clear();
 		((List<Peer>) FieldUtils.readField(NetworkData.getInstance(), "connectedPeers", true)).clear();
 		((List<Peer>) FieldUtils.readField(NetworkData.getInstance(), "handshakedPeers", true)).clear();
 		((List<Peer>) FieldUtils.readField(NetworkData.getInstance(), "outboundHandshakedPeers", true)).clear();
+		FieldUtils.writeField(NetworkData.getInstance(), "nextHandshakeCleanup", 0L, true);
 		getConnectingI2PPeers().clear();
 	}
 
@@ -253,6 +271,17 @@ public class NetworkDataI2PTests extends Common {
 		java.lang.reflect.Method method = NetworkData.class.getDeclaredMethod("findI2PFallbackPeerWithDirectReplacement", Long.class);
 		method.setAccessible(true);
 		return (Peer) method.invoke(NetworkData.getInstance(), now);
+	}
+
+	@SuppressWarnings("unchecked")
+	private Map<String, ?> getOutboundFailures() throws Exception {
+		return (Map<String, ?>) FieldUtils.readField(NetworkData.getInstance(), "outboundFailures", true);
+	}
+
+	private void invokeCleanupStaleHandshakingPeers(long now) throws Exception {
+		java.lang.reflect.Method method = NetworkData.class.getDeclaredMethod("cleanupStaleHandshakingPeers", Long.class);
+		method.setAccessible(true);
+		method.invoke(NetworkData.getInstance(), now);
 	}
 
 	private static class FakeI2PStreamProvider implements I2PStreamProvider {
