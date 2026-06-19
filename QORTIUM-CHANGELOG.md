@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - qdn: stronger encryption check for private resources
+
+Replaces the weak "does the data start with a text marker" check for private QDN resources with a structured encrypted-data envelope that Core can actually validate the shape of. When a private resource is published, Core now accepts either the new v1 envelope (a compact binary header that clients place in front of the ciphertext, identifying the encryption mode and cipher) or the original text prefix, and rejects anything that is neither -- so an app that accidentally tries to publish unencrypted data as "private" is stopped, instead of slipping through because it happened to start with the right characters. Core still never holds the decryption key (encryption stays client-side), so it validates the envelope's structure rather than decrypting; the format and a client implementation guide are documented in docs/qdn/encrypted-data-envelope.md. This is a publish/read-time check only, with no consensus or database changes, and existing resources using the old prefix continue to work.
+
 ### 2026-06-19 - qdn: add image gallery service and multi-file media
 
 Adds a new IMAGE_GALLERY service for publishing a collection of images as one resource (it accepts only image files -- png, jpg, jpeg, gif, webp, bmp, avif, tif -- with a 50 MB cap, mirroring how the existing GIF repository works but for any image type). This keeps single images on the IMAGE service while giving galleries their own clearly-typed home, instead of overloading IMAGE or using a generic file bundle. Also switches the public VIDEO, AUDIO, DOCUMENT, and PODCAST services to allow multiple files, so a media resource can carry sidecar files (subtitles, cover art, show notes) alongside the main file, with the entry point picking the primary one.
