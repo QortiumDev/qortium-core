@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - qdn: smart SPA routing fallback for rendered resources
+
+Lets more QDN resources work as single-page apps while keeping static sites correct. Previously only the APP service forwarded unhandled requests to its index file (so a client-side router could handle them), and it did so for every missing file -- including missing images or scripts, which were wrongly served the HTML index. Now any rendered resource that declares an entry point gets the same routing (so a WEBSITE, for example, can be a single-page app), and the forwarding is smart: only navigation-style requests (a path with no file extension, or a browser page load) are sent to the entry file, while genuinely missing assets return a normal "not found". The fallback target is the resource's declared entry point when set, otherwise the usual index file. Plain static sites that do not declare an entry point are unchanged. This is a render-path change only -- no consensus, schema, or service-definition changes -- and it also fixes the long-standing case where a missing asset in an app was served the index page.
+
 ### 2026-06-19 - qdn: make multi-file publishing reproducible
 
 Makes publishing a multi-file QDN resource deterministic, so the same files always produce the same published data. Previously the file order depended on the operating system's directory listing and the resource's zip archive embedded the current time, so re-publishing identical content produced a different result each time. Now the file list is sorted, and the zip archive uses a sorted entry order with a fixed timestamp, so identical content yields a byte-identical archive. This is a client-side packaging change only: there are no consensus, transaction-validation, or service-definition changes, and existing resources are unaffected. As a side benefit this removes a source of test flakiness that surfaced when publishing multi-file resources.
