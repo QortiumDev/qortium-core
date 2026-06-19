@@ -145,6 +145,7 @@ public class Network {
     private final Integer threadCountPerMessageTypeWarningThreshold = Settings.getInstance().getThreadCountPerMessageTypeWarningThreshold();
 
     private final List<PeerAddress> selfPeers = new ArrayList<>();
+    private final Set<PeerAddress> connectingI2PPeers = ConcurrentHashMap.newKeySet();
 
     /**
      * Track outbound connection failures by peer IP address.
@@ -1078,6 +1079,21 @@ public class Network {
         return this.getImmutableConnectedPeers().stream().anyMatch(peer -> peer.getPeerData().getAddress().equals(peerAddress));
     };
 
+    private final Predicate<PeerData> isConnectingI2PPeer = peerData -> {
+        PeerAddress peerAddress = peerData.getAddress();
+        return peerAddress.isI2P() && this.connectingI2PPeers.contains(peerAddress);
+    };
+
+    private final Predicate<PeerData> isLocalI2PPeer = peerData -> isLocalI2PAddress(peerData.getAddress());
+
+    private boolean isLocalI2PAddress(PeerAddress peerAddress) {
+        if (peerAddress == null || !peerAddress.isI2P())
+            return false;
+
+        String localI2PDestination = this.getI2PChainDestination();
+        return localI2PDestination != null && peerAddress.getHost().equalsIgnoreCase(localI2PDestination);
+    }
+
     private final Predicate<PeerData> isResolvedAsConnectedPeer = peerData -> {
         try {
             InetSocketAddress resolvedSocketAddress = peerData.getAddress().toSocketAddress();
@@ -1663,9 +1679,11 @@ public class Network {
             synchronized (this.selfPeers) {
                 peers.removeIf(isSelfPeer);
             }
+            peers.removeIf(isLocalI2PPeer);
 
             // Don't consider already connected peers (simple address match)
             peers.removeIf(isConnectedPeer);
+            peers.removeIf(isConnectingI2PPeer);
 
             // CRITICAL FIX: Don't consider peers we're already connected to by nodeId
             // This handles cases where we have an inbound connection on an ephemeral port
@@ -1748,7 +1766,9 @@ public class Network {
                 synchronized (this.selfPeers) {
                     peersInBackoff.removeIf(isSelfPeer);
                 }
+                peersInBackoff.removeIf(isLocalI2PPeer);
                 peersInBackoff.removeIf(isConnectedPeer);
+                peersInBackoff.removeIf(isConnectingI2PPeer);
                 
                 if (!peersInBackoff.isEmpty()) {
                     peers = peersInBackoff;
@@ -1776,6 +1796,8 @@ public class Network {
             PeerData peerData = peers.get(peerIndex);
             Peer newPeer = new Peer(peerData, Peer.NETWORK);
             newPeer.setIsDataPeer(false);
+            if (peerData.getAddress().isI2P())
+                this.connectingI2PPeers.add(peerData.getAddress());
 
             // Update connection attempt info
             peerData.setLastAttempted(now);
@@ -1794,38 +1816,44 @@ public class Network {
     }
 
     public boolean connectPeer(Peer newPeer) throws InterruptedException {
-        // Also checked before creating PeerConnectTask
-        if (getImmutableOutboundHandshakedPeers().size() >= minOutboundPeers)
-            return false;
+        try {
+            // Also checked before creating PeerConnectTask
+            if (getImmutableOutboundHandshakedPeers().size() >= minOutboundPeers)
+                return false;
 
-        SocketChannel socketChannel = newPeer.connect(Peer.NETWORK);
-        if (socketChannel == null) {
-            // Record outbound failure for reachability fallback
-            try {
-                String peerAddress = newPeer.getPeerData().getAddress().toString();
+            SocketChannel socketChannel = newPeer.connect(Peer.NETWORK);
+            if (socketChannel == null) {
+                // Record outbound failure for reachability fallback
+                try {
+                    String peerAddress = newPeer.getPeerData().getAddress().toString();
                 
-                // Try to get nodeId from cache for more accurate tracking
-                String nodeId = null;
-                CachedNodeIdInfo cachedInfo = addressToNodeIdCache.get(peerAddress);
-                if (cachedInfo != null) {
-                    nodeId = cachedInfo.nodeId;
+                    // Try to get nodeId from cache for more accurate tracking
+                    String nodeId = null;
+                    CachedNodeIdInfo cachedInfo = addressToNodeIdCache.get(peerAddress);
+                    if (cachedInfo != null) {
+                        nodeId = cachedInfo.nodeId;
+                    }
+
+                    recordOutboundFailure(peerAddress, nodeId);
+                } catch (Exception e) {
+                    LOGGER.debug("Failed to record outbound failure: {}", e.getMessage());
                 }
-                
-                recordOutboundFailure(peerAddress, nodeId);
-            } catch (Exception e) {
-                LOGGER.debug("Failed to record outbound failure: {}", e.getMessage());
+                return false;
             }
-            return false;
+                
+            if (Thread.currentThread().isInterrupted()) {
+                return false;
+            }
+
+            this.addConnectedPeer(newPeer);
+            this.onPeerReady(newPeer);
+
+            return true;
+        } finally {
+            PeerAddress peerAddress = newPeer.getPeerData().getAddress();
+            if (peerAddress.isI2P())
+                this.connectingI2PPeers.remove(peerAddress);
         }
-
-        if (Thread.currentThread().isInterrupted()) {
-            return false;
-        }
-
-        this.addConnectedPeer(newPeer);
-        this.onPeerReady(newPeer);
-
-        return true;
     }
 
     private List<PeerData> selectPreferredTransportPeers(List<PeerData> peers) {
@@ -2574,6 +2602,11 @@ public class Network {
             PeerAddress i2pAddress = PeerAddress.fromString(((String) i2pCapability).trim());
             if (!i2pAddress.isI2P())
                 throw new IllegalArgumentException("I2P was not an I2P address");
+            if (isLocalI2PAddress(i2pAddress)) {
+                LOGGER.debug("Peer {} advertised our own I2P chain address {}, skipping",
+                        peer.getPeerData().getAddress(), i2pAddress);
+                return null;
+            }
             return i2pAddress;
         } catch (IllegalArgumentException e) {
             LOGGER.debug("Peer {} advertised invalid I2P capability: {}",

@@ -31,6 +31,7 @@ public class ConnectedPeer {
     public Long peersConnectedWhen;
 
     public String address;
+    public String transport;
     public String version;
 
     public String nodeId;
@@ -61,6 +62,7 @@ public class ConnectedPeer {
         this.peersConnectedWhen = peer.getPeersConnectionTimestamp();
 
         this.address = peerData.getAddress().toString();
+        this.transport = peerData.getAddress().isI2P() ? "I2P" : "IP";
 
         this.version = peer.getPeersVersionString();
         this.nodeId = peer.getPeersNodeId();
