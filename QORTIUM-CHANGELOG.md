@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - docs: document I2P fallback rollout status
+
+Updates the I2P fallback transport design notes and preview runbooks to match the current branch. The design document now records that both chain and QDN/data I2P wiring are implemented, that forced live two-node testing has validated the fallback path, and that the remaining work is normal fallback-mode validation, real QDN resource testing, recovery checks, packaging, and final PR prep. The tester guide and seed operator runbook now explain the current external `i2pd` requirement, local SAM bridge, peer `transport` field, and local-file reseed workaround for hardened hosts.
+
 ### 2026-06-18 - network: compare I2P peers without DNS resolution
 
 Stops peer equality checks from trying to resolve `.b32.i2p` addresses through the normal DNS/socket path. I2P peer addresses are now compared directly by their peer-address kind, host, and port, while direct IP peers keep the existing socket-address comparison. This removes noisy runtime errors during I2P peer maintenance and keeps fallback peers visible without treating I2P destinations like resolvable TCP hostnames.

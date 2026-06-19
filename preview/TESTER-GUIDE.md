@@ -9,12 +9,35 @@ as permanent.
 For the easy download path:
 
 - Java 17 or newer
+- Optional for I2P fallback testing: `i2pd` running locally with SAM enabled on
+  `127.0.0.1:7656`
 
 For the source-build path:
 
 - Java 17 or newer JDK
 - Maven
 - Git
+- Optional for I2P fallback testing: `i2pd` running locally with SAM enabled on
+  `127.0.0.1:7656`
+
+## I2P Fallback Testing
+
+Preview builds that include I2P fallback can reach other I2P-capable nodes even
+when neither side has inbound router or firewall ports open. Direct TCP remains
+the primary transport; I2P is used only when there is no direct path, unless a
+tester explicitly enables the `i2pPreferred` setting.
+
+The current preview package does not bundle an I2P router. To test I2P fallback,
+install and start `i2pd` before starting Qortium Core, and make sure the SAM
+bridge is available locally:
+
+```text
+127.0.0.1:7656
+```
+
+Qortium creates stable chain and QDN/data I2P destination keys under the local
+runtime directory, using `i2p/chain.keys` and `i2p/data.keys` by default. Do not
+share those key files.
 
 ## Easy Path: Download The Preview Zip
 
@@ -146,8 +169,12 @@ preview\reset.bat
   chat messages, trying QDN features, and reporting issues.
 - Preview participant nodes try to keep four outbound chain peers when enough
   reachable peers are available. Nodes behind a firewall or router can still use
-  preview normally, but they may only show outbound peers unless other nodes can
-  connect back to them.
+  preview normally. On I2P-capable builds with a working local `i2pd`, they can
+  also connect to other I2P-capable nodes that are not directly reachable over
+  TCP.
+- Connected peer API responses include a `transport` field. `IP` means the peer
+  is using the normal direct TCP path; `I2P` means the peer is connected through
+  the fallback transport.
 - Preview participant and seed nodes expose limited public read-only API access
   by default so Qortium Home can discover useful peers, browse QDN resources,
   and read common chain data. Your local node still keeps transaction building,
@@ -158,7 +185,8 @@ If you want your node to be reachable by other testers, your firewall or router
 needs to allow inbound TCP `24891` for public read API access, `24892` for P2P,
 and `24894` for QDN/data. If you do not open those ports, your node can still
 use the preview network normally, but other users may not be able to use it as a
-public read or QDN peer.
+public read or QDN peer over direct TCP. I2P fallback does not require opening
+those ports, but it does require a working local I2P router.
 
 The `/admin/status` response includes directional peer counts and inbound
 reachability fields. If `numberOfOutboundConnections` is healthy but
@@ -195,4 +223,8 @@ local preview node.
   for launcher or Java startup errors.
 - If the node API is reachable but there are no peers, leave the node running
   for a few minutes and then check the known-peer URL above.
+- If expected I2P peers do not appear, confirm `i2pd` is running, SAM is
+  listening on `127.0.0.1:7656`, and the I2P router has completed reseed and
+  learned routers. Cold I2P routers can take several minutes before stream
+  connections succeed.
 - If the public preview is reset, run the reset command and start again.

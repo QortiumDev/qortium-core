@@ -15,6 +15,13 @@ Both seeds use the preview port range:
 - P2P: `24892`
 - QDN/data: `24894`
 
+I2P fallback uses a local SAM bridge, not an exposed public port:
+
+- SAM: `127.0.0.1:7656`
+- i2pd console, when enabled locally: `http://127.0.0.1:7070`
+
+Do not expose SAM publicly.
+
 ## Update And Build
 
 Run seed nodes from a non-root user.
@@ -72,6 +79,58 @@ tail -n 120 preview/qortium.log
 
 `preview/run.log` records launcher details and Java stdout/stderr.
 `preview/qortium.log` is the main application log written by Log4j.
+
+## I2P Fallback
+
+Preview builds that include I2P fallback use an external `i2pd` process for
+now. Core connects to SAM on `127.0.0.1:7656`, creates one persistent I2P
+destination for the chain network and one for QDN/data, and advertises those
+destinations only after the corresponding SAM session is up.
+
+Direct TCP remains primary for public seed-to-seed and reachable peer traffic.
+I2P is the fallback path for peers that cannot accept inbound TCP, unless the
+local `i2pPreferred` setting is enabled for testing.
+
+On Debian-family hosts, the basic service setup is:
+
+```sh
+sudo apt install i2pd
+sudo systemctl enable --now i2pd
+```
+
+Verify that SAM is listening locally before starting or restarting Core:
+
+```sh
+ss -ltn | grep ':7656'
+```
+
+Check Core's active I2P state in the application log:
+
+```sh
+grep -E "I2P .*fallback reachable|I2P session" preview/qortium.log
+```
+
+Check connected peer transports through the local API:
+
+```sh
+curl -fsS http://127.0.0.1:24891/peers
+curl -fsS http://127.0.0.1:24891/peers/data
+```
+
+Each connected peer entry includes `transport`. Seed peers should normally stay
+on `IP`; fallback peers that have no direct TCP path should show `I2P`.
+
+On hardened hosts where normal URL or Tor reseed fails, use i2pd's local-file
+reseed path instead of repeatedly restarting the router. Place a valid SU3
+reseed file on the host, configure i2pd with:
+
+```ini
+[reseed]
+file = /var/lib/i2pd/i2pseeds.su3
+```
+
+Then restart `i2pd` and wait for the router count to climb before restarting
+Core or judging I2P fallback connectivity.
 
 ## Public API Contract
 
