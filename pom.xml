@@ -8,6 +8,10 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<skipJUnitTests>true</skipJUnitTests>
+		<!-- Honor Maven's standard -DskipTests too: it defaults to skipJUnitTests but a CLI
+		     -DskipTests=true/false overrides, so focused runs like
+		     `mvn -DskipTests=false -Dtest=SomeTest test` execute as expected. -->
+		<skipTests>${skipJUnitTests}</skipTests>
 		<!-- Override with -Dqortium.runGuiDisplayTests=true -Dtest.awt.headless=false when intentionally running GUI tests with a display. -->
 		<test.awt.headless>true</test.awt.headless>
 
@@ -458,7 +462,7 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>${maven-surefire-plugin.version}</version>
 				<configuration>
-					<skipTests>${skipJUnitTests}</skipTests>
+					<skipTests>${skipTests}</skipTests>
 					<systemPropertyVariables>
 						<hsqldb.method_class_names>org.qortium.test.RepositoryTests.*</hsqldb.method_class_names>
 						<java.awt.headless>${test.awt.headless}</java.awt.headless>
