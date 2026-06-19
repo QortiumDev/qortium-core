@@ -255,6 +255,7 @@ public class Network {
     private final Set<SelectableChannel> channelsPendingWrite = ConcurrentHashMap.newKeySet();
     private final AtomicBoolean i2pStartupInProgress = new AtomicBoolean(false);
     private final AtomicLong i2pStartupAttemptCounter = new AtomicLong(0L);
+    private final AtomicBoolean i2pFallbackUnavailableLogged = new AtomicBoolean(false);
     /** Coalesces OP_WRITE wakeups: only the first caller per select-cycle actually wakes the selector. */
     private final java.util.concurrent.atomic.AtomicBoolean selectorWakeupPending = new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -458,11 +459,11 @@ public class Network {
 
             this.chainI2PStreamProvider = provider;
             this.i2pServerChannel = forwardServerChannel;
+            this.i2pFallbackUnavailableLogged.set(false);
             LOGGER.info("Network I2P fallback reachable at {}", provider.getLocalB32());
             return true;
         } catch (IOException | RuntimeException e) {
-            LOGGER.warn("Network I2P fallback unavailable: {}; retrying in {} seconds",
-                    e.getMessage(), TimeUnit.MILLISECONDS.toSeconds(I2P_CHAIN_START_RETRY_DELAY));
+            logI2PChainFallbackUnavailable(settings, e);
             if (forwardServerChannel != null) {
                 try {
                     forwardServerChannel.close();
@@ -475,6 +476,19 @@ public class Network {
             this.i2pServerChannel = null;
             return false;
         }
+    }
+
+    private void logI2PChainFallbackUnavailable(Settings settings, Exception e) {
+        long retrySeconds = TimeUnit.MILLISECONDS.toSeconds(I2P_CHAIN_START_RETRY_DELAY);
+        if (this.i2pFallbackUnavailableLogged.compareAndSet(false, true)) {
+            LOGGER.info("Network I2P fallback unavailable via SAM at {}:{} ({}). Direct TCP remains active; "
+                            + "install/run i2pd or set i2pEnabled=false to disable I2P retries. Retrying in {} seconds",
+                    settings.getI2PSamHost(), settings.getI2PSamPort(), e.getMessage(), retrySeconds);
+            return;
+        }
+
+        LOGGER.debug("Network I2P fallback still unavailable via SAM at {}:{} ({}); retrying in {} seconds",
+                settings.getI2PSamHost(), settings.getI2PSamPort(), e.getMessage(), retrySeconds);
     }
 
     private String nextI2PChainSessionId() {
