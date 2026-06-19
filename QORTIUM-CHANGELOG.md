@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - docs: record final I2P direct-primary proof
+
+Updates the I2P fallback transport notes with the final non-loopback chain-network proof. A disposable local node and a temporary Netcup proof node showed the complete recovery path: the local node learned Netcup over direct TCP, forced a completed outbound I2P chain fallback to the same node ID, then returned to direct TCP once preferred-I2P testing was disabled and the direct address was available again. The notes also record that Regxa stayed online during the test and that Netcup's normal seed service was restored afterward.
+
 ### 2026-06-19 - docs: record chain I2P direct-primary lab validation
 
 Updates the I2P fallback transport notes with the controlled local chain-network validation. The notes now record that a two-node lab proved the direct-primary drop branch for chain peers: a completed outbound I2P fallback peer was disconnected once a cached direct TCP route became eligible again. They also document the remaining limitation honestly: the loopback forwarding setup cannot prove final TCP replacement because the receiving node detects the forwarded `127.0.0.1` route as a self-connection, so any final chain TCP replacement proof needs a non-loopback topology.
