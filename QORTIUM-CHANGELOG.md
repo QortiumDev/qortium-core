@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - gui: add restart action to system tray menu
+
+Adds a "Restart" item to the desktop system-tray menu, between "Build version" and "Exit". Selecting it restarts the node in place using the same mechanism as the existing admin restart, and quietly does nothing if a restart or bootstrap is already underway. The menu label is translated into all supported languages. This is the first of several planned tray-menu additions; update, check-for-update, and bootstrap actions will follow.
+
 ### 2026-06-19 - api: add arbitrary services metadata endpoint
 
 Adds a new read-only `GET /arbitrary/services` endpoint that lists every supported QDN service alongside its rules: numeric id, maximum size, whether it is private/encrypted, whether it is a single file or supports directories, and whether it requires validation. This information already existed inside Core but was not reachable over the API, so apps like Home and the Publish Manager had to hardcode their own copies of these limits. The endpoint lets those apps treat Core as the single source of truth instead. It needs no API key, so public Previewnet seeds can serve it. No existing behavior changes.
