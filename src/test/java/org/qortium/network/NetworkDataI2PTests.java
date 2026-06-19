@@ -6,9 +6,12 @@ import org.junit.Before;
 import org.junit.Test;
 import org.qortium.data.network.PeerData;
 import org.qortium.network.helper.PeerCapabilities;
+import org.qortium.network.i2p.I2PStreamProvider;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.Common;
 
+import java.io.IOException;
+import java.nio.channels.SocketChannel;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +23,7 @@ import static org.junit.Assert.assertTrue;
 public class NetworkDataI2PTests extends Common {
 
 	private static final String B32 = "abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrst.b32.i2p";
+	private static final String LOCAL_B32 = "bcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu.b32.i2p";
 	private static final String NODE_ID = "node-id-for-networkdata-i2p-test";
 
 	@Before
@@ -31,6 +35,7 @@ public class NetworkDataI2PTests extends Common {
 
 	@After
 	public void after() throws Exception {
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", null, true);
 		clearNetworkDataPeerState();
 	}
 
@@ -59,6 +64,20 @@ public class NetworkDataI2PTests extends Common {
 	}
 
 	@Test
+	public void testAddPeerSkipsOwnI2PQdnCapability() throws Exception {
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(B32, true), true);
+		Map<String, Object> capabilities = new HashMap<>();
+		capabilities.put("QDN", 24894);
+		capabilities.put(Handshake.I2P_QDN_CAPABILITY, B32);
+
+		NetworkData.getInstance().addPeer(networkPeerWithCapabilities(capabilities));
+
+		List<PeerData> knownPeers = NetworkData.getInstance().getAllKnownPeers();
+		assertTrue(containsAddress(knownPeers, "198.51.100.10:24894"));
+		assertFalse(containsAddress(knownPeers, B32 + ":0"));
+	}
+
+	@Test
 	public void testAddPeerSkipsI2PQdnWhenI2PDisabled() throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "i2pEnabled", false, true);
 		Map<String, Object> capabilities = new HashMap<>();
@@ -75,6 +94,22 @@ public class NetworkDataI2PTests extends Common {
 		List<PeerData> knownPeers = getMutableKnownPeers();
 		knownPeers.add(new PeerData(PeerAddress.fromString("198.51.100.10:24894"), 100L, "test"));
 		knownPeers.add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
+
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertEquals("198.51.100.10:24894", selectedPeer.getPeerData().getAddress().toString());
+		assertFalse(selectedPeer.getPeerData().getAddress().isI2P());
+	}
+
+	@Test
+	public void testPreferredI2PSkipsDataPeerAlreadyConnecting() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "i2pPreferred", true, true);
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		PeerAddress i2pAddress = PeerAddress.fromString(B32);
+		List<PeerData> knownPeers = getMutableKnownPeers();
+		knownPeers.add(new PeerData(PeerAddress.fromString("198.51.100.10:24894"), 100L, "test"));
+		knownPeers.add(new PeerData(i2pAddress, 100L, "test"));
+		getConnectingI2PPeers().add(i2pAddress);
 
 		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
 
@@ -106,12 +141,19 @@ public class NetworkDataI2PTests extends Common {
 	@SuppressWarnings("unchecked")
 	private void clearNetworkDataPeerState() throws Exception {
 		getMutableKnownPeers().clear();
+		((List<PeerAddress>) FieldUtils.readField(NetworkData.getInstance(), "selfPeers", true)).clear();
 		((Map<String, ?>) FieldUtils.readField(NetworkData.getInstance(), "addressToNodeIdCache", true)).clear();
+		getConnectingI2PPeers().clear();
 	}
 
 	@SuppressWarnings("unchecked")
 	private List<PeerData> getMutableKnownPeers() throws Exception {
 		return (List<PeerData>) FieldUtils.readField(NetworkData.getInstance(), "allKnownPeers", true);
+	}
+
+	@SuppressWarnings("unchecked")
+	private java.util.Set<PeerAddress> getConnectingI2PPeers() throws Exception {
+		return (java.util.Set<PeerAddress>) FieldUtils.readField(NetworkData.getInstance(), "connectingI2PPeers", true);
 	}
 
 	private Peer invokeGetConnectablePeer(long now) throws Exception {
@@ -124,5 +166,47 @@ public class NetworkDataI2PTests extends Common {
 		java.lang.reflect.Method method = NetworkData.class.getDeclaredMethod("nextI2PDataSessionId");
 		method.setAccessible(true);
 		return (String) method.invoke(NetworkData.getInstance());
+	}
+
+	private static class FakeI2PStreamProvider implements I2PStreamProvider {
+		private final String localB32;
+		private final boolean sessionUp;
+
+		private FakeI2PStreamProvider(String localB32, boolean sessionUp) {
+			this.localB32 = localB32;
+			this.sessionUp = sessionUp;
+		}
+
+		@Override
+		public void start() throws IOException {
+		}
+
+		@Override
+		public String getLocalB32() {
+			return this.localB32;
+		}
+
+		@Override
+		public boolean isSessionUp() {
+			return this.sessionUp;
+		}
+
+		@Override
+		public SocketChannel connect(String remoteB32) throws IOException {
+			return null;
+		}
+
+		@Override
+		public void startForward(int localPort) throws IOException {
+		}
+
+		@Override
+		public String readForwardedDestination(SocketChannel inbound) throws IOException {
+			return null;
+		}
+
+		@Override
+		public void close() {
+		}
 	}
 }

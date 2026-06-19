@@ -25,6 +25,7 @@ public class ConnectedDataPeer {
     public Long connectedWhen;
     public Long peersConnectedWhen;
     public String address;
+    public String transport;
     public String version;
     public String nodeId;
     public UUID connectionId;
@@ -44,6 +45,7 @@ public class ConnectedDataPeer {
         this.peersConnectedWhen = peer.getPeersConnectionTimestamp();
 
         this.address = peerData.getAddress().toString();
+        this.transport = peerData.getAddress().isI2P() ? "I2P" : "IP";
 
         this.version = peer.getPeersVersionString();
         this.nodeId = peer.getPeersNodeId();

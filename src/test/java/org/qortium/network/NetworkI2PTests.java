@@ -26,6 +26,7 @@ import static org.junit.Assert.assertTrue;
 public class NetworkI2PTests extends Common {
 
 	private static final String B32 = "bcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu.b32.i2p";
+	private static final String LOCAL_B32 = "cdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.b32.i2p";
 	private static final String NODE_ID = "node-id-for-network-i2p-test";
 
 	@Before
@@ -64,8 +65,19 @@ public class NetworkI2PTests extends Common {
 	}
 
 	@Test
-	public void testDirectChainPeerStaysPrimaryWhenI2PNotPreferred() throws Exception {
+	public void testSkipsOwnI2PChainCapability() throws Exception {
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(B32, true), true);
+		Map<String, Object> capabilities = new HashMap<>();
+		capabilities.put(Handshake.I2P_CAPABILITY, B32);
+
+		invokeAddI2PChainPeer(networkPeerWithCapabilities(capabilities));
+
+		assertTrue(Network.getInstance().getAllKnownPeers().isEmpty());
+	}
+
+	@Test
+	public void testDirectChainPeerStaysPrimaryWhenI2PNotPreferred() throws Exception {
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
 
@@ -78,7 +90,7 @@ public class NetworkI2PTests extends Common {
 	@Test
 	public void testPreferredI2PSelectsI2PChainPeerWhenSessionIsUp() throws Exception {
 		FieldUtils.writeField(Settings.getInstance(), "i2pPreferred", true, true);
-		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(B32, true), true);
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
 
@@ -86,6 +98,21 @@ public class NetworkI2PTests extends Common {
 
 		assertEquals(B32 + ":0", selectedPeer.getPeerData().getAddress().toString());
 		assertTrue(selectedPeer.getPeerData().getAddress().isI2P());
+	}
+
+	@Test
+	public void testPreferredI2PSkipsChainPeerAlreadyConnecting() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "i2pPreferred", true, true);
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		PeerAddress i2pAddress = PeerAddress.fromString(B32);
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));
+		getMutableKnownPeers().add(new PeerData(i2pAddress, 100L, "test"));
+		getConnectingI2PPeers().add(i2pAddress);
+
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertEquals("198.51.100.10:24892", selectedPeer.getPeerData().getAddress().toString());
+		assertFalse(selectedPeer.getPeerData().getAddress().isI2P());
 	}
 
 	@Test
@@ -121,11 +148,17 @@ public class NetworkI2PTests extends Common {
 		getMutableKnownPeers().clear();
 		((List<PeerAddress>) FieldUtils.readField(Network.getInstance(), "selfPeers", true)).clear();
 		((Map<String, ?>) FieldUtils.readField(Network.getInstance(), "addressToNodeIdCache", true)).clear();
+		getConnectingI2PPeers().clear();
 	}
 
 	@SuppressWarnings("unchecked")
 	private List<PeerData> getMutableKnownPeers() throws Exception {
 		return (List<PeerData>) FieldUtils.readField(Network.getInstance(), "allKnownPeers", true);
+	}
+
+	@SuppressWarnings("unchecked")
+	private java.util.Set<PeerAddress> getConnectingI2PPeers() throws Exception {
+		return (java.util.Set<PeerAddress>) FieldUtils.readField(Network.getInstance(), "connectingI2PPeers", true);
 	}
 
 	private Peer invokeGetConnectablePeer(long now) throws Exception {

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - network: harden I2P peer selection visibility
+
+Tightens I2P fallback behavior after live forced-I2P testing. The chain and data networks now skip their own advertised `.b32.i2p` destinations, avoid launching duplicate outbound I2P dials to the same peer while a previous attempt is still in progress, and log QDN/data I2P dial outcomes with the same clarity as chain dials. Connected peer API responses now include a simple `transport` field so operators can see whether each active chain or data connection is using direct IP transport or I2P without inferring it from the address string.
+
 ### 2026-06-18 - network: log I2P chain dial outcomes
 
 Adds clear runtime logging around chain-network I2P outbound dials. Forced-I2P tests now report when the node starts a SAM `STREAM CONNECT`, whether i2pd establishes the stream, and whether the chain peer connection succeeds or fails, making fallback transport problems visible without trace-level logs.
