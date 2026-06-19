@@ -30,6 +30,8 @@ public class NetworkI2PTests extends Common {
 	private static final String B32 = "bcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu.b32.i2p";
 	private static final String LOCAL_B32 = "cdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstuv.b32.i2p";
 	private static final String NODE_ID = "node-id-for-network-i2p-test";
+	/** Must match Network.I2P_FALLBACK_DROP_COOLDOWN. */
+	private static final long I2P_FALLBACK_DROP_COOLDOWN = 15 * 60 * 1000L;
 
 	@Before
 	public void before() throws Exception {
@@ -138,9 +140,13 @@ public class NetworkI2PTests extends Common {
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
 		Map<String, Object> capabilities = new HashMap<>();
 		capabilities.put(Handshake.I2P_CAPABILITY, B32);
+		// The direct peer that advertises B32 must actually be connected, otherwise there is no
+		// connected alternative to suppress and dialing the bare I2P address is correct.
+		Peer directPeer = networkPeerWithCapabilities(capabilities);
+		Network.getInstance().addConnectedPeer(directPeer);
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
 
-		invokeAddI2PChainPeer(networkPeerWithCapabilities(capabilities));
+		invokeAddI2PChainPeer(directPeer);
 		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
 
 		assertNull(selectedPeer);
@@ -174,6 +180,70 @@ public class NetworkI2PTests extends Common {
 		Peer fallbackPeer = invokeFindI2PFallbackPeerWithDirectReplacement(System.currentTimeMillis());
 
 		assertSame(i2pPeer, fallbackPeer);
+	}
+
+	@Test
+	public void testDroppedI2PChainFallbackIsNotImmediatelyRedropped() throws Exception {
+		long now = System.currentTimeMillis();
+
+		// An outbound, handshaked I2P fallback peer with a known nodeId...
+		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORK);
+		i2pPeer.setPeersNodeId(NODE_ID);
+		Network.getInstance().addConnectedPeer(i2pPeer);
+		Network.getInstance().addHandshakedPeer(i2pPeer);
+
+		// ...and a cached (but, in the wild, unreachable) direct TCP address for that same node.
+		PeerData directPeerData = new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test");
+		getMutableKnownPeers().add(directPeerData);
+		invokeUpdateAddressToNodeIdCache(directPeerData.getAddress().toString(), NODE_ID);
+
+		// First pass: the I2P fallback is eligible and is dropped so direct TCP can be retried.
+		assertTrue(invokeDisconnectI2PFallbackPeerWithDirectReplacement(now));
+
+		// The direct dial would fail in the wild; the peer reconnects over I2P (same node) while
+		// the cached direct address stays unreachable.
+		Peer reconnectedI2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORK);
+		reconnectedI2pPeer.setPeersNodeId(NODE_ID);
+		Network.getInstance().addConnectedPeer(reconnectedI2pPeer);
+		Network.getInstance().addHandshakedPeer(reconnectedI2pPeer);
+
+		// Within the cooldown window the same node must NOT be dropped again (no thrash).
+		assertNull(invokeFindI2PFallbackPeerWithDirectReplacement(now + 60_000L));
+		assertFalse(invokeDisconnectI2PFallbackPeerWithDirectReplacement(now + 60_000L));
+
+		// Once the cooldown expires it becomes eligible to drop again.
+		assertSame(reconnectedI2pPeer,
+				invokeFindI2PFallbackPeerWithDirectReplacement(now + I2P_FALLBACK_DROP_COOLDOWN + 1));
+	}
+
+	@Test
+	public void testI2PChainForwardedPeerRejectedWhenServerFull() throws Exception {
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+
+		// Fill the chain peer slots to maxPeers.
+		int maxPeers = Network.getInstance().getMaxPeers();
+		for (int i = 0; i < maxPeers; i++) {
+			int v = i + 1;
+			String ip = "10." + ((v >> 16) & 255) + "." + ((v >> 8) & 255) + "." + (v & 255);
+			Network.getInstance().addConnectedPeer(new Peer(new PeerData(PeerAddress.fromString(ip + ":24892")), Peer.NETWORK));
+		}
+		int beforeCount = Network.getInstance().getImmutableConnectedPeers().size();
+
+		// A forwarded I2P connection arriving while full must be closed and not added as a peer.
+		try (java.nio.channels.ServerSocketChannel server = java.nio.channels.ServerSocketChannel.open()) {
+			server.bind(new java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 0));
+			SocketChannel client = SocketChannel.open(server.getLocalAddress());
+			SocketChannel accepted = server.accept();
+			try {
+				invokeProcessI2PForwardedPeer(client);
+
+				assertEquals(beforeCount, Network.getInstance().getImmutableConnectedPeers().size());
+				assertFalse(client.isOpen());
+			} finally {
+				if (client.isOpen()) client.close();
+				if (accepted != null) accepted.close();
+			}
+		}
 	}
 
 	@Test
@@ -225,7 +295,10 @@ public class NetworkI2PTests extends Common {
 		connectedPeer.setPeersNodeId(NODE_ID);
 		Network.getInstance().addConnectedPeer(connectedPeer);
 		Network.getInstance().addHandshakedPeer(connectedPeer);
-		PeerData recentlyAttemptedI2PPeer = new PeerData(PeerAddress.fromString(B32), System.currentTimeMillis() - 3 * 60 * 1000L, "test");
+		PeerData recentlyAttemptedI2PPeer = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		// lastAttempted (not addedWhen) drives the backoff: 3 min ago is past the 2 min TCP backoff
+		// but within the 15 min I2P backoff, so an I2P peer must still be skipped.
+		recentlyAttemptedI2PPeer.setLastAttempted(System.currentTimeMillis() - 3 * 60 * 1000L);
 		getMutableKnownPeers().add(recentlyAttemptedI2PPeer);
 
 		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
@@ -316,6 +389,18 @@ public class NetworkI2PTests extends Common {
 		java.lang.reflect.Method method = Network.class.getDeclaredMethod("findI2PFallbackPeerWithDirectReplacement", Long.class);
 		method.setAccessible(true);
 		return (Peer) method.invoke(Network.getInstance(), now);
+	}
+
+	private boolean invokeDisconnectI2PFallbackPeerWithDirectReplacement(long now) throws Exception {
+		java.lang.reflect.Method method = Network.class.getDeclaredMethod("disconnectI2PFallbackPeerWithDirectReplacement", Long.class);
+		method.setAccessible(true);
+		return (boolean) method.invoke(Network.getInstance(), now);
+	}
+
+	private void invokeProcessI2PForwardedPeer(SocketChannel channel) throws Exception {
+		java.lang.reflect.Method method = Network.class.getDeclaredMethod("processI2PForwardedPeer", SocketChannel.class);
+		method.setAccessible(true);
+		method.invoke(Network.getInstance(), channel);
 	}
 
 	@SuppressWarnings("unchecked")

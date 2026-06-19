@@ -54,7 +54,14 @@ public class NetworkData {
 
     // How long before retrying after a connection failure, in milliseconds.
     private static final long CONNECT_FAILURE_BACKOFF = 2 * 60 * 1000L; // ms
-    
+
+    /**
+     * After dropping a working I2P fallback peer to retry direct TCP, don't drop another
+     * I2P fallback for the same node within this window. Bounds drop/reconnect thrash when
+     * the cached direct address is stale or unreachable.
+     */
+    private static final long I2P_FALLBACK_DROP_COOLDOWN = 15 * 60 * 1000L; // ms
+
     /**
      * How long to wait between connection attempts when isolated (no peers) and retrying backoff peers, in milliseconds.
      * This prevents hammering peers when the node has no connections.
@@ -155,7 +162,14 @@ public class NetworkData {
      * Expires after 24 hours to prevent stale mappings.
      */
     private final Map<String, CachedNodeIdInfo> addressToNodeIdCache = new ConcurrentHashMap<>();
-    
+
+    /**
+     * nodeId -> earliest epoch-ms at which we may again drop an I2P fallback peer for that
+     * node, so a stale cached direct address cannot thrash a working I2P tunnel.
+     * See {@link #I2P_FALLBACK_DROP_COOLDOWN}.
+     */
+    private final Map<String, Long> i2pFallbackDropCooldownUntil = new ConcurrentHashMap<>();
+
     /**
      * Configuration for direction mismatch tracking (NetworkData - more lenient than Network).
      * Exponential backoff: 5min base, up to 60min max (longer than Network's 2min/30min).
@@ -1641,6 +1655,9 @@ public class NetworkData {
         LOGGER.debug("[NetworkData: {}] Dropping I2P fallback peer {} (nodeId {}) so direct TCP peer {} can be retried",
                 i2pFallbackPeer.getPeerConnectionId(), i2pFallbackPeer.getPeerData().getAddress(),
                 i2pFallbackPeer.getPeersNodeId(), directPeerData.getAddress());
+        String fallbackNodeId = i2pFallbackPeer.getPeersNodeId();
+        if (now != null && fallbackNodeId != null)
+            i2pFallbackDropCooldownUntil.put(fallbackNodeId, now + I2P_FALLBACK_DROP_COOLDOWN);
         i2pFallbackPeer.disconnect("direct TCP replacement available");
         return true;
     }
@@ -1652,9 +1669,28 @@ public class NetworkData {
         return getImmutableOutboundHandshakedPeers().stream()
                 .filter(peer -> peer.getPeerData().getAddress().isI2P())
                 .filter(peer -> peer.getPeersNodeId() != null)
+                .filter(peer -> !isI2PFallbackDropOnCooldown(peer.getPeersNodeId(), now))
                 .filter(peer -> findDirectReplacementForI2PFallback(peer, now) != null)
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * @return true if we dropped an I2P fallback peer for this node too recently to drop another,
+     *         per {@link #I2P_FALLBACK_DROP_COOLDOWN}. Expired entries are pruned on read.
+     */
+    private boolean isI2PFallbackDropOnCooldown(String nodeId, Long now) {
+        if (now == null || nodeId == null)
+            return false;
+
+        Long until = i2pFallbackDropCooldownUntil.get(nodeId);
+        if (until == null)
+            return false;
+        if (now >= until) {
+            i2pFallbackDropCooldownUntil.remove(nodeId);
+            return false;
+        }
+        return true;
     }
 
     private PeerData findDirectReplacementForI2PFallback(Peer i2pFallbackPeer, Long now) {
