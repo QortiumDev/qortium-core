@@ -56,6 +56,12 @@ public class Network {
      */
     private static final long CONNECT_FAILURE_BACKOFF = 2 * 60 * 1000L; // ms
     /**
+     * I2P stream setup is slow and stale destinations can still establish at
+     * the SAM layer without completing a Core handshake. Back off longer than
+     * direct TCP to avoid repeated fallback probes while direct peers are healthy.
+     */
+    private static final long I2P_CONNECT_FAILURE_BACKOFF = 15 * 60 * 1000L; // ms
+    /**
      * How long to wait between connection attempts when isolated (no peers) and retrying backoff peers, in milliseconds.
      * This prevents hammering peers when the node has no connections.
      */
@@ -794,6 +800,21 @@ public class Network {
      */
     private void updateAddressToNodeIdCache(String address, String nodeId) {
         addressToNodeIdCache.put(address, new CachedNodeIdInfo(nodeId, System.currentTimeMillis()));
+    }
+
+    void noteHandshakePeerAddress(Peer peer, String nodeId) {
+        if (peer == null || nodeId == null || peer.getPeerData() == null || peer.getPeerData().getAddress() == null)
+            return;
+
+        PeerAddress peerAddress = peer.getPeerData().getAddress();
+        updateAddressToNodeIdCache(peerAddress.toString(), nodeId);
+
+        if (peerAddress.isI2P() || peer.getResolvedAddress() == null)
+            return;
+
+        String peerIP = peer.getResolvedAddress().getAddress().getHostAddress();
+        int peerPort = peer.getResolvedAddress().getPort();
+        updateAddressToNodeIdCache(peerIP + ":" + peerPort, nodeId);
     }
 
     /**
@@ -1734,6 +1755,17 @@ public class Network {
                 && peerData.getLastAttempted() > now - CONNECT_FAILURE_BACKOFF;
     }
 
+    private boolean hasRecentConnectFailure(PeerData peerData, Long now) {
+        if (now == null || peerData.getLastAttempted() == null)
+            return false;
+
+        if (peerData.getLastConnected() != null && peerData.getLastConnected() >= peerData.getLastAttempted())
+            return false;
+
+        long backoff = peerData.getAddress().isI2P() ? I2P_CONNECT_FAILURE_BACKOFF : CONNECT_FAILURE_BACKOFF;
+        return peerData.getLastAttempted() > now - backoff;
+    }
+
     private Peer getConnectablePeer(final Long now) throws InterruptedException {
         // Find an address to connect to
         List<PeerData> peers = this.getAllKnownPeers();
@@ -1749,24 +1781,15 @@ public class Network {
             // Check if we have any handshaked peers (inbound or outbound) - are we isolated?
             boolean hasNoPeers = getImmutableHandshakedPeers().isEmpty();
                 
-            // Don't consider peers with recent connection failures
-            final long lastAttemptedThreshold = now - CONNECT_FAILURE_BACKOFF;
-            
             // Save peers in backoff for later consideration if we're isolated
             List<PeerData> peersInBackoff = new ArrayList<>();
             if (hasNoPeers) {
                 peersInBackoff = peers.stream()
-                    .filter(peerData -> peerData.getLastAttempted() != null
-                        && (peerData.getLastConnected() == null
-                        || peerData.getLastConnected() < peerData.getLastAttempted())
-                        && peerData.getLastAttempted() > lastAttemptedThreshold)
+                    .filter(peerData -> hasRecentConnectFailure(peerData, now))
                     .collect(Collectors.toList());
             }
             
-            peers.removeIf(peerData -> peerData.getLastAttempted() != null
-                && (peerData.getLastConnected() == null
-                || peerData.getLastConnected() < peerData.getLastAttempted())
-                && peerData.getLastAttempted() > lastAttemptedThreshold);
+            peers.removeIf(peerData -> hasRecentConnectFailure(peerData, now));
 
             // Don't consider peers that we know loop back to ourself
             synchronized (this.selfPeers) {
@@ -2457,28 +2480,10 @@ public class Network {
         LOGGER.debug("[{}] Handshake completed with peer {} on {}", peer.getPeerConnectionId(), peer,
                 peer.getPeersVersionString());
 
-        // Clear any outbound failure records for this peer's IP since connection succeeded
-        // Also update address→nodeId cache and clear direction mismatch for inbound
+        // Clear any outbound failure records since connection succeeded.
+        // Also update address→nodeId cache and clear direction mismatch for inbound.
         try {
-            if (peer.getResolvedAddress() != null && peer.getPeersNodeId() != null) {
-                String peerIP = peer.getResolvedAddress().getAddress().getHostAddress();
-                int peerPort = peer.getResolvedAddress().getPort();
-                String peerAddress = peerIP + ":" + peerPort;
-                String theirNodeId = peer.getPeersNodeId();
-                
-                // Keep cache updated with latest address for this nodeId
-                // Handles IP changes from DHCP/UPnP/VPN
-                updateAddressToNodeIdCache(peerAddress, theirNodeId);
-                
-                clearOutboundFailures(peerIP, theirNodeId);
-                
-                // Clear direction mismatch if inbound succeeds
-                // (They successfully connected to us, so we don't need to avoid them)
-                if (!peer.isOutbound()) {
-                    this.inboundReachability.recordInboundHandshake();
-                    clearDirectionMismatch(theirNodeId);
-                }
-            }
+            updateConnectedPeerAddressCache(peer);
         } catch (Exception e) {
             LOGGER.debug("Failed to update peer tracking: {}", e.getMessage());
         }
@@ -2663,6 +2668,42 @@ public class Network {
         Controller.getInstance().onPeerHandshakeCompleted(peer);
     }
 
+    private void updateConnectedPeerAddressCache(Peer peer) {
+        if (peer == null || peer.getPeerData() == null || peer.getPeersNodeId() == null)
+            return;
+
+        PeerAddress peerAddress = peer.getPeerData().getAddress();
+        String theirNodeId = peer.getPeersNodeId();
+
+        if (peerAddress.isI2P()) {
+            updateAddressToNodeIdCache(peerAddress.toString(), theirNodeId);
+            clearOutboundFailures(peerAddress.getHost(), theirNodeId);
+            if (!peer.isOutbound())
+                clearDirectionMismatch(theirNodeId);
+            return;
+        }
+
+        if (peer.getResolvedAddress() == null)
+            return;
+
+        String peerIP = peer.getResolvedAddress().getAddress().getHostAddress();
+        int peerPort = peer.getResolvedAddress().getPort();
+        String resolvedPeerAddress = peerIP + ":" + peerPort;
+
+        // Keep cache updated with latest address for this nodeId.
+        // Handles IP changes from DHCP/UPnP/VPN.
+        updateAddressToNodeIdCache(resolvedPeerAddress, theirNodeId);
+
+        clearOutboundFailures(peerIP, theirNodeId);
+
+        // Clear direction mismatch if inbound succeeds.
+        // They successfully connected to us, so we don't need to avoid them.
+        if (!peer.isOutbound()) {
+            this.inboundReachability.recordInboundHandshake();
+            clearDirectionMismatch(theirNodeId);
+        }
+    }
+
     private void addI2PChainPeer(Peer peer) {
         PeerAddress i2pAddress = getI2PChainPeerAddress(peer);
         if (i2pAddress == null)
@@ -2675,12 +2716,11 @@ public class Network {
         synchronized (this.allKnownPeers) {
             boolean alreadyKnown = this.allKnownPeers.stream()
                     .anyMatch(peerData -> peerData.getAddress().equals(i2pAddress));
-            if (alreadyKnown)
-                return;
-
-            this.allKnownPeers.add(new PeerData(i2pAddress, addedWhen, peer.getPeerData().getAddress().toString()));
-            LOGGER.debug("Added I2P chain peer address {} from Network connection {}",
-                    i2pAddress, peer.getPeerData().getAddress());
+            if (!alreadyKnown) {
+                this.allKnownPeers.add(new PeerData(i2pAddress, addedWhen, peer.getPeerData().getAddress().toString()));
+                LOGGER.debug("Added I2P chain peer address {} from Network connection {}",
+                        i2pAddress, peer.getPeerData().getAddress());
+            }
         }
 
         if (peer.getPeersNodeId() != null)

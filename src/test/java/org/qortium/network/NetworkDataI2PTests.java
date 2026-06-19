@@ -133,6 +133,23 @@ public class NetworkDataI2PTests extends Common {
 	}
 
 	@Test
+	public void testRejectedDuplicateI2PDataHandshakeCachesNodeIdForSuppression() throws Exception {
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		Peer directPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24894")), Peer.NETWORKDATA);
+		directPeer.setPeersNodeId(NODE_ID);
+		directPeer.setIsDataPeer(true);
+		NetworkData.getInstance().addConnectedPeer(directPeer);
+		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORKDATA);
+		i2pPeer.setIsDataPeer(true);
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
+
+		NetworkData.getInstance().noteHandshakePeerAddress(i2pPeer, NODE_ID);
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertNull(selectedPeer);
+	}
+
+	@Test
 	public void testFullDataSlotsSelectI2PFallbackForDirectReplacement() throws Exception {
 		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORKDATA);
 		i2pPeer.setPeersNodeId(NODE_ID);

@@ -103,6 +103,50 @@ public class NetworkI2PTests extends Common {
 	}
 
 	@Test
+	public void testI2PChainHandshakeCachesNodeIdForDuplicateSuppression() throws Exception {
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		Peer directPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK);
+		directPeer.setPeersNodeId(NODE_ID);
+		Network.getInstance().addConnectedPeer(directPeer);
+		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORK);
+		i2pPeer.setPeersNodeId(NODE_ID);
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
+
+		invokeUpdateConnectedPeerAddressCache(i2pPeer);
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertNull(selectedPeer);
+	}
+
+	@Test
+	public void testRejectedDuplicateI2PChainHandshakeCachesNodeIdForSuppression() throws Exception {
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		Peer directPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK);
+		directPeer.setPeersNodeId(NODE_ID);
+		Network.getInstance().addConnectedPeer(directPeer);
+		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORK);
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
+
+		Network.getInstance().noteHandshakePeerAddress(i2pPeer, NODE_ID);
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertNull(selectedPeer);
+	}
+
+	@Test
+	public void testKnownI2PChainCapabilityRefreshesNodeIdCache() throws Exception {
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		Map<String, Object> capabilities = new HashMap<>();
+		capabilities.put(Handshake.I2P_CAPABILITY, B32);
+		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
+
+		invokeAddI2PChainPeer(networkPeerWithCapabilities(capabilities));
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertNull(selectedPeer);
+	}
+
+	@Test
 	public void testDirectChainPeerCanReplaceExistingI2PFallback() throws Exception {
 		Peer i2pPeer = new Peer(new PeerData(PeerAddress.fromString(B32)), Peer.NETWORK);
 		i2pPeer.setPeersNodeId(NODE_ID);
@@ -158,6 +202,21 @@ public class NetworkI2PTests extends Common {
 
 		assertEquals("198.51.100.10:24892", selectedPeer.getPeerData().getAddress().toString());
 		assertFalse(selectedPeer.getPeerData().getAddress().isI2P());
+	}
+
+	@Test
+	public void testI2PChainPeerUsesLongerConnectFailureBackoff() throws Exception {
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
+		Peer connectedPeer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK);
+		connectedPeer.setPeersNodeId(NODE_ID);
+		Network.getInstance().addConnectedPeer(connectedPeer);
+		Network.getInstance().addHandshakedPeer(connectedPeer);
+		PeerData recentlyAttemptedI2PPeer = new PeerData(PeerAddress.fromString(B32), System.currentTimeMillis() - 3 * 60 * 1000L, "test");
+		getMutableKnownPeers().add(recentlyAttemptedI2PPeer);
+
+		Peer selectedPeer = invokeGetConnectablePeer(System.currentTimeMillis());
+
+		assertNull(selectedPeer);
 	}
 
 	@Test
@@ -228,6 +287,12 @@ public class NetworkI2PTests extends Common {
 		java.lang.reflect.Method method = Network.class.getDeclaredMethod("updateAddressToNodeIdCache", String.class, String.class);
 		method.setAccessible(true);
 		method.invoke(Network.getInstance(), address, nodeId);
+	}
+
+	private void invokeUpdateConnectedPeerAddressCache(Peer peer) throws Exception {
+		java.lang.reflect.Method method = Network.class.getDeclaredMethod("updateConnectedPeerAddressCache", Peer.class);
+		method.setAccessible(true);
+		method.invoke(Network.getInstance(), peer);
 	}
 
 	private Peer invokeFindI2PFallbackPeerWithDirectReplacement(long now) throws Exception {

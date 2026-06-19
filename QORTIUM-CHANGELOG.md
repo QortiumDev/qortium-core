@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - network: refresh I2P peer identity cache
+
+Keeps the direct-primary fallback rules from losing track of a peer after restart or after an I2P handshake attempt. Completed chain I2P connections now update the same address-to-node-ID cache that TCP and QDN/data handshakes use. Direct TCP handshakes also refresh the cache for an advertised `.b32.i2p` chain address even when that I2P address was already known from an earlier run. If an outbound I2P chain or data handshake is rejected as a duplicate of an existing direct peer, the duplicate path now records the current node ID before disconnecting. Chain I2P connection attempts also use a longer failure backoff than direct TCP, because stale fallback destinations can establish at the SAM layer without completing a Core handshake. This lets the peer selector recognize or cool down persisted I2P addresses that are already covered by direct TCP, reducing repeated fallback dials while preserving I2P for peers that still need it.
+
 ### 2026-06-19 - network: restore TCP after temporary I2P fallback
 
 Keeps direct TCP primary after a peer temporarily falls back to I2P during restart or connection-backoff windows. When I2P is not preferred and an outbound I2P fallback peer has a known direct address that the normal dialer would allow, the chain and QDN/data networks now drop the fallback connection so the existing TCP reconnect path can retry it. This prevents full outbound slots from leaving a reachable public seed or direct peer stuck on I2P after TCP becomes eligible again, while preserving I2P as the fallback for peers that still have no direct path.
