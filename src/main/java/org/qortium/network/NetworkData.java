@@ -1401,6 +1401,7 @@ public class NetworkData {
             return null;
         }
         if (getImmutableOutboundHandshakedPeers().size() >= minOutboundPeers) {
+            disconnectI2PFallbackPeerWithDirectReplacement(now);
             return null;
         }
         boolean hasNoPeers = getImmutableHandshakedPeers().isEmpty();
@@ -1593,6 +1594,79 @@ public class NetworkData {
         for (int i = 0; i < peersToDisconnect.size(); i++) {
             peersToDisconnect.get(i).disconnect(disconnectReasons.get(i));
         }
+    }
+
+    private boolean disconnectI2PFallbackPeerWithDirectReplacement(Long now) {
+        Peer i2pFallbackPeer = findI2PFallbackPeerWithDirectReplacement(now);
+        if (i2pFallbackPeer == null)
+            return false;
+
+        PeerData directPeerData = findDirectReplacementForI2PFallback(i2pFallbackPeer, now);
+        if (directPeerData == null)
+            return false;
+
+        LOGGER.debug("[NetworkData: {}] Dropping I2P fallback peer {} (nodeId {}) so direct TCP peer {} can be retried",
+                i2pFallbackPeer.getPeerConnectionId(), i2pFallbackPeer.getPeerData().getAddress(),
+                i2pFallbackPeer.getPeersNodeId(), directPeerData.getAddress());
+        i2pFallbackPeer.disconnect("direct TCP replacement available");
+        return true;
+    }
+
+    private Peer findI2PFallbackPeerWithDirectReplacement(Long now) {
+        if (Settings.getInstance().isI2PPreferred())
+            return null;
+
+        return getImmutableOutboundHandshakedPeers().stream()
+                .filter(peer -> peer.getPeerData().getAddress().isI2P())
+                .filter(peer -> peer.getPeersNodeId() != null)
+                .filter(peer -> findDirectReplacementForI2PFallback(peer, now) != null)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private PeerData findDirectReplacementForI2PFallback(Peer i2pFallbackPeer, Long now) {
+        if (i2pFallbackPeer == null || i2pFallbackPeer.getPeersNodeId() == null)
+            return null;
+
+        String fallbackNodeId = i2pFallbackPeer.getPeersNodeId();
+        return getAllKnownPeers().stream()
+                .filter(peerData -> isEligibleDirectReplacementForI2PFallback(peerData, fallbackNodeId, now))
+                .findFirst()
+                .orElse(null);
+    }
+
+    private boolean isEligibleDirectReplacementForI2PFallback(PeerData peerData, String fallbackNodeId, Long now) {
+        if (peerData == null || peerData.getAddress().isI2P())
+            return false;
+
+        CachedNodeIdInfo cachedInfo = addressToNodeIdCache.get(peerData.getAddress().toString());
+        if (cachedInfo == null || !cachedInfo.nodeId.equals(fallbackNodeId))
+            return false;
+
+        if (isDirectPeerInConnectBackoff(peerData, now))
+            return false;
+
+        synchronized (this.selfPeers) {
+            if (isSelfPeer.test(peerData))
+                return false;
+        }
+
+        if (isConnectedPeer.test(peerData))
+            return false;
+
+        return !hasRecentDirectionMismatch(cachedInfo.nodeId);
+    }
+
+    private boolean isDirectPeerInConnectBackoff(PeerData peerData, Long now) {
+        if (peerData.getLastAttempted() == null)
+            return false;
+
+        if (peerData.getLastConnected() == null)
+            return true;
+
+        return now != null
+                && peerData.getLastConnected() < peerData.getLastAttempted()
+                && peerData.getLastAttempted() > now - CONNECT_FAILURE_BACKOFF;
     }
 
     private Peer getConnectablePeer(final Long now) throws InterruptedException {
