@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - network: suppress I2P fallback for connected TCP peers
+
+Stops normal fallback mode from repeatedly dialing a peer's advertised I2P destination when that same peer is already connected over direct TCP. The chain and QDN/data peer selectors now treat I2P destinations advertised by an active IP peer as already covered, while still allowing `i2pPreferred` to force I2P for testing or privacy. Focused tests cover both chain and data selection so public seeds stay on the fast TCP path and I2P remains reserved for peers that need it.
+
 ### 2026-06-18 - docs: document I2P fallback rollout status
 
 Updates the I2P fallback transport design notes and preview runbooks to match the current branch. The design document now records that both chain and QDN/data I2P wiring are implemented, that forced live two-node testing has validated the fallback path, and that the remaining work is normal fallback-mode validation, real QDN resource testing, recovery checks, packaging, and final PR prep. The tester guide and seed operator runbook now explain the current external `i2pd` requirement, local SAM bridge, peer `transport` field, and local-file reseed workaround for hardened hosts.
