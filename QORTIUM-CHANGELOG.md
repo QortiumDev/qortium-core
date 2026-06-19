@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - docs: record chain I2P direct-primary lab validation
+
+Updates the I2P fallback transport notes with the controlled local chain-network validation. The notes now record that a two-node lab proved the direct-primary drop branch for chain peers: a completed outbound I2P fallback peer was disconnected once a cached direct TCP route became eligible again. They also document the remaining limitation honestly: the loopback forwarding setup cannot prove final TCP replacement because the receiving node detects the forwarded `127.0.0.1` route as a self-connection, so any final chain TCP replacement proof needs a non-loopback topology.
+
 ### 2026-06-19 - docs: record I2P handshake cleanup validation
 
 Updates the I2P fallback transport notes after deploying the stale-handshake cleanup to both public seeds. The notes now record that Netcup and Regxa are both running the cleanup builds, that the focused and full Maven test suites passed, and that the latest seed test did not leave another lingering I2P `HELLO`: Netcup restored a direct QDN/data peer to Regxa and the temporary I2P lookup failed cleanly at the SAM layer. The remaining pre-bundling gap is now narrowed to a clean chain-network live proof of direct-primary recovery, which still needs firewall control or a dedicated test hook.
