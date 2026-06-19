@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - qdn: make multi-file publishing reproducible
+
+Makes publishing a multi-file QDN resource deterministic, so the same files always produce the same published data. Previously the file order depended on the operating system's directory listing and the resource's zip archive embedded the current time, so re-publishing identical content produced a different result each time. Now the file list is sorted, and the zip archive uses a sorted entry order with a fixed timestamp, so identical content yields a byte-identical archive. This is a client-side packaging change only: there are no consensus, transaction-validation, or service-definition changes, and existing resources are unaffected. As a side benefit this removes a source of test flakiness that surfaced when publishing multi-file resources.
+
 ### 2026-06-19 - qdn: optional entry point for multi-file resources
 
 Adds an optional "entry point" (a primary file) to QDN resources, so a resource made of several files can still resolve a sensible default file when fetched without naming one. A publisher may now declare an entryPoint when publishing; it is stored in the resource metadata and must be one of the resource's files (publishing fails clearly otherwise). When a resource is fetched without a specific file path, the node resolves the file to serve in order: a single-file resource serves its only file (unchanged); otherwise, if the metadata declares an entryPoint that exists, that file is served; otherwise the request asks for an explicit file path as before. Existing single-file and explicit-path fetches behave exactly as they did, and resources published without an entryPoint are unaffected. This is a client-side change only: there are no consensus, transaction-validation, schema, or service-definition changes, and the on-publish metadata is byte-identical when no entryPoint is set. Note: like the other metadata fields, entryPoint must be resupplied when updating a resource, otherwise it is cleared.
