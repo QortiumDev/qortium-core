@@ -518,7 +518,10 @@ final class LinuxStatusNotifierTray implements NodeTray {
 
 		@Override
 		public boolean AboutToShow(int id) {
-			return false;
+			// The layout is rebuilt from TrayActions.createMenuActions() on every query, and may
+			// change between opens (e.g. an available-update install entry appears). Returning
+			// true asks the host to re-fetch the layout before showing, so it stays current.
+			return true;
 		}
 
 		@Override

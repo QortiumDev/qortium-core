@@ -52,6 +52,16 @@ final class TrayActions {
 		if (Settings.getInstance().getAutoUpdateMode() != Settings.AutoUpdateMode.INSTALL) {
 			actions.add(new TrayMenuAction(7, Translator.INSTANCE.translate("SysTray", "CHECK_FOR_UPDATE"),
 					() -> runAction(beforeAction, TrayActions::checkForUpdates)));
+
+			// If a check (periodic or manual) already found an update, surface a persistent
+			// install entry so a missed/dismissed notification doesn't hide it.
+			AutoUpdate.CachedUpdateStatus cached = AutoUpdate.getCachedUpdateStatus();
+			if (cached != null) {
+				String label = String.format(Translator.INSTANCE.translate("SysTray", "INSTALL_UPDATE"),
+						describeBuild(cached.commitHash, cached.updateTimestamp));
+				actions.add(new TrayMenuAction(8, label,
+						() -> runAction(beforeAction, () -> confirmAndInstall(describeBuild(cached.commitHash, cached.updateTimestamp)))));
+			}
 		}
 
 		// Only offer Bootstrap when hosts are configured; without them the action would just fail.
@@ -139,18 +149,23 @@ final class TrayActions {
 			}
 
 			// An update is available: offer to install it (which restarts the node).
-			final String prompt = String.format(
-					Translator.INSTANCE.translate("SysTray", "UPDATE_AVAILABLE_PROMPT"), describeUpdate(result));
-			SwingUtilities.invokeLater(() -> {
-				int choice = JOptionPane.showConfirmDialog(null, prompt,
-						Translator.INSTANCE.translate("SysTray", "CHECK_FOR_UPDATE"),
-						JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-				if (choice == JOptionPane.YES_OPTION)
-					installUpdate();
-			});
+			confirmAndInstall(describeBuild(result.commitHash, result.updateTimestamp));
 		}, "Tray update check");
 		thread.setDaemon(true);
 		thread.start();
+	}
+
+	/** Confirm on the EDT, then install if the user agrees. */
+	private static void confirmAndInstall(String descriptor) {
+		final String prompt = String.format(
+				Translator.INSTANCE.translate("SysTray", "UPDATE_AVAILABLE_PROMPT"), descriptor);
+		SwingUtilities.invokeLater(() -> {
+			int choice = JOptionPane.showConfirmDialog(null, prompt,
+					Translator.INSTANCE.translate("SysTray", "CHECK_FOR_UPDATE"),
+					JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+			if (choice == JOptionPane.YES_OPTION)
+				installUpdate();
+		});
 	}
 
 	private static void installUpdate() {
@@ -167,15 +182,15 @@ final class TrayActions {
 		thread.start();
 	}
 
-	/** Short, factual descriptor of the available build (commit and/or build date) for the prompt. */
-	private static String describeUpdate(AutoUpdate.UpdateCheckResult result) {
+	/** Short, factual descriptor of the available build (commit and/or build date) for labels/prompts. */
+	private static String describeBuild(String commitHash, Long updateTimestamp) {
 		StringBuilder sb = new StringBuilder();
-		if (result.commitHash != null && !result.commitHash.isEmpty())
-			sb.append(result.commitHash.length() > 8 ? result.commitHash.substring(0, 8) : result.commitHash);
-		if (result.updateTimestamp != null) {
+		if (commitHash != null && !commitHash.isEmpty())
+			sb.append(commitHash.length() > 8 ? commitHash.substring(0, 8) : commitHash);
+		if (updateTimestamp != null) {
 			if (sb.length() > 0)
 				sb.append(", ");
-			sb.append(new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date(result.updateTimestamp)));
+			sb.append(new SimpleDateFormat("yyyy-MM-dd HH:mm").format(new Date(updateTimestamp)));
 		}
 		return sb.length() > 0 ? sb.toString() : Translator.INSTANCE.translate("SysTray", "AUTO_UPDATE");
 	}
