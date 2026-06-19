@@ -298,9 +298,13 @@ deciding factor is *who runs the node*:
   drops the I2P fallback so the existing dialer can retry TCP even when outbound peer slots are
   already full. Focused tests cover the replacement decision. Live Regxa/Netcup testing proved
   this behavior for the QDN/data network: the seeds were forced onto completed I2P data peers,
-  then returned to direct TCP after the fixed data addresses were restored. Chain-network live
-  proof is still topology-limited because the public seed fixed-peer TCP path reconnects before
-  a completed chain I2P fallback can be held without firewall control or a dedicated test hook.
+  then returned to direct TCP after the fixed data addresses were restored. A controlled local
+  two-node chain lab also proved the chain-network drop branch: node A held a completed outbound
+  chain I2P peer to node B, a cached direct TCP route to node B became eligible again, and node A
+  logged the expected `Dropping I2P fallback peer ... so direct TCP peer ... can be retried`
+  disconnect. The local loopback forwarding lab did not prove final TCP replacement because node
+  B correctly treated the forwarded `127.0.0.1` route as a self-connection and closed the direct
+  handshake. A non-loopback topology is still needed if we want final chain TCP replacement proof.
 - **Completed real QDN payload validation:** Netcup deleted its local cache for
   `JSON/Native/qhelp.feedback.v1.p.mqkcfj5406253a6t6o`, rebuilt it to 100%, and the active
   non-seed I2P data peer's `lastAccessed` timestamp advanced during the rebuild. This proves
@@ -323,9 +327,8 @@ deciding factor is *who runs the node*:
   Regxa, the follow-up seed test did not leave another lingering I2P QDN/data `HELLO`: Netcup
   restored a direct QDN/data peer to Regxa, and the temporary I2P data lookup failed cleanly at
   the SAM layer with `LeaseSet not found`.
-- **Remaining integration:** a clean chain-network live proof of direct-primary recovery still
-  needs a controlled direct-reachable peer that can first be held on a completed outbound I2P
-  fallback, then have its direct TCP address become eligible without restarting Core.
+- **Remaining integration:** only final chain TCP replacement remains unproven in a non-loopback
+  topology. The chain direct-primary drop branch itself has been proven in the local lab.
 - **Cross-NAT:** the two-machine setup from `~/reticulum-spike/CROSS-NAT-SETUP.md`, but with
   Core instead of `rncp`.
 - **Regression:** existing TCP-only tests must pass unchanged with `i2pEnabled:false`.
@@ -497,9 +500,12 @@ Do a final sync/rebase onto `main` before any PR.
   layer.
 - Local regression validation after the cleanup passed `mvn -q -Dtest=NetworkI2PTests,NetworkDataI2PTests,PeerAddressTests,PeerTests,HandshakeTests test`,
   `mvn -q -DskipTests package`, and `mvn -q test`.
-- Live chain direct-primary drop validation is still topology-limited: without firewall control
-  or a dedicated test hook, the fixed public-seed TCP path reconnects before a completed chain
-  I2P fallback can be held.
+- Live chain direct-primary drop validation succeeded in a controlled local two-node lab: node A
+  held a completed outbound I2P chain peer to node B, then dropped that fallback when the cached
+  direct TCP route became eligible again. The lab used a loopback `socat` forwarder for the direct
+  route, so final TCP replacement did not stick: node B detected the forwarded `127.0.0.1` address
+  as a self-connection and closed the handshake. That leaves only final non-loopback chain TCP
+  replacement proof, not the direct-primary drop branch itself, for any further live validation.
 
 **Environment (this dev box is Kicksecure — read `~/AGENTS/` first):** i2pd installed +
 running, SAM on `127.0.0.1:7656`, console `http://127.0.0.1:7070`, `bandwidth = X`. **i2pd
@@ -511,11 +517,10 @@ and `~/.reticulum-a|-b`. Reference clones (Java RNS, qortal reticulum branch, ma
 Python) are in `~/reticulum/repos/`.
 
 **Next steps, in order:**
-1. Validate the chain-network direct-primary recovery path live in a controlled topology: if a
-   public seed or other direct-reachable peer is temporarily held on completed outbound I2P
-   while TCP is down, the node should move back to direct TCP once the IP path is eligible
-   again, even when outbound peer slots are already full. QDN/data has now been proven with
-   Regxa/Netcup; chain still needs either firewall control or a dedicated test hook.
+1. If desired before PR, validate final chain TCP replacement in a non-loopback topology. The
+   direct-primary chain drop branch is proven by the local two-node lab, but the same lab cannot
+   prove the final TCP handshake because its loopback forwarder is correctly detected as a
+   self-connection by the receiving node.
 2. Decide the end-user deployment model before broad release: Qortium Home managed `i2pd`
    binaries or an embedded Java I2P provider behind `I2PStreamProvider`.
 3. Final PR prep: sync/rebase onto `main`, run the broader test/package suite, review the
