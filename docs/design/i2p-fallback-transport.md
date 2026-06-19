@@ -1,6 +1,6 @@
 # Design: I2P Fallback Transport for Qortium Core
 
-Status: **Draft / proposal** (2026-06-18)
+Status: **Implemented on branch / validation in progress** (2026-06-18)
 Author: prepared with QuickMythril
 Scope: Qortium Core networking (`org.qortium.network`), chain network + QDN data network
 
@@ -262,36 +262,49 @@ deciding factor is *who runs the node*:
 
 ## 7. Phasing
 
-- **Phase 2a — Data network over I2P (prove it in-Java).**
-  SAM session manager + outbound connect + `STREAM FORWARD` inbound, wired into
-  `NetworkData`. Advertise `"I2P_QDN"`, fix `addPeer`/`getConnectablePeer` (§5.8). Goal: two
-  NAT'd nodes fetch QDN data from each other over I2P with no ports. (Lower risk: cannot fork
-  consensus.) Resolve the §6 library/deployment decision here.
-- **Phase 2b — Chain network over I2P.**
-  Advertise `"I2P"`, add the chain I2P session + forward listener, transport selection (§5.5),
-  peer-exchange propagation (§5.6). Goal: NAT'd nodes maintain chain peers beyond the seeds.
-- **Phase 2c — Reachability, settings, rollout.**
-  `InboundReachability` I2P mode, preview config defaults (`i2pEnabled:true`), packaging
-  (§9), `MergeSettings` keys, seed handling.
+- **Phase 2a — Data network over I2P: implemented.**
+  SAM session management, outbound `STREAM CONNECT`, inbound `STREAM FORWARD`, `I2P_QDN`
+  capability advertisement, direct-vs-I2P QDN peer learning, and data-peer transport
+  selection are wired into `NetworkData`.
+- **Phase 2b — Chain network over I2P: implemented.**
+  The chain network now has its own SAM destination, advertises `"I2P"`, accepts forwarded
+  I2P streams, learns I2P chain peer addresses from handshakes and PEERS messages, and can
+  use I2P when direct TCP is unavailable or when `i2pPreferred` is enabled for testing.
+- **Phase 2c — Reachability, settings, rollout: partially implemented.**
+  Runtime settings, default-on I2P, API transport visibility, seed participation, and
+  operator-level testing are in place. Remaining rollout work is mostly packaging and UX:
+  either bundle/manage `i2pd` for normal users or add an embedded Java I2P provider behind
+  the existing `I2PStreamProvider` seam.
 
 ## 8. Testing strategy
 
-- **Unit:** SAM v3 client against a mock/fake SAM bridge (handshake parsing, framing,
-  reconnect); `PeerAddress` I2P parsing/round-trip; transport-selection decision table.
-- **Integration (in-JVM):** two Core instances on one host, I2P-only, exchanging blocks /
-  fetching a QDN resource over a live i2pd — the Java analogue of the spike (which already
-  proved the network mechanics with `rncp`).
+- **Completed unit/focused tests:** `PeerAddress` I2P parsing and no-DNS socket rejection,
+  PEERS-message round-trip, HELLO capability serialization, chain/data capability
+  advertisement, direct-vs-I2P peer learning/selection, duplicate/self I2P peer filtering,
+  API transport labeling, and I2P peer equality without DNS resolution.
+- **Completed live SAM integration:** opt-in tests bring up two `SamSession` instances
+  against a live `i2pd`, forward inbound streams over loopback, exchange bytes over I2P,
+  verify the forwarded remote destination, and confirm invalid `.b32.i2p` destinations fail.
+- **Completed live Core validation:** two non-seed Previewnet nodes behind NAT established
+  chain and QDN/data peer connections over I2P with no port forwarding. Forced-I2P testing
+  confirmed both networks can use the fallback transport end to end.
+- **Remaining integration:** repeat the two-node validation with `i2pPreferred:false` so
+  public/direct seed paths stay on TCP while non-reachable non-seed paths fall back to I2P;
+  fetch or publish a real QDN resource across the non-seed I2P data path.
 - **Cross-NAT:** the two-machine setup from `~/reticulum-spike/CROSS-NAT-SETUP.md`, but with
   Core instead of `rncp`.
 - **Regression:** existing TCP-only tests must pass unchanged with `i2pEnabled:false`.
 
 ## 9. Rollout
 
-- Bundle decision per §6 into `package-release.sh` (ship i2pd binary, or `net.i2p` jar, or
-  document external i2pd).
-- Preview configs (`settings-preview.json`, seeds) gain `i2pEnabled` etc.; existing testers
-  pick them up via the `MergeSettings` 3-way merge (as the UPnP/minOutbound defaults did),
-  unless an operator overrode the key.
+- Current branch behavior uses an external `i2pd` SAM bridge. The release zip does not yet
+  bundle `i2pd` or an embedded router, so preview testers who want I2P fallback must install
+  and run `i2pd` locally with SAM enabled on `127.0.0.1:7656`.
+- Bundle decision per §6 into the production packaging path later (ship/manage an `i2pd`
+  binary from Qortium Home, or add a `net.i2p` embedded provider behind the same seam).
+- Preview configs inherit `i2pEnabled:true` and the SAM defaults from `Settings.java`;
+  existing testers pick up untouched keys through normal settings-template merge behavior,
+  while local overrides still win.
 - Seeds keep public IPs (TCP primary) and additionally run I2P, so they can also serve
   unreachable peers over I2P during transition.
 - No mainnet exists yet, so `i2pEnabled:true` across the board (preview/testnet/defaults);
@@ -364,11 +377,10 @@ Reusable references (reticulum branch): `RNS.java`, `ReticulumPeer.java`,
 ## 13. Implementation status & handoff (2026-06-18)
 
 **Branch:** `i2p-fallback-transport` in `/home/user/git/qortium`, created off
-`work/restore-feature-triggers` — **rebase onto `main` before any PR.** The transport
-groundwork is checkpointed; the data-network wiring below should be reviewed with the
-current working-tree diff before committing.
+`work/restore-feature-triggers` and later brought forward with the current `main` history.
+Do a final sync/rebase onto `main` before any PR.
 
-**Done — Phase 2a (SAM fallback seam, address parsing, and data-network wiring):**
+**Done on this branch:**
 - `src/main/java/org/qortium/network/i2p/I2PStreamProvider.java` — the transport seam (SAM
   now; embedded `net.i2p` possible later behind the same interface).
 - `src/main/java/org/qortium/network/i2p/SamSession.java` — thin SAM v3 client (persistent
@@ -390,23 +402,42 @@ current working-tree diff before committing.
 - `src/main/java/org/qortium/settings/Settings.java` — adds enabled-by-default I2P settings,
   SAM host/port, separate chain/data key paths, the future embedded-router toggle, writable
   setting support, and restart-required validation.
-- `src/main/java/org/qortium/network/Handshake.java` — advertises `I2P_QDN` only when the
-  local data I2P session is up while preserving the existing numeric `QDN` capability.
+- `src/main/java/org/qortium/network/Handshake.java` — advertises `I2P` and `I2P_QDN` only
+  when the corresponding local I2P session is up while preserving existing numeric
+  capabilities such as `QDN`.
 - `src/main/java/org/qortium/network/NetworkData.java` — starts the data SAM session
   asynchronously, opens the local loopback `STREAM FORWARD` listener, accepts forwarded I2P
   peers without blocking the selector thread, learns direct and `I2P_QDN` data addresses from
   chain handshakes, keeps direct TCP primary, and uses I2P as a fallback (or as preferred only
   when `i2pPreferred` is enabled).
-- `src/main/java/org/qortium/network/Peer.java` — adds the data-network I2P outbound connect
-  branch while leaving chain-network I2P for Phase 2b.
+- `src/main/java/org/qortium/network/Network.java` — starts the chain SAM session
+  asynchronously, opens the chain `STREAM FORWARD` listener, accepts forwarded chain peers,
+  learns and exchanges I2P chain peer addresses, skips local/duplicate connecting I2P peers,
+  and keeps direct TCP primary unless `i2pPreferred` is enabled.
+- `src/main/java/org/qortium/network/Peer.java` — branches outbound connects for chain and
+  data I2P peers, preserves forwarded I2P peer addresses instead of loopback bridge
+  addresses, and compares I2P peer identity without DNS resolution.
+- `src/main/java/org/qortium/api/model/ConnectedPeer.java` and
+  `src/main/java/org/qortium/api/model/ConnectedDataPeer.java` — expose a simple
+  `transport` field (`IP` or `I2P`) for active chain and data peers.
 - `src/test/java/org/qortium/network/HandshakeTests.java`,
   `src/test/java/org/qortium/network/message/HelloMessageTests.java`, and
-  `src/test/java/org/qortium/network/NetworkDataI2PTests.java` — cover `I2P_QDN`
+  `src/test/java/org/qortium/network/NetworkDataI2PTests.java` — cover I2P capability
   advertisement/serialization and direct-vs-I2P QDN peer learning/selection behavior.
+- `src/test/java/org/qortium/network/NetworkI2PTests.java` and
+  `src/test/java/org/qortium/network/PeerTests.java` — cover chain I2P learning/selection,
+  PEERS-message propagation, and peer equality behavior for I2P addresses.
 
-**Validated:** I2P gives NAT-free cross-NAT reachability — a cross-NAT transfer was received
-intact; throughput ~28 Kbps avg / 72–127 Kbps physical peaks (semi-warm) → **fallback-grade,
-not primary**. Hence I2P is a fallback; direct TCP stays primary.
+**Validated:**
+- I2P gives NAT-free cross-NAT reachability — a cross-NAT file transfer was received intact;
+  throughput was ~28 Kbps avg / 72–127 Kbps physical peaks (semi-warm), so it is
+  fallback-grade, not primary.
+- Live Java SAM integration tests proved two `SamSession` instances can exchange bytes over
+  live `i2pd`, and invalid destinations fail.
+- Live Previewnet testing with forced I2P proved two non-seed nodes can establish both chain
+  and QDN/data peer connections over I2P with no port forwarding.
+- Public seed nodes keep direct TCP as the preferred path when reachable, while also
+  advertising I2P destinations for fallback-capable peers.
 
 **Environment (this dev box is Kicksecure — read `~/AGENTS/` first):** i2pd installed +
 running, SAM on `127.0.0.1:7656`, console `http://127.0.0.1:7070`, `bandwidth = X`. **i2pd
@@ -418,12 +449,17 @@ and `~/.reticulum-a|-b`. Reference clones (Java RNS, qortal reticulum branch, ma
 Python) are in `~/reticulum/repos/`.
 
 **Next steps, in order:**
-1. Review the current NetworkData wiring diff and commit it with a matching
-   `QORTIUM-CHANGELOG.md` entry.
-2. Run a two-node QDN validation where one NAT'd node learns and dials another node's
-   `I2P_QDN` capability, confirming direct TCP remains preferred when available.
-3. Continue with Phase 2b (chain network I2P fallback) and Phase 2c (rollout controls and
-   operator guidance).
+1. Run the live two-node fallback validation with `i2pPreferred:false`: direct seed peers
+   should remain `IP`, while non-reachable non-seed chain and data peers should use `I2P`.
+2. Validate real QDN usefulness over the I2P data path, not only data-peer connection setup:
+   publish/fetch or otherwise retrieve a QDN resource from one non-seed node through the
+   other non-seed node.
+3. Test recovery behavior: restart `i2pd` while Core is running and confirm SAM sessions
+   recover, then run with `i2pEnabled:false` to confirm TCP-only behavior remains clean.
+4. Decide the end-user deployment model before broad release: Qortium Home managed `i2pd`
+   binaries or an embedded Java I2P provider behind `I2PStreamProvider`.
+5. Final PR prep: sync/rebase onto `main`, run the broader test/package suite, review the
+   total diff for local paths/debug settings/stale docs, then open the PR.
 
 **Gotchas:** `pkill -f <pattern>` matches the running shell when the pattern is in its own
 command line (kill by filtered `ps` instead). i2pd must be `active` for any I2P test —
