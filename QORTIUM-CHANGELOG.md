@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - consensus: defer Previewnet feature triggers
+
+Moves the two Previewnet consensus feature triggers from block 27000 to the temporary placeholder height 99999 while rollout is held for more review. The online-account signature V2 and asset-order bounds fixes remain ported and gated, and mainnet plus the local testnet still activate them from genesis. Because feature-trigger metadata is hash-neutral, this delay does not change the chain-config fingerprint used for peer compatibility.
+
 ### 2026-06-19 - network: quiet optional I2P fallback setup
 
 Makes the I2P fallback startup path friendlier for standalone Core operators who do not run `i2pd`. Missing SAM now logs one clear informational message for the chain network and one for QDN/data, then moves repeated retry messages to debug while direct TCP continues normally. The root README and documentation index now point manual operators to a new I2P fallback guide that explains the optional `i2pd` setup, safe defaults, verification checks, and how to disable I2P attempts. The preview operator runbook also links to the general guide.
