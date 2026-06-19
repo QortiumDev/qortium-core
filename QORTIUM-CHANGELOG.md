@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - qdn: optional entry point for multi-file resources
+
+Adds an optional "entry point" (a primary file) to QDN resources, so a resource made of several files can still resolve a sensible default file when fetched without naming one. A publisher may now declare an entryPoint when publishing; it is stored in the resource metadata and must be one of the resource's files (publishing fails clearly otherwise). When a resource is fetched without a specific file path, the node resolves the file to serve in order: a single-file resource serves its only file (unchanged); otherwise, if the metadata declares an entryPoint that exists, that file is served; otherwise the request asks for an explicit file path as before. Existing single-file and explicit-path fetches behave exactly as they did, and resources published without an entryPoint are unaffected. This is a client-side change only: there are no consensus, transaction-validation, schema, or service-definition changes, and the on-publish metadata is byte-identical when no entryPoint is set. Note: like the other metadata fields, entryPoint must be resupplied when updating a resource, otherwise it is cleared.
+
 ### 2026-06-19 - api: match public chat paths on regular preview nodes
 
 Brings regular Previewnet nodes in line with the seed nodes for public API access, so the "use any public node" option works against ordinary nodes and not just seeds. The same three public endpoints already allowed on the seeds -- POST /chat/public/build, POST /transactions/convert, and POST /transactions/process -- are now also allowed through the public API on the standard Previewnet node config. All three preview configs now expose an identical public path list. As before, the signing endpoint and the proof-of-work compute endpoint are not exposed, so no private keys are handled and there is no public proof-of-work workload. No consensus or database changes.

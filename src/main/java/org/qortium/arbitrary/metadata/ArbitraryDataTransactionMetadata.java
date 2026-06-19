@@ -23,6 +23,7 @@ public class ArbitraryDataTransactionMetadata extends ArbitraryDataMetadata {
     private Category category;
     private List<String> files;
     private String mimeType;
+    private String entryPoint;
 
     private static int MAX_TITLE_LENGTH = 80;
     private static int MAX_DESCRIPTION_LENGTH = 240;
@@ -99,6 +100,11 @@ public class ArbitraryDataTransactionMetadata extends ArbitraryDataMetadata {
         if (metadata.has("mimeType")) {
             this.mimeType = metadata.getString("mimeType");
         }
+
+        // optString tolerates a missing, null, or non-string value (degrades to null) so old or
+        // malformed metadata never throws here.
+        String entryPoint = metadata.optString("entryPoint", null);
+        this.entryPoint = (entryPoint == null || entryPoint.isBlank()) ? null : entryPoint;
     }
 
     @Override
@@ -143,6 +149,10 @@ public class ArbitraryDataTransactionMetadata extends ArbitraryDataMetadata {
 
         if (this.mimeType != null && !this.mimeType.isEmpty()) {
             outer.put("mimeType", this.mimeType);
+        }
+
+        if (this.entryPoint != null && !this.entryPoint.isEmpty()) {
+            outer.put("entryPoint", this.entryPoint);
         }
 
         this.jsonString = outer.toString(2);
@@ -204,6 +214,16 @@ public class ArbitraryDataTransactionMetadata extends ArbitraryDataMetadata {
 
     public String getMimeType() {
         return this.mimeType;
+    }
+
+    public void setEntryPoint(String entryPoint) {
+        // Normalise blank to null so getEntryPoint() is always null-or-non-blank, matching the
+        // writer's handling and the serialize-only-when-set guard in buildJson().
+        this.entryPoint = (entryPoint == null || entryPoint.isBlank()) ? null : entryPoint;
+    }
+
+    public String getEntryPoint() {
+        return this.entryPoint;
     }
 
     public boolean containsChunk(byte[] chunk) {

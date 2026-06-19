@@ -58,6 +58,7 @@ public class ArbitraryDataTransactionBuilder {
     private final String description;
     private final List<String> tags;
     private final Category category;
+    private final String entryPoint;
 
     private int chunkSize = ArbitraryDataFile.CHUNK_SIZE;
 
@@ -67,6 +68,13 @@ public class ArbitraryDataTransactionBuilder {
     public ArbitraryDataTransactionBuilder(Repository repository, String publicKey58, long fee, Path path, String name,
                                            Method method, Service service, String identifier,
                                            String title, String description, List<String> tags, Category category) {
+        this(repository, publicKey58, fee, path, name, method, service, identifier, title, description, tags, category, null);
+    }
+
+    public ArbitraryDataTransactionBuilder(Repository repository, String publicKey58, long fee, Path path, String name,
+                                           Method method, Service service, String identifier,
+                                           String title, String description, List<String> tags, Category category,
+                                           String entryPoint) {
         this.repository = repository;
         this.publicKey58 = publicKey58;
         this.fee = fee;
@@ -86,6 +94,9 @@ public class ArbitraryDataTransactionBuilder {
         this.description = ArbitraryDataTransactionMetadata.limitDescription(description);
         this.tags = ArbitraryDataTransactionMetadata.limitTags(tags);
         this.category = category;
+
+        // entryPoint (optional). Treat blank as null.
+        this.entryPoint = (entryPoint == null || entryPoint.isBlank()) ? null : entryPoint;
     }
 
     public void build() throws DataException {
@@ -143,7 +154,7 @@ public class ArbitraryDataTransactionBuilder {
             Compression compression = shouldUseOnChainData ? Compression.NONE : Compression.ZIP;
 
             ArbitraryDataWriter arbitraryDataWriter = new ArbitraryDataWriter(path, name, service, identifier, method,
-                    compression, title, description, tags, category);
+                    compression, title, description, tags, category, entryPoint);
             try {
                 arbitraryDataWriter.setChunkSize(this.chunkSize);
                 arbitraryDataWriter.save();
