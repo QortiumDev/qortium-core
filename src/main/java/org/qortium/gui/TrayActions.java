@@ -3,6 +3,7 @@ package org.qortium.gui;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.qortium.controller.Controller;
+import org.qortium.controller.RestartNode;
 import org.qortium.globalization.Translator;
 import org.qortium.utils.URLViewer;
 
@@ -40,6 +41,8 @@ final class TrayActions {
 
 		actions.add(new TrayMenuAction(3, Translator.INSTANCE.translate("SysTray", "BUILD_VERSION"),
 				() -> runAction(beforeAction, TrayActions::showAboutDialog)));
+		actions.add(new TrayMenuAction(5, Translator.INSTANCE.translate("SysTray", "RESTART"),
+				() -> runAction(beforeAction, TrayActions::restart)));
 		actions.add(new TrayMenuAction(4, Translator.INSTANCE.translate("SysTray", "EXIT"),
 				() -> runAction(beforeAction, TrayActions::exit)));
 
@@ -97,6 +100,13 @@ final class TrayActions {
 						+ Controller.getInstance().getVersionStringWithoutPrefix(),
 				"Qortium Core",
 				JOptionPane.INFORMATION_MESSAGE));
+	}
+
+	private static void restart() {
+		// scheduleRestart() spawns its own worker that performs the shutdown and relaunch,
+		// and returns false if a restart/bootstrap apply is already scheduled or running.
+		if (!RestartNode.scheduleRestart())
+			LOGGER.info("Ignoring tray restart request: a restart is already scheduled or running");
 	}
 
 	private static void exit() {
