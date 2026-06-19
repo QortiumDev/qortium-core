@@ -249,6 +249,104 @@ public class ArbitraryServiceTests extends Common {
     }
 
     @Test
+    public void testValidateImageGallery() throws IOException {
+        byte[] data = new byte[1024];
+        new Random().nextBytes(data);
+
+        Path path = Files.createTempDirectory("testValidateImageGallery");
+        path.toFile().deleteOnExit();
+        // A mix of allowed image extensions
+        Files.write(Paths.get(path.toString(), "photo1.png"), data, StandardOpenOption.CREATE);
+        Files.write(Paths.get(path.toString(), "photo2.jpg"), data, StandardOpenOption.CREATE);
+        Files.write(Paths.get(path.toString(), "photo3.webp"), data, StandardOpenOption.CREATE);
+        Files.write(Paths.get(path.toString(), "photo4.gif"), data, StandardOpenOption.CREATE);
+
+        Service service = Service.IMAGE_GALLERY;
+        assertFalse("IMAGE_GALLERY is a multi-file service", service.isSingle());
+        assertTrue(service.isValidationRequired());
+
+        assertEquals(ValidationResult.OK, service.validate(path));
+    }
+
+    @Test
+    public void testValidateSingleFileImageGallery() throws IOException {
+        byte[] data = new byte[1024];
+        new Random().nextBytes(data);
+
+        Path path = Files.createTempDirectory("testValidateSingleFileImageGallery");
+        path.toFile().deleteOnExit();
+        Path imagePath = Paths.get(path.toString(), "photo1.png");
+        Files.write(imagePath, data, StandardOpenOption.CREATE);
+
+        assertEquals(ValidationResult.OK, Service.IMAGE_GALLERY.validate(imagePath));
+    }
+
+    @Test
+    public void testValidateImageGalleryRejectsNonImage() throws IOException {
+        byte[] data = new byte[1024];
+        new Random().nextBytes(data);
+
+        Path path = Files.createTempDirectory("testValidateImageGalleryRejectsNonImage");
+        path.toFile().deleteOnExit();
+        Files.write(Paths.get(path.toString(), "photo1.png"), data, StandardOpenOption.CREATE);
+        Files.write(Paths.get(path.toString(), "notes.txt"), data, StandardOpenOption.CREATE); // not an image
+
+        assertEquals(ValidationResult.INVALID_FILE_EXTENSION, Service.IMAGE_GALLERY.validate(path));
+    }
+
+    @Test
+    public void testValidateImageGalleryRejectsSubdirectory() throws IOException {
+        byte[] data = new byte[1024];
+        new Random().nextBytes(data);
+
+        Path path = Files.createTempDirectory("testValidateImageGalleryRejectsSubdirectory");
+        path.toFile().deleteOnExit();
+        Files.write(Paths.get(path.toString(), "photo1.png"), data, StandardOpenOption.CREATE);
+        Path subdirectory = Paths.get(path.toString(), "subdirectory");
+        Files.createDirectories(subdirectory);
+        Files.write(Paths.get(subdirectory.toString(), "photo2.png"), data, StandardOpenOption.CREATE);
+
+        assertEquals(ValidationResult.DIRECTORIES_NOT_ALLOWED, Service.IMAGE_GALLERY.validate(path));
+    }
+
+    @Test
+    public void testValidateEmptyImageGallery() throws IOException {
+        Path path = Files.createTempDirectory("testValidateEmptyImageGallery");
+        path.toFile().deleteOnExit();
+
+        assertEquals(ValidationResult.MISSING_DATA, Service.IMAGE_GALLERY.validate(path));
+    }
+
+    @Test
+    public void testMediaServicesAreNowMultiFile() throws IOException {
+        // The public media/document services were flipped to multi-file (single == false), so a
+        // directory of files is accepted. They have no further structural validation.
+        byte[] data = new byte[1024];
+        new Random().nextBytes(data);
+
+        for (Service service : new Service[] { Service.VIDEO, Service.AUDIO, Service.DOCUMENT, Service.PODCAST }) {
+            assertFalse(service.name() + " should be multi-file", service.isSingle());
+
+            Path path = Files.createTempDirectory("multiFile-" + service.name());
+            path.toFile().deleteOnExit();
+            Files.write(Paths.get(path.toString(), "main.bin"), data, StandardOpenOption.CREATE);
+            Files.write(Paths.get(path.toString(), "sidecar.srt"), data, StandardOpenOption.CREATE);
+
+            assertEquals(service.name() + " should accept a multi-file directory",
+                    ValidationResult.OK, service.validate(path));
+        }
+    }
+
+    @Test
+    public void testPrivateMediaServicesRemainSingleFile() {
+        // The private variants deliberately stay single-file: their privacy relies on single-file
+        // pre-encryption validation, which does not extend to multi-file resources yet.
+        assertTrue(Service.VIDEO_PRIVATE.isSingle());
+        assertTrue(Service.AUDIO_PRIVATE.isSingle());
+        assertTrue(Service.DOCUMENT_PRIVATE.isSingle());
+    }
+
+    @Test
     public void testValidatePublishedGifRepository() throws IOException, DataException, MissingDataException, IllegalAccessException {
         try (final Repository repository = RepositoryManager.getRepository()) {
 
