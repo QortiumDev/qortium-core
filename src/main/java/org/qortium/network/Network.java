@@ -536,7 +536,19 @@ public class Network {
             return null;
         }
 
-        return provider.connect(remoteB32);
+        LOGGER.info("Connecting to I2P chain peer {}", remoteB32);
+        try {
+            SocketChannel socketChannel = provider.connect(remoteB32);
+            if (socketChannel == null)
+                LOGGER.warn("I2P chain peer {} connect failed", remoteB32);
+            else
+                LOGGER.info("Connected to I2P chain peer {}", remoteB32);
+
+            return socketChannel;
+        } catch (IOException e) {
+            LOGGER.warn("I2P chain peer {} connect failed: {}", remoteB32, e.getMessage());
+            throw e;
+        }
     }
 
     private void closeI2PChainFallback() {

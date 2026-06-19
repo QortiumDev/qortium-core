@@ -128,6 +128,7 @@ public class SamSession implements I2PStreamProvider {
             throw new IOException("I2P session not up");
 
         String normalizedRemoteB32 = remoteB32.toLowerCase(Locale.ROOT);
+        LOGGER.info("I2P STREAM CONNECT '{}' -> {}", sessionId, normalizedRemoteB32);
         SocketChannel ch = openSam();
         try {
             ch.socket().setSoTimeout(SAM_REPLY_TIMEOUT_MS);
@@ -139,13 +140,15 @@ public class SamSession implements I2PStreamProvider {
             String reply = readLine(in);
             if (!"OK".equals(token(reply, "RESULT"))) {
                 ch.close();
-                LOGGER.debug("I2P STREAM CONNECT to {} failed: {}", normalizedRemoteB32, reply);
+                LOGGER.warn("I2P STREAM CONNECT '{}' -> {} failed: {}", sessionId, normalizedRemoteB32, reply);
                 return null;
             }
             ch.socket().setSoTimeout(0);
+            LOGGER.info("I2P STREAM CONNECT '{}' -> {} established", sessionId, normalizedRemoteB32);
             return ch; // now a transparent data stream; caller configures non-blocking + selector
         } catch (IOException e) {
             try { ch.close(); } catch (IOException ignored) { /* best effort */ }
+            LOGGER.warn("I2P STREAM CONNECT '{}' -> {} failed: {}", sessionId, normalizedRemoteB32, e.getMessage());
             throw e;
         }
     }

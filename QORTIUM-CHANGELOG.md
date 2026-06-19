@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - network: log I2P chain dial outcomes
+
+Adds clear runtime logging around chain-network I2P outbound dials. Forced-I2P tests now report when the node starts a SAM `STREAM CONNECT`, whether i2pd establishes the stream, and whether the chain peer connection succeeds or fails, making fallback transport problems visible without trace-level logs.
+
 ### 2026-06-18 - network: wire I2P fallback into chain peers
 
 Connects the I2P fallback transport to the main chain network. Nodes now bring up a separate chain-network SAM destination, advertise it as an `I2P` handshake capability, learn peer chain destinations from handshakes, preserve `.b32.i2p` addresses in normal peer exchange, and can accept or dial chain peers through I2P while keeping direct TCP as the default path. The existing `i2pPreferred` setting can force I2P for testing, and focused tests cover chain capability advertisement, peer learning, transport selection, and PEERS-message propagation.
