@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - api: allow public open-group chat sends on preview seeds
+
+Lets public Previewnet seed nodes accept open-group chat messages without an API key and without ever receiving a private key. Adds a new keyless POST /chat/public/build endpoint that returns the same raw, unsigned chat-transaction bytes as the existing POST /chat, but does not require an API key; it shares its logic with the existing endpoint, which stays API-key protected. The caller computes the proof-of-work and signs locally, then submits the finished transaction. The two preview seed configs now also allow POST /chat/public/build, POST /transactions/convert, and POST /transactions/process through the public API. The signing endpoint POST /transactions/sign is deliberately left out so private keys are never handled by a public node. No consensus or database changes.
+
 ### 2026-06-19 - gui: show available update in system tray menu
 
 Makes the system-tray menu remember when an update has been found so the user can act on it later. The node already notifies when an approved update is available, but that notice is easy to miss or dismiss. Now every update check -- whether the automatic periodic check or a manual one from the menu -- records the result, and while an update is known to be available the menu shows a persistent "Install update" entry alongside "Check for updates". Selecting it confirms and installs as before. The tray menu is now rebuilt each time it opens so this entry appears and disappears in step with the actual update state. The new label is translated into all supported languages.
