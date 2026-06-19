@@ -1146,6 +1146,7 @@ public class ArbitraryResource {
 					   @QueryParam("tags") List<String> tags,
 					   @QueryParam("category") Category category,
 					   @QueryParam("fee") Long fee,
+					   @QueryParam("entryPoint") String entryPoint,
 					   @QueryParam("preview") Boolean preview,
 					   String path) {
 		Security.checkApiCallAllowed(request);
@@ -1155,7 +1156,7 @@ public class ArbitraryResource {
 		}
 
 		return this.upload(Service.valueOf(serviceString), name, null, path, null, null, false,
-				fee, null, title, description, tags, category, preview);
+				fee, null, title, description, tags, category, entryPoint, preview);
 	}
 
 	@POST
@@ -1193,6 +1194,7 @@ public class ArbitraryResource {
 					   @QueryParam("tags") List<String> tags,
 					   @QueryParam("category") Category category,
 					   @QueryParam("fee") Long fee,
+					   @QueryParam("entryPoint") String entryPoint,
 					   @QueryParam("preview") Boolean preview,
 					   String path) {
 		Security.checkApiCallAllowed(request);
@@ -1202,7 +1204,7 @@ public class ArbitraryResource {
 		}
 
 		return this.upload(Service.valueOf(serviceString), name, identifier, path, null, null, false,
-				fee, null, title, description, tags, category, preview);
+				fee, null, title, description, tags, category, entryPoint, preview);
 	}
 
 	@POST
@@ -1617,6 +1619,7 @@ public String finalizeUploadNoIdentifier(
     @QueryParam("category") Category category,
     @QueryParam("filename") String filename,
     @QueryParam("fee") Long fee,
+    @QueryParam("entryPoint") String entryPoint,
     @QueryParam("preview") Boolean preview,
     @QueryParam("isZip") Boolean isZip
 ) {
@@ -1701,6 +1704,7 @@ public String finalizeUploadNoIdentifier(
             description,
             tags,
             category,
+            entryPoint,
             preview
         );
 
@@ -1806,6 +1810,7 @@ public String finalizeUpload(
     @QueryParam("category") Category category,
     @QueryParam("filename") String filename,
     @QueryParam("fee") Long fee,
+    @QueryParam("entryPoint") String entryPoint,
     @QueryParam("preview") Boolean preview,
 	@QueryParam("isZip") Boolean isZip
 ) {
@@ -1895,6 +1900,7 @@ public String finalizeUpload(
             description,
             tags,
             category,
+            entryPoint,
             preview
         );
 
@@ -1971,7 +1977,7 @@ public String finalizeUpload(
 		}
 
 		return this.upload(Service.valueOf(serviceString), name, null, null, null, base64, false,
-				fee, filename, title, description, tags, category, preview);
+				fee, filename, title, description, tags, category, null, preview);
 	}
 
 	@POST
@@ -2017,7 +2023,7 @@ public String finalizeUpload(
 		}
 
 		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64, false,
-				fee, filename, title, description, tags, category, preview);
+				fee, filename, title, description, tags, category, null, preview);
 	}
 
 
@@ -2055,6 +2061,7 @@ public String finalizeUpload(
 								 @QueryParam("tags") List<String> tags,
 								 @QueryParam("category") Category category,
 								 @QueryParam("fee") Long fee,
+								 @QueryParam("entryPoint") String entryPoint,
 								 @QueryParam("preview") Boolean preview,
 								 String base64Zip) {
 		Security.checkApiCallAllowed(request);
@@ -2064,7 +2071,7 @@ public String finalizeUpload(
 		}
 
 		return this.upload(Service.valueOf(serviceString), name, null, null, null, base64Zip, true,
-				fee, null, title, description, tags, category, preview);
+				fee, null, title, description, tags, category, entryPoint, preview);
 	}
 
 	@POST
@@ -2100,6 +2107,7 @@ public String finalizeUpload(
 								 @QueryParam("tags") List<String> tags,
 								 @QueryParam("category") Category category,
 								 @QueryParam("fee") Long fee,
+								 @QueryParam("entryPoint") String entryPoint,
 								 @QueryParam("preview") Boolean preview,
 								 String base64Zip) {
 		Security.checkApiCallAllowed(request);
@@ -2109,7 +2117,7 @@ public String finalizeUpload(
 		}
 
 		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64Zip, true,
-				fee, null, title, description, tags, category, preview);
+				fee, null, title, description, tags, category, entryPoint, preview);
 	}
 
 
@@ -2160,7 +2168,7 @@ public String finalizeUpload(
 		}
 
 		return this.upload(Service.valueOf(serviceString), name, null, null, string, null, false,
-				fee, filename, title, description, tags, category, preview);
+				fee, filename, title, description, tags, category, null, preview);
 	}
 
 	@POST
@@ -2208,7 +2216,7 @@ public String finalizeUpload(
 		}
 
 		return this.upload(Service.valueOf(serviceString), name, identifier, null, string, null, false,
-				fee, filename, title, description, tags, category, preview);
+				fee, filename, title, description, tags, category, null, preview);
 	}
 
 
@@ -2351,7 +2359,7 @@ public String finalizeUpload(
 	private String upload(Service service, String name, String identifier,
 						  String path, String string, String base64, boolean zipped, Long fee, String filename,
 						  String title, String description, List<String> tags, Category category,
-						  Boolean preview) {
+						  String entryPoint, Boolean preview) {
 		// Fetch public key from registered name
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			NameData nameData = repository.getNameRepository().fromName(name);
@@ -2441,7 +2449,7 @@ public String finalizeUpload(
 			try {
 				ArbitraryDataTransactionBuilder transactionBuilder = new ArbitraryDataTransactionBuilder(
 						repository, publicKey58, fee, Paths.get(path), name, null, service, identifier,
-						title, description, tags, category
+						title, description, tags, category, entryPoint
 				);
 
 				transactionBuilder.build();
@@ -2510,6 +2518,37 @@ public String finalizeUpload(
 			LOGGER.info("Unable to build arbitrary delete transaction: {}", e.getMessage());
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, e.getMessage());
 		}
+	}
+
+	/**
+	 * Resolve which file to serve when a resource is fetched without an explicit filepath.
+	 * Order: (1) a single-file resource serves its only file; (2) a declared metadata entryPoint
+	 * that exists on disk; otherwise null (the caller then requires an explicit filepath).
+	 * An unsafe/escaping entryPoint is treated as unusable rather than aborting the request.
+	 *
+	 * @param outputPath the resource's unpacked output directory
+	 * @param files the resource's files (excluding the .qdn marker), or null
+	 * @param entryPoint the metadata-declared entry point, or null
+	 * @return the relative filepath to serve, or null if none could be resolved
+	 */
+	static String resolveDefaultFilepath(java.nio.file.Path outputPath, String[] files, String entryPoint) {
+		if (files != null && files.length == 1) {
+			// (1) Single file resource - serve it (existing behaviour)
+			return files[0];
+		}
+
+		// (2) A declared entryPoint that actually exists on disk
+		if (entryPoint != null && !entryPoint.isEmpty()) {
+			try {
+				if (Files.exists(FilesystemUtils.resolveRelativePathInsideBase(outputPath, entryPoint))) {
+					return entryPoint;
+				}
+			} catch (IOException e) {
+				// Unsafe/escaping entryPoint - treat as unusable and fall through.
+			}
+		}
+
+		return null;
 	}
 
 	private void download(Service service, String name, String identifier, String filepath, String encoding, boolean rebuild, boolean async, Integer maxAttempts, boolean attachment, String attachmentFilename) {
@@ -2594,12 +2633,27 @@ public String finalizeUpload(
 			}
 
 			if (filepath == null || filepath.isEmpty()) {
-				// No file path supplied - so check if this is a single file resource
+				// No file path supplied - resolve a default file to serve.
 				String[] files = ArrayUtils.removeElement(outputPath.toFile().list(), ".qdn");
-				if (files != null && files.length == 1) {
-					// This is a single file resource
-					filepath = files[0];
-				} else {
+
+				// Only consult metadata when it could matter (more than one file); a declared
+				// entryPoint lets a multi-file resource still resolve a default file.
+				String entryPoint = null;
+				if (!(files != null && files.length == 1)) {
+					try {
+						ArbitraryDataResource resource = new ArbitraryDataResource(name, ResourceIdType.NAME, service, identifier);
+						ArbitraryDataTransactionMetadata metadata = ArbitraryMetadataManager.getInstance().fetchMetadata(resource, true);
+						if (metadata != null) {
+							entryPoint = metadata.getEntryPoint();
+						}
+					} catch (Exception e) {
+						// Treat any failure to load metadata as 'no entryPoint available' and fall through.
+						LOGGER.debug("Unable to load metadata entryPoint for {}: {}", name, e.getMessage());
+					}
+				}
+
+				filepath = resolveDefaultFilepath(outputPath, files, entryPoint);
+				if (filepath == null || filepath.isEmpty()) {
 					throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "filepath is required for resources containing more than one file");
 				}
 			}

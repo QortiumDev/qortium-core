@@ -56,6 +56,7 @@ public class ArbitraryDataWriter {
     private final String description;
     private final List<String> tags;
     private final Category category;
+    private final String entryPoint;
     private List<String> files;
     private String mimeType;
 
@@ -71,6 +72,11 @@ public class ArbitraryDataWriter {
 
     public ArbitraryDataWriter(Path filePath, String name, Service service, String identifier, Method method, Compression compression,
                                String title, String description, List<String> tags, Category category) {
+        this(filePath, name, service, identifier, method, compression, title, description, tags, category, null);
+    }
+
+    public ArbitraryDataWriter(Path filePath, String name, Service service, String identifier, Method method, Compression compression,
+                               String title, String description, List<String> tags, Category category, String entryPoint) {
         this.filePath = filePath;
         this.name = name;
         this.service = service;
@@ -88,6 +94,14 @@ public class ArbitraryDataWriter {
         this.description = ArbitraryDataTransactionMetadata.limitDescription(description);
         this.tags = ArbitraryDataTransactionMetadata.limitTags(tags);
         this.category = category;
+
+        // entryPoint (optional). Normalize empty/blank to null and standardise path separators.
+        if (entryPoint == null || entryPoint.isBlank()) {
+            this.entryPoint = null;
+        } else {
+            this.entryPoint = entryPoint.replace('\\', '/');
+        }
+
         this.files = new ArrayList<>(); // Populated in buildFileList()
         this.mimeType = null; // Populated in buildFileList()
     }
@@ -97,6 +111,7 @@ public class ArbitraryDataWriter {
             this.preExecute();
             this.validateService();
             this.buildFileList();
+            this.validateEntryPoint();
             this.process();
             this.compress();
             this.encrypt();
@@ -218,6 +233,29 @@ public class ArbitraryDataWriter {
                 // Attempt to extract MIME type from file contents
                 this.mimeType = detectedMimeType;
             }
+        }
+    }
+
+    private void validateEntryPoint() throws DataException {
+        // entryPoint is optional. When supplied it must reference a file present in the resource's file list.
+        if (this.entryPoint == null) {
+            return;
+        }
+
+        // Compare using normalised (forward-slash) path separators, since buildFileList()
+        // may store OS-dependent separators for directory publishes.
+        boolean found = false;
+        if (this.files != null) {
+            for (String file : this.files) {
+                if (file != null && file.replace('\\', '/').equals(this.entryPoint)) {
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        if (!found) {
+            throw new DataException(String.format("entryPoint '%s' does not match any file in the resource", this.entryPoint));
         }
     }
 
@@ -361,6 +399,7 @@ public class ArbitraryDataWriter {
             metadata.setChunks(this.arbitraryDataFile.chunkHashList());
             metadata.setFiles(this.files);
             metadata.setMimeType(this.mimeType);
+            metadata.setEntryPoint(this.entryPoint);
             metadata.write();
 
             // Create an ArbitraryDataFile from the JSON file (we don't have a signature yet)
@@ -420,6 +459,9 @@ public class ArbitraryDataWriter {
             if (!Objects.equals(metadata.getCategory(), this.category)) {
                 throw new DataException("Metadata mismatch: category");
             }
+            if (!Objects.equals(metadata.getEntryPoint(), this.entryPoint)) {
+                throw new DataException("Metadata mismatch: entryPoint");
+            }
         }
     }
 
@@ -447,6 +489,9 @@ public class ArbitraryDataWriter {
             return true;
         }
         if (this.title != null || this.description != null || this.tags != null || this.category != null) {
+            return true;
+        }
+        if (this.entryPoint != null) {
             return true;
         }
         return false;

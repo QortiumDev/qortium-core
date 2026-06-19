@@ -38,8 +38,18 @@ public class ArbitraryUtils {
                                                      int chunkSize, long fee, boolean computeNonce,
                                                      String title, String description, List<String> tags, Category category) throws DataException {
 
+        return createAndMintTxn(repository, publicKey58, path, name, identifier, method, service, account,
+                chunkSize, fee, computeNonce, title, description, tags, category, null);
+    }
+
+    public static ArbitraryDataFile createAndMintTxn(Repository repository, String publicKey58, Path path, String name, String identifier,
+                                                     ArbitraryTransactionData.Method method, Service service, PrivateKeyAccount account,
+                                                     int chunkSize, long fee, boolean computeNonce,
+                                                     String title, String description, List<String> tags, Category category,
+                                                     String entryPoint) throws DataException {
+
         ArbitraryDataTransactionBuilder txnBuilder = new ArbitraryDataTransactionBuilder(
-                repository, publicKey58, fee, path, name, method, service, identifier, title, description, tags, category);
+                repository, publicKey58, fee, path, name, method, service, identifier, title, description, tags, category, entryPoint);
 
         txnBuilder.setChunkSize(chunkSize);
         txnBuilder.build();
