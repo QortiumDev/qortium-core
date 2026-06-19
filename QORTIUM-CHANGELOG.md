@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-18 - network: compare I2P peers without DNS resolution
+
+Stops peer equality checks from trying to resolve `.b32.i2p` addresses through the normal DNS/socket path. I2P peer addresses are now compared directly by their peer-address kind, host, and port, while direct IP peers keep the existing socket-address comparison. This removes noisy runtime errors during I2P peer maintenance and keeps fallback peers visible without treating I2P destinations like resolvable TCP hostnames.
+
 ### 2026-06-18 - network: harden I2P peer selection visibility
 
 Tightens I2P fallback behavior after live forced-I2P testing. The chain and data networks now skip their own advertised `.b32.i2p` destinations, avoid launching duplicate outbound I2P dials to the same peer while a previous attempt is still in progress, and log QDN/data I2P dial outcomes with the same clarity as chain dials. Connected peer API responses now include a simple `transport` field so operators can see whether each active chain or data connection is using direct IP transport or I2P without inferring it from the address string.
