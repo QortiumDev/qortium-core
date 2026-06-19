@@ -288,9 +288,14 @@ deciding factor is *who runs the node*:
 - **Completed live Core validation:** two non-seed Previewnet nodes behind NAT established
   chain and QDN/data peer connections over I2P with no port forwarding. Forced-I2P testing
   confirmed both networks can use the fallback transport end to end.
-- **Remaining integration:** repeat the two-node validation with `i2pPreferred:false` so
-  public/direct seed paths stay on TCP while non-reachable non-seed paths fall back to I2P;
-  fetch or publish a real QDN resource across the non-seed I2P data path.
+- **Completed live fallback-mode validation:** with `i2pPreferred:false`, public seed
+  connections can stay on direct TCP while non-reachable non-seed chain and data peers connect
+  over I2P. Testing also exposed direct-primary polish still needed around restart/backoff
+  windows: a seed can keep an I2P chain connection to a non-seed if the direct chain path is
+  not reacquired before outbound peer slots fill.
+- **Remaining integration:** fetch or publish a real QDN resource across the non-seed I2P
+  data path, and tighten direct-primary replacement/disconnect behavior for the restart case
+  above.
 - **Cross-NAT:** the two-machine setup from `~/reticulum-spike/CROSS-NAT-SETUP.md`, but with
   Core instead of `rncp`.
 - **Regression:** existing TCP-only tests must pass unchanged with `i2pEnabled:false`.
@@ -436,6 +441,8 @@ Do a final sync/rebase onto `main` before any PR.
   live `i2pd`, and invalid destinations fail.
 - Live Previewnet testing with forced I2P proved two non-seed nodes can establish both chain
   and QDN/data peer connections over I2P with no port forwarding.
+- Live fallback-mode testing with `i2pPreferred:false` proved the same non-seed path can stay
+  on I2P while public seed paths use direct TCP when those direct paths are active.
 - Public seed nodes keep direct TCP as the preferred path when reachable, while also
   advertising I2P destinations for fallback-capable peers.
 
@@ -449,8 +456,10 @@ and `~/.reticulum-a|-b`. Reference clones (Java RNS, qortal reticulum branch, ma
 Python) are in `~/reticulum/repos/`.
 
 **Next steps, in order:**
-1. Run the live two-node fallback validation with `i2pPreferred:false`: direct seed peers
-   should remain `IP`, while non-reachable non-seed chain and data peers should use `I2P`.
+1. Tighten direct-primary replacement after restart/backoff: if a public seed or other
+   direct-reachable peer is temporarily reached over I2P while TCP is down, the node should
+   move back to direct TCP once the IP path is eligible again, even when outbound peer slots
+   are already full.
 2. Validate real QDN usefulness over the I2P data path, not only data-peer connection setup:
    publish/fetch or otherwise retrieve a QDN resource from one non-seed node through the
    other non-seed node.
