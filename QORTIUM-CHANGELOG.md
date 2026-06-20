@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-20 - preview: fix node start on macOS bash 3.2
+
+Fixes `preview/start.sh` failing to launch the node on macOS, where the default
+`/bin/bash` is the old 3.2 release. The launcher builds optional Java argument
+lists (`nice`, headless/GUI, and JVM memory flags) as arrays, and expanded them
+with plain `"${arr[@]}"`. Under `set -u`, bash 3.2 treats expanding an empty
+array as an "unbound variable" error and aborts before starting Java; bash 4.4+
+(Linux) tolerates it, so only macOS nodes were affected. Each expansion now uses
+the `${arr[@]+"${arr[@]}"}` guard, which is empty-array safe on bash 3.2 while
+behaving identically when the arrays have values. Startup only; no node behaviour
+change.
+
 ### 2026-06-20 - release: move version to 1.1.0
 
 Bumps the project version from 1.0.0 to 1.1.0, the version the node now reports to
