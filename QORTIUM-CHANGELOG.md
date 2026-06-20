@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-20 - release: move version to 1.1.0
+
+Bumps the project version from 1.0.0 to 1.1.0, the version the node now reports to
+peers and in its API (the build version becomes `1.1.0` plus the commit, replacing
+the earlier `1.0.0` line). This is the first release to drop the `-preview` label
+from the version number; the build itself is still a Previewnet package for testers.
+The change is only the version string -- no code, consensus, or database behaviour
+changes with it.
+
 ### 2026-06-19 - review: tray confirm, render perf, and doc/test fixes
 
 Applies the fixes from a full review of the branch. The system-tray "Restart" action now asks for confirmation before shutting down and relaunching the node, matching the existing Bootstrap confirmation, so an accidental click can't restart the node. The tray "Check for updates" action no longer claims the node is up to date when the update check couldn't actually run (for example when QDN is disabled); it reports that the check failed instead. The website/app render path now skips the resource-metadata lookup for genuinely missing files (only navigation-style requests trigger it), so a missing asset returns a fast "not found". The rest are accuracy fixes: the QDN app docs now describe the new routing behaviour, the metadata endpoint path and the image-gallery extension list are corrected, and a couple of tests were tightened. No consensus or database changes.
