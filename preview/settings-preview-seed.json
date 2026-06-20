@@ -76,10 +76,14 @@
   "qdnEnabled": true,
   "relayModeEnabled": true,
   "qdnAuthBypassEnabled": true,
+  "gatewayEnabled": true,
+  "gatewayPort": 8090,
+  "gatewayLoopbackEnabled": true,
   "maxStorageCapacity": 10737418240,
   "storagePolicy": "ALL",
   "initialPeers": [
-    "185.207.104.78:24892"
+    "185.207.104.78:24892",
+    "zqcackxkhjzfbbc6daigc73zqhzdpgwua3mjc7xgn3hwjed5z3ca.b32.i2p"
   ],
   "uiLocalServers": [
     "localhost",
