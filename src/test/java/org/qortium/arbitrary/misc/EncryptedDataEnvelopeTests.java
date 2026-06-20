@@ -24,7 +24,7 @@ public class EncryptedDataEnvelopeTests {
 
     private static byte[] validSingleRecipientEnvelope() {
         // single-recipient header = ephemeral pubkey(32) + nonce(12) = 44, plus some ciphertext
-        return envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_SINGLE_RECIPIENT,
+        return envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_RECIPIENTS,
                 EncryptedDataEnvelope.CIPHER_AES_256_GCM, 44, 64);
     }
 
@@ -53,7 +53,7 @@ public class EncryptedDataEnvelopeTests {
 
     @Test
     public void rejectsUnknownVersion() {
-        byte[] data = envelope((byte) 0x02, EncryptedDataEnvelope.MODE_SINGLE_RECIPIENT,
+        byte[] data = envelope((byte) 0x02, EncryptedDataEnvelope.MODE_RECIPIENTS,
                 EncryptedDataEnvelope.CIPHER_AES_256_GCM, 44, 64);
         assertFalse(EncryptedDataEnvelope.isEnvelope(data));
     }
@@ -67,14 +67,14 @@ public class EncryptedDataEnvelopeTests {
 
     @Test
     public void rejectsUnknownCipher() {
-        byte[] data = envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_SINGLE_RECIPIENT,
+        byte[] data = envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_RECIPIENTS,
                 (byte) 0x09, 44, 64);
         assertFalse(EncryptedDataEnvelope.isEnvelope(data));
     }
 
     @Test
     public void rejectsZeroHeaderLength() {
-        byte[] data = envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_SINGLE_RECIPIENT,
+        byte[] data = envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_RECIPIENTS,
                 EncryptedDataEnvelope.CIPHER_AES_256_GCM, 0, 64);
         assertFalse(EncryptedDataEnvelope.isEnvelope(data));
     }
@@ -82,7 +82,7 @@ public class EncryptedDataEnvelopeTests {
     @Test
     public void rejectsHeaderLongerThanData() {
         // Declare a header far larger than the actual bytes present
-        byte[] data = envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_SINGLE_RECIPIENT,
+        byte[] data = envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_RECIPIENTS,
                 EncryptedDataEnvelope.CIPHER_AES_256_GCM, 44, 0);
         // headerLen=44 but no header/ciphertext bytes actually present beyond the fixed header
         assertFalse(EncryptedDataEnvelope.isEnvelope(data));
@@ -91,7 +91,7 @@ public class EncryptedDataEnvelopeTests {
     @Test
     public void rejectsEnvelopeWithNoCiphertext() {
         // Exactly fixed header + header, but no ciphertext byte
-        byte[] data = envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_SINGLE_RECIPIENT,
+        byte[] data = envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_RECIPIENTS,
                 EncryptedDataEnvelope.CIPHER_AES_256_GCM, 44, 0);
         assertFalse(EncryptedDataEnvelope.isEnvelope(data));
     }

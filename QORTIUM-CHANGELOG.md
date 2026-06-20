@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - qdn: define publisher/accounts/group encryption modes
+
+Fleshes out the private-resource encryption envelope so client apps can implement it. A private resource is encrypted for one of three audiences: publisher (only the publishing account can read it), accounts (a chosen set of accounts by public key), or group (members of a Qortium group). Publisher and accounts share one mechanism -- a content key wrapped to each recipient's key -- so the envelope has two wire modes (recipients and group). The documentation now fully specifies the byte layout for each mode, how multi-file private resources are handled (encrypt the whole archive as one blob), what the node validates versus what stays a client agreement, and includes client pseudocode. Encryption and decryption remain entirely client-side; the node never holds keys. No consensus or database changes.
+
 ### 2026-06-19 - qdn: stronger encryption check for private resources
 
 Replaces the weak "does the data start with a text marker" check for private QDN resources with a structured encrypted-data envelope that Core can actually validate the shape of. When a private resource is published, Core now accepts either the new v1 envelope (a compact binary header that clients place in front of the ciphertext, identifying the encryption mode and cipher) or the original text prefix, and rejects anything that is neither -- so an app that accidentally tries to publish unencrypted data as "private" is stopped, instead of slipping through because it happened to start with the right characters. Core still never holds the decryption key (encryption stays client-side), so it validates the envelope's structure rather than decrypting; the format and a client implementation guide are documented in docs/qdn/encrypted-data-envelope.md. This is a publish/read-time check only, with no consensus or database changes, and existing resources using the old prefix continue to work.
