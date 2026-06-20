@@ -91,16 +91,30 @@ QCHAT_AUDIO,
 QCHAT_VOICE
 
 ### Private services ###
-For the services below, data is encrypted for a single recipient, and can only be decrypted using the private key of the recipient's wallet.
+For the services below, data is encrypted **entirely client-side** before publishing — the
+node never holds the key. A private resource can be encrypted for one of three audiences:
+the **publisher** (only the publishing account), specific **accounts** (chosen public keys),
+or a **group** (Qortium group members). See
+[encrypted-data-envelope.md](encrypted-data-envelope.md) for the encryption format and
+[multi-file-resources.md](multi-file-resources.md) for how multi-file private resources are
+published (as one encrypted archive) and consumed.
 
 QCHAT_ATTACHMENT_PRIVATE,
 ATTACHMENT_PRIVATE,
 FILE_PRIVATE,
+FILES_PRIVATE,
+WEBSITE_PRIVATE,
+GIT_REPOSITORY_PRIVATE,
 IMAGE_PRIVATE,
+IMAGE_GALLERY_PRIVATE,
 VIDEO_PRIVATE,
 AUDIO_PRIVATE,
 VOICE_PRIVATE,
+BLOG_PRIVATE,
 DOCUMENT_PRIVATE,
+APP_PRIVATE,
+DATABASE_PRIVATE,
+SNAPSHOT_PRIVATE,
 MAIL_PRIVATE,
 MESSAGE_PRIVATE
 

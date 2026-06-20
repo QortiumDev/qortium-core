@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - docs: client guide for multi-file and private resources
+
+Adds a developer guide for app authors covering everything in the recent QDN work: which services are multi-file, the optional entry point and how to set and read it, how the node picks a default file when none is named, how rendering and single-page-app routing behave, and how private resources are published as one encrypted archive and consumed (the app decrypts and handles file paths itself). It also writes down the parts that are deliberately the app's job rather than the node's -- the upload experience, handling the multi-file fetch case, and pairing sidecar files like subtitles to a video. The existing QDN app docs were updated to list all current private service types and point to the new guide and the encryption format. Documentation only.
+
 ### 2026-06-19 - qdn: add private variants for more resource types
 
 Adds private (encrypted) versions of eight more resource types that didn't have one: apps, websites, blogs, file collections, image galleries, code repositories, database snapshots, and databases. A private resource is published as a single client-encrypted blob (the whole resource encrypted as one archive), so these are validated the same way as the other private types -- they must carry the encryption envelope, and publishing unencrypted data to them is rejected. This fills obvious gaps (for example file collections and image galleries could be published privately as single files but not as collections, and there was no private app/website/repo/backup type at all). The new types are additive and client-side only -- no consensus or database changes -- and the content is encrypted and decrypted entirely by the client, never by the node.
