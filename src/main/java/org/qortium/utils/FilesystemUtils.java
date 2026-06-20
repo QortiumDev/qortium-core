@@ -210,6 +210,23 @@ public class FilesystemUtils {
         return child.toAbsolutePath().normalize().startsWith(parent.toAbsolutePath().normalize());
     }
 
+    /**
+     * Returns true if {@code candidate}'s canonical path is contained within (or equal to)
+     * {@code base}'s canonical path. Unlike {@link #isChild(Path, Path)} this canonicalizes both
+     * paths, so it resolves symlinks and {@code ..} segments. Use it as a path-traversal /
+     * symlink-escape guard before performing filesystem operations on enumerated child entries
+     * (e.g. iterating a directory's listFiles()).
+     */
+    public static boolean isWithinCanonical(File base, File candidate) throws IOException {
+        if (base == null || candidate == null) {
+            return false;
+        }
+        String basePath = base.getCanonicalPath();
+        String candidatePath = candidate.getCanonicalPath();
+        return candidatePath.equals(basePath)
+                || candidatePath.startsWith(basePath + File.separator);
+    }
+
     public static Path safeRelativePath(Path path) throws IOException {
         if (path == null) {
             throw new IOException("Path is null");

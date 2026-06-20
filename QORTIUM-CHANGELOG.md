@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-20 - qdn: harden directory scans against path traversal
+
+Adds defensive path checks to the two places that walk a resource's files on disk: the image-gallery / GIF-repository content validators, and the multi-file zip packer used when publishing. Each now resolves the resource's own folder to a single canonical location and confirms every file it looks at really lives inside that folder before touching it; anything that resolves elsewhere (for example a symlink pointing outside the folder) is rejected by the validators and skipped by the packer. This is defense-in-depth -- these paths were already reachable only by the authenticated local publisher and extracted content was already confined -- but it makes the safety explicit and resolves three static-analysis (CodeQL) path-injection alerts that the previous inline code comment could not suppress. A shared helper and unit tests for the containment check (including a symlink-escape case) were added. No consensus, API, or database changes.
+
 ### 2026-06-19 - review: tray confirm, render perf, and doc/test fixes
 
 Applies the fixes from a full review of the branch. The system-tray "Restart" action now asks for confirmation before shutting down and relaunching the node, matching the existing Bootstrap confirmation, so an accidental click can't restart the node. The tray "Check for updates" action no longer claims the node is up to date when the update check couldn't actually run (for example when QDN is disabled); it reports that the check failed instead. The website/app render path now skips the resource-metadata lookup for genuinely missing files (only navigation-style requests trigger it), so a missing asset returns a fast "not found". The rest are accuracy fixes: the QDN app docs now describe the new routing behaviour, the metadata endpoint path and the image-gallery extension list are corrected, and a couple of tests were tightened. No consensus or database changes.

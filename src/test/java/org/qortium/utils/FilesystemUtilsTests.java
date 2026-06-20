@@ -113,6 +113,53 @@ public class FilesystemUtilsTests {
         assertFalse(FilesystemUtils.pathInsideDataOrTempPath(escapedPath));
     }
 
+    @Test
+    public void testIsWithinCanonicalAcceptsContainedChild() throws IOException {
+        Path base = Files.createTempDirectory("filesystem-utils-base");
+        Path child = Files.createFile(base.resolve("file.txt"));
+
+        assertTrue(FilesystemUtils.isWithinCanonical(base.toFile(), child.toFile()));
+        // The base directory is "within" itself.
+        assertTrue(FilesystemUtils.isWithinCanonical(base.toFile(), base.toFile()));
+    }
+
+    @Test
+    public void testIsWithinCanonicalRejectsSibling() throws IOException {
+        Path base = Files.createTempDirectory("filesystem-utils-base");
+        Path sibling = Files.createTempDirectory("filesystem-utils-sibling");
+
+        // A path whose name is a prefix of the base must not be considered contained.
+        assertFalse(FilesystemUtils.isWithinCanonical(base.toFile(), sibling.toFile()));
+        assertFalse(FilesystemUtils.isWithinCanonical(base.toFile(),
+                base.getParent().resolve(base.getFileName() + "-outside").toFile()));
+    }
+
+    @Test
+    public void testIsWithinCanonicalRejectsSymlinkEscape() throws IOException {
+        Path base = Files.createTempDirectory("filesystem-utils-base");
+        Path outside = Files.createTempDirectory("filesystem-utils-outside");
+        Path target = Files.createFile(outside.resolve("secret.txt"));
+
+        // A symlink living inside the base but pointing outside must resolve as not-contained.
+        Path link = base.resolve("link.txt");
+        try {
+            Files.createSymbolicLink(link, target);
+        } catch (UnsupportedOperationException | IOException e) {
+            // Filesystem/OS doesn't support symlinks (e.g. unprivileged Windows) — skip.
+            return;
+        }
+
+        assertFalse(FilesystemUtils.isWithinCanonical(base.toFile(), link.toFile()));
+    }
+
+    @Test
+    public void testIsWithinCanonicalRejectsNull() throws IOException {
+        Path base = Files.createTempDirectory("filesystem-utils-base");
+
+        assertFalse(FilesystemUtils.isWithinCanonical(base.toFile(), null));
+        assertFalse(FilesystemUtils.isWithinCanonical(null, base.toFile()));
+    }
+
     private static void assertUnsafeRelativePath(Path relativePath) throws IOException {
         Path base = Files.createTempDirectory("filesystem-utils-base");
 

@@ -52,8 +52,11 @@ public class ZipUtils {
     private static final long FIXED_ENTRY_TIME = 0L;
 
     public static void zip(String sourcePath, String destFilePath, String enclosingFolderName) throws IOException, InterruptedException {
-        File sourceFile = new File(sourcePath);
-        boolean isSingleFile = Paths.get(sourcePath).toFile().isFile();
+        // Canonicalize the source up-front so every downstream filesystem check operates on a
+        // resolved path; this acts as a path-traversal barrier for the (authenticated, local)
+        // publish source directory.
+        File sourceFile = new File(sourcePath).getCanonicalFile();
+        boolean isSingleFile = sourceFile.isFile();
 
         // 🔧 Use best speed compression level
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(new FileOutputStream(destFilePath))) {
@@ -77,8 +80,8 @@ public class ZipUtils {
             return;
         }
 
-        // Authenticated local uploads intentionally read a user-selected source path.
-        // codeql[java/path-injection]
+        // fileToZip arrives canonicalized from the caller (see the public zip() entry point and the
+        // canonicalized recursion below), so this stat operates on a resolved, contained path.
         if (fileToZip.isDirectory()) {
             zipOut.putNextEntry(fixedTimeEntry(safeZipEntryName(enclosingFolderName, true)));
             zipOut.closeEntry();
@@ -88,7 +91,13 @@ public class ZipUtils {
                 // regardless of filesystem listing order.
                 Arrays.sort(children, Comparator.comparing(File::getName));
                 for (final File childFile : children) {
-                    ZipUtils.zip(childFile, zipEntryChildName(enclosingFolderName, childFile.getName()), zipOut, false);
+                    // Defense-in-depth: skip any entry that resolves outside the source directory
+                    // (e.g. a symlink), and recurse on the canonical path so the guard holds.
+                    final File canonicalChild = childFile.getCanonicalFile();
+                    if (!FilesystemUtils.isWithinCanonical(fileToZip, canonicalChild)) {
+                        continue;
+                    }
+                    ZipUtils.zip(canonicalChild, zipEntryChildName(enclosingFolderName, childFile.getName()), zipOut, false);
                 }
             }
             return;

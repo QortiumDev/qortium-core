@@ -106,15 +106,23 @@ public enum Service {
             // Custom validation function to require image files only, and at least 1
             final List<String> allowedExtensions = Arrays.asList("png", "jpg", "jpeg", "gif", "webp", "bmp", "avif", "tif", "tiff");
             int imageCount = 0;
-            File[] files = path.toFile().listFiles();
+            // Canonicalize the resource path up-front; all subsequent filesystem checks operate on
+            // this canonical base, which acts as a path-traversal barrier for the validator.
+            final File baseDir = path.toFile().getCanonicalFile();
+            File[] files = baseDir.listFiles();
             // If already a single file, replace the list with one that contains that file only
-            if (files == null && path.toFile().isFile()) {
-                files = new File[] { path.toFile() };
+            if (files == null && baseDir.isFile()) {
+                files = new File[] { baseDir };
             }
             if (files != null) {
                 for (File file : files) {
                     if (file.getName().equals(".qdn")) {
                         continue;
+                    }
+                    // Defense-in-depth: reject any entry that resolves outside the resource
+                    // directory (e.g. a symlink), so we never stat an attacker-chosen path.
+                    if (!FilesystemUtils.isWithinCanonical(baseDir, file)) {
+                        return ValidationResult.INVALID_CONTENT;
                     }
                     if (file.isDirectory()) {
                         return ValidationResult.DIRECTORIES_NOT_ALLOWED;
@@ -182,15 +190,23 @@ public enum Service {
 
             // Custom validation function to require .gif files only, and at least 1
             int gifCount = 0;
-            File[] files = path.toFile().listFiles();
+            // Canonicalize the resource path up-front; all subsequent filesystem checks operate on
+            // this canonical base, which acts as a path-traversal barrier for the validator.
+            final File baseDir = path.toFile().getCanonicalFile();
+            File[] files = baseDir.listFiles();
             // If already a single file, replace the list with one that contains that file only
-            if (files == null && path.toFile().isFile()) {
-                files = new File[] { path.toFile() };
+            if (files == null && baseDir.isFile()) {
+                files = new File[] { baseDir };
             }
             if (files != null) {
                 for (File file : files) {
                     if (file.getName().equals(".qdn")) {
                         continue;
+                    }
+                    // Defense-in-depth: reject any entry that resolves outside the resource
+                    // directory (e.g. a symlink), so we never stat an attacker-chosen path.
+                    if (!FilesystemUtils.isWithinCanonical(baseDir, file)) {
+                        return ValidationResult.INVALID_CONTENT;
                     }
                     if (file.isDirectory()) {
                         return ValidationResult.DIRECTORIES_NOT_ALLOWED;
