@@ -36,7 +36,7 @@ public class NetworkI2PTests extends Common {
 	@Before
 	public void before() throws Exception {
 		Common.useDefaultSettings();
-		FieldUtils.writeField(Settings.getInstance(), "i2pEnabled", true, true);
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP", "I2P"), true);
 		clearNetworkPeerState();
 	}
 
@@ -59,7 +59,7 @@ public class NetworkI2PTests extends Common {
 
 	@Test
 	public void testSkipsI2PChainCapabilityWhenI2PDisabled() throws Exception {
-		FieldUtils.writeField(Settings.getInstance(), "i2pEnabled", false, true);
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP"), true);
 		Map<String, Object> capabilities = new HashMap<>();
 		capabilities.put(Handshake.I2P_CAPABILITY, B32);
 
@@ -262,7 +262,7 @@ public class NetworkI2PTests extends Common {
 
 	@Test
 	public void testPreferredI2PSelectsI2PChainPeerWhenSessionIsUp() throws Exception {
-		FieldUtils.writeField(Settings.getInstance(), "i2pPreferred", true, true);
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P", "IP"), true);
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
@@ -275,7 +275,7 @@ public class NetworkI2PTests extends Common {
 
 	@Test
 	public void testPreferredI2PSkipsChainPeerAlreadyConnecting() throws Exception {
-		FieldUtils.writeField(Settings.getInstance(), "i2pPreferred", true, true);
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P", "IP"), true);
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
 		PeerAddress i2pAddress = PeerAddress.fromString(B32);
 		getMutableKnownPeers().add(new PeerData(PeerAddress.fromString("198.51.100.10:24892"), 100L, "test"));

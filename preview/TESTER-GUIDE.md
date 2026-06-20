@@ -25,7 +25,7 @@ For the source-build path:
 Preview builds that include I2P fallback can reach other I2P-capable nodes even
 when neither side has inbound router or firewall ports open. Direct TCP remains
 the primary transport; I2P is used only when there is no direct path, unless a
-tester explicitly enables the `i2pPreferred` setting.
+tester orders `allowedTransports` to prefer I2P (e.g. `["I2P","IP"]`).
 
 The current preview package does not bundle an I2P router. To test I2P fallback,
 install and start `i2pd` before starting Qortium Core, and make sure the SAM

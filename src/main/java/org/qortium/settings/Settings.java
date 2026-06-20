@@ -70,6 +70,12 @@ public class Settings {
 		INSTALL
 	}
 
+	/** Network transports a node may use, in preference order (see {@code allowedTransports}). TOR reserved for later. */
+	public enum Transport {
+		IP,
+		I2P
+	}
+
 	// New in v5.1.0 - Dedicated Ports for Data Flows; NetworkData Class
 	private static final int MAINNET_QDN_LISTEN_PORT = 14894;
 	private static final int TESTNET_QDN_LISTEN_PORT = 24894;
@@ -297,10 +303,19 @@ public class Settings {
 	/** Maximum time (in seconds) that a peer should remain connected when requesting QDN data */
 	private int maxDataPeerConnectionTime = 30 * 60; // seconds
 
-	/** Whether to bring up I2P fallback transports where supported. */
-	private boolean i2pEnabled = true;
-	/** Whether to prefer I2P even when a direct IP path is available. Useful for testing. */
-	private boolean i2pPreferred = false;
+	/**
+	 * Ordered list of allowed network transports. Presence = enabled, order = preference (first =
+	 * preferred). A single element means that transport only — e.g. {@code [I2P]} is I2P-only (no
+	 * direct TCP at all: not bound, advertised, or dialled), {@code [IP]} is TCP-only. When absent
+	 * (null) the effective default is [IP, I2P] — see {@link #getAllowedTransports()}. Left null so
+	 * MOXy replaces rather than appends to a pre-populated list when unmarshalling JSON.
+	 * <p>
+	 * Bound as raw Strings (not {@code List<Transport>}) deliberately: MOXy silently DROPS unknown
+	 * enum constants when binding a {@code List<enum>}, so a typo like {@code "TOR"} would quietly
+	 * disable a real transport. Keeping the raw names lets {@link #validate()} reject unknown/empty/
+	 * duplicate values with a clear error and normalise case identically to the writable PATCH path.
+	 */
+	private List<String> allowedTransports = null;
 	/** SAM bridge host for the initial external-i2pd provider. */
 	private String i2pSamHost = "127.0.0.1";
 	/** SAM bridge port for the initial external-i2pd provider. */
@@ -925,7 +940,8 @@ public class Settings {
 		BOOLEAN_MAP,
 		BITCOINY_SERVERS,
 		PIRATE_CHAIN_NET,
-		STORAGE_POLICY
+		STORAGE_POLICY,
+		ALLOWED_TRANSPORTS
 	}
 
 	@XmlTransient
@@ -964,8 +980,7 @@ public class Settings {
 		settings.put("autoRestartEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("bootstrapHosts", new WritableSetting(WritableSettingType.STRING_ARRAY, false));
 		settings.put("qdnEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
-		settings.put("i2pEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
-		settings.put("i2pPreferred", new WritableSetting(WritableSettingType.BOOLEAN, false)); // read live; no restart needed
+		settings.put("allowedTransports", new WritableSetting(WritableSettingType.ALLOWED_TRANSPORTS, true)); // changes binding/advertisement -> restart
 		settings.put("i2pSamHost", new WritableSetting(WritableSettingType.STRING, true));
 		settings.put("i2pSamPort", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("i2pChainKeyFile", new WritableSetting(WritableSettingType.STRING, true));
@@ -1308,6 +1323,9 @@ public class Settings {
 				StoragePolicy.valueOf((String) value);
 				return value;
 
+			case ALLOWED_TRANSPORTS:
+				return validateAllowedTransportsSetting(settingName, value);
+
 			default:
 				throw new IllegalArgumentException("Unsupported writable setting type: " + writableSetting.type);
 		}
@@ -1321,6 +1339,30 @@ public class Settings {
 			if (!(entry instanceof String))
 				throw new IllegalArgumentException("Setting array must contain strings only: " + settingName);
 		}
+	}
+
+	/** Validates/normalises the writable {@code allowedTransports} list into canonical uppercase transport names. */
+	private static Object validateAllowedTransportsSetting(String settingName, Object value) {
+		if (!(value instanceof List<?>) || ((List<?>) value).isEmpty())
+			throw new IllegalArgumentException("Setting must be a non-empty array of transports ("
+					+ EnumUtils.getNames(Transport.class, ", ") + "): " + settingName);
+
+		List<String> normalized = new ArrayList<>();
+		for (Object entry : (List<?>) value) {
+			if (!(entry instanceof String))
+				throw new IllegalArgumentException("Setting array must contain transport names only: " + settingName);
+			String name;
+			try {
+				name = Transport.valueOf(((String) entry).trim().toUpperCase(Locale.ROOT)).name();
+			} catch (IllegalArgumentException e) {
+				throw new IllegalArgumentException(settingName + " must contain only: "
+						+ EnumUtils.getNames(Transport.class, ", "));
+			}
+			if (normalized.contains(name))
+				throw new IllegalArgumentException(settingName + " must not contain duplicate transports: " + name);
+			normalized.add(name);
+		}
+		return normalized;
 	}
 
 	private static void validateMapSetting(String settingName, Object value, Class<?> valueClass) {
@@ -1394,6 +1436,26 @@ public class Settings {
 			} catch (IllegalArgumentException ex) {
 				String possibleValues = EnumUtils.getNames(org.qortium.crypto.ElectrumSSLSocketFactory.TrustMode.class, ", ");
 				throwValidationError(String.format("electrumTlsTrustMode must be one of: %s", possibleValues));
+			}
+		}
+
+		if (this.allowedTransports != null) {
+			if (this.allowedTransports.isEmpty())
+				throwValidationError("allowedTransports must contain at least one of: "
+						+ EnumUtils.getNames(Transport.class, ", "));
+
+			List<String> seen = new ArrayList<>();
+			for (String name : this.allowedTransports) {
+				String canonical = null;
+				try {
+					canonical = Transport.valueOf(name.trim().toUpperCase(Locale.ROOT)).name();
+				} catch (RuntimeException ex) {
+					throwValidationError("allowedTransports must contain only: "
+							+ EnumUtils.getNames(Transport.class, ", ") + " (got: " + name + ")");
+				}
+				if (seen.contains(canonical))
+					throwValidationError("allowedTransports must not contain duplicate transports: " + canonical);
+				seen.add(canonical);
 			}
 		}
 
@@ -1783,12 +1845,45 @@ public class Settings {
 		return this.maxDataPeers;
 	}
 
-	public boolean isI2PEnabled() {
-		return this.i2pEnabled;
+	/** @return the configured transports in preference order (never null/empty; defaults to [IP, I2P]). */
+	public List<Transport> getAllowedTransports() {
+		if (this.allowedTransports == null || this.allowedTransports.isEmpty())
+			return List.of(Transport.IP, Transport.I2P);
+
+		// Names are validated/normalised at load (validate) and on the writable path; parse defensively.
+		List<Transport> result = new ArrayList<>(this.allowedTransports.size());
+		for (String name : this.allowedTransports)
+			result.add(Transport.valueOf(name.trim().toUpperCase(Locale.ROOT)));
+		return result;
 	}
 
+	/** @return true if direct IP (TCP) transport is allowed (so the node may bind/advertise/dial direct). */
+	public boolean isIPAllowed() {
+		return getAllowedTransports().contains(Transport.IP);
+	}
+
+	/** Alias for {@link #isIPAllowed()}. */
+	public boolean isDirectAllowed() {
+		return isIPAllowed();
+	}
+
+	public boolean isI2PEnabled() {
+		return getAllowedTransports().contains(Transport.I2P);
+	}
+
+	/** @return true if I2P is allowed and preferred over direct IP (I2P listed before IP, or IP not allowed). */
 	public boolean isI2PPreferred() {
-		return this.i2pPreferred;
+		List<Transport> transports = getAllowedTransports();
+		if (!transports.contains(Transport.I2P))
+			return false;
+		int i2p = transports.indexOf(Transport.I2P);
+		int ip = transports.indexOf(Transport.IP);
+		return ip < 0 || i2p < ip;
+	}
+
+	/** @return true if only I2P is allowed (I2P enabled and direct IP disallowed). */
+	public boolean isI2POnly() {
+		return isI2PEnabled() && !isIPAllowed();
 	}
 
 	public String getI2PSamHost() {
