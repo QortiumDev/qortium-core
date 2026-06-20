@@ -34,6 +34,31 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-20 - preview: point I2P initialPeers at regxa's chain destination
+
+Corrects the i2p address used to reach the regxa seed over I2P. The earlier change
+listed regxa's QDN/data destination by mistake, but the chain network and the data
+network each have their own separate i2p destination, and the entry in `initialPeers`
+must be the **chain** one. This swaps regxa's i2p initial-peer address from its data
+destination (`hg3seiuul…`) to its chain destination (`3u25ana5…`) in the netcup seed
+profile and the non-seed preview profile, so nodes that fall back to i2p actually find
+the regxa chain node instead of looking in the wrong place. Configuration only.
+
+### 2026-06-20 - network: fix I2P LeaseSet publication (SAM session recreate churn)
+
+Fixes a bug that could leave a node unreachable over i2p even though i2p looked
+"up". I2P only lets other people reach you after your router publishes a *LeaseSet*
+(a signed set of inbound tunnels). When Core tore down its i2p session and immediately
+re-opened one for the same saved i2p identity, the i2p router (`i2pd`) had not yet
+finished releasing the old identity, so it handed back a hollow session that built no
+inbound tunnels and published no LeaseSet — leaving the node silently unreachable while
+appearing connected, and the repeated quick retries kept it stuck. The fix makes Core
+wait out a short per-identity cooldown before re-opening a session for the same i2p
+destination, and detect the hollow case (a session that comes back almost instantly,
+which a real one never does) and rebuild it properly after the cooldown. With this,
+nodes reliably publish their LeaseSet and become reachable over i2p, including i2p-only
+nodes bootstrapping from the seeds. No consensus or database behaviour changes.
+
 ### 2026-06-20 - preview: enable seed gateway and add i2p initial peers
 
 Two preview-network configuration changes for the seed nodes. First, both shared

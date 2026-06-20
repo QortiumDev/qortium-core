@@ -537,3 +537,66 @@ Python) are in `~/reticulum/repos/`.
 **Gotchas:** `pkill -f <pattern>` matches the running shell when the pattern is in its own
 command line (kill by filtered `ps` instead). i2pd must be `active` for any I2P test —
 check the console `Routers` is in the hundreds. SAM stream ops are slow on a cold router.
+
+## 14. Production fix: SAM session recreate churn / LeaseSet publication (2026-06-20)
+
+**Symptom.** I2P-only nodes (and freshly (re)started nodes) could sit at zero I2P
+connections despite the SAM session reporting "up". Remote nodes dialing such a node
+got `STREAM STATUS RESULT=CANT_REACH_PEER` with `LeaseSet not found`: the node was not
+publishing a LeaseSet, so nothing could reach it inbound over I2P. Self-bootstrap from
+the seeds over I2P therefore failed even though everything looked configured correctly.
+
+**Root cause — recreate churn against a not-yet-released destination.** `SamSession.close()`
+drops the SAM control socket, but `i2pd` takes tens of seconds to actually tear down and
+release that destination's tunnels. If Core opened a *new* SAM session for the **same
+persisted destination** during that window (any teardown→recreate cycle: retry, restart
+shortly after stop, etc.), `i2pd` attached the new session to the dying destination,
+built **no** inbound tunnels, and published **no** LeaseSet — yet returned
+`SESSION STATUS RESULT=OK` immediately. Because the session looked OK, Core kept using
+it, kept failing, and kept recreating — a self-sustaining churn (~21 recreates in one
+observed run) that never published a LeaseSet.
+
+This was confirmed live with a standalone SAM probe against the same `i2pd`, using a
+freshly generated throwaway destination (never touching Core's keys):
+
+- **A — first `SESSION CREATE`:** ~30–50 s (real tunnel build); destination appears in
+  i2pd's local destinations with established inbound tunnels → **published**.
+- **B — `close(A)` then immediate recreate of the same destination:** `SESSION CREATE`
+  returns in ~0 s; destination is **absent** from local destinations, no inbound
+  section → **not published** (the zombie).
+- **C — wait a cooldown (75 s) then recreate:** ~30–50 s again, established inbound
+  tunnels → **published** once more.
+
+So a real session build is always slow (it must build tunnels); a near-instant
+`SESSION CREATE OK` for a persisted destination is the tell-tale of a zombie attach.
+
+**Fix (`SamSession.java`).** Two cooperating guards, both keyed by the destination's key
+file so the chain and data destinations are tracked independently:
+
+1. **Per-destination recreate cooldown.** Before `SESSION CREATE`, wait out
+   `DESTINATION_REUSE_COOLDOWN_MS` (90 s) since that destination's last teardown, so
+   `i2pd` has fully released it and a fresh create builds real tunnels and publishes.
+   `close()` records the teardown timestamp (only when it actually held the control
+   channel).
+2. **Zombie detection by timing.** Time the `SESSION CREATE`. A real build never returns
+   in under `MIN_REAL_SESSION_BUILD_MS` (5 s); a faster "OK" is treated as a failed,
+   unpublished setup — Core throws so the caller rebuilds, then the cooldown ensures the
+   rebuild waits for the destination to release. This second guard also **self-heals the
+   restart case**: the cooldown map lives in the JVM, so after a process restart it
+   starts empty and the cooldown alone can't catch a too-soon recreate — but the timing
+   check still flags the instant-OK zombie and forces a proper rebuild.
+
+The SAM-level `SESSION REMOVE` approach was considered and dropped: it is not valid SAM v3
+for these non-primary sessions, and the cooldown + timing guards address the cause directly.
+
+**Validation.** After the patch, a node reliably published its LeaseSet (observed inbound
+tunnels climbing 5 → 8 → 10), a remote `STREAM CONNECT` returned `RESULT=OK`, and the
+**I2P-only local node bootstrapped from the seeds over I2P and reached SYNCED** — the
+end-to-end goal that the churn had been blocking. This also closes the practical side of
+F1 ("cold seed LeaseSet"): the seeds now keep a published LeaseSet, so NAT'd nodes can
+fall back to them over I2P.
+
+**Rollout lesson.** Do not build Core on a low-RAM seed: a Maven build there OOM-killed the
+host's `i2pd` (taking I2P down mid-rollout). Build the jar elsewhere and copy it to the
+seed, or skip the copy entirely when the change is config-only and the jar is functionally
+identical.
