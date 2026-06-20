@@ -10,8 +10,10 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.util.Base64;
@@ -43,12 +45,16 @@ public class SamSession implements I2PStreamProvider {
     private static final Pattern TOKEN = Pattern.compile("(\\S+?)=(\\S+)");
     private static final Pattern SESSION_ID = Pattern.compile("[A-Za-z0-9._~-]+");
     private static final Pattern B32_DESTINATION = Pattern.compile("[a-z2-7]{52}\\.b32\\.i2p", Pattern.CASE_INSENSITIVE);
+    /** I2P base64 key/destination charset (standard base64 with -/~ for +//, optional = padding). */
+    private static final Pattern I2P_KEY_TOKEN = Pattern.compile("[A-Za-z0-9~=-]+");
 
     /** TCP/SAM HELLO should be immediate on a healthy local router. */
     private static final int SAM_CONNECT_TIMEOUT_MS = 5_000;
     private static final int SAM_REPLY_TIMEOUT_MS = 10_000;
     /** Tunnel build / lease lookup can be slow; allow plenty of time for session & stream setup. */
     private static final int SETUP_TIMEOUT_MS = 120_000;
+    /** SAM control/forward lines are short by spec; cap reads so a misbehaving peer can't exhaust memory. */
+    private static final int MAX_LINE_LENGTH = 8192;
 
     private final String samHost;
     private final int samPort;
@@ -188,6 +194,7 @@ public class SamSession implements I2PStreamProvider {
     @Override
     public synchronized void close() {
         sessionUp.set(false);
+        localB32 = null;
         if (controlReader != null)
             controlReader.interrupt();
         closeQuietly(forwardChannel);
@@ -217,9 +224,11 @@ public class SamSession implements I2PStreamProvider {
                 if (l.startsWith("PUB=")) pub = l.substring(4).trim();
                 else if (l.startsWith("PRIV=")) priv = l.substring(5).trim();
             }
-            if (pub != null && priv != null)
+            // Validate before trusting: a malformed/tampered file must not feed stray tokens into the
+            // SAM control line (SESSION CREATE ... DESTINATION=<priv>). Treat invalid as unreadable.
+            if (isValidKeyToken(pub) && isValidKeyToken(priv))
                 return new String[]{pub, priv};
-            LOGGER.warn("I2P key file {} unreadable; regenerating", keyFile);
+            LOGGER.warn("I2P key file {} missing or malformed; regenerating", keyFile);
         }
 
         sendLine(out, "DEST GENERATE SIGNATURE_TYPE=7"); // 7 = EdDSA-SHA512-Ed25519
@@ -229,19 +238,56 @@ public class SamSession implements I2PStreamProvider {
         if (pub == null || priv == null)
             throw new IOException("SAM DEST GENERATE failed: " + reply);
 
+        persistKeys(pub, priv);
+        return new String[]{pub, priv};
+    }
+
+    /** @return true if {@code s} is a well-formed I2P base64 key token (no whitespace / control chars). */
+    static boolean isValidKeyToken(String s) {
+        return s != null && I2P_KEY_TOKEN.matcher(s).matches();
+    }
+
+    /**
+     * Persist the destination keys with restrictive permissions and no broad-perms window: a temp file
+     * is created and chmod'd to {@code rw-------} <em>before</em> the secret bytes are written, then
+     * atomically moved into place. The containing directory is restricted too. Best effort on non-POSIX
+     * filesystems (where POSIX perms are unsupported).
+     */
+    private void persistKeys(String pub, String priv) {
+        Path tmp = null;
         try {
-            if (keyFile.getParent() != null)
-                Files.createDirectories(keyFile.getParent());
-            Files.write(keyFile, List.of("PUB=" + pub, "PRIV=" + priv), StandardCharsets.US_ASCII);
-            try {
-                Files.setPosixFilePermissions(keyFile, PosixFilePermissions.fromString("rw-------"));
-            } catch (UnsupportedOperationException ignored) {
-                // non-POSIX filesystem; best effort
+            Path parent = keyFile.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+                trySetPosixPermissions(parent, "rwx------");
             }
+            tmp = (parent != null)
+                    ? Files.createTempFile(parent, "i2pkeys", ".tmp")
+                    : Files.createTempFile("i2pkeys", ".tmp");
+            trySetPosixPermissions(tmp, "rw-------"); // restrict BEFORE writing the secret
+            Files.write(tmp, List.of("PUB=" + pub, "PRIV=" + priv), StandardCharsets.US_ASCII);
+            try {
+                Files.move(tmp, keyFile, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, keyFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            tmp = null;
+            trySetPosixPermissions(keyFile, "rw-------");
         } catch (IOException e) {
             LOGGER.warn("Could not persist I2P keys to {}: {}", keyFile, e.getMessage());
+        } finally {
+            if (tmp != null) {
+                try { Files.deleteIfExists(tmp); } catch (IOException ignored) { /* best effort */ }
+            }
         }
-        return new String[]{pub, priv};
+    }
+
+    private static void trySetPosixPermissions(Path path, String perms) {
+        try {
+            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString(perms));
+        } catch (UnsupportedOperationException | IOException ignored) {
+            // non-POSIX filesystem, or path no longer present; best effort
+        }
     }
 
     private void startControlReader(InputStream in) {
@@ -278,6 +324,8 @@ public class SamSession implements I2PStreamProvider {
         while ((b = in.read()) != -1) {
             if (b == '\n') break;
             if (b != '\r') bos.write(b);
+            if (bos.size() > MAX_LINE_LENGTH)
+                throw new IOException("SAM line exceeded " + MAX_LINE_LENGTH + " bytes");
         }
         if (b == -1 && bos.size() == 0)
             return null;

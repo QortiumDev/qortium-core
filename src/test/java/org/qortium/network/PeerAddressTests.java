@@ -75,6 +75,30 @@ public class PeerAddressTests {
 		assertInvalid(B32 + " extra");
 	}
 
+	@Test
+	public void testValueBasedEqualityAndHashCode() {
+		PeerAddress a = PeerAddress.fromString("192.0.2.1:24892");
+		PeerAddress b = PeerAddress.fromString("192.0.2.1:24892");
+		PeerAddress different = PeerAddress.fromString("192.0.2.2:24892");
+
+		// equals(Object)/hashCode are value-based and consistent across distinct instances.
+		assertEquals(a, b);
+		assertEquals(a.hashCode(), b.hashCode());
+		assertFalse(a.equals(different));
+
+		// I2P addresses compare case-insensitively.
+		PeerAddress i2pLower = PeerAddress.fromString(B32);
+		PeerAddress i2pUpper = PeerAddress.fromString(B32_UPPER);
+		assertEquals(i2pLower, i2pUpper);
+		assertEquals(i2pLower.hashCode(), i2pUpper.hashCode());
+
+		// Value-equal instances therefore dedupe in a hash-based Set.
+		java.util.HashSet<PeerAddress> set = new java.util.HashSet<>();
+		set.add(a);
+		assertTrue(set.contains(b));
+		assertFalse(set.add(b));
+	}
+
 	private void assertInvalid(String address) {
 		try {
 			PeerAddress.fromString(address);

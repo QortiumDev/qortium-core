@@ -212,6 +212,20 @@ public class PeerAddress {
 		return this.host.equalsIgnoreCase(other.host);
 	}
 
+	@Override
+	public boolean equals(Object other) {
+		return (other instanceof PeerAddress) && equals((PeerAddress) other);
+	}
+
+	@Override
+	public int hashCode() {
+		// Consistent with equals: kind + port + case-insensitive host, no DNS lookups.
+		int result = getKind().hashCode();
+		result = 31 * result + this.port;
+		result = 31 * result + (this.host == null ? 0 : this.host.toLowerCase(Locale.ROOT).hashCode());
+		return result;
+	}
+
 	private static Kind kindForHost(String host) {
 		if (isI2PHost(host))
 			return Kind.I2P;

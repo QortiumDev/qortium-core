@@ -231,6 +231,136 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testI2PSettingsRoundTripAndRestartRequired() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave(
+				"{\"allowedTransports\":[\"I2P\",\"IP\"],\"i2pSamHost\":\"127.0.0.2\",\"i2pSamPort\":7000}");
+
+		assertTrue(result.saved);
+		// allowedTransports + SAM host/port change binding/transport setup -> restart required (not applied live).
+		assertTrue(result.restartRequired.contains("allowedTransports"));
+		assertFalse(result.applied.contains("allowedTransports"));
+		assertTrue(result.restartRequired.contains("i2pSamHost"));
+		assertTrue(result.restartRequired.contains("i2pSamPort"));
+
+		// The in-memory value is still updated, so the derived getters reflect the new ordered list.
+		assertTrue(Settings.getInstance().isI2PPreferred()); // I2P listed before IP
+		assertTrue(Settings.getInstance().isI2PEnabled());
+		assertTrue(Settings.getInstance().isIPAllowed());
+		assertEquals("127.0.0.2", Settings.getInstance().getI2PSamHost());
+		assertEquals(7000, Settings.getInstance().getI2PSamPort());
+
+		Map<String, Object> saved = readSettings(settingsPath);
+		assertEquals(java.util.List.of("I2P", "IP"), saved.get("allowedTransports"));
+		assertEquals(7000, ((Number) saved.get("i2pSamPort")).intValue());
+		assertEquals("127.0.0.2", saved.get("i2pSamHost"));
+	}
+
+	@Test
+	public void testAllowedTransportsDerivedSemantics() throws Exception {
+		Common.useDefaultSettings();
+		Settings s = Settings.getInstance();
+
+		// null field => effective default [IP, I2P]
+		org.apache.commons.lang3.reflect.FieldUtils.writeField(s, "allowedTransports", null, true);
+		assertTransports(s, true, true, false, false);
+
+		// [IP, I2P] = direct primary, I2P fallback (old i2pEnabled=true, i2pPreferred=false)
+		setTransports(s, Settings.Transport.IP, Settings.Transport.I2P);
+		assertTransports(s, true, true, false, false);
+
+		// [I2P, IP] = I2P preferred (old i2pPreferred=true)
+		setTransports(s, Settings.Transport.I2P, Settings.Transport.IP);
+		assertTransports(s, true, true, true, false);
+
+		// [I2P] = I2P only (privacy: no direct TCP)
+		setTransports(s, Settings.Transport.I2P);
+		assertTransports(s, false, true, true, true);
+
+		// [IP] = TCP only (old i2pEnabled=false)
+		setTransports(s, Settings.Transport.IP);
+		assertTransports(s, true, false, false, false);
+	}
+
+	/** Writable PATCH path (validateAllowedTransportsSetting) rejects bad values before any file write. */
+	@Test
+	public void testAllowedTransportsWritablePathRejectsBadValues() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+		for (String bad : new String[] {"[]", "[\"IP\",\"IP\"]", "[\"TOR\"]", "[\"IP\",\"TOR\"]"}) {
+			try {
+				Settings.updateAndSave("{\"allowedTransports\":" + bad + "}");
+				fail("Expected rejection of allowedTransports=" + bad);
+			} catch (IllegalArgumentException expected) {
+				// good
+			}
+		}
+	}
+
+	/**
+	 * Load path (validate) must reject the same bad values a hand-edited settings.json could contain.
+	 * MOXy binds the field as raw Strings precisely so unknown names like "TOR" are NOT silently
+	 * dropped but surface here as a clear validation error.
+	 */
+	@Test
+	public void testAllowedTransportsLoadPathRejectsBadValues() throws Exception {
+		for (String bad : new String[] {"[]", "[\"IP\",\"IP\"]", "[\"TOR\"]", "[\"IP\",\"TOR\"]"}) {
+			Path settingsPath = createSettingsFile("{\"allowedTransports\":" + bad + "}");
+			try {
+				Settings.fileInstance(settingsPath.toString());
+				fail("Expected load-time rejection of allowedTransports=" + bad);
+			} catch (RuntimeException expected) {
+				// good — validate() throws on load
+			}
+		}
+	}
+
+	/** Load and writable paths must agree on case: lowercase names load and normalise to canonical Transports. */
+	@Test
+	public void testAllowedTransportsLoadNormalizesCase() throws Exception {
+		Path settingsPath = createSettingsFile("{\"allowedTransports\":[\"i2p\",\" ip \"]}");
+		Settings.fileInstance(settingsPath.toString());
+		Settings s = Settings.getInstance();
+		assertEquals(java.util.List.of(Settings.Transport.I2P, Settings.Transport.IP), s.getAllowedTransports());
+		assertTransports(s, true, true, true, false);
+	}
+
+	private static void setTransports(Settings s, Settings.Transport... transports) throws Exception {
+		// Field is bound as List<String> (raw names) so MOXy cannot silently drop unknown enums.
+		java.util.List<String> names = new java.util.ArrayList<>();
+		for (Settings.Transport t : transports)
+			names.add(t.name());
+		org.apache.commons.lang3.reflect.FieldUtils.writeField(s, "allowedTransports", names, true);
+	}
+
+	private static void assertTransports(Settings s, boolean ip, boolean i2pEnabled, boolean i2pPreferred, boolean i2pOnly) {
+		assertEquals(ip, s.isIPAllowed());
+		assertEquals(ip, s.isDirectAllowed());
+		assertEquals(i2pEnabled, s.isI2PEnabled());
+		assertEquals(i2pPreferred, s.isI2PPreferred());
+		assertEquals(i2pOnly, s.isI2POnly());
+	}
+
+	@Test
+	public void testInvalidI2PSamPortIsRejectedWithoutChangingFile() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
+
+		try {
+			Settings.updateAndSave("{\"i2pSamPort\":70000}");
+			fail("Expected out-of-range i2pSamPort to be rejected");
+		} catch (IllegalArgumentException e) {
+			assertTrue(e.getMessage().contains("i2pSamPort"));
+		}
+
+		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+		assertEquals(7656, Settings.getInstance().getI2PSamPort()); // unchanged default
+	}
+
+	@Test
 	public void testInvalidMergedSettingsAreRejectedWithoutChangingFile() throws Exception {
 		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
 		Settings.fileInstance(settingsPath.toString());

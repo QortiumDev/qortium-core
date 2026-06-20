@@ -23,6 +23,9 @@ final class InboundReachability {
 	}
 
 	boolean canAcceptInbound() {
+		if (!Settings.getInstance().isIPAllowed())
+			return false; // I2P-only: never advertise direct IP reachability
+
 		if (!this.listenSocketAvailable)
 			return false;
 

@@ -736,6 +736,8 @@ public class Peer {
                 this.resolvedAddress = (InetSocketAddress) this.socketChannel.getRemoteAddress();
                 this.isLocal = false;
             } else {
+                if (!Settings.getInstance().isIPAllowed())
+                    return null; // I2P-only (IP not in allowedTransports): never dial a direct peer
                 this.resolvedAddress = peerAddress.toSocketAddress();
                 this.isLocal = isAddressLocal(this.resolvedAddress.getAddress());
 

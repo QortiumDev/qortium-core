@@ -31,7 +31,7 @@ public class NetworkDataI2PTests extends Common {
 	@Before
 	public void before() throws Exception {
 		Common.useDefaultSettings();
-		FieldUtils.writeField(Settings.getInstance(), "i2pEnabled", true, true);
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP", "I2P"), true);
 		clearNetworkDataPeerState();
 	}
 
@@ -81,7 +81,7 @@ public class NetworkDataI2PTests extends Common {
 
 	@Test
 	public void testAddPeerSkipsI2PQdnWhenI2PDisabled() throws Exception {
-		FieldUtils.writeField(Settings.getInstance(), "i2pEnabled", false, true);
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP"), true);
 		Map<String, Object> capabilities = new HashMap<>();
 		capabilities.put(Handshake.I2P_QDN_CAPABILITY, B32);
 
@@ -92,7 +92,7 @@ public class NetworkDataI2PTests extends Common {
 
 	@Test
 	public void testPreferredI2PSkipsI2PWhenLocalSessionIsDown() throws Exception {
-		FieldUtils.writeField(Settings.getInstance(), "i2pPreferred", true, true);
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P", "IP"), true);
 		List<PeerData> knownPeers = getMutableKnownPeers();
 		knownPeers.add(new PeerData(PeerAddress.fromString("198.51.100.10:24894"), 100L, "test"));
 		knownPeers.add(new PeerData(PeerAddress.fromString(B32), 100L, "test"));
@@ -182,7 +182,7 @@ public class NetworkDataI2PTests extends Common {
 
 	@Test
 	public void testPreferredI2PSkipsDataPeerAlreadyConnecting() throws Exception {
-		FieldUtils.writeField(Settings.getInstance(), "i2pPreferred", true, true);
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P", "IP"), true);
 		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(LOCAL_B32, true), true);
 		PeerAddress i2pAddress = PeerAddress.fromString(B32);
 		List<PeerData> knownPeers = getMutableKnownPeers();
