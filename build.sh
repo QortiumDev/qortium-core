@@ -15,7 +15,7 @@ for arg in "$@"; do
 			echo "Usage: ./build.sh [--yes]"
 			echo
 			echo "Checks Java, javac, and Maven, then builds Qortium with:"
-			echo "  mvn -q -DskipTests package"
+			echo "  mvn -q -DskipTests clean package"
 			exit 0
 			;;
 		*)
@@ -114,7 +114,7 @@ fi
 echo
 echo "This will build Qortium from source."
 echo "Command:"
-echo "  mvn -q -DskipTests package"
+echo "  mvn -q -DskipTests clean package"
 
 if [ "${yes}" -ne 1 ]; then
 	printf "Continue? [y/N] "
@@ -129,7 +129,7 @@ if [ "${yes}" -ne 1 ]; then
 	esac
 fi
 
-mvn -q -DskipTests package
+mvn -q -DskipTests clean package
 
 jar_path=""
 for jar in "${SCRIPT_DIR}"/target/qortium*.jar; do

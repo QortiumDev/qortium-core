@@ -34,6 +34,19 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-20 - build: package the current version's jar, not a stale one
+
+Fixes a packaging foot-gun around version bumps. `build.sh` ran `mvn package`
+without `clean`, so an older `target/qortium-<old>.jar` from a previous version
+could linger, and both `build.sh` and `preview/package-release.sh` selected the
+first `target/qortium*.jar` by name -- which is the alphabetically-lowest version,
+i.e. the stale jar. Right after a version bump this could quietly package and ship
+the previous version's jar. `build.sh` now runs a clean build, and
+`package-release.sh` picks the jar whose name matches the project version in
+`pom.xml` (falling back to the previous search only if that exact jar is absent),
+so the packaged jar always matches the version being released. Build tooling only;
+no node, consensus, or database behaviour changes.
+
 ### 2026-06-20 - release: move version to 1.1.1
 
 Bumps the project version from 1.1.0 to 1.1.1, the version the node now reports to

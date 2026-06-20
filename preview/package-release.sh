@@ -51,8 +51,20 @@ if [ "${SKIP_BUILD}" -ne 1 ]; then
 	"${REPO_DIR}/build.sh" --yes
 fi
 
+pom_version() {
+	grep -m1 '<version>' "${REPO_DIR}/pom.xml" \
+		| sed -E 's/.*<version>([^<]+)<\/version>.*/\1/'
+}
+
 find_qortium_jar() {
-	local jar
+	local jar version
+	version="$(pom_version)"
+	# Prefer the jar matching the project version so a stale older jar left in
+	# target/ (e.g. after a version bump) is never packaged in its place.
+	if [ -n "${version}" ] && [ -f "${TARGET_DIR}/qortium-${version}.jar" ]; then
+		printf '%s\n' "${TARGET_DIR}/qortium-${version}.jar"
+		return 0
+	fi
 	for jar in "${TARGET_DIR}"/qortium*.jar; do
 		if [ -f "${jar}" ]; then
 			printf '%s\n' "${jar}"
