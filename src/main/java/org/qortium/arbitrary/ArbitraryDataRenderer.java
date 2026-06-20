@@ -162,15 +162,19 @@ public class ArbitraryDataRenderer {
                 // fallback file, so a client-side router can handle it. Opt-in: APP always; any other
                 // service when it declares a metadata entryPoint. Missing assets still 404, so static
                 // sites are unaffected.
-                String entryPoint = this.getMetadataEntryPoint();
+                // Cheap, no-I/O check first: only route-like requests (not missing assets) may fall
+                // back, so a missing static asset 404s without any metadata lookup.
                 String acceptHeader = this.request != null ? this.request.getHeader("Accept") : null;
-                if (spaRoutingEnabled(this.service, entryPoint) && isRouteLikeRequest(inPath, acceptHeader)) {
-                    // Forward to the declared entryPoint, else the index-file convention.
-                    Path fallbackPath = resolveFallbackFile(Paths.get(unzippedPath), entryPoint);
-                    if (fallbackPath != null) {
-                        filePath = fallbackPath;
-                        filename = fallbackPath.getFileName().toString();
-                        usingCustomRouting = true;
+                if (isRouteLikeRequest(inPath, acceptHeader)) {
+                    String entryPoint = this.getMetadataEntryPoint();
+                    if (spaRoutingEnabled(this.service, entryPoint)) {
+                        // Forward to the declared entryPoint, else the index-file convention.
+                        Path fallbackPath = resolveFallbackFile(Paths.get(unzippedPath), entryPoint);
+                        if (fallbackPath != null) {
+                            filePath = fallbackPath;
+                            filename = fallbackPath.getFileName().toString();
+                            usingCustomRouting = true;
+                        }
                     }
                 }
 

@@ -333,6 +333,10 @@ public class ArbitraryServiceTests extends Common {
             Files.write(Paths.get(path.toString(), "main.bin"), data, StandardOpenOption.CREATE);
             Files.write(Paths.get(path.toString(), "sidecar.srt"), data, StandardOpenOption.CREATE);
 
+            // Validation is a no-op for these services (requiresValidation == false and
+            // single == false, so isValidationRequired() is false and validate() short-circuits
+            // to OK). This asserts they impose no structural constraint on a multi-file directory,
+            // not that any per-file content check ran.
             assertEquals(service.name() + " should accept a multi-file directory",
                     ValidationResult.OK, service.validate(path));
         }

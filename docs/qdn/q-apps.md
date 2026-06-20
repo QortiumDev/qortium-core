@@ -144,13 +144,13 @@ To update a resource, it can be overwritten by publishing with the same `name`, 
 
 ## Routing
 
-If a non-existent `filepath` is accessed, the default behaviour of QDN is to return a `404: File not found` error. This includes anything published using the `WEBSITE` service.
+If a non-existent `filepath` is accessed, the default behaviour of QDN is to return a `404: File not found` error. This applies to a plain `WEBSITE` (with no declared entry point), where missing files are served as-is.
 
-However, routing is handled differently for anything published using the `APP` service. 
+However, routing is handled differently for rendered resources that support SPA-style routing: the `APP` service (always), and **any** service that declares a metadata `entryPoint`. For these resources, QDN forwards an unhandled **route-like** request — a path with no file extension, or a browser navigation sending `Accept: text/html` — to the declared `entryPoint` (or, if none, the conventional index file, generally index.html). This allows the app to use custom client-side routing, as it is able to listen on any route. If a file exists at a path, the file itself is served, so the request won't be forwarded.
 
-For apps, QDN automatically sends all unhandled requests to the index file (generally index.html). This allows the app to use custom routing, as it is able to listen on any path. If a file exists at a path, the file itself will be served, and so the request won't be sent to the index file.
+Note that **genuinely missing assets** (e.g. a missing `.css`, `.js`, or image file) still return `404: File not found` rather than being served the entry/index file. Only navigation/route-like requests are forwarded.
 
-It's recommended that all apps return a 404 page if a request isn't able to be routed.
+It's recommended that all apps return a 404 page if a request isn't able to be routed. See [multi-file-resources.md](multi-file-resources.md) (the "Rendering and SPA routing" section) for the full specification.
 
 
 # Section 1: Simple links and image loading via HTML

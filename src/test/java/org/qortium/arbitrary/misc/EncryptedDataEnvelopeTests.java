@@ -81,10 +81,12 @@ public class EncryptedDataEnvelopeTests {
 
     @Test
     public void rejectsHeaderLongerThanData() {
-        // Declare a header far larger than the actual bytes present
-        byte[] data = envelope(EncryptedDataEnvelope.VERSION_1, EncryptedDataEnvelope.MODE_RECIPIENTS,
-                EncryptedDataEnvelope.CIPHER_AES_256_GCM, 44, 0);
-        // headerLen=44 but no header/ciphertext bytes actually present beyond the fixed header
+        // Start from a valid envelope, then over-declare headerLen without enlarging the array so the
+        // declared header runs past the bytes actually present (FIXED_HEADER_LENGTH + headerLen > length).
+        byte[] data = validSingleRecipientEnvelope(); // length 118, real headerLen 44
+        int overLen = 200; // 118 - FIXED_HEADER_LENGTH(10) = 108 bytes available, far less than 200
+        data[8] = (byte) ((overLen >> 8) & 0xFF);
+        data[9] = (byte) (overLen & 0xFF);
         assertFalse(EncryptedDataEnvelope.isEnvelope(data));
     }
 

@@ -35,7 +35,7 @@ serve when the resource is fetched **without naming a specific file**.
 - **Set it at publish time.** The `entryPoint` must be one of the resource's files, or
   the publish is rejected.
 - **It is stored in the resource metadata** and returned by
-  `GET /arbitrary/metadata/{service}/{name}[/{identifier}]` as `entryPoint`, so a client
+  `GET /arbitrary/metadata/{service}/{name}/{identifier}` as `entryPoint`, so a client
   can discover it without downloading the resource.
 - **It must be re-supplied on every update** (like `title`/`description`/etc.) — if you
   omit it when updating, it is cleared.
