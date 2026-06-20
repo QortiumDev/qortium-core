@@ -395,6 +395,32 @@ public class ArbitraryServiceTests extends Common {
     }
 
     @Test
+    public void testNewPrivateServicesRequireEncryption() throws IOException {
+        // The new private variants store one client-encrypted archive (single blob), so they are
+        // private + single-file and the default validator enforces the encryption envelope.
+        Service[] newPrivate = {
+                Service.APP_PRIVATE, Service.WEBSITE_PRIVATE, Service.BLOG_PRIVATE, Service.FILES_PRIVATE,
+                Service.IMAGE_GALLERY_PRIVATE, Service.GIT_REPOSITORY_PRIVATE, Service.SNAPSHOT_PRIVATE,
+                Service.DATABASE_PRIVATE
+        };
+
+        for (Service service : newPrivate) {
+            assertTrue(service.name() + " should be private", service.isPrivate());
+            assertTrue(service.name() + " should be a single encrypted blob", service.isSingle());
+            assertTrue(service.name() + " should require validation", service.isValidationRequired());
+
+            Path encrypted = singleFileResource("priv-" + service.name(), encryptedEnvelope());
+            assertEquals(service.name() + " should accept encrypted data",
+                    ValidationResult.OK, service.validate(encrypted));
+
+            Path plaintext = singleFileResource("plain-" + service.name(),
+                    "not encrypted".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            assertEquals(service.name() + " should reject plaintext",
+                    ValidationResult.DATA_NOT_ENCRYPTED, service.validate(plaintext));
+        }
+    }
+
+    @Test
     public void testValidatePublishedGifRepository() throws IOException, DataException, MissingDataException, IllegalAccessException {
         try (final Repository repository = RepositoryManager.getRepository()) {
 
