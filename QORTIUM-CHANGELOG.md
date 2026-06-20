@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-20 - release: move version to 1.1.1
+
+Bumps the project version from 1.1.0 to 1.1.1, the version the node now reports to
+peers and in its API (the build version becomes `1.1.1` plus the commit). This is a
+Previewnet patch release whose headline is the I2P LeaseSet publication fix below,
+which is what makes i2p reachability dependable enough to roll out; it also carries
+the seed gateway enablement, the corrected i2p initial peers, and the macOS start
+fixes already landed since 1.1.0. The change here is only the version string -- no
+code, consensus, or database behaviour changes with it.
+
 ### 2026-06-20 - preview: point I2P initialPeers at regxa's chain destination
 
 Corrects the i2p address used to reach the regxa seed over I2P. The earlier change
