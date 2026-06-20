@@ -114,7 +114,11 @@ it, it unzips into the directory and renders/uses it locally.
 
 This keeps things simple and more private (the file list is hidden, not just the file
 contents) and means private multi-file resources validate with the same single-file
-envelope check — there is no separate per-file format.
+envelope check — there is no separate per-file format. Because the resource is one opaque
+blob to Core, there is no `?filepath=` support for private resources; the client decrypts,
+unzips, and resolves paths itself. See
+[multi-file-resources.md](multi-file-resources.md) for the full client guide (entry points,
+default-file resolution, and app responsibilities).
 
 ## What Core validates (and what it does not)
 
