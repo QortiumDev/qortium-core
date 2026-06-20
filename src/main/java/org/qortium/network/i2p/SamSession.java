@@ -19,7 +19,10 @@ import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -56,6 +59,26 @@ public class SamSession implements I2PStreamProvider {
     /** SAM control/forward lines are short by spec; cap reads so a misbehaving peer can't exhaust memory. */
     private static final int MAX_LINE_LENGTH = 8192;
 
+    /**
+     * After a session's control socket closes, i2pd needs time (tunnel-expiry order) to release the
+     * destination's tunnels. Recreating the SAME destination before that finishes yields a "zombie"
+     * session: SESSION CREATE returns instantly, but i2pd reattaches to the dying destination and never
+     * builds inbound tunnels or publishes a LeaseSet, so the node is unreachable inbound over I2P. Wait
+     * out this cooldown (keyed by key file == destination) before re-creating. Validated: a recreate
+     * after ~75s builds real tunnels and publishes; an immediate recreate does not.
+     */
+    private static final long DESTINATION_REUSE_COOLDOWN_MS = 90_000L;
+    /**
+     * A genuine SESSION CREATE blocks tens of seconds while i2pd builds tunnels. A reply faster than
+     * this means i2pd reattached to a not-yet-released destination (zombie) instead of building fresh
+     * tunnels; treat it as a failed setup so the caller rebuilds after the cooldown. This self-heals
+     * the restart case, where the (per-JVM) cooldown map starts empty but i2pd may still hold the
+     * destination from the previous process.
+     */
+    private static final long MIN_REAL_SESSION_BUILD_MS = 5_000L;
+    /** Per-destination (key file path) nanotime of the last teardown, shared across SamSession instances. */
+    private static final Map<String, Long> LAST_TEARDOWN_NANOS = new ConcurrentHashMap<>();
+
     private final String samHost;
     private final int samPort;
     private final String sessionId;   // SAM session nickname (unique per session on the router)
@@ -89,6 +112,8 @@ public class SamSession implements I2PStreamProvider {
         if (sessionUp.get())
             return;
 
+        awaitDestinationCooldown();
+
         controlChannel = openSam();
         controlChannel.socket().setSoTimeout(SAM_REPLY_TIMEOUT_MS);
         InputStream in = controlChannel.socket().getInputStream();
@@ -101,16 +126,27 @@ public class SamSession implements I2PStreamProvider {
         this.localB32 = toB32(pub);
 
         controlChannel.socket().setSoTimeout(SETUP_TIMEOUT_MS);
+        long createStartNanos = System.nanoTime();
         sendLine(out, "SESSION CREATE STYLE=STREAM ID=" + sessionId + " DESTINATION=" + priv);
         String reply = readLine(in);
         String result = token(reply, "RESULT");
         if (!"OK".equals(result))
             throw new IOException("SAM SESSION CREATE failed: " + reply);
+        long createMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - createStartNanos);
+        if (createMillis < MIN_REAL_SESSION_BUILD_MS) {
+            // i2pd returned OK without building tunnels: it reattached to a destination still being torn
+            // down from a prior session. This zombie has no inbound tunnels / no published LeaseSet and is
+            // unreachable inbound. Fail so the caller rebuilds; close() (below, via the caller) records the
+            // teardown so the next attempt waits out the cooldown and gets a real build.
+            throw new IOException("SAM SESSION CREATE returned in " + createMillis
+                    + "ms with no tunnel build (unpublished/zombie destination); rebuilding after cooldown");
+        }
         controlChannel.socket().setSoTimeout(0); // long-lived; reader blocks
 
         sessionUp.set(true);
         startControlReader(in);
-        LOGGER.info("I2P session '{}' up, reachable at {}", sessionId, localB32);
+        LOGGER.info("I2P session '{}' up, reachable at {} ({}s tunnel build)",
+                sessionId, localB32, TimeUnit.MILLISECONDS.toSeconds(createMillis));
     }
 
     @Override
@@ -197,8 +233,39 @@ public class SamSession implements I2PStreamProvider {
         localB32 = null;
         if (controlReader != null)
             controlReader.interrupt();
+        boolean hadSession = controlChannel != null;
         closeQuietly(forwardChannel);
         closeQuietly(controlChannel);
+        // Only record a teardown if i2pd actually had a session/destination to release (a failed SAM
+        // connect created nothing), so we don't impose the cooldown when the router was simply down.
+        if (hadSession)
+            recordDestinationTeardown();
+    }
+
+    /**
+     * Block until at least {@link #DESTINATION_REUSE_COOLDOWN_MS} has elapsed since this destination
+     * (key file) was last torn down, so i2pd has released its tunnels and the next SESSION CREATE builds
+     * fresh ones instead of reattaching to a zombie. No-op on first use of a destination in this process.
+     */
+    private void awaitDestinationCooldown() {
+        Long lastTeardownNanos = LAST_TEARDOWN_NANOS.get(keyFile.toAbsolutePath().toString());
+        if (lastTeardownNanos == null)
+            return;
+        long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastTeardownNanos);
+        long remainingMs = DESTINATION_REUSE_COOLDOWN_MS - elapsedMs;
+        if (remainingMs <= 0)
+            return;
+        LOGGER.info("I2P session '{}' waiting {}s for i2pd to release the prior destination before re-creating",
+                sessionId, TimeUnit.MILLISECONDS.toSeconds(remainingMs));
+        try {
+            Thread.sleep(remainingMs);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void recordDestinationTeardown() {
+        LAST_TEARDOWN_NANOS.put(keyFile.toAbsolutePath().toString(), System.nanoTime());
     }
 
     // ---- SAM plumbing -----------------------------------------------------------------------
