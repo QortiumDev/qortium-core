@@ -318,35 +318,42 @@ public class Network {
             bindAddresses.add(Settings.getInstance().getBindAddressFallback());
         }
 
-        for (int i=0; i<bindAddresses.size(); i++) {
-            try {
-                String testBindAddress = bindAddresses.get(i);
-                InetAddress bindAddr = InetAddress.getByName(testBindAddress);
-                InetSocketAddress endpoint = new InetSocketAddress(bindAddr, listenPort);
+        // The channel selector is always needed (the I2P inbound forward listener also registers on it).
+        channelSelector = Selector.open();
 
-                channelSelector = Selector.open();
+        if (Settings.getInstance().isIPAllowed()) {
+            for (int i=0; i<bindAddresses.size(); i++) {
+                try {
+                    String testBindAddress = bindAddresses.get(i);
+                    InetAddress bindAddr = InetAddress.getByName(testBindAddress);
+                    InetSocketAddress endpoint = new InetSocketAddress(bindAddr, listenPort);
 
-                // Set up listen socket
-                serverChannel = ServerSocketChannel.open();
-                serverChannel.configureBlocking(false);
-                serverChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-                serverChannel.bind(endpoint, LISTEN_BACKLOG);
-                serverSelectionKey = serverChannel.register(channelSelector, SelectionKey.OP_ACCEPT);
+                    // Set up listen socket
+                    serverChannel = ServerSocketChannel.open();
+                    serverChannel.configureBlocking(false);
+                    serverChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+                    serverChannel.bind(endpoint, LISTEN_BACKLOG);
+                    serverSelectionKey = serverChannel.register(channelSelector, SelectionKey.OP_ACCEPT);
 
-                this.bindAddress = testBindAddress; // Store the selected address, so that it can be used by other parts of the app
-                this.inboundReachability.setListenSocketAvailable(true);
-                break; // We don't want to bind to more than one address
-            } catch (UnknownHostException | UnsupportedAddressTypeException e) {
-                LOGGER.error("Can't bind listen socket to address {}", Settings.getInstance().getBindAddress());
-                if (i == bindAddresses.size()-1) { // Only throw an exception if all addresses have been tried
-                    throw new IOException("Can't bind listen socket to address", e);
-                }
-            } catch (IOException e) {
-                LOGGER.error("Can't create listen socket: {}", e.getMessage());
-                if (i == bindAddresses.size()-1) { // Only throw an exception if all addresses have been tried
-                    throw new IOException("Can't create listen socket", e);
+                    this.bindAddress = testBindAddress; // Store the selected address, so that it can be used by other parts of the app
+                    this.inboundReachability.setListenSocketAvailable(true);
+                    break; // We don't want to bind to more than one address
+                } catch (UnknownHostException | UnsupportedAddressTypeException e) {
+                    LOGGER.error("Can't bind listen socket to address {}", Settings.getInstance().getBindAddress());
+                    if (i == bindAddresses.size()-1) { // Only throw an exception if all addresses have been tried
+                        throw new IOException("Can't bind listen socket to address", e);
+                    }
+                } catch (IOException e) {
+                    LOGGER.error("Can't create listen socket: {}", e.getMessage());
+                    if (i == bindAddresses.size()-1) { // Only throw an exception if all addresses have been tried
+                        throw new IOException("Can't create listen socket", e);
+                    }
                 }
             }
+        } else {
+            // I2P-only (IP not in allowedTransports): do not bind/advertise a public direct TCP listener.
+            this.inboundReachability.setListenSocketAvailable(false);
+            LOGGER.info("Direct TCP (IP) disabled by allowedTransports - chain network listening over I2P only");
         }
 
         // Load all known peers from repository
@@ -375,7 +382,7 @@ public class Network {
 
         // Attempt to set up UPnP for P2P. All errors are ignored.
         int networkPort = Settings.getInstance().getListenPort();
-        if (Settings.getInstance().isUPnPEnabled()) {
+        if (Settings.getInstance().isUPnPEnabled() && Settings.getInstance().isIPAllowed()) {
             PortMappingResult portMappingResult = PortMapperFactory.getInstance().openTcpPort(networkPort, "Qortium P2P");
             if (portMappingResult.isMapped()) {
                 this.inboundReachability.setPortMapped(true);
@@ -495,7 +502,7 @@ public class Network {
         long retrySeconds = TimeUnit.MILLISECONDS.toSeconds(I2P_CHAIN_START_RETRY_DELAY);
         if (this.i2pFallbackUnavailableLogged.compareAndSet(false, true)) {
             LOGGER.info("Network I2P fallback unavailable via SAM at {}:{} ({}). Direct TCP remains active; "
-                            + "install/run i2pd or set i2pEnabled=false to disable I2P retries. Retrying in {} seconds",
+                            + "install/run i2pd or remove I2P from allowedTransports to disable I2P retries. Retrying in {} seconds",
                     settings.getI2PSamHost(), settings.getI2PSamPort(), e.getMessage(), retrySeconds);
             return;
         }
@@ -2074,6 +2081,8 @@ public class Network {
         List<PeerData> directPeers = peers.stream()
                 .filter(peerData -> !peerData.getAddress().isI2P())
                 .collect(Collectors.toList());
+        if (!Settings.getInstance().isIPAllowed())
+            directPeers = new ArrayList<>(); // I2P-only: never dial a direct peer
         List<PeerData> i2pPeers = peers.stream()
                 .filter(peerData -> peerData.getAddress().isI2P())
                 .collect(Collectors.toList());
@@ -2298,6 +2307,7 @@ public class Network {
             return;
 
         if (getImmutableConnectedPeers().size() < maxPeers - 1
+                && serverSelectionKey != null
                 && serverSelectionKey.isValid()
                 && (serverSelectionKey.interestOps() & SelectionKey.OP_ACCEPT) == 0) {
             try {

@@ -89,7 +89,8 @@ destinations only after the corresponding SAM session is up.
 
 Direct TCP remains primary for public seed-to-seed and reachable peer traffic.
 I2P is the fallback path for peers that cannot accept inbound TCP, unless the
-local `i2pPreferred` setting is enabled for testing.
+local `allowedTransports` setting lists I2P ahead of IP (e.g. `["I2P","IP"]`)
+to prefer I2P for testing.
 
 On Debian-family hosts, the basic service setup is:
 

@@ -49,6 +49,7 @@ apikey.txt
 /preview/qortium-backup/
 /preview/qortium-backup-preview/
 /preview/secrets/
+/preview/i2p/
 
 # Build output and packaged artifacts
 /bin/
