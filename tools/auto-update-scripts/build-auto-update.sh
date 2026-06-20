@@ -122,15 +122,19 @@ if [[ -n "${uncommitted}" ]]; then
   abort "Please commit or stash changes first."
 fi
 
-project=$(grep -oPm1 "(?<=<artifactId>)[^<]+" pom.xml)
+# sed (not grep -oP): PCRE lookbehind is GNU-only and unavailable in BSD/macOS grep.
+# Both extractions take the first matching element, matching the old grep -m1 behavior.
+project=$(sed -n 's|.*<artifactId>\([^<]*\)</artifactId>.*|\1|p' pom.xml | head -n1)
 [[ -z "${project}" ]] && abort "Unable to determine project name from pom.xml."
 echo "Detected project: ${project}"
 
 # === Auto-Increment Version in pom.xml ===
-current_version=$(grep -oPm1 "(?<=<version>)[^<]+" pom.xml)
+current_version=$(sed -n 's|.*<version>\([^<]*\)</version>.*|\1|p' pom.xml | head -n1)
 new_version=$(increment_version "$current_version")
 
-$DRY_RUN || sed -i "s|<version>${current_version}</version>|<version>${new_version}</version>|" pom.xml
+# Temp-file edit rather than `sed -i "EXPR"`: BSD/macOS sed reads the arg after -i as
+# a backup suffix, so the GNU in-place form is non-portable.
+$DRY_RUN || { sed "s|<version>${current_version}</version>|<version>${new_version}</version>|" pom.xml > pom.xml.tmp && mv pom.xml.tmp pom.xml; }
 
 echo "Updated version from ${current_version} to ${new_version} in pom.xml"
 git diff pom.xml
@@ -159,7 +163,7 @@ while true; do
     continue
   fi
 
-  $DRY_RUN || sed -i "s|<version>${new_version}</version>|<version>${user_version}</version>|" pom.xml
+  $DRY_RUN || { sed "s|<version>${new_version}</version>|<version>${user_version}</version>|" pom.xml > pom.xml.tmp && mv pom.xml.tmp pom.xml; }
   echo "Updated version to user-provided version: ${user_version}"
   git diff pom.xml
   new_version="${user_version}"

@@ -34,6 +34,20 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-20 - scripts: portable sed and grep for macOS
+
+Makes the shell scripts that can run on macOS use portable text tools, since macOS
+ships BSD userland which differs from GNU. In `preview/start.sh`, the optional
+auto-update-mode override used `sed -i "EXPR" file`; BSD/macOS sed reads the argument
+after `-i` as a backup suffix, so the GNU in-place form is broken there -- switched to
+a temp-file edit (that path is only reached when `QORTIUM_PREVIEW_AUTO_UPDATE_MODE` is
+set, so normal startup was unaffected). The auto-update build helper
+(`tools/auto-update-scripts/build-auto-update.sh`) had the same `sed -i` issue when
+bumping the pom version, plus two `grep -oP` calls using PCRE lookbehind (a GNU-only
+feature absent from BSD grep) to read the project name and version -- all replaced with
+portable `sed`/temp-file forms that produce identical output. Part of the same
+macOS-compatibility pass as the bash 3.2 array fix; no behaviour change on Linux.
+
 ### 2026-06-20 - preview: fix node start on macOS bash 3.2
 
 Fixes `preview/start.sh` failing to launch the node on macOS, where the default

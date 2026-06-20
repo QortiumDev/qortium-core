@@ -92,7 +92,12 @@ apply_auto_update_mode() {
 			;;
 	esac
 
-	sed -i "s/\"autoUpdateMode\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"autoUpdateMode\": \"${mode}\"/" "${settings_file}"
+	# In-place edit via a temp file rather than `sed -i`: GNU sed treats `-i` with no
+	# suffix as in-place, but BSD/macOS sed reads the next argument as a backup suffix,
+	# so `sed -i "EXPR" file` is non-portable. The temp-file form works on both.
+	local temp_file="${settings_file}.tmp"
+	sed "s/\"autoUpdateMode\"[[:space:]]*:[[:space:]]*\"[^\"]*\"/\"autoUpdateMode\": \"${mode}\"/" "${settings_file}" > "${temp_file}"
+	mv "${temp_file}" "${settings_file}"
 }
 
 resolve_runtime_dir() {
