@@ -255,6 +255,10 @@ AUTO_UPDATE_MODE_EFFECTIVE="$(read_auto_update_mode "${SETTINGS_LOCAL}" || true)
 JVM_MEMORY_ARGS_STRING="${QORTIUM_PREVIEW_JVM_MEMORY_ARGS:--XX:MaxRAMPercentage=50 -XX:+UseG1GC -Xss1024k}"
 read -r -a JVM_MEMORY_ARGS <<< "${JVM_MEMORY_ARGS_STRING}"
 
+# Note: array expansions below use the ${arr[@]+"${arr[@]}"} guard so an empty array
+# expands to nothing instead of tripping `set -u`. Plain "${arr[@]}" on an empty array
+# is an "unbound variable" error under bash 3.2 (the default /bin/bash on macOS), which
+# breaks node startup there; bash 4.4+ on Linux tolerates it.
 JAVA_DISPLAY_ARGS=()
 DISPLAY_MODE_DESCRIPTION="GUI auto-detected"
 case "${HEADLESS_MODE}" in
@@ -293,35 +297,35 @@ fi
 } >"${RUN_LOG}"
 
 if command -v setsid >/dev/null 2>&1; then
-	nohup setsid "${NICE_ARGS[@]}" java \
+	nohup setsid ${NICE_ARGS[@]+"${NICE_ARGS[@]}"} java \
 			-Djava.net.preferIPv4Stack=false \
 			-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
 			-Dqortium.log.dir="${RUNTIME_DIR}" \
 			-Dqortium.pid.file="${RUN_PID}" \
-			"${JAVA_DISPLAY_ARGS[@]}" \
-		"${JVM_MEMORY_ARGS[@]}" \
+			${JAVA_DISPLAY_ARGS[@]+"${JAVA_DISPLAY_ARGS[@]}"} \
+		${JVM_MEMORY_ARGS[@]+"${JVM_MEMORY_ARGS[@]}"} \
 		-jar "${JAR_PATH}" \
 		"${SETTINGS_LOCAL}" \
 		>>"${RUN_LOG}" 2>&1 &
 elif command -v nohup >/dev/null 2>&1; then
-	nohup "${NICE_ARGS[@]}" java \
+	nohup ${NICE_ARGS[@]+"${NICE_ARGS[@]}"} java \
 			-Djava.net.preferIPv4Stack=false \
 			-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
 			-Dqortium.log.dir="${RUNTIME_DIR}" \
 			-Dqortium.pid.file="${RUN_PID}" \
-			"${JAVA_DISPLAY_ARGS[@]}" \
-		"${JVM_MEMORY_ARGS[@]}" \
+			${JAVA_DISPLAY_ARGS[@]+"${JAVA_DISPLAY_ARGS[@]}"} \
+		${JVM_MEMORY_ARGS[@]+"${JVM_MEMORY_ARGS[@]}"} \
 		-jar "${JAR_PATH}" \
 		"${SETTINGS_LOCAL}" \
 		>>"${RUN_LOG}" 2>&1 &
 else
-	"${NICE_ARGS[@]}" java \
+	${NICE_ARGS[@]+"${NICE_ARGS[@]}"} java \
 		-Djava.net.preferIPv4Stack=false \
 		-Dlog4j.configurationFile="${LOG4J_CONFIG}" \
 		-Dqortium.log.dir="${RUNTIME_DIR}" \
 		-Dqortium.pid.file="${RUN_PID}" \
-		"${JAVA_DISPLAY_ARGS[@]}" \
-	"${JVM_MEMORY_ARGS[@]}" \
+		${JAVA_DISPLAY_ARGS[@]+"${JAVA_DISPLAY_ARGS[@]}"} \
+	${JVM_MEMORY_ARGS[@]+"${JVM_MEMORY_ARGS[@]}"} \
 	-jar "${JAR_PATH}" \
 	"${SETTINGS_LOCAL}" \
 	>>"${RUN_LOG}" 2>&1 &
