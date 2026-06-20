@@ -352,7 +352,7 @@ public class ArbitraryServiceTests extends Common {
         byte[] out = new byte[EncryptedDataEnvelope.FIXED_HEADER_LENGTH + 44 + 64];
         out[0] = 'Q'; out[1] = 'E'; out[2] = 'N'; out[3] = 'C';
         out[4] = EncryptedDataEnvelope.VERSION_1;
-        out[5] = EncryptedDataEnvelope.MODE_SINGLE_RECIPIENT;
+        out[5] = EncryptedDataEnvelope.MODE_RECIPIENTS;
         out[6] = EncryptedDataEnvelope.CIPHER_AES_256_GCM;
         out[8] = 0; out[9] = 44; // headerLen = 44
         return out;

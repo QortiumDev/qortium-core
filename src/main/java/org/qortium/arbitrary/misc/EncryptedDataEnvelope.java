@@ -12,6 +12,16 @@ import java.nio.charset.StandardCharsets;
  * envelope, which robustly catches the real failure mode: an app accidentally publishing plaintext
  * as "private".
  * <p>
+ * The envelope carries an audience, expressed at the API/UX layer as one of three modes:
+ * <ul>
+ *   <li><b>PUBLISHER</b> — only the publishing account can decrypt;</li>
+ *   <li><b>ACCOUNTS</b> — a chosen set of accounts (by public key) can decrypt;</li>
+ *   <li><b>GROUP</b> — members of a Qortium group can decrypt.</li>
+ * </ul>
+ * PUBLISHER and ACCOUNTS share one cryptographic mechanism (a content key wrapped to each recipient's
+ * public key — PUBLISHER is simply "the only recipient is the publisher"), so at the wire level there
+ * are two envelope modes: {@link #MODE_RECIPIENTS} and {@link #MODE_GROUP}.
+ * <p>
  * Two formats are accepted:
  * <ul>
  *   <li><b>v1 binary envelope</b> (preferred) — a fixed header that clients prepend to the ciphertext.
@@ -28,7 +38,7 @@ public final class EncryptedDataEnvelope {
     // Layout (big-endian):
     //   [0:4]   magic      = "QENC"
     //   [4]     version    = 0x01
-    //   [5]     mode       = 0x01 single-recipient | 0x02 group
+    //   [5]     mode       = 0x01 recipients (PUBLISHER/ACCOUNTS) | 0x02 group
     //   [6]     cipher     = 0x01 AES-256-GCM
     //   [7]     flags      = reserved (0)
     //   [8:10]  headerLen  = uint16, length of the mode-specific header that follows
@@ -37,15 +47,21 @@ public final class EncryptedDataEnvelope {
     public static final byte[] MAGIC = { 'Q', 'E', 'N', 'C' };
     public static final byte VERSION_1 = 0x01;
 
-    public static final byte MODE_SINGLE_RECIPIENT = 0x01;
+    /** Recipient-wrapped: one content key wrapped to 1..N recipient public keys (PUBLISHER = 1 = self, ACCOUNTS = N). */
+    public static final byte MODE_RECIPIENTS = 0x01;
+    /** Encrypted with a Qortium group's shared key. */
     public static final byte MODE_GROUP = 0x02;
 
     public static final byte CIPHER_AES_256_GCM = 0x01;
 
     /** magic(4) + version(1) + mode(1) + cipher(1) + flags(1) + headerLen(2) */
     public static final int FIXED_HEADER_LENGTH = 10;
-    /** Sanity bound on the declared variable-header length. */
-    public static final int MAX_VARIABLE_HEADER_LENGTH = 4096;
+    /**
+     * Upper bound on the declared variable-header length (full uint16 range). In practice the header
+     * (which for ACCOUNTS grows with the recipient count) must also fit within Core's data-inspection
+     * window so it can be validated; see {@link #isEnvelope}.
+     */
+    public static final int MAX_VARIABLE_HEADER_LENGTH = 0xFFFF;
 
     // --- legacy text prefixes (still accepted) ---
     public static final String LEGACY_PREFIX = "qdnEncryptedData";
@@ -80,7 +96,7 @@ public final class EncryptedDataEnvelope {
         }
 
         byte mode = data[5];
-        if (mode != MODE_SINGLE_RECIPIENT && mode != MODE_GROUP) {
+        if (mode != MODE_RECIPIENTS && mode != MODE_GROUP) {
             return false;
         }
 
