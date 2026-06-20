@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - review: tray confirm, render perf, and doc/test fixes
+
+Applies the fixes from a full review of the branch. The system-tray "Restart" action now asks for confirmation before shutting down and relaunching the node, matching the existing Bootstrap confirmation, so an accidental click can't restart the node. The tray "Check for updates" action no longer claims the node is up to date when the update check couldn't actually run (for example when QDN is disabled); it reports that the check failed instead. The website/app render path now skips the resource-metadata lookup for genuinely missing files (only navigation-style requests trigger it), so a missing asset returns a fast "not found". The rest are accuracy fixes: the QDN app docs now describe the new routing behaviour, the metadata endpoint path and the image-gallery extension list are corrected, and a couple of tests were tightened. No consensus or database changes.
+
 ### 2026-06-19 - docs: client guide for multi-file and private resources
 
 Adds a developer guide for app authors covering everything in the recent QDN work: which services are multi-file, the optional entry point and how to set and read it, how the node picks a default file when none is named, how rendering and single-page-app routing behave, and how private resources are published as one encrypted archive and consumed (the app decrypts and handles file paths itself). It also writes down the parts that are deliberately the app's job rather than the node's -- the upload experience, handling the multi-file fetch case, and pairing sidecar files like subtitles to a video. The existing QDN app docs were updated to list all current private service types and point to the new guide and the encryption format. Documentation only.
@@ -52,7 +56,7 @@ Replaces the weak "does the data start with a text marker" check for private QDN
 
 ### 2026-06-19 - qdn: add image gallery service and multi-file media
 
-Adds a new IMAGE_GALLERY service for publishing a collection of images as one resource (it accepts only image files -- png, jpg, jpeg, gif, webp, bmp, avif, tif -- with a 50 MB cap, mirroring how the existing GIF repository works but for any image type). This keeps single images on the IMAGE service while giving galleries their own clearly-typed home, instead of overloading IMAGE or using a generic file bundle. Also switches the public VIDEO, AUDIO, DOCUMENT, and PODCAST services to allow multiple files, so a media resource can carry sidecar files (subtitles, cover art, show notes) alongside the main file, with the entry point picking the primary one.
+Adds a new IMAGE_GALLERY service for publishing a collection of images as one resource (it accepts only image files -- png, jpg, jpeg, gif, webp, bmp, avif, tif, tiff -- with a 50 MB cap, mirroring how the existing GIF repository works but for any image type). This keeps single images on the IMAGE service while giving galleries their own clearly-typed home, instead of overloading IMAGE or using a generic file bundle. Also switches the public VIDEO, AUDIO, DOCUMENT, and PODCAST services to allow multiple files, so a media resource can carry sidecar files (subtitles, cover art, show notes) alongside the main file, with the entry point picking the primary one.
 
 The private variants (VIDEO_PRIVATE, AUDIO_PRIVATE, DOCUMENT_PRIVATE) and a private gallery are intentionally left single-file for now: privacy currently depends on single-file pre-encryption validation that does not safely extend to multi-file resources, so multi-file private support needs a separate design. Existing resources are unaffected, and there are no consensus or database changes (the published service id is opaque to the chain).
 

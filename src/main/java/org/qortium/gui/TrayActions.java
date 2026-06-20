@@ -143,7 +143,18 @@ final class TrayActions {
 				return;
 			}
 
-			if (result == null || !result.updateAvailable) {
+			if (result == null) {
+				showUpdateInfo(Translator.INSTANCE.translate("SysTray", "UPDATE_CHECK_FAILED"));
+				return;
+			}
+
+			if (!result.qdnEnabled) {
+				// QDN is off, so no real check ran: don't claim the node is up to date.
+				showUpdateInfo(Translator.INSTANCE.translate("SysTray", "UPDATE_CHECK_FAILED"));
+				return;
+			}
+
+			if (!result.updateAvailable) {
 				showUpdateInfo(Translator.INSTANCE.translate("SysTray", "UP_TO_DATE"));
 				return;
 			}
@@ -220,10 +231,22 @@ final class TrayActions {
 	}
 
 	private static void restart() {
-		// scheduleRestart() spawns its own worker that performs the shutdown and relaunch,
-		// and returns false if a restart/bootstrap apply is already scheduled or running.
-		if (!RestartNode.scheduleRestart())
-			LOGGER.info("Ignoring tray restart request: a restart is already scheduled or running");
+		// Restart shuts down and relaunches the node, so confirm before scheduling to guard
+		// against an accidental tray click. The dialog/scheduling run on the EDT to stay safe
+		// regardless of which tray backend invoked the action.
+		SwingUtilities.invokeLater(() -> {
+			int choice = JOptionPane.showConfirmDialog(null,
+					Translator.INSTANCE.translate("SysTray", "RESTART_CONFIRM"),
+					Translator.INSTANCE.translate("SysTray", "RESTART"),
+					JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+			if (choice != JOptionPane.YES_OPTION)
+				return;
+
+			// scheduleRestart() spawns its own worker that performs the shutdown and relaunch,
+			// and returns false if a restart/bootstrap apply is already scheduled or running.
+			if (!RestartNode.scheduleRestart())
+				LOGGER.info("Ignoring tray restart request: a restart is already scheduled or running");
+		});
 	}
 
 	private static void exit() {
