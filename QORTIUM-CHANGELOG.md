@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-20 - preview: enable seed gateway and add i2p initial peers
+
+Two preview-network configuration changes for the seed nodes. First, both shared
+seed nodes (`settings-preview-seed.json` and `settings-preview-seed-netcup.json`)
+now turn on the QDN gateway so they can serve published data over a plain web
+gateway, listening on port 8090 with loopback access enabled. Second, the i2p
+addresses of the seed VPSes are added to the lists of initial peers each node
+tries on startup, alongside the existing IP addresses, so nodes can also reach the
+seeds over i2p. Each seed keeps listing only the other seed (not itself), and the
+non-seed preview profile (`settings-preview.json`) gets both seed i2p addresses.
+Configuration only; no node, consensus, or database behaviour changes.
+
 ### 2026-06-20 - scripts: portable sed and grep for macOS
 
 Makes the shell scripts that can run on macOS use portable text tools, since macOS
