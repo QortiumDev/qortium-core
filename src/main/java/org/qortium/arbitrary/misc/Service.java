@@ -52,6 +52,9 @@ public enum Service {
     FILE(140, false, null, true, false, null),
     FILE_PRIVATE(141, true, null, true, true, null),
     FILES(150, false, null, false, false, null),
+    // Private variants store the whole resource as one client-encrypted archive (single blob), so
+    // they are single=true and rely on the default validator to enforce the encryption envelope.
+    FILES_PRIVATE(151, true, null, true, true, null),
     CHAIN_DATA(160, true, 239L, true, false, null),
     WEBSITE(200, true, null, false, false, null) {
         @Override
@@ -85,7 +88,9 @@ public enum Service {
             return ValidationResult.MISSING_INDEX_FILE;
         }
     },
+    WEBSITE_PRIVATE(201, true, null, true, true, null),
     GIT_REPOSITORY(300, false, null, false, false, null),
+    GIT_REPOSITORY_PRIVATE(301, true, null, true, true, null),
     IMAGE(400, true, 10*1024*1024L, true, false, null),
     IMAGE_PRIVATE(401, true, 10*1024*1024L, true, true, null),
     THUMBNAIL(410, true, 500*1024L, true, false, null),
@@ -127,6 +132,7 @@ public enum Service {
             return ValidationResult.OK;
         }
     },
+    IMAGE_GALLERY_PRIVATE(431, true, 50*1024*1024L, true, true, null),
     VIDEO(500, false, null, false, false, null),
     VIDEO_PRIVATE(501, true, null, true, true, null),
     AUDIO(600, false, null, false, false, null),
@@ -137,6 +143,7 @@ public enum Service {
     VOICE_PRIVATE(631, true, 10*1024*1024L, true, true, null),
     PODCAST(640, false, null, false, false, null),
     BLOG(700, false, null, false, false, null),
+    BLOG_PRIVATE(701, true, null, true, true, null),
     BLOG_POST(777, false, null, true, false, null),
     BLOG_COMMENT(778, true, 500*1024L, true, false, null),
     DOCUMENT(800, false, null, false, false, null),
@@ -144,6 +151,7 @@ public enum Service {
     LIST(900, true, null, true, false, null),
     PLAYLIST(910, true, null, true, false, null),
     APP(1000, true, 50*1024*1024L, false, false, null),
+    APP_PRIVATE(1001, true, 50*1024*1024L, true, true, null),
     METADATA(1100, false, null, true, false, null),
     JSON(1110, true, 25*1024L, true, false, null) {
         @Override
@@ -211,7 +219,9 @@ public enum Service {
     ITEM(1510, false, null, true, false, null),
     NFT(1600, false, null, true, false, null),
     DATABASE(1700, false, null, false, false, null),
+    DATABASE_PRIVATE(1701, true, null, true, true, null),
     SNAPSHOT(1710, false, null, false, false, null),
+    SNAPSHOT_PRIVATE(1711, true, null, true, true, null),
     COMMENT(1800, true, 500*1024L, true, false, null),
     CHAIN_COMMENT(1810, true, 239L, true, false, null),
     MAIL(1900, true, 1024*1024L, true, false, null),

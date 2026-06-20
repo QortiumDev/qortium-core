@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-19 - qdn: add private variants for more resource types
+
+Adds private (encrypted) versions of eight more resource types that didn't have one: apps, websites, blogs, file collections, image galleries, code repositories, database snapshots, and databases. A private resource is published as a single client-encrypted blob (the whole resource encrypted as one archive), so these are validated the same way as the other private types -- they must carry the encryption envelope, and publishing unencrypted data to them is rejected. This fills obvious gaps (for example file collections and image galleries could be published privately as single files but not as collections, and there was no private app/website/repo/backup type at all). The new types are additive and client-side only -- no consensus or database changes -- and the content is encrypted and decrypted entirely by the client, never by the node.
+
 ### 2026-06-19 - qdn: define publisher/accounts/group encryption modes
 
 Fleshes out the private-resource encryption envelope so client apps can implement it. A private resource is encrypted for one of three audiences: publisher (only the publishing account can read it), accounts (a chosen set of accounts by public key), or group (members of a Qortium group). Publisher and accounts share one mechanism -- a content key wrapped to each recipient's key -- so the envelope has two wire modes (recipients and group). The documentation now fully specifies the byte layout for each mode, how multi-file private resources are handled (encrypt the whole archive as one blob), what the node validates versus what stays a client agreement, and includes client pseudocode. Encryption and decryption remain entirely client-side; the node never holds keys. No consensus or database changes.
