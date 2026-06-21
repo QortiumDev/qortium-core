@@ -2676,6 +2676,18 @@ public class NetworkData {
         return this.inboundReachability.canAcceptInbound();
     }
 
+    /**
+     * Transport-aware direct-connectability for QDN data fetching.
+     * <p>
+     * Returns true when this node is reachable directly either over clearnet (IP) or over I2P
+     * (it has a usable, session-up I2P data destination). Used so a NAT'd-but-I2P-reachable
+     * publisher advertises itself as directly connectable, letting requesters dial its data
+     * destination instead of funnelling to an unreachable I2P relay.
+     */
+    public boolean canAcceptInboundData() {
+        return this.inboundReachability.canAcceptInboundData(this.getI2PDataDestination() != null);
+    }
+
     public boolean isListenSocketAvailable() {
         return this.inboundReachability.isListenSocketAvailable();
     }
