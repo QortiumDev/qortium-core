@@ -60,6 +60,34 @@ public class SamSession implements I2PStreamProvider {
     private static final int MAX_LINE_LENGTH = 8192;
 
     /**
+     * i2cp / tunnel options pinned onto {@code SESSION CREATE} so our LeaseSet is built the same way on
+     * every i2pd version and is actually floodable:
+     * <ul>
+     *   <li>{@code i2cp.leaseSetEncType=4,0} — offer both the modern (type 4, ECIES-X25519) and the
+     *       legacy (type 0, ElGamal) LeaseSet encryptions, so any-vintage remote router can encrypt to us;
+     *   <li>{@code inbound/outbound.quantity=3} + {@code backupQuantity=1} — enough redundant tunnels that
+     *       the destination keeps a stable, published LeaseSet instead of flapping when one tunnel expires;
+     *   <li>{@code inbound/outbound.length=2} — standard 2-hop tunnels (anonymity vs. latency balance).
+     * </ul>
+     * SAM v3 passes these as space-separated {@code KEY=VALUE} tokens appended to the SESSION CREATE line.
+     */
+    private static final String SESSION_OPTIONS =
+            "i2cp.leaseSetEncType=4,0"
+            + " inbound.quantity=3 outbound.quantity=3"
+            + " inbound.length=2 outbound.length=2"
+            + " inbound.backupQuantity=1 outbound.backupQuantity=1";
+
+    /**
+     * After a session reports up, confirm the destination is actually published by looking our own b32 up
+     * through the router's netDB. A freshly attached/zombie destination has no published LeaseSet and the
+     * lookup fails; retry a few times (publication can lag tunnel build by a few seconds) before treating
+     * the destination as unpublished and forcing a rebuild. Best-effort: if SAM doesn't support the lookup
+     * we skip the check rather than tearing down a working session.
+     */
+    private static final int PUBLICATION_CHECK_ATTEMPTS = 3;
+    private static final long PUBLICATION_CHECK_INTERVAL_MS = 5_000L;
+
+    /**
      * After a session's control socket closes, i2pd needs time (tunnel-expiry order) to release the
      * destination's tunnels. Recreating the SAME destination before that finishes yields a "zombie"
      * session: SESSION CREATE returns instantly, but i2pd reattaches to the dying destination and never
@@ -91,6 +119,13 @@ public class SamSession implements I2PStreamProvider {
     private Thread controlReader;
     private volatile String localB32;
 
+    /**
+     * Minimum SESSION CREATE duration below which the reply is treated as a zombie/no-tunnel-build
+     * (see {@link #MIN_REAL_SESSION_BUILD_MS}). Defaults to the production value; overridable so a
+     * hermetic fake-SAM test, whose server replies instantly, is not rejected as a zombie.
+     */
+    private volatile long minRealSessionBuildMs = MIN_REAL_SESSION_BUILD_MS;
+
     public SamSession(String samHost, int samPort, String sessionId, Path keyFile) {
         if (samHost == null || samHost.isBlank())
             throw new IllegalArgumentException("SAM host cannot be blank");
@@ -103,6 +138,14 @@ public class SamSession implements I2PStreamProvider {
         this.samPort = samPort;
         this.sessionId = sessionId;
         this.keyFile = Objects.requireNonNull(keyFile, "keyFile");
+    }
+
+    /**
+     * Test seam: lower the zombie-detection threshold so a hermetic fake-SAM server (which replies to
+     * SESSION CREATE instantly) is not rejected as a no-tunnel-build zombie. Not used in production.
+     */
+    void setMinRealSessionBuildMillisForTesting(long millis) {
+        this.minRealSessionBuildMs = millis;
     }
 
     // ---- I2PStreamProvider ------------------------------------------------------------------
@@ -127,13 +170,14 @@ public class SamSession implements I2PStreamProvider {
 
         controlChannel.socket().setSoTimeout(SETUP_TIMEOUT_MS);
         long createStartNanos = System.nanoTime();
-        sendLine(out, "SESSION CREATE STYLE=STREAM ID=" + sessionId + " DESTINATION=" + priv);
+        sendLine(out, "SESSION CREATE STYLE=STREAM ID=" + sessionId + " DESTINATION=" + priv
+                + " " + SESSION_OPTIONS);
         String reply = readLine(in);
         String result = token(reply, "RESULT");
         if (!"OK".equals(result))
             throw new IOException("SAM SESSION CREATE failed: " + reply);
         long createMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - createStartNanos);
-        if (createMillis < MIN_REAL_SESSION_BUILD_MS) {
+        if (createMillis < minRealSessionBuildMs) {
             // i2pd returned OK without building tunnels: it reattached to a destination still being torn
             // down from a prior session. This zombie has no inbound tunnels / no published LeaseSet and is
             // unreachable inbound. Fail so the caller rebuilds; close() (below, via the caller) records the
@@ -143,10 +187,80 @@ public class SamSession implements I2PStreamProvider {
         }
         controlChannel.socket().setSoTimeout(0); // long-lived; reader blocks
 
+        // Tunnels are built, but inbound reachability depends on the LeaseSet being floodfill-published.
+        // A zombie/late-publishing destination can still slip past the timing guard, so verify the
+        // destination is actually resolvable through the netDB before claiming inbound reachability.
+        // On confirmed non-publication, fail so the caller rebuilds: close() records the teardown, and the
+        // existing cooldown + zombie guards then drive a clean rebuild (we don't bypass them here).
+        if (!verifyLeaseSetPublished()) {
+            throw new IOException("I2P destination " + localB32
+                    + " did not publish a LeaseSet (not resolvable via netDB); rebuilding after cooldown");
+        }
+
         sessionUp.set(true);
         startControlReader(in);
-        LOGGER.info("I2P session '{}' up, reachable at {} ({}s tunnel build)",
+        LOGGER.info("I2P session '{}' up, destination {} ({}s tunnel build); LeaseSet published",
                 sessionId, localB32, TimeUnit.MILLISECONDS.toSeconds(createMillis));
+    }
+
+    /**
+     * Best-effort confirmation that our destination's LeaseSet is published and resolvable through the
+     * router's netDB. Opens a transient SAM control connection and issues {@code NAMING LOOKUP NAME=<b32>}
+     * for our own b32; a published destination resolves locally, an unpublished/zombie one fails. Retries a
+     * few times because publication can lag the tunnel build by a few seconds.
+     *
+     * @return {@code true} if the destination resolved (published), or if the check could not be performed
+     *         (SAM doesn't support the lookup, or the control connection failed) — in which case we keep the
+     *         session rather than tearing down a possibly-working one; {@code false} only on a definitive
+     *         repeated lookup failure that indicates no published LeaseSet.
+     */
+    private boolean verifyLeaseSetPublished() {
+        if (localB32 == null)
+            return true; // nothing to verify against; don't block setup
+        boolean lookupSupported = false;
+        for (int attempt = 1; attempt <= PUBLICATION_CHECK_ATTEMPTS; attempt++) {
+            SocketChannel probe = null;
+            try {
+                probe = openSam();
+                probe.socket().setSoTimeout(SAM_REPLY_TIMEOUT_MS);
+                InputStream in = probe.socket().getInputStream();
+                OutputStream out = probe.socket().getOutputStream();
+                hello(in, out);
+                sendLine(out, "NAMING LOOKUP NAME=" + localB32);
+                String reply = readLine(in);
+                String result = token(reply, "RESULT");
+                if ("OK".equals(result)) {
+                    lookupSupported = true;
+                    return true; // resolved -> LeaseSet is published
+                }
+                // I2P_ERROR / KEY_NOT_FOUND etc.: router knows the command but can't resolve us yet.
+                // INVALID_KEY would mean SAM rejected the request form -> treat the check as unsupported.
+                if ("INVALID_KEY".equals(result) || result == null) {
+                    LOGGER.debug("I2P LeaseSet self-check unsupported/unparsable for '{}': {}", sessionId, reply);
+                    return true; // can't perform the check; don't tear down the session over it
+                }
+                lookupSupported = true;
+                LOGGER.debug("I2P LeaseSet self-check {}/{} for '{}' not yet resolvable: {}",
+                        attempt, PUBLICATION_CHECK_ATTEMPTS, sessionId, reply);
+            } catch (IOException e) {
+                LOGGER.debug("I2P LeaseSet self-check {}/{} for '{}' could not run: {}",
+                        attempt, PUBLICATION_CHECK_ATTEMPTS, sessionId, e.getMessage());
+                if (!lookupSupported)
+                    return true; // never managed a clean SAM exchange; skip the check rather than churn
+            } finally {
+                closeQuietly(probe);
+            }
+            if (attempt < PUBLICATION_CHECK_ATTEMPTS) {
+                try {
+                    Thread.sleep(PUBLICATION_CHECK_INTERVAL_MS);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    return true; // shutting down; don't force a rebuild
+                }
+            }
+        }
+        // Lookup worked but our destination stayed unresolvable across all attempts: no published LeaseSet.
+        return false;
     }
 
     @Override

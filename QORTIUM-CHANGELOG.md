@@ -34,6 +34,29 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-21 - network: pin I2P session options and verify LeaseSet publication
+
+Makes a node stop believing it is reachable over I2P when it actually is not.
+For other nodes to fetch data from us over I2P, our "LeaseSet" (the directory
+entry that tells the network how to reach our hidden address) must be published.
+Two gaps let a node look up and running while remaining silently unreachable.
+First, the I2P session was created with whatever defaults the local i2pd router
+happened to use, which differ by router version and can produce a LeaseSet some
+remote routers cannot use; we now pin a fixed, interoperable set of options
+(both modern and legacy encryption offered, a few redundant tunnels so the
+address stays continuously published instead of flapping, and standard 2-hop
+tunnels). Second, the node declared itself "reachable" the instant its tunnels
+were built, before confirming the LeaseSet was actually published -- so a
+half-published or zombie address looked healthy in the logs. The node now does a
+quick self-check after the session comes up: it asks the router to resolve its
+own address and only declares success once that works, retrying briefly because
+publication can lag tunnel-building by a few seconds. If resolution keeps
+failing, it tears the session down and rebuilds (reusing the existing cooldown so
+it does not thrash). The check is best-effort: if the router cannot perform the
+lookup at all, the session is kept rather than dropped. The misleading "reachable
+at" log lines now say tunnels are up but inbound reachability depends on the
+LeaseSet, and only report the address as published once the self-check passes.
+
 ### 2026-06-21 - network: don't reap slow-but-progressing QDN chunk transfers
 
 Stops a watchdog from killing large QDN data transfers that are simply slow,

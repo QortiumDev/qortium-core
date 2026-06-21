@@ -55,7 +55,11 @@ public class SamSessionFakeSamTests {
 
 	private SamSession newSession(Path keyFile) throws IOException {
 		this.server = new FakeSamServer(FAKE_PUB, FAKE_PRIV, "OK", true);
-		return new SamSession("127.0.0.1", server.port(), "qortium-fakesam-test", keyFile);
+		SamSession s = new SamSession("127.0.0.1", server.port(), "qortium-fakesam-test", keyFile);
+		// The fake SAM server answers SESSION CREATE instantly; disable the zombie-build timing guard so
+		// the hermetic test is not rejected as a no-tunnel-build destination.
+		s.setMinRealSessionBuildMillisForTesting(0);
+		return s;
 	}
 
 	private Path freshKeyDir() throws IOException {
@@ -137,6 +141,7 @@ public class SamSessionFakeSamTests {
 		this.server = new FakeSamServer(FAKE_PUB, FAKE_PRIV, "CANT_REACH_PEER", false);
 		Path keyFile = freshKeyDir().resolve("chain.keys");
 		session = new SamSession("127.0.0.1", server.port(), "qortium-fakesam-test", keyFile);
+		session.setMinRealSessionBuildMillisForTesting(0);
 		session.start();
 
 		assertNull(session.connect(REMOTE_B32));
@@ -281,6 +286,11 @@ public class SamSessionFakeSamTests {
 					} else if (line.startsWith("SESSION CREATE")) {
 						writeLine(out, "SESSION STATUS RESULT=OK DESTINATION=" + priv);
 						// control connection stays open for the session's lifetime
+					} else if (line.startsWith("NAMING LOOKUP")) {
+						// Post-session LeaseSet publication self-check (verifyLeaseSetPublished): the real
+						// router resolves our own b32 once published. Report OK so the check passes promptly
+						// instead of blocking on the SAM reply timeout.
+						writeLine(out, "NAMING REPLY RESULT=OK NAME=ME VALUE=" + pub);
 					} else if (line.startsWith("STREAM CONNECT")) {
 						writeLine(out, "STREAM STATUS RESULT=" + streamStatusResult);
 						if ("OK".equals(streamStatusResult) && echoData) {
