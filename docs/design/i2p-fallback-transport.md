@@ -600,3 +600,41 @@ fall back to them over I2P.
 host's `i2pd` (taking I2P down mid-rollout). Build the jar elsewhere and copy it to the
 seed, or skip the copy entirely when the change is config-only and the jar is functionally
 identical.
+
+## 15. LeaseSet hardening: pinned session options + publication self-check (2026-06-21)
+
+Two follow-ups to §14 that stop a node from *believing* it is inbound-reachable over I2P
+when its LeaseSet is not actually published. Both live in `SamSession.java`.
+
+**Pinned `SESSION CREATE` options (`SESSION_OPTIONS`).** The session previously inherited
+whatever tunnel/leaseset defaults the local `i2pd` happened to use, which varies by router
+version and can yield a LeaseSet some remote routers cannot encrypt to. We now append a fixed
+set of SAM v3 `KEY=VALUE` options to the `SESSION CREATE` line:
+
+- `i2cp.leaseSetEncType=4,0` — publish a LeaseSet that offers both ECIES-X25519 (type 4) and
+  legacy ElGamal (type 0) encryption, so any-vintage remote router can reach us;
+- `inbound.quantity=3 outbound.quantity=3` with `inbound.backupQuantity=1 outbound.backupQuantity=1`
+  — redundant tunnels so the destination keeps a stable, continuously-published LeaseSet rather
+  than flapping when a single tunnel expires;
+- `inbound.length=2 outbound.length=2` — standard 2-hop tunnels.
+
+**Publication self-check (`verifyLeaseSetPublished`).** §14's timing guard catches the
+instant-OK zombie, but a destination can still report `SESSION STATUS RESULT=OK` after a real
+tunnel build yet lag (or fail) LeaseSet publication. After the session reports up, Core opens a
+transient SAM control connection and issues `NAMING LOOKUP NAME=<ourB32>`, retrying a few times
+(publication can trail the tunnel build by seconds):
+
+- `RESULT=OK` → the destination resolves through the netDB → LeaseSet published → proceed.
+- Repeated non-`OK` resolution failures (e.g. `KEY_NOT_FOUND`) → treat as unpublished and throw,
+  so the caller rebuilds. This deliberately **reuses** the §14 cooldown + zombie guards
+  (`close()` records the teardown; the next `start()` waits out the cooldown) rather than
+  bypassing them.
+- The check is **best-effort and non-fatal**: if SAM cannot perform the lookup at all
+  (`INVALID_KEY`, an unparsable reply, or no clean SAM exchange), Core keeps the session instead
+  of tearing down something that may be working.
+
+**Honest logging.** The "reachable at" lines in `Network`/`NetworkData` (and the `SamSession`
+up-log) overstated reachability: they fired as soon as tunnels were built. They now say
+control/tunnels are up and that inbound reachability depends on LeaseSet publication; the
+`SamSession` up-log additionally reports `LeaseSet published` only after the self-check passes
+(or is skipped as unsupported).

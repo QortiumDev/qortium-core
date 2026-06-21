@@ -480,7 +480,8 @@ public class Network {
             this.chainI2PStreamProvider = provider;
             this.i2pServerChannel = forwardServerChannel;
             this.i2pFallbackUnavailableLogged.set(false);
-            LOGGER.info("Network I2P fallback reachable at {}", provider.getLocalB32());
+            LOGGER.info("Network I2P fallback up at {} (control/tunnels established; inbound reachability depends on LeaseSet publication)",
+                    provider.getLocalB32());
             return true;
         } catch (IOException | RuntimeException e) {
             logI2PChainFallbackUnavailable(settings, e);

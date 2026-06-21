@@ -427,7 +427,8 @@ public class NetworkData {
             this.dataI2PStreamProvider = provider;
             this.i2pServerChannel = forwardServerChannel;
             this.i2pFallbackUnavailableLogged.set(false);
-            LOGGER.info("NetworkData I2P fallback reachable at {}", provider.getLocalB32());
+            LOGGER.info("NetworkData I2P fallback up at {} (control/tunnels established; inbound reachability depends on LeaseSet publication)",
+                    provider.getLocalB32());
             return true;
         } catch (IOException | RuntimeException e) {
             logI2PDataFallbackUnavailable(settings, e);
