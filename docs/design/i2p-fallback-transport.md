@@ -651,3 +651,30 @@ up-log) overstated reachability: they fired as soon as tunnels were built. They 
 control/tunnels are up and that inbound reachability depends on LeaseSet publication; the
 `SamSession` up-log additionally reports `LeaseSet published` only after the self-check passes
 (or is skipped as unsupported).
+
+## 16. Publisher-initiated QDN push (2026-06-21)
+
+QDN data dissemination is otherwise pull-only: a peer that wants a resource asks holders for it.
+A NAT'd publisher cannot be pulled from until its I2P LeaseSet resolves (and even then large
+chunks may struggle), so freshly-published data can sit unreachable. A NAT'd node's **outbound**
+connections work fine, though — so the publisher can push.
+
+When our own just-published (or otherwise locally-held) arbitrary transaction enters the mempool,
+`ArbitraryTransaction.onImportAsUnconfirmed()` calls
+`ArbitraryDataManager.pushFreshlyPublishedData()` →
+`ArbitraryDataFileManager.offerDataToReachablePeers()` (best-effort, on a dedicated daemon
+executor; gated by `qdnPushOnPublishEnabled`, default on). It picks up to `QDN_PUSH_MAX_PEERS`
+(3) **outbound, handshaked** data peers that advertise the `QDN_PUSH` capability — outbound means
+we dialled them, so they are reachable to us regardless of our NAT status — and sends each an
+`ARBITRARY_DATA_FILE_OFFER` (114) listing the hashes we hold for that signature.
+
+A receiver handles the OFFER only if its **own storage policy** allows holding the resource
+(`canStoreData()`, plus the QDN block list). It pre-registers the offered hashes it doesn't
+already have (so the subsequently-pushed chunks are *expected* by the normal receive path) and
+replies with an `ARBITRARY_DATA_FILE_WANT` (115) listing exactly that subset. The publisher then
+sends those chunks as ordinary `ARBITRARY_DATA_FILE` messages via the existing serve path.
+
+Safety: no data is sent before a WANT; pushed chunks are still hash-validated on receipt
+(`validateHash`), so a lying offerer gains nothing; per-message hash counts are capped and
+pre-registered hashes expire on the normal request-guard TTL. Both messages are capability-gated
+(`QDN_PUSH`), so pre-feature peers neither receive nor are confused by them.

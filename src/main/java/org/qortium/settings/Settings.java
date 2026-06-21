@@ -452,6 +452,11 @@ public class Settings {
 	/** Whether to allow data outside of the storage policy to be relayed between other peers */
 	private boolean relayModeEnabled = true;
 
+	/** Whether, after publishing/holding our own resource, we proactively PUSH it out to a few
+	 * reachable (outbound, push-capable) peers so the data reaches the network even when this node
+	 * is NAT'd and cannot be pulled from. Receivers still gate acceptance on their own storage policy. */
+	private boolean qdnPushOnPublishEnabled = true;
+
 	/** Whether to remember which data was originally uploaded using this node.
 	 * This prevents auto deletion of own files when storage limits are reached. */
 	private boolean originalCopyIndicatorFileEnabled = true;
@@ -988,6 +993,7 @@ public class Settings {
 		settings.put("i2pEmbeddedRouter", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("storagePolicy", new WritableSetting(WritableSettingType.STORAGE_POLICY, false));
 		settings.put("relayModeEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
+		settings.put("qdnPushOnPublishEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("publicDataEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("privateDataEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("apiDocumentationEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
@@ -2318,6 +2324,10 @@ public class Settings {
 
 	public boolean isRelayModeEnabled() {
 		return this.relayModeEnabled;
+	}
+
+	public boolean isQdnPushOnPublishEnabled() {
+		return this.qdnPushOnPublishEnabled;
 	}
 
 	public boolean isDirectDataRetrievalEnabled() {

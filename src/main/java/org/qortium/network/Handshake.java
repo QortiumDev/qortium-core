@@ -519,6 +519,8 @@ public enum Handshake {
 	 * protocol error and disconnect, so a re-advertise must only be sent to peers that advertise this.
 	 */
 	static final String POST_HANDSHAKE_HELLO_CAPABILITY = "PHH";
+	/** Set when this node understands publisher-initiated QDN push (ARBITRARY_DATA_FILE_OFFER/WANT). */
+	public static final String QDN_PUSH_CAPABILITY = "QDN_PUSH";
 
 	private static final int POW_BUFFER_SIZE_PRE_131 = 8 * 1024 * 1024; // bytes
 	private static final int POW_DIFFICULTY_PRE_131 = 8; // leading zero bits
@@ -580,6 +582,9 @@ public enum Handshake {
 			String dataI2PDestination = NetworkData.getInstance().getI2PDataDestination();
 			if (dataI2PDestination != null)
 				capabilities.put(I2P_QDN_CAPABILITY, dataI2PDestination);
+			// Advertise that we understand publisher-initiated push so publishers can offer us data.
+			// Unknown capabilities are ignored by older peers, so this is backward compatible.
+			capabilities.put(QDN_PUSH_CAPABILITY, 1);
 		} else {
 			capabilities.put("QDN", 0);
 		}

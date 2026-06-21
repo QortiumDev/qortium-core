@@ -302,6 +302,17 @@ public class ArbitraryTransaction extends Transaction {
 
 		// Update caches
 		updateCaches(true);
+
+		// Publisher-initiated push (Fix 1): if we hold this resource's data locally (i.e. we just
+		// published it), proactively offer it to a few reachable peers so it reaches the network even
+		// when this node is NAT'd and cannot be pulled from. Best-effort and fully async; never let a
+		// failure here disturb transaction import.
+		try {
+			ArbitraryDataManager.getInstance().pushFreshlyPublishedData(arbitraryTransactionData);
+		} catch (Exception e) {
+			LOGGER.debug("Unable to schedule publisher push for {}: {}",
+					arbitraryTransactionData.getName(), e.getMessage());
+		}
 	}
 
 	@Override
