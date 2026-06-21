@@ -55,6 +55,10 @@ public enum MessageType {
 
     GET_ARBITRARY_DATA_FILES(113, GetArbitraryDataFileMessage::fromByteBuffer),
 
+    // Publisher-initiated push (Fix 1): OFFER advertises held hashes, WANT accepts a subset.
+    ARBITRARY_DATA_FILE_OFFER(114, ArbitraryDataFileOfferMessage::fromByteBuffer),
+    ARBITRARY_DATA_FILE_WANT(115, ArbitraryDataFileWantMessage::fromByteBuffer),
+
     ARBITRARY_DATA_FILE_LIST(120, ArbitraryDataFileListMessage::fromByteBuffer),
     GET_ARBITRARY_DATA_FILE_LIST(121, GetArbitraryDataFileListMessage::fromByteBuffer),
 

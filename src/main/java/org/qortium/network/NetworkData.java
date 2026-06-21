@@ -2423,6 +2423,14 @@ public class NetworkData {
 				ArbitraryDataFileListManager.getInstance().onNetworkArbitraryDataFileListMessage(peer, message);
 				break;
 
+			case ARBITRARY_DATA_FILE_OFFER:
+				ArbitraryDataFileManager.getInstance().onNetworkArbitraryDataFileOfferMessage(peer, message);
+				break;
+
+			case ARBITRARY_DATA_FILE_WANT:
+				ArbitraryDataFileManager.getInstance().onNetworkArbitraryDataFileWantMessage(peer, message);
+				break;
+
 			case GET_ARBITRARY_DATA_FILE:
 				ArbitraryDataFileManager.getInstance().onNetworkGetArbitraryDataFileMessage(peer, message);
 				break;

@@ -737,6 +737,11 @@ public class ArbitraryDataManager extends Thread {
 		return ArbitraryDataFileListManager.getInstance().fetchArbitraryDataFileList(arbitraryTransactionData);
 	}
 
+	// Entrypoint (Fix 1): proactively push freshly-published/locally-held data to reachable peers.
+	public void pushFreshlyPublishedData(ArbitraryTransactionData arbitraryTransactionData) {
+		ArbitraryDataFileManager.getInstance().offerDataToReachablePeers(arbitraryTransactionData);
+	}
+
 	// Entrypoint to request new metadata from peers
 	public ArbitraryDataTransactionMetadata fetchMetadata(ArbitraryTransactionData arbitraryTransactionData) {
 

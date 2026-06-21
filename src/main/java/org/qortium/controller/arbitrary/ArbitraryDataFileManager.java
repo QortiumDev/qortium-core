@@ -14,7 +14,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,6 +32,8 @@ import org.qortium.data.arbitrary.ArbitraryFileListResponseInfo;
 import org.qortium.data.arbitrary.ArbitraryRelayInfo;
 import org.qortium.data.network.PeerData;
 import org.qortium.data.transaction.ArbitraryTransactionData;
+import org.qortium.data.transaction.TransactionData;
+import org.qortium.network.Handshake;
 import org.qortium.network.NetworkData;
 import org.qortium.network.Peer;
 import org.qortium.network.PeerAddress;
@@ -38,6 +42,8 @@ import org.qortium.network.MessageFactory;
 import org.qortium.network.PeerSendManagement;
 import org.qortium.network.PeerSendManager;
 import org.qortium.network.message.ArbitraryDataFileMessage;
+import org.qortium.network.message.ArbitraryDataFileOfferMessage;
+import org.qortium.network.message.ArbitraryDataFileWantMessage;
 import org.qortium.network.message.BlockSummariesMessage;
 import org.qortium.network.message.GenericUnknownMessage;
 import org.qortium.network.message.GetArbitraryDataFileMessage;
@@ -49,6 +55,7 @@ import org.qortium.repository.RepositoryManager;
 import org.qortium.settings.Settings;
 import org.qortium.utils.ArbitraryTransactionUtils;
 import org.qortium.utils.Base58;
+import org.qortium.utils.ListUtils;
 import org.qortium.utils.NTP;
 
 import com.google.common.net.InetAddresses;
@@ -690,7 +697,8 @@ public class ArbitraryDataFileManager extends Thread {
         arbitraryDataFileHashResponseScheduler.shutdown();
         handleFileListRequestsScheduler.shutdown();
         cleaner.shutdown();
-        
+        pushExecutor.shutdownNow();
+
         try {
             if (!arbitraryDataFileHashResponseScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
                 LOGGER.warn("arbitraryDataFileHashResponseScheduler did not terminate in time, forcing shutdown");
@@ -1844,6 +1852,192 @@ public class ArbitraryDataFileManager extends Thread {
 //            processDataFile(peer, hash, signature, message.getId());
 //        }
 //    }
+
+    // ---- Publisher-initiated push (Fix 1) ----
+
+    /** Max reachable peers we offer a freshly-published resource to. */
+    private static final int QDN_PUSH_MAX_PEERS = 3;
+    /** Defensive cap on hashes processed from a single OFFER/WANT message. */
+    private static final int QDN_PUSH_MAX_HASHES_PER_MESSAGE = 10_000;
+    /** Dedicated single-thread executor so the push never blocks the import / network threads. */
+    private final ExecutorService pushExecutor = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "QDN Publisher Push");
+        t.setDaemon(true);
+        return t;
+    });
+
+    /**
+     * Offer a locally-held (freshly-published) resource to a few reachable, push-capable peers.
+     * Best-effort and asynchronous: we only ever advertise the hashes; nothing is sent until a peer
+     * replies with a WANT listing the hashes it accepts (see {@link #onNetworkArbitraryDataFileWantMessage}).
+     */
+    public void offerDataToReachablePeers(ArbitraryTransactionData transactionData) {
+        if (transactionData == null || transactionData.getSignature() == null)
+            return;
+        if (isStopping || !Settings.getInstance().isQdnEnabled() || !Settings.getInstance().isQdnPushOnPublishEnabled())
+            return;
+        try {
+            pushExecutor.execute(() -> {
+                try {
+                    doOfferDataToReachablePeers(transactionData);
+                } catch (Exception e) {
+                    LOGGER.debug("Publisher push failed for {}: {}", transactionData.getName(), e.getMessage());
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            // Shutting down - ignore
+        }
+    }
+
+    private void doOfferDataToReachablePeers(ArbitraryTransactionData transactionData) {
+        byte[] signature = transactionData.getSignature();
+
+        // Only push data we are actually allowed to hold/serve (also rejects blocked resources).
+        if (!ArbitraryDataStorageManager.getInstance().canStoreData(transactionData))
+            return;
+
+        // Enumerate the resource's hashes (metadata + chunks, or the single full hash) and keep only
+        // those we actually hold on disk.
+        List<byte[]> heldHashes = new ArrayList<>();
+        try {
+            ArbitraryDataFile arbitraryDataFile = ArbitraryDataFile.fromTransactionData(transactionData);
+            List<byte[]> allHashes = new ArrayList<>();
+            if (arbitraryDataFile.getMetadataHash() != null)
+                allHashes.add(arbitraryDataFile.getMetadataHash());
+            if (!arbitraryDataFile.getChunkHashes().isEmpty())
+                allHashes.addAll(arbitraryDataFile.getChunkHashes());
+            else if (arbitraryDataFile.getHash() != null)
+                allHashes.add(arbitraryDataFile.getHash());
+
+            for (byte[] hash : allHashes) {
+                if (hash != null && ArbitraryDataFile.fromHash(hash, signature).exists())
+                    heldHashes.add(hash);
+            }
+        } catch (DataException e) {
+            LOGGER.debug("Unable to enumerate hashes for publisher push of {}: {}", transactionData.getName(), e.getMessage());
+            return;
+        }
+
+        if (heldHashes.isEmpty())
+            return;
+
+        // Select reachable, push-capable peers: outbound (we dialled them, so they are reachable to us
+        // regardless of our own NAT status) and advertising the QDN_PUSH capability. Older peers that
+        // don't understand the OFFER/WANT messages never advertise the capability, so they are skipped.
+        List<Peer> targets = new ArrayList<>();
+        for (Peer peer : NetworkData.getInstance().getImmutableHandshakedPeers()) {
+            if (peer.isOutbound() && peer.getPeerCapability(Handshake.QDN_PUSH_CAPABILITY) != null) {
+                targets.add(peer);
+                if (targets.size() >= QDN_PUSH_MAX_PEERS)
+                    break;
+            }
+        }
+        if (targets.isEmpty())
+            return;
+
+        String signature58 = Base58.encode(signature);
+        for (Peer peer : targets) {
+            LOGGER.debug("Offering {} held hashes for {} to push-capable peer {}", heldHashes.size(), signature58, peer);
+            peer.sendMessage(new ArbitraryDataFileOfferMessage(signature, heldHashes));
+        }
+    }
+
+    /**
+     * Receiver side of the push: a peer is offering hashes it holds for a resource. If our storage policy
+     * allows holding this resource, pre-register the hashes we don't already have (so the subsequently
+     * pushed chunks are accepted and still hash-validated by the normal receive path) and reply with a
+     * WANT listing exactly that subset.
+     */
+    public void onNetworkArbitraryDataFileOfferMessage(Peer peer, Message message) {
+        if (isStopping || !Settings.getInstance().isQdnEnabled())
+            return;
+
+        ArbitraryDataFileOfferMessage offerMessage = (ArbitraryDataFileOfferMessage) message;
+        byte[] signature = offerMessage.getSignature();
+        List<byte[]> offeredHashes = offerMessage.getHashes();
+        if (signature == null || offeredHashes == null || offeredHashes.isEmpty())
+            return;
+        if (offeredHashes.size() > QDN_PUSH_MAX_HASHES_PER_MESSAGE) {
+            LOGGER.debug("Ignoring oversized QDN push OFFER ({} hashes) from {}", offeredHashes.size(), peer);
+            return;
+        }
+
+        // Only accept data our storage policy actually allows us to hold.
+        ArbitraryTransactionData transactionData;
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            TransactionData txData = repository.getTransactionRepository().fromSignature(signature);
+            if (!(txData instanceof ArbitraryTransactionData))
+                return;
+            transactionData = (ArbitraryTransactionData) txData;
+        } catch (DataException e) {
+            LOGGER.debug("Repository issue handling QDN push OFFER from {}: {}", peer, e.getMessage());
+            return;
+        }
+
+        if (ListUtils.isQdnBlocked(transactionData.getService(), transactionData.getName(), transactionData.getIdentifier()))
+            return;
+        if (!ArbitraryDataStorageManager.getInstance().canStoreData(transactionData))
+            return;
+
+        Long now = NTP.getTime();
+        if (now == null)
+            return;
+
+        List<byte[]> wantedHashes = new ArrayList<>();
+        for (byte[] hash : offeredHashes) {
+            if (hash == null)
+                continue;
+            try {
+                if (ArbitraryDataFile.fromHash(hash, signature).exists())
+                    continue; // already have it
+            } catch (DataException e) {
+                continue;
+            }
+            String hash58 = Base58.encode(hash);
+            // Mark as expected so the pushed chunk is accepted (and still hash-validated) on receipt.
+            arbitraryDataFileRequests.put(hash58, now);
+            addGuardTracking(hash58);
+            wantedHashes.add(hash);
+        }
+
+        if (wantedHashes.isEmpty())
+            return;
+
+        LOGGER.debug("Accepting QDN push: requesting {} of {} offered hashes for {} from {}",
+                wantedHashes.size(), offeredHashes.size(), Base58.encode(signature), peer);
+        peer.sendMessage(new ArbitraryDataFileWantMessage(signature, wantedHashes));
+    }
+
+    /**
+     * Publisher side of the push: a peer has accepted our offer and listed the hashes it wants. Serve each
+     * one we actually hold, reusing the standard chunk-send path (which validates existence and queues a
+     * lazy-loaded {@code ARBITRARY_DATA_FILE}).
+     */
+    public void onNetworkArbitraryDataFileWantMessage(Peer peer, Message message) {
+        if (isStopping)
+            return;
+
+        ArbitraryDataFileWantMessage wantMessage = (ArbitraryDataFileWantMessage) message;
+        byte[] signature = wantMessage.getSignature();
+        List<byte[]> wantedHashes = wantMessage.getHashes();
+        if (signature == null || wantedHashes == null || wantedHashes.isEmpty())
+            return;
+        if (wantedHashes.size() > QDN_PUSH_MAX_HASHES_PER_MESSAGE) {
+            LOGGER.debug("Ignoring oversized QDN push WANT ({} hashes) from {}", wantedHashes.size(), peer);
+            return;
+        }
+
+        for (byte[] hash : wantedHashes) {
+            if (hash == null)
+                continue;
+            try {
+                if (ArbitraryDataFile.fromHash(hash, signature).exists())
+                    processDataFile(peer, hash, signature, message);
+            } catch (DataException e) {
+                LOGGER.trace("Unable to serve pushed hash to {}: {}", peer, e.getMessage());
+            }
+        }
+    }
 
     public void onNetworkGetArbitraryDataFileMessage(Peer peer, Message message) {
         // Don't respond if QDN is disabled

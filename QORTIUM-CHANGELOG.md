@@ -34,6 +34,28 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-21 - network: push freshly-published QDN data to reachable peers
+
+Adds a way for data to leave a node that cannot be reached from the outside.
+Until now, sharing QDN data was entirely "pull": other nodes had to come and
+fetch it. A node behind NAT (no public address) can't be fetched from until its
+private I2P address fully comes online, so data it just published could sit
+stranded even though the node itself is perfectly able to reach out. This change
+lets such a node push instead: right after it publishes (or otherwise holds) a
+resource, it offers that data to a few peers it is already connected to and that
+understand the feature. Each offer just lists which pieces the publisher holds;
+nothing is sent yet. A receiver accepts only if its own storage rules allow
+keeping the resource, and replies listing the pieces it actually wants; the
+publisher then sends exactly those over the normal channel. This gets freshly
+published data onto reachable, well-connected nodes (e.g. seeds) quickly, from
+where the rest of the network can fetch it normally. Safety is preserved: no data
+is sent before it is requested, every received piece is still checksum-verified
+(so a dishonest offer achieves nothing), the amount of work per message is
+capped, and the whole feature is gated by a capability flag so older nodes are
+unaffected, plus a setting (qdnPushOnPublishEnabled, on by default) to turn it
+off. The push runs in the background and never interferes with importing the
+transaction.
+
 ### 2026-06-21 - network: re-advertise I2P address once the session comes up
 
 Fixes a timing gap that left NAT'd nodes unreachable over I2P for hours. When a
