@@ -953,7 +953,15 @@ public class Peer {
                     this.outputBuffer = ByteBuffer.wrap(messageBytes);
                     this.outputMessageType = message.getType().name();
                     this.outputMessageId = message.getId();
-                    
+
+                    // Start the no-progress window fresh for this message. Without this, a peer
+                    // that has been idle (lastWriteProgressTime holding a stale value from a previous
+                    // message or from construction) could be flagged as "stuck" the instant the
+                    // first write returns 0 bytes (e.g. socket send buffer momentarily full), even
+                    // though no forward-progress time has actually elapsed on THIS message. The
+                    // stuck-write watchdog measures time since last byte progress, so reset it here.
+                    this.lastWriteProgressTime = System.currentTimeMillis();
+
                     // Log only for ARBITRARY_DATA_FILE messages (actual chunks)
                     if (message.getType() == MessageType.ARBITRARY_DATA_FILE) {
                         LOGGER.trace("RESPONDER NETWORK PREP: messageId={}, toBytes={}ms, bytes={}, peer={}", 

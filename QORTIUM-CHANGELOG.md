@@ -34,6 +34,29 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-21 - network: don't reap slow-but-progressing QDN chunk transfers
+
+Stops a watchdog from killing large QDN data transfers that are simply slow,
+which was breaking data delivery over I2P. A background safety check
+disconnects any peer whose outgoing message hasn't moved for 60 seconds, to
+clear genuinely dead sockets. It measures "hasn't moved" as time since the last
+bytes were actually sent, which is correct -- but the timer that backs it was
+only reset when bytes flowed, so it could still be holding a stale value from a
+much earlier message (or from when the connection was first opened). If a peer
+had been quiet for a while and then started sending a fresh chunk, the very
+first moment the operating system's send buffer was momentarily full (zero bytes
+sent on that attempt) could make the watchdog believe the transfer had already
+been stalled for over a minute and cut the connection instantly. This hit large
+512 KiB data chunks over slow I2P tunnels especially hard: such a chunk needs
+roughly 85 seconds to push through a ~6 KiB/s tunnel, so it was being reaped
+mid-send while still making steady forward progress, leaving fetchers stuck with
+the small metadata chunk but never the data. The fix resets the no-progress
+timer at the start of each outgoing message, so the 60-second window now always
+measures stall time for the message currently being sent. A truly dead socket
+(no bytes for a full 60 seconds) is still reaped as before; a slow-but-steady
+transfer is left alone. Applies to both the chain network and the QDN data
+network, which share the same watchdog.
+
 ### 2026-06-20 - build: package the current version's jar, not a stale one
 
 Fixes a packaging foot-gun around version bumps. `build.sh` ran `mvn package`
