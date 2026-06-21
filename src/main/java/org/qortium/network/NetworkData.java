@@ -402,7 +402,7 @@ public class NetworkData {
 
     private boolean startI2PDataFallbackAttempt(Settings settings) {
         I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
-                nextI2PDataSessionId(), settings.getI2PDataKeyPath());
+                nextI2PDataSessionId(), settings.getI2PDataKeyPath(), this::onI2PDataSessionUp);
         ServerSocketChannel forwardServerChannel = null;
 
         try {
@@ -505,6 +505,51 @@ public class NetworkData {
             return null;
 
         return provider.getLocalB32();
+    }
+
+    /**
+     * Fired by {@link SamSession} the moment our QDN data I2P session comes up. A NAT'd node finishes its
+     * clearnet handshake to seeds in under a second, but its SAM I2P session can take 9-30s to build
+     * tunnels and publish a LeaseSet; the one-shot HELLO those peers received therefore carried no
+     * {@code I2P_QDN} capability, so they never learn our b32 (and keep funnelling fetches to an
+     * unreachable relay) until connection rotation hours later. Re-send an updated HELLO (which now
+     * includes the {@code I2P_QDN} capability) so already-handshaked data peers learn our reachable
+     * destination immediately.
+     *
+     * <p>Runs the re-advertise on a short-lived daemon thread, not the SAM setup thread: when this fires
+     * {@code dataI2PStreamProvider} has not yet been assigned (it is set after {@code provider.start()}
+     * returns), so {@link #getI2PDataDestination()} would still read {@code null} if called inline.
+     * Deferring also keeps the per-peer message queueing off the session-setup path.
+     */
+    private void onI2PDataSessionUp() {
+        Thread t = new Thread(this::reAdvertiseI2PDataCapability, "i2p-readvertise-data");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void reAdvertiseI2PDataCapability() {
+        if (this.isShuttingDown)
+            return;
+        if (this.getI2PDataDestination() == null) {
+            LOGGER.debug("Skipping I2P data capability re-advertise: data destination not available");
+            return;
+        }
+        Long timestamp = NTP.getTime();
+        if (timestamp == null) {
+            LOGGER.debug("Skipping I2P data capability re-advertise: NTP unsynchronized");
+            return;
+        }
+        String versionString = Controller.getInstance().getVersionString();
+        LOGGER.info("Re-advertising I2P QDN capability to handshaked data peers (destination now published)");
+        broadcast(peer -> {
+            // Only peers that understand a post-handshake HELLO; older peers would treat it as a protocol
+            // error and disconnect. Such peers simply pick up our destination at the next handshake/rotation.
+            if (peer.getHandshakeStatus() != Handshake.COMPLETED || !Handshake.supportsPostHandshakeHello(peer))
+                return null;
+            Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
+            String senderPeerAddress = peer.getPeerData().getAddress().toString();
+            return new HelloMessage(timestamp, versionString, senderPeerAddress, capabilities, peer.getPeerType());
+        });
     }
 
     public SocketChannel connectI2PDataPeer(String remoteB32) throws IOException {
@@ -2333,6 +2378,13 @@ public class NetworkData {
         switch (message.getType()) {
 
             case HELLO:
+                // A HELLO after completion is a capability refresh (the peer's slow I2P session just came
+                // up and it is now advertising its I2P_QDN destination). Merge it instead of treating it as
+                // a protocol error; only disconnect if its chain identity is incompatible.
+                if (!Handshake.applyPostHandshakeHello(peer, (HelloMessage) message))
+                    peer.disconnect("incompatible post-handshake HELLO");
+                return;
+
             case CHALLENGE:
             case RESPONSE:
                 LOGGER.debug("[{}] Unexpected handshaking message {} from peer {}", peer.getPeerConnectionId(),

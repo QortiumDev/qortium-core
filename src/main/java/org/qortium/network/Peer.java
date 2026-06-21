@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -492,6 +493,33 @@ public class Peer {
     protected void setPeersCapabilities(PeerCapabilities capabilities) {
         synchronized (this.peerInfoLock) {
             this.peerCapabilities = capabilities;
+        }
+    }
+
+    /**
+     * Merge newly-advertised capabilities into this peer's existing set, overwriting on key collision and
+     * adding new keys. Unlike {@link #setPeersCapabilities}, this preserves capabilities the peer already
+     * advertised — used when a peer re-sends HELLO after its (slow) I2P session comes up to add its
+     * {@code I2P}/{@code I2P_QDN} destination without dropping the rest of its capability set.
+     *
+     * @return {@code true} if any capability value was added or changed
+     */
+    protected boolean mergePeersCapabilities(Map<String, Object> updates) {
+        if (updates == null || updates.isEmpty())
+            return false;
+        synchronized (this.peerInfoLock) {
+            if (this.peerCapabilities == null)
+                this.peerCapabilities = new PeerCapabilities();
+            Map<String, Object> current = this.peerCapabilities.getPeerCapabilities();
+            boolean changed = false;
+            for (Map.Entry<String, Object> entry : updates.entrySet()) {
+                Object existing = current.get(entry.getKey());
+                if (!Objects.equals(existing, entry.getValue())) {
+                    current.put(entry.getKey(), entry.getValue());
+                    changed = true;
+                }
+            }
+            return changed;
         }
     }
 
