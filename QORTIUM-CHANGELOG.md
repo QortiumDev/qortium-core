@@ -34,6 +34,20 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-21 - release: move version to 1.1.2
+
+Bumps the project version from 1.1.1 to 1.1.2, the version the node now reports
+to peers and in its API (the build version becomes `1.1.2` plus the commit).
+This is a Previewnet patch release focused on making I2P-backed QDN publishing
+and fetching reliable for NAT'd nodes: it includes the I2P LeaseSet option and
+publication checks, refreshed hello advertisements once I2P comes online, direct
+fetching from I2P-only holders, preference for already-connected data holders,
+background push offers for freshly published QDN data, and the fix that stops
+slow-but-progressing chunk transfers from being reaped mid-send. It also carries
+the packaging fix that ensures the preview bundle uses the jar matching the
+current project version. The change here is only the version string -- no code,
+consensus, or database behaviour changes with it.
+
 ### 2026-06-21 - network: push freshly-published QDN data to reachable peers
 
 Adds a way for data to leave a node that cannot be reached from the outside.
