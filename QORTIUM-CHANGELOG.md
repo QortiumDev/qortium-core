@@ -34,6 +34,25 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-21 - network: make NAT'd nodes fetchable for QDN and prefer connected holders
+
+Fixes the case where a node behind NAT publishes data that no one else can
+fetch. Such a node has no public internet address, so when it told other nodes
+where to fetch its data it advertised either nothing or a broken placeholder,
+and it flagged itself as "not directly connectable." Other nodes therefore tried
+to get its data only by relaying through a third party -- and on this network
+that third party is usually reachable only over I2P, which often could not be
+dialled, so the fetch dead-ended and the data never arrived. Two changes fix
+this. First, a node now counts as directly connectable for data when it has a
+working I2P data address even without a public internet address, and it
+advertises that I2P address so others can dial it directly instead of giving up
+on a relay; clearnet nodes with a public address behave exactly as before, and a
+node with neither simply advertises nothing (handled safely rather than emitting
+a broken address). Second, when picking where to fetch a chunk from, a node now
+prefers a holder it already has an open connection to over one it would have to
+dial fresh, since a fresh dial to an I2P-only relay is the case most likely to
+fail; among equally-connected holders it still prefers the fewest relay hops.
+
 ### 2026-06-21 - network: pin I2P session options and verify LeaseSet publication
 
 Makes a node stop believing it is reachable over I2P when it actually is not.

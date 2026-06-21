@@ -35,6 +35,22 @@ final class InboundReachability {
 	}
 
 	/**
+	 * Transport-aware direct-connectability for QDN data fetching.
+	 * <p>
+	 * {@link #canAcceptInbound()} only describes clearnet (IP) reachability and must stay that
+	 * way so that node-status reporting and IP peer logic are not misled. However, a NAT'd node
+	 * that has no usable external IP can still be dialled directly over I2P when it has a usable
+	 * I2P data destination (a published b32). In that case it should advertise itself as directly
+	 * connectable for QDN so requesters dial its data destination instead of dead-ending on an
+	 * unreachable I2P relay.
+	 *
+	 * @param hasUsableI2PDataDestination true if this node currently has a usable (session-up) I2P data destination
+	 */
+	boolean canAcceptInboundData(boolean hasUsableI2PDataDestination) {
+		return this.canAcceptInbound() || hasUsableI2PDataDestination;
+	}
+
+	/**
 	 * A node with a configured external IP address (e.g. a public-IP seed/VPS with an
 	 * open or forwarded port) is reachable from outside even when UPnP is disabled and
 	 * no inbound handshake has arrived within the recent window, so it should still

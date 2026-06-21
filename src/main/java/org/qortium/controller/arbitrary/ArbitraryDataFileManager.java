@@ -1461,14 +1461,23 @@ public class ArbitraryDataFileManager extends Thread {
                 return this.getRandomRelayInfoEntryForHash(hash58);
             }
 
-            // Sort by number of hops (lowest first)
-            relayInfoList.sort(Comparator.comparingInt(ArbitraryRelayInfo::getRequestHops));
+            // Prefer a holder we ALREADY have an open connection to over one we'd have to dial
+            // fresh. A fresh dial to an I2P-only relay can dead-end ("LeaseSet not found" / no
+            // direct fallback), whereas an already-connected TCP/handshaked peer can be reached
+            // immediately. Within each group we keep the existing lowest-hop-count preference.
+            PeerList connectedPeers = NetworkData.getInstance().getImmutableHandshakedPeers();
+            Comparator<ArbitraryRelayInfo> connectedFirstThenFewestHops = Comparator
+                    .comparing((ArbitraryRelayInfo r) -> r.getPeer(connectedPeers) == null) // false (connected) sorts first
+                    .thenComparingInt(ArbitraryRelayInfo::getRequestHops);
+
+            relayInfoList.sort(connectedFirstThenFewestHops);
 
             // FUTURE: secondary sort by requestTime?
 
             ArbitraryRelayInfo relayInfo = relayInfoList.get(0);
 
-            LOGGER.trace("Returning optimal relay info for hash: {} (requestHops {})", hash58, relayInfo.getRequestHops());
+            LOGGER.trace("Returning optimal relay info for hash: {} (requestHops {}, alreadyConnected {})",
+                    hash58, relayInfo.getRequestHops(), relayInfo.getPeer(connectedPeers) != null);
             return relayInfo;
         }
         LOGGER.trace("No relay info exists for hash: {}", hash58);

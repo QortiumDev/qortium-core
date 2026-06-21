@@ -98,7 +98,9 @@ public class ArbitraryDataFileListManager {
  
 
     private Boolean getIsDirectConnectable() {
-        return NetworkData.getInstance().canAcceptInbound();
+        // Transport-aware: a NAT'd node with no usable external IP is still directly connectable
+        // over I2P when it has a usable I2P data destination. canAcceptInboundData() folds both in.
+        return NetworkData.getInstance().canAcceptInboundData();
     }
 
     public static ArbitraryDataFileListManager getInstance() {
@@ -721,14 +723,27 @@ public class ArbitraryDataFileListManager {
                             int requestHops = arbitraryDataFileListMessage.getRequestHops() != null ? arbitraryDataFileListMessage.getRequestHops() : 100;
 
                             String peerWithFilesString = arbitraryDataFileListMessage.getPeerAddress();
-                            PeerAddress pa = PeerAddress.fromString(peerWithFilesString); // HOST:PORT
-                            PeerData pd = new PeerData(pa,now, "INIT");
-                            Peer peerWithFiles = new Peer(pd, Peer.NETWORKDATA);
+                            // The advertised holder address may now be absent (a node with neither a usable
+                            // external IP nor a usable I2P data destination advertises nothing). Parse it
+                            // defensively so a missing/malformed address falls back to relay-via-sender
+                            // rather than crashing the whole response loop.
+                            Peer peerWithFiles = null;
+                            if (peerWithFilesString != null && !peerWithFilesString.isBlank()) {
+                                try {
+                                    PeerAddress pa = PeerAddress.fromString(peerWithFilesString); // HOST:PORT or bare I2P b32
+                                    PeerData pd = new PeerData(pa, now, "INIT");
+                                    peerWithFiles = new Peer(pd, Peer.NETWORKDATA);
+                                } catch (IllegalArgumentException e) {
+                                    LOGGER.trace("Ignoring unusable advertised holder address '{}' for hash {}: {}", peerWithFilesString, hash58, e.getMessage());
+                                }
+                            }
                             String nodeId = arbitraryDataFileListMessage.getNodeId();
                             // Update Response based on Content Holder being able to access direct connect
                             ArbitraryFileListResponseInfo responseInfo;
 
-                            if(arbitraryDataFileListMessage.isDirectConnectable()) {
+                            // Only treat as direct-connectable if the holder both advertised that capability
+                            // AND gave us a usable address to dial. Otherwise relay via the sender.
+                            if (arbitraryDataFileListMessage.isDirectConnectable() && peerWithFiles != null) {
                                 responseInfo = new ArbitraryFileListResponseInfo(hash58, signature58,
                                         peerWithFiles, nodeId, now, arbitraryDataFileListMessage.getRequestTime(), requestHops, true);
                                 LOGGER.debug("Adding QDN Direct Connect responseInfo to ArbDataFileManager peer: {} FileHash: {}", peerWithFilesString, hash58);
@@ -741,9 +756,10 @@ public class ArbitraryDataFileListManager {
                         }
 
                         // Keep track of the source peer, for direct connections
-                        if (arbitraryDataFileListMessage.getPeerAddress() != null) {
+                        String advertisedHolderAddress = arbitraryDataFileListMessage.getPeerAddress();
+                        if (advertisedHolderAddress != null && !advertisedHolderAddress.isBlank()) {
                             ArbitraryDataFileManager.getInstance().addDirectConnectionInfoIfUnique(
-                                    new ArbitraryDirectConnectionInfo(signature, arbitraryDataFileListMessage.getPeerAddress(), arbitraryDataFileListMessage.getNodeId(), hashes, now));
+                                    new ArbitraryDirectConnectionInfo(signature, advertisedHolderAddress, arbitraryDataFileListMessage.getNodeId(), hashes, now));
                         }
                     }
 
@@ -1024,8 +1040,20 @@ public class ArbitraryDataFileListManager {
                         arbitraryDataFileListRequests.put(message.getId(), newEntry);
                     }
 
-                    String ourAddress = Network.getInstance().getOurExternalIpAddress() + ":" + Settings.getInstance().getQDNListenPort();
-                    LOGGER.trace("We Think our external address is: {}", Network.getInstance().getOurExternalIpAddress());
+                    // Advertise an address requesters can dial back to. Prefer a usable external IP
+                    // (clearnet-reachable seeds keep behaving exactly as before). When there is no usable
+                    // external IP but we have a usable I2P data destination, advertise our b32 so a NAT'd
+                    // publisher is still reachable (requesters dial the data dest instead of dead-ending on
+                    // an unreachable I2P relay). Never advertise the literal "null:port" we used to emit.
+                    String externalIpAddress = Network.getInstance().getOurExternalIpAddress();
+                    String ourAddress;
+                    if (externalIpAddress != null && !externalIpAddress.isBlank()) {
+                        ourAddress = externalIpAddress + ":" + Settings.getInstance().getQDNListenPort();
+                    } else {
+                        // Bare b32 (no port) — PeerAddress classifies it as I2P. May be null if no usable dest.
+                        ourAddress = NetworkData.getInstance().getI2PDataDestination();
+                    }
+                    LOGGER.trace("We Think our external address is: {}", ourAddress);
                     ArbitraryDataFileListMessage arbitraryDataFileListMessage;
 
                     Collections.shuffle(hashes.subList(1, hashes.size()));
