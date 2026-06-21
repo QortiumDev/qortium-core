@@ -513,6 +513,12 @@ public enum Handshake {
 	static final String ARCHIVE_HEIGHT_CAPABILITY = "ARCHIVE_HEIGHT";
 	static final String I2P_CAPABILITY = "I2P";
 	static final String I2P_QDN_CAPABILITY = "I2P_QDN";
+	/**
+	 * Advertised by nodes that accept a HELLO re-sent <em>after</em> handshake completion as a capability
+	 * refresh (see {@link #applyPostHandshakeHello}). Older nodes treat a post-handshake HELLO as a
+	 * protocol error and disconnect, so a re-advertise must only be sent to peers that advertise this.
+	 */
+	static final String POST_HANDSHAKE_HELLO_CAPABILITY = "PHH";
 
 	private static final int POW_BUFFER_SIZE_PRE_131 = 8 * 1024 * 1024; // bytes
 	private static final int POW_DIFFICULTY_PRE_131 = 8; // leading zero bits
@@ -590,7 +596,45 @@ public enum Handshake {
 				: 0;
 		capabilities.put(ARCHIVE_HEIGHT_CAPABILITY, archiveHeight);
 
+		// We accept a post-handshake HELLO as a capability refresh, so peers may re-advertise their I2P
+		// destination to us once their slow SAM session comes up. Unknown to older peers, who ignore it.
+		capabilities.put(POST_HANDSHAKE_HELLO_CAPABILITY, true);
+
 		return capabilities;
+	}
+
+	/**
+	 * Apply a HELLO that arrives <em>after</em> the handshake has already completed. Peers re-send HELLO
+	 * once their (slow) I2P SAM session comes up so we learn the {@code I2P}/{@code I2P_QDN} destination
+	 * that their first HELLO could not carry. This is purely a capability refresh: we do NOT re-run the
+	 * handshake state machine, change handshake state, or send anything back (the original handshake
+	 * already authenticated the peer and any reply would risk a HELLO ping-pong). The peer's chain
+	 * identity is re-checked so a post-handshake HELLO cannot flip us onto an incompatible chain, then the
+	 * advertised capabilities are <em>merged</em> (not replaced) so existing capabilities are preserved.
+	 *
+	 * @return {@code true} if the update was accepted (compatible); {@code false} if it should be rejected
+	 *         (incompatible chain identity) so the caller can disconnect.
+	 */
+	static boolean applyPostHandshakeHello(Peer peer, HelloMessage helloMessage) {
+		PeerCapabilities updated = helloMessage.getCapabilities();
+		if (!areChainCapabilitiesCompatible(updated)) {
+			LOGGER.debug("Ignoring post-handshake HELLO from {} - incompatible chain identity: {}",
+					peer, describeChainCapabilityMismatch(updated));
+			return false;
+		}
+		boolean changed = peer.mergePeersCapabilities(updated.getPeerCapabilities());
+		if (changed)
+			LOGGER.debug("Merged updated capabilities from post-handshake HELLO for {}", peer);
+		return true;
+	}
+
+	/**
+	 * Whether {@code peer} advertised that it accepts a post-handshake HELLO (see
+	 * {@link #POST_HANDSHAKE_HELLO_CAPABILITY}). A re-advertise must be sent only to such peers; older
+	 * peers treat an unexpected HELLO as a protocol error and would disconnect.
+	 */
+	static boolean supportsPostHandshakeHello(Peer peer) {
+		return Boolean.TRUE.equals(peer.getPeerCapability(POST_HANDSHAKE_HELLO_CAPABILITY));
 	}
 
 	static boolean areChainCapabilitiesCompatible(PeerCapabilities capabilities) {

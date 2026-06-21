@@ -184,6 +184,19 @@ how `"QDN":24894` is advertised — so we add string capabilities, no wire-forma
 Two keys because chain and data use separate destinations. A node advertises a key only
 when that I2P session is up; absence = "no I2P here".
 
+Because the SAM session can take 9-30s to build tunnels and publish a LeaseSet while a
+clearnet handshake to seeds finishes in under a second, the first HELLO a NAT'd node sends
+often carries no I2P key yet. `SamSession` therefore fires an `onSessionUp` callback the
+moment the session comes up; `Network`/`NetworkData` re-send an updated HELLO (now carrying
+the `"I2P"`/`"I2P_QDN"` key) to peers they already handshaked. A HELLO received after the
+handshake has completed is treated as a capability refresh — `Handshake.applyPostHandshakeHello()`
+re-checks chain identity and **merges** the advertised capabilities into the peer
+(`Peer.mergePeersCapabilities()`) without touching handshake state or replying — so peers
+learn the b32 immediately instead of waiting for connection rotation. Older nodes treat an
+unexpected post-handshake HELLO as a protocol error and disconnect, so a node only re-advertises
+to peers that announce the `"PHH"` capability (added to every HELLO); pre-`PHH` peers simply
+pick up the destination at the next handshake/rotation.
+
 ### 5.5 Transport selection / fallback policy
 
 When choosing how to reach a known peer:

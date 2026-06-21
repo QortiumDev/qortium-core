@@ -126,7 +126,20 @@ public class SamSession implements I2PStreamProvider {
      */
     private volatile long minRealSessionBuildMs = MIN_REAL_SESSION_BUILD_MS;
 
+    /**
+     * Fired once each time the session transitions to up (after {@code sessionUp.set(true)}). Lets the
+     * owner (Network / NetworkData) re-advertise the now-available I2P capability to peers it already
+     * handshaked over clearnet before this slow session came up. May be {@code null}. Must be cheap and
+     * non-blocking: it runs on the session-setup thread, so any network work it triggers should be
+     * dispatched elsewhere (the callers do this).
+     */
+    private final Runnable onSessionUp;
+
     public SamSession(String samHost, int samPort, String sessionId, Path keyFile) {
+        this(samHost, samPort, sessionId, keyFile, null);
+    }
+
+    public SamSession(String samHost, int samPort, String sessionId, Path keyFile, Runnable onSessionUp) {
         if (samHost == null || samHost.isBlank())
             throw new IllegalArgumentException("SAM host cannot be blank");
         if (samPort <= 0 || samPort > 65535)
@@ -138,6 +151,7 @@ public class SamSession implements I2PStreamProvider {
         this.samPort = samPort;
         this.sessionId = sessionId;
         this.keyFile = Objects.requireNonNull(keyFile, "keyFile");
+        this.onSessionUp = onSessionUp;
     }
 
     /**
@@ -201,6 +215,21 @@ public class SamSession implements I2PStreamProvider {
         startControlReader(in);
         LOGGER.info("I2P session '{}' up, destination {} ({}s tunnel build); LeaseSet published",
                 sessionId, localB32, TimeUnit.MILLISECONDS.toSeconds(createMillis));
+        fireSessionUp();
+    }
+
+    /**
+     * Notify the owner that the session just came up so it can re-advertise the now-available I2P
+     * capability. Best-effort and isolated: a misbehaving callback must never fail session setup.
+     */
+    private void fireSessionUp() {
+        if (onSessionUp == null)
+            return;
+        try {
+            onSessionUp.run();
+        } catch (RuntimeException e) {
+            LOGGER.warn("I2P session '{}' onSessionUp callback failed: {}", sessionId, e.getMessage());
+        }
     }
 
     /**

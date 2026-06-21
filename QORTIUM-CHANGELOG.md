@@ -34,6 +34,24 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-21 - network: re-advertise I2P address once the session comes up
+
+Fixes a timing gap that left NAT'd nodes unreachable over I2P for hours. When a
+node connects to a seed, it immediately sends a short "hello" that lists how it
+can be reached. But its private I2P address can take 10-30 seconds to come
+online, while the clearnet handshake to the seed completes in under a second --
+so that first hello almost always goes out before the I2P address exists, and
+the peer never learns it until the connection is recycled hours later. Now, the
+moment the I2P address comes online, the node re-sends an updated hello carrying
+it, so already-connected peers learn the reachable address right away. A hello
+that arrives after the initial handshake is treated as an address refresh: the
+receiver re-checks that it is still the same chain and merges in the new address
+without disturbing anything else, and without replying (so there is no
+back-and-forth). Because older nodes treat an unexpected second hello as an error
+and would drop the connection, a node only sends the refresh to peers that
+advertise support for it (a small "PHH" capability now included in every hello);
+older peers are left alone and simply pick up the address at the next reconnect.
+
 ### 2026-06-21 - network: make NAT'd nodes fetchable for QDN and prefer connected holders
 
 Fixes the case where a node behind NAT publishes data that no one else can

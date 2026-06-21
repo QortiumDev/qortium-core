@@ -455,7 +455,7 @@ public class Network {
 
     private boolean startI2PChainFallbackAttempt(Settings settings) {
         I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
-                nextI2PChainSessionId(), settings.getI2PChainKeyPath());
+                nextI2PChainSessionId(), settings.getI2PChainKeyPath(), this::onI2PChainSessionUp);
         ServerSocketChannel forwardServerChannel = null;
 
         try {
@@ -558,6 +558,53 @@ public class Network {
             return null;
 
         return provider.getLocalB32();
+    }
+
+    /**
+     * Fired by {@link SamSession} the moment our chain I2P session comes up. A NAT'd node finishes its
+     * clearnet handshake to seeds in under a second, but its SAM I2P session can take 9-30s to build
+     * tunnels and publish a LeaseSet; the one-shot HELLO those peers received therefore carried no
+     * {@code I2P} capability, so they never learn our b32 until connection rotation hours later. Re-send
+     * an updated HELLO (which now includes the {@code I2P} capability) so already-handshaked peers learn
+     * our reachable destination immediately.
+     *
+     * <p>Runs the re-advertise on a short-lived daemon thread, not the SAM setup thread: when this fires
+     * {@code chainI2PStreamProvider} has not yet been assigned (it is set after {@code provider.start()}
+     * returns), so {@link #getI2PChainDestination()} would still read {@code null} if called inline.
+     * Deferring also keeps the per-peer message queueing off the session-setup path.
+     */
+    private void onI2PChainSessionUp() {
+        Thread t = new Thread(this::reAdvertiseI2PChainCapability, "i2p-readvertise-chain");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void reAdvertiseI2PChainCapability() {
+        if (this.isShuttingDown)
+            return;
+        // Capability snapshot is built per-peer below (HELLO carries the recipient's own address), and now
+        // includes the I2P capability because the session is up. If the session has already gone back down
+        // there is nothing useful to advertise, so skip.
+        if (this.getI2PChainDestination() == null) {
+            LOGGER.debug("Skipping I2P chain capability re-advertise: chain destination not available");
+            return;
+        }
+        Long timestamp = NTP.getTime();
+        if (timestamp == null) {
+            LOGGER.debug("Skipping I2P chain capability re-advertise: NTP unsynchronized");
+            return;
+        }
+        String versionString = Controller.getInstance().getVersionString();
+        LOGGER.info("Re-advertising I2P chain capability to handshaked peers (destination now published)");
+        broadcast(peer -> {
+            // Only peers that understand a post-handshake HELLO; older peers would treat it as a protocol
+            // error and disconnect. Such peers simply pick up our destination at the next handshake/rotation.
+            if (peer.getHandshakeStatus() != Handshake.COMPLETED || !Handshake.supportsPostHandshakeHello(peer))
+                return null;
+            Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
+            String senderPeerAddress = peer.getPeerData().getAddress().toString();
+            return new HelloMessage(timestamp, versionString, senderPeerAddress, capabilities, peer.getPeerType());
+        });
     }
 
     public SocketChannel connectI2PChainPeer(String remoteB32) throws IOException {
@@ -2389,6 +2436,13 @@ public class Network {
                 break;
 
             case HELLO:
+                // A HELLO after completion is a capability refresh (the peer's slow I2P session just came
+                // up and it is now advertising its I2P chain destination). Merge it instead of treating it
+                // as a protocol error; only disconnect if its chain identity is incompatible.
+                if (!Handshake.applyPostHandshakeHello(peer, (HelloMessage) message))
+                    peer.disconnect("incompatible post-handshake HELLO");
+                return;
+
             case CHALLENGE:
             case RESPONSE:
                 LOGGER.debug("[{}] Unexpected handshaking message {} from peer {}", peer.getPeerConnectionId(),
