@@ -249,27 +249,27 @@ public class AccountTrustSnapshotTests extends Common {
 
 			List<AccountTrustSnapshotData> silverAccountSnapshots = repository.getAccountRatingRepository()
 					.getTrustDerivationSnapshotsForDerivation(AccountTrustStatus.SILVER, AccountRatingCategory.SUBJECT,
-							null, null, null, null, null);
+							null, null, null, null, null, null);
 			assertSingleAccountSnapshotPage(silverAccountSnapshots, alice.getAddress());
 
 			List<AccountTrustSnapshotData> playerLevelThreeSnapshots = repository.getAccountRatingRepository()
-					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.PLAYER, null, 3, null, null,
+					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.PLAYER, null, null, 3, null, null,
 							null);
 			assertSingleAccountSnapshotPage(playerLevelThreeSnapshots, dilbert.getAddress());
 
 			List<AccountTrustSnapshotData> firstAccountSnapshots = repository.getAccountRatingRepository()
-					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.SUBJECT, null, null, 1, null,
+					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.SUBJECT, null, null, null, 1, null,
 							null);
 			assertSingleAccountSnapshotPage(firstAccountSnapshots, alice.getAddress());
 
 			List<AccountTrustSnapshotData> reversedFirstAccountSnapshots = repository.getAccountRatingRepository()
-					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.SUBJECT, null, null, 1, null,
+					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.SUBJECT, null, null, null, 1, null,
 							true);
 			assertEquals(4, reversedFirstAccountSnapshots.size());
 			assertFalse(alice.getAddress().equals(reversedFirstAccountSnapshots.get(0).getAccountAddress()));
 
 			assertTrue(repository.getAccountRatingRepository()
-					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.SUBJECT, null, null, 0, null,
+					.getTrustDerivationSnapshotsForDerivation(null, AccountRatingCategory.SUBJECT, null, null, null, 0, null,
 							null).isEmpty());
 		}
 	}
