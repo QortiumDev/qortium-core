@@ -1033,9 +1033,10 @@ public class AccountRatingsResource {
 							snapshot.getMappedTrustStatus(), snapshot.getInboundRatings(), new ArrayList<>()));
 			}
 
+			// TODO: Snapshot rows are currently stored without blocksMinted/mintingLevel/effectiveVoteWeight; defaults to 0 for derivation rows.
 			derivedAccounts.add(new AccountTrustDerivationData(firstSnapshot.getAccountPublicKey(),
 					firstSnapshot.getAccountAddress(), derivedTrustStatus,
-					AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, derivedTrustStatus),
+					AccountTrustPolicy.getVoteWeightPercent(voteWeightPercents, derivedTrustStatus), 0, 0, 0,
 					firstSnapshot.isMintingSeedMember(), firstSnapshot.getSnapshotHeight(),
 					firstSnapshot.getSnapshotTimestamp(), false, categories));
 		}
