@@ -34,6 +34,13 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-22 - i18n: add Norwegian Bokmal translations
+
+Adds Norwegian Bokmål language bundles for Core API errors, system tray text,
+and transaction validation messages. The translator also treats legacy
+Norwegian locale tags such as `no` and `no-NO` as Bokmål so clients using those
+tags receive the new Norwegian text instead of falling back to English.
+
 ### 2026-06-22 - tools: add a Previewnet topology map generator
 
 Adds an operator tool that queries the Previewnet nodes, records a JSON snapshot

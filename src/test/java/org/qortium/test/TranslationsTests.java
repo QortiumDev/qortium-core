@@ -2,6 +2,7 @@ package org.qortium.test;
 
 import org.junit.Test;
 import org.qortium.api.ApiError;
+import org.qortium.globalization.Translator;
 import org.qortium.transaction.Transaction.ValidationResult;
 
 import java.io.IOException;
@@ -27,6 +28,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -104,6 +106,14 @@ public class TranslationsTests {
 		}
 
 		assertTrue(describe(issues), issues.isEmpty());
+	}
+
+	@Test
+	public void testLegacyNorwegianLocaleResolvesToBokmal() {
+		String bokmal = Translator.INSTANCE.translate("SysTray", "nb", "EXIT");
+
+		assertEquals(bokmal, Translator.INSTANCE.translate("SysTray", "no", "EXIT"));
+		assertEquals(bokmal, Translator.INSTANCE.translate("SysTray", "no-NO", "EXIT"));
 	}
 
 	private static void checkBundleKeys(String className, String lang, Set<String> expectedKeys, List<String> issues) throws IOException {
