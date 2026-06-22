@@ -6,6 +6,7 @@ import org.qortium.data.account.AccountRatingData;
 import org.qortium.data.account.AccountRatingCategory;
 import org.qortium.data.account.AccountRatingSummaryData;
 import org.qortium.data.account.AccountTrustDerivationData;
+import org.qortium.data.account.AccountTrustDerivationOrder;
 import org.qortium.data.account.AccountTrustCategoryData;
 import org.qortium.data.account.AccountTrustRatingCountsData;
 import org.qortium.data.account.AccountTrustSnapshotData;
@@ -554,26 +555,70 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 
 	@Override
 	public List<AccountTrustSnapshotData> getTrustDerivationSnapshotsForDerivation(AccountTrustStatus status,
-			AccountRatingCategory sortCategory, Boolean seedMember, Integer minLevel, Integer limit, Integer offset,
-			Boolean reverse) throws DataException {
+			AccountRatingCategory sortCategory, AccountTrustDerivationOrder order, Boolean seedMember, Integer minLevel,
+			Integer limit, Integer offset, Boolean reverse) throws DataException {
 		if (limit != null && limit == 0)
 			return new ArrayList<>();
 
 		List<String> accountAddresses = getTrustDerivationSnapshotAccountPage(status, defaultCategory(sortCategory),
-				seedMember, minLevel, limit, offset, reverse);
+				order, seedMember, minLevel, limit, offset, reverse);
 		if (accountAddresses.isEmpty())
 			return new ArrayList<>();
 
 		return getTrustDerivationSnapshotsForAccounts(accountAddresses);
 	}
 
-	private List<String> getTrustDerivationSnapshotAccountPage(AccountTrustStatus status, AccountRatingCategory sortCategory,
-			Boolean seedMember, Integer minLevel, Integer limit, Integer offset, Boolean reverse) throws DataException {
+	@Override
+	public long getTrustDerivationSnapshotCountForDerivation(AccountTrustStatus status, AccountRatingCategory sortCategory,
+			Boolean seedMember, Integer minLevel) throws DataException {
 		StringBuilder sql = new StringBuilder(512);
 		List<Object> bindParams = new ArrayList<>();
+
+		sql.append("SELECT COUNT(subject_snapshot.account) ");
+		appendTrustDerivationSnapshotFromWhere(sql, bindParams, defaultCategory(sortCategory), status, seedMember, minLevel);
+
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {
+			if (resultSet == null)
+				return 0L;
+
+			return resultSet.getLong(1);
+		} catch (SQLException e) {
+			throw new DataException("Unable to count account trust derivation snapshots in repository", e);
+		}
+	}
+
+	private List<String> getTrustDerivationSnapshotAccountPage(AccountTrustStatus status, AccountRatingCategory sortCategory,
+			AccountTrustDerivationOrder order, Boolean seedMember, Integer minLevel, Integer limit, Integer offset,
+			Boolean reverse) throws DataException {
+		StringBuilder sql = new StringBuilder(512);
+		List<Object> bindParams = new ArrayList<>();
+
+		sql.append("SELECT subject_snapshot.account ");
+		appendTrustDerivationSnapshotFromWhere(sql, bindParams, sortCategory, status, seedMember, minLevel);
+		appendTrustDerivationSnapshotOrderBy(sql, order, reverse);
+		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
+
+		List<String> accountAddresses = new ArrayList<>();
+		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {
+			if (resultSet == null)
+				return accountAddresses;
+
+			do {
+				accountAddresses.add(resultSet.getString(1));
+			} while (resultSet.next());
+
+			return accountAddresses;
+		} catch (SQLException e) {
+			throw new DataException("Unable to fetch account trust derivation snapshot account page from repository", e);
+		}
+	}
+
+	/** Appends the shared {@code FROM ... JOIN ... WHERE ...} used by both the page and count queries. */
+	private void appendTrustDerivationSnapshotFromWhere(StringBuilder sql, List<Object> bindParams,
+			AccountRatingCategory sortCategory, AccountTrustStatus status, Boolean seedMember, Integer minLevel) {
 		List<String> whereClauses = new ArrayList<>();
 
-		sql.append("SELECT subject_snapshot.account FROM AccountTrustDerivationSnapshots subject_snapshot ")
+		sql.append("FROM AccountTrustDerivationSnapshots subject_snapshot ")
 				.append("JOIN AccountTrustDerivationSnapshots sort_snapshot ")
 				.append("ON sort_snapshot.account = subject_snapshot.account AND sort_snapshot.category = ?");
 		bindParams.add(sortCategory.value);
@@ -597,27 +642,32 @@ public class HSQLDBAccountRatingRepository implements AccountRatingRepository {
 		}
 
 		sql.append(" WHERE ").append(String.join(" AND ", whereClauses));
+	}
 
+	/**
+	 * Appends the ORDER BY clause for the requested ordering. Snapshots do not carry blocksMinted or
+	 * effectiveVoteWeight, so live-only orderings fall back to the default level/score ordering; the API
+	 * layer rejects those orderings for the snapshot path before reaching here.
+	 */
+	private void appendTrustDerivationSnapshotOrderBy(StringBuilder sql, AccountTrustDerivationOrder order,
+			Boolean reverse) {
 		String scoreSortDirection = Boolean.TRUE.equals(reverse) ? " ASC" : " DESC";
 		String accountSortDirection = Boolean.TRUE.equals(reverse) ? " DESC" : " ASC";
+
+		if (order == AccountTrustDerivationOrder.ACCOUNT) {
+			sql.append(" ORDER BY subject_snapshot.account").append(accountSortDirection);
+			return;
+		}
+
+		if (order == AccountTrustDerivationOrder.SCORE) {
+			sql.append(" ORDER BY sort_snapshot.score").append(scoreSortDirection)
+					.append(", subject_snapshot.account").append(accountSortDirection);
+			return;
+		}
+
 		sql.append(" ORDER BY sort_snapshot.level").append(scoreSortDirection)
 				.append(", sort_snapshot.score").append(scoreSortDirection)
 				.append(", subject_snapshot.account").append(accountSortDirection);
-		HSQLDBRepository.limitOffsetSql(sql, limit, offset);
-
-		List<String> accountAddresses = new ArrayList<>();
-		try (ResultSet resultSet = this.repository.checkedExecute(sql.toString(), bindParams.toArray())) {
-			if (resultSet == null)
-				return accountAddresses;
-
-			do {
-				accountAddresses.add(resultSet.getString(1));
-			} while (resultSet.next());
-
-			return accountAddresses;
-		} catch (SQLException e) {
-			throw new DataException("Unable to fetch account trust derivation snapshot account page from repository", e);
-		}
 	}
 
 	private List<AccountTrustSnapshotData> getTrustDerivationSnapshotsForAccounts(List<String> accountAddresses)

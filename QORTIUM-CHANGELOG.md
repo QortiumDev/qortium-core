@@ -45,6 +45,18 @@ neighbourhood out to the chosen number of hops. This lets an app render the grap
 directly from one response instead of scraping and reshaping a capped page of
 raw ratings, which silently dropped connections on larger networks.
 
+### 2026-06-22 - api: add ordering and total count to the trust derivation listing
+
+Extends the account trust-derivation listing so apps can sort and page large
+result sets instead of being silently cut off at a fixed cap. A new `orderBy`
+option chooses the sort field — account, level (the existing default), score,
+vote weight, or blocks minted — and every response now reports the full number
+of matching accounts in an `X-Total-Count` header, so an app can show
+"showing 50 of 1,234" and fetch further pages with `limit`/`offset`. Vote
+weight and blocks minted are only available on the freshly calculated (live)
+listing, since the stored block snapshots do not record them; asking to sort
+stored results by either is rejected as an invalid request.
+
 ### 2026-06-22 - account: avoid a redundant account read when deriving trust rows
 
 Small internal tidy-up of the previous change. When building each trust

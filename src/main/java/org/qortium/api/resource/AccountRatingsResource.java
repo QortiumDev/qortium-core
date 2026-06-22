@@ -25,6 +25,7 @@ import org.qortium.data.account.AccountRatingData;
 import org.qortium.data.account.AccountRatingImpactPreviewData;
 import org.qortium.data.account.AccountRatingSummaryData;
 import org.qortium.data.account.AccountTrustDerivationData;
+import org.qortium.data.account.AccountTrustDerivationOrder;
 import org.qortium.data.account.AccountTrustGraphData;
 import org.qortium.data.account.AccountTrustGraphEdgeData;
 import org.qortium.data.account.AccountTrustGraphNodeData;
@@ -39,6 +40,7 @@ import org.qortium.data.account.AccountTrustStatus;
 import org.qortium.data.account.AccountTrustStatusChangeData;
 import org.qortium.data.account.AccountTrustSummaryData;
 import org.qortium.data.transaction.RateAccountTransactionData;
+import org.qortium.repository.AccountRatingRepository;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
@@ -50,6 +52,7 @@ import org.qortium.transform.transaction.RateAccountTransactionTransformer;
 import org.qortium.utils.Base58;
 
 import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -79,8 +82,13 @@ public class AccountRatingsResource {
 	private static final int TRUST_EXPLANATION_IMPACT_LIMIT = 5;
 	private static final int DEFAULT_TRUST_GRAPH_DEPTH = 2;
 
+	private static final String TOTAL_COUNT_HEADER = "X-Total-Count";
+
 	@Context
 	HttpServletRequest request;
+
+	@Context
+	HttpServletResponse response;
 
 	@GET
 	@Operation(
@@ -425,6 +433,7 @@ public class AccountRatingsResource {
 	public List<AccountTrustDerivationData> getAccountTrustDerivation(
 			@Parameter(description = "Optional final Subject-derived trust status: GOLD, SILVER, BRONZE, UNVERIFIED, or SUSPICIOUS") @QueryParam("status") String statusName,
 			@Parameter(description = "Optional category used for level filtering and sorting: SUBJECT, PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName,
+			@Parameter(description = "Optional ordering: account, level (default), score, voteWeight, or blocksMinted. voteWeight and blocksMinted require live=true.") @QueryParam("orderBy") String orderBy,
 			@Parameter(description = "Optional filter for current minting seed membership") @QueryParam("seedMember") Boolean seedMember,
 			@Parameter(description = "Optional minimum level in the selected category") @QueryParam("minLevel") Integer minLevel,
 			@Parameter(ref = "limit") @QueryParam("limit") Integer limit,
@@ -437,20 +446,29 @@ public class AccountRatingsResource {
 			if (sortCategory == null)
 				sortCategory = AccountRatingCategory.SUBJECT;
 
+			AccountTrustDerivationOrder order = parseOptionalTrustDerivationOrder(orderBy);
 			validateTrustDerivationCriteria(minLevel, limit, offset);
 
 			if (Boolean.TRUE.equals(live)) {
 				List<AccountTrustDerivationData> derivedAccounts = AccountTrustDerivation.deriveAll(repository);
-				return filterTrustDerivation(derivedAccounts, status, sortCategory, seedMember, minLevel, limit, offset,
-						reverse);
+				return filterTrustDerivation(derivedAccounts, status, sortCategory, order, seedMember, minLevel, limit,
+						offset, reverse);
 			}
+
+			// Snapshots do not carry per-account minting data, so live-only orderings cannot be served from them.
+			if (order != null && order.requiresLiveDerivation())
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+			AccountRatingRepository accountRatingRepository = repository.getAccountRatingRepository();
+			setTotalCountHeader(accountRatingRepository.getTrustDerivationSnapshotCountForDerivation(status, sortCategory,
+					seedMember, minLevel));
 
 			int currentHeight = repository.getBlockRepository().getBlockchainHeight();
 			int[] voteWeightPercents = AccountTrustPolicy.getVoteWeightPercents(repository, currentHeight);
 
-			return buildTrustDerivationFromSnapshots(repository.getAccountRatingRepository()
-					.getTrustDerivationSnapshotsForDerivation(status, sortCategory, seedMember, minLevel, limit, offset,
-							reverse), voteWeightPercents);
+			return buildTrustDerivationFromSnapshots(accountRatingRepository
+					.getTrustDerivationSnapshotsForDerivation(status, sortCategory, order, seedMember, minLevel, limit,
+							offset, reverse), voteWeightPercents);
 		} catch (ApiException e) {
 			throw e;
 		} catch (DataException e) {
@@ -460,7 +478,12 @@ public class AccountRatingsResource {
 
 	public List<AccountTrustDerivationData> getAccountTrustDerivation(String statusName, String categoryName, Boolean seedMember,
 			Integer minLevel, Integer limit, Integer offset, Boolean reverse) {
-		return getAccountTrustDerivation(statusName, categoryName, seedMember, minLevel, limit, offset, reverse, null);
+		return getAccountTrustDerivation(statusName, categoryName, null, seedMember, minLevel, limit, offset, reverse, null);
+	}
+
+	public List<AccountTrustDerivationData> getAccountTrustDerivation(String statusName, String categoryName, Boolean seedMember,
+			Integer minLevel, Integer limit, Integer offset, Boolean reverse, Boolean live) {
+		return getAccountTrustDerivation(statusName, categoryName, null, seedMember, minLevel, limit, offset, reverse, live);
 	}
 
 	@GET
@@ -1176,8 +1199,8 @@ public class AccountRatingsResource {
 	}
 
 	private List<AccountTrustDerivationData> filterTrustDerivation(List<AccountTrustDerivationData> derivedAccounts,
-			AccountTrustStatus status, AccountRatingCategory sortCategory, Boolean seedMember, Integer minLevel,
-			Integer limit, Integer offset, Boolean reverse) {
+			AccountTrustStatus status, AccountRatingCategory sortCategory, AccountTrustDerivationOrder order,
+			Boolean seedMember, Integer minLevel, Integer limit, Integer offset, Boolean reverse) {
 		List<AccountTrustDerivationData> filteredAccounts = new ArrayList<>();
 
 		for (AccountTrustDerivationData derivedAccount : derivedAccounts) {
@@ -1193,23 +1216,48 @@ public class AccountRatingsResource {
 			filteredAccounts.add(derivedAccount);
 		}
 
-		filteredAccounts.sort((left, right) -> compareTrustDerivationRows(left, right, sortCategory));
+		filteredAccounts.sort((left, right) -> compareTrustDerivationRows(left, right, sortCategory, order));
 		if (Boolean.TRUE.equals(reverse))
 			Collections.reverse(filteredAccounts);
+
+		// Total before paging, so callers can show "showing N of M".
+		setTotalCountHeader(filteredAccounts.size());
 
 		return pageTrustDerivation(filteredAccounts, limit, offset);
 	}
 
 	private static int compareTrustDerivationRows(AccountTrustDerivationData left, AccountTrustDerivationData right,
-			AccountRatingCategory sortCategory) {
-		int compare = Integer.compare(getCategoryLevel(right, sortCategory), getCategoryLevel(left, sortCategory));
+			AccountRatingCategory sortCategory, AccountTrustDerivationOrder order) {
+		int compare;
+
+		switch (order == null ? AccountTrustDerivationOrder.LEVEL : order) {
+			case ACCOUNT:
+				return left.getAccountAddress().compareTo(right.getAccountAddress());
+
+			case SCORE:
+				compare = Long.compare(getCategoryScore(right, sortCategory), getCategoryScore(left, sortCategory));
+				break;
+
+			case VOTE_WEIGHT:
+				compare = Integer.compare(right.getEffectiveVoteWeight(), left.getEffectiveVoteWeight());
+				break;
+
+			case BLOCKS_MINTED:
+				compare = Integer.compare(right.getBlocksMinted(), left.getBlocksMinted());
+				break;
+
+			case LEVEL:
+			default:
+				compare = Integer.compare(getCategoryLevel(right, sortCategory), getCategoryLevel(left, sortCategory));
+				if (compare == 0)
+					compare = Long.compare(getCategoryScore(right, sortCategory), getCategoryScore(left, sortCategory));
+				break;
+		}
+
 		if (compare != 0)
 			return compare;
 
-		compare = Long.compare(getCategoryScore(right, sortCategory), getCategoryScore(left, sortCategory));
-		if (compare != 0)
-			return compare;
-
+		// Stable, deterministic tiebreak by address.
 		return left.getAccountAddress().compareTo(right.getAccountAddress());
 	}
 
@@ -1321,6 +1369,23 @@ public class AccountRatingsResource {
 		} catch (IllegalArgumentException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
 		}
+	}
+
+	private AccountTrustDerivationOrder parseOptionalTrustDerivationOrder(String orderBy) {
+		if (orderBy == null || orderBy.trim().isEmpty())
+			return null;
+
+		AccountTrustDerivationOrder order = AccountTrustDerivationOrder.fromString(orderBy);
+		if (order == null)
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+		return order;
+	}
+
+	/** Publishes the unpaged total via a response header; no-op when not running inside a servlet container. */
+	private void setTotalCountHeader(long total) {
+		if (this.response != null)
+			this.response.setHeader(TOTAL_COUNT_HEADER, Long.toString(total));
 	}
 
 	private byte[] requireKnownPublicKey(Repository repository, String publicKey58) throws DataException {
