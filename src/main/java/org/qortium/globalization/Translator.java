@@ -64,7 +64,8 @@ public enum Translator {
 	}
 
 	private static Locale localeForLang(String lang) {
-		return Locale.forLanguageTag(lang.replace('_', '-'));
+		Locale locale = Locale.forLanguageTag(lang.replace('_', '-'));
+		return locale.getLanguage().equals("no") ? Locale.forLanguageTag("nb") : locale;
 	}
 
 }
