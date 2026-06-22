@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-22 - account: avoid a redundant account read when deriving trust rows
+
+Small internal tidy-up of the previous change. When building each trust
+derivation row the node had been loading the same account record from storage
+twice — once for its minted-block count and again, indirectly, for its level.
+The level is now taken from the record already in hand, halving the storage
+reads done per account while producing the exact same result.
+
 ### 2026-06-22 - account: add minting level and blocks-minted to trust derivation rows
 
 Each row returned by the account trust-derivation API now carries the account's

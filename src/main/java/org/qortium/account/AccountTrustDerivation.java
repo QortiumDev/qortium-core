@@ -58,7 +58,7 @@ public class AccountTrustDerivation {
 			Result result = graph.buildResult(accountAddress, LIST_IMPACT_LIMIT);
 			AccountData accountData = repository.getAccountRepository().getAccount(accountAddress);
 			int blocksMinted = accountData == null ? 0 : accountData.getBlocksMinted();
-			int mintingLevel = accountData == null ? 0 : new Account(repository, accountAddress).getEffectiveMintingLevel();
+			int mintingLevel = accountData == null ? 0 : accountData.getLevel();
 			int effectiveVoteWeight = AccountTrustPolicy.calculateEffectiveVoteWeight(voteWeightPercents, blocksMinted,
 					result.getDerivedTrustStatus());
 			derivedAccounts.add(new AccountTrustDerivationData(graph.publicKeysByAddress.get(accountAddress), accountAddress,
