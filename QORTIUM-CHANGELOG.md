@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-22 - tools: add a Previewnet topology map generator
+
+Adds an operator tool that queries the Previewnet nodes, records a JSON snapshot
+of their peer view, and renders an SVG topology map showing direct and I2P
+chain/data links. The output goes under the build target directory, so the tool
+can be rerun for live network checks without adding generated maps to the
+repository.
+
 ### 2026-06-22 - api: add a trust-graph endpoint for account ratings
 
 Adds a new read-only endpoint that returns a ready-to-draw trust graph for one
