@@ -20,6 +20,9 @@ import org.qortium.data.account.AccountRatingImpactPreviewData;
 import org.qortium.data.account.AccountRatingSummaryData;
 import org.qortium.data.account.AccountTrustDerivationData;
 import org.qortium.data.account.AccountTrustExplanationData;
+import org.qortium.data.account.AccountTrustGraphData;
+import org.qortium.data.account.AccountTrustGraphEdgeData;
+import org.qortium.data.account.AccountTrustGraphNodeData;
 import org.qortium.data.account.AccountTrustPolicyData;
 import org.qortium.data.account.AccountTrustCategoryData;
 import org.qortium.data.account.AccountTrustCategoryImpactData;
@@ -54,7 +57,9 @@ import org.qortium.utils.Base58;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -1890,6 +1895,70 @@ public class AccountRatingsApiTests extends ApiCommon {
 	public void testInvalidTrustSnapshotAddressFailsList() {
 		assertApiError(ApiError.INVALID_CRITERIA,
 				() -> this.accountRatingsResource.getAccountTrustSnapshots("not-an-address", null, null, null, null, null, null, null));
+	}
+
+	@Test
+	public void testTrustGraphReturnsNodesAndEdges() throws DataException {
+		TestAccount alice;
+		TestAccount bob;
+		TestAccount chloe;
+		TestAccount dilbert;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			alice = Common.getTestAccount(repository, "alice");
+			bob = Common.getTestAccount(repository, "bob");
+			chloe = Common.getTestAccount(repository, "chloe");
+			dilbert = Common.getTestAccount(repository, "dilbert");
+
+			// A simple chain: alice -> bob -> chloe -> dilbert in the SUBJECT category.
+			saveAccountRating(repository, alice, bob, AccountRatingCategory.SUBJECT, 3);
+			saveAccountRating(repository, bob, chloe, AccountRatingCategory.SUBJECT, 3);
+			saveAccountRating(repository, chloe, dilbert, AccountRatingCategory.SUBJECT, 3);
+			repository.saveChanges();
+		}
+
+		// Full active set: all three edges, all four accounts.
+		AccountTrustGraphData fullGraph = this.accountRatingsResource.getAccountTrustGraph(null, null, null);
+		assertEquals(AccountRatingCategory.SUBJECT, fullGraph.getCategory());
+		assertEquals(3, fullGraph.getEdges().size());
+		Set<String> fullNodes = trustGraphAddresses(fullGraph);
+		assertEquals(4, fullNodes.size());
+		assertTrue(fullNodes.contains(alice.getAddress()));
+		assertTrue(fullNodes.contains(dilbert.getAddress()));
+		assertTrue(hasTrustGraphEdge(fullGraph, alice.getAddress(), bob.getAddress()));
+
+		// Neighbourhood around alice at depth 1 -> {alice, bob}; only the alice->bob edge qualifies.
+		AccountTrustGraphData aliceDepthOne = this.accountRatingsResource.getAccountTrustGraph(null, alice.getAddress(), 1);
+		assertEquals(1, aliceDepthOne.getEdges().size());
+		assertEquals(2, trustGraphAddresses(aliceDepthOne).size());
+		assertTrue(hasTrustGraphEdge(aliceDepthOne, alice.getAddress(), bob.getAddress()));
+
+		// Depth 2 around alice -> {alice, bob, chloe}; the alice->bob and bob->chloe edges.
+		AccountTrustGraphData aliceDepthTwo = this.accountRatingsResource.getAccountTrustGraph(null, alice.getAddress(), 2);
+		assertEquals(2, aliceDepthTwo.getEdges().size());
+		assertEquals(3, trustGraphAddresses(aliceDepthTwo).size());
+	}
+
+	@Test
+	public void testTrustGraphRejectsNegativeDepth() {
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustGraph(null, null, -1));
+	}
+
+	private static Set<String> trustGraphAddresses(AccountTrustGraphData graph) {
+		Set<String> addresses = new HashSet<>();
+		for (AccountTrustGraphNodeData node : graph.getNodes())
+			addresses.add(node.getAddress());
+
+		return addresses;
+	}
+
+	private static boolean hasTrustGraphEdge(AccountTrustGraphData graph, String source, String target) {
+		for (AccountTrustGraphEdgeData edge : graph.getEdges())
+			if (edge.getSource().equals(source) && edge.getTarget().equals(target))
+				return true;
+
+		return false;
 	}
 
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target, int rating)

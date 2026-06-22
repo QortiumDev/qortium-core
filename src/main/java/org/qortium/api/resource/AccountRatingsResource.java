@@ -25,6 +25,9 @@ import org.qortium.data.account.AccountRatingData;
 import org.qortium.data.account.AccountRatingImpactPreviewData;
 import org.qortium.data.account.AccountRatingSummaryData;
 import org.qortium.data.account.AccountTrustDerivationData;
+import org.qortium.data.account.AccountTrustGraphData;
+import org.qortium.data.account.AccountTrustGraphEdgeData;
+import org.qortium.data.account.AccountTrustGraphNodeData;
 import org.qortium.data.account.AccountTrustExplanationData;
 import org.qortium.data.account.AccountTrustPolicyData;
 import org.qortium.data.account.AccountTrustCategoryData;
@@ -53,13 +56,17 @@ import javax.ws.rs.Path;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -70,6 +77,7 @@ import java.util.Set;
 public class AccountRatingsResource {
 
 	private static final int TRUST_EXPLANATION_IMPACT_LIMIT = 5;
+	private static final int DEFAULT_TRUST_GRAPH_DEPTH = 2;
 
 	@Context
 	HttpServletRequest request;
@@ -493,6 +501,129 @@ public class AccountRatingsResource {
 		} catch (DataException e) {
 			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
 		}
+	}
+
+	@GET
+	@Path("/trust-graph")
+	@Operation(
+			summary = "Shaped account trust graph (nodes and directed rating edges) for one category",
+			description = "Returns the active rating edges for a category plus the derived trust standing of each "
+					+ "participating account. Without a root, the full active set is returned; with a root, the graph "
+					+ "is scoped to the accounts within depth edges of that root.",
+			responses = {
+					@ApiResponse(
+							description = "account trust graph",
+							content = @Content(
+									mediaType = MediaType.APPLICATION_JSON,
+									schema = @Schema(implementation = AccountTrustGraphData.class)
+							)
+					)
+			}
+	)
+	@ApiErrors({ApiError.INVALID_CRITERIA, ApiError.REPOSITORY_ISSUE})
+	public AccountTrustGraphData getAccountTrustGraph(
+			@Parameter(description = "Category whose rating edges form the graph: SUBJECT (default), PLAYER, TRAINER, or MANAGER") @QueryParam("category") String categoryName,
+			@Parameter(description = "Optional root account address scoping the graph to a neighbourhood") @QueryParam("root") String root,
+			@Parameter(description = "Neighbourhood radius in edges around root (default 2; ignored without a root)") @QueryParam("depth") Integer depth) {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			AccountRatingCategory category = parseOptionalCategory(categoryName);
+			if (category == null)
+				category = AccountRatingCategory.SUBJECT;
+
+			String rootAddress = parseOptionalAddress(root);
+			if (depth != null && depth < 0)
+				throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.INVALID_CRITERIA);
+
+			return buildTrustGraph(repository, category, rootAddress, depth);
+		} catch (ApiException e) {
+			throw e;
+		} catch (DataException e) {
+			throw ApiExceptionFactory.INSTANCE.createException(request, ApiError.REPOSITORY_ISSUE, e);
+		}
+	}
+
+	private AccountTrustGraphData buildTrustGraph(Repository repository, AccountRatingCategory category,
+			String rootAddress, Integer depth) throws DataException {
+		// Active rating edges in this category (inactive/neutral edges are not part of the graph).
+		List<AccountRatingData> activeRatings = new ArrayList<>();
+		for (AccountRatingData rating : repository.getAccountRatingRepository().getRatings(null, null, category, null,
+				null, null))
+			if (AccountRating.isActive(rating.getRating()))
+				activeRatings.add(rating);
+
+		// Optional neighbourhood scoping: null means "include the whole active set".
+		Set<String> includedAddresses = null;
+		if (rootAddress != null) {
+			int radius = depth == null ? DEFAULT_TRUST_GRAPH_DEPTH : depth;
+			includedAddresses = collectTrustGraphNeighbourhood(activeRatings, rootAddress, radius);
+		}
+
+		List<AccountTrustGraphEdgeData> edges = new ArrayList<>();
+		Set<String> nodeAddresses = new LinkedHashSet<>();
+		if (rootAddress != null)
+			nodeAddresses.add(rootAddress); // keep an isolated root visible
+
+		Map<String, byte[]> publicKeyByAddress = new HashMap<>();
+		for (AccountRatingData rating : activeRatings) {
+			String source = rating.getRaterAddress();
+			String target = rating.getTargetAddress();
+			publicKeyByAddress.putIfAbsent(source, rating.getRaterPublicKey());
+			publicKeyByAddress.putIfAbsent(target, rating.getTargetPublicKey());
+
+			if (includedAddresses != null && (!includedAddresses.contains(source) || !includedAddresses.contains(target)))
+				continue;
+
+			edges.add(new AccountTrustGraphEdgeData(source, target, rating.getRating(), rating.getRatingConfidence()));
+			nodeAddresses.add(source);
+			nodeAddresses.add(target);
+		}
+
+		// Derived trust standing for each node, from the live derivation graph.
+		Map<String, AccountTrustDerivationData> derivationByAddress = new HashMap<>();
+		for (AccountTrustDerivationData derived : AccountTrustDerivation.deriveAll(repository))
+			derivationByAddress.put(derived.getAccountAddress(), derived);
+
+		List<AccountTrustGraphNodeData> nodes = new ArrayList<>();
+		for (String address : nodeAddresses) {
+			AccountTrustDerivationData derived = derivationByAddress.get(address);
+			byte[] publicKey = derived != null && derived.getAccountPublicKey() != null
+					? derived.getAccountPublicKey()
+					: publicKeyByAddress.get(address);
+			AccountTrustStatus status = derived == null ? AccountTrustStatus.UNVERIFIED : derived.getDerivedTrustStatus();
+			int level = derived == null ? 0 : getCategoryLevel(derived, category);
+			long score = derived == null ? 0L : getCategoryScore(derived, category);
+			boolean seedMember = derived != null && derived.isMintingSeedMember();
+			nodes.add(new AccountTrustGraphNodeData(address, publicKey, status, level, score, seedMember));
+		}
+
+		return new AccountTrustGraphData(category, nodes, edges);
+	}
+
+	/** Collects the addresses within {@code radius} undirected edges of {@code rootAddress}, inclusive. */
+	private Set<String> collectTrustGraphNeighbourhood(List<AccountRatingData> activeRatings, String rootAddress,
+			int radius) {
+		Map<String, Set<String>> adjacency = new HashMap<>();
+		for (AccountRatingData rating : activeRatings) {
+			adjacency.computeIfAbsent(rating.getRaterAddress(), ignored -> new HashSet<>()).add(rating.getTargetAddress());
+			adjacency.computeIfAbsent(rating.getTargetAddress(), ignored -> new HashSet<>()).add(rating.getRaterAddress());
+		}
+
+		Set<String> visited = new HashSet<>();
+		visited.add(rootAddress);
+		Deque<String> frontier = new ArrayDeque<>();
+		frontier.add(rootAddress);
+
+		for (int hop = 0; hop < radius && !frontier.isEmpty(); ++hop) {
+			Deque<String> nextFrontier = new ArrayDeque<>();
+			for (String address : frontier)
+				for (String neighbour : adjacency.getOrDefault(address, Collections.emptySet()))
+					if (visited.add(neighbour))
+						nextFrontier.add(neighbour);
+
+			frontier = nextFrontier;
+		}
+
+		return visited;
 	}
 
 	@POST

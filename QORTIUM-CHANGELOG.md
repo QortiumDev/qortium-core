@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-22 - api: add a trust-graph endpoint for account ratings
+
+Adds a new read-only endpoint that returns a ready-to-draw trust graph for one
+rating category: a list of account nodes, each with its derived trust standing
+(status, level, score, seed-member flag), plus the directed rating edges between
+them with their rating and confidence. Without a starting account it returns the
+whole active set; given a root account and a depth it returns just that account's
+neighbourhood out to the chosen number of hops. This lets an app render the graph
+directly from one response instead of scraping and reshaping a capped page of
+raw ratings, which silently dropped connections on larger networks.
+
 ### 2026-06-22 - account: avoid a redundant account read when deriving trust rows
 
 Small internal tidy-up of the previous change. When building each trust
