@@ -116,6 +116,14 @@ public class TranslationsTests {
 		assertEquals(bokmal, Translator.INSTANCE.translate("SysTray", "no-NO", "EXIT"));
 	}
 
+	@Test
+	public void testRegionalLocalesResolveToLanguageBundles() {
+		assertEquals(Translator.INSTANCE.translate("SysTray", "el", "EXIT"),
+				Translator.INSTANCE.translate("SysTray", "el-GR", "EXIT"));
+		assertEquals(Translator.INSTANCE.translate("SysTray", "hi", "EXIT"),
+				Translator.INSTANCE.translate("SysTray", "hi-IN", "EXIT"));
+	}
+
 	private static void checkBundleKeys(String className, String lang, Set<String> expectedKeys, List<String> issues) throws IOException {
 		String fileName = className + "_" + lang + ".properties";
 
