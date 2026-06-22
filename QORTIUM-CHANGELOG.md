@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-22 - account: add minting level and blocks-minted to trust derivation rows
+
+Each row returned by the account trust-derivation API now carries the account's
+minting level, its number of minted blocks, and its effective vote weight,
+alongside the trust status that was already there. Previously an app showing a
+list of accounts (such as the Trust app) had to ask the node separately about
+every single account just to fill in those columns — hundreds of extra requests
+for one screen. Now that information comes back in the same response, so the
+list loads in a single request. The values are filled in for live results;
+older stored snapshot rows report zero for them for now.
+
 ### 2026-06-21 - release: move version to 1.1.2
 
 Bumps the project version from 1.1.1 to 1.1.2, the version the node now reports
