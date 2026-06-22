@@ -4,6 +4,7 @@ import org.qortium.data.account.AccountRatingData;
 import org.qortium.data.account.AccountRatingCategory;
 import org.qortium.data.account.AccountRatingSummaryData;
 import org.qortium.data.account.AccountTrustDerivationData;
+import org.qortium.data.account.AccountTrustDerivationOrder;
 import org.qortium.data.account.AccountTrustSnapshotData;
 import org.qortium.data.account.AccountTrustStatus;
 import org.qortium.data.account.AccountTrustStatusChangeData;
@@ -48,8 +49,12 @@ public interface AccountRatingRepository {
 			throws DataException;
 
 	public List<AccountTrustSnapshotData> getTrustDerivationSnapshotsForDerivation(AccountTrustStatus status,
-			AccountRatingCategory sortCategory, Boolean seedMember, Integer minLevel, Integer limit, Integer offset,
-			Boolean reverse) throws DataException;
+			AccountRatingCategory sortCategory, AccountTrustDerivationOrder order, Boolean seedMember, Integer minLevel,
+			Integer limit, Integer offset, Boolean reverse) throws DataException;
+
+	/** Counts derivation rows matching the same filters, ignoring ordering and paging. */
+	public long getTrustDerivationSnapshotCountForDerivation(AccountTrustStatus status, AccountRatingCategory sortCategory,
+			Boolean seedMember, Integer minLevel) throws DataException;
 
 	public AccountTrustSnapshotData getTrustDerivationSnapshot(String accountAddress, AccountRatingCategory category)
 			throws DataException;

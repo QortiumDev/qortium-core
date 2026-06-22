@@ -1892,6 +1892,33 @@ public class AccountRatingsApiTests extends ApiCommon {
 				() -> this.accountRatingsResource.getAccountTrustSnapshots("not-an-address", null, null, null, null, null, null, null));
 	}
 
+	@Test
+	public void testInvalidOrderByFailsDerivationList() {
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustDerivation(null, null, "not-an-order", null, null, null,
+						null, null, null));
+	}
+
+	@Test
+	public void testLiveOnlyOrderByRejectedForStoredDerivationList() {
+		// blocksMinted and voteWeight are not stored on snapshots, so they require live=true.
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustDerivation(null, null, "blocksMinted", null, null, null,
+						null, null, false));
+		assertApiError(ApiError.INVALID_CRITERIA,
+				() -> this.accountRatingsResource.getAccountTrustDerivation(null, null, "voteWeight", null, null, null,
+						null, null, false));
+	}
+
+	@Test
+	public void testLiveOnlyOrderByAllowedForLiveDerivationList() {
+		// The same orderings are valid on the live path and must not raise.
+		assertNotNull(this.accountRatingsResource.getAccountTrustDerivation(null, null, "blocksMinted", null, null, null,
+				null, null, true));
+		assertNotNull(this.accountRatingsResource.getAccountTrustDerivation(null, null, "voteWeight", null, null, null,
+				null, null, true));
+	}
+
 	private RateAccountTransactionData ratingData(PrivateKeyAccount rater, PrivateKeyAccount target, int rating)
 			throws DataException {
 		return new RateAccountTransactionData(TestTransaction.generateBase(rater), target.getPublicKey(), rating);
