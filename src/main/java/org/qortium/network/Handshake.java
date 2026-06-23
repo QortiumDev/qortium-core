@@ -69,7 +69,7 @@ import java.util.regex.Matcher;
  *    - Proof-of-Work–protected authentication.
  *    - Each side computes:
  *        • digest(sharedSecret or challenge)
- *    - PoW difficulty and buffer size vary by peer version.
+ *    - PoW difficulty and buffer size use explicit capability negotiation.
  *    - RX (message thread) validates peer RESPONSE.
  *    - TX (PoW thread) computes and sends our RESPONSE asynchronously.
  *
@@ -367,9 +367,8 @@ public enum Handshake {
 			}
 
 			int nonce = responseMessage.getNonce();
-			int powBufferSize = peer.getPeersVersion() < PEER_VERSION_131 ? POW_BUFFER_SIZE_PRE_131 : POW_BUFFER_SIZE_POST_131;
-			int powDifficulty = peer.getPeersVersion() < PEER_VERSION_131 ? POW_DIFFICULTY_PRE_131 : POW_DIFFICULTY_POST_131;
-			if (!MemoryPoW.verify2(data, powBufferSize, powDifficulty, nonce)) {
+			HandshakePowParameters powParameters = getHandshakePowParameters(peer);
+			if (!MemoryPoW.verify2(data, powParameters.bufferSize, powParameters.difficulty, nonce)) {
 				LOGGER.debug(() -> String.format("Peer %s sent incorrect RESPONSE nonce", peer));
 				return null;
 			}
@@ -430,9 +429,8 @@ public enum Handshake {
 					// No point computing for dead peer
 					return;
 
-				int powBufferSize = peer.getPeersVersion() < PEER_VERSION_131 ? POW_BUFFER_SIZE_PRE_131 : POW_BUFFER_SIZE_POST_131;
-				int powDifficulty = peer.getPeersVersion() < PEER_VERSION_131 ? POW_DIFFICULTY_PRE_131 : POW_DIFFICULTY_POST_131;
-				Integer nonce = MemoryPoW.compute2(data, powBufferSize, powDifficulty);
+				HandshakePowParameters powParameters = getHandshakePowParameters(peer);
+				Integer nonce = MemoryPoW.compute2(data, powParameters.bufferSize, powParameters.difficulty);
 
 				Message responseMessage = new ResponseMessage(nonce, data);
 				if (!peer.sendMessage(responseMessage)) {
@@ -519,6 +517,8 @@ public enum Handshake {
 	 * protocol error and disconnect, so a re-advertise must only be sent to peers that advertise this.
 	 */
 	static final String POST_HANDSHAKE_HELLO_CAPABILITY = "PHH";
+	/** Advertised by Qortium peers that use the newer, lighter handshake PoW baseline. */
+	static final String HANDSHAKE_POW_V2_CAPABILITY = "HANDSHAKE_POW_V2";
 	/** Set when this node understands publisher-initiated QDN push (ARBITRARY_DATA_FILE_OFFER/WANT). */
 	public static final String QDN_PUSH_CAPABILITY = "QDN_PUSH";
 
@@ -635,8 +635,35 @@ public enum Handshake {
 		// We accept a post-handshake HELLO as a capability refresh, so peers may re-advertise their I2P
 		// destination to us once their slow SAM session comes up. Unknown to older peers, who ignore it.
 		capabilities.put(POST_HANDSHAKE_HELLO_CAPABILITY, true);
+		capabilities.put(HANDSHAKE_POW_V2_CAPABILITY, true);
 
 		return capabilities;
+	}
+
+	static HandshakePowParameters getHandshakePowParameters(Peer peer) {
+		if (Boolean.TRUE.equals(peer.getPeerCapability(HANDSHAKE_POW_V2_CAPABILITY)))
+			return HandshakePowParameters.V2;
+
+		Long peerVersion = peer.getPeersVersion();
+		if (peerVersion != null && peerVersion >= PEER_VERSION_131)
+			return HandshakePowParameters.V2;
+
+		return HandshakePowParameters.LEGACY;
+	}
+
+	static final class HandshakePowParameters {
+		static final HandshakePowParameters LEGACY = new HandshakePowParameters(
+				POW_BUFFER_SIZE_PRE_131, POW_DIFFICULTY_PRE_131);
+		static final HandshakePowParameters V2 = new HandshakePowParameters(
+				POW_BUFFER_SIZE_POST_131, POW_DIFFICULTY_POST_131);
+
+		final int bufferSize;
+		final int difficulty;
+
+		private HandshakePowParameters(int bufferSize, int difficulty) {
+			this.bufferSize = bufferSize;
+			this.difficulty = difficulty;
+		}
 	}
 
 	/**
