@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-23 - docs: use version-agnostic jar name in preview operator runbook
+
+Updates the seed operator runbook so the step that copies the freshly built jar
+into place uses a wildcard (`target/qortium-*.jar`) instead of the old hardcoded
+`qortium-1.0.0.jar` name. The shaded jar is named after the project version, so
+after the bump to 1.1.x the hardcoded name no longer existed and the copy step
+failed. The wildcard always matches the current build, and a short note reminds
+operators that the jar name tracks the pom version.
+
 ### 2026-06-23 - build(deps): bump io.swagger.core.v3:swagger-jaxrs2
 
 Updates the Swagger JAX-RS integration dependency from 2.2.51 to 2.2.52. This
