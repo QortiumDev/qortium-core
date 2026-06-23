@@ -34,6 +34,12 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-23 - build(deps): bump io.swagger.core.v3:swagger-jaxrs2
+
+Updates the Swagger JAX-RS integration dependency from 2.2.51 to 2.2.52. This
+is a small maintenance update for the API documentation stack and does not
+change Qortium consensus, database state, or Previewnet configuration.
+
 ### 2026-06-23 - release: move version to 1.1.3
 
 Bumps the project version from 1.1.2 to 1.1.3, the version the node now reports
