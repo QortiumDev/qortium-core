@@ -15,6 +15,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class HandshakeTests {
 
@@ -50,41 +51,60 @@ public class HandshakeTests {
 	}
 
 	@Test
-	public void testAdvertisesI2PChainWhenChainSessionIsUp() throws Exception {
+	public void testAdvertisesI2PChainToI2PPeerWhenChainSessionIsUp() throws Exception {
 		String b32 = "bcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu.b32.i2p";
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(b32, true), true);
 
-		Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
+		Map<String, Object> capabilities = Handshake.buildHelloCapabilities(true);
 
 		assertEquals(b32, capabilities.get(Handshake.I2P_CAPABILITY));
 	}
 
 	@Test
-	public void testDoesNotAdvertiseI2PChainWhenChainSessionIsDown() throws Exception {
+	public void testDoesNotAdvertiseI2PChainToI2PPeerWhenChainSessionIsDown() throws Exception {
 		String b32 = "bcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu.b32.i2p";
 		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(b32, false), true);
 
-		Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
+		Map<String, Object> capabilities = Handshake.buildHelloCapabilities(true);
 
 		assertFalse(capabilities.containsKey(Handshake.I2P_CAPABILITY));
 	}
 
 	@Test
-	public void testAdvertisesI2PQdnWhenDataSessionIsUp() throws Exception {
-		String b32 = "abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrst.b32.i2p";
-		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(b32, true), true);
+	public void testDoesNotAdvertiseI2PChainToClearnetPeerEvenWhenChainSessionIsUp() throws Exception {
+		String b32 = "bcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrstu.b32.i2p";
+		FieldUtils.writeField(Network.getInstance(), "chainI2PStreamProvider", new FakeI2PStreamProvider(b32, true), true);
 
-		Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
+		Map<String, Object> capabilities = Handshake.buildHelloCapabilities(false);
 
-		assertEquals(b32, capabilities.get(Handshake.I2P_QDN_CAPABILITY));
+		assertFalse(capabilities.containsKey(Handshake.I2P_CAPABILITY));
 	}
 
 	@Test
-	public void testDoesNotAdvertiseI2PQdnWhenDataSessionIsDown() throws Exception {
-		String b32 = "abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrst.b32.i2p";
-		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(b32, false), true);
+	public void testAdvertisesQdnPortToClearnetPeerButNotToI2PPeer() throws Exception {
+		Map<String, Object> clearnet = Handshake.buildHelloCapabilities(false);
+		assertTrue("clearnet peer must learn our QDN port", clearnet.containsKey("QDN"));
 
-		Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
+		Map<String, Object> i2p = Handshake.buildHelloCapabilities(true);
+		assertFalse("I2P peer must not learn our clearnet QDN port", i2p.containsKey("QDN"));
+	}
+
+	@Test
+	public void testNeverAdvertisesI2PQdnToClearnetPeer() throws Exception {
+		String b32 = "abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrst.b32.i2p";
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(b32, true), true);
+
+		Map<String, Object> capabilities = Handshake.buildHelloCapabilities(false);
+
+		assertFalse(capabilities.containsKey(Handshake.I2P_QDN_CAPABILITY));
+	}
+
+	@Test
+	public void testNeverAdvertisesI2PQdnToI2PPeer() throws Exception {
+		String b32 = "abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrst.b32.i2p";
+		FieldUtils.writeField(NetworkData.getInstance(), "dataI2PStreamProvider", new FakeI2PStreamProvider(b32, true), true);
+
+		Map<String, Object> capabilities = Handshake.buildHelloCapabilities(true);
 
 		assertFalse(capabilities.containsKey(Handshake.I2P_QDN_CAPABILITY));
 	}

@@ -28,8 +28,13 @@ public class HelloMessageTests {
 		assertEquals("abc123", chainConfigHash);
 	}
 
+	/**
+	 * The wire format must still be able to <em>decode</em> a legacy {@code I2P_QDN} capability so this node
+	 * stays graceful toward older peers that still advertise one. We no longer ever <em>emit</em> {@code I2P_QDN}
+	 * ourselves (asserted in {@code HandshakeTests}), but decoding a legacy peer's HELLO must keep working.
+	 */
 	@Test
-	public void testI2PQdnCapabilityRoundTrip() throws MessageException {
+	public void testLegacyI2PQdnCapabilityStillDecodes() throws MessageException {
 		String b32 = "abcdefghijklmnopqrstuvwxyz234567abcdefghijklmnopqrst.b32.i2p";
 		Map<String, Object> capabilities = new HashMap<>();
 		capabilities.put("QDN", 24894);

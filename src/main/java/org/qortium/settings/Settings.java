@@ -376,6 +376,17 @@ public class Settings {
 	/** Repository connection pool size. Needs to be a bit bigger than maxNetworkThreadPoolSize */
 	private int repositoryConnectionPoolSize = 1920;
 	private String[] initialPeers = new String[0];
+	/**
+	 * Data-layer (QDN) bootstrap addresses, seeding NetworkData's known-peers list at startup.
+	 * Mirrors the chain {@code initialPeers} format. Accepts clearnet (host:port) and I2P
+	 * (.b32.i2p) data-seed entries; a node only attempts entries reachable on a transport it
+	 * supports. The I2P data identity is never advertised in the chain handshake, so the data
+	 * layer is bootstrapped via these peers instead. Default port is the QDN/data port (24894).
+	 */
+	private String[] initialDataPeers = new String[] {
+			"185.207.104.78:24894",
+			"146.103.42.59:24894"
+	};
 	private List<String> fixedNetwork;
 
 	// Export/import
@@ -2204,6 +2215,27 @@ public class Settings {
 
 	public boolean hasInitialPeersConfigured() {
 		return this.getInitialPeers().length > 0;
+	}
+
+	public String[] getInitialDataPeers() {
+		if (this.initialDataPeers == null || this.initialDataPeers.length == 0)
+			return new String[0];
+
+		Set<String> configuredPeers = new LinkedHashSet<>(this.initialDataPeers.length);
+		for (String initialDataPeer : this.initialDataPeers) {
+			if (initialDataPeer == null)
+				continue;
+
+			String trimmedPeer = initialDataPeer.trim();
+			if (!trimmedPeer.isEmpty())
+				configuredPeers.add(trimmedPeer);
+		}
+
+		return configuredPeers.toArray(new String[0]);
+	}
+
+	public boolean hasInitialDataPeersConfigured() {
+		return this.getInitialDataPeers().length > 0;
 	}
 
 	public List<String> getFixedNetwork() {

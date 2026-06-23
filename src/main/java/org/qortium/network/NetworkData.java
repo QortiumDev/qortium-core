@@ -78,6 +78,31 @@ public class NetworkData {
 
     private static final long DISCONNECTION_CHECK_INTERVAL = 180 * 1000L; // milliseconds - 3min
 
+    // ---- Data-layer gossip (PEERS) bounds ----
+    // The data overlay has NO compensating age-prune for allKnownPeers (unlike the chain layer's
+    // Network.prunePeers, which evicts 'old' peers). Gossiped entries also carry no lastAttempted/
+    // lastConnected timestamps, so an age-based prune copied from the chain layer would never evict
+    // them. To stop a hostile (or merely chatty) data peer from growing allKnownPeers without bound,
+    // we (a) cap how many advertised addresses we process from a single PEERS message, and (b) cap
+    // the total size of allKnownPeers, evicting the OLDEST gossiped entries first (never seeds,
+    // chain-discovered peers, or currently-connected peers).
+
+    /** Marker stored in PeerData.addedBy for entries learned via untrusted PEERS gossip. */
+    static final String GOSSIP_ADDED_BY = "data-gossip";
+
+    /**
+     * Max advertised addresses accepted from a single PEERS message. A PEERS message can carry on the
+     * order of a million addresses (10MB MAX_DATA_SIZE), so bound per-message work regardless of cap.
+     */
+    static final int MAX_GOSSIPED_PEERS_PER_MESSAGE = 1000;
+
+    /**
+     * Hard cap on the total number of entries kept in allKnownPeers. When gossip would push us over
+     * this, the oldest gossiped (untrusted) entries are evicted to make room. Seeds, chain-discovered
+     * peers and connected peers are never evicted by this cap.
+     */
+    static final int MAX_KNOWN_PEERS = 10000;
+
     // Generate our node keys / ID
     private final Ed25519PrivateKeyParameters edPrivateKeyParams = new Ed25519PrivateKeyParameters(new SecureRandom());
     private final Ed25519PublicKeyParameters edPublicKeyParams = edPrivateKeyParams.generatePublicKey();
@@ -354,6 +379,10 @@ public class NetworkData {
             PortMapperFactory.getInstance().closeTcpPort(qdnPort);
         }
 
+        // Seed the data layer's known-peers list from configured initialDataPeers before the IO/scheduler
+        // loops begin, so the data layer has bootstrap peers to dial immediately.
+        seedInitialDataPeers();
+
         this.ioThread = new Thread(this::runIOLoop, "NetworkData-IO");
         this.ioThread.setDaemon(false);
         this.ioThread.start();
@@ -362,6 +391,38 @@ public class NetworkData {
         this.schedulerThread.start();
 
         startI2PDataFallbackAsync();
+    }
+
+    /**
+     * Seed {@link #allKnownPeers} from the configured {@code initialDataPeers} list, so the data layer has
+     * bootstrap peers to dial at startup before peer-exchange gossip kicks in. Only entries reachable on a
+     * transport this node supports are kept: clearnet entries require {@link Settings#isIPAllowed()} and
+     * I2P (.b32.i2p) entries require {@link Settings#isI2PEnabled()}. Seeds carry no nodeId.
+     */
+    void seedInitialDataPeers() {
+        long addedWhen = NTP.getTime() != null ? NTP.getTime() : System.currentTimeMillis();
+
+        List<PeerData> seeds = new ArrayList<>();
+        for (String addr : Settings.getInstance().getInitialDataPeers()) {
+            try {
+                PeerAddress peerAddress = PeerAddress.fromString(addr);
+                boolean reachable = peerAddress.isI2P()
+                        ? Settings.getInstance().isI2PEnabled()
+                        : Settings.getInstance().isIPAllowed();
+                if (!reachable) {
+                    LOGGER.debug("Skipping initialDataPeers '{}': transport not supported by this node", addr);
+                    continue;
+                }
+                seeds.add(new PeerData(peerAddress, addedWhen, "INIT"));
+            } catch (IllegalArgumentException e) {
+                LOGGER.warn("Skipping invalid initialDataPeers '{}': {}", addr, e.getMessage());
+            }
+        }
+
+        if (!seeds.isEmpty()) {
+            int added = addKnownPeersIfMissing(seeds, null);
+            LOGGER.info("Seeded {} data peer(s) from initialDataPeers", added);
+        }
     }
 
     private void startI2PDataFallbackAsync() {
@@ -401,8 +462,11 @@ public class NetworkData {
     }
 
     private boolean startI2PDataFallbackAttempt(Settings settings) {
+        // No session-up callback: the I2P data destination (I2P_QDN) is never advertised in a HELLO, so
+        // there is nothing to re-advertise when the data SAM session comes up. The I2P data layer is
+        // bootstrapped via initialDataPeers plus data-layer gossip instead.
         I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
-                nextI2PDataSessionId(), settings.getI2PDataKeyPath(), this::onI2PDataSessionUp);
+                nextI2PDataSessionId(), settings.getI2PDataKeyPath());
         ServerSocketChannel forwardServerChannel = null;
 
         try {
@@ -505,51 +569,6 @@ public class NetworkData {
             return null;
 
         return provider.getLocalB32();
-    }
-
-    /**
-     * Fired by {@link SamSession} the moment our QDN data I2P session comes up. A NAT'd node finishes its
-     * clearnet handshake to seeds in under a second, but its SAM I2P session can take 9-30s to build
-     * tunnels and publish a LeaseSet; the one-shot HELLO those peers received therefore carried no
-     * {@code I2P_QDN} capability, so they never learn our b32 (and keep funnelling fetches to an
-     * unreachable relay) until connection rotation hours later. Re-send an updated HELLO (which now
-     * includes the {@code I2P_QDN} capability) so already-handshaked data peers learn our reachable
-     * destination immediately.
-     *
-     * <p>Runs the re-advertise on a short-lived daemon thread, not the SAM setup thread: when this fires
-     * {@code dataI2PStreamProvider} has not yet been assigned (it is set after {@code provider.start()}
-     * returns), so {@link #getI2PDataDestination()} would still read {@code null} if called inline.
-     * Deferring also keeps the per-peer message queueing off the session-setup path.
-     */
-    private void onI2PDataSessionUp() {
-        Thread t = new Thread(this::reAdvertiseI2PDataCapability, "i2p-readvertise-data");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    private void reAdvertiseI2PDataCapability() {
-        if (this.isShuttingDown)
-            return;
-        if (this.getI2PDataDestination() == null) {
-            LOGGER.debug("Skipping I2P data capability re-advertise: data destination not available");
-            return;
-        }
-        Long timestamp = NTP.getTime();
-        if (timestamp == null) {
-            LOGGER.debug("Skipping I2P data capability re-advertise: NTP unsynchronized");
-            return;
-        }
-        String versionString = Controller.getInstance().getVersionString();
-        LOGGER.info("Re-advertising I2P QDN capability to handshaked data peers (destination now published)");
-        broadcast(peer -> {
-            // Only peers that understand a post-handshake HELLO; older peers would treat it as a protocol
-            // error and disconnect. Such peers simply pick up our destination at the next handshake/rotation.
-            if (peer.getHandshakeStatus() != Handshake.COMPLETED || !Handshake.supportsPostHandshakeHello(peer))
-                return null;
-            Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
-            String senderPeerAddress = peer.getPeerData().getAddress().toString();
-            return new HelloMessage(timestamp, versionString, senderPeerAddress, capabilities, peer.getPeerType());
-        });
     }
 
     public SocketChannel connectI2PDataPeer(String remoteB32) throws IOException {
@@ -2446,6 +2465,15 @@ public class NetworkData {
 			case ARBITRARY_METADATA:
 				ArbitraryMetadataManager.getInstance().onNetworkArbitraryMetadataMessage(peer, message);
 				break;
+
+            case GET_PEERS:
+                onGetPeersMessage(peer, message);
+                break;
+
+            case PEERS:
+                onPeersMessage(peer, message);
+                break;
+
             default:
                 // Bump up to controller for possible action
                 Controller.getInstance().onNetworkMessage(peer, message);
@@ -2725,7 +2753,25 @@ public class NetworkData {
 
         // Only the outbound side needs to send anything (after we've received handshake-completing response).
         // (If inbound sent anything here, it's possible it could be processed out-of-order with handshake message).
+        //
+        // DATA-LAYER peer exchange (gossip): mirror the chain layer's one-shot cadence
+        // (Network.onHandshakeCompleted) exactly. The outbound side advertises our transport-scoped
+        // known DATA peers and asks for theirs. There is no periodic/recurring GET_PEERS — one request
+        // per connection, outbound only. This lets the QDN/data overlay discover data peers
+        // independently of the chain layer, without ever referencing chain identity.
+        if (peer.isOutbound()) {
+            // Send our (transport-scoped) known data peers
+            if (!peer.sendMessage(buildDataPeersMessage(peer))) {
+                peer.disconnect("failed to send peers list");
+                return;
+            }
 
+            // Request their known data peers
+            if (!peer.sendMessage(new GetPeersMessage())) {
+                peer.disconnect("failed to request peers list");
+                return;
+            }
+        }
 
         LOGGER.trace("Handshake has been completed");
         // Ask Controller if they want to do anything
@@ -2948,6 +2994,239 @@ public class NetworkData {
 
             return true;
         }
+    }
+
+    // =====================================================================================
+    // DATA-LAYER peer exchange (gossip)
+    //
+    // A transport-scoped GET_PEERS/PEERS exchange that lets the QDN/data overlay discover
+    // data peers INDEPENDENTLY of the chain layer. This mirrors Network.buildPeersMessage /
+    // Network.onGetPeersMessage / Network.onPeersMessage exactly, but sources its addresses
+    // ONLY from NetworkData.allKnownPeers (DATA destinations seeded from initialDataPeers and
+    // grown by gossip). Privacy invariants:
+    //   - allKnownPeers holds only DATA destinations, so chain addresses are never shared.
+    //   - The transport is the privacy boundary: an I2P requester only ever learns .b32.i2p
+    //     data peers; a clearnet requester only ever learns clearnet data peers. Never cross.
+    //   - No chain identity (public key / nodeId) is referenced; gossiped peers are merged with
+    //     a null nodeId so they never poison the address->nodeId cache.
+    // =====================================================================================
+
+    /**
+     * Responder: a data peer asked for our known data peers, so reply with a transport-scoped
+     * PEERS message built from our DATA destinations only.
+     */
+    private void onGetPeersMessage(Peer peer, Message message) {
+        if (!peer.sendMessage(buildDataPeersMessage(peer))) {
+            peer.disconnect("failed to send peers list");
+        }
+    }
+
+    /**
+     * Build a transport-scoped PEERS message from our known DATA peers.
+     * Mirrors Network.buildPeersMessage: an I2P requester receives ONLY .b32.i2p data
+     * destinations, a clearnet requester receives ONLY clearnet data destinations. The
+     * "0.0.0.0:&lt;port&gt;" sentinel first entry is added automatically by the PeersMessage
+     * constructor (and is dropped/ignored by the data consumer), so the wire format matches
+     * the chain PEERS message and no new message type is required.
+     */
+    public Message buildDataPeersMessage(Peer peer) {
+        // allKnownPeers holds ONLY data destinations, so chain addresses can never be advertised.
+        List<PeerData> knownPeers = this.getAllKnownPeers();
+
+        // The transport is the privacy boundary: never cross-advertise between transports.
+        final boolean requesterIsI2P = peer.getPeerData().getAddress().isI2P();
+
+        List<PeerAddress> peerAddresses = scopeDataPeerAddresses(knownPeers, requesterIsI2P, peer.isLocal());
+
+        // PeersMessage constructor prepends the sentinel and drops >255-byte addresses.
+        return new PeersMessage(peerAddresses);
+    }
+
+    /**
+     * Transport-scope the advertised DATA peer addresses for a requester. The transport is the
+     * privacy boundary, mirroring Network.buildPeersMessage:
+     * <ul>
+     *   <li>an I2P requester is given ONLY .b32.i2p data destinations,</li>
+     *   <li>a clearnet requester is given ONLY clearnet data destinations,</li>
+     *   <li>never cross between transports.</li>
+     * </ul>
+     * Because the input is sourced from allKnownPeers (DATA destinations only), chain addresses
+     * can never appear here. Package-visible and static so the scoping invariant is unit-testable
+     * without constructing a live Peer.
+     */
+    static List<PeerAddress> scopeDataPeerAddresses(List<PeerData> knownPeers, boolean requesterIsI2P,
+                                                    boolean requesterIsLocal) {
+        List<PeerAddress> peerAddresses = new ArrayList<>();
+
+        for (PeerData peerData : knownPeers) {
+            PeerAddress address = peerData.getAddress();
+
+            if (address.isI2P()) {
+                // Only hand I2P data destinations to an I2P requester.
+                if (requesterIsI2P) {
+                    peerAddresses.add(address);
+                }
+                continue;
+            }
+
+            // Clearnet data address: never hand it to an I2P requester.
+            if (requesterIsI2P) {
+                continue;
+            }
+
+            try {
+                InetAddress resolved = InetAddress.getByName(address.getHost());
+
+                // Don't send 'local' addresses if peer is not 'local'.
+                if (!requesterIsLocal && Peer.isAddressLocal(resolved)) {
+                    continue;
+                }
+
+                peerAddresses.add(address);
+            } catch (UnknownHostException e) {
+                // Couldn't resolve hostname to IP address so discard
+            }
+        }
+
+        return peerAddresses;
+    }
+
+    /**
+     * Consumer: a data peer advertised its known data peers. Drop the sentinel first entry,
+     * transport-gate each advertised address by LOCAL reachability (so an I2P-only node never
+     * stores clearnet data peers and vice-versa), then merge into allKnownPeers.
+     * <p>
+     * Unlike the chain consumer we do NOT reconstruct the sender's listen address from the
+     * sentinel port: the sentinel carries the CHAIN listen port, which is meaningless for a
+     * data destination, so reusing it would record a wrong port / leak chain-layer info.
+     */
+    private void onPeersMessage(Peer peer, Message message) {
+        PeersMessage peersMessage = (PeersMessage) message;
+
+        List<PeerAddress> peerAddresses = peersMessage.getPeerAddresses();
+        if (peerAddresses == null || peerAddresses.isEmpty()) {
+            return;
+        }
+
+        // First entry is the sentinel (sender's chain listen port with empty address); discard it.
+        peerAddresses.remove(0);
+
+        // Transport-gate by LOCAL reachability so we only store data peers we could actually dial.
+        final boolean i2pEnabled = Settings.getInstance().isI2PEnabled();
+        final boolean ipAllowed = Settings.getInstance().isIPAllowed();
+
+        List<PeerAddress> dialableAddresses = new ArrayList<>();
+        for (PeerAddress address : peerAddresses) {
+            if (address.isI2P()) {
+                if (i2pEnabled) {
+                    dialableAddresses.add(address);
+                }
+            } else {
+                if (ipAllowed) {
+                    dialableAddresses.add(address);
+                }
+            }
+        }
+
+        if (dialableAddresses.isEmpty()) {
+            return;
+        }
+
+        // Bound per-message work: a single PEERS message can advertise ~1M addresses (10MB
+        // MAX_DATA_SIZE), so never process more than MAX_GOSSIPED_PEERS_PER_MESSAGE from one message
+        // regardless of the total cap. This stops a hostile peer from forcing a huge merge in one go.
+        if (dialableAddresses.size() > MAX_GOSSIPED_PEERS_PER_MESSAGE) {
+            LOGGER.debug("Capping PEERS gossip from {} to {} addresses (advertised {})",
+                    peer.getPeerData().getAddress(), MAX_GOSSIPED_PEERS_PER_MESSAGE, dialableAddresses.size());
+            dialableAddresses = dialableAddresses.subList(0, MAX_GOSSIPED_PEERS_PER_MESSAGE);
+        }
+
+        // Merge into allKnownPeers (inherits dedup + locking). Pass a null nodeId so gossiped,
+        // unverified data destinations never poison the address->nodeId cache (no chain identity).
+        // Tag with GOSSIP_ADDED_BY (not peer.toString()) so these untrusted entries are identifiable
+        // and are the only ones evicted when the total-size cap is enforced.
+        final Long now = NTP.getTime();
+        final long addedWhen = now != null ? now : System.currentTimeMillis();
+
+        List<PeerData> candidatePeers = new ArrayList<>(dialableAddresses.size());
+        for (PeerAddress address : dialableAddresses) {
+            candidatePeers.add(new PeerData(address, addedWhen, GOSSIP_ADDED_BY));
+        }
+
+        int added = addGossipedPeersIfMissing(candidatePeers);
+        if (added > 0) {
+            LOGGER.debug("Added {} data peer address(es) from PEERS gossip via {}", added,
+                    peer.getPeerData().getAddress());
+        }
+    }
+
+    /**
+     * Merge untrusted gossiped data peers into allKnownPeers, enforcing the MAX_KNOWN_PEERS total
+     * cap. Because the data layer has no age-based prune (and gossiped entries carry no connection
+     * timestamps that such a prune could act on), this is the ONLY backstop against unbounded growth.
+     * When adding would exceed the cap we first evict the OLDEST existing gossiped entries; we never
+     * evict seeds, chain-discovered peers, or currently-connected peers. If no gossiped entries can
+     * be evicted (the list is full of trusted entries), excess candidates are simply dropped.
+     *
+     * @return number of new gossiped entries actually stored
+     */
+    private int addGossipedPeersIfMissing(List<PeerData> candidatePeers) {
+        int added = 0;
+
+        synchronized (this.allKnownPeers) {
+            for (PeerData candidatePeer : candidatePeers) {
+                boolean alreadyKnown = this.allKnownPeers.stream()
+                        .anyMatch(peerData -> peerData.getAddress().equals(candidatePeer.getAddress()));
+                if (alreadyKnown)
+                    continue;
+
+                // Enforce the hard cap before inserting. Try to make room by evicting the oldest
+                // gossiped (untrusted) entry that isn't currently connected.
+                if (this.allKnownPeers.size() >= MAX_KNOWN_PEERS && !evictOldestGossipedPeer()) {
+                    // Could not free a slot (no evictable gossiped entries) — drop remaining candidates.
+                    LOGGER.debug("allKnownPeers at cap {} with no evictable gossiped entries; "
+                            + "dropping {} further gossiped address(es)", MAX_KNOWN_PEERS,
+                            candidatePeers.size() - added);
+                    break;
+                }
+
+                this.allKnownPeers.add(candidatePeer);
+                added++;
+            }
+        }
+
+        return added;
+    }
+
+    /**
+     * Evict the single oldest gossiped (GOSSIP_ADDED_BY) entry from allKnownPeers that is not
+     * currently connected. Caller MUST hold the allKnownPeers monitor.
+     *
+     * @return true if an entry was evicted, false if none was evictable
+     */
+    private boolean evictOldestGossipedPeer() {
+        PeerData oldest = null;
+        for (PeerData peerData : this.allKnownPeers) {
+            if (!GOSSIP_ADDED_BY.equals(peerData.getAddedBy()))
+                continue;
+            if (isConnectedPeer.test(peerData))
+                continue;
+
+            if (oldest == null || addedWhenOf(peerData) < addedWhenOf(oldest)) {
+                oldest = peerData;
+            }
+        }
+
+        if (oldest == null)
+            return false;
+
+        this.allKnownPeers.remove(oldest);
+        return true;
+    }
+
+    private static long addedWhenOf(PeerData peerData) {
+        Long addedWhen = peerData.getAddedWhen();
+        return addedWhen != null ? addedWhen : Long.MAX_VALUE;
     }
 
     public void prunePeers() throws DataException {

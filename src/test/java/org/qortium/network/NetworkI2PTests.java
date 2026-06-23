@@ -7,6 +7,7 @@ import org.junit.Test;
 import org.qortium.data.network.PeerData;
 import org.qortium.network.helper.PeerCapabilities;
 import org.qortium.network.i2p.I2PStreamProvider;
+import org.qortium.network.message.Message;
 import org.qortium.network.message.PeersMessage;
 import org.qortium.settings.Settings;
 import org.qortium.test.common.Common;
@@ -15,6 +16,7 @@ import org.qortium.utils.NTP;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -314,13 +316,56 @@ public class NetworkI2PTests extends Common {
 		i2pPeerData.setLastConnected(now);
 		getMutableKnownPeers().add(i2pPeerData);
 
-		Peer peer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK);
+		// Requester is an I2P peer, so it must receive the I2P chain peer address (no DNS resolution).
+		Peer peer = new Peer(new PeerData(PeerAddress.fromString(LOCAL_B32)), Peer.NETWORK);
 		PeersMessage message = (PeersMessage) Network.getInstance().buildPeersMessage(peer);
 		byte[] dataBytes = (byte[]) FieldUtils.readField(message, "dataBytes", true);
 		PeersMessage decoded = (PeersMessage) PeersMessage.fromByteBuffer(1, ByteBuffer.wrap(dataBytes));
 
 		assertTrue(decoded.getPeerAddresses().stream()
 				.anyMatch(peerAddress -> peerAddress.isI2P() && peerAddress.toString().equals(B32 + ":0")));
+	}
+
+	@Test
+	public void testPeersMessageFiltersByRequesterTransport() throws Exception {
+		Long now = NTP.getTime();
+
+		PeerData i2pPeerData = new PeerData(PeerAddress.fromString(B32), 100L, "test");
+		i2pPeerData.setLastAttempted(now);
+		i2pPeerData.setLastConnected(now);
+		getMutableKnownPeers().add(i2pPeerData);
+
+		PeerData clearnetPeerData = new PeerData(PeerAddress.fromString("198.51.100.20:24892"), 100L, "test");
+		clearnetPeerData.setLastAttempted(now);
+		clearnetPeerData.setLastConnected(now);
+		getMutableKnownPeers().add(clearnetPeerData);
+
+		// Clearnet requester: receives only the clearnet address, never the I2P one.
+		Peer clearnetRequester = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK);
+		List<PeerAddress> clearnetAddresses = decodedPeerAddresses(Network.getInstance().buildPeersMessage(clearnetRequester));
+		assertTrue(clearnetAddresses.stream()
+				.anyMatch(peerAddress -> peerAddress.toString().equals("198.51.100.20:24892")));
+		assertFalse(clearnetAddresses.stream().anyMatch(PeerAddress::isI2P));
+
+		// I2P requester: receives only the I2P address, never the clearnet one.
+		Peer i2pRequester = new Peer(new PeerData(PeerAddress.fromString(LOCAL_B32)), Peer.NETWORK);
+		List<PeerAddress> i2pAddresses = decodedPeerAddresses(Network.getInstance().buildPeersMessage(i2pRequester));
+		assertTrue(i2pAddresses.stream()
+				.anyMatch(peerAddress -> peerAddress.isI2P() && peerAddress.toString().equals(B32 + ":0")));
+		assertFalse(i2pAddresses.stream().anyMatch(peerAddress -> !peerAddress.isI2P()));
+	}
+
+	// buildPeersMessage returns an outbound message that only holds serialized dataBytes; getPeerAddresses()
+	// is null until a serialize -> fromByteBuffer round-trip, matching how a remote peer would decode it. The
+	// first decoded entry is the sender's own listen-port sentinel (empty address); drop it like the real
+	// receiver (onPeersMessage) does before inspecting the advertised peer addresses.
+	private static List<PeerAddress> decodedPeerAddresses(Message message) throws Exception {
+		byte[] dataBytes = (byte[]) FieldUtils.readField(message, "dataBytes", true);
+		PeersMessage decoded = (PeersMessage) PeersMessage.fromByteBuffer(1, ByteBuffer.wrap(dataBytes));
+		List<PeerAddress> addresses = new ArrayList<>(decoded.getPeerAddresses());
+		if (!addresses.isEmpty())
+			addresses.remove(0);
+		return addresses;
 	}
 
 	private Peer networkPeerWithCapabilities(Map<String, Object> capabilities) {
