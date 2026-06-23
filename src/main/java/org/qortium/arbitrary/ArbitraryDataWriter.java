@@ -491,6 +491,14 @@ public class ArbitraryDataWriter {
         if (this.arbitraryDataFile.chunkCount() > 1) {
             return true;
         }
+        // A multi-file (directory) resource needs a metadata file so consumers can
+        // enumerate its files. Larger resources already get one via the chunk-count
+        // check above, but a small directory that fits in a single chunk would
+        // otherwise be published with no file manifest, leaving viewers unable to
+        // list its contents.
+        if (this.files != null && this.files.size() > 1) {
+            return true;
+        }
         if (this.title != null || this.description != null || this.tags != null || this.category != null) {
             return true;
         }
