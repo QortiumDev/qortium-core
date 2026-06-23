@@ -85,6 +85,19 @@
     "146.103.42.59:24892",
     "3u25ana5e5hvriqqiuh6fcetxezsqm7la276ljtjxaoxt767n4hq.b32.i2p"
   ],
+  "initialDataPeers": [
+    "146.103.42.59:24894",
+    "hg3seiuul4pcz6a2svatdahzudphbm464vwqcmiejc77kumglwaq.b32.i2p"
+  ],
+  "allowedTransports": [
+    "IP",
+    "I2P"
+  ],
+  "i2pSamHost": "127.0.0.1",
+  "i2pSamPort": 7656,
+  "i2pChainKeyFile": "i2p/chain.keys",
+  "i2pDataKeyFile": "i2p/data.keys",
+  "i2pEmbeddedRouter": false,
   "uiLocalServers": [
     "localhost",
     "127.0.0.1",
