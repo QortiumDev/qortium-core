@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-23 - release: move version to 1.1.3
+
+Bumps the project version from 1.1.2 to 1.1.3, the version the node now reports
+to peers and in its API (the build version becomes `1.1.3` plus the commit).
+This Previewnet patch release carries the I2P transport-scoping cleanup, explicit
+chain/data I2P bootstrap settings for the bundled preview config, deferred
+feature-trigger activation at height 32000 with the matching checkpoint advance,
+and the capability-negotiated handshake proof-of-work baseline. The change here
+is only the version string -- no additional code, consensus, or database
+behaviour changes with it.
+
 ### 2026-06-23 - network: negotiate handshake PoW baseline by capability
 
 Qortium peers now advertise an explicit handshake proof-of-work capability so
