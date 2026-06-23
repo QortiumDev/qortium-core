@@ -206,6 +206,61 @@ public class NetworkDataI2PTests extends Common {
 		assertFalse(firstSessionId.equals(secondSessionId));
 	}
 
+	@Test
+	public void testSeedInitialDataPeersSeedsClearnetWhenIPAllowed() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP", "I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "initialDataPeers",
+				new String[] { "185.207.104.78:24894", "146.103.42.59:24894" }, true);
+
+		NetworkData.getInstance().seedInitialDataPeers();
+
+		List<PeerData> knownPeers = NetworkData.getInstance().getAllKnownPeers();
+		assertTrue(containsAddress(knownPeers, "185.207.104.78:24894"));
+		assertTrue(containsAddress(knownPeers, "146.103.42.59:24894"));
+	}
+
+	@Test
+	public void testSeedInitialDataPeersSkipsClearnetWhenIPDisabled() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("I2P"), true);
+		FieldUtils.writeField(Settings.getInstance(), "initialDataPeers",
+				new String[] { "185.207.104.78:24894", B32 }, true);
+
+		NetworkData.getInstance().seedInitialDataPeers();
+
+		List<PeerData> knownPeers = NetworkData.getInstance().getAllKnownPeers();
+		// Clearnet seed skipped (IP not allowed), I2P seed kept (I2P enabled)
+		assertFalse(containsAddress(knownPeers, "185.207.104.78:24894"));
+		assertTrue(containsAddress(knownPeers, B32 + ":0"));
+	}
+
+	@Test
+	public void testSeedInitialDataPeersSkipsI2PWhenI2PDisabled() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP"), true);
+		FieldUtils.writeField(Settings.getInstance(), "initialDataPeers",
+				new String[] { "185.207.104.78:24894", B32 }, true);
+
+		NetworkData.getInstance().seedInitialDataPeers();
+
+		List<PeerData> knownPeers = NetworkData.getInstance().getAllKnownPeers();
+		// I2P seed skipped (I2P disabled), clearnet seed kept (IP allowed)
+		assertTrue(containsAddress(knownPeers, "185.207.104.78:24894"));
+		assertFalse(containsAddress(knownPeers, B32 + ":0"));
+	}
+
+	@Test
+	public void testSeedInitialDataPeersIgnoresInvalidEntries() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "allowedTransports", java.util.List.of("IP", "I2P"), true);
+		// Unbracketed IPv6 literal is rejected by PeerAddress.fromString (requireBracketsForIPv6)
+		FieldUtils.writeField(Settings.getInstance(), "initialDataPeers",
+				new String[] { "2001:db8::1:9084", "185.207.104.78:24894" }, true);
+
+		NetworkData.getInstance().seedInitialDataPeers();
+
+		List<PeerData> knownPeers = NetworkData.getInstance().getAllKnownPeers();
+		assertTrue(containsAddress(knownPeers, "185.207.104.78:24894"));
+		assertEquals(1, knownPeers.size());
+	}
+
 	private Peer networkPeerWithCapabilities(Map<String, Object> capabilities) {
 		Peer peer = new Peer(new PeerData(PeerAddress.fromString("198.51.100.10:24892")), Peer.NETWORK);
 		peer.setPeersCapabilities(new PeerCapabilities(capabilities));

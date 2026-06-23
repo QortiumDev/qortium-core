@@ -555,7 +555,8 @@ public enum Handshake {
 		}
 		long timestamp = timestampObj;
 		String senderPeerAddress = peer.getPeerData().getAddress().toString();
-		Map<String, Object> capabilities = buildHelloCapabilities();
+		boolean isI2PTransport = peer.getPeerData().getAddress().isI2P();
+		Map<String, Object> capabilities = buildHelloCapabilities(isI2PTransport);
 
 		Message helloMessage = new HelloMessage(timestamp, versionString, senderPeerAddress, capabilities, peer.getPeerType());
 
@@ -567,26 +568,56 @@ public enum Handshake {
 		return true;
 	}
 
+	/**
+	 * Backward-compatible no-arg overload. Builds capabilities for a <em>clearnet</em> connection (the safe
+	 * default): it never advertises any I2P address, so callers that have not been made transport-aware can
+	 * never leak an I2P identity to the wrong transport. Transport-aware callers must use
+	 * {@link #buildHelloCapabilities(boolean)} instead.
+	 */
 	static Map<String, Object> buildHelloCapabilities() {
+		return buildHelloCapabilities(false);
+	}
+
+	/**
+	 * Build the capabilities advertised in a HELLO, scoped to the transport of the connection it will be sent
+	 * over. The transport is the privacy boundary: a node must never advertise an address reachable only via a
+	 * transport the receiving peer cannot use, and must never co-advertise its IP identity and its I2P identity
+	 * to the same peer.
+	 * <ul>
+	 *   <li>On an <strong>I2P</strong> connection ({@code isI2PTransport == true}): advertise only the chain
+	 *       I2P destination ({@link #I2P_CAPABILITY}) plus the transport-neutral capabilities. Never advertise
+	 *       the clearnet QDN port and never advertise any clearnet info.</li>
+	 *   <li>On a <strong>clearnet</strong> connection: advertise the clearnet QDN listen port plus the
+	 *       transport-neutral capabilities. Never advertise the chain I2P destination.</li>
+	 * </ul>
+	 * The data-layer I2P destination ({@link #I2P_QDN_CAPABILITY}) is NEVER advertised in a chain HELLO under
+	 * any transport; the I2P data layer is bootstrapped out of band (initialDataPeers + data-layer gossip).
+	 */
+	static Map<String, Object> buildHelloCapabilities(boolean isI2PTransport) {
 		Map<String, Object> capabilities = new HashMap<>();
 		BlockChain blockChain = BlockChain.getInstance();
 		capabilities.put(CHAIN_NETWORK_ID_CAPABILITY, blockChain.getNetworkId());
 		capabilities.put(CHAIN_GENESIS_SIGNATURE_CAPABILITY, blockChain.getGenesisSignature());
 		capabilities.put(CHAIN_CONFIG_HASH_CAPABILITY, blockChain.getChainConfigHash());
-		String chainI2PDestination = Network.getInstance().getI2PChainDestination();
-		if (chainI2PDestination != null)
-			capabilities.put(I2P_CAPABILITY, chainI2PDestination);
+
+		if (isI2PTransport) {
+			// I2P peer: advertise only our chain I2P destination. No clearnet info, and never I2P_QDN.
+			String chainI2PDestination = Network.getInstance().getI2PChainDestination();
+			if (chainI2PDestination != null)
+				capabilities.put(I2P_CAPABILITY, chainI2PDestination);
+		} else {
+			// Clearnet peer: advertise our clearnet QDN port. Our data lives on the same already-public IP,
+			// so no privacy is lost. Never advertise our chain I2P destination, and never I2P_QDN.
+			if (Settings.getInstance().isQdnEnabled())
+				capabilities.put("QDN", Settings.getInstance().getQDNListenPort());
+			else
+				capabilities.put("QDN", 0);
+		}
 
 		if (Settings.getInstance().isQdnEnabled()) {
-			capabilities.put("QDN", Settings.getInstance().getQDNListenPort());
-			String dataI2PDestination = NetworkData.getInstance().getI2PDataDestination();
-			if (dataI2PDestination != null)
-				capabilities.put(I2P_QDN_CAPABILITY, dataI2PDestination);
 			// Advertise that we understand publisher-initiated push so publishers can offer us data.
-			// Unknown capabilities are ignored by older peers, so this is backward compatible.
+			// This is transport-neutral (no address) and unknown capabilities are ignored by older peers.
 			capabilities.put(QDN_PUSH_CAPABILITY, 1);
-		} else {
-			capabilities.put("QDN", 0);
 		}
 
 		if (!Settings.getInstance().isLite())
@@ -627,7 +658,14 @@ public enum Handshake {
 					peer, describeChainCapabilityMismatch(updated));
 			return false;
 		}
-		boolean changed = peer.mergePeersCapabilities(updated.getPeerCapabilities());
+		// A post-handshake HELLO is only a legitimate vehicle for re-advertising the CHAIN I2P destination once
+		// a node's slow SAM session comes up. The data-layer I2P destination (I2P_QDN) is never advertised in a
+		// chain HELLO under any transport, so defensively strip it before merging: this guarantees we neither
+		// learn nor re-propagate a peer's I2P data identity through the chain handshake, even if a legacy or
+		// misbehaving peer still sends one.
+		Map<String, Object> mergeable = new HashMap<>(updated.getPeerCapabilities());
+		mergeable.remove(I2P_QDN_CAPABILITY);
+		boolean changed = peer.mergePeersCapabilities(mergeable);
 		if (changed)
 			LOGGER.debug("Merged updated capabilities from post-handshake HELLO for {}", peer);
 		return true;

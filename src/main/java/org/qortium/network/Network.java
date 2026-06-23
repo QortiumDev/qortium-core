@@ -597,11 +597,18 @@ public class Network {
         String versionString = Controller.getInstance().getVersionString();
         LOGGER.info("Re-advertising I2P chain capability to handshaked peers (destination now published)");
         broadcast(peer -> {
+            // Transport-scoped: only re-advertise the chain I2P destination to I2P peers. A clearnet peer
+            // can never reach our I2P destination and must never see our I2P identity.
+            if (!peer.getPeerData().getAddress().isI2P())
+                return null;
             // Only peers that understand a post-handshake HELLO; older peers would treat it as a protocol
             // error and disconnect. Such peers simply pick up our destination at the next handshake/rotation.
             if (peer.getHandshakeStatus() != Handshake.COMPLETED || !Handshake.supportsPostHandshakeHello(peer))
                 return null;
-            Map<String, Object> capabilities = Handshake.buildHelloCapabilities();
+            // I2P-scoped capabilities: this re-advertise targets I2P peers only and its whole purpose is to
+            // carry our chain I2P destination (now that the SAM session is up). The no-arg overload defaults
+            // to clearnet scope and would omit the I2P destination, so request I2P scope explicitly.
+            Map<String, Object> capabilities = Handshake.buildHelloCapabilities(true);
             String senderPeerAddress = peer.getPeerData().getAddress().toString();
             return new HelloMessage(timestamp, versionString, senderPeerAddress, capabilities, peer.getPeerType());
         });
@@ -2915,6 +2922,11 @@ public class Network {
     public Message buildPeersMessage(Peer peer) {
         List<PeerData> knownPeers = this.getAllKnownPeers();
 
+        // Transport-scoped peer exchange: the transport is the privacy boundary, so an I2P requester
+        // must only ever learn .b32.i2p peer addresses, and a clearnet requester must only ever learn
+        // clearnet addresses. Never cross-advertise between transports.
+        final boolean requesterIsI2P = peer.getPeerData().getAddress().isI2P();
+
         // Filter out peers that we've not connected to ever or within X milliseconds
         final long connectionThreshold = NTP.getTime() - RECENT_CONNECTION_THRESHOLD;
         Predicate<PeerData> notRecentlyConnected = peerData -> {
@@ -2941,7 +2953,15 @@ public class Network {
 
         for (PeerData peerData : knownPeers) {
             if (peerData.getAddress().isI2P()) {
-                peerAddresses.add(peerData.getAddress());
+                // Only hand I2P addresses to an I2P requester.
+                if (requesterIsI2P) {
+                    peerAddresses.add(peerData.getAddress());
+                }
+                continue;
+            }
+
+            // Clearnet address: never hand it to an I2P requester.
+            if (requesterIsI2P) {
                 continue;
             }
 
