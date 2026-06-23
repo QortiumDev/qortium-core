@@ -72,7 +72,7 @@
 		{ "timestamp": 0, "fee": "1.25" }
 	],
 	"checkpoints": [
-		{ "height": 24000, "signature": "SnsdHBz5NCjtnRUTKfCsWfEmLCvm4JsSDMwnHKMURpAaxtHxPi9BrmNheLn7sXrrSNE6hraupCd8FKzLFzrht8vsqZHq1ESwy8HHg9tPUyyMTCSzGgZCxmLdNBbr1GQ7mKzCxJcFkKHAan5gZfwdtdMpUhzLucrp7u2KVfDmWNSAESo" }
+		{ "height": 30000, "signature": "8SiSpBpV43ZNdSKyKQvNxy1nTyuhQXnbhSEzth8xYhsAqM6DzpM5x3tn7DT1EHPfGKy9LH872c1A7MbdKUfv8mZQm9JkTWSMFkkj4t5twwKWr3vyzvEcWLnMrcSr6UAKTzokWEZEaAR3Hb9xhJow7QKrnaV48Bp8MFSkD1TZh671Qrq" }
 	],
 	"requireGroupForApproval": false,
 	"defaultGroupId": 0,
@@ -83,8 +83,10 @@
 	],
 	"onlineAccountSignaturesMinLifetime": 43200000,
 	"onlineAccountSignaturesMaxLifetime": 86400000,
-	"onlineAccountsSignatureV2Height": 99999,
-	"assetOrderBoundsHeight": 99999,
+	"featureTriggers": {
+		"onlineAccountsSignatureV2Height": 32000,
+		"assetOrderBoundsHeight": 32000
+	},
 	"mempowSettings": {
 		"feeAlternativeDifficulty": 12,
 		"arbitraryDifficulty": 11,
