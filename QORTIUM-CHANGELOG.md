@@ -34,6 +34,14 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-23 - network: negotiate handshake PoW baseline by capability
+
+Qortium peers now advertise an explicit handshake proof-of-work capability so
+upgraded nodes can use the newer, lighter handshake baseline even while the
+public version line remains `qortium-1.0.0`. Older peers that do not advertise
+the capability keep the existing legacy path, avoiding a block-height or
+timestamp switch that could split peers before they finish connecting.
+
 ### 2026-06-22 - i18n: add Norwegian Bokmal translations
 
 Adds Norwegian Bokmål language bundles for Core API errors, system tray text,
