@@ -326,6 +326,8 @@ public class Settings {
 	private String i2pDataKeyFile = "i2p/data.keys";
 	/** Future switch for an embedded Java I2P router behind the same transport seam. */
 	private boolean i2pEmbeddedRouter = false;
+	/** Diagnostic: when true, append every received PEERS gossip message (chain and data networks) to a local JSONL file. */
+	private boolean recordPeerExchange = false;
 
 	/** Whether to sync multiple blocks at once in normal operation */
 	private boolean fastSyncEnabled = true;
@@ -1002,6 +1004,7 @@ public class Settings {
 		settings.put("i2pChainKeyFile", new WritableSetting(WritableSettingType.STRING, true));
 		settings.put("i2pDataKeyFile", new WritableSetting(WritableSettingType.STRING, true));
 		settings.put("i2pEmbeddedRouter", new WritableSetting(WritableSettingType.BOOLEAN, true));
+		settings.put("recordPeerExchange", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("storagePolicy", new WritableSetting(WritableSettingType.STORAGE_POLICY, false));
 		settings.put("relayModeEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("qdnPushOnPublishEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
@@ -1921,6 +1924,10 @@ public class Settings {
 
 	public boolean isI2PEmbeddedRouterEnabled() {
 		return this.i2pEmbeddedRouter;
+	}
+
+	public boolean isRecordPeerExchangeEnabled() {
+		return this.recordPeerExchange;
 	}
 
 	private Path resolveUserPath(String configuredPath) {
