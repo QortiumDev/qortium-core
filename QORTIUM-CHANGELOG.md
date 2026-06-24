@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-24 - fix: refresh run.pid after /admin/restart
+
+Keeps the small `run.pid` file accurate after the node restarts itself. A plain
+restart (for example, the one triggered when an I2P setting is changed) relaunches
+the node directly rather than through the `start.sh` launcher that normally records
+the running process id, so `run.pid` was left pointing at the old, already-stopped
+process while the new one ran unrecorded. The automatic-update restart already kept
+this file up to date; this applies the same step to a plain restart. The benefit is
+that anything relying on `run.pid` to tell whether the node is alive — the start and
+stop scripts, and Qortium Home's check that decides whether to keep its managed I2P
+router running when Home is closed — now stays correct across a restart.
+
 ### 2026-06-23 - preview: keep block and follow lists in the runtime directory
 
 Fixes block lists and follow lists being wiped whenever the Core is updated
