@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-23 - preview: keep block and follow lists in the runtime directory
+
+Fixes block lists and follow lists being wiped whenever the Core is updated
+through the Home app. The node stores these QDN lists in a `lists` folder, but
+the preview launcher never told it where to put them, so they landed inside the
+install directory next to the jar. Home replaces that install directory on every
+update, taking the user's block and follow lists with it. The launcher now points
+`listsPath` at the runtime directory — alongside the database, QDN data, and API
+key, which were already kept there — so the lists survive updates. On first start
+after this change, any lists found in the old install-directory location are moved
+into the runtime directory once, so existing users keep their lists. The preview
+`reset` scripts also clear the lists from both the new and old locations. This
+applies to participant, regxa-seed, and netcup-seed nodes on Linux, macOS, and
+Windows.
+
 ### 2026-06-23 - docs: use version-agnostic jar name in preview operator runbook
 
 Updates the seed operator runbook so the step that copies the freshly built jar

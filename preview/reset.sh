@@ -59,6 +59,8 @@ fi
 paths=(
 	"${RUNTIME_DIR}/db-preview"
 	"${RUNTIME_DIR}/data-preview"
+	"${RUNTIME_DIR}/lists"
+	"${SCRIPT_DIR}/lists"
 	"${RUNTIME_DIR}/qortium-backup"
 	"${RUNTIME_DIR}/qortium-backup-preview"
 	"${RUNTIME_DIR}/settings-preview-local.json"

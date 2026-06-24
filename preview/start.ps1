@@ -162,7 +162,44 @@ function Set-RuntimeSettingPaths {
         $Settings | Add-Member -NotePropertyName "apiKeyPath" -NotePropertyValue $RuntimeDir
     }
 
+    # QDN block/follow lists. Without this they default to "lists" relative to the
+    # node's working directory (the install dir), which Home replaces on every Core
+    # update — wiping the user's block and follow lists. Keep them in $RuntimeDir.
+    $ListsPath = Join-Path $RuntimeDir "lists"
+    if ($Settings.PSObject.Properties.Name -contains "listsPath") {
+        $Settings.listsPath = $ListsPath
+    } else {
+        $Settings | Add-Member -NotePropertyName "listsPath" -NotePropertyValue $ListsPath
+    }
+
     $Settings | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath $SettingsPath
+}
+
+# Older preview builds left listsPath at its default, so block/follow lists were
+# written to $ScriptDir\lists (inside the install dir). Move any such lists into the
+# runtime directory once, so existing users keep their lists across this change.
+function Move-LegacyLists {
+    $LegacyLists = Join-Path $ScriptDir "lists"
+    $TargetLists = Join-Path $RuntimeDir "lists"
+
+    if ($LegacyLists -eq $TargetLists -or -not (Test-Path -LiteralPath $LegacyLists -PathType Container)) {
+        return
+    }
+
+    New-Item -ItemType Directory -Force -Path $TargetLists | Out-Null
+
+    foreach ($Entry in Get-ChildItem -LiteralPath $LegacyLists -Force) {
+        $Destination = Join-Path $TargetLists $Entry.Name
+        # Don't clobber lists already present in the runtime dir.
+        if (-not (Test-Path -LiteralPath $Destination)) {
+            Move-Item -LiteralPath $Entry.FullName -Destination $Destination
+        }
+    }
+
+    # Remove the old directory only if it is now empty.
+    if (-not (Get-ChildItem -LiteralPath $LegacyLists -Force)) {
+        Remove-Item -LiteralPath $LegacyLists -Force
+    }
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -230,6 +267,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 Set-RuntimeSettingPaths -SettingsPath $SettingsLocal
+Move-LegacyLists
 Set-AutoUpdateMode -SettingsPath $SettingsLocal -Mode $env:QORTIUM_PREVIEW_AUTO_UPDATE_MODE
 $AutoUpdateModeEffective = Get-AutoUpdateMode -SettingsPath $SettingsLocal
 

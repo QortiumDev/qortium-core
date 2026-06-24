@@ -165,6 +165,37 @@ configure_runtime_settings() {
 	set_json_string_setting "${settings_file}" "exportPath" "${RUNTIME_DIR}/qortium-backup-preview"
 	set_json_string_setting "${settings_file}" "dataPath" "${RUNTIME_DIR}/data-preview"
 	set_json_string_setting "${settings_file}" "apiKeyPath" "${RUNTIME_DIR}"
+	# QDN block/follow lists. Without this they default to "lists" relative to the
+	# node's working directory (the install dir), which Home replaces on every Core
+	# update — wiping the user's block and follow lists. Keep them in RUNTIME_DIR.
+	set_json_string_setting "${settings_file}" "listsPath" "${RUNTIME_DIR}/lists"
+}
+
+# Older preview builds left listsPath at its default, so block/follow lists were
+# written to ${SCRIPT_DIR}/lists (inside the install dir). Move any such lists into
+# the runtime directory once, so existing users keep their lists across this change.
+migrate_legacy_lists() {
+	local legacy_lists="${SCRIPT_DIR}/lists"
+	local target_lists="${RUNTIME_DIR}/lists"
+
+	if [ "${legacy_lists}" = "${target_lists}" ] || [ ! -d "${legacy_lists}" ]; then
+		return 0
+	fi
+
+	mkdir -p "${target_lists}"
+
+	local entry name
+	for entry in "${legacy_lists}"/*; do
+		[ -e "${entry}" ] || continue
+		name="$(basename "${entry}")"
+		# Don't clobber lists already present in the runtime dir.
+		if [ ! -e "${target_lists}/${name}" ]; then
+			mv "${entry}" "${target_lists}/${name}"
+		fi
+	done
+
+	# Remove the old directory only if it is now empty.
+	rmdir "${legacy_lists}" 2>/dev/null || true
 }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -252,6 +283,7 @@ if ! java -cp "${JAR_PATH}" org.qortium.MergeSettings \
 	exit 1
 fi
 configure_runtime_settings "${SETTINGS_LOCAL}"
+migrate_legacy_lists
 if [ -n "${QORTIUM_PREVIEW_AUTO_UPDATE_MODE:-}" ]; then
 	apply_auto_update_mode "${SETTINGS_LOCAL}" "${QORTIUM_PREVIEW_AUTO_UPDATE_MODE}"
 fi

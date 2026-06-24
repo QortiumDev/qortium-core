@@ -57,6 +57,7 @@ try {
 $Paths = @(
     "db-preview",
     "data-preview",
+    "lists",
     "qortium-backup",
     "qortium-backup-preview",
     "settings-preview-local.json",
@@ -72,6 +73,9 @@ $Paths = @(
     "QortiumKeyStore.jks",
     "apikey.txt"
 ) | ForEach-Object { Join-Path $RuntimeDir $_ }
+
+# Also clear any legacy lists left in the install dir by older preview builds.
+$Paths += (Join-Path $ScriptDir "lists")
 
 $Removed = $false
 Write-Host "Removing generated preview files:"
