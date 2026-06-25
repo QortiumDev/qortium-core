@@ -41,8 +41,11 @@ If the node is using the release-style preview runtime jar, replace it after
 building and before restarting:
 
 ```sh
-cp target/qortium-1.0.0.jar preview/qortium.jar
+cp target/qortium-*.jar preview/qortium.jar
 ```
+
+The jar name tracks the pom `<version>` (e.g. `target/qortium-1.1.3.jar`), so use
+the glob above rather than a hardcoded version.
 
 ## Stop, Start, And Check
 
