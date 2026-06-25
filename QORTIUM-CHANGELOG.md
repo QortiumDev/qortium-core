@@ -34,6 +34,64 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-24 - Seed the default QDN data-peer bootstrap list with the preview seeds' I2P data destinations
+
+Seed the default QDN data-peer bootstrap list with the preview seeds' I2P data destinations (not just clearnet), so I2P-only nodes can find data peers.
+
+### 2026-06-24 - fix: refresh run.pid after /admin/restart
+
+Keeps the small `run.pid` file accurate after the node restarts itself. A plain
+restart (for example, the one triggered when an I2P setting is changed) relaunches
+the node directly rather than through the `start.sh` launcher that normally records
+the running process id, so `run.pid` was left pointing at the old, already-stopped
+process while the new one ran unrecorded. The automatic-update restart already kept
+this file up to date; this applies the same step to a plain restart. The benefit is
+that anything relying on `run.pid` to tell whether the node is alive — the start and
+stop scripts, and Qortium Home's check that decides whether to keep its managed I2P
+router running when Home is closed — now stays correct across a restart.
+
+### 2026-06-24 - network: optional recordPeerExchange diagnostic (default off)
+
+Adds an opt-in `recordPeerExchange` setting (default false) that records the peer
+lists a node receives through normal peer-exchange discovery. When enabled, every
+received PEERS message — on both the chain and data networks — is appended as a
+single JSON line to a local `peer-exchange.jsonl` file (timestamp, layer, sending
+peer, transport, and the advertised peer addresses). It is a thread-safe,
+no-op-when-disabled diagnostic: while off it performs no file I/O and no allocation,
+and when on it swallows write errors and never throws into the networking path. The
+data captured is exactly what the node already receives during discovery, so there
+is no new network behaviour, no new endpoint, and no consensus or database change.
+Intended for operators mapping network topology — for example, surfacing I2P↔I2P
+links that a node's own connection list cannot reveal.
+
+### 2026-06-23 - preview: keep block and follow lists in the runtime directory
+
+Fixes block lists and follow lists being wiped whenever the Core is updated
+through the Home app. The node stores these QDN lists in a `lists` folder, but
+the preview launcher never told it where to put them, so they landed inside the
+install directory next to the jar. Home replaces that install directory on every
+update, taking the user's block and follow lists with it. The launcher now points
+`listsPath` at the runtime directory — alongside the database, QDN data, and API
+key, which were already kept there — so the lists survive updates. On first start
+after this change, any lists found in the old install-directory location are moved
+into the runtime directory once, so existing users keep their lists. The preview
+`reset` scripts also clear the lists from both the new and old locations. This
+applies to participant, regxa-seed, and netcup-seed nodes on Linux, macOS, and
+Windows.
+
+### 2026-06-23 - fix: emit QDN metadata file for small multi-file resources
+
+A directory (multi-file) QDN resource that fit in a single chunk and was published
+without any user metadata (title/description/tags/category/entry point) produced no
+metadata file, so consumers had no file manifest to enumerate its contents — for
+example a `GIT_REPOSITORY` would show "0 files". Larger resources already get a
+metadata file via the chunk-count check; `needsMetadataFile()` now also returns true
+whenever a resource has more than one file, closing the gap for small directories.
+The file list is already built before this runs, and validation only requires a
+metadata file when the chunk count is greater than one, so emitting one for a
+single-chunk resource is safe. Client-side packaging only — no consensus,
+transaction-validation, or database changes, and existing resources are unaffected.
+
 ### 2026-06-23 - docs: use version-agnostic jar name in preview operator runbook
 
 Updates the seed operator runbook so the step that copies the freshly built jar

@@ -7,6 +7,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.qortium.api.ApiKey;
 import org.qortium.api.ApiRequest;
+import org.qortium.controller.AutoUpdate;
 import org.qortium.controller.RestartNode;
 import org.qortium.settings.Settings;
 import org.qortium.utils.RestartTrayAnimator;
@@ -14,7 +15,9 @@ import org.qortium.utils.RestartTrayAnimator;
 import java.io.File;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.Security;
@@ -40,6 +43,7 @@ public class ApplyRestart {
 	private static final Logger LOGGER = LogManager.getLogger(ApplyRestart.class);
 	private static final String JAR_FILENAME = RestartNode.JAR_FILENAME;
 	private static final String WINDOWS_EXE_LAUNCHER = "qortium.exe";
+	private static final String RUN_PID_FILENAME = "run.pid";
 	private static final String JAVA_TOOL_OPTIONS_NAME = "JAVA_TOOL_OPTIONS";
 	private static final String JAVA_TOOL_OPTIONS_VALUE = "";
 
@@ -228,6 +232,15 @@ public class ApplyRestart {
 
 			Process process = processBuilder.start();
 
+			// Record the replacement node's pid so run.pid tracks the live JVM. Unlike
+			// an auto-update, a plain /admin/restart relaunches the JVM without going
+			// back through start.sh (which is what normally writes run.pid), so without
+			// this the file would keep pointing at the original — now dead — pid. External
+			// supervisors (start.sh/stop.sh's ps -p guard, and Qortium Home's managed-Core
+			// liveness check that decides whether to keep the i2pd router running) would
+			// then see the node as stopped while it is actually running.
+			writePidFileForRestart(process);
+
 			// Nothing to pipe to new process, so close output stream (process's stdin)
 			process.getOutputStream().close();
 			return process;
@@ -245,5 +258,54 @@ public class ApplyRestart {
 			LOGGER.warn("Failed to resolve current jar path for restart; falling back to {}", JAR_FILENAME, e);
 			return JAR_FILENAME;
 		}
+	}
+
+	private static void writePidFileForRestart(Process process) {
+		Path pidFile = null;
+		try {
+			Path workingDirectory = resolveWorkingDirectoryForRestart();
+			pidFile = resolvePidFileForRestart(workingDirectory);
+			if (pidFile == null)
+				return;
+
+			writePidFile(pidFile, process.pid());
+		} catch (IOException | InvalidPathException e) {
+			LOGGER.warn("Unable to update pid file {} after restart: {}", pidFile, e.getMessage());
+		}
+	}
+
+	private static Path resolveWorkingDirectoryForRestart() {
+		try {
+			Path currentJar = Paths.get(getCurrentJarPath());
+			Path currentDirectory = currentJar.getParent();
+			if (currentDirectory != null)
+				return currentDirectory;
+		} catch (Exception e) {
+			LOGGER.warn("Failed to resolve restart working directory from jar path: {}", e.getMessage());
+		}
+
+		Path fallbackDirectory = Paths.get("").toAbsolutePath().normalize();
+		LOGGER.warn("Falling back to process working directory for restart pid file: {}", fallbackDirectory);
+		return fallbackDirectory;
+	}
+
+	static Path resolvePidFileForRestart(Path workingDirectory) {
+		String pidFile = System.getProperty(AutoUpdate.PID_FILE_PROPERTY);
+		if (pidFile != null && !pidFile.isBlank())
+			return Paths.get(pidFile);
+
+		Path fallbackPidFile = workingDirectory.resolve(RUN_PID_FILENAME);
+		if (Files.exists(fallbackPidFile))
+			return fallbackPidFile;
+
+		return null;
+	}
+
+	static void writePidFile(Path pidFile, long pid) throws IOException {
+		Path parent = pidFile.getParent();
+		if (parent != null)
+			Files.createDirectories(parent);
+
+		Files.writeString(pidFile, Long.toString(pid) + System.lineSeparator(), StandardCharsets.UTF_8);
 	}
 }

@@ -3104,6 +3104,9 @@ public class NetworkData {
         PeersMessage peersMessage = (PeersMessage) message;
 
         List<PeerAddress> peerAddresses = peersMessage.getPeerAddresses();
+
+        PeerExchangeRecorder.getInstance().record("data", peer, peersMessage.getPeerAddresses());
+
         if (peerAddresses == null || peerAddresses.isEmpty()) {
             return;
         }

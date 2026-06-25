@@ -2602,6 +2602,8 @@ public class Network {
 
         List<PeerAddress> peerAddresses = peersMessage.getPeerAddresses();
 
+        PeerExchangeRecorder.getInstance().record("chain", peer, peersMessage.getPeerAddresses());
+
         // First entry contains remote peer's listen port but empty address.
         int peerPort = peerAddresses.get(0).getPort();
         peerAddresses.remove(0);
