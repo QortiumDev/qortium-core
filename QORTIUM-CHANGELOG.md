@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-26 - api-docs: darken Swagger UI content surfaces
+
+Adds a dark-surface pass to Qortium's local Swagger UI theme so dark mode no
+longer leaves the generated API documentation with bright default Swagger
+panels. Scheme selection, endpoint detail bodies, section headers, models,
+tables, form fields, response/code blocks, tabs, copy/download controls, and the
+authorization dialog now use Qortium's dark documentation palette while keeping
+the per-method endpoint accents intact. This is local API documentation styling
+only; it does not change Core APIs, consensus, database state, or Previewnet
+configuration.
+
 ### 2026-06-26 - api-docs: reflect the accent in the dark Swagger banner
 
 The Swagger UI banner showed the selected accent in light mode but was a fixed dark
