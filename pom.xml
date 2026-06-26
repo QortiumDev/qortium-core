@@ -74,7 +74,7 @@
 		<simplemagic.version>1.17</simplemagic.version>
 		<slf4j.version>1.7.36</slf4j.version>
 		<swagger-api.version>2.2.52</swagger-api.version>
-		<swagger-ui.version>5.32.6</swagger-ui.version>
+		<swagger-ui.version>5.32.8</swagger-ui.version>
 		<tika-core.version>3.3.1</tika-core.version>
 		<jupnp.version>3.0.4</jupnp.version>
 		<xz.version>1.12</xz.version>
@@ -149,8 +149,10 @@
 									<groupId>org.webjars</groupId>
 									<artifactId>swagger-ui</artifactId>
 									<version>${swagger-ui.version}</version>
+									<overWrite>true</overWrite>
 								</artifactItem>
 							</artifactItems>
+							<overWriteReleases>true</overWriteReleases>
 							<outputDirectory>${project.build.directory}/swagger-ui.unpacked</outputDirectory>
 						</configuration>
 					</execution>
@@ -207,6 +209,16 @@
 									<token>Swagger UI</token>
 									<value>Qortium API Documentation</value>
 								</replacement>
+								<replacement>
+									<token><![CDATA[<link rel="stylesheet" type="text/css" href="index.css" />]]></token>
+									<value><![CDATA[<link rel="stylesheet" type="text/css" href="index.css" />
+    <link rel="stylesheet" type="text/css" href="qortium-swagger-theme.css" />]]></value>
+								</replacement>
+								<replacement>
+									<token><![CDATA[<script src="./swagger-initializer.js" charset="UTF-8"> </script>]]></token>
+									<value><![CDATA[<script src="./qortium-swagger-theme.js" charset="UTF-8"> </script>
+    <script src="./swagger-initializer.js" charset="UTF-8"> </script>]]></value>
+								</replacement>
 							</replacements>
 						</configuration>
 					</execution>
@@ -228,6 +240,8 @@
 									<token>deepLinking: true,</token>
 									<value>
 										deepLinking: true,
+										docExpansion: "none",
+										filter: true,
 										tagsSorter: "alpha",
 										operationsSorter: "alpha",
 										validatorUrl: false,
@@ -278,6 +292,9 @@
 							<resources>
 								<resource>
 									<directory>${project.build.directory}/swagger-ui.unpacked/META-INF/resources/webjars/swagger-ui/${swagger-ui.version}</directory>
+								</resource>
+								<resource>
+									<directory>${basedir}/src/main/swagger-ui</directory>
 								</resource>
 							</resources>
 						</configuration>
