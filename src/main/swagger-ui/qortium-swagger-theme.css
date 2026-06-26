@@ -1,0 +1,289 @@
+:root {
+  --text-scale: 1;
+  --qortium-bg: #fafafa;
+  --qortium-text: #18201f;
+  --qortium-accent: #21824a;
+  --qortium-accent-strong: #196a3a;
+  --qortium-accent-contrast: #ffffff;
+  --qortium-accent-ring: rgb(33 130 74 / 18%);
+  --qortium-accent-soft: rgb(33 130 74 / 10%);
+}
+
+:root[data-accent="blue"] {
+  --qortium-accent: #2368cf;
+  --qortium-accent-strong: #1e5ec3;
+  --qortium-accent-contrast: #ffffff;
+  --qortium-accent-ring: rgb(35 104 207 / 20%);
+  --qortium-accent-soft: rgb(35 104 207 / 10%);
+}
+
+:root[data-accent="orange"] {
+  --qortium-accent: #de8b23;
+  --qortium-accent-strong: #bf6e0f;
+  --qortium-accent-contrast: #2a1c00;
+  --qortium-accent-ring: rgb(222 139 35 / 20%);
+  --qortium-accent-soft: rgb(222 139 35 / 10%);
+}
+
+:root[data-accent="purple"] {
+  --qortium-accent: #7b44da;
+  --qortium-accent-strong: #622fbd;
+  --qortium-accent-contrast: #ffffff;
+  --qortium-accent-ring: rgb(123 68 218 / 20%);
+  --qortium-accent-soft: rgb(123 68 218 / 10%);
+}
+
+:root[data-accent="red"] {
+  --qortium-accent: #c63838;
+  --qortium-accent-strong: #b63232;
+  --qortium-accent-contrast: #ffffff;
+  --qortium-accent-ring: rgb(198 56 56 / 20%);
+  --qortium-accent-soft: rgb(198 56 56 / 10%);
+}
+
+:root[data-accent="teal"] {
+  --qortium-accent: #17a398;
+  --qortium-accent-strong: #12857a;
+  --qortium-accent-contrast: #031817;
+  --qortium-accent-ring: rgb(23 163 152 / 20%);
+  --qortium-accent-soft: rgb(23 163 152 / 10%);
+}
+
+:root[data-accent="cyan"] {
+  --qortium-accent: #1298d8;
+  --qortium-accent-strong: #0f79aa;
+  --qortium-accent-contrast: #000a12;
+  --qortium-accent-ring: rgb(18 152 216 / 20%);
+  --qortium-accent-soft: rgb(18 152 216 / 10%);
+}
+
+:root[data-accent="pink"] {
+  --qortium-accent: #bd3673;
+  --qortium-accent-strong: #bd3673;
+  --qortium-accent-contrast: #ffffff;
+  --qortium-accent-ring: rgb(189 54 115 / 20%);
+  --qortium-accent-soft: rgb(189 54 115 / 10%);
+}
+
+:root[data-accent="yellow"] {
+  --qortium-accent: #d6a828;
+  --qortium-accent-strong: #bd8f20;
+  --qortium-accent-contrast: #1e1400;
+  --qortium-accent-ring: rgb(214 168 40 / 20%);
+  --qortium-accent-soft: rgb(214 168 40 / 10%);
+}
+
+:root[data-theme="dark"] {
+  --qortium-bg: #0e1111;
+  --qortium-text: #f4f0e8;
+  --qortium-accent: #87d99b;
+  --qortium-accent-strong: #6fcd87;
+  --qortium-accent-contrast: #0e1411;
+  --qortium-accent-ring: rgb(135 217 155 / 20%);
+  --qortium-accent-soft: rgb(135 217 155 / 12%);
+}
+
+:root[data-theme="dark"][data-accent="blue"] {
+  --qortium-accent: #8abefe;
+  --qortium-accent-strong: #7aaef7;
+  --qortium-accent-contrast: #061733;
+  --qortium-accent-ring: rgb(138 190 254 / 20%);
+  --qortium-accent-soft: rgb(138 190 254 / 12%);
+}
+
+:root[data-theme="dark"][data-accent="orange"] {
+  --qortium-accent: #f1b16d;
+  --qortium-accent-strong: #eaa257;
+  --qortium-accent-contrast: #2a1c00;
+  --qortium-accent-ring: rgb(241 177 109 / 20%);
+  --qortium-accent-soft: rgb(241 177 109 / 12%);
+}
+
+:root[data-theme="dark"][data-accent="purple"] {
+  --qortium-accent: #caa2ff;
+  --qortium-accent-strong: #b58dff;
+  --qortium-accent-contrast: #1c0c3d;
+  --qortium-accent-ring: rgb(202 162 255 / 20%);
+  --qortium-accent-soft: rgb(202 162 255 / 12%);
+}
+
+:root[data-theme="dark"][data-accent="red"] {
+  --qortium-accent: #f19a9a;
+  --qortium-accent-strong: #dd7a7a;
+  --qortium-accent-contrast: #301111;
+  --qortium-accent-ring: rgb(241 154 154 / 20%);
+  --qortium-accent-soft: rgb(241 154 154 / 12%);
+}
+
+:root[data-theme="dark"][data-accent="teal"] {
+  --qortium-accent: #6ed9d1;
+  --qortium-accent-strong: #5fc3bc;
+  --qortium-accent-contrast: #072523;
+  --qortium-accent-ring: rgb(110 217 209 / 20%);
+  --qortium-accent-soft: rgb(110 217 209 / 12%);
+}
+
+:root[data-theme="dark"][data-accent="cyan"] {
+  --qortium-accent: #88d2ff;
+  --qortium-accent-strong: #79c5f5;
+  --qortium-accent-contrast: #03243d;
+  --qortium-accent-ring: rgb(136 210 255 / 20%);
+  --qortium-accent-soft: rgb(136 210 255 / 12%);
+}
+
+:root[data-theme="dark"][data-accent="pink"] {
+  --qortium-accent: #f8a7cf;
+  --qortium-accent-strong: #f58cbf;
+  --qortium-accent-contrast: #2a0d23;
+  --qortium-accent-ring: rgb(248 167 207 / 20%);
+  --qortium-accent-soft: rgb(248 167 207 / 12%);
+}
+
+:root[data-theme="dark"][data-accent="yellow"] {
+  --qortium-accent: #f4cb67;
+  --qortium-accent-strong: #edbf53;
+  --qortium-accent-contrast: #2f2100;
+  --qortium-accent-ring: rgb(244 203 103 / 20%);
+  --qortium-accent-soft: rgb(244 203 103 / 12%);
+}
+
+html,
+body,
+#swagger-ui {
+  font-size: calc(16px * var(--text-scale));
+}
+
+body {
+  background: var(--qortium-bg);
+}
+
+.swagger-ui {
+  color: var(--qortium-text);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.swagger-ui,
+.swagger-ui .btn,
+.swagger-ui input,
+.swagger-ui select,
+.swagger-ui textarea,
+.swagger-ui .info li,
+.swagger-ui .info p,
+.swagger-ui .info table,
+.swagger-ui .opblock .opblock-description-wrapper,
+.swagger-ui .opblock .opblock-summary-description,
+.swagger-ui .opblock .opblock-summary-operation-id,
+.swagger-ui .opblock .opblock-summary-path,
+.swagger-ui .opblock .opblock-summary-path__deprecated,
+.swagger-ui .opblock .opblock-title_normal,
+.swagger-ui .opblock .parameter__in,
+.swagger-ui .opblock .parameter__name,
+.swagger-ui .opblock .parameter__type,
+.swagger-ui .responses-inner h4,
+.swagger-ui .responses-inner h5,
+.swagger-ui table thead tr td,
+.swagger-ui table thead tr th {
+  font-size: calc(14px * var(--text-scale));
+}
+
+.swagger-ui .info .title {
+  font-size: calc(36px * var(--text-scale));
+}
+
+.swagger-ui .opblock-tag {
+  font-size: calc(24px * var(--text-scale));
+}
+
+.swagger-ui .opblock .opblock-summary-method {
+  font-size: calc(14px * var(--text-scale));
+}
+
+.swagger-ui code,
+.swagger-ui pre,
+.swagger-ui .microlight {
+  font-size: calc(12px * var(--text-scale));
+}
+
+.swagger-ui .topbar {
+  background: var(--qortium-accent);
+}
+
+.swagger-ui .topbar .download-url-wrapper .select-label select,
+.swagger-ui .scheme-container .schemes > label select,
+.swagger-ui select {
+  border-color: var(--qortium-accent);
+}
+
+.swagger-ui .info a,
+.swagger-ui .opblock-tag a.link,
+.swagger-ui .opblock .opblock-external-docs a.link {
+  color: var(--qortium-accent-strong);
+}
+
+.swagger-ui .btn.authorize,
+.swagger-ui .btn.try-out__btn {
+  border-color: var(--qortium-accent);
+  color: var(--qortium-accent);
+}
+
+.swagger-ui .btn.authorize svg {
+  fill: var(--qortium-accent);
+}
+
+.swagger-ui .btn.execute,
+.swagger-ui .opblock .btn.execute {
+  background: var(--qortium-accent);
+  border-color: var(--qortium-accent);
+  color: var(--qortium-accent-contrast);
+}
+
+.swagger-ui .btn.execute:hover,
+.swagger-ui .opblock .btn.execute:hover {
+  background: var(--qortium-accent-strong);
+  border-color: var(--qortium-accent-strong);
+}
+
+.swagger-ui input:focus,
+.swagger-ui textarea:focus,
+.swagger-ui select:focus {
+  border-color: var(--qortium-accent);
+  box-shadow: 0 0 0 3px var(--qortium-accent-ring);
+  outline: none;
+}
+
+.swagger-ui .info .title small.version-stamp {
+  background: var(--qortium-accent);
+  color: var(--qortium-accent-contrast);
+}
+
+.swagger-ui .opblock .opblock-section-header .tab-header .tab-item.active h4 span::after {
+  background: var(--qortium-accent);
+}
+
+html.dark-mode .swagger-ui .topbar {
+  background: #101414;
+  border-bottom: 1px solid #364444;
+}
+
+html.dark-mode .swagger-ui .btn.authorize,
+html.dark-mode .swagger-ui .btn.try-out__btn {
+  border-color: var(--qortium-accent);
+  color: var(--qortium-accent);
+}
+
+html.dark-mode .swagger-ui .btn.authorize svg {
+  fill: var(--qortium-accent);
+}
+
+html.dark-mode .swagger-ui .btn.execute,
+html.dark-mode .swagger-ui .opblock .btn.execute {
+  background: var(--qortium-accent);
+  border-color: var(--qortium-accent);
+  color: var(--qortium-accent-contrast);
+}
+
+html.dark-mode .swagger-ui .info a,
+html.dark-mode .swagger-ui .opblock-tag a.link,
+html.dark-mode .swagger-ui .opblock .opblock-external-docs a.link {
+  color: var(--qortium-accent);
+}

@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-26 - api-docs: align Swagger UI with Home display settings
+
+Updates the bundled Swagger UI to the latest 5.32 patch release, keeps the API
+documentation sections collapsed by default so the large Core API is easier to
+scan, adds Swagger's built-in filter box for finding endpoints, and adds a small
+Qortium theme layer that can read Home's theme, accent, and text-size settings
+from the documentation URL or live display-setting messages. The build now
+forces a fresh Swagger UI unpack before applying the Qortium patches, avoiding
+repeated injected options when resource generation is run more than once without
+a clean build. This only changes the local API documentation interface; it does
+not change Core APIs, consensus, database state, or Previewnet configuration.
+
 ### 2026-06-24 - Seed the default QDN data-peer bootstrap list with the preview seeds' I2P data destinations
 
 Seed the default QDN data-peer bootstrap list with the preview seeds' I2P data destinations (not just clearnet), so I2P-only nodes can find data peers.

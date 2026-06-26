@@ -198,6 +198,34 @@ migrate_legacy_lists() {
 	rmdir "${legacy_lists}" 2>/dev/null || true
 }
 
+# Close file descriptors (>= 3) inherited from the parent before launching the
+# long-lived node JVM. When Qortium Home (an Electron app) starts a managed Core,
+# the JVM would otherwise inherit Home's non-CLOEXEC descriptors (app.asar, the
+# Chromium *.pak files, leveldb, etc.). A node that outlives Home then keeps those
+# handles — and the deleted Home AppImage's FUSE mount — pinned open indefinitely.
+# Linux exposes the fd table at /proc/$$/fd; macOS at /dev/fd. The script itself
+# holds no fd >= 3 at the point this runs (just before the launch).
+close_inherited_fds() {
+	local fd_dir fd
+	if [ -d "/proc/$$/fd" ]; then
+		fd_dir="/proc/$$/fd"
+	elif [ -d /dev/fd ]; then
+		fd_dir="/dev/fd"
+	else
+		return 0
+	fi
+
+	for fd in "${fd_dir}"/*; do
+		fd="${fd##*/}"
+		case "${fd}" in
+			''|*[!0-9]*|0|1|2)
+				continue
+				;;
+		esac
+		eval "exec ${fd}>&-" 2>/dev/null || true
+	done
+}
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 RUNTIME_DIR="$(resolve_runtime_dir "${RUNTIME_DIR_OPTION:-${QORTIUM_PREVIEW_RUNTIME_DIR:-}}")"
@@ -332,6 +360,9 @@ fi
 	echo "Auto-update mode: ${AUTO_UPDATE_MODE_EFFECTIVE:-OFF}"
 	echo
 } >"${RUN_LOG}"
+
+# Don't leak the parent's inherited descriptors into the long-lived node.
+close_inherited_fds
 
 if command -v setsid >/dev/null 2>&1; then
 	nohup setsid ${NICE_ARGS[@]+"${NICE_ARGS[@]}"} java \
