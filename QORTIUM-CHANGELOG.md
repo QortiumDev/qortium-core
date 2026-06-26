@@ -34,6 +34,15 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-26 - api-docs: reflect the accent in the dark Swagger banner
+
+The Swagger UI banner showed the selected accent in light mode but was a fixed dark
+bar in dark mode. Dark mode now reflects the accent with a faint accent tint and an
+accent-colored bottom border (a full accent fill is avoided because the dark accent
+tokens are light pastels and would make a harsh bright bar). Also drops redundant
+dark-mode button overrides that only re-declared the accent variables the base rules
+already use. Local API documentation styling only.
+
 ### 2026-06-26 - api-docs: align Swagger UI with Home display settings
 
 Updates the bundled Swagger UI to the latest 5.32 patch release, keeps the API

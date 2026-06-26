@@ -260,26 +260,15 @@ body {
   background: var(--qortium-accent);
 }
 
+/* Dark-native accent for the banner: a full accent fill works in light mode (the
+   light accent is saturated), but the dark accent tokens are light pastels, so a
+   full fill would be a harsh bright bar. Instead reflect the accent with a faint
+   tint + a clear accent bottom border so the banner is themed without shouting.
+   (The button/authorize/execute styling already theme-switches via the accent vars
+   in the base rules above, so no dark-mode duplicates are needed.) */
 html.dark-mode .swagger-ui .topbar {
-  background: #101414;
-  border-bottom: 1px solid #364444;
-}
-
-html.dark-mode .swagger-ui .btn.authorize,
-html.dark-mode .swagger-ui .btn.try-out__btn {
-  border-color: var(--qortium-accent);
-  color: var(--qortium-accent);
-}
-
-html.dark-mode .swagger-ui .btn.authorize svg {
-  fill: var(--qortium-accent);
-}
-
-html.dark-mode .swagger-ui .btn.execute,
-html.dark-mode .swagger-ui .opblock .btn.execute {
-  background: var(--qortium-accent);
-  border-color: var(--qortium-accent);
-  color: var(--qortium-accent-contrast);
+  background: var(--qortium-accent-soft);
+  border-bottom: 2px solid var(--qortium-accent);
 }
 
 html.dark-mode .swagger-ui .info a,
