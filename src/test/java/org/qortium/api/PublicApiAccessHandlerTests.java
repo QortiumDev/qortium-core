@@ -105,10 +105,10 @@ public class PublicApiAccessHandlerTests extends Common {
 	}
 
 	@Test
-	public void testPreviewTemplatesExposeRenderReadsOnly() throws Exception {
-		assertPreviewTemplateExposesRenderReadsOnly(Path.of("preview/settings-preview.json"));
-		assertPreviewTemplateExposesRenderReadsOnly(Path.of("preview/settings-preview-seed.json"));
-		assertPreviewTemplateExposesRenderReadsOnly(Path.of("preview/settings-preview-seed-netcup.json"));
+	public void testPreviewSettingsExposePublicReadsAndChatSendOnly() throws Exception {
+		assertPreviewSettingsExposePublicReadsAndChatSendOnly(Path.of("preview/settings-preview.json"));
+		assertPreviewSettingsExposePublicReadsAndChatSendOnly(Path.of("preview/settings-preview-seed.json"));
+		assertPreviewSettingsExposePublicReadsAndChatSendOnly(Path.of("preview/settings-preview-seed-netcup.json"));
 	}
 
 	@Test
@@ -144,7 +144,7 @@ public class PublicApiAccessHandlerTests extends Common {
 		}, true);
 	}
 
-	private static void assertPreviewTemplateExposesRenderReadsOnly(Path settingsPath) throws Exception {
+	private static void assertPreviewSettingsExposePublicReadsAndChatSendOnly(Path settingsPath) throws Exception {
 		JSONObject settingsJson = new JSONObject(Files.readString(settingsPath));
 		JSONArray publicApiPaths = settingsJson.getJSONArray("publicApiPaths");
 
@@ -152,8 +152,16 @@ public class PublicApiAccessHandlerTests extends Common {
 				settingsJson.getBoolean("qdnAuthBypassEnabled"));
 		assertTrue(settingsPath + " should allow public render reads",
 				jsonArrayContains(publicApiPaths, "GET /render/*"));
+		assertTrue(settingsPath + " should allow keyless public chat builds",
+				jsonArrayContains(publicApiPaths, "POST /chat/public/build"));
+		assertTrue(settingsPath + " should allow unsigned transaction conversion",
+				jsonArrayContains(publicApiPaths, "POST /transactions/convert"));
+		assertTrue(settingsPath + " should allow signed transaction submission",
+				jsonArrayContains(publicApiPaths, "POST /transactions/process"));
 		assertFalse(settingsPath + " should not expose render authorization writes",
 				jsonArrayContains(publicApiPaths, "POST /render/authorize/*"));
+		assertFalse(settingsPath + " should not expose QDN publish writes yet",
+				jsonArrayContains(publicApiPaths, "POST /arbitrary/*"));
 	}
 
 	private static boolean jsonArrayContains(JSONArray array, String value) {

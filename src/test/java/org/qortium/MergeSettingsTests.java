@@ -110,6 +110,37 @@ public class MergeSettingsTests {
 	}
 
 	@Test
+	public void testMigrationWithoutSnapshotAddsNewPublicApiPaths() throws Exception {
+		writeJson(settingsPath, "{\"publicApiPaths\": [\"GET /admin/status\", \"GET /chat/*\"]}");
+		writeJson(templatePath,
+				"{\"publicApiPaths\": [\"GET /admin/status\", \"GET /chat/*\", \"POST /chat/public/build\", \"POST /transactions/process\"]}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		Map<String, Object> merged = readJson(settingsPath);
+		assertEquals(MAPPER.readValue(
+				"[\"GET /admin/status\", \"GET /chat/*\", \"POST /chat/public/build\", \"POST /transactions/process\"]",
+				Object.class), merged.get("publicApiPaths"));
+		assertFalse(result.preserved.contains("publicApiPaths"));
+	}
+
+	@Test
+	public void testMigrationWithoutSnapshotKeepsCustomPublicApiPaths() throws Exception {
+		writeJson(settingsPath,
+				"{\"publicApiPaths\": [\"GET /admin/status\", \"GET /chat/*\", \"GET /custom/*\"]}");
+		writeJson(templatePath,
+				"{\"publicApiPaths\": [\"GET /admin/status\", \"GET /chat/*\", \"POST /chat/public/build\"]}");
+
+		MergeSettings.MergeResult result = MergeSettings.merge(templatePath, snapshotPath, settingsPath);
+
+		Map<String, Object> merged = readJson(settingsPath);
+		assertEquals(MAPPER.readValue(
+				"[\"GET /admin/status\", \"GET /chat/*\", \"GET /custom/*\"]",
+				Object.class), merged.get("publicApiPaths"));
+		assertTrue(result.preserved.contains("publicApiPaths"));
+	}
+
+	@Test
 	public void testNestedValuesCompareByContent() throws Exception {
 		writeJson(snapshotPath, "{\"initialPeers\": [\"1.2.3.4:24892\"], \"wallets\": {\"BTC\": false}}");
 		writeJson(settingsPath, "{\"initialPeers\": [\"1.2.3.4:24892\"], \"wallets\": {\"BTC\": true}}");

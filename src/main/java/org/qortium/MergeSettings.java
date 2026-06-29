@@ -82,7 +82,7 @@ public class MergeSettings {
 			merged = new LinkedHashMap<>(template);
 			for (Map.Entry<String, Object> entry : settings.entrySet()) {
 				String key = entry.getKey();
-				if (!base.containsKey(key) || !Objects.equals(base.get(key), entry.getValue())) {
+				if (!base.containsKey(key) || isLocalSettingChanged(key, base.get(key), entry.getValue(), haveSnapshot)) {
 					merged.put(key, entry.getValue());
 					result.preserved.add(key);
 				}
@@ -116,6 +116,16 @@ public class MergeSettings {
 			throw new IOException(String.format("'%s' does not contain a JSON object", path));
 
 		return parsed;
+	}
+
+	private static boolean isLocalSettingChanged(String key, Object baseValue, Object settingValue, boolean haveSnapshot) {
+		if (Objects.equals(baseValue, settingValue))
+			return false;
+
+		if (!haveSnapshot && "publicApiPaths".equals(key) && baseValue instanceof List<?> && settingValue instanceof List<?>)
+			return !((List<?>) baseValue).containsAll((List<?>) settingValue);
+
+		return true;
 	}
 
 	private static void writeJsonObject(Path path, LinkedHashMap<String, Object> jsonObject) throws IOException {

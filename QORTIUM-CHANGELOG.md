@@ -34,6 +34,18 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-29 - Sync local preview public chat paths
+
+Brings stale local preview node settings back in line with the seed and default
+Previewnet settings for public open-group chat sends. Existing local runtime
+settings that only have an older subset of `publicApiPaths` now inherit newly
+added release-template paths on startup, while custom extra public paths remain
+preserved. This lets older local preview nodes pick up the keyless chat-build,
+transaction-convert, and transaction-process POST paths without exposing QDN
+publishing or other writes on public nodes. The public API settings test also
+checks the tracked preview settings files so future allowlist drift is caught
+before release.
+
 ### 2026-06-26 - api-docs: darken Swagger UI content surfaces
 
 Adds a dark-surface pass to Qortium's local Swagger UI theme so dark mode no
