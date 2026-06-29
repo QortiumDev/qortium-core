@@ -803,7 +803,7 @@ public class ArbitraryResource {
 											   @PathParam("service") Service service,
 											   @PathParam("name") String name,
 											   @QueryParam("fee") Long fee) {
-		return this.buildDeleteResourceTransaction(service, name, null, fee);
+		return this.buildDeleteResourceTransaction(service, name, null, fee, true);
 	}
 
 	@POST
@@ -822,7 +822,40 @@ public class ArbitraryResource {
 										@PathParam("name") String name,
 										@PathParam("identifier") String identifier,
 										@QueryParam("fee") Long fee) {
-		return this.buildDeleteResourceTransaction(service, name, identifier, fee);
+		return this.buildDeleteResourceTransaction(service, name, identifier, fee, true);
+	}
+
+	@POST
+	@Path("/public/resource/{service}/{name}/delete")
+	@Operation(
+			summary = "Build a public, unsigned ARBITRARY transaction that deletes the default QDN resource",
+			responses = {
+					@ApiResponse(
+							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
+					)
+			}
+	)
+	public String deleteDefaultResourceOnChainPublic(@PathParam("service") Service service,
+													 @PathParam("name") String name,
+													 @QueryParam("fee") Long fee) {
+		return this.buildDeleteResourceTransaction(service, name, null, fee, false);
+	}
+
+	@POST
+	@Path("/public/resource/{service}/{name}/{identifier}/delete")
+	@Operation(
+			summary = "Build a public, unsigned ARBITRARY transaction that deletes a QDN resource",
+			responses = {
+					@ApiResponse(
+							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
+					)
+			}
+	)
+	public String deleteResourceOnChainPublic(@PathParam("service") Service service,
+											  @PathParam("name") String name,
+											  @PathParam("identifier") String identifier,
+											  @QueryParam("fee") Long fee) {
+		return this.buildDeleteResourceTransaction(service, name, identifier, fee, false);
 	}
 
 	@POST
@@ -1981,6 +2014,46 @@ public String finalizeUpload(
 	}
 
 	@POST
+	@Path("/public/{service}/{name}/base64")
+	@Operation(
+			summary = "Build public raw, unsigned, ARBITRARY transaction, based on user-supplied base64 encoded data",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "byte")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	public String postBase64EncodedDataPublic(@PathParam("service") String serviceString,
+											  @PathParam("name") String name,
+											  @QueryParam("title") String title,
+											  @QueryParam("description") String description,
+											  @QueryParam("tags") List<String> tags,
+											  @QueryParam("category") Category category,
+											  @QueryParam("filename") String filename,
+											  @QueryParam("fee") Long fee,
+											  String base64) {
+		if (base64 == null) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
+		}
+
+		return this.upload(Service.valueOf(serviceString), name, null, null, null, base64, false,
+				fee, filename, title, description, tags, category, null, false);
+	}
+
+	@POST
 	@Path("/{service}/{name}/{identifier}/base64")
 	@Operation(
 			summary = "Build raw, unsigned, ARBITRARY transaction, based on user supplied base64 encoded data",
@@ -2024,6 +2097,47 @@ public String finalizeUpload(
 
 		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64, false,
 				fee, filename, title, description, tags, category, null, preview);
+	}
+
+	@POST
+	@Path("/public/{service}/{name}/{identifier}/base64")
+	@Operation(
+			summary = "Build public raw, unsigned, ARBITRARY transaction, based on user supplied base64 encoded data",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "byte")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	public String postBase64EncodedDataPublic(@PathParam("service") String serviceString,
+											  @PathParam("name") String name,
+											  @PathParam("identifier") String identifier,
+											  @QueryParam("title") String title,
+											  @QueryParam("description") String description,
+											  @QueryParam("tags") List<String> tags,
+											  @QueryParam("category") Category category,
+											  @QueryParam("filename") String filename,
+											  @QueryParam("fee") Long fee,
+											  String base64) {
+		if (base64 == null) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
+		}
+
+		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64, false,
+				fee, filename, title, description, tags, category, null, false);
 	}
 
 
@@ -2075,6 +2189,46 @@ public String finalizeUpload(
 	}
 
 	@POST
+	@Path("/public/{service}/{name}/zip")
+	@Operation(
+			summary = "Build public raw, unsigned, ARBITRARY transaction, based on user-supplied zip file, encoded as base64",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "byte")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	public String postZippedDataPublic(@PathParam("service") String serviceString,
+									   @PathParam("name") String name,
+									   @QueryParam("title") String title,
+									   @QueryParam("description") String description,
+									   @QueryParam("tags") List<String> tags,
+										   @QueryParam("category") Category category,
+										   @QueryParam("fee") Long fee,
+										   @QueryParam("entryPoint") String entryPoint,
+										   String base64Zip) {
+		if (base64Zip == null) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
+		}
+
+		return this.upload(Service.valueOf(serviceString), name, null, null, null, base64Zip, true,
+				fee, null, title, description, tags, category, entryPoint, false);
+	}
+
+	@POST
 	@Path("/{service}/{name}/{identifier}/zip")
 	@Operation(
 			summary = "Build raw, unsigned, ARBITRARY transaction, based on user supplied zip file, encoded as base64",
@@ -2118,6 +2272,47 @@ public String finalizeUpload(
 
 		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64Zip, true,
 				fee, null, title, description, tags, category, entryPoint, preview);
+	}
+
+	@POST
+	@Path("/public/{service}/{name}/{identifier}/zip")
+	@Operation(
+			summary = "Build public raw, unsigned, ARBITRARY transaction, based on user supplied zip file, encoded as base64",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "byte")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	public String postZippedDataPublic(@PathParam("service") String serviceString,
+									   @PathParam("name") String name,
+									   @PathParam("identifier") String identifier,
+									   @QueryParam("title") String title,
+									   @QueryParam("description") String description,
+									   @QueryParam("tags") List<String> tags,
+										   @QueryParam("category") Category category,
+										   @QueryParam("fee") Long fee,
+										   @QueryParam("entryPoint") String entryPoint,
+										   String base64Zip) {
+		if (base64Zip == null) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
+		}
+
+		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64Zip, true,
+				fee, null, title, description, tags, category, entryPoint, false);
 	}
 
 
@@ -2469,8 +2664,10 @@ public String finalizeUpload(
 		}
 	}
 
-	private String buildDeleteResourceTransaction(Service service, String name, String identifier, Long fee) {
-		Security.checkApiCallAllowed(request);
+	private String buildDeleteResourceTransaction(Service service, String name, String identifier, Long fee, boolean checkApiKey) {
+		if (checkApiKey) {
+			Security.checkApiCallAllowed(request);
+		}
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			NameData nameData = repository.getNameRepository().fromName(name);

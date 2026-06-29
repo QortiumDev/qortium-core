@@ -1,15 +1,32 @@
 package org.qortium.test.api;
 
+import com.google.common.primitives.Bytes;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.Before;
 import org.junit.Test;
+import org.qortium.account.PrivateKeyAccount;
 import org.qortium.api.ApiError;
 import org.qortium.api.resource.ArbitraryResource;
 import org.qortium.api.resource.TransactionsResource.ConfirmationStatus;
 import org.qortium.arbitrary.ArbitraryDataResource;
 import org.qortium.arbitrary.misc.Service;
+import org.qortium.controller.Controller;
 import org.qortium.controller.arbitrary.ArbitraryDataRenderManager;
+import org.qortium.data.transaction.RegisterNameTransactionData;
+import org.qortium.data.transaction.TransactionData;
+import org.qortium.repository.Repository;
+import org.qortium.repository.RepositoryManager;
+import org.qortium.settings.Settings;
 import org.qortium.test.common.ApiCommon;
+import org.qortium.test.common.ArbitraryUtils;
+import org.qortium.test.common.Common;
+import org.qortium.test.common.TransactionUtils;
+import org.qortium.test.common.transaction.TestTransaction;
+import org.qortium.transaction.RegisterNameTransaction;
+import org.qortium.transaction.Transaction.TransactionType;
+import org.qortium.transform.transaction.TransactionTransformer;
+import org.qortium.utils.Base58;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -36,8 +53,10 @@ public class ArbitraryApiTests extends ApiCommon {
 	private ArbitraryResource arbitraryResource;
 
 	@Before
-	public void buildResource() {
+	public void buildResource() throws Exception {
 		this.arbitraryResource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class);
+		FieldUtils.writeField(Settings.getInstance(), "singleNodeTestnet", true, true);
+		Controller.getInstance().refillLatestBlocksCache();
 	}
 
 	@Test
@@ -187,6 +206,73 @@ public class ArbitraryApiTests extends ApiCommon {
 	public void testPreviewUploadRequiresApiKey() {
 		assertApiError(ApiError.UNAUTHORIZED,
 				() -> this.arbitraryResource.previewUpload(null, "VIDEO", "video.mp4", false, base64(new byte[] { 1, 2, 3 })));
+	}
+
+	@Test
+	public void testPublicQdnPublishBuildEndpointsDoNotRequireApiKey() throws Exception {
+		String name = "public-qdn-api-test";
+		registerName(name);
+
+		String base64Transaction = this.arbitraryResource.postBase64EncodedDataPublic(
+				"APP", name, "public", null, null, null, null, "index.html", 0L,
+				base64("<html>public</html>".getBytes(StandardCharsets.UTF_8)));
+		assertUnsignedArbitraryTransaction(base64Transaction);
+
+		ByteArrayOutputStream zipBytes = new ByteArrayOutputStream();
+		try (ZipOutputStream zip = new ZipOutputStream(zipBytes)) {
+			zip.putNextEntry(new ZipEntry("index.html"));
+			zip.write("<html><body>public</body></html>".getBytes(StandardCharsets.UTF_8));
+			zip.closeEntry();
+		}
+
+		String zipTransaction = this.arbitraryResource.postZippedDataPublic(
+				"APP", name, "public-zip", null, null, null, null, 0L, null,
+				base64(zipBytes.toByteArray()));
+		assertUnsignedArbitraryTransaction(zipTransaction);
+
+		publishTestResource(name, "public");
+		String deleteTransaction = this.arbitraryResource.deleteResourceOnChainPublic(Service.APP, name, "public", 0L);
+		assertUnsignedArbitraryTransaction(deleteTransaction);
+	}
+
+	@Test
+	public void testPrivateQdnPublishBuildEndpointsStillRequireApiKey() {
+		assertApiError(ApiError.UNAUTHORIZED,
+				() -> this.arbitraryResource.postBase64EncodedData(null, "APP", "missing", null, null, null,
+						null, "index.html", 0L, null, base64(new byte[] { 1, 2, 3 })));
+		assertApiError(ApiError.UNAUTHORIZED,
+				() -> this.arbitraryResource.postZippedData(null, "APP", "missing", null, null, null,
+						null, 0L, null, null, base64(new byte[] { 1, 2, 3 })));
+		assertApiError(ApiError.UNAUTHORIZED,
+				() -> this.arbitraryResource.deleteResourceOnChain(null, Service.APP, "missing", "identifier", 0L));
+	}
+
+	private static void registerName(String name) throws Exception {
+		try (Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			RegisterNameTransactionData transactionData = new RegisterNameTransactionData(
+					TestTransaction.generateBase(alice), name, "");
+			transactionData.setFee(new RegisterNameTransaction(null, null).getUnitFee(transactionData.getTimestamp()));
+			TransactionUtils.signAndMint(repository, transactionData, alice);
+		}
+	}
+
+	private static void publishTestResource(String name, String identifier) throws Exception {
+		Path path = ArbitraryUtils.generateRandomDataPath(32);
+		try (Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			ArbitraryUtils.createAndMintTxn(repository, Base58.encode(alice.getPublicKey()), path, name, identifier,
+					org.qortium.data.transaction.ArbitraryTransactionData.Method.PUT, Service.APP, alice);
+		}
+	}
+
+	private static void assertUnsignedArbitraryTransaction(String rawTransaction58) throws Exception {
+		byte[] rawBytes = Base58.decode(rawTransaction58);
+		assertTrue("Unsigned transaction bytes should not be empty", rawBytes.length > 0);
+
+		TransactionData transactionData = TransactionTransformer.fromBytes(
+				Bytes.concat(rawBytes, new byte[TransactionTransformer.SIGNATURE_LENGTH]));
+		assertEquals(TransactionType.ARBITRARY, transactionData.getType());
 	}
 
 	@Test

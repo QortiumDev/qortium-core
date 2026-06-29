@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-29 - Add keyless public QDN publish builders
+
+Adds public, API-key-free QDN publish/delete transaction builders under
+`/arbitrary/public/*` for Home's keyless public-node publish path. The public
+Previewnet allowlist now exposes only that unsigned-build namespace, while the
+generic `/arbitrary/*`, `/arbitrary/compute`, and `/transactions/sign` write/sign
+paths remain private. Tests cover both the allowlist boundary and the public
+builders so public nodes can build unsigned QDN publish/delete transactions
+without receiving user keys.
+
 ### 2026-06-29 - Sync local preview public chat paths
 
 Brings stale local preview node settings back in line with the seed and default

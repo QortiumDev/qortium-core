@@ -102,11 +102,11 @@ All under `qortium-core/preview/`. "POSTs" = the three chat-send entries
 
 | Config file | Used by | GET reads | Chat-send POSTs | Publish |
 |---|---|---|---|---|
-| `settings-preview-seed.json` | seed VPS (apiRestricted) | ✅ | ✅ | ❌ |
-| `settings-preview-seed-netcup.json` | seed VPS (netcup) | ✅ | ✅ | ❌ |
-| `settings-preview.json` | **default user node** (Home desktop launches this — `qortium-home/electron/core-manager.ts:465`) | ✅ | ✅ | ❌ |
-| `settings-preview-local.template.json` | ignored runtime snapshot for local preview nodes | ✅ | ✅ **locally repaired 2026-06-29** | ❌ |
-| `settings-preview-local.json` | ignored generated local preview node settings; read at runtime (`core-manager.ts:2216`) | ✅ | ✅ **locally repaired 2026-06-29** | ❌ |
+| `settings-preview-seed.json` | seed VPS (apiRestricted) | ✅ | ✅ | ✅ unsigned builders only |
+| `settings-preview-seed-netcup.json` | seed VPS (netcup) | ✅ | ✅ | ✅ unsigned builders only |
+| `settings-preview.json` | **default user node** (Home desktop launches this — `qortium-home/electron/core-manager.ts:465`) | ✅ | ✅ | ✅ unsigned builders only |
+| `settings-preview-local.template.json` | ignored runtime snapshot for local preview nodes | ✅ | ✅ **locally repaired 2026-06-29** | ✅ **locally repaired 2026-06-29** |
+| `settings-preview-local.json` | ignored generated local preview node settings; read at runtime (`core-manager.ts:2216`) | ✅ | ✅ **locally repaired 2026-06-29** | ✅ **locally repaired 2026-06-29** |
 
 The current GET allowlist (all five files share this set):
 
@@ -126,6 +126,7 @@ for keyless open-group chat sends. They include the three chat-send POSTs added 
 seeds", `bb3e53816` "match public chat paths on regular preview nodes"):
 
 - `POST /chat/public/build`
+- `POST /arbitrary/public/*`
 - `POST /transactions/convert`
 - `POST /transactions/process`
 
@@ -135,7 +136,10 @@ by tests. The two `settings-preview-local*` files remain intentionally gitignore
 runtime files. `MergeSettings` also treats an old no-snapshot `publicApiPaths`
 array that is only a subset of the release template as an untouched setting, so
 older generated runtime files inherit new default public paths on startup while
-custom extra public paths remain preserved.
+custom extra public paths remain preserved. Public QDN publishing is exposed only
+through `/arbitrary/public/*` unsigned builders; generic `POST /arbitrary/*`,
+`POST /arbitrary/compute`, and `POST /transactions/sign` remain blocked on public
+nodes.
 
 ---
 
@@ -155,6 +159,7 @@ body rejected); `403` = blocked by Gate 1. Both nodes identical:
 | `POST /transactions/convert` | 400 | **allowed** |
 | `GET /admin/mintingaccounts` | **403** | blocked |
 | `POST /arbitrary/WEBSITE/...` (publish) | **403** | blocked |
+| `POST /arbitrary/public/WEBSITE/.../base64` | not live-verified yet | intended public unsigned builder |
 
 Conclusion: open-group chat send already works on the **seed** nodes. The
 remaining work is (a) make sure the **default user node** config carries the same
@@ -237,25 +242,15 @@ Open-group chat send never exposes a key to the foreign node:
   The tracked source template, `settings-preview.json`, already contained them,
   and `MergeSettings` now repairs old no-snapshot runtime allowlists that only
   lag behind the release template.
-- [ ] **Default-node allowlist:** decide the final `publicApiPaths` set for the
-  default user node (`settings-preview.json` + Home-generated user settings) and
-  apply it consistently across all five config files.
-- [ ] **Publish build endpoint:** design a keyless `build-unsigned` path for
-  arbitrary/QDN publish, analogous to `POST /chat/public/build`. Considerations:
-  - Publishing also requires the **data** to reach a node (chunk upload +
-    on-chain/off-chain hashing). Uploading public data to a foreign node is
-    acceptable, but the **transaction** must be built unsigned and returned for
-    local PoW + signing. Identify which existing `ArbitraryResource` POSTs
-    (`/arbitrary/{service}/{name}` build at `:1115`, `/chunk` `:1549`,
-    `/finalize` `:1599`, `/resources/onchain/data` `:900`) participate and which
-    need keyless public variants.
-  - Decide exactly which new `METHOD /path` entries to add to `publicApiPaths`
-    (keep it minimal). Note: `qdnAuthBypassEnabled`/gateway mode only relaxes the
-    *resource-level* apiKey check — it does **not** bypass Gate 1, so every new
-    path must be added to `publicApiPaths` explicitly.
-- [ ] **Home Gate 2 changes:** for each newly-public action, remove it from
-  `QDN_LOCAL_WRITE_ONLY_ACTIONS` only once a keyless local-signing implementation
-  exists, so `SHOW_ACTIONS` advertises it on public nodes.
+- [x] **Default-node allowlist (done 2026-06-29):** tracked preview user/seed
+  configs and this machine's ignored local runtime configs include
+  `POST /arbitrary/public/*`.
+- [x] **Publish build endpoint (done 2026-06-29):** public unsigned QDN
+  publish/delete builders live under `/arbitrary/public/*`. Path-based publish,
+  generic arbitrary writes, nonce computation, and server-side signing remain
+  private/API-key-only.
+- [x] **Home Gate 2 changes (done 2026-06-29):** Home advertises QDN write
+  actions on public nodes only after routing them through local PoW/signing.
 - [ ] **Abuse/rate-limiting:** opening publish/transaction submission to anonymous
   public clients invites spam. Decide on PoW difficulty / rate limits / size
   caps before enabling on the default node.

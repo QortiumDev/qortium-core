@@ -65,6 +65,7 @@
     "GET /at/*",
     "GET /stats/*",
     "POST /chat/public/build",
+    "POST /arbitrary/public/*",
     "POST /transactions/convert",
     "POST /transactions/process"
   ],
