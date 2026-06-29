@@ -236,6 +236,39 @@ public class ArbitraryApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testPublicQdnPublishBuildEndpointRejectsOversizedBase64Payload() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "publicQdnPublishMaxSize", 8L, true);
+
+		String name = "public-qdn-size-test";
+		registerName(name);
+
+		assertApiError(ApiError.INVALID_DATA,
+				() -> this.arbitraryResource.postBase64EncodedDataPublic(
+						"APP", name, "public", null, null, null, null, "index.html", 0L,
+						base64("0123456789".getBytes(StandardCharsets.UTF_8))));
+	}
+
+	@Test
+	public void testPublicQdnPublishBuildEndpointRejectsOversizedZipAfterExtraction() throws Exception {
+		FieldUtils.writeField(Settings.getInstance(), "publicQdnPublishMaxSize", 200L, true);
+
+		String name = "public-qdn-zip-size-test";
+		registerName(name);
+
+		ByteArrayOutputStream zipBytes = new ByteArrayOutputStream();
+		try (ZipOutputStream zip = new ZipOutputStream(zipBytes)) {
+			zip.putNextEntry(new ZipEntry("index.html"));
+			zip.write(new byte[1024]);
+			zip.closeEntry();
+		}
+
+		assertApiError(ApiError.INVALID_DATA,
+				() -> this.arbitraryResource.postZippedDataPublic(
+						"APP", name, "public-zip", null, null, null, null, 0L, null,
+						base64(zipBytes.toByteArray())));
+	}
+
+	@Test
 	public void testPrivateQdnPublishBuildEndpointsStillRequireApiKey() {
 		assertApiError(ApiError.UNAUTHORIZED,
 				() -> this.arbitraryResource.postBase64EncodedData(null, "APP", "missing", null, null, null,

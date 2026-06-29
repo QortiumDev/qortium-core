@@ -80,6 +80,7 @@
   "gatewayEnabled": true,
   "gatewayPort": 8090,
   "gatewayLoopbackEnabled": true,
+  "publicQdnPublishMaxSize": 104857600,
   "maxStorageCapacity": 10737418240,
   "storagePolicy": "ALL",
   "initialPeers": [

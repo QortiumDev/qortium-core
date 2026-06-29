@@ -17,16 +17,16 @@ own chain.
 ## Early Goals
 
 - keep the history clean and easy to read
-- make each logical change its own commit
+- make each logical PR merge easy to review
 - explain every meaningful change in plain language
 - separate Qortium-specific direction from upstream Qortal messaging
 - turn stable architectural decisions into tracked documentation over time
 
 ## How To Use This File
 
-- update this file with every intentional Qortium commit
-- use one entry per commit
-- make each entry title match the commit message exactly
+- update this file with every intentional Qortium PR/squash merge
+- use one entry per merged PR
+- make each entry title match the squash commit / PR title
 - keep each entry to one combined plain-language description
 - keep entries understandable to non-developers
 - use this file as the public narrative of the fork, alongside the technical
@@ -34,27 +34,16 @@ own chain.
 
 ## Change Entries
 
-### 2026-06-29 - Add keyless public QDN publish builders
+### 2026-06-29 - release: prepare core 1.2.0
 
-Adds public, API-key-free QDN publish/delete transaction builders under
-`/arbitrary/public/*` for Home's keyless public-node publish path. The public
-Previewnet allowlist now exposes only that unsigned-build namespace, while the
-generic `/arbitrary/*`, `/arbitrary/compute`, and `/transactions/sign` write/sign
-paths remain private. Tests cover both the allowlist boundary and the public
-builders so public nodes can build unsigned QDN publish/delete transactions
-without receiving user keys.
-
-### 2026-06-29 - Sync local preview public chat paths
-
-Brings stale local preview node settings back in line with the seed and default
-Previewnet settings for public open-group chat sends. Existing local runtime
-settings that only have an older subset of `publicApiPaths` now inherit newly
-added release-template paths on startup, while custom extra public paths remain
-preserved. This lets older local preview nodes pick up the keyless chat-build,
-transaction-convert, and transaction-process POST paths without exposing QDN
-publishing or other writes on public nodes. The public API settings test also
-checks the tracked preview settings files so future allowlist drift is caught
-before release.
+Bumps Qortium Core from 1.1.3 to 1.2.0 and prepares the public-node write path
+Home needs for the next prerelease. Preview settings now keep public chat-send
+paths in sync for default and seed nodes, and expose only the keyless unsigned
+QDN publish/delete builders under `/arbitrary/public/*`; generic QDN writes,
+server-side nonce computation, and server-side signing remain private. Public
+QDN publish builders enforce the configurable `publicQdnPublishMaxSize` guard,
+defaulting to 100 MiB, while private API-key publish paths and lower
+service-specific QDN caps keep their existing behavior.
 
 ### 2026-06-26 - api-docs: darken Swagger UI content surfaces
 

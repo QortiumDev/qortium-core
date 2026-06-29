@@ -169,6 +169,8 @@ public class PublicApiAccessHandlerTests extends Common {
 
 		assertTrue(settingsPath + " should enable preview QDN auth bypass",
 				settingsJson.getBoolean("qdnAuthBypassEnabled"));
+		assertTrue(settingsPath + " should set the public QDN publish size guard",
+				settingsJson.getLong("publicQdnPublishMaxSize") == 104857600L);
 		assertTrue(settingsPath + " should allow public render reads",
 				jsonArrayContains(publicApiPaths, "GET /render/*"));
 		assertTrue(settingsPath + " should allow keyless public chat builds",

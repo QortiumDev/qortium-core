@@ -251,9 +251,12 @@ Open-group chat send never exposes a key to the foreign node:
   private/API-key-only.
 - [x] **Home Gate 2 changes (done 2026-06-29):** Home advertises QDN write
   actions on public nodes only after routing them through local PoW/signing.
+- [x] **Public QDN publish size cap (done 2026-06-29):** public unsigned QDN
+  publish builders enforce `publicQdnPublishMaxSize`, defaulting to 100 MiB,
+  before building publish transactions.
 - [ ] **Abuse/rate-limiting:** opening publish/transaction submission to anonymous
-  public clients invites spam. Decide on PoW difficulty / rate limits / size
-  caps before enabling on the default node.
+  public clients invites spam. Decide on PoW difficulty / rate limits before
+  enabling on the default node.
 - [ ] **Version check:** confirm the shipped Android build and live nodes are both
   ≥ 2026-06-19 so existing open-group chat actually works for users.
 
