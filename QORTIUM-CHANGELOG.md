@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-29 - docs: add Qortal 6.1.7 upstream comparison
+
+Added an inventory of the upstream Qortal changes between the 6.1.6 and 6.1.7 release points, in the same neutral style as the earlier comparisons. It records what changed and which review bucket each change belongs to. Unlike 6.1.6, the 6.1.7 release introduces no new consensus feature triggers and no activation-height changes — it is a maintenance and hardening release. The functional changes are: defensive bounds-checking on peer message deserialization (DoS hardening across four message types), added length validation in the arbitrary and AT transaction transformers (consensus-adjacent, recommended only after verifying it does not reject any existing on-chain transaction), a new read-only group-membership-validation API endpoint, and two QDN/storage bugfixes (saving relay-cache metadata into the arbitrary cache, and a temp-path fix for storage-size calculations). This document guides which of the 6.1.7 changes are adopted into the fork; no code has been ported yet pending review of the triage worksheet.
+
 ### 2026-06-29 - release: prepare core 1.2.0
 
 Bumps Qortium Core from 1.1.3 to 1.2.0 and prepares the public-node write path
