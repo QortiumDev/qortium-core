@@ -285,13 +285,21 @@ public class NetworkDataI2PTests extends Common {
 		getMutableKnownPeers().clear();
 		((List<PeerAddress>) FieldUtils.readField(NetworkData.getInstance(), "selfPeers", true)).clear();
 		((Map<String, ?>) FieldUtils.readField(NetworkData.getInstance(), "addressToNodeIdCache", true)).clear();
-		((Map<String, ?>) FieldUtils.readField(NetworkData.getInstance(), "outboundFailures", true)).clear();
-		((Map<String, ?>) FieldUtils.readField(NetworkData.getInstance(), "outboundFailuresByNodeId", true)).clear();
+		clearPeerDirectionState();
 		((List<Peer>) FieldUtils.readField(NetworkData.getInstance(), "connectedPeers", true)).clear();
 		((List<Peer>) FieldUtils.readField(NetworkData.getInstance(), "handshakedPeers", true)).clear();
 		((List<Peer>) FieldUtils.readField(NetworkData.getInstance(), "outboundHandshakedPeers", true)).clear();
 		FieldUtils.writeField(NetworkData.getInstance(), "nextHandshakeCleanup", 0L, true);
 		getConnectingI2PPeers().clear();
+	}
+
+	@SuppressWarnings("unchecked")
+	private void clearPeerDirectionState() throws Exception {
+		PeerDirectionState peerDirectionState = (PeerDirectionState) FieldUtils.readField(NetworkData.getInstance(),
+				"peerDirectionState", true);
+		((Map<String, ?>) FieldUtils.readField(peerDirectionState, "outboundFailures", true)).clear();
+		((Map<String, ?>) FieldUtils.readField(peerDirectionState, "outboundFailuresByNodeId", true)).clear();
+		((Map<String, ?>) FieldUtils.readField(peerDirectionState, "directionMismatchByNodeId", true)).clear();
 	}
 
 	@SuppressWarnings("unchecked")
@@ -330,7 +338,9 @@ public class NetworkDataI2PTests extends Common {
 
 	@SuppressWarnings("unchecked")
 	private Map<String, ?> getOutboundFailures() throws Exception {
-		return (Map<String, ?>) FieldUtils.readField(NetworkData.getInstance(), "outboundFailures", true);
+		PeerDirectionState peerDirectionState = (PeerDirectionState) FieldUtils.readField(NetworkData.getInstance(),
+				"peerDirectionState", true);
+		return (Map<String, ?>) FieldUtils.readField(peerDirectionState, "outboundFailures", true);
 	}
 
 	private void invokeCleanupStaleHandshakingPeers(long now) throws Exception {
