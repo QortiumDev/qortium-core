@@ -422,6 +422,7 @@ public class Controller extends Thread {
 			else
 				Settings.getInstance();
 		} catch (Throwable t) {
+			LOGGER.error("Unable to start: fatal error while loading settings/blockchain config", t);
 			Gui.getInstance().fatalError("Settings file", t.getMessage());
 			return; // Not System.exit() so that GUI can display error
 		}
