@@ -273,7 +273,13 @@ public class ArchiveFastSyncManager extends Thread {
 		Peer best = null;
 		int bestHeight = 0;
 		for (Peer peer : Network.getInstance().getImmutableHandshakedPeers()) {
-			if (Controller.hasMisbehaved.test(peer) || Controller.hasOldVersion.test(peer) || Controller.hasInvalidSigner.test(peer))
+			// Deliberately NOT filtering on hasInvalidSigner here. That predicate validates a peer's
+			// chain-tip minter against our own repository — something a genesis-fresh node (the only state
+			// that fast-replays) cannot do, so it would exclude every peer and the bootstrap could never
+			// start. Archive integrity does not depend on trusting the peer: each chunk is verified by
+			// SHA-256 content-addressing and the checkpoint-spanning chunk is cross-bound to the
+			// release-pinned signature, so a dishonest peer cannot smuggle in a bad chain.
+			if (Controller.hasMisbehaved.test(peer) || Controller.hasOldVersion.test(peer))
 				continue;
 
 			int archiveHeight = peerArchiveHeight(peer);
