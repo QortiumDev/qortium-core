@@ -21,6 +21,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Verifies and imports a downloaded block-archive {@code .dat} chunk, then replays its blocks into the
@@ -50,6 +52,13 @@ import java.nio.file.StandardCopyOption;
 public class ArchiveChunkImporter {
 
 	private static final Logger LOGGER = LogManager.getLogger(ArchiveChunkImporter.class);
+	private static final int PROGRESS_LOG_BLOCK_INTERVAL = 500;
+	private static final long PROGRESS_LOG_TIME_INTERVAL_MS = 30_000L;
+
+	@FunctionalInterface
+	public interface ReplayProgressListener {
+		void onReplayProgress(int height, int fromHeight, int toHeight);
+	}
 
 	private ArchiveChunkImporter() {
 	}
@@ -103,6 +112,8 @@ public class ArchiveChunkImporter {
 			Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
 		} catch (IOException e) {
 			// Fall back to a non-atomic move if the filesystem doesn't support ATOMIC_MOVE+REPLACE together.
+			LOGGER.warn("Archive chunk {}-{} atomic move failed ({}); falling back to replace-existing move",
+					startHeight, endHeight, e.getClass().getSimpleName());
 			Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
 		} finally {
 			Files.deleteIfExists(temp);
@@ -117,11 +128,10 @@ public class ArchiveChunkImporter {
 	 * repository, building derived state via {@link Block#process()}.
 	 * <p>
 	 * For each block strictly below {@code trustedCheckpointHeight} (when that is &gt; 0), the expensive
-	 * per-signature crypto is skipped — the block minter/transactions signatures via
-	 * {@link Block#isSignatureValid()} are not checked, and {@link Block#isValid(boolean)} is called with
-	 * {@code trustedReplay = true} (skipping online-account signature / memory-PoW verification). At and above
-	 * the checkpoint, full validation runs. Pass {@code trustedCheckpointHeight = 0} to fully validate every
-	 * block (no skipping).
+	 * online-account signature / memory-PoW crypto is skipped by calling {@link Block#isValid(boolean)} with
+	 * {@code trustedReplay = true}. The block minter signature and every transaction signature are still checked
+	 * via {@link Block#isSignatureValid()} at every height. At and above the checkpoint, full validation runs.
+	 * Pass {@code trustedCheckpointHeight = 0} to fully validate every block (no skipping).
 	 * <p>
 	 * This method does <b>not</b> commit: it leaves all changes pending in the repository transaction so the
 	 * caller can apply the whole range atomically. The caller <b>must</b> wrap the call in
@@ -134,8 +144,19 @@ public class ArchiveChunkImporter {
 	 * @return the height successfully replayed up to
 	 */
 	public static int replayArchivedBlocks(Repository repository, int fromHeight, int toHeight, int trustedCheckpointHeight) throws DataException {
+		return replayArchivedBlocks(repository, fromHeight, toHeight, trustedCheckpointHeight, null);
+	}
+
+	public static int replayArchivedBlocks(Repository repository, int fromHeight, int toHeight, int trustedCheckpointHeight,
+			ReplayProgressListener progressListener) throws DataException {
 		BlockArchiveReader reader = BlockArchiveReader.getInstance();
 		int lastHeight = fromHeight - 1;
+		long replayStartNanos = System.nanoTime();
+		long lastProgressLogNanos = replayStartNanos;
+		int totalBlocks = Math.max(0, toHeight - fromHeight + 1);
+
+		LOGGER.info("Archive fast-replay: replaying blocks {}-{} ({} blocks; checkpoint height {})",
+				fromHeight, toHeight, totalBlocks, trustedCheckpointHeight);
 
 		for (int height = fromHeight; height <= toHeight; ++height) {
 			BlockTransformation blockTransformation = reader.fetchBlockAtHeight(height);
@@ -144,6 +165,22 @@ public class ArchiveChunkImporter {
 
 			replayBlock(repository, blockTransformation, trustedCheckpointHeight);
 			lastHeight = height;
+
+			long elapsedMillis = elapsedMillisSince(replayStartNanos);
+			if (progressListener != null)
+				progressListener.onReplayProgress(height, fromHeight, toHeight);
+
+			long nowNanos = System.nanoTime();
+			int replayedBlocks = height - fromHeight + 1;
+			boolean reachedInterval = replayedBlocks % PROGRESS_LOG_BLOCK_INTERVAL == 0;
+			boolean reachedTime = TimeUnit.NANOSECONDS.toMillis(nowNanos - lastProgressLogNanos) >= PROGRESS_LOG_TIME_INTERVAL_MS;
+			boolean reachedEnd = height == toHeight;
+			if (reachedInterval || reachedTime || reachedEnd) {
+				LOGGER.info("Archive fast-replay: replayed block {} of {} ({}%, {}/{} blocks, elapsed {} ms, {} blocks/sec)",
+						height, toHeight, calculatePercent(replayedBlocks, totalBlocks), replayedBlocks, totalBlocks,
+						elapsedMillis, formatBlocksPerSecond(replayedBlocks, elapsedMillis));
+				lastProgressLogNanos = nowNanos;
+			}
 		}
 
 		return lastHeight;
@@ -173,12 +210,17 @@ public class ArchiveChunkImporter {
 		// (preserving the chain up to the pinned checkpoint) while substituting forged transactions below it — which
 		// areTransactionsValid() does not signature-check. It is also cheap (a few Ed25519 verifies per block)
 		// relative to the online-account crypto the trusted replay actually skips.
+		long blockStartNanos = System.nanoTime();
+		long signatureStartNanos = blockStartNanos;
 		if (!block.isSignatureValid())
 			throw new DataException(String.format("Archive fast-replay: invalid block signature at height %d", height));
+		long signatureMillis = elapsedMillisSince(signatureStartNanos);
 
+		long validationStartNanos = System.nanoTime();
 		Block.ValidationResult validationResult = block.isValid(trustedReplay);
 		if (validationResult != Block.ValidationResult.OK)
 			throw new DataException(String.format("Archive fast-replay: block at height %d failed validation: %s", height, validationResult.name()));
+		long validationMillis = elapsedMillisSince(validationStartNanos);
 
 		// Archive-replayed blocks carry their transactions straight from the archive. Unlike normal sync —
 		// where a block's transactions are saved as unconfirmed when they arrive, *before* the block is
@@ -186,16 +228,43 @@ public class ArchiveChunkImporter {
 		// foreign key would have no parent. Persist them first (with an initial approval status, as the
 		// unconfirmed-import path does) so process()/linkTransactionsToBlock() can link and confirm them.
 		// AT transactions are created and saved by Block.processTransactions, so skip those here.
+		long saveTransactionsStartNanos = System.nanoTime();
+		int savedTransactions = 0;
 		for (TransactionData transactionData : blockTransformation.getTransactions()) {
 			if (transactionData.getType() == TransactionType.AT)
 				continue;
 			Transaction transaction = Transaction.fromData(repository, transactionData);
 			transaction.setInitialApprovalStatus();
 			repository.getTransactionRepository().save(transactionData);
+			savedTransactions++;
 		}
+		long saveTransactionsMillis = elapsedMillisSince(saveTransactionsStartNanos);
 
+		long processStartNanos = System.nanoTime();
 		block.process();
+		long processMillis = elapsedMillisSince(processStartNanos);
+		LOGGER.debug("Archive fast-replay: block {} replayed (trustedReplay={}, transactions={}, savedTransactions={}, signature={} ms, validation={} ms, saveTransactions={} ms, process={} ms, total={} ms)",
+				height, trustedReplay, blockTransformation.getTransactions().size(), savedTransactions, signatureMillis,
+				validationMillis, saveTransactionsMillis, processMillis, elapsedMillisSince(blockStartNanos));
 		// Intentionally no saveChanges() here: the caller commits the whole replayed range atomically so that a
 		// forged sub-checkpoint prefix that fails at the checkpoint block is rolled back, never durably stored.
+	}
+
+	private static int calculatePercent(int replayedBlocks, int totalBlocks) {
+		if (totalBlocks <= 0)
+			return 100;
+
+		return (int) Math.min(100, (Math.max(0L, replayedBlocks) * 100L) / totalBlocks);
+	}
+
+	private static long elapsedMillisSince(long startNanos) {
+		return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
+	}
+
+	private static String formatBlocksPerSecond(int replayedBlocks, long elapsedMillis) {
+		if (elapsedMillis <= 0)
+			return "n/a";
+
+		return String.format(Locale.ROOT, "%.2f", replayedBlocks * 1000.0d / elapsedMillis);
 	}
 }

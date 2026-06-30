@@ -154,4 +154,17 @@ public class ArchiveFastSyncManagerTests {
 		assertFalse(ArchiveFastSyncManager.isWithinReplayBudget(
 				Arrays.asList(sized(1), sized(1), sized(1), sized(1), sized(1)), 3));
 	}
+
+	@Test
+	public void testArchiveFastSyncPercentTracksReplayRange() {
+		assertEquals(0, ArchiveFastSyncManager.calculateArchiveFastSyncPercent(2, 1, 501));
+		assertEquals(20, ArchiveFastSyncManager.calculateArchiveFastSyncPercent(2, 101, 501));
+		assertEquals(100, ArchiveFastSyncManager.calculateArchiveFastSyncPercent(2, 501, 501));
+		assertEquals(100, ArchiveFastSyncManager.calculateArchiveFastSyncPercent(2, 600, 501));
+	}
+
+	@Test
+	public void testArchiveFastSyncPercentHandlesEmptyRange() {
+		assertEquals(100, ArchiveFastSyncManager.calculateArchiveFastSyncPercent(2, 1, 1));
+	}
 }

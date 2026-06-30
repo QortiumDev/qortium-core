@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-30 - fast-sync: show archive replay progress
+
+Makes archive fast-sync replay easier to observe while a fresh node is building
+state from downloaded archive chunks. Core now logs archive replay start,
+periodic progress, elapsed time, replay rate, and per-block debug timings for
+the expensive validation and processing steps. The node status response also
+reports whether archive fast-sync replay is active, the replayed height, the
+target height, and replay percentage, so desktop or API clients can distinguish
+a long archive replay from a stuck startup. The replay trust model and atomic
+commit behavior are unchanged.
+
 ### 2026-06-30 - fix(fast-sync): persist archived block transactions before replay link
 
 Fixes the final archive fast-replay bootstrap blocker found while bringing a

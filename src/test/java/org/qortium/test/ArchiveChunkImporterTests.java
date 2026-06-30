@@ -20,6 +20,7 @@ import org.qortium.transform.TransformationException;
 import org.qortium.utils.NTP;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -94,8 +95,20 @@ public class ArchiveChunkImporterTests extends Common {
 		assertFalse(ArchiveChunkImporter.isChunkHeaderValid(badVersion, 2, 250));
 
 		// Too-short buffer -> rejected, not an exception.
+		assertFalse(ArchiveChunkImporter.isChunkHeaderValid(new byte[0], 2, 250));
+		assertFalse(ArchiveChunkImporter.isChunkHeaderValid(new byte[1], 2, 250));
 		assertFalse(ArchiveChunkImporter.isChunkHeaderValid(new byte[4], 2, 250));
+		assertFalse(ArchiveChunkImporter.isChunkHeaderValid(new byte[19], 2, 250));
 		assertFalse(ArchiveChunkImporter.isChunkHeaderValid(null, 2, 250));
+
+		// Exactly the fixed header size is enough for this header-only integrity check.
+		ByteBuffer minimalHeader = ByteBuffer.allocate(5 * Integer.BYTES);
+		minimalHeader.putInt(BlockArchiveReader.SUPPORTED_ARCHIVE_VERSION);
+		minimalHeader.putInt(2);
+		minimalHeader.putInt(250);
+		minimalHeader.putInt(249);
+		minimalHeader.putInt(0);
+		assertTrue(ArchiveChunkImporter.isChunkHeaderValid(minimalHeader.array(), 2, 250));
 	}
 
 	/** Mint enough blocks to archive a single deterministic chunk "2-250.dat" and return its raw bytes. */

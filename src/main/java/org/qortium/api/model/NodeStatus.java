@@ -1,6 +1,8 @@
 package org.qortium.api.model;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import org.qortium.controller.ArchiveFastSyncManager;
+import org.qortium.controller.ArchiveFastSyncManager.ArchiveReplayStatus;
 import org.qortium.controller.Controller;
 import org.qortium.controller.OnlineAccountsManager;
 import org.qortium.controller.Synchronizer;
@@ -109,11 +111,35 @@ public class NodeStatus {
 
 	public final int height;
 
+	@Schema(
+			description = "Whether the node is currently replaying archived blocks during startup archive fast-sync."
+	)
+	public final boolean isArchiveFastSyncing;
+
+	@Schema(
+			description = "Current block height replayed by archive fast-sync. Null when archive fast-sync replay is inactive.",
+			nullable = true
+	)
+	public final Integer archiveFastSyncHeight;
+
+	@Schema(
+			description = "Target block height for the current archive fast-sync replay. Null when archive fast-sync replay is inactive.",
+			nullable = true
+	)
+	public final Integer archiveFastSyncTargetHeight;
+
+	@Schema(
+			description = "Archive fast-sync replay percentage for the current replay range. Null when archive fast-sync replay is inactive.",
+			nullable = true
+	)
+	public final Integer archiveFastSyncPercent;
+
 	public NodeStatus() {
 		this.isMintingPossible = OnlineAccountsManager.getInstance().hasActiveOnlineAccountSignatures();
 
 		Synchronizer synchronizer = Synchronizer.getInstance();
 		Controller controller = Controller.getInstance();
+		ArchiveFastSyncManager archiveFastSyncManager = ArchiveFastSyncManager.getInstance();
 		Network network = Network.getInstance();
 		NetworkData networkData = NetworkData.getInstance();
 		List<Peer> handshakedPeers = network.getImmutableHandshakedPeers();
@@ -150,6 +176,12 @@ public class NodeStatus {
 		this.syncTargetHeight = syncProgress.syncTargetHeight;
 		this.syncBlocksRemaining = syncProgress.syncBlocksRemaining;
 		this.syncPhase = syncProgress.syncPhase;
+
+		ArchiveReplayStatus archiveReplayStatus = archiveFastSyncManager.getArchiveReplayStatus();
+		this.isArchiveFastSyncing = archiveReplayStatus.isActive;
+		this.archiveFastSyncHeight = archiveReplayStatus.isActive ? archiveReplayStatus.height : null;
+		this.archiveFastSyncTargetHeight = archiveReplayStatus.isActive ? archiveReplayStatus.targetHeight : null;
+		this.archiveFastSyncPercent = archiveReplayStatus.isActive ? archiveReplayStatus.percent : null;
 	}
 
 	public static SyncProgress calculateSyncProgress(int height, Integer activeSyncTargetHeight,

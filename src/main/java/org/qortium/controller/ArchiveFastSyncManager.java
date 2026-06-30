@@ -69,7 +69,8 @@ public class ArchiveFastSyncManager extends Thread {
 	private static ArchiveFastSyncManager instance;
 
 	private volatile boolean isStopping = false;
-	private boolean completed = false;
+	private volatile boolean completed = false;
+	private volatile ArchiveReplayStatus archiveReplayStatus = ArchiveReplayStatus.inactive();
 
 	private ArchiveFastSyncManager() {
 	}
@@ -113,6 +114,39 @@ public class ArchiveFastSyncManager extends Thread {
 	public void shutdown() {
 		isStopping = true;
 		this.interrupt();
+	}
+
+	public boolean isArchiveFastSyncing() {
+		return archiveReplayStatus.isActive;
+	}
+
+	public int getArchiveFastSyncStartHeight() {
+		return archiveReplayStatus.startHeight;
+	}
+
+	public int getArchiveFastSyncHeight() {
+		return archiveReplayStatus.height;
+	}
+
+	public int getArchiveFastSyncTargetHeight() {
+		return archiveReplayStatus.targetHeight;
+	}
+
+	public Integer getArchiveFastSyncPercent() {
+		return archiveReplayStatus.percent;
+	}
+
+	public ArchiveReplayStatus getArchiveReplayStatus() {
+		return archiveReplayStatus;
+	}
+
+	static int calculateArchiveFastSyncPercent(int startHeight, int replayedHeight, int targetHeight) {
+		if (targetHeight < startHeight)
+			return 100;
+
+		long totalBlocks = (long) targetHeight - startHeight + 1;
+		long replayedBlocks = Math.max(0L, (long) replayedHeight - startHeight + 1);
+		return (int) Math.min(100, (replayedBlocks * 100L) / totalBlocks);
 	}
 
 	/** Master gate. Off by default; only runs for a non-lite, archive-enabled node with a pinned checkpoint. */
@@ -409,31 +443,80 @@ public class ArchiveFastSyncManager extends Thread {
 				return false;
 			}
 
+			int fromHeight = 2;
 			int toHeight = chunks.get(chunks.size() - 1).getEndHeight();
 			// Atomic replay: nothing is committed unless the entire range — including the fully validated
 			// checkpoint block — succeeds. A forged sub-checkpoint prefix fails at H_cp and is rolled back.
 			repository.setSavepoint();
+			long replayStartNanos = System.nanoTime();
+			boolean replayCommitted = false;
 			try {
-				ArchiveChunkImporter.replayArchivedBlocks(repository, 2, toHeight, checkpointHeight);
+				startArchiveReplayStatus(fromHeight, toHeight);
+				ArchiveChunkImporter.replayArchivedBlocks(repository, fromHeight, toHeight, checkpointHeight, this::updateArchiveReplayStatus);
 				repository.saveChanges();
+				replayCommitted = true;
 			} catch (DataException e) {
 				repository.rollbackToSavepoint();
 				deleteChunks(written);
 				LOGGER.warn("Archive fast-sync: replay failed and was rolled back: {}", e.getMessage());
 				return false;
+			} finally {
+				if (!replayCommitted)
+					clearArchiveReplayStatus();
 			}
 
 			// Refresh the in-memory chain-tip cache so we don't keep advertising the old (genesis) height to
 			// peers / the API / systray until the next applied block would otherwise self-heal it.
-			Controller.getInstance().refillLatestBlocksCache();
+			try {
+				Controller.getInstance().refillLatestBlocksCache();
+			} finally {
+				clearArchiveReplayStatus();
+			}
 
-			LOGGER.info("Archive fast-sync: replayed to height {} (checkpoint {} verified). Handing off to normal sync.", toHeight, checkpointHeight);
+			LOGGER.info("Archive fast-sync: replayed to height {} in {} ms (checkpoint {} verified). Handing off to normal sync.",
+					toHeight, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - replayStartNanos), checkpointHeight);
 		} finally {
 			blockchainLock.unlock();
 		}
 
 		Synchronizer.getInstance().requestSync();
 		return true;
+	}
+
+	private void startArchiveReplayStatus(int fromHeight, int toHeight) {
+		this.archiveReplayStatus = ArchiveReplayStatus.active(fromHeight, fromHeight - 1, toHeight);
+	}
+
+	private void updateArchiveReplayStatus(int height, int fromHeight, int toHeight) {
+		this.archiveReplayStatus = ArchiveReplayStatus.active(fromHeight, height, toHeight);
+	}
+
+	private void clearArchiveReplayStatus() {
+		this.archiveReplayStatus = ArchiveReplayStatus.inactive();
+	}
+
+	public static class ArchiveReplayStatus {
+		public final boolean isActive;
+		public final int startHeight;
+		public final int height;
+		public final int targetHeight;
+		public final Integer percent;
+
+		private ArchiveReplayStatus(boolean isActive, int startHeight, int height, int targetHeight) {
+			this.isActive = isActive;
+			this.startHeight = startHeight;
+			this.height = height;
+			this.targetHeight = targetHeight;
+			this.percent = isActive ? calculateArchiveFastSyncPercent(startHeight, height, targetHeight) : null;
+		}
+
+		private static ArchiveReplayStatus active(int startHeight, int height, int targetHeight) {
+			return new ArchiveReplayStatus(true, startHeight, height, targetHeight);
+		}
+
+		private static ArchiveReplayStatus inactive() {
+			return new ArchiveReplayStatus(false, 0, 0, 0);
+		}
 	}
 
 	private static void deleteChunks(List<ArchiveChunkData> chunks) {
