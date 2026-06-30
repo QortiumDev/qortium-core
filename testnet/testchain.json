@@ -4,6 +4,7 @@
 	"blockTimestampMargin": 500,
 	"transactionExpiryPeriod": 86400000,
 	"maxBlockSize": 2097152,
+	"chainParameterUpdateMinActivationDelay": 20,
 	"maxBytesPerUnitFee": 1024,
 	"mainnetMessageMagic": "QRTM",
 	"testnetMessageMagic": "qrtm",

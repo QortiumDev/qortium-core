@@ -141,8 +141,12 @@ public class Gui {
 	}
 
 	public void fatalError(String title, String message) {
-		if (this.isHeadless)
+		if (this.isHeadless) {
+			// Headless nodes have no GUI to surface this, so log it instead of
+			// silently swallowing the fatal error (e.g. invalid blockchain config).
+			LOGGER.error("Fatal error - {}: {}", title, message);
 			return;
+		}
 
 		shutdown();
 
