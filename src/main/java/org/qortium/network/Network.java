@@ -673,7 +673,7 @@ public class Network {
     /**
      * Maximum message size (bytes). Needs to be at least maximum block size + MAGIC + message type, etc.
      */
-    protected int getMaxMessageSize() {
+    public int getMaxMessageSize() {
         return this.maxMessageSize;
     }
 
