@@ -25,6 +25,7 @@ history.
 ## Development And Operations
 
 - `Developer reference` [Database inspection](development/database.md) - local HSQLDB inspection notes
+- `Planning note` [Archive replay performance investigation](development/archive-replay-performance.md) - diagnostic plan for archive fast-sync replay slowdown
 - `Developer reference` [I2P fallback operator guide](networking/i2p-fallback-operator-guide.md) - standalone Core setup and verification for optional i2pd fallback
 - `Developer reference` [Current QDN auto-update scripts](../tools/auto-update-scripts/README.md) - current update publisher flow
 - `Developer reference` [Core preview 14 release prep](releases/v1.0.0-preview.14.md) - post-merge prerelease checklist and draft release notes

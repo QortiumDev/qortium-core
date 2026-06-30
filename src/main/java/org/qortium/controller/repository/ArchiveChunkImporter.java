@@ -21,7 +21,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
+import java.util.StringJoiner;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -181,7 +184,7 @@ public class ArchiveChunkImporter {
 			if (reachedInterval || reachedTime || reachedEnd) {
 				int recentBlocks = height - lastProgressLogHeight;
 				long recentElapsedMillis = TimeUnit.NANOSECONDS.toMillis(nowNanos - lastProgressLogNanos);
-				LOGGER.info("Archive fast-replay: replayed block {} of {} ({}%, {}/{} blocks, elapsed {} ms, cumulative {} blocks/sec, recent {} blocks/sec; recent avg ms/block: signature={}, validation={}, saveTransactions={}, process={}, total={})",
+				LOGGER.info("Archive fast-replay: replayed block {} of {} ({}%, {}/{} blocks, elapsed {} ms, cumulative {} blocks/sec, recent {} blocks/sec; recent avg ms/block: signature={}, validation={}, saveTransactions={}, process={}, total={}; recent process phases avg ms/block: {})",
 						height, toHeight, calculatePercent(replayedBlocks, totalBlocks), replayedBlocks, totalBlocks,
 						elapsedMillis, formatBlocksPerSecond(replayedBlocks, elapsedMillis),
 						formatBlocksPerSecond(recentBlocks, recentElapsedMillis),
@@ -189,7 +192,8 @@ public class ArchiveChunkImporter {
 						formatMillisPerBlock(recentTimings.validationMillis, recentBlocks),
 						formatMillisPerBlock(recentTimings.saveTransactionsMillis, recentBlocks),
 						formatMillisPerBlock(recentTimings.processMillis, recentBlocks),
-						formatMillisPerBlock(recentTimings.totalMillis, recentBlocks));
+						formatMillisPerBlock(recentTimings.totalMillis, recentBlocks),
+						formatProcessPhaseAverages(recentTimings.processPhaseMillis, recentBlocks));
 				lastProgressLogNanos = nowNanos;
 				lastProgressLogHeight = height;
 				recentTimings = new ReplayBlockTimings();
@@ -257,17 +261,24 @@ public class ArchiveChunkImporter {
 		}
 		long saveTransactionsMillis = elapsedMillisSince(saveTransactionsStartNanos);
 
+		ReplayBlockTimings timings = new ReplayBlockTimings();
+		timings.signatureMillis = signatureMillis;
+		timings.validationMillis = validationMillis;
+		timings.saveTransactionsMillis = saveTransactionsMillis;
+
 		long processStartNanos = System.nanoTime();
-		block.process();
+		Block.runWithProcessTimingListener(timings::addProcessPhaseMillis, block::process);
 		long processMillis = elapsedMillisSince(processStartNanos);
 		long totalMillis = elapsedMillisSince(blockStartNanos);
-		LOGGER.debug("Archive fast-replay: block {} replayed (trustedReplay={}, transactions={}, savedTransactions={}, signature={} ms, validation={} ms, saveTransactions={} ms, process={} ms, total={} ms)",
+		timings.processMillis = processMillis;
+		timings.totalMillis = totalMillis;
+
+		LOGGER.debug("Archive fast-replay: block {} replayed (trustedReplay={}, transactions={}, savedTransactions={}, signature={} ms, validation={} ms, saveTransactions={} ms, process={} ms, total={} ms, processPhases={})",
 				height, trustedReplay, blockTransformation.getTransactions().size(), savedTransactions, signatureMillis,
-				validationMillis, saveTransactionsMillis, processMillis, totalMillis);
+				validationMillis, saveTransactionsMillis, processMillis, totalMillis, timings.processPhaseMillis);
 		// Intentionally no saveChanges() here: the caller commits the whole replayed range atomically so that a
 		// forged sub-checkpoint prefix that fails at the checkpoint block is rolled back, never durably stored.
-		return new ReplayBlockTimings(signatureMillis, validationMillis, saveTransactionsMillis, processMillis,
-				totalMillis);
+		return timings;
 	}
 
 	private static int calculatePercent(int replayedBlocks, int totalBlocks) {
@@ -295,23 +306,26 @@ public class ArchiveChunkImporter {
 		return String.format(Locale.ROOT, "%.2f", elapsedMillis * 1.0d / replayedBlocks);
 	}
 
+	private static String formatProcessPhaseAverages(Map<String, Long> phaseMillis, int replayedBlocks) {
+		if (phaseMillis.isEmpty() || replayedBlocks <= 0)
+			return "n/a";
+
+		StringJoiner joiner = new StringJoiner(", ");
+		for (Map.Entry<String, Long> entry : phaseMillis.entrySet())
+			joiner.add(entry.getKey() + "=" + formatMillisPerBlock(entry.getValue(), replayedBlocks));
+
+		return joiner.toString();
+	}
+
 	private static class ReplayBlockTimings {
 		private long signatureMillis;
 		private long validationMillis;
 		private long saveTransactionsMillis;
 		private long processMillis;
 		private long totalMillis;
+		private Map<String, Long> processPhaseMillis = new LinkedHashMap<>();
 
 		private ReplayBlockTimings() {
-		}
-
-		private ReplayBlockTimings(long signatureMillis, long validationMillis, long saveTransactionsMillis,
-				long processMillis, long totalMillis) {
-			this.signatureMillis = signatureMillis;
-			this.validationMillis = validationMillis;
-			this.saveTransactionsMillis = saveTransactionsMillis;
-			this.processMillis = processMillis;
-			this.totalMillis = totalMillis;
 		}
 
 		private void add(ReplayBlockTimings other) {
@@ -320,6 +334,12 @@ public class ArchiveChunkImporter {
 			this.saveTransactionsMillis += other.saveTransactionsMillis;
 			this.processMillis += other.processMillis;
 			this.totalMillis += other.totalMillis;
+			for (Map.Entry<String, Long> entry : other.processPhaseMillis.entrySet())
+				addProcessPhaseMillis(entry.getKey(), entry.getValue());
+		}
+
+		private void addProcessPhaseMillis(String phase, long elapsedMillis) {
+			this.processPhaseMillis.merge(phase, elapsedMillis, Long::sum);
 		}
 	}
 }

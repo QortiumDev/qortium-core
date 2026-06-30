@@ -57,6 +57,7 @@ import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.stream;
@@ -116,8 +117,39 @@ public class Block {
 	// Other properties
 	private static final Logger LOGGER = LogManager.getLogger(Block.class);
 	private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+	private static final ThreadLocal<ProcessTimingListener> PROCESS_TIMING_LISTENER = new ThreadLocal<>();
 
 	public static final int CURRENT_VERSION = 1;
+
+	@FunctionalInterface
+	public interface ProcessTimingListener {
+		void onProcessPhase(String phase, long elapsedMillis);
+	}
+
+	@FunctionalInterface
+	public interface ProcessTimingTask {
+		void run() throws DataException;
+	}
+
+	public static void runWithProcessTimingListener(ProcessTimingListener listener, ProcessTimingTask task) throws DataException {
+		ProcessTimingListener previousListener = PROCESS_TIMING_LISTENER.get();
+		PROCESS_TIMING_LISTENER.set(listener);
+
+		try {
+			task.run();
+		} finally {
+			if (previousListener != null)
+				PROCESS_TIMING_LISTENER.set(previousListener);
+			else
+				PROCESS_TIMING_LISTENER.remove();
+		}
+	}
+
+	private static void recordProcessTiming(String phase, long startNanos) {
+		ProcessTimingListener listener = PROCESS_TIMING_LISTENER.get();
+		if (listener != null)
+			listener.onProcessPhase(phase, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
+	}
 
 	/** Number of left-shifts to apply to block's online accounts count when calculating block's weight. */
 	private static final int ACCOUNTS_COUNT_SHIFT = Transformer.PUBLIC_KEY_LENGTH * 8;
@@ -1676,53 +1708,82 @@ public class Block {
 			// Account levels and block rewards are only processed on block reward distribution blocks
 			if (this.isRewardDistributionBlock()) {
 				// Increase account levels
+				long phaseStartNanos = System.nanoTime();
 				increaseAccountLevels();
+				recordProcessTiming("increaseAccountLevels", phaseStartNanos);
 
 				// Distribute block rewards, including transaction fees, before transactions processed
+				phaseStartNanos = System.nanoTime();
 				processBlockRewards();
+				recordProcessTiming("processBlockRewards", phaseStartNanos);
 			}
 		}
 
 		// Process transactions (we'll link them to this block after saving the block itself)
+		long phaseStartNanos = System.nanoTime();
 		boolean trustInputsChanged = processTransactions();
+		recordProcessTiming("processTransactions", phaseStartNanos);
 
 		// Group-approval transactions
+		phaseStartNanos = System.nanoTime();
 		trustInputsChanged |= processGroupApprovalTransactions();
+		recordProcessTiming("processGroupApprovalTransactions", phaseStartNanos);
+
+		phaseStartNanos = System.nanoTime();
 		trustInputsChanged |= hasMintingGroupIdBoundary(this.blockData.getHeight());
 		trustInputsChanged |= hasTrustSnapshotAffectingParameterActivation(this.blockData.getHeight());
 		trustInputsChanged |= needsInitialTrustDerivationSnapshotRefresh(this.blockData.getHeight());
+		recordProcessTiming("trustSnapshotChecks", phaseStartNanos);
 
 		// Store current account trust derivation after rating and group state changes in this block.
-		if (trustInputsChanged)
+		if (trustInputsChanged) {
+			phaseStartNanos = System.nanoTime();
 			refreshTrustDerivationSnapshots(this.blockData.getHeight(), this.blockData.getTimestamp());
+			recordProcessTiming("refreshTrustDerivationSnapshots", phaseStartNanos);
+		}
 
 		// Snapshot polls that close at this block timestamp before later account changes can move their weights.
+		phaseStartNanos = System.nanoTime();
 		freezeClosedPolls();
+		recordProcessTiming("freezeClosedPolls", phaseStartNanos);
 
 		// Process AT fees and save AT states into repository
+		phaseStartNanos = System.nanoTime();
 		processAtFeesAndStates();
+		recordProcessTiming("processAtFeesAndStates", phaseStartNanos);
 
 		// Link block into blockchain by fetching signature of highest block and setting that as our reference
+		phaseStartNanos = System.nanoTime();
 		BlockData latestBlockData = this.repository.getBlockRepository().fromHeight(blockchainHeight);
 		if (latestBlockData != null)
 			this.blockData.setReference(latestBlockData.getSignature());
+		recordProcessTiming("fetchLatestBlockReference", phaseStartNanos);
 
 		// Save block
+		phaseStartNanos = System.nanoTime();
 		this.repository.getBlockRepository().save(this.blockData);
+		recordProcessTiming("saveBlock", phaseStartNanos);
 
 		// Persist the local (non-consensus) per-block online-accounts index now, while the block's
 		// positional online-account indices still resolve against the current self-share set. This
 		// stores the absolute reward-share public keys so the set can be fetched historically even
 		// after the self-share set changes. See Blocks.getDecodedOnlineAccountsForBlock.
+		phaseStartNanos = System.nanoTime();
 		this.repository.getBlockRepository().saveOnlineRewardSharePublicKeys(
 				this.blockData.getHeight(), this.getOnlineRewardSharePublicKeys());
+		recordProcessTiming("saveOnlineRewardSharePublicKeys", phaseStartNanos);
 
 		// Link transactions to this block, thus removing them from unconfirmed transactions list.
 		// Also update "transaction participants" in repository for "transactions involving X" support in API
+		phaseStartNanos = System.nanoTime();
 		linkTransactionsToBlock();
+		recordProcessTiming("linkTransactionsToBlock", phaseStartNanos);
 
-        if(blockchainHeight % 100 == 0) // Only sweep the balance table once every 100 blocks for 0 balances
-		    postBlockTidy();
+		if (blockchainHeight % 100 == 0) { // Only sweep the balance table once every 100 blocks for 0 balances
+			phaseStartNanos = System.nanoTime();
+			postBlockTidy();
+			recordProcessTiming("postBlockTidy", phaseStartNanos);
+		}
 
 		// Log some debugging info relating to the block weight calculation
 		this.logDebugInfo();
@@ -1733,14 +1794,18 @@ public class Block {
 		final List<Integer> cumulativeBlocksByLevel = BlockChain.getInstance().getCumulativeBlocksByLevel();
 		final int maximumLevel = cumulativeBlocksByLevel.size() - 1;
 
+		long phaseStartNanos = System.nanoTime();
 		final List<ExpandedAccount> expandedAccounts = this.getExpandedAccounts().stream()
 				.filter(expandedAccount -> expandedAccount.isMinterMember)
 				.collect(Collectors.toList());
+		recordProcessTiming("increaseAccountLevels.getExpandedAccounts", phaseStartNanos);
 
+		phaseStartNanos = System.nanoTime();
 		Map<String, AccountData> uniqueMintingAccountsByAddress = new HashMap<>();
 		for (ExpandedAccount expandedAccount : expandedAccounts) {
 			uniqueMintingAccountsByAddress.putIfAbsent(expandedAccount.mintingAccountData.getAddress(), expandedAccount.mintingAccountData);
 		}
+		recordProcessTiming("increaseAccountLevels.buildUniqueMintingAccounts", phaseStartNanos);
 
 		// Increase blocks minted count for all accounts
 		int delta = 1;
@@ -1749,12 +1814,15 @@ public class Block {
 		}
 
 		// Batch update in repository
+		phaseStartNanos = System.nanoTime();
 		repository.getAccountRepository().modifyMintedBlockCounts(new ArrayList<>(uniqueMintingAccountsByAddress.keySet()), +delta);
+		recordProcessTiming("increaseAccountLevels.modifyMintedBlockCounts", phaseStartNanos);
 
 		// Keep track of level bumps in case we need to apply to other entries
 		Map<String, Integer> bumpedAccounts = new HashMap<>();
 
 		// Local changes and also checks for level bump
+		phaseStartNanos = System.nanoTime();
 		for (AccountData accountData : uniqueMintingAccountsByAddress.values()) {
 			// Adjust count locally (in Java)
 			accountData.setBlocksMinted(accountData.getBlocksMinted() + delta);
@@ -1775,6 +1843,7 @@ public class Block {
 					break;
 				}
 		}
+		recordProcessTiming("increaseAccountLevels.levelUpdates", phaseStartNanos);
 
 		// Also bump other entries if need be
 		if (!bumpedAccounts.isEmpty()) {
