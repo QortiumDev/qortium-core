@@ -384,8 +384,7 @@ public class NetworkI2PTests extends Common {
 		getMutableKnownPeers().clear();
 		((List<PeerAddress>) FieldUtils.readField(Network.getInstance(), "selfPeers", true)).clear();
 		((Map<String, ?>) FieldUtils.readField(Network.getInstance(), "addressToNodeIdCache", true)).clear();
-		((Map<String, ?>) FieldUtils.readField(Network.getInstance(), "outboundFailures", true)).clear();
-		((Map<String, ?>) FieldUtils.readField(Network.getInstance(), "outboundFailuresByNodeId", true)).clear();
+		clearPeerDirectionState();
 		((List<Peer>) FieldUtils.readField(Network.getInstance(), "connectedPeers", true)).clear();
 		((List<Peer>) FieldUtils.readField(Network.getInstance(), "handshakedPeers", true)).clear();
 		((List<Peer>) FieldUtils.readField(Network.getInstance(), "outboundHandshakedPeers", true)).clear();
@@ -394,6 +393,15 @@ public class NetworkI2PTests extends Common {
 		FieldUtils.writeField(Network.getInstance(), "immutableOutboundHandshakedPeers", List.of(), true);
 		FieldUtils.writeField(Network.getInstance(), "nextHandshakeCleanup", 0L, true);
 		getConnectingI2PPeers().clear();
+	}
+
+	@SuppressWarnings("unchecked")
+	private void clearPeerDirectionState() throws Exception {
+		PeerDirectionState peerDirectionState = (PeerDirectionState) FieldUtils.readField(Network.getInstance(),
+				"peerDirectionState", true);
+		((Map<String, ?>) FieldUtils.readField(peerDirectionState, "outboundFailures", true)).clear();
+		((Map<String, ?>) FieldUtils.readField(peerDirectionState, "outboundFailuresByNodeId", true)).clear();
+		((Map<String, ?>) FieldUtils.readField(peerDirectionState, "directionMismatchByNodeId", true)).clear();
 	}
 
 	@SuppressWarnings("unchecked")
@@ -450,7 +458,9 @@ public class NetworkI2PTests extends Common {
 
 	@SuppressWarnings("unchecked")
 	private Map<String, ?> getOutboundFailures() throws Exception {
-		return (Map<String, ?>) FieldUtils.readField(Network.getInstance(), "outboundFailures", true);
+		PeerDirectionState peerDirectionState = (PeerDirectionState) FieldUtils.readField(Network.getInstance(),
+				"peerDirectionState", true);
+		return (Map<String, ?>) FieldUtils.readField(peerDirectionState, "outboundFailures", true);
 	}
 
 	private void invokeCleanupStaleHandshakingPeers(long now) throws Exception {

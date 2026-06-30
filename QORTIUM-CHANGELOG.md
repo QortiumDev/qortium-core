@@ -34,6 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-30 - network: harden connection direction reachability for #80
+
+Makes peer connection direction account for real inbound reachability instead
+of relying only on the deterministic node-id tie-break. A node that cannot
+accept inbound connections now prefers to dial out only when the peer is known
+to be dialable, while unknown or mutually unreachable cases keep the node-id
+tie-break so both sides do not try to be outbound at once. A reachable node
+that has recent failed dial evidence for a peer can accept that peer's inbound
+connection immediately, and chain peers now count live I2P chain destinations
+as inbound-reachable instead of checking only clearnet. Chain and data
+networking now share the outbound failure and direction-mismatch tracking code,
+intentionally use the same mismatch backoff, and both keep fixed/bootstrap
+peers eligible even after a direction mismatch so bootstrap connectivity is not
+accidentally skipped.
+
 ### 2026-06-29 - release: prepare core 1.2.0
 
 Bumps Qortium Core from 1.1.3 to 1.2.0 and prepares the public-node write path

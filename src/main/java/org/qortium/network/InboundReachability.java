@@ -44,10 +44,14 @@ final class InboundReachability {
 	 * connectable for QDN so requesters dial its data destination instead of dead-ending on an
 	 * unreachable I2P relay.
 	 *
-	 * @param hasUsableI2PDataDestination true if this node currently has a usable (session-up) I2P data destination
+	 * @param hasUsableI2PDestination true if this node currently has a usable (session-up) I2P destination
 	 */
+	boolean canAcceptInboundWithI2P(boolean hasUsableI2PDestination) {
+		return this.canAcceptInbound() || hasUsableI2PDestination;
+	}
+
 	boolean canAcceptInboundData(boolean hasUsableI2PDataDestination) {
-		return this.canAcceptInbound() || hasUsableI2PDataDestination;
+		return this.canAcceptInboundWithI2P(hasUsableI2PDataDestination);
 	}
 
 	/**

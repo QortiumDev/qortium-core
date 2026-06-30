@@ -14,6 +14,24 @@ final class PeerDirectionPolicy {
 		return ourNodeId.compareTo(theirNodeId) < 0;
 	}
 
+	static boolean shouldBeOutbound(String ourNodeId, String theirNodeId, boolean weCanAcceptInbound,
+			boolean peerLikelyCannotAcceptInbound) {
+		return shouldBeOutbound(ourNodeId, theirNodeId, weCanAcceptInbound, false, peerLikelyCannotAcceptInbound);
+	}
+
+	static boolean shouldBeOutbound(String ourNodeId, String theirNodeId, boolean weCanAcceptInbound,
+			boolean peerCanAcceptInbound, boolean peerLikelyCannotAcceptInbound) {
+		boolean nodeIdOutbound = shouldBeOutbound(ourNodeId, theirNodeId);
+
+		if (!weCanAcceptInbound && peerCanAcceptInbound)
+			return true;
+
+		if (weCanAcceptInbound && peerLikelyCannotAcceptInbound)
+			return false;
+
+		return nodeIdOutbound;
+	}
+
 	static boolean shouldKeepSinglePeerAsFallback(boolean peerOutbound, boolean weShouldBeOutbound) {
 		return peerOutbound != weShouldBeOutbound;
 	}

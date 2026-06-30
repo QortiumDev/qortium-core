@@ -145,41 +145,7 @@ public class NetworkData {
     private final List<PeerAddress> selfPeers = new ArrayList<>();
     private final Set<PeerAddress> connectingI2PPeers = ConcurrentHashMap.newKeySet();
 
-    /**
-     * Track outbound connection failures by peer IP address.
-     * Used to implement reachability fallback: if outbound to a peer keeps failing,
-     * we allow inbound connections from them even if deterministic tie-breaking says we should be outbound.
-     */
-    private final Map<String, OutboundFailureInfo> outboundFailures = new ConcurrentHashMap<>();
-    
-    /**
-     * Track outbound connection failures by peer nodeId (preferred, handles multiple nodes per IP).
-     * Falls back to IP-based tracking if nodeId is not available (first-time connection).
-     */
-    private final Map<String, OutboundFailureInfo> outboundFailuresByNodeId = new ConcurrentHashMap<>();
-    
-    /**
-     * Configuration for outbound failure tracking.
-     * Allow inbound fallback after this many failures within the time window.
-     */
-    private static final int OUTBOUND_FAILURE_THRESHOLD = 3;
-    private static final long OUTBOUND_FAILURE_WINDOW_MS = 5 * 60 * 1000L; // 5 minutes
-
-    /**
-     * Tracks outbound connection failure history for a peer IP.
-     */
-    private static class OutboundFailureInfo {
-        int failureCount = 0;
-        long firstFailureTimestamp = 0;
-        long lastFailureTimestamp = 0;
-    }
-
-    /**
-     * Direction mismatch tracking: prevents immediate reconnect thrash when we disconnect
-     * a peer for having the wrong connection direction. Tracks by nodeId (survives IP changes).
-     * NetworkData uses MORE LENIENT parameters than Network (QDN can tolerate asymmetry better).
-     */
-    private final Map<String, DirectionMismatchInfo> directionMismatchByNodeId = new ConcurrentHashMap<>();
+    private final PeerDirectionState peerDirectionState = new PeerDirectionState();
     
     /**
      * Cache mapping address → nodeId, learned from successful handshakes.
@@ -195,29 +161,7 @@ public class NetworkData {
      */
     private final Map<String, Long> i2pFallbackDropCooldownUntil = new ConcurrentHashMap<>();
 
-    /**
-     * Configuration for direction mismatch tracking (NetworkData - more lenient than Network).
-     * Exponential backoff: 5min base, up to 60min max (longer than Network's 2min/30min).
-     */
-    private static final long DIRECTION_MISMATCH_BASE_BACKOFF = 5 * 60 * 1000L; // 5 minutes
-    private static final long DIRECTION_MISMATCH_MAX_BACKOFF = 60 * 60 * 1000L; // 60 minutes
     private static final long ADDRESS_CACHE_EXPIRY = 24 * 60 * 60 * 1000L; // 24 hours
-    
-    /**
-     * Tracks direction mismatch history for a peer nodeId.
-     * Uses exponential backoff to prevent both thrash and permanent blocking.
-     */
-    private static class DirectionMismatchInfo {
-        int count = 0;
-        long firstMismatch = 0;
-        long lastMismatch = 0;
-        
-        long getBackoffDuration() {
-            // Exponential backoff: 5min, 10min, 20min, 40min, capped at 60min
-            return Math.min(DIRECTION_MISMATCH_BASE_BACKOFF * (1L << (count - 1)), 
-                           DIRECTION_MISMATCH_MAX_BACKOFF);
-        }
-    }
     
     /**
      * Cached nodeId info with timestamp for expiry.
@@ -643,36 +587,12 @@ public class NetworkData {
      * Prefers tracking by nodeId (persistent across IP changes), falls back to IP.
      */
     public void recordOutboundFailure(String peerAddress, String nodeId) {
-        // Track by nodeId if available (handles multiple nodes per IP)
-        if (nodeId != null) {
-            OutboundFailureInfo info = outboundFailuresByNodeId.computeIfAbsent(
-                nodeId, k -> new OutboundFailureInfo()
-            );
-            synchronized (info) {
-                if (info.firstFailureTimestamp == 0) {
-                    info.firstFailureTimestamp = System.currentTimeMillis();
-                }
-                info.failureCount++;
-                info.lastFailureTimestamp = System.currentTimeMillis();
-            }
-            LOGGER.debug("Recorded outbound failure #{} for nodeId {}", 
-                info.failureCount, nodeId.substring(0, 8));
-        } else {
-            // Fallback: track by IP if nodeId unknown (first-time connection)
-            String peerIP = PeerAddress.fromString(peerAddress).getHost();
-            OutboundFailureInfo info = outboundFailures.computeIfAbsent(
-                peerIP, k -> new OutboundFailureInfo()
-            );
-            synchronized (info) {
-                if (info.firstFailureTimestamp == 0) {
-                    info.firstFailureTimestamp = System.currentTimeMillis();
-                }
-                info.failureCount++;
-                info.lastFailureTimestamp = System.currentTimeMillis();
-            }
-            LOGGER.debug("Recorded outbound failure #{} for IP {} (nodeId unknown)", 
-                info.failureCount, peerIP);
-        }
+        int failureCount = this.peerDirectionState.recordOutboundFailure(peerAddress, nodeId);
+        if (nodeId != null)
+            LOGGER.debug("Recorded outbound failure #{} for nodeId {}", failureCount, nodeId.substring(0, 8));
+        else
+            LOGGER.debug("Recorded outbound failure #{} for IP {} (nodeId unknown)",
+                    failureCount, PeerAddress.fromString(peerAddress).getHost());
     }
 
     /**
@@ -682,37 +602,21 @@ public class NetworkData {
      * Prefers checking by nodeId, falls back to IP if nodeId unknown.
      */
     public boolean hasRecentOutboundFailures(String nodeId, String peerIP) {
-        long now = System.currentTimeMillis();
-        
-        // Check by nodeId first (most accurate, handles multiple nodes per IP)
-        if (nodeId != null) {
-            OutboundFailureInfo info = outboundFailuresByNodeId.get(nodeId);
-            if (info != null) {
-                synchronized (info) {
-                    if (now - info.lastFailureTimestamp > OUTBOUND_FAILURE_WINDOW_MS) {
-                        outboundFailuresByNodeId.remove(nodeId);
-                        return false;
-                    }
-                    return info.failureCount >= OUTBOUND_FAILURE_THRESHOLD;
-                }
-            }
-        }
-        
-        // Fallback: check by IP (for first-time connections or cache miss)
-        if (peerIP != null) {
-            OutboundFailureInfo info = outboundFailures.get(peerIP);
-            if (info != null) {
-                synchronized (info) {
-                    if (now - info.lastFailureTimestamp > OUTBOUND_FAILURE_WINDOW_MS) {
-                        outboundFailures.remove(peerIP);
-                        return false;
-                    }
-                    return info.failureCount >= OUTBOUND_FAILURE_THRESHOLD;
-                }
-            }
-        }
-        
-        return false;
+        return this.peerDirectionState.hasRecentOutboundFailures(nodeId, peerIP);
+    }
+
+    public boolean hasRecentOutboundFailureEvidence(String nodeId, String peerIP) {
+        return this.peerDirectionState.hasRecentOutboundFailureEvidence(nodeId, peerIP);
+    }
+
+    boolean shouldBeOutboundTo(String theirNodeId, String peerIP) {
+        return PeerDirectionPolicy.shouldBeOutbound(this.ourNodeId, theirNodeId, this.canAcceptInboundData(),
+                isKnownDialableI2PPeer(peerIP),
+                hasRecentOutboundFailureEvidence(theirNodeId, peerIP));
+    }
+
+    private static boolean isKnownDialableI2PPeer(String peerIP) {
+        return peerIP != null && peerIP.toLowerCase(Locale.ROOT).endsWith(".b32.i2p");
     }
 
     /**
@@ -721,21 +625,10 @@ public class NetworkData {
      * Clears both IP-based and nodeId-based tracking.
      */
     public void clearOutboundFailures(String peerIP, String nodeId) {
-        // Clear IP-based tracking
-        OutboundFailureInfo removed = outboundFailures.remove(peerIP);
-        if (removed != null) {
-            LOGGER.debug("Cleared outbound failures for peer IP {} (was {} failures)", 
-                peerIP, removed.failureCount);
-        }
-        
-        // Clear nodeId-based tracking
-        if (nodeId != null) {
-            OutboundFailureInfo removedById = outboundFailuresByNodeId.remove(nodeId);
-            if (removedById != null) {
-                LOGGER.debug("Cleared outbound failures for nodeId {} (was {} failures)", 
-                    nodeId.substring(0, 8), removedById.failureCount);
-            }
-        }
+        int removedCount = this.peerDirectionState.clearOutboundFailures(peerIP, nodeId);
+        if (removedCount > 0)
+            LOGGER.debug("Cleared outbound failures for peer IP {} / nodeId {} (was {} failures)",
+                    peerIP, nodeId == null ? "unknown" : nodeId.substring(0, 8), removedCount);
     }
 
     /**
@@ -743,42 +636,9 @@ public class NetworkData {
      * Called from checkLongestConnection during prunePeers() (every 90 seconds).
      */
     private void cleanupStaleOutboundFailures() {
-        if (outboundFailures.isEmpty() && outboundFailuresByNodeId.isEmpty()) {
-            return;
-        }
-        
-        long now = System.currentTimeMillis();
-        int removed = 0;
-        
-        // Clean up IP-based failures
-        var iterator = outboundFailures.entrySet().iterator();
-        while (iterator.hasNext()) {
-            var entry = iterator.next();
-            OutboundFailureInfo info = entry.getValue();
-            synchronized (info) {
-                if ((now - info.lastFailureTimestamp) > OUTBOUND_FAILURE_WINDOW_MS) {
-                    iterator.remove();
-                    removed++;
-                }
-            }
-        }
-        
-        // Clean up nodeId-based failures
-        var nodeIdIterator = outboundFailuresByNodeId.entrySet().iterator();
-        while (nodeIdIterator.hasNext()) {
-            var entry = nodeIdIterator.next();
-            OutboundFailureInfo info = entry.getValue();
-            synchronized (info) {
-                if ((now - info.lastFailureTimestamp) > OUTBOUND_FAILURE_WINDOW_MS) {
-                    nodeIdIterator.remove();
-                    removed++;
-                }
-            }
-        }
-        
-        if (removed > 0) {
+        int removed = this.peerDirectionState.cleanupStaleOutboundFailures();
+        if (removed > 0)
             LOGGER.debug("Cleaned up {} stale outbound failure records", removed);
-        }
     }
 
     // Direction mismatch tracking
@@ -789,20 +649,9 @@ public class NetworkData {
      * Uses exponential backoff to prevent thrash while allowing eventual retry.
      */
     public void recordDirectionMismatch(String nodeId) {
-        DirectionMismatchInfo info = directionMismatchByNodeId.computeIfAbsent(
-            nodeId, k -> new DirectionMismatchInfo()
-        );
-        
-        synchronized (info) {
-            if (info.firstMismatch == 0) {
-                info.firstMismatch = System.currentTimeMillis();
-            }
-            info.count++;
-            info.lastMismatch = System.currentTimeMillis();
-        }
-        
+        PeerDirectionState.DirectionMismatchRecord record = this.peerDirectionState.recordDirectionMismatch(nodeId);
         LOGGER.debug("Recorded direction mismatch #{} for nodeId {} - backoff: {}ms", 
-                info.count, nodeId.substring(0, 8), info.getBackoffDuration());
+                record.count, nodeId.substring(0, 8), record.backoffDuration);
     }
 
     /**
@@ -810,22 +659,7 @@ public class NetworkData {
      * Returns true if within backoff period, false otherwise.
      */
     public boolean hasRecentDirectionMismatch(String nodeId) {
-        DirectionMismatchInfo info = directionMismatchByNodeId.get(nodeId);
-        if (info == null) {
-            return false;
-        }
-        
-        long now = System.currentTimeMillis();
-        long backoffDuration = info.getBackoffDuration();
-        
-        synchronized (info) {
-            if (now - info.lastMismatch > backoffDuration) {
-                // Backoff expired - clear it
-                directionMismatchByNodeId.remove(nodeId);
-                return false;
-            }
-            return true;
-        }
+        return this.peerDirectionState.hasRecentDirectionMismatch(nodeId);
     }
 
     /**
@@ -834,11 +668,46 @@ public class NetworkData {
      * indicating they can reach us and we don't need to avoid them.
      */
     public void clearDirectionMismatch(String nodeId) {
-        DirectionMismatchInfo removed = directionMismatchByNodeId.remove(nodeId);
-        if (removed != null) {
+        int removedCount = this.peerDirectionState.clearDirectionMismatch(nodeId);
+        if (removedCount > 0) {
             LOGGER.debug("Cleared direction mismatch for nodeId {} (was {} mismatches)", 
-                    nodeId.substring(0, 8), removed.count);
+                    nodeId.substring(0, 8), removedCount);
         }
+    }
+
+    /**
+     * Check if a peer address is in the fixed network list.
+     * Fixed peers are never skipped due to direction mismatch (prevents isolation).
+     */
+    private boolean isFixedPeer(PeerAddress address) {
+        List<String> fixedNetwork = Settings.getInstance().getFixedNetwork();
+        if (fixedNetwork == null || fixedNetwork.isEmpty())
+            return false;
+
+        return !ipNotInFixedList(address, fixedNetwork);
+    }
+
+    private boolean isInitialDataPeer(PeerAddress address) {
+        for (String initialDataPeer : Settings.getInstance().getInitialDataPeers()) {
+            try {
+                if (address.equals(PeerAddress.fromString(initialDataPeer)))
+                    return true;
+            } catch (IllegalArgumentException e) {
+                LOGGER.debug("Ignoring invalid initialDataPeers entry '{}': {}", initialDataPeer, e.getMessage());
+            }
+        }
+
+        return false;
+    }
+
+    public boolean ipNotInFixedList(PeerAddress address, List<String> fixedNetwork) {
+        for (String ipAddress : fixedNetwork) {
+            String[] bits = ipAddress.split(":");
+            if (bits.length >= 1 && bits.length <= 2 && address.getHost().equals(bits[0]))
+                return false;
+        }
+
+        return true;
     }
 
     /**
@@ -871,22 +740,9 @@ public class NetworkData {
      */
     private void cleanupStaleDirectionMismatches() {
         long now = System.currentTimeMillis();
-        int removedMismatches = 0;
+        int removedMismatches = this.peerDirectionState.cleanupStaleDirectionMismatches();
         int removedCache = 0;
-        
-        // Clean up expired mismatch records
-        var mismatchIterator = directionMismatchByNodeId.entrySet().iterator();
-        while (mismatchIterator.hasNext()) {
-            var entry = mismatchIterator.next();
-            DirectionMismatchInfo info = entry.getValue();
-            synchronized (info) {
-                if (now - info.lastMismatch > info.getBackoffDuration()) {
-                    mismatchIterator.remove();
-                    removedMismatches++;
-                }
-            }
-        }
-        
+
         // Clean up old address cache entries (24 hour expiry)
         var cacheIterator = addressToNodeIdCache.entrySet().iterator();
         while (cacheIterator.hasNext()) {
@@ -1664,7 +1520,8 @@ public class NetworkData {
         for (Map.Entry<String, List<Peer>> entry : byNodeId.entrySet()) {
             List<Peer> peers = entry.getValue();
             String theirNodeId = entry.getKey();
-            boolean weShouldBeOutbound = ourNodeId.compareTo(theirNodeId) < 0;
+            String peerHost = peers.get(0).getPeerData().getAddress().getHost();
+            boolean weShouldBeOutbound = shouldBeOutboundTo(theirNodeId, peerHost);
             
             if (peers.size() == 1) {
                 Peer peer = peers.get(0);
@@ -1799,7 +1656,9 @@ public class NetworkData {
         if (isConnectedPeer.test(peerData))
             return false;
 
-        return !hasRecentDirectionMismatch(cachedInfo.nodeId);
+        return isFixedPeer(peerData.getAddress())
+                || isInitialDataPeer(peerData.getAddress())
+                || !hasRecentDirectionMismatch(cachedInfo.nodeId);
     }
 
     private boolean isDirectPeerInConnectBackoff(PeerData peerData, Long now) {
@@ -1922,7 +1781,7 @@ public class NetworkData {
                     // Already connected to this nodeId - check whether a preferred outbound replacement is useful.
                     String ourNodeId = this.getOurNodeId();
                     if (ourNodeId != null) {
-                        boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound(ourNodeId, candidateNodeId);
+                        boolean weShouldBeOutbound = shouldBeOutboundTo(candidateNodeId, peerData.getAddress().getHost());
                         boolean outboundRecentlyFailed = hasRecentOutboundFailures(candidateNodeId, peerData.getAddress().getHost());
                         if (PeerDirectionPolicy.shouldAttemptPreferredOutboundReplacement(existingPeer.isOutbound(),
                                 weShouldBeOutbound, outboundRecentlyFailed)) {
@@ -1944,8 +1803,12 @@ public class NetworkData {
         peers.removeIf(peerData -> peerData.getAddress().isI2P() && this.getI2PDataDestination() == null);
 
         // Don't consider peers with recent direction mismatches
-        // NetworkData: no fixed peer exemption (QDN doesn't have fixed bootstrap nodes)
+        // CRITICAL: Never skip fixed network peers (prevents isolation)
         peers.removeIf(peerData -> {
+            if (isFixedPeer(peerData.getAddress()) || isInitialDataPeer(peerData.getAddress())) {
+                return false;
+            }
+
             // Try to resolve address to nodeId using cache
             String peerAddress = peerData.getAddress().toString();
             CachedNodeIdInfo cachedInfo = addressToNodeIdCache.get(peerAddress);
@@ -2692,7 +2555,8 @@ public class NetworkData {
                             peerToDisconnect = peer;
                             disconnectReason = "duplicate connection - missing node id";
                         } else {
-                            boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound(ourNodeId, theirNodeId);
+                            boolean weShouldBeOutbound = shouldBeOutboundTo(theirNodeId,
+                                    peer.getPeerData().getAddress().getHost());
                             PeerDirectionPolicy.DuplicateConnectionDecision duplicateDecision =
                                     PeerDirectionPolicy.decideDuplicate(true, existingPeer.isOutbound(), peer.isOutbound(),
                                             weShouldBeOutbound);

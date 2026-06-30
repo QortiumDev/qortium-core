@@ -16,6 +16,52 @@ public class PeerDirectionPolicyTests {
 	}
 
 	@Test
+	public void testReachablePairKeepsNodeIdTieBreak() {
+		assertTrue(PeerDirectionPolicy.shouldBeOutbound("aaa", "bbb", true, false));
+		assertFalse(PeerDirectionPolicy.shouldBeOutbound("bbb", "aaa", true, false));
+	}
+
+	@Test
+	public void testUnreachableLocalNodePrefersOutboundToKnownDialablePeer() {
+		assertTrue(PeerDirectionPolicy.shouldBeOutbound("bbb", "aaa", false, true, false));
+	}
+
+	@Test
+	public void testReachableNodeAcceptsLikelyUnreachablePeerInbound() {
+		assertFalse(PeerDirectionPolicy.shouldBeOutbound("aaa", "bbb", true, true));
+	}
+
+	@Test
+	public void testUnknownReachabilityKeepsNodeIdTieBreak() {
+		assertTrue(PeerDirectionPolicy.shouldBeOutbound("aaa", "bbb", false, false));
+		assertFalse(PeerDirectionPolicy.shouldBeOutbound("bbb", "aaa", false, false));
+	}
+
+	@Test
+	public void testMutualUnreachableEvidenceKeepsNodeIdTieBreak() {
+		assertTrue(PeerDirectionPolicy.shouldBeOutbound("aaa", "bbb", false, true));
+		assertFalse(PeerDirectionPolicy.shouldBeOutbound("bbb", "aaa", false, true));
+	}
+
+	@Test
+	public void testReachabilityAsymmetryDedupesToSameConnection() {
+		boolean unreachableSideShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound("bbb", "aaa", false, false);
+		boolean reachableSideShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound("aaa", "bbb", true, false);
+
+		assertEquals(DuplicateConnectionDecision.KEEP_EXISTING,
+				PeerDirectionPolicy.decideDuplicate(true, false, true, unreachableSideShouldBeOutbound));
+		assertEquals(DuplicateConnectionDecision.KEEP_EXISTING,
+				PeerDirectionPolicy.decideDuplicate(true, true, false, reachableSideShouldBeOutbound));
+	}
+
+	@Test
+	public void testLikelyUnreachablePeerInboundWinsDuplicateDecision() {
+		boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound("aaa", "bbb", true, true);
+		assertEquals(DuplicateConnectionDecision.REPLACE_EXISTING,
+				PeerDirectionPolicy.decideDuplicate(true, true, false, weShouldBeOutbound));
+	}
+
+	@Test
 	public void testSingleWrongDirectionPeerIsKeptAsFallback() {
 		assertTrue(PeerDirectionPolicy.shouldKeepSinglePeerAsFallback(false, true));
 		assertTrue(PeerDirectionPolicy.shouldKeepSinglePeerAsFallback(true, false));

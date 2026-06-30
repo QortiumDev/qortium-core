@@ -231,7 +231,8 @@ public enum Handshake {
 									LOGGER.debug("Cannot determine direction (our nodeId unavailable) - keeping existing connection to {}", existingNetworkPeer);
 									return null;
 								}
-								boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound(ourNodeId, theirNodeId);
+								boolean weShouldBeOutbound = Network.getInstance().shouldBeOutboundTo(theirNodeId,
+										peer.getPeerData().getAddress().getHost());
 								PeerDirectionPolicy.DuplicateConnectionDecision duplicateDecision =
 										PeerDirectionPolicy.decideDuplicate(true, existingNetworkPeer.isOutbound(), peer.isOutbound(),
 												weShouldBeOutbound);
@@ -279,7 +280,8 @@ public enum Handshake {
 									LOGGER.debug("Cannot determine direction (our nodeId unavailable) - keeping existing connection to {}", existingNetworkDataPeer);
 									return null;
 								}
-								boolean weShouldBeOutbound = PeerDirectionPolicy.shouldBeOutbound(ourNodeId, theirNodeId);
+								boolean weShouldBeOutbound = NetworkData.getInstance().shouldBeOutboundTo(theirNodeId,
+										peer.getPeerData().getAddress().getHost());
 								PeerDirectionPolicy.DuplicateConnectionDecision duplicateDecision =
 										PeerDirectionPolicy.decideDuplicate(true, existingNetworkDataPeer.isOutbound(), peer.isOutbound(),
 												weShouldBeOutbound);
