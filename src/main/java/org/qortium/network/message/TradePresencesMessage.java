@@ -21,6 +21,11 @@ import java.util.Map;
  */
 public class TradePresencesMessage extends Message {
 
+	private static final long ENTRY_SIZE
+		= Transformer.PUBLIC_KEY_LENGTH +
+			Transformer.SIGNATURE_LENGTH +
+			Transformer.ADDRESS_LENGTH;
+
 	private List<TradePresenceData> tradePresences;
 
 	public TradePresencesMessage(List<TradePresenceData> tradePresences) {
@@ -81,8 +86,12 @@ public class TradePresencesMessage extends Message {
 		return this.tradePresences;
 	}
 
-	public static Message fromByteBuffer(int id, ByteBuffer bytes) {
+	public static Message fromByteBuffer(int id, ByteBuffer bytes) throws MessageException {
 		int groupedEntriesCount = bytes.getInt();
+
+		// if negative or (count * entry size) + timestamp > remaining, then invalid count
+		if (groupedEntriesCount < 0 || (((long) groupedEntriesCount * ENTRY_SIZE) + Transformer.LONG_LENGTH) > bytes.remaining())
+			throw new MessageException("invalid grouped entries count");
 
 		List<TradePresenceData> tradePresences = new ArrayList<>(groupedEntriesCount);
 
