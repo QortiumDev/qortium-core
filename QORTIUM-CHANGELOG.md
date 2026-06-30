@@ -43,7 +43,8 @@ QDN publish/delete builders under `/arbitrary/public/*`; generic QDN writes,
 server-side nonce computation, and server-side signing remain private. Public
 QDN publish builders enforce the configurable `publicQdnPublishMaxSize` guard,
 defaulting to 100 MiB, while private API-key publish paths and lower
-service-specific QDN caps keep their existing behavior.
+service-specific QDN caps keep their existing behavior. The bundled gRPC
+dependency line also moves from 1.82.0 to 1.82.1.
 
 ### 2026-06-26 - api-docs: darken Swagger UI content surfaces
 
