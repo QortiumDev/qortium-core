@@ -34,26 +34,6 @@ own chain.
 
 ## Change Entries
 
-### 2026-06-29 - transform: bound variable-length fields when parsing arbitrary/AT transactions
-
-Transaction deserialization reads a few variable-length fields (the arbitrary transaction's encryption secret and metadata hash, and an AT MESSAGE transaction's message) by first reading a length and then reading that many bytes. These now reject a length larger than the field can legitimately be — 32 bytes in every case — instead of trusting it. Because this runs on the consensus path (a stricter parser could in principle reject a previously-accepted transaction), it was verified safe before adoption: every producer of these fields emits a fixed 32-byte value (a 32-byte AES-256 key, a 32-byte SHA-256 hash, and the AT's 32-byte A register), and an audit of all 998 arbitrary transactions on the Previewnet chain found only 0- or 32-byte values, with no AT transactions present. The bounds therefore never reject any valid transaction and need no feature trigger. Ported from the consensus-adjacent portion of upstream Qortal 6.1.7's "stronger message validation"; full reasoning is recorded in docs/upstream/qortal-6.1.7-comparison.md.
-
-### 2026-06-29 - qdn: cache metadata saved from the relay cache
-
-When a data chunk recovered from the relay cache turns out to be a transaction's metadata file, the transaction is now queued for the arbitrary-data cache after the chunk is written to permanent storage, so later lookups find the metadata in the cache instead of fetching it again. Applies to both relay-cache save paths (the file-list manager and the file-request thread). This is a QDN performance fix with no effect on consensus. Ported from upstream Qortal 6.1.7.
-
-### 2026-06-29 - api: add group membership validation endpoint
-
-Added a new read-only endpoint, POST /groups/members/{groupid}/validate, that takes a list of addresses and returns, for each one, whether it is a member of the group and (for members) whether it is an admin. This lets clients check membership for many addresses at once without downloading the full member list. It is backed by two new batched repository queries and changes no data and no consensus rules. Ported from upstream Qortal 6.1.7.
-
-### 2026-06-29 - network: bound entry counts when parsing peer messages
-
-Several peer-to-peer messages begin with a count of how many entries follow. Previously that count was trusted to size a list and drive a read loop, so a malicious or corrupt peer could send a huge count and make a node allocate a large list or spin a long loop. Each affected message now rejects a count that is negative or larger than the remaining message bytes could possibly contain. Covers the trade-presence, names, and online-accounts message types. This hardens peer message parsing only and does not change block or transaction validity. Ported from the non-consensus portion of upstream Qortal 6.1.7's "stronger message validation"; the consensus-adjacent transaction-transformer bounds from the same upstream change are deliberately left for separate review.
-
-### 2026-06-29 - docs: add Qortal 6.1.7 upstream comparison
-
-Added an inventory of the upstream Qortal changes between the 6.1.6 and 6.1.7 release points, in the same neutral style as the earlier comparisons. It records what changed and which review bucket each change belongs to. Unlike 6.1.6, the 6.1.7 release introduces no new consensus feature triggers and no activation-height changes — it is a maintenance and hardening release. The functional changes are: defensive bounds-checking on peer message deserialization (DoS hardening across four message types), added length validation in the arbitrary and AT transaction transformers (consensus-adjacent, recommended only after verifying it does not reject any existing on-chain transaction), a new read-only group-membership-validation API endpoint, and two QDN/storage bugfixes (saving relay-cache metadata into the arbitrary cache, and a temp-path fix for storage-size calculations). This document guides which of the 6.1.7 changes are adopted into the fork. The three safe, non-consensus changes (peer-message bounds checking, the membership-validation endpoint, and the relay-cache metadata fix) were ported in the companion commits; the temp-path fix was already present in Qortium; and the consensus-adjacent transaction-transformer bounds are held back for separate verification.
-
 ### 2026-06-29 - release: prepare core 1.2.0
 
 Bumps Qortium Core from 1.1.3 to 1.2.0 and prepares the public-node write path
@@ -65,6 +45,40 @@ QDN publish builders enforce the configurable `publicQdnPublishMaxSize` guard,
 defaulting to 100 MiB, while private API-key publish paths and lower
 service-specific QDN caps keep their existing behavior. The bundled gRPC
 dependency line also moves from 1.82.0 to 1.82.1.
+
+This release also folds in the upstream Qortal 6.1.7 review. 6.1.7 is a
+maintenance and hardening release with no new consensus feature triggers and no
+activation-height changes, and its safe changes are adopted here:
+
+- **Peer message hardening (non-consensus):** several peer-to-peer messages
+  (trade-presence, names, and online-accounts types) begin with an entry count
+  that was previously trusted to size a list and drive a read loop. Each now
+  rejects a count that is negative or larger than the remaining message bytes
+  could possibly contain, so a malicious or corrupt peer can no longer force a
+  large allocation or long loop. This affects peer parsing only; block and
+  transaction validity are unchanged.
+- **Transaction field bounds (consensus-adjacent, verified safe):** the
+  arbitrary and AT transaction parsers now reject an over-long encryption
+  secret, metadata hash, or AT message — 32 bytes in every case. Because this
+  runs on the consensus path, it was verified not to reject any valid history
+  before adoption: every producer emits a fixed 32-byte value (a 32-byte
+  AES-256 key, a 32-byte SHA-256 hash, and the AT's 32-byte A register), and an
+  audit of all 998 arbitrary transactions on the live Previewnet chain found
+  only 0- or 32-byte values, with no AT transactions present. No feature
+  trigger is required.
+- **Group membership validation endpoint (non-consensus):** a new read-only
+  endpoint, POST /groups/members/{groupid}/validate, returns per-address
+  membership and admin status so clients can validate many addresses at once
+  without downloading the full member list.
+- **Relay-cache metadata fix (non-consensus):** when a chunk recovered from the
+  relay cache is a transaction's metadata file, the transaction is now queued
+  for the arbitrary-data cache so later lookups hit the cache instead of
+  re-fetching.
+
+The upstream temp-path fix from 6.1.7 was already present in Qortium, and the
+upstream version bump is not adopted (Qortium versions independently). The full
+neutral inventory and the consensus-safety reasoning are recorded in
+docs/upstream/qortal-6.1.7-comparison.md.
 
 ### 2026-06-26 - api-docs: darken Swagger UI content surfaces
 
