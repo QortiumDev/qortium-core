@@ -137,12 +137,50 @@ If any field can legitimately exceed 32 bytes, this must be height-gated instead
 |----|--------|--------|------------|--------|
 | 7-A | P2P message count bounds (4 message classes) | A | No | **Ported** — `network: bound entry counts when parsing peer messages`. Applied to `GetTradePresencesMessage`, `NamesMessage`, `TradePresencesMessage`, and `OnlineAccountsMessage` (Qortium's consolidated equivalent of upstream `OnlineAccountsV3Message`). |
 | 7-B | Group membership validation endpoint | B | No | **Ported** — `api: add group membership validation endpoint`. |
-| 7-C | Transaction transformer length bounds | C | Adjacent | **Held back.** Port only after confirming no historical arbitrary/AT tx exceeds the 32-byte caps; check AT `null`-vs-empty message semantics. No trigger needed if bounds hold for all history. |
+| 7-C | Transaction transformer length bounds | C | Adjacent | **Ported (verified).** `transform: bound variable-length fields when parsing arbitrary/AT transactions`. Verified safe — see "7-C verification" below. No feature trigger. |
 | 7-D1 | Metadata → arbitrary cache from relay-cache | D | No | **Ported** — `qdn: cache metadata saved from the relay cache`. |
 | 7-D2 | Temp-path fix for storage-size calc | D | No | **Already present** in Qortium (`ArbitraryDataStorageManager` already uses `tempDirectoryPath` for the temp-size calc); nothing to port. |
 | 7-E | Version bump to 6.1.7 | E | No | **Skipped** (Qortium versions independently). |
 
-**Net:** no hard forks, no activation-height coordination. The three safe,
-non-consensus changes (7-A, 7-B, 7-D1) are ported and compile (`mvn compile`
-BUILD SUCCESS); 7-D2 was already present. Only 7-C remains, and it needs a
-verification step against chain history before it can be merged.
+**Net:** no hard forks, no activation-height coordination. 7-A, 7-B, 7-D1 and
+7-C are ported and compile (`mvn compile` BUILD SUCCESS); 7-D2 was already
+present; 7-E skipped. All six items are now resolved.
+
+## 7-C Verification (consensus safety)
+
+The 7-C bounds add a hard `throw` during transaction deserialization, so the
+only risk is rejecting a *previously-valid* transaction on replay/resync and
+forking the chain. This was checked two independent ways; both confirm every
+bounded field is always ≤ 32 bytes, so the throw is unreachable for valid
+history and no feature trigger is required.
+
+**1. Constructive proof (covers all possible history).** Each field is produced
+at a fixed size on the serialize side:
+
+- Arbitrary `secret`: set from `AES.generateKey(256).getEncoded()` — a 32-byte
+  AES-256 key (`ArbitraryDataWriter`); the reader only accepts a secret whose
+  length `== Transformer.AES256_LENGTH` (32). Cap `PRIVATE_KEY_LENGTH` = 32.
+- Arbitrary `metadataHash`: set from `ArbitraryDataFile.getHash()`, a
+  `Crypto.digest(...)` SHA-256 — 32 bytes by definition. Cap `SHA256_LENGTH` = 32.
+- AT MESSAGE `message`: the only MESSAGE-type producer is
+  `ChainATAPI.messageAToB`, whose payload is `getA(state)`. `API.getA` allocates
+  exactly `4 * 8 = 32` bytes (the A1–A4 registers). Cap `SHA256_LENGTH` = 32.
+
+  `toBytes` writes each field at its actual length, so no serialized transaction
+  in history can carry one of these fields larger than 32 bytes.
+
+**2. Empirical check (live Previewnet, height 37961).** Enumerated every
+confirmed transaction of the affected types on a Previewnet node and measured the
+decoded field lengths:
+
+- ARBITRARY (998 txs): `secret` length ∈ {0, 32}; `metadataHash` length ∈ {0, 32}.
+  No value exceeded 32.
+- AT (0 txs): no AT transactions exist on Previewnet yet, so there is nothing to
+  reject; the constructive proof covers the AT message field.
+
+**Note on the AT `null`-vs-empty change.** The ported guard (`if (messageLength > 0)`)
+leaves `message == null` for a zero-length MESSAGE-type AT, where the old code
+produced a zero-length array. Because `getA` always returns 32 bytes, a
+zero-length MESSAGE-type AT transaction cannot be produced, so this branch is
+unreachable for real transactions and the change is behaviour-preserving for all
+valid history.

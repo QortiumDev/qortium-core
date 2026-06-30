@@ -42,8 +42,13 @@ public class AtTransactionTransformer extends TransactionTransformer {
 		if (isMessageType) {
 			messageLength = byteBuffer.getInt();
 
-			message = new byte[messageLength];
-			byteBuffer.get(message);
+			if (messageLength > 0) {
+				if (messageLength > SHA256_LENGTH)
+					throw new TransformationException("excessive message length " + messageLength);
+
+				message = new byte[messageLength];
+				byteBuffer.get(message);
+			}
 		}
 		else {
 			assetId = byteBuffer.getLong();

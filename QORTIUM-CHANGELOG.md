@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-29 - transform: bound variable-length fields when parsing arbitrary/AT transactions
+
+Transaction deserialization reads a few variable-length fields (the arbitrary transaction's encryption secret and metadata hash, and an AT MESSAGE transaction's message) by first reading a length and then reading that many bytes. These now reject a length larger than the field can legitimately be — 32 bytes in every case — instead of trusting it. Because this runs on the consensus path (a stricter parser could in principle reject a previously-accepted transaction), it was verified safe before adoption: every producer of these fields emits a fixed 32-byte value (a 32-byte AES-256 key, a 32-byte SHA-256 hash, and the AT's 32-byte A register), and an audit of all 998 arbitrary transactions on the Previewnet chain found only 0- or 32-byte values, with no AT transactions present. The bounds therefore never reject any valid transaction and need no feature trigger. Ported from the consensus-adjacent portion of upstream Qortal 6.1.7's "stronger message validation"; full reasoning is recorded in docs/upstream/qortal-6.1.7-comparison.md.
+
 ### 2026-06-29 - qdn: cache metadata saved from the relay cache
 
 When a data chunk recovered from the relay cache turns out to be a transaction's metadata file, the transaction is now queued for the arbitrary-data cache after the chunk is written to permanent storage, so later lookups find the metadata in the cache instead of fetching it again. Applies to both relay-cache save paths (the file-list manager and the file-request thread). This is a QDN performance fix with no effect on consensus. Ported from upstream Qortal 6.1.7.

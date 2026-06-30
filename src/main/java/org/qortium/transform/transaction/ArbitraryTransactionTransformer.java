@@ -101,6 +101,9 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		byte[] secret = null;
 
 		if (secretLength > 0) {
+			if (secretLength > PRIVATE_KEY_LENGTH)
+				throw new TransformationException("excessive secret length " + secretLength);
+
 			secret = new byte[secretLength];
 			byteBuffer.get(secret);
 		}
@@ -135,6 +138,9 @@ public class ArbitraryTransactionTransformer extends TransactionTransformer {
 		byte[] metadataHash = null;
 
 		if (metadataHashLength > 0) {
+			if (metadataHashLength > SHA256_LENGTH)
+				throw new TransformationException("excessive metadata hash length " + metadataHashLength);
+
 			metadataHash = new byte[metadataHashLength];
 			byteBuffer.get(metadataHash);
 		}
