@@ -153,7 +153,9 @@ public class ArchiveChunkImporter {
 		int lastHeight = fromHeight - 1;
 		long replayStartNanos = System.nanoTime();
 		long lastProgressLogNanos = replayStartNanos;
+		int lastProgressLogHeight = fromHeight - 1;
 		int totalBlocks = Math.max(0, toHeight - fromHeight + 1);
+		ReplayBlockTimings recentTimings = new ReplayBlockTimings();
 
 		LOGGER.info("Archive fast-replay: replaying blocks {}-{} ({} blocks; checkpoint height {})",
 				fromHeight, toHeight, totalBlocks, trustedCheckpointHeight);
@@ -163,7 +165,8 @@ public class ArchiveChunkImporter {
 			if (blockTransformation == null || blockTransformation.getBlockData() == null)
 				throw new DataException(String.format("Archive fast-replay: missing block at height %d", height));
 
-			replayBlock(repository, blockTransformation, trustedCheckpointHeight);
+			ReplayBlockTimings blockTimings = replayBlockWithTimings(repository, blockTransformation, trustedCheckpointHeight);
+			recentTimings.add(blockTimings);
 			lastHeight = height;
 
 			long elapsedMillis = elapsedMillisSince(replayStartNanos);
@@ -176,10 +179,20 @@ public class ArchiveChunkImporter {
 			boolean reachedTime = TimeUnit.NANOSECONDS.toMillis(nowNanos - lastProgressLogNanos) >= PROGRESS_LOG_TIME_INTERVAL_MS;
 			boolean reachedEnd = height == toHeight;
 			if (reachedInterval || reachedTime || reachedEnd) {
-				LOGGER.info("Archive fast-replay: replayed block {} of {} ({}%, {}/{} blocks, elapsed {} ms, {} blocks/sec)",
+				int recentBlocks = height - lastProgressLogHeight;
+				long recentElapsedMillis = TimeUnit.NANOSECONDS.toMillis(nowNanos - lastProgressLogNanos);
+				LOGGER.info("Archive fast-replay: replayed block {} of {} ({}%, {}/{} blocks, elapsed {} ms, cumulative {} blocks/sec, recent {} blocks/sec; recent avg ms/block: signature={}, validation={}, saveTransactions={}, process={}, total={})",
 						height, toHeight, calculatePercent(replayedBlocks, totalBlocks), replayedBlocks, totalBlocks,
-						elapsedMillis, formatBlocksPerSecond(replayedBlocks, elapsedMillis));
+						elapsedMillis, formatBlocksPerSecond(replayedBlocks, elapsedMillis),
+						formatBlocksPerSecond(recentBlocks, recentElapsedMillis),
+						formatMillisPerBlock(recentTimings.signatureMillis, recentBlocks),
+						formatMillisPerBlock(recentTimings.validationMillis, recentBlocks),
+						formatMillisPerBlock(recentTimings.saveTransactionsMillis, recentBlocks),
+						formatMillisPerBlock(recentTimings.processMillis, recentBlocks),
+						formatMillisPerBlock(recentTimings.totalMillis, recentBlocks));
 				lastProgressLogNanos = nowNanos;
+				lastProgressLogHeight = height;
+				recentTimings = new ReplayBlockTimings();
 			}
 		}
 
@@ -193,6 +206,10 @@ public class ArchiveChunkImporter {
 	 * {@link #replayArchivedBlocks}).
 	 */
 	public static void replayBlock(Repository repository, BlockTransformation blockTransformation, int trustedCheckpointHeight) throws DataException {
+		replayBlockWithTimings(repository, blockTransformation, trustedCheckpointHeight);
+	}
+
+	private static ReplayBlockTimings replayBlockWithTimings(Repository repository, BlockTransformation blockTransformation, int trustedCheckpointHeight) throws DataException {
 		BlockData blockData = blockTransformation.getBlockData();
 		int height = blockData.getHeight();
 
@@ -243,11 +260,14 @@ public class ArchiveChunkImporter {
 		long processStartNanos = System.nanoTime();
 		block.process();
 		long processMillis = elapsedMillisSince(processStartNanos);
+		long totalMillis = elapsedMillisSince(blockStartNanos);
 		LOGGER.debug("Archive fast-replay: block {} replayed (trustedReplay={}, transactions={}, savedTransactions={}, signature={} ms, validation={} ms, saveTransactions={} ms, process={} ms, total={} ms)",
 				height, trustedReplay, blockTransformation.getTransactions().size(), savedTransactions, signatureMillis,
-				validationMillis, saveTransactionsMillis, processMillis, elapsedMillisSince(blockStartNanos));
+				validationMillis, saveTransactionsMillis, processMillis, totalMillis);
 		// Intentionally no saveChanges() here: the caller commits the whole replayed range atomically so that a
 		// forged sub-checkpoint prefix that fails at the checkpoint block is rolled back, never durably stored.
+		return new ReplayBlockTimings(signatureMillis, validationMillis, saveTransactionsMillis, processMillis,
+				totalMillis);
 	}
 
 	private static int calculatePercent(int replayedBlocks, int totalBlocks) {
@@ -266,5 +286,40 @@ public class ArchiveChunkImporter {
 			return "n/a";
 
 		return String.format(Locale.ROOT, "%.2f", replayedBlocks * 1000.0d / elapsedMillis);
+	}
+
+	private static String formatMillisPerBlock(long elapsedMillis, int replayedBlocks) {
+		if (replayedBlocks <= 0)
+			return "n/a";
+
+		return String.format(Locale.ROOT, "%.2f", elapsedMillis * 1.0d / replayedBlocks);
+	}
+
+	private static class ReplayBlockTimings {
+		private long signatureMillis;
+		private long validationMillis;
+		private long saveTransactionsMillis;
+		private long processMillis;
+		private long totalMillis;
+
+		private ReplayBlockTimings() {
+		}
+
+		private ReplayBlockTimings(long signatureMillis, long validationMillis, long saveTransactionsMillis,
+				long processMillis, long totalMillis) {
+			this.signatureMillis = signatureMillis;
+			this.validationMillis = validationMillis;
+			this.saveTransactionsMillis = saveTransactionsMillis;
+			this.processMillis = processMillis;
+			this.totalMillis = totalMillis;
+		}
+
+		private void add(ReplayBlockTimings other) {
+			this.signatureMillis += other.signatureMillis;
+			this.validationMillis += other.validationMillis;
+			this.saveTransactionsMillis += other.saveTransactionsMillis;
+			this.processMillis += other.processMillis;
+			this.totalMillis += other.totalMillis;
+		}
 	}
 }
