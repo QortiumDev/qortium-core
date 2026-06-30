@@ -377,7 +377,19 @@ public class Settings {
 	private String repositoryPath = "db";
 	/** Repository connection pool size. Needs to be a bit bigger than maxNetworkThreadPoolSize */
 	private int repositoryConnectionPoolSize = 1920;
-	private String[] initialPeers = new String[0];
+	/**
+	 * Chain-network bootstrap addresses, seeding Network's known-peers list at startup.
+	 * Accepts clearnet (host:port) and I2P (.b32.i2p) chain-seed entries; a node only attempts
+	 * entries reachable on a transport it supports. Default port is the chain P2P port (24892).
+	 * Mirrors {@link #initialDataPeers}.
+	 */
+	private String[] initialPeers = new String[] {
+			"185.207.104.78:24892",
+			"146.103.42.59:24892",
+			"80.241.221.139:24892",
+			"3u25ana5e5hvriqqiuh6fcetxezsqm7la276ljtjxaoxt767n4hq.b32.i2p",
+			"zqcackxkhjzfbbc6daigc73zqhzdpgwua3mjc7xgn3hwjed5z3ca.b32.i2p"
+	};
 	/**
 	 * Data-layer (QDN) bootstrap addresses, seeding NetworkData's known-peers list at startup.
 	 * Mirrors the chain {@code initialPeers} format. Accepts clearnet (host:port) and I2P
