@@ -1790,7 +1790,7 @@ public class Controller extends Thread {
 
 			// Positional read of just the requested slice (bounded by MAX_SLICE_LENGTH) — the whole chunk file is
 			// never loaded into heap, so a peer can't amplify cheap requests into full-file reads.
-			int sliceLength = Math.min(Math.max(requestedLength, 0), ArchiveChunkMessage.MAX_SLICE_LENGTH);
+			int sliceLength = Math.min(Math.max(requestedLength, 0), ArchiveChunkMessage.maxWireSafeSlice(Network.getInstance().getMaxMessageSize()));
 			BlockArchiveReader.ChunkSlice slice = BlockArchiveReader.getInstance().fetchRawChunkSlice(startHeight, offset, sliceLength);
 
 			// If we don't have a chunk starting at this height, or the requested offset is out of range,

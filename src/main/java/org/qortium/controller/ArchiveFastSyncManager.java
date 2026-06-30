@@ -342,7 +342,7 @@ public class ArchiveFastSyncManager extends Thread {
 			if (isStopping)
 				return null;
 
-			int want = Math.min(ArchiveChunkMessage.MAX_SLICE_LENGTH, buffer.length - offset);
+			int want = Math.min(ArchiveChunkMessage.maxWireSafeSlice(Network.getInstance().getMaxMessageSize()), buffer.length - offset);
 			Message response = peer.getResponseWithTimeout(new GetArchiveChunkMessage(chunk.getStartHeight(), offset, want), Peer.FETCH_BLOCKS_TIMEOUT);
 			if (response == null || response.getType() != MessageType.ARCHIVE_CHUNK)
 				return null; // timeout, or peer can't serve this (GenericUnknownMessage)

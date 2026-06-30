@@ -16,8 +16,21 @@ import java.nio.ByteBuffer;
  */
 public class ArchiveChunkMessage extends Message {
 
-	/** Maximum slice size served per message, kept safely below the network message size limit. */
+	/** Hard upper bound on a slice; the effective per-message cap is the smaller of this and the
+	 *  peer's receive-buffer size — see {@link #maxWireSafeSlice(int)}. */
 	public static final int MAX_SLICE_LENGTH = 8 * 1024 * 1024;
+
+	/**
+	 * Largest slice byte-count that, wrapped in an ArchiveChunkMessage, still fits a peer's receive
+	 * buffer ({@code Network.maxMessageSize}). MAX_SLICE_LENGTH (8 MB) can exceed that buffer (which is
+	 * only ~maxBlockSize, e.g. ~2 MB on preview), in which case the slice message is never delivered and
+	 * the chunk can't be fetched. Both requester and server bound their slice length by this so any
+	 * chunk — including the multi-MB archive chunks — downloads in buffer-fitting slices.
+	 */
+	public static int maxWireSafeSlice(int maxMessageSize) {
+		// Generous headroom for the message header + this message's four int fields.
+		return Math.max(0, Math.min(MAX_SLICE_LENGTH, maxMessageSize - 1024));
+	}
 
 	private final int startHeight;
 	private final int offset;
