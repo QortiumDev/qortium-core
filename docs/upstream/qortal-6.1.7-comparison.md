@@ -133,14 +133,16 @@ If any field can legitimately exceed 32 bytes, this must be height-gated instead
 
 ## Triage Worksheet (Qortium decisions)
 
-| ID | Change | Bucket | Consensus? | Recommendation |
-|----|--------|--------|------------|----------------|
-| 7-A | P2P message count bounds (4 message classes) | A | No | **Port.** Cheap, safe DoS hardening; re-root to `org.qortium`. |
-| 7-B | Group membership validation endpoint | B | No | **Port** (additive, read-only API). Confirm desired on Qortium API surface. |
-| 7-C | Transaction transformer length bounds | C | Adjacent | **Port after verification.** Confirm no historical arbitrary/AT tx exceeds the 32-byte caps; check AT `null`-vs-empty message semantics. No trigger needed if bounds hold for all history. |
-| 7-D1 | Metadata → arbitrary cache from relay-cache | D | No | **Port** (QDN optimization). |
-| 7-D2 | Temp-path fix for storage-size calc | D | No | **Port** (one-line bugfix). |
-| 7-E | Version bump to 6.1.7 | E | No | **Skip** (Qortium versions independently). |
+| ID | Change | Bucket | Consensus? | Status |
+|----|--------|--------|------------|--------|
+| 7-A | P2P message count bounds (4 message classes) | A | No | **Ported** — `network: bound entry counts when parsing peer messages`. Applied to `GetTradePresencesMessage`, `NamesMessage`, `TradePresencesMessage`, and `OnlineAccountsMessage` (Qortium's consolidated equivalent of upstream `OnlineAccountsV3Message`). |
+| 7-B | Group membership validation endpoint | B | No | **Ported** — `api: add group membership validation endpoint`. |
+| 7-C | Transaction transformer length bounds | C | Adjacent | **Held back.** Port only after confirming no historical arbitrary/AT tx exceeds the 32-byte caps; check AT `null`-vs-empty message semantics. No trigger needed if bounds hold for all history. |
+| 7-D1 | Metadata → arbitrary cache from relay-cache | D | No | **Ported** — `qdn: cache metadata saved from the relay cache`. |
+| 7-D2 | Temp-path fix for storage-size calc | D | No | **Already present** in Qortium (`ArbitraryDataStorageManager` already uses `tempDirectoryPath` for the temp-size calc); nothing to port. |
+| 7-E | Version bump to 6.1.7 | E | No | **Skipped** (Qortium versions independently). |
 
-**Net:** no hard forks, no activation-height coordination. Five small functional
-changes; all are portable. Only 7-C requires a verification step before merge.
+**Net:** no hard forks, no activation-height coordination. The three safe,
+non-consensus changes (7-A, 7-B, 7-D1) are ported and compile (`mvn compile`
+BUILD SUCCESS); 7-D2 was already present. Only 7-C remains, and it needs a
+verification step against chain history before it can be merged.

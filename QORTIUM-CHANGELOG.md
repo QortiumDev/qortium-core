@@ -34,9 +34,21 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-29 - qdn: cache metadata saved from the relay cache
+
+When a data chunk recovered from the relay cache turns out to be a transaction's metadata file, the transaction is now queued for the arbitrary-data cache after the chunk is written to permanent storage, so later lookups find the metadata in the cache instead of fetching it again. Applies to both relay-cache save paths (the file-list manager and the file-request thread). This is a QDN performance fix with no effect on consensus. Ported from upstream Qortal 6.1.7.
+
+### 2026-06-29 - api: add group membership validation endpoint
+
+Added a new read-only endpoint, POST /groups/members/{groupid}/validate, that takes a list of addresses and returns, for each one, whether it is a member of the group and (for members) whether it is an admin. This lets clients check membership for many addresses at once without downloading the full member list. It is backed by two new batched repository queries and changes no data and no consensus rules. Ported from upstream Qortal 6.1.7.
+
+### 2026-06-29 - network: bound entry counts when parsing peer messages
+
+Several peer-to-peer messages begin with a count of how many entries follow. Previously that count was trusted to size a list and drive a read loop, so a malicious or corrupt peer could send a huge count and make a node allocate a large list or spin a long loop. Each affected message now rejects a count that is negative or larger than the remaining message bytes could possibly contain. Covers the trade-presence, names, and online-accounts message types. This hardens peer message parsing only and does not change block or transaction validity. Ported from the non-consensus portion of upstream Qortal 6.1.7's "stronger message validation"; the consensus-adjacent transaction-transformer bounds from the same upstream change are deliberately left for separate review.
+
 ### 2026-06-29 - docs: add Qortal 6.1.7 upstream comparison
 
-Added an inventory of the upstream Qortal changes between the 6.1.6 and 6.1.7 release points, in the same neutral style as the earlier comparisons. It records what changed and which review bucket each change belongs to. Unlike 6.1.6, the 6.1.7 release introduces no new consensus feature triggers and no activation-height changes — it is a maintenance and hardening release. The functional changes are: defensive bounds-checking on peer message deserialization (DoS hardening across four message types), added length validation in the arbitrary and AT transaction transformers (consensus-adjacent, recommended only after verifying it does not reject any existing on-chain transaction), a new read-only group-membership-validation API endpoint, and two QDN/storage bugfixes (saving relay-cache metadata into the arbitrary cache, and a temp-path fix for storage-size calculations). This document guides which of the 6.1.7 changes are adopted into the fork; no code has been ported yet pending review of the triage worksheet.
+Added an inventory of the upstream Qortal changes between the 6.1.6 and 6.1.7 release points, in the same neutral style as the earlier comparisons. It records what changed and which review bucket each change belongs to. Unlike 6.1.6, the 6.1.7 release introduces no new consensus feature triggers and no activation-height changes — it is a maintenance and hardening release. The functional changes are: defensive bounds-checking on peer message deserialization (DoS hardening across four message types), added length validation in the arbitrary and AT transaction transformers (consensus-adjacent, recommended only after verifying it does not reject any existing on-chain transaction), a new read-only group-membership-validation API endpoint, and two QDN/storage bugfixes (saving relay-cache metadata into the arbitrary cache, and a temp-path fix for storage-size calculations). This document guides which of the 6.1.7 changes are adopted into the fork. The three safe, non-consensus changes (peer-message bounds checking, the membership-validation endpoint, and the relay-cache metadata fix) were ported in the companion commits; the temp-path fix was already present in Qortium; and the consensus-adjacent transaction-transformer bounds are held back for separate verification.
 
 ### 2026-06-29 - release: prepare core 1.2.0
 
