@@ -18,6 +18,11 @@ import java.util.Map;
  */
 public class OnlineAccountsMessage extends Message {
 
+	private static final long ENTRY_SIZE
+			= Transformer.SIGNATURE_LENGTH +
+				Transformer.PUBLIC_KEY_LENGTH +
+				Transformer.INT_LENGTH; // nonce
+
 	private List<OnlineAccountData> onlineAccounts;
 
 	public OnlineAccountsMessage(List<OnlineAccountData> onlineAccounts) {
@@ -81,6 +86,10 @@ public class OnlineAccountsMessage extends Message {
 
 	public static Message fromByteBuffer(int id, ByteBuffer bytes) throws MessageException {
 		int accountCount = bytes.getInt();
+
+		// if negative count or (count * entry size) + timestamp > remaining, then invalid count
+		if (accountCount < 0 || (((long) accountCount * ENTRY_SIZE) + Transformer.LONG_LENGTH) > bytes.remaining())
+			throw new MessageException("invalid online accounts count");
 
 		List<OnlineAccountData> onlineAccounts = new ArrayList<>(accountCount);
 

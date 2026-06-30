@@ -19,6 +19,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.bouncycastle.util.encoders.Base64;
+import org.bouncycastle.util.encoders.DecoderException;
 import org.qortium.api.*;
 import org.qortium.crypto.AES;
 import org.qortium.api.model.FileProperties;
@@ -803,7 +804,7 @@ public class ArbitraryResource {
 											   @PathParam("service") Service service,
 											   @PathParam("name") String name,
 											   @QueryParam("fee") Long fee) {
-		return this.buildDeleteResourceTransaction(service, name, null, fee);
+		return this.buildDeleteResourceTransaction(service, name, null, fee, true);
 	}
 
 	@POST
@@ -822,7 +823,40 @@ public class ArbitraryResource {
 										@PathParam("name") String name,
 										@PathParam("identifier") String identifier,
 										@QueryParam("fee") Long fee) {
-		return this.buildDeleteResourceTransaction(service, name, identifier, fee);
+		return this.buildDeleteResourceTransaction(service, name, identifier, fee, true);
+	}
+
+	@POST
+	@Path("/public/resource/{service}/{name}/delete")
+	@Operation(
+			summary = "Build a public, unsigned ARBITRARY transaction that deletes the default QDN resource",
+			responses = {
+					@ApiResponse(
+							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
+					)
+			}
+	)
+	public String deleteDefaultResourceOnChainPublic(@PathParam("service") Service service,
+													 @PathParam("name") String name,
+													 @QueryParam("fee") Long fee) {
+		return this.buildDeleteResourceTransaction(service, name, null, fee, false);
+	}
+
+	@POST
+	@Path("/public/resource/{service}/{name}/{identifier}/delete")
+	@Operation(
+			summary = "Build a public, unsigned ARBITRARY transaction that deletes a QDN resource",
+			responses = {
+					@ApiResponse(
+							content = @Content(mediaType = MediaType.TEXT_PLAIN, schema = @Schema(type = "string"))
+					)
+			}
+	)
+	public String deleteResourceOnChainPublic(@PathParam("service") Service service,
+											  @PathParam("name") String name,
+											  @PathParam("identifier") String identifier,
+											  @QueryParam("fee") Long fee) {
+		return this.buildDeleteResourceTransaction(service, name, identifier, fee, false);
 	}
 
 	@POST
@@ -1981,6 +2015,47 @@ public String finalizeUpload(
 	}
 
 	@POST
+	@Path("/public/{service}/{name}/base64")
+	@Operation(
+			summary = "Build public raw, unsigned, ARBITRARY transaction, based on user-supplied base64 encoded data",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "byte")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	public String postBase64EncodedDataPublic(@PathParam("service") String serviceString,
+											  @PathParam("name") String name,
+											  @QueryParam("title") String title,
+											  @QueryParam("description") String description,
+											  @QueryParam("tags") List<String> tags,
+											  @QueryParam("category") Category category,
+											  @QueryParam("filename") String filename,
+											  @QueryParam("fee") Long fee,
+											  String base64) {
+		if (base64 == null) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
+		}
+
+		return this.upload(Service.valueOf(serviceString), name, null, null, null, base64, false,
+				fee, filename, title, description, tags, category, null, false,
+				Settings.getInstance().getPublicQdnPublishMaxSize());
+	}
+
+	@POST
 	@Path("/{service}/{name}/{identifier}/base64")
 	@Operation(
 			summary = "Build raw, unsigned, ARBITRARY transaction, based on user supplied base64 encoded data",
@@ -2024,6 +2099,48 @@ public String finalizeUpload(
 
 		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64, false,
 				fee, filename, title, description, tags, category, null, preview);
+	}
+
+	@POST
+	@Path("/public/{service}/{name}/{identifier}/base64")
+	@Operation(
+			summary = "Build public raw, unsigned, ARBITRARY transaction, based on user supplied base64 encoded data",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "byte")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	public String postBase64EncodedDataPublic(@PathParam("service") String serviceString,
+											  @PathParam("name") String name,
+											  @PathParam("identifier") String identifier,
+											  @QueryParam("title") String title,
+											  @QueryParam("description") String description,
+											  @QueryParam("tags") List<String> tags,
+											  @QueryParam("category") Category category,
+											  @QueryParam("filename") String filename,
+											  @QueryParam("fee") Long fee,
+											  String base64) {
+		if (base64 == null) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
+		}
+
+		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64, false,
+				fee, filename, title, description, tags, category, null, false,
+				Settings.getInstance().getPublicQdnPublishMaxSize());
 	}
 
 
@@ -2075,6 +2192,47 @@ public String finalizeUpload(
 	}
 
 	@POST
+	@Path("/public/{service}/{name}/zip")
+	@Operation(
+			summary = "Build public raw, unsigned, ARBITRARY transaction, based on user-supplied zip file, encoded as base64",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "byte")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	public String postZippedDataPublic(@PathParam("service") String serviceString,
+									   @PathParam("name") String name,
+									   @QueryParam("title") String title,
+									   @QueryParam("description") String description,
+									   @QueryParam("tags") List<String> tags,
+										   @QueryParam("category") Category category,
+										   @QueryParam("fee") Long fee,
+										   @QueryParam("entryPoint") String entryPoint,
+										   String base64Zip) {
+		if (base64Zip == null) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
+		}
+
+		return this.upload(Service.valueOf(serviceString), name, null, null, null, base64Zip, true,
+				fee, null, title, description, tags, category, entryPoint, false,
+				Settings.getInstance().getPublicQdnPublishMaxSize());
+	}
+
+	@POST
 	@Path("/{service}/{name}/{identifier}/zip")
 	@Operation(
 			summary = "Build raw, unsigned, ARBITRARY transaction, based on user supplied zip file, encoded as base64",
@@ -2118,6 +2276,48 @@ public String finalizeUpload(
 
 		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64Zip, true,
 				fee, null, title, description, tags, category, entryPoint, preview);
+	}
+
+	@POST
+	@Path("/public/{service}/{name}/{identifier}/zip")
+	@Operation(
+			summary = "Build public raw, unsigned, ARBITRARY transaction, based on user supplied zip file, encoded as base64",
+			requestBody = @RequestBody(
+					required = true,
+					content = @Content(
+							mediaType = MediaType.APPLICATION_OCTET_STREAM,
+							schema = @Schema(type = "string", format = "byte")
+					)
+			),
+			responses = {
+					@ApiResponse(
+							description = "raw, unsigned, ARBITRARY transaction encoded in Base58",
+							content = @Content(
+									mediaType = MediaType.TEXT_PLAIN,
+									schema = @Schema(
+											type = "string"
+									)
+							)
+					)
+			}
+	)
+	public String postZippedDataPublic(@PathParam("service") String serviceString,
+									   @PathParam("name") String name,
+									   @PathParam("identifier") String identifier,
+									   @QueryParam("title") String title,
+									   @QueryParam("description") String description,
+									   @QueryParam("tags") List<String> tags,
+										   @QueryParam("category") Category category,
+										   @QueryParam("fee") Long fee,
+										   @QueryParam("entryPoint") String entryPoint,
+										   String base64Zip) {
+		if (base64Zip == null) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_CRITERIA, "Data not supplied");
+		}
+
+		return this.upload(Service.valueOf(serviceString), name, identifier, null, null, base64Zip, true,
+				fee, null, title, description, tags, category, entryPoint, false,
+				Settings.getInstance().getPublicQdnPublishMaxSize());
 	}
 
 
@@ -2360,6 +2560,14 @@ public String finalizeUpload(
 						  String path, String string, String base64, boolean zipped, Long fee, String filename,
 						  String title, String description, List<String> tags, Category category,
 						  String entryPoint, Boolean preview) {
+		return this.upload(service, name, identifier, path, string, base64, zipped, fee, filename,
+				title, description, tags, category, entryPoint, preview, null);
+	}
+
+	private String upload(Service service, String name, String identifier,
+						  String path, String string, String base64, boolean zipped, Long fee, String filename,
+						  String title, String description, List<String> tags, Category category,
+						  String entryPoint, Boolean preview, Long maxUploadSize) {
 		// Fetch public key from registered name
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			NameData nameData = repository.getNameRepository().fromName(name);
@@ -2391,6 +2599,7 @@ public String finalizeUpload(
 						// Use current time as filename
 						filename = String.format("qdn-%d", NTP.getTime());
 					}
+						enforceUploadSize(string.getBytes(StandardCharsets.UTF_8).length, maxUploadSize);
 						java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
 						File tempFile = resolveUploadTempFile(tempDirectory, filename).toFile();
 						tempFile.deleteOnExit();
@@ -2406,10 +2615,13 @@ public String finalizeUpload(
 						// Use current time as filename
 						filename = String.format("qdn-%d", NTP.getTime());
 					}
+						enforceBase64UploadSize(base64, maxUploadSize);
 						java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
 						File tempFile = resolveUploadTempFile(tempDirectory, filename).toFile();
 						tempFile.deleteOnExit();
-						Files.write(tempFile.toPath(), Base64.decode(base64));
+						byte[] decoded = decodeBase64Upload(base64);
+						enforceUploadSize(decoded.length, maxUploadSize);
+						Files.write(tempFile.toPath(), decoded);
 						path = tempFile.toPath().toString();
 				}
 				else {
@@ -2417,12 +2629,14 @@ public String finalizeUpload(
 				}
 			}
 
+			enforceUploadPathSize(Paths.get(path), maxUploadSize);
+
 			if (zipped) {
 				// Unzip the file
 				java.nio.file.Path tempDirectory = Files.createTempDirectory("qdn-");
 				tempDirectory.toFile().deleteOnExit();
 				LOGGER.info("Unzipping...");
-				ZipUtils.unzip(path, tempDirectory.toString());
+				unzipUpload(path, tempDirectory, maxUploadSize);
 				path = tempDirectory.toString();
 
 				// Handle directories slightly differently to files
@@ -2434,6 +2648,8 @@ public String finalizeUpload(
 						path = Paths.get(tempDirectory.toString(), files[0]).toString();
 					}
 				}
+
+				enforceUploadPathSize(Paths.get(path), maxUploadSize);
 			}
 
 			// Finish here if user has requested a preview
@@ -2463,14 +2679,99 @@ public String finalizeUpload(
 				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA, e.getMessage());
 			}
 
+		} catch (ApiException e) {
+			throw e;
 		} catch (Exception e) {
 			LOGGER.info("Exception when publishing data: ", e);
 			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.REPOSITORY_ISSUE, e.getMessage());
 		}
 	}
 
-	private String buildDeleteResourceTransaction(Service service, String name, String identifier, Long fee) {
-		Security.checkApiCallAllowed(request);
+	private static long estimateBase64DecodedSize(String base64) {
+		long encodedLength = 0L;
+		int padding = 0;
+
+		for (int i = base64.length() - 1; i >= 0; --i) {
+			char c = base64.charAt(i);
+			if (Character.isWhitespace(c)) {
+				continue;
+			}
+			if (c == '=') {
+				padding++;
+				continue;
+			}
+			break;
+		}
+
+		for (int i = 0; i < base64.length(); ++i) {
+			if (!Character.isWhitespace(base64.charAt(i))) {
+				encodedLength++;
+			}
+		}
+
+		if (encodedLength == 0) {
+			return 0L;
+		}
+
+		long decodedLength = (encodedLength / 4L) * 3L;
+		int remainder = (int) (encodedLength % 4L);
+		if (remainder == 2) {
+			decodedLength += 1L;
+		} else if (remainder == 3) {
+			decodedLength += 2L;
+		} else if (remainder == 1) {
+			decodedLength += 3L;
+		}
+
+		return decodedLength - Math.min(padding, 2);
+	}
+
+	private void enforceBase64UploadSize(String base64, Long maxUploadSize) {
+		enforceUploadSize(estimateBase64DecodedSize(base64), maxUploadSize);
+	}
+
+	private byte[] decodeBase64Upload(String base64) {
+		try {
+			return Base64.decode(base64);
+		} catch (DecoderException | IllegalArgumentException e) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA, "Data is not valid base64");
+		}
+	}
+
+	private void enforceUploadPathSize(java.nio.file.Path path, Long maxUploadSize) throws IOException {
+		if (maxUploadSize == null) {
+			return;
+		}
+
+		long size = Files.isDirectory(path)
+				? FilesystemUtils.getDirectorySize(path, true)
+				: Files.size(path);
+		enforceUploadSize(size, maxUploadSize);
+	}
+
+	private void unzipUpload(String path, java.nio.file.Path tempDirectory, Long maxUploadSize) throws IOException {
+		try {
+			ZipUtils.unzip(path, tempDirectory.toString(), maxUploadSize);
+		} catch (IOException e) {
+			if (maxUploadSize != null && "ZIP extracted data exceeds the maximum allowed size".equals(e.getMessage())) {
+				throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA,
+						String.format("QDN publish data exceeds the %d byte public-node publish limit.", maxUploadSize));
+			}
+			throw e;
+		}
+	}
+
+	private void enforceUploadSize(long size, Long maxUploadSize) {
+		if (maxUploadSize != null && size > maxUploadSize) {
+			throw ApiExceptionFactory.INSTANCE.createCustomException(request, ApiError.INVALID_DATA,
+					String.format("QDN publish data exceeds the %d byte public-node publish limit.", maxUploadSize));
+		}
+	}
+
+	private String buildDeleteResourceTransaction(Service service, String name, String identifier, Long fee, boolean checkApiKey) {
+		if (checkApiKey) {
+			Security.checkApiCallAllowed(request);
+		}
 
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			NameData nameData = repository.getNameRepository().fromName(name);

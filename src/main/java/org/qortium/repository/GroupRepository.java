@@ -2,7 +2,9 @@ package org.qortium.repository;
 
 import org.qortium.data.group.*;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 public interface GroupRepository {
 
@@ -62,6 +64,8 @@ public interface GroupRepository {
 
 	public boolean adminExists(int groupId, String address) throws DataException;
 
+	public Set<String> getGroupAdminAddresses(int groupId, Collection<String> addresses) throws DataException;
+
 	public List<GroupAdminData> getGroupAdmins(int groupId, Integer limit, Integer offset, Boolean reverse) throws DataException;
 
 	public default List<GroupAdminData> getGroupAdmins(int groupId) throws DataException {
@@ -84,6 +88,8 @@ public interface GroupRepository {
 	public GroupMemberData getMember(int groupId, String address) throws DataException;
 
 	public boolean memberExists(int groupId, String address) throws DataException;
+
+	public Set<String> getGroupMemberAddresses(int groupId, Collection<String> addresses) throws DataException;
 
 	public List<GroupMemberData> getGroupMembers(int groupId, Integer limit, Integer offset, Boolean reverse) throws DataException;
 

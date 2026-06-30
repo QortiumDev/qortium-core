@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -703,6 +704,9 @@ public class ArbitraryDataFileListManager {
                                         ArbitraryDataFile cachedFile = new ArbitraryDataFile(cachedData, signature, false);
                                         if (cachedFile.validateHash(hash)) {
                                             cachedFile.save();
+                                            if (arbitraryTransactionData.getMetadataHash() != null && Arrays.equals(arbitraryTransactionData.getMetadataHash(), hash)) {
+                                                ArbitraryDataCacheManager.getInstance().addToUpdateQueue(arbitraryTransactionData);
+                                            }
                                             LOGGER.trace("Saved hash {} from relay cache to permanent storage", hash58);
                                             continue; // Skip adding to response tracking
                                         } else {

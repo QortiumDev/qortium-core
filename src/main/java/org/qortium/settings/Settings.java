@@ -494,6 +494,9 @@ public class Settings {
 	/** Maximum total size of hosted data, in bytes. Unlimited if null */
 	private Long maxStorageCapacity = null;
 
+	/** Maximum decoded public QDN publish-builder upload size, in bytes */
+	private long publicQdnPublishMaxSize = 100L * 1024L * 1024L;
+
 	/** The local hour in the day to perform a full scan of the data directory size. */
 	private int dataStorageSizeCalculationHour = 23;
 
@@ -1493,6 +1496,9 @@ public class Settings {
 
 		if (this.i2pDataKeyFile == null || this.i2pDataKeyFile.trim().isEmpty())
 			throwValidationError("i2pDataKeyFile must not be blank");
+
+		if (this.publicQdnPublishMaxSize < 1)
+			throwValidationError("publicQdnPublishMaxSize must be at least 1 byte");
 	}
 
 	private static Map<String, String> defaultBitcoinyNetworks() {
@@ -2398,6 +2404,10 @@ public class Settings {
 
 	public Long getMaxStorageCapacity() {
 		return this.maxStorageCapacity;
+	}
+
+	public long getPublicQdnPublishMaxSize() {
+		return this.publicQdnPublishMaxSize;
 	}
 
 	public int getDataStorageSizeCalculationHour() {

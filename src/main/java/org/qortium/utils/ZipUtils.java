@@ -123,10 +123,24 @@ public class ZipUtils {
      * @throws IOException If extraction fails
      */
     public static void unzip(String sourcePath, String destPath) throws IOException {
+        unzip(sourcePath, destPath, null);
+    }
+
+    /**
+     * Unzips a file from the given source path to the destination path, optionally enforcing
+     * a maximum extracted data size.
+     *
+     * @param sourcePath Path to the ZIP file
+     * @param destPath Destination directory for extracted files
+     * @param maxOutputSize Maximum extracted file bytes, or null for unlimited
+     * @throws IOException If extraction fails or exceeds maxOutputSize
+     */
+    public static void unzip(String sourcePath, String destPath, Long maxOutputSize) throws IOException {
         final File destDir = new File(destPath);
         // Buffer size: 512KB - optimized for large files (reduces syscalls)
         final int BUFFER_SIZE = 512 * 1024;
         final byte[] buffer = new byte[BUFFER_SIZE];
+        long outputSize = 0L;
         try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(sourcePath), BUFFER_SIZE);
              ZipInputStream zis = new ZipInputStream(bis)) {
             ZipEntry zipEntry = zis.getNextEntry();
@@ -145,6 +159,10 @@ public class ZipUtils {
                     try (BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(newFile), BUFFER_SIZE)) {
                         int len;
                         while ((len = zis.read(buffer)) > 0) {
+                            outputSize += len;
+                            if (maxOutputSize != null && outputSize > maxOutputSize) {
+                                throw new IOException("ZIP extracted data exceeds the maximum allowed size");
+                            }
                             bos.write(buffer, 0, len);
                         }
                     }

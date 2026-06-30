@@ -17,22 +17,68 @@ own chain.
 ## Early Goals
 
 - keep the history clean and easy to read
-- make each logical change its own commit
+- make each logical PR merge easy to review
 - explain every meaningful change in plain language
 - separate Qortium-specific direction from upstream Qortal messaging
 - turn stable architectural decisions into tracked documentation over time
 
 ## How To Use This File
 
-- update this file with every intentional Qortium commit
-- use one entry per commit
-- make each entry title match the commit message exactly
+- update this file with every intentional Qortium PR/squash merge
+- use one entry per merged PR
+- make each entry title match the squash commit / PR title
 - keep each entry to one combined plain-language description
 - keep entries understandable to non-developers
 - use this file as the public narrative of the fork, alongside the technical
   git history
 
 ## Change Entries
+
+### 2026-06-29 - release: prepare core 1.2.0
+
+Bumps Qortium Core from 1.1.3 to 1.2.0 and prepares the public-node write path
+Home needs for the next prerelease. Preview settings now keep public chat-send
+paths in sync for default and seed nodes, and expose only the keyless unsigned
+QDN publish/delete builders under `/arbitrary/public/*`; generic QDN writes,
+server-side nonce computation, and server-side signing remain private. Public
+QDN publish builders enforce the configurable `publicQdnPublishMaxSize` guard,
+defaulting to 100 MiB, while private API-key publish paths and lower
+service-specific QDN caps keep their existing behavior. The bundled gRPC
+dependency line also moves from 1.82.0 to 1.82.1.
+
+This release also folds in the upstream Qortal 6.1.7 review. 6.1.7 is a
+maintenance and hardening release with no new consensus feature triggers and no
+activation-height changes, and its safe changes are adopted here:
+
+- **Peer message hardening (non-consensus):** several peer-to-peer messages
+  (trade-presence, names, and online-accounts types) begin with an entry count
+  that was previously trusted to size a list and drive a read loop. Each now
+  rejects a count that is negative or larger than the remaining message bytes
+  could possibly contain, so a malicious or corrupt peer can no longer force a
+  large allocation or long loop. This affects peer parsing only; block and
+  transaction validity are unchanged.
+- **Transaction field bounds (consensus-adjacent, verified safe):** the
+  arbitrary and AT transaction parsers now reject an over-long encryption
+  secret, metadata hash, or AT message — 32 bytes in every case. Because this
+  runs on the consensus path, it was verified not to reject any valid history
+  before adoption: every producer emits a fixed 32-byte value (a 32-byte
+  AES-256 key, a 32-byte SHA-256 hash, and the AT's 32-byte A register), and an
+  audit of all 998 arbitrary transactions on the live Previewnet chain found
+  only 0- or 32-byte values, with no AT transactions present. No feature
+  trigger is required.
+- **Group membership validation endpoint (non-consensus):** a new read-only
+  endpoint, POST /groups/members/{groupid}/validate, returns per-address
+  membership and admin status so clients can validate many addresses at once
+  without downloading the full member list.
+- **Relay-cache metadata fix (non-consensus):** when a chunk recovered from the
+  relay cache is a transaction's metadata file, the transaction is now queued
+  for the arbitrary-data cache so later lookups hit the cache instead of
+  re-fetching.
+
+The upstream temp-path fix from 6.1.7 was already present in Qortium, and the
+upstream version bump is not adopted (Qortium versions independently). The full
+neutral inventory and the consensus-safety reasoning are recorded in
+docs/upstream/qortal-6.1.7-comparison.md.
 
 ### 2026-06-26 - api-docs: darken Swagger UI content surfaces
 

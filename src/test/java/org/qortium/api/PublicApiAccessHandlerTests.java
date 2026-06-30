@@ -105,10 +105,28 @@ public class PublicApiAccessHandlerTests extends Common {
 	}
 
 	@Test
-	public void testPreviewTemplatesExposeRenderReadsOnly() throws Exception {
-		assertPreviewTemplateExposesRenderReadsOnly(Path.of("preview/settings-preview.json"));
-		assertPreviewTemplateExposesRenderReadsOnly(Path.of("preview/settings-preview-seed.json"));
-		assertPreviewTemplateExposesRenderReadsOnly(Path.of("preview/settings-preview-seed-netcup.json"));
+	public void testPublicQdnBuildNamespaceIsAllowedWithoutGenericArbitraryWrites() throws Exception {
+		enablePublicApi();
+
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/arbitrary/public/APP/QortiumHome/base64", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/arbitrary/public/APP/QortiumHome/qortium-chat/zip", this.settings));
+		assertTrue(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/arbitrary/public/resource/APP/QortiumHome/qortium-chat/delete", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/arbitrary/APP/QortiumHome/base64", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/arbitrary/compute", this.settings));
+		assertFalse(PublicApiAccessHandler.isRequestAllowed(
+				"203.0.113.10", "POST", "/transactions/sign", this.settings));
+	}
+
+	@Test
+	public void testPreviewSettingsExposePublicReadsAndKeylessBuildsOnly() throws Exception {
+		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview.json"));
+		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview-seed.json"));
+		assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path.of("preview/settings-preview-seed-netcup.json"));
 	}
 
 	@Test
@@ -140,20 +158,35 @@ public class PublicApiAccessHandlerTests extends Common {
 				"GET /arbitrary/*",
 				"GET /render/*",
 				"GET /names/*",
-				"GET /transactions/*"
+				"GET /transactions/*",
+				"POST /arbitrary/public/*"
 		}, true);
 	}
 
-	private static void assertPreviewTemplateExposesRenderReadsOnly(Path settingsPath) throws Exception {
+	private static void assertPreviewSettingsExposePublicReadsAndKeylessBuildsOnly(Path settingsPath) throws Exception {
 		JSONObject settingsJson = new JSONObject(Files.readString(settingsPath));
 		JSONArray publicApiPaths = settingsJson.getJSONArray("publicApiPaths");
 
 		assertTrue(settingsPath + " should enable preview QDN auth bypass",
 				settingsJson.getBoolean("qdnAuthBypassEnabled"));
+		assertTrue(settingsPath + " should set the public QDN publish size guard",
+				settingsJson.getLong("publicQdnPublishMaxSize") == 104857600L);
 		assertTrue(settingsPath + " should allow public render reads",
 				jsonArrayContains(publicApiPaths, "GET /render/*"));
+		assertTrue(settingsPath + " should allow keyless public chat builds",
+				jsonArrayContains(publicApiPaths, "POST /chat/public/build"));
+		assertTrue(settingsPath + " should allow keyless public QDN publish/delete builds",
+				jsonArrayContains(publicApiPaths, "POST /arbitrary/public/*"));
+		assertTrue(settingsPath + " should allow unsigned transaction conversion",
+				jsonArrayContains(publicApiPaths, "POST /transactions/convert"));
+		assertTrue(settingsPath + " should allow signed transaction submission",
+				jsonArrayContains(publicApiPaths, "POST /transactions/process"));
 		assertFalse(settingsPath + " should not expose render authorization writes",
 				jsonArrayContains(publicApiPaths, "POST /render/authorize/*"));
+		assertFalse(settingsPath + " should not expose generic QDN publish writes",
+				jsonArrayContains(publicApiPaths, "POST /arbitrary/*"));
+		assertFalse(settingsPath + " should not expose server-side transaction signing",
+				jsonArrayContains(publicApiPaths, "POST /transactions/sign"));
 	}
 
 	private static boolean jsonArrayContains(JSONArray array, String value) {
