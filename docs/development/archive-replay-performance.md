@@ -81,6 +81,28 @@ Likely conclusions:
 Avoid skipping more validation as the first optimization. Current evidence does not point there, and
 the archive checkpoint safety model depends on replaying derived state locally.
 
+## Resume Checklist
+
+When picking this up:
+
+1. Check PR #84 first. It is the correctness/observability base branch
+   (`codex/archive-replay-save-transactions`). Let any live PR #84 replay finish before replacing the
+   test runtime unless the operator explicitly decides to stop it.
+2. Check this branch and PR #85 (`codex/archive-replay-diagnostics`). It is intentionally based on
+   PR #84 so the diagnostic diff is reviewable; retarget/rebase after PR #84 merges.
+3. If using the Qubes lab, prefer a cloned/new Qube for this branch. The original Leap runtime was
+   `~/qortium-pr84-replay-current` and should be treated as evidence from the PR #84 run.
+4. Build with `mvn -B -DskipTests package`, run a fresh Previewnet runtime, and collect only compact
+   log/status samples:
+
+   ```bash
+   grep 'Archive fast-replay: replayed block' "$runtime/qortium.log" | tail -20
+   curl -H "X-API-KEY: $api_key" http://127.0.0.1:24891/admin/status
+   ```
+
+5. Use the process-phase averages to choose exactly one next experiment. Do not combine batched
+   account updates, replay commit changes, and deferred local indexes in the same first test.
+
 ## Safety Boundary
 
 This branch is for evidence gathering. It should not change consensus behavior, checkpoint
