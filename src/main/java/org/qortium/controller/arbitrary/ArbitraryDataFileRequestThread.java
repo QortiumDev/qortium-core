@@ -1,6 +1,7 @@
 package org.qortium.controller.arbitrary;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -481,6 +482,9 @@ public class ArbitraryDataFileRequestThread {
                                 ArbitraryDataFile cachedFile = new ArbitraryDataFile(cachedChunk, data.getSignature(), false);
                                 if (cachedFile.validateHash(fileHashBytes)) {
                                     cachedFile.save();
+                                    if (data.getMetadataHash() != null && Arrays.equals(data.getMetadataHash(), fileHashBytes)) {
+                                        ArbitraryDataCacheManager.getInstance().addToUpdateQueue(data);
+                                    }
                                     LOGGER.trace("Saved chunk {} from relay cache to permanent storage", fileHash);
                                     continue; // Skip adding to batch
                                 } else {
