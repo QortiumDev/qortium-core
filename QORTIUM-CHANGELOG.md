@@ -34,6 +34,20 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-30 - fix(fast-sync): persist archived block transactions before replay link
+
+Fixes the final archive fast-replay bootstrap blocker found while bringing a
+fresh openSUSE Leap 16 Previewnet node online. Archived blocks include their
+transactions in the downloaded block-archive chunks, but those transactions had
+not been saved to the repository before the block was processed. Normal network
+sync saves incoming transactions first and then links them to the confirming
+block; archive replay skipped that setup step, so block replay could fail with a
+database foreign-key error when it tried to link a block to transaction rows
+that did not exist yet. Archive replay now saves each non-AT transaction with
+its initial approval status before processing the block, while leaving AT
+transactions to the existing AT processing path. This lets a genesis-fresh node
+replay the checkpointed archive range and then continue with normal sync.
+
 ### 2026-06-30 - network: harden connection direction reachability for #80
 
 Makes peer connection direction account for real inbound reachability instead

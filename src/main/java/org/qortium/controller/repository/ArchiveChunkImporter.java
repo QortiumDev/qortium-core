@@ -6,10 +6,13 @@ import org.apache.logging.log4j.Logger;
 import org.qortium.block.Block;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.block.BlockData;
+import org.qortium.data.transaction.TransactionData;
 import org.qortium.repository.BlockArchiveReader;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.settings.Settings;
+import org.qortium.transaction.Transaction;
+import org.qortium.transaction.Transaction.TransactionType;
 import org.qortium.transform.block.BlockTransformation;
 
 import java.io.IOException;
@@ -176,6 +179,20 @@ public class ArchiveChunkImporter {
 		Block.ValidationResult validationResult = block.isValid(trustedReplay);
 		if (validationResult != Block.ValidationResult.OK)
 			throw new DataException(String.format("Archive fast-replay: block at height %d failed validation: %s", height, validationResult.name()));
+
+		// Archive-replayed blocks carry their transactions straight from the archive. Unlike normal sync —
+		// where a block's transactions are saved as unconfirmed when they arrive, *before* the block is
+		// processed — these Transaction rows don't exist yet, so linkTransactionsToBlock()'s BlockTransaction
+		// foreign key would have no parent. Persist them first (with an initial approval status, as the
+		// unconfirmed-import path does) so process()/linkTransactionsToBlock() can link and confirm them.
+		// AT transactions are created and saved by Block.processTransactions, so skip those here.
+		for (TransactionData transactionData : blockTransformation.getTransactions()) {
+			if (transactionData.getType() == TransactionType.AT)
+				continue;
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+			transaction.setInitialApprovalStatus();
+			repository.getTransactionRepository().save(transactionData);
+		}
 
 		block.process();
 		// Intentionally no saveChanges() here: the caller commits the whole replayed range atomically so that a
