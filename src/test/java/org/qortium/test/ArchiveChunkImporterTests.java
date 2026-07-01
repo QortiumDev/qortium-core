@@ -30,9 +30,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -127,12 +129,22 @@ public class ArchiveChunkImporterTests extends Common {
 			writer.write();
 
 			BlockUtils.orphanToBlock(repository, 1);
-			assertEquals("payment transaction should be absent after orphaning archived range", null,
+			TransactionData orphanedPayment = repository.getTransactionRepository().fromSignature(paymentSignature);
+			assertNotNull("orphaning should leave the payment transaction as unconfirmed", orphanedPayment);
+			assertNull("orphaned payment transaction should no longer be linked to a block", orphanedPayment.getBlockHeight());
+
+			// A fresh archive fast-sync database will not have this transaction preloaded as unconfirmed.
+			// Remove it so replay has to recreate the normal sync invariant before block linking.
+			repository.getTransactionRepository().delete(orphanedPayment);
+			repository.saveChanges();
+			assertNull("payment transaction should be absent before archive replay",
 					repository.getTransactionRepository().fromSignature(paymentSignature));
 
 			BlockArchiveReader.getInstance().invalidateFileListCache();
 			List<Integer> progressHeights = new ArrayList<>();
-			int replayedHeight = ArchiveChunkImporter.replayArchivedBlocks(repository, 2, 250, 0, progressHeights::add);
+			// Use trusted replay above this range so this regression isolates the transaction persistence
+			// invariant instead of re-testing online-account nonce validation.
+			int replayedHeight = ArchiveChunkImporter.replayArchivedBlocks(repository, 2, 250, 251, progressHeights::add);
 			repository.saveChanges();
 
 			assertEquals(250, replayedHeight);
@@ -143,7 +155,9 @@ public class ArchiveChunkImporterTests extends Common {
 			TransactionData replayedPayment = repository.getTransactionRepository().fromSignature(paymentSignature);
 			assertNotNull("archived payment transaction should be saved before block link", replayedPayment);
 			assertEquals(2, replayedPayment.getBlockHeight().intValue());
-			assertEquals(0, replayedPayment.getBlockSequence().intValue());
+			TransactionData firstTransactionAtHeight = repository.getTransactionRepository().fromHeightAndSequence(2, 0);
+			assertNotNull("archived payment transaction should be linked at height 2 sequence 0", firstTransactionAtHeight);
+			assertArrayEquals(paymentSignature, firstTransactionAtHeight.getSignature());
 		}
 	}
 
