@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-30 - security: track Jackson CVE until patched 2.x artifacts publish
+
+Documents and suppresses the OSV alert for CVE-2026-54515 on
+`jackson-databind` 2.22.0 while Jackson's patched 2.x artifacts are not yet
+available from Maven Central. The advisory names 2.22.1 as the patched line,
+but the latest published Jackson BOM and `jackson-databind` artifacts are still
+2.22.0, so a dependency bump cannot build yet. The ignore is wired into the OSV
+workflows with that reason and should be removed as soon as a patched Jackson
+2.x artifact is published. This does not change Core APIs, consensus behavior,
+or Previewnet configuration.
+
 ### 2026-06-30 - core: prepare 1.2.1 stabilization fixes
 
 Prepares the next Core stabilization prerelease with fixes found during live

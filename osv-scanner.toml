@@ -1,0 +1,3 @@
+[[IgnoredVulns]]
+id = "CVE-2026-54515"
+reason = "Temporary: OSV flags jackson-databind 2.22.0, but the advisory's patched 2.x artifacts (including 2.22.1) are not published in Maven Central yet. Remove this ignore and bump Jackson as soon as a patched 2.x release is available."
