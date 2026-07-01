@@ -205,7 +205,7 @@ public class Peer {
     /**
      * Our common block with this peer
      */
-    private CommonBlockData commonBlockData;
+    private volatile CommonBlockData commonBlockData;
 
     /**
      * Last time we detected this peer as TOO_DIVERGENT

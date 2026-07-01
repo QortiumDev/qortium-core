@@ -34,6 +34,36 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-01 - fix: harden Core settings and peer sync defaults
+
+Adds Core settings metadata for Home and other local tools so they can discover
+the active settings file, writable settings, restart-required settings, pending
+restart changes, and file/runtime drift before presenting controls to the user.
+The writable settings API now covers the peer and storage fields needed by those
+controls, including long integer storage limits, while preserving restart
+tracking for changes that cannot safely apply live.
+
+Ports the upstream arbitrary-data HSQLDB query optimization into Qortium's
+schema layout by storing `created_when` directly on `ArbitraryTransactions`,
+indexing `name` plus newest-first timestamps, hydrating limited latest-resource
+queries in two steps, and removing the extra transaction join from lightweight
+QDN signature scans. The cleanup manager also reuses its transaction list for up
+to 6 hours instead of requerying the full arbitrary transaction list every time
+it wraps around.
+
+This also fixes a rare BlockMinter race during sync by taking a single
+per-peer common-block snapshot before comparing chain weights and making the
+peer's common-block cache visible across threads. That avoids a recovered node
+throwing a null-pointer exception when the synchronizer clears a peer's common
+block data between repeated reads.
+
+Previewnet defaults are updated for the larger current network: normal and seed
+configs now require 3 chain peers before treating sync and minting as
+sufficiently connected, while keeping the existing outbound targets and 32-peer
+caps. The normal preview config also now includes the public seed data ports and
+I2P data destinations as QDN/data bootstrap peers so fresh nodes can discover
+data peers without relying on merged runtime defaults.
+
 ### 2026-06-30 - release: move version to 1.2.1
 
 Bumps the project version from 1.2.0 to 1.2.1, the version the node now reports

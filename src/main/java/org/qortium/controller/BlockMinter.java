@@ -670,15 +670,16 @@ public class BlockMinter extends Thread {
 		List<Peer> peers = Network.getInstance().getImmutableHandshakedPeers();
 		// Loop through handshaked peers and check for any new block candidates
 		for (Peer peer : peers) {
-			if (peer.getCommonBlockData() != null && peer.getCommonBlockData().getCommonBlockSummary() != null) {
+			CommonBlockData commonBlockData = peer.getCommonBlockData();
+			if (commonBlockData != null && commonBlockData.getCommonBlockSummary() != null) {
 				// This peer has common block data
-				CommonBlockData commonBlockData = peer.getCommonBlockData();
 				BlockSummaryData commonBlockSummaryData = commonBlockData.getCommonBlockSummary();
-				if (commonBlockData.getChainWeight() != null && peer.getCommonBlockData().getBlockSummariesAfterCommonBlock() != null) {
+				List<BlockSummaryData> blockSummariesAfterCommonBlock = commonBlockData.getBlockSummariesAfterCommonBlock();
+				if (commonBlockData.getChainWeight() != null && blockSummariesAfterCommonBlock != null) {
 					// The synchronizer has calculated this peer's chain weight
-					if (!Synchronizer.getInstance().containsInvalidBlockSummary(peer.getCommonBlockData().getBlockSummariesAfterCommonBlock())) {
+					if (!Synchronizer.getInstance().containsInvalidBlockSummary(blockSummariesAfterCommonBlock)) {
 						// .. and it doesn't hold any invalid blocks
-						BigInteger ourChainWeightSinceCommonBlock = this.getOurChainWeightSinceBlock(repository, commonBlockSummaryData, commonBlockData.getBlockSummariesAfterCommonBlock());
+						BigInteger ourChainWeightSinceCommonBlock = this.getOurChainWeightSinceBlock(repository, commonBlockSummaryData, blockSummariesAfterCommonBlock);
 						BigInteger ourChainWeight = ourChainWeightSinceCommonBlock.add(blockCandidateWeight);
 						BigInteger peerChainWeight = commonBlockData.getChainWeight();
 						if (peerChainWeight.compareTo(ourChainWeight) >= 0) {

@@ -9,6 +9,9 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.Reader;
+import java.lang.reflect.Field;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
@@ -110,6 +113,8 @@ public class Settings {
 	private static Settings instance;
 	@XmlTransient
 	private static Path activeSettingsPath;
+	@XmlTransient
+	private static final LinkedHashSet<String> pendingRestartSettings = new LinkedHashSet<>();
 
 	// Settings, and other config files
 	private String userPath;
@@ -969,6 +974,7 @@ public class Settings {
 	private enum WritableSettingType {
 		BOOLEAN,
 		INTEGER,
+		LONG,
 		STRING,
 		AUTO_UPDATE_MODE,
 		STRING_ARRAY,
@@ -1004,6 +1010,34 @@ public class Settings {
 		}
 	}
 
+	@XmlAccessorType(XmlAccessType.FIELD)
+	public static class WritableSettingMetadata {
+		public String type;
+		public boolean restartRequired;
+
+		public WritableSettingMetadata() {
+		}
+
+		private WritableSettingMetadata(WritableSetting writableSetting) {
+			this.type = writableSetting.type.name();
+			this.restartRequired = writableSetting.restartRequired;
+		}
+	}
+
+	@XmlAccessorType(XmlAccessType.FIELD)
+	public static class SettingsMetadata {
+		public String settingsPath;
+		public Map<String, WritableSettingMetadata> writable = new LinkedHashMap<>();
+		public List<String> pendingRestart = new ArrayList<>();
+		public boolean fileDiffersFromRuntime;
+		public List<String> fileChanged = new ArrayList<>();
+		@JsonInclude(JsonInclude.Include.NON_NULL)
+		public String fileComparisonError;
+
+		public SettingsMetadata() {
+		}
+	}
+
 	private static Map<String, WritableSetting> buildWritableSettings() {
 		Map<String, WritableSetting> settings = new LinkedHashMap<>();
 
@@ -1017,6 +1051,10 @@ public class Settings {
 		settings.put("bootstrapHosts", new WritableSetting(WritableSettingType.STRING_ARRAY, false));
 		settings.put("qdnEnabled", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("allowedTransports", new WritableSetting(WritableSettingType.ALLOWED_TRANSPORTS, true)); // changes binding/advertisement -> restart
+		settings.put("listenPort", new WritableSetting(WritableSettingType.INTEGER, true));
+		settings.put("listenDataPort", new WritableSetting(WritableSettingType.INTEGER, true));
+		settings.put("maxPeers", new WritableSetting(WritableSettingType.INTEGER, true));
+		settings.put("maxDataPeers", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("i2pSamHost", new WritableSetting(WritableSettingType.STRING, true));
 		settings.put("i2pSamPort", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("i2pChainKeyFile", new WritableSetting(WritableSettingType.STRING, true));
@@ -1024,6 +1062,7 @@ public class Settings {
 		settings.put("i2pEmbeddedRouter", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("recordPeerExchange", new WritableSetting(WritableSettingType.BOOLEAN, true));
 		settings.put("storagePolicy", new WritableSetting(WritableSettingType.STORAGE_POLICY, false));
+		settings.put("maxStorageCapacity", new WritableSetting(WritableSettingType.LONG, false));
 		settings.put("relayModeEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("qdnPushOnPublishEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
 		settings.put("publicDataEnabled", new WritableSetting(WritableSettingType.BOOLEAN, false));
@@ -1089,6 +1128,7 @@ public class Settings {
 		// Successfully read settings now in effect
 		instance = settings;
 		activeSettingsPath = settingsPath.toAbsolutePath().normalize();
+		pendingRestartSettings.clear();
 
 		// Now read blockchain config
 		BlockChain.fileInstance(settings.getUserPath(), settings.getBlockchainConfig());
@@ -1229,6 +1269,7 @@ public class Settings {
 			result.updated = new ArrayList<>(updated);
 			result.removed = new ArrayList<>(removed);
 			result.restartRequired = new ArrayList<>(restartRequired);
+			pendingRestartSettings.addAll(restartRequired);
 
 			LinkedHashSet<String> applied = new LinkedHashSet<>();
 			applied.addAll(updated);
@@ -1293,6 +1334,59 @@ public class Settings {
 		return activeSettingsPath;
 	}
 
+	public static synchronized SettingsMetadata getMetadata() {
+		Settings settings = getInstance();
+		SettingsMetadata metadata = new SettingsMetadata();
+		metadata.settingsPath = activeSettingsPath == null ? null : activeSettingsPath.toString();
+		metadata.writable = getWritableSettingsMetadata();
+		metadata.pendingRestart = new ArrayList<>(pendingRestartSettings);
+
+		try {
+			metadata.fileChanged = getFileChangedSettings(settings);
+			metadata.fileDiffersFromRuntime = !metadata.fileChanged.isEmpty();
+		} catch (RuntimeException | IOException e) {
+			metadata.fileComparisonError = e.getMessage();
+		}
+
+		return metadata;
+	}
+
+	private static Map<String, WritableSettingMetadata> getWritableSettingsMetadata() {
+		Map<String, WritableSettingMetadata> writable = new LinkedHashMap<>();
+		for (Map.Entry<String, WritableSetting> entry : WRITABLE_SETTINGS.entrySet())
+			writable.put(entry.getKey(), new WritableSettingMetadata(entry.getValue()));
+
+		return writable;
+	}
+
+	private static List<String> getFileChangedSettings(Settings runtimeSettings) throws IOException {
+		if (activeSettingsPath == null)
+			return new ArrayList<>();
+
+		Settings fileSettings = prepareLoadedSettings(unmarshalSettings(activeSettingsPath), runtimeSettings.userPath);
+		List<String> changed = new ArrayList<>();
+
+		for (String settingName : WRITABLE_SETTINGS.keySet()) {
+			Object runtimeValue = getComparableSettingValue(runtimeSettings, settingName);
+			Object fileValue = getComparableSettingValue(fileSettings, settingName);
+			if (!Objects.equals(runtimeValue, fileValue))
+				changed.add(settingName);
+		}
+
+		return changed;
+	}
+
+	private static Object getComparableSettingValue(Settings settings, String settingName) {
+		try {
+			Field field = Settings.class.getDeclaredField(settingName);
+			field.setAccessible(true);
+			Object value = field.get(settings);
+			return SETTINGS_JSON_MAPPER.convertValue(value, Object.class);
+		} catch (NoSuchFieldException | IllegalAccessException e) {
+			throw new IllegalStateException("Unable to compare setting: " + settingName, e);
+		}
+	}
+
 	private static LinkedHashMap<String, Object> parseSettingsPatch(String patchJson) {
 		if (patchJson == null || patchJson.trim().isEmpty())
 			throw new IllegalArgumentException("Settings patch is empty");
@@ -1320,9 +1414,10 @@ public class Settings {
 				return value;
 
 			case INTEGER:
-				if (!(value instanceof Number))
-					throw new IllegalArgumentException("Setting must be an integer: " + settingName);
-				return ((Number) value).intValue();
+				return validateIntegerSetting(settingName, value);
+
+			case LONG:
+				return validateLongSetting(settingName, value);
 
 			case STRING:
 				if (!(value instanceof String))
@@ -1367,6 +1462,39 @@ public class Settings {
 			default:
 				throw new IllegalArgumentException("Unsupported writable setting type: " + writableSetting.type);
 		}
+	}
+
+	private static int validateIntegerSetting(String settingName, Object value) {
+		long longValue = validateLongSetting(settingName, value);
+		if (longValue < Integer.MIN_VALUE || longValue > Integer.MAX_VALUE)
+			throw new IllegalArgumentException("Setting integer is out of range: " + settingName);
+		return (int) longValue;
+	}
+
+	private static long validateLongSetting(String settingName, Object value) {
+		if (value instanceof Integer || value instanceof Long || value instanceof Short || value instanceof Byte)
+			return ((Number) value).longValue();
+
+		if (value instanceof BigInteger) {
+			try {
+				return ((BigInteger) value).longValueExact();
+			} catch (ArithmeticException e) {
+				throw new IllegalArgumentException("Setting integer is out of range: " + settingName, e);
+			}
+		}
+
+		if (value instanceof BigDecimal) {
+			try {
+				return ((BigDecimal) value).toBigIntegerExact().longValueExact();
+			} catch (ArithmeticException e) {
+				throw new IllegalArgumentException("Setting must be an integer: " + settingName, e);
+			}
+		}
+
+		if (value instanceof Number)
+			throw new IllegalArgumentException("Setting must be an integer: " + settingName);
+
+		throw new IllegalArgumentException("Setting must be an integer: " + settingName);
 	}
 
 	private static void validateStringArraySetting(String settingName, Object value) {
@@ -1497,6 +1625,15 @@ public class Settings {
 			}
 		}
 
+		validateOptionalPort("listenPort", this.listenPort);
+		validateOptionalPort("listenDataPort", this.listenDataPort);
+
+		if (this.maxPeers < 1)
+			throwValidationError("maxPeers must be at least 1");
+
+		if (this.maxDataPeers < 1)
+			throwValidationError("maxDataPeers must be at least 1");
+
 		if (this.i2pSamHost == null || this.i2pSamHost.trim().isEmpty())
 			throwValidationError("i2pSamHost must not be blank");
 
@@ -1511,6 +1648,17 @@ public class Settings {
 
 		if (this.publicQdnPublishMaxSize < 1)
 			throwValidationError("publicQdnPublishMaxSize must be at least 1 byte");
+
+		if (this.maxStorageCapacity != null && this.maxStorageCapacity < 1)
+			throwValidationError("maxStorageCapacity must be at least 1 byte");
+	}
+
+	private static void validateOptionalPort(String settingName, Integer port) {
+		if (port == null)
+			return;
+
+		if (port <= 0 || port > 65535)
+			throwValidationError(settingName + " must be between 1 and 65535");
 	}
 
 	private static Map<String, String> defaultBitcoinyNetworks() {

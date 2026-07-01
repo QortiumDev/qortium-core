@@ -388,6 +388,21 @@ public class AdminResource {
 	}
 
 	@GET
+	@Path("/settings/metadata")
+	@Operation(
+		summary = "Fetch node settings metadata",
+		description = "Returns the active settings path, writable settings metadata, pending restart settings, and file/runtime drift.",
+		responses = {
+			@ApiResponse(
+				content = @Content(mediaType = MediaType.APPLICATION_JSON, schema = @Schema(implementation = Settings.SettingsMetadata.class))
+			)
+		}
+	)
+	public Settings.SettingsMetadata settingsMetadata() {
+		return Settings.getMetadata();
+	}
+
+	@GET
 	@Path("/settings/{setting}")
 	@Operation(
 			summary = "Fetch a single node setting",

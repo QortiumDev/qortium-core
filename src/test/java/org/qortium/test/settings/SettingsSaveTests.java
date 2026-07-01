@@ -109,6 +109,40 @@ public class SettingsSaveTests extends Common {
 	}
 
 	@Test
+	public void testNodeNetworkAndCapacitySettingsAreSaved() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Settings.SettingsUpdateResult result = Settings.updateAndSave(
+				"{\"listenPort\":25000,\"listenDataPort\":25001,\"maxPeers\":40,\"maxDataPeers\":80,\"maxStorageCapacity\":1234567890123}");
+
+		assertTrue(result.saved);
+		assertTrue(result.updated.contains("listenPort"));
+		assertTrue(result.updated.contains("listenDataPort"));
+		assertTrue(result.updated.contains("maxPeers"));
+		assertTrue(result.updated.contains("maxDataPeers"));
+		assertTrue(result.updated.contains("maxStorageCapacity"));
+		assertTrue(result.restartRequired.contains("listenPort"));
+		assertTrue(result.restartRequired.contains("listenDataPort"));
+		assertTrue(result.restartRequired.contains("maxPeers"));
+		assertTrue(result.restartRequired.contains("maxDataPeers"));
+		assertTrue(result.applied.contains("maxStorageCapacity"));
+
+		assertEquals(25000, Settings.getInstance().getListenPort());
+		assertEquals(25001, Settings.getInstance().getQDNListenPort());
+		assertEquals(40, Settings.getInstance().getMaxPeers());
+		assertEquals(80, Settings.getInstance().getMaxDataPeers());
+		assertEquals(Long.valueOf(1234567890123L), Settings.getInstance().getMaxStorageCapacity());
+
+		Map<String, Object> savedSettings = readSettings(settingsPath);
+		assertEquals(25000, ((Number) savedSettings.get("listenPort")).intValue());
+		assertEquals(25001, ((Number) savedSettings.get("listenDataPort")).intValue());
+		assertEquals(40, ((Number) savedSettings.get("maxPeers")).intValue());
+		assertEquals(80, ((Number) savedSettings.get("maxDataPeers")).intValue());
+		assertEquals(1234567890123L, ((Number) savedSettings.get("maxStorageCapacity")).longValue());
+	}
+
+	@Test
 	public void testAutoUpdateEnabledSettingIsRejectedWithoutChangingFile() throws Exception {
 		Path settingsPath = createSettingsFile("{\"autoUpdateMode\":\"CHECK_ONLY\"}");
 		Settings.fileInstance(settingsPath.toString());
@@ -228,6 +262,34 @@ public class SettingsSaveTests extends Common {
 
 		assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
 		assertTrue(Settings.getInstance().isQdnEnabled());
+	}
+
+	@Test
+	public void testInvalidNodeNetworkAndCapacitySettingsAreRejectedWithoutChangingFile() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+		String originalJson = new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8);
+
+		for (String badPatch : new String[] {
+				"{\"listenPort\":0}",
+				"{\"listenPort\":65536}",
+				"{\"listenPort\":25000.5}",
+				"{\"listenDataPort\":0}",
+				"{\"listenDataPort\":65536}",
+				"{\"maxPeers\":0}",
+				"{\"maxDataPeers\":0}",
+				"{\"maxStorageCapacity\":0}",
+				"{\"maxStorageCapacity\":123.5}"
+		}) {
+			try {
+				Settings.updateAndSave(badPatch);
+				fail("Expected invalid node setting patch to be rejected: " + badPatch);
+			} catch (IllegalArgumentException e) {
+				// good
+			}
+
+			assertEquals(originalJson, new String(Files.readAllBytes(settingsPath), StandardCharsets.UTF_8));
+		}
 	}
 
 	@Test
@@ -523,6 +585,57 @@ public class SettingsSaveTests extends Common {
 
 		assertEquals("FOLLOWED", readSettings(redirectedSettingsPath).get("storagePolicy"));
 		assertFalse(readSettings(rootSettingsPath).containsKey("storagePolicy"));
+		assertEquals(StoragePolicy.FOLLOWED, Settings.getInstance().getStoragePolicy());
+	}
+
+	@Test
+	public void testSettingsMetadataReportsWritableSettingsAndPath() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Settings.SettingsMetadata metadata = Settings.getMetadata();
+
+		assertEquals(settingsPath.toAbsolutePath().normalize().toString(), metadata.settingsPath);
+		assertTrue(metadata.writable.containsKey("qdnEnabled"));
+		assertEquals("BOOLEAN", metadata.writable.get("qdnEnabled").type);
+		assertTrue(metadata.writable.get("qdnEnabled").restartRequired);
+		assertEquals("STORAGE_POLICY", metadata.writable.get("storagePolicy").type);
+		assertFalse(metadata.writable.get("storagePolicy").restartRequired);
+		assertTrue(metadata.pendingRestart.isEmpty());
+		assertFalse(metadata.fileDiffersFromRuntime);
+		assertTrue(metadata.fileChanged.isEmpty());
+	}
+
+	@Test
+	public void testSettingsMetadataTracksPendingRestartUntilReload() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\",\"qdnEnabled\":true}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Settings.updateAndSave("{\"qdnEnabled\":false,\"storagePolicy\":\"NONE\"}");
+
+		Settings.SettingsMetadata metadata = Settings.getMetadata();
+		assertTrue(metadata.pendingRestart.contains("qdnEnabled"));
+		assertFalse(metadata.pendingRestart.contains("storagePolicy"));
+		assertFalse(metadata.fileDiffersFromRuntime);
+
+		Settings.fileInstance(settingsPath.toString());
+		assertFalse(Settings.getMetadata().pendingRestart.contains("qdnEnabled"));
+	}
+
+	@Test
+	public void testSettingsMetadataReportsManualFileChanges() throws Exception {
+		Path settingsPath = createSettingsFile("{\"storagePolicy\":\"FOLLOWED\",\"qdnEnabled\":true}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Map<String, Object> savedSettings = readSettings(settingsPath);
+		savedSettings.put("storagePolicy", "NONE");
+		write(settingsPath, MAPPER.writeValueAsString(savedSettings));
+
+		Settings.SettingsMetadata metadata = Settings.getMetadata();
+
+		assertTrue(metadata.fileDiffersFromRuntime);
+		assertTrue(metadata.fileChanged.contains("storagePolicy"));
+		assertFalse(metadata.fileChanged.contains("qdnEnabled"));
 		assertEquals(StoragePolicy.FOLLOWED, Settings.getInstance().getStoragePolicy());
 	}
 

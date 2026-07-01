@@ -194,4 +194,42 @@ public class HSQLDBDatabaseUpdates {
 		StartupStatus.update(text);
 	}
 
+
+	private static void ensureArbitraryTransactionCreatedWhen(Connection connection) throws SQLException {
+		if (!columnExists(connection, "ARBITRARYTRANSACTIONS", "CREATED_WHEN")) {
+			LOGGER.info("Denormalizing created_when into ArbitraryTransactions - please wait...");
+			try (Statement stmt = connection.createStatement()) {
+				stmt.execute("ALTER TABLE PUBLIC.ARBITRARYTRANSACTIONS ADD CREATED_WHEN PUBLIC.EPOCHMILLIS");
+				stmt.execute("UPDATE PUBLIC.ARBITRARYTRANSACTIONS SET CREATED_WHEN = "
+						+ "(SELECT CREATED_WHEN FROM PUBLIC.TRANSACTIONS WHERE SIGNATURE = PUBLIC.ARBITRARYTRANSACTIONS.SIGNATURE)");
+				stmt.execute("ALTER TABLE PUBLIC.ARBITRARYTRANSACTIONS ALTER COLUMN CREATED_WHEN SET NOT NULL");
+			}
+		}
+
+		if (!indexExists(connection, "ARBITRARYTRANSACTIONS", "ARBITRARYNAMECREATEDINDEX")) {
+			try (Statement stmt = connection.createStatement()) {
+				stmt.execute("CREATE INDEX PUBLIC.ARBITRARYNAMECREATEDINDEX ON PUBLIC.ARBITRARYTRANSACTIONS (NAME, CREATED_WHEN DESC)");
+			}
+		}
+
+		connection.commit();
+	}
+
+	private static boolean columnExists(Connection connection, String tableName, String columnName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getColumns(null, "PUBLIC", tableName, columnName)) {
+			return resultSet.next();
+		}
+	}
+
+	private static boolean indexExists(Connection connection, String tableName, String indexName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getIndexInfo(null, "PUBLIC", tableName, false, false)) {
+			while (resultSet.next()) {
+				String candidate = resultSet.getString("INDEX_NAME");
+				if (indexName.equalsIgnoreCase(candidate))
+					return true;
+			}
+		}
+
+		return false;
+	}
 }

@@ -84,6 +84,29 @@ public class AdminApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testSettingsMetadata() throws Exception {
+		Path settingsPath = createWritableApiSettings("{\"storagePolicy\":\"NONE\"}");
+		Settings.fileInstance(settingsPath.toString());
+
+		Settings.SettingsMetadata metadata = this.adminResource.settingsMetadata();
+
+		assertEquals(settingsPath.toAbsolutePath().normalize().toString(), metadata.settingsPath);
+		assertTrue(metadata.writable.containsKey("storagePolicy"));
+		assertEquals("STORAGE_POLICY", metadata.writable.get("storagePolicy").type);
+		assertEquals("LONG", metadata.writable.get("maxStorageCapacity").type);
+		assertEquals(false, metadata.writable.get("maxStorageCapacity").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("listenPort").type);
+		assertEquals(true, metadata.writable.get("listenPort").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("listenDataPort").type);
+		assertEquals(true, metadata.writable.get("listenDataPort").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("maxPeers").type);
+		assertEquals(true, metadata.writable.get("maxPeers").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("maxDataPeers").type);
+		assertEquals(true, metadata.writable.get("maxDataPeers").restartRequired);
+		assertTrue(metadata.pendingRestart.isEmpty());
+	}
+
+	@Test
 	public void testSettingRequiresApiKey() {
 		assertApiError(ApiError.UNAUTHORIZED, () -> this.adminResource.setting("repositoryPath"));
 
