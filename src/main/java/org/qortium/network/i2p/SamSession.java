@@ -113,6 +113,7 @@ public class SamSession implements I2PStreamProvider {
     private final Path keyFile;       // persists PUB/PRIV so our .b32.i2p is stable across restarts
 
     private final AtomicBoolean sessionUp = new AtomicBoolean(false);
+    private final AtomicBoolean closeRequested = new AtomicBoolean(false);
 
     private SocketChannel controlChannel;     // owns the session; must stay open
     private SocketChannel forwardChannel;      // owns the STREAM FORWARD; must stay open
@@ -134,12 +135,18 @@ public class SamSession implements I2PStreamProvider {
      * dispatched elsewhere (the callers do this).
      */
     private final Runnable onSessionUp;
+    private final Runnable onSessionDown;
 
     public SamSession(String samHost, int samPort, String sessionId, Path keyFile) {
-        this(samHost, samPort, sessionId, keyFile, null);
+        this(samHost, samPort, sessionId, keyFile, null, null);
     }
 
     public SamSession(String samHost, int samPort, String sessionId, Path keyFile, Runnable onSessionUp) {
+        this(samHost, samPort, sessionId, keyFile, onSessionUp, null);
+    }
+
+    public SamSession(String samHost, int samPort, String sessionId, Path keyFile, Runnable onSessionUp,
+                      Runnable onSessionDown) {
         if (samHost == null || samHost.isBlank())
             throw new IllegalArgumentException("SAM host cannot be blank");
         if (samPort <= 0 || samPort > 65535)
@@ -152,6 +159,7 @@ public class SamSession implements I2PStreamProvider {
         this.sessionId = sessionId;
         this.keyFile = Objects.requireNonNull(keyFile, "keyFile");
         this.onSessionUp = onSessionUp;
+        this.onSessionDown = onSessionDown;
     }
 
     /**
@@ -169,6 +177,7 @@ public class SamSession implements I2PStreamProvider {
         if (sessionUp.get())
             return;
 
+        closeRequested.set(false);
         awaitDestinationCooldown();
 
         controlChannel = openSam();
@@ -229,6 +238,20 @@ public class SamSession implements I2PStreamProvider {
             onSessionUp.run();
         } catch (RuntimeException e) {
             LOGGER.warn("I2P session '{}' onSessionUp callback failed: {}", sessionId, e.getMessage());
+        }
+    }
+
+    /**
+     * Notify the owner that an established SAM session died outside an explicit close path, so it can
+     * rebuild the fallback provider even if no later outbound I2P dial happens to notice the loss.
+     */
+    private void fireSessionDown() {
+        if (onSessionDown == null)
+            return;
+        try {
+            onSessionDown.run();
+        } catch (RuntimeException e) {
+            LOGGER.warn("I2P session '{}' onSessionDown callback failed: {}", sessionId, e.getMessage());
         }
     }
 
@@ -372,17 +395,32 @@ public class SamSession implements I2PStreamProvider {
 
     @Override
     public synchronized void close() {
-        sessionUp.set(false);
-        localB32 = null;
+        closeRequested.set(true);
         if (controlReader != null)
             controlReader.interrupt();
+        markSessionDownAndClose();
+    }
+
+    /**
+     * Mark the session down and close stale SAM sockets. Returns true only for the first transition from
+     * up -> down, which is the transition owners need to hear about.
+     */
+    private synchronized boolean markSessionDownAndClose() {
+        boolean wasUp = sessionUp.getAndSet(false);
+        localB32 = null;
+
         boolean hadSession = controlChannel != null;
         closeQuietly(forwardChannel);
         closeQuietly(controlChannel);
+        forwardChannel = null;
+        controlChannel = null;
+
         // Only record a teardown if i2pd actually had a session/destination to release (a failed SAM
         // connect created nothing), so we don't impose the cooldown when the router was simply down.
         if (hadSession)
             recordDestinationTeardown();
+
+        return wasUp;
     }
 
     /**
@@ -513,7 +551,10 @@ public class SamSession implements I2PStreamProvider {
                 if (sessionUp.get())
                     LOGGER.warn("I2P session '{}' control connection lost: {}", sessionId, e.getMessage());
             } finally {
-                sessionUp.set(false); // session is gone until restarted
+                boolean notifyOwner = !closeRequested.get();
+                boolean wasUp = markSessionDownAndClose(); // session is gone until restarted
+                if (notifyOwner && wasUp)
+                    fireSessionDown();
             }
         }, "i2p-sam-" + sessionId);
         controlReader.setDaemon(true);

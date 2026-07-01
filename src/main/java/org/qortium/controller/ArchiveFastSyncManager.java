@@ -414,18 +414,30 @@ public class ArchiveFastSyncManager extends Thread {
 			// checkpoint block — succeeds. A forged sub-checkpoint prefix fails at H_cp and is rolled back.
 			repository.setSavepoint();
 			try {
-				ArchiveChunkImporter.replayArchivedBlocks(repository, 2, toHeight, checkpointHeight);
+				Controller.getInstance().setArchiveReplayHeight(repository.getBlockRepository().getBlockchainHeight());
+				ArchiveChunkImporter.replayArchivedBlocks(repository, 2, toHeight, checkpointHeight, height -> {
+					Controller.getInstance().setArchiveReplayHeight(height);
+					LOGGER.info("Archive fast-sync: replayed through height {} of {}", height, toHeight);
+				});
 				repository.saveChanges();
 			} catch (DataException e) {
-				repository.rollbackToSavepoint();
-				deleteChunks(written);
-				LOGGER.warn("Archive fast-sync: replay failed and was rolled back: {}", e.getMessage());
-				return false;
+				try {
+					repository.rollbackToSavepoint();
+					deleteChunks(written);
+					LOGGER.warn("Archive fast-sync: replay failed and was rolled back: {}", e.getMessage());
+					return false;
+				} finally {
+					Controller.getInstance().clearArchiveReplayHeight();
+				}
 			}
 
 			// Refresh the in-memory chain-tip cache so we don't keep advertising the old (genesis) height to
 			// peers / the API / systray until the next applied block would otherwise self-heal it.
-			Controller.getInstance().refillLatestBlocksCache();
+			try {
+				Controller.getInstance().refillLatestBlocksCache();
+			} finally {
+				Controller.getInstance().clearArchiveReplayHeight();
+			}
 
 			LOGGER.info("Archive fast-sync: replayed to height {} (checkpoint {} verified). Handing off to normal sync.", toHeight, checkpointHeight);
 		} finally {

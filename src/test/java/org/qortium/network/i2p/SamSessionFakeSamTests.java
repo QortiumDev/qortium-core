@@ -19,6 +19,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -166,6 +168,43 @@ public class SamSessionFakeSamTests {
 		session.startForward(34567);
 	}
 
+	@Test
+	public void testControlConnectionLossMarksSessionDownAndFiresCallback() throws Exception {
+		this.server = new FakeSamServer(FAKE_PUB, FAKE_PRIV, "OK", true);
+		AtomicInteger downCallbacks = new AtomicInteger();
+		session = new SamSession("127.0.0.1", server.port(), "qortium-fakesam-test",
+				freshKeyDir().resolve("chain.keys"), null, downCallbacks::incrementAndGet);
+		session.setMinRealSessionBuildMillisForTesting(0);
+		session.start();
+
+		assertTrue(session.isSessionUp());
+		assertEquals(EXPECTED_B32, session.getLocalB32());
+
+		server.closeConnections();
+
+		waitUntil("session down callback", () -> downCallbacks.get() == 1 && !session.isSessionUp());
+		assertFalse(session.isSessionUp());
+		assertNull(session.getLocalB32());
+		assertEquals(1, downCallbacks.get());
+	}
+
+	@Test
+	public void testExplicitCloseDoesNotFireSessionDownCallback() throws Exception {
+		this.server = new FakeSamServer(FAKE_PUB, FAKE_PRIV, "OK", true);
+		AtomicInteger downCallbacks = new AtomicInteger();
+		session = new SamSession("127.0.0.1", server.port(), "qortium-fakesam-test",
+				freshKeyDir().resolve("chain.keys"), null, downCallbacks::incrementAndGet);
+		session.setMinRealSessionBuildMillisForTesting(0);
+		session.start();
+
+		assertTrue(session.isSessionUp());
+
+		session.close();
+
+		waitUntil("explicit close", () -> !session.isSessionUp());
+		assertEquals(0, downCallbacks.get());
+	}
+
 	// ---- readForwardedDestination() ---------------------------------------------------------
 
 	@Test
@@ -216,6 +255,16 @@ public class SamSessionFakeSamTests {
 		}
 	}
 
+	private static void waitUntil(String description, BooleanSupplier condition) throws Exception {
+		long deadline = System.currentTimeMillis() + 5_000L;
+		while (System.currentTimeMillis() < deadline) {
+			if (condition.getAsBoolean())
+				return;
+			Thread.sleep(25L);
+		}
+		throw new AssertionError("Timed out waiting for " + description);
+	}
+
 	private static void deleteRecursively(Path dir) throws IOException {
 		if (!Files.exists(dir)) return;
 		try (var paths = Files.walk(dir)) {
@@ -256,6 +305,14 @@ public class SamSessionFakeSamTests {
 
 		boolean destGenerateSeen() {
 			return destGenerateSeen;
+		}
+
+		void closeConnections() {
+			synchronized (sockets) {
+				for (Socket s : sockets) {
+					try { s.close(); } catch (IOException ignored) { }
+				}
+			}
 		}
 
 		private void acceptLoop() {
@@ -332,11 +389,7 @@ public class SamSessionFakeSamTests {
 		@Override
 		public void close() throws IOException {
 			serverSocket.close();
-			synchronized (sockets) {
-				for (Socket s : sockets) {
-					try { s.close(); } catch (IOException ignored) { }
-				}
-			}
+			closeConnections();
 		}
 	}
 }

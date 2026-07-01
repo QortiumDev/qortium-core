@@ -9,13 +9,17 @@ import org.junit.Test;
 import org.qortium.controller.BlockMinter;
 import org.qortium.controller.repository.ArchiveChunkImporter;
 import org.qortium.crypto.Crypto;
+import org.qortium.data.transaction.TransactionData;
 import org.qortium.repository.BlockArchiveReader;
 import org.qortium.repository.BlockArchiveWriter;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.settings.Settings;
+import org.qortium.test.common.BlockUtils;
 import org.qortium.test.common.Common;
+import org.qortium.test.common.TransactionUtils;
+import org.qortium.transaction.Transaction.TransactionType;
 import org.qortium.transform.TransformationException;
 import org.qortium.utils.NTP;
 
@@ -23,8 +27,12 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -96,6 +104,47 @@ public class ArchiveChunkImporterTests extends Common {
 		// Too-short buffer -> rejected, not an exception.
 		assertFalse(ArchiveChunkImporter.isChunkHeaderValid(new byte[4], 2, 250));
 		assertFalse(ArchiveChunkImporter.isChunkHeaderValid(null, 2, 250));
+	}
+
+	@Test
+	public void testReplayPersistsArchivedTransactionsBeforeBlockLink() throws Exception {
+		byte[] paymentSignature;
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			TransactionData paymentData = TransactionUtils.randomTransaction(repository,
+					Common.getTestAccount(repository, "alice"), TransactionType.PAYMENT, true);
+			TransactionUtils.signAndMint(repository, paymentData, Common.getTestAccount(repository, "alice"));
+			paymentSignature = paymentData.getSignature();
+
+			assertEquals("payment block height before archive", 2,
+					repository.getTransactionRepository().fromSignature(paymentSignature).getBlockHeight().intValue());
+
+			for (int height = repository.getBlockRepository().getBlockchainHeight(); height < 300; height++)
+				BlockMinter.mintTestingBlock(repository, Common.getTestAccount(repository, "alice-reward-share"));
+
+			BlockArchiveWriter writer = new BlockArchiveWriter(0, 250, repository);
+			writer.setShouldEnforceFileSizeTarget(false);
+			writer.write();
+
+			BlockUtils.orphanToBlock(repository, 1);
+			assertEquals("payment transaction should be absent after orphaning archived range", null,
+					repository.getTransactionRepository().fromSignature(paymentSignature));
+
+			BlockArchiveReader.getInstance().invalidateFileListCache();
+			List<Integer> progressHeights = new ArrayList<>();
+			int replayedHeight = ArchiveChunkImporter.replayArchivedBlocks(repository, 2, 250, 0, progressHeights::add);
+			repository.saveChanges();
+
+			assertEquals(250, replayedHeight);
+			assertFalse("archive replay should report progress", progressHeights.isEmpty());
+			assertEquals(Integer.valueOf(250), progressHeights.get(progressHeights.size() - 1));
+			assertEquals(250, repository.getBlockRepository().getBlockchainHeight());
+
+			TransactionData replayedPayment = repository.getTransactionRepository().fromSignature(paymentSignature);
+			assertNotNull("archived payment transaction should be saved before block link", replayedPayment);
+			assertEquals(2, replayedPayment.getBlockHeight().intValue());
+			assertEquals(0, replayedPayment.getBlockSequence().intValue());
+		}
 	}
 
 	/** Mint enough blocks to archive a single deterministic chunk "2-250.dat" and return its raw bytes. */

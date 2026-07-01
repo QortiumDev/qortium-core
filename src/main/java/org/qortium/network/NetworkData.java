@@ -402,6 +402,7 @@ public class NetworkData {
             }
         } finally {
             this.i2pStartupInProgress.set(false);
+            restartI2PDataFallbackIfSessionDown();
         }
     }
 
@@ -410,7 +411,7 @@ public class NetworkData {
         // there is nothing to re-advertise when the data SAM session comes up. The I2P data layer is
         // bootstrapped via initialDataPeers plus data-layer gossip instead.
         I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
-                nextI2PDataSessionId(), settings.getI2PDataKeyPath());
+                nextI2PDataSessionId(), settings.getI2PDataKeyPath(), null, this::onI2PDataSessionDown);
         ServerSocketChannel forwardServerChannel = null;
 
         try {
@@ -431,6 +432,8 @@ public class NetworkData {
             provider.startForward(localForwardPort);
             if (this.isShuttingDown)
                 throw new IOException("NetworkData is shutting down");
+            if (!provider.isSessionUp())
+                throw new IOException("I2P data session went down during startup");
 
             this.dataI2PStreamProvider = provider;
             this.i2pServerChannel = forwardServerChannel;
@@ -513,6 +516,25 @@ public class NetworkData {
             return null;
 
         return provider.getLocalB32();
+    }
+
+    private void onI2PDataSessionDown() {
+        Thread t = new Thread(this::restartI2PDataFallbackIfSessionDown, "i2p-restart-data");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void restartI2PDataFallbackIfSessionDown() {
+        if (this.isShuttingDown || this.i2pStartupInProgress.get())
+            return;
+
+        I2PStreamProvider provider = this.dataI2PStreamProvider;
+        if (provider == null || provider.isSessionUp())
+            return;
+
+        LOGGER.warn("NetworkData I2P fallback session went down; restarting fallback");
+        closeI2PDataFallback();
+        startI2PDataFallbackAsync();
     }
 
     public SocketChannel connectI2PDataPeer(String remoteB32) throws IOException {

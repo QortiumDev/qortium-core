@@ -395,12 +395,14 @@ public class Network {
             }
         } finally {
             this.i2pStartupInProgress.set(false);
+            restartI2PChainFallbackIfSessionDown();
         }
     }
 
     private boolean startI2PChainFallbackAttempt(Settings settings) {
         I2PStreamProvider provider = new SamSession(settings.getI2PSamHost(), settings.getI2PSamPort(),
-                nextI2PChainSessionId(), settings.getI2PChainKeyPath(), this::onI2PChainSessionUp);
+                nextI2PChainSessionId(), settings.getI2PChainKeyPath(), this::onI2PChainSessionUp,
+                this::onI2PChainSessionDown);
         ServerSocketChannel forwardServerChannel = null;
 
         try {
@@ -421,6 +423,8 @@ public class Network {
             provider.startForward(localForwardPort);
             if (this.isShuttingDown)
                 throw new IOException("Network is shutting down");
+            if (!provider.isSessionUp())
+                throw new IOException("I2P chain session went down during startup");
 
             this.chainI2PStreamProvider = provider;
             this.i2pServerChannel = forwardServerChannel;
@@ -522,6 +526,25 @@ public class Network {
         Thread t = new Thread(this::reAdvertiseI2PChainCapability, "i2p-readvertise-chain");
         t.setDaemon(true);
         t.start();
+    }
+
+    private void onI2PChainSessionDown() {
+        Thread t = new Thread(this::restartI2PChainFallbackIfSessionDown, "i2p-restart-chain");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void restartI2PChainFallbackIfSessionDown() {
+        if (this.isShuttingDown || this.i2pStartupInProgress.get())
+            return;
+
+        I2PStreamProvider provider = this.chainI2PStreamProvider;
+        if (provider == null || provider.isSessionUp())
+            return;
+
+        LOGGER.warn("Network I2P fallback session went down; restarting fallback");
+        closeI2PChainFallback();
+        startI2PChainFallbackAsync();
     }
 
     private void reAdvertiseI2PChainCapability() {

@@ -12,12 +12,18 @@ import org.qortium.repository.Repository;
 import org.qortium.repository.RepositoryManager;
 import org.qortium.test.common.Common;
 import org.qortium.test.common.transaction.AtTestTransaction;
+import org.qortium.transaction.AtTransaction;
 import org.qortium.transaction.Transaction;
 import org.qortium.transform.TransformationException;
+import org.qortium.transform.Transformer;
 import org.qortium.transform.transaction.TransactionTransformer;
 import org.qortium.utils.Base58;
 
+import java.nio.ByteBuffer;
+
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class AtSerializationTests extends Common {
 
@@ -91,6 +97,81 @@ public class AtSerializationTests extends Common {
             byte[] reserializedTransaction = TransactionTransformer.toBytes(deserializedTransactionData);
             assertEquals("Reserialized MESSAGE-type AT transaction bytes differ", HashCode.fromBytes(serializedTransaction).toString(), HashCode.fromBytes(reserializedTransaction).toString());
         }
+    }
+
+    @Test
+    public void testEmptyMessageTypeAtSerialization() throws DataException, TransformationException {
+        roundTripMessageType(new byte[0]);
+    }
+
+    @Test
+    public void testMaxSizeMessageTypeAtSerialization() throws DataException, TransformationException {
+        byte[] message = new byte[AtTransaction.MAX_DATA_SIZE];
+        for (int i = 0; i < message.length; ++i)
+            message[i] = (byte) i;
+
+        roundTripMessageType(message);
+    }
+
+    @Test
+    public void testMessageTypeAtRejectsNegativeMessageLength() throws DataException, TransformationException {
+        assertMutatedMessageLengthRejected(-1);
+    }
+
+    @Test
+    public void testMessageTypeAtRejectsExcessiveMessageLength() throws DataException, TransformationException {
+        assertMutatedMessageLengthRejected(AtTransaction.MAX_DATA_SIZE + 1);
+    }
+
+    @Test
+    public void testMessageTypeAtRejectsMessageLengthOverrun() throws DataException, TransformationException {
+        assertMutatedMessageLengthRejected(AtTransaction.MAX_DATA_SIZE);
+    }
+
+    private void roundTripMessageType(byte[] message) throws DataException, TransformationException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount signingAccount = Common.getTestAccount(repository, "alice");
+            ATTransactionData transactionData = (ATTransactionData) AtTestTransaction.messageType(repository, signingAccount, true, message);
+            Transaction transaction = Transaction.fromData(repository, transactionData);
+            transaction.sign(signingAccount);
+
+            byte[] serializedTransaction = TransactionTransformer.toBytes(transactionData);
+            TransactionData deserializedTransactionData = TransactionTransformer.fromBytes(serializedTransaction);
+
+            assertArrayEquals(message, ((ATTransactionData) deserializedTransactionData).getMessage());
+            assertEquals(TransactionTransformer.getDataLength(transactionData),
+                    TransactionTransformer.getDataLength(deserializedTransactionData));
+            assertEquals(HashCode.fromBytes(serializedTransaction).toString(),
+                    HashCode.fromBytes(TransactionTransformer.toBytes(deserializedTransactionData)).toString());
+        }
+    }
+
+    private void assertMutatedMessageLengthRejected(int declaredMessageLength) throws DataException, TransformationException {
+        try (final Repository repository = RepositoryManager.getRepository()) {
+            PrivateKeyAccount signingAccount = Common.getTestAccount(repository, "alice");
+            ATTransactionData transactionData = (ATTransactionData) AtTestTransaction.messageType(repository, signingAccount, true);
+            Transaction transaction = Transaction.fromData(repository, transactionData);
+            transaction.sign(signingAccount);
+
+            byte[] serializedTransaction = TransactionTransformer.toBytes(transactionData);
+            ByteBuffer.wrap(serializedTransaction).putInt(messageLengthOffset(), declaredMessageLength);
+
+            try {
+                TransactionTransformer.fromBytes(serializedTransaction);
+            } catch (TransformationException e) {
+                return;
+            }
+
+            fail("Expected malformed AT message length to be rejected");
+        }
+    }
+
+    private static int messageLengthOffset() {
+        return Transformer.INT_LENGTH
+                + Transformer.TIMESTAMP_LENGTH
+                + Transformer.ADDRESS_LENGTH
+                + Transformer.ADDRESS_LENGTH
+                + Transformer.INT_LENGTH;
     }
 
 }

@@ -6,10 +6,13 @@ import org.apache.logging.log4j.Logger;
 import org.qortium.block.Block;
 import org.qortium.crypto.Crypto;
 import org.qortium.data.block.BlockData;
+import org.qortium.data.transaction.TransactionData;
 import org.qortium.repository.BlockArchiveReader;
 import org.qortium.repository.DataException;
 import org.qortium.repository.Repository;
 import org.qortium.settings.Settings;
+import org.qortium.transaction.Transaction;
+import org.qortium.transaction.Transaction.TransactionType;
 import org.qortium.transform.block.BlockTransformation;
 
 import java.io.IOException;
@@ -18,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.function.IntConsumer;
 
 /**
  * Verifies and imports a downloaded block-archive {@code .dat} chunk, then replays its blocks into the
@@ -47,6 +51,7 @@ import java.nio.file.StandardCopyOption;
 public class ArchiveChunkImporter {
 
 	private static final Logger LOGGER = LogManager.getLogger(ArchiveChunkImporter.class);
+	private static final int REPLAY_PROGRESS_INTERVAL_BLOCKS = 250;
 
 	private ArchiveChunkImporter() {
 	}
@@ -131,8 +136,14 @@ public class ArchiveChunkImporter {
 	 * @return the height successfully replayed up to
 	 */
 	public static int replayArchivedBlocks(Repository repository, int fromHeight, int toHeight, int trustedCheckpointHeight) throws DataException {
+		return replayArchivedBlocks(repository, fromHeight, toHeight, trustedCheckpointHeight, null);
+	}
+
+	public static int replayArchivedBlocks(Repository repository, int fromHeight, int toHeight, int trustedCheckpointHeight,
+			IntConsumer progressCallback) throws DataException {
 		BlockArchiveReader reader = BlockArchiveReader.getInstance();
 		int lastHeight = fromHeight - 1;
+		int lastProgressHeight = lastHeight;
 
 		for (int height = fromHeight; height <= toHeight; ++height) {
 			BlockTransformation blockTransformation = reader.fetchBlockAtHeight(height);
@@ -141,6 +152,12 @@ public class ArchiveChunkImporter {
 
 			replayBlock(repository, blockTransformation, trustedCheckpointHeight);
 			lastHeight = height;
+
+			if (progressCallback != null
+					&& (height == toHeight || height - lastProgressHeight >= REPLAY_PROGRESS_INTERVAL_BLOCKS)) {
+				progressCallback.accept(height);
+				lastProgressHeight = height;
+			}
 		}
 
 		return lastHeight;
@@ -176,6 +193,18 @@ public class ArchiveChunkImporter {
 		Block.ValidationResult validationResult = block.isValid(trustedReplay);
 		if (validationResult != Block.ValidationResult.OK)
 			throw new DataException(String.format("Archive fast-replay: block at height %d failed validation: %s", height, validationResult.name()));
+
+		// Archive-replayed blocks carry their transactions straight from the archive. Normal sync saves a
+		// block's transactions as unconfirmed before the block that confirms them is processed; archive replay
+		// has to recreate that invariant so Block.linkTransactionsToBlock() can satisfy its FK to Transactions.
+		// AT transactions are created and saved by Block.processTransactions(), so leave those to that path.
+		for (TransactionData transactionData : blockTransformation.getTransactions()) {
+			if (transactionData.getType() == TransactionType.AT)
+				continue;
+			Transaction transaction = Transaction.fromData(repository, transactionData);
+			transaction.setInitialApprovalStatus();
+			repository.getTransactionRepository().save(transactionData);
+		}
 
 		block.process();
 		// Intentionally no saveChanges() here: the caller commits the whole replayed range atomically so that a

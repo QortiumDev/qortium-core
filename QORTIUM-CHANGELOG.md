@@ -34,6 +34,28 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-30 - core: prepare 1.2.1 stabilization fixes
+
+Prepares the next Core stabilization prerelease with fixes found during live
+Previewnet and archive fast-sync testing, plus the safe Qortal 6.1.8 validation
+follow-ups. I2P fallback sessions now notice an unexpected SAM control
+disconnect and rebuild the chain or data fallback session instead of staying
+down until another operation happens to touch I2P. Archive fast-sync now saves
+non-AT transactions from archived blocks before replay links those transactions
+to their block, matching the normal sync invariant and preventing the
+`BlockTransactions` foreign-key failure seen on fresh-node replay. While archive
+replay is running, local status and the tray can show the replayed height moving
+forward without advertising that uncommitted height to peers before the atomic
+checkpoint-gated replay commits.
+
+This also adapts the relevant Qortal 6.1.8 parser hardening without adopting
+Qortal's version bump or peer-version floor. Grouped online-account and
+trade-presence peer messages now validate every group count before reading the
+group, `NamesMessage` uses a minimum entry-size precheck so valid short multi-name
+responses are not rejected, and AT MESSAGE transactions now deserialize up to the
+existing 256-byte validator limit while explicitly rejecting negative,
+over-sized, or over-declared message lengths.
+
 ### 2026-06-30 - network: harden connection direction reachability for #80
 
 Makes peer connection direction account for real inbound reachability instead
