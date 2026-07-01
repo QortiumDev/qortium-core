@@ -10,6 +10,7 @@ import org.qortium.transform.Transformer;
 import org.qortium.transform.block.BlockTransformer;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -172,6 +173,26 @@ public class AccountMessageTests {
 		assertEquals(nameData.getSaleRecipient(), decodedData.getSaleRecipient());
 		assertArrayEquals(nameData.getReference(), decodedData.getReference());
 		assertEquals(nameData.getCreationGroupId(), decodedData.getCreationGroupId());
+	}
+
+	@Test
+	public void testShortNamesMessageAcceptsMultipleEntries() throws MessageException {
+		LiteDataAnchor anchor = anchor();
+		String owner = Common.getTestAccount(null, "alice").getAddress();
+		byte[] reference = new byte[Transformer.SIGNATURE_LENGTH];
+		for (int i = 0; i < reference.length; i++)
+			reference[i] = (byte) (i + 1);
+
+		NameData firstName = new NameData("a", "a", owner, "{}", 12345L, reference, 1);
+		NameData secondName = new NameData("b", "b", owner, "{}", 12346L, reference, 1);
+		NamesMessage message = new NamesMessage(Arrays.asList(firstName, secondName), anchor);
+
+		NamesMessage decodedMessage = (NamesMessage) NamesMessage.fromByteBuffer(123, ByteBuffer.wrap(message.dataBytes));
+
+		assertEquals(LiteDataResponseStatus.DATA, decodedMessage.getStatus());
+		assertEquals(2, decodedMessage.getNameDataList().size());
+		assertEquals(firstName.getName(), decodedMessage.getNameDataList().get(0).getName());
+		assertEquals(secondName.getName(), decodedMessage.getNameDataList().get(1).getName());
 	}
 
 	@Test

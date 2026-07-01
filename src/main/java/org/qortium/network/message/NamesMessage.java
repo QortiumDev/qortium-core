@@ -19,16 +19,14 @@ import java.util.List;
 public class NamesMessage extends Message {
 
 	private static final int SIGNATURE_LENGTH = Transformer.SIGNATURE_LENGTH;
-	private static final long ENTRY_SIZE
-		= Name.MAX_NAME_SIZE + // name
-			Name.MAX_NAME_SIZE + // reduced name
+	private static final long MIN_ENTRY_SIZE
+		= Transformer.INT_LENGTH + // name length
+			Transformer.INT_LENGTH + // reduced name length
 			Transformer.ADDRESS_LENGTH + // owner
-			Name.MAX_DATA_SIZE + // data
+			Transformer.INT_LENGTH + // data length
 			Transformer.LONG_LENGTH + // registered timestamp
 			Transformer.INT_LENGTH + // was updated
-			Transformer.LONG_LENGTH + // updated timestamp
 			Transformer.INT_LENGTH + // is for sale
-			Transformer.LONG_LENGTH + // sale price
 			SIGNATURE_LENGTH + // reference
 			Transformer.INT_LENGTH; // creation group Id
 
@@ -160,8 +158,8 @@ public class NamesMessage extends Message {
 
 			final int nameCount = bytes.getInt();
 
-			// if negative count or count * entry size > remaining, then invalid count
-			if (nameCount < 0 || ((long) nameCount * ENTRY_SIZE) > bytes.remaining())
+			// if negative count or count * minimum entry size > remaining, then invalid count
+			if (nameCount < 0 || ((long) nameCount * MIN_ENTRY_SIZE) > bytes.remaining())
 				throw new MessageException("invalid name count");
 
 			List<NameData> nameDataList = new ArrayList<>(nameCount);

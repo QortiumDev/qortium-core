@@ -85,11 +85,7 @@ public class OnlineAccountsMessage extends Message {
 	}
 
 	public static Message fromByteBuffer(int id, ByteBuffer bytes) throws MessageException {
-		int accountCount = bytes.getInt();
-
-		// if negative count or (count * entry size) + timestamp > remaining, then invalid count
-		if (accountCount < 0 || (((long) accountCount * ENTRY_SIZE) + Transformer.LONG_LENGTH) > bytes.remaining())
-			throw new MessageException("invalid online accounts count");
+		int accountCount = GroupedMessageUtils.readInitialGroupCount(bytes, ENTRY_SIZE, "invalid online accounts count");
 
 		List<OnlineAccountData> onlineAccounts = new ArrayList<>(accountCount);
 
@@ -114,7 +110,7 @@ public class OnlineAccountsMessage extends Message {
 			}
 
 			if (bytes.hasRemaining()) {
-				accountCount = bytes.getInt();
+				accountCount = GroupedMessageUtils.readNextGroupCount(bytes, ENTRY_SIZE, "invalid online accounts count");
 			} else {
 				// we've finished
 				accountCount = 0;

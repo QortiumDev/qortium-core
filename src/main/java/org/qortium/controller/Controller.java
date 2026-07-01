@@ -82,6 +82,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
@@ -128,6 +129,7 @@ public class Controller extends Thread {
 
 	/** Latest blocks on our chain. Note: tail/last is the latest block. */
 	private final Deque<BlockData> latestBlocks = new LinkedList<>();
+	private final AtomicInteger archiveReplayHeight = new AtomicInteger(0);
 
 	/** Cache of BlockMessages, indexed by block signature */
 	@SuppressWarnings("serial")
@@ -354,6 +356,36 @@ public class Controller extends Thread {
 				return 0;
 
 			return blockData.getHeight();
+		}
+	}
+
+	/** Returns committed chain height plus any in-progress archive replay height for local status displays only. */
+	public int getStatusChainHeight() {
+		return Math.max(this.getChainHeight(), this.archiveReplayHeight.get());
+	}
+
+	public void setArchiveReplayHeight(int height) {
+		int boundedHeight = Math.max(0, height);
+		int previousHeight;
+		do {
+			previousHeight = this.archiveReplayHeight.get();
+			if (boundedHeight <= previousHeight)
+				return;
+		} while (!this.archiveReplayHeight.compareAndSet(previousHeight, boundedHeight));
+
+		this.notifyArchiveReplayStatusChanged();
+	}
+
+	public void clearArchiveReplayHeight() {
+		if (this.archiveReplayHeight.getAndSet(0) > 0)
+			this.notifyArchiveReplayStatusChanged();
+	}
+
+	private void notifyArchiveReplayStatusChanged() {
+		try {
+			this.updateSysTray();
+		} catch (RuntimeException e) {
+			LOGGER.debug("Couldn't publish archive replay status update", e);
 		}
 	}
 
@@ -1130,7 +1162,7 @@ public class Controller extends Thread {
 		final List<Peer> handshakedPeers = Network.getInstance().getImmutableHandshakedPeers();
 		final int numberOfPeers = handshakedPeers.size();
 
-		final int height = getChainHeight();
+		final int height = getStatusChainHeight();
 
 		String connectionsText = Translator.INSTANCE.translate("SysTray", numberOfPeers != 1 ? "CONNECTIONS" : "CONNECTION");
 		String heightText = Translator.INSTANCE.translate("SysTray", "BLOCK_HEIGHT");

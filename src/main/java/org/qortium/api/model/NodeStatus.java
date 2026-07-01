@@ -140,7 +140,7 @@ public class NodeStatus {
 		this.isQDNListenSocketAvailable = dataPeerStats.listenSocketAvailable;
 		this.isQDNPortMapped = dataPeerStats.portMapped;
 
-		this.height = controller.getChainHeight();
+		this.height = controller.getStatusChainHeight();
 
 		SyncProgress syncProgress = calculateSyncProgress(this.height, synchronizer.getSyncTargetHeight(),
 				this.isSynchronizing, getBestPeerHeight(handshakedPeers), controller.isUpToDate(),

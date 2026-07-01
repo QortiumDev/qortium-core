@@ -7,6 +7,7 @@ import org.qortium.data.transaction.ATTransactionData;
 import org.qortium.data.transaction.BaseTransactionData;
 import org.qortium.data.transaction.TransactionData;
 import org.qortium.group.Group;
+import org.qortium.transaction.AtTransaction;
 import org.qortium.transform.TransformationException;
 import org.qortium.utils.Serialization;
 
@@ -42,13 +43,17 @@ public class AtTransactionTransformer extends TransactionTransformer {
 		if (isMessageType) {
 			messageLength = byteBuffer.getInt();
 
-			if (messageLength > 0) {
-				if (messageLength > SHA256_LENGTH)
-					throw new TransformationException("excessive message length " + messageLength);
+			if (messageLength < 0)
+				throw new TransformationException("negative message length " + messageLength);
 
-				message = new byte[messageLength];
-				byteBuffer.get(message);
-			}
+			if (messageLength > AtTransaction.MAX_DATA_SIZE)
+				throw new TransformationException("excessive message length " + messageLength);
+
+			if (messageLength > byteBuffer.remaining())
+				throw new TransformationException("message length exceeds remaining bytes " + messageLength);
+
+			message = new byte[messageLength];
+			byteBuffer.get(message);
 		}
 		else {
 			assetId = byteBuffer.getLong();
