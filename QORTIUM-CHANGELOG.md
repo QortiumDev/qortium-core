@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-01 - release: move version to 1.2.2
+
+Bumps the project version from 1.2.1 to 1.2.2, the version the node now reports
+to peers and in its API (the build version becomes `1.2.2` plus the commit).
+This Previewnet patch release packages the Core settings metadata endpoint,
+writable peer and storage settings coverage, the arbitrary-data HSQLDB query
+optimization port, the BlockMinter common-block race fix, and the updated
+Previewnet peer and data-bootstrap defaults that landed after 1.2.1. The change
+here is only the release version string and changelog entry; the behavioral
+changes were merged in the preceding PR.
+
 ### 2026-07-01 - fix: harden Core settings and peer sync defaults
 
 Adds Core settings metadata for Home and other local tools so they can discover
