@@ -34,6 +34,19 @@ own chain.
 
 ## Change Entries
 
+### 2026-06-30 - release: move version to 1.2.1
+
+Bumps the project version from 1.2.0 to 1.2.1, the version the node now reports
+to peers and in its API (the build version becomes `1.2.1` plus the commit).
+This Previewnet patch release packages the stabilization fixes for I2P fallback
+session recovery, archive fast-sync replay, live replay status progress, and the
+safe Qortal 6.1.8 parser-hardening follow-ups. It also carries the temporary
+OSV scanner tracking entry for the Jackson advisory until the patched 2.x
+artifacts are available from Maven Central. This release-prep pass also tightens
+the archive replay regression test so it simulates a fresh database without the
+orphaned transaction preloaded as unconfirmed; the behavior changes were merged
+in the preceding stabilization and security PRs.
+
 ### 2026-06-30 - security: track Jackson CVE until patched 2.x artifacts publish
 
 Documents and suppresses the OSV alert for CVE-2026-54515 on
