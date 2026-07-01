@@ -102,7 +102,7 @@ public class ArbitraryDataCacheManager extends Thread {
                                     "FROM Transactions t " +
                                     "JOIN ArbitraryTransactions a ON t.signature = a.signature " +
                                     "WHERE name IS NOT NULL " +
-                                    "ORDER BY created_when DESC "
+                                    "ORDER BY t.created_when DESC "
                     );
 
                     Map<ArbitraryTransactionDataHashWrapper, byte[]> signatureByData = new HashMap<>();

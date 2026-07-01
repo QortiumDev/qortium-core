@@ -20,13 +20,16 @@ public class InitialDataPeersTests extends Common {
 	}
 
 	@Test
-	public void testDefaultInitialDataPeersAreClearnetSeeds() throws ReflectiveOperationException {
+	public void testDefaultInitialDataPeersIncludeClearnetAndI2PSeeds() throws ReflectiveOperationException {
 		Settings settings = newSettingsInstance();
 
 		assertTrue(settings.hasInitialDataPeersConfigured());
 		assertArrayEquals(new String[] {
 				"185.207.104.78:24894",
-				"146.103.42.59:24894"
+				"146.103.42.59:24894",
+				"80.241.221.139:24894",
+				"qhk6g5hl7vqf5fmlgj6knbajtiszotaf2w26fwjapsr75kbz7fma.b32.i2p",
+				"hg3seiuul4pcz6a2svatdahzudphbm464vwqcmiejc77kumglwaq.b32.i2p"
 		}, settings.getInitialDataPeers());
 	}
 
