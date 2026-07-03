@@ -103,6 +103,10 @@ public class AdminApiTests extends ApiCommon {
 		assertEquals(true, metadata.writable.get("maxPeers").restartRequired);
 		assertEquals("INTEGER", metadata.writable.get("maxDataPeers").type);
 		assertEquals(true, metadata.writable.get("maxDataPeers").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("hsqldbCacheRows").type);
+		assertEquals(true, metadata.writable.get("hsqldbCacheRows").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("hsqldbCacheSize").type);
+		assertEquals(true, metadata.writable.get("hsqldbCacheSize").restartRequired);
 		assertTrue(metadata.pendingRestart.isEmpty());
 	}
 

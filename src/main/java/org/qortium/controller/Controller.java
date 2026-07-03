@@ -110,7 +110,14 @@ public class Controller extends Thread {
 	public static final long MISBEHAVIOUR_COOLOFF = 10 * 60 * 1000L; // ms
 	private static final int MAX_BLOCKCHAIN_TIP_AGE = 5; // blocks
 	private static final Object shutdownLock = new Object();
-	private static final String repositoryUrlTemplate = "jdbc:hsqldb:file:%s" + File.separator + "blockchain;create=true;hsqldb.full_log_replay=true";
+	private static String buildRepositoryUrl(String path) {
+		int cacheRows = Settings.getInstance().getHsqldbCacheRows();
+		int cacheSize = Settings.getInstance().getHsqldbCacheSize();
+		return "jdbc:hsqldb:file:" + path + File.separator
+				+ "blockchain;create=true;hsqldb.full_log_replay=true"
+				+ ";hsqldb.cache_rows=" + cacheRows
+				+ ";hsqldb.cache_size=" + cacheSize;
+	}
 	private static final long NTP_PRE_SYNC_CHECK_PERIOD = 5 * 1000L; // ms
 	private static final long NTP_POST_SYNC_CHECK_PERIOD = 5 * 60 * 1000L; // ms
 	private static final long DELETE_EXPIRED_INTERVAL = 5 * 60 * 1000L; // ms
@@ -333,7 +340,7 @@ public class Controller extends Thread {
 	// Getters / setters
 
 	public static String getRepositoryUrl() {
-		return String.format(repositoryUrlTemplate, Settings.getInstance().getRepositoryPath());
+		return buildRepositoryUrl(Settings.getInstance().getRepositoryPath());
 	}
 
 	public long getBuildTimestamp() {
@@ -475,6 +482,7 @@ public class Controller extends Thread {
 			NTP.start(Settings.getInstance().getNtpServers());
 
 		LOGGER.info("Starting repository");
+		LOGGER.debug("Repository URL: {}", getRepositoryUrl());
 		try {
 			HSQLDBRepositoryFactory repositoryFactory = new HSQLDBRepositoryFactory(getRepositoryUrl());
 			RepositoryManager.setRepositoryFactory(repositoryFactory);

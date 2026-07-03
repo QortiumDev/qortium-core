@@ -202,6 +202,11 @@ public class Settings {
 	/* How many blocks to cache locally. Defaulted to 10, which covers a typical Synchronizer request + a few spare - increased to 100 */
 	private int blockCacheSize = 100;
 
+	/** HSQLDB cache_rows: max rows kept in memory. */
+	private int hsqldbCacheRows = 50000;
+	/** HSQLDB cache_size: max size of data cache in KB. */
+	private int hsqldbCacheSize = 65536;
+
 	/** Maximum number of transactions for the block minter to include in a block */
 	private int maxTransactionsPerBlock = 100;
 
@@ -1055,6 +1060,8 @@ public class Settings {
 		settings.put("listenDataPort", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("maxPeers", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("maxDataPeers", new WritableSetting(WritableSettingType.INTEGER, true));
+		settings.put("hsqldbCacheRows", new WritableSetting(WritableSettingType.INTEGER, true));
+		settings.put("hsqldbCacheSize", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("i2pSamHost", new WritableSetting(WritableSettingType.STRING, true));
 		settings.put("i2pSamPort", new WritableSetting(WritableSettingType.INTEGER, true));
 		settings.put("i2pChainKeyFile", new WritableSetting(WritableSettingType.STRING, true));
@@ -1968,6 +1975,14 @@ public class Settings {
 
 	public int getBlockCacheSize() {
 		return this.blockCacheSize;
+	}
+
+	public int getHsqldbCacheRows() {
+		return this.hsqldbCacheRows;
+	}
+
+	public int getHsqldbCacheSize() {
+		return this.hsqldbCacheSize;
 	}
 
 	public int getMaxTransactionsPerBlock() {
