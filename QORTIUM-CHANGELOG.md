@@ -34,6 +34,16 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-03 - release: move version to 1.2.3
+
+Bumps the project version from 1.2.2 to 1.2.3, the version the node now reports
+to peers and in its API (the build version becomes `1.2.3` plus the commit).
+This Previewnet patch release packages the QDN timestamp migration for existing
+repositories, legacy trigger-height config cleanup, and the archive fast-replay
+shutdown, segmentation, resumability, and cooperative pacing work that landed
+after 1.2.2. The change here is only the release version string and changelog
+entry; the behavioral changes were merged in the preceding PRs.
+
 ### 2026-07-03 - fast-sync: make archive replay cooperative
 
 Adds pacing to checkpoint-backed archive replay so Core no longer tries to rebuild the whole archived prefix in one uninterrupted run. Replay still commits durable 500-block segments and keeps normal sync and minting blocked until the checkpoint-protected replay marker is cleared, but it now releases the blockchain lock between bounded replay windows and briefly pauses before resuming. The replay logs now include committed segment timing and throughput so prerelease testing can show whether archive replay is actually faster on real systems.
