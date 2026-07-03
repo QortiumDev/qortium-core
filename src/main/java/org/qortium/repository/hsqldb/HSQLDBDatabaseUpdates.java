@@ -36,6 +36,7 @@ public class HSQLDBDatabaseUpdates {
 			// Local-only (non-consensus) tables live outside the schema version counter so an
 			// existing node picks them up on restart without a repository reset.
 			ensureLocalTables(connection);
+			ensureArbitraryTransactionCreatedWhen(connection);
 			connection.commit();
 
 			updateStartupStatus();
@@ -45,6 +46,7 @@ public class HSQLDBDatabaseUpdates {
 		if (databaseVersion == 1) {
 			upgradeFromVersion1(connection);
 			ensureLocalTables(connection);
+			ensureArbitraryTransactionCreatedWhen(connection);
 			connection.commit();
 
 			updateStartupStatus();
@@ -196,6 +198,9 @@ public class HSQLDBDatabaseUpdates {
 
 
 	private static void ensureArbitraryTransactionCreatedWhen(Connection connection) throws SQLException {
+		if (!tableExists(connection, "ARBITRARYTRANSACTIONS"))
+			return;
+
 		if (!columnExists(connection, "ARBITRARYTRANSACTIONS", "CREATED_WHEN")) {
 			LOGGER.info("Denormalizing created_when into ArbitraryTransactions - please wait...");
 			try (Statement stmt = connection.createStatement()) {
@@ -213,6 +218,12 @@ public class HSQLDBDatabaseUpdates {
 		}
 
 		connection.commit();
+	}
+
+	private static boolean tableExists(Connection connection, String tableName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", tableName, null)) {
+			return resultSet.next();
+		}
 	}
 
 	private static boolean columnExists(Connection connection, String tableName, String columnName) throws SQLException {

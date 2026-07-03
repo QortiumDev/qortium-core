@@ -34,6 +34,17 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-03 - Fix QDN timestamp migration on existing repositories
+
+Ensures existing Previewnet repositories receive the `created_when` field and
+newest-first QDN index that Core 1.2.2 expects on `ArbitraryTransactions`.
+Without this startup migration, nodes that already had the current database
+schema version could open the repository, then fail while rebuilding the QDN
+resource cache because the optimized arbitrary-data queries were looking for a
+column that had not been added yet. The migration now runs idempotently during
+repository startup and backfills the timestamp from the matching transaction
+record before Core continues.
+
 ### 2026-07-01 - release: move version to 1.2.2
 
 Bumps the project version from 1.2.1 to 1.2.2, the version the node now reports

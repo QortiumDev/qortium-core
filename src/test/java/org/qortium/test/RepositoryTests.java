@@ -143,6 +143,56 @@ public class RepositoryTests extends Common {
 	}
 
 	@Test
+	public void testCurrentSchemaAddsArbitraryTransactionCreatedWhen() throws Exception {
+		String connectionUrl = "jdbc:hsqldb:mem:arbitrary-created-when-current-schema-" + System.nanoTime();
+		byte[] signature = new byte[] {7, 8, 9};
+
+		try (Connection connection = DriverManager.getConnection(connectionUrl, "SA", "")) {
+			connection.setAutoCommit(false);
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("CREATE TYPE PUBLIC.EPOCHMILLIS AS BIGINT");
+				statement.execute("CREATE TYPE PUBLIC.SIGNATURE AS VARBINARY(64)");
+				statement.execute("CREATE TABLE PUBLIC.DATABASEINFO(VERSION INTEGER NOT NULL)");
+				statement.execute("INSERT INTO PUBLIC.DATABASEINFO VALUES(" + HSQLDBDatabaseUpdates.CURRENT_SCHEMA_VERSION + ")");
+				statement.execute("CREATE TABLE PUBLIC.TRANSACTIONS(SIGNATURE PUBLIC.SIGNATURE PRIMARY KEY, CREATED_WHEN PUBLIC.EPOCHMILLIS NOT NULL)");
+				statement.execute("CREATE TABLE PUBLIC.ARBITRARYTRANSACTIONS(SIGNATURE PUBLIC.SIGNATURE PRIMARY KEY, NAME VARCHAR(400))");
+			}
+
+			try (PreparedStatement preparedStatement = connection.prepareStatement(
+					"INSERT INTO Transactions(signature, created_when) VALUES (?, ?)")) {
+				preparedStatement.setBytes(1, signature);
+				preparedStatement.setLong(2, 123456789L);
+				preparedStatement.executeUpdate();
+			}
+
+			try (PreparedStatement preparedStatement = connection.prepareStatement(
+					"INSERT INTO ArbitraryTransactions(signature, name) VALUES (?, ?)")) {
+				preparedStatement.setBytes(1, signature);
+				preparedStatement.setString(2, "legacy-name");
+				preparedStatement.executeUpdate();
+			}
+			connection.commit();
+
+			assertFalse(HSQLDBDatabaseUpdates.updateDatabase(connection));
+
+			assertColumnExists(connection, "ARBITRARYTRANSACTIONS", "CREATED_WHEN");
+			assertIndexExists(connection, "ARBITRARYTRANSACTIONS", "ARBITRARYNAMECREATEDINDEX");
+
+			try (Statement statement = connection.createStatement();
+					ResultSet resultSet = statement.executeQuery("SELECT created_when FROM ArbitraryTransactions")) {
+				assertTrue(resultSet.next());
+				assertEquals(123456789L, resultSet.getLong(1));
+				assertFalse(resultSet.next());
+			}
+
+			try (Statement statement = connection.createStatement()) {
+				statement.execute("SHUTDOWN");
+			}
+		}
+	}
+
+	@Test
 	public void testVersionThreeRepositorySchemaVersionIsUnsupported() throws Exception {
 		String connectionUrl = "jdbc:hsqldb:mem:unsupported-version-three-schema-" + System.nanoTime();
 
@@ -297,6 +347,17 @@ public class RepositoryTests extends Common {
 			assertTrue(String.format("Column %s.%s should exist", tableName, columnName), resultSet.next());
 			assertEquals(expectedSize, resultSet.getInt("COLUMN_SIZE"));
 		}
+	}
+
+	private static void assertIndexExists(Connection connection, String tableName, String indexName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getIndexInfo(null, "PUBLIC", tableName, false, false)) {
+			while (resultSet.next()) {
+				if (indexName.equalsIgnoreCase(resultSet.getString("INDEX_NAME")))
+					return;
+			}
+		}
+
+		fail(String.format("Index %s.%s should exist", tableName, indexName));
 	}
 
 	@Test
