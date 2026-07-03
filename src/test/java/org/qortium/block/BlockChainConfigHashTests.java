@@ -20,19 +20,41 @@ public class BlockChainConfigHashTests {
 		String firstConfig = "{"
 				+ "\"networkId\":\"qortium-preview\","
 				+ "\"checkpoints\":[{\"height\":24000,\"signature\":\"first\"}],"
+				+ "\"featureTriggers\":{"
+				+ "\"onlineAccountsSignatureV2Height\":27000,"
+				+ "\"assetOrderBoundsHeight\":27000"
+				+ "},"
+				+ "\"stableParameter\":\"same\""
+				+ "}";
+		String secondConfig = "{"
+				+ "\"networkId\":\"qortium-preview\","
+				+ "\"checkpoints\":[{\"height\":25000,\"signature\":\"second\"}],"
+				+ "\"featureTriggers\":{"
+				+ "\"onlineAccountsSignatureV2Height\":30000,"
+				+ "\"assetOrderBoundsHeight\":31000"
+				+ "},"
+				+ "\"stableParameter\":\"same\""
+				+ "}";
+
+		assertEquals(hash(firstConfig), hash(secondConfig));
+	}
+
+	@Test
+	public void testLegacyTopLevelFeatureTriggersAreIncludedInHash() {
+		String firstConfig = "{"
+				+ "\"networkId\":\"qortium-preview\","
 				+ "\"onlineAccountsSignatureV2Height\":27000,"
 				+ "\"assetOrderBoundsHeight\":27000,"
 				+ "\"stableParameter\":\"same\""
 				+ "}";
 		String secondConfig = "{"
 				+ "\"networkId\":\"qortium-preview\","
-				+ "\"checkpoints\":[{\"height\":25000,\"signature\":\"second\"}],"
 				+ "\"onlineAccountsSignatureV2Height\":30000,"
 				+ "\"assetOrderBoundsHeight\":31000,"
 				+ "\"stableParameter\":\"same\""
 				+ "}";
 
-		assertEquals(hash(firstConfig), hash(secondConfig));
+		assertNotEquals(hash(firstConfig), hash(secondConfig));
 	}
 
 	@Test
@@ -87,17 +109,32 @@ public class BlockChainConfigHashTests {
 	}
 
 	@Test
+	public void testKnownFeatureTriggersFallBackToLegacyTopLevelValues() throws Exception {
+		BlockChain blockChain = unmarshal("{"
+				+ "\"onlineAccountsSignatureV2Height\":27000,"
+				+ "\"assetOrderBoundsHeight\":31000"
+				+ "}");
+
+		assertEquals(27000L, blockChain.getOnlineAccountsSignatureV2Height());
+		assertEquals(31000L, blockChain.getAssetOrderBoundsHeight());
+	}
+
+	@Test
 	public void testOtherConfigChangesStillAffectHash() {
 		String firstConfig = "{"
 				+ "\"networkId\":\"qortium-preview\","
+				+ "\"featureTriggers\":{"
 				+ "\"onlineAccountsSignatureV2Height\":27000,"
-				+ "\"assetOrderBoundsHeight\":27000,"
+				+ "\"assetOrderBoundsHeight\":27000"
+				+ "},"
 				+ "\"stableParameter\":\"first\""
 				+ "}";
 		String secondConfig = "{"
 				+ "\"networkId\":\"qortium-preview\","
+				+ "\"featureTriggers\":{"
 				+ "\"onlineAccountsSignatureV2Height\":27000,"
-				+ "\"assetOrderBoundsHeight\":27000,"
+				+ "\"assetOrderBoundsHeight\":27000"
+				+ "},"
 				+ "\"stableParameter\":\"second\""
 				+ "}";
 

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-03 - consensus: move legacy trigger heights into featureTriggers
+
+Moves the main chain's existing online-account signature and asset-order bounds activation heights into the shared `featureTriggers` object, matching the Previewnet config shape and keeping feature activation metadata in one hash-neutral place. The old top-level fields remain as a parser fallback for older private configs, but they are no longer excluded from the chain-config fingerprint; new bundled configs should use the grouped trigger object instead.
+
 ### 2026-07-03 - Fix QDN timestamp migration on existing repositories
 
 Ensures existing Previewnet repositories receive the `created_when` field and

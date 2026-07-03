@@ -56,9 +56,7 @@ public class BlockChain {
 	private static BlockChain instance = null;
 	private static final Set<String> CHAIN_CONFIG_HASH_EXCLUDED_FIELDS = Set.of(
 			"checkpoints",
-			"featureTriggers",
-			"onlineAccountsSignatureV2Height",
-			"assetOrderBoundsHeight");
+			"featureTriggers");
 	private static final String ONLINE_ACCOUNTS_SIGNATURE_V2_TRIGGER = "onlineAccountsSignatureV2Height";
 	private static final String ASSET_ORDER_BOUNDS_TRIGGER = "assetOrderBoundsHeight";
 
@@ -211,7 +209,10 @@ public class BlockChain {
 	@XmlJavaTypeAdapter(StringLongMapXmlAdapter.class)
 	private Map<String, Long> featureTriggers = Collections.emptyMap();
 
-	/** Feature trigger block height from which online-account signatures must use the secure per-account
+	/** Legacy top-level fallback for configs that predate the featureTriggers container.
+	 * New configs should set featureTriggers.onlineAccountsSignatureV2Height instead.
+	 *
+	 * Feature trigger block height from which online-account signatures must use the secure per-account
 	 * Ed25519 scheme (challenge bound to R and A) rather than the legacy, forgeable custom aggregate scheme
 	 * (consensus fix c-01). Below this height behaviour is byte-for-byte the legacy scheme so historic blocks
 	 * replay identically. Defaults to a disabled sentinel so a chain config that omits the key keeps the fix
@@ -246,7 +247,10 @@ public class BlockChain {
 	}
 	private MemoryPoWSettings mempowSettings;
 
-	/** Feature trigger block height for asset order amount/price bounds validation (consensus fix c-02).
+	/** Legacy top-level fallback for configs that predate the featureTriggers container.
+	 * New configs should set featureTriggers.assetOrderBoundsHeight instead.
+	 *
+	 * Feature trigger block height for asset order amount/price bounds validation (consensus fix c-02).
 	 * Below this height behaviour is byte-for-byte identical to legacy order validation. Defaults to a
 	 * disabled sentinel so a chain config that omits the key keeps the fix OFF (fail-closed, replay-safe). */
 	private long assetOrderBoundsHeight = FEATURE_TRIGGER_DISABLED_HEIGHT;
