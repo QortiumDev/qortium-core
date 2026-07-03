@@ -71,6 +71,9 @@ public class ArchiveFastSyncManager extends Thread {
 	private static final long RETRY_INTERVAL_MS = 30 * 1000L;
 	private static final int MAX_ATTEMPTS = 3;
 	private static final int REPLAY_SEGMENT_BLOCKS = 500;
+	private static final int REPLAY_MAX_SEGMENTS_PER_WINDOW = 4;
+	private static final long REPLAY_MAX_WINDOW_MS = 15 * 1000L;
+	private static final long REPLAY_WINDOW_PAUSE_MS = 250L;
 	private static final int REPLAY_STATE_ID = 1;
 
 	private static ArchiveFastSyncManager instance;
@@ -440,12 +443,40 @@ public class ArchiveFastSyncManager extends Thread {
 	private boolean resumeStagedReplay(ReplayState replayState, List<ArchiveChunkData> written) throws InterruptedException, DataException {
 		this.isFastSyncActive = true;
 
+		try {
+			LOGGER.info("Archive fast-sync: replaying from height {} to {} in {}-block segments, up to {} segments or {} ms per window",
+					Math.max(replayState.startHeight, replayState.lastReplayedHeight + 1), replayState.targetHeight,
+					REPLAY_SEGMENT_BLOCKS, REPLAY_MAX_SEGMENTS_PER_WINDOW, REPLAY_MAX_WINDOW_MS);
+
+			while (!isReplayStopping()) {
+				ReplayWindowResult result = replayWindow(replayState, written);
+				if (result.completed) {
+					Synchronizer.getInstance().requestSync();
+					return true;
+				}
+				if (result.terminal)
+					return false;
+
+				replayState = result.replayState != null ? result.replayState : replayState;
+				Thread.sleep(REPLAY_WINDOW_PAUSE_MS);
+			}
+
+			return false;
+		} finally {
+			if (!hasActiveReplayState())
+				this.isFastSyncActive = false;
+		}
+	}
+
+	private ReplayWindowResult replayWindow(ReplayState replayState, List<ArchiveChunkData> written) throws InterruptedException, DataException {
 		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
 		if (!blockchainLock.tryLock(5, TimeUnit.SECONDS)) {
 			LOGGER.debug("Archive fast-sync: couldn't acquire blockchain lock; will retry");
-			return false;
+			return ReplayWindowResult.pause(replayState);
 		}
 
+		long windowStart = System.currentTimeMillis();
+		int segmentsThisWindow = 0;
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			ReplayState currentState = loadActiveReplayState(repository);
 			if (currentState != null)
@@ -455,24 +486,22 @@ public class ArchiveFastSyncManager extends Thread {
 				LOGGER.error("Archive fast-sync: active replay checkpoint {} is not present in the current chain config; resetting replay state",
 						replayState.checkpointHeight);
 				resetFailedReplay(repository, replayState, written);
-				return false;
+				return ReplayWindowResult.terminal(replayState);
 			}
 
 			if (!isCheckpointSignatureOnDisk(replayState.checkpointHeight, replayState.checkpointSignature)) {
 				LOGGER.warn("Archive fast-sync: checkpoint cross-bind FAILED at height {}; resetting replay state", replayState.checkpointHeight);
 				resetFailedReplay(repository, replayState, written);
-				return false;
+				return ReplayWindowResult.terminal(replayState);
 			}
-
-			LOGGER.info("Archive fast-sync: replaying from height {} to {} in {}-block segments",
-					Math.max(replayState.startHeight, replayState.lastReplayedHeight + 1), replayState.targetHeight, REPLAY_SEGMENT_BLOCKS);
 
 			while (replayState.lastReplayedHeight < replayState.targetHeight) {
 				if (isReplayStopping())
-					return false;
+					return ReplayWindowResult.terminal(replayState);
 
 				int fromHeight = Math.max(replayState.startHeight, replayState.lastReplayedHeight + 1);
 				int segmentEndHeight = Math.min(replayState.targetHeight, fromHeight + REPLAY_SEGMENT_BLOCKS - 1);
+				long segmentStart = System.currentTimeMillis();
 
 				repository.setSavepoint();
 				try {
@@ -493,12 +522,16 @@ public class ArchiveFastSyncManager extends Thread {
 						clearReplayState(repository);
 
 					repository.saveChanges();
+					segmentsThisWindow++;
+
+					long segmentElapsed = Math.max(1L, System.currentTimeMillis() - segmentStart);
+					logReplaySegmentProgress(fromHeight, segmentEndHeight, replayState.targetHeight, segmentElapsed);
 				} catch (DataException | RuntimeException e) {
 					rollbackReplayChanges(repository);
 
 					if (isReplayStopping()) {
 						LOGGER.info("Archive fast-sync: replay stopped before segment completion; committed height remains {}", replayState.lastReplayedHeight);
-						return false;
+						return ReplayWindowResult.terminal(replayState);
 					}
 
 					if (e instanceof RuntimeException)
@@ -507,28 +540,46 @@ public class ArchiveFastSyncManager extends Thread {
 					LOGGER.warn("Archive fast-sync: replay failed at segment {}-{}; resetting replay state: {}",
 							fromHeight, segmentEndHeight, e.getMessage());
 					resetFailedReplay(repository, replayState, written);
-					return false;
+					return ReplayWindowResult.terminal(replayState);
+				}
+
+				if (replayState.lastReplayedHeight >= replayState.targetHeight) {
+					// Refresh the in-memory chain-tip cache so we don't keep advertising the old (genesis) height to
+					// peers / the API / systray until the next applied block would otherwise self-heal it.
+					try {
+						Controller.getInstance().refillLatestBlocksCache();
+					} finally {
+						Controller.getInstance().clearArchiveReplayHeight();
+					}
+
+					LOGGER.info("Archive fast-sync: replayed to height {} (checkpoint {} verified). Handing off to normal sync.",
+							replayState.targetHeight, replayState.checkpointHeight);
+					return ReplayWindowResult.completed(replayState);
+				}
+
+				if (shouldPauseReplayWindow(segmentsThisWindow, windowStart, System.currentTimeMillis())) {
+					LOGGER.info("Archive fast-sync: pausing replay window at height {} of {} after {} segment(s) and {} ms",
+							replayState.lastReplayedHeight, replayState.targetHeight, segmentsThisWindow,
+							System.currentTimeMillis() - windowStart);
+					return ReplayWindowResult.pause(replayState);
 				}
 			}
 
-			// Refresh the in-memory chain-tip cache so we don't keep advertising the old (genesis) height to
-			// peers / the API / systray until the next applied block would otherwise self-heal it.
-			try {
-				Controller.getInstance().refillLatestBlocksCache();
-			} finally {
-				Controller.getInstance().clearArchiveReplayHeight();
-			}
-
-			LOGGER.info("Archive fast-sync: replayed to height {} (checkpoint {} verified). Handing off to normal sync.",
-					replayState.targetHeight, replayState.checkpointHeight);
+			return ReplayWindowResult.completed(replayState);
 		} finally {
 			blockchainLock.unlock();
-			if (!hasActiveReplayState())
-				this.isFastSyncActive = false;
 		}
+	}
 
-		Synchronizer.getInstance().requestSync();
-		return true;
+	static boolean shouldPauseReplayWindow(int segmentsThisWindow, long windowStart, long now) {
+		return segmentsThisWindow >= REPLAY_MAX_SEGMENTS_PER_WINDOW || now - windowStart >= REPLAY_MAX_WINDOW_MS;
+	}
+
+	private static void logReplaySegmentProgress(int fromHeight, int segmentEndHeight, int targetHeight, long segmentElapsed) {
+		int replayedBlocks = segmentEndHeight - fromHeight + 1;
+		long blocksPerSecond = replayedBlocks * 1000L / segmentElapsed;
+		LOGGER.info("Archive fast-sync: committed replay segment {}-{} of {} in {} ms ({} blocks/sec)",
+				fromHeight, segmentEndHeight, targetHeight, segmentElapsed, blocksPerSecond);
 	}
 
 	private boolean isReplayStopping() {
@@ -699,6 +750,30 @@ public class ArchiveFastSyncManager extends Thread {
 				replayChunks.add(chunk);
 		}
 		deleteChunks(replayChunks);
+	}
+
+	private static final class ReplayWindowResult {
+		private final ReplayState replayState;
+		private final boolean completed;
+		private final boolean terminal;
+
+		private ReplayWindowResult(ReplayState replayState, boolean completed, boolean terminal) {
+			this.replayState = replayState;
+			this.completed = completed;
+			this.terminal = terminal;
+		}
+
+		private static ReplayWindowResult completed(ReplayState replayState) {
+			return new ReplayWindowResult(replayState, true, true);
+		}
+
+		private static ReplayWindowResult terminal(ReplayState replayState) {
+			return new ReplayWindowResult(replayState, false, true);
+		}
+
+		private static ReplayWindowResult pause(ReplayState replayState) {
+			return new ReplayWindowResult(replayState, false, false);
+		}
 	}
 
 	static final class ReplayState {

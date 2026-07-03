@@ -62,4 +62,20 @@ public class ArchiveFastSyncReplayStateTests extends Common {
 			assertFalse(ArchiveFastSyncManager.hasActiveReplayState(repository));
 		}
 	}
+
+	@Test
+	public void testReplayWindowPausesAfterWorkLimit() {
+		long windowStart = 1_000L;
+
+		assertFalse(ArchiveFastSyncManager.shouldPauseReplayWindow(1, windowStart, windowStart + 1));
+		assertTrue(ArchiveFastSyncManager.shouldPauseReplayWindow(Integer.MAX_VALUE, windowStart, windowStart + 1));
+	}
+
+	@Test
+	public void testReplayWindowPausesAfterTimeLimit() {
+		long windowStart = 1_000L;
+
+		assertFalse(ArchiveFastSyncManager.shouldPauseReplayWindow(0, windowStart, windowStart));
+		assertTrue(ArchiveFastSyncManager.shouldPauseReplayWindow(0, windowStart, Long.MAX_VALUE));
+	}
 }

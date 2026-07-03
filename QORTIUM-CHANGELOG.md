@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-03 - fast-sync: make archive replay cooperative
+
+Adds pacing to checkpoint-backed archive replay so Core no longer tries to rebuild the whole archived prefix in one uninterrupted run. Replay still commits durable 500-block segments and keeps normal sync and minting blocked until the checkpoint-protected replay marker is cleared, but it now releases the blockchain lock between bounded replay windows and briefly pauses before resuming. The replay logs now include committed segment timing and throughput so prerelease testing can show whether archive replay is actually faster on real systems.
+
 ### 2026-07-03 - fast-sync: make archive replay segmented and resumable
 
 Changes archive fast-replay from one giant all-or-nothing repository transaction into checkpoint-protected replay segments. Core now records local replay progress in an idempotent repository table, commits each replay segment with that progress marker, blocks normal sync and minting while the marker is active, and resumes from the last committed replay height after a restart. The checkpoint block still has to validate before the replay marker is cleared and the node hands off to normal sync; if replay validation fails, Core orphans the committed replay prefix back to its pre-replay height and discards the staged chunks.
