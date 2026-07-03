@@ -179,6 +179,9 @@ public class Synchronizer extends Thread {
 			while (running && !Controller.isStopping()) {
 				Thread.sleep(1000);
 
+				if (ArchiveFastSyncManager.isReplayInProgress())
+					continue;
+
 				// Heartbeat: periodically re-arm a sync attempt when we are not up to date and
 				// no sync is already requested/pending/running. This guarantees the node keeps
 				// retrying synchronization even if inbound BLOCK_SUMMARIES broadcasts stop
@@ -1360,6 +1363,9 @@ public class Synchronizer extends Thread {
 	 * @throws InterruptedException
 	 */
 	public SynchronizationResult synchronize(Peer peer, boolean force) throws InterruptedException {
+		if (ArchiveFastSyncManager.isReplayInProgress())
+			return SynchronizationResult.NO_BLOCKCHAIN_LOCK;
+
 		// Make sure we're the only thread modifying the blockchain
 		// If we're already synchronizing with another peer then this will also return fast
 		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();

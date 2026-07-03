@@ -91,6 +91,18 @@ public class HSQLDBDatabaseUpdates {
 			stmt.execute("CREATE TABLE IF NOT EXISTS PUBLIC.BLOCKONLINEACCOUNTS ("
 					+ "HEIGHT INTEGER PRIMARY KEY, "
 					+ "ONLINE_REWARD_SHARES VARBINARY(1048576) NOT NULL)");
+
+			// One-row local progress marker for checkpoint-backed archive replay. This lets a node commit
+			// replayed blocks in restartable segments while keeping normal sync/minting blocked until the
+			// checkpoint-spanning range has validated and the row is cleared.
+			stmt.execute("CREATE TABLE IF NOT EXISTS PUBLIC.ARCHIVEREPLAYSTATE ("
+					+ "ID INTEGER PRIMARY KEY, "
+					+ "START_HEIGHT INTEGER NOT NULL, "
+					+ "CHECKPOINT_HEIGHT INTEGER NOT NULL, "
+					+ "CHECKPOINT_SIGNATURE VARBINARY(128) NOT NULL, "
+					+ "TARGET_HEIGHT INTEGER NOT NULL, "
+					+ "LAST_REPLAYED_HEIGHT INTEGER NOT NULL, "
+					+ "UPDATED_WHEN PUBLIC.EPOCHMILLIS NOT NULL)");
 		}
 	}
 

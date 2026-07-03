@@ -123,6 +123,9 @@ public class BlockMinter extends Thread {
 						// It's faster on single node testnets, to allow lots of blocks to be minted quickly.
 						Thread.sleep(isSingleNodeTestnet ? 50 : 1000);
 
+						if (ArchiveFastSyncManager.isReplayInProgress())
+							continue;
+
 						isMintingPossible = false;
 
 						final Long now = NTP.getTime();

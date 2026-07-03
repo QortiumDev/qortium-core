@@ -2,10 +2,12 @@ package org.qortium.controller;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.qortium.block.Block;
 import org.qortium.block.BlockChain;
 import org.qortium.controller.repository.ArchiveChunkImporter;
 import org.qortium.data.block.ArchiveChunkData;
 import org.qortium.data.block.ArchiveManifest;
+import org.qortium.data.block.BlockData;
 import org.qortium.network.Network;
 import org.qortium.network.Peer;
 import org.qortium.network.message.ArchiveChunkMessage;
@@ -26,6 +28,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -65,10 +70,13 @@ public class ArchiveFastSyncManager extends Thread {
 	private static final long INITIAL_SETTLE_MS = 20 * 1000L;
 	private static final long RETRY_INTERVAL_MS = 30 * 1000L;
 	private static final int MAX_ATTEMPTS = 3;
+	private static final int REPLAY_SEGMENT_BLOCKS = 500;
+	private static final int REPLAY_STATE_ID = 1;
 
 	private static ArchiveFastSyncManager instance;
 
 	private volatile boolean isStopping = false;
+	private volatile boolean isFastSyncActive = false;
 	private boolean completed = false;
 
 	private ArchiveFastSyncManager() {
@@ -89,7 +97,8 @@ public class ArchiveFastSyncManager extends Thread {
 			return;
 
 		try {
-			Thread.sleep(INITIAL_SETTLE_MS);
+			if (!hasActiveReplayState())
+				Thread.sleep(INITIAL_SETTLE_MS);
 
 			for (int attempt = 1; attempt <= MAX_ATTEMPTS && !isStopping && !completed; attempt++) {
 				try {
@@ -115,13 +124,25 @@ public class ArchiveFastSyncManager extends Thread {
 		this.interrupt();
 	}
 
+	public static boolean isReplayInProgress() {
+		ArchiveFastSyncManager manager = instance;
+		if (manager != null && manager.isFastSyncActive)
+			return true;
+
+		return hasActiveReplayState();
+	}
+
 	/** Master gate. Off by default; only runs for a non-lite, archive-enabled node with a pinned checkpoint. */
 	private boolean shouldRun() {
 		Settings settings = Settings.getInstance();
 
-		if (!settings.isArchiveFastReplayEnabled())
-			return false;
 		if (settings.isLite())
+			return false;
+
+		if (hasActiveReplayState())
+			return true;
+
+		if (!settings.isArchiveFastReplayEnabled())
 			return false;
 		if (!settings.isArchiveEnabled())
 			return false;
@@ -140,6 +161,10 @@ public class ArchiveFastSyncManager extends Thread {
 	 *         retried; false if a transient failure (e.g. no peer yet) warrants a retry.
 	 */
 	private boolean attemptFastSync() throws InterruptedException, DataException {
+		ReplayState activeReplayState = loadActiveReplayState();
+		if (activeReplayState != null)
+			return resumeStagedReplay(activeReplayState, null);
+
 		if (Controller.getInstance().getChainHeight() > MAX_START_HEIGHT_FOR_FAST_SYNC) {
 			// e.g. a local genesis-bootstrap minter produced block 2 during the settle window — fast-sync no
 			// longer applies. Log at INFO so an operator who enabled it isn't left wondering why it didn't engage.
@@ -183,6 +208,7 @@ public class ArchiveFastSyncManager extends Thread {
 		// first so a bogus manifest is rejected by the cheap cross-bind after one chunk, not the whole prefix.
 		List<ArchiveChunkData> written = new ArrayList<>();
 		ArchiveChunkData checkpointChunk = chunks.get(chunks.size() - 1);
+		this.isFastSyncActive = true;
 		try {
 			if (!downloadVerifyWrite(peer, checkpointChunk, written)) {
 				deleteChunks(written);
@@ -212,6 +238,9 @@ public class ArchiveFastSyncManager extends Thread {
 		} catch (RuntimeException e) {
 			deleteChunks(written);
 			throw e;
+		} finally {
+			if (!hasActiveReplayState())
+				this.isFastSyncActive = false;
 		}
 	}
 
@@ -372,10 +401,9 @@ public class ArchiveFastSyncManager extends Thread {
 
 	/**
 	 * Imports the already-staged (downloaded, verified, on-disk) chunks by replaying {@code [2, toHeight]}
-	 * <b>atomically</b> under the blockchain lock: the whole range is one repository transaction (savepoint),
-	 * committed only if every block — including the fully validated checkpoint block — validates and the
-	 * checkpoint cross-binds against the pinned signature. Any failure rolls the whole range back and deletes
-	 * the staged chunks, so a forged sub-checkpoint prefix can never be left durably on disk or in the DB.
+	 * in committed segments under the blockchain lock. A local replay-state row blocks normal sync/minting
+	 * while the prefix is incomplete, so a restart can resume from the last committed segment without exposing
+	 * the partially replayed chain as normal node state.
 	 * <p>
 	 * The cross-bind is enforced two ways: a cheap byte-compare of the on-disk checkpoint block's signature
 	 * against the pinned value (catches an honest divergence or a self-signed forgery before the expensive
@@ -387,70 +415,100 @@ public class ArchiveFastSyncManager extends Thread {
 	 */
 	private boolean importStagedChunks(List<ArchiveChunkData> chunks, int checkpointHeight, byte[] pinnedSignature,
 			List<ArchiveChunkData> written) throws InterruptedException, DataException {
-		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
-		if (!blockchainLock.tryLock(5, TimeUnit.SECONDS)) {
-			LOGGER.debug("Archive fast-sync: couldn't acquire blockchain lock; will retry");
-			deleteChunks(written);
-			return false;
-		}
-
+		int toHeight = chunks.get(chunks.size() - 1).getEndHeight();
 		try (final Repository repository = RepositoryManager.getRepository()) {
-			// Re-check under the lock: a concurrent Synchronizer may have advanced the chain already.
-			if (repository.getBlockRepository().getBlockchainHeight() > MAX_START_HEIGHT_FOR_FAST_SYNC) {
-				LOGGER.info("Archive fast-sync: chain advanced before we got the lock; leaving to normal sync");
+			int currentHeight = repository.getBlockRepository().getBlockchainHeight();
+			if (currentHeight > MAX_START_HEIGHT_FOR_FAST_SYNC) {
+				LOGGER.info("Archive fast-sync: chain advanced before replay could start; leaving to normal sync");
 				deleteChunks(written);
 				return true;
 			}
 
-			// Authoritative cross-bind (full set now on disk), before any block is replayed.
 			if (!isCheckpointSignatureOnDisk(checkpointHeight, pinnedSignature)) {
 				LOGGER.warn("Archive fast-sync: checkpoint cross-bind FAILED at height {}; discarding staged chunks", checkpointHeight);
 				deleteChunks(written);
 				return false;
 			}
 
-			int toHeight = chunks.get(chunks.size() - 1).getEndHeight();
-			// Atomic replay: nothing is committed unless the entire range — including the fully validated
-			// checkpoint block — succeeds. A forged sub-checkpoint prefix fails at H_cp and is rolled back.
-			repository.setSavepoint();
-			try {
-				Controller.getInstance().setArchiveReplayHeight(repository.getBlockRepository().getBlockchainHeight());
-				ArchiveChunkImporter.replayArchivedBlocks(repository, 2, toHeight, checkpointHeight, height -> {
-					Controller.getInstance().setArchiveReplayHeight(height);
-					LOGGER.info("Archive fast-sync: replayed through height {} of {}", height, toHeight);
-				}, this::isReplayStopping);
-				if (isReplayStopping())
-					throw new DataException("Archive fast-replay interrupted before commit");
-				repository.saveChanges();
-			} catch (DataException | RuntimeException e) {
-				DataException rollbackFailure = null;
-				try {
-					rollbackReplayChanges(repository);
-				} catch (DataException cleanupException) {
-					rollbackFailure = cleanupException;
-					e.addSuppressed(cleanupException);
-				} finally {
-					deleteChunks(written);
-					Controller.getInstance().clearArchiveReplayHeight();
-				}
+			ReplayState replayState = new ReplayState(Math.max(2, currentHeight + 1), checkpointHeight, pinnedSignature, toHeight, currentHeight);
+			saveReplayState(repository, replayState);
+			repository.saveChanges();
+			return resumeStagedReplay(replayState, written);
+		}
+	}
 
-				if (rollbackFailure != null) {
+	private boolean resumeStagedReplay(ReplayState replayState, List<ArchiveChunkData> written) throws InterruptedException, DataException {
+		this.isFastSyncActive = true;
+
+		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();
+		if (!blockchainLock.tryLock(5, TimeUnit.SECONDS)) {
+			LOGGER.debug("Archive fast-sync: couldn't acquire blockchain lock; will retry");
+			return false;
+		}
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			ReplayState currentState = loadActiveReplayState(repository);
+			if (currentState != null)
+				replayState = currentState;
+
+			if (!isConfiguredCheckpoint(replayState)) {
+				LOGGER.error("Archive fast-sync: active replay checkpoint {} is not present in the current chain config; resetting replay state",
+						replayState.checkpointHeight);
+				resetFailedReplay(repository, replayState, written);
+				return false;
+			}
+
+			if (!isCheckpointSignatureOnDisk(replayState.checkpointHeight, replayState.checkpointSignature)) {
+				LOGGER.warn("Archive fast-sync: checkpoint cross-bind FAILED at height {}; resetting replay state", replayState.checkpointHeight);
+				resetFailedReplay(repository, replayState, written);
+				return false;
+			}
+
+			LOGGER.info("Archive fast-sync: replaying from height {} to {} in {}-block segments",
+					Math.max(replayState.startHeight, replayState.lastReplayedHeight + 1), replayState.targetHeight, REPLAY_SEGMENT_BLOCKS);
+
+			while (replayState.lastReplayedHeight < replayState.targetHeight) {
+				if (isReplayStopping())
+					return false;
+
+				int fromHeight = Math.max(replayState.startHeight, replayState.lastReplayedHeight + 1);
+				int segmentEndHeight = Math.min(replayState.targetHeight, fromHeight + REPLAY_SEGMENT_BLOCKS - 1);
+
+				repository.setSavepoint();
+				try {
+					final int targetHeight = replayState.targetHeight;
+					Controller.getInstance().setArchiveReplayHeight(Math.max(repository.getBlockRepository().getBlockchainHeight(), replayState.lastReplayedHeight));
+					ArchiveChunkImporter.replayArchivedBlocks(repository, fromHeight, segmentEndHeight, replayState.checkpointHeight, height -> {
+						Controller.getInstance().setArchiveReplayHeight(height);
+						LOGGER.info("Archive fast-sync: replayed through height {} of {}", height, targetHeight);
+					}, this::isReplayStopping);
+
+					if (isReplayStopping())
+						throw new DataException("Archive fast-replay interrupted before segment commit");
+
+					replayState = replayState.withLastReplayedHeight(segmentEndHeight);
+					saveReplayState(repository, replayState);
+
+					if (segmentEndHeight >= replayState.targetHeight)
+						clearReplayState(repository);
+
+					repository.saveChanges();
+				} catch (DataException | RuntimeException e) {
+					rollbackReplayChanges(repository);
+
+					if (isReplayStopping()) {
+						LOGGER.info("Archive fast-sync: replay stopped before segment completion; committed height remains {}", replayState.lastReplayedHeight);
+						return false;
+					}
+
 					if (e instanceof RuntimeException)
 						throw e;
-					throw new DataException("Archive fast-sync replay failed and rollback failed", e);
-				}
 
-				if (isReplayStopping()) {
-					LOGGER.info("Archive fast-sync: replay stopped before completion; rolled back staged state");
+					LOGGER.warn("Archive fast-sync: replay failed at segment {}-{}; resetting replay state: {}",
+							fromHeight, segmentEndHeight, e.getMessage());
+					resetFailedReplay(repository, replayState, written);
 					return false;
 				}
-
-				if (e instanceof DataException) {
-					LOGGER.warn("Archive fast-sync: replay failed and was rolled back: {}", e.getMessage());
-					return false;
-				}
-
-				throw e;
 			}
 
 			// Refresh the in-memory chain-tip cache so we don't keep advertising the old (genesis) height to
@@ -461,9 +519,12 @@ public class ArchiveFastSyncManager extends Thread {
 				Controller.getInstance().clearArchiveReplayHeight();
 			}
 
-			LOGGER.info("Archive fast-sync: replayed to height {} (checkpoint {} verified). Handing off to normal sync.", toHeight, checkpointHeight);
+			LOGGER.info("Archive fast-sync: replayed to height {} (checkpoint {} verified). Handing off to normal sync.",
+					replayState.targetHeight, replayState.checkpointHeight);
 		} finally {
 			blockchainLock.unlock();
+			if (!hasActiveReplayState())
+				this.isFastSyncActive = false;
 		}
 
 		Synchronizer.getInstance().requestSync();
@@ -472,6 +533,125 @@ public class ArchiveFastSyncManager extends Thread {
 
 	private boolean isReplayStopping() {
 		return isStopping || Controller.isStopping() || Thread.currentThread().isInterrupted();
+	}
+
+	private static boolean isConfiguredCheckpoint(ReplayState replayState) {
+		return BlockChain.getInstance().getCheckpoints().stream()
+				.anyMatch(checkpoint -> checkpoint.height == replayState.checkpointHeight
+						&& Arrays.equals(Base58.decode(checkpoint.signature), replayState.checkpointSignature));
+	}
+
+	private static boolean hasActiveReplayState() {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return hasActiveReplayState(repository);
+		} catch (DataException e) {
+			return false;
+		}
+	}
+
+	static boolean hasActiveReplayState(Repository repository) throws DataException {
+		return loadActiveReplayState(repository) != null;
+	}
+
+	static ReplayState loadActiveReplayState() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			return loadActiveReplayState(repository);
+		}
+	}
+
+	static ReplayState loadActiveReplayState(Repository repository) throws DataException {
+		String sql = "SELECT start_height, checkpoint_height, checkpoint_signature, target_height, last_replayed_height "
+				+ "FROM ArchiveReplayState WHERE id = ?";
+		try (PreparedStatement statement = repository.getConnection().prepareStatement(sql)) {
+			statement.setInt(1, REPLAY_STATE_ID);
+			try (ResultSet resultSet = statement.executeQuery()) {
+				if (!resultSet.next())
+					return null;
+
+				return new ReplayState(
+						resultSet.getInt(1),
+						resultSet.getInt(2),
+						resultSet.getBytes(3),
+						resultSet.getInt(4),
+						resultSet.getInt(5));
+			}
+		} catch (SQLException e) {
+			throw new DataException("Unable to load archive replay state", e);
+		}
+	}
+
+	static void saveReplayState(Repository repository, ReplayState replayState) throws DataException {
+		String updateSql = "UPDATE ArchiveReplayState SET start_height = ?, checkpoint_height = ?, checkpoint_signature = ?, "
+				+ "target_height = ?, last_replayed_height = ?, updated_when = ? WHERE id = ?";
+		try (PreparedStatement statement = repository.getConnection().prepareStatement(updateSql)) {
+			statement.setInt(1, replayState.startHeight);
+			statement.setInt(2, replayState.checkpointHeight);
+			statement.setBytes(3, replayState.checkpointSignature);
+			statement.setInt(4, replayState.targetHeight);
+			statement.setInt(5, replayState.lastReplayedHeight);
+			statement.setLong(6, System.currentTimeMillis());
+			statement.setInt(7, REPLAY_STATE_ID);
+			if (statement.executeUpdate() > 0)
+				return;
+		} catch (SQLException e) {
+			throw new DataException("Unable to update archive replay state", e);
+		}
+
+		String insertSql = "INSERT INTO ArchiveReplayState "
+				+ "(id, start_height, checkpoint_height, checkpoint_signature, target_height, last_replayed_height, updated_when) "
+				+ "VALUES (?, ?, ?, ?, ?, ?, ?)";
+		try (PreparedStatement statement = repository.getConnection().prepareStatement(insertSql)) {
+			statement.setInt(1, REPLAY_STATE_ID);
+			statement.setInt(2, replayState.startHeight);
+			statement.setInt(3, replayState.checkpointHeight);
+			statement.setBytes(4, replayState.checkpointSignature);
+			statement.setInt(5, replayState.targetHeight);
+			statement.setInt(6, replayState.lastReplayedHeight);
+			statement.setLong(7, System.currentTimeMillis());
+			statement.executeUpdate();
+		} catch (SQLException e) {
+			throw new DataException("Unable to insert archive replay state", e);
+		}
+	}
+
+	static void clearReplayState(Repository repository) throws DataException {
+		String sql = "DELETE FROM ArchiveReplayState WHERE id = ?";
+		try (PreparedStatement statement = repository.getConnection().prepareStatement(sql)) {
+			statement.setInt(1, REPLAY_STATE_ID);
+			statement.executeUpdate();
+		} catch (SQLException e) {
+			throw new DataException("Unable to clear archive replay state", e);
+		}
+	}
+
+	private static void resetFailedReplay(Repository repository, ReplayState replayState, List<ArchiveChunkData> written) throws DataException {
+		repository.discardChanges();
+		orphanReplayPrefix(repository, replayState.startHeight - 1);
+		clearReplayState(repository);
+		repository.saveChanges();
+		Controller.getInstance().clearArchiveReplayHeight();
+
+		if (written != null)
+			deleteChunks(written);
+		else
+			deleteReplayChunksToTarget(replayState.targetHeight);
+	}
+
+	private static void orphanReplayPrefix(Repository repository, int targetHeight) throws DataException {
+		int height = repository.getBlockRepository().getBlockchainHeight();
+		int orphaned = 0;
+		while (height > targetHeight) {
+			BlockData blockData = repository.getBlockRepository().getLastBlock();
+			LOGGER.info("Archive fast-sync: orphaning replayed block {} after failed checkpoint replay", blockData.getHeight());
+
+			Block block = new Block(repository, blockData);
+			block.orphan();
+			orphaned++;
+			if (orphaned % REPLAY_SEGMENT_BLOCKS == 0)
+				repository.saveChanges();
+
+			height = repository.getBlockRepository().getBlockchainHeight();
+		}
 	}
 
 	private static void rollbackReplayChanges(Repository repository) throws DataException {
@@ -497,6 +677,9 @@ public class ArchiveFastSyncManager extends Thread {
 	}
 
 	private static void deleteChunks(List<ArchiveChunkData> chunks) {
+		if (chunks == null || chunks.isEmpty())
+			return;
+
 		Path archivePath = Paths.get(Settings.getInstance().getRepositoryPath(), "archive").toAbsolutePath();
 		for (ArchiveChunkData chunk : chunks) {
 			try {
@@ -506,5 +689,35 @@ public class ArchiveFastSyncManager extends Thread {
 			}
 		}
 		BlockArchiveReader.getInstance().invalidateFileListCache();
+	}
+
+	private static void deleteReplayChunksToTarget(int targetHeight) {
+		ArchiveManifest localManifest = BlockArchiveReader.getInstance().buildArchiveManifest();
+		List<ArchiveChunkData> replayChunks = new ArrayList<>();
+		for (ArchiveChunkData chunk : localManifest.getChunks()) {
+			if (chunk.getStartHeight() >= 2 && chunk.getStartHeight() <= targetHeight)
+				replayChunks.add(chunk);
+		}
+		deleteChunks(replayChunks);
+	}
+
+	static final class ReplayState {
+		final int startHeight;
+		final int checkpointHeight;
+		final byte[] checkpointSignature;
+		final int targetHeight;
+		final int lastReplayedHeight;
+
+		ReplayState(int startHeight, int checkpointHeight, byte[] checkpointSignature, int targetHeight, int lastReplayedHeight) {
+			this.startHeight = startHeight;
+			this.checkpointHeight = checkpointHeight;
+			this.checkpointSignature = Arrays.copyOf(checkpointSignature, checkpointSignature.length);
+			this.targetHeight = targetHeight;
+			this.lastReplayedHeight = lastReplayedHeight;
+		}
+
+		ReplayState withLastReplayedHeight(int lastReplayedHeight) {
+			return new ReplayState(this.startHeight, this.checkpointHeight, this.checkpointSignature, this.targetHeight, lastReplayedHeight);
+		}
 	}
 }

@@ -34,6 +34,10 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-03 - fast-sync: make archive replay segmented and resumable
+
+Changes archive fast-replay from one giant all-or-nothing repository transaction into checkpoint-protected replay segments. Core now records local replay progress in an idempotent repository table, commits each replay segment with that progress marker, blocks normal sync and minting while the marker is active, and resumes from the last committed replay height after a restart. The checkpoint block still has to validate before the replay marker is cleared and the node hands off to normal sync; if replay validation fails, Core orphans the committed replay prefix back to its pre-replay height and discards the staged chunks.
+
 ### 2026-07-03 - fast-sync: roll back archive replay cleanly on shutdown
 
 Makes archive fast-replay observe shutdown while it is rebuilding the repository from staged archive chunks. If Core is stopped or restarted during the long checkpoint replay, the replay now exits through the normal rollback path, clears the replay status, and removes staged chunks instead of letting the repository close with an uncommitted transaction. This keeps the checkpoint-safe all-or-nothing replay model while avoiding dirty repository shutdowns during updates or manual restarts.

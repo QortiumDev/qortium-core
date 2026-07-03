@@ -188,6 +188,28 @@ public class ArchiveChunkImporterTests extends Common {
 		}
 	}
 
+	@Test
+	public void testReplayCanResumeAfterCommittedSegment() throws Exception {
+		mintAndReadChunkBytes();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			BlockUtils.orphanToBlock(repository, 1);
+			assertEquals(1, repository.getBlockRepository().getBlockchainHeight());
+
+			int firstSegmentHeight = ArchiveChunkImporter.replayArchivedBlocks(repository, 2, 50, 251);
+			repository.saveChanges();
+
+			assertEquals(50, firstSegmentHeight);
+			assertEquals(50, repository.getBlockRepository().getBlockchainHeight());
+
+			int finalHeight = ArchiveChunkImporter.replayArchivedBlocks(repository, 51, 250, 251);
+			repository.saveChanges();
+
+			assertEquals(250, finalHeight);
+			assertEquals(250, repository.getBlockRepository().getBlockchainHeight());
+		}
+	}
+
 	/** Mint enough blocks to archive a single deterministic chunk "2-250.dat" and return its raw bytes. */
 	private byte[] mintAndReadChunkBytes() throws DataException, InterruptedException, TransformationException, IOException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
