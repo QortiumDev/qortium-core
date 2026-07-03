@@ -418,17 +418,39 @@ public class ArchiveFastSyncManager extends Thread {
 				ArchiveChunkImporter.replayArchivedBlocks(repository, 2, toHeight, checkpointHeight, height -> {
 					Controller.getInstance().setArchiveReplayHeight(height);
 					LOGGER.info("Archive fast-sync: replayed through height {} of {}", height, toHeight);
-				});
+				}, this::isReplayStopping);
+				if (isReplayStopping())
+					throw new DataException("Archive fast-replay interrupted before commit");
 				repository.saveChanges();
-			} catch (DataException e) {
+			} catch (DataException | RuntimeException e) {
+				DataException rollbackFailure = null;
 				try {
-					repository.rollbackToSavepoint();
-					deleteChunks(written);
-					LOGGER.warn("Archive fast-sync: replay failed and was rolled back: {}", e.getMessage());
-					return false;
+					rollbackReplayChanges(repository);
+				} catch (DataException cleanupException) {
+					rollbackFailure = cleanupException;
+					e.addSuppressed(cleanupException);
 				} finally {
+					deleteChunks(written);
 					Controller.getInstance().clearArchiveReplayHeight();
 				}
+
+				if (rollbackFailure != null) {
+					if (e instanceof RuntimeException)
+						throw e;
+					throw new DataException("Archive fast-sync replay failed and rollback failed", e);
+				}
+
+				if (isReplayStopping()) {
+					LOGGER.info("Archive fast-sync: replay stopped before completion; rolled back staged state");
+					return false;
+				}
+
+				if (e instanceof DataException) {
+					LOGGER.warn("Archive fast-sync: replay failed and was rolled back: {}", e.getMessage());
+					return false;
+				}
+
+				throw e;
 			}
 
 			// Refresh the in-memory chain-tip cache so we don't keep advertising the old (genesis) height to
@@ -446,6 +468,32 @@ public class ArchiveFastSyncManager extends Thread {
 
 		Synchronizer.getInstance().requestSync();
 		return true;
+	}
+
+	private boolean isReplayStopping() {
+		return isStopping || Controller.isStopping() || Thread.currentThread().isInterrupted();
+	}
+
+	private static void rollbackReplayChanges(Repository repository) throws DataException {
+		DataException failure = null;
+
+		try {
+			repository.rollbackToSavepoint();
+		} catch (DataException e) {
+			failure = e;
+		}
+
+		try {
+			repository.discardChanges();
+		} catch (DataException e) {
+			if (failure == null)
+				failure = e;
+			else
+				failure.addSuppressed(e);
+		}
+
+		if (failure != null)
+			throw failure;
 	}
 
 	private static void deleteChunks(List<ArchiveChunkData> chunks) {
