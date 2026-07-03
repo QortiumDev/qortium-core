@@ -34,6 +34,33 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-03 - fast-sync: make archive replay cooperative
+
+Adds pacing to checkpoint-backed archive replay so Core no longer tries to rebuild the whole archived prefix in one uninterrupted run. Replay still commits durable 500-block segments and keeps normal sync and minting blocked until the checkpoint-protected replay marker is cleared, but it now releases the blockchain lock between bounded replay windows and briefly pauses before resuming. The replay logs now include committed segment timing and throughput so prerelease testing can show whether archive replay is actually faster on real systems.
+
+### 2026-07-03 - fast-sync: make archive replay segmented and resumable
+
+Changes archive fast-replay from one giant all-or-nothing repository transaction into checkpoint-protected replay segments. Core now records local replay progress in an idempotent repository table, commits each replay segment with that progress marker, blocks normal sync and minting while the marker is active, and resumes from the last committed replay height after a restart. The checkpoint block still has to validate before the replay marker is cleared and the node hands off to normal sync; if replay validation fails, Core orphans the committed replay prefix back to its pre-replay height and discards the staged chunks.
+
+### 2026-07-03 - fast-sync: roll back archive replay cleanly on shutdown
+
+Makes archive fast-replay observe shutdown while it is rebuilding the repository from staged archive chunks. If Core is stopped or restarted during the long checkpoint replay, the replay now exits through the normal rollback path, clears the replay status, and removes staged chunks instead of letting the repository close with an uncommitted transaction. This keeps the checkpoint-safe all-or-nothing replay model while avoiding dirty repository shutdowns during updates or manual restarts.
+
+### 2026-07-03 - consensus: move legacy trigger heights into featureTriggers
+
+Moves the main chain's existing online-account signature and asset-order bounds activation heights into the shared `featureTriggers` object, matching the Previewnet config shape and keeping feature activation metadata in one hash-neutral place. The old top-level fields remain as a parser fallback for older private configs, but they are no longer excluded from the chain-config fingerprint; new bundled configs should use the grouped trigger object instead.
+
+### 2026-07-03 - Fix QDN timestamp migration on existing repositories
+
+Ensures existing Previewnet repositories receive the `created_when` field and
+newest-first QDN index that Core 1.2.2 expects on `ArbitraryTransactions`.
+Without this startup migration, nodes that already had the current database
+schema version could open the repository, then fail while rebuilding the QDN
+resource cache because the optimized arbitrary-data queries were looking for a
+column that had not been added yet. The migration now runs idempotently during
+repository startup and backfills the timestamp from the matching transaction
+record before Core continues.
+
 ### 2026-07-01 - release: move version to 1.2.2
 
 Bumps the project version from 1.2.1 to 1.2.2, the version the node now reports
@@ -236,7 +263,8 @@ Adds an opt-in `recordPeerExchange` setting (default false) that records the pee
 lists a node receives through normal peer-exchange discovery. When enabled, every
 received PEERS message — on both the chain and data networks — is appended as a
 single JSON line to a local `peer-exchange.jsonl` file (timestamp, layer, sending
-peer, transport, and the advertised peer addresses). It is a thread-safe,
+peer, sender node ID, sender Core version when known, transport, and the advertised
+peer addresses). It is a thread-safe,
 no-op-when-disabled diagnostic: while off it performs no file I/O and no allocation,
 and when on it swallows write errors and never throws into the networking path. The
 data captured is exactly what the node already receives during discovery, so there

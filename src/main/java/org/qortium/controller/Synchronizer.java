@@ -41,6 +41,7 @@ import static org.qortium.network.Peer.SYNC_RESPONSE_TIMEOUT;
 public class Synchronizer extends Thread {
 
 	private static final Logger LOGGER = LogManager.getLogger(Synchronizer.class);
+	private static final String ARCHIVE_HEIGHT_CAPABILITY = "ARCHIVE_HEIGHT";
 
 	/** Max number of new blocks we aim to add to chain tip in each sync round */
 	private static final int SYNC_BATCH_SIZE = 1000; // XXX move to Settings?
@@ -178,6 +179,9 @@ public class Synchronizer extends Thread {
 		try {
 			while (running && !Controller.isStopping()) {
 				Thread.sleep(1000);
+
+				if (ArchiveFastSyncManager.isReplayInProgress())
+					continue;
 
 				// Heartbeat: periodically re-arm a sync attempt when we are not up to date and
 				// no sync is already requested/pending/running. This guarantees the node keeps
@@ -390,6 +394,18 @@ public class Synchronizer extends Thread {
 			}
 		}
 
+		// Also respect the peer-side archive floor. If orphaning would leave us below the height
+		// that fresh higher peers serve via normal block-body sync, the immediate sync request below
+		// cannot re-fetch the orphaned block and the node remains stranded behind the archive floor.
+		int nextBlockHeight = targetHeight + 1;
+		int bodyServingPeers = countFreshHigherPeersServingBlock(targetHeight, nextBlockHeight);
+		if (bodyServingPeers < RECOVERY_WATCHDOG_MIN_PEERS) {
+			LOGGER.warn("Fork-recovery watchdog: not orphaning to {} because only {} fresh higher peer(s) can serve block {} via normal sync",
+					targetHeight, bodyServingPeers, nextBlockHeight);
+			resetWatchdogStuckState();
+			return;
+		}
+
 		// Discard only our own top block back to the common height; BlockChain.orphan uses a
 		// non-blocking tryLock and returns false if minting/sync holds the blockchain lock.
 		boolean orphaned = BlockChain.orphan(targetHeight);
@@ -433,6 +449,34 @@ public class Synchronizer extends Thread {
 		}
 
 		return count;
+	}
+
+	private int countFreshHigherPeersServingBlock(int ourHeight, int blockHeight) {
+		List<Peer> peers = new ArrayList<>(Network.getInstance().getImmutableHandshakedPeers());
+
+		peers.removeIf(Controller.hasMisbehaved);
+		peers.removeIf(Controller.hasOldVersion);
+		peers.removeIf(Controller.hasInvalidSigner);
+		peers.removeIf(Controller.hasNoRecentBlock);
+
+		int count = 0;
+		for (Peer peer : peers) {
+			final BlockSummaryData peerChainTipData = peer.getChainTipData();
+			if (peerChainTipData != null && peerChainTipData.getSignature() != null && peerChainTipData.getHeight() > ourHeight
+					&& canServeBlockViaNormalSync(peerArchiveHeight(peer), blockHeight))
+				count++;
+		}
+
+		return count;
+	}
+
+	private static int peerArchiveHeight(Peer peer) {
+		Object capability = peer.getPeerCapability(ARCHIVE_HEIGHT_CAPABILITY);
+		return (capability instanceof Number) ? ((Number) capability).intValue() : 0;
+	}
+
+	/* package */ static boolean canServeBlockViaNormalSync(int peerArchiveHeight, int blockHeight) {
+		return peerArchiveHeight < blockHeight;
 	}
 
 
@@ -1360,6 +1404,9 @@ public class Synchronizer extends Thread {
 	 * @throws InterruptedException
 	 */
 	public SynchronizationResult synchronize(Peer peer, boolean force) throws InterruptedException {
+		if (ArchiveFastSyncManager.isReplayInProgress())
+			return SynchronizationResult.NO_BLOCKCHAIN_LOCK;
+
 		// Make sure we're the only thread modifying the blockchain
 		// If we're already synchronizing with another peer then this will also return fast
 		ReentrantLock blockchainLock = Controller.getInstance().getBlockchainLock();

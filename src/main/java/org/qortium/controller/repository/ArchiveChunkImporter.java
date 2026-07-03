@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.function.BooleanSupplier;
 import java.util.function.IntConsumer;
 
 /**
@@ -141,17 +142,25 @@ public class ArchiveChunkImporter {
 
 	public static int replayArchivedBlocks(Repository repository, int fromHeight, int toHeight, int trustedCheckpointHeight,
 			IntConsumer progressCallback) throws DataException {
+		return replayArchivedBlocks(repository, fromHeight, toHeight, trustedCheckpointHeight, progressCallback, null);
+	}
+
+	public static int replayArchivedBlocks(Repository repository, int fromHeight, int toHeight, int trustedCheckpointHeight,
+			IntConsumer progressCallback, BooleanSupplier shouldStop) throws DataException {
 		BlockArchiveReader reader = BlockArchiveReader.getInstance();
 		int lastHeight = fromHeight - 1;
 		int lastProgressHeight = lastHeight;
 
 		for (int height = fromHeight; height <= toHeight; ++height) {
+			throwIfReplayStopped(shouldStop, "before", height);
+
 			BlockTransformation blockTransformation = reader.fetchBlockAtHeight(height);
 			if (blockTransformation == null || blockTransformation.getBlockData() == null)
 				throw new DataException(String.format("Archive fast-replay: missing block at height %d", height));
 
 			replayBlock(repository, blockTransformation, trustedCheckpointHeight);
 			lastHeight = height;
+			throwIfReplayStopped(shouldStop, "after", height);
 
 			if (progressCallback != null
 					&& (height == toHeight || height - lastProgressHeight >= REPLAY_PROGRESS_INTERVAL_BLOCKS)) {
@@ -161,6 +170,11 @@ public class ArchiveChunkImporter {
 		}
 
 		return lastHeight;
+	}
+
+	private static void throwIfReplayStopped(BooleanSupplier shouldStop, String position, int height) throws DataException {
+		if (shouldStop != null && shouldStop.getAsBoolean())
+			throw new DataException(String.format("Archive fast-replay interrupted %s height %d", position, height));
 	}
 
 	/**

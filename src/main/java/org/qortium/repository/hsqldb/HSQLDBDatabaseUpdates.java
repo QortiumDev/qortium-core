@@ -36,6 +36,7 @@ public class HSQLDBDatabaseUpdates {
 			// Local-only (non-consensus) tables live outside the schema version counter so an
 			// existing node picks them up on restart without a repository reset.
 			ensureLocalTables(connection);
+			ensureArbitraryTransactionCreatedWhen(connection);
 			connection.commit();
 
 			updateStartupStatus();
@@ -45,6 +46,7 @@ public class HSQLDBDatabaseUpdates {
 		if (databaseVersion == 1) {
 			upgradeFromVersion1(connection);
 			ensureLocalTables(connection);
+			ensureArbitraryTransactionCreatedWhen(connection);
 			connection.commit();
 
 			updateStartupStatus();
@@ -89,6 +91,18 @@ public class HSQLDBDatabaseUpdates {
 			stmt.execute("CREATE TABLE IF NOT EXISTS PUBLIC.BLOCKONLINEACCOUNTS ("
 					+ "HEIGHT INTEGER PRIMARY KEY, "
 					+ "ONLINE_REWARD_SHARES VARBINARY(1048576) NOT NULL)");
+
+			// One-row local progress marker for checkpoint-backed archive replay. This lets a node commit
+			// replayed blocks in restartable segments while keeping normal sync/minting blocked until the
+			// checkpoint-spanning range has validated and the row is cleared.
+			stmt.execute("CREATE TABLE IF NOT EXISTS PUBLIC.ARCHIVEREPLAYSTATE ("
+					+ "ID INTEGER PRIMARY KEY, "
+					+ "START_HEIGHT INTEGER NOT NULL, "
+					+ "CHECKPOINT_HEIGHT INTEGER NOT NULL, "
+					+ "CHECKPOINT_SIGNATURE VARBINARY(128) NOT NULL, "
+					+ "TARGET_HEIGHT INTEGER NOT NULL, "
+					+ "LAST_REPLAYED_HEIGHT INTEGER NOT NULL, "
+					+ "UPDATED_WHEN PUBLIC.EPOCHMILLIS NOT NULL)");
 		}
 	}
 
@@ -196,6 +210,9 @@ public class HSQLDBDatabaseUpdates {
 
 
 	private static void ensureArbitraryTransactionCreatedWhen(Connection connection) throws SQLException {
+		if (!tableExists(connection, "ARBITRARYTRANSACTIONS"))
+			return;
+
 		if (!columnExists(connection, "ARBITRARYTRANSACTIONS", "CREATED_WHEN")) {
 			LOGGER.info("Denormalizing created_when into ArbitraryTransactions - please wait...");
 			try (Statement stmt = connection.createStatement()) {
@@ -213,6 +230,12 @@ public class HSQLDBDatabaseUpdates {
 		}
 
 		connection.commit();
+	}
+
+	private static boolean tableExists(Connection connection, String tableName) throws SQLException {
+		try (ResultSet resultSet = connection.getMetaData().getTables(null, "PUBLIC", tableName, null)) {
+			return resultSet.next();
+		}
 	}
 
 	private static boolean columnExists(Connection connection, String tableName, String columnName) throws SQLException {

@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -36,6 +37,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Integrity-gate tests for the archive-chunk fast-sync importer: a downloaded chunk is content-addressed
@@ -158,6 +160,53 @@ public class ArchiveChunkImporterTests extends Common {
 			TransactionData firstTransactionAtHeight = repository.getTransactionRepository().fromHeightAndSequence(2, 0);
 			assertNotNull("archived payment transaction should be linked at height 2 sequence 0", firstTransactionAtHeight);
 			assertArrayEquals(paymentSignature, firstTransactionAtHeight.getSignature());
+		}
+	}
+
+	@Test
+	public void testReplayCancellationCanBeRolledBack() throws Exception {
+		mintAndReadChunkBytes();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			BlockUtils.orphanToBlock(repository, 1);
+			assertEquals(1, repository.getBlockRepository().getBlockchainHeight());
+
+			AtomicInteger cancellationChecks = new AtomicInteger();
+			repository.setSavepoint();
+			try {
+				ArchiveChunkImporter.replayArchivedBlocks(repository, 2, 250, 251, null,
+						() -> cancellationChecks.incrementAndGet() > 10);
+				fail("archive replay should stop when cancellation is requested");
+			} catch (DataException e) {
+				assertTrue(e.getMessage().contains("Archive fast-replay interrupted"));
+				repository.rollbackToSavepoint();
+				repository.discardChanges();
+			}
+
+			assertEquals("cancelled archive replay must not leave partial blocks committed", 1,
+					repository.getBlockRepository().getBlockchainHeight());
+		}
+	}
+
+	@Test
+	public void testReplayCanResumeAfterCommittedSegment() throws Exception {
+		mintAndReadChunkBytes();
+
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			BlockUtils.orphanToBlock(repository, 1);
+			assertEquals(1, repository.getBlockRepository().getBlockchainHeight());
+
+			int firstSegmentHeight = ArchiveChunkImporter.replayArchivedBlocks(repository, 2, 50, 251);
+			repository.saveChanges();
+
+			assertEquals(50, firstSegmentHeight);
+			assertEquals(50, repository.getBlockRepository().getBlockchainHeight());
+
+			int finalHeight = ArchiveChunkImporter.replayArchivedBlocks(repository, 51, 250, 251);
+			repository.saveChanges();
+
+			assertEquals(250, finalHeight);
+			assertEquals(250, repository.getBlockRepository().getBlockchainHeight());
 		}
 	}
 
