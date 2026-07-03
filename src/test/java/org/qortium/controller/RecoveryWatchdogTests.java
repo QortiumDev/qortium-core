@@ -87,4 +87,15 @@ public class RecoveryWatchdogTests {
 		assertEquals(RecoveryWatchdogAction.ORPHAN,
 				decide(true, MIN_PEERS, true, NOW - THRESHOLD, 0L, 0));
 	}
+
+	@Test
+	public void testPeerArchiveHeightBlocksNormalBodySyncAtArchiveFloor() {
+		assertEquals(false, Synchronizer.canServeBlockViaNormalSync(30000, 30000));
+		assertEquals(true, Synchronizer.canServeBlockViaNormalSync(30000, 30001));
+	}
+
+	@Test
+	public void testMissingPeerArchiveCapabilityAllowsNormalBodySync() {
+		assertEquals(true, Synchronizer.canServeBlockViaNormalSync(0, 30000));
+	}
 }

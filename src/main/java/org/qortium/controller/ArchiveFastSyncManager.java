@@ -159,6 +159,27 @@ public class ArchiveFastSyncManager extends Thread {
 		return true;
 	}
 
+	private void handoffToNormalSync() throws InterruptedException {
+		Synchronizer.getInstance().requestSync();
+
+		if (isStopping || Controller.isStopping())
+			return;
+
+		Peer peer = selectArchivePeer(Controller.getInstance().getChainHeight());
+		if (peer == null) {
+			LOGGER.info("Archive fast-sync: no archive peer available for immediate normal-sync handoff");
+			return;
+		}
+
+		LOGGER.info("Archive fast-sync: starting normal-sync handoff with peer {}", peer);
+		Synchronizer.SynchronizationResult result;
+		do {
+			result = Synchronizer.getInstance().actuallySynchronize(peer, true);
+		} while (result == Synchronizer.SynchronizationResult.OK && !isStopping && !Controller.isStopping());
+
+		LOGGER.info("Archive fast-sync: normal-sync handoff finished with {}", result);
+	}
+
 	/**
 	 * @return true if the attempt reached a terminal state (success, or nothing to do) and should not be
 	 *         retried; false if a transient failure (e.g. no peer yet) warrants a retry.
@@ -451,7 +472,9 @@ public class ArchiveFastSyncManager extends Thread {
 			while (!isReplayStopping()) {
 				ReplayWindowResult result = replayWindow(replayState, written);
 				if (result.completed) {
-					Synchronizer.getInstance().requestSync();
+					if (!hasActiveReplayState())
+						this.isFastSyncActive = false;
+					handoffToNormalSync();
 					return true;
 				}
 				if (result.terminal)
