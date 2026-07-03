@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.After;
 import org.junit.Test;
+import org.qortium.controller.Controller;
 import org.qortium.controller.arbitrary.ArbitraryDataStorageManager.StoragePolicy;
 import org.qortium.settings.Settings;
 import org.qortium.settings.Settings.AutoUpdateMode;
@@ -114,31 +115,40 @@ public class SettingsSaveTests extends Common {
 		Settings.fileInstance(settingsPath.toString());
 
 		Settings.SettingsUpdateResult result = Settings.updateAndSave(
-				"{\"listenPort\":25000,\"listenDataPort\":25001,\"maxPeers\":40,\"maxDataPeers\":80,\"maxStorageCapacity\":1234567890123}");
+				"{\"listenPort\":25000,\"listenDataPort\":25001,\"maxPeers\":40,\"maxDataPeers\":80,\"hsqldbCacheRows\":60000,\"hsqldbCacheSize\":131072,\"maxStorageCapacity\":1234567890123}");
 
 		assertTrue(result.saved);
 		assertTrue(result.updated.contains("listenPort"));
 		assertTrue(result.updated.contains("listenDataPort"));
 		assertTrue(result.updated.contains("maxPeers"));
 		assertTrue(result.updated.contains("maxDataPeers"));
+		assertTrue(result.updated.contains("hsqldbCacheRows"));
+		assertTrue(result.updated.contains("hsqldbCacheSize"));
 		assertTrue(result.updated.contains("maxStorageCapacity"));
 		assertTrue(result.restartRequired.contains("listenPort"));
 		assertTrue(result.restartRequired.contains("listenDataPort"));
 		assertTrue(result.restartRequired.contains("maxPeers"));
 		assertTrue(result.restartRequired.contains("maxDataPeers"));
+		assertTrue(result.restartRequired.contains("hsqldbCacheRows"));
+		assertTrue(result.restartRequired.contains("hsqldbCacheSize"));
 		assertTrue(result.applied.contains("maxStorageCapacity"));
 
 		assertEquals(25000, Settings.getInstance().getListenPort());
 		assertEquals(25001, Settings.getInstance().getQDNListenPort());
 		assertEquals(40, Settings.getInstance().getMaxPeers());
 		assertEquals(80, Settings.getInstance().getMaxDataPeers());
+		assertEquals(60000, Settings.getInstance().getHsqldbCacheRows());
+		assertEquals(131072, Settings.getInstance().getHsqldbCacheSize());
 		assertEquals(Long.valueOf(1234567890123L), Settings.getInstance().getMaxStorageCapacity());
+		assertTrue(Controller.getRepositoryUrl().contains(";hsqldb.cache_rows=60000;hsqldb.cache_size=131072"));
 
 		Map<String, Object> savedSettings = readSettings(settingsPath);
 		assertEquals(25000, ((Number) savedSettings.get("listenPort")).intValue());
 		assertEquals(25001, ((Number) savedSettings.get("listenDataPort")).intValue());
 		assertEquals(40, ((Number) savedSettings.get("maxPeers")).intValue());
 		assertEquals(80, ((Number) savedSettings.get("maxDataPeers")).intValue());
+		assertEquals(60000, ((Number) savedSettings.get("hsqldbCacheRows")).intValue());
+		assertEquals(131072, ((Number) savedSettings.get("hsqldbCacheSize")).intValue());
 		assertEquals(1234567890123L, ((Number) savedSettings.get("maxStorageCapacity")).longValue());
 	}
 
@@ -599,6 +609,10 @@ public class SettingsSaveTests extends Common {
 		assertTrue(metadata.writable.containsKey("qdnEnabled"));
 		assertEquals("BOOLEAN", metadata.writable.get("qdnEnabled").type);
 		assertTrue(metadata.writable.get("qdnEnabled").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("hsqldbCacheRows").type);
+		assertTrue(metadata.writable.get("hsqldbCacheRows").restartRequired);
+		assertEquals("INTEGER", metadata.writable.get("hsqldbCacheSize").type);
+		assertTrue(metadata.writable.get("hsqldbCacheSize").restartRequired);
 		assertEquals("STORAGE_POLICY", metadata.writable.get("storagePolicy").type);
 		assertFalse(metadata.writable.get("storagePolicy").restartRequired);
 		assertTrue(metadata.pendingRestart.isEmpty());
