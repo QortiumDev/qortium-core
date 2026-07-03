@@ -53,26 +53,7 @@ public class PeerExchangeRecorder {
 		if (!Settings.getInstance().isRecordPeerExchangeEnabled())
 			return;
 
-		JSONObject record = new JSONObject();
-		record.put("at", Instant.now().toString());
-		record.put("layer", layer);
-
-		PeerAddress fromAddress = peer.getPeerData().getAddress();
-		record.put("fromPeer", fromAddress.toString());
-		record.put("fromNodeId", peer.getPeersNodeId());
-		record.put("transport", fromAddress.isI2P() ? "I2P" : "IP");
-
-		JSONArray peers = new JSONArray();
-		if (advertisedAddresses != null && advertisedAddresses.size() > 1) {
-			// Skip index 0: it is the sender's listen-port marker with an empty address.
-			for (int i = 1; i < advertisedAddresses.size(); ++i) {
-				PeerAddress address = advertisedAddresses.get(i);
-				if (address != null)
-					peers.put(address.toString());
-			}
-		}
-		record.put("peers", peers);
-
+		JSONObject record = buildRecord(layer, peer, advertisedAddresses, Instant.now());
 		String line = record.toString() + "\n";
 
 		synchronized (this) {
@@ -86,5 +67,32 @@ public class PeerExchangeRecorder {
 				}
 			}
 		}
+	}
+
+	static JSONObject buildRecord(String layer, Peer peer, List<PeerAddress> advertisedAddresses, Instant recordedAt) {
+		JSONObject record = new JSONObject();
+		record.put("at", recordedAt.toString());
+		record.put("layer", layer);
+
+		PeerAddress fromAddress = peer.getPeerData().getAddress();
+		record.put("fromPeer", fromAddress.toString());
+		record.put("fromNodeId", peer.getPeersNodeId());
+		record.put("transport", fromAddress.isI2P() ? "I2P" : "IP");
+		String version = peer.getPeersVersionString();
+		if (version != null && !version.isBlank())
+			record.put("version", version);
+
+		JSONArray peers = new JSONArray();
+		if (advertisedAddresses != null && advertisedAddresses.size() > 1) {
+			// Skip index 0: it is the sender's listen-port marker with an empty address.
+			for (int i = 1; i < advertisedAddresses.size(); ++i) {
+				PeerAddress address = advertisedAddresses.get(i);
+				if (address != null)
+					peers.put(address.toString());
+			}
+		}
+		record.put("peers", peers);
+
+		return record;
 	}
 }

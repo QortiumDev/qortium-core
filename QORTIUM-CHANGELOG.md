@@ -236,7 +236,8 @@ Adds an opt-in `recordPeerExchange` setting (default false) that records the pee
 lists a node receives through normal peer-exchange discovery. When enabled, every
 received PEERS message — on both the chain and data networks — is appended as a
 single JSON line to a local `peer-exchange.jsonl` file (timestamp, layer, sending
-peer, transport, and the advertised peer addresses). It is a thread-safe,
+peer, sender node ID, sender Core version when known, transport, and the advertised
+peer addresses). It is a thread-safe,
 no-op-when-disabled diagnostic: while off it performs no file I/O and no allocation,
 and when on it swallows write errors and never throws into the networking path. The
 data captured is exactly what the node already receives during discovery, so there
