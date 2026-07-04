@@ -226,6 +226,12 @@ public class ArbitraryDataRendererTests {
     }
 
     @Test
+    public void missingHtmlFilesAreNotRoutes() {
+        assertFalse(ArbitraryDataRenderer.isRouteLikeRequest("/player.html", HTML_ACCEPT));
+        assertFalse(ArbitraryDataRenderer.isRouteLikeRequest("/nested/player.HTML", HTML_ACCEPT));
+    }
+
+    @Test
     public void dottedPathIsRouteOnlyWhenBrowserNavigating() {
         assertTrue(ArbitraryDataRenderer.isRouteLikeRequest("/report.2024", HTML_ACCEPT));
         assertFalse(ArbitraryDataRenderer.isRouteLikeRequest("/report.2024", "*/*"));

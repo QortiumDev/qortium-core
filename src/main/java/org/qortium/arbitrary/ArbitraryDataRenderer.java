@@ -35,11 +35,17 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 public class ArbitraryDataRenderer {
 
     private static final Logger LOGGER = LogManager.getLogger(ArbitraryDataRenderer.class);
     static final long MAX_HTML_REWRITE_SIZE = 5L * 1024 * 1024;
+    private static final Set<String> KNOWN_FILE_EXTENSIONS = Set.of(
+            "3gp", "aac", "avi", "bin", "bmp", "css", "csv", "gif", "gz", "htm", "html", "ico", "jpeg",
+            "jpg", "js", "json", "m4a", "map", "mjs", "mkv", "mov", "mp3", "mp4", "oga", "ogg", "ogv",
+            "otf", "pdf", "png", "svg", "tar", "ttf", "txt", "wasm", "wav", "webm", "webp", "woff",
+            "woff2", "xml", "zip");
 
     private final String resourceId;
     private final ResourceIdType resourceIdType;
@@ -338,8 +344,8 @@ public class ArbitraryDataRenderer {
 
     /**
      * Whether a request looks like a client-side route (so it may fall back to an entry file) rather
-     * than a missing asset (which should 404). True when the last path segment has no file extension,
-     * or when the client is navigating (Accept: text/html).
+     * than a missing file (which should 404). Extensionless paths are routes. Dotted paths with known
+     * file extensions are files. Other dotted paths may still be routes when the browser is navigating.
      */
     static boolean isRouteLikeRequest(String requestPath, String acceptHeader) {
         String lastSegment = requestPath == null ? "" : requestPath;
@@ -347,8 +353,13 @@ public class ArbitraryDataRenderer {
         if (slash >= 0) {
             lastSegment = lastSegment.substring(slash + 1);
         }
-        if (!lastSegment.contains(".")) {
+        int dot = lastSegment.lastIndexOf('.');
+        if (dot < 0) {
             return true;
+        }
+        String extension = lastSegment.substring(dot + 1).toLowerCase(Locale.ROOT);
+        if (KNOWN_FILE_EXTENSIONS.contains(extension)) {
+            return false;
         }
         // A dotted path may still be a route if the browser is navigating to it.
         return acceptHeader != null && acceptHeader.contains("text/html");
