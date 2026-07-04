@@ -80,6 +80,14 @@ confirmed. They can confirm again when the protected reward window ends. This
 keeps trust-changing ratings from changing minting eligibility inside the same
 short window that decides a batch reward.
 
+Batched reward payouts intentionally use distribution-height account state. The
+batch captures the online self-share set from the selected online-account block,
+but the account levels, share bins, minting-group membership, trust-derived
+minting status, and payout reward-share rows used for distribution are the values
+visible at the reward-distribution block. This keeps batching simple and
+deterministic, but it means mid-window account-state changes can affect the
+whole batch payout.
+
 Wallets and explorers can query `GET /account-ratings/cooldown` before building
 a rating transaction. It reports the latest change height, earliest allowed
 height, remaining block count, and whether the same rater, target, and category

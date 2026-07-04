@@ -34,6 +34,46 @@ own chain.
 
 ## Change Entries
 
+### 2026-07-03 - release: move Core to 1.3.0
+
+Bumps the project version from 1.2.3 to 1.3.0, the version the node now reports
+to peers and in its API (the build version becomes `1.3.0` plus the commit).
+This Previewnet minor release packages the batch-reward feature trigger and
+raises the bundled Previewnet minimum peer version to 1.3.0, so nodes using the
+standard Previewnet configs will reject peers still running older Core builds.
+It also locks future block-reward parameter updates to batch boundaries once
+batched rewards are active, preventing a reward change from repricing only part
+of a batched reward window. The trust/minting docs now also make the related
+distribution-height account-state rule explicit for levels, share bins,
+minting-group membership, trust-derived minting status, and payout reward-share
+rows. Multi-block sync responses are now byte-bounded to the peer receive-buffer
+budget, so `BLOCKS` responses can still return fewer blocks than requested but
+will not exceed the single-message transport buffer.
+
+### 2026-07-03 - docs: document batched reward account-state pricing
+
+Documents the intended batch-reward account-state policy. A batched payout uses
+the captured online self-share set for the batch, but it prices account levels,
+share bins, minting-group membership, trust-derived minting status, and payout
+reward-share rows at the reward-distribution block. This makes the current
+snapshot behavior explicit before enabling batch rewards on Previewnet.
+
+### 2026-07-03 - consensus: require batched reward updates on batch boundaries
+
+Adds validation for `BLOCK_REWARD` chain-parameter updates after batched rewards
+are active. A reward change may still activate at or before the batch start, but
+after that point it must activate on the first block covered by a new reward
+batch. This preserves the simple batched reward calculation while preventing a
+mid-window update from overpaying or underpaying the covered blocks.
+
+### 2026-07-03 - consensus: enable Previewnet batch rewards via feature trigger
+
+Moves the batch-reward activation height behind the shared `featureTriggers`
+chain-config map and enables it for Previewnet at height 50000. The legacy
+top-level setting remains as a fallback for older private configs, but bundled
+Previewnet config now activates batch rewards through the same trigger mechanism
+used by other Previewnet consensus features.
+
 ### 2026-07-03 - release: move version to 1.2.3
 
 Bumps the project version from 1.2.2 to 1.2.3, the version the node now reports

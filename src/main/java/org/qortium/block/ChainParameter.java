@@ -15,7 +15,7 @@ import static java.util.stream.Collectors.toMap;
 
 public enum ChainParameter {
 	BLOCK_REWARD(1, Long.BYTES, "AMOUNT",
-			"Height-based block reward amount, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long.",
+			"Height-based block reward amount, expressed as a normal decimal amount in the public builder and stored on chain as an 8-byte signed long. After batched rewards start, activation heights must land on the first block covered by a new reward batch.",
 			"/chain-parameters/block-reward/update",
 			"/chain-parameters/block-reward/{height}"),
 	MIN_ACCOUNTS_TO_ACTIVATE_SHARE_BIN(2, Integer.BYTES, "INTEGER",

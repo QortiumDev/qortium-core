@@ -1065,6 +1065,42 @@ public class ChainParameterUpdateTests extends Common {
 	}
 
 	@Test
+	public void testBlockRewardUpdateMustActivateOnBatchBoundary() throws DataException {
+		try (final Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			int batchStartHeight = Math.toIntExact(BlockChain.getInstance().getBlockRewardBatchStartHeight());
+			int batchSize = BlockChain.getInstance().getBlockRewardBatchSize();
+			long updatedReward = BlockChain.getInstance().getRewardAtHeight(repository, batchStartHeight + 1)
+					+ Amounts.MULTIPLIER;
+
+			ChainParameterUpdateTransactionData lastPreBatchTransactionData = buildBlockRewardUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight, updatedReward);
+			assertEquals(Transaction.ValidationResult.OK,
+					new ChainParameterUpdateTransaction(repository, lastPreBatchTransactionData).isValid());
+
+			ChainParameterUpdateTransactionData firstBatchTransactionData = buildBlockRewardUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + 1, updatedReward);
+			assertEquals(Transaction.ValidationResult.OK,
+					new ChainParameterUpdateTransaction(repository, firstBatchTransactionData).isValid());
+
+			ChainParameterUpdateTransactionData midBatchTransactionData = buildBlockRewardUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + 50, updatedReward);
+			assertEquals(Transaction.ValidationResult.INVALID_LIFETIME,
+					new ChainParameterUpdateTransaction(repository, midBatchTransactionData).isValid());
+
+			ChainParameterUpdateTransactionData distributionBlockTransactionData = buildBlockRewardUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + batchSize, updatedReward);
+			assertEquals(Transaction.ValidationResult.INVALID_LIFETIME,
+					new ChainParameterUpdateTransaction(repository, distributionBlockTransactionData).isValid());
+
+			ChainParameterUpdateTransactionData nextBatchTransactionData = buildBlockRewardUpdate(repository, alice,
+					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + batchSize + 1, updatedReward);
+			assertEquals(Transaction.ValidationResult.OK,
+					new ChainParameterUpdateTransaction(repository, nextBatchTransactionData).isValid());
+		}
+	}
+
+	@Test
 	public void testChainParameterUpdateRejectsNegativeIntegerValue() throws DataException {
 		try (final Repository repository = RepositoryManager.getRepository()) {
 			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
