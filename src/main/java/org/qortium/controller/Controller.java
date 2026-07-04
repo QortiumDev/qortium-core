@@ -2048,20 +2048,38 @@ public class Controller extends Thread {
             int untrimmedBlockLimitPerRequest = Settings.getInstance().getMaxBlocksPerResponse();
             int numberRequested = Math.min(blockLimitPerRequest, getBlocksMessage.getNumberRequested());
 
-            List<Block> blocks = new ArrayList<>();
+            BlocksMessage.BoundedBuilder blocksBuilder = BlocksMessage.newBoundedBuilder(Network.getInstance().getMaxMessageSize());
             BlockData blockData = repository.getBlockRepository().fromReference(parentSignature);
+            int includedBlockCount = 0;
 
-            while (blockData != null && blocks.size() < numberRequested) {
+            while (blockData != null && includedBlockCount < numberRequested) {
                 // If we're dealing with untrimmed blocks, ensure we don't go above the untrimmedBlockLimitPerRequest
-                if (blockData.isTrimmed() == false && blocks.size() >= untrimmedBlockLimitPerRequest) {
+                if (blockData.isTrimmed() == false && includedBlockCount >= untrimmedBlockLimitPerRequest) {
                     break;
                 }
                 Block block = new Block(repository, blockData);
-                blocks.add(block);
+                BlocksMessage.SerializedBlock serializedBlock = BlocksMessage.SerializedBlock.fromBlock(block);
+                if (!blocksBuilder.tryAdd(serializedBlock))
+                    break;
+
+                ++includedBlockCount;
                 blockData = repository.getBlockRepository().fromReference(blockData.getSignature());
             }
 
-            Message blocksMessage = new BlocksMessage(blocks);
+            BlocksMessage.BoundedBuildResult boundedBlocks = blocksBuilder.build();
+            if (boundedBlocks.isFirstBlockOversized()) {
+                LOGGER.warn("Disconnecting peer {} after requested block height {} serialized to {} bytes, exceeding BLOCKS payload budget {} bytes",
+                        peer, boundedBlocks.getFirstExcludedHeight(), boundedBlocks.getFirstExcludedPayloadLength(), BlocksMessage.maxWireSafePayload(Network.getInstance().getMaxMessageSize()));
+                peer.disconnect("requested block exceeds BLOCKS response byte budget");
+                return;
+            }
+
+            if (boundedBlocks.isTruncated())
+                LOGGER.debug("Byte-bounded BLOCKS response to {}: requested {}, returned {}, payload {} bytes, next excluded height {} ({} bytes)",
+                        peer, numberRequested, boundedBlocks.getBlockCount(), boundedBlocks.getPayloadLength(), boundedBlocks.getFirstExcludedHeight(),
+                        boundedBlocks.getFirstExcludedPayloadLength());
+
+            Message blocksMessage = boundedBlocks.getMessage();
             blocksMessage.setId(message.getId());
             try {
                 if (!peer.sendMessageWithTimeout(blocksMessage, FETCH_BLOCKS_TIMEOUT))
@@ -2073,6 +2091,8 @@ public class Controller extends Thread {
 
         } catch (DataException e) {
             LOGGER.error(String.format("Repository issue while sending blocks after %s to peer %s", Base58.encode(parentSignature), peer), e);
+        } catch (TransformationException | IOException e) {
+            LOGGER.error(String.format("Failed to build BLOCKS response after %s to peer %s", Base58.encode(parentSignature), peer), e);
         }
     }
 

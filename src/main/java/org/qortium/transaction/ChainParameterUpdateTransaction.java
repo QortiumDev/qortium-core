@@ -102,11 +102,31 @@ public class ChainParameterUpdateTransaction extends Transaction {
 		if (this.chainParameterUpdateTransactionData.getActivationHeight() < minimumActivationHeight)
 			return ValidationResult.INVALID_LIFETIME;
 
+		if (parameter == ChainParameter.BLOCK_REWARD
+				&& isBlockRewardBatchBoundaryRuleEnabled(approvalHeight)
+				&& !isValidBlockRewardActivationHeight(
+						this.chainParameterUpdateTransactionData.getActivationHeight()))
+			return ValidationResult.INVALID_LIFETIME;
+
 		if (!parameter.isValidValue(this.repository, this.chainParameterUpdateTransactionData.getActivationHeight(),
 				this.chainParameterUpdateTransactionData.getValue()))
 			return ValidationResult.INVALID_VALUE_LENGTH;
 
 		return ValidationResult.OK;
+	}
+
+	private boolean isBlockRewardBatchBoundaryRuleEnabled(int approvalHeight) {
+		return approvalHeight >= BlockChain.getInstance().getBlockRewardBatchStartHeight();
+	}
+
+	private boolean isValidBlockRewardActivationHeight(int activationHeight) {
+		long batchStartHeight = BlockChain.getInstance().getBlockRewardBatchStartHeight();
+		if (activationHeight <= batchStartHeight)
+			return true;
+
+		int batchSize = BlockChain.getInstance().getBlockRewardBatchSize();
+		long firstBatchedHeight = batchStartHeight + 1L;
+		return (activationHeight - firstBatchedHeight) % batchSize == 0;
 	}
 
 	private int getNextBlockHeight() throws DataException {

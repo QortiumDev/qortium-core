@@ -29,7 +29,8 @@ public class InitialDataPeersTests extends Common {
 				"146.103.42.59:24894",
 				"80.241.221.139:24894",
 				"qhk6g5hl7vqf5fmlgj6knbajtiszotaf2w26fwjapsr75kbz7fma.b32.i2p",
-				"hg3seiuul4pcz6a2svatdahzudphbm464vwqcmiejc77kumglwaq.b32.i2p"
+				"hg3seiuul4pcz6a2svatdahzudphbm464vwqcmiejc77kumglwaq.b32.i2p",
+				"ksbtmej35uvkhhedslrk6zekvjijxaegwnueavcm4ws5zzsadhrq.b32.i2p"
 		}, settings.getInitialDataPeers());
 	}
 

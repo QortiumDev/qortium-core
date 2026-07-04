@@ -59,6 +59,7 @@ public class BlockChain {
 			"featureTriggers");
 	private static final String ONLINE_ACCOUNTS_SIGNATURE_V2_TRIGGER = "onlineAccountsSignatureV2Height";
 	private static final String ASSET_ORDER_BOUNDS_TRIGGER = "assetOrderBoundsHeight";
+	private static final String BLOCK_REWARD_BATCH_START_TRIGGER = "blockRewardBatchStartHeight";
 
 	// Properties
 
@@ -802,7 +803,7 @@ public class BlockChain {
 
 	/* Block reward batching */
 	public long getBlockRewardBatchStartHeight() {
-		return this.blockRewardBatchStartHeight;
+		return getFeatureTriggerHeight(BLOCK_REWARD_BATCH_START_TRIGGER, this.blockRewardBatchStartHeight);
 	}
 
 	public int getBlockRewardBatchSize() {
@@ -1224,8 +1225,10 @@ public class BlockChain {
 		if (this.blockRewardBatchSize <= 0)
 			Settings.throwValidationError("\"blockRewardBatchSize\" must be greater than 0");
 
+		long blockRewardBatchStartHeight = getBlockRewardBatchStartHeight();
+
 		// Check that blockRewardBatchStartHeight is a multiple of blockRewardBatchSize
-		if (this.blockRewardBatchStartHeight % this.blockRewardBatchSize != 0)
+		if (blockRewardBatchStartHeight % this.blockRewardBatchSize != 0)
 			Settings.throwValidationError("\"blockRewardBatchStartHeight\" must be a multiple of \"blockRewardBatchSize\"");
 
 		// Check that blockRewardBatchAccountsBlockCount isn't zero

@@ -20,6 +20,8 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.*;
 import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
 
 @Path("/render")
@@ -35,36 +37,40 @@ public class RenderResource {
     @POST
     @Path("/authorize/{resourceId}")
     @SecurityRequirement(name = "apiKey")
-    public boolean authorizeResource(@HeaderParam(Security.API_KEY_HEADER) String apiKey, @PathParam("resourceId") String resourceId) {
+    public Response authorizeResource(@HeaderParam(Security.API_KEY_HEADER) String apiKey, @PathParam("resourceId") String resourceId) {
         Security.checkApiCallAllowed(request, apiKey);
         ArbitraryDataResource resource = new ArbitraryDataResource(resourceId, null, null, null);
         ArbitraryDataRenderManager.getInstance().addToAuthorizedResources(resource);
-        return true;
+        return authorizationSuccessResponse();
     }
 
     @POST
     @Path("authorize/{service}/{resourceId}")
     @SecurityRequirement(name = "apiKey")
-    public boolean authorizeResource(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+    public Response authorizeResource(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
                                      @PathParam("service") Service service,
                                      @PathParam("resourceId") String resourceId) {
         Security.checkApiCallAllowed(request, apiKey);
         ArbitraryDataResource resource = new ArbitraryDataResource(resourceId, null, service, null);
         ArbitraryDataRenderManager.getInstance().addToAuthorizedResources(resource);
-        return true;
+        return authorizationSuccessResponse();
     }
 
     @POST
     @Path("authorize/{service}/{resourceId}/{identifier}")
     @SecurityRequirement(name = "apiKey")
-    public boolean authorizeResource(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
+    public Response authorizeResource(@HeaderParam(Security.API_KEY_HEADER) String apiKey,
                                      @PathParam("service") Service service,
                                      @PathParam("resourceId") String resourceId,
                                      @PathParam("identifier") String identifier) {
         Security.checkApiCallAllowed(request, apiKey);
         ArbitraryDataResource resource = new ArbitraryDataResource(resourceId, null, service, identifier);
         ArbitraryDataRenderManager.getInstance().addToAuthorizedResources(resource);
-        return true;
+        return authorizationSuccessResponse();
+    }
+
+    static Response authorizationSuccessResponse() {
+        return Response.ok("true", MediaType.APPLICATION_JSON).build();
     }
 
     @GET
@@ -135,6 +141,13 @@ public class RenderResource {
                                              @QueryParam("lang") String lang,
                                              @QueryParam("textSize") String textSize,
                                              @QueryParam("accent") String accent) {
+        // If an explicit ?identifier= was supplied and the path also starts with that same identifier,
+        // strip the duplicate segment. This preserves relative links resolved from Core's injected
+        // <base href="/render/{service}/{name}/{identifier}/"> without looking for identifier/path.
+        if (identifier != null && !identifier.isBlank()) {
+            inPath = stripDuplicateIdentifierPathSegment(inPath, identifier);
+        }
+
         // If no explicit ?identifier= was supplied, attempt to peel a non-default identifier from the
         // leading path segment (mirroring the gateway), so /render/{service}/{name}/{identifier}/{path}
         // works with a clean path-segment identifier. The ?identifier= query is honoured as-is for back-compat.
@@ -155,6 +168,24 @@ public class RenderResource {
 
         String prefix = String.format("/render/%s", service);
         return this.get(name, ResourceIdType.NAME, service, identifier, inPath, null, prefix, true, true, theme, lang, textSize, accent);
+    }
+
+    static String stripDuplicateIdentifierPathSegment(String inPath, String identifier) {
+        if (inPath == null || inPath.isEmpty() || identifier == null || identifier.isBlank()) {
+            return inPath;
+        }
+
+        String normalizedPath = inPath.startsWith("/") ? inPath.substring(1) : inPath;
+        if (normalizedPath.equals(identifier)) {
+            return "";
+        }
+
+        String duplicatedPrefix = identifier + "/";
+        if (normalizedPath.startsWith(duplicatedPrefix)) {
+            return normalizedPath.substring(duplicatedPrefix.length());
+        }
+
+        return inPath;
     }
 
     /**

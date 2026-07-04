@@ -2486,6 +2486,9 @@ public class Block {
 		 * to a configured minting group. Active account-level share bins are normalized
 		 * to distribute the full block reward to eligible online minters, then each
 		 * minter's payout reward-shares are applied to that minter's earned amount.
+		 * For batched rewards, account state is priced at distribution height: levels,
+		 * bins, minting-group membership, and reward-share rows at this block apply to
+		 * the whole captured batch.
 		 */
 		List<AccountLevelShareBin> accountLevelShareBinsForBlock = BlockChain.getInstance()
 				.getAccountLevelShareBins(this.repository, this.blockData.getHeight());

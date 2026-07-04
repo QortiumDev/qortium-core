@@ -155,6 +155,11 @@ Directed account ratings are native chain data:
 - during the online-account capture and reward-distribution blocks used for
   batch rewards, account-rating changes remain pending until the protected
   reward window ends
+- batched rewards use distribution-height account state by design: the captured
+  online self-share set decides who is eligible for the batch, while account
+  levels, share-bin membership, minting-group membership, trust-derived minting
+  status, and payout reward-share rows are read at the distribution block and
+  applied to the whole batch window
 - `GET /account-ratings/cooldown` lets clients show the latest change height,
   earliest allowed height, remaining block count, and whether the edge can be
   changed in the next block

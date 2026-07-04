@@ -44,6 +44,28 @@ public class BatchRewardTests extends Common {
 	}
 
 	@Test
+	@SuppressWarnings("unchecked")
+	public void testBatchRewardStartFeatureTriggerOverridesFallback() throws IllegalAccessException {
+		Map<String, Long> originalFeatureTriggers = (Map<String, Long>) FieldUtils.readField(BlockChain.getInstance(), "featureTriggers", true);
+		try {
+			FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchStartHeight", 1508000, true);
+			FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchSize", 100, true);
+			FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchAccountsBlockCount", 10, true);
+			FieldUtils.writeField(BlockChain.getInstance(), "featureTriggers", Collections.singletonMap("blockRewardBatchStartHeight", 50000L), true);
+
+			assertEquals(50000L, BlockChain.getInstance().getBlockRewardBatchStartHeight());
+			assertFalse(Block.isBatchRewardDistributionActive(50000));
+			assertTrue(Block.isRewardDistributionBlock(50000));
+			assertTrue(Block.isBatchRewardDistributionActive(50001));
+			assertFalse(Block.isRewardDistributionBlock(50001));
+			assertTrue(Block.isBatchRewardDistributionActive(50100));
+			assertTrue(Block.isRewardDistributionBlock(50100));
+		} finally {
+			FieldUtils.writeField(BlockChain.getInstance(), "featureTriggers", originalFeatureTriggers, true);
+		}
+	}
+
+	@Test
 	public void testBatchReward() throws DataException, IllegalAccessException {
 		// Set reward batching to every 10 blocks, starting at block 20, looking back the last 3 blocks for online accounts
 		FieldUtils.writeField(BlockChain.getInstance(), "blockRewardBatchStartHeight", 20, true);

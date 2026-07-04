@@ -42,6 +42,8 @@ public abstract class Message {
 	private static final int DATA_SIZE_LENGTH = 4;
 	private static final int CHECKSUM_LENGTH = 4;
 
+	public static final int MAX_WIRE_OVERHEAD = MAGIC_LENGTH + TYPE_LENGTH + HAS_ID_LENGTH + ID_LENGTH + DATA_SIZE_LENGTH + CHECKSUM_LENGTH;
+
 	private static final int MAX_DATA_SIZE = 10 * 1024 * 1024; // 10MB
 
 	protected static final byte[] EMPTY_DATA_BYTES = new byte[0];
