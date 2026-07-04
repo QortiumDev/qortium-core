@@ -1,5 +1,6 @@
 package org.qortium.test;
 
+import org.apache.commons.lang3.reflect.FieldUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -39,7 +40,9 @@ import org.qortium.transaction.Transaction;
 import org.qortium.utils.Amounts;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -1065,38 +1068,50 @@ public class ChainParameterUpdateTests extends Common {
 	}
 
 	@Test
-	public void testBlockRewardUpdateMustActivateOnBatchBoundary() throws DataException {
-		try (final Repository repository = RepositoryManager.getRepository()) {
-			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
-			int batchStartHeight = Math.toIntExact(BlockChain.getInstance().getBlockRewardBatchStartHeight());
-			int batchSize = BlockChain.getInstance().getBlockRewardBatchSize();
-			long updatedReward = BlockChain.getInstance().getRewardAtHeight(repository, batchStartHeight + 1)
-					+ Amounts.MULTIPLIER;
+	@SuppressWarnings("unchecked")
+	public void testBlockRewardUpdateMustActivateOnBatchBoundary() throws DataException, IllegalAccessException {
+		Map<String, Long> originalFeatureTriggers = (Map<String, Long>) FieldUtils.readField(BlockChain.getInstance(), "featureTriggers", true);
+		try {
+			try (final Repository repository = RepositoryManager.getRepository()) {
+				PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+				int approvalHeight = repository.getBlockRepository().getBlockchainHeight() + 1;
+				int batchSize = BlockChain.getInstance().getBlockRewardBatchSize();
+				int futureBatchStartHeight = approvalHeight + 100;
+				FieldUtils.writeField(BlockChain.getInstance(), "featureTriggers",
+						Collections.singletonMap("blockRewardBatchStartHeight", (long) futureBatchStartHeight), true);
 
-			ChainParameterUpdateTransactionData lastPreBatchTransactionData = buildBlockRewardUpdate(repository, alice,
-					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight, updatedReward);
-			assertEquals(Transaction.ValidationResult.OK,
-					new ChainParameterUpdateTransaction(repository, lastPreBatchTransactionData).isValid());
+				long preTriggerUpdatedReward = BlockChain.getInstance().getRewardAtHeight(repository, futureBatchStartHeight + 50)
+						+ Amounts.MULTIPLIER;
 
-			ChainParameterUpdateTransactionData firstBatchTransactionData = buildBlockRewardUpdate(repository, alice,
-					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + 1, updatedReward);
-			assertEquals(Transaction.ValidationResult.OK,
-					new ChainParameterUpdateTransaction(repository, firstBatchTransactionData).isValid());
+				ChainParameterUpdateTransactionData historicalMidBatchTransactionData = buildBlockRewardUpdate(repository, alice,
+						TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, futureBatchStartHeight + 50, preTriggerUpdatedReward);
+				assertEquals(Transaction.ValidationResult.OK,
+						new ChainParameterUpdateTransaction(repository, historicalMidBatchTransactionData).isValid());
 
-			ChainParameterUpdateTransactionData midBatchTransactionData = buildBlockRewardUpdate(repository, alice,
-					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + 50, updatedReward);
-			assertEquals(Transaction.ValidationResult.INVALID_LIFETIME,
-					new ChainParameterUpdateTransaction(repository, midBatchTransactionData).isValid());
+				int batchStartHeight = approvalHeight;
+				FieldUtils.writeField(BlockChain.getInstance(), "featureTriggers",
+						Collections.singletonMap("blockRewardBatchStartHeight", (long) batchStartHeight), true);
 
-			ChainParameterUpdateTransactionData distributionBlockTransactionData = buildBlockRewardUpdate(repository, alice,
-					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + batchSize, updatedReward);
-			assertEquals(Transaction.ValidationResult.INVALID_LIFETIME,
-					new ChainParameterUpdateTransaction(repository, distributionBlockTransactionData).isValid());
+				long updatedReward = BlockChain.getInstance().getRewardAtHeight(repository, batchStartHeight + 1)
+						+ Amounts.MULTIPLIER;
 
-			ChainParameterUpdateTransactionData nextBatchTransactionData = buildBlockRewardUpdate(repository, alice,
-					TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + batchSize + 1, updatedReward);
-			assertEquals(Transaction.ValidationResult.OK,
-					new ChainParameterUpdateTransaction(repository, nextBatchTransactionData).isValid());
+				ChainParameterUpdateTransactionData midBatchTransactionData = buildBlockRewardUpdate(repository, alice,
+						TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + 50, updatedReward);
+				assertEquals(Transaction.ValidationResult.INVALID_LIFETIME,
+						new ChainParameterUpdateTransaction(repository, midBatchTransactionData).isValid());
+
+				ChainParameterUpdateTransactionData distributionBlockTransactionData = buildBlockRewardUpdate(repository, alice,
+						TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + batchSize, updatedReward);
+				assertEquals(Transaction.ValidationResult.INVALID_LIFETIME,
+						new ChainParameterUpdateTransaction(repository, distributionBlockTransactionData).isValid());
+
+				ChainParameterUpdateTransactionData nextBatchTransactionData = buildBlockRewardUpdate(repository, alice,
+						TestChainBootstrapUtils.DEVELOPMENT_GROUP_ID, batchStartHeight + batchSize + 1, updatedReward);
+				assertEquals(Transaction.ValidationResult.OK,
+						new ChainParameterUpdateTransaction(repository, nextBatchTransactionData).isValid());
+			}
+		} finally {
+			FieldUtils.writeField(BlockChain.getInstance(), "featureTriggers", originalFeatureTriggers, true);
 		}
 	}
 

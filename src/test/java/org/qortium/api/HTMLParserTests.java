@@ -54,7 +54,7 @@ public class HTMLParserTests {
 	}
 
 	@Test
-	public void testRenderIdentifierQueryIsInsertedBeforeFragment() {
+	public void testRenderIdentifierIsRoutedThroughBaseHref() {
 		HTMLParser htmlParser = new HTMLParser(
 				"Example",
 				"/index.html",
@@ -77,16 +77,19 @@ public class HTMLParserTests {
 		htmlParser.addAdditionalHeaderTags();
 
 		Document document = Jsoup.parse(new String(htmlParser.getData(), StandardCharsets.UTF_8));
+		Element base = document.selectFirst("head base[href]");
 		Element relativeScript = document.selectFirst("script[src^=app.js]");
 		Element absoluteScript = document.selectFirst("script[src=/apps/platform.js]");
 		Element stylesheet = document.selectFirst("link[href^=style.css]");
 
+		assertNotNull(base);
 		assertNotNull(relativeScript);
 		assertNotNull(absoluteScript);
 		assertNotNull(stylesheet);
-		assertEquals("app.js?identifier=id%20value%3C%26#frag", relativeScript.attr("src"));
+		assertEquals("/render/APP/Example/id%20value<&/", base.attr("href"));
+		assertEquals("app.js#frag", relativeScript.attr("src"));
 		assertEquals("/apps/platform.js", absoluteScript.attr("src"));
-		assertEquals("style.css?x=1&identifier=id%20value%3C%26#frag", stylesheet.attr("href"));
+		assertEquals("style.css?x=1#frag", stylesheet.attr("href"));
 	}
 
 }

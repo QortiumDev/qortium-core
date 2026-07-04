@@ -44,6 +44,24 @@ public class BlocksMessageTests {
 	}
 
 	@Test
+	public void testBoundedBuilderTruncatesNonFirstBlockOneByteOverBudget() throws Exception {
+		BlocksMessage.BoundedBuilder builder = builderWithPayloadBudget(41);
+
+		assertTrue(builder.tryAdd(serializedBlock(1, 10)));
+		assertFalse(builder.tryAdd(serializedBlock(2, 20)));
+
+		BlocksMessage.BoundedBuildResult result = builder.build();
+
+		assertTrue(result.isTruncated());
+		assertFalse(result.isFirstBlockOversized());
+		assertEquals(1, result.getBlockCount());
+		assertEquals(18, result.getPayloadLength());
+		assertEquals(Integer.valueOf(2), result.getFirstExcludedHeight());
+		assertEquals(24, result.getFirstExcludedPayloadLength());
+		assertEquals(1, serializedCount(result.getMessage()));
+	}
+
+	@Test
 	public void testBoundedBuilderAllowsExactBudget() throws Exception {
 		BlocksMessage.BoundedBuilder builder = builderWithPayloadBudget(18);
 
@@ -75,6 +93,14 @@ public class BlocksMessageTests {
 	}
 
 	@Test
+	public void testDerivedMaxMessageSizeCanServeOneMaxBlock() {
+		int maxBlockSize = 2 * 1024 * 1024;
+		int maxMessageSize = BlocksMessage.maxMessageSizeForMaxBlockSize(maxBlockSize);
+
+		assertEquals(4 + 4 + maxBlockSize, BlocksMessage.maxWireSafePayload(maxMessageSize));
+	}
+
+	@Test
 	public void testBoundedBuilderBuildsEmptyBlocksMessage() throws Exception {
 		BlocksMessage.BoundedBuildResult result = builderWithPayloadBudget(64).build();
 
@@ -85,7 +111,7 @@ public class BlocksMessageTests {
 	}
 
 	private static BlocksMessage.BoundedBuilder builderWithPayloadBudget(int payloadBudget) {
-		return BlocksMessage.newBoundedBuilder(payloadBudget + 1024);
+		return BlocksMessage.newBoundedBuilder(BlocksMessage.maxMessageSizeForPayloadBudget(payloadBudget));
 	}
 
 	private static BlocksMessage.SerializedBlock serializedBlock(int height, int blockByteCount) {

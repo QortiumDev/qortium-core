@@ -66,8 +66,16 @@ public class BlocksMessage extends Message {
         return this.dataBytes == null ? 0 : this.dataBytes.length;
     }
 
+    public static int maxMessageSizeForMaxBlockSize(int maxBlockSize) {
+        return maxBlockSize + BLOCK_COUNT_LENGTH + BLOCK_HEIGHT_LENGTH + Message.MAX_WIRE_OVERHEAD + WIRE_SIZE_HEADROOM;
+    }
+
+    public static int maxMessageSizeForPayloadBudget(int payloadBudget) {
+        return payloadBudget + Message.MAX_WIRE_OVERHEAD + WIRE_SIZE_HEADROOM;
+    }
+
     public static int maxWireSafePayload(int maxMessageSize) {
-        return Math.max(0, maxMessageSize - WIRE_SIZE_HEADROOM);
+        return Math.max(0, maxMessageSize - Message.MAX_WIRE_OVERHEAD - WIRE_SIZE_HEADROOM);
     }
 
     public static BoundedBuilder newBoundedBuilder(int maxMessageSize) {

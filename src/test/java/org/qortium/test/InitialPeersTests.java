@@ -74,8 +74,24 @@ public class InitialPeersTests extends Common {
 	}
 
 	@Test
-	public void testDefaultInitialPeersAreEmpty() throws ReflectiveOperationException {
+	public void testDefaultInitialPeersIncludeClearnetAndI2PSeeds() throws ReflectiveOperationException {
 		Settings settings = newSettingsInstance();
+
+		assertTrue(settings.hasInitialPeersConfigured());
+		assertArrayEquals(new String[] {
+				"185.207.104.78:24892",
+				"146.103.42.59:24892",
+				"80.241.221.139:24892",
+				"3u25ana5e5hvriqqiuh6fcetxezsqm7la276ljtjxaoxt767n4hq.b32.i2p",
+				"zqcackxkhjzfbbc6daigc73zqhzdpgwua3mjc7xgn3hwjed5z3ca.b32.i2p",
+				"q25q6gbn2x67x5sos5fgcr5td2xzazzkibovavthha6dpjg3cc6a.b32.i2p"
+		}, settings.getInitialPeers());
+	}
+
+	@Test
+	public void testEmptyInitialPeersAreNotConfigured() throws ReflectiveOperationException, IllegalAccessException {
+		Settings settings = newSettingsInstance();
+		FieldUtils.writeField(settings, "initialPeers", new String[0], true);
 
 		assertFalse(settings.hasInitialPeersConfigured());
 		assertArrayEquals(new String[0], settings.getInitialPeers());

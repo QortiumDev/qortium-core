@@ -43,12 +43,14 @@ raises the bundled Previewnet minimum peer version to 1.3.0, so nodes using the
 standard Previewnet configs will reject peers still running older Core builds.
 It also locks future block-reward parameter updates to batch boundaries once
 batched rewards are active, preventing a reward change from repricing only part
-of a batched reward window. The trust/minting docs now also make the related
-distribution-height account-state rule explicit for levels, share bins,
-minting-group membership, trust-derived minting status, and payout reward-share
-rows. Multi-block sync responses are now byte-bounded to the peer receive-buffer
-budget, so `BLOCKS` responses can still return fewer blocks than requested but
-will not exceed the single-message transport buffer.
+of a batched reward window while preserving pre-trigger historical validation.
+The trust/minting docs now also make the related distribution-height
+account-state rule explicit for levels, share bins, minting-group membership,
+trust-derived minting status, and payout reward-share rows. Multi-block sync
+responses are now byte-bounded to the peer receive-buffer budget, and that
+buffer is sized from the message envelope plus the maximum valid single-block
+`BLOCKS` payload, so `BLOCKS` responses can still return fewer blocks than
+requested without making a near-max-size block unservable.
 
 ### 2026-07-03 - docs: document batched reward account-state pricing
 

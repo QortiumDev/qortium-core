@@ -102,8 +102,10 @@ public class ChainParameterUpdateTransaction extends Transaction {
 		if (this.chainParameterUpdateTransactionData.getActivationHeight() < minimumActivationHeight)
 			return ValidationResult.INVALID_LIFETIME;
 
-		if (parameter == ChainParameter.BLOCK_REWARD && !isValidBlockRewardActivationHeight(
-				this.chainParameterUpdateTransactionData.getActivationHeight()))
+		if (parameter == ChainParameter.BLOCK_REWARD
+				&& isBlockRewardBatchBoundaryRuleEnabled(approvalHeight)
+				&& !isValidBlockRewardActivationHeight(
+						this.chainParameterUpdateTransactionData.getActivationHeight()))
 			return ValidationResult.INVALID_LIFETIME;
 
 		if (!parameter.isValidValue(this.repository, this.chainParameterUpdateTransactionData.getActivationHeight(),
@@ -111,6 +113,10 @@ public class ChainParameterUpdateTransaction extends Transaction {
 			return ValidationResult.INVALID_VALUE_LENGTH;
 
 		return ValidationResult.OK;
+	}
+
+	private boolean isBlockRewardBatchBoundaryRuleEnabled(int approvalHeight) {
+		return approvalHeight >= BlockChain.getInstance().getBlockRewardBatchStartHeight();
 	}
 
 	private boolean isValidBlockRewardActivationHeight(int activationHeight) {
