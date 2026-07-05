@@ -172,7 +172,8 @@ public abstract class ElectrumSSLSocketFactory {
 
 	private static SSLSocketFactory createPinnedSocketFactory(String fingerprint) throws IOException {
 		try {
-			SSLContext sslContext = SSLContext.getInstance("TLS");
+			// TLSv1.3 context also enables TLSv1.2, but not legacy TLS/SSL versions
+			SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
 			sslContext.init(null, new TrustManager[] { new PinnedCertificateTrustManager(fingerprint) }, new SecureRandom());
 			return sslContext.getSocketFactory();
 		} catch (GeneralSecurityException e) {
@@ -182,7 +183,8 @@ public abstract class ElectrumSSLSocketFactory {
 
 	private static SSLSocketFactory createCapturingSocketFactory(CapturingTrustManager capturing) throws IOException {
 		try {
-			SSLContext sslContext = SSLContext.getInstance("TLS");
+			// TLSv1.3 context also enables TLSv1.2, but not legacy TLS/SSL versions
+			SSLContext sslContext = SSLContext.getInstance("TLSv1.3");
 			sslContext.init(null, new TrustManager[] { capturing }, new SecureRandom());
 			return sslContext.getSocketFactory();
 		} catch (GeneralSecurityException e) {
