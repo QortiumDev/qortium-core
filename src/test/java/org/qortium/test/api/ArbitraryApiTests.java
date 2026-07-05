@@ -310,6 +310,19 @@ public class ArbitraryApiTests extends ApiCommon {
 		}
 	}
 
+	private static void publishZeroByteTestResource(String name, String identifier) throws Exception {
+		Path path = Files.createTempDirectory("qdn-download-zero-byte");
+		Files.createFile(path.resolve("file.txt"));
+
+		try (Repository repository = RepositoryManager.getRepository()) {
+			PrivateKeyAccount alice = Common.getTestAccount(repository, "alice");
+			ArbitraryUtils.createAndMintTxn(repository, Base58.encode(alice.getPublicKey()), path, name, identifier,
+					org.qortium.data.transaction.ArbitraryTransactionData.Method.PUT, Service.APP, alice);
+		} finally {
+			FileUtils.deleteDirectory(path.toFile());
+		}
+	}
+
 	private static void assertUnsignedArbitraryTransaction(String rawTransaction58) throws Exception {
 		byte[] rawBytes = Base58.decode(rawTransaction58);
 		assertTrue("Unsigned transaction bytes should not be empty", rawBytes.length > 0);
@@ -476,6 +489,29 @@ public class ArbitraryApiTests extends ApiCommon {
 	}
 
 	@Test
+	public void testGetDownloadResponseUsesNoSniffHeaderForZeroByteRawContent() throws Exception {
+		String name = "qdn-nosniff-raw-zero-byte";
+		registerName(name);
+		publishZeroByteTestResource(name, null);
+
+		ApiCommon.installTestApiKey();
+		try {
+			ArbitraryResource resource = (ArbitraryResource) ApiCommon.buildResource(ArbitraryResource.class);
+			DownloadExchange exchange = new DownloadExchange();
+			exchange.requestHeaders.put("X-API-KEY", ApiCommon.TEST_API_KEY);
+			FieldUtils.writeField(resource, "request", exchange.request, true);
+			FieldUtils.writeField(resource, "response", exchange.response, true);
+			FieldUtils.writeField(resource, "context", exchange.context, true);
+
+			resource.get(Service.APP, name, null, null, false, false, 5, false, null);
+
+			assertEquals("nosniff", exchange.getResponseHeader("X-Content-Type-Options"));
+		} finally {
+			ApiCommon.clearTestApiKey();
+		}
+	}
+
+	@Test
 	public void testGetDownloadResponseUsesNoSniffHeaderForBase64Encoding() throws Exception {
 		String name = "qdn-nosniff-base64";
 		registerName(name);
@@ -513,13 +549,17 @@ public class ArbitraryApiTests extends ApiCommon {
 	private static class DownloadExchange {
 		private final Map<String, String> requestHeaders = new LinkedHashMap<>();
 		private final Map<String, String> responseHeaders = new LinkedHashMap<>();
-		private final CapturingServletOutputStream outputStream = new CapturingServletOutputStream();
+		private final CapturingServletOutputStream outputStream;
 		private final HttpServletRequest request;
 		private final HttpServletResponse response;
 		private final ServletContext context;
 		private boolean responseCommitted;
+		private boolean outputStreamUsed;
+		private boolean writerUsed;
 
 		private DownloadExchange() {
+			this.outputStream = new CapturingServletOutputStream(() -> this.responseCommitted = true);
+
 			this.request = (HttpServletRequest) Proxy.newProxyInstance(
 					ArbitraryApiTests.class.getClassLoader(),
 					new Class[] { HttpServletRequest.class },
@@ -565,11 +605,18 @@ public class ArbitraryApiTests extends ApiCommon {
 							case "setContentLengthLong":
 								return null;
 							case "setStatus":
-								this.responseCommitted = true;
 								return null;
 							case "getOutputStream":
+								if (this.writerUsed) {
+									throw new IllegalStateException("getOutputStream() called after getWriter()");
+								}
+								this.outputStreamUsed = true;
 								return this.outputStream;
 							case "getWriter":
+								if (this.outputStreamUsed) {
+									throw new IllegalStateException("getWriter() called after getOutputStream()");
+								}
+								this.writerUsed = true;
 								return new PrintWriter(this.outputStream.outputStream, true);
 							case "isCommitted":
 								return this.responseCommitted;
@@ -606,10 +653,18 @@ public class ArbitraryApiTests extends ApiCommon {
 	private static class CapturingServletOutputStream extends ServletOutputStream {
 
 		private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+		private final Runnable onWrite;
+
+		private CapturingServletOutputStream(Runnable onWrite) {
+			this.onWrite = onWrite;
+		}
 
 		@Override
 		public void write(int b) {
 			this.outputStream.write(b);
+			if (this.onWrite != null) {
+				this.onWrite.run();
+			}
 		}
 
 		@Override

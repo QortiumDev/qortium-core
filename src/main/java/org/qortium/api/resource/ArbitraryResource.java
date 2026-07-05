@@ -3084,11 +3084,6 @@ public String finalizeUpload(
 					rawOut.flush(); // Flush only the base output stream if nothing was wrapped
 				}
 
-				if (!response.isCommitted()) {
-					response.setStatus(HttpServletResponse.SC_OK);
-					response.getWriter().write(" ");
-				}
-
 		} catch (IOException e) {
 			// Streaming errors should not rethrow — just log
 			LOGGER.trace(String.format("Streaming error for %s %s: %s", service, name, e.getMessage()));
